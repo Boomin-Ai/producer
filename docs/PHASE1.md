@@ -217,9 +217,17 @@ Settings; nothing is locked in.
   reschedule. Hosted job statuses poll into the same view.
 - History: reverse-chron with links to the live posts, plain-language
   error explanations, one-click retry of failures only.
-- Scheduling difference stated inline: connected = "fires even if your
-  computer is off"; independent = "Producer must be running (tray counts)"
-  with launch-at-login offered and overdue catch-up on next open.
+- Scheduling difference stated inline, per channel, honestly:
+
+  | Channel | Fires with the computer off? |
+  | --- | --- |
+  | Connected (any platform) | yes — hosted scheduler |
+  | Independent Facebook | yes — the FB sender always uses Meta's native `scheduled_publish_time`, so Meta's servers fire it (allowed window verified in the sender spike) |
+  | Independent Threads / IG | no — Producer must be running (tray counts); launch-at-login offered; overdue catch-up with notification on next open |
+
+  Roadmap note (post-v0.1, enabled by the engine/UI split): `producerd`,
+  the engine compiled headless for any always-on box the user owns —
+  fully independent laptop-closed scheduling with zero Boomin contact.
 
 ### 3.4 Independent connection wizard (Threads, Facebook)
 
