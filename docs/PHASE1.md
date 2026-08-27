@@ -91,6 +91,13 @@ Both modes flow through the same engine so the UI is mode-agnostic: a
 
 - **Auth:** Boomin email OTP (existing `/auth/otp` + `/auth/verify`),
   session token in keychain. No password ever exists.
+- **Workspace auto-provisioning:** the hosted tenant model is
+  user → org → brand; desktop sign-up silently creates the org +
+  default workspace (reusing the existing no-workspace portal flow
+  server-side). The desktop UI never says "brand" — the user sees an
+  account and channels. Payoff: when they later open the Boomin web app
+  or the Phase-2 network opt-in, their workspace already exists with
+  their media and history in it.
 - **Channels:** list the workspace's connected social integrations
   (Instagram today) via existing integration endpoints.
 - **Media:** upload via the existing files API (presigned direct-to-R2
@@ -107,7 +114,11 @@ Both modes flow through the same engine so the UI is mode-agnostic: a
   Drive; enables reuse + history previews) with a per-workspace
   "auto-delete after publishing" setting and delete-anytime controls,
   all stated on the disclosure page — vs. ephemeral-by-default.
-  Free-tier storage quota bounds cost either way. Independent-mode
+  Free-tier storage quota bounds cost either way: a fixed free quota
+  (server-configurable; pick 2–10 GB at launch from real R2 costs), a
+  visible usage meter in Settings, a bulk purge tool (oldest-first /
+  published-first), and quota-full → purge or upgrade. Posting is
+  never paywalled — stored history is the paid lever, not publishing. Independent-mode
   media never touches Boomin: FB uploads go disk→Meta directly; the
   future independent-IG bridge (§6) is ephemeral by design (delete on
   publish confirmation, 1h TTL fallback).
