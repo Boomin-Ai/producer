@@ -1,0 +1,63 @@
+:root {
+  --bg: #0a1114;
+  --text: #deede9;
+  --muted: #7e9793;
+  --accent: #41e6b0;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.boot {
+  text-align: center;
+  padding: 24px;
+}
+
+.wordmark {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: var(--accent);
+}
+
+.wordmark .by {
+  color: var(--muted);
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: none;
+}
+
+h1 {
+  font-size: 2.4rem;
+  line-height: 1.15;
+  margin: 18px 0 10px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+h1 strong {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.status {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0;
+}
