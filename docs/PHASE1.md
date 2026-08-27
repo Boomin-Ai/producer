@@ -287,11 +287,28 @@ bridge and ships after launch, gated on spikes:
 - **S3** — Threads dev-mode setup walkthrough (feeds the wizard content;
   runs before M4).
 
-Bridge design (when it ships): one setting, three interchangeable
-backends — (a) Boomin ephemeral handoff (open-source ~100-line Worker in
-this repo, auto-delete on publish, TTL 1h), (b) self-hosted deployment of
-that same Worker, (c) BYO S3-compatible bucket. Full disclosure at first
-use. Purists get (b)/(c); nobody is silently routed.
+Bridge design (when it ships): a pluggable **`MediaSource` trait**
+mirroring `PlatformSender` — each source resolves a draft's media to a
+publicly fetchable URL at publish time and cleans up afterward:
+
+- **Pasted URL** (v0.1-cheap): media already hosted anywhere public is
+  passed straight through. An input field, zero infrastructure.
+- **Boomin ephemeral handoff** (default bridge): open-source ~100-line
+  Worker in this repo; auto-delete on publish confirmation, TTL 1h.
+- **Self-hosted handoff:** the same Worker on the user's own Cloudflare
+  account (one URL field).
+- **BYO S3-compatible bucket** (R2/B2/S3): presigned time-limited URLs —
+  the contractually reliable self-owned option.
+- **Ephemeral-public flip adapters** (community track): the file lives in
+  the user's own cloud; at publish time the app uses the user's own OAuth
+  to make it link-public, hands the URL to Meta, and revokes on publish
+  confirmation. Dropbox first (raw links serve clean bytes reliably);
+  Google Drive labeled experimental (virus-scan interstitial breaks
+  machine fetches above modest sizes; direct-link format churns).
+
+Full disclosure at first use of any backend; nobody is silently routed.
+The trait is a second labeled community extension point alongside
+`PlatformSender`.
 
 ## 7. Build order
 
