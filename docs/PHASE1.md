@@ -1,188 +1,182 @@
-# Phase 1 — Producer v0.1: the two-mode cross-poster
+# Phase 1 — Producer v0.1: one client, two backends
 
-Status: DRAFT v2 for review. Supersedes the single-mode (BYO-only) draft.
+Status: DRAFT v3 for review. Supersedes the two-mode/local-engine draft.
 
-v0.1 ships a desktop cross-poster with **two honestly-labeled modes**:
+The desktop app is a **client of a Producer endpoint**. There are two
+backends implementing the same API contract:
 
-- **Connected mode (default):** sign in with a free Boomin account and
-  publish through Boomin's hosted, already-approved platform integrations.
-  Setup in ~2 minutes. Content routes through Boomin's servers.
-- **Independent mode (the option):** bring your own platform keys; nothing
-  ever touches a Boomin server. Slower setup, total self-sufficiency —
-  the app keeps working even if Boomin disappears.
+- **Connected (default):** the endpoint is `api.boomin.ai`. Free Boomin
+  account, publishing in ~2 minutes, content routes through Boomin.
+- **Independent (self-hosted):** the endpoint is the user's own
+  **`producer-server`** — a new open-source (AGPL) repo they deploy to
+  their own Cloudflare account. Their server, their storage, their
+  platform keys. Nothing ever touches Boomin, and they never pay Boomin
+  a dollar. Ghost / n8n / Mastodon model.
 
-Precedent: Signal, Bitwarden, Ghost — open-source clients, hosted default,
-real self-host escape hatch. The escape hatch being *real* is what keeps
-the default honest.
+**Why self-hosting is the independent answer (not per-channel local
+tricks):** cross-posting's value is *all channels, one schedule, laptop
+closed*. A server the user owns delivers that wholesale — and dissolves
+every hard problem the local-engine draft was fighting:
 
-**Launch platform matrix (the honest version):**
+| Problem (old draft) | Self-hosted server |
+| --- | --- |
+| Scheduled posts need the laptop open | Worker cron triggers run 24/7 free |
+| IG/Threads media needs a public URL | their R2 bucket *is* the public URL |
+| OAuth loopback uncertainty (spike S1) | server has a real HTTPS redirect URL |
+| Media handoff / MediaSource bridges | deleted — not needed |
+| Local queue + catch-up-on-launch logic | deleted — queue lives server-side |
+| BYO secrets juggled in a desktop keychain | secrets live on their worker |
 
-| Platform | Connected (hosted) | Independent (BYO) |
+**Launch platform matrix:**
+
+| Platform | Connected (`api.boomin.ai`) | Independent (self-hosted) |
 | --- | --- | --- |
-| Instagram | **v0.1** (hosted integration is live today) | v0.1.x (needs media-handoff track, see §6) |
-| Threads | later (needs Boomin app review) | **v0.1** (text posts; no media bridge needed) |
-| Facebook Pages | later (needs Boomin app review) | **v0.1** (direct uploads; no bridge needed) |
+| Instagram | **v0.1** (hosted integration live today) | **v0.1** — BYO Meta app |
+| Threads | later (needs Boomin app review) | **v0.1** — BYO Meta app |
+| Facebook Pages | later (needs Boomin app review) | **v0.1** — BYO Meta app |
 
-Every platform is reachable at launch through at least one mode, and each
-mode launches with something real.
+Independent mode now covers the **full trio at launch** — the server
+model made independent-Instagram possible instead of deferred.
 
 ---
 
 ## 1. Product definition
 
-**User:** a creator or small brand posting the same content everywhere,
-currently paying a cross-posting SaaS or doing it by hand.
+**Connected user:** a creator who wants posting in minutes and accepts
+that content routes through Boomin (disclosed plainly).
+
+**Independent user:** a technical creator or brand who can run
+`wrangler deploy` and wants total self-sufficiency. For them, **the
+self-hosting guide is the onboarding** — it is a first-class product
+artifact, not an afterthought.
 
 **Success criteria for v0.1 (all must hold):**
 
-1. **Connected:** a fresh user goes from install → signed in → first
-   Instagram post in **under 5 minutes** (email OTP, connect IG, post).
-2. **Independent:** a user with zero Meta developer experience gets
-   Threads + Facebook posting working fully locally in **under 30 guided
-   minutes**, and the app states plainly that no Boomin server is involved.
-3. **Disclosure:** every connected channel is visibly badged with its mode;
-   a first-run screen and Settings page state exactly what talks to what,
-   in plain language. No silent server dependency, ever.
-4. Publishing is per-channel atomic with no double-posts: independent
-   jobs checkpoint before side-effectful calls; connected jobs are
-   idempotent via hosted job IDs.
-5. Scheduled posts behave as documented per mode (§4.3): connected fires
-   server-side even with the laptop closed; independent fires locally with
-   tray + catch-up-on-launch, and the difference is stated in the UI.
-6. The app updates itself from GitHub Releases (signed update manifest).
-7. Secrets hygiene: Boomin session token, BYO app secrets, and OAuth
-   tokens live in the OS keychain; never in SQLite, logs, or the webview.
+1. **Connected:** fresh install → signed in (email OTP) → first
+   Instagram post in **under 5 minutes**.
+2. **Independent:** following the guide, a technical user goes from
+   nothing → deployed server → all three Meta-trio channels connected
+   (their own Meta app) → a scheduled post that fires **with their
+   computer off**, in **under an hour**, paying $0.
+3. **One contract:** the desktop app has no mode-specific publish logic —
+   it points at an endpoint and authenticates. Switching modes is a
+   Settings change, and both can run side by side.
+4. **Disclosure:** the active endpoint is always visible; connected mode
+   states plainly what routes through Boomin; independent mode states
+   that nothing does.
+5. Publishing is per-channel atomic with plain-language errors and
+   retry-only-the-failure; no double-posts (idempotent submits, server-
+   side checkpointing).
+6. The app updates itself from GitHub Releases (signed manifest).
+7. Secrets hygiene: desktop keychain holds only session tokens;
+   platform secrets live server-side (Boomin's vault or the user's
+   worker secrets); nothing sensitive in logs or the webview.
 
 **Non-goals for v0.1:** YouTube/X/TikTok senders, multistreaming, media
 generation, analytics, comment management, carousels/Stories, team
-features, the Boomin network opt-in surface (Phase 2 — but see §8 note),
-mobile. Independent-Instagram is v0.1.x, not v0.1 (§6).
+features, the network opt-in surface (Phase 2), mobile, `producerd`-style
+home-machine daemons (the server *is* the daemon).
 
 ---
 
 ## 2. Architecture
 
-### 2.1 The structural rule (unchanged)
-
-**All platform I/O, credentials, and persistence live in the Rust core
-("the engine"). The React webview renders and never touches a token.**
+### 2.1 The pieces
 
 ```
-┌───────────────────────────── Tauri app ─────────────────────────────┐
-│  React UI (composer, queue, wizard, settings)                       │
-│      │  typed IPC commands + events                                 │
-│  ────┴──────────────────────────────────────────────────────────    │
-│  engine (Rust crate)                                                │
-│    ├─ vault: OS keychain (Boomin token, BYO secrets, OAuth tokens)  │
-│    ├─ store: SQLite (posts, channels, jobs, history, settings)      │
-│    ├─ queue: local state machine + scheduler (independent mode)     │
-│    ├─ connected: thin client for api.boomin.ai (auth, channels,     │
-│    │             media upload, publish, schedule, status polling)   │
-│    └─ senders: trait PlatformSender (independent mode) —            │
-│                threads / facebook in v0.1; the extension point      │
-└─────────────────────────────────────────────────────────────────────┘
+┌── producer (this repo, AGPL) ────────────────────────────────┐
+│  Tauri 2 desktop app                                         │
+│   ├─ UI: composer, queue, history, settings, onboarding      │
+│   ├─ vault: OS keychain (endpoint session tokens only)       │
+│   └─ client: typed client for the Producer API contract      │
+└──────────────────────────────────────────────────────────────┘
+                 │ same API contract │
+        ┌────────┴────────┐  ┌───────┴──────────────────────────┐
+        │ api.boomin.ai   │  │ producer-server (new repo, AGPL) │
+        │ (closed, lean   │  │ Cloudflare Worker + Hono         │
+        │  contract       │  │  ├─ auth: single-user bearer     │
+        │  endpoints —    │  │  ├─ channels: BYO Meta OAuth     │
+        │  decision D1)   │  │  ├─ media: R2 (public serving)   │
+        │                 │  │  ├─ queue: state machine + cron  │
+        │                 │  │  ├─ senders: TS modules ★        │
+        │                 │  │  └─ store: D1 (SQLite)           │
+        └─────────────────┘  └──────────────────────────────────┘
 ```
 
-Both modes flow through the same engine so the UI is mode-agnostic: a
-"channel" is either `Connected(boomin_channel_id)` or
-`Independent(account_id)`, and the composer/queue/history don't care.
+★ = the community extension point. Senders are TypeScript modules in an
+open repo — a far larger contributor pool than Rust trait impls, and
+AGPL on server code is exactly what AGPL is for (no one can SaaS a fork
+without opening their changes).
 
-### 2.2 Connected mode client
+### 2.2 The API contract
 
-- **Auth:** Boomin email OTP (existing `/auth/otp` + `/auth/verify`),
-  session token in keychain. No password ever exists.
-- **Workspace auto-provisioning:** the hosted tenant model is
-  user → org → brand; desktop sign-up silently creates the org +
-  default workspace (reusing the existing no-workspace portal flow
-  server-side). The desktop UI never says "brand" — the user sees an
-  account and channels. Payoff: when they later open the Boomin web app
-  or the Phase-2 network opt-in, their workspace already exists with
-  their media and history in it.
-- **Channels:** list the workspace's connected social integrations
-  (Instagram today) via existing integration endpoints.
-- **Media:** upload via the existing files API (presigned direct-to-R2
-  for large files). This is what dissolves Instagram's public-URL
-  requirement in the default mode.
-- **Publish & schedule:** executed server-side by the hosted publish
-  engine (the production-proven job state machine). The app submits,
-  then polls/receives status into local history.
-- **Where media lives:** source files stay on the user's disk (SQLite
-  stores paths, never blobs). Connected publishing uploads a copy to
-  Boomin storage (R2) for the hosted engine to hand to the platform.
-  **Open decision D2 — retention of that copy:** default to persisting
-  it as the user's cloud media library (matches the hosted product's
-  Drive; enables reuse + history previews) with a per-workspace
-  "auto-delete after publishing" setting and delete-anytime controls,
-  all stated on the disclosure page — vs. ephemeral-by-default.
-  Free-tier storage quota bounds cost either way: a fixed free quota
-  (server-configurable; pick 2–10 GB at launch from real R2 costs), a
-  visible usage meter in Settings, a bulk purge tool (oldest-first /
-  published-first), and quota-full → purge or upgrade. Posting is
-  never paywalled — stored history is the paid lever, not publishing. Independent-mode
-  media never touches Boomin: FB uploads go disk→Meta directly; the
-  future independent-IG bridge (§6) is ephemeral by design (delete on
-  publish confirmation, 1h TTL fallback).
-- **Open decision D1 (needs an owner in the api repo):** desktop submits
-  through the existing unit/collection endpoints vs. a new lean
-  `POST /v1/app/posts` surface purpose-built for the desktop composer.
-  The lean endpoint is preferred (decouples desktop from the web app's
-  content model); it is a small, additive api-repo workstream and the
-  only server-side work Phase 1 requires.
+One OpenAPI spec, versioned in the `producer-server` repo, implemented by
+both backends: auth/session, channels (list/connect/disconnect), media
+(**`upload_id` OR `url`** — see below), posts (create/update/list),
+schedule, publish-now, job status, history.
 
-### 2.3 Independent mode engine
+**Media-by-URL — the free-forever connected tier.** Meta's publish APIs
+fetch media from a URL; the backend never needs the bytes. So the
+contract accepts either an uploaded media id (stored by the backend) or
+a plain public URL (the user's own R2/S3 bucket, Dropbox raw link,
+their CDN — anywhere fetchable). A connected user on BYO storage costs
+Boomin only metadata (captions, schedules — kilobytes): **they can stay
+connected, scheduled, laptop-closed, and never owe Boomin a dollar.**
+Boomin-managed storage is the paid *convenience* (quota + meter + purge
+per D2), never a toll on publishing. The desktop app uploads directly
+from disk to the user's bucket (their credentials, held locally in the
+keychain) and submits the URL. One caveat, surfaced in the UI: a
+URL-sourced scheduled post requires the object to remain reachable until
+it fires — early deletion produces a clear, retryable error. **Decision D1 (api repo workstream):** the hosted
+side implements this contract as new lean `/v1/app/producer/*` endpoints
+rather than exposing the web app's unit/collection model. The contract is
+the product's spine — desktop, hosted, and self-host all meet there.
 
-- **Sender trait** — the community extension point; YouTube/X/TikTok in
-  Phase 2 are new impls of this contract:
+### 2.3 producer-server (the new repo)
 
-```rust
-trait PlatformSender {
-    fn platform(&self) -> Platform;
-    /// Validate a draft BEFORE queueing (caption length, media
-    /// type/size, rate-limit budget). Issues render in the composer.
-    fn preflight(&self, post: &DraftPost, target: &Target) -> Vec<Issue>;
-    /// Advance one publish job step; re-entrant with persisted
-    /// checkpoints so a crash resumes instead of double-posting.
-    async fn publish(&self, job: &mut PublishJob, ctx: &EngineCtx)
-        -> Result<StepOutcome, SendError>; // Done | InProgress | RetryAfter
-}
-```
+- **Stack:** Cloudflare Worker, Hono, **D1** (not Neon — one vendor, one
+  account, one `wrangler deploy`, free tier covers a single user
+  forever; "bring your own Postgres" is a documented variant, not the
+  default), R2 for media with public serving enabled, cron triggers for
+  the scheduler, worker secrets for platform keys.
+- **Tenancy:** single-user by design. Auth is one bearer token generated
+  at deploy time and pasted into the desktop app. No orgs, no brands,
+  no billing — this is what keeps the repo lean and auditable.
+- **Queue:** the proven state machine (draft → scheduled → queued →
+  publishing → published/failed) with exponential backoff, error
+  classes (`Retryable`/`TokenExpired`/`RateLimited(until)`/`Permanent`),
+  and the idempotency rule: platform-side IDs (upload sessions, IG
+  containers) persist before the call that consumes them. Cron tick
+  advances due jobs; multi-step IG container flows checkpoint in D1.
+- **Senders v0.1:** Instagram (feed image + reel via container flow —
+  media URLs served from the user's R2), Facebook Pages (direct upload;
+  native `scheduled_publish_time` used opportunistically), Threads
+  (text + media — media URL problem solved by R2).
+- **OAuth:** the worker's own HTTPS URL (`*.workers.dev` or custom
+  domain) is the redirect URI for the user's BYO Meta app — no loopback
+  gymnastics. Connect flows can be driven from the desktop app (it opens
+  the browser at `https://<their-server>/connect/instagram`).
+- **Media retention (D2, self-host edition):** the user's bucket, the
+  user's rules — default keep (it's their storage), one-click purge of
+  published media, optional auto-delete after publish.
 
-  `SendError` classes — `Retryable(backoff)`, `TokenExpired`,
-  `RateLimited(until)`, `Permanent(msg)` — drive the queue generically.
+### 2.4 The desktop app (radically simplified)
 
-- **Local queue state machine** (independent jobs only):
+No local publish engine, no local scheduler, no media bridges. It is:
+shell + onboarding chooser + composer/queue/history rendered from the
+API + settings + updater + keychain for session tokens. All state of
+record lives at the endpoint. Endpoints are per-channel-set, so a user
+can run Connected and Independent side by side.
 
-```
-draft ─▶ scheduled ─▶ queued ─▶ publishing ─▶ published
-             │                     ├─ retryable ─▶ backoff ─▶ queued
-             └─▶ canceled          └─ permanent ─▶ failed
-```
+### 2.5 The zero-dollar independent stack (the honest math)
 
-  Exponential backoff with jitter; honors `RateLimited(until)`;
-  **idempotency rule:** any platform-side ID (upload session, container)
-  is persisted before the call that consumes it.
-
-- **OAuth loopback:** engine binds `127.0.0.1:<ephemeral>`, opens the
-  system browser, captures the redirect; PKCE + single-use state.
-- **Token lifecycle:** FB long-lived user token → per-Page tokens;
-  Threads long-lived (~60d) with refresh; background refresh for
-  anything expiring within 7 days; "reconnect needed" surfaced in UI.
-
-### 2.4 Data model (SQLite)
-
-```
-channels(id, mode /* connected|independent */, platform, display_name,
-         external_id, boomin_channel_id?, token_ref?, scopes, status)
-posts(id, created_at, body_text, media_json, status, scheduled_at)
-targets(id, post_id, channel_id, per_platform_overrides_json)
-publish_jobs(id, target_id, executor /* local|hosted */, state, attempt,
-             next_attempt_at, state_json, hosted_job_id?,
-             error_class, error_message, published_external_id, timestamps)
-app_settings(key, value)
-```
-
-Keychain: `vault:boomin:session`, `vault:{platform}:{app_id}:secret`,
-`vault:account:{id}:tokens`. DB stores references only.
+Cloudflare free tier: Workers 100k requests/day, cron triggers included,
+D1 5GB + generous daily reads/writes, R2 10GB storage with **zero egress
+fees**, `workers.dev` HTTPS domain included. A single creator posting
+daily consumes a rounding error of every one of those. Their costs:
+**$0 to Boomin ever (by design), $0 to Cloudflare at personal scale**,
+plus their own Meta app (free) and technical effort. If they outgrow
+10GB of stored media, purge or pay Cloudflare cents — never Boomin.
 
 ---
 
@@ -190,174 +184,125 @@ Keychain: `vault:boomin:session`, `vault:{platform}:{app_id}:secret`,
 
 ### 3.1 Onboarding chooser (first run)
 
-Two doors, honestly described, both first-class:
-
-> **Connect with Boomin** — free account, publishing in ~2 minutes.
-> Your posts route through Boomin's servers to reach the platforms.
+> **Connect with Boomin** — free account, posting in ~2 minutes. Your
+> posts route through Boomin's servers.
 >
-> **Independent setup** — your own platform keys, ~20-30 minutes,
-> nothing touches Boomin. Works forever, even if we don't.
+> **Use your own server** — deploy the open-source producer-server to
+> your own Cloudflare account (guide: ~1 hour, $0), then paste your
+> endpoint + token here. Nothing touches Boomin, ever.
 
-Modes are per-channel, not global — a user can run connected Instagram
-and independent Threads side by side. The chooser is re-enterable from
-Settings; nothing is locked in.
+Re-enterable from Settings; nothing is locked in.
 
-### 3.2 Composer
+### 3.2 The self-hosting guide (first-class deliverable)
 
-- One draft → N channels (mixed modes). Text + one image or one
-  video/reel via picker or drag-drop.
-- Per-channel accordion (pattern proven in the hosted web app): caption
-  override, IG reel share-to-feed, Threads reply-control, FB Page pick.
-- Live preflight per channel; channel chips show platform + mode badge.
-- Actions: Post now / Schedule / Save draft.
+Lives in the `producer-server` repo (`SELF_HOSTING.md`), maintained with
+the same care as the app: create Cloudflare account → `wrangler deploy`
+(D1 + R2 + cron provisioned by config) → generate the app token → create
+your Meta app (screenshots + deep links; the old wizard content lives
+here now) → set secrets → paste endpoint into Producer → connect
+channels → test post → verify a scheduled post fires with the app
+closed. Includes the free-tier cost table and an upgrade path note.
 
-### 3.3 Queue & history
+### 3.3 Composer
 
-- Upcoming + in-flight with per-channel state chips; cancel / retry /
-  reschedule. Hosted job statuses poll into the same view.
-- History: reverse-chron with links to the live posts, plain-language
-  error explanations, one-click retry of failures only.
-- Scheduling difference stated inline, per channel, honestly:
+One draft → N channels (mixed endpoints). Text + one image or one
+video/reel. Per-channel accordion (caption override, IG reel
+share-to-feed, Threads reply-control, FB Page pick). Live server-side
+preflight surfaced in the composer (caption limits, media constraints,
+rate-limit budget — IG 100 posts/24h). Post now / Schedule / Draft.
 
-  | Channel | Fires with the computer off? |
-  | --- | --- |
-  | Connected (any platform) | yes — hosted scheduler |
-  | Independent Facebook | yes — the FB sender always uses Meta's native `scheduled_publish_time`, so Meta's servers fire it (allowed window verified in the sender spike) |
-  | Independent Threads / IG | no — Producer must be running (tray counts); launch-at-login offered; overdue catch-up with notification on next open |
+### 3.4 Queue & history
 
-  Roadmap note (post-v0.1, enabled by the engine/UI split): `producerd`,
-  the engine compiled headless for any always-on box the user owns —
-  fully independent laptop-closed scheduling with zero Boomin contact.
+Upcoming + in-flight with per-channel state chips (cancel / retry /
+reschedule); history with links to live posts and plain-language errors.
+All scheduling is server-side on both endpoints — **"fires with your
+computer off" is true everywhere**, which retires the old per-channel
+scheduling caveat table entirely.
 
-### 3.4 Independent connection wizard (Threads, Facebook)
+### 3.5 Settings
 
-Guided per-platform flow with screenshots + deep links into
-developers.facebook.com: create the (free) Meta app → enable the product
-→ add yourself as tester → paste App ID/Secret (→ keychain) → OAuth →
-live verification (profile fetch + per-scope checklist) → optional test
-post. Requirements stated up front (FB posting targets a Page; IG
-independent not yet available — roadmap link; rate limits listed).
-
-### 3.5 Settings console
-
-Connections (channels, modes, scopes, reconnect) · Publishing defaults ·
-Behavior (tray, launch-at-login, notifications) · **Privacy — "what talks
-to what"** (the disclosure page, always one click away) · Updates ·
-Advanced (log viewer, data folder). Plain sectioned page in v0.1; the
-dockable panel system arrives with multistream.
+Endpoints (Boomin sign-in; custom endpoint + token, connection health) ·
+Channels (per-endpoint, reconnect, scopes) · Publishing defaults ·
+**Privacy — "what talks to what"** (per-endpoint disclosure, always one
+click away) · Behavior (notifications) · Updates · Advanced (log viewer).
 
 ### 3.6 Updater & releases
 
 `tauri-plugin-updater` + minisign-signed manifest on GitHub Releases
-(private key: CI secret + one offline backup). `tauri-action` release
-workflow: tag → build win/mac/linux → sign-if-secrets-present (Apple /
-Windows steps no-op until certs exist) → draft release with changelog.
-In-app: background check, non-nag banner, "Restart to update".
+(private key: CI secret + offline backup). `tauri-action` workflow:
+tag → win/mac/linux builds → sign-if-secrets-present (Apple/Windows
+steps no-op until certs are funded) → draft release with changelog.
 
 ---
 
 ## 4. Security & privacy posture
 
-- **Disclosure is a feature:** first-run screen + permanent Settings page
-  stating per-mode data flow. Connected mode sends: media files, captions,
-  schedule times, and platform account linkage to Boomin (governed by the
-  hosted ToS/privacy policy — linked). Independent mode sends nothing to
-  Boomin; the app makes no Boomin network calls for independent-only
-  users beyond the update check to GitHub.
-- Tokens/secrets in OS keychain only; log scrubber redacts token shapes.
-- Real CSP (drop scaffold's `csp: null`); Tauri capabilities minimized.
-- **No telemetry in v0.1** — not even opt-in. What Boomin observes in
-  connected mode is the API traffic itself, disclosed above. Crash
-  reporting revisited post-launch as opt-in.
-- `SECURITY.md` with disclosure contact ships at flip-public.
+- Disclosure is a feature: per-endpoint data-flow statements; the active
+  endpoint always visible in the shell.
+- Desktop keychain: session tokens only. Platform secrets never exist
+  client-side in either mode.
+- producer-server: bearer auth on every route, OAuth `state` single-use,
+  tokens encrypted at rest in D1 (AES-GCM, key in worker secrets),
+  log scrubbing, R2 public access scoped to a media prefix only.
+- Real CSP in the webview (drop scaffold's `csp: null`); Tauri
+  capabilities minimized.
+- **No telemetry in v0.1** in the app or producer-server. What Boomin
+  observes in connected mode is the API traffic itself, disclosed.
+- `SECURITY.md` with disclosure contact in both repos at flip-public.
 
 ## 5. Testing strategy
 
-- Engine unit tests: state machine edges, backoff math, error classes,
-  checkpoint/resume (kill mid-publish), mixed-mode fan-out.
-- Sender integration tests against a mock Graph server (wiremock) with
-  golden fixtures; connected-client tests against a mock Boomin API.
-- Manual pre-release checklist on all three OSes against real accounts
-  (WebView2 / WKWebView / WebKitGTK differences).
-- CI extended with engine tests + clippy; release workflow dry-run on a
-  `v0.0.x-rc` tag before launch.
+- producer-server: queue state-machine unit tests (every edge, backoff,
+  idempotent resume), sender integration tests against a mock Graph
+  server (golden fixtures incl. the multi-step IG container flow),
+  cron-tick tests, contract tests generated from the OpenAPI spec.
+- Desktop: client contract tests against a local producer-server
+  instance (`wrangler dev`) — the self-host stack doubles as the test
+  harness; component tests for composer preflight rendering.
+- Manual pre-release checklist on all three OSes (WebView2 / WKWebView /
+  WebKitGTK) against real dev-mode Meta apps.
+- CI: existing 3-OS build matrix + engine/server tests + a release
+  workflow dry-run on a `v0.0.x-rc` tag.
 
-## 6. Independent-Instagram track (v0.1.x, not launch-blocking)
-
-Instagram feed images require a publicly reachable URL — a structural
-constraint, not a spike outcome. Independent IG therefore needs a media
-bridge and ships after launch, gated on spikes:
-
-- **S1** — loopback OAuth acceptance for IG Business Login / Threads
-  (FB known-good). Fallbacks: local self-signed HTTPS or manual-code flow.
-- **S2** — IG Reels resumable upload without a public URL (if yes,
-  independent reels skip the bridge).
-- **S3** — Threads dev-mode setup walkthrough (feeds the wizard content;
-  runs before M4).
-
-Bridge design (when it ships): a pluggable **`MediaSource` trait**
-mirroring `PlatformSender` — each source resolves a draft's media to a
-publicly fetchable URL at publish time and cleans up afterward:
-
-- **Pasted URL** (v0.1-cheap): media already hosted anywhere public is
-  passed straight through. An input field, zero infrastructure.
-- **Boomin ephemeral handoff** (default bridge): open-source ~100-line
-  Worker in this repo; auto-delete on publish confirmation, TTL 1h.
-- **Self-hosted handoff:** the same Worker on the user's own Cloudflare
-  account (one URL field).
-- **BYO S3-compatible bucket** (R2/B2/S3): presigned time-limited URLs —
-  the contractually reliable self-owned option.
-- **Ephemeral-public flip adapters** (community track): the file lives in
-  the user's own cloud; at publish time the app uses the user's own OAuth
-  to make it link-public, hands the URL to Meta, and revokes on publish
-  confirmation. Dropbox first (raw links serve clean bytes reliably);
-  Google Drive labeled experimental (virus-scan interstitial breaks
-  machine fetches above modest sizes; direct-link format churns).
-
-Full disclosure at first use of any backend; nobody is silently routed.
-The trait is a second labeled community extension point alongside
-`PlatformSender`.
-
-## 7. Build order
+## 6. Build order
 
 | M | Deliverable | Proves |
 | --- | --- | --- |
-| **M1** | Engine skeleton: SQLite + migrations, keychain vault, IPC contract, log scrubber, updater keypair. Parallel: **D1 decision + lean publish endpoint** in api repo | foundations |
-| **M2** | Boomin OTP sign-in + connected channel list + **connected Instagram: compose → post now**, end-to-end | the 5-minute default path — demo-able |
-| **M3** | Connected scheduling + status polling + history view | the "laptop closed" story |
-| **M4** | Sender trait + local queue + **independent Threads** (wizard → OAuth → text post, fully local) | the escape hatch is real |
-| **M5** | **Independent Facebook Pages** (direct media uploads) + tray/catch-up scheduler | second sender proves the trait |
-| **M6** | Settings console + disclosure pages + updater UX + release workflow e2e | shippable |
-| **M7** | Hardening, SECURITY.md, CLA bot, README + demo GIF + comparison table, issue templates, launch collateral | flip public |
+| **M1** | API contract v0 (OpenAPI) + desktop skeleton (client, vault, onboarding chooser) + D1 decision landed in api repo | the spine |
+| **M2** | Connected: OTP sign-in, workspace auto-provisioning (user never sees "brand"), channel list, **compose → post now to Instagram** | the 5-minute path — demo-able |
+| **M3** | Connected scheduling + job status + history | laptop-closed story, mode one |
+| **M4** | `producer-server` repo: worker + D1 + R2 + cron + queue engine + **Instagram sender** (BYO app, container flow, R2 media) | the hard sender, on the open stack |
+| **M5** | Facebook + Threads senders; SELF_HOSTING.md guide complete; desktop custom-endpoint mode wired end-to-end | full trio, independent |
+| **M6** | Settings + disclosure pages + updater UX + release workflow e2e | shippable |
+| **M7** | Hardening, SECURITY.md + CLA bot (both repos), README + demo GIF + comparison table, sender backlog as labeled issues, launch collateral | flip public |
 
-Spikes S1–S3 run in parallel from M1; they gate only the v0.1.x
-independent-IG track, never the launch. A real demo exists at M2 —
-build-in-public content starts there.
+`producer-server` is built in the open from M4 — it is arguably the
+stronger build-in-public artifact of the two repos. Remaining spike:
+**S3 only** (walk the real Meta BYO app setup as a fresh user; the
+screenshots become SELF_HOSTING.md). S1 (loopback) and S2 (resumable
+upload) died with the local-engine design.
 
-## 8. Risk register
+## 7. Risk register
 
 | Risk | Level | Mitigation |
 | --- | --- | --- |
-| Hosted uptime/cost becomes part of the OSS product's reputation | High | It already is Boomin's product surface; free-tier publish quotas; status page; independent mode is the pressure valve |
-| OSS-purist pushback on hosted-default | Med | Independent mode ships *working* at launch (Threads+FB), disclosure UX is loud, independent-IG roadmap public |
-| D1 slips (api-repo dependency) | Med | Fallback: reuse existing unit endpoints behind the connected client; lean endpoint refactor later |
-| Meta dev-mode friction in independent wizard | Med | S3 makes the wizard truthful; scope checklist; test post |
-| Scheduling expectations (independent, app closed) | Med | Difference stated in-UI per §3.3; connected mode is the answer for "always fires" |
-| Free connected tier abused / rate limits | Low-Med | Per-account platform limits already bind (IG 100/24h); hosted quotas configurable server-side |
-| Meta policy/API drift | Med | Versioned endpoints isolated per sender; connected mode insulated by hosted layer |
-| Scope creep | Med | §1 non-goals; anything unlisted is v0.1.x+ |
-| Unsigned macOS friction | Low | Known + accepted; guided install note; signing when funded |
+| Two repos of scope for one launch | **High — the top risk** | producer-server is deliberately lean (single-user, no billing/orgs); the contract keeps surfaces small; M4-M5 timebox; connected mode alone is a shippable fallback launch |
+| D1 (lean hosted endpoints) slips | Med | Fallback: connected client temporarily rides existing unit endpoints behind the same desktop client interface |
+| Hosted FB/Threads needs Meta app review (Boomin's app) | Med | Independent covers them at launch; hosted parity is a post-launch workstream, stated in the matrix |
+| Meta BYO setup friction for self-hosters | Med | S3 makes the guide truthful; per-scope checklist in the connect flow; test post step |
+| Cloudflare single-vendor for self-host | Low-Med | Free tier + zero egress is the best-in-class deal today; AGPL means the community can port the worker (it's Hono + SQLite — portable by construction); BYO-Postgres variant documented |
+| Hosted uptime/cost is now OSS reputation | Med | Free-tier quotas server-side; status page; independent mode is the pressure valve |
+| OSS-purist pushback on hosted-default | Low | The independent stack is *fully* capable at launch (all three platforms, $0) — the strongest possible answer |
+| Meta policy/API drift | Med | Senders isolate versioned endpoints; preflight enums; pinned Graph versions |
+| Unsigned macOS friction | Low | Known + accepted; guided note; signing when funded (first Sponsors goal) |
 
-Note on the network moat: connected mode means every default user holds a
-Boomin account at launch. The Phase-2 network opt-in becomes a checkbox on
-an existing account rather than a new signup — by design.
+## 8. Launch definition (exit of Phase 1)
 
-## 9. Launch definition (exit of Phase 1)
-
-Repo flips public when: §1 success criteria pass on all three OSes;
-a signed-manifest release has shipped and been consumed by the updater;
-CLA bot active; disclosure pages reviewed against actual data flows;
-README shows a 30-second demo GIF of the 5-minute connected path AND
-names independent mode honestly; Mac unsigned-install note published;
-sender backlog (YouTube/X/TikTok + independent-IG) posted as labeled
-issues for contributors.
+Both repos flip public together when: §1 success criteria pass on all
+three OSes; a signed-manifest release has shipped and been consumed by
+the updater; SELF_HOSTING.md has been executed start-to-finish by a
+fresh account (S3); CLA bot active on both repos; disclosure pages
+reviewed against actual data flows; README shows the 5-minute connected
+demo AND the "your server, your rules, $0" independent story; Mac
+unsigned-install note published; sender backlog (YouTube/X/TikTok)
+posted as labeled issues in producer-server.
