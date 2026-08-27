@@ -3,7 +3,7 @@ name = "producer"
 version = "0.1.0"
 description = "Producer by Boomin — the open-source studio for creators: post everywhere, stream everywhere."
 authors = ["Boomin"]
-license = "MIT"
+license = "AGPL-3.0-only"
 repository = "https://github.com/Boomin-Ai/producer"
 edition = "2021"
 

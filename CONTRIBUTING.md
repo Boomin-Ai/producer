@@ -34,6 +34,13 @@ The platform senders are the heart of the roadmap — each one (YouTube, X,
 TikTok, …) is a well-scoped module behind a common publish-job interface.
 Check issues labeled `good first issue` and `platform-sender`.
 
+## Contributor License Agreement
+
+Producer is AGPL-3.0 with an open-core model. To keep that model workable
+(including letting Boomin reuse contributions in its hosted products), all
+contributors sign a lightweight CLA once, on their first PR — automated by
+a bot, takes a minute. Your code stays yours and stays credited to you.
+
 ## Ground rules
 
 - One change per PR; describe the user-visible effect in the first line.

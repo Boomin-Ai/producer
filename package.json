@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "Producer by Boomin — the open-source studio for creators: post everywhere, stream everywhere.",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "repository": {
     "type": "git",
     "url": "https://github.com/Boomin-Ai/producer.git"

@@ -4,7 +4,7 @@
 
 Producer is the open-source studio for creators and brands: **post everywhere,
 stream everywhere** — from one desktop app, with your own keys, on your own
-channels. MIT-licensed. Built by [Boomin](https://boomin.ai).
+channels. Free and open source (AGPL-3.0). Built by [Boomin](https://boomin.ai).
 
 ## Why
 
@@ -54,11 +54,17 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full setup.
 
 ## How it stays free
 
-The desktop app is MIT and runs on your keys — that part is free forever.
-Boomin makes money on the hosted platform (managed keys, credits for media
-generation, the paid multistream relay, and the brand network). Think
-ComfyUI and Comfy Cloud: same team, open core, honest split.
+The desktop app is AGPL-3.0 and runs on your keys — free forever, and it
+*stays* free: the license guarantees nobody can take this code closed, and
+anyone running a modified version as a service must share their changes
+with their users. Boomin makes money on the hosted platform (managed keys,
+credits for media generation, the paid multistream relay, and the brand
+network) and on commercial licenses for companies that want Producer inside
+proprietary products. Want this functionality embedded in your own product
+without AGPL obligations? That's what the MIT-licensed Boomin SDK is for.
+Think ComfyUI and Comfy Cloud: same team, open core, honest split.
 
 ## License
 
-MIT © 2026 Boomin
+AGPL-3.0-only © 2026 Boomin. The Boomin SDK packages (`@boomin/sdk`,
+`@boomin/connect`) are separately MIT-licensed.
