@@ -64,6 +64,14 @@ proprietary products. Want this functionality embedded in your own product
 without AGPL obligations? That's what the MIT-licensed Boomin SDK is for.
 Think ComfyUI and Comfy Cloud: same team, open core, honest split.
 
+## Support the project
+
+Producer is free and always will be. If it saves you a subscription, consider
+[sponsoring development](https://github.com/sponsors/ikleveland) — every bit
+funds more platform senders and faster releases. The other great ways to help:
+star the repo, ship a PR, or use [Boomin hosted](https://boomin.ai) when you
+want the managed experience.
+
 ## License
 
 AGPL-3.0-only © 2026 Boomin. The Boomin SDK packages (`@boomin/sdk`,
