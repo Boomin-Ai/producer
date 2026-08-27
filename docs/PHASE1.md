@@ -99,6 +99,18 @@ Both modes flow through the same engine so the UI is mode-agnostic: a
 - **Publish & schedule:** executed server-side by the hosted publish
   engine (the production-proven job state machine). The app submits,
   then polls/receives status into local history.
+- **Where media lives:** source files stay on the user's disk (SQLite
+  stores paths, never blobs). Connected publishing uploads a copy to
+  Boomin storage (R2) for the hosted engine to hand to the platform.
+  **Open decision D2 — retention of that copy:** default to persisting
+  it as the user's cloud media library (matches the hosted product's
+  Drive; enables reuse + history previews) with a per-workspace
+  "auto-delete after publishing" setting and delete-anytime controls,
+  all stated on the disclosure page — vs. ephemeral-by-default.
+  Free-tier storage quota bounds cost either way. Independent-mode
+  media never touches Boomin: FB uploads go disk→Meta directly; the
+  future independent-IG bridge (§6) is ephemeral by design (delete on
+  publish confirmation, 1h TTL fallback).
 - **Open decision D1 (needs an owner in the api repo):** desktop submits
   through the existing unit/collection endpoints vs. a new lean
   `POST /v1/app/posts` surface purpose-built for the desktop composer.
