@@ -63,7 +63,9 @@ export default {
     const asset = rel.assets.find((a) => patterns.some((re) => re.test(a.name)));
     if (!asset) return new Response("No build for this platform yet.", { status: 404 });
 
-    const upstream = await fetch(asset.browser_download_url, {
+    // Cache-key on the asset id: rebuilt releases reuse the same URL, and
+    // without this the edge keeps serving the previous binary for an hour.
+    const upstream = await fetch(`${asset.browser_download_url}?ck=${asset.id}`, {
       redirect: "follow",
       cf: { cacheTtl: 3600, cacheEverything: true },
     });
