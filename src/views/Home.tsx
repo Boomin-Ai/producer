@@ -33,8 +33,8 @@ interface ChannelParams {
   // instagram
   feed: boolean;
   location: string;
-  userTags: string;
-  collaborators: string;
+  userTags: string[];
+  collaborators: string[];
   cover_url: string;
   trial_post: boolean;
   // threads
@@ -48,8 +48,8 @@ const DEFAULT_PARAMS: ChannelParams = {
   caption: "",
   feed: true,
   location: "",
-  userTags: "",
-  collaborators: "",
+  userTags: [],
+  collaborators: [],
   cover_url: "",
   trial_post: false,
   reply_control: "",
@@ -64,8 +64,8 @@ function buildOverrides(p: ChannelParams | undefined, platform: string): Record<
   if (platform === "instagram") {
     o.feed = p.feed;
     if (p.location.trim()) o.location = p.location.trim();
-    if (p.userTags.trim()) o.userTags = p.userTags.trim();
-    if (p.collaborators.trim()) o.collaborators = p.collaborators.trim();
+    if (p.userTags.length) o.userTags = p.userTags;
+    if (p.collaborators.length) o.collaborators = p.collaborators;
     if (p.cover_url.trim()) o.cover_url = p.cover_url.trim();
     if (p.trial_post) o.trial_post = true;
   }
@@ -75,6 +75,64 @@ function buildOverrides(p: ChannelParams | undefined, platform: string): Record<
     if (p.link_attachment.trim()) o.link_attachment = p.link_attachment.trim();
   }
   return o;
+}
+
+/** Chip-style tag input: Enter/comma adds, Backspace on empty or ✕
+ *  removes. Emits a clean array — no separator parsing downstream. */
+function TagInput({
+  values,
+  onChange,
+  placeholder,
+}: {
+  values: string[];
+  onChange: (values: string[]) => void;
+  placeholder: string;
+}) {
+  const [draft, setDraft] = useState("");
+
+  function commit() {
+    const tag = draft.trim().replace(/^@/, "").replace(/,+$/, "");
+    setDraft("");
+    if (tag && !values.includes(tag)) onChange([...values, tag]);
+  }
+
+  return (
+    <div className="tag-input">
+      {values.map((v) => (
+        <span key={v} className="tag-chip">
+          @{v}
+          <button
+            type="button"
+            aria-label={`remove ${v}`}
+            onClick={() => onChange(values.filter((x) => x !== v))}
+          >
+            ✕
+          </button>
+        </span>
+      ))}
+      <input
+        value={draft}
+        onChange={(e) => {
+          if (e.target.value.endsWith(",")) {
+            setDraft(e.target.value);
+            commit();
+          } else {
+            setDraft(e.target.value);
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          } else if (e.key === "Backspace" && !draft && values.length) {
+            onChange(values.slice(0, -1));
+          }
+        }}
+        onBlur={commit}
+        placeholder={values.length ? "" : placeholder}
+      />
+    </div>
+  );
 }
 
 function Switch({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
@@ -587,18 +645,18 @@ function ComposerDetail({
                             </div>
                             <div className="acc-row">
                               <span className="acc-label">User Tags</span>
-                              <input
-                                value={p.userTags}
-                                onChange={(e) => patchParams(c.id, { userTags: e.target.value })}
-                                placeholder="@username"
+                              <TagInput
+                                values={p.userTags}
+                                onChange={(v) => patchParams(c.id, { userTags: v })}
+                                placeholder="@username — press Enter to add"
                               />
                             </div>
                             <div className="acc-row">
                               <span className="acc-label">Collaborators</span>
-                              <input
-                                value={p.collaborators}
-                                onChange={(e) => patchParams(c.id, { collaborators: e.target.value })}
-                                placeholder="@collaborator"
+                              <TagInput
+                                values={p.collaborators}
+                                onChange={(v) => patchParams(c.id, { collaborators: v.slice(0, 3) })}
+                                placeholder="@collaborator — press Enter to add (max 3)"
                               />
                             </div>
                             <div className="acc-row">
