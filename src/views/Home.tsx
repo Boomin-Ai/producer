@@ -227,6 +227,16 @@ function ComposerDetail({
   const [connectPending, setConnectPending] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [params, setParams] = useState<Record<string, ChannelParams>>({});
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  function toggleExpanded(channelId: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(channelId)) next.delete(channelId);
+      else next.add(channelId);
+      return next;
+    });
+  }
 
   async function startConnect(endpointId: string, platform: string) {
     setConnectError(null);
@@ -507,9 +517,16 @@ function ComposerDetail({
                   .filter((c) => selected.has(c.id))
                   .map((c) => {
                     const p = params[c.id] ?? DEFAULT_PARAMS;
+                    const isOpen = expanded.has(c.id);
                     return (
                       <div key={c.id} className="channel-acc">
-                        <div className="acc-head">
+                        <div
+                          className="acc-head clickable"
+                          onClick={() => toggleExpanded(c.id)}
+                          role="button"
+                          aria-expanded={isOpen}
+                        >
+                          <span className={`chev${isOpen ? " open" : ""}`}>▸</span>
                           <span className="platform">{c.platform}</span>
                           <span className="name">{c.display_name}</span>
                           {c.external_handle && (
@@ -518,11 +535,19 @@ function ComposerDetail({
                           <span className="mode-tag">
                             {c.endpoint_kind === "connected" ? "Boomin" : "Self-hosted"}
                           </span>
-                          <button className="linkish" onClick={() => toggle(c.id)}>
+                          <button
+                            className="linkish"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggle(c.id);
+                            }}
+                          >
                             remove
                           </button>
                         </div>
 
+                        {isOpen && (
+                          <>
                         <div className="acc-row">
                           <span className="acc-group">Caption</span>
                           <span className="muted">
@@ -627,6 +652,8 @@ function ComposerDetail({
                                 placeholder="https://… (text-only posts — shows a preview card)"
                               />
                             </div>
+                          </>
+                        )}
                           </>
                         )}
                       </div>
