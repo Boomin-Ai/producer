@@ -3,7 +3,10 @@
 Status: **v4.1 — FROZEN (implementation contract).** Architecture GREEN
 through two staff review rounds. v4 applied six corrections; v4.1
 applies the approved micro-patch (immutable outbox snapshots,
-effectively-once acceptance semantics, media-capability hardening).
+effectively-once acceptance semantics, media-capability hardening);
+v4.1.1 is a non-architectural amendment (endpoint access token
+terminology; automation token scoped to publish/read/media-upload;
+humans establish channel authority, agents exercise it).
 Changes from here require a versioned amendment, not a redesign round.
 
 The desktop app is a **client of a Producer endpoint**. There are two
@@ -80,8 +83,10 @@ self-hosting guide is the onboarding** — a first-class product artifact.
    signed by the release key, signatures distributed through the update
    manifest, and verified by Tauri before installation.
 7. **Secrets law (absolute):** the desktop keychain holds only endpoint
-   session tokens. Platform secrets and storage-provider credentials
-   never exist client-side — no exceptions, including BYO storage
+   access tokens (Connected: the Boomin session token; Independent: the
+   self-host bearer token). Platform credentials and infrastructure
+   credentials never cross into the desktop; storage-provider secrets
+   never exist client-side, no exceptions, including BYO storage
    (§2.2). Nothing sensitive in logs or the webview.
 
 **Non-goals for v0.1:** YouTube/X/TikTok senders, multistreaming, media
@@ -102,7 +107,7 @@ what makes `wrangler deploy` credible as a product.
 ┌── producer (this repo, AGPL) ────────────────────────────────┐
 │  Tauri 2 desktop app                                         │
 │   ├─ UI: composer, queue, history, settings, onboarding      │
-│   ├─ vault: OS keychain (endpoint session tokens ONLY)       │
+│   ├─ vault: OS keychain (endpoint access tokens ONLY)        │
 │   ├─ outbox: durable submission intents (§2.4)               │
 │   └─ client: typed client for the Producer API contract      │
 └──────────────────────────────────────────────────────────────┘
@@ -212,10 +217,24 @@ it fires — early deletion produces a clear, retryable error.
   account, one `wrangler deploy`; "bring your own Postgres" is a
   documented variant, not the default), private R2, cron triggers,
   worker secrets for platform keys.
-- **Tenancy:** single-user. Auth is one bearer token generated at deploy
-  time and pasted into the desktop app, plus an optional second
-  **automation token** (same rights, separately revocable) for CLI/MCP/
-  agent use — issued at M1 so it isn't a retrofit.
+- **Tenancy:** single-user. Auth is the primary endpoint token generated
+  at deploy time and pasted into the desktop app, plus an optional
+  **automation token** — a separately revocable **publish/read/
+  media-upload** token intended for agents, CLI, MCP, and CI (issued at
+  M1 so it isn't a retrofit). Two token classes, not RBAC:
+
+```
+primary token       publish · read · channel administration ·
+                    connection/OAuth · media administration ·
+                    server administration
+
+automation token    publish · read · media upload
+```
+
+  The automation token can never: connect/disconnect channels, rotate or
+  modify stored platform credentials, issue other tokens, or change
+  server configuration. It will be pasted into far more places than the
+  desktop credential — its blast radius is scoped accordingly.
 - **Auth model (stated precisely):** bearer auth on every Producer API
   route; OAuth browser/callback routes use short-lived, single-use
   connect sessions and validated single-use `state` — never the bearer
@@ -259,8 +278,8 @@ Meta    ──▶ /oauth/callback?code&state   (validated, single-use state)
 
 No local publish engine, no local scheduler, no media bridges. It is:
 shell + onboarding chooser + composer/queue/history rendered from the
-API + settings + updater + keychain (session tokens only) + **the
-outbox**.
+API + settings + updater + keychain (endpoint access tokens only) +
+**the outbox**.
 
 **The client outbox (delivery integrity for mixed-endpoint fan-out).**
 One draft can target channels on different endpoints; no single server
@@ -382,10 +401,15 @@ and the OpenAPI spec can do everything the app can do, on either
 backend. This is Producer's obs-websocket, native to 2026:
 
 - **v0.1 (free, by construction):** the versioned OpenAPI spec is
-  published in producer-server; the automation token (§2.3) gives
-  agents revocable access. A user's Claude/Codex can connect channels,
-  submit posts by URL, schedule, and poll jobs today with zero extra
-  code from us.
+  published in producer-server; the automation token (§2.3, scoped to
+  publish/read/media-upload) gives agents revocable access. Agents and
+  scripts can publish, schedule, inspect existing channel connections,
+  and poll jobs without the desktop app. **Channel authorization remains
+  an explicit human OAuth action** — an agent may at most initiate a
+  connect session for a human to complete in a browser (§2.3). The law,
+  stated once and enforced by the token scopes:
+  **humans establish channel authority; agents exercise granted
+  authority.**
 - **M8 (post-launch, first follow-up release):** `producer-mcp` — a
   thin stdio MCP server wrapping the contract (`producer_create_post`,
   `producer_schedule`, `producer_list_channels`, `producer_job_status`),
@@ -404,7 +428,8 @@ backend. This is Producer's obs-websocket, native to 2026:
 
 - Disclosure is a feature: per-endpoint data-flow statements; the active
   endpoint always visible in the shell.
-- **Secrets law:** desktop keychain holds session tokens only. Platform
+- **Secrets law:** desktop keychain holds endpoint access tokens only.
+  Platform
   secrets and storage credentials live server-side exclusively (Boomin's
   encrypted vault or the user's worker secrets). The outbox stores
   instructions, never secrets or media bytes.
