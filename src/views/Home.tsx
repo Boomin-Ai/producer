@@ -149,6 +149,7 @@ function ComposerDetail({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<TargetResult[] | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const maxChars = useMemo(() => {
     const limits = channels
@@ -240,11 +241,46 @@ function ComposerDetail({
           Producer <span className="sep">›</span> <strong>New post</strong>
         </div>
         <div className="top-meta">
-          <span className="meta-block">
+          <span className="meta-block dist-block">
             <span className="meta-label">Distribution</span>
             <span className="meta-value">
               {selected.size} channel{selected.size === 1 ? "" : "s"}
+              <button
+                className="pencil"
+                title="Choose channels"
+                onClick={() => setPickerOpen((o) => !o)}
+              >
+                ✎
+              </button>
             </span>
+            {pickerOpen && (
+              <>
+                <div className="popover-backdrop" onClick={() => setPickerOpen(false)} />
+                <div className="channel-popover">
+                  <div className="popover-label">Channels</div>
+                  {channels.length === 0 ? (
+                    <div className="popover-empty">No publishable channels yet.</div>
+                  ) : (
+                    channels.map((c) => (
+                      <label key={c.id} className="popover-row">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(c.id)}
+                          onChange={() => toggle(c.id)}
+                        />
+                        <span className="popover-row-text">
+                          <span className="popover-name">{c.display_name}</span>
+                          <span className="popover-sub">
+                            {c.platform}
+                            {c.endpoint_kind === "independent" ? " · self-hosted" : ""}
+                          </span>
+                        </span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
           </span>
           <span className="meta-block">
             <span className="meta-label">Stage</span>
@@ -328,21 +364,28 @@ function ComposerDetail({
             <div className="section-head">
               <span className="section-label">Selected channels</span>
             </div>
-            {channels.length === 0 ? (
+            {selected.size === 0 ? (
               <div className="empty-strip">
-                No publishable channels. Connected workspaces pick up channels from the Boomin
-                web app; independent servers list them once a platform is connected there.
+                No channels selected.
+                {channels.length === 0 &&
+                  " Connected workspaces pick up channels from the Boomin web app; self-hosted servers list them once a platform is connected there."}
               </div>
             ) : (
               <div className="channel-cards">
-                {channels.map((c) => (
-                  <label key={c.id} className={`channel-card${selected.has(c.id) ? " picked" : ""}`}>
-                    <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} />
-                    <span className="platform">{c.platform}</span>
-                    <span className="name">{c.display_name}</span>
-                    <span className="mode-tag">{c.endpoint_kind === "connected" ? "Boomin" : "Self-hosted"}</span>
-                  </label>
-                ))}
+                {channels
+                  .filter((c) => selected.has(c.id))
+                  .map((c) => (
+                    <div key={c.id} className="channel-card picked">
+                      <span className="platform">{c.platform}</span>
+                      <span className="name">{c.display_name}</span>
+                      <span className="mode-tag">
+                        {c.endpoint_kind === "connected" ? "Boomin" : "Self-hosted"}
+                      </span>
+                      <button className="linkish" onClick={() => toggle(c.id)}>
+                        remove
+                      </button>
+                    </div>
+                  ))}
               </div>
             )}
             {loadError && <p className="error">{loadError}</p>}
