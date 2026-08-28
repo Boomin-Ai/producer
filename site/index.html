@@ -92,7 +92,7 @@
     display: inline-flex; align-items: center; gap: 9px;
     font-size: 13px; font-weight: 500; color: var(--dim);
     border: 1px solid var(--line); border-radius: 999px;
-    padding: 8px 18px; margin-bottom: 40px;
+    padding: 8px 18px;
     background: rgba(255, 255, 255, 0.02);
   }
   .badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 10px var(--mint); }
@@ -130,35 +130,14 @@
   .dl-note a { color: var(--dim); }
   .dl-note a:hover { color: var(--text); }
 
-  /* ── fan-out card ── */
-  .stage { margin: 64px auto 0; max-width: 640px; }
-  .card {
-    border: 1px solid var(--line); border-radius: 16px; background: rgba(14, 16, 21, 0.85);
-    text-align: left; overflow: hidden;
-    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
-  }
-  .card .compose { padding: 22px 24px 18px; }
-  .card .caption { font-size: 15.5px; color: var(--text); }
-  .card .caret { display: inline-block; width: 1.5px; height: 1.1em; background: var(--mint); vertical-align: -0.18em; margin-left: 2px; animation: blink 1.1s step-end infinite; }
-  @keyframes blink { 50% { opacity: 0; } }
-  .card .meta {
-    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-    padding: 0 24px 18px;
-  }
-  .chip {
-    font-family: var(--mono); font-size: 11px; color: var(--dim);
-    border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px;
-  }
-  .chip.on { color: var(--mint); border-color: rgba(61, 220, 166, 0.35); }
-  .card .foot {
-    display: flex; align-items: center; gap: 10px;
-    border-top: 1px solid var(--line); padding: 14px 24px;
-    font-family: var(--mono); font-size: 11.5px; color: var(--faint);
-  }
-  .card .foot .ok { color: var(--mint); }
-  .card .foot .spacer { flex: 1; }
+  /* ── badges & platform row ── */
+  .badges { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 40px; }
+  .badge img { width: 16px; height: 16px; }
 
-  @media (max-width: 640px) { .stage { margin-top: 48px; } }
+  .works { display: flex; align-items: center; gap: 18px; margin-top: 38px; }
+  .works .lbl { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em; color: var(--faint); text-transform: uppercase; }
+  .works img { width: 22px; height: 22px; opacity: 0.9; }
+  .works .soon { font-family: var(--mono); font-size: 11px; color: var(--faint); }
 
   /* ── sections ── */
   section { padding: 60px 0; border-top: 1px solid var(--line); }
@@ -213,7 +192,10 @@
   <header>
     <div class="hero-grid">
       <div>
-        <span class="badge"><span class="dot"></span> Open source · <b>AGPL-3.0</b> · Free forever</span>
+        <div class="badges">
+          <span class="badge"><span class="dot"></span> Open source · <b>AGPL-3.0</b></span>
+          <span class="badge"><img src="meta.svg" alt="" /> <b>Meta Verified</b> Technology Partner</span>
+        </div>
         <h1>
           <span class="l1">Post everywhere.</span>
           <span class="l2">Own everything.</span>
@@ -228,29 +210,17 @@
           <a class="pill" href="https://github.com/Boomin-Ai/producer">View source</a>
         </div>
         <p class="dl-note" id="dl-note"></p>
+        <div class="works">
+          <span class="lbl">Works with</span>
+          <img src="instagram.svg" alt="Instagram" title="Instagram" />
+          <img src="threads.svg" alt="Threads" title="Threads" />
+          <img src="facebook.svg" alt="Facebook" title="Facebook" />
+          <span class="soon">youtube · x · tiktok — next</span>
+        </div>
       </div>
       <img class="hero-chair" src="chair.png" alt="" />
     </div>
 
-    <div class="stage">
-      <div class="card">
-        <div class="compose">
-          <span class="caption">Open sourced the plug.<span class="caret"></span></span>
-        </div>
-        <div class="meta">
-          <span class="chip on">instagram</span>
-          <span class="chip on">threads</span>
-          <span class="chip on">facebook</span>
-          <span class="chip">youtube · soon</span>
-          <span class="chip">x · soon</span>
-        </div>
-        <div class="foot">
-          <span class="ok">●</span> published → instagram · boomin cloud
-          <span class="spacer"></span>
-          <span class="ok">●</span> published → threads · your worker
-        </div>
-      </div>
-    </div>
   </header>
 
   <section>
