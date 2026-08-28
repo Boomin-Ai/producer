@@ -11,6 +11,17 @@ const PLATFORMS = {
   "linux": [/\.AppImage$/i, /\.deb$/i],
 };
 
+// Clean save-as names — users see these, not the build artifact names.
+function cleanName(platform, assetName) {
+  const ext = assetName.slice(assetName.lastIndexOf("."));
+  return {
+    "macos": "Producer.dmg",
+    "macos-intel": "Producer-Intel.dmg",
+    "windows": "Producer-Setup" + ext,
+    "linux": "Producer" + ext,
+  }[platform] || assetName;
+}
+
 async function latestRelease() {
   // /releases/latest excludes prereleases, so list and take the newest non-draft.
   const res = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=10`, {
@@ -60,7 +71,7 @@ export default {
 
     const headers = new Headers();
     headers.set("content-type", "application/octet-stream");
-    headers.set("content-disposition", `attachment; filename="${asset.name}"`);
+    headers.set("content-disposition", `attachment; filename="${cleanName(m[1], asset.name)}"`);
     const len = upstream.headers.get("content-length");
     if (len) headers.set("content-length", len);
     headers.set("cache-control", "public, max-age=3600");
