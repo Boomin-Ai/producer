@@ -21,6 +21,23 @@ machine can push. Producer collapses both into one app you own:
   brand network — programs, partners, budgets. Skip it entirely and Producer
   still works, forever, for free.
 
+## One repo, both halves
+
+```
+/            the desktop app — Tauri 2 + Rust + React (this page)
+/server      producer-server — the self-hosted backend: a Cloudflare
+             Worker (D1 + R2 + cron) you deploy with one command, so
+             posting and scheduling run on YOUR account for $0.
+             → server/SELF_HOSTING.md is the ~20-minute walkthrough
+/server/contract   the Producer API contract (OpenAPI) — the spine the
+             desktop, the hosted backend, and your server all share
+```
+
+The app speaks one contract to either backend: **Connected** (Boomin's
+hosted platform, posting in ~2 minutes) or **Independent** (your own
+producer-server — nothing ever touches Boomin). Both can run side by
+side, and one post can fan out across them.
+
 ## Status
 
 **Pre-launch, building in public.** v0.1 ships cross-posting for the Meta
