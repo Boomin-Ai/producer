@@ -10,6 +10,10 @@ pub struct ProducerClient {
     http: reqwest::Client,
     base_url: String,
     token: String,
+    /// Hosted-backend workspace scope, appended as ?brandSlug= to every
+    /// request. Backend-specific (like the bearer token itself); None for
+    /// self-hosted endpoints.
+    brand_slug: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,11 +55,23 @@ impl ProducerClient {
             http: reqwest::Client::new(),
             base_url: base_url.trim_end_matches('/').to_string(),
             token: token.to_string(),
+            brand_slug: None,
         }
     }
 
+    pub fn with_brand(mut self, brand_slug: Option<String>) -> Self {
+        self.brand_slug = brand_slug.filter(|s| !s.is_empty());
+        self
+    }
+
     fn url(&self, path: &str) -> String {
-        format!("{}{}", self.base_url, path)
+        let mut url = format!("{}{}", self.base_url, path);
+        if let Some(slug) = &self.brand_slug {
+            url.push(if path.contains('?') { '&' } else { '?' });
+            url.push_str("brandSlug=");
+            url.push_str(slug);
+        }
+        url
     }
 
     /// Validate the token and learn its class + the server identity.

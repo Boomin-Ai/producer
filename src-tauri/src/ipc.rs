@@ -96,16 +96,11 @@ pub async fn endpoint_channels(
     state: State<'_, AppState>,
     endpoint_id: String,
 ) -> EngineResult<Value> {
-    let base_url: String = {
-        let conn = state.db.lock().expect("db mutex poisoned");
-        conn.query_row(
-            "SELECT base_url FROM endpoints WHERE id = ?1",
-            params![endpoint_id],
-            |r| r.get(0),
-        )?
-    };
-    let token = vault::get_token(&endpoint_id)?;
-    ProducerClient::new(&base_url, &token).list_channels().await
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .list_channels()
+        .await
 }
 
 /// Connected-mode sign-in, step 1: ask Boomin to email a code.
@@ -115,9 +110,10 @@ pub async fn boomin_request_otp(api_root: Option<String>, email: String) -> Engi
     boomin::request_otp(&root, &email).await
 }
 
-/// Connected-mode sign-in, step 2: verify the code and connect the endpoint
-/// in one motion — the session token flows straight into the keychain and
-/// never crosses the IPC boundary back to the webview.
+/// Connected-mode sign-in, step 2: verify the code. If the account has one
+/// workspace, connect immediately; with several, hold the token engine-side
+/// (AppState.pending_auth — it never crosses to the webview) and hand the
+/// UI a workspace list to pick from (finish via boomin_select_brand).
 #[tauri::command]
 pub async fn boomin_connect(
     state: State<'_, AppState>,
@@ -127,9 +123,58 @@ pub async fn boomin_connect(
 ) -> EngineResult<Value> {
     let root = api_root.unwrap_or_else(|| boomin::DEFAULT_BOOMIN_API_ROOT.to_string());
     let token = boomin::verify_otp(&root, &email, &code).await?;
-    let base = boomin::producer_base_for_root(&root);
-    let session = ProducerClient::new(&base, &token).get_session().await?;
+    let brands = boomin::list_brands(&root, &token).await?;
+    match brands.len() {
+        0 => Err(EngineError::Other(
+            "this account has no workspace yet — create one in the Boomin web app first".into(),
+        )),
+        1 => finalize_boomin_endpoint(&state, &root, &token, &brands[0].0).await,
+        _ => {
+            *state.pending_auth.lock().expect("auth mutex poisoned") = Some((root, token));
+            Ok(json!({
+                "needs_brand": true,
+                "brands": brands
+                    .iter()
+                    .map(|(slug, name)| json!({ "slug": slug, "name": name }))
+                    .collect::<Vec<_>>(),
+            }))
+        }
+    }
+}
 
+/// Connected-mode sign-in, step 3 (multi-workspace accounts): bind the held
+/// token to the chosen workspace and connect the endpoint.
+#[tauri::command]
+pub async fn boomin_select_brand(
+    state: State<'_, AppState>,
+    brand_slug: String,
+) -> EngineResult<Value> {
+    let pending = state
+        .pending_auth
+        .lock()
+        .expect("auth mutex poisoned")
+        .clone();
+    let Some((root, token)) = pending else {
+        return Err(EngineError::Other(
+            "the sign-in session expired — start over".into(),
+        ));
+    };
+    let result = finalize_boomin_endpoint(&state, &root, &token, &brand_slug).await?;
+    *state.pending_auth.lock().expect("auth mutex poisoned") = None;
+    Ok(result)
+}
+
+async fn finalize_boomin_endpoint(
+    state: &State<'_, AppState>,
+    api_root: &str,
+    token: &str,
+    brand_slug: &str,
+) -> EngineResult<Value> {
+    let base = boomin::producer_base_for_root(api_root);
+    let session = ProducerClient::new(&base, token)
+        .with_brand(Some(brand_slug.to_string()))
+        .get_session()
+        .await?;
     let id = Uuid::new_v4().to_string();
     let name = session
         .account
@@ -141,12 +186,31 @@ pub async fn boomin_connect(
     {
         let conn = state.db.lock().expect("db mutex poisoned");
         conn.execute(
-            "INSERT INTO endpoints (id, kind, name, base_url) VALUES (?1, 'connected', ?2, ?3)",
-            params![id, name, base],
+            "INSERT INTO endpoints (id, kind, name, base_url, brand_slug)
+             VALUES (?1, 'connected', ?2, ?3, ?4)",
+            params![id, name, base, brand_slug],
         )?;
     }
-    vault::set_token(&id, &token)?;
+    vault::set_token(&id, token)?;
     Ok(json!({ "id": id, "session": session }))
+}
+
+/// Load an endpoint's connection details (base URL, hosted workspace scope,
+/// keychain token).
+fn endpoint_access(
+    state: &State<'_, AppState>,
+    endpoint_id: &str,
+) -> EngineResult<(String, Option<String>, String)> {
+    let (base_url, brand_slug): (String, Option<String>) = {
+        let conn = state.db.lock().expect("db mutex poisoned");
+        conn.query_row(
+            "SELECT base_url, brand_slug FROM endpoints WHERE id = ?1",
+            params![endpoint_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?
+    };
+    let token = vault::get_token(endpoint_id)?;
+    Ok((base_url, brand_slug, token))
 }
 
 fn mime_for_path(path: &str) -> Option<(&'static str, &'static str)> {
@@ -185,16 +249,8 @@ pub async fn upload_media(
         .unwrap_or("media")
         .to_string();
 
-    let base_url: String = {
-        let conn = state.db.lock().expect("db mutex poisoned");
-        conn.query_row(
-            "SELECT base_url FROM endpoints WHERE id = ?1",
-            params![endpoint_id],
-            |r| r.get(0),
-        )?
-    };
-    let token = vault::get_token(&endpoint_id)?;
-    let client = ProducerClient::new(&base_url, &token);
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    let client = ProducerClient::new(&base_url, &token).with_brand(brand_slug);
     let slot = client
         .create_upload(&filename, mime, bytes.len() as u64)
         .await?;
@@ -215,16 +271,11 @@ pub async fn upload_media(
 
 #[tauri::command]
 pub async fn list_jobs(state: State<'_, AppState>, endpoint_id: String) -> EngineResult<Value> {
-    let base_url: String = {
-        let conn = state.db.lock().expect("db mutex poisoned");
-        conn.query_row(
-            "SELECT base_url FROM endpoints WHERE id = ?1",
-            params![endpoint_id],
-            |r| r.get(0),
-        )?
-    };
-    let token = vault::get_token(&endpoint_id)?;
-    ProducerClient::new(&base_url, &token).list_jobs(50).await
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .list_jobs(50)
+        .await
 }
 
 #[derive(Debug, Deserialize)]

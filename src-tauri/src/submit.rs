@@ -29,31 +29,37 @@ pub async fn submit_pending(
     db: &Mutex<Connection>,
     only_intent: Option<&str>,
 ) -> EngineResult<Vec<TargetResult>> {
-    // Snapshot pending work + endpoint base URLs under one short lock.
-    let (targets, base_urls) = {
+    // Snapshot pending work + endpoint connection info under one short lock.
+    let (targets, endpoints_info) = {
         let conn = db.lock().expect("db mutex poisoned");
         let targets = outbox::pending_targets(&conn, only_intent)?;
-        let mut base_urls: HashMap<String, String> = HashMap::new();
+        let mut endpoints_info: HashMap<String, (String, Option<String>)> = HashMap::new();
         {
-            let mut stmt = conn.prepare("SELECT id, base_url FROM endpoints")?;
-            let rows =
-                stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+            let mut stmt = conn.prepare("SELECT id, base_url, brand_slug FROM endpoints")?;
+            let rows = stmt.query_map([], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, Option<String>>(2)?,
+                ))
+            })?;
             for row in rows {
-                let (id, url) = row?;
-                base_urls.insert(id, url);
+                let (id, url, slug) = row?;
+                endpoints_info.insert(id, (url, slug));
             }
         }
-        (targets, base_urls)
+        (targets, endpoints_info)
     };
 
     let mut results = Vec::with_capacity(targets.len());
     for t in targets {
-        let outcome = match base_urls.get(&t.endpoint_id) {
+        let outcome = match endpoints_info.get(&t.endpoint_id) {
             None => Err(format!("unknown endpoint {}", t.endpoint_id)),
-            Some(base_url) => match vault::get_token(&t.endpoint_id) {
+            Some((base_url, brand_slug)) => match vault::get_token(&t.endpoint_id) {
                 Err(e) => Err(format!("no access token in keychain: {e}")),
                 Ok(token) => {
-                    let client = ProducerClient::new(base_url, &token);
+                    let client =
+                        ProducerClient::new(base_url, &token).with_brand(brand_slug.clone());
                     match client
                         .create_post(&t.request_json, &t.idempotency_key)
                         .await

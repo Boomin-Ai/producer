@@ -51,9 +51,10 @@ export function Onboarding({ onConnected }: { onConnected: () => void }) {
 }
 
 function BoominLogin({ onBack, onConnected }: { onBack: () => void; onConnected: () => void }) {
-  const [step, setStep] = useState<"email" | "code">("email");
+  const [step, setStep] = useState<"email" | "code" | "brand">("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  const [brands, setBrands] = useState<{ slug: string; name: string }[]>([]);
   const [apiRoot, setApiRoot] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,13 +77,60 @@ function BoominLogin({ onBack, onConnected }: { onBack: () => void; onConnected:
     setBusy(true);
     setError(null);
     try {
-      await ipc.boominConnect(email.trim(), code.trim(), apiRoot.trim() || undefined);
+      const result = await ipc.boominConnect(email.trim(), code.trim(), apiRoot.trim() || undefined);
+      if (result?.needs_brand && result.brands?.length) {
+        setBrands(result.brands);
+        setStep("brand");
+      } else {
+        onConnected();
+      }
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function pickBrand(slug: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await ipc.boominSelectBrand(slug);
       onConnected();
     } catch (e) {
       setError(String(e));
     } finally {
       setBusy(false);
     }
+  }
+
+  if (step === "brand") {
+    return (
+      <div className="onboarding">
+        <Wordmark />
+        <h1>
+          <strong>Which workspace?</strong>
+        </h1>
+        <p className="muted">
+          This account has several brands — Producer connects one at a time.
+          You can add the others later from &ldquo;Add endpoint&rdquo;.
+        </p>
+        <div className="brand-list">
+          {brands.map((b) => (
+            <button key={b.slug} className="brand-option" disabled={busy} onClick={() => pickBrand(b.slug)}>
+              {b.name}
+              <span className="muted">{b.slug}</span>
+            </button>
+          ))}
+        </div>
+        {error && <p className="error">{error}</p>}
+        <div className="form-actions" style={{ justifyContent: "center", marginTop: 16 }}>
+          <button type="button" className="ghost" onClick={onBack}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -61,5 +61,13 @@ fn init(conn: &Connection) -> EngineResult<()> {
             ON submission_targets(status) WHERE status = 'pending';
         "#,
     )?;
+    // v2: connected endpoints carry the hosted workspace scope. A backend-
+    // specific scoping detail (like the token itself), not a contract concept.
+    let has_brand_slug = conn
+        .prepare("SELECT 1 FROM pragma_table_info('endpoints') WHERE name = 'brand_slug'")?
+        .exists([])?;
+    if !has_brand_slug {
+        conn.execute_batch("ALTER TABLE endpoints ADD COLUMN brand_slug TEXT;")?;
+    }
     Ok(())
 }

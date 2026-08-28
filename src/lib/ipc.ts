@@ -57,7 +57,11 @@ export const ipc = {
   boominRequestOtp: (email: string, apiRoot?: string) =>
     invoke("boomin_request_otp", { email, apiRoot: apiRoot || null }),
   boominConnect: (email: string, code: string, apiRoot?: string) =>
-    invoke("boomin_connect", { email, code, apiRoot: apiRoot || null }),
+    invoke<{ needs_brand?: boolean; brands?: { slug: string; name: string }[] }>(
+      "boomin_connect",
+      { email, code, apiRoot: apiRoot || null },
+    ),
+  boominSelectBrand: (brandSlug: string) => invoke("boomin_select_brand", { brandSlug }),
   endpointChannels: (endpointId: string) =>
     invoke<{ channels: Omit<Channel, "endpoint_id" | "endpoint_kind">[] }>("endpoint_channels", { endpointId }),
   uploadMedia: (endpointId: string, filePath: string) =>

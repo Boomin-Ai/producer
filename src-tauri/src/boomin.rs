@@ -33,6 +33,40 @@ pub async fn request_otp(api_root: &str, email: &str) -> EngineResult<()> {
     Ok(())
 }
 
+/// List the workspaces this account can act in (hosted `GET /v1/app/brands`).
+pub async fn list_brands(api_root: &str, token: &str) -> EngineResult<Vec<(String, String)>> {
+    let url = format!("{}/v1/app/brands", api_root.trim_end_matches('/'));
+    let resp = reqwest::Client::new()
+        .get(url)
+        .bearer_auth(token)
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        return Err(EngineError::Other(format!(
+            "could not list workspaces (HTTP {})",
+            resp.status().as_u16()
+        )));
+    }
+    let body: Value = resp.json().await?;
+    let brands = body
+        .get("brands")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    Ok(brands
+        .iter()
+        .filter_map(|b| {
+            let slug = b.get("slug").and_then(Value::as_str)?.to_string();
+            let name = b
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or(&slug)
+                .to_string();
+            Some((slug, name))
+        })
+        .collect())
+}
+
 pub async fn verify_otp(api_root: &str, email: &str, code: &str) -> EngineResult<String> {
     let url = format!("{}/v1/app/auth/verify", api_root.trim_end_matches('/'));
     let resp = reqwest::Client::new()

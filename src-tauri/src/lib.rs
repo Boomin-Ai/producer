@@ -13,6 +13,9 @@ use tauri::Manager;
 
 pub struct AppState {
     pub db: Mutex<rusqlite::Connection>,
+    /// Mid-sign-in hosted auth (api_root, token) held engine-side between
+    /// OTP verification and workspace selection — never enters the webview.
+    pub pending_auth: Mutex<Option<(String, String)>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -27,6 +30,7 @@ pub fn run() {
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
             app.manage(AppState {
                 db: Mutex::new(conn),
+                pending_auth: Mutex::new(None),
             });
 
             // Resume any submissions a crash left unacknowledged.
@@ -46,6 +50,7 @@ pub fn run() {
             ipc::endpoint_channels,
             ipc::boomin_request_otp,
             ipc::boomin_connect,
+            ipc::boomin_select_brand,
             ipc::upload_media,
             ipc::list_jobs,
             ipc::submit_post,
