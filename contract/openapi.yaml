@@ -1,0 +1,624 @@
+openapi: 3.1.0
+info:
+  title: Producer API Contract
+  version: 0.1.0
+  description: |
+    The contract every Producer backend implements and every Producer
+    client consumes. Two known backends: Boomin hosted (`api.boomin.ai`,
+    lean `/v1/app/producer/*` mount) and self-hosted `producer-server`.
+    The desktop app, the CLI, `producer-mcp`, and any user agent or
+    script are all equal clients of this spec.
+
+    Governed by docs/PHASE1.md (v4.1.1, FROZEN). Load-bearing rules:
+
+    **Token classes.** Two bearer token classes, not RBAC:
+    `primary` (everything) and `automation` (publish, read, media
+    upload only). Routes marked `x-token-class: primary` reject
+    automation tokens with 403 `token_class_insufficient`. Humans
+    establish channel authority; agents exercise granted authority.
+
+    **Idempotency.** Transport is at-least-once; acceptance is
+    effectively-once. Every mutating submission route requires an
+    `Idempotency-Key` header. Server contract:
+    UNIQUE(actor, operation, idempotency_key); new key -> create,
+    persist key + payload hash + canonical result; same key + same
+    payload -> return the original result (200, `replayed: true`);
+    same key + different payload -> 409 `idempotency_conflict`.
+    Keys are durable, never TTL'd; `client_request_id` is retained
+    permanently on the job record.
+
+    **Publish-now is a job.** Omitting `schedule_at` creates a job due
+    now. Post Now and Schedule differ only in due time - same queue,
+    same state machine, same idempotency.
+
+    **Media.** A post references media by durable `upload_id` (obtained
+    via an upload slot; client PUTs to a short-lived presigned URL and
+    never touches storage credentials) or by stable public `url`.
+    Uploads never attached to a post are garbage-collected after an
+    orphan TTL. Backends expose fetchable media to platforms only
+    through opaque bearer-capability URLs (>=128-bit CSPRNG, never
+    logged), never a public bucket.
+
+    **Capabilities, not doctrine.** Clients render limits (rate limits,
+    media constraints, text lengths) from each channel's `capabilities`
+    object - never from constants baked into a client.
+  license:
+    name: AGPL-3.0-only
+    url: https://www.gnu.org/licenses/agpl-3.0.txt
+
+security:
+  - bearer: []
+
+paths:
+  /v1/health:
+    get:
+      operationId: getHealth
+      summary: Liveness and implementation identity (no auth)
+      security: []
+      responses:
+        "200":
+          description: Server is up.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServerInfo" }
+
+  /v1/session:
+    get:
+      operationId: getSession
+      summary: Validate the presented token and describe its authority
+      responses:
+        "200":
+          description: Token is valid.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/channels:
+    get:
+      operationId: listChannels
+      summary: List connected channels with their capabilities
+      responses:
+        "200":
+          description: Channels available to this account.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [channels]
+                properties:
+                  channels:
+                    type: array
+                    items: { $ref: "#/components/schemas/Channel" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/channels/{platform}/connect-session:
+    post:
+      operationId: createConnectSession
+      summary: Begin channel authorization (human completes in browser)
+      description: |
+        Returns a one-time browser URL containing an ephemeral,
+        single-use nonce. The bearer token never appears in the URL;
+        the OAuth callback is authenticated by validated single-use
+        `state`, not bearer auth. Channel authorization is always an
+        explicit human OAuth action.
+      x-token-class: primary
+      parameters:
+        - name: platform
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/Platform" }
+      responses:
+        "201":
+          description: Connect session created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConnectSession" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/TokenClassInsufficient" }
+
+  /v1/channels/{channelId}:
+    delete:
+      operationId: disconnectChannel
+      summary: Disconnect a channel and revoke its stored credentials
+      x-token-class: primary
+      parameters:
+        - $ref: "#/components/parameters/channelId"
+      responses:
+        "204": { description: Disconnected. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/TokenClassInsufficient" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/media/uploads:
+    post:
+      operationId: createUploadSlot
+      summary: Request an upload slot (presigned PUT; no credentials)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateUploadRequest" }
+      responses:
+        "201":
+          description: Slot created; PUT the raw bytes to `put_url`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadSlot" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "413":
+          description: Declared size exceeds the backend's limit.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /v1/media/{uploadId}:
+    get:
+      operationId: getUpload
+      summary: Inspect an upload's status
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Upload state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Upload" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/posts:
+    post:
+      operationId: createPost
+      summary: Submit one publishing job for one channel
+      description: |
+        One call targets exactly one channel and creates at most one
+        job (the idempotency unit matches the client outbox's
+        submission_targets row). Multi-channel fan-out is a client
+        concern: the client submits one request per target, all
+        sharing an `intent_id` for grouping in history. Omitting
+        `schedule_at` means due now.
+      parameters:
+        - $ref: "#/components/parameters/idempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreatePostRequest" }
+      responses:
+        "201":
+          description: Job created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubmitResult" }
+        "200":
+          description: >
+            Replay: this idempotency key with an identical payload was
+            already accepted; the original result is returned.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SubmitResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: Same idempotency key, different payload.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "422":
+          description: Preflight failed (see capability constraints).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PreflightFailure" }
+
+  /v1/jobs:
+    get:
+      operationId: listJobs
+      summary: List jobs (queue and history are one listing)
+      parameters:
+        - name: state
+          in: query
+          schema:
+            type: array
+            items: { $ref: "#/components/schemas/JobState" }
+          style: form
+          explode: false
+        - name: channel_id
+          in: query
+          schema: { type: string }
+        - name: intent_id
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Jobs, newest first.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/jobs/{jobId}:
+    get:
+      operationId: getJob
+      summary: Inspect one job
+      parameters:
+        - $ref: "#/components/parameters/jobId"
+      responses:
+        "200":
+          description: The job.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      operationId: rescheduleJob
+      summary: Reschedule a not-yet-published job
+      parameters:
+        - $ref: "#/components/parameters/jobId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [schedule_at]
+              properties:
+                schedule_at: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Rescheduled.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Job is already publishing or terminal.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /v1/jobs/{jobId}/cancel:
+    post:
+      operationId: cancelJob
+      summary: Cancel a not-yet-published job
+      parameters:
+        - $ref: "#/components/parameters/jobId"
+      responses:
+        "200":
+          description: Canceled.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "409":
+          description: Job is already publishing or terminal.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /v1/jobs/{jobId}/retry:
+    post:
+      operationId: retryJob
+      summary: Re-queue a failed job (retries only this job)
+      parameters:
+        - $ref: "#/components/parameters/jobId"
+      responses:
+        "200":
+          description: Re-queued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "409":
+          description: Job is not in a retryable state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: >
+        Endpoint access token. Class `primary` or `automation`; see
+        info.description for the class rules.
+
+  parameters:
+    idempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >
+        Client-generated, unique per submission target. Durable
+        server-side forever; replays return the original result.
+      schema: { type: string, minLength: 16, maxLength: 128 }
+    channelId:
+      name: channelId
+      in: path
+      required: true
+      schema: { type: string }
+    jobId:
+      name: jobId
+      in: path
+      required: true
+      schema: { type: string }
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid bearer token.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    TokenClassInsufficient:
+      description: >
+        Route requires the primary endpoint token
+        (code `token_class_insufficient`).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    NotFound:
+      description: No such resource.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    BadRequest:
+      description: Malformed request.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  schemas:
+    ServerInfo:
+      type: object
+      required: [ok, implementation, contract_version]
+      properties:
+        ok: { type: boolean }
+        implementation:
+          type: string
+          description: e.g. "boomin-hosted" or "producer-server".
+        version: { type: string }
+        contract_version: { type: string }
+
+    Session:
+      type: object
+      required: [token_class, server]
+      properties:
+        token_class: { $ref: "#/components/schemas/TokenClass" }
+        account:
+          type: object
+          properties:
+            display_name: { type: string }
+        server: { $ref: "#/components/schemas/ServerInfo" }
+
+    TokenClass:
+      type: string
+      enum: [primary, automation]
+
+    Platform:
+      type: string
+      enum: [instagram, facebook, threads]
+      description: v0.1 platforms. New senders extend this enum.
+
+    Channel:
+      type: object
+      required: [id, platform, display_name, status, capabilities]
+      properties:
+        id: { type: string }
+        platform: { $ref: "#/components/schemas/Platform" }
+        display_name: { type: string }
+        external_handle: { type: string }
+        status:
+          type: string
+          enum: [active, needs_reconnect, disabled]
+        capabilities: { $ref: "#/components/schemas/ChannelCapabilities" }
+
+    ChannelCapabilities:
+      type: object
+      description: >
+        Rendered by clients as the source of truth for constraints.
+        Senders emit these; clients never hardcode platform numbers.
+      properties:
+        rateLimit:
+          type: object
+          required: [type, max, windowSeconds]
+          properties:
+            type: { type: string, enum: [rolling_window] }
+            max: { type: integer }
+            windowSeconds: { type: integer }
+        media:
+          type: object
+          properties:
+            kinds:
+              type: array
+              items: { type: string, enum: [image, video, reel] }
+            maxBytes: { type: integer }
+            aspect:
+              type: object
+              properties:
+                min: { type: number }
+                max: { type: number }
+        text:
+          type: object
+          properties:
+            maxChars: { type: integer }
+        features:
+          type: object
+          properties:
+            native_scheduling:
+              type: boolean
+              description: >
+                Platform executes the schedule itself (e.g. Facebook
+                scheduled_publish_time).
+
+    ConnectSession:
+      type: object
+      required: [browser_url, expires_at]
+      properties:
+        browser_url:
+          type: string
+          format: uri
+          description: One-time URL with an ephemeral single-use nonce.
+        expires_at: { type: string, format: date-time }
+
+    CreateUploadRequest:
+      type: object
+      required: [filename, content_type, size_bytes]
+      properties:
+        filename: { type: string }
+        content_type: { type: string }
+        size_bytes: { type: integer, minimum: 1 }
+
+    UploadSlot:
+      type: object
+      required: [upload_id, put_url, expires_at]
+      properties:
+        upload_id: { type: string }
+        put_url:
+          type: string
+          format: uri
+          description: Short-lived presigned PUT target for raw bytes.
+        expires_at: { type: string, format: date-time }
+
+    Upload:
+      type: object
+      required: [upload_id, status]
+      properties:
+        upload_id: { type: string }
+        status:
+          type: string
+          enum: [pending, stored, attached, orphan_expired]
+        content_type: { type: string }
+        size_bytes: { type: integer }
+
+    MediaRef:
+      description: Durable media reference. Exactly one of the two.
+      oneOf:
+        - type: object
+          required: [upload_id]
+          properties:
+            upload_id: { type: string }
+        - type: object
+          required: [url]
+          properties:
+            url:
+              type: string
+              format: uri
+              description: >
+                Stable public URL; must stay reachable until the job
+                fires. Early deletion produces a retryable error.
+
+    CreatePostRequest:
+      type: object
+      required: [channel_id]
+      properties:
+        channel_id: { type: string }
+        text: { type: string }
+        media:
+          type: array
+          maxItems: 1
+          items: { $ref: "#/components/schemas/MediaRef" }
+        overrides:
+          type: object
+          description: >
+            Per-platform options (e.g. IG reel share_to_feed, Threads
+            reply_control, FB page targeting). Validated against the
+            channel's sender.
+        schedule_at:
+          type: string
+          format: date-time
+          description: Omit for due-now. Same queue either way.
+        intent_id:
+          type: string
+          description: >
+            Client-generated grouping id shared by all targets of one
+            logical draft; echoed on jobs for history grouping.
+
+    SubmitResult:
+      type: object
+      required: [job, replayed]
+      properties:
+        job: { $ref: "#/components/schemas/Job" }
+        replayed:
+          type: boolean
+          description: True when returned from an idempotent replay.
+
+    JobState:
+      type: string
+      enum: [scheduled, queued, publishing, published, failed, canceled]
+
+    ErrorClass:
+      type: string
+      enum: [retryable, token_expired, rate_limited, permanent]
+
+    Job:
+      type: object
+      required: [id, channel_id, state, due_at, created_at]
+      properties:
+        id: { type: string }
+        channel_id: { type: string }
+        intent_id: { type: string }
+        client_request_id:
+          type: string
+          description: The Idempotency-Key that created this job. Permanent.
+        state: { $ref: "#/components/schemas/JobState" }
+        attempt: { type: integer }
+        due_at: { type: string, format: date-time }
+        next_attempt_at: { type: string, format: date-time }
+        error_class: { $ref: "#/components/schemas/ErrorClass" }
+        error_message:
+          type: string
+          description: Plain-language, user-renderable.
+        published_external_id: { type: string }
+        published_external_url: { type: string, format: uri }
+        created_at: { type: string, format: date-time }
+        published_at: { type: string, format: date-time }
+
+    JobList:
+      type: object
+      required: [jobs]
+      properties:
+        jobs:
+          type: array
+          items: { $ref: "#/components/schemas/Job" }
+        next_cursor: { type: string }
+
+    PreflightFailure:
+      type: object
+      required: [error, issues]
+      properties:
+        error: { $ref: "#/components/schemas/Error" }
+        issues:
+          type: array
+          items:
+            type: object
+            required: [code, message]
+            properties:
+              code: { type: string }
+              message: { type: string }
+              field: { type: string }
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: >
+            Stable machine-readable code, e.g. unauthorized,
+            token_class_insufficient, idempotency_conflict, not_found,
+            invalid_request, preflight_failed, rate_limited.
+        message: { type: string }
+        details: { type: object }
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error: { $ref: "#/components/schemas/Error" }
