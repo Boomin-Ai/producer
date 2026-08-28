@@ -728,6 +728,16 @@ textarea::placeholder {
   margin-left: auto;
 }
 
+.acc-select {
+  font-family: var(--font);
+  font-size: 13.5px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--fg);
+  padding: 6px 10px;
+}
+
 .acc-caption {
   display: block;
   width: calc(100% - 32px);

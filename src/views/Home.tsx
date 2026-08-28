@@ -24,16 +24,23 @@ interface Attached {
   local_path: string;
 }
 
-/** Per-channel platform params — mirrors the web ChannelAccordion. */
+/** Per-channel platform params. Each platform gets its own real knobs:
+ *  Instagram mirrors the web ChannelAccordion; Threads carries reply
+ *  control, one topic tag, and a text-only link attachment. */
 interface ChannelParams {
   useCaption: boolean;
   caption: string;
+  // instagram
   feed: boolean;
   location: string;
   userTags: string;
   collaborators: string;
   cover_url: string;
   trial_post: boolean;
+  // threads
+  reply_control: string;
+  topic_tag: string;
+  link_attachment: string;
 }
 
 const DEFAULT_PARAMS: ChannelParams = {
@@ -45,17 +52,28 @@ const DEFAULT_PARAMS: ChannelParams = {
   collaborators: "",
   cover_url: "",
   trial_post: false,
+  reply_control: "",
+  topic_tag: "",
+  link_attachment: "",
 };
 
-function buildOverrides(p: ChannelParams | undefined): Record<string, unknown> | undefined {
+function buildOverrides(p: ChannelParams | undefined, platform: string): Record<string, unknown> | undefined {
   if (!p) return undefined;
-  const o: Record<string, unknown> = { feed: p.feed };
+  const o: Record<string, unknown> = {};
   if (p.useCaption && p.caption.trim()) o.caption = p.caption.trim();
-  if (p.location.trim()) o.location = p.location.trim();
-  if (p.userTags.trim()) o.userTags = p.userTags.trim();
-  if (p.collaborators.trim()) o.collaborators = p.collaborators.trim();
-  if (p.cover_url.trim()) o.cover_url = p.cover_url.trim();
-  if (p.trial_post) o.trial_post = true;
+  if (platform === "instagram") {
+    o.feed = p.feed;
+    if (p.location.trim()) o.location = p.location.trim();
+    if (p.userTags.trim()) o.userTags = p.userTags.trim();
+    if (p.collaborators.trim()) o.collaborators = p.collaborators.trim();
+    if (p.cover_url.trim()) o.cover_url = p.cover_url.trim();
+    if (p.trial_post) o.trial_post = true;
+  }
+  if (platform === "threads") {
+    if (p.reply_control) o.reply_control = p.reply_control;
+    if (p.topic_tag.trim()) o.topic_tag = p.topic_tag.trim();
+    if (p.link_attachment.trim()) o.link_attachment = p.link_attachment.trim();
+  }
   return o;
 }
 
@@ -279,7 +297,7 @@ function ComposerDetail({
         .map((c) => ({
           endpoint_id: c.endpoint_id,
           channel_id: c.id,
-          overrides: buildOverrides(params[c.id] ?? DEFAULT_PARAMS),
+          overrides: buildOverrides(params[c.id] ?? DEFAULT_PARAMS, c.platform),
         }));
       const { results } = await ipc.submitPost({
         text: text || undefined,
@@ -526,56 +544,91 @@ function ComposerDetail({
                           />
                         )}
 
-                        <div className="acc-row">
-                          <span className="acc-label">Show on Feed</span>
-                          <span className="acc-control">
-                            <Switch on={p.feed} onChange={(v) => patchParams(c.id, { feed: v })} />
-                          </span>
-                        </div>
-                        <div className="acc-row">
-                          <span className="acc-label">Location</span>
-                          <input
-                            value={p.location}
-                            onChange={(e) => patchParams(c.id, { location: e.target.value })}
-                            placeholder="Add location…"
-                          />
-                        </div>
-                        <div className="acc-row">
-                          <span className="acc-label">User Tags</span>
-                          <input
-                            value={p.userTags}
-                            onChange={(e) => patchParams(c.id, { userTags: e.target.value })}
-                            placeholder="@username"
-                          />
-                        </div>
-                        <div className="acc-row">
-                          <span className="acc-label">Collaborators</span>
-                          <input
-                            value={p.collaborators}
-                            onChange={(e) => patchParams(c.id, { collaborators: e.target.value })}
-                            placeholder="@collaborator"
-                          />
-                        </div>
+                        {c.platform === "instagram" && (
+                          <>
+                            <div className="acc-row">
+                              <span className="acc-label">Show on Feed</span>
+                              <span className="acc-control">
+                                <Switch on={p.feed} onChange={(v) => patchParams(c.id, { feed: v })} />
+                              </span>
+                            </div>
+                            <div className="acc-row">
+                              <span className="acc-label">Location</span>
+                              <input
+                                value={p.location}
+                                onChange={(e) => patchParams(c.id, { location: e.target.value })}
+                                placeholder="Add location…"
+                              />
+                            </div>
+                            <div className="acc-row">
+                              <span className="acc-label">User Tags</span>
+                              <input
+                                value={p.userTags}
+                                onChange={(e) => patchParams(c.id, { userTags: e.target.value })}
+                                placeholder="@username"
+                              />
+                            </div>
+                            <div className="acc-row">
+                              <span className="acc-label">Collaborators</span>
+                              <input
+                                value={p.collaborators}
+                                onChange={(e) => patchParams(c.id, { collaborators: e.target.value })}
+                                placeholder="@collaborator"
+                              />
+                            </div>
+                            <div className="acc-row">
+                              <span className="acc-group">Cover photo</span>
+                              <input
+                                value={p.cover_url}
+                                onChange={(e) => patchParams(c.id, { cover_url: e.target.value })}
+                                placeholder="https://… (optional — sets the Reel thumbnail)"
+                              />
+                            </div>
+                            <div className="acc-row">
+                              <span className="acc-group">Trial</span>
+                              <span className="acc-label">Post as trial reel</span>
+                              <span className="acc-control">
+                                <Switch
+                                  on={p.trial_post}
+                                  onChange={(v) => patchParams(c.id, { trial_post: v })}
+                                />
+                              </span>
+                            </div>
+                          </>
+                        )}
 
-                        <div className="acc-row">
-                          <span className="acc-group">Cover photo</span>
-                          <input
-                            value={p.cover_url}
-                            onChange={(e) => patchParams(c.id, { cover_url: e.target.value })}
-                            placeholder="https://… (optional — sets the Reel thumbnail)"
-                          />
-                        </div>
-
-                        <div className="acc-row">
-                          <span className="acc-group">Trial</span>
-                          <span className="acc-label">Post as trial reel</span>
-                          <span className="acc-control">
-                            <Switch
-                              on={p.trial_post}
-                              onChange={(v) => patchParams(c.id, { trial_post: v })}
-                            />
-                          </span>
-                        </div>
+                        {c.platform === "threads" && (
+                          <>
+                            <div className="acc-row">
+                              <span className="acc-label">Who can reply</span>
+                              <select
+                                className="acc-select"
+                                value={p.reply_control}
+                                onChange={(e) => patchParams(c.id, { reply_control: e.target.value })}
+                              >
+                                <option value="">Everyone (default)</option>
+                                <option value="accounts_you_follow">Accounts you follow</option>
+                                <option value="mentioned_only">Mentioned only</option>
+                              </select>
+                            </div>
+                            <div className="acc-row">
+                              <span className="acc-label">Topic tag</span>
+                              <input
+                                value={p.topic_tag}
+                                onChange={(e) => patchParams(c.id, { topic_tag: e.target.value })}
+                                placeholder="one topic, no # needed (e.g. Producer)"
+                              />
+                            </div>
+                            <div className="acc-row">
+                              <span className="acc-label">Link attachment</span>
+                              <input
+                                value={p.link_attachment}
+                                onChange={(e) => patchParams(c.id, { link_attachment: e.target.value })}
+                                placeholder="https://… (text-only posts — shows a preview card)"
+                              />
+                            </div>
+                          </>
+                        )}
                       </div>
                     );
                   })}
