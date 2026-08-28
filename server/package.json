@@ -1,0 +1,25 @@
+{
+  "name": "producer-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hosted Producer backend: your server, your storage, your keys.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 execute producer --local --file=./schema.sql",
+    "db:migrate": "wrangler d1 execute producer --remote --file=./schema.sql",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260826.1",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0",
+    "wrangler": "^4.0.0"
+  }
+}
