@@ -62,5 +62,5 @@ jobs:
             to Applications, run `xattr -cr /Applications/Producer.app` once (or
             right-click → Open) to clear the quarantine flag. Signed builds are coming.
           releaseDraft: false
-          prerelease: true
+          prerelease: false
           args: ${{ matrix.args }}

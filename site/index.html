@@ -323,7 +323,7 @@
       <img class="hero-chair" src="chair.png" alt="The Producer chair" />
     </div>
     <div class="cta-row">
-      <a class="btn solid" id="download" href="https://github.com/Boomin-Ai/producer/releases">⬇ Download</a>
+      <a class="btn solid" id="download" href="/download/macos">⬇ Download</a>
       <a class="btn" href="https://github.com/Boomin-Ai/producer"><span class="star">★</span> Star on GitHub</a>
       <a class="btn" href="https://github.com/Boomin-Ai/producer/blob/main/server/SELF_HOSTING.md">Self-host in 20 min — $0</a>
     </div>
@@ -457,7 +457,7 @@ cd server && <span class="m">npx</span> wrangler deploy   <span class="c"># → 
     })
     .catch(() => {});
 
-  // Platform-aware download button — falls back to the releases page silently.
+  // Platform-aware download button — everything served from this domain.
   (function () {
     var btn = document.getElementById("download");
     var note = document.getElementById("dl-note");
@@ -465,37 +465,23 @@ cd server && <span class="m">npx</span> wrangler deploy   <span class="c"># → 
     var isMac = /Macintosh|Mac OS X/.test(ua);
     var isWin = /Windows/.test(ua);
     var isLinux = /Linux/.test(ua) && !/Android/.test(ua);
-    if (isMac) btn.textContent = "⬇ Download for macOS";
-    else if (isWin) btn.textContent = "⬇ Download for Windows";
-    else if (isLinux) btn.textContent = "⬇ Download for Linux";
 
-    fetch("https://api.github.com/repos/Boomin-Ai/producer/releases/latest")
+    if (isWin) { btn.textContent = "⬇ Download for Windows"; btn.href = "/download/windows"; }
+    else if (isLinux) { btn.textContent = "⬇ Download for Linux"; btn.href = "/download/linux"; }
+    else { btn.textContent = "⬇ Download for macOS"; btn.href = "/download/macos"; }
+
+    var links =
+      isMac ? 'Apple Silicon · <a href="/download/macos-intel">Intel Mac instead</a>' :
+      isWin ? '<a href="/download/macos">macOS</a> · <a href="/download/linux">Linux</a>' :
+      isLinux ? '<a href="/download/macos">macOS</a> · <a href="/download/windows">Windows</a>' : "";
+
+    fetch("/download/meta.json")
       .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (rel) {
-        if (!rel || !rel.assets || !rel.assets.length) return;
-        function find(re) {
-          for (var i = 0; i < rel.assets.length; i++)
-            if (re.test(rel.assets[i].name)) return rel.assets[i];
-          return null;
-        }
-        var armDmg = find(/aarch64.*\.dmg$/i);
-        var x64Dmg = find(/x(86_)?64.*\.dmg$/i);
-        var winExe = find(/\.exe$/i) || find(/\.msi$/i);
-        var appImg = find(/\.AppImage$/i) || find(/\.deb$/i);
-        var pick = null, extra = "";
-        if (isMac) {
-          pick = armDmg || x64Dmg;
-          if (armDmg && x64Dmg)
-            extra = 'Apple Silicon · <a href="' + x64Dmg.browser_download_url + '">Intel Mac instead</a> · ';
-        } else if (isWin) pick = winExe;
-        else if (isLinux) pick = appImg;
-        if (pick) {
-          btn.href = pick.browser_download_url;
-          note.innerHTML = extra + rel.tag_name +
-            ' · unsigned preview · <a href="' + rel.html_url + '">all platforms</a>';
-        }
+      .then(function (meta) {
+        note.innerHTML = (meta && meta.version ? meta.version + " · " : "") +
+          "unsigned preview · " + links;
       })
-      .catch(function () {});
+      .catch(function () { note.innerHTML = links; });
   })();
 </script>
 </body>
