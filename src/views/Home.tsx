@@ -80,7 +80,7 @@ function buildOverrides(p: ChannelParams | undefined, platform: string): Record<
 /** Chip-style tag input: Enter/comma adds, Backspace on empty or ✕
  *  removes. Emits a clean array — no separator parsing downstream. */
 function TagInput({
-  values,
+  values: rawValues,
   onChange,
   placeholder,
 }: {
@@ -89,6 +89,9 @@ function TagInput({
   placeholder: string;
 }) {
   const [draft, setDraft] = useState("");
+  // Defensive: survive stale in-memory state from hot reloads or older
+  // shapes — never let a non-array white-screen the composer.
+  const values = Array.isArray(rawValues) ? rawValues : [];
 
   function commit() {
     const tag = draft.trim().replace(/^@/, "").replace(/,+$/, "");
