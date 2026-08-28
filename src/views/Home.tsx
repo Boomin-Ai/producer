@@ -94,18 +94,22 @@ export function Home({
 
         <div className="side-spacer" />
 
-        <div className="side-label">Endpoints</div>
+        <div className="side-label">Workspaces</div>
         {endpoints.map((ep) => (
-          <div key={ep.id} className="side-endpoint" title={ep.base_url}>
+          <div
+            key={ep.id}
+            className="side-endpoint"
+            title={`${ep.kind === "connected" ? "Boomin workspace" : "Self-hosted server"} · ${ep.base_url}`}
+          >
             <span className={`dot ${ep.kind}`} />
             <span className="name">{ep.name}</span>
-            <button onClick={() => onRemoveEndpoint(ep.id)} title="Remove">
+            <button onClick={() => onRemoveEndpoint(ep.id)} title="Disconnect workspace">
               ✕
             </button>
           </div>
         ))}
         <button className="side-item" onClick={onAddEndpoint}>
-          + Add endpoint
+          + Add workspace
         </button>
       </aside>
 
