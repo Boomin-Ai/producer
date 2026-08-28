@@ -1,8 +1,10 @@
 # Phase 1 — Producer v0.1: one client, two backends
 
-Status: DRAFT v4 — incorporates staff review of v3 (architecture GREEN;
-six corrections applied below). Freeze candidate: this version is
-intended to become the implementation contract.
+Status: **v4.1 — FROZEN (implementation contract).** Architecture GREEN
+through two staff review rounds. v4 applied six corrections; v4.1
+applies the approved micro-patch (immutable outbox snapshots,
+effectively-once acceptance semantics, media-capability hardening).
+Changes from here require a versioned amendment, not a redesign round.
 
 The desktop app is a **client of a Producer endpoint**. There are two
 backends implementing the same API contract:
@@ -66,11 +68,14 @@ self-hosting guide is the onboarding** — a first-class product artifact.
    states plainly what routes through Boomin; independent mode states
    that nothing does.
 5. **Delivery integrity across mixed endpoints:** a draft fanning out to
-   channels on different endpoints survives a client crash mid-submit —
-   the client outbox (§2.4) guarantees every endpoint eventually
-   receives its instruction exactly once (idempotency keys), and each
-   endpoint's queue guarantees no double-publish (checkpoints + job
-   leases, §2.3). Retry retries only the failure.
+   channels on different endpoints survives a client crash mid-submit.
+   The guarantee, stated precisely: **at-least-once transport,
+   effectively-once server acceptance** — the client may retry a
+   submission, but a target's idempotency key can create at most one
+   server-side publishing job (§2.2); the client outbox (§2.4) makes
+   every unacknowledged instruction independently reconstructable; each
+   endpoint's queue prevents double-publish (checkpoints + job leases,
+   §2.3). Retry retries only the failure.
 6. The app updates itself from GitHub Releases: update artifacts are
    signed by the release key, signatures distributed through the update
    manifest, and verified by Tauri before installation.
@@ -125,9 +130,36 @@ modified source available to the users of that service.
 One OpenAPI spec, versioned in the `producer-server` repo, implemented
 by both backends: auth/session, channels (list/connect/disconnect),
 media (`upload_id` OR `url`), posts (create/update/list), schedule,
-publish-now, job status, history. Every mutating route accepts an
-**idempotency key** (client-generated, unique per intent target — the
-outbox's exactly-once mechanism). **Decision D1 (api repo workstream):**
+publish-now, job status, history.
+
+**Idempotency semantics (both backends).** Every mutating route accepts
+a client-generated **idempotency key**, unique per intent target. The
+transport is at-least-once — the endpoint may receive the same HTTP
+request twice (response lost, client retries after restart). Acceptance
+is effectively-once, enforced by an explicit server contract:
+
+```
+UNIQUE (actor, operation, idempotency_key)
+
+new key + payload            → create operation; persist key, payload
+                               hash, canonical result; return result
+same key + same payload      → return the original result
+same key + different payload → 409 idempotency_conflict
+```
+
+Idempotency keys are **durable, not TTL'd**: a laptop can stay closed
+for months and reopen with an unacknowledged outbox item; the
+`client_request_id` is retained permanently on the job/history record
+(negligible storage) so a late replay returns the original result
+instead of minting a second post.
+
+**Publish-now is a job, not a synchronous call.** `POST /publish-now`
+creates a publishing job with `due_at = now` and returns it. Post now
+and Schedule differ only in when the job is due — same queue, same
+state machine, same idempotency — so there is exactly one failure model
+to test and operate.
+
+**Decision D1 (api repo workstream):**
 the hosted side implements this contract as new lean
 `/v1/app/producer/*` endpoints rather than exposing the web app's
 unit/collection model.
@@ -181,7 +213,9 @@ it fires — early deletion produces a clear, retryable error.
   documented variant, not the default), private R2, cron triggers,
   worker secrets for platform keys.
 - **Tenancy:** single-user. Auth is one bearer token generated at deploy
-  time and pasted into the desktop app.
+  time and pasted into the desktop app, plus an optional second
+  **automation token** (same rights, separately revocable) for CLI/MCP/
+  agent use — issued at M1 so it isn't a retrofit.
 - **Auth model (stated precisely):** bearer auth on every Producer API
   route; OAuth browser/callback routes use short-lived, single-use
   connect sessions and validated single-use `state` — never the bearer
@@ -235,18 +269,40 @@ delivering it durably. Before sending anything, the app persists the
 fan-out intent locally (SQLite):
 
 ```
-submission_intents(id, created_at, payload_hash)
+submission_intents(id, created_at, schema_version)
 submission_targets(intent_id, endpoint_id, channel_id,
-                   idempotency_key, status: pending | acknowledged)
+                   idempotency_key,
+                   request_json,    -- immutable exact Producer request
+                   request_hash,
+                   status: pending | acknowledged,
+                   acknowledged_at, last_error)
 ```
+
+Each target is **self-sufficient**: `request_json` is the exact,
+immutable request to replay. Resumption never depends on the mutable
+drafts table — which may have been edited, deleted, or migrated since
+submission. (Captions and schedule times aren't secrets; the law
+stands: the outbox stores instructions, never tokens or media bytes.)
+
+**Media rule:** a target may only be committed once its media has become
+a durable endpoint reference (`upload_id`) or stable external URL:
+
+```
+local media → upload to endpoint(s) → durable upload_id(s)
+  → atomically persist immutable outbox intent → begin submissions
+```
+
+Uploads never attached to a post are garbage-collected server-side after
+a defined orphan TTL. The invariant: once the UI says "Scheduled," the
+laptop can die immediately and every target instruction remains
+independently reconstructable.
 
 Submission marks each target acknowledged as its endpoint accepts; a
 crash mid-fan-out resumes unacknowledged targets on next launch, reusing
-the same idempotency keys so endpoints dedupe. The intent is deleted
-when every target is acknowledged. The boundary this draws:
-**the desktop owns delivery of the scheduling instruction; endpoints own
-execution of the schedule.** The outbox stores instructions, never
-tokens or media.
+the same idempotency keys — the server's effectively-once acceptance
+(§2.2) makes the retry safe. The intent is deleted when every target is
+acknowledged. The boundary this draws: **the desktop owns delivery of
+the scheduling instruction; endpoints own execution of the schedule.**
 
 ### 2.5 The zero-dollar independent stack (the honest math)
 
@@ -318,6 +374,30 @@ verification cannot be disabled. `tauri-action` workflow: tag →
 win/mac/linux builds → OS code-sign-if-secrets-present (Apple/Windows
 steps no-op until certs are funded) → draft release with changelog.
 
+### 3.7 Automation surfaces (contract-as-API)
+
+Because the desktop is a thin client of an HTTP contract, **the contract
+is the automation surface** — any agent or script with a bearer token
+and the OpenAPI spec can do everything the app can do, on either
+backend. This is Producer's obs-websocket, native to 2026:
+
+- **v0.1 (free, by construction):** the versioned OpenAPI spec is
+  published in producer-server; the automation token (§2.3) gives
+  agents revocable access. A user's Claude/Codex can connect channels,
+  submit posts by URL, schedule, and poll jobs today with zero extra
+  code from us.
+- **M8 (post-launch, first follow-up release):** `producer-mcp` — a
+  thin stdio MCP server wrapping the contract (`producer_create_post`,
+  `producer_schedule`, `producer_list_channels`, `producer_job_status`),
+  pointed at whichever endpoint the user configured. One line in an
+  agent's config; "your agent runs your distribution" is the demo.
+  Alongside it, a `producer` CLI (`producer post --to ig,threads
+  --media ./clip.mp4 --at 9am`) — same contract, scriptable in cron/CI.
+- **Deferred to the multistream phase:** a real-time control WebSocket
+  (scene switching, go-live) — that's where OBS-style live control
+  actually belongs; cross-posting has no real-time nerve that HTTP +
+  job polling doesn't cover.
+
 ---
 
 ## 4. Security & privacy posture
@@ -332,7 +412,12 @@ steps no-op until certs are funded) → draft release with changelog.
   browser/callback routes use short-lived single-use connect sessions
   and validated single-use `state` (§2.3).
 - **Media:** private R2; objects exposed individually via the opaque
-  capability gateway; per-object revocation and audit logging.
+  capability gateway; per-object revocation and audit logging. Media
+  capability IDs are **bearer capabilities**: CSPRNG-generated with
+  ≥128 bits of entropy; never emitted in application logs or analytics
+  (they appear as URL paths, so scrubbing must be path-aware —
+  token-shape scrubbing alone won't catch them); revoked when their
+  media object is purged.
 - producer-server: tokens encrypted at rest in D1 (AES-GCM, key in
   worker secrets), log scrubbing on token shapes.
 - Real CSP in the webview (drop scaffold's `csp: null`); Tauri
@@ -349,7 +434,9 @@ steps no-op until certs are funded) → draft release with changelog.
   incl. the multi-step IG container flow), cron-tick tests, contract
   tests generated from the OpenAPI spec.
 - Desktop: **outbox crash-recovery tests** (kill between endpoint
-  acknowledgements; assert resume + dedupe via idempotency keys); client
+  acknowledgements; assert resume + dedupe via idempotency keys; assert
+  replay from `request_json` still succeeds after the source draft is
+  edited or deleted); client
   contract tests against a local `wrangler dev` instance — the
   self-host stack doubles as the test harness; composer renders
   capability-driven preflight correctly.
@@ -369,6 +456,7 @@ steps no-op until certs are funded) → draft release with changelog.
 | **M5** | Facebook + Threads senders; connect-session OAuth flow; SELF_HOSTING.md complete; desktop custom-endpoint mode end-to-end; mixed-endpoint fan-out demo | full trio, independent |
 | **M6** | Settings + disclosure pages + updater UX + release workflow e2e | shippable |
 | **M7** | Hardening, SECURITY.md + CLA bot (both repos), README + demo GIF + comparison table, sender backlog as labeled issues, launch collateral | flip public |
+| **M8** (post-launch) | `producer-mcp` + `producer` CLI over the contract (§3.7) | agents and scripts run distribution |
 
 `producer-server` is built in the open from M4. Remaining spike:
 **S3 only** (walk the real Meta BYO app setup as a fresh user; the
