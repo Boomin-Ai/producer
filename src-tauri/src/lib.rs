@@ -51,6 +51,7 @@ pub fn run() {
             ipc::boomin_request_otp,
             ipc::boomin_connect,
             ipc::boomin_select_brand,
+            ipc::connect_channel,
             ipc::upload_media,
             ipc::list_jobs,
             ipc::submit_post,

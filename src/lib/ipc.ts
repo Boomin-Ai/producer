@@ -62,6 +62,8 @@ export const ipc = {
       { email, code, apiRoot: apiRoot || null },
     ),
   boominSelectBrand: (brandSlug: string) => invoke("boomin_select_brand", { brandSlug }),
+  connectChannel: (endpointId: string, platform: string) =>
+    invoke<{ browser_url: string; expires_at: string }>("connect_channel", { endpointId, platform }),
   endpointChannels: (endpointId: string) =>
     invoke<{ channels: Omit<Channel, "endpoint_id" | "endpoint_kind">[] }>("endpoint_channels", { endpointId }),
   uploadMedia: (endpointId: string, filePath: string) =>

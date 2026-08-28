@@ -430,6 +430,42 @@ textarea::placeholder {
   text-transform: capitalize;
 }
 
+.popover-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 2px;
+}
+
+.popover-connect-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  flex-wrap: wrap;
+}
+
+.popover-connect-row .popover-sub {
+  flex: 1 1 100%;
+  text-transform: none;
+}
+
+.platform-btn {
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+.popover-connect-hint {
+  font-size: 12.5px;
+  color: var(--muted-fg);
+  padding: 4px 6px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 /* ── Composer detail ────────────────────────────────────────────────── */
 
 .detail {

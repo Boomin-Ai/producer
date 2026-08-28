@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Channel, EndpointInfo, Job, TargetResult } from "../lib/ipc";
 import { ipc } from "../lib/ipc";
 
@@ -166,6 +167,8 @@ export function Home({
         {view === "compose" ? (
           <ComposerDetail
             channels={channels.filter((c) => c.status === "active")}
+            independents={endpoints.filter((e) => e.kind === "independent")}
+            onRefreshChannels={loadChannels}
             loadError={loadError}
             onSubmitted={() => {
               loadJobs();
@@ -182,10 +185,14 @@ export function Home({
 
 function ComposerDetail({
   channels,
+  independents,
+  onRefreshChannels,
   loadError,
   onSubmitted,
 }: {
   channels: Channel[];
+  independents: EndpointInfo[];
+  onRefreshChannels: () => void;
   loadError: string | null;
   onSubmitted: () => void;
 }) {
@@ -199,7 +206,20 @@ function ComposerDetail({
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<TargetResult[] | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [connectPending, setConnectPending] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
   const [params, setParams] = useState<Record<string, ChannelParams>>({});
+
+  async function startConnect(endpointId: string, platform: string) {
+    setConnectError(null);
+    try {
+      const { browser_url } = await ipc.connectChannel(endpointId, platform);
+      await openUrl(browser_url);
+      setConnectPending(true);
+    } catch (e) {
+      setConnectError(String(e));
+    }
+  }
 
   function patchParams(channelId: string, patch: Partial<ChannelParams>) {
     setParams((prev) => ({
@@ -338,6 +358,38 @@ function ComposerDetail({
                         </span>
                       </label>
                     ))
+                  )}
+                  {independents.length > 0 && (
+                    <>
+                      <div className="popover-divider" />
+                      <div className="popover-label">Connect new</div>
+                      {connectPending ? (
+                        <div className="popover-connect-hint">
+                          Finish approving in your browser, then
+                          <button
+                            className="linkish"
+                            onClick={() => {
+                              onRefreshChannels();
+                              setConnectPending(false);
+                            }}
+                          >
+                            refresh channels
+                          </button>
+                        </div>
+                      ) : (
+                        independents.map((ep) => (
+                          <div key={ep.id} className="popover-connect-row">
+                            <span className="popover-sub">{ep.name}</span>
+                            {["instagram", "facebook", "threads"].map((p) => (
+                              <button key={p} className="platform-btn" onClick={() => startConnect(ep.id, p)}>
+                                {p}
+                              </button>
+                            ))}
+                          </div>
+                        ))
+                      )}
+                      {connectError && <div className="popover-empty error">{connectError}</div>}
+                    </>
                   )}
                 </div>
               </>

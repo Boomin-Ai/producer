@@ -231,6 +231,21 @@ fn endpoint_access(
     Ok((base_url, brand_slug, token))
 }
 
+/// Begin channel authorization on an endpoint — returns the browser URL a
+/// human completes (the endpoint enforces primary-token-only).
+#[tauri::command]
+pub async fn connect_channel(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    platform: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .create_connect_session(&platform)
+        .await
+}
+
 fn mime_for_path(path: &str) -> Option<(&'static str, &'static str)> {
     let ext = path.rsplit('.').next()?.to_ascii_lowercase();
     match ext.as_str() {

@@ -119,6 +119,23 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
+    /// Begin channel authorization (contract: connect-session). Returns the
+    /// one-time browser URL a human completes — primary token only.
+    pub async fn create_connect_session(&self, platform: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.url(&format!("/v1/channels/{platform}/connect-session")))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let body: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&body, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     /// Request an upload slot (contract: POST /v1/media/uploads).
     pub async fn create_upload(
         &self,
