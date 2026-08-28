@@ -74,7 +74,9 @@ export default {
     headers.set("content-disposition", `attachment; filename="${cleanName(m[1], asset.name)}"`);
     const len = upstream.headers.get("content-length");
     if (len) headers.set("content-length", len);
-    headers.set("cache-control", "public, max-age=3600");
+    // No caching of the response envelope — the filename header must always be current.
+    // (The upstream GitHub fetch above is still edge-cached, so downloads stay fast.)
+    headers.set("cache-control", "no-store");
     return new Response(upstream.body, { status: 200, headers });
   },
 };
