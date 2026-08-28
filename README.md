@@ -14,11 +14,16 @@ contract; the desktop app, CLI, and agents are equal clients of either.
 
 ## Status
 
-Pre-alpha. The **API contract lives here** and is the project's spine:
-[`contract/openapi.yaml`](./contract/openapi.yaml). The worker
-implementation lands per the Phase 1 plan (milestones M4–M5) in the
-[producer](https://github.com/Boomin-Ai/producer) repo's
-`docs/PHASE1.md` (v4.1.1, frozen).
+**Working alpha.** The worker implements the full Producer contract
+([`contract/openapi.yaml`](./contract/openapi.yaml), the project's
+spine): bearer auth with two token classes, channel OAuth for BYO Meta
+apps (Instagram, Facebook Pages, Threads), upload slots into private R2
+with a capability gateway, effectively-once post acceptance with
+durable idempotency, and a D1-backed queue with leases, checkpoints,
+and an every-minute cron — scheduled posts fire with your laptop
+closed. **[SELF_HOSTING.md](./SELF_HOSTING.md) is the ~20-minute
+walkthrough.** Live Meta publishing awaits your own dev-mode apps; the
+engine and acceptance paths are covered by tests and a local smoke.
 
 ## Design commitments
 

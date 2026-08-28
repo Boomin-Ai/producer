@@ -1,0 +1,37 @@
+# producer-server — deploy with `wrangler deploy` after `wrangler d1 create producer`
+# and `wrangler r2 bucket create producer-media` (SELF_HOSTING.md walks every step).
+
+name = "producer-server"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+
+# The every-minute tick: fires due jobs, retries backoffs, refreshes
+# expiring platform tokens. This is what makes "laptop closed" true.
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "producer"
+# Set database_id after `wrangler d1 create producer` prints it:
+database_id = "REPLACE_WITH_YOUR_D1_ID"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "producer-media"
+
+[vars]
+# Your own Meta developer app ids (Development Mode is fine — you post to
+# your own accounts). Secrets are set with `wrangler secret put`:
+#   PRIMARY_TOKEN            — the endpoint token you paste into Producer
+#   AUTOMATION_TOKEN         — optional publish/read-only token for agents/CLI
+#   TOKEN_ENCRYPTION_KEY     — 32+ chars; encrypts platform tokens at rest
+#   INSTAGRAM_APP_SECRET
+#   FACEBOOK_APP_SECRET
+#   THREADS_APP_SECRET
+INSTAGRAM_APP_ID = ""
+FACEBOOK_APP_ID = ""
+THREADS_APP_ID = ""
+
+[observability.logs]
+enabled = true
