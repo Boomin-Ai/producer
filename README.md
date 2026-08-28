@@ -40,21 +40,26 @@ side, and one post can fan out across them.
 
 ## Status
 
-**Pre-launch, building in public.** v0.1 ships cross-posting for the Meta
-trio (Instagram, Facebook, Threads) with bring-your-own-keys. Watch the
-[issues](https://github.com/Boomin-Ai/producer/issues) for the live roadmap.
+**Working, and freshly public.** On launch night, one caption composed
+in this app published to Instagram through Boomin's hosted platform
+*and* to Threads through a self-hosted producer-server on a personal
+Cloudflare account — one submission, two clouds, both live. That
+mixed-workspace fan-out is the architecture working as designed.
 
 | Milestone | Status |
 | --- | --- |
-| Tauri 2 + React shell | done |
-| Meta BYO-app setup wizard (OAuth, keychain storage) | in progress |
-| Publish queue: drafts → scheduled → published, retries | in progress |
-| Instagram / Facebook / Threads senders | in progress |
-| YouTube sender (with API-audit walkthrough) | planned |
-| X sender | planned |
-| TikTok sender | planned |
-| Multistream: local multi-RTMP fan-out | planned |
-| Media generation (BYO fal / ElevenLabs keys) | planned |
+| Tauri 2 + React shell, dark-rail / light-surface UI | shipped |
+| Connected mode: Boomin sign-in, workspace picker, Instagram publish + server-side scheduling | shipped |
+| Self-hosted backend (`server/`): full contract, D1 queue + cron, private-R2 media gateway | shipped |
+| Independent Threads sender (BYO app, reply control, topic tags) | shipped — proven live |
+| Independent Instagram + Facebook senders | written — awaiting first real BYO-app runs |
+| Per-channel params (captions, collaborators, tags), crash-safe outbox, idempotent publishing | shipped |
+| Signed installers + in-app auto-update | this week |
+| YouTube sender (with API-audit walkthrough) | planned — good first issue |
+| X sender | planned — good first issue |
+| TikTok sender | planned — good first issue |
+| Multistream: local multi-RTMP fan-out | later phase |
+| Media generation (BYO fal / ElevenLabs keys) | later phase |
 
 ## Quickstart (development)
 
