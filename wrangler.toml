@@ -14,7 +14,7 @@ crons = ["* * * * *"]
 binding = "DB"
 database_name = "producer"
 # Set database_id after `wrangler d1 create producer` prints it:
-database_id = "34794768-3860-4280-8b08-a42fb82c79a2"
+database_id = "REPLACE_WITH_YOUR_D1_ID"
 
 [[r2_buckets]]
 binding = "MEDIA"
@@ -31,7 +31,7 @@ bucket_name = "producer-media"
 #   THREADS_APP_SECRET
 INSTAGRAM_APP_ID = ""
 FACEBOOK_APP_ID = ""
-THREADS_APP_ID = "3818723891606826"
+THREADS_APP_ID = ""
 
 [observability.logs]
 enabled = true
