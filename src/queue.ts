@@ -163,12 +163,20 @@ async function buildInput(env: Env, job: JobRow): Promise<JobInput> {
     }
   }
 
+  const overrides = JSON.parse(job.overrides || "{}") as Record<string, unknown>;
   return {
-    caption: job.caption,
+    // A per-channel caption override beats the global text — same
+    // preference order as the hosted engine.
+    caption: captionFromOverrides(overrides) ?? job.caption,
     mediaUrl,
     mediaKind,
-    overrides: JSON.parse(job.overrides || "{}") as Record<string, unknown>,
+    overrides,
   };
+}
+
+export function captionFromOverrides(overrides: Record<string, unknown>): string | null {
+  const caption = overrides.caption;
+  return typeof caption === "string" && caption.trim() ? caption.trim() : null;
 }
 
 async function recordFailure(

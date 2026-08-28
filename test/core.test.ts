@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { backoffSeconds } from "../src/queue";
+import { backoffSeconds, captionFromOverrides } from "../src/queue";
 import { decryptSecret, encryptSecret, randomCapability, sha256Hex, timingSafeEqual } from "../src/crypto";
 import { tagList } from "../src/senders/types";
 import { instagramSender } from "../src/senders/instagram";
@@ -38,6 +38,14 @@ describe("queue backoff", () => {
     expect(backoffSeconds(1)).toBe(30);
     expect(backoffSeconds(5)).toBe(150);
     expect(backoffSeconds(100)).toBe(600);
+  });
+});
+
+describe("caption override", () => {
+  it("a per-channel caption beats the global text; blanks do not", () => {
+    expect(captionFromOverrides({ caption: " custom " })).toBe("custom");
+    expect(captionFromOverrides({ caption: "   " })).toBeNull();
+    expect(captionFromOverrides({})).toBeNull();
   });
 });
 

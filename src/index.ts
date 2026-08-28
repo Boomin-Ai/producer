@@ -16,7 +16,7 @@ import { encryptSecret, randomCapability, randomId, sha256Hex } from "./crypto";
 import { authorizeUrl, exchangeCode } from "./oauth";
 import { senderFor, SENDERS } from "./senders";
 import type { JobInput } from "./senders/types";
-import { publicOrigin, rememberOrigin, tick, type JobRow } from "./queue";
+import { captionFromOverrides, rememberOrigin, tick, type JobRow } from "./queue";
 
 type Vars = { tokenClass: TokenClass };
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
@@ -274,7 +274,9 @@ app.post("/v1/posts", async (c) => {
   }
 
   const input: JobInput = {
-    caption: body.text ?? null,
+    // Preflight against what will actually publish: a per-channel caption
+    // override wins over the global text.
+    caption: captionFromOverrides(body.overrides ?? {}) ?? body.text ?? null,
     mediaUrl,
     mediaKind,
     overrides: body.overrides ?? {},
