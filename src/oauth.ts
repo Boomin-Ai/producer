@@ -53,7 +53,9 @@ export function authorizeUrl(platform: string, env: Env, redirectUri: string, st
     case "threads": {
       const id = need(env.THREADS_APP_ID, "THREADS_APP_ID");
       const scope = "threads_basic,threads_content_publish";
-      return `https://threads.net/oauth/authorize?client_id=${id}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&state=${state}`;
+      // threads.net redirects to threads.com and DROPS the query string —
+      // the authorize URL must target www.threads.com directly.
+      return `https://www.threads.com/oauth/authorize?client_id=${id}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&state=${state}`;
     }
     default:
       throw new ApiError(404, "not_found", `Unknown platform: ${platform}`);
