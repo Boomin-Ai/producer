@@ -175,6 +175,24 @@ async fn finalize_boomin_endpoint(
         .with_brand(Some(brand_slug.to_string()))
         .get_session()
         .await?;
+
+    // Re-connecting an already-connected workspace refreshes its token
+    // instead of minting a duplicate endpoint (a duplicate would list the
+    // same channels twice and double-post).
+    let existing: Option<String> = {
+        let conn = state.db.lock().expect("db mutex poisoned");
+        conn.query_row(
+            "SELECT id FROM endpoints WHERE base_url = ?1 AND brand_slug = ?2",
+            params![base, brand_slug],
+            |r| r.get(0),
+        )
+        .ok()
+    };
+    if let Some(existing_id) = existing {
+        vault::set_token(&existing_id, token)?;
+        return Ok(json!({ "id": existing_id, "session": session, "refreshed": true }));
+    }
+
     let id = Uuid::new_v4().to_string();
     let name = session
         .account
