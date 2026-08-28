@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="site/chair.png" width="170" alt="Producer — the chair is yours" />
+</p>
+
 # Producer
 
 > **Stop posting. Start producing.**

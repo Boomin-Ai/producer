@@ -7,6 +7,9 @@
 <meta name="description" content="The open-source studio that posts everywhere — from your desktop, through your keys, on your clouds. AGPL-3.0, self-hostable for $0." />
 <meta property="og:title" content="Producer — the open-source cross-posting studio" />
 <meta property="og:description" content="Post everywhere from one desktop app. Bring your own keys, or your own server. AGPL-3.0." />
+<meta property="og:image" content="https://producer.boomin.ai/chair.png" />
+<link rel="icon" type="image/png" href="favicon.png" />
+<link rel="apple-touch-icon" href="favicon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -101,6 +104,20 @@
 
   /* ── hero ────────────────────────────────────────── */
   header { padding: 72px 0 40px; }
+  .hero-grid {
+    display: grid; grid-template-columns: 1fr auto;
+    gap: 28px; align-items: center;
+  }
+  .hero-chair {
+    width: min(330px, 28vw); height: auto;
+    -webkit-mask-image: radial-gradient(closest-side, #000 55%, transparent 98%);
+    mask-image: radial-gradient(closest-side, #000 55%, transparent 98%);
+    animation: rise 700ms 240ms cubic-bezier(.2,.7,.2,1) both,
+               float 7s 1.2s ease-in-out infinite;
+  }
+  @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+  @media (max-width: 900px) { .hero-chair { display: none; } }
+  nav .mark { width: 22px; height: 22px; border-radius: 5px; margin-right: 10px; vertical-align: -5px; }
   .chip {
     display: inline-flex; gap: 14px; align-items: center;
     font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.18em;
@@ -275,7 +292,7 @@
 <div class="wrap">
 
   <nav>
-    <span class="wordmark">PRODUCER <span>by Boomin</span></span>
+    <span class="wordmark"><img class="mark" src="favicon.png" alt="" />PRODUCER <span>by Boomin</span></span>
     <span class="spacer"></span>
     <a class="nav-link" href="https://github.com/Boomin-Ai/producer/blob/main/server/SELF_HOSTING.md">self-host</a>
     <a class="nav-link" href="https://boomin.ai/producer">hosted&nbsp;→</a>
@@ -286,15 +303,20 @@
 
   <header>
     <span class="chip"><span class="dot"></span> OPEN SOURCE <b>AGPL-3.0</b> · DESKTOP · v0.1</span>
-    <h1>
-      <span class="stop">Stop posting.</span>
-      <span class="start">Start producing.</span>
-    </h1>
-    <p class="sub">
-      The open-source studio that posts everywhere — from <b>your desktop</b>,
-      through <b>your keys</b>, on <b>your clouds</b>. One caption, every
-      channel, scheduled to fire with your laptop closed.
-    </p>
+    <div class="hero-grid">
+      <div>
+        <h1>
+          <span class="stop">Stop posting.</span>
+          <span class="start">Start producing.</span>
+        </h1>
+        <p class="sub">
+          The open-source studio that posts everywhere — from <b>your desktop</b>,
+          through <b>your keys</b>, on <b>your clouds</b>. One caption, every
+          channel, scheduled to fire with your laptop closed.
+        </p>
+      </div>
+      <img class="hero-chair" src="chair.png" alt="The Producer chair" />
+    </div>
     <div class="cta-row">
       <a class="btn solid" href="https://github.com/Boomin-Ai/producer"><span class="star">★</span> Star on GitHub</a>
       <a class="btn" href="https://github.com/Boomin-Ai/producer/blob/main/server/SELF_HOSTING.md">Self-host in 20 min — $0</a>
