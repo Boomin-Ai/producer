@@ -226,10 +226,7 @@ textarea::placeholder {
   padding: 6px 10px;
   border-radius: 7px;
   font-size: 13px;
-}
-
-.side-endpoint:hover {
-  background: var(--rail-elevated);
+  cursor: default;
 }
 
 .side-endpoint .dot {
