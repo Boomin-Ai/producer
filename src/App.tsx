@@ -53,13 +53,11 @@ function App() {
   }
 
   return (
-    <main className="shell shell-top">
-      <Home
-        endpoints={endpoints}
-        onAddEndpoint={() => setView("onboarding")}
-        onRemoveEndpoint={removeEndpoint}
-      />
-    </main>
+    <Home
+      endpoints={endpoints}
+      onAddEndpoint={() => setView("onboarding")}
+      onRemoveEndpoint={removeEndpoint}
+    />
   );
 }
 
