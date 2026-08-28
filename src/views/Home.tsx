@@ -23,6 +23,55 @@ interface Attached {
   local_path: string;
 }
 
+/** Per-channel platform params — mirrors the web ChannelAccordion. */
+interface ChannelParams {
+  useCaption: boolean;
+  caption: string;
+  feed: boolean;
+  location: string;
+  userTags: string;
+  collaborators: string;
+  cover_url: string;
+  trial_post: boolean;
+}
+
+const DEFAULT_PARAMS: ChannelParams = {
+  useCaption: false,
+  caption: "",
+  feed: true,
+  location: "",
+  userTags: "",
+  collaborators: "",
+  cover_url: "",
+  trial_post: false,
+};
+
+function buildOverrides(p: ChannelParams | undefined): Record<string, unknown> | undefined {
+  if (!p) return undefined;
+  const o: Record<string, unknown> = { feed: p.feed };
+  if (p.useCaption && p.caption.trim()) o.caption = p.caption.trim();
+  if (p.location.trim()) o.location = p.location.trim();
+  if (p.userTags.trim()) o.userTags = p.userTags.trim();
+  if (p.collaborators.trim()) o.collaborators = p.collaborators.trim();
+  if (p.cover_url.trim()) o.cover_url = p.cover_url.trim();
+  if (p.trial_post) o.trial_post = true;
+  return o;
+}
+
+function Switch({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      className={`switch${on ? " on" : ""}`}
+      onClick={() => onChange(!on)}
+    >
+      <span className="knob" />
+    </button>
+  );
+}
+
 export function Home({
   endpoints,
   onAddEndpoint,
@@ -150,6 +199,14 @@ function ComposerDetail({
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<TargetResult[] | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [params, setParams] = useState<Record<string, ChannelParams>>({});
+
+  function patchParams(channelId: string, patch: Partial<ChannelParams>) {
+    setParams((prev) => ({
+      ...prev,
+      [channelId]: { ...(prev[channelId] ?? DEFAULT_PARAMS), ...patch },
+    }));
+  }
 
   const maxChars = useMemo(() => {
     const limits = channels
@@ -199,7 +256,11 @@ function ComposerDetail({
     try {
       const targets = channels
         .filter((c) => selected.has(c.id))
-        .map((c) => ({ endpoint_id: c.endpoint_id, channel_id: c.id }));
+        .map((c) => ({
+          endpoint_id: c.endpoint_id,
+          channel_id: c.id,
+          overrides: buildOverrides(params[c.id] ?? DEFAULT_PARAMS),
+        }));
       const { results } = await ipc.submitPost({
         text: text || undefined,
         media_url: mediaUrl.trim() || undefined,
@@ -374,18 +435,98 @@ function ComposerDetail({
               <div className="channel-cards">
                 {channels
                   .filter((c) => selected.has(c.id))
-                  .map((c) => (
-                    <div key={c.id} className="channel-card picked">
-                      <span className="platform">{c.platform}</span>
-                      <span className="name">{c.display_name}</span>
-                      <span className="mode-tag">
-                        {c.endpoint_kind === "connected" ? "Boomin" : "Self-hosted"}
-                      </span>
-                      <button className="linkish" onClick={() => toggle(c.id)}>
-                        remove
-                      </button>
-                    </div>
-                  ))}
+                  .map((c) => {
+                    const p = params[c.id] ?? DEFAULT_PARAMS;
+                    return (
+                      <div key={c.id} className="channel-acc">
+                        <div className="acc-head">
+                          <span className="platform">{c.platform}</span>
+                          <span className="name">{c.display_name}</span>
+                          {c.external_handle && (
+                            <span className="muted">@{c.external_handle}</span>
+                          )}
+                          <span className="mode-tag">
+                            {c.endpoint_kind === "connected" ? "Boomin" : "Self-hosted"}
+                          </span>
+                          <button className="linkish" onClick={() => toggle(c.id)}>
+                            remove
+                          </button>
+                        </div>
+
+                        <div className="acc-row">
+                          <span className="acc-group">Caption</span>
+                          <span className="muted">
+                            {p.useCaption ? "Custom for this channel" : "Using global"}
+                          </span>
+                          <span className="acc-control">
+                            <Switch
+                              on={p.useCaption}
+                              onChange={(v) => patchParams(c.id, { useCaption: v })}
+                            />
+                          </span>
+                        </div>
+                        {p.useCaption && (
+                          <textarea
+                            className="acc-caption"
+                            value={p.caption}
+                            onChange={(e) => patchParams(c.id, { caption: e.target.value })}
+                            placeholder={`Caption just for ${c.display_name}…`}
+                          />
+                        )}
+
+                        <div className="acc-row">
+                          <span className="acc-label">Show on Feed</span>
+                          <span className="acc-control">
+                            <Switch on={p.feed} onChange={(v) => patchParams(c.id, { feed: v })} />
+                          </span>
+                        </div>
+                        <div className="acc-row">
+                          <span className="acc-label">Location</span>
+                          <input
+                            value={p.location}
+                            onChange={(e) => patchParams(c.id, { location: e.target.value })}
+                            placeholder="Add location…"
+                          />
+                        </div>
+                        <div className="acc-row">
+                          <span className="acc-label">User Tags</span>
+                          <input
+                            value={p.userTags}
+                            onChange={(e) => patchParams(c.id, { userTags: e.target.value })}
+                            placeholder="@username"
+                          />
+                        </div>
+                        <div className="acc-row">
+                          <span className="acc-label">Collaborators</span>
+                          <input
+                            value={p.collaborators}
+                            onChange={(e) => patchParams(c.id, { collaborators: e.target.value })}
+                            placeholder="@collaborator"
+                          />
+                        </div>
+
+                        <div className="acc-row">
+                          <span className="acc-group">Cover photo</span>
+                          <input
+                            value={p.cover_url}
+                            onChange={(e) => patchParams(c.id, { cover_url: e.target.value })}
+                            placeholder="https://… (optional — sets the Reel thumbnail)"
+                          />
+                        </div>
+
+                        <div className="acc-row">
+                          <span className="acc-group">Trial</span>
+                          <span className="acc-label">Post as trial reel</span>
+                          <span className="acc-control">
+                            <Switch
+                              on={p.trial_post}
+                              onChange={(v) => patchParams(c.id, { trial_post: v })}
+                            />
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
             )}
             {loadError && <p className="error">{loadError}</p>}

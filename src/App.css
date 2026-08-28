@@ -616,6 +616,124 @@ textarea::placeholder {
   flex-wrap: wrap;
 }
 
+/* Per-channel params accordion (ChannelAccordion parity) */
+
+.channel-acc {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.acc-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--soft);
+}
+
+.acc-head .platform {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-fg);
+}
+
+.acc-head .name {
+  font-weight: 700;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acc-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  min-height: 44px;
+}
+
+.channel-acc > .acc-row:last-child {
+  border-bottom: none;
+}
+
+.acc-group {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted-fg);
+  min-width: 92px;
+}
+
+.acc-label {
+  font-size: 13.5px;
+  min-width: 110px;
+}
+
+.acc-row input {
+  flex: 1;
+  border: none;
+  background: none;
+  padding: 4px 0;
+  border-radius: 0;
+  font-size: 13.5px;
+}
+
+.acc-row input:focus-visible {
+  outline: none;
+  box-shadow: 0 1px 0 var(--indigo);
+}
+
+.acc-control {
+  margin-left: auto;
+}
+
+.acc-caption {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 10px 16px;
+  min-height: 76px;
+  resize: vertical;
+  border-radius: 8px;
+  font-size: 13.5px;
+}
+
+.switch {
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  background: #d4dae6;
+  border: none;
+  padding: 2px;
+  display: inline-flex;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.switch .knob {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.25);
+  transition: transform 120ms ease;
+}
+
+.switch.on {
+  background: var(--primary);
+}
+
+.switch.on .knob {
+  transform: translateX(16px);
+}
+
 .muted {
   color: var(--muted-fg);
   font-size: 13px;

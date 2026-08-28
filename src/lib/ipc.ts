@@ -76,6 +76,10 @@ export const ipc = {
     media_url?: string;
     media_upload_id?: string;
     schedule_at?: string;
-    targets: { endpoint_id: string; channel_id: string }[];
+    targets: {
+      endpoint_id: string;
+      channel_id: string;
+      overrides?: Record<string, unknown>;
+    }[];
   }) => invoke<{ intent_id: string; results: TargetResult[] }>("submit_post", { input }),
 };
