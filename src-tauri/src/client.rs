@@ -36,7 +36,10 @@ pub enum SubmitOutcome {
 }
 
 fn error_message(body: &Value, status: u16) -> String {
+    // Contract envelope { error: { message } }; legacy hosted routes use a
+    // flat { message } — read both so mixed surfaces stay legible.
     body.pointer("/error/message")
+        .or_else(|| body.get("message"))
         .and_then(Value::as_str)
         .map(str::to_string)
         .unwrap_or_else(|| format!("endpoint returned HTTP {status}"))
@@ -78,9 +81,17 @@ impl ProducerClient {
     }
 
     pub async fn list_channels(&self) -> EngineResult<Value> {
+        self.get_json("/v1/channels").await
+    }
+
+    pub async fn list_jobs(&self, limit: u32) -> EngineResult<Value> {
+        self.get_json(&format!("/v1/jobs?limit={limit}")).await
+    }
+
+    async fn get_json(&self, path: &str) -> EngineResult<Value> {
         let resp = self
             .http
-            .get(self.url("/v1/channels"))
+            .get(self.url(path))
             .bearer_auth(&self.token)
             .send()
             .await?;
@@ -90,6 +101,56 @@ impl ProducerClient {
             return Err(EngineError::Other(error_message(&body, status)));
         }
         Ok(resp.json().await?)
+    }
+
+    /// Request an upload slot (contract: POST /v1/media/uploads).
+    pub async fn create_upload(
+        &self,
+        filename: &str,
+        content_type: &str,
+        size_bytes: u64,
+    ) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.url("/v1/media/uploads"))
+            .bearer_auth(&self.token)
+            .json(&serde_json::json!({
+                "filename": filename,
+                "content_type": content_type,
+                "size_bytes": size_bytes,
+            }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let body: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&body, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// PUT raw bytes to a presigned capability URL — no credentials involved,
+    /// exactly per the contract's media rule.
+    pub async fn put_bytes(
+        &self,
+        put_url: &str,
+        content_type: &str,
+        bytes: Vec<u8>,
+    ) -> EngineResult<()> {
+        let resp = self
+            .http
+            .put(put_url)
+            .header("Content-Type", content_type)
+            .body(bytes)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(EngineError::Other(format!(
+                "media upload failed (HTTP {})",
+                resp.status().as_u16()
+            )));
+        }
+        Ok(())
     }
 
     /// Submit one publishing job for one channel. The request body is

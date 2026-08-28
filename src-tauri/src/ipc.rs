@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::client::ProducerClient;
 use crate::error::{EngineError, EngineResult};
-use crate::{outbox, submit, vault, AppState};
+use crate::{boomin, outbox, submit, vault, AppState};
 
 #[derive(Debug, Serialize)]
 pub struct EndpointInfo {
@@ -108,6 +108,125 @@ pub async fn endpoint_channels(
     ProducerClient::new(&base_url, &token).list_channels().await
 }
 
+/// Connected-mode sign-in, step 1: ask Boomin to email a code.
+#[tauri::command]
+pub async fn boomin_request_otp(api_root: Option<String>, email: String) -> EngineResult<()> {
+    let root = api_root.unwrap_or_else(|| boomin::DEFAULT_BOOMIN_API_ROOT.to_string());
+    boomin::request_otp(&root, &email).await
+}
+
+/// Connected-mode sign-in, step 2: verify the code and connect the endpoint
+/// in one motion — the session token flows straight into the keychain and
+/// never crosses the IPC boundary back to the webview.
+#[tauri::command]
+pub async fn boomin_connect(
+    state: State<'_, AppState>,
+    api_root: Option<String>,
+    email: String,
+    code: String,
+) -> EngineResult<Value> {
+    let root = api_root.unwrap_or_else(|| boomin::DEFAULT_BOOMIN_API_ROOT.to_string());
+    let token = boomin::verify_otp(&root, &email, &code).await?;
+    let base = boomin::producer_base_for_root(&root);
+    let session = ProducerClient::new(&base, &token).get_session().await?;
+
+    let id = Uuid::new_v4().to_string();
+    let name = session
+        .account
+        .as_ref()
+        .and_then(|a| a.get("display_name"))
+        .and_then(Value::as_str)
+        .unwrap_or("Boomin")
+        .to_string();
+    {
+        let conn = state.db.lock().expect("db mutex poisoned");
+        conn.execute(
+            "INSERT INTO endpoints (id, kind, name, base_url) VALUES (?1, 'connected', ?2, ?3)",
+            params![id, name, base],
+        )?;
+    }
+    vault::set_token(&id, &token)?;
+    Ok(json!({ "id": id, "session": session }))
+}
+
+fn mime_for_path(path: &str) -> Option<(&'static str, &'static str)> {
+    let ext = path.rsplit('.').next()?.to_ascii_lowercase();
+    match ext.as_str() {
+        "jpg" | "jpeg" => Some(("image/jpeg", "image")),
+        "png" => Some(("image/png", "image")),
+        "webp" => Some(("image/webp", "image")),
+        "gif" => Some(("image/gif", "image")),
+        "mp4" => Some(("video/mp4", "video")),
+        "mov" => Some(("video/quicktime", "video")),
+        "webm" => Some(("video/webm", "video")),
+        _ => None,
+    }
+}
+
+/// Upload a local file through the endpoint's slot flow (contract §media):
+/// request slot → PUT bytes to the presigned URL → durable upload_id. This
+/// runs BEFORE the outbox intent is committed, per the frozen media rule.
+#[tauri::command]
+pub async fn upload_media(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    file_path: String,
+) -> EngineResult<Value> {
+    let Some((mime, kind)) = mime_for_path(&file_path) else {
+        return Err(EngineError::Other(
+            "unsupported file type — use jpg, png, webp, gif, mp4, mov, or webm".into(),
+        ));
+    };
+    let bytes = std::fs::read(&file_path)
+        .map_err(|e| EngineError::Other(format!("could not read the file: {e}")))?;
+    let filename = file_path
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or("media")
+        .to_string();
+
+    let base_url: String = {
+        let conn = state.db.lock().expect("db mutex poisoned");
+        conn.query_row(
+            "SELECT base_url FROM endpoints WHERE id = ?1",
+            params![endpoint_id],
+            |r| r.get(0),
+        )?
+    };
+    let token = vault::get_token(&endpoint_id)?;
+    let client = ProducerClient::new(&base_url, &token);
+    let slot = client
+        .create_upload(&filename, mime, bytes.len() as u64)
+        .await?;
+    let put_url = slot
+        .get("put_url")
+        .and_then(Value::as_str)
+        .ok_or_else(|| EngineError::Other("the endpoint returned no upload URL".into()))?;
+    let upload_id = slot
+        .get("upload_id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| EngineError::Other("the endpoint returned no upload id".into()))?
+        .to_string();
+    client.put_bytes(put_url, mime, bytes).await?;
+    Ok(
+        json!({ "upload_id": upload_id, "kind": kind, "filename": filename, "endpoint_id": endpoint_id }),
+    )
+}
+
+#[tauri::command]
+pub async fn list_jobs(state: State<'_, AppState>, endpoint_id: String) -> EngineResult<Value> {
+    let base_url: String = {
+        let conn = state.db.lock().expect("db mutex poisoned");
+        conn.query_row(
+            "SELECT base_url FROM endpoints WHERE id = ?1",
+            params![endpoint_id],
+            |r| r.get(0),
+        )?
+    };
+    let token = vault::get_token(&endpoint_id)?;
+    ProducerClient::new(&base_url, &token).list_jobs(50).await
+}
+
 #[derive(Debug, Deserialize)]
 pub struct SubmitTarget {
     pub endpoint_id: String,
@@ -119,8 +238,11 @@ pub struct SubmitTarget {
 #[derive(Debug, Deserialize)]
 pub struct SubmitPostInput {
     pub text: Option<String>,
-    /// Stable public URL (media-by-URL). Upload-slot flow lands in M2.
+    /// Stable public URL (media-by-URL) — valid across any endpoints.
     pub media_url: Option<String>,
+    /// Durable upload reference from `upload_media` — endpoint-scoped, so
+    /// every target must live on the same endpoint.
+    pub media_upload_id: Option<String>,
     pub schedule_at: Option<String>,
     pub targets: Vec<SubmitTarget>,
 }
@@ -136,8 +258,24 @@ pub async fn submit_post(
     if input.targets.is_empty() {
         return Err(EngineError::Other("select at least one channel".into()));
     }
-    if input.text.as_deref().unwrap_or("").is_empty() && input.media_url.is_none() {
+    if input.text.as_deref().unwrap_or("").is_empty()
+        && input.media_url.is_none()
+        && input.media_upload_id.is_none()
+    {
         return Err(EngineError::Other("a post needs text or media".into()));
+    }
+    if input.media_url.is_some() && input.media_upload_id.is_some() {
+        return Err(EngineError::Other(
+            "use a media URL or an upload, not both".into(),
+        ));
+    }
+    if input.media_upload_id.is_some() {
+        let first = &input.targets[0].endpoint_id;
+        if !input.targets.iter().all(|t| &t.endpoint_id == first) {
+            return Err(EngineError::Other(
+                "an uploaded file belongs to one endpoint — targets on other endpoints need a media URL".into(),
+            ));
+        }
     }
 
     let intent_id = Uuid::new_v4().to_string();
@@ -154,6 +292,9 @@ pub async fn submit_post(
             }
             if let Some(url) = &input.media_url {
                 req["media"] = json!([{ "url": url }]);
+            }
+            if let Some(upload_id) = &input.media_upload_id {
+                req["media"] = json!([{ "upload_id": upload_id }]);
             }
             if let Some(at) = &input.schedule_at {
                 req["schedule_at"] = json!(at);

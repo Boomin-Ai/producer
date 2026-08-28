@@ -254,3 +254,208 @@ button:focus-visible {
   background: rgba(126, 151, 147, 0.16);
   color: var(--muted);
 }
+
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+button.linkish {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-weight: 500;
+  font-size: 0.85rem;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Composer */
+.composer {
+  margin-top: 8px;
+}
+
+.composer textarea {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 12px 14px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.composer textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.composer-row {
+  display: flex;
+  justify-content: flex-end;
+  min-height: 18px;
+}
+
+.char-count {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.char-count.over {
+  color: var(--red);
+  font-weight: 700;
+}
+
+.channel-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.channel-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.channel-pick.picked {
+  border-color: var(--accent);
+}
+
+.channel-pick .platform {
+  text-transform: capitalize;
+  color: var(--muted);
+}
+
+.media-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  flex-wrap: wrap;
+}
+
+.media-row input:not([type="datetime-local"]) {
+  flex: 1;
+  min-width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 9px 12px;
+  font-size: 0.85rem;
+}
+
+.schedule-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.schedule-label input {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 0.85rem;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.results {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+  font-size: 0.85rem;
+}
+
+.results .ok {
+  color: var(--accent);
+}
+
+.results .bad {
+  color: var(--red);
+}
+
+/* Jobs */
+.jobs {
+  margin-top: 24px;
+}
+
+.job-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.job {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.job a {
+  color: var(--accent);
+}
+
+.job-channel {
+  font-weight: 600;
+}
+
+.state-chip {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 99px;
+  background: rgba(126, 151, 147, 0.16);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.state-chip.published {
+  background: rgba(65, 230, 176, 0.12);
+  color: var(--accent);
+}
+
+.state-chip.scheduled {
+  background: rgba(65, 230, 176, 0.12);
+  color: var(--accent);
+}
+
+.state-chip.publishing,
+.state-chip.queued {
+  background: rgba(232, 180, 76, 0.14);
+  color: #e8b44c;
+}
+
+.state-chip.failed {
+  background: rgba(232, 112, 107, 0.14);
+  color: var(--red);
+}
