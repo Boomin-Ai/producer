@@ -28,7 +28,9 @@ cp -R "$STAGE/licenses/." "$CONTENTS/Resources/licenses/" 2>/dev/null || true
 # Inner→outer signing: leaf dylibs, then framework bundles, then plugin
 # bundles, then the app itself. --force replaces the signatures the engine
 # binaries arrived with (OBS's or a previous run's).
-sign() { codesign --force --timestamp=none --options runtime --sign "$IDENT" "$@"; }
+# Secure timestamps are required by notarization on every nested Mach-O.
+# (Changed from --timestamp=none per the release-pipeline handoff note.)
+sign() { codesign --force --timestamp --options runtime --sign "$IDENT" "$@"; }
 if [[ $IDENT == "-" ]]; then
   # ad-hoc signatures cannot carry the hardened runtime flag usefully in dev
   sign() { codesign --force --sign - "$@"; }
