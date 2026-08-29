@@ -1272,3 +1272,42 @@ textarea::placeholder {
   font-size: 11px;
   max-width: 380px;
 }
+
+/* --- Live M-L7 escape hatch: overlay picker --- */
+.live-overlay-details {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: var(--card);
+  font-size: 12px;
+}
+.live-overlay-details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.live-overlay {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+}
+.live-overlay-row {
+  display: flex;
+  gap: 8px;
+}
+.live-overlay-row select {
+  flex: 1;
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+}
+.live-overlay-key {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-fg);
+}

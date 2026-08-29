@@ -112,6 +112,9 @@ pub struct SourcesState {
     pub screen: bool,
     pub camera: bool,
     pub mic: bool,
+    /// Window-capture overlay (D1's sanctioned v1 escape hatch); the CGWindowID
+    /// being captured, if any.
+    pub overlay_window: Option<u32>,
 }
 
 /// The implicit scene (§2.2: "UI exposes one implicit scene"): screen
@@ -124,6 +127,7 @@ pub struct SceneGraph {
     screen: Option<(*mut ffi::obs_sceneitem_t, *mut ffi::obs_source_t)>,
     camera: Option<(*mut ffi::obs_sceneitem_t, *mut ffi::obs_source_t)>,
     mic: Option<*mut ffi::obs_source_t>,
+    overlay: Option<(*mut ffi::obs_sceneitem_t, *mut ffi::obs_source_t, u32)>,
 }
 
 impl SceneGraph {
@@ -140,6 +144,7 @@ impl SceneGraph {
                 screen: None,
                 camera: None,
                 mic: None,
+                overlay: None,
             })
         }
     }
@@ -149,7 +154,65 @@ impl SceneGraph {
             screen: self.screen.is_some(),
             camera: self.camera.is_some(),
             mic: self.mic.is_some(),
+            overlay_window: self.overlay.as_ref().map(|(_, _, id)| *id),
         }
+    }
+
+    /// Window-capture overlay (D1 escape hatch): a browser window running the
+    /// overlay page, captured full-frame on top of the scene; optional green
+    /// color-key so it composites like a real overlay. None clears it.
+    pub fn set_overlay(&mut self, window_id: Option<u32>, color_key: bool) -> Result<(), String> {
+        unsafe {
+            if let Some((item, src, _)) = self.overlay.take() {
+                ffi::obs_sceneitem_remove(item);
+                ffi::obs_source_release(src);
+            }
+            let Some(window_id) = window_id else {
+                return Ok(());
+            };
+            let settings = ffi::obs_data_create();
+            // mac-sck-common.h: ScreenCaptureWindowStream = 1
+            ffi::obs_data_set_int(settings, CString::new("type").unwrap().as_ptr(), 1);
+            ffi::obs_data_set_int(settings, CString::new("window").unwrap().as_ptr(), window_id as i64);
+            ffi::obs_data_set_bool(settings, CString::new("show_cursor").unwrap().as_ptr(), false);
+            let id = CString::new("screen_capture").unwrap();
+            let name = CString::new("Overlay").unwrap();
+            let src = ffi::obs_source_create(id.as_ptr(), name.as_ptr(), settings, ptr::null_mut());
+            ffi::obs_data_release(settings);
+            if src.is_null() {
+                return Err("overlay window capture creation failed".into());
+            }
+            if color_key {
+                let fsettings = ffi::obs_data_create();
+                ffi::obs_data_set_string(
+                    fsettings,
+                    CString::new("key_color_type").unwrap().as_ptr(),
+                    CString::new("green").unwrap().as_ptr(),
+                );
+                let fid = CString::new("color_key_filter_v2").unwrap();
+                let fname = CString::new("overlay-key").unwrap();
+                let filter = ffi::obs_source_create_private(fid.as_ptr(), fname.as_ptr(), fsettings);
+                ffi::obs_data_release(fsettings);
+                if !filter.is_null() {
+                    ffi::obs_source_filter_add(src, filter);
+                    ffi::obs_source_release(filter);
+                }
+            }
+            let item = ffi::obs_scene_add(self.scene, src);
+            if item.is_null() {
+                ffi::obs_source_release(src);
+                return Err("scene add failed for overlay".into());
+            }
+            let (bw, bh) = Self::base_size();
+            ffi::obs_sceneitem_set_bounds_type(item, ffi::OBS_BOUNDS_SCALE_INNER);
+            let bounds = ffi::vec2 { x: bw, y: bh };
+            ffi::obs_sceneitem_set_bounds(item, &bounds);
+            let pos = ffi::vec2 { x: 0.0, y: 0.0 };
+            ffi::obs_sceneitem_set_pos(item, &pos);
+            ffi::obs_sceneitem_set_visible(item, true);
+            self.overlay = Some((item, src, window_id));
+        }
+        Ok(())
     }
 
     fn base_size() -> (f32, f32) {

@@ -262,6 +262,17 @@ extern "C" {
     pub fn producer_screen_capture_preflight() -> c_int;
     pub fn producer_screen_capture_request();
     pub fn producer_default_camera_id(buf: *mut c_char, buflen: c_int) -> c_int;
+    pub fn producer_list_windows(buf: *mut c_char, buflen: c_int) -> c_int;
+}
+
+// M-L7 escape hatch: filters on the overlay window capture
+extern "C" {
+    pub fn obs_source_create_private(
+        id: *const c_char,
+        name: *const c_char,
+        settings: *mut obs_data_t,
+    ) -> *mut obs_source_t;
+    pub fn obs_source_filter_add(source: *mut obs_source_t, filter: *mut obs_source_t);
 }
 
 // M-L3: encoders, service, output — first light (LIVE-REVIEW.md F4 chain)

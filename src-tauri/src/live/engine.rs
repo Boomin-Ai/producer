@@ -268,6 +268,10 @@ pub enum Command {
         camera: bool,
         mic: bool,
     },
+    SetOverlay {
+        window_id: Option<u32>,
+        color_key: bool,
+    },
     AttachPreview {
         /// NSWindow* of the Tauri window, as usize.
         window: usize,
@@ -356,6 +360,11 @@ impl LiveHandle {
     pub fn set_sources(&self, screen: bool, camera: bool, mic: bool) -> Result<(), String> {
         self.cmd
             .send(Command::SetSources { screen, camera, mic })
+            .map_err(|e| e.to_string())
+    }
+    pub fn set_overlay(&self, window_id: Option<u32>, color_key: bool) -> Result<(), String> {
+        self.cmd
+            .send(Command::SetOverlay { window_id, color_key })
             .map_err(|e| e.to_string())
     }
     pub fn attach_preview(&self, window: usize, rect: PreviewRect) -> Result<(), String> {
@@ -588,6 +597,18 @@ pub fn start(sink: impl Fn(&LiveEvent) + Send + 'static) -> LiveHandle {
                                         message: format!("{label}: {e}"),
                                     });
                                 }
+                            }
+                            let sources = g.state();
+                            snap.lock().unwrap().sources = sources;
+                            sink(&LiveEvent::SourcesChanged { sources });
+                        }
+                    }
+                    Ok(Command::SetOverlay { window_id, color_key }) => {
+                        if let Some(g) = scene.as_mut() {
+                            if let Err(e) = g.set_overlay(window_id, color_key) {
+                                sink(&LiveEvent::EngineError {
+                                    message: format!("overlay: {e}"),
+                                });
                             }
                             let sources = g.state();
                             snap.lock().unwrap().sources = sources;

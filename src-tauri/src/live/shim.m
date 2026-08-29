@@ -86,6 +86,31 @@ void producer_screen_capture_request(void) {
     CGRequestScreenCaptureAccess();
 }
 
+// On-screen window list for the window-capture overlay (M-L7 escape hatch,
+// LIVE-REVIEW.md D1). JSON array of {id, owner, title} written into buf.
+// Window titles are only populated when Screen Recording is granted.
+int producer_list_windows(char *buf, int buflen) {
+    CFArrayRef list = CGWindowListCopyWindowInfo(
+        kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID);
+    if (!list) return 0;
+    NSMutableArray *out = [NSMutableArray array];
+    for (NSDictionary *info in (__bridge NSArray *)list) {
+        NSNumber *layer = info[(id)kCGWindowLayer];
+        NSNumber *wid = info[(id)kCGWindowNumber];
+        NSString *owner = info[(id)kCGWindowOwnerName] ?: @"";
+        NSString *title = info[(id)kCGWindowName] ?: @"";
+        if (layer.intValue != 0 || !wid) continue;
+        if (owner.length == 0 && title.length == 0) continue;
+        [out addObject:@{@"id": wid, @"owner": owner, @"title": title}];
+    }
+    CFRelease(list);
+    NSData *json = [NSJSONSerialization dataWithJSONObject:out options:0 error:nil];
+    if (!json || (int)json.length >= buflen) return 0;
+    memcpy(buf, json.bytes, json.length);
+    buf[json.length] = 0;
+    return 1;
+}
+
 // Default camera uniqueID (mac-avcapture requires an explicit device id, the
 // same way SCK required an explicit display UUID). Returns 1 on success.
 int producer_default_camera_id(char *buf, int buflen) {

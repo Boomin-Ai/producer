@@ -29,6 +29,36 @@ spike Mac (macOS 15.5, CLT-only, no Xcode installed). Owner decision:
   acceptance items (bundle law, Finder launch, relocation, zero-Qt closure,
   post-load ID assertions, inner→outer signing) run against this engine today.
 
+### v1.1.2 deviation note (2026-08-29, recorded at M-L7)
+
+D1's budget rule is invoked: **M-L7 (CEF overlays) slips to the first point
+release (tracked as M-L7.1)**, and the sanctioned escape hatch ships in v1.
+Verified facts driving the call:
+
+- The official `obs-browser.plugin` binary links QtCore/QtGui/QtWidgets and
+  `obs-frontend-api` (otool-verified against the 32.1.2 DMG) — unusable under
+  M-L7's own "no Qt dragged in" acceptance, and non-functional anyway: its
+  macOS CEF message pump (`ENABLE_BROWSER_QT_LOOP`, hard-wired in
+  `cmake/os-macos.cmake`) schedules work via QObjects that require the OBS
+  frontend's running QApplication.
+- CEF on macOS requires a main-thread pump; obs-browser already uses CEF's
+  `external_message_pump` + `OnScheduleMessagePumpWork` — only the scheduling
+  half is Qt. **M-L7.1 plan:** build obs-browser in engine CI with the Qt
+  scheduler replaced by a host-provided callback (Producer marshals
+  `CefDoMessageLoopWork()` onto the AppKit main queue via the existing GCD
+  bridge); carried as a patchset in obs.lock per D5; preset gains
+  ENABLE_BROWSER=ON + CEF fetch; artifact grows ~600MB (CEF + helpers);
+  frontend-api ships as the no-op shim dylib (obs-browser links it; all calls
+  degrade gracefully with no frontend registered — verify the
+  FINISHED_LOADING dependency at patch time). No local build possible (no
+  Xcode on the spike Mac) — the CI session owns the build loop.
+- **v1 escape hatch (shipped):** window-capture overlay — SCK window capture
+  of a browser window running the overlay page, composited full-frame on top
+  of the scene, with an optional green color-key (obs-filters
+  `color_key_filter_v2`) so a green-background overlay page blends like a
+  true overlay. Limitation vs CEF: no native page alpha, no in-engine
+  audio from the overlay, interaction stays in the browser window.
+
 ---
 
 ## 1. Goal (one sentence)

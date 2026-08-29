@@ -122,6 +122,33 @@ impl Live {
     }
 
     #[cfg(have_engine)]
+    pub fn set_overlay(&self, window_id: Option<u32>, color_key: bool) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .set_overlay(window_id, color_key)
+    }
+    #[cfg(not(have_engine))]
+    pub fn set_overlay(&self, _w: Option<u32>, _k: bool) -> Result<(), String> {
+        Err("live engine not bundled in this build".into())
+    }
+
+    #[cfg(have_engine)]
+    pub fn list_windows(&self) -> Result<serde_json::Value, String> {
+        let mut buf = vec![0u8; 256 * 1024];
+        let ok = unsafe { ffi::producer_list_windows(buf.as_mut_ptr() as *mut std::os::raw::c_char, buf.len() as i32) };
+        if ok == 0 {
+            return Err("window enumeration failed".into());
+        }
+        let end = buf.iter().position(|b| *b == 0).unwrap_or(buf.len());
+        serde_json::from_slice(&buf[..end]).map_err(|e| format!("window list parse: {e}"))
+    }
+    #[cfg(not(have_engine))]
+    pub fn list_windows(&self) -> Result<serde_json::Value, String> {
+        Err("live engine not bundled in this build".into())
+    }
+
+    #[cfg(have_engine)]
     pub fn attach_preview(&self, window: usize, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
         self.handle
             .as_ref()

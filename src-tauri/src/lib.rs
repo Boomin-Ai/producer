@@ -91,6 +91,8 @@ pub fn run() {
             live::commands::live_detach_preview,
             live::commands::live_permissions,
             live::commands::live_request_permission,
+            live::commands::live_set_overlay,
+            live::commands::live_list_windows,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

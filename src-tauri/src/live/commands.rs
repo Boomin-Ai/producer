@@ -241,6 +241,20 @@ pub fn live_detach_preview(state: State<'_, AppState>) -> EngineResult<()> {
 }
 
 #[tauri::command]
+pub fn live_set_overlay(
+    state: State<'_, AppState>,
+    window_id: Option<u32>,
+    color_key: bool,
+) -> EngineResult<()> {
+    state.live.set_overlay(window_id, color_key).map_err(EngineError::Other)
+}
+
+#[tauri::command]
+pub fn live_list_windows(state: State<'_, AppState>) -> EngineResult<serde_json::Value> {
+    state.live.list_windows().map_err(EngineError::Other)
+}
+
+#[tauri::command]
 pub fn live_permissions() -> EngineResult<serde_json::Value> {
     Ok(crate::live::permissions())
 }
