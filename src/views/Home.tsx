@@ -4,6 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Channel, EndpointInfo, Job, TargetResult } from "../lib/ipc";
 import { ipc } from "../lib/ipc";
+import { LiveView } from "./Live";
 
 const STATE_LABEL: Record<string, string> = {
   scheduled: "Scheduled",
@@ -14,7 +15,7 @@ const STATE_LABEL: Record<string, string> = {
   canceled: "Canceled",
 };
 
-type MainView = "compose" | "history";
+type MainView = "compose" | "history" | "live";
 
 interface Attached {
   upload_id: string;
@@ -218,6 +219,11 @@ export function Home({
           {upcoming.length > 0 && <span className="side-count">{upcoming.length}</span>}
         </button>
 
+        <div className="side-label">Live</div>
+        <button className={`side-item${view === "live" ? " active" : ""}`} onClick={() => setView("live")}>
+          Go live
+        </button>
+
         <div className="side-label">Collections</div>
         <div className="side-soon">Series &amp; collections arrive with the creation phase.</div>
 
@@ -243,7 +249,9 @@ export function Home({
       </aside>
 
       <main className="main">
-        {view === "compose" ? (
+        {view === "live" ? (
+          <LiveView />
+        ) : view === "compose" ? (
           <ComposerDetail
             channels={channels.filter((c) => c.status === "active")}
             independents={endpoints.filter((e) => e.kind === "independent")}

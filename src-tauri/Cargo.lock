@@ -2815,6 +2815,7 @@ dependencies = [
 name = "producer"
 version = "0.1.0"
 dependencies = [
+ "cc",
  "hex",
  "keyring",
  "reqwest 0.12.28",

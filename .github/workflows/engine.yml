@@ -1,0 +1,51 @@
+# Producer engine CI — LIVE-REVIEW.md D5: build-on-engine-change, consume-by-hash.
+# Builds libobs + the §5.2 plugin allowlist from the OBS source pinned in
+# engine/obs.lock using the producer-macos preset, gates the result on the
+# zero-Qt closure check, and publishes the immutable artifact.
+#
+# This workflow is new in M-L1 and validates assumption A1 (source build under
+# our preset) — the local spike consumes the R1-fallback extracted engine
+# until this has run green. Owned by the engine track; release.yml is not
+# touched by this pipeline (app CI consumes the artifact by SHA256).
+name: engine
+
+on:
+  push:
+    branches: ["main", "live/**"]
+    paths:
+      - "engine/obs.lock"
+      - "engine/producer-presets.json"
+      - "scripts/build-engine.sh"
+      - "scripts/engine-lib.sh"
+      - "scripts/engine-closure.sh"
+  workflow_dispatch:
+
+jobs:
+  build-macos-arm64:
+    # macOS 15 runner ships Xcode 16.x / SDK 15 — matches the 32.1.2 pin.
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 16
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s /Applications/Xcode_16.2.app
+          xcodebuild -version
+
+      - name: Build engine from pinned source
+        run: ./scripts/build-engine.sh
+
+      - name: Zero-Qt closure gate
+        run: |
+          stage=$(ls -d engine/artifacts/producer-libobs-macos-arm64-*/ | head -1)
+          ./scripts/engine-closure.sh "$stage"
+
+      - name: Upload engine artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: producer-libobs-macos-arm64
+          path: |
+            engine/artifacts/*.tar.zst
+            engine/artifacts/*.sha256
+          if-no-files-found: error

@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# OBS engine workspace (pinned via engine/obs.lock)
+engine/obs-studio/
+engine/cache/
+engine/artifacts/
