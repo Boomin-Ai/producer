@@ -35,6 +35,8 @@ void *producer_preview_attach(void *ns_window, double x, double y, double w, dou
         view = [[NSView alloc] initWithFrame:frame_from_css(content, x, y, w, h)];
         view.wantsLayer = YES;
         view.layer.backgroundColor = CGColorGetConstantColor(kCGColorBlack);
+        view.layer.cornerRadius = 8; // the stage canvas is a rounded card
+        view.layer.masksToBounds = YES;
         [content addSubview:view positioned:NSWindowAbove relativeTo:nil];
         double scale = win.backingScaleFactor > 0 ? win.backingScaleFactor : 1.0;
         *out_px_w = w * scale;

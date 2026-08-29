@@ -265,14 +265,23 @@ export function Home({
     loadJobs();
   };
 
-  const title =
-    view.kind === "room"
-      ? view.room.name
-      : view.kind === "compose"
-        ? "New post"
-        : view.kind === "history"
-          ? "Rundown"
-          : null;
+  const title = view.kind === "compose" ? "New post" : view.kind === "history" ? "Rundown" : null;
+
+  // The room owns the entire window, its own top bar included (mock-faithful).
+  if (view.kind === "room") {
+    return (
+      <LiveView
+        key={view.room.id}
+        room={view.room}
+        rooms={rooms}
+        onLeave={back}
+        onSwitchRoom={(r) => {
+          const full = rooms.find((x) => x.id === r.id);
+          if (full) setView({ kind: "room", room: full });
+        }}
+      />
+    );
+  }
 
   return (
     <div className="cr">
@@ -287,7 +296,7 @@ export function Home({
             PRODUCER
           </span>
           {title && <span className="cr-title">{title}</span>}
-          {view.kind === "room" && streaming && <span className="cr-live-pill">LIVE</span>}
+          {streaming && <span className="cr-live-pill">LIVE</span>}
         </div>
         <div className="cr-top-right">
           {updater.state === "ready" && (
@@ -330,12 +339,6 @@ export function Home({
           onCompose={() => setView({ kind: "compose" })}
           onHistory={() => setView({ kind: "history" })}
         />
-      )}
-
-      {view.kind === "room" && (
-        <main className="cr-page stage-page">
-          <LiveView key={view.room.id} room={view.room} />
-        </main>
       )}
 
       {view.kind === "compose" && (

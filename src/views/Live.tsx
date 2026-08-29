@@ -232,83 +232,155 @@ function OverlayPicker({ activeWindow, activeUrl }: { activeWindow: number | nul
   );
 }
 
-/** One video tile in the sources sheet: name + eye toggle. */
-function SourceTile({
-  label,
-  sub,
-  on,
-  disabled,
-  onToggle,
-  children,
-}: {
-  label: string;
-  sub?: string;
-  on: boolean;
-  disabled?: boolean;
-  onToggle: () => void;
-  children?: ReactNode;
-}) {
+/* Icon set lifted from the Boomin Live room mocks. */
+const ic = {
+  mic: (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="2" width="6" height="12" rx="3" />
+      <path d="M5 10a7 7 0 0 0 14 0M12 17v5" />
+    </svg>
+  ),
+  cam: (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 10l5-3v10l-5-3" />
+      <rect x="2" y="6" width="13" height="12" rx="2" />
+    </svg>
+  ),
+  screen: (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="4" width="20" height="13" rx="2" />
+      <path d="M12 11V8M10 9.5l2-1.5 2 1.5M8 21h8" />
+    </svg>
+  ),
+  link: (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
+      <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
+    </svg>
+  ),
+  invite: (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M19 8v6M22 11h-6" />
+    </svg>
+  ),
+  plus: (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  ),
+  gear: (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  ),
+  eye: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  ),
+  chev: (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  ),
+  onair: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="2" />
+      <path d="M7.5 7.5a6.4 6.4 0 0 0 0 9M16.5 7.5a6.4 6.4 0 0 1 0 9M4.6 4.6a10.5 10.5 0 0 0 0 14.8M19.4 4.6a10.5 10.5 0 0 1 0 14.8" />
+    </svg>
+  ),
+  cast: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6" />
+      <path d="M2 12a9 9 0 0 1 8 8M2 16a5 5 0 0 1 4 4M2 20h.01" />
+    </svg>
+  ),
+  x: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M18 6L6 18M6 6l12 12" />
+    </svg>
+  ),
+  chat: (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  ),
+};
+
+/** Mock-faithful slim fader: 4px track, white 26×14 thumb, pointer drag. */
+function Fader({ value, disabled, onChange }: { value: number; disabled?: boolean; onChange: (ui: number) => void }) {
+  const track = useRef<HTMLDivElement | null>(null);
+
+  function fromEvent(e: { clientY: number }) {
+    const el = track.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const ui = 1 - Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+    onChange(ui);
+  }
+
   return (
-    <div className={`st-tile${on ? " on" : ""}`}>
-      <button className="st-tile-body" disabled={disabled} onClick={onToggle}>
-        <span className="st-eye">{on ? "●" : "○"}</span>
-        <span className="st-tile-name">{label}</span>
-        {sub && <span className="st-tile-sub">{sub}</span>}
-      </button>
-      {children}
+    <div
+      ref={track}
+      className={`rm-fader${disabled ? " disabled" : ""}`}
+      onPointerDown={(e) => {
+        if (disabled) return;
+        (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+        fromEvent(e);
+      }}
+      onPointerMove={(e) => {
+        if (disabled || e.buttons !== 1) return;
+        fromEvent(e);
+      }}
+    >
+      <div className="rm-fader-track" />
+      <div className="rm-fader-thumb" style={{ top: `calc(${(1 - value) * 100}% - 7px)` }} />
     </div>
   );
 }
 
-/** Vertical mic strip: real meter (engine peak stream), fader, mute. */
-function MicStrip({
-  on,
+/** Vertical meter + fader strip, straight from the sources-sheet mock. */
+function MeterStrip({
+  label,
+  icon,
   level,
   volume,
   muted,
-  onToggle,
+  disabled,
+  soon,
   onVolume,
   onMute,
 }: {
-  on: boolean;
+  label: string;
+  icon: ReactNode;
   level: number;
   volume: number;
   muted: boolean;
-  onToggle: () => void;
-  onVolume: (v: number) => void;
-  onMute: () => void;
+  disabled?: boolean;
+  soon?: boolean;
+  onVolume?: (mul: number) => void;
+  onMute?: () => void;
 }) {
   const ui = Math.cbrt(Math.max(0, Math.min(1, volume)));
   const db = volume > 0.001 ? Math.round(20 * Math.log10(volume)) : -60;
+  const dead = disabled || soon;
   return (
-    <div className={`st-strip${on ? " on" : ""}${muted ? " muted" : ""}`}>
-      <div className="st-strip-columns">
-        <div className="st-meter">
-          <div className="st-meter-fill" style={{ height: `${Math.round(level * 100)}%` }} />
+    <div className={`rm-strip${dead ? " dead" : ""}`} title={soon ? "Desktop audio arrives soon" : undefined}>
+      <div className="rm-strip-cols">
+        <div className="rm-meter">
+          <div className="rm-meter-fill" style={{ height: `${Math.round((dead || muted ? 0 : level) * 100)}%` }} />
         </div>
-        <div className="st-fader">
-          <input
-            type="range"
-            min={0}
-            max={1000}
-            value={Math.round(ui * 1000)}
-            disabled={!on}
-            onChange={(e) => {
-              const u = Number(e.target.value) / 1000;
-              onVolume(u * u * u);
-            }}
-          />
-        </div>
+        <Fader value={dead ? 0.35 : ui} disabled={dead} onChange={(u) => onVolume?.(u * u * u)} />
       </div>
-      <div className="st-strip-db">{muted ? "muted" : `${db <= -60 ? "-∞" : db} dB`}</div>
-      <div className="st-strip-actions">
-        <button className={`st-mute${muted ? " active" : ""}`} disabled={!on} onClick={onMute} title="Mute">
-          {muted ? "🔇" : "🎙"}
-        </button>
-        <button className="st-strip-toggle" onClick={onToggle}>
-          {on ? "Mic on" : "Mic off"}
-        </button>
-      </div>
+      <span className="rm-strip-db">{soon ? "soon" : muted ? "muted" : `${db <= -60 ? "-∞" : db} dB`}</span>
+      <button className={`rm-strip-icon${muted ? " muted" : ""}`} disabled={dead} onClick={onMute} title={muted ? "Unmute" : "Mute"}>
+        {icon}
+      </button>
+      <span className="rm-strip-name">{label}</span>
     </div>
   );
 }
@@ -452,7 +524,23 @@ export function DestinationEditor({
   );
 }
 
-export function LiveView({ room }: { room?: { id: string; name: string; config: string } }) {
+export interface RoomInfo {
+  id: string;
+  name: string;
+  config: string;
+}
+
+export function LiveView({
+  room,
+  rooms = [],
+  onLeave,
+  onSwitchRoom,
+}: {
+  room?: RoomInfo;
+  rooms?: RoomInfo[];
+  onLeave?: () => void;
+  onSwitchRoom?: (room: RoomInfo) => void;
+}) {
   const [destinations, setDestinations] = useState<LiveDestination[]>([]);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
   const [statuses, setStatuses] = useState<Map<string, LiveDestStatus>>(new Map());
@@ -464,6 +552,10 @@ export function LiveView({ room }: { room?: { id: string; name: string; config: 
   const [micLevel, setMicLevel] = useState(0);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [roomsOpen, setRoomsOpen] = useState(false);
+  const [destsOpen, setDestsOpen] = useState(false);
+  const [micPopOpen, setMicPopOpen] = useState(false);
+  const [overlayOpen, setOverlayOpen] = useState(false);
   const sheetAutoOpened = useRef(false);
   const unlisten = useRef<(() => void) | null>(null);
   const roomApplied = useRef(false);
@@ -570,141 +662,361 @@ export function LiveView({ room }: { room?: { id: string; name: string; config: 
 
   const overlayActive = sources.overlay_window != null || !!sources.overlay_url;
   const enabledDests = destinations.filter((d) => d.enabled);
+  const destChip =
+    enabledDests.length > 0 ? enabledDests.map((d) => d.label).join(" + ") : "Add channels";
+
+  // The mock's scenes are real presets over the implicit scene.
+  const scenePresets: { key: string; label: string; screen: boolean; camera: boolean }[] = [
+    { key: "pip", label: "PiP", screen: true, camera: true },
+    { key: "cam", label: "Full cam", screen: false, camera: true },
+    { key: "screen", label: "Screen", screen: true, camera: false },
+  ];
+  const activeScene = scenePresets.find(
+    (p) => p.screen === sources.screen && p.camera === sources.camera,
+  )?.key;
+
+  const setVolume = (v: number) => {
+    setSources((s) => ({ ...s, mic_volume: v }));
+    ipc.liveSetMicAudio({ volume: v }).catch((e) => setBanner(String(e)));
+  };
+  const toggleMute = () => {
+    const m = !(sources.mic_muted ?? false);
+    setSources((s) => ({ ...s, mic_muted: m }));
+    ipc.liveSetMicAudio({ muted: m }).catch((e) => setBanner(String(e)));
+  };
+
+  const closePops = () => {
+    setRoomsOpen(false);
+    setDestsOpen(false);
+    setMicPopOpen(false);
+    setOverlayOpen(false);
+    setChatOpen(false);
+  };
+  const anyPop = roomsOpen || destsOpen || micPopOpen || overlayOpen || chatOpen;
+
+  const micStrip = (
+    <MeterStrip
+      label="Mic"
+      icon={ic.mic}
+      level={micLevel}
+      volume={sources.mic_volume ?? 1}
+      muted={sources.mic_muted ?? false}
+      disabled={!sources.mic}
+      onVolume={setVolume}
+      onMute={toggleMute}
+    />
+  );
 
   return (
-    <div className="stage-wrap">
-      <div className="stage">
-        {engineOk && <PreviewPanel />}
-        {!engineOk && snapshot && (
-          <div className="stage-msg">
-            {snapshot.disabled ? "Live engine not bundled in this build." : "Warming up the engine…"}
-          </div>
-        )}
-        <div className="stage-float">
-          <PermissionsCoach sources={sources} />
-          {banner && <div className="live-error">{banner}</div>}
-        </div>
-      </div>
+    <div className="room">
+      {anyPop && <div className="rm-pop-backdrop" onClick={closePops} />}
 
-      {sheetOpen && (
-        <div className="stage-sheet">
-          <div className="st-tiles">
-            <SourceTile
-              label="Screen"
-              sub="your display, full frame"
-              on={sources.screen}
-              disabled={!engineOk}
-              onToggle={() => setSrc({ screen: !sources.screen })}
-            />
-            <SourceTile
-              label="Camera"
-              sub="picture-in-picture"
-              on={sources.camera}
-              disabled={!engineOk}
-              onToggle={() => setSrc({ camera: !sources.camera })}
-            />
-            <div className={`st-tile${overlayActive ? " on" : ""} st-tile-overlay`}>
-              <div className="st-tile-body as-label">
-                <span className="st-eye">{overlayActive ? "●" : "○"}</span>
-                <span className="st-tile-name">Overlay</span>
-                <span className="st-tile-sub">alerts · browser · window</span>
+      <header className="rm-top" data-tauri-drag-region>
+        <div className="rm-top-left" data-tauri-drag-region>
+          <span className="rm-brand" data-tauri-drag-region>
+            PRODUCER
+          </span>
+          <div className="rm-pop-anchor">
+            <button className="rm-room-chip" onClick={() => setRoomsOpen((o) => !o)}>
+              {room?.name ?? "Live"}
+              {ic.chev}
+            </button>
+            {roomsOpen && (
+              <div className="rm-pop rm-pop-left">
+                {rooms
+                  .filter((r) => r.id !== room?.id)
+                  .map((r) => (
+                    <button
+                      key={r.id}
+                      className="rm-pop-row"
+                      onClick={() => {
+                        closePops();
+                        onSwitchRoom?.(r);
+                      }}
+                    >
+                      {r.name}
+                    </button>
+                  ))}
+                <button className="rm-pop-row dim" onClick={() => onLeave?.()}>
+                  ← Control room
+                </button>
               </div>
-              <OverlayPicker
-                activeWindow={sources.overlay_window ?? null}
-                activeUrl={sources.overlay_url ?? null}
-              />
-            </div>
+            )}
           </div>
-          <MicStrip
-            on={sources.mic}
-            level={sources.mic && !sources.mic_muted ? micLevel : 0}
-            volume={sources.mic_volume ?? 1}
-            muted={sources.mic_muted ?? false}
-            onToggle={() => setSrc({ mic: !sources.mic })}
-            onVolume={(v) => {
-              setSources((s) => ({ ...s, mic_volume: v }));
-              ipc.liveSetMicAudio({ volume: v }).catch((e) => setBanner(String(e)));
-            }}
-            onMute={() => {
-              const m = !(sources.mic_muted ?? false);
-              setSources((s) => ({ ...s, mic_muted: m }));
-              ipc.liveSetMicAudio({ muted: m }).catch((e) => setBanner(String(e)));
-            }}
-          />
-        </div>
-      )}
-
-      {(adding || editing) && (
-        <div className="stage-editor">
-          <DestinationEditor
-            existing={editing}
-            onSaved={() => {
-              setAdding(false);
-              setEditing(null);
-              refresh();
-            }}
-            onCancel={() => {
-              setAdding(false);
-              setEditing(null);
-            }}
-          />
-        </div>
-      )}
-
-      <div className="stage-bar">
-        <button
-          className={`stage-btn${sheetOpen ? " active" : ""}`}
-          onClick={() => setSheetOpen((o) => !o)}
-        >
-          Sources
-        </button>
-        <div className="stage-chat-anchor">
-          <button className={`stage-btn${chatOpen ? " active" : ""}`} onClick={() => setChatOpen((o) => !o)}>
-            Chat
-          </button>
-          {chatOpen && <ChatPopover onClose={() => setChatOpen(false)} />}
         </div>
 
-        <div className="stage-dests">
-          {destinations.map((d) => {
-            const st = statuses.get(d.id);
-            const phase = st ? PHASE_COPY[st.phase] ?? PHASE_COPY.idle : PHASE_COPY.idle;
-            return (
-              <button
-                key={d.id}
-                className={`stage-dest${d.enabled ? "" : " off"}`}
-                title={
-                  streaming && st
-                    ? `${phase.label} · ${fmtBitrate(st.bytes_sent, elapsed)}${st.dropped_frames > 0 ? ` · ${st.dropped_frames} dropped` : ""}${st.last_error ? ` · ${st.last_error}` : ""}`
-                    : `${d.preset} · click: on/off · double-click: edit`
-                }
-                onClick={() => !streaming && toggleEnabled(d)}
-                onDoubleClick={() => !streaming && setEditing(d)}
-              >
-                <span className={`live-dot ${streaming && st ? phase.tone : d.enabled ? "ready" : "muted"}`} />
-                {d.label}
-              </button>
-            );
-          })}
-          {!streaming && (
-            <button className="stage-dest add" onClick={() => setAdding(true)} title="Add a live channel">
-              +
+        <div className="rm-top-right">
+          <div className="rm-pop-anchor">
+            <button className="rm-chip" onClick={() => setDestsOpen((o) => !o)} title="Live channels">
+              {ic.cast}
+              <span>{destChip}</span>
+            </button>
+            {destsOpen && (
+              <div className="rm-pop rm-pop-right rm-pop-dests">
+                {destinations.map((d) => {
+                  const st = statuses.get(d.id);
+                  const phase = st ? PHASE_COPY[st.phase] ?? PHASE_COPY.idle : PHASE_COPY.idle;
+                  return (
+                    <div key={d.id} className={`rm-dest-row${d.enabled ? "" : " off"}`}>
+                      <span className={`live-dot ${streaming && st ? phase.tone : d.enabled ? "ready" : "muted"}`} />
+                      <span className="rm-dest-name">{d.label}</span>
+                      <span className="rm-dest-sub">
+                        {streaming && st
+                          ? `${phase.label}${st.phase === "live" ? ` · ${fmtBitrate(st.bytes_sent, elapsed)}` : ""}${st.dropped_frames > 0 ? ` · ${st.dropped_frames} drop` : ""}`
+                          : d.preset}
+                      </span>
+                      {!streaming && (
+                        <>
+                          <button className="rm-mini" onClick={() => toggleEnabled(d)}>
+                            {d.enabled ? "On" : "Off"}
+                          </button>
+                          <button className="rm-mini" onClick={() => setEditing(d)}>
+                            Edit
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+                {!streaming && (
+                  <button className="rm-pop-row dim" onClick={() => setAdding(true)}>
+                    + Add channel
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          <span className="rm-chip rm-chip-static" title="Encoder controls arrive with custom encoding">
+            LIVE STREAM · 720P
+          </span>
+
+          {streaming ? (
+            <button className="rm-golive stop" onClick={() => ipc.liveStop()} disabled={state === "stopping"}>
+              {ic.onair}
+              {state === "stopping"
+                ? "Stopping…"
+                : `Stop · ${Math.floor(elapsed / 60)}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}
+            </button>
+          ) : (
+            <button className="rm-golive" onClick={goLive} disabled={!engineOk || enabledDests.length === 0}>
+              {ic.onair}
+              Go Live
             </button>
           )}
+
+          <button className="rm-leave" onClick={() => onLeave?.()} title="Leave room">
+            {ic.x}
+          </button>
+        </div>
+      </header>
+
+      <div className="rm-body">
+        <aside className="rm-scenes">
+          <button className="rm-addscene" title="Custom scenes arrive with the scene editor" disabled>
+            + Add scene
+          </button>
+          {scenePresets.map((p) => (
+            <button
+              key={p.key}
+              className={`rm-scene${activeScene === p.key ? " active" : ""}`}
+              disabled={!engineOk}
+              onClick={() => setSrc({ screen: p.screen, camera: p.camera })}
+            >
+              <span className={`rm-scene-thumb ${p.key}`}>
+                {p.key !== "cam" && <span className="rm-scene-main" />}
+                {p.key !== "screen" && <span className={`rm-scene-cam${p.key === "cam" ? " full" : ""}`} />}
+              </span>
+              <span className="rm-scene-name">{p.label}</span>
+            </button>
+          ))}
+          <span className="rm-scenes-note">Cuts hit the broadcast instantly.</span>
+        </aside>
+
+        <div className="rm-center">
+          <div className="rm-canvas">
+            {engineOk && <PreviewPanel />}
+            {!engineOk && snapshot && (
+              <div className="rm-canvas-msg">
+                {snapshot.disabled ? "Live engine not bundled in this build." : "Warming up the engine…"}
+              </div>
+            )}
+          </div>
+
+          <div className="rm-float">
+            <PermissionsCoach sources={sources} />
+            {banner && <div className="live-error">{banner}</div>}
+          </div>
+
+          <div className="rm-pills">
+            <div className="rm-pop-anchor">
+              <div className={`rm-pill${sources.mic ? "" : " off"}`}>
+                <button
+                  className="rm-pill-main"
+                  disabled={!engineOk}
+                  onClick={() => setSrc({ mic: !sources.mic })}
+                  title={sources.mic ? "Mic on — click to turn off" : "Mic off — click to turn on"}
+                >
+                  {ic.mic}
+                </button>
+                <button className="rm-pill-chev" onClick={() => setMicPopOpen((o) => !o)}>
+                  {ic.chev}
+                </button>
+              </div>
+              {micPopOpen && <div className="rm-pop rm-pop-up rm-pop-mixer">{micStrip}</div>}
+            </div>
+
+            <button
+              className={`rm-circle${sources.camera ? "" : " off"}`}
+              disabled={!engineOk}
+              onClick={() => setSrc({ camera: !sources.camera })}
+              title={sources.camera ? "Camera on" : "Camera off"}
+            >
+              {ic.cam}
+            </button>
+
+            <button
+              className={`rm-circle${sources.screen ? "" : " off"}`}
+              disabled={!engineOk}
+              onClick={() => setSrc({ screen: !sources.screen })}
+              title={sources.screen ? "Screen share on" : "Share your screen"}
+            >
+              {ic.screen}
+            </button>
+
+            <button className="rm-circle off soon" title="Guests arrive with the Producer network" disabled>
+              {ic.invite}
+            </button>
+
+            <div className="rm-pop-anchor">
+              <button
+                className={`rm-circle${overlayActive ? "" : " off"}`}
+                onClick={() => setOverlayOpen((o) => !o)}
+                title="Overlay — alerts, browser, window"
+              >
+                {ic.plus}
+              </button>
+              {overlayOpen && (
+                <div className="rm-pop rm-pop-up rm-pop-overlay">
+                  <OverlayPicker
+                    activeWindow={sources.overlay_window ?? null}
+                    activeUrl={sources.overlay_url ?? null}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="rm-pop-anchor">
+              <button className={`rm-circle${chatOpen ? "" : " off"}`} onClick={() => setChatOpen((o) => !o)} title="Chat">
+                {ic.chat}
+              </button>
+              {chatOpen && (
+                <div className="rm-pop rm-pop-up">
+                  <ChatPopover onClose={() => setChatOpen(false)} />
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        {streaming ? (
-          <button className="stage-stop" onClick={() => ipc.liveStop()} disabled={state === "stopping"}>
-            {state === "stopping"
-              ? "Stopping…"
-              : `STOP · ${Math.floor(elapsed / 60)}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}
+        <aside className="rm-rail">
+          <button className={`rm-rail-item${sheetOpen ? " active" : ""}`} onClick={() => setSheetOpen((o) => !o)}>
+            {ic.invite}
+            <span>Sources</span>
           </button>
-        ) : (
-          <button className="stage-go" onClick={goLive} disabled={!engineOk || enabledDests.length === 0}>
-            GO LIVE
+          <button className={`rm-rail-item${overlayActive ? " active" : ""}`} onClick={() => setOverlayOpen(true)}>
+            {ic.link}
+            <span>Graphics</span>
           </button>
-        )}
+          <div className="rm-rail-item soon">
+            <span className="rm-soon">SOON</span>
+            {ic.plus}
+            <span>Widgets</span>
+          </div>
+          <div className="rm-rail-item soon">
+            <span className="rm-soon">SOON</span>
+            {ic.chat}
+            <span>Music</span>
+          </div>
+        </aside>
       </div>
+
+      {(adding || editing) && (
+        <>
+          <div className="rm-pop-backdrop" onClick={() => (setAdding(false), setEditing(null))} />
+          <div className="rm-editor">
+            <DestinationEditor
+              existing={editing}
+              onSaved={() => {
+                setAdding(false);
+                setEditing(null);
+                refresh();
+              }}
+              onCancel={() => {
+                setAdding(false);
+                setEditing(null);
+              }}
+            />
+          </div>
+        </>
+      )}
+
+      {sheetOpen && (
+        <div className="rm-sheet">
+          <div className="rm-sheet-head">
+            <span className="rm-sheet-handle" />
+            <button className="rm-sheet-label" onClick={() => setSheetOpen(false)}>
+              SOURCES{activeScene ? ` · ${scenePresets.find((p) => p.key === activeScene)?.label.toUpperCase()} SCENE` : ""}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 9l6 6 6-6" transform="rotate(180 12 12)" />
+              </svg>
+            </button>
+          </div>
+          <div className="rm-sheet-body">
+            <div className="rm-tiles">
+              <button
+                className={`rm-tile${sources.screen ? " on" : ""}`}
+                disabled={!engineOk}
+                onClick={() => setSrc({ screen: !sources.screen })}
+              >
+                <span className="rm-tile-canvas">{ic.screen}</span>
+                <span className="rm-tile-row">
+                  <span>Screen</span>
+                  <span className="rm-eye">{ic.eye}</span>
+                </span>
+              </button>
+              <button
+                className={`rm-tile${sources.camera ? " on" : ""}`}
+                disabled={!engineOk}
+                onClick={() => setSrc({ camera: !sources.camera })}
+              >
+                <span className="rm-tile-canvas">{ic.cam}</span>
+                <span className="rm-tile-row">
+                  <span>Camera</span>
+                  <span className="rm-eye">{ic.eye}</span>
+                </span>
+              </button>
+              <button className={`rm-tile${overlayActive ? " on" : ""}`} onClick={() => setOverlayOpen(true)}>
+                <span className="rm-tile-canvas">{ic.link}</span>
+                <span className="rm-tile-row">
+                  <span>Alerts</span>
+                  <span className="rm-eye">{ic.eye}</span>
+                </span>
+              </button>
+            </div>
+            <div className="rm-sheet-div" />
+            <div className="rm-strips">
+              {micStrip}
+              <MeterStrip label="Desktop" icon={ic.cast} level={0} volume={0.5} muted soon />
+            </div>
+            <div className="rm-sheet-div" />
+            <button className="rm-addsource" title="More source types arrive with the scene editor" disabled>
+              {ic.plus}
+              <span>Add source</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
