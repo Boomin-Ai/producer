@@ -68,10 +68,13 @@ for p in "${ENGINE_PLUGINS[@]}"; do
 done
 # obs-deps runtime dylibs (ffmpeg, x264, freetype, mbedtls, srt, rist) from .deps
 DEPS_LIB="$(find "$SRC_DIR/.deps" -maxdepth 2 -type d -name lib | head -1)"
-"$REPO_ROOT/scripts/engine-closure.sh" "$STAGE" 2>/dev/null | grep -v '^#' | while read -r dep; do
+# First closure pass is a LISTING of wanted dylibs — at this point deps are
+# not yet copied, so a nonzero exit is its normal state; don't let pipefail
+# kill the script here (the enforcing pass below still gates hard).
+("$REPO_ROOT/scripts/engine-closure.sh" "$STAGE" 2>/dev/null || true) | { grep -v '^#' || true; } | while read -r dep; do
   [[ -f "$STAGE/Frameworks/$dep" ]] && continue
   src="$(find "$DEPS_LIB" "$BUILD" -name "$dep" 2>/dev/null | head -1)"
-  [[ -n $src ]] && cp "$src" "$STAGE/Frameworks/"
+  if [[ -n $src ]]; then cp "$src" "$STAGE/Frameworks/"; fi
 done
 cp "$SRC_DIR/COPYING" "$STAGE/licenses/COPYING.obs-studio"
 
