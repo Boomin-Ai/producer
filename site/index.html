@@ -317,7 +317,9 @@
     fetch("/download/meta.json")
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (meta) {
-        note.innerHTML = (meta && meta.version ? meta.version + " · " : "") + links;
+        note.innerHTML =
+          (meta && meta.version ? meta.version + " · " : "") +
+          "updates itself · " + links;
       })
       .catch(function () { note.innerHTML = links; });
   })();
