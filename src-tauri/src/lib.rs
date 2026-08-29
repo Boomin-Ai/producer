@@ -2,6 +2,7 @@ mod boomin;
 mod client;
 mod error;
 mod ipc;
+mod live;
 mod outbox;
 mod store;
 mod submit;
@@ -20,6 +21,11 @@ pub struct AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Headless engine self-test (M-L1 acceptance harness): bootstrap libobs,
+    // print the discovery report, exit — no window, no webview.
+    if std::env::var("PRODUCER_LIVE_SELFTEST").is_ok() {
+        live::selftest_main();
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -32,6 +38,10 @@ pub fn run() {
                 db: Mutex::new(conn),
                 pending_auth: Mutex::new(None),
             });
+
+            // Live engine: bootstrap on its owner thread, record what the
+            // bundled engine discovered (M-L1 evidence for Finder launches).
+            live::startup_probe(&data_dir.join("live").join("engine-report.json"));
 
             // Resume any submissions a crash left unacknowledged.
             let handle = app.handle().clone();

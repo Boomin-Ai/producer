@@ -7,6 +7,28 @@ Changes from v1.0 are marked ★.
 
 Owner: Kleveland. Implementation target: the Mac spike session, starting at §6.
 
+### v1.1.1 deviation note (2026-08-28, recorded during M-L1)
+
+Reality check at M-L1 start: OBS master (and ≥32.2.0) hard-requires Xcode 26.5 /
+macOS 26 SDK (`cmake/macos/compilerconfig.cmake`), which cannot run on this
+spike Mac (macOS 15.5, CLT-only, no Xcode installed). Owner decision:
+
+- **obs.lock pins release tag `32.1.2`** (commit `fb4d98bf88fae5fc85cb11fc57f7c5e309282194`),
+  the newest tag buildable with Xcode 16 / SDK 15.0 — **not master**.
+- **All §3.1 facts re-verified at that tag**: F7 (Kick absent from
+  services.json), F12 (service policy API), F13 (obs_set_ui_task_handler),
+  F9 (libobs-metal present), F10 (WHIP output), F3 (obs_post_load_modules) —
+  all hold. F2 is *better* at 32.1.2: frontend-tools lives under the
+  ENABLE_FRONTEND-gated frontend tree, so the Qt-free allowlist build needs no
+  upstream patch (patchset: empty).
+- **A1 is validated in engine CI** (Xcode 16.x runner), not locally.
+- **R1's fallback is exercised for the local spike engine**: libobs + the
+  allowlisted plugins are extracted from the official signed
+  `OBS-Studio-32.1.2-macOS-Apple.dmg` (checksum-pinned per §8), producing the
+  same artifact layout `build-engine.sh` produces from source. All other M-L1
+  acceptance items (bundle law, Finder launch, relocation, zero-Qt closure,
+  post-load ID assertions, inner→outer signing) run against this engine today.
+
 ---
 
 ## 1. Goal (one sentence)

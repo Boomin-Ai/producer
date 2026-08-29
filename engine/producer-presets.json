@@ -1,0 +1,39 @@
+{
+  "version": 8,
+  "cmakeMinimumRequired": { "major": 3, "minor": 28, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "producer-macos",
+      "displayName": "Producer engine (macOS)",
+      "description": "libobs + explicit plugin allowlist per LIVE-REVIEW.md §5.2. No frontend, no Qt, no CEF, no websocket, no scripting. obs-ffmpeg is ungated upstream at 32.1.2 and is built but NOT shipped (excluded at artifact assembly).",
+      "inherits": ["macos"],
+      "binaryDir": "${sourceDir}/build_producer",
+      "cacheVariables": {
+        "CMAKE_OSX_ARCHITECTURES": { "type": "STRING", "value": "arm64" },
+        "ENABLE_FRONTEND": false,
+        "ENABLE_UI": false,
+        "ENABLE_SCRIPTING": false,
+        "ENABLE_BROWSER": false,
+        "ENABLE_BROWSER_PANELS": false,
+        "ENABLE_WEBSOCKET": false,
+        "ENABLE_WEBRTC": false,
+        "ENABLE_AJA": false,
+        "ENABLE_DECKLINK": false,
+        "ENABLE_VST": false,
+        "ENABLE_SYPHON": false,
+        "ENABLE_VIRTUALCAM": false,
+        "ENABLE_VLC": false,
+        "ENABLE_LIBFDK": false,
+        "ENABLE_SERVICE_UPDATES": false,
+        "ENABLE_TEST_INPUT": false
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "producer-macos",
+      "configurePreset": "producer-macos",
+      "configuration": "Release"
+    }
+  ]
+}
