@@ -146,8 +146,10 @@ impl Live {
 
     #[cfg(all(have_engine, target_os = "windows"))]
     pub fn list_windows(&self) -> Result<serde_json::Value, String> {
-        // Window enumeration for the overlay picker lands in M-W2.
-        Ok(serde_json::json!([]))
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .list_windows()
     }
     #[cfg(all(have_engine, target_os = "macos"))]
     pub fn list_windows(&self) -> Result<serde_json::Value, String> {
@@ -452,6 +454,21 @@ pub fn selftest_main() -> ! {
             }
         }
     };
+    // Enumeration diagnostics (M-W2): prove the OBS-properties question path
+    // works headlessly. stderr only — stdout stays pure report JSON.
+    #[cfg(target_os = "windows")]
+    if report.ok {
+        let windows = graph::enum_list_property("window_capture", "window");
+        let cams = graph::enum_list_property("dshow_input", "video_device_id");
+        eprintln!(
+            "[live] enumeration: {} capturable windows, {} dshow cameras",
+            windows.iter().filter(|(_, v)| !v.is_empty()).count(),
+            cams.iter().filter(|(_, v)| !v.is_empty()).count()
+        );
+        for (name, _) in cams.iter().take(3) {
+            eprintln!("[live]   camera: {name}");
+        }
+    }
     println!("{}", serde_json::to_string_pretty(&report).unwrap());
     std::process::exit(if report.ok { 0 } else { 1 });
 }

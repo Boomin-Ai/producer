@@ -157,6 +157,68 @@ pub(crate) fn on_main_thread<T: Send, F: FnOnce() -> T + Send>(f: F) -> T {
     f()
 }
 
+/// Enumerate a source type's list property — the exact question the OBS UI's
+/// pickers ask. Engine thread only (obs call).
+pub(crate) fn enum_list_property(source_id: &str, prop_name: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    unsafe {
+        let id = CString::new(source_id).unwrap();
+        let props = ffi::obs_get_source_properties(id.as_ptr());
+        if props.is_null() {
+            return out;
+        }
+        let pname = CString::new(prop_name).unwrap();
+        let prop = ffi::obs_properties_get(props, pname.as_ptr());
+        if !prop.is_null() {
+            let n = ffi::obs_property_list_item_count(prop);
+            for i in 0..n {
+                let name = ffi::obs_property_list_item_name(prop, i);
+                let value = ffi::obs_property_list_item_string(prop, i);
+                if value.is_null() {
+                    continue;
+                }
+                let value = std::ffi::CStr::from_ptr(value)
+                    .to_string_lossy()
+                    .into_owned();
+                let name = if name.is_null() {
+                    value.clone()
+                } else {
+                    std::ffi::CStr::from_ptr(name)
+                        .to_string_lossy()
+                        .into_owned()
+                };
+                out.push((name, value));
+            }
+        }
+        ffi::obs_properties_destroy(props);
+    }
+    out
+}
+
+/// Windows: capturable windows enumerated per call; the u32 window id the
+/// cross-platform IPC carries is an index into the last enumeration (macOS
+/// uses real CGWindowIDs). Engine thread only.
+#[cfg(target_os = "windows")]
+pub(crate) static WINDOW_VALUES: std::sync::Mutex<Vec<(String, String)>> =
+    std::sync::Mutex::new(Vec::new());
+
+#[cfg(target_os = "windows")]
+pub(crate) fn list_capture_windows() -> serde_json::Value {
+    let items = enum_list_property("window_capture", "window");
+    let mut cache = WINDOW_VALUES.lock().unwrap();
+    *cache = items.clone();
+    serde_json::Value::Array(
+        items
+            .iter()
+            .enumerate()
+            // Entry 0 of OBS's list is the "select a window" placeholder with
+            // an empty value; skip anything valueless.
+            .filter(|(_, (_, v))| !v.is_empty())
+            .map(|(i, (name, _))| serde_json::json!({ "id": i as u32, "title": name, "app": "" }))
+            .collect(),
+    )
+}
+
 /// Run a closure on the macOS main thread (blocking) — used for the TCC
 /// preflight/request calls, which can present system UI.
 #[cfg(target_os = "macos")]
@@ -283,13 +345,27 @@ impl SceneGraph {
             let Some(window_id) = window_id else {
                 return Ok(());
             };
+            // Per-OS: source id + settings. macOS captures by CGWindowID via
+            // SCK; Windows via win-capture's window_capture, whose "window"
+            // value string comes from the cached enumeration (the u32 id the
+            // IPC carries is an index into it — see list_capture_windows).
             #[cfg(target_os = "windows")]
-            {
-                let _ = (window_id, color_key);
-                return Err("overlay window capture on Windows lands in M-W2".into());
-            }
+            let (settings, id) = {
+                let value = WINDOW_VALUES
+                    .lock()
+                    .unwrap()
+                    .get(window_id as usize)
+                    .map(|(_, v)| v.clone())
+                    .ok_or("stale window id — refresh the window list")?;
+                let settings = ffi::obs_data_create();
+                let key = CString::new("window").unwrap();
+                let val = CString::new(value).map_err(|e| e.to_string())?;
+                ffi::obs_data_set_string(settings, key.as_ptr(), val.as_ptr());
+                ffi::obs_data_set_bool(settings, CString::new("cursor").unwrap().as_ptr(), false);
+                (settings, CString::new("window_capture").unwrap())
+            };
             #[cfg(target_os = "macos")]
-            {
+            let (settings, id) = {
                 let settings = ffi::obs_data_create();
                 // mac-sck-common.h: ScreenCaptureWindowStream = 1
                 ffi::obs_data_set_int(settings, CString::new("type").unwrap().as_ptr(), 1);
@@ -303,7 +379,9 @@ impl SceneGraph {
                     CString::new("show_cursor").unwrap().as_ptr(),
                     false,
                 );
-                let id = CString::new("screen_capture").unwrap();
+                (settings, CString::new("screen_capture").unwrap())
+            };
+            {
                 let name = CString::new("Overlay").unwrap();
                 let src =
                     ffi::obs_source_create(id.as_ptr(), name.as_ptr(), settings, ptr::null_mut());
@@ -404,7 +482,48 @@ impl SceneGraph {
                 }
                 #[cfg(target_os = "windows")]
                 (true, None) => {
-                    return Err("camera (win-dshow device enumeration) lands in M-W2".into());
+                    // First DirectShow device, discovered the way OBS's own
+                    // picker does; a device chooser UI can come later.
+                    let device = enum_list_property("dshow_input", "video_device_id")
+                        .into_iter()
+                        .map(|(_, v)| v)
+                        .find(|v| !v.is_empty())
+                        .ok_or("no camera device found")?;
+                    let settings = ffi::obs_data_create();
+                    let key = CString::new("video_device_id").unwrap();
+                    let val = CString::new(device).map_err(|e| e.to_string())?;
+                    ffi::obs_data_set_string(settings, key.as_ptr(), val.as_ptr());
+                    let id = CString::new("dshow_input").unwrap();
+                    let name = CString::new("Camera").unwrap();
+                    let src = ffi::obs_source_create(
+                        id.as_ptr(),
+                        name.as_ptr(),
+                        settings,
+                        ptr::null_mut(),
+                    );
+                    ffi::obs_data_release(settings);
+                    if src.is_null() {
+                        return Err("camera source creation failed".into());
+                    }
+                    let item = ffi::obs_scene_add(self.scene, src);
+                    if item.is_null() {
+                        ffi::obs_source_release(src);
+                        return Err("scene add failed for camera".into());
+                    }
+                    let (bw, bh) = Self::base_size();
+                    let pip_w = bw * 0.28;
+                    let pip_h = pip_w * 9.0 / 16.0;
+                    let margin = 24.0;
+                    ffi::obs_sceneitem_set_bounds_type(item, ffi::OBS_BOUNDS_SCALE_INNER);
+                    let bounds = ffi::vec2 { x: pip_w, y: pip_h };
+                    ffi::obs_sceneitem_set_bounds(item, &bounds);
+                    let pos = ffi::vec2 {
+                        x: bw - pip_w - margin,
+                        y: bh - pip_h - margin,
+                    };
+                    ffi::obs_sceneitem_set_pos(item, &pos);
+                    ffi::obs_sceneitem_set_visible(item, true);
+                    self.camera = Some((item, src));
                 }
                 #[cfg(target_os = "macos")]
                 (true, None) => {

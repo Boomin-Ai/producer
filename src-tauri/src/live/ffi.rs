@@ -64,6 +64,8 @@ pub struct video_data {
 
 pub enum obs_source_t {}
 pub enum obs_data_t {}
+pub enum obs_properties_t {}
+pub enum obs_property_t {}
 pub enum obs_encoder_t {}
 pub enum obs_service_t {}
 pub enum obs_output_t {}
@@ -148,6 +150,21 @@ extern "C" {
 }
 
 // obs-data settings (obs_source_create input)
+// Source property introspection — how the OBS UI itself discovers device and
+// window lists; we ask the same questions (enumeration without reinvention).
+#[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
+extern "C" {
+    pub fn obs_get_source_properties(id: *const c_char) -> *mut obs_properties_t;
+    pub fn obs_properties_destroy(props: *mut obs_properties_t);
+    pub fn obs_properties_get(
+        props: *mut obs_properties_t,
+        property: *const c_char,
+    ) -> *mut obs_property_t;
+    pub fn obs_property_list_item_count(prop: *mut obs_property_t) -> usize;
+    pub fn obs_property_list_item_name(prop: *mut obs_property_t, idx: usize) -> *const c_char;
+    pub fn obs_property_list_item_string(prop: *mut obs_property_t, idx: usize) -> *const c_char;
+}
+
 #[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
 extern "C" {
     pub fn obs_data_create() -> *mut obs_data_t;

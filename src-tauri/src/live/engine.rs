@@ -342,6 +342,11 @@ pub enum Command {
         window_id: Option<u32>,
         color_key: bool,
     },
+    /// Enumerate capturable windows on the engine thread (Windows: via OBS
+    /// source properties; macOS answers via the CGWindow shim without this).
+    ListWindows {
+        reply: mpsc::Sender<serde_json::Value>,
+    },
     AttachPreview {
         /// NSWindow* of the Tauri window, as usize.
         window: usize,
@@ -443,6 +448,14 @@ impl LiveHandle {
                 color_key,
             })
             .map_err(|e| e.to_string())
+    }
+    pub fn list_windows(&self) -> Result<serde_json::Value, String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd
+            .send(Command::ListWindows { reply: tx })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(3))
+            .map_err(|_| "window enumeration timed out".to_string())
     }
     pub fn attach_preview(&self, window: usize, rect: PreviewRect) -> Result<(), String> {
         self.cmd
@@ -726,6 +739,12 @@ pub fn start(sink: impl Fn(&LiveEvent) + Send + 'static) -> LiveHandle {
                             snap.lock().unwrap().sources = sources;
                             sink(&LiveEvent::SourcesChanged { sources });
                         }
+                    }
+                    Ok(Command::ListWindows { reply }) => {
+                        #[cfg(target_os = "windows")]
+                        let _ = reply.send(graph::list_capture_windows());
+                        #[cfg(not(target_os = "windows"))]
+                        let _ = reply.send(serde_json::Value::Null);
                     }
                     Ok(Command::AttachPreview { window, rect }) => {
                         if preview.is_none() {
