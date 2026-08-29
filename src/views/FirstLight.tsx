@@ -68,8 +68,7 @@ export function FirstLight({ onDone }: { onDone: () => void }) {
         }}
       />
     );
-  if (phase === "welcome")
-    return <Welcome onNext={() => setPhase("permissions")} onSkip={finish} />;
+  if (phase === "welcome") return <Welcome onNext={() => setPhase("permissions")} />;
   return <Permissions onDone={finish} />;
 }
 
@@ -102,42 +101,54 @@ function Intro({ onEnd }: { onEnd: () => void }) {
   );
 }
 
-/** Soft two-chord synth swell — no bundled audio, no licensing. If the
- * webview blocks autoplay the intro simply plays silent. */
+/** Soft two-chord synth swell — no bundled audio, no licensing. Voiced in
+ * the 220–660 Hz band laptop speakers actually reproduce, with slow-attack
+ * detuned pairs so it reads as a pad, not a beep. If the webview refuses
+ * audio without a gesture the intro simply plays silent. */
 function playSwell(): () => void {
   try {
     const Ctx = window.AudioContext ?? (window as never as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const ctx = new Ctx();
-    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    const kick = () => {
+      if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    };
+    kick();
+    const retry = setInterval(kick, 400);
     const master = ctx.createGain();
     master.gain.value = 0;
     const lp = ctx.createBiquadFilter();
     lp.type = "lowpass";
-    lp.frequency.value = 900;
+    lp.frequency.value = 1400;
     master.connect(lp).connect(ctx.destination);
     const t0 = ctx.currentTime;
-    master.gain.linearRampToValueAtTime(0.07, t0 + 2.2);
-    master.gain.linearRampToValueAtTime(0.0, t0 + 5.0);
+    master.gain.setValueAtTime(0, t0);
+    master.gain.linearRampToValueAtTime(0.24, t0 + 1.8);
+    master.gain.setValueAtTime(0.24, t0 + 3.6);
+    master.gain.linearRampToValueAtTime(0.0, t0 + 5.1);
     const voices: OscillatorNode[] = [];
     const chord = (freqs: number[], start: number, dur: number) => {
       for (const f of freqs) {
-        const o = ctx.createOscillator();
-        o.type = "sine";
-        o.frequency.value = f;
-        const g = ctx.createGain();
-        g.gain.value = 0;
-        g.gain.setValueAtTime(0, t0 + start);
-        g.gain.linearRampToValueAtTime(0.5, t0 + start + dur * 0.4);
-        g.gain.linearRampToValueAtTime(0, t0 + start + dur);
-        o.connect(g).connect(master);
-        o.start(t0 + start);
-        o.stop(t0 + start + dur + 0.1);
-        voices.push(o);
+        // detuned pair per note = gentle chorus shimmer
+        for (const cents of [-4, 4]) {
+          const o = ctx.createOscillator();
+          o.type = "triangle";
+          o.frequency.value = f;
+          o.detune.value = cents;
+          const g = ctx.createGain();
+          g.gain.setValueAtTime(0, t0 + start);
+          g.gain.linearRampToValueAtTime(0.22, t0 + start + dur * 0.45);
+          g.gain.linearRampToValueAtTime(0, t0 + start + dur);
+          o.connect(g).connect(master);
+          o.start(t0 + start);
+          o.stop(t0 + start + dur + 0.1);
+          voices.push(o);
+        }
       }
     };
-    chord([110, 220, 277.18, 329.63], 0, 3.2); // A add9 bloom
-    chord([123.47, 246.94, 311.13, 392.0], 2.2, 2.8); // lift to B
-    return () => {
+    chord([220, 277.18, 329.63, 440], 0, 3.4); // A add9 bloom
+    chord([246.94, 311.13, 392.0, 493.88], 2.3, 2.9); // lift to B
+    const cleanup = () => {
+      clearInterval(retry);
       try {
         for (const v of voices) v.stop();
         ctx.close().catch(() => {});
@@ -145,6 +156,8 @@ function playSwell(): () => void {
         /* already gone */
       }
     };
+    setTimeout(() => clearInterval(retry), 5200);
+    return cleanup;
   } catch {
     return () => {};
   }
@@ -152,7 +165,7 @@ function playSwell(): () => void {
 
 /* ── Welcome ───────────────────────────────────────────────────────────── */
 
-function Welcome({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) {
+function Welcome({ onNext }: { onNext: () => void }) {
   return (
     <div className="fl-screen">
       <div className="fl-body">
@@ -185,9 +198,6 @@ function Welcome({ onNext, onSkip }: { onNext: () => void; onSkip: () => void })
         <div className="fl-actions">
           <button className="fl-primary" onClick={onNext}>
             Set up permissions
-          </button>
-          <button className="fl-ghost" onClick={onSkip}>
-            Skip for now
           </button>
         </div>
       </div>
@@ -316,7 +326,7 @@ function Permissions({ onDone }: { onDone: () => void }) {
 
         <div className="fl-actions">
           <button className={allSet ? "fl-primary" : "fl-ghost"} onClick={onDone} disabled={needsRelaunch}>
-            {allSet ? "Continue" : "Set up later"}
+            {allSet ? "Continue" : "Skip for now"}
           </button>
         </div>
       </div>
