@@ -6,39 +6,63 @@
 pub mod engine;
 #[cfg(have_engine)]
 mod ffi;
+#[cfg(have_engine)]
+pub mod graph;
 
 use std::path::Path;
 
-/// Run the engine bootstrap and persist the discovery report. Called once at
-/// app startup; also the workhorse for self-test mode.
-#[cfg(have_engine)]
-pub fn startup_probe(report_path: &Path) {
-    let report_path = report_path.to_path_buf();
-    std::thread::spawn(move || {
-        let (_cmd_tx, report_rx) = engine::spawn();
-        if let Ok(report) = report_rx.recv() {
-            if let Some(dir) = report_path.parent() {
-                let _ = std::fs::create_dir_all(dir);
-            }
-            match serde_json::to_string_pretty(&report) {
-                Ok(json) => {
-                    let _ = std::fs::write(&report_path, &json);
-                    eprintln!(
-                        "[live] engine bootstrap ok={} backend={:?} report={}",
-                        report.ok,
-                        report.graphics_backend,
-                        report_path.display()
-                    );
-                }
-                Err(e) => eprintln!("[live] report serialize failed: {e}"),
-            }
+fn write_json<T: serde::Serialize>(path: &Path, value: &T) {
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    match serde_json::to_string_pretty(value) {
+        Ok(json) => {
+            let _ = std::fs::write(path, &json);
         }
-        // _cmd_tx dropped: engine thread shuts libobs down cleanly.
-    });
+        Err(e) => eprintln!("[live] report serialize failed: {e}"),
+    }
+}
+
+/// Bootstrap the engine on its owner thread and persist the discovery report.
+/// When the app was launched with `--live-capture-probe` (M-L2 acceptance
+/// harness), also put SCK display + mic sources live in the graph and write
+/// the capture evidence report.
+#[cfg(have_engine)]
+pub fn startup_probe(report_dir: &Path) {
+    let report_dir = report_dir.to_path_buf();
+    let run_capture_probe = std::env::args().any(|a| a == "--live-capture-probe");
+    std::thread::Builder::new()
+        .name("live-engine".into())
+        .spawn(move || {
+            let report = engine::bootstrap();
+            write_json(&report_dir.join("engine-report.json"), &report);
+            eprintln!(
+                "[live] engine bootstrap ok={} backend={:?}",
+                report.ok, report.graphics_backend
+            );
+            if run_capture_probe {
+                if !report.ok {
+                    eprintln!("[live] skipping capture probe: bootstrap not ok");
+                    return;
+                }
+                let capture = graph::capture_probe(std::time::Duration::from_secs(8));
+                write_json(&report_dir.join("capture-report.json"), &capture);
+                eprintln!(
+                    "[live] capture probe ok={} size={:?} frames={} audio_cbs={}",
+                    capture.ok,
+                    capture.screen_source_size,
+                    capture.rendered_frames,
+                    capture.mic_audio_callbacks
+                );
+            }
+            // Engine stays initialized for the app's lifetime; teardown comes
+            // with the M-L5 host contract.
+        })
+        .expect("spawn live-engine thread");
 }
 
 #[cfg(not(have_engine))]
-pub fn startup_probe(_report_path: &Path) {
+pub fn startup_probe(_report_dir: &Path) {
     eprintln!("[live] engine artifact not bundled at build time; live disabled");
 }
 

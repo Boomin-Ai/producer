@@ -43,8 +43,33 @@ pub struct obs_module_failure_info {
     pub count: usize,
 }
 
+pub const MAX_AV_PLANES: usize = 8;
+
+/// media-io/audio-io.h — audio is float planar internally; plane 0 suffices
+/// for level metering.
+#[repr(C)]
+pub struct audio_data {
+    pub data: [*mut u8; MAX_AV_PLANES],
+    pub frames: u32,
+    pub timestamp: u64,
+}
+
+/// media-io/video-io.h
+#[repr(C)]
+pub struct video_data {
+    pub data: [*mut u8; MAX_AV_PLANES],
+    pub linesize: [u32; MAX_AV_PLANES],
+    pub timestamp: u64,
+}
+
+pub enum obs_source_t {}
+pub enum obs_data_t {}
+
 pub type obs_task_t = extern "C" fn(param: *mut c_void);
 pub type obs_task_handler_t = extern "C" fn(task: obs_task_t, param: *mut c_void, wait: bool);
+pub type obs_source_audio_capture_t =
+    extern "C" fn(param: *mut c_void, source: *mut obs_source_t, audio: *const audio_data, muted: bool);
+pub type raw_video_cb_t = extern "C" fn(param: *mut c_void, frame: *mut video_data);
 
 extern "C" {
     pub fn obs_startup(
@@ -67,6 +92,64 @@ extern "C" {
     pub fn obs_enum_output_types(idx: usize, id: *mut *const c_char) -> bool;
     pub fn obs_enum_service_types(idx: usize, id: *mut *const c_char) -> bool;
     pub fn obs_set_ui_task_handler(handler: obs_task_handler_t);
+
+    // M-L2: sources in the graph
+    pub fn obs_source_create(
+        id: *const c_char,
+        name: *const c_char,
+        settings: *mut obs_data_t,
+        hotkey_data: *mut obs_data_t,
+    ) -> *mut obs_source_t;
+    pub fn obs_source_release(source: *mut obs_source_t);
+    pub fn obs_set_output_source(channel: u32, source: *mut obs_source_t);
+    pub fn obs_source_get_width(source: *mut obs_source_t) -> u32;
+    pub fn obs_source_get_height(source: *mut obs_source_t) -> u32;
+    pub fn obs_source_add_audio_capture_callback(
+        source: *mut obs_source_t,
+        callback: obs_source_audio_capture_t,
+        param: *mut c_void,
+    );
+    pub fn obs_source_remove_audio_capture_callback(
+        source: *mut obs_source_t,
+        callback: obs_source_audio_capture_t,
+        param: *mut c_void,
+    );
+    pub fn obs_add_raw_video_callback(
+        conversion: *const c_void,
+        callback: raw_video_cb_t,
+        param: *mut c_void,
+    );
+    pub fn obs_remove_raw_video_callback(callback: raw_video_cb_t, param: *mut c_void);
+}
+
+// CoreGraphics TCC preflight/request for Screen Recording.
+extern "C" {
+    pub fn CGPreflightScreenCaptureAccess() -> bool;
+    pub fn CGRequestScreenCaptureAccess() -> bool;
+}
+
+// obs-data settings (obs_source_create input)
+extern "C" {
+    pub fn obs_data_create() -> *mut obs_data_t;
+    pub fn obs_data_release(data: *mut obs_data_t);
+    pub fn obs_data_set_string(data: *mut obs_data_t, name: *const c_char, value: *const c_char);
+}
+
+// Main-display UUID lookup — the same CoreGraphics path OBS's own display
+// picker uses (window-utils.m); the SCK source has no default-display
+// behavior, it requires an explicit display_uuid.
+pub const K_CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
+extern "C" {
+    pub fn CGMainDisplayID() -> u32;
+    pub fn CGDisplayCreateUUIDFromDisplayID(display: u32) -> *const c_void;
+    pub fn CFUUIDCreateString(alloc: *const c_void, uuid: *const c_void) -> *const c_void;
+    pub fn CFStringGetCString(
+        s: *const c_void,
+        buffer: *mut c_char,
+        buffer_size: isize,
+        encoding: u32,
+    ) -> bool;
+    pub fn CFRelease(cf: *const c_void);
 }
 
 // Grand Central Dispatch + pthread, for marshalling OBS UI tasks onto the

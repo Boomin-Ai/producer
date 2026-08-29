@@ -41,7 +41,7 @@ pub fn run() {
 
             // Live engine: bootstrap on its owner thread, record what the
             // bundled engine discovered (M-L1 evidence for Finder launches).
-            live::startup_probe(&data_dir.join("live").join("engine-report.json"));
+            live::startup_probe(&data_dir.join("live"));
 
             // Resume any submissions a crash left unacknowledged.
             let handle = app.handle().clone();
