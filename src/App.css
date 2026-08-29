@@ -1311,3 +1311,18 @@ textarea::placeholder {
   gap: 6px;
   color: var(--muted-fg);
 }
+
+/* --- auto-update affordance --- */
+.update-ready {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #3ddca6;
+}
+.update-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3ddca6;
+  flex-shrink: 0;
+}

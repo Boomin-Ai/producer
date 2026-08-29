@@ -1,6 +1,6 @@
 [package]
 name = "producer"
-version = "0.2.0"
+version = "0.3.0"
 description = "Producer by Boomin — the open-source studio for creators: post everywhere, stream everywhere."
 authors = ["Boomin"]
 license = "AGPL-3.0-only"
@@ -31,3 +31,5 @@ hex = "0.4"
 rusqlite = { version = "0.31", features = ["bundled"] }
 keyring = { version = "3", features = ["windows-native", "apple-native", "linux-native"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tauri-plugin-updater = "2.10.1"
+tauri-plugin-process = "2.3.1"

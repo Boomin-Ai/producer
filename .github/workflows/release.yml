@@ -63,6 +63,10 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Auto-update: tauri-action emits .sig files + latest.json for this
+          # matrix's platforms; the arm64 job merges its own entry afterwards.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
           releaseName: "Producer v__VERSION__"
@@ -94,6 +98,8 @@ jobs:
       NOTARY_ID: ${{ secrets.APPLE_ID }}
       NOTARY_PW: ${{ secrets.APPLE_PASSWORD }}
       NOTARY_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -236,3 +242,38 @@ jobs:
           set -euo pipefail
           gh release create "v$VERSION" --title "Producer v$VERSION" --notes "Producer v$VERSION" 2>/dev/null || true
           gh release upload "v$VERSION" "$DMG" --clobber
+
+      # Auto-update leg: the updater archive must contain the ASSEMBLED,
+      # notarized app (tauri's auto-generated one is the engine-less
+      # intermediate — never ship that). This job is the single writer of the
+      # published latest.json: it merges its darwin-aarch64 entry into the
+      # manifest tauri-action uploaded for the other platforms.
+      - name: Updater artifact + manifest merge
+        if: ${{ github.event_name == 'push' || inputs.publish }}
+        run: |
+          set -euo pipefail
+          UPD="Producer_${VERSION}_aarch64.app.tar.gz"
+          tar -czf "$UPD" -C "$(dirname "$APP")" "$(basename "$APP")"
+          bun run tauri signer sign "$UPD" --password "" >/dev/null
+          test -f "$UPD.sig" || { echo "FATAL: updater signature not produced" >&2; exit 1; }
+          gh release upload "v$VERSION" "$UPD" "$UPD.sig" --clobber
+
+          # Single-writer guarantee: wait until every other job in this run is
+          # done, so nothing (tauri-action's own latest.json upload included)
+          # can land after our merged manifest.
+          for i in $(seq 1 120); do
+            PENDING="$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs" --paginate \
+              --jq '[.jobs[] | select(.name != "build-macos-arm64-live") | select(.status != "completed")] | length')"
+            [ "$PENDING" = "0" ] && break
+            echo "waiting on $PENDING sibling job(s)… ($i)"
+            sleep 30
+          done
+
+          MANIFEST=/tmp/latest.json
+          if ! gh release download "v$VERSION" -p "latest.json" -O "$MANIFEST" --clobber 2>/dev/null; then
+            echo "WARN: matrix latest.json missing — publishing manifest with darwin-aarch64 only" >&2
+            printf '{"version":"%s","platforms":{}}' "$VERSION" > "$MANIFEST"
+          fi
+          SIG="$(cat "$UPD.sig")" REPO="${{ github.repository }}" \
+            python3 scripts/merge-update-manifest.py "$MANIFEST" "$VERSION" "$UPD"
+          gh release upload "v$VERSION" "$MANIFEST" --clobber

@@ -4,6 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Channel, EndpointInfo, Job, TargetResult } from "../lib/ipc";
 import { ipc } from "../lib/ipc";
+import { useUpdater } from "../lib/updater";
 import { LiveView } from "./Live";
 
 const STATE_LABEL: Record<string, string> = {
@@ -163,6 +164,7 @@ export function Home({
   onRemoveEndpoint: (id: string) => void;
 }) {
   const [view, setView] = useState<MainView>("compose");
+  const updater = useUpdater();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -228,6 +230,13 @@ export function Home({
         <div className="side-soon">Series &amp; collections arrive with the creation phase.</div>
 
         <div className="side-spacer" />
+
+        {updater.state === "ready" && (
+          <button className="side-item update-ready" onClick={updater.restart} title={`Producer ${updater.version} is staged`}>
+            <span className="update-dot" />
+            Update ready — Restart
+          </button>
+        )}
 
         <div className="side-label">Workspaces</div>
         {endpoints.map((ep) => (
