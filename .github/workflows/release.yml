@@ -10,6 +10,14 @@ on:
         type: boolean
         default: false
 
+# One release run at a time, newest wins. Re-pushing a tag otherwise leaves
+# TWO complete runs racing as writers on the same release — v0.4.0 shipped a
+# latest.json whose darwin-aarch64 signature came from run A over run B's
+# tar.gz, and every updater correctly refused the mismatch.
+concurrency:
+  group: release
+  cancel-in-progress: true
+
 jobs:
   # ── Windows / Linux / Intel-mac (engine-less, unchanged path) ──────────────
   # Skipped on dry-runs so a dispatch can't clobber public release assets.
