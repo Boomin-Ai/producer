@@ -297,3 +297,8 @@ pub fn live_permissions() -> EngineResult<serde_json::Value> {
 pub fn live_request_permission(kind: String) -> EngineResult<()> {
     crate::live::request_permission(&kind).map_err(EngineError::Other)
 }
+
+#[tauri::command]
+pub fn live_screen_coach(action: String) -> EngineResult<()> {
+    crate::live::screen_grant_coach(&action).map_err(EngineError::Other)
+}

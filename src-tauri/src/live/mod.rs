@@ -270,6 +270,28 @@ pub fn request_permission(kind: &str) -> Result<(), String> {
     }
 }
 
+/// First Light onboarding: the floating drag chip that carries the app
+/// bundle into System Settings' Screen Recording list, plus a deep link to
+/// that pane. macOS never lets an app grant itself Screen Recording — the
+/// drag is the smoothest way to hand the user that step.
+pub fn screen_grant_coach(action: &str) -> Result<(), String> {
+    #[cfg(have_engine)]
+    unsafe {
+        match action {
+            "chip_show" => ffi::producer_drag_chip_show(),
+            "chip_hide" => ffi::producer_drag_chip_hide(),
+            "open_settings" => ffi::producer_open_screen_settings(),
+            other => return Err(format!("unknown coach action {other}")),
+        }
+        return Ok(());
+    }
+    #[cfg(not(have_engine))]
+    {
+        let _ = action;
+        Err("live engine not bundled in this build".into())
+    }
+}
+
 /// Start the LiveEngine for the app: events flow to the webview as
 /// `live://event`, the snapshot backs `live_engine_status`, and when the app
 /// was launched with `--live-multistream` the M-L4/M-L5 harness rides the

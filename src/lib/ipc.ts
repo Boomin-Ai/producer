@@ -111,6 +111,8 @@ export const ipc = {
   livePermissions: () => invoke<LivePermissions>("live_permissions"),
   liveRequestPermission: (kind: "screen" | "camera" | "mic") =>
     invoke("live_request_permission", { kind }),
+  liveScreenCoach: (action: "chip_show" | "chip_hide" | "open_settings") =>
+    invoke("live_screen_coach", { action }),
   liveListWindows: () => invoke<LiveWindow[]>("live_list_windows"),
   liveSetOverlay: (windowId: number | null, colorKey: boolean, url?: string | null) =>
     invoke("live_set_overlay", { windowId, colorKey, url: url ?? null }),

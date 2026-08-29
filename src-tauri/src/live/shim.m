@@ -111,6 +111,126 @@ int producer_list_windows(char *buf, int buflen) {
     return 1;
 }
 
+// ── First Light onboarding: Screen Recording drag chip ──────────────────────
+// macOS never lets an app add ITSELF to Screen & System Audio Recording; the
+// user must add it. The smoothest gesture is dragging the app into the list,
+// so we float a small always-on-top chip carrying the app bundle's file URL —
+// dropping it on the Privacy list registers the app, same as a Finder drag.
+
+@interface ProducerDragChipView : NSView <NSDraggingSource>
+@end
+
+@implementation ProducerDragChipView
+
+- (void)mouseDown:(NSEvent *)event {
+    (void)event; // drag starts on movement; a bare click does nothing
+}
+
+- (void)mouseDragged:(NSEvent *)event {
+    NSURL *bundle = [[NSBundle mainBundle] bundleURL];
+    NSDraggingItem *item = [[NSDraggingItem alloc] initWithPasteboardWriter:bundle];
+    NSImage *icon = [[NSWorkspace sharedWorkspace] iconForFile:bundle.path];
+    NSPoint p = [self convertPoint:event.locationInWindow fromView:nil];
+    NSRect frame = NSMakeRect(p.x - 32, p.y - 32, 64, 64);
+    [item setDraggingFrame:frame contents:icon];
+    [self beginDraggingSessionWithItems:@[ item ] event:event source:self];
+}
+
+- (NSDragOperation)draggingSession:(NSDraggingSession *)session
+    sourceOperationMaskForDraggingContext:(NSDraggingContext)context {
+    (void)session;
+    (void)context;
+    return NSDragOperationCopy | NSDragOperationGeneric | NSDragOperationLink;
+}
+
+@end
+
+static NSPanel *g_drag_chip = nil;
+
+void producer_drag_chip_show(void) {
+    run_on_main(^{
+        if (g_drag_chip) {
+            [g_drag_chip orderFrontRegardless];
+            return;
+        }
+        const CGFloat W = 380, H = 96;
+        NSScreen *screen = [NSScreen mainScreen];
+        NSRect sf = screen ? screen.visibleFrame : NSMakeRect(0, 0, 1200, 800);
+        NSRect frame = NSMakeRect(NSMidX(sf) - W / 2, sf.origin.y + 96, W, H);
+        NSPanel *panel = [[NSPanel alloc]
+            initWithContentRect:frame
+                      styleMask:NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel
+                        backing:NSBackingStoreBuffered
+                          defer:NO];
+        panel.level = NSStatusWindowLevel; // above System Settings
+        panel.opaque = NO;
+        panel.backgroundColor = [NSColor clearColor];
+        panel.hasShadow = YES;
+        panel.movableByWindowBackground = NO;
+        panel.collectionBehavior =
+            NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary;
+
+        NSView *root = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, W, H)];
+        root.wantsLayer = YES;
+        root.layer.backgroundColor =
+            [[NSColor colorWithCalibratedWhite:0.09 alpha:0.97] CGColor];
+        root.layer.cornerRadius = 18;
+        panel.contentView = root;
+
+        NSTextField *title = [NSTextField labelWithString:@"Drag Producer into the list to allow Screen Recording"];
+        title.font = [NSFont systemFontOfSize:12 weight:NSFontWeightMedium];
+        title.textColor = [NSColor colorWithCalibratedWhite:0.72 alpha:1.0];
+        title.frame = NSMakeRect(16, H - 28, W - 32, 16);
+        [root addSubview:title];
+
+        ProducerDragChipView *row =
+            [[ProducerDragChipView alloc] initWithFrame:NSMakeRect(12, 12, W - 24, H - 44)];
+        row.wantsLayer = YES;
+        row.layer.backgroundColor = [[NSColor colorWithCalibratedWhite:0.16 alpha:1.0] CGColor];
+        row.layer.cornerRadius = 12;
+        [root addSubview:row];
+
+        NSImage *icon = [[NSWorkspace sharedWorkspace] iconForFile:[[NSBundle mainBundle] bundlePath]];
+        NSImageView *iv = [NSImageView imageViewWithImage:icon];
+        iv.frame = NSMakeRect(10, (row.frame.size.height - 32) / 2, 32, 32);
+        [row addSubview:iv];
+
+        NSTextField *name = [NSTextField labelWithString:@"Producer"];
+        name.font = [NSFont systemFontOfSize:15 weight:NSFontWeightSemibold];
+        name.textColor = [NSColor whiteColor];
+        name.frame = NSMakeRect(52, (row.frame.size.height - 20) / 2, 160, 20);
+        [row addSubview:name];
+
+        NSTextField *hint = [NSTextField labelWithString:@"drag me"];
+        hint.font = [NSFont systemFontOfSize:12 weight:NSFontWeightRegular];
+        hint.textColor = [NSColor colorWithCalibratedRed:0.24 green:0.86 blue:0.65 alpha:1.0];
+        hint.alignment = NSTextAlignmentRight;
+        hint.frame = NSMakeRect(row.frame.size.width - 110, (row.frame.size.height - 16) / 2, 96, 16);
+        [row addSubview:hint];
+
+        g_drag_chip = panel;
+        [panel orderFrontRegardless];
+    });
+}
+
+void producer_drag_chip_hide(void) {
+    run_on_main(^{
+        if (!g_drag_chip) return;
+        [g_drag_chip orderOut:nil];
+        g_drag_chip = nil;
+    });
+}
+
+// Opens System Settings directly on the Screen & System Audio Recording pane.
+void producer_open_screen_settings(void) {
+    run_on_main(^{
+        NSURL *url = [NSURL
+            URLWithString:
+                @"x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"];
+        [[NSWorkspace sharedWorkspace] openURL:url];
+    });
+}
+
 // Default camera uniqueID (mac-avcapture requires an explicit device id, the
 // same way SCK required an explicit display UUID). Returns 1 on success.
 int producer_default_camera_id(char *buf, int buflen) {

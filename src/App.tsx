@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import "./App.css";
 import { hasTauri, ipc, type EndpointInfo } from "./lib/ipc";
 import { Onboarding, Wordmark } from "./views/Onboarding";
+import { FirstLight, firstLightDone } from "./views/FirstLight";
 import { Home } from "./views/Home";
 
 type View = "loading" | "onboarding" | "home";
 
 function App() {
   const [view, setView] = useState<View>("loading");
+  const [firstLight, setFirstLight] = useState(() => !firstLightDone());
   const [endpoints, setEndpoints] = useState<EndpointInfo[]>([]);
 
   const refresh = useCallback(async () => {
@@ -32,6 +34,10 @@ function App() {
   async function removeEndpoint(id: string) {
     await ipc.removeEndpoint(id);
     await refresh();
+  }
+
+  if (firstLight) {
+    return <FirstLight onDone={() => setFirstLight(false)} />;
   }
 
   if (view === "loading") {

@@ -283,6 +283,9 @@ extern "C" {
     pub fn producer_screen_capture_request();
     pub fn producer_default_camera_id(buf: *mut c_char, buflen: c_int) -> c_int;
     pub fn producer_list_windows(buf: *mut c_char, buflen: c_int) -> c_int;
+    pub fn producer_drag_chip_show();
+    pub fn producer_drag_chip_hide();
+    pub fn producer_open_screen_settings();
 }
 
 // M-L7 escape hatch: filters on the overlay window capture
