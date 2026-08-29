@@ -27,3 +27,7 @@ dist-ssr
 engine/obs-studio/
 engine/cache/
 engine/artifacts/
+
+# OBS module runtime config droppings (module_config_path is NULL in harnesses)
+src-tauri/rtmp-services/
+src-tauri/win-capture/
