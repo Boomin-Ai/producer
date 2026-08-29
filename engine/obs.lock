@@ -15,7 +15,11 @@
   },
   "arch": "arm64",
   "preset": "producer-macos",
-  "patchset": null,
+  "patchset": {
+    "dir": "engine/patches",
+    "target": "plugins/obs-browser",
+    "sha256": "21281fe9577e52f7297b6831c7ca42d6ef91f152c64c19985100a3dabe662e5d"
+  },
   "fallback": {
     "mode": "official-release-extract",
     "note": "R1 fallback per LIVE-REVIEW.md v1.1.1: local spike engine extracted from the official signed release; source build via producer-macos preset is validated in engine CI.",

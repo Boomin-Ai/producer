@@ -8,14 +8,16 @@
 set -euo pipefail
 
 APP="${1:?usage: check-no-qt.sh /path/to/Producer.app}"
-FORBIDDEN='Qt[A-Za-z]*\.framework|libQt|Chromium Embedded Framework|Sparkle\.framework|libobs-frontend-api|obs-frontend-api|obs-scripting|libcef'
+# M-L7.1: CEF and the frontend-api shim are sanctioned bundle members;
+# Qt, Sparkle, and scripting remain forbidden (the A9 assertion).
+FORBIDDEN='Qt[A-Za-z]*\.framework|libQt|Sparkle\.framework|obs-scripting'
 
 fail=0
 
 # 1. No forbidden bundles/dirs present in the app tree
 while IFS= read -r hit; do
   echo "FORBIDDEN FILE: $hit"; fail=1
-done < <(find "$APP" \( -name "Qt*.framework" -o -name "Chromium*" -o -name "Sparkle.framework" -o -name "*frontend-api*" -o -name "*obs-scripting*" -o -name "libcef*" \) 2>/dev/null)
+done < <(find "$APP" \( -name "Qt*.framework" -o -name "Sparkle.framework" -o -name "*obs-scripting*" \) 2>/dev/null)
 
 # 2. No Mach-O in the bundle links anything forbidden
 scanned=0

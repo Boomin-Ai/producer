@@ -112,8 +112,8 @@ export const ipc = {
   liveRequestPermission: (kind: "screen" | "camera" | "mic") =>
     invoke("live_request_permission", { kind }),
   liveListWindows: () => invoke<LiveWindow[]>("live_list_windows"),
-  liveSetOverlay: (windowId: number | null, colorKey: boolean) =>
-    invoke("live_set_overlay", { windowId, colorKey }),
+  liveSetOverlay: (windowId: number | null, colorKey: boolean, url?: string | null) =>
+    invoke("live_set_overlay", { windowId, colorKey, url: url ?? null }),
 };
 
 export interface LiveWindow {
@@ -133,6 +133,7 @@ export interface LiveSources {
   camera: boolean;
   mic: boolean;
   overlay_window?: number | null;
+  overlay_url?: string | null;
 }
 
 export type LivePreset = "twitch" | "kick" | "youtube" | "custom";

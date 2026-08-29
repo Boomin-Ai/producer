@@ -138,6 +138,12 @@ fn reset_video(module: &str) -> Result<(), i32> {
 /// Full F3 bootstrap. MUST be called on the live-engine thread, never the
 /// main thread and never more than once per process.
 pub fn bootstrap() -> EngineReport {
+    bootstrap_with_config(None)
+}
+
+/// module_config_path feeds obs_module_config_path() — obs-browser derives
+/// its CEF cache dir from it (M-L7.1); harmless for every other plugin.
+pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> EngineReport {
     let mut report = EngineReport {
         ok: false,
         obs_version: String::new(),
@@ -153,7 +159,12 @@ pub fn bootstrap() -> EngineReport {
     };
 
     let locale = CString::new("en-US").unwrap();
-    if !unsafe { ffi::obs_startup(locale.as_ptr(), ptr::null(), ptr::null_mut()) } {
+    let config_c = module_config_dir.and_then(|p| {
+        let _ = std::fs::create_dir_all(p);
+        CString::new(p.to_string_lossy().into_owned()).ok()
+    });
+    let config_ptr = config_c.as_ref().map_or(ptr::null(), |c| c.as_ptr());
+    if !unsafe { ffi::obs_startup(locale.as_ptr(), config_ptr, ptr::null_mut()) } {
         report.errors.push("obs_startup failed".into());
         return report;
     }
@@ -272,10 +283,7 @@ pub enum Command {
         camera: bool,
         mic: bool,
     },
-    SetOverlay {
-        window_id: Option<u32>,
-        color_key: bool,
-    },
+    SetOverlay(graph::OverlaySpec),
     AttachPreview {
         /// NSWindow* of the Tauri window, as usize.
         window: usize,
@@ -370,12 +378,9 @@ impl LiveHandle {
             })
             .map_err(|e| e.to_string())
     }
-    pub fn set_overlay(&self, window_id: Option<u32>, color_key: bool) -> Result<(), String> {
+    pub fn set_overlay(&self, spec: graph::OverlaySpec) -> Result<(), String> {
         self.cmd
-            .send(Command::SetOverlay {
-                window_id,
-                color_key,
-            })
+            .send(Command::SetOverlay(spec))
             .map_err(|e| e.to_string())
     }
     pub fn attach_preview(&self, window: usize, rect: PreviewRect) -> Result<(), String> {
@@ -522,7 +527,10 @@ impl LiveProxy {
 /// Start the LiveEngine owner thread. `sink` receives every event after the
 /// snapshot has been updated; it runs on the engine thread and must not
 /// block or call back into the engine.
-pub fn start(sink: impl Fn(&LiveEvent) + Send + 'static) -> LiveHandle {
+pub fn start(
+    module_config_dir: std::path::PathBuf,
+    sink: impl Fn(&LiveEvent) + Send + 'static,
+) -> LiveHandle {
     let (cmd_tx, cmd_rx) = mpsc::channel::<Command>();
     let snapshot = Arc::new(Mutex::new(Snapshot::default()));
     let streaming = Arc::new(AtomicBool::new(false));
@@ -532,7 +540,7 @@ pub fn start(sink: impl Fn(&LiveEvent) + Send + 'static) -> LiveHandle {
     std::thread::Builder::new()
         .name("live-engine".into())
         .spawn(move || {
-            let report = bootstrap();
+            let report = bootstrap_with_config(Some(&module_config_dir));
             {
                 let mut s = snap.lock().unwrap();
                 s.engine_ready = true;
@@ -628,22 +636,19 @@ pub fn start(sink: impl Fn(&LiveEvent) + Send + 'static) -> LiveHandle {
                                 }
                             }
                             let sources = g.state();
-                            snap.lock().unwrap().sources = sources;
+                            snap.lock().unwrap().sources = sources.clone();
                             sink(&LiveEvent::SourcesChanged { sources });
                         }
                     }
-                    Ok(Command::SetOverlay {
-                        window_id,
-                        color_key,
-                    }) => {
+                    Ok(Command::SetOverlay(spec)) => {
                         if let Some(g) = scene.as_mut() {
-                            if let Err(e) = g.set_overlay(window_id, color_key) {
+                            if let Err(e) = g.set_overlay(spec) {
                                 sink(&LiveEvent::EngineError {
                                     message: format!("overlay: {e}"),
                                 });
                             }
                             let sources = g.state();
-                            snap.lock().unwrap().sources = sources;
+                            snap.lock().unwrap().sources = sources.clone();
                             sink(&LiveEvent::SourcesChanged { sources });
                         }
                     }

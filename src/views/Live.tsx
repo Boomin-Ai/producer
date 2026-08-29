@@ -148,7 +148,9 @@ function PermissionsCoach({ sources }: { sources: LiveSources }) {
 /** Overlay via window capture — D1's sanctioned v1 escape hatch while CEF
  * overlays (M-L7.1) are built. Run the overlay page in a browser window; a
  * green background + the color-key option composites it like a real overlay. */
-function OverlayPicker({ activeWindow }: { activeWindow: number | null }) {
+function OverlayPicker({ activeWindow, activeUrl }: { activeWindow: number | null; activeUrl: string | null }) {
+  const [mode, setMode] = useState<"window" | "browser">(activeUrl ? "browser" : "window");
+  const [url, setUrl] = useState(activeUrl ?? "");
   const [windows, setWindows] = useState<{ id: number; owner: string; title: string }[]>([]);
   const [selected, setSelected] = useState<number | "">("");
   const [colorKey, setColorKey] = useState(true);
@@ -165,44 +167,65 @@ function OverlayPicker({ activeWindow }: { activeWindow: number | null }) {
     load();
   }, [load]);
 
+  const active = activeWindow != null || activeUrl != null;
   return (
     <div className="live-overlay">
       <div className="live-overlay-row">
-        <select value={selected} onChange={(e) => setSelected(e.target.value === "" ? "" : Number(e.target.value))}>
-          <option value="">Choose a window…</option>
-          {windows.map((w) => (
-            <option key={w.id} value={w.id}>
-              {w.owner}
-              {w.title ? ` — ${w.title}` : ""}
-            </option>
-          ))}
-        </select>
-        <button onClick={load} title="Refresh window list">
-          ↻
+        <button className={mode === "window" ? "primary" : ""} onClick={() => setMode("window")}>
+          Window capture
+        </button>
+        <button className={mode === "browser" ? "primary" : ""} onClick={() => setMode("browser")}>
+          Browser (URL)
         </button>
       </div>
-      <label className="live-overlay-key">
-        <input type="checkbox" checked={colorKey} onChange={(e) => setColorKey(e.target.checked)} />
-        Green-screen it (key out a green page background)
-      </label>
+      {mode === "window" ? (
+        <>
+          <div className="live-overlay-row">
+            <select value={selected} onChange={(e) => setSelected(e.target.value === "" ? "" : Number(e.target.value))}>
+              <option value="">Choose a window…</option>
+              {windows.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.owner}
+                  {w.title ? ` — ${w.title}` : ""}
+                </option>
+              ))}
+            </select>
+            <button onClick={load} title="Refresh window list">
+              ↻
+            </button>
+          </div>
+          <label className="live-overlay-key">
+            <input type="checkbox" checked={colorKey} onChange={(e) => setColorKey(e.target.checked)} />
+            Green-screen it (key out a green page background)
+          </label>
+        </>
+      ) : (
+        <input
+          placeholder="Overlay URL (https://… — needs the CEF-capable engine)"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+        />
+      )}
       <div className="live-editor-row">
         <button
           className="primary"
-          disabled={selected === ""}
+          disabled={mode === "window" ? selected === "" : url.trim() === ""}
           onClick={async () => {
             setError(null);
             try {
-              await ipc.liveSetOverlay(selected as number, colorKey);
+              if (mode === "window") {
+                await ipc.liveSetOverlay(selected as number, colorKey);
+              } else {
+                await ipc.liveSetOverlay(null, false, url.trim());
+              }
             } catch (e) {
               setError(String(e));
             }
           }}
         >
-          {activeWindow != null ? "Replace overlay" : "Set overlay"}
+          {active ? "Replace overlay" : "Set overlay"}
         </button>
-        {activeWindow != null && (
-          <button onClick={() => ipc.liveSetOverlay(null, false).catch(() => {})}>Clear overlay</button>
-        )}
+        {active && <button onClick={() => ipc.liveSetOverlay(null, false).catch(() => {})}>Clear overlay</button>}
       </div>
       {error && <div className="live-error">{error}</div>}
     </div>
@@ -401,11 +424,11 @@ export function LiveView() {
       />
       <PermissionsCoach sources={sources} />
 
-      <details className="live-overlay-details" open={sources.overlay_window != null}>
+      <details className="live-overlay-details" open={sources.overlay_window != null || sources.overlay_url != null}>
         <summary>
-          Overlay {sources.overlay_window != null ? "· active" : "· window capture"}
+          Overlay {sources.overlay_window != null || sources.overlay_url != null ? "· active" : ""}
         </summary>
-        <OverlayPicker activeWindow={sources.overlay_window ?? null} />
+        <OverlayPicker activeWindow={sources.overlay_window ?? null} activeUrl={sources.overlay_url ?? null} />
       </details>
 
       <div className="section-head">

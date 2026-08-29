@@ -133,14 +133,26 @@ impl Live {
     }
 
     #[cfg(have_engine)]
-    pub fn set_overlay(&self, window_id: Option<u32>, color_key: bool) -> Result<(), String> {
+    pub fn set_overlay(
+        &self,
+        window_id: Option<u32>,
+        color_key: bool,
+        url: Option<String>,
+    ) -> Result<(), String> {
+        let spec = match (url, window_id) {
+            (Some(url), _) if !url.trim().is_empty() => graph::OverlaySpec::Browser {
+                url: url.trim().into(),
+            },
+            (_, Some(id)) => graph::OverlaySpec::Window { id, color_key },
+            _ => graph::OverlaySpec::None,
+        };
         self.handle
             .as_ref()
             .ok_or("live engine not running")?
-            .set_overlay(window_id, color_key)
+            .set_overlay(spec)
     }
     #[cfg(not(have_engine))]
-    pub fn set_overlay(&self, _w: Option<u32>, _k: bool) -> Result<(), String> {
+    pub fn set_overlay(&self, _w: Option<u32>, _k: bool, _u: Option<String>) -> Result<(), String> {
         Err("live engine not bundled in this build".into())
     }
 
@@ -269,7 +281,7 @@ pub fn init(app: tauri::AppHandle, report_dir: PathBuf) -> Live {
     let harness = std::env::args().any(|a| a == "--live-multistream");
     let harness_dir = report_dir.clone();
 
-    let handle = engine::start(move |ev| {
+    let handle = engine::start(report_dir.join("module-config"), move |ev| {
         let _ = app.emit("live://event", ev);
         match ev {
             engine::LiveEvent::EngineReady { ok, .. } => {

@@ -115,7 +115,7 @@ fn main_display_uuid() -> Option<String> {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, serde::Serialize)]
+#[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct SourcesState {
     pub screen: bool,
     pub camera: bool,
@@ -123,6 +123,15 @@ pub struct SourcesState {
     /// Window-capture overlay (D1's sanctioned v1 escape hatch); the CGWindowID
     /// being captured, if any.
     pub overlay_window: Option<u32>,
+    /// Native CEF overlay URL (M-L7.1); requires a browser-capable engine.
+    pub overlay_url: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub enum OverlaySpec {
+    None,
+    Window { id: u32, color_key: bool },
+    Browser { url: String },
 }
 
 /// The implicit scene (§2.2: "UI exposes one implicit scene"): screen
@@ -135,7 +144,11 @@ pub struct SceneGraph {
     screen: Option<(*mut ffi::obs_sceneitem_t, *mut ffi::obs_source_t)>,
     camera: Option<(*mut ffi::obs_sceneitem_t, *mut ffi::obs_source_t)>,
     mic: Option<*mut ffi::obs_source_t>,
-    overlay: Option<(*mut ffi::obs_sceneitem_t, *mut ffi::obs_source_t, u32)>,
+    overlay: Option<(
+        *mut ffi::obs_sceneitem_t,
+        *mut ffi::obs_source_t,
+        OverlaySpec,
+    )>,
 }
 
 impl SceneGraph {
@@ -162,42 +175,100 @@ impl SceneGraph {
             screen: self.screen.is_some(),
             camera: self.camera.is_some(),
             mic: self.mic.is_some(),
-            overlay_window: self.overlay.as_ref().map(|(_, _, id)| *id),
+            overlay_window: self.overlay.as_ref().and_then(|(_, _, spec)| match spec {
+                OverlaySpec::Window { id, .. } => Some(*id),
+                _ => None,
+            }),
+            overlay_url: self.overlay.as_ref().and_then(|(_, _, spec)| match spec {
+                OverlaySpec::Browser { url } => Some(url.clone()),
+                _ => None,
+            }),
         }
     }
 
-    /// Window-capture overlay (D1 escape hatch): a browser window running the
-    /// overlay page, captured full-frame on top of the scene; optional green
-    /// color-key so it composites like a real overlay. None clears it.
-    pub fn set_overlay(&mut self, window_id: Option<u32>, color_key: bool) -> Result<(), String> {
+    /// Overlay on top of the scene. Window mode = D1's v1 escape hatch (SCK
+    /// window capture + optional green color-key). Browser mode = M-L7.1
+    /// native CEF (`browser_source`); fails truthfully on engines built
+    /// without obs-browser. None clears.
+    pub fn set_overlay(&mut self, spec: OverlaySpec) -> Result<(), String> {
         unsafe {
             if let Some((item, src, _)) = self.overlay.take() {
                 ffi::obs_sceneitem_remove(item);
                 ffi::obs_source_release(src);
             }
-            let Some(window_id) = window_id else {
-                return Ok(());
+            let (src, color_key) = match &spec {
+                OverlaySpec::None => return Ok(()),
+                OverlaySpec::Window {
+                    id: window_id,
+                    color_key,
+                } => {
+                    let settings = ffi::obs_data_create();
+                    // mac-sck-common.h: ScreenCaptureWindowStream = 1
+                    ffi::obs_data_set_int(settings, CString::new("type").unwrap().as_ptr(), 1);
+                    ffi::obs_data_set_int(
+                        settings,
+                        CString::new("window").unwrap().as_ptr(),
+                        *window_id as i64,
+                    );
+                    ffi::obs_data_set_bool(
+                        settings,
+                        CString::new("show_cursor").unwrap().as_ptr(),
+                        false,
+                    );
+                    let id = CString::new("screen_capture").unwrap();
+                    let name = CString::new("Overlay").unwrap();
+                    let src = ffi::obs_source_create(
+                        id.as_ptr(),
+                        name.as_ptr(),
+                        settings,
+                        ptr::null_mut(),
+                    );
+                    ffi::obs_data_release(settings);
+                    if src.is_null() {
+                        return Err("overlay window capture creation failed".into());
+                    }
+                    (src, *color_key)
+                }
+                OverlaySpec::Browser { url } => {
+                    let (bw, bh) = Self::base_size();
+                    let settings = ffi::obs_data_create();
+                    let k_url = CString::new("url").unwrap();
+                    let v_url = CString::new(url.clone()).unwrap();
+                    ffi::obs_data_set_string(settings, k_url.as_ptr(), v_url.as_ptr());
+                    ffi::obs_data_set_int(
+                        settings,
+                        CString::new("width").unwrap().as_ptr(),
+                        bw as i64,
+                    );
+                    ffi::obs_data_set_int(
+                        settings,
+                        CString::new("height").unwrap().as_ptr(),
+                        bh as i64,
+                    );
+                    // overlay audio joins the mix as a source, not the desktop
+                    ffi::obs_data_set_bool(
+                        settings,
+                        CString::new("reroute_audio").unwrap().as_ptr(),
+                        true,
+                    );
+                    let id = CString::new("browser_source").unwrap();
+                    let name = CString::new("Overlay").unwrap();
+                    let src = ffi::obs_source_create(
+                        id.as_ptr(),
+                        name.as_ptr(),
+                        settings,
+                        ptr::null_mut(),
+                    );
+                    ffi::obs_data_release(settings);
+                    if src.is_null() {
+                        return Err(
+                            "browser overlays need the CEF-capable engine (M-L7.1) — this build's engine doesn't include obs-browser"
+                                .into(),
+                        );
+                    }
+                    (src, false)
+                }
             };
-            let settings = ffi::obs_data_create();
-            // mac-sck-common.h: ScreenCaptureWindowStream = 1
-            ffi::obs_data_set_int(settings, CString::new("type").unwrap().as_ptr(), 1);
-            ffi::obs_data_set_int(
-                settings,
-                CString::new("window").unwrap().as_ptr(),
-                window_id as i64,
-            );
-            ffi::obs_data_set_bool(
-                settings,
-                CString::new("show_cursor").unwrap().as_ptr(),
-                false,
-            );
-            let id = CString::new("screen_capture").unwrap();
-            let name = CString::new("Overlay").unwrap();
-            let src = ffi::obs_source_create(id.as_ptr(), name.as_ptr(), settings, ptr::null_mut());
-            ffi::obs_data_release(settings);
-            if src.is_null() {
-                return Err("overlay window capture creation failed".into());
-            }
             if color_key {
                 let fsettings = ffi::obs_data_create();
                 ffi::obs_data_set_string(
@@ -227,7 +298,7 @@ impl SceneGraph {
             let pos = ffi::vec2 { x: 0.0, y: 0.0 };
             ffi::obs_sceneitem_set_pos(item, &pos);
             ffi::obs_sceneitem_set_visible(item, true);
-            self.overlay = Some((item, src, window_id));
+            self.overlay = Some((item, src, spec));
         }
         Ok(())
     }

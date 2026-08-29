@@ -16,6 +16,10 @@ seeds=("$CONTENTS/Frameworks/libobs.framework/Versions/A/libobs"
 for p in "${PLUGINS[@]}"; do
   seeds+=("$CONTENTS/PlugIns/$p.plugin/Contents/MacOS/$p")
 done
+# M-L7.1: obs-browser joins the walk when the artifact carries it
+if [[ -f "$CONTENTS/PlugIns/obs-browser.plugin/Contents/MacOS/obs-browser" ]]; then
+  seeds+=("$CONTENTS/PlugIns/obs-browser.plugin/Contents/MacOS/obs-browser")
+fi
 
 declare -a seen=()
 queue=("${seeds[@]}")
@@ -42,8 +46,16 @@ echo "# @rpath closure beyond libobs:"
 for d in $(printf '%s\n' "${seen[@]:-}" | sort -u); do
   echo "$d"
   case $d in
-    *Qt*|*Chromium*|*obs-frontend-api*|*obs-scripting*|*Sparkle*)
+    # M-L7.1: CEF + the frontend-api shim are sanctioned; Qt/Sparkle/scripting stay forbidden
+    *Qt*|*obs-scripting*|*Sparkle*)
       echo "VIOLATION: $d" >&2; violations=1;;
   esac
+  # A dep that is linked but absent from the artifact fails at dyld load —
+  # enforce existence, don't just list. (Gap found 2026-08-29: CI shipped an
+  # artifact without the obs-deps dylibs and this gate stayed green.)
+  if [[ ! -e "$CONTENTS/Frameworks/$d" ]]; then
+    echo "MISSING DEP: $d not present in Frameworks" >&2
+    violations=1
+  fi
 done
 exit $violations

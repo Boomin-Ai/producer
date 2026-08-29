@@ -1,0 +1,397 @@
+diff --git a/browser-app.cpp b/browser-app.cpp
+index 5d2c4dc..f51c393 100644
+--- a/browser-app.cpp
++++ b/browser-app.cpp
+@@ -423,3 +423,103 @@ void BrowserApp::OnScheduleMessagePumpWork(int64_t delay_ms)
+ 	QMetaObject::invokeMethod(&messageObject, "DoCefMessageLoop", Qt::QueuedConnection, Q_ARG(int, (int)delay_ms));
+ }
+ #endif
++
++#ifdef ENABLE_BROWSER_DISPATCH_LOOP
++/* Producer patch: libdispatch main-thread pump — the Qt loop above,
++ * re-expressed with GCD so a host without a QApplication can run CEF.
++ * The host's NSApplication run loop drains the main queue. */
++#include <dispatch/dispatch.h>
++
++namespace {
++struct DispatchTask {
++	CefRefPtr<CefBrowser> browser;
++	BrowserFunc func;
++};
++
++std::mutex browserTaskMutex;
++std::deque<DispatchTask> browserTasks;
++
++void execute_next_browser_task_f(void *)
++{
++	ExecuteNextBrowserTask();
++}
++
++void cef_do_work_f(void *)
++{
++	CefDoMessageLoopWork();
++}
++
++void execute_message_task_f(void *param)
++{
++	MessageTask *task = static_cast<MessageTask *>(param);
++	(*task)();
++	delete task;
++}
++
++dispatch_source_t frame_timer = nullptr;
++
++/* only ever called on the main queue, so creation is race-free */
++void ensure_frame_timer_f(void *)
++{
++	if (frame_timer)
++		return;
++	frame_timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
++	dispatch_source_set_timer(frame_timer, DISPATCH_TIME_NOW, 33ull * NSEC_PER_MSEC, 4ull * NSEC_PER_MSEC);
++	dispatch_source_set_event_handler_f(frame_timer, cef_do_work_f);
++	dispatch_resume(frame_timer);
++}
++} // namespace
++
++bool ExecuteNextBrowserTask()
++{
++	DispatchTask nextTask;
++	{
++		std::lock_guard<std::mutex> lock(browserTaskMutex);
++		if (!browserTasks.size())
++			return false;
++
++		nextTask = browserTasks[0];
++		browserTasks.pop_front();
++	}
++
++	nextTask.func(nextTask.browser);
++	return true;
++}
++
++void QueueBrowserTask(CefRefPtr<CefBrowser> browser, BrowserFunc func)
++{
++	{
++		std::lock_guard<std::mutex> lock(browserTaskMutex);
++		browserTasks.push_back({browser, func});
++	}
++	dispatch_async_f(dispatch_get_main_queue(), nullptr, execute_next_browser_task_f);
++}
++
++void ExecuteTaskOnMain(MessageTask task)
++{
++	dispatch_async_f(dispatch_get_main_queue(), new MessageTask(std::move(task)), execute_message_task_f);
++}
++
++void ProcessCef()
++{
++	dispatch_async_f(dispatch_get_main_queue(), nullptr, cef_do_work_f);
++}
++
++#define MAX_DELAY (1000 / 30)
++
++#if CHROME_VERSION_BUILD < 5938
++void BrowserApp::OnScheduleMessagePumpWork(int64 delay_ms)
++#else
++void BrowserApp::OnScheduleMessagePumpWork(int64_t delay_ms)
++#endif
++{
++	if (delay_ms < 0)
++		delay_ms = 0;
++	else if (delay_ms > MAX_DELAY)
++		delay_ms = MAX_DELAY;
++
++	dispatch_async_f(dispatch_get_main_queue(), nullptr, ensure_frame_timer_f);
++	dispatch_after_f(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay_ms + 2) * NSEC_PER_MSEC),
++			 dispatch_get_main_queue(), nullptr, cef_do_work_f);
++}
++#endif
+diff --git a/browser-app.hpp b/browser-app.hpp
+index b25d9ac..4c93fec 100644
+--- a/browser-app.hpp
++++ b/browser-app.hpp
+@@ -59,6 +59,22 @@ public slots:
+ extern void QueueBrowserTask(CefRefPtr<CefBrowser> browser, BrowserFunc func);
+ #endif
+ 
++#ifdef ENABLE_BROWSER_DISPATCH_LOOP
++#include <mutex>
++#include <deque>
++
++typedef std::function<void()> MessageTask;
++
++/* Producer patch: Qt-free main-thread CEF pump for hosts without a
++ * QApplication. Same semantics as the Qt loop — browser tasks and CEF
++ * message-loop work run on the process main thread — but scheduled via
++ * libdispatch instead of the Qt event loop. */
++extern void QueueBrowserTask(CefRefPtr<CefBrowser> browser, BrowserFunc func);
++extern bool ExecuteNextBrowserTask();
++extern void ExecuteTaskOnMain(MessageTask task);
++extern void ProcessCef();
++#endif
++
+ class BrowserApp : public CefApp, public CefRenderProcessHandler, public CefBrowserProcessHandler, public CefV8Handler {
+ 
+ 	void ExecuteJSFunction(CefRefPtr<CefBrowser> browser, const char *functionName, CefV8ValueList arguments);
+@@ -97,12 +113,14 @@ public:
+ 	virtual bool Execute(const CefString &name, CefRefPtr<CefV8Value> object, const CefV8ValueList &arguments,
+ 			     CefRefPtr<CefV8Value> &retval, CefString &exception) override;
+ 
+-#ifdef ENABLE_BROWSER_QT_LOOP
++#if defined(ENABLE_BROWSER_QT_LOOP) || defined(ENABLE_BROWSER_DISPATCH_LOOP)
+ #if CHROME_VERSION_BUILD < 5938
+ 	virtual void OnScheduleMessagePumpWork(int64 delay_ms) override;
+ #else
+ 	virtual void OnScheduleMessagePumpWork(int64_t delay_ms) override;
+ #endif
++#endif
++#ifdef ENABLE_BROWSER_QT_LOOP
+ 	QTimer frameTimer;
+ #endif
+ 
+diff --git a/browser-client.cpp b/browser-client.cpp
+index bf7baad..4d9855c 100644
+--- a/browser-client.cpp
++++ b/browser-client.cpp
+@@ -23,9 +23,11 @@
+ #include <obs-frontend-api.h>
+ #include <obs.hpp>
+ #include <util/platform.h>
++#ifndef ENABLE_BROWSER_DISPATCH_LOOP
+ #include <QApplication>
+ #include <QThread>
+ #include <QToolTip>
++#endif
+ #if defined(__APPLE__) && CHROME_VERSION_BUILD > 4430
+ #include <IOSurface/IOSurface.h>
+ #endif
+@@ -295,9 +297,14 @@ void BrowserClient::GetViewRect(CefRefPtr<CefBrowser>, CefRect &rect)
+ 
+ bool BrowserClient::OnTooltip(CefRefPtr<CefBrowser>, CefString &text)
+ {
++#ifdef ENABLE_BROWSER_DISPATCH_LOOP
++	/* no Qt UI to host a tooltip; suppress (handled, draw nothing) */
++	UNUSED_PARAMETER(text);
++#else
+ 	std::string str_text = text;
+ 	QMetaObject::invokeMethod(QCoreApplication::instance()->thread(),
+ 				  [str_text]() { QToolTip::showText(QCursor::pos(), str_text.c_str()); });
++#endif
+ 	return true;
+ }
+ 
+diff --git a/cmake/os-macos.cmake b/cmake/os-macos.cmake
+index 6d6dc51..77ad8fe 100644
+--- a/cmake/os-macos.cmake
++++ b/cmake/os-macos.cmake
+@@ -1,16 +1,30 @@
+-find_package(Qt6 REQUIRED Widgets)
+-
+-target_compile_definitions(obs-browser PRIVATE ENABLE_BROWSER_SHARED_TEXTURE ENABLE_BROWSER_QT_LOOP)
++# Producer patch: allow a Qt-free build for hosts without a QApplication.
++# The libdispatch pump (ENABLE_BROWSER_DISPATCH_LOOP) replaces the Qt event
++# loop as CEF's main-thread scheduler; everything else is unchanged.
++option(ENABLE_BROWSER_DISPATCH_LOOP "Use a libdispatch main-thread CEF pump instead of the Qt event loop" OFF)
++
++if(ENABLE_BROWSER_DISPATCH_LOOP)
++  target_compile_definitions(obs-browser PRIVATE ENABLE_BROWSER_SHARED_TEXTURE ENABLE_BROWSER_DISPATCH_LOOP)
++else()
++  find_package(Qt6 REQUIRED Widgets)
++  target_compile_definitions(obs-browser PRIVATE ENABLE_BROWSER_SHARED_TEXTURE ENABLE_BROWSER_QT_LOOP)
++  target_link_libraries(obs-browser PRIVATE Qt::Widgets)
++endif()
+ 
+ if(CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL 14.0.3)
+   target_compile_options(obs-browser PRIVATE -Wno-error=unqualified-std-cast-call)
+ endif()
+ 
+-target_link_libraries(obs-browser PRIVATE Qt::Widgets CEF::Wrapper "$<LINK_LIBRARY:FRAMEWORK,CoreFoundation.framework>"
++target_link_libraries(obs-browser PRIVATE CEF::Wrapper "$<LINK_LIBRARY:FRAMEWORK,CoreFoundation.framework>"
+                                           "$<LINK_LIBRARY:FRAMEWORK,AppKit.framework>")
+ 
+ set(helper_basename browser-helper)
+-set(helper_output_name "OBS Helper")
++# Producer patch: CEF locates helper apps by "<AppName> Helper" convention;
++# embedding hosts override this to match their app name.
++if(NOT DEFINED BROWSER_HELPER_OUTPUT_NAME)
++  set(BROWSER_HELPER_OUTPUT_NAME "OBS Helper")
++endif()
++set(helper_output_name "${BROWSER_HELPER_OUTPUT_NAME}")
+ set(helper_suffixes "::" " (GPU):_gpu:.gpu" " (Plugin):_plugin:.plugin" " (Renderer):_renderer:.renderer")
+ 
+ foreach(helper IN LISTS helper_suffixes)
+@@ -56,8 +70,10 @@ endforeach()
+ 
+ target_sources(obs-browser PRIVATE deps/ip-string-posix.cpp)
+ 
+-set_target_properties(
+-  obs-browser
+-  PROPERTIES AUTOMOC ON
+-             AUTOUIC ON
+-             AUTORCC ON)
++if(NOT ENABLE_BROWSER_DISPATCH_LOOP)
++  set_target_properties(
++    obs-browser
++    PROPERTIES AUTOMOC ON
++               AUTOUIC ON
++               AUTORCC ON)
++endif()
+diff --git a/obs-browser-plugin.cpp b/obs-browser-plugin.cpp
+index 95a168c..478e6f4 100644
+--- a/obs-browser-plugin.cpp
++++ b/obs-browser-plugin.cpp
+@@ -55,6 +55,11 @@
+ #include <QThread>
+ #endif
+ 
++#ifdef ENABLE_BROWSER_DISPATCH_LOOP
++#include <dispatch/dispatch.h>
++#include <pthread.h>
++#endif
++
+ #if !defined(_WIN32) && !defined(__APPLE__)
+ #include "drm-format.hpp"
+ #endif
+@@ -98,6 +103,10 @@ public:
+ 		 * correctly, it's only supposed to take 10ms max */
+ 		QMetaObject::invokeMethod(&messageObject, "ExecuteTask", Qt::QueuedConnection,
+ 					  Q_ARG(MessageTask, task));
++#elif defined(ENABLE_BROWSER_DISPATCH_LOOP)
++		/* same rule as the Qt loop: leave the CEF stack before
++		 * running the task */
++		ExecuteTaskOnMain(task);
+ #else
+ 		task();
+ #endif
+@@ -310,7 +319,7 @@ static void BrowserInit(void)
+ 
+ 	CefString(&settings.user_agent_product) = prod_ver.str();
+ 
+-#ifdef ENABLE_BROWSER_QT_LOOP
++#if defined(ENABLE_BROWSER_QT_LOOP) || defined(ENABLE_BROWSER_DISPATCH_LOOP)
+ 	settings.external_message_pump = true;
+ 	settings.multi_threaded_message_loop = false;
+ #endif
+@@ -402,12 +411,16 @@ static void BrowserShutdown(void)
+ 	while (messageObject.ExecuteNextBrowserTask())
+ 		;
+ 	CefDoMessageLoopWork();
++#elif defined(ENABLE_BROWSER_DISPATCH_LOOP)
++	while (ExecuteNextBrowserTask())
++		;
++	CefDoMessageLoopWork();
+ #endif
+ 	CefShutdown();
+ 	app = nullptr;
+ }
+ 
+-#ifndef ENABLE_BROWSER_QT_LOOP
++#if !defined(ENABLE_BROWSER_QT_LOOP) && !defined(ENABLE_BROWSER_DISPATCH_LOOP)
+ static void BrowserManagerThread(void)
+ {
+ 	BrowserInit();
+@@ -416,11 +429,28 @@ static void BrowserManagerThread(void)
+ }
+ #endif
+ 
++#ifdef ENABLE_BROWSER_DISPATCH_LOOP
++static void browser_init_f(void *)
++{
++	BrowserInit();
++}
++static void browser_shutdown_f(void *)
++{
++	BrowserShutdown();
++}
++#endif
++
+ extern "C" EXPORT void obs_browser_initialize(void)
+ {
+ 	if (!os_atomic_set_bool(&manager_initialized, true)) {
+ #ifdef ENABLE_BROWSER_QT_LOOP
+ 		BrowserInit();
++#elif defined(ENABLE_BROWSER_DISPATCH_LOOP)
++		/* CefInitialize must run on the process main thread */
++		if (pthread_main_np())
++			BrowserInit();
++		else
++			dispatch_sync_f(dispatch_get_main_queue(), nullptr, browser_init_f);
+ #else
+ 		manager_thread = thread(BrowserManagerThread);
+ #endif
+@@ -781,6 +811,13 @@ void obs_module_unload(void)
+ {
+ #ifdef ENABLE_BROWSER_QT_LOOP
+ 	BrowserShutdown();
++#elif defined(ENABLE_BROWSER_DISPATCH_LOOP)
++	if (os_atomic_load_bool(&manager_initialized)) {
++		if (pthread_main_np())
++			BrowserShutdown();
++		else
++			dispatch_sync_f(dispatch_get_main_queue(), nullptr, browser_shutdown_f);
++	}
+ #else
+ 	if (manager_thread.joinable()) {
+ 		if (!QueueCEFTask([]() { CefQuitMessageLoop(); }))
+diff --git a/obs-browser-source.cpp b/obs-browser-source.cpp
+index 6e80fbc..565f6aa 100644
+--- a/obs-browser-source.cpp
++++ b/obs-browser-source.cpp
+@@ -22,7 +22,6 @@
+ #include "wide-string.hpp"
+ #include <nlohmann/json.hpp>
+ #include <util/threading.h>
+-#include <QApplication>
+ #include <util/dstr.h>
+ #include <functional>
+ #include <thread>
+@@ -33,10 +32,15 @@
+ #endif
+ 
+ #ifdef ENABLE_BROWSER_QT_LOOP
++#include <QApplication>
+ #include <QEventLoop>
+ #include <QThread>
+ #endif
+ 
++#ifdef ENABLE_BROWSER_DISPATCH_LOOP
++#include <pthread.h>
++#endif
++
+ #if !defined(_WIN32) && !defined(__APPLE__)
+ #include "drm-format.hpp"
+ #endif
+@@ -153,6 +157,15 @@ void BrowserSource::ExecuteOnBrowser(BrowserFunc func, bool async)
+ 				func(cefBrowser);
+ 			return;
+ 		}
++#elif defined(ENABLE_BROWSER_DISPATCH_LOOP)
++		/* same deadlock guard as the Qt loop: with the external pump the
++		 * CEF UI thread IS the main thread — a synchronous wait from it
++		 * would never be serviced */
++		if (pthread_main_np()) {
++			if (!!cefBrowser)
++				func(cefBrowser);
++			return;
++		}
+ #endif
+ 		os_event_t *finishedEvent;
+ 		os_event_init(&finishedEvent, OS_EVENT_TYPE_AUTO);
+@@ -168,7 +181,7 @@ void BrowserSource::ExecuteOnBrowser(BrowserFunc func, bool async)
+ 	} else {
+ 		CefRefPtr<CefBrowser> browser = GetBrowser();
+ 		if (!!browser) {
+-#ifdef ENABLE_BROWSER_QT_LOOP
++#if defined(ENABLE_BROWSER_QT_LOOP) || defined(ENABLE_BROWSER_DISPATCH_LOOP)
+ 			QueueBrowserTask(cefBrowser, func);
+ #else
+ 			QueueCEFTask([=]() { func(browser); });
+@@ -630,7 +643,7 @@ void BrowserSource::Render()
+ 
+ #if defined(BROWSER_EXTERNAL_BEGIN_FRAME_ENABLED) && defined(ENABLE_BROWSER_SHARED_TEXTURE)
+ 	SignalBeginFrame();
+-#elif defined(ENABLE_BROWSER_QT_LOOP)
++#elif defined(ENABLE_BROWSER_QT_LOOP) || defined(ENABLE_BROWSER_DISPATCH_LOOP)
+ 	ProcessCef();
+ #endif
+ }
