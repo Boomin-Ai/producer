@@ -227,17 +227,28 @@ pub fn live_attach_preview(
     w: f64,
     h: f64,
 ) -> EngineResult<()> {
-    use tauri::Manager;
-    let window = app
-        .get_webview_window("main")
-        .ok_or_else(|| EngineError::Other("main window missing".into()))?;
-    let ns_window = window
-        .ns_window()
-        .map_err(|e| EngineError::Other(format!("ns_window: {e}")))? as usize;
-    state
-        .live
-        .attach_preview(ns_window, x, y, w, h)
-        .map_err(EngineError::Other)
+    #[cfg(target_os = "macos")]
+    {
+        use tauri::Manager;
+        let window = app
+            .get_webview_window("main")
+            .ok_or_else(|| EngineError::Other("main window missing".into()))?;
+        let ns_window = window
+            .ns_window()
+            .map_err(|e| EngineError::Other(format!("ns_window: {e}")))?
+            as usize;
+        state
+            .live
+            .attach_preview(ns_window, x, y, w, h)
+            .map_err(EngineError::Other)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (app, state, x, y, w, h);
+        Err(EngineError::Other(
+            "live preview is macOS-only in this build".into(),
+        ))
+    }
 }
 
 #[tauri::command]
