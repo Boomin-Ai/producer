@@ -1,6 +1,6 @@
 [package]
 name = "producer"
-version = "0.1.0"
+version = "0.2.0"
 description = "Producer by Boomin — the open-source studio for creators: post everywhere, stream everywhere."
 authors = ["Boomin"]
 license = "AGPL-3.0-only"
