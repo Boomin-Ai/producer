@@ -1,21 +1,33 @@
 {
   "version": 8,
-  "cmakeMinimumRequired": { "major": 3, "minor": 28, "patch": 0 },
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
   "configurePresets": [
     {
       "name": "producer-macos",
       "displayName": "Producer engine (macOS)",
-      "description": "libobs + explicit plugin allowlist per LIVE-REVIEW.md §5.2. No frontend, no Qt, no CEF, no websocket, no scripting. obs-ffmpeg is ungated upstream at 32.1.2 and is built but NOT shipped (excluded at artifact assembly).",
-      "inherits": ["macos"],
+      "description": "libobs + explicit plugin allowlist per LIVE-REVIEW.md \u00a75.2, plus obs-browser/CEF via the dispatch-loop patch (M-L7.1, docs/M-L7.1-CEF.md). No frontend, no Qt, no websocket, no scripting. obs-ffmpeg is ungated upstream at 32.1.2 and is built but NOT shipped.",
+      "inherits": [
+        "macos"
+      ],
       "generator": "Xcode",
       "binaryDir": "${sourceDir}/build_producer",
       "cacheVariables": {
-        "CMAKE_PROJECT_INCLUDE": { "type": "FILEPATH", "value": "${sourceDir}/producer-project-include.cmake" },
-        "CMAKE_OSX_ARCHITECTURES": { "type": "STRING", "value": "arm64" },
+        "CMAKE_PROJECT_INCLUDE": {
+          "type": "FILEPATH",
+          "value": "${sourceDir}/producer-project-include.cmake"
+        },
+        "CMAKE_OSX_ARCHITECTURES": {
+          "type": "STRING",
+          "value": "arm64"
+        },
         "ENABLE_FRONTEND": false,
         "ENABLE_UI": false,
         "ENABLE_SCRIPTING": false,
-        "ENABLE_BROWSER": false,
+        "ENABLE_BROWSER": true,
         "ENABLE_BROWSER_PANELS": false,
         "ENABLE_WEBSOCKET": false,
         "ENABLE_WEBRTC": false,
@@ -27,7 +39,16 @@
         "ENABLE_VLC": false,
         "ENABLE_LIBFDK": false,
         "ENABLE_SERVICE_UPDATES": false,
-        "ENABLE_TEST_INPUT": false
+        "ENABLE_TEST_INPUT": false,
+        "ENABLE_BROWSER_DISPATCH_LOOP": true,
+        "BROWSER_HELPER_OUTPUT_NAME": {
+          "type": "STRING",
+          "value": "Producer Helper"
+        },
+        "CEF_ROOT_DIR": {
+          "type": "PATH",
+          "value": "${sourceDir}/.deps/cef_binary_6533_macos_arm64"
+        }
       }
     }
   ],

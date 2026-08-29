@@ -35,9 +35,28 @@ for sub in plugins/obs-browser plugins/obs-websocket; do
   [[ $want == "$have" ]] || { echo "FATAL: $sub at $have, lock wants $want" >&2; exit 1; }
 done
 
-# patchset (obs.lock 'patchset'; currently null — nothing applied)
+# patchset (obs.lock 'patchset'): sha256-verified patches applied to the
+# declared target tree. Idempotent — a tree that already carries the patch
+# (e.g. the Mac session's local submodule worktree) is detected and skipped.
 patchset="$(lock_get "['patchset']")"
-[[ $patchset == "None" ]] || { echo "FATAL: patchset declared but application not implemented" >&2; exit 1; }
+if [[ $patchset != "None" ]]; then
+  patch_dir="$REPO_ROOT/$(lock_get "['patchset']['dir']")"
+  patch_target="$SRC_DIR/$(lock_get "['patchset']['target']")"
+  want_sha="$(lock_get "['patchset']['sha256']")"
+  have_sha="$(cat $(ls "$patch_dir"/*.patch | sort) | shasum -a 256 | cut -d' ' -f1)"
+  [[ $want_sha == "$have_sha" ]] || { echo "FATAL: patchset sha256 mismatch (lock $want_sha, files $have_sha)" >&2; exit 1; }
+  for patch in $(ls "$patch_dir"/*.patch | sort); do
+    if git -C "$patch_target" apply --check "$patch" 2>/dev/null; then
+      git -C "$patch_target" apply "$patch"
+      echo "patch applied: $(basename "$patch")"
+    elif git -C "$patch_target" apply --reverse --check "$patch" 2>/dev/null; then
+      echo "patch already present: $(basename "$patch")"
+    else
+      echo "FATAL: patch neither applies nor is present: $(basename "$patch")" >&2
+      exit 1
+    fi
+  done
+fi
 
 # our preset rides alongside upstream's as CMakeUserPresets.json
 cp "$REPO_ROOT/engine/producer-presets.json" "$SRC_DIR/CMakeUserPresets.json"
@@ -49,6 +68,9 @@ cmake --preset producer-macos -S "$SRC_DIR" -DOBS_VERSION_OVERRIDE="$OBS_REF"
 # `cmake --build --preset` has no -S flag; presets resolve from cwd, so run
 # the build from inside the source tree.
 (cd "$SRC_DIR" && cmake --build --preset producer-macos)
+# CEF helper apps are EXCLUDE_FROM_ALL; build them explicitly (M-L7.1)
+(cd "$SRC_DIR" && cmake --build --preset producer-macos \
+  --target browser-helper browser-helper_gpu browser-helper_plugin browser-helper_renderer)
 
 # assemble artifact from the build tree's bundle-style output
 BUILD="$SRC_DIR/build_producer"
@@ -88,6 +110,33 @@ DEPS_LIB="$(find "$SRC_DIR/.deps" -maxdepth 2 -type d -name lib | head -1)"
   if [[ -n $src ]]; then cp "$src" "$STAGE/Frameworks/"; fi
 done
 cp "$SRC_DIR/COPYING" "$STAGE/licenses/COPYING.obs-studio"
+
+# M-L7.1 browser assets: obs-browser plugin, CEF framework, Producer Helper
+# apps, and the frontend-api shim dylib obs-browser links.
+BROWSER_BUNDLE="$(find "$BUILD" -name "obs-browser.plugin" -maxdepth 6 -type d | head -1)"
+if [[ -n $BROWSER_BUNDLE ]]; then
+  cp -R "$BROWSER_BUNDLE" "$STAGE/PlugIns/"
+  CEF_FW="$(find "$SRC_DIR/.deps" -maxdepth 3 -type d -name "Chromium Embedded Framework.framework" -path "*Release*" | head -1)"
+  [[ -n $CEF_FW ]] || CEF_FW="$(find "$SRC_DIR/.deps" -maxdepth 3 -type d -name "Chromium Embedded Framework.framework" | head -1)"
+  [[ -n $CEF_FW ]] || { echo "FATAL: obs-browser built but CEF framework not found in .deps" >&2; exit 1; }
+  cp -R "$CEF_FW" "$STAGE/Frameworks/"
+  for helper in "Producer Helper.app" "Producer Helper (GPU).app" "Producer Helper (Plugin).app" "Producer Helper (Renderer).app"; do
+    happ="$(find "$BUILD" -name "$helper" -maxdepth 6 -type d | head -1)"
+    [[ -n $happ ]] || { echo "FATAL: $helper not produced by build" >&2; exit 1; }
+    cp -R "$happ" "$STAGE/Frameworks/"
+  done
+  FRONTEND_API="$(find "$BUILD" -name "obs-frontend-api.dylib" -path "*Release*" | head -1)"
+  [[ -n $FRONTEND_API ]] || FRONTEND_API="$(find "$BUILD" -name "libobs-frontend-api*.dylib" | head -1)"
+  [[ -n $FRONTEND_API ]] || { echo "FATAL: obs-browser built but frontend-api dylib not found" >&2; exit 1; }
+  cp "$FRONTEND_API" "$STAGE/Frameworks/"
+  # helper entitlement plists ride in the artifact — the release workflow
+  # signs from the artifact alone, without the OBS source tree
+  mkdir -p "$STAGE/signing"
+  cp "$SRC_DIR"/plugins/obs-browser/cmake/macos/entitlements-helper*.plist "$STAGE/signing/" 2>/dev/null || true
+  echo "browser assets staged (obs-browser + CEF + 4 helpers + frontend-api)"
+else
+  echo "NOTE: obs-browser not in build output; artifact ships without CEF overlays"
+fi
 
 "$REPO_ROOT/scripts/engine-closure.sh" "$STAGE" > /dev/null \
   || { echo "FATAL: built artifact failed closure/Qt gate" >&2; exit 1; }

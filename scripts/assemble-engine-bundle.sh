@@ -36,6 +36,27 @@ if [[ $IDENT == "-" ]]; then
   sign() { codesign --force --sign - "$@"; }
 fi
 
+# M-L7.1: CEF framework and helper apps sign before everything that loads
+# them. Helper entitlements (JIT etc.) come from the artifact's signing/ dir
+# and only apply under a real identity (hardened runtime).
+if [[ -d "$CONTENTS/Frameworks/Chromium Embedded Framework.framework" ]]; then
+  sign "$CONTENTS/Frameworks/Chromium Embedded Framework.framework"
+fi
+for helper in "$CONTENTS/Frameworks/"*" Helper"*.app; do
+  [[ -d $helper ]] || continue
+  ent=""
+  case "$helper" in
+    *"(GPU)"*) ent="$STAGE/signing/entitlements-helper.gpu.plist" ;;
+    *"(Plugin)"*) ent="$STAGE/signing/entitlements-helper.plugin.plist" ;;
+    *"(Renderer)"*) ent="$STAGE/signing/entitlements-helper.renderer.plist" ;;
+    *) ent="$STAGE/signing/entitlements-helper.plist" ;;
+  esac
+  if [[ $IDENT != "-" && -f $ent ]]; then
+    codesign --force --timestamp --options runtime --entitlements "$ent" --sign "$IDENT" "$helper"
+  else
+    sign "$helper"
+  fi
+done
 find "$CONTENTS/Frameworks" -maxdepth 1 -name "*.dylib" -print0 | while IFS= read -r -d '' f; do sign "$f"; done
 sign "$CONTENTS/Frameworks/libobs.framework"
 find "$CONTENTS/PlugIns" -maxdepth 1 -name "*.plugin" -print0 | while IFS= read -r -d '' p; do sign "$p"; done
