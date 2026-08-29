@@ -509,20 +509,104 @@ extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, _cx: u32, _cy: u32
         };
         ffi::gs_viewport_push();
         ffi::gs_projection_push();
+        ffi::gs_set_viewport(0, 0, _cx as i32, _cy as i32);
         ffi::gs_ortho(0.0, bw, 0.0, bh, -100.0, 100.0);
         // Render the channel-0 scene source DIRECTLY (the OBS source-projector
         // pattern). obs_render_main_texture draws the cached mix texture,
         // which libobs only renders while an encoder or raw consumer is
         // active — an idle preview showed black forever (M-W6 finding).
-        let src = ffi::obs_get_output_source(0);
-        if src.is_null() {
-            ffi::obs_render_main_texture();
-        } else {
-            ffi::obs_source_video_render(src);
-            ffi::obs_source_release(src);
+        // Blit the courier frame (see preview_pipeline_tap) — a CPU-uploaded
+        // dynamic texture drawn with the default effect, the cursor-proven
+        // path. The texture lives across frames; recreated on size change.
+        {
+            static mut PREVIEW_TEX: *mut ffi::gs_texture_t = std::ptr::null_mut();
+            static mut TEX_W: u32 = 0;
+            static mut TEX_H: u32 = 0;
+            let mut guard = PREVIEW_FRAME.lock().unwrap();
+            if let Some(frame) = guard.as_mut() {
+                if PREVIEW_TEX.is_null() || TEX_W != frame.width || TEX_H != frame.height {
+                    if !PREVIEW_TEX.is_null() {
+                        ffi::gs_texture_destroy(PREVIEW_TEX);
+                    }
+                    PREVIEW_TEX = ffi::gs_texture_create(
+                        frame.width,
+                        frame.height,
+                        ffi::GS_BGRA,
+                        1,
+                        std::ptr::null_mut(),
+                        ffi::GS_DYNAMIC,
+                    );
+                    TEX_W = frame.width;
+                    TEX_H = frame.height;
+                }
+                if !PREVIEW_TEX.is_null() {
+                    if frame.dirty {
+                        ffi::gs_texture_set_image(
+                            PREVIEW_TEX,
+                            frame.data.as_ptr(),
+                            frame.width * 4,
+                            false,
+                        );
+                        frame.dirty = false;
+                    }
+                    let effect = ffi::obs_get_base_effect(ffi::OBS_EFFECT_DEFAULT);
+                    if !effect.is_null() {
+                        let image = std::ffi::CString::new("image").unwrap();
+                        let tech = std::ffi::CString::new("Draw").unwrap();
+                        let param = ffi::gs_effect_get_param_by_name(effect, image.as_ptr());
+                        ffi::gs_effect_set_texture(param, PREVIEW_TEX);
+                        while ffi::gs_effect_loop(effect, tech.as_ptr()) {
+                            ffi::gs_draw_sprite(PREVIEW_TEX, 0, frame.width, frame.height);
+                        }
+                    }
+                }
+            }
         }
         ffi::gs_projection_pop();
         ffi::gs_viewport_pop();
+    }
+}
+
+/// Preview frame courier (M-W6 final form): libobs hands us BGRA canvas
+/// frames on the CPU (the raw tap requests conversion); preview_draw uploads
+/// them to a dynamic texture and blits. CPU-uploaded textures are the ONE
+/// draw path proven to present in our display context (the cursor test) —
+/// every GPU-texture route (main texture, source render, DrawMultiply/scRGB)
+/// rendered black there on this HDR desktop.
+struct PreviewFrame {
+    data: Vec<u8>,
+    width: u32,
+    height: u32,
+    dirty: bool,
+}
+static PREVIEW_FRAME: std::sync::Mutex<Option<PreviewFrame>> = std::sync::Mutex::new(None);
+
+extern "C" fn preview_pipeline_tap(_param: *mut c_void, frame: *mut ffi::video_data) {
+    unsafe {
+        if frame.is_null() {
+            return;
+        }
+        let f = &*frame;
+        let src = f.data[0];
+        let linesize = f.linesize[0] as usize;
+        if src.is_null() || linesize == 0 {
+            return;
+        }
+        // Requested conversion: BGRA 1280x720 (see attach).
+        let (w, h) = (1280u32, 720u32);
+        let row = (w as usize) * 4;
+        let mut guard = PREVIEW_FRAME.lock().unwrap();
+        let slot = guard.get_or_insert_with(|| PreviewFrame {
+            data: vec![0u8; row * h as usize],
+            width: w,
+            height: h,
+            dirty: false,
+        });
+        for y in 0..h as usize {
+            let s = std::slice::from_raw_parts(src.add(y * linesize), row);
+            slot.data[y * row..(y + 1) * row].copy_from_slice(s);
+        }
+        slot.dirty = true;
     }
 }
 
@@ -557,6 +641,20 @@ impl Preview {
                 ffi::obs_source_inc_showing(scene_src);
                 ffi::obs_source_release(scene_src);
             }
+            // Frame courier (see preview_pipeline_tap): request BGRA 1280x720
+            // conversion so the tap receives ready-to-upload frames.
+            let conv = ffi::video_scale_info {
+                format: ffi::VIDEO_FORMAT_BGRA,
+                width: 1280,
+                height: 720,
+                range: 0,
+                colorspace: 0,
+            };
+            ffi::obs_add_raw_video_callback(
+                &conv as *const ffi::video_scale_info as *const c_void,
+                preview_pipeline_tap,
+                std::ptr::null_mut(),
+            );
             eprintln!(
                 "[live] preview display created: child={child:?} {}x{}",
                 (rect.w as u32).max(1),
@@ -577,6 +675,7 @@ impl Preview {
 
     fn detach(self) {
         unsafe {
+            ffi::obs_remove_raw_video_callback(preview_pipeline_tap, std::ptr::null_mut());
             let scene_src = ffi::obs_get_output_source(0);
             if !scene_src.is_null() {
                 ffi::obs_source_dec_showing(scene_src);

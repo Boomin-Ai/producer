@@ -7,6 +7,51 @@ use std::os::raw::{c_char, c_int, c_void};
 
 // media-io/video-io.h
 pub const VIDEO_FORMAT_NV12: c_int = 2;
+pub const VIDEO_FORMAT_BGRA: c_int = 7;
+
+/// media-io/video-io.h struct video_scale_info — requests raw-callback frames
+/// pre-converted (format/size) by libobs.
+#[repr(C)]
+pub struct video_scale_info {
+    pub format: c_int,
+    pub width: u32,
+    pub height: u32,
+    pub range: c_int,
+    pub colorspace: c_int,
+}
+
+pub enum gs_texture_t {}
+pub enum gs_effect_t {}
+pub enum gs_eparam_t {}
+pub const GS_DYNAMIC: u32 = 1 << 1;
+pub const OBS_EFFECT_DEFAULT: c_int = 0;
+
+#[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
+extern "C" {
+    pub fn obs_get_base_effect(effect: c_int) -> *mut gs_effect_t;
+    pub fn gs_effect_get_param_by_name(
+        effect: *mut gs_effect_t,
+        name: *const c_char,
+    ) -> *mut gs_eparam_t;
+    pub fn gs_effect_set_texture(param: *mut gs_eparam_t, val: *mut gs_texture_t);
+    pub fn gs_effect_loop(effect: *mut gs_effect_t, name: *const c_char) -> bool;
+    pub fn gs_draw_sprite(tex: *mut gs_texture_t, flip: u32, width: u32, height: u32);
+    pub fn gs_texture_create(
+        width: u32,
+        height: u32,
+        color_format: c_int,
+        levels: u32,
+        data: *mut *const u8,
+        flags: u32,
+    ) -> *mut gs_texture_t;
+    pub fn gs_texture_set_image(
+        tex: *mut gs_texture_t,
+        data: *const u8,
+        linesize: u32,
+        invert: bool,
+    );
+    pub fn gs_texture_destroy(tex: *mut gs_texture_t);
+}
 pub const VIDEO_CS_709: c_int = 2;
 pub const VIDEO_RANGE_PARTIAL: c_int = 1;
 // obs.h enum obs_scale_type
@@ -123,6 +168,7 @@ extern "C" {
     pub fn obs_source_release(source: *mut obs_source_t);
     pub fn obs_set_output_source(channel: u32, source: *mut obs_source_t);
     pub fn obs_get_output_source(channel: u32) -> *mut obs_source_t;
+    pub fn obs_get_source_by_name(name: *const c_char) -> *mut obs_source_t;
     pub fn obs_source_video_render(source: *mut obs_source_t);
     pub fn obs_source_inc_showing(source: *mut obs_source_t);
     pub fn obs_source_dec_showing(source: *mut obs_source_t);
@@ -278,6 +324,7 @@ extern "C" {
     pub fn obs_get_video_info(ovi: *mut obs_video_info) -> bool;
 
     pub fn gs_clear(clear_flags: u32, color: *const vec4, depth: f32, stencil: u8);
+    pub fn gs_set_viewport(x: c_int, y: c_int, width: c_int, height: c_int);
     pub fn gs_viewport_push();
     pub fn gs_viewport_pop();
     pub fn gs_projection_push();
