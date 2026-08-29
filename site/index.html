@@ -3,31 +3,38 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Producer — Post everywhere. Own everything.</title>
-<meta name="description" content="Producer is the open-source studio that publishes to every channel from your desktop — your keys, your clouds, zero subscriptions." />
-<meta property="og:title" content="Producer — Post everywhere. Own everything." />
-<meta property="og:description" content="The open-source cross-posting studio. Your keys, your clouds, zero subscriptions." />
+<title>Producer — Go live everywhere. Own everything.</title>
+<meta name="description" content="Producer is the open-source desktop studio that multistreams to Twitch, YouTube, and Kick and posts to every social at once — your keys, your hardware, zero subscriptions." />
+<meta property="og:title" content="Producer — Go live everywhere. Own everything." />
+<meta property="og:description" content="The open-source multistreaming + posting studio for your desktop. Your keys, your hardware, zero subscriptions." />
 <meta property="og:image" content="https://producer.boomin.ai/chair.png" />
 <link rel="icon" type="image/png" href="favicon.png" />
 <link rel="apple-touch-icon" href="favicon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --ink: #07080c;
-    --panel: #0e1015;
-    --line: #1b1e25;
-    --text: #f0f1f3;
-    --dim: #979da6;
-    --faint: #545b64;
+    --ink: #050609;
+    --panel: #0c0e13;
+    --panel-2: #10131a;
+    --line: rgba(255, 255, 255, 0.075);
+    --line-strong: rgba(255, 255, 255, 0.14);
+    --text: #f2f3f5;
+    --dim: #9aa1ab;
+    --faint: #59616b;
     --mint: #3ddca6;
+    --mint-dim: rgba(61, 220, 166, 0.14);
     --glow: #ffeccb;
+    --gold: #ffc46b;
+    --live: #ff5252;
+    --display: "Bricolage Grotesque", "Instrument Sans", "Helvetica Neue", sans-serif;
     --sans: "Instrument Sans", "Helvetica Neue", Arial, sans-serif;
     --mono: "IBM Plex Mono", Consolas, monospace;
   }
 
   * { box-sizing: border-box; margin: 0; }
+  html { scroll-behavior: smooth; }
 
   body {
     background: var(--ink);
@@ -39,134 +46,339 @@
     overflow-x: hidden;
   }
 
-  /* ambient glow, boomin.ai family */
+  /* stage lighting: one warm key light, one cool fill, both fixed */
   body::before {
     content: "";
     position: fixed; inset: 0; pointer-events: none; z-index: 0;
     background:
-      radial-gradient(46% 34% at 50% 6%, rgba(120, 110, 255, 0.07), transparent 70%),
-      radial-gradient(38% 30% at 12% 92%, rgba(90, 70, 220, 0.06), transparent 70%),
-      radial-gradient(38% 30% at 88% 90%, rgba(61, 220, 166, 0.05), transparent 70%);
+      radial-gradient(52% 38% at 50% -4%, rgba(255, 196, 107, 0.10), transparent 70%),
+      radial-gradient(40% 30% at 8% 100%, rgba(61, 220, 166, 0.05), transparent 70%),
+      radial-gradient(40% 30% at 94% 96%, rgba(120, 110, 255, 0.05), transparent 70%);
+  }
+  /* faint scanline grain */
+  body::after {
+    content: "";
+    position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0.35;
+    background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 3px);
   }
 
-  .wrap { position: relative; z-index: 1; max-width: 1000px; margin: 0 auto; padding: 0 24px; }
+  .wrap { position: relative; z-index: 1; max-width: 1060px; margin: 0 auto; padding: 0 24px; }
 
   a { color: var(--text); text-decoration: none; }
+  img { max-width: 100%; }
 
-  /* ── nav ── */
-  nav { display: flex; align-items: center; gap: 24px; padding: 24px 0; }
-  .wordmark { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16.5px; letter-spacing: -0.01em; }
-  .wordmark img { width: 28px; height: 28px; }
-  .wordmark span { color: var(--faint); font-weight: 400; font-size: 13.5px; }
-  nav .spacer { flex: 1; }
+  /* ── floating pill nav ── */
+  .navbar {
+    position: sticky; top: 14px; z-index: 50;
+    margin: 14px 0 0;
+  }
+  .navbar .bar {
+    display: flex; align-items: center; gap: 20px;
+    padding: 10px 12px 10px 20px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: rgba(9, 10, 14, 0.72);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  }
+  .wordmark { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; letter-spacing: -0.01em; }
+  .wordmark img { width: 26px; height: 26px; }
+  .wordmark span { color: var(--faint); font-weight: 400; font-size: 13px; }
+  .navbar .spacer { flex: 1; }
   .nav-link { font-size: 14px; color: var(--dim); }
   .nav-link:hover { color: var(--text); }
+  @media (max-width: 640px) {
+    .nav-link.hide-sm { display: none; }
+    .wordmark span { display: none; }
+    .navbar .bar { gap: 12px; padding: 8px 8px 8px 14px; }
+    .nav-link { font-size: 13px; white-space: nowrap; }
+    .navbar .pill { padding: 8px 14px; font-size: 13px; }
+  }
 
   .pill {
-    display: inline-flex; align-items: center; gap: 8px;
+    display: inline-flex; align-items: center; gap: 9px;
     font-size: 14.5px; font-weight: 600;
     padding: 11px 22px; border-radius: 999px;
-    border: 1px solid var(--line); color: var(--text);
-    transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+    border: 1px solid var(--line-strong); color: var(--text);
+    transition: border-color 140ms ease, background 140ms ease, transform 140ms ease, box-shadow 140ms ease;
   }
-  .pill:hover { border-color: #2d323a; transform: translateY(-1px); }
-  .pill.solid { background: var(--text); border-color: var(--text); color: var(--ink); }
-  .pill.solid:hover { background: #fff; }
+  .pill:hover { border-color: rgba(255, 255, 255, 0.3); transform: translateY(-1px); }
+  .pill.solid { background: var(--text); border-color: var(--text); color: #0a0b0e; }
+  .pill.solid:hover { background: #fff; box-shadow: 0 6px 30px rgba(255, 236, 203, 0.18); }
+  .pill svg { width: 15px; height: 15px; flex: none; }
+  .pill .ico-win { display: none; }
+  .pill.is-win .ico-mac { display: none; }
+  .pill.is-win .ico-win { display: block; }
+  .navbar .pill { padding: 9px 18px; font-size: 13.5px; }
 
   /* ── hero ── */
-  header { padding: 76px 0 64px; }
-  .hero-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 44px; align-items: center; }
-  .hero-chair {
-    width: 100%; max-width: 330px; height: auto; justify-self: center;
-    filter: drop-shadow(0 26px 52px rgba(0, 0, 0, 0.55));
-    animation: float 7s 1s ease-in-out infinite;
-  }
-  @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-  @media (max-width: 820px) {
-    .hero-grid { grid-template-columns: 1fr; }
-    .hero-chair { display: none; }
-    header { padding: 48px 0 56px; }
-  }
+  header { padding: 84px 0 30px; text-align: center; }
 
   .badge {
     display: inline-flex; align-items: center; gap: 9px;
     font-size: 13px; font-weight: 500; color: var(--dim);
     border: 1px solid var(--line); border-radius: 999px;
-    padding: 8px 18px;
-    background: rgba(255, 255, 255, 0.02);
+    padding: 7px 16px;
+    background: rgba(255, 255, 255, 0.025);
   }
-  .badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 10px var(--mint); }
+  .badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 10px var(--mint); animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
   .badge b { color: var(--text); font-weight: 600; }
+  .badge .mono { font-family: var(--mono); font-size: 11.5px; }
 
   h1 {
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-    line-height: 1.12;
+    font-family: var(--display);
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.02;
+    margin-top: 26px;
+    text-wrap: balance;
   }
-  h1 .l1 {
-    display: block;
-    font-size: clamp(22px, 3.4vw, 34px);
-    color: var(--dim);
-    letter-spacing: 0.06em;
-  }
+  h1 .l1 { display: block; font-size: clamp(40px, 7.2vw, 82px); }
   h1 .l2 {
-    display: block;
-    font-size: clamp(38px, 6.6vw, 68px);
+    display: block; font-size: clamp(40px, 7.2vw, 82px);
     color: var(--glow);
     text-shadow:
-      0 0 16px rgba(255, 236, 203, 0.45),
-      0 0 56px rgba(255, 205, 130, 0.28),
-      0 0 110px rgba(255, 185, 100, 0.18);
+      0 0 18px rgba(255, 236, 203, 0.4),
+      0 0 70px rgba(255, 196, 107, 0.25),
+      0 0 130px rgba(255, 180, 90, 0.15);
   }
 
   .sub {
-    margin: 22px 0 0; font-size: 17px; color: var(--dim); max-width: 48ch;
+    margin: 24px auto 0; font-size: 17.5px; color: var(--dim); max-width: 56ch;
+    text-wrap: pretty;
   }
   .sub b { color: var(--text); font-weight: 500; }
 
-  .cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 34px; }
-  .dl-note { margin-top: 16px; font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
-  .dl-note a { color: var(--dim); }
-  .dl-note a:hover { color: var(--text); }
+  .cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 34px; justify-content: center; }
+  .cta-row .pill { padding: 14px 28px; font-size: 15.5px; }
+  .trust { margin-top: 18px; font-family: var(--mono); font-size: 11.5px; color: var(--faint); letter-spacing: 0.04em; }
+  .trust a { color: var(--dim); }
+  .trust a:hover { color: var(--text); }
+  .trust .sep { margin: 0 8px; opacity: 0.5; }
 
-  /* ── badges & platform row ── */
-  .badges { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 40px; }
-  .badge img { width: 16px; height: 16px; }
+  /* load-in choreography */
+  @media (prefers-reduced-motion: no-preference) {
+    .rise { opacity: 0; transform: translateY(14px); animation: rise 700ms cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .rise.d1 { animation-delay: 60ms; } .rise.d2 { animation-delay: 140ms; }
+    .rise.d3 { animation-delay: 220ms; } .rise.d4 { animation-delay: 300ms; }
+    .rise.d5 { animation-delay: 420ms; }
+    @keyframes rise { to { opacity: 1; transform: none; } }
+    .reveal { opacity: 0; transform: translateY(22px); transition: opacity 700ms cubic-bezier(0.16,1,0.3,1), transform 700ms cubic-bezier(0.16,1,0.3,1); }
+    .reveal.in { opacity: 1; transform: none; }
+  }
 
-  .works { display: flex; align-items: center; gap: 18px; margin-top: 38px; }
-  .works .lbl { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em; color: var(--faint); text-transform: uppercase; }
-  .works img { width: 22px; height: 22px; opacity: 0.9; }
-  .works .soon { font-family: var(--mono); font-size: 11px; color: var(--faint); }
+  /* ── the big shot ── */
+  .stage { margin: 58px auto 0; max-width: 980px; position: relative; }
+  .stage::before {
+    content: ""; position: absolute; inset: 8% -6% -12% -6%; z-index: 0;
+    background: radial-gradient(48% 55% at 50% 60%, rgba(255, 196, 107, 0.13), transparent 72%);
+    filter: blur(10px);
+  }
+  .shot {
+    position: relative; z-index: 1;
+    border: 1px solid var(--line-strong);
+    border-radius: 18px;
+    background: linear-gradient(180deg, #12151c, #0a0c11);
+    box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6), 0 2px 0 rgba(255, 255, 255, 0.05) inset;
+    overflow: hidden;
+  }
+  .shot .chrome {
+    display: flex; align-items: center; gap: 7px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .shot .chrome i { width: 11px; height: 11px; border-radius: 50%; background: #303540; }
+  .shot .chrome i:nth-child(1) { background: #ff5f57; }
+  .shot .chrome i:nth-child(2) { background: #febc2e; }
+  .shot .chrome i:nth-child(3) { background: #28c840; }
+  .shot .chrome .title { margin: 0 auto; font-family: var(--mono); font-size: 11px; color: var(--faint); letter-spacing: 0.08em; }
+  .shot .real { display: none; width: 100%; vertical-align: top; }
+  .shot.has-real .real { display: block; }
+  .shot.has-real .mock { display: none; }
+
+  /* animated mission-control mock (placeholder until shots/hero.png exists) */
+  .mock { display: grid; grid-template-columns: 1fr 300px; min-height: 430px; }
+  @media (max-width: 760px) { .mock { grid-template-columns: 1fr; } }
+  .mock .preview {
+    position: relative; margin: 18px; border-radius: 10px; overflow: hidden;
+    background:
+      radial-gradient(70% 90% at 50% 10%, rgba(255, 196, 107, 0.16), transparent 60%),
+      radial-gradient(60% 80% at 85% 90%, rgba(61, 220, 166, 0.10), transparent 60%),
+      linear-gradient(180deg, #0b0d12, #07080c);
+    border: 1px solid var(--line);
+    min-height: 260px;
+  }
+  .mock .preview .beam {
+    position: absolute; top: -30%; left: 32%; width: 36%; height: 160%;
+    background: linear-gradient(180deg, rgba(255, 226, 178, 0.14), transparent 75%);
+    transform: skewX(-9deg);
+    filter: blur(6px);
+    animation: sway 9s ease-in-out infinite;
+  }
+  @keyframes sway { 0%, 100% { transform: skewX(-9deg) translateX(0); } 50% { transform: skewX(-6deg) translateX(26px); } }
+  .mock .preview .chairline {
+    position: absolute; left: 50%; bottom: 12%; transform: translateX(-50%);
+    width: 130px; opacity: 0.9;
+    filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.6));
+    animation: float 7s ease-in-out infinite;
+  }
+  @keyframes float { 0%, 100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(-7px); } }
+  .mock .preview .onair {
+    position: absolute; top: 12px; left: 12px;
+    display: inline-flex; align-items: center; gap: 7px;
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.16em; color: #ffb3b3;
+    background: rgba(20, 8, 8, 0.72); border: 1px solid rgba(255, 82, 82, 0.35);
+    padding: 5px 11px; border-radius: 999px;
+  }
+  .mock .preview .onair i { width: 7px; height: 7px; border-radius: 50%; background: var(--live); box-shadow: 0 0 10px var(--live); animation: pulse 1.6s ease-in-out infinite; }
+  .mock .preview .clock { position: absolute; top: 14px; right: 14px; font-family: var(--mono); font-size: 11px; color: var(--dim); }
+  .mock .rail { padding: 18px 18px 18px 0; display: flex; flex-direction: column; gap: 10px; }
+  @media (max-width: 760px) { .mock .rail { padding: 0 18px 18px; } }
+  .dest {
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.018);
+  }
+  .dest .row1 { display: flex; align-items: center; gap: 9px; }
+  .dest .row1 img { width: 16px; height: 16px; }
+  .dest .row1 .kick-mark { height: 11px; width: auto; }
+  .dest .name { font-size: 13px; font-weight: 600; }
+  .dest .chip {
+    margin-left: auto; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.14em;
+    color: var(--live); border: 1px solid rgba(255, 82, 82, 0.4); border-radius: 999px; padding: 2px 8px;
+  }
+  .dest .meter { margin-top: 10px; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.06); overflow: hidden; }
+  .dest .meter i { display: block; height: 100%; width: 70%; border-radius: 4px; background: linear-gradient(90deg, var(--mint), #7deadfcc); transition: width 700ms ease; }
+  .dest .stats { display: flex; justify-content: space-between; margin-top: 7px; font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+  .dest .stats .kbps { color: var(--dim); }
+  .mock .golive {
+    margin-top: auto; text-align: center; font-weight: 600; font-size: 14px;
+    border-radius: 10px; padding: 12px;
+    background: var(--mint-dim); border: 1px solid rgba(61, 220, 166, 0.35); color: var(--mint);
+  }
+
+  /* ── logo strip ── */
+  .strip { padding: 46px 0 8px; text-align: center; }
+  .strip .lbl { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.18em; color: var(--faint); text-transform: uppercase; }
+  .strip .logos { display: flex; align-items: center; justify-content: center; gap: 26px; flex-wrap: wrap; margin-top: 18px; }
+  .strip .logos img { height: 24px; width: auto; opacity: 0.92; }
+  .strip .logos img.kick-mark { height: 15px; }
+  .strip .logos .plus { color: var(--faint); font-size: 15px; }
+  .strip .soon { margin-top: 14px; font-family: var(--mono); font-size: 11px; color: var(--faint); }
+
+  /* ── pillar chips ── */
+  .pillars { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 40px 0 8px; }
+  .pillars a {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.14em;
+    color: var(--dim); border: 1px solid var(--line); border-radius: 999px; padding: 9px 20px;
+    transition: color 140ms ease, border-color 140ms ease;
+  }
+  .pillars a:hover { color: var(--text); border-color: var(--line-strong); }
+  .pillars a b { color: var(--mint); font-weight: 500; margin-right: 7px; }
 
   /* ── sections ── */
-  section { padding: 60px 0; border-top: 1px solid var(--line); }
-  header + section { border-top: none; padding-top: 84px; }
+  section { padding: 84px 0 10px; }
   .kicker {
-    font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
-    color: var(--faint); margin-bottom: 24px; text-transform: uppercase;
-    text-align: center;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em;
+    color: var(--mint); text-transform: uppercase;
   }
-  .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; }
-  @media (max-width: 820px) { .cols { grid-template-columns: 1fr; gap: 28px; } }
-  .col h3 { font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em; }
-  .col p { margin-top: 8px; font-size: 14.5px; color: var(--dim); }
-  .col a { color: var(--mint); }
-  .col a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  h2 {
+    font-family: var(--display); font-weight: 700; letter-spacing: -0.02em;
+    font-size: clamp(28px, 4.2vw, 44px); line-height: 1.1; margin-top: 12px;
+    text-wrap: balance;
+  }
+  .lede { margin-top: 16px; font-size: 16.5px; color: var(--dim); max-width: 58ch; text-wrap: pretty; }
+  .lede b { color: var(--text); font-weight: 500; }
+  .center { text-align: center; }
+  .center .lede { margin-left: auto; margin-right: auto; }
 
-  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 820px) { .modes { grid-template-columns: 1fr; } }
-  .mode { border: 1px solid var(--line); border-radius: 16px; padding: 26px; background: var(--panel); }
-  .mode h3 { font-size: 16px; font-weight: 600; margin-top: 6px; }
-  .mode .tag { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em; color: var(--mint); }
-  .mode p { margin-top: 10px; font-size: 14.5px; color: var(--dim); }
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 40px; }
+  @media (max-width: 820px) { .cards { grid-template-columns: 1fr; } }
+  .card {
+    border: 1px solid var(--line); border-radius: 16px; padding: 24px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.008));
+  }
+  .card .tag { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.16em; color: var(--mint); }
+  .card h3 { font-size: 16.5px; font-weight: 600; margin-top: 10px; letter-spacing: -0.01em; }
+  .card p { margin-top: 9px; font-size: 14.5px; color: var(--dim); }
+  .card a { color: var(--mint); }
+  .card a:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-  .term { border: 1px solid var(--line); border-radius: 16px; background: var(--panel); overflow: hidden; max-width: 640px; margin: 0 auto; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 44px; align-items: center; margin-top: 30px; }
+  @media (max-width: 820px) { .split { grid-template-columns: 1fr; gap: 28px; } }
+
+  /* composer skeleton (placeholder until shots/post.png) */
+  .mini-shot { border: 1px solid var(--line-strong); border-radius: 14px; overflow: hidden; background: linear-gradient(180deg, #11141b, #0a0c11); box-shadow: 0 26px 70px rgba(0,0,0,0.5); }
+  .mini-shot .real { display: none; width: 100%; vertical-align: top; }
+  .mini-shot.has-real .real { display: block; }
+  .mini-shot.has-real .sk { display: none; }
+  .sk { padding: 20px; }
+  .sk .bar { height: 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.07); margin-bottom: 10px; }
+  .sk .bar.w60 { width: 60%; } .sk .bar.w85 { width: 85%; } .sk .bar.w40 { width: 40%; }
+  .sk .media { height: 120px; border-radius: 10px; background: radial-gradient(60% 80% at 30% 20%, rgba(255,196,107,0.12), transparent 60%), rgba(255, 255, 255, 0.04); margin: 16px 0; border: 1px dashed var(--line-strong); display: grid; place-items: center; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em; color: var(--faint); }
+  .sk .fan { display: flex; gap: 8px; align-items: center; }
+  .sk .fan img { width: 18px; height: 18px; }
+  .sk .fan .arrow { color: var(--faint); font-size: 13px; margin-right: 4px; }
+  .sk .fan .ok { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--mint); letter-spacing: 0.1em; }
+
+  /* compare table */
+  .compare { margin-top: 40px; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .compare .scroll { overflow-x: auto; }
+  .compare table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 560px; }
+  .compare th, .compare td { text-align: left; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+  .compare tr:last-child td { border-bottom: none; }
+  .compare th { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--faint); font-weight: 500; background: rgba(255, 255, 255, 0.02); }
+  .compare td:first-child { color: var(--dim); }
+  .compare td.us { color: var(--text); font-weight: 500; background: rgba(61, 220, 166, 0.045); }
+  .compare td.us b { color: var(--mint); font-weight: 600; }
+  .compare td.them { color: var(--dim); }
+
+  /* terminal */
+  .term { border: 1px solid var(--line); border-radius: 16px; background: var(--panel); overflow: hidden; }
+  .term .thead { display: flex; gap: 7px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .term .thead i { width: 10px; height: 10px; border-radius: 50%; background: #2a2f38; }
   .term pre { padding: 20px 22px; font-family: var(--mono); font-size: 13px; line-height: 2; overflow-x: auto; color: var(--dim); }
   .term .m { color: var(--mint); }
   .term .c { color: var(--faint); }
 
-  /* ── footer ── */
+  /* open-source proof */
+  .proof { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 40px; }
+  @media (max-width: 820px) { .proof { grid-template-columns: 1fr; } }
+  .stat {
+    border: 1px solid var(--line); border-radius: 16px; padding: 26px; text-align: center;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
+  }
+  .stat .big { font-family: var(--display); font-weight: 800; font-size: 34px; letter-spacing: -0.02em; }
+  .stat .big .mint { color: var(--mint); }
+  .stat .lbl { margin-top: 6px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; color: var(--faint); text-transform: uppercase; }
+
+  /* FAQ */
+  .faq { max-width: 720px; margin: 40px auto 0; }
+  .faq details { border-bottom: 1px solid var(--line); }
+  .faq summary {
+    cursor: pointer; list-style: none; padding: 20px 4px;
+    font-size: 16px; font-weight: 600; letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after { content: "+"; margin-left: auto; color: var(--faint); font-family: var(--mono); font-size: 16px; transition: transform 160ms ease; }
+  .faq details[open] summary::after { transform: rotate(45deg); }
+  .faq .a { padding: 0 4px 22px; color: var(--dim); font-size: 15px; max-width: 62ch; }
+  .faq .a a { color: var(--mint); }
+
+  /* closing */
+  .closing { padding: 110px 0 90px; text-align: center; position: relative; }
+  .closing .chair { width: 150px; margin: 0 auto 8px; filter: drop-shadow(0 26px 52px rgba(0, 0, 0, 0.6)); animation: float2 7s ease-in-out infinite; }
+  @keyframes float2 { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+  .closing::before {
+    content: ""; position: absolute; left: 50%; top: 0; transform: translateX(-50%);
+    width: 620px; max-width: 90vw; height: 420px; pointer-events: none;
+    background: radial-gradient(50% 50% at 50% 30%, rgba(255, 196, 107, 0.14), transparent 70%);
+  }
+  .closing h2 { font-size: clamp(34px, 5.4vw, 58px); }
+
   footer {
     border-top: 1px solid var(--line); padding: 34px 0 56px;
     display: flex; align-items: center; gap: 22px; flex-wrap: wrap;
@@ -175,100 +387,283 @@
   footer a { color: var(--dim); }
   footer a:hover { color: var(--text); }
   footer .spacer { flex: 1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .badge .dot, .mock .preview .beam, .mock .preview .chairline, .closing .chair, .mock .preview .onair i { animation: none; }
+  }
 </style>
 </head>
 <body>
 
 <div class="wrap">
 
-  <nav>
-    <a class="wordmark" href="/"><img src="favicon.png" alt="" />Producer <span>by Boomin</span></a>
-    <span class="spacer"></span>
-    <a class="nav-link" href="https://github.com/Boomin-Ai/producer">GitHub <span id="stars"></span></a>
-    <a class="nav-link" href="https://github.com/Boomin-Ai/producer/blob/main/server/SELF_HOSTING.md">Self-host</a>
-    <a class="pill solid" id="nav-download" href="/download/macos">Download</a>
-  </nav>
+  <div class="navbar">
+    <div class="bar">
+      <a class="wordmark" href="/"><img src="favicon.png" alt="" />Producer <span>by Boomin</span></a>
+      <span class="spacer"></span>
+      <a class="nav-link" href="https://github.com/Boomin-Ai/producer">GitHub <span id="stars"></span></a>
+      <a class="nav-link hide-sm" href="https://github.com/Boomin-Ai/producer/blob/main/server/SELF_HOSTING.md">Self-host</a>
+      <a class="pill solid dl" href="/download/macos">
+        <svg class="ico-mac" viewBox="0 0 814 1000" fill="currentColor" aria-hidden="true"><path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105.6-57-155.5-127C46.7 790.7 0 663 0 541.8c0-194.4 126.4-297.5 250.8-297.5 66.1 0 121.2 43.4 162.7 43.4 39.5 0 101.1-46 176.3-46 28.5 0 130.9 2.6 198.3 99.2zm-234-181.5c31.1-36.9 53.1-88.1 53.1-139.3 0-7.1-.6-14.3-1.9-20.1-50.6 1.9-110.8 33.7-147.1 75.8-28.5 32.4-55.1 83.6-55.1 135.5 0 7.8 1.3 15.6 1.9 18.1 3.2.6 8.4 1.3 13.6 1.3 45.4 0 102.5-30.4 135.5-71.3z"/></svg>
+        <svg class="ico-win" viewBox="0 0 88 88" fill="currentColor" aria-hidden="true"><path d="m0 12.402 35.687-4.86.016 34.423-35.67.203zm35.67 33.529.028 34.453L.028 75.48.026 45.7zm4.326-39.025L87.314 0v41.527l-47.318.376zm47.329 39.349-.011 41.34-47.318-6.678-.066-34.739z"/></svg>
+        <span class="dl-label">Download</span>
+      </a>
+    </div>
+  </div>
 
   <header>
-    <div class="hero-grid">
-      <div>
-        <div class="badges">
-          <span class="badge"><span class="dot"></span> Open source · <b>AGPL-3.0</b></span>
-          <span class="badge"><img src="meta.svg" alt="" /> <b>Meta Verified</b> Technology Partner</span>
-        </div>
-        <h1>
-          <span class="l1">Post everywhere.</span>
-          <span class="l2">Own everything.</span>
-        </h1>
-        <p class="sub">
-          The open-source studio that publishes to every channel from your
-          desktop — <b>your keys</b>, <b>your clouds</b>, zero subscriptions.
-          Schedule it and close the laptop.
-        </p>
-        <div class="cta-row">
-          <a class="pill solid" id="download" href="/download/macos">Download</a>
-          <a class="pill" href="https://github.com/Boomin-Ai/producer">View source</a>
-        </div>
-        <p class="dl-note" id="dl-note"></p>
-        <div class="works">
-          <span class="lbl">Works with</span>
-          <img src="instagram.svg" alt="Instagram" title="Instagram" />
-          <img src="threads.svg" alt="Threads" title="Threads" />
-          <img src="facebook.svg" alt="Facebook" title="Facebook" />
-          <span class="soon">youtube · x · tiktok — next</span>
+    <div class="rise d1"><span class="badge"><span class="dot"></span> Open source · <b>AGPL-3.0</b> <span class="mono" id="ver"></span></span></div>
+    <h1>
+      <span class="l1 rise d2">Go live everywhere.</span>
+      <span class="l2 rise d3">Own everything.</span>
+    </h1>
+    <p class="sub rise d3">
+      Producer is the open-source desktop studio that <b>multistreams to Twitch,
+      YouTube, and Kick</b> and <b>posts to every social</b> at once —
+      your keys, your hardware, zero subscriptions.
+    </p>
+    <div class="cta-row rise d4">
+      <a class="pill solid dl" href="/download/macos">
+        <svg class="ico-mac" viewBox="0 0 814 1000" fill="currentColor" aria-hidden="true"><path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105.6-57-155.5-127C46.7 790.7 0 663 0 541.8c0-194.4 126.4-297.5 250.8-297.5 66.1 0 121.2 43.4 162.7 43.4 39.5 0 101.1-46 176.3-46 28.5 0 130.9 2.6 198.3 99.2zm-234-181.5c31.1-36.9 53.1-88.1 53.1-139.3 0-7.1-.6-14.3-1.9-20.1-50.6 1.9-110.8 33.7-147.1 75.8-28.5 32.4-55.1 83.6-55.1 135.5 0 7.8 1.3 15.6 1.9 18.1 3.2.6 8.4 1.3 13.6 1.3 45.4 0 102.5-30.4 135.5-71.3z"/></svg>
+        <svg class="ico-win" viewBox="0 0 88 88" fill="currentColor" aria-hidden="true"><path d="m0 12.402 35.687-4.86.016 34.423-35.67.203zm35.67 33.529.028 34.453L.028 75.48.026 45.7zm4.326-39.025L87.314 0v41.527l-47.318.376zm47.329 39.349-.011 41.34-47.318-6.678-.066-34.739z"/></svg>
+        <span class="dl-label">Download</span>
+      </a>
+      <a class="pill" href="https://github.com/Boomin-Ai/producer">View source</a>
+    </div>
+    <p class="trust rise d4"><span id="dl-note"></span></p>
+    <p class="trust rise d4">free forever <span class="sep">·</span> no relay servers <span class="sep">·</span> your stream keys never leave your machine</p>
+
+    <div class="stage rise d5">
+      <div class="shot" id="hero-shot">
+        <div class="chrome"><i></i><i></i><i></i><span class="title">PRODUCER — LIVE</span></div>
+        <img class="real" src="shots/hero.png" alt="Producer's live dashboard multistreaming to Twitch, YouTube, and Kick" />
+        <div class="mock" aria-hidden="true">
+          <div class="preview">
+            <div class="beam"></div>
+            <img class="chairline" src="chair.png" alt="" />
+            <span class="onair"><i></i>ON AIR</span>
+            <span class="clock" id="uptime">00:00:00</span>
+          </div>
+          <div class="rail">
+            <div class="dest" data-kbps="6000">
+              <div class="row1"><img src="twitch.svg" alt="" /><span class="name">Twitch</span><span class="chip">LIVE</span></div>
+              <div class="meter"><i></i></div>
+              <div class="stats"><span>1080p60</span><span class="kbps">6000 kbps</span></div>
+            </div>
+            <div class="dest" data-kbps="6800">
+              <div class="row1"><img src="youtube.svg" alt="" /><span class="name">YouTube</span><span class="chip">LIVE</span></div>
+              <div class="meter"><i></i></div>
+              <div class="stats"><span>1080p60</span><span class="kbps">6800 kbps</span></div>
+            </div>
+            <div class="dest" data-kbps="6400">
+              <div class="row1"><img class="kick-mark" src="kick.svg" alt="Kick" /><span class="chip">LIVE</span></div>
+              <div class="meter"><i></i></div>
+              <div class="stats"><span>1080p60</span><span class="kbps">6400 kbps</span></div>
+            </div>
+            <div class="golive">● Streaming to 3 platforms</div>
+          </div>
         </div>
       </div>
-      <img class="hero-chair" src="chair.png" alt="" />
     </div>
-
   </header>
 
-  <section>
-    <div class="cols">
-      <div class="col">
-        <h3>Your keys</h3>
-        <p>Connect Instagram, Threads, and Facebook with your own Meta app.
-           No middleman, no review queue, no per-channel pricing.</p>
+  <div class="strip reveal">
+    <div class="lbl">Streams to</div>
+    <div class="logos">
+      <img src="twitch.svg" alt="Twitch" title="Twitch" />
+      <img src="youtube.svg" alt="YouTube" title="YouTube" />
+      <img class="kick-mark" src="kick.svg" alt="Kick" title="Kick" />
+      <span class="plus">+ any RTMP server</span>
+    </div>
+    <div class="lbl" style="margin-top: 30px;">Posts to</div>
+    <div class="logos">
+      <img src="instagram.svg" alt="Instagram" title="Instagram" />
+      <img src="threads.svg" alt="Threads" title="Threads" />
+      <img src="facebook.svg" alt="Facebook" title="Facebook" />
+      <span class="soon">youtube · x · tiktok — next</span>
+    </div>
+  </div>
+
+  <div class="pillars reveal">
+    <a href="#live"><b>01</b>LIVE</a>
+    <a href="#post"><b>02</b>POST</a>
+    <a href="#own"><b>03</b>OWN</a>
+  </div>
+
+  <section id="live">
+    <div class="center reveal">
+      <div class="kicker">01 — Live</div>
+      <h2>Every stage at once, from your desk.</h2>
+      <p class="lede">
+        Producer embeds the same battle-tested engine OBS is built on. Capture
+        your screen and camera, encode once on your GPU, and send the stream to
+        every platform simultaneously — <b>no cloud relay taking a cut of your
+        bitrate or your wallet</b>.
+      </p>
+    </div>
+    <div class="cards reveal">
+      <div class="card">
+        <span class="tag">ONE ENCODE</span>
+        <h3>Hardware-encoded, fanned out</h3>
+        <p>One NVENC or VideoToolbox encode, delivered to every ingest at
+           full quality. Your GPU does the work once, not per platform.</p>
       </div>
-      <div class="col">
-        <h3>Your clouds</h3>
-        <p>Use Boomin's hosted platform, or deploy your own backend to
-           Cloudflare in ~20 minutes for $0. One post can fan out across both.</p>
+      <div class="card">
+        <span class="tag">NO MIDDLEMAN</span>
+        <h3>Desktop → platform, direct</h3>
+        <p>Your machine connects straight to Twitch, YouTube, and Kick ingest
+           servers. No relay in the middle, nothing to subscribe to, no cap on
+           destinations.</p>
       </div>
-      <div class="col">
-        <h3>Yours, period</h3>
-        <p>AGPL-3.0 — nobody can ever take it closed. Want it inside a
-           commercial product? That's the <a href="https://boomin.ai">Boomin SDK</a>.</p>
+      <div class="card">
+        <span class="tag">LOCKED DOWN</span>
+        <h3>Keys stay in your keychain</h3>
+        <p>Stream keys go into your OS keychain once, and are never readable
+           back out — not by the UI, not by us. Open source means you can
+           check.</p>
       </div>
     </div>
   </section>
 
-  <section>
-    <div class="kicker">Two ways to run it</div>
-    <div class="modes">
-      <div class="mode">
-        <span class="tag">CONNECTED</span>
-        <h3>Boomin hosted</h3>
-        <p>Sign in and publish in two minutes. Managed channels, storage, and
-           scheduling — free to start.</p>
+  <section id="post">
+    <div class="split">
+      <div class="reveal">
+        <div class="kicker">02 — Post</div>
+        <h2>Write once. Publish everywhere.</h2>
+        <p class="lede">
+          One composer fans a post out to Instagram, Threads, and Facebook —
+          connected through <b>your own Meta app keys</b>, not a middleman with
+          a review queue and per-channel pricing. Schedule it and close the
+          laptop; your server does the posting.
+        </p>
       </div>
-      <div class="mode">
-        <span class="tag">INDEPENDENT</span>
-        <h3>Your own server</h3>
-        <p>A Cloudflare Worker you deploy with one command. Your database,
-           your storage, your tokens. Boomin never sees a byte.</p>
+      <div class="mini-shot reveal" id="post-shot">
+        <img class="real" src="shots/post.png" alt="Producer's composer fanning one post out to Instagram, Threads, and Facebook" />
+        <div class="sk" aria-hidden="true">
+          <div class="bar w60"></div>
+          <div class="bar w85"></div>
+          <div class="bar w40"></div>
+          <div class="media">DROP MEDIA</div>
+          <div class="fan">
+            <span class="arrow">→</span>
+            <img src="instagram.svg" alt="" />
+            <img src="threads.svg" alt="" />
+            <img src="facebook.svg" alt="" />
+            <span class="ok">3 SCHEDULED ✓</span>
+          </div>
+        </div>
       </div>
     </div>
   </section>
 
-  <section>
-    <div class="kicker">Build from source</div>
-    <div class="term">
-      <pre><span class="m">git</span> clone https://github.com/Boomin-Ai/producer && cd producer
-<span class="m">bun</span> install && <span class="m">bun</span> run tauri dev
+  <section id="own">
+    <div class="center reveal">
+      <div class="kicker">03 — Own</div>
+      <h2>Yours. Actually yours.</h2>
+      <p class="lede">
+        AGPL-3.0 licensed — nobody can ever take it closed. Run it against
+        Boomin's hosted backend, or deploy your own Cloudflare Worker in about
+        twenty minutes and <b>Boomin never sees a byte</b>.
+      </p>
+    </div>
+
+    <div class="compare reveal">
+      <div class="scroll">
+        <table>
+          <tr><th></th><th>Producer</th><th>The usual cloud stack</th></tr>
+          <tr><td>Multistreaming</td><td class="us"><b>✓</b> direct from your desktop</td><td class="them">✓ through their relay servers</td></tr>
+          <tr><td>Cross-posting + scheduling</td><td class="us"><b>✓</b> your own platform keys</td><td class="them">✓ their app, their review queue</td></tr>
+          <tr><td>Price</td><td class="us"><b>$0</b>, forever</td><td class="them">monthly, per feature, per channel</td></tr>
+          <tr><td>Source code</td><td class="us"><b>Open</b> — AGPL-3.0</td><td class="them">closed</td></tr>
+          <tr><td>Your data lives</td><td class="us"><b>on your machine</b> or your own cloud</td><td class="them">on theirs</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="split" style="margin-top: 44px;">
+      <div class="reveal">
+        <h2 style="font-size: clamp(22px, 3vw, 30px);">Self-host in one command</h2>
+        <p class="lede">
+          The backend is a single Cloudflare Worker — your database, your
+          storage, your tokens, on Cloudflare's free tier. The
+          <a href="https://github.com/Boomin-Ai/producer/blob/main/server/SELF_HOSTING.md" style="color: var(--mint);">guide</a>
+          takes about twenty minutes.
+        </p>
+      </div>
+      <div class="term reveal">
+        <div class="thead"><i></i><i></i><i></i></div>
+        <pre><span class="m">git</span> clone https://github.com/Boomin-Ai/producer
+<span class="m">cd</span> producer && <span class="m">bun</span> install
+<span class="m">bun</span> run tauri dev
 <span class="c"># self-host the backend → server/SELF_HOSTING.md</span></pre>
+      </div>
     </div>
   </section>
+
+  <section>
+    <div class="center reveal">
+      <div class="kicker">Built in the open</div>
+      <h2>Every commit is public.</h2>
+    </div>
+    <div class="proof reveal">
+      <div class="stat"><div class="big" id="stars-big">Day one</div><div class="lbl" id="stars-lbl">You're early — star it</div></div>
+      <div class="stat"><div class="big"><span class="mint" id="ver-big">—</span></div><div class="lbl">Latest release · auto-updates</div></div>
+      <div class="stat"><div class="big">AGPL-3.0</div><div class="lbl">Can never be taken closed</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="center reveal">
+      <div class="kicker">FAQ</div>
+      <h2>Fair questions.</h2>
+    </div>
+    <div class="faq reveal">
+      <details>
+        <summary>Is it actually free?</summary>
+        <div class="a">Yes. The app is AGPL-3.0 open source and every feature in it is
+        free. Boomin's hosted backend has a free tier; self-hosting on Cloudflare
+        costs $0 for a normal creator's workload. There is no pro plan.</div>
+      </details>
+      <details>
+        <summary>Does my stream go through your servers?</summary>
+        <div class="a">No. Producer's engine connects from your desktop directly
+        to each platform's ingest servers. There is no relay in the middle —
+        which is also why there's nothing for us to charge you for.</div>
+      </details>
+      <details>
+        <summary>What platforms does it run on?</summary>
+        <div class="a">macOS (Apple silicon and Intel), Windows, and Linux.
+        Live multistreaming ships on macOS today and is in the works for
+        Windows; posting and scheduling work everywhere.</div>
+      </details>
+      <details>
+        <summary>Do I need an account?</summary>
+        <div class="a">Only if you use Boomin's hosted backend for posting. Going
+        live needs no account at all — paste your stream keys and go. Self-hosters
+        never touch Boomin's servers.</div>
+      </details>
+      <details>
+        <summary>How do you make money then?</summary>
+        <div class="a">Producer is free and stays free. Boomin sells a commercial
+        <a href="https://boomin.ai">SDK</a> for companies that want this
+        publishing stack inside their own products — that funds the open-source
+        work.</div>
+      </details>
+    </div>
+  </section>
+
+  <div class="closing">
+    <img class="chair" src="chair.png" alt="" />
+    <h2 class="reveal">Take the chair.</h2>
+    <div class="cta-row reveal">
+      <a class="pill solid dl" href="/download/macos">
+        <svg class="ico-mac" viewBox="0 0 814 1000" fill="currentColor" aria-hidden="true"><path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105.6-57-155.5-127C46.7 790.7 0 663 0 541.8c0-194.4 126.4-297.5 250.8-297.5 66.1 0 121.2 43.4 162.7 43.4 39.5 0 101.1-46 176.3-46 28.5 0 130.9 2.6 198.3 99.2zm-234-181.5c31.1-36.9 53.1-88.1 53.1-139.3 0-7.1-.6-14.3-1.9-20.1-50.6 1.9-110.8 33.7-147.1 75.8-28.5 32.4-55.1 83.6-55.1 135.5 0 7.8 1.3 15.6 1.9 18.1 3.2.6 8.4 1.3 13.6 1.3 45.4 0 102.5-30.4 135.5-71.3z"/></svg>
+        <svg class="ico-win" viewBox="0 0 88 88" fill="currentColor" aria-hidden="true"><path d="m0 12.402 35.687-4.86.016 34.423-35.67.203zm35.67 33.529.028 34.453L.028 75.48.026 45.7zm4.326-39.025L87.314 0v41.527l-47.318.376zm47.329 39.349-.011 41.34-47.318-6.678-.066-34.739z"/></svg>
+        <span class="dl-label">Download</span>
+      </a>
+      <a class="pill" href="https://github.com/Boomin-Ai/producer">Star on GitHub</a>
+    </div>
+  </div>
 
   <footer>
     <span>© 2026 Boomin · AGPL-3.0</span>
@@ -281,20 +676,23 @@
 </div>
 
 <script>
-  // Star count — silent on failure.
+  // ── GitHub stars (nav + proof) — silent on failure. ──
   fetch("https://api.github.com/repos/Boomin-Ai/producer")
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (d) {
       if (d && typeof d.stargazers_count === "number") {
-        document.getElementById("stars").textContent =
-          "★ " + (d.stargazers_count >= 1000
-            ? (d.stargazers_count / 1000).toFixed(1) + "k"
-            : d.stargazers_count);
+        var n = d.stargazers_count;
+        var s = n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
+        document.getElementById("stars").textContent = "★ " + s;
+        if (n >= 25) {
+          document.getElementById("stars-big").textContent = "★ " + s;
+          document.getElementById("stars-lbl").textContent = "GitHub stars";
+        }
       }
     })
     .catch(function () {});
 
-  // Platform-aware downloads, served from this domain.
+  // ── Platform-aware downloads, served from this domain. ──
   (function () {
     var ua = navigator.userAgent;
     var isWin = /Windows/.test(ua);
@@ -304,9 +702,12 @@
     var href = isWin ? "/download/windows" : isLinux ? "/download/linux" : "/download/macos";
     var label = "Download for " + (isWin ? "Windows" : isLinux ? "Linux" : "macOS");
 
-    var btn = document.getElementById("download");
-    btn.href = href; btn.textContent = label;
-    document.getElementById("nav-download").href = href;
+    document.querySelectorAll(".pill.dl").forEach(function (btn) {
+      btn.href = href;
+      if (isWin) btn.classList.add("is-win");
+      var l = btn.querySelector(".dl-label");
+      if (l && !btn.closest(".navbar")) l.textContent = label;
+    });
 
     var links =
       isMac ? '<a href="/download/macos-intel">Intel Mac</a> · <a href="/download/windows">Windows</a> · <a href="/download/linux">Linux</a>' :
@@ -317,9 +718,52 @@
     fetch("/download/meta.json")
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (meta) {
-        note.innerHTML = (meta && meta.version ? meta.version + " · " : "") + links;
+        var v = meta && meta.version ? meta.version : null;
+        note.innerHTML = (v ? v + " · updates itself · " : "") + links;
+        if (v) {
+          document.getElementById("ver").textContent = " · " + v;
+          document.getElementById("ver-big").textContent = v;
+        }
       })
       .catch(function () { note.innerHTML = links; });
+  })();
+
+  // ── Real screenshots swap in when the files exist. ──
+  ["hero-shot", "post-shot"].forEach(function (id) {
+    var box = document.getElementById(id);
+    var img = box.querySelector(".real");
+    img.addEventListener("load", function () { box.classList.add("has-real"); });
+    if (img.complete && img.naturalWidth > 0) box.classList.add("has-real");
+  });
+
+  // ── Mission-control mock: living numbers. ──
+  (function () {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    var dests = document.querySelectorAll(".dest");
+    setInterval(function () {
+      dests.forEach(function (d) {
+        var base = parseInt(d.getAttribute("data-kbps"), 10);
+        var kbps = base + Math.round((Math.random() - 0.5) * 900);
+        d.querySelector(".kbps").textContent = kbps + " kbps";
+        d.querySelector(".meter i").style.width = (52 + (kbps - 5200) / 40) + "%";
+      });
+    }, 900);
+    var t0 = Date.now(), up = document.getElementById("uptime");
+    setInterval(function () {
+      var s = Math.floor((Date.now() - t0) / 1000) + 754; // joined mid-stream
+      var p = function (n) { return String(n).padStart(2, "0"); };
+      up.textContent = p(Math.floor(s / 3600)) + ":" + p(Math.floor(s / 60) % 60) + ":" + p(s % 60);
+    }, 1000);
+  })();
+
+  // ── Scroll reveals. ──
+  (function () {
+    var els = document.querySelectorAll(".reveal");
+    if (!("IntersectionObserver" in window)) { els.forEach(function (e) { e.classList.add("in"); }); return; }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } });
+    }, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" });
+    els.forEach(function (e) { io.observe(e); });
   })();
 </script>
 </body>
