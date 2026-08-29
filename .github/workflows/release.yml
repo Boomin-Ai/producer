@@ -201,7 +201,7 @@ jobs:
           if [ -n "${SIGN_IDENT:-}" ]; then
             codesign --force --timestamp --sign "$SIGN_IDENT" "$DMG"
             xcrun notarytool submit "$DMG" \
-              --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" \
+              --apple-id "$NOTARY_ID" --password "$NOTARY_PW" --team-id "$NOTARY_TEAM" \
               --wait
             xcrun stapler staple "$DMG"
           fi
