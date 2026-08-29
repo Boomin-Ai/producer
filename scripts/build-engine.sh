@@ -15,6 +15,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/engine-lib.sh"
 SRC_DIR="$REPO_ROOT/engine/obs-studio"
 OBS_COMMIT="$(lock_get "['obs']['commit']")"
 OBS_REPO="$(lock_get "['obs']['repo']")"
+OBS_REF="$(lock_get "['obs']['ref']")"
 
 xcode-select -p | grep -Eq "Xcode[^/]*\.app" || {
   echo "FATAL: full Xcode required (found: $(xcode-select -p)). Use extract-engine.sh locally." >&2
@@ -41,7 +42,9 @@ patchset="$(lock_get "['patchset']")"
 # our preset rides alongside upstream's as CMakeUserPresets.json
 cp "$REPO_ROOT/engine/producer-presets.json" "$SRC_DIR/CMakeUserPresets.json"
 
-cmake --preset producer-macos -S "$SRC_DIR"
+# Shallow clones have no tags, so git-describe versioning fails ("fb4d98b
+# format invalid") — hand OBS its version from the lock instead.
+cmake --preset producer-macos -S "$SRC_DIR" -DOBS_VERSION_OVERRIDE="$OBS_REF"
 cmake --build --preset producer-macos
 
 # assemble artifact from the build tree's bundle-style output
