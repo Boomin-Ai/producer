@@ -510,7 +510,17 @@ extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, _cx: u32, _cy: u32
         ffi::gs_viewport_push();
         ffi::gs_projection_push();
         ffi::gs_ortho(0.0, bw, 0.0, bh, -100.0, 100.0);
-        ffi::obs_render_main_texture();
+        // Render the channel-0 scene source DIRECTLY (the OBS source-projector
+        // pattern). obs_render_main_texture draws the cached mix texture,
+        // which libobs only renders while an encoder or raw consumer is
+        // active — an idle preview showed black forever (M-W6 finding).
+        let src = ffi::obs_get_output_source(0);
+        if src.is_null() {
+            ffi::obs_render_main_texture();
+        } else {
+            ffi::obs_source_video_render(src);
+            ffi::obs_source_release(src);
+        }
         ffi::gs_projection_pop();
         ffi::gs_viewport_pop();
     }
@@ -539,6 +549,14 @@ impl Preview {
                 return Err("obs_display_create failed".into());
             }
             ffi::obs_display_add_draw_callback(display, preview_draw, std::ptr::null_mut());
+            // OBS projector pattern: take a SHOWING ref on the previewed
+            // source. Without it, capture sources never mark as shown while
+            // idle (no encoder/raw consumer) and produce nothing (M-W6).
+            let scene_src = ffi::obs_get_output_source(0);
+            if !scene_src.is_null() {
+                ffi::obs_source_inc_showing(scene_src);
+                ffi::obs_source_release(scene_src);
+            }
             eprintln!(
                 "[live] preview display created: child={child:?} {}x{}",
                 (rect.w as u32).max(1),
@@ -559,6 +577,11 @@ impl Preview {
 
     fn detach(self) {
         unsafe {
+            let scene_src = ffi::obs_get_output_source(0);
+            if !scene_src.is_null() {
+                ffi::obs_source_dec_showing(scene_src);
+                ffi::obs_source_release(scene_src);
+            }
             ffi::obs_display_remove_draw_callback(self.display, preview_draw, std::ptr::null_mut());
             ffi::obs_display_destroy(self.display);
         }
@@ -697,6 +720,7 @@ pub fn start(sink: impl Fn(&LiveEvent) + Send + 'static) -> LiveHandle {
             };
             let mut preview: Option<Preview> = None;
             let mut session: Option<Session> = None;
+            let mut dbg_tick: u64 = 0;
             let mut state = SessionState::Idle;
             let mut last_status_emit = Instant::now();
 
@@ -827,7 +851,16 @@ pub fn start(sink: impl Fn(&LiveEvent) + Send + 'static) -> LiveHandle {
                         }
                         break;
                     }
-                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        // M-W6 diagnostic heartbeat: engine-truth of the
+                        // screen source every ~5s while present.
+                        dbg_tick += 1;
+                        if dbg_tick % 25 == 0 {
+                            if let Some(g) = scene.as_ref() {
+                                g.debug_log();
+                            }
+                        }
+                    }
                 }
 
                 if let Some(s) = session.as_mut() {

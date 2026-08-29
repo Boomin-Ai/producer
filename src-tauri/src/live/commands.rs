@@ -372,17 +372,10 @@ pub(crate) mod win_preview_child {
             if child.is_null() {
                 return child;
             }
-            // M-W6 black-preview finding, part 2: WebView2's window paints
-            // over siblings unless every sibling clips (WS_CLIPSIBLINGS), and
-            // our child must sit at the top of the sibling z-order.
-            let mut sib = GetWindow(parent, GW_CHILD);
-            while !sib.is_null() {
-                let style = GetWindowLongW(sib, GWL_STYLE);
-                if style & WS_CLIPSIBLINGS == 0 {
-                    SetWindowLongW(sib, GWL_STYLE, style | WS_CLIPSIBLINGS);
-                }
-                sib = GetWindow(sib, GW_HWNDNEXT);
-            }
+            // Keep our child at the top of the sibling z-order. Do NOT mutate
+            // the webview's styles (an earlier WS_CLIPSIBLINGS stamp on
+            // WebView2's window broke its size/input alignment — the
+            // "everything shifted right, clicks land nowhere" bug).
             SetWindowPos(
                 child,
                 std::ptr::null_mut(), // HWND_TOP

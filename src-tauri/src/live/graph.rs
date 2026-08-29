@@ -361,6 +361,22 @@ impl SceneGraph {
         }
     }
 
+    /// M-W6 diagnostic: the capture source's engine-truth. width 0 = the
+    /// duplicator never engaged; showing=false = show refs not propagating.
+    pub fn debug_log(&self) {
+        if let Some((_, src)) = self.screen {
+            unsafe {
+                eprintln!(
+                    "[live] screen dbg: showing={} active={} {}x{}",
+                    ffi::obs_source_showing(src),
+                    ffi::obs_source_active(src),
+                    ffi::obs_source_get_width(src),
+                    ffi::obs_source_get_height(src)
+                );
+            }
+        }
+    }
+
     pub fn state(&self) -> SourcesState {
         SourcesState {
             screen: self.screen.is_some(),
