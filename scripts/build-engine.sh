@@ -57,7 +57,18 @@ STAGE="$ARTIFACT_DIR/$NAME"
 rm -rf "$STAGE"
 mkdir -p "$STAGE/Frameworks" "$STAGE/PlugIns" "$STAGE/licenses"
 
-find "$BUILD" -name "libobs.framework" -maxdepth 4 -type d | head -1 | xargs -I{} cp -R {} "$STAGE/Frameworks/"
+# Xcode trees contain partial/stub framework dirs; take the one that actually
+# carries the binary, not the first name match.
+FW=""
+while IFS= read -r cand; do
+  if [[ -f "$cand/Versions/A/libobs" || -f "$cand/libobs" ]]; then FW="$cand"; break; fi
+done < <(find "$BUILD" -name "libobs.framework" -type d)
+if [[ -z $FW ]]; then
+  echo "FATAL: no complete libobs.framework in build tree; candidates were:" >&2
+  find "$BUILD" -name "libobs.framework" -type d >&2
+  exit 1
+fi
+cp -R "$FW" "$STAGE/Frameworks/"
 for lib in libobs-metal.dylib libobs-opengl.dylib; do
   find "$BUILD" -name "$lib" -path "*Release*" | head -1 | xargs -I{} cp {} "$STAGE/Frameworks/"
 done
