@@ -106,6 +106,8 @@ pub fn run() {
                 // the default raise when the app already has a visible
                 // window — the First Light drag chip (a floating NSPanel)
                 // counts as one, leaving the main window buried.
+                // (Reopen only exists on macOS/iOS.)
+                #[cfg(target_os = "macos")]
                 tauri::RunEvent::Reopen { .. } => {
                     if let Some(win) = app.webview_windows().into_values().next() {
                         let _ = win.show();
