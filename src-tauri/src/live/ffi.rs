@@ -241,6 +241,15 @@ pub struct vec2 {
 
 pub type draw_callback_t = extern "C" fn(param: *mut c_void, cx: u32, cy: u32);
 
+#[repr(C)]
+pub struct vec4 {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub w: f32,
+}
+pub const GS_CLEAR_COLOR: u32 = 1;
+
 #[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
 extern "C" {
     pub fn obs_display_create(
@@ -262,6 +271,7 @@ extern "C" {
     pub fn obs_render_main_texture();
     pub fn obs_get_video_info(ovi: *mut obs_video_info) -> bool;
 
+    pub fn gs_clear(clear_flags: u32, color: *const vec4, depth: f32, stencil: u8);
     pub fn gs_viewport_push();
     pub fn gs_viewport_pop();
     pub fn gs_projection_push();

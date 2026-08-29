@@ -242,23 +242,184 @@ pub fn live_attach_preview(
             .attach_preview(ns_window, x, y, w, h)
             .map_err(EngineError::Other)
     }
-    #[cfg(not(target_os = "macos"))]
+    // Windows split of the Mac shim's division of labor: the child window is
+    // created/moved/destroyed ON THE MAIN THREAD (cross-thread child windows
+    // link input queues with the webview's thread — the M-W6 crash); the
+    // engine thread only ever touches the obs_display bound to it.
+    #[cfg(target_os = "windows")]
+    {
+        use tauri::Manager;
+        let window = app
+            .get_webview_window("main")
+            .ok_or_else(|| EngineError::Other("main window missing".into()))?;
+        let parent = window
+            .hwnd()
+            .map_err(|e| EngineError::Other(format!("hwnd: {e}")))?
+            .0 as usize;
+        let scale = window.scale_factor().unwrap_or(1.0);
+        let (px, py) = ((x * scale) as i32, (y * scale) as i32);
+        let (pw, ph) = (((w * scale) as i32).max(1), ((h * scale) as i32).max(1));
+        let (tx, rx) = std::sync::mpsc::channel();
+        app.run_on_main_thread(move || {
+            let child = win_preview_child::create(parent as *mut _, px, py, pw, ph);
+            let _ = tx.send(child as usize);
+        })
+        .map_err(|e| EngineError::Other(format!("main-thread dispatch: {e}")))?;
+        let child = rx
+            .recv_timeout(std::time::Duration::from_secs(3))
+            .map_err(|_| EngineError::Other("preview child creation timed out".into()))?;
+        if child == 0 {
+            return Err(EngineError::Other(
+                "preview child window creation failed".into(),
+            ));
+        }
+        win_preview_child::CHILD.store(child, std::sync::atomic::Ordering::SeqCst);
+        // Engine receives the child hwnd; w/h already in device pixels.
+        state
+            .live
+            .attach_preview(child, 0.0, 0.0, pw as f64, ph as f64)
+            .map_err(EngineError::Other)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         let _ = (app, state, x, y, w, h);
         Err(EngineError::Other(
-            "live preview is macOS-only in this build".into(),
+            "live preview is not supported on this platform yet".into(),
         ))
+    }
+}
+
+/// Win32 preview child helpers — main-thread only (see live_attach_preview).
+#[cfg(all(have_engine, target_os = "windows"))]
+pub(crate) mod win_preview_child {
+    use std::os::raw::c_void;
+    use std::sync::atomic::AtomicUsize;
+    pub static CHILD: AtomicUsize = AtomicUsize::new(0);
+    const WS_CHILD: u32 = 0x4000_0000;
+    const WS_VISIBLE: u32 = 0x1000_0000;
+    #[link(name = "user32")]
+    extern "system" {
+        fn CreateWindowExW(
+            ex: u32,
+            class: *const u16,
+            name: *const u16,
+            style: u32,
+            x: i32,
+            y: i32,
+            w: i32,
+            h: i32,
+            parent: *mut c_void,
+            menu: *mut c_void,
+            inst: *mut c_void,
+            param: *mut c_void,
+        ) -> *mut c_void;
+        fn DestroyWindow(hwnd: *mut c_void) -> i32;
+        fn SetWindowPos(
+            hwnd: *mut c_void,
+            after: *mut c_void,
+            x: i32,
+            y: i32,
+            w: i32,
+            h: i32,
+            flags: u32,
+        ) -> i32;
+        fn GetWindow(hwnd: *mut c_void, cmd: u32) -> *mut c_void;
+        fn GetWindowLongW(hwnd: *mut c_void, idx: i32) -> i32;
+        fn SetWindowLongW(hwnd: *mut c_void, idx: i32, value: i32) -> i32;
+    }
+    const GW_CHILD: u32 = 5;
+    const GW_HWNDNEXT: u32 = 2;
+    const GWL_STYLE: i32 = -16;
+    const WS_CLIPSIBLINGS: i32 = 0x0400_0000;
+    const SWP_NOMOVE: u32 = 0x0002;
+    const SWP_NOSIZE: u32 = 0x0001;
+    const SWP_NOACTIVATE: u32 = 0x0010;
+    pub fn create(parent: *mut c_void, x: i32, y: i32, w: i32, h: i32) -> *mut c_void {
+        let class: Vec<u16> = "STATIC".encode_utf16().chain(std::iter::once(0)).collect();
+        unsafe {
+            let child = CreateWindowExW(
+                0,
+                class.as_ptr(),
+                std::ptr::null(),
+                WS_CHILD | WS_VISIBLE,
+                x,
+                y,
+                w,
+                h,
+                parent,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            );
+            if child.is_null() {
+                return child;
+            }
+            // M-W6 black-preview finding, part 2: WebView2's window paints
+            // over siblings unless every sibling clips (WS_CLIPSIBLINGS), and
+            // our child must sit at the top of the sibling z-order.
+            let mut sib = GetWindow(parent, GW_CHILD);
+            while !sib.is_null() {
+                let style = GetWindowLongW(sib, GWL_STYLE);
+                if style & WS_CLIPSIBLINGS == 0 {
+                    SetWindowLongW(sib, GWL_STYLE, style | WS_CLIPSIBLINGS);
+                }
+                sib = GetWindow(sib, GW_HWNDNEXT);
+            }
+            SetWindowPos(
+                child,
+                std::ptr::null_mut(), // HWND_TOP
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+            );
+            child
+        }
+    }
+    pub fn move_to(hwnd: usize, x: i32, y: i32, w: i32, h: i32) {
+        unsafe {
+            SetWindowPos(hwnd as *mut c_void, std::ptr::null_mut(), x, y, w, h, 0);
+        }
+    }
+    pub fn destroy(hwnd: usize) {
+        unsafe {
+            DestroyWindow(hwnd as *mut c_void);
+        }
     }
 }
 
 #[tauri::command]
 pub fn live_move_preview(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     x: f64,
     y: f64,
     w: f64,
     h: f64,
 ) -> EngineResult<()> {
+    #[cfg(all(have_engine, target_os = "windows"))]
+    {
+        use tauri::Manager;
+        let child = win_preview_child::CHILD.load(std::sync::atomic::Ordering::SeqCst);
+        if child != 0 {
+            let scale = app
+                .get_webview_window("main")
+                .and_then(|win| win.scale_factor().ok())
+                .unwrap_or(1.0);
+            let (px, py) = ((x * scale) as i32, (y * scale) as i32);
+            let (pw, ph) = (((w * scale) as i32).max(1), ((h * scale) as i32).max(1));
+            let _ = app.run_on_main_thread(move || {
+                win_preview_child::move_to(child, px, py, pw, ph);
+            });
+            return state
+                .live
+                .move_preview(0.0, 0.0, pw as f64, ph as f64)
+                .map_err(EngineError::Other);
+        }
+    }
+    #[cfg(not(all(have_engine, target_os = "windows")))]
+    let _ = &app;
     state
         .live
         .move_preview(x, y, w, h)
@@ -266,8 +427,18 @@ pub fn live_move_preview(
 }
 
 #[tauri::command]
-pub fn live_detach_preview(state: State<'_, AppState>) -> EngineResult<()> {
-    state.live.detach_preview().map_err(EngineError::Other)
+pub fn live_detach_preview(app: tauri::AppHandle, state: State<'_, AppState>) -> EngineResult<()> {
+    let result = state.live.detach_preview().map_err(EngineError::Other);
+    #[cfg(all(have_engine, target_os = "windows"))]
+    {
+        let child = win_preview_child::CHILD.swap(0, std::sync::atomic::Ordering::SeqCst);
+        if child != 0 {
+            let _ = app.run_on_main_thread(move || win_preview_child::destroy(child));
+        }
+    }
+    #[cfg(not(all(have_engine, target_os = "windows")))]
+    let _ = &app;
+    result
 }
 
 #[tauri::command]

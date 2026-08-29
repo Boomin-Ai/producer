@@ -492,8 +492,13 @@ struct Preview {
     display: *mut ffi::obs_display_t,
 }
 
-#[cfg(target_os = "macos")]
 extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, _cx: u32, _cy: u32) {
+    {
+        static FIRST: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+        if FIRST.swap(false, std::sync::atomic::Ordering::Relaxed) {
+            eprintln!("[live] preview_draw first frame ({_cx}x{_cy})");
+        }
+    }
     unsafe {
         let mut ovi: std::mem::MaybeUninit<ffi::obs_video_info> = std::mem::MaybeUninit::zeroed();
         let (bw, bh) = if ffi::obs_get_video_info(ovi.as_mut_ptr()) {
@@ -511,16 +516,53 @@ extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, _cx: u32, _cy: u32
     }
 }
 
-/// Windows preview lands in M-W6: same obs_display machinery, but bound to an
-/// HWND child region instead of an NSView (no shim needed — gs_window takes
-/// the HWND directly on Windows).
+/// Windows preview (M-W6): the command layer creates/moves/destroys the child
+/// HWND on the MAIN thread (cross-thread child windows link input queues with
+/// the webview thread — the M-W6 crash finding); the engine receives the
+/// child hwnd and owns ONLY the obs_display bound to it. rect values arrive
+/// as device pixels (pre-scaled by the command layer).
 #[cfg(target_os = "windows")]
 impl Preview {
-    fn attach(_window: *mut std::os::raw::c_void, _rect: PreviewRect) -> Result<Preview, String> {
-        Err("in-app preview lands in M-W6 (HWND obs_display path)".into())
+    fn attach(child: *mut std::os::raw::c_void, rect: PreviewRect) -> Result<Preview, String> {
+        unsafe {
+            let init = ffi::gs_init_data {
+                window: ffi::gs_window { view: child },
+                cx: (rect.w as u32).max(1),
+                cy: (rect.h as u32).max(1),
+                num_backbuffers: 0,
+                format: ffi::GS_BGRA,
+                zsformat: ffi::GS_ZS_NONE,
+                adapter: 0,
+            };
+            let display = ffi::obs_display_create(&init, 0);
+            if display.is_null() {
+                return Err("obs_display_create failed".into());
+            }
+            ffi::obs_display_add_draw_callback(display, preview_draw, std::ptr::null_mut());
+            eprintln!(
+                "[live] preview display created: child={child:?} {}x{}",
+                (rect.w as u32).max(1),
+                (rect.h as u32).max(1)
+            );
+            Ok(Preview {
+                view: child,
+                display,
+            })
+        }
     }
-    fn set_rect(&mut self, _rect: PreviewRect) {}
-    fn detach(self) {}
+
+    fn set_rect(&mut self, rect: PreviewRect) {
+        unsafe {
+            ffi::obs_display_resize(self.display, (rect.w as u32).max(1), (rect.h as u32).max(1));
+        }
+    }
+
+    fn detach(self) {
+        unsafe {
+            ffi::obs_display_remove_draw_callback(self.display, preview_draw, std::ptr::null_mut());
+            ffi::obs_display_destroy(self.display);
+        }
+    }
 }
 
 #[cfg(target_os = "macos")]

@@ -50,8 +50,36 @@ extern "C" fn audio_cb(
     AUDIO_PEAK_MICRO.fetch_max((peak * 1_000_000.0) as u64, Ordering::Relaxed);
 }
 
+static VIDEO_LUMA_SUM: AtomicU64 = AtomicU64::new(0);
+static VIDEO_LUMA_N: AtomicU64 = AtomicU64::new(0);
+
 extern "C" fn video_cb(_param: *mut c_void, _frame: *mut ffi::video_data) {
     VIDEO_FRAMES.fetch_add(1, Ordering::Relaxed);
+    // Grid-sample the Y plane (NV12) across the WHOLE frame. (First version
+    // sampled only row 0 — the top scanline — which is transparent padding in
+    // test images and near-black title-bar pixels in screen captures, and it
+    // condemned a working pipeline. Sample like you mean it.)
+    unsafe {
+        if !_frame.is_null() {
+            let f = &*_frame;
+            let y = f.data[0];
+            let stride = f.linesize[0] as usize;
+            if !y.is_null() && stride > 0 {
+                let mut sum = 0u64;
+                let mut n = 0u64;
+                for row in (40..720).step_by(80) {
+                    for col in (0..1280).step_by(64) {
+                        sum += *y.add(row * stride + col) as u64;
+                        n += 1;
+                    }
+                }
+                if n > 0 {
+                    VIDEO_LUMA_SUM.fetch_add(sum / n, Ordering::Relaxed);
+                    VIDEO_LUMA_N.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        }
+    }
 }
 
 /// Display-capture source id: SCK on macOS, DXGI duplicator on Windows.
@@ -85,6 +113,15 @@ unsafe fn screen_capture_settings() -> Result<*mut ffi::obs_data_t, String> {
         let key = CString::new("monitor_id").unwrap();
         let val = CString::new(device).unwrap();
         ffi::obs_data_set_string(settings, key.as_ptr(), val.as_ptr());
+        // M-W6 finding (the black-preview saga): on an HDR desktop
+        // (RGB_FULL_G2084 — PQ), both capture paths deliver HDR frames that
+        // render black through an SDR canvas. force_sdr asks Windows for
+        // tone-mapped SDR frames (DXGI DuplicateOutput1 path) — matching what
+        // an SDR pipeline can actually draw.
+        let method_key = CString::new("method").unwrap();
+        ffi::obs_data_set_int(settings, method_key.as_ptr(), 1); // DXGI
+        let sdr_key = CString::new("force_sdr").unwrap();
+        ffi::obs_data_set_bool(settings, sdr_key.as_ptr(), true);
     }
     Ok(settings)
 }
@@ -721,13 +758,98 @@ pub fn capture_probe(window: Duration) -> CaptureProbeReport {
             unsafe { ffi::obs_data_create() }
         }
     };
+    // PRODUCER_PROBE_COLOR=1: substitute a solid white color_source for the
+    // display capture — bisects "no source renders" (effects/shader path)
+    // from "capture sources specifically render black" (M-W6 debugging).
     let screen = unsafe {
-        ffi::obs_source_create(
-            screen_id.as_ptr(),
-            screen_name.as_ptr(),
-            screen_settings,
-            ptr::null_mut(),
-        )
+        if std::env::var("PRODUCER_PROBE_WINDOW").is_ok() {
+            // Capture a real top-level window via window_capture (WGC window
+            // path — the one proven working in OBS Studio on this machine).
+            let wins = enum_list_property("window_capture", "window");
+            let pick = wins
+                .iter()
+                .find(|(n, v)| !v.is_empty() && (n.contains("Chrome") || n.contains("chrome")))
+                .or_else(|| wins.iter().find(|(_, v)| !v.is_empty()))
+                .cloned();
+            match pick {
+                Some((name, value)) => {
+                    notes.push(format!("probe source: window_capture of {name}"));
+                    let ws = ffi::obs_data_create();
+                    let k = CString::new("window").unwrap();
+                    let v = CString::new(value).unwrap();
+                    ffi::obs_data_set_string(ws, k.as_ptr(), v.as_ptr());
+                    let m = CString::new("method").unwrap();
+                    ffi::obs_data_set_int(ws, m.as_ptr(), 2); // WGC
+                    let id = CString::new("window_capture").unwrap();
+                    let src = ffi::obs_source_create(
+                        id.as_ptr(),
+                        screen_name.as_ptr(),
+                        ws,
+                        ptr::null_mut(),
+                    );
+                    ffi::obs_data_release(ws);
+                    src
+                }
+                None => {
+                    notes.push("no capturable windows found".into());
+                    ptr::null_mut()
+                }
+            }
+        } else if let Ok(img) = std::env::var("PRODUCER_PROBE_LAYERED") {
+            // White color source on channel 2 UNDER the image: distinguishes
+            // "textured source drew black" (luma drops) from "textured source
+            // drew nothing" (luma stays 235 — white shows through).
+            notes.push(format!("probe: white color under image {img}"));
+            let cs = ffi::obs_data_create();
+            ffi::obs_data_set_int(cs, CString::new("color").unwrap().as_ptr(), 0xFFFF_FFFF);
+            ffi::obs_data_set_int(cs, CString::new("width").unwrap().as_ptr(), 1280);
+            ffi::obs_data_set_int(cs, CString::new("height").unwrap().as_ptr(), 720);
+            let cid = CString::new("color_source").unwrap();
+            let cname = CString::new("probe-under").unwrap();
+            let under = ffi::obs_source_create(cid.as_ptr(), cname.as_ptr(), cs, ptr::null_mut());
+            ffi::obs_data_release(cs);
+            ffi::obs_set_output_source(2, under);
+            ffi::obs_source_release(under);
+
+            let is = ffi::obs_data_create();
+            let k = CString::new("file").unwrap();
+            let v = CString::new(img).unwrap();
+            ffi::obs_data_set_string(is, k.as_ptr(), v.as_ptr());
+            let id = CString::new("image_source").unwrap();
+            let src =
+                ffi::obs_source_create(id.as_ptr(), screen_name.as_ptr(), is, ptr::null_mut());
+            ffi::obs_data_release(is);
+            src
+        } else if let Ok(img) = std::env::var("PRODUCER_PROBE_IMAGE") {
+            notes.push(format!("probe source: image_source {img}"));
+            let is = ffi::obs_data_create();
+            let k = CString::new("file").unwrap();
+            let v = CString::new(img).unwrap();
+            ffi::obs_data_set_string(is, k.as_ptr(), v.as_ptr());
+            let id = CString::new("image_source").unwrap();
+            let src =
+                ffi::obs_source_create(id.as_ptr(), screen_name.as_ptr(), is, ptr::null_mut());
+            ffi::obs_data_release(is);
+            src
+        } else if std::env::var("PRODUCER_PROBE_COLOR").is_ok() {
+            notes.push("probe source: color_source (white) instead of display capture".into());
+            let cs = ffi::obs_data_create();
+            ffi::obs_data_set_int(cs, CString::new("color").unwrap().as_ptr(), 0xFFFF_FFFF);
+            ffi::obs_data_set_int(cs, CString::new("width").unwrap().as_ptr(), 1280);
+            ffi::obs_data_set_int(cs, CString::new("height").unwrap().as_ptr(), 720);
+            let id = CString::new("color_source").unwrap();
+            let src =
+                ffi::obs_source_create(id.as_ptr(), screen_name.as_ptr(), cs, ptr::null_mut());
+            ffi::obs_data_release(cs);
+            src
+        } else {
+            ffi::obs_source_create(
+                screen_id.as_ptr(),
+                screen_name.as_ptr(),
+                screen_settings,
+                ptr::null_mut(),
+            )
+        }
     };
     unsafe { ffi::obs_data_release(screen_settings) };
     let mic = unsafe {
@@ -798,6 +920,12 @@ pub fn capture_probe(window: Duration) -> CaptureProbeReport {
 
     let rendered = VIDEO_FRAMES.load(Ordering::Relaxed);
     let audio_cbs = AUDIO_CALLBACKS.load(Ordering::Relaxed);
+    let luma_n = VIDEO_LUMA_N.load(Ordering::Relaxed).max(1);
+    let avg_luma = VIDEO_LUMA_SUM.load(Ordering::Relaxed) as f64 / luma_n as f64;
+    notes.push(format!(
+        "avg mix luma {avg_luma:.1}/255 over {luma_n} sampled frames (0 = black output)"
+    ));
+
     let ok = granted && size.0 > 0 && rendered > 0 && audio_cbs > 0;
 
     CaptureProbeReport {

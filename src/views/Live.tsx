@@ -38,6 +38,7 @@ function fmtBitrate(bytes: number, secs: number): string {
 function PreviewPanel() {
   const ref = useRef<HTMLDivElement | null>(null);
   const attached = useRef(false);
+  const retries = useRef(0);
 
   useEffect(() => {
     let raf = 0;
@@ -56,7 +57,12 @@ function PreviewPanel() {
             await ipc.liveMovePreview(r.x, r.y, r.width, r.height);
           }
         } catch {
-          // engine not ready yet; retry on next layout change
+          // Engine not ready yet (bootstrap race — the M-W6 black-preview
+          // finding): retry shortly, not just on the next layout change.
+          if (!attached.current && retries.current < 30) {
+            retries.current += 1;
+            setTimeout(sync, 1000);
+          }
         }
       });
     };
