@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { Channel, EndpointInfo, Job, TargetResult } from "../lib/ipc";
+import type { Channel, EndpointInfo, Job, LiveDestination, LiveRoom, LiveSnapshot } from "../lib/ipc";
+import type { TargetResult } from "../lib/ipc";
 import { ipc } from "../lib/ipc";
 import { useUpdater } from "../lib/updater";
-import { LiveView } from "./Live";
+import { DestinationEditor, LiveView } from "./Live";
 
 const STATE_LABEL: Record<string, string> = {
   scheduled: "Scheduled",
@@ -16,7 +17,11 @@ const STATE_LABEL: Record<string, string> = {
   canceled: "Canceled",
 };
 
-type MainView = "compose" | "history" | "live";
+type MainView =
+  | { kind: "home" }
+  | { kind: "room"; room: LiveRoom }
+  | { kind: "compose" }
+  | { kind: "history" };
 
 interface Attached {
   upload_id: string;
@@ -154,6 +159,28 @@ function Switch({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
   );
 }
 
+/** Preset → dot color for the channel spine. */
+const PRESET_TONE: Record<string, string> = {
+  twitch: "#a970ff",
+  kick: "#53fc18",
+  youtube: "#ff4e45",
+  custom: "#8b93a7",
+  instagram: "#e1306c",
+  facebook: "#1877f2",
+  threads: "#e7eaf3",
+};
+
+function fmtAgo(iso: string | null): string {
+  if (!iso) return "never live";
+  const ms = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return "live just now";
+  if (m < 60) return `live ${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 48) return `live ${h}h ago`;
+  return `live ${Math.floor(h / 24)}d ago`;
+}
+
 export function Home({
   endpoints,
   onAddEndpoint,
@@ -163,10 +190,13 @@ export function Home({
   onAddEndpoint: () => void;
   onRemoveEndpoint: (id: string) => void;
 }) {
-  const [view, setView] = useState<MainView>("compose");
+  const [view, setView] = useState<MainView>({ kind: "home" });
   const updater = useUpdater();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [rooms, setRooms] = useState<LiveRoom[]>([]);
+  const [destinations, setDestinations] = useState<LiveDestination[]>([]);
+  const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadChannels = useCallback(async () => {
@@ -198,69 +228,110 @@ export function Home({
     setJobs(all);
   }, [endpoints]);
 
+  const loadLive = useCallback(async () => {
+    try {
+      setRooms(await ipc.liveListRooms());
+      setDestinations(await ipc.liveListDestinations());
+      setSnapshot(await ipc.liveEngineStatus());
+    } catch {
+      /* engine-less build — live sections render empty */
+    }
+  }, []);
+
   useEffect(() => {
     loadChannels();
     loadJobs();
-  }, [loadChannels, loadJobs]);
+    loadLive();
+  }, [loadChannels, loadJobs, loadLive]);
 
-  const upcoming = jobs.filter((j) => j.state === "scheduled" || j.state === "queued" || j.state === "publishing");
+  // Keep the ON AIR state honest while sitting on home.
+  useEffect(() => {
+    if (view.kind !== "home") return;
+    const t = setInterval(() => {
+      ipc.liveEngineStatus().then(setSnapshot).catch(() => {});
+    }, 5000);
+    return () => clearInterval(t);
+  }, [view.kind]);
+
+  const streaming =
+    snapshot?.session_state === "streaming" ||
+    snapshot?.session_state === "starting" ||
+    snapshot?.session_state === "stopping";
+
+  const back = () => {
+    setView({ kind: "home" });
+    loadLive();
+    loadJobs();
+  };
+
+  const title =
+    view.kind === "room"
+      ? view.room.name
+      : view.kind === "compose"
+        ? "New post"
+        : view.kind === "history"
+          ? "Rundown"
+          : null;
 
   return (
-    <div className="app">
-      <aside className="sidebar">
-        <div className="side-brand">
-          PRODUCER <span className="by">by Boomin</span>
-        </div>
-
-        <div className="side-label">Manager</div>
-        <button className={`side-item${view === "compose" ? " active" : ""}`} onClick={() => setView("compose")}>
-          New post
-        </button>
-        <button className={`side-item${view === "history" ? " active" : ""}`} onClick={() => setView("history")}>
-          Queue &amp; history
-          {upcoming.length > 0 && <span className="side-count">{upcoming.length}</span>}
-        </button>
-
-        <div className="side-label">Live</div>
-        <button className={`side-item${view === "live" ? " active" : ""}`} onClick={() => setView("live")}>
-          Go live
-        </button>
-
-        <div className="side-label">Collections</div>
-        <div className="side-soon">Series &amp; collections arrive with the creation phase.</div>
-
-        <div className="side-spacer" />
-
-        {updater.state === "ready" && (
-          <button className="side-item update-ready" onClick={updater.restart} title={`Producer ${updater.version} is staged`}>
-            <span className="update-dot" />
-            Update ready — Restart
-          </button>
-        )}
-
-        <div className="side-label">Workspaces</div>
-        {endpoints.map((ep) => (
-          <div
-            key={ep.id}
-            className="side-endpoint"
-            title={`${ep.kind === "connected" ? "Boomin workspace" : "Self-hosted server"} · ${ep.base_url}`}
-          >
-            <span className={`dot ${ep.kind}`} />
-            <span className="name">{ep.name}</span>
-            <button onClick={() => onRemoveEndpoint(ep.id)} title="Disconnect workspace">
+    <div className="cr">
+      <header className="cr-top" data-tauri-drag-region>
+        <div className="cr-top-left" data-tauri-drag-region>
+          {view.kind !== "home" && (
+            <button className="cr-back" onClick={back} title="Back to the control room">
               ✕
             </button>
-          </div>
-        ))}
-        <button className="side-item" onClick={onAddEndpoint}>
-          + Add workspace
-        </button>
-      </aside>
+          )}
+          <span className="cr-brand" data-tauri-drag-region>
+            PRODUCER
+          </span>
+          {title && <span className="cr-title">{title}</span>}
+          {view.kind === "room" && streaming && <span className="cr-live-pill">LIVE</span>}
+        </div>
+        <div className="cr-top-right">
+          {updater.state === "ready" && (
+            <button className="cr-update" onClick={updater.restart} title={`Producer ${updater.version} is staged`}>
+              <span className="update-dot" /> Restart to update
+            </button>
+          )}
+          {endpoints.map((ep) => (
+            <span key={ep.id} className="cr-workspace" title={`${ep.base_url} — click ✕ to disconnect`}>
+              <span className={`dot ${ep.kind}`} />
+              {ep.name}
+              <button onClick={() => onRemoveEndpoint(ep.id)} title="Disconnect">
+                ✕
+              </button>
+            </span>
+          ))}
+          <button className="cr-add-ws" onClick={onAddEndpoint} title="Add a workspace">
+            +
+          </button>
+        </div>
+      </header>
 
-      <main className="main">
-        {view === "live" ? (
-          <LiveView />
-        ) : view === "compose" ? (
+      {view.kind === "home" && (
+        <ControlRoomHome
+          rooms={rooms}
+          destinations={destinations}
+          channels={channels}
+          jobs={jobs}
+          streaming={streaming}
+          loadError={loadError}
+          onOpenRoom={(room) => setView({ kind: "room", room })}
+          onRoomsChanged={loadLive}
+          onCompose={() => setView({ kind: "compose" })}
+          onHistory={() => setView({ kind: "history" })}
+        />
+      )}
+
+      {view.kind === "room" && (
+        <main className="cr-page">
+          <LiveView key={view.room.id} room={view.room} />
+        </main>
+      )}
+
+      {view.kind === "compose" && (
+        <main className="cr-page">
           <ComposerDetail
             channels={channels.filter((c) => c.status === "active")}
             independents={endpoints.filter((e) => e.kind === "independent")}
@@ -268,14 +339,202 @@ export function Home({
             loadError={loadError}
             onSubmitted={() => {
               loadJobs();
-              setView("history");
+              setView({ kind: "history" });
             }}
           />
-        ) : (
+        </main>
+      )}
+
+      {view.kind === "history" && (
+        <main className="cr-page">
           <HistoryView jobs={jobs} channels={channels} onRefresh={loadJobs} />
-        )}
-      </main>
+        </main>
+      )}
     </div>
+  );
+}
+
+function ControlRoomHome({
+  rooms,
+  destinations,
+  channels,
+  jobs,
+  streaming,
+  loadError,
+  onOpenRoom,
+  onRoomsChanged,
+  onCompose,
+  onHistory,
+}: {
+  rooms: LiveRoom[];
+  destinations: LiveDestination[];
+  channels: Channel[];
+  jobs: Job[];
+  streaming: boolean;
+  loadError: string | null;
+  onOpenRoom: (room: LiveRoom) => void;
+  onRoomsChanged: () => void;
+  onCompose: () => void;
+  onHistory: () => void;
+}) {
+  const [naming, setNaming] = useState(false);
+  const [name, setName] = useState("");
+  const [addingDest, setAddingDest] = useState(false);
+  const [editingDest, setEditingDest] = useState<LiveDestination | null>(null);
+
+  const upcoming = jobs.filter((j) => ["scheduled", "queued", "publishing"].includes(j.state));
+  const recent = jobs.filter((j) => !["scheduled", "queued", "publishing"].includes(j.state)).slice(0, 3);
+
+  async function createRoom() {
+    const n = name.trim();
+    if (!n) return;
+    setName("");
+    setNaming(false);
+    const room = await ipc.liveCreateRoom(n);
+    onRoomsChanged();
+    onOpenRoom(room);
+  }
+
+  return (
+    <main className="cr-home">
+      <section className="cr-section">
+        <div className="cr-label">
+          ON AIR
+          {streaming && <span className="cr-live-pill">LIVE</span>}
+        </div>
+        <div className="cr-rooms">
+          {rooms.map((room) => (
+            <button key={room.id} className="cr-room" onClick={() => onOpenRoom(room)}>
+              <span className="cr-room-name">{room.name}</span>
+              <span className="cr-room-meta">{fmtAgo(room.last_live_at)}</span>
+              <span
+                className="cr-room-del"
+                title="Delete room"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  ipc.liveDeleteRoom(room.id).then(onRoomsChanged);
+                }}
+              >
+                ✕
+              </span>
+            </button>
+          ))}
+          {naming ? (
+            <form
+              className="cr-room cr-room-new naming"
+              onSubmit={(e) => {
+                e.preventDefault();
+                createRoom();
+              }}
+            >
+              <input
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onBlur={() => (name.trim() ? createRoom() : setNaming(false))}
+                onKeyDown={(e) => e.key === "Escape" && setNaming(false)}
+                placeholder="Name your show…"
+              />
+            </form>
+          ) : (
+            <button className="cr-room cr-room-new" onClick={() => setNaming(true)}>
+              <span className="cr-room-plus">+</span>
+              <span className="cr-room-name">New room</span>
+              <span className="cr-room-meta">a stage of its own</span>
+            </button>
+          )}
+        </div>
+      </section>
+
+      <section className="cr-section">
+        <div className="cr-label">CHANNELS</div>
+        <div className="cr-channels">
+          {destinations.map((d) => (
+            <button
+              key={d.id}
+              className={`cr-chip${d.enabled ? "" : " off"}`}
+              title={`${d.preset} · key in Keychain — click to edit`}
+              onClick={() => setEditingDest(d)}
+            >
+              <span className="cr-chip-dot" style={{ background: PRESET_TONE[d.preset] ?? "#8b93a7" }} />
+              {d.label}
+              <span className="cr-chip-kind">live</span>
+            </button>
+          ))}
+          {channels.map((c) => (
+            <span key={c.id} className="cr-chip static" title={`${c.platform} via ${c.endpoint_kind === "connected" ? "Boomin" : "self-hosted"}`}>
+              <span className="cr-chip-dot" style={{ background: PRESET_TONE[c.platform] ?? "#8b93a7" }} />
+              {c.display_name}
+              <span className="cr-chip-kind">{c.platform}</span>
+            </span>
+          ))}
+          <button className="cr-chip add" onClick={() => setAddingDest(true)}>
+            + Add
+          </button>
+        </div>
+        {(addingDest || editingDest) && (
+          <div className="cr-dest-editor">
+            <DestinationEditor
+              existing={editingDest}
+              onSaved={() => {
+                setAddingDest(false);
+                setEditingDest(null);
+                onRoomsChanged();
+              }}
+              onCancel={() => {
+                setAddingDest(false);
+                setEditingDest(null);
+              }}
+            />
+            <div className="cr-hint">
+              Live channels stream from rooms. Social channels join through your Boomin workspace and
+              receive posts.
+            </div>
+          </div>
+        )}
+        {loadError && <div className="cr-hint error">{loadError}</div>}
+      </section>
+
+      <section className="cr-section">
+        <div className="cr-label">
+          RUNDOWN
+          <span className="cr-label-actions">
+            <button className="cr-primary" onClick={onCompose}>
+              New post
+            </button>
+            <button className="cr-ghost" onClick={onHistory}>
+              Everything ▸
+            </button>
+          </span>
+        </div>
+        {upcoming.length === 0 && recent.length === 0 ? (
+          <div className="cr-hint">Nothing scheduled. Write once, post everywhere.</div>
+        ) : (
+          <div className="cr-rundown">
+            {upcoming.slice(0, 4).map((j) => (
+              <div key={j.id} className="cr-run-row">
+                <span className={`chip ${j.state}`}>{STATE_LABEL[j.state] ?? j.state}</span>
+                <span className="cr-run-name">
+                  {channels.find((c) => c.id === j.channel_id)?.display_name ?? "channel"}
+                </span>
+                <span className="cr-run-when">
+                  {j.state === "scheduled" ? new Date(j.due_at).toLocaleString() : new Date(j.created_at).toLocaleString()}
+                </span>
+              </div>
+            ))}
+            {recent.map((j) => (
+              <div key={j.id} className="cr-run-row past">
+                <span className={`chip ${j.state}`}>{STATE_LABEL[j.state] ?? j.state}</span>
+                <span className="cr-run-name">
+                  {channels.find((c) => c.id === j.channel_id)?.display_name ?? "channel"}
+                </span>
+                <span className="cr-run-when">{new Date(j.created_at).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </main>
   );
 }
 

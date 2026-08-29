@@ -46,6 +46,16 @@ fn init(conn: &Connection) -> EngineResult<()> {
             created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
         );
 
+        -- Live rooms: each room is a switchable show document owning its
+        -- scene config (sources, overlay) as JSON. Destinations stay global.
+        CREATE TABLE IF NOT EXISTS live_rooms (
+            id           TEXT PRIMARY KEY,
+            name         TEXT NOT NULL,
+            config       TEXT NOT NULL DEFAULT '{}',
+            last_live_at TEXT,
+            created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        );
+
         -- The client outbox (PHASE1.md §2.4). Each target is
         -- self-sufficient: request_json is the exact immutable request
         -- to replay; resumption never depends on mutable draft state.

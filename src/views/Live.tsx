@@ -263,7 +263,7 @@ function SourceToggles({
   );
 }
 
-function DestinationEditor({
+export function DestinationEditor({
   existing,
   onSaved,
   onCancel,
@@ -339,7 +339,7 @@ function DestinationEditor({
   );
 }
 
-export function LiveView() {
+export function LiveView({ room }: { room?: { id: string; name: string; config: string } }) {
   const [destinations, setDestinations] = useState<LiveDestination[]>([]);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
   const [statuses, setStatuses] = useState<Map<string, LiveDestStatus>>(new Map());
@@ -349,13 +349,32 @@ export function LiveView() {
   const [banner, setBanner] = useState<string | null>(null);
   const [sources, setSources] = useState<LiveSources>({ screen: false, camera: false, mic: false });
   const unlisten = useRef<(() => void) | null>(null);
+  const roomApplied = useRef(false);
+  const roomId = room?.id ?? null;
 
   const refresh = useCallback(async () => {
     setDestinations(await ipc.liveListDestinations());
     const snap = await ipc.liveEngineStatus();
     setSnapshot(snap);
     if (snap.sources) setSources(snap.sources);
-  }, []);
+    // Opening a room applies its saved scene — but never over a live
+    // session (switching rooms mid-stream adopts the running scene).
+    if (room && !roomApplied.current && snap.engine_ready && snap.session_state === "idle") {
+      roomApplied.current = true;
+      try {
+        const cfg = JSON.parse(room.config || "{}") as Partial<LiveSources>;
+        if (typeof cfg.screen === "boolean") {
+          await ipc.liveSetSources(cfg.screen, cfg.camera ?? false, cfg.mic ?? false);
+          if (cfg.overlay_window != null || cfg.overlay_url) {
+            await ipc.liveSetOverlay(cfg.overlay_window ?? null, true, cfg.overlay_url ?? null);
+          }
+          setSources((s) => ({ ...s, ...cfg }));
+        }
+      } catch {
+        /* malformed config — start clean */
+      }
+    }
+  }, [room]);
 
   useEffect(() => {
     refresh();
@@ -371,6 +390,11 @@ export function LiveView() {
         if (!ev.report.ok && ev.report.notes.length > 0) setBanner(ev.report.notes.join(" · "));
       } else if (ev.type === "sources_changed") {
         setSources(ev.sources);
+        // The room document follows the scene: every source/overlay change
+        // is persisted so reopening the room restores it.
+        if (roomId) {
+          ipc.liveUpdateRoom(roomId, { config: JSON.stringify(ev.sources) }).catch(() => {});
+        }
       } else if (ev.type === "engine_error") {
         setBanner(ev.message);
       } else if (ev.type === "engine_ready" && !ev.ok) {
@@ -382,7 +406,7 @@ export function LiveView() {
     return () => {
       unlisten.current?.();
     };
-  }, [refresh]);
+  }, [refresh, roomId]);
 
   const state = snapshot?.session_state ?? "idle";
   const streaming = state === "streaming" || state === "starting" || state === "stopping";
@@ -397,6 +421,7 @@ export function LiveView() {
     setBanner(null);
     try {
       await ipc.liveGoLive();
+      if (roomId) ipc.liveUpdateRoom(roomId, { touchLive: true }).catch(() => {});
     } catch (e) {
       setBanner(String(e));
     }

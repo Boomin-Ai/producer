@@ -115,6 +115,16 @@ export const ipc = {
     invoke("live_screen_coach", { action }),
   firstlightResume: (action: "set" | "take" | "clear") =>
     invoke<boolean>("firstlight_resume", { action }),
+  liveListRooms: () => invoke<LiveRoom[]>("live_list_rooms"),
+  liveCreateRoom: (name: string) => invoke<LiveRoom>("live_create_room", { name }),
+  liveUpdateRoom: (id: string, patch: { name?: string; config?: string; touchLive?: boolean }) =>
+    invoke("live_update_room", {
+      id,
+      name: patch.name ?? null,
+      config: patch.config ?? null,
+      touchLive: patch.touchLive ?? null,
+    }),
+  liveDeleteRoom: (id: string) => invoke("live_delete_room", { id }),
   liveListWindows: () => invoke<LiveWindow[]>("live_list_windows"),
   liveSetOverlay: (windowId: number | null, colorKey: boolean, url?: string | null) =>
     invoke("live_set_overlay", { windowId, colorKey, url: url ?? null }),
@@ -124,6 +134,15 @@ export interface LiveWindow {
   id: number;
   owner: string;
   title: string;
+}
+
+export interface LiveRoom {
+  id: string;
+  name: string;
+  /** JSON blob of the room's scene config (LiveSources shape). */
+  config: string;
+  last_live_at: string | null;
+  created_at: string;
 }
 
 export interface LivePermissions {

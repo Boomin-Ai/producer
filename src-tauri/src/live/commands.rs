@@ -303,6 +303,111 @@ pub fn live_screen_coach(action: String) -> EngineResult<()> {
     crate::live::screen_grant_coach(&action).map_err(EngineError::Other)
 }
 
+// ── Live rooms: switchable show documents (control-room home) ───────────────
+
+#[derive(Debug, Serialize)]
+pub struct RoomRow {
+    pub id: String,
+    pub name: String,
+    pub config: String,
+    pub last_live_at: Option<String>,
+    pub created_at: String,
+}
+
+fn room_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RoomRow> {
+    Ok(RoomRow {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        config: row.get(2)?,
+        last_live_at: row.get(3)?,
+        created_at: row.get(4)?,
+    })
+}
+
+#[tauri::command]
+pub fn live_list_rooms(state: State<'_, AppState>) -> EngineResult<Vec<RoomRow>> {
+    let db = state.db.lock().unwrap();
+    let mut stmt = db
+        .prepare(
+            "SELECT id, name, config, last_live_at, created_at FROM live_rooms
+             ORDER BY COALESCE(last_live_at, created_at) DESC",
+        )
+        .map_err(|e| EngineError::Other(e.to_string()))?;
+    let rows = stmt
+        .query_map([], |r| room_from_row(r))
+        .and_then(|it| it.collect::<rusqlite::Result<Vec<_>>>())
+        .map_err(|e| EngineError::Other(e.to_string()))?;
+    Ok(rows)
+}
+
+#[tauri::command]
+pub fn live_create_room(state: State<'_, AppState>, name: String) -> EngineResult<RoomRow> {
+    let id = Uuid::new_v4().to_string();
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err(EngineError::Other("room name is empty".into()));
+    }
+    let db = state.db.lock().unwrap();
+    db.execute(
+        "INSERT INTO live_rooms (id, name) VALUES (?1, ?2)",
+        params![id, name],
+    )
+    .map_err(|e| EngineError::Other(e.to_string()))?;
+    db.query_row(
+        "SELECT id, name, config, last_live_at, created_at FROM live_rooms WHERE id = ?1",
+        params![id],
+        |r| room_from_row(r),
+    )
+    .map_err(|e| EngineError::Other(e.to_string()))
+}
+
+#[tauri::command]
+pub fn live_update_room(
+    state: State<'_, AppState>,
+    id: String,
+    name: Option<String>,
+    config: Option<String>,
+    touch_live: Option<bool>,
+) -> EngineResult<()> {
+    let db = state.db.lock().unwrap();
+    if let Some(name) = name {
+        let name = name.trim().to_string();
+        if !name.is_empty() {
+            db.execute(
+                "UPDATE live_rooms SET name = ?2 WHERE id = ?1",
+                params![id, name],
+            )
+            .map_err(|e| EngineError::Other(e.to_string()))?;
+        }
+    }
+    if let Some(config) = config {
+        // Refuse malformed JSON so a bad write can't brick a room.
+        serde_json::from_str::<serde_json::Value>(&config)
+            .map_err(|e| EngineError::Other(format!("room config is not JSON: {e}")))?;
+        db.execute(
+            "UPDATE live_rooms SET config = ?2 WHERE id = ?1",
+            params![id, config],
+        )
+        .map_err(|e| EngineError::Other(e.to_string()))?;
+    }
+    if touch_live == Some(true) {
+        db.execute(
+            "UPDATE live_rooms SET last_live_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?1",
+            params![id],
+        )
+        .map_err(|e| EngineError::Other(e.to_string()))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn live_delete_room(state: State<'_, AppState>, id: String) -> EngineResult<()> {
+    let db = state.db.lock().unwrap();
+    db.execute("DELETE FROM live_rooms WHERE id = ?1", params![id])
+        .map_err(|e| EngineError::Other(e.to_string()))?;
+    Ok(())
+}
+
 /// First Light resume marker. localStorage can't carry this across the
 /// screen-grant relaunch (WKWebView flushes it to disk asynchronously, so
 /// an immediate restart loses the write) — a file in app data is
