@@ -100,15 +100,28 @@ for p in "${ENGINE_PLUGINS[@]}"; do
   cp -R "$bundle" "$STAGE/PlugIns/"
 done
 # obs-deps runtime dylibs (ffmpeg, x264, freetype, mbedtls, srt, rist) from .deps
-DEPS_LIB="$(find "$SRC_DIR/.deps" -maxdepth 2 -type d -name lib | head -1)"
+[[ -d "$SRC_DIR/.deps" ]] || { echo "FATAL: $SRC_DIR/.deps missing after build" >&2; exit 1; }
 # First closure pass is a LISTING of wanted dylibs — at this point deps are
 # not yet copied, so a nonzero exit is its normal state; don't let pipefail
 # kill the script here (the enforcing pass below still gates hard).
-("$REPO_ROOT/scripts/engine-closure.sh" "$STAGE" 2>/dev/null || true) | { grep -v '^#' || true; } | while read -r dep; do
-  [[ -f "$STAGE/Frameworks/$dep" ]] && continue
-  src="$(find "$DEPS_LIB" "$BUILD" -name "$dep" 2>/dev/null | head -1)"
-  if [[ -n $src ]]; then cp "$src" "$STAGE/Frameworks/"; fi
-done
+# NOTE: no silent skips — a listed dep that can't be resolved is FATAL
+# (2026-08-29: this loop failed silently on the runner and CI shipped an
+# artifact with no runtime dylibs).
+("$REPO_ROOT/scripts/engine-closure.sh" "$STAGE" 2>/dev/null || true) | { grep -v '^#' || true; } > "$STAGE/.closure-list"
+while read -r dep; do
+  [[ -z $dep ]] && continue
+  [[ -e "$STAGE/Frameworks/$dep" ]] && continue
+  src="$(find "$SRC_DIR/.deps" "$BUILD" -name "$dep" -not -path "*qt6*" 2>/dev/null | head -1)"
+  if [[ -n $src ]]; then
+    cp "$src" "$STAGE/Frameworks/"
+    echo "dep copied: $dep (from $src)"
+  else
+    echo "FATAL: closure dep $dep not found under .deps or build tree; .deps layout:" >&2
+    find "$SRC_DIR/.deps" -maxdepth 2 >&2 || true
+    exit 1
+  fi
+done < "$STAGE/.closure-list"
+rm -f "$STAGE/.closure-list"
 cp "$SRC_DIR/COPYING" "$STAGE/licenses/COPYING.obs-studio"
 
 # M-L7.1 browser assets: obs-browser plugin, CEF framework, Producer Helper

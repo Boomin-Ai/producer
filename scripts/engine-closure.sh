@@ -50,5 +50,12 @@ for d in $(printf '%s\n' "${seen[@]:-}" | sort -u); do
     *Qt*|*obs-scripting*|*Sparkle*)
       echo "VIOLATION: $d" >&2; violations=1;;
   esac
+  # A dep that is linked but absent from the artifact fails at dyld load —
+  # enforce existence, don't just list. (Gap found 2026-08-29: CI shipped an
+  # artifact without the obs-deps dylibs and this gate stayed green.)
+  if [[ ! -e "$CONTENTS/Frameworks/$d" ]]; then
+    echo "MISSING DEP: $d not present in Frameworks" >&2
+    violations=1
+  fi
 done
 exit $violations
