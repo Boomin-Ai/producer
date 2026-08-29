@@ -40,6 +40,11 @@ fi
 # them. Helper entitlements (JIT etc.) come from the artifact's signing/ dir
 # and only apply under a real identity (hardened runtime).
 if [[ -d "$CONTENTS/Frameworks/Chromium Embedded Framework.framework" ]]; then
+  # Notarization requires EVERY nested Mach-O signed (v0.2.1 lesson: Apple
+  # returns Invalid for CEF's inner Libraries/*.dylib) — sign leaves first,
+  # then the framework bundle itself.
+  find "$CONTENTS/Frameworks/Chromium Embedded Framework.framework" -name "*.dylib" -type f -print0 \
+    | while IFS= read -r -d '' f; do sign "$f"; done
   sign "$CONTENTS/Frameworks/Chromium Embedded Framework.framework"
 fi
 for helper in "$CONTENTS/Frameworks/"*" Helper"*.app; do

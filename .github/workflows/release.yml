@@ -192,7 +192,15 @@ jobs:
           ditto -c -k --keepParent "$APP" /tmp/Producer.zip
           xcrun notarytool submit /tmp/Producer.zip \
             --apple-id "$NOTARY_ID" --password "$NOTARY_PW" --team-id "$NOTARY_TEAM" \
-            --wait
+            --wait --output-format json | tee /tmp/notary.json
+          SUB_ID="$(python3 -c "import json;print(json.load(open('/tmp/notary.json'))['id'])")"
+          STATUS="$(python3 -c "import json;print(json.load(open('/tmp/notary.json'))['status'])")"
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "Notarization $STATUS — per-file issues:" >&2
+            xcrun notarytool log "$SUB_ID" \
+              --apple-id "$NOTARY_ID" --password "$NOTARY_PW" --team-id "$NOTARY_TEAM" || true
+            exit 1
+          fi
           xcrun stapler staple "$APP"
           spctl -a -t exec -vv "$APP"
 
