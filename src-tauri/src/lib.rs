@@ -101,10 +101,24 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
-            // §5.5: no daemon — closing Producer ends the stream. The engine
-            // bounds the stop wait itself (≤ ~15s with an active session).
-            if let tauri::RunEvent::Exit = event {
-                app.state::<AppState>().live.shutdown();
+            match event {
+                // Dock click must ALWAYS raise the main window. macOS skips
+                // the default raise when the app already has a visible
+                // window — the First Light drag chip (a floating NSPanel)
+                // counts as one, leaving the main window buried.
+                tauri::RunEvent::Reopen { .. } => {
+                    if let Some(win) = app.webview_windows().into_values().next() {
+                        let _ = win.show();
+                        let _ = win.set_focus();
+                    }
+                }
+                // §5.5: no daemon — closing Producer ends the stream. The
+                // engine bounds the stop wait itself (≤ ~15s with an active
+                // session).
+                tauri::RunEvent::Exit => {
+                    app.state::<AppState>().live.shutdown();
+                }
+                _ => {}
             }
         });
 }
