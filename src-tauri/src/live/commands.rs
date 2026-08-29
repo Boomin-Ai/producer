@@ -302,3 +302,36 @@ pub fn live_request_permission(kind: String) -> EngineResult<()> {
 pub fn live_screen_coach(action: String) -> EngineResult<()> {
     crate::live::screen_grant_coach(&action).map_err(EngineError::Other)
 }
+
+/// First Light resume marker. localStorage can't carry this across the
+/// screen-grant relaunch (WKWebView flushes it to disk asynchronously, so
+/// an immediate restart loses the write) — a file in app data is
+/// deterministic. "set" on entering the permissions step, "take" on boot
+/// (returns whether onboarding should resume there), "clear" on finish.
+#[tauri::command]
+pub fn firstlight_resume(app: tauri::AppHandle, action: String) -> EngineResult<bool> {
+    use tauri::Manager;
+    let path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| EngineError::Other(e.to_string()))?
+        .join("firstlight-resume");
+    match action.as_str() {
+        "set" => {
+            std::fs::write(&path, b"permissions").map_err(|e| EngineError::Other(e.to_string()))?;
+            Ok(true)
+        }
+        "take" => {
+            let hit = path.exists();
+            if hit {
+                let _ = std::fs::remove_file(&path);
+            }
+            Ok(hit)
+        }
+        "clear" => {
+            let _ = std::fs::remove_file(&path);
+            Ok(true)
+        }
+        other => Err(EngineError::Other(format!("unknown resume action {other}"))),
+    }
+}

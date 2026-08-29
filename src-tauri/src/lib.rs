@@ -96,6 +96,7 @@ pub fn run() {
             live::commands::live_set_overlay,
             live::commands::live_list_windows,
             live::commands::live_screen_coach,
+            live::commands::firstlight_resume,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

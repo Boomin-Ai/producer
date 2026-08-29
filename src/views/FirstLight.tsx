@@ -9,7 +9,6 @@ import { Wordmark } from "./Onboarding";
 
 const DONE_KEY = "producer.firstlight.v1";
 const INTRO_KEY = "producer.firstlight.intro.v1";
-const RESUME_KEY = "producer.firstlight.resume";
 
 export function firstLightDone(): boolean {
   try {
@@ -24,15 +23,24 @@ type Phase = "intro" | "welcome" | "permissions";
 export function FirstLight({ onDone }: { onDone: () => void }) {
   const [phase, setPhase] = useState<Phase>(() => {
     try {
-      if (localStorage.getItem(RESUME_KEY)) {
-        localStorage.removeItem(RESUME_KEY);
-        return "permissions"; // back from the screen-grant relaunch
-      }
       return localStorage.getItem(INTRO_KEY) === "1" ? "welcome" : "intro";
     } catch {
       return "welcome";
     }
   });
+
+  // Mid-permissions relaunch (the Screen Recording grant requires one):
+  // a Rust-side marker survives the restart — localStorage can't, WKWebView
+  // flushes it asynchronously — and drops us straight back on the list.
+  useEffect(() => {
+    if (!hasTauri()) return;
+    ipc
+      .firstlightResume("take")
+      .then((hit) => {
+        if (hit) setPhase("permissions");
+      })
+      .catch(() => {});
+  }, []);
 
   const finish = useCallback(() => {
     try {
@@ -40,7 +48,10 @@ export function FirstLight({ onDone }: { onDone: () => void }) {
     } catch {
       /* still proceed */
     }
-    if (hasTauri()) ipc.liveScreenCoach("chip_hide").catch(() => {});
+    if (hasTauri()) {
+      ipc.liveScreenCoach("chip_hide").catch(() => {});
+      ipc.firstlightResume("clear").catch(() => {});
+    }
     onDone();
   }, [onDone]);
 
@@ -197,6 +208,9 @@ function Permissions({ onDone }: { onDone: () => void }) {
 
   useEffect(() => {
     if (!hasTauri()) return;
+    // From here on, every launch returns to this list until the user
+    // finishes or skips — finish() clears the marker.
+    ipc.firstlightResume("set").catch(() => {});
     let alive = true;
     const poll = async () => {
       try {
@@ -239,11 +253,9 @@ function Permissions({ onDone }: { onDone: () => void }) {
   }
 
   async function relaunchNow() {
-    try {
-      localStorage.setItem(RESUME_KEY, "permissions");
-    } catch {
-      /* resume is best-effort */
-    }
+    // Await the marker write — the IPC roundtrip guarantees it is on disk
+    // before the process dies.
+    await ipc.firstlightResume("set").catch(() => {});
     const { relaunch } = await import("@tauri-apps/plugin-process");
     await relaunch();
   }

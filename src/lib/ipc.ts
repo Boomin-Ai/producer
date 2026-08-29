@@ -113,6 +113,8 @@ export const ipc = {
     invoke("live_request_permission", { kind }),
   liveScreenCoach: (action: "chip_show" | "chip_hide" | "open_settings") =>
     invoke("live_screen_coach", { action }),
+  firstlightResume: (action: "set" | "take" | "clear") =>
+    invoke<boolean>("firstlight_resume", { action }),
   liveListWindows: () => invoke<LiveWindow[]>("live_list_windows"),
   liveSetOverlay: (windowId: number | null, colorKey: boolean, url?: string | null) =>
     invoke("live_set_overlay", { windowId, colorKey, url: url ?? null }),
