@@ -16,7 +16,7 @@ SRC_DIR="$REPO_ROOT/engine/obs-studio"
 OBS_COMMIT="$(lock_get "['obs']['commit']")"
 OBS_REPO="$(lock_get "['obs']['repo']")"
 
-xcode-select -p | grep -q "Xcode.app" || {
+xcode-select -p | grep -Eq "Xcode[^/]*\.app" || {
   echo "FATAL: full Xcode required (found: $(xcode-select -p)). Use extract-engine.sh locally." >&2
   exit 1
 }
