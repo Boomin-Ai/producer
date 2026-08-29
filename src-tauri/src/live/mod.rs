@@ -11,6 +11,8 @@ mod ffi;
 #[cfg(have_engine)]
 pub mod graph;
 #[cfg(have_engine)]
+pub mod multi;
+#[cfg(have_engine)]
 pub mod stream;
 
 use std::path::Path;
@@ -42,6 +44,9 @@ pub fn startup_probe(report_dir: &Path) {
         .iter()
         .position(|a| a == "--live-first-light")
         .and_then(|i| args.get(i + 1).cloned());
+    // --live-multistream: M-L4 harness; destinations come from
+    // live/multi-config.json (credential IDs only, never keys — §8).
+    let run_multistream = args.iter().any(|a| a == "--live-multistream");
     std::thread::Builder::new()
         .name("live-engine".into())
         .spawn(move || {
@@ -51,7 +56,7 @@ pub fn startup_probe(report_dir: &Path) {
                 "[live] engine bootstrap ok={} backend={:?}",
                 report.ok, report.graphics_backend
             );
-            if !report.ok && (run_capture_probe || first_light_cred.is_some()) {
+            if !report.ok && (run_capture_probe || first_light_cred.is_some() || run_multistream) {
                 eprintln!("[live] skipping live harness: bootstrap not ok");
                 return;
             }
@@ -72,6 +77,17 @@ pub fn startup_probe(report_dir: &Path) {
                 eprintln!(
                     "[live] first light ok={} encoder={} frames={} dropped={}",
                     fl.ok, fl.encoder_used, fl.total_frames, fl.dropped_frames
+                );
+            }
+            if run_multistream {
+                let ms = multi::run_multistream(&report_dir);
+                write_json(&report_dir.join("multi-report.json"), &ms);
+                eprintln!(
+                    "[live] multistream ok={} encoder={} shared={}kbps dests={}",
+                    ms.ok,
+                    ms.encoder_used,
+                    ms.shared_video_kbps,
+                    ms.destinations.len()
                 );
             }
             // Engine stays initialized for the app's lifetime; teardown comes

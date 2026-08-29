@@ -144,6 +144,30 @@ extern "C" {
     pub fn obs_data_set_string(data: *mut obs_data_t, name: *const c_char, value: *const c_char);
     pub fn obs_data_set_int(data: *mut obs_data_t, name: *const c_char, value: i64);
     pub fn obs_data_set_bool(data: *mut obs_data_t, name: *const c_char, value: bool);
+    pub fn obs_data_get_int(data: *mut obs_data_t, name: *const c_char) -> i64;
+}
+
+// M-L4: D2 service-policy intersection (F12) + per-output telemetry
+#[repr(C)]
+pub struct obs_service_resolution {
+    pub cx: c_int,
+    pub cy: c_int,
+}
+extern "C" {
+    pub fn obs_service_get_supported_resolutions(
+        service: *const obs_service_t,
+        resolutions: *mut *mut obs_service_resolution,
+        count: *mut usize,
+    );
+    pub fn obs_service_get_max_fps(service: *const obs_service_t, fps: *mut c_int);
+    pub fn obs_service_get_max_bitrate(
+        service: *const obs_service_t,
+        video_bitrate: *mut c_int,
+        audio_bitrate: *mut c_int,
+    );
+    pub fn obs_service_get_supported_video_codecs(service: *const obs_service_t) -> *const *const c_char;
+    pub fn obs_output_get_congestion(output: *mut obs_output_t) -> f32;
+    pub fn bfree(ptr: *mut c_void);
 }
 
 // M-L3: encoders, service, output — first light (LIVE-REVIEW.md F4 chain)
