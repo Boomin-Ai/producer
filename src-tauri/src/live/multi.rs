@@ -19,7 +19,14 @@ use serde::{Deserialize, Serialize};
 
 use super::{creds, ffi};
 
+#[cfg(target_os = "macos")]
 const VT_H264_HW: &str = "com.apple.videotoolbox.videoencoder.ave.avc";
+#[cfg(target_os = "windows")]
+const VT_H264_HW: &str = "obs_nvenc_h264_tex"; // preferred hw encoder; x264 fallback below
+#[cfg(target_os = "macos")]
+const AAC_ID: &str = "CoreAudio_AAC";
+#[cfg(target_os = "windows")]
+const AAC_ID: &str = "ffmpeg_aac";
 const MAX_STREAM_SECS: u64 = 12 * 60 * 60; // backstop only; UI/harness stop explicitly
 const BASE_VIDEO_KBPS: i64 = 4500;
 const BASE_AUDIO_KBPS: i64 = 160;
@@ -435,7 +442,7 @@ impl Session {
             let aenc_settings = ffi::obs_data_create();
             ffi::obs_data_set_int(aenc_settings, cstr("bitrate").as_ptr(), audio_kbps);
             let aenc = ffi::obs_audio_encoder_create(
-                cstr("CoreAudio_AAC").as_ptr(),
+                cstr(AAC_ID).as_ptr(),
                 cstr("shared-aac").as_ptr(),
                 aenc_settings,
                 0,

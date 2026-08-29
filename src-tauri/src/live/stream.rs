@@ -15,7 +15,14 @@ use serde::Serialize;
 
 use super::{creds, ffi, graph};
 
+#[cfg(target_os = "macos")]
 const VT_H264_HW: &str = "com.apple.videotoolbox.videoencoder.ave.avc";
+#[cfg(target_os = "windows")]
+const VT_H264_HW: &str = "obs_nvenc_h264_tex"; // preferred hw encoder; x264 fallback below
+#[cfg(target_os = "macos")]
+const AAC_ID: &str = "CoreAudio_AAC";
+#[cfg(target_os = "windows")]
+const AAC_ID: &str = "ffmpeg_aac";
 const MAX_STREAM_SECS: u64 = 600;
 
 #[derive(Debug, Clone, Serialize)]
@@ -179,7 +186,7 @@ pub fn first_light(credential_id: &str, report_dir: &Path) -> FirstLightReport {
             report.encoder_used = VT_H264_HW.into();
         }
         let aenc = ffi::obs_audio_encoder_create(
-            cstr("CoreAudio_AAC").as_ptr(),
+            cstr(AAC_ID).as_ptr(),
             cstr("ML3 AAC").as_ptr(),
             aenc_settings,
             0,
