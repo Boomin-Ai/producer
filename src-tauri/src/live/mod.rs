@@ -3,11 +3,15 @@
 //! stub keeps the app building on machines/CI without the engine.
 
 #[cfg(have_engine)]
+pub mod creds;
+#[cfg(have_engine)]
 pub mod engine;
 #[cfg(have_engine)]
 mod ffi;
 #[cfg(have_engine)]
 pub mod graph;
+#[cfg(have_engine)]
+pub mod stream;
 
 use std::path::Path;
 
@@ -30,7 +34,14 @@ fn write_json<T: serde::Serialize>(path: &Path, value: &T) {
 #[cfg(have_engine)]
 pub fn startup_probe(report_dir: &Path) {
     let report_dir = report_dir.to_path_buf();
-    let run_capture_probe = std::env::args().any(|a| a == "--live-capture-probe");
+    let args: Vec<String> = std::env::args().collect();
+    let run_capture_probe = args.iter().any(|a| a == "--live-capture-probe");
+    // --live-first-light <credential_id>: M-L3 harness. The argument is an
+    // opaque keychain credential ID, never a key (§8).
+    let first_light_cred = args
+        .iter()
+        .position(|a| a == "--live-first-light")
+        .and_then(|i| args.get(i + 1).cloned());
     std::thread::Builder::new()
         .name("live-engine".into())
         .spawn(move || {
@@ -40,11 +51,11 @@ pub fn startup_probe(report_dir: &Path) {
                 "[live] engine bootstrap ok={} backend={:?}",
                 report.ok, report.graphics_backend
             );
+            if !report.ok && (run_capture_probe || first_light_cred.is_some()) {
+                eprintln!("[live] skipping live harness: bootstrap not ok");
+                return;
+            }
             if run_capture_probe {
-                if !report.ok {
-                    eprintln!("[live] skipping capture probe: bootstrap not ok");
-                    return;
-                }
                 let capture = graph::capture_probe(std::time::Duration::from_secs(8));
                 write_json(&report_dir.join("capture-report.json"), &capture);
                 eprintln!(
@@ -53,6 +64,14 @@ pub fn startup_probe(report_dir: &Path) {
                     capture.screen_source_size,
                     capture.rendered_frames,
                     capture.mic_audio_callbacks
+                );
+            }
+            if let Some(cred) = first_light_cred {
+                let fl = stream::run_first_light(&cred, &report_dir);
+                write_json(&report_dir.join("first-light-report.json"), &fl);
+                eprintln!(
+                    "[live] first light ok={} encoder={} frames={} dropped={}",
+                    fl.ok, fl.encoder_used, fl.total_frames, fl.dropped_frames
                 );
             }
             // Engine stays initialized for the app's lifetime; teardown comes

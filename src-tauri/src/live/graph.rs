@@ -107,6 +107,38 @@ fn main_display_uuid() -> Option<String> {
     }
 }
 
+/// Create the default capture graph (SCK main display + default mic) and
+/// attach it to output channels 0/1. The channels hold their own references,
+/// so local refs are released before returning. Engine thread only.
+pub fn attach_capture_sources() -> Result<(), String> {
+    let uuid = main_display_uuid().ok_or("could not resolve main display UUID")?;
+    unsafe {
+        let settings = ffi::obs_data_create();
+        let key = CString::new("display_uuid").unwrap();
+        let val = CString::new(uuid).unwrap();
+        ffi::obs_data_set_string(settings, key.as_ptr(), val.as_ptr());
+        let screen_id = CString::new("screen_capture").unwrap();
+        let screen_name = CString::new("Live Screen").unwrap();
+        let screen = ffi::obs_source_create(screen_id.as_ptr(), screen_name.as_ptr(), settings, ptr::null_mut());
+        ffi::obs_data_release(settings);
+        if screen.is_null() {
+            return Err("screen_capture source creation failed".into());
+        }
+        let mic_id = CString::new("coreaudio_input_capture").unwrap();
+        let mic_name = CString::new("Live Mic").unwrap();
+        let mic = ffi::obs_source_create(mic_id.as_ptr(), mic_name.as_ptr(), ptr::null_mut(), ptr::null_mut());
+        if mic.is_null() {
+            ffi::obs_source_release(screen);
+            return Err("mic source creation failed".into());
+        }
+        ffi::obs_set_output_source(0, screen);
+        ffi::obs_set_output_source(1, mic);
+        ffi::obs_source_release(screen);
+        ffi::obs_source_release(mic);
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct CaptureProbeReport {
     pub ok: bool,

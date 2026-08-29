@@ -64,6 +64,15 @@ pub struct video_data {
 
 pub enum obs_source_t {}
 pub enum obs_data_t {}
+pub enum obs_encoder_t {}
+pub enum obs_service_t {}
+pub enum obs_output_t {}
+pub enum video_t {}
+pub enum audio_t {}
+pub enum signal_handler_t {}
+pub enum calldata_t {}
+
+pub type signal_callback_t = extern "C" fn(data: *mut c_void, cd: *mut calldata_t);
 
 pub type obs_task_t = extern "C" fn(param: *mut c_void);
 pub type obs_task_handler_t = extern "C" fn(task: obs_task_t, param: *mut c_void, wait: bool);
@@ -133,6 +142,70 @@ extern "C" {
     pub fn obs_data_create() -> *mut obs_data_t;
     pub fn obs_data_release(data: *mut obs_data_t);
     pub fn obs_data_set_string(data: *mut obs_data_t, name: *const c_char, value: *const c_char);
+    pub fn obs_data_set_int(data: *mut obs_data_t, name: *const c_char, value: i64);
+    pub fn obs_data_set_bool(data: *mut obs_data_t, name: *const c_char, value: bool);
+}
+
+// M-L3: encoders, service, output — first light (LIVE-REVIEW.md F4 chain)
+extern "C" {
+    pub fn obs_get_video() -> *mut video_t;
+    pub fn obs_get_audio() -> *mut audio_t;
+
+    pub fn obs_video_encoder_create(
+        id: *const c_char,
+        name: *const c_char,
+        settings: *mut obs_data_t,
+        hotkey_data: *mut obs_data_t,
+    ) -> *mut obs_encoder_t;
+    pub fn obs_audio_encoder_create(
+        id: *const c_char,
+        name: *const c_char,
+        settings: *mut obs_data_t,
+        mixer_idx: usize,
+        hotkey_data: *mut obs_data_t,
+    ) -> *mut obs_encoder_t;
+    pub fn obs_encoder_set_video(encoder: *mut obs_encoder_t, video: *mut video_t);
+    pub fn obs_encoder_set_audio(encoder: *mut obs_encoder_t, audio: *mut audio_t);
+    pub fn obs_encoder_release(encoder: *mut obs_encoder_t);
+
+    pub fn obs_service_create(
+        id: *const c_char,
+        name: *const c_char,
+        settings: *mut obs_data_t,
+        hotkey_data: *mut obs_data_t,
+    ) -> *mut obs_service_t;
+    pub fn obs_service_release(service: *mut obs_service_t);
+    pub fn obs_service_apply_encoder_settings(
+        service: *mut obs_service_t,
+        video_encoder_settings: *mut obs_data_t,
+        audio_encoder_settings: *mut obs_data_t,
+    );
+
+    pub fn obs_output_create(
+        id: *const c_char,
+        name: *const c_char,
+        settings: *mut obs_data_t,
+        hotkey_data: *mut obs_data_t,
+    ) -> *mut obs_output_t;
+    pub fn obs_output_release(output: *mut obs_output_t);
+    pub fn obs_output_set_video_encoder(output: *mut obs_output_t, encoder: *mut obs_encoder_t);
+    pub fn obs_output_set_audio_encoder(output: *mut obs_output_t, encoder: *mut obs_encoder_t, idx: usize);
+    pub fn obs_output_set_service(output: *mut obs_output_t, service: *mut obs_service_t);
+    pub fn obs_output_start(output: *mut obs_output_t) -> bool;
+    pub fn obs_output_stop(output: *mut obs_output_t);
+    pub fn obs_output_active(output: *const obs_output_t) -> bool;
+    pub fn obs_output_get_total_frames(output: *const obs_output_t) -> c_int;
+    pub fn obs_output_get_frames_dropped(output: *const obs_output_t) -> c_int;
+    pub fn obs_output_get_last_error(output: *mut obs_output_t) -> *const c_char;
+    pub fn obs_output_get_signal_handler(output: *const obs_output_t) -> *mut signal_handler_t;
+
+    pub fn signal_handler_connect(
+        handler: *mut signal_handler_t,
+        signal: *const c_char,
+        callback: signal_callback_t,
+        data: *mut c_void,
+    );
+    pub fn calldata_get_data(data: *const calldata_t, name: *const c_char, out: *mut c_void, size: usize) -> bool;
 }
 
 // Main-display UUID lookup — the same CoreGraphics path OBS's own display
