@@ -7,6 +7,7 @@
       "displayName": "Producer engine (macOS)",
       "description": "libobs + explicit plugin allowlist per LIVE-REVIEW.md §5.2. No frontend, no Qt, no CEF, no websocket, no scripting. obs-ffmpeg is ungated upstream at 32.1.2 and is built but NOT shipped (excluded at artifact assembly).",
       "inherits": ["macos"],
+      "generator": "Xcode",
       "binaryDir": "${sourceDir}/build_producer",
       "cacheVariables": {
         "CMAKE_OSX_ARCHITECTURES": { "type": "STRING", "value": "arm64" },
