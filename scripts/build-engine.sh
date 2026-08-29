@@ -92,7 +92,7 @@ if [[ -z $FW ]]; then
 fi
 cp -R "$FW" "$STAGE/Frameworks/"
 for lib in libobs-metal.dylib libobs-opengl.dylib; do
-  find "$BUILD" -name "$lib" -path "*Release*" | head -1 | xargs -I{} cp {} "$STAGE/Frameworks/"
+  find "$BUILD" -name "$lib" -path "*Release*" -not -path "*.dSYM/*" | head -1 | xargs -I{} cp {} "$STAGE/Frameworks/"
 done
 for p in "${ENGINE_PLUGINS[@]}"; do
   bundle="$(find "$BUILD" -name "$p.plugin" -maxdepth 6 -type d | head -1)"
@@ -112,7 +112,7 @@ for pass in 1 2 3 4 5 6; do
   while read -r dep; do
     [[ -z $dep ]] && continue
     [[ -e "$STAGE/Frameworks/$dep" ]] && continue
-    src="$(find "$SRC_DIR/.deps" "$BUILD" -name "$dep" -not -path "*qt6*" 2>/dev/null | head -1)"
+    src="$(find "$SRC_DIR/.deps" "$BUILD" -name "$dep" -not -path "*qt6*" -not -path "*.dSYM/*" 2>/dev/null | head -1)"
     if [[ -n $src ]]; then
       cp "$src" "$STAGE/Frameworks/"
       echo "dep copied (pass $pass): $dep (from $src)"
@@ -142,8 +142,8 @@ if [[ -n $BROWSER_BUNDLE ]]; then
     [[ -n $happ ]] || { echo "FATAL: $helper not produced by build" >&2; exit 1; }
     cp -R "$happ" "$STAGE/Frameworks/"
   done
-  FRONTEND_API="$(find "$BUILD" -name "obs-frontend-api.dylib" -path "*Release*" | head -1)"
-  [[ -n $FRONTEND_API ]] || FRONTEND_API="$(find "$BUILD" -name "libobs-frontend-api*.dylib" | head -1)"
+  FRONTEND_API="$(find "$BUILD" -name "obs-frontend-api.dylib" -path "*Release*" -not -path "*.dSYM/*" -type f | head -1)"
+  [[ -n $FRONTEND_API ]] || FRONTEND_API="$(find "$BUILD" -name "libobs-frontend-api*.dylib" -not -path "*.dSYM/*" -type f | head -1)"
   [[ -n $FRONTEND_API ]] || { echo "FATAL: obs-browser built but frontend-api dylib not found" >&2; exit 1; }
   cp "$FRONTEND_API" "$STAGE/Frameworks/"
   # helper entitlement plists ride in the artifact — the release workflow
