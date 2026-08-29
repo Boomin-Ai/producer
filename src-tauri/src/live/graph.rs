@@ -69,7 +69,10 @@ pub(crate) fn on_main_thread<T: Send, F: FnOnce() -> T + Send>(f: F) -> T {
         let f = ctx.f.take().unwrap();
         ctx.out = Some(f());
     }
-    let mut ctx = Ctx { f: Some(f), out: None };
+    let mut ctx = Ctx {
+        f: Some(f),
+        out: None,
+    };
     unsafe {
         ffi::dispatch_sync_f(
             &ffi::_dispatch_main_q as *const c_void,
@@ -94,7 +97,12 @@ fn main_display_uuid() -> Option<String> {
             return None;
         }
         let mut buf = [0i8; 64];
-        let ok = ffi::CFStringGetCString(s, buf.as_mut_ptr(), buf.len() as isize, ffi::K_CF_STRING_ENCODING_UTF8);
+        let ok = ffi::CFStringGetCString(
+            s,
+            buf.as_mut_ptr(),
+            buf.len() as isize,
+            ffi::K_CF_STRING_ENCODING_UTF8,
+        );
         ffi::CFRelease(s);
         if !ok {
             return None;
@@ -173,8 +181,16 @@ impl SceneGraph {
             let settings = ffi::obs_data_create();
             // mac-sck-common.h: ScreenCaptureWindowStream = 1
             ffi::obs_data_set_int(settings, CString::new("type").unwrap().as_ptr(), 1);
-            ffi::obs_data_set_int(settings, CString::new("window").unwrap().as_ptr(), window_id as i64);
-            ffi::obs_data_set_bool(settings, CString::new("show_cursor").unwrap().as_ptr(), false);
+            ffi::obs_data_set_int(
+                settings,
+                CString::new("window").unwrap().as_ptr(),
+                window_id as i64,
+            );
+            ffi::obs_data_set_bool(
+                settings,
+                CString::new("show_cursor").unwrap().as_ptr(),
+                false,
+            );
             let id = CString::new("screen_capture").unwrap();
             let name = CString::new("Overlay").unwrap();
             let src = ffi::obs_source_create(id.as_ptr(), name.as_ptr(), settings, ptr::null_mut());
@@ -191,7 +207,8 @@ impl SceneGraph {
                 );
                 let fid = CString::new("color_key_filter_v2").unwrap();
                 let fname = CString::new("overlay-key").unwrap();
-                let filter = ffi::obs_source_create_private(fid.as_ptr(), fname.as_ptr(), fsettings);
+                let filter =
+                    ffi::obs_source_create_private(fid.as_ptr(), fname.as_ptr(), fsettings);
                 ffi::obs_data_release(fsettings);
                 if !filter.is_null() {
                     ffi::obs_source_filter_add(src, filter);
@@ -243,7 +260,12 @@ impl SceneGraph {
                     ffi::obs_data_set_string(settings, key.as_ptr(), val.as_ptr());
                     let id = CString::new("screen_capture").unwrap();
                     let name = CString::new("Screen").unwrap();
-                    let src = ffi::obs_source_create(id.as_ptr(), name.as_ptr(), settings, ptr::null_mut());
+                    let src = ffi::obs_source_create(
+                        id.as_ptr(),
+                        name.as_ptr(),
+                        settings,
+                        ptr::null_mut(),
+                    );
                     ffi::obs_data_release(settings);
                     if src.is_null() {
                         return Err("screen_capture creation failed".into());
@@ -277,17 +299,28 @@ impl SceneGraph {
                     if ffi::producer_default_camera_id(buf.as_mut_ptr(), buf.len() as i32) == 0 {
                         return Err("no camera device found".into());
                     }
-                    let device = std::ffi::CStr::from_ptr(buf.as_ptr()).to_string_lossy().into_owned();
+                    let device = std::ffi::CStr::from_ptr(buf.as_ptr())
+                        .to_string_lossy()
+                        .into_owned();
                     let settings = ffi::obs_data_create();
                     let k_device = CString::new("device").unwrap();
                     let v_device = CString::new(device).unwrap();
                     ffi::obs_data_set_string(settings, k_device.as_ptr(), v_device.as_ptr());
                     // The webcam is a video PiP; its own audio stays out of
                     // the mix (mic is a separate toggle).
-                    ffi::obs_data_set_bool(settings, CString::new("enable_audio").unwrap().as_ptr(), false);
+                    ffi::obs_data_set_bool(
+                        settings,
+                        CString::new("enable_audio").unwrap().as_ptr(),
+                        false,
+                    );
                     let id = CString::new("macos-avcapture").unwrap();
                     let name = CString::new("Camera").unwrap();
-                    let src = ffi::obs_source_create(id.as_ptr(), name.as_ptr(), settings, ptr::null_mut());
+                    let src = ffi::obs_source_create(
+                        id.as_ptr(),
+                        name.as_ptr(),
+                        settings,
+                        ptr::null_mut(),
+                    );
                     ffi::obs_data_release(settings);
                     if src.is_null() {
                         return Err("camera source creation failed".into());
@@ -330,7 +363,12 @@ impl SceneGraph {
                 (true, None) => {
                     let id = CString::new("coreaudio_input_capture").unwrap();
                     let name = CString::new("Mic").unwrap();
-                    let src = ffi::obs_source_create(id.as_ptr(), name.as_ptr(), ptr::null_mut(), ptr::null_mut());
+                    let src = ffi::obs_source_create(
+                        id.as_ptr(),
+                        name.as_ptr(),
+                        ptr::null_mut(),
+                        ptr::null_mut(),
+                    );
                     if src.is_null() {
                         return Err("mic source creation failed".into());
                     }
@@ -355,14 +393,24 @@ pub fn attach_capture_sources() -> Result<(), String> {
         ffi::obs_data_set_string(settings, key.as_ptr(), val.as_ptr());
         let screen_id = CString::new("screen_capture").unwrap();
         let screen_name = CString::new("Live Screen").unwrap();
-        let screen = ffi::obs_source_create(screen_id.as_ptr(), screen_name.as_ptr(), settings, ptr::null_mut());
+        let screen = ffi::obs_source_create(
+            screen_id.as_ptr(),
+            screen_name.as_ptr(),
+            settings,
+            ptr::null_mut(),
+        );
         ffi::obs_data_release(settings);
         if screen.is_null() {
             return Err("screen_capture source creation failed".into());
         }
         let mic_id = CString::new("coreaudio_input_capture").unwrap();
         let mic_name = CString::new("Live Mic").unwrap();
-        let mic = ffi::obs_source_create(mic_id.as_ptr(), mic_name.as_ptr(), ptr::null_mut(), ptr::null_mut());
+        let mic = ffi::obs_source_create(
+            mic_id.as_ptr(),
+            mic_name.as_ptr(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+        );
         if mic.is_null() {
             ffi::obs_source_release(screen);
             return Err("mic source creation failed".into());
@@ -431,11 +479,22 @@ pub fn capture_probe(window: Duration) -> CaptureProbeReport {
         None => notes.push("could not resolve main display UUID".into()),
     }
     let screen = unsafe {
-        ffi::obs_source_create(screen_id.as_ptr(), screen_name.as_ptr(), screen_settings, ptr::null_mut())
+        ffi::obs_source_create(
+            screen_id.as_ptr(),
+            screen_name.as_ptr(),
+            screen_settings,
+            ptr::null_mut(),
+        )
     };
     unsafe { ffi::obs_data_release(screen_settings) };
-    let mic =
-        unsafe { ffi::obs_source_create(mic_id.as_ptr(), mic_name.as_ptr(), ptr::null_mut(), ptr::null_mut()) };
+    let mic = unsafe {
+        ffi::obs_source_create(
+            mic_id.as_ptr(),
+            mic_name.as_ptr(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+        )
+    };
     if screen.is_null() || mic.is_null() {
         notes.push(format!(
             "source creation failed: screen={} mic={}",
@@ -461,11 +520,21 @@ pub fn capture_probe(window: Duration) -> CaptureProbeReport {
     while start.elapsed() < window {
         std::thread::sleep(Duration::from_millis(250));
         if !screen.is_null() && size.0 == 0 {
-            size = unsafe { (ffi::obs_source_get_width(screen), ffi::obs_source_get_height(screen)) };
+            size = unsafe {
+                (
+                    ffi::obs_source_get_width(screen),
+                    ffi::obs_source_get_height(screen),
+                )
+            };
         }
     }
     if !screen.is_null() && size.0 == 0 {
-        size = unsafe { (ffi::obs_source_get_width(screen), ffi::obs_source_get_height(screen)) };
+        size = unsafe {
+            (
+                ffi::obs_source_get_width(screen),
+                ffi::obs_source_get_height(screen),
+            )
+        };
     }
     let elapsed = start.elapsed().as_secs_f64();
 

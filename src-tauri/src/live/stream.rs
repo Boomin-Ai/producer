@@ -147,7 +147,11 @@ pub fn first_light(credential_id: &str, report_dir: &Path) -> FirstLightReport {
         }
 
         let venc_settings = ffi::obs_data_create();
-        ffi::obs_data_set_string(venc_settings, cstr("rate_control").as_ptr(), cstr("CBR").as_ptr());
+        ffi::obs_data_set_string(
+            venc_settings,
+            cstr("rate_control").as_ptr(),
+            cstr("CBR").as_ptr(),
+        );
         ffi::obs_data_set_int(venc_settings, cstr("bitrate").as_ptr(), 4500);
         ffi::obs_data_set_int(venc_settings, cstr("keyint_sec").as_ptr(), 2);
         let aenc_settings = ffi::obs_data_create();
@@ -161,7 +165,9 @@ pub fn first_light(credential_id: &str, report_dir: &Path) -> FirstLightReport {
             ptr::null_mut(),
         );
         if venc.is_null() {
-            report.notes.push("VideoToolbox encoder unavailable, using obs_x264".into());
+            report
+                .notes
+                .push("VideoToolbox encoder unavailable, using obs_x264".into());
             venc = ffi::obs_video_encoder_create(
                 cstr("obs_x264").as_ptr(),
                 cstr("ML3 x264").as_ptr(),
@@ -209,11 +215,23 @@ pub fn first_light(credential_id: &str, report_dir: &Path) -> FirstLightReport {
         let sh = ffi::obs_output_get_signal_handler(output);
         ffi::signal_handler_connect(sh, cstr("start").as_ptr(), on_start, ptr::null_mut());
         ffi::signal_handler_connect(sh, cstr("stop").as_ptr(), on_stop, ptr::null_mut());
-        ffi::signal_handler_connect(sh, cstr("reconnect").as_ptr(), on_reconnect, ptr::null_mut());
-        ffi::signal_handler_connect(sh, cstr("reconnect_success").as_ptr(), on_reconnect_success, ptr::null_mut());
+        ffi::signal_handler_connect(
+            sh,
+            cstr("reconnect").as_ptr(),
+            on_reconnect,
+            ptr::null_mut(),
+        );
+        ffi::signal_handler_connect(
+            sh,
+            cstr("reconnect_success").as_ptr(),
+            on_reconnect_success,
+            ptr::null_mut(),
+        );
 
         let started = ffi::obs_output_start(output);
-        report.events.push(format!("obs_output_start returned {started}"));
+        report
+            .events
+            .push(format!("obs_output_start returned {started}"));
         let t0 = Instant::now();
         let mut phase: &'static str = if started { "connecting" } else { "failed" };
         let mut stopped_code: Option<i64> = None;
@@ -229,7 +247,9 @@ pub fn first_light(credential_id: &str, report_dir: &Path) -> FirstLightReport {
                             stopped_code = Some(*code);
                         }
                     }
-                    report.events.push(format!("{:?} at {:.1}s", ev, t0.elapsed().as_secs_f64()));
+                    report
+                        .events
+                        .push(format!("{:?} at {:.1}s", ev, t0.elapsed().as_secs_f64()));
                 }
                 if stopped_code.is_some() {
                     break;
@@ -245,12 +265,17 @@ pub fn first_light(credential_id: &str, report_dir: &Path) -> FirstLightReport {
                     },
                 );
                 if stop_file.exists() || t0.elapsed() > Duration::from_secs(MAX_STREAM_SECS) {
-                    report.events.push(format!("stop requested at {:.1}s", t0.elapsed().as_secs_f64()));
+                    report.events.push(format!(
+                        "stop requested at {:.1}s",
+                        t0.elapsed().as_secs_f64()
+                    ));
                     ffi::obs_output_stop(output);
                     // wait for the stop signal, bounded
                     let deadline = Instant::now() + Duration::from_secs(15);
                     while stopped_code.is_none() && Instant::now() < deadline {
-                        if let Ok(StreamEvent::Stopped { code }) = rx.recv_timeout(Duration::from_millis(250)) {
+                        if let Ok(StreamEvent::Stopped { code }) =
+                            rx.recv_timeout(Duration::from_millis(250))
+                        {
                             stopped_code = Some(code);
                         }
                     }

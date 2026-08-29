@@ -54,7 +54,9 @@ pub fn live_list_destinations(state: State<'_, AppState>) -> EngineResult<Vec<De
     let mut stmt = conn.prepare(
         "SELECT id, preset, label, server, enabled, created_at FROM live_destinations ORDER BY created_at",
     )?;
-    let rows = stmt.query_map([], row_from_db)?.collect::<Result<Vec<_>, _>>()?;
+    let rows = stmt
+        .query_map([], row_from_db)?
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
 }
 
@@ -64,18 +66,17 @@ pub fn live_upsert_destination(
     input: UpsertDestination,
 ) -> EngineResult<DestinationRow> {
     if !PRESETS.contains(&input.preset.as_str()) {
-        return Err(EngineError::Other(format!("unknown preset {}", input.preset)));
+        return Err(EngineError::Other(format!(
+            "unknown preset {}",
+            input.preset
+        )));
     }
     let server = match input.preset.as_str() {
         "kick" => {
-            let raw = input
-                .server
-                .as_deref()
-                .ok_or_else(|| EngineError::Other("Kick needs its ingest URL (from the Kick dashboard)".into()))?;
-            Some(
-                crate::live::normalize_kick_server_checked(raw)
-                    .map_err(EngineError::Other)?,
-            )
+            let raw = input.server.as_deref().ok_or_else(|| {
+                EngineError::Other("Kick needs its ingest URL (from the Kick dashboard)".into())
+            })?;
+            Some(crate::live::normalize_kick_server_checked(raw).map_err(EngineError::Other)?)
         }
         "custom" => {
             let raw = input
@@ -85,7 +86,9 @@ pub fn live_upsert_destination(
                 .trim()
                 .to_string();
             if !(raw.starts_with("rtmp://") || raw.starts_with("rtmps://")) {
-                return Err(EngineError::Other("server must start with rtmp:// or rtmps://".into()));
+                return Err(EngineError::Other(
+                    "server must start with rtmp:// or rtmps://".into(),
+                ));
             }
             Some(raw)
         }
@@ -130,7 +133,14 @@ pub fn live_upsert_destination(
         "INSERT INTO live_destinations (id, preset, label, server, credential_id, enabled)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)
          ON CONFLICT(id) DO UPDATE SET preset = ?2, label = ?3, server = ?4, enabled = ?6",
-        params![id, input.preset, input.label, server, credential_id, enabled as i64],
+        params![
+            id,
+            input.preset,
+            input.label,
+            server,
+            credential_id,
+            enabled as i64
+        ],
     )?;
 
     let row = conn.query_row(
@@ -182,10 +192,7 @@ pub fn live_go_live(state: State<'_, AppState>) -> EngineResult<()> {
     if specs.is_empty() {
         return Err(EngineError::Other("no enabled destinations".into()));
     }
-    state
-        .live
-        .go_live_specs(specs)
-        .map_err(EngineError::Other)
+    state.live.go_live_specs(specs).map_err(EngineError::Other)
 }
 
 #[tauri::command]
@@ -205,7 +212,10 @@ pub fn live_set_sources(
     camera: bool,
     mic: bool,
 ) -> EngineResult<()> {
-    state.live.set_sources(screen, camera, mic).map_err(EngineError::Other)
+    state
+        .live
+        .set_sources(screen, camera, mic)
+        .map_err(EngineError::Other)
 }
 
 #[tauri::command]
@@ -231,8 +241,17 @@ pub fn live_attach_preview(
 }
 
 #[tauri::command]
-pub fn live_move_preview(state: State<'_, AppState>, x: f64, y: f64, w: f64, h: f64) -> EngineResult<()> {
-    state.live.move_preview(x, y, w, h).map_err(EngineError::Other)
+pub fn live_move_preview(
+    state: State<'_, AppState>,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+) -> EngineResult<()> {
+    state
+        .live
+        .move_preview(x, y, w, h)
+        .map_err(EngineError::Other)
 }
 
 #[tauri::command]
@@ -246,7 +265,10 @@ pub fn live_set_overlay(
     window_id: Option<u32>,
     color_key: bool,
 ) -> EngineResult<()> {
-    state.live.set_overlay(window_id, color_key).map_err(EngineError::Other)
+    state
+        .live
+        .set_overlay(window_id, color_key)
+        .map_err(EngineError::Other)
 }
 
 #[tauri::command]

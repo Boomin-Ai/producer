@@ -76,8 +76,12 @@ pub type signal_callback_t = extern "C" fn(data: *mut c_void, cd: *mut calldata_
 
 pub type obs_task_t = extern "C" fn(param: *mut c_void);
 pub type obs_task_handler_t = extern "C" fn(task: obs_task_t, param: *mut c_void, wait: bool);
-pub type obs_source_audio_capture_t =
-    extern "C" fn(param: *mut c_void, source: *mut obs_source_t, audio: *const audio_data, muted: bool);
+pub type obs_source_audio_capture_t = extern "C" fn(
+    param: *mut c_void,
+    source: *mut obs_source_t,
+    audio: *const audio_data,
+    muted: bool,
+);
 pub type raw_video_cb_t = extern "C" fn(param: *mut c_void, frame: *mut video_data);
 
 extern "C" {
@@ -165,7 +169,9 @@ extern "C" {
         video_bitrate: *mut c_int,
         audio_bitrate: *mut c_int,
     );
-    pub fn obs_service_get_supported_video_codecs(service: *const obs_service_t) -> *const *const c_char;
+    pub fn obs_service_get_supported_video_codecs(
+        service: *const obs_service_t,
+    ) -> *const *const c_char;
     pub fn obs_output_get_congestion(output: *mut obs_output_t) -> f32;
     pub fn obs_output_get_total_bytes(output: *const obs_output_t) -> u64;
     pub fn bfree(ptr: *mut c_void);
@@ -211,11 +217,22 @@ pub struct vec2 {
 pub type draw_callback_t = extern "C" fn(param: *mut c_void, cx: u32, cy: u32);
 
 extern "C" {
-    pub fn obs_display_create(graphics_data: *const gs_init_data, background_color: u32) -> *mut obs_display_t;
+    pub fn obs_display_create(
+        graphics_data: *const gs_init_data,
+        background_color: u32,
+    ) -> *mut obs_display_t;
     pub fn obs_display_destroy(display: *mut obs_display_t);
     pub fn obs_display_resize(display: *mut obs_display_t, cx: u32, cy: u32);
-    pub fn obs_display_add_draw_callback(display: *mut obs_display_t, draw: draw_callback_t, param: *mut c_void);
-    pub fn obs_display_remove_draw_callback(display: *mut obs_display_t, draw: draw_callback_t, param: *mut c_void);
+    pub fn obs_display_add_draw_callback(
+        display: *mut obs_display_t,
+        draw: draw_callback_t,
+        param: *mut c_void,
+    );
+    pub fn obs_display_remove_draw_callback(
+        display: *mut obs_display_t,
+        draw: draw_callback_t,
+        param: *mut c_void,
+    );
     pub fn obs_render_main_texture();
     pub fn obs_get_video_info(ovi: *mut obs_video_info) -> bool;
 
@@ -228,7 +245,10 @@ extern "C" {
     pub fn obs_scene_create(name: *const c_char) -> *mut obs_scene_t;
     pub fn obs_scene_release(scene: *mut obs_scene_t);
     pub fn obs_scene_get_source(scene: *const obs_scene_t) -> *mut obs_source_t;
-    pub fn obs_scene_add(scene: *mut obs_scene_t, source: *mut obs_source_t) -> *mut obs_sceneitem_t;
+    pub fn obs_scene_add(
+        scene: *mut obs_scene_t,
+        source: *mut obs_source_t,
+    ) -> *mut obs_sceneitem_t;
     pub fn obs_sceneitem_remove(item: *mut obs_sceneitem_t);
     pub fn obs_sceneitem_set_pos(item: *mut obs_sceneitem_t, pos: *const vec2);
     pub fn obs_sceneitem_set_bounds_type(item: *mut obs_sceneitem_t, bounds_type: c_int);
@@ -318,7 +338,11 @@ extern "C" {
     ) -> *mut obs_output_t;
     pub fn obs_output_release(output: *mut obs_output_t);
     pub fn obs_output_set_video_encoder(output: *mut obs_output_t, encoder: *mut obs_encoder_t);
-    pub fn obs_output_set_audio_encoder(output: *mut obs_output_t, encoder: *mut obs_encoder_t, idx: usize);
+    pub fn obs_output_set_audio_encoder(
+        output: *mut obs_output_t,
+        encoder: *mut obs_encoder_t,
+        idx: usize,
+    );
     pub fn obs_output_set_service(output: *mut obs_output_t, service: *mut obs_service_t);
     pub fn obs_output_start(output: *mut obs_output_t) -> bool;
     pub fn obs_output_stop(output: *mut obs_output_t);
@@ -334,7 +358,12 @@ extern "C" {
         callback: signal_callback_t,
         data: *mut c_void,
     );
-    pub fn calldata_get_data(data: *const calldata_t, name: *const c_char, out: *mut c_void, size: usize) -> bool;
+    pub fn calldata_get_data(
+        data: *const calldata_t,
+        name: *const c_char,
+        out: *mut c_void,
+        size: usize,
+    ) -> bool;
 }
 
 // Main-display UUID lookup — the same CoreGraphics path OBS's own display

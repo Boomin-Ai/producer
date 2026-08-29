@@ -171,7 +171,10 @@ struct DestRuntime {
     status: DestStatus,
 }
 
-unsafe fn create_service(spec: &DestinationSpec, secret: &str) -> Result<*mut ffi::obs_service_t, String> {
+unsafe fn create_service(
+    spec: &DestinationSpec,
+    secret: &str,
+) -> Result<*mut ffi::obs_service_t, String> {
     let settings = ffi::obs_data_create();
     let k_key = cstr("key");
     let v_key = cstr(secret);
@@ -183,7 +186,11 @@ unsafe fn create_service(spec: &DestinationSpec, secret: &str) -> Result<*mut ff
             "rtmp_common"
         }
         "youtube" => {
-            ffi::obs_data_set_string(settings, cstr("service").as_ptr(), cstr("YouTube - RTMPS").as_ptr());
+            ffi::obs_data_set_string(
+                settings,
+                cstr("service").as_ptr(),
+                cstr("YouTube - RTMPS").as_ptr(),
+            );
             ffi::obs_data_set_string(
                 settings,
                 cstr("server").as_ptr(),
@@ -192,7 +199,10 @@ unsafe fn create_service(spec: &DestinationSpec, secret: &str) -> Result<*mut ff
             "rtmp_common"
         }
         "kick" | "custom" => {
-            let raw = spec.server.as_deref().ok_or("kick/custom destination needs a server URL")?;
+            let raw = spec
+                .server
+                .as_deref()
+                .ok_or("kick/custom destination needs a server URL")?;
             let server = if spec.kind == "kick" {
                 normalize_kick_server(raw)?
             } else {
@@ -259,7 +269,10 @@ unsafe fn policy_intersection(
             ));
         }
         if max_fps > 0 && fps > max_fps {
-            return Err(format!("destination {} caps fps at {max_fps}, graph runs {fps}", d.spec.id));
+            return Err(format!(
+                "destination {} caps fps at {max_fps}, graph runs {fps}",
+                d.spec.id
+            ));
         }
 
         let mut res_list: *mut ffi::obs_service_resolution = ptr::null_mut();
@@ -296,9 +309,13 @@ unsafe fn policy_intersection(
         ffi::obs_data_release(a);
     }
     if video_kbps < 1000 {
-        return Err(format!("policy intersection collapsed to {video_kbps} kbps — unacceptable"));
+        return Err(format!(
+            "policy intersection collapsed to {video_kbps} kbps — unacceptable"
+        ));
     }
-    notes.push(format!("D2 intersection: video {video_kbps} kbps, audio {audio_kbps} kbps @ {fps} fps"));
+    notes.push(format!(
+        "D2 intersection: video {video_kbps} kbps, audio {audio_kbps} kbps @ {fps} fps"
+    ));
     Ok((video_kbps, audio_kbps, readouts))
 }
 
@@ -362,7 +379,9 @@ impl Session {
                 }
             }
             if dests.is_empty() || dests.len() != config.destinations.len() {
-                report.notes.push("not all destinations constructed; aborting".into());
+                report
+                    .notes
+                    .push("not all destinations constructed; aborting".into());
                 for d in &dests {
                     ffi::obs_service_release(d.service);
                 }
@@ -370,23 +389,28 @@ impl Session {
                 return Err(report);
             }
 
-            let (video_kbps, audio_kbps, readouts) = match policy_intersection(&dests, 30, &mut report.notes) {
-                Ok(r) => r,
-                Err(e) => {
-                    report.notes.push(e);
-                    for d in &dests {
-                        ffi::obs_service_release(d.service);
+            let (video_kbps, audio_kbps, readouts) =
+                match policy_intersection(&dests, 30, &mut report.notes) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        report.notes.push(e);
+                        for d in &dests {
+                            ffi::obs_service_release(d.service);
+                        }
+                        *EVENT_TX.lock().unwrap() = None;
+                        return Err(report);
                     }
-                    *EVENT_TX.lock().unwrap() = None;
-                    return Err(report);
-                }
-            };
+                };
             report.policy = readouts;
             report.shared_video_kbps = video_kbps;
             report.shared_audio_kbps = audio_kbps;
 
             let venc_settings = ffi::obs_data_create();
-            ffi::obs_data_set_string(venc_settings, cstr("rate_control").as_ptr(), cstr("CBR").as_ptr());
+            ffi::obs_data_set_string(
+                venc_settings,
+                cstr("rate_control").as_ptr(),
+                cstr("CBR").as_ptr(),
+            );
             ffi::obs_data_set_int(venc_settings, cstr("bitrate").as_ptr(), video_kbps);
             ffi::obs_data_set_int(venc_settings, cstr("keyint_sec").as_ptr(), 2);
             let mut venc = ffi::obs_video_encoder_create(
@@ -397,7 +421,9 @@ impl Session {
             );
             report.encoder_used = VT_H264_HW.into();
             if venc.is_null() {
-                report.notes.push("VT unavailable; shared encoder = obs_x264 (A7 fallback)".into());
+                report
+                    .notes
+                    .push("VT unavailable; shared encoder = obs_x264 (A7 fallback)".into());
                 venc = ffi::obs_video_encoder_create(
                     cstr("obs_x264").as_ptr(),
                     cstr("shared-x264").as_ptr(),
@@ -443,17 +469,27 @@ impl Session {
                 ffi::signal_handler_connect(sh, cstr("start").as_ptr(), on_start, idx);
                 ffi::signal_handler_connect(sh, cstr("stop").as_ptr(), on_stop, idx);
                 ffi::signal_handler_connect(sh, cstr("reconnect").as_ptr(), on_reconnect, idx);
-                ffi::signal_handler_connect(sh, cstr("reconnect_success").as_ptr(), on_reconnect_success, idx);
+                ffi::signal_handler_connect(
+                    sh,
+                    cstr("reconnect_success").as_ptr(),
+                    on_reconnect_success,
+                    idx,
+                );
                 d.output = output;
             }
 
             let t0 = Instant::now();
             for d in dests.iter_mut() {
                 let started = ffi::obs_output_start(d.output);
-                d.status.phase = if started { Phase::Connecting } else { Phase::Stopped };
-                report
-                    .events
-                    .push(format!("{}: obs_output_start returned {started}", d.spec.id));
+                d.status.phase = if started {
+                    Phase::Connecting
+                } else {
+                    Phase::Stopped
+                };
+                report.events.push(format!(
+                    "{}: obs_output_start returned {started}",
+                    d.spec.id
+                ));
             }
 
             Ok(Session {
@@ -481,7 +517,8 @@ impl Session {
                 Ev::Start(i) => {
                     self.dests[i].status.phase = Phase::Live;
                     if self.dests[i].status.went_live_at_secs.is_none() {
-                        self.dests[i].status.went_live_at_secs = Some(self.t0.elapsed().as_secs_f64());
+                        self.dests[i].status.went_live_at_secs =
+                            Some(self.t0.elapsed().as_secs_f64());
                     }
                     (i, "live".to_string())
                 }
@@ -500,9 +537,12 @@ impl Session {
                     (i, format!("stopped code={code}"))
                 }
             };
-            self.report
-                .events
-                .push(format!("{}: {} at {:.1}s", self.dests[i].spec.id, line, self.t0.elapsed().as_secs_f64()));
+            self.report.events.push(format!(
+                "{}: {} at {:.1}s",
+                self.dests[i].spec.id,
+                line,
+                self.t0.elapsed().as_secs_f64()
+            ));
         }
         unsafe {
             for d in self.dests.iter_mut() {
@@ -514,7 +554,8 @@ impl Session {
                     d.status.congestion = ffi::obs_output_get_congestion(d.output);
                     let err = ffi::obs_output_get_last_error(d.output);
                     if !err.is_null() {
-                        let redacted = creds::redact(&CStr::from_ptr(err).to_string_lossy(), &d.secret);
+                        let redacted =
+                            creds::redact(&CStr::from_ptr(err).to_string_lossy(), &d.secret);
                         d.status.last_error = Some(redacted);
                     }
                 }
@@ -526,9 +567,13 @@ impl Session {
             self.done = true;
             return true;
         }
-        if self.stop_requested_at.is_none() && self.t0.elapsed() > Duration::from_secs(MAX_STREAM_SECS) {
+        if self.stop_requested_at.is_none()
+            && self.t0.elapsed() > Duration::from_secs(MAX_STREAM_SECS)
+        {
             self.request_stop();
-            self.report.notes.push("max stream duration backstop hit".into());
+            self.report
+                .notes
+                .push("max stream duration backstop hit".into());
         }
         if let Some(at) = self.stop_requested_at {
             if at.elapsed() > Duration::from_secs(20) {
@@ -547,9 +592,10 @@ impl Session {
             return;
         }
         self.stop_requested_at = Some(Instant::now());
-        self.report
-            .events
-            .push(format!("stop requested at {:.1}s", self.t0.elapsed().as_secs_f64()));
+        self.report.events.push(format!(
+            "stop requested at {:.1}s",
+            self.t0.elapsed().as_secs_f64()
+        ));
         unsafe {
             for d in self.dests.iter() {
                 if d.status.phase != Phase::Stopped {

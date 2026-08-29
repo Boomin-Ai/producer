@@ -59,27 +59,38 @@ impl Live {
 
     /// (id, preset, server, credential_id) rows → go live.
     #[cfg(have_engine)]
-    pub fn go_live_specs(&self, specs: Vec<(String, String, Option<String>, String)>) -> Result<(), String> {
+    pub fn go_live_specs(
+        &self,
+        specs: Vec<(String, String, Option<String>, String)>,
+    ) -> Result<(), String> {
         let handle = self.handle.as_ref().ok_or("live engine not running")?;
         let destinations = specs
             .into_iter()
-            .map(|(id, preset, server, credential_id)| multi::DestinationSpec {
-                id,
-                kind: preset,
-                credential_id,
-                server,
-            })
+            .map(
+                |(id, preset, server, credential_id)| multi::DestinationSpec {
+                    id,
+                    kind: preset,
+                    credential_id,
+                    server,
+                },
+            )
             .collect();
         handle.go_live(multi::MultiConfig { destinations })
     }
     #[cfg(not(have_engine))]
-    pub fn go_live_specs(&self, _specs: Vec<(String, String, Option<String>, String)>) -> Result<(), String> {
+    pub fn go_live_specs(
+        &self,
+        _specs: Vec<(String, String, Option<String>, String)>,
+    ) -> Result<(), String> {
         Err("live engine not bundled in this build".into())
     }
 
     #[cfg(have_engine)]
     pub fn stop_live(&self) -> Result<(), String> {
-        self.handle.as_ref().ok_or("live engine not running")?.stop_live()
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .stop_live()
     }
     #[cfg(not(have_engine))]
     pub fn stop_live(&self) -> Result<(), String> {
@@ -136,7 +147,12 @@ impl Live {
     #[cfg(have_engine)]
     pub fn list_windows(&self) -> Result<serde_json::Value, String> {
         let mut buf = vec![0u8; 256 * 1024];
-        let ok = unsafe { ffi::producer_list_windows(buf.as_mut_ptr() as *mut std::os::raw::c_char, buf.len() as i32) };
+        let ok = unsafe {
+            ffi::producer_list_windows(
+                buf.as_mut_ptr() as *mut std::os::raw::c_char,
+                buf.len() as i32,
+            )
+        };
         if ok == 0 {
             return Err("window enumeration failed".into());
         }
@@ -149,14 +165,28 @@ impl Live {
     }
 
     #[cfg(have_engine)]
-    pub fn attach_preview(&self, window: usize, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
+    pub fn attach_preview(
+        &self,
+        window: usize,
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+    ) -> Result<(), String> {
         self.handle
             .as_ref()
             .ok_or("live engine not running")?
             .attach_preview(window, engine::PreviewRect { x, y, w, h })
     }
     #[cfg(not(have_engine))]
-    pub fn attach_preview(&self, _win: usize, _x: f64, _y: f64, _w: f64, _h: f64) -> Result<(), String> {
+    pub fn attach_preview(
+        &self,
+        _win: usize,
+        _x: f64,
+        _y: f64,
+        _w: f64,
+        _h: f64,
+    ) -> Result<(), String> {
         Err("live engine not bundled in this build".into())
     }
 
@@ -174,7 +204,10 @@ impl Live {
 
     #[cfg(have_engine)]
     pub fn detach_preview(&self) -> Result<(), String> {
-        self.handle.as_ref().ok_or("live engine not running")?.detach_preview()
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .detach_preview()
     }
     #[cfg(not(have_engine))]
     pub fn detach_preview(&self) -> Result<(), String> {
@@ -244,8 +277,10 @@ pub fn init(app: tauri::AppHandle, report_dir: PathBuf) -> Live {
                     let cfg_path = harness_dir.join("multi-config.json");
                     match std::fs::read_to_string(&cfg_path)
                         .map_err(|e| e.to_string())
-                        .and_then(|s| serde_json::from_str::<multi::MultiConfig>(&s).map_err(|e| e.to_string()))
-                    {
+                        .and_then(|s| {
+                            serde_json::from_str::<multi::MultiConfig>(&s)
+                                .map_err(|e| e.to_string())
+                        }) {
                         Ok(cfg) => {
                             // Sent from the engine thread's own sink; the
                             // command is picked up on the next loop turn.
@@ -303,7 +338,9 @@ pub fn init(app: tauri::AppHandle, report_dir: PathBuf) -> Live {
         });
     }
 
-    Live { handle: Some(handle) }
+    Live {
+        handle: Some(handle),
+    }
 }
 
 #[cfg(have_engine)]
