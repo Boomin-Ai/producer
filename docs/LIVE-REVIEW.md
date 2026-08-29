@@ -59,6 +59,24 @@ Verified facts driving the call:
   true overlay. Limitation vs CEF: no native page alpha, no in-engine
   audio from the overlay, interaction stays in the browser window.
 
+### v1.1.3 completion note (2026-08-29): M-L7.1 ACCEPTED on hardware
+
+The dispatch-loop plan above shipped the same day. obs-browser 2.26.8 built
+in engine CI with the Qt scheduler replaced by a libdispatch pump
+(`engine/patches/0001-obs-browser-dispatch-loop.patch`, carried as the
+obs.lock patchset per D5); CEF 6533 + four Producer Helper apps + the
+frontend-api shim ride the engine artifact. Full M-L7 acceptance verified on
+the spike Mac: overlay URL renders with true alpha over the scene; overlay
+audio confirmed audible on the Twitch stream (reroute_audio into the mix);
+websocket alerts fire; refresh (source replace) and restart (clear/set)
+work; frontend-api shim degrades without blocking; **zero Qt in the
+CEF-laden closure** (A9 gate green). CI hardening en route: closure gate now
+enforces dep existence (a listed-but-absent dylib is red), dep copy runs to
+a fixed point, and dSYM companions are excluded from binary discovery.
+Remaining for release: CEF notarization leg in release.yml (helper
+entitlements ship inside the artifact under signing/), Windows CEF assembly
+(no pump patch needed there — Qt loop is macOS-only).
+
 ---
 
 ## 1. Goal (one sentence)
