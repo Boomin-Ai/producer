@@ -111,26 +111,31 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      - name: Fetch engine artifact (by obs.lock hash; R1 extract fallback)
+      # v0.2.0 postmortem: NO fallbacks, NO stale artifacts. The artifact for
+      # the CURRENT obs.lock lockhash must exist among recent green engine.yml
+      # runs or the release fails — run engine.yml for this lock first.
+      - name: Fetch engine artifact (current obs.lock hash — fail hard on miss)
         run: |
           set -euo pipefail
           ARCH="$(python3 -c "import json;print(json.load(open('engine/obs.lock'))['arch'])")"
           NAME="producer-libobs-macos-${ARCH}-$(shasum -a 256 engine/obs.lock | cut -c1-12)"
           echo "want: $NAME"
-          RUN_ID="$(gh run list --workflow=engine.yml --status success --limit 1 --json databaseId -q '.[0].databaseId' || true)"
-          if [ -n "$RUN_ID" ]; then
-            gh run download "$RUN_ID" -n "producer-libobs-macos-${ARCH}" -D /tmp/engine-dl || true
+          FOUND=""
+          for RUN_ID in $(gh run list --workflow=engine.yml --status success --limit 10 --json databaseId -q '.[].databaseId'); do
+            rm -rf /tmp/engine-dl
+            gh run download "$RUN_ID" -n "producer-libobs-macos-${ARCH}" -D /tmp/engine-dl 2>/dev/null || continue
+            if [ -f "/tmp/engine-dl/$NAME.tar.zst" ]; then FOUND="$RUN_ID"; break; fi
+          done
+          if [ -z "$FOUND" ]; then
+            echo "FATAL: no engine artifact matches the current obs.lock ($NAME) in the last 10 green engine runs." >&2
+            echo "Run engine.yml for this obs.lock (push to engine paths or workflow_dispatch), then re-run the release." >&2
+            exit 1
           fi
-          if [ -f "/tmp/engine-dl/$NAME.tar.zst" ]; then
-            (cd /tmp/engine-dl && shasum -a 256 -c "$NAME.tar.zst.sha256")
-            mkdir -p engine/artifacts
-            tar --zstd -xf "/tmp/engine-dl/$NAME.tar.zst" -C engine/artifacts/ \
-              || tar --use-compress-program=unzstd -xf "/tmp/engine-dl/$NAME.tar.zst" -C engine/artifacts/
-            echo "engine: CI source-build artifact (run $RUN_ID)"
-          else
-            echo "engine: CI artifact for current obs.lock not found — R1 official-DMG extract fallback"
-            ./scripts/extract-engine.sh
-          fi
+          (cd /tmp/engine-dl && shasum -a 256 -c "$NAME.tar.zst.sha256")
+          mkdir -p engine/artifacts
+          tar --zstd -xf "/tmp/engine-dl/$NAME.tar.zst" -C engine/artifacts/ \
+            || tar --use-compress-program=unzstd -xf "/tmp/engine-dl/$NAME.tar.zst" -C engine/artifacts/
+          echo "engine: CI source-build artifact (run $FOUND)"
           test -d "engine/artifacts/$NAME/Frameworks/libobs.framework" \
             || { echo "FATAL: engine artifact missing after fetch — refusing to ship a stub build" >&2; exit 1; }
           echo "ENGINE_NAME=$NAME" >> "$GITHUB_ENV"
@@ -172,8 +177,11 @@ jobs:
             --entitlements .github/macos/producer.entitlements \
             --sign "$SIGN_IDENT" "$APP"
 
-      - name: Gates — no-Qt closure + deep-strict verify
+      - name: Gates — dependency closure + no-Qt + deep-strict verify
         run: |
+          # engine-closure.sh enforces that every @rpath dep EXISTS in the
+          # assembled bundle — the gate that turns v0.2.0's launch crash red.
+          ./scripts/engine-closure.sh "$APP/Contents"
           ./scripts/check-no-qt.sh "$APP"
           codesign --verify --deep --strict --verbose=2 "$APP"
 
