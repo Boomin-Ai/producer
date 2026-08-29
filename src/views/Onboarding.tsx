@@ -11,7 +11,7 @@ export function Wordmark() {
 
 type Door = "chooser" | "boomin" | "server";
 
-export function Onboarding({ onConnected }: { onConnected: () => void }) {
+export function Onboarding({ onConnected, onCancel }: { onConnected: () => void; onCancel?: () => void }) {
   const [door, setDoor] = useState<Door>("chooser");
 
   if (door === "boomin") return <BoominLogin onBack={() => setDoor("chooser")} onConnected={onConnected} />;
@@ -19,6 +19,11 @@ export function Onboarding({ onConnected }: { onConnected: () => void }) {
 
   return (
     <div className="onboarding">
+      {onCancel && (
+        <button className="cr-back onboarding-cancel" onClick={onCancel} title="Back to the control room">
+          ✕
+        </button>
+      )}
       <Wordmark />
       <h1>
         <span>Stop posting.</span> <strong>Start producing.</strong>

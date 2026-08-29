@@ -53,7 +53,10 @@ function App() {
   if (view === "onboarding") {
     return (
       <main className="shell">
-        <Onboarding onConnected={refresh} />
+        <Onboarding
+          onConnected={refresh}
+          onCancel={endpoints.length > 0 ? () => setView("home") : undefined}
+        />
       </main>
     );
   }

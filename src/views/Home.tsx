@@ -191,6 +191,7 @@ export function Home({
   onRemoveEndpoint: (id: string) => void;
 }) {
   const [view, setView] = useState<MainView>({ kind: "home" });
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const updater = useUpdater();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -294,20 +295,27 @@ export function Home({
               <span className="update-dot" /> Restart to update
             </button>
           )}
-          {endpoints.map((ep) => (
-            <span key={ep.id} className="cr-workspace" title={`${ep.base_url} — click ✕ to disconnect`}>
-              <span className={`dot ${ep.kind}`} />
-              {ep.name}
-              <button onClick={() => onRemoveEndpoint(ep.id)} title="Disconnect">
-                ✕
-              </button>
-            </span>
-          ))}
-          <button className="cr-add-ws" onClick={onAddEndpoint} title="Add a workspace">
-            +
+          <button className="cr-gear" onClick={() => setSettingsOpen(true)} title="Settings">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="12" cy="12" r="3.2" />
+              <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01A1.7 1.7 0 0 0 10 4.09V4a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01c.26.63.87 1.04 1.56 1.04H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51.94z" />
+            </svg>
           </button>
         </div>
       </header>
+
+      {settingsOpen && (
+        <SettingsSheet
+          endpoints={endpoints}
+          onAddEndpoint={() => {
+            setSettingsOpen(false);
+            onAddEndpoint();
+          }}
+          onRemoveEndpoint={onRemoveEndpoint}
+          updater={updater}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
 
       {view.kind === "home" && (
         <ControlRoomHome
@@ -351,6 +359,88 @@ export function Home({
         </main>
       )}
     </div>
+  );
+}
+
+function SettingsSheet({
+  endpoints,
+  onAddEndpoint,
+  onRemoveEndpoint,
+  updater,
+  onClose,
+}: {
+  endpoints: EndpointInfo[];
+  onAddEndpoint: () => void;
+  onRemoveEndpoint: (id: string) => void;
+  updater: { state: string; version: string | null; restart: () => void };
+  onClose: () => void;
+}) {
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    import("@tauri-apps/api/app")
+      .then(({ getVersion }) => getVersion())
+      .then(setAppVersion)
+      .catch(() => {});
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <>
+      <div className="cr-sheet-backdrop" onClick={onClose} />
+      <aside className="cr-sheet">
+        <div className="cr-sheet-head">
+          <span className="cr-sheet-title">Settings</span>
+          <button className="cr-back" onClick={onClose} title="Close">
+            ✕
+          </button>
+        </div>
+
+        <div className="cr-label">WORKSPACES</div>
+        <div className="cr-sheet-rows">
+          {endpoints.map((ep) => (
+            <div key={ep.id} className="cr-sheet-row" title={ep.base_url}>
+              <span className={`dot ${ep.kind}`} />
+              <span className="cr-sheet-row-name">{ep.name}</span>
+              <span className="cr-sheet-row-sub">
+                {ep.kind === "connected" ? "Boomin" : "self-hosted"}
+              </span>
+              <button onClick={() => onRemoveEndpoint(ep.id)} title="Disconnect workspace">
+                ✕
+              </button>
+            </div>
+          ))}
+          <button className="cr-ghost" onClick={onAddEndpoint}>
+            + Add workspace
+          </button>
+        </div>
+
+        <div className="cr-label" style={{ marginTop: 28 }}>
+          APP
+        </div>
+        <div className="cr-sheet-rows">
+          <div className="cr-sheet-row">
+            <span className="cr-sheet-row-name">Producer {appVersion ?? ""}</span>
+            {updater.state === "ready" ? (
+              <button className="cr-primary" onClick={updater.restart}>
+                Restart to update{updater.version ? ` to ${updater.version}` : ""}
+              </button>
+            ) : updater.state === "downloading" ? (
+              <span className="cr-sheet-row-sub">downloading update…</span>
+            ) : (
+              <span className="cr-sheet-row-sub">up to date — updates install themselves</span>
+            )}
+          </div>
+        </div>
+
+        <div className="cr-hint" style={{ marginTop: "auto" }}>
+          Stream keys never leave the macOS Keychain. Channel connections are managed in your Boomin
+          workspace.
+        </div>
+      </aside>
+    </>
   );
 }
 

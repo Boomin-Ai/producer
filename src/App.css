@@ -1914,3 +1914,129 @@ textarea::placeholder {
   font-size: 12px;
   color: var(--muted-fg);
 }
+
+/* settings sheet */
+
+.cr-gear {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--muted-fg);
+}
+
+.cr-gear:hover {
+  color: var(--fg);
+}
+
+.cr-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(4, 6, 10, 0.55);
+}
+
+.cr-sheet {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 61;
+  width: min(400px, 92vw);
+  background: #10141f;
+  border-left: 1px solid var(--border);
+  padding: 20px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -24px 0 60px rgba(0, 0, 0, 0.45);
+  animation: cr-sheet-in 0.22s ease;
+}
+
+@keyframes cr-sheet-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.cr-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.cr-sheet-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.cr-sheet-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.cr-sheet-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+}
+
+.cr-sheet-row .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mint);
+  flex-shrink: 0;
+}
+
+.cr-sheet-row .dot.independent {
+  background: var(--indigo);
+}
+
+.cr-sheet-row-name {
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.cr-sheet-row-sub {
+  font-size: 12px;
+  color: var(--muted-fg);
+  margin-left: auto;
+}
+
+.cr-sheet-row button {
+  border: none;
+  background: none;
+  padding: 0 2px;
+  font-size: 11px;
+  color: var(--muted-fg);
+}
+
+.cr-sheet-row button.cr-primary {
+  background: var(--primary);
+  color: var(--primary-fg);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+}
+
+.onboarding-cancel {
+  position: fixed;
+  top: 14px;
+  left: 92px;
+  z-index: 10;
+}
