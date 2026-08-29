@@ -84,8 +84,16 @@ jobs:
     permissions:
       contents: write
     runs-on: macos-latest
+    # Deliberately NOT named APPLE_* at job scope: tauri's bundler reads those
+    # names and would sign/notarize the engine-less intermediate build.
     env:
       GH_TOKEN: ${{ github.token }}
+      SIGN_IDENT: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      CERT_B64: ${{ secrets.APPLE_CERTIFICATE }}
+      CERT_PW: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      NOTARY_ID: ${{ secrets.APPLE_ID }}
+      NOTARY_PW: ${{ secrets.APPLE_PASSWORD }}
+      NOTARY_TEAM: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -128,10 +136,7 @@ jobs:
           echo "ENGINE_NAME=$NAME" >> "$GITHUB_ENV"
 
       - name: Import signing certificate
-        if: ${{ secrets.APPLE_CERTIFICATE != '' }}
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        if: env.CERT_B64 != ''
         run: |
           set -euo pipefail
           KC=build.keychain
@@ -139,8 +144,8 @@ jobs:
           security default-keychain -s "$KC"
           security unlock-keychain -p ci "$KC"
           security set-keychain-settings -lut 21600 "$KC"
-          echo "$APPLE_CERTIFICATE" | base64 --decode > /tmp/cert.p12
-          security import /tmp/cert.p12 -k "$KC" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          echo "$CERT_B64" | base64 --decode > /tmp/cert.p12
+          security import /tmp/cert.p12 -k "$KC" -P "$CERT_PW" -T /usr/bin/codesign
           rm /tmp/cert.p12
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k ci "$KC" >/dev/null
 
@@ -158,18 +163,14 @@ jobs:
           echo "APP=$APP" >> "$GITHUB_ENV"
 
       - name: Assemble engine into bundle + sign inner→outer
-        env:
-          CODESIGN_IDENT: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
-        run: ./scripts/assemble-engine-bundle.sh "$APP"
+        run: CODESIGN_IDENT="${SIGN_IDENT:--}" ./scripts/assemble-engine-bundle.sh "$APP"
 
       - name: Re-sign app with hardened runtime entitlements
-        if: ${{ secrets.APPLE_SIGNING_IDENTITY != '' }}
-        env:
-          IDENT: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        if: env.SIGN_IDENT != ''
         run: |
           codesign --force --options runtime --timestamp \
             --entitlements .github/macos/producer.entitlements \
-            --sign "$IDENT" "$APP"
+            --sign "$SIGN_IDENT" "$APP"
 
       - name: Gates — no-Qt closure + deep-strict verify
         run: |
@@ -177,26 +178,17 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$APP"
 
       - name: Notarize + staple app
-        if: ${{ secrets.APPLE_SIGNING_IDENTITY != '' }}
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        if: env.SIGN_IDENT != ''
         run: |
           set -euo pipefail
           ditto -c -k --keepParent "$APP" /tmp/Producer.zip
           xcrun notarytool submit /tmp/Producer.zip \
-            --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" \
+            --apple-id "$NOTARY_ID" --password "$NOTARY_PW" --team-id "$NOTARY_TEAM" \
             --wait
           xcrun stapler staple "$APP"
           spctl -a -t exec -vv "$APP"
 
       - name: Package DMG (+ sign, notarize, staple)
-        env:
-          IDENT: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
           VERSION="$(python3 -c "import json;print(json.load(open('src-tauri/tauri.conf.json'))['version'])")"
@@ -206,8 +198,8 @@ jobs:
           cp -R "$APP" "$ROOT/"
           ln -s /Applications "$ROOT/Applications"
           hdiutil create -volname "Producer" -srcfolder "$ROOT" -ov -format UDZO "$DMG"
-          if [ -n "${IDENT:-}" ]; then
-            codesign --force --timestamp --sign "$IDENT" "$DMG"
+          if [ -n "${SIGN_IDENT:-}" ]; then
+            codesign --force --timestamp --sign "$SIGN_IDENT" "$DMG"
             xcrun notarytool submit "$DMG" \
               --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" \
               --wait
