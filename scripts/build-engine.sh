@@ -41,6 +41,7 @@ patchset="$(lock_get "['patchset']")"
 
 # our preset rides alongside upstream's as CMakeUserPresets.json
 cp "$REPO_ROOT/engine/producer-presets.json" "$SRC_DIR/CMakeUserPresets.json"
+cp "$REPO_ROOT/engine/producer-project-include.cmake" "$SRC_DIR/producer-project-include.cmake"
 
 # Shallow clones have no tags, so git-describe versioning fails ("fb4d98b
 # format invalid") — hand OBS its version from the lock instead.

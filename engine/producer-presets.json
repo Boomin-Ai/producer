@@ -10,6 +10,7 @@
       "generator": "Xcode",
       "binaryDir": "${sourceDir}/build_producer",
       "cacheVariables": {
+        "CMAKE_PROJECT_INCLUDE": { "type": "FILEPATH", "value": "${sourceDir}/producer-project-include.cmake" },
         "CMAKE_OSX_ARCHITECTURES": { "type": "STRING", "value": "arm64" },
         "ENABLE_FRONTEND": false,
         "ENABLE_UI": false,
