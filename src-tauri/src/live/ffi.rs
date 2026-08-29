@@ -167,6 +167,7 @@ extern "C" {
     );
     pub fn obs_service_get_supported_video_codecs(service: *const obs_service_t) -> *const *const c_char;
     pub fn obs_output_get_congestion(output: *mut obs_output_t) -> f32;
+    pub fn obs_output_get_total_bytes(output: *const obs_output_t) -> u64;
     pub fn bfree(ptr: *mut c_void);
 }
 

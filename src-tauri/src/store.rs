@@ -34,6 +34,18 @@ fn init(conn: &Connection) -> EngineResult<()> {
             created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
         );
 
+        -- Live destinations (LIVE-REVIEW.md §5.4 / §8). credential_id is an
+        -- opaque keychain reference; the stream key itself NEVER lands here.
+        CREATE TABLE IF NOT EXISTS live_destinations (
+            id            TEXT PRIMARY KEY,
+            preset        TEXT NOT NULL CHECK (preset IN ('twitch', 'kick', 'youtube', 'custom')),
+            label         TEXT NOT NULL,
+            server        TEXT,
+            credential_id TEXT NOT NULL,
+            enabled       INTEGER NOT NULL DEFAULT 1,
+            created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        );
+
         -- The client outbox (PHASE1.md §2.4). Each target is
         -- self-sufficient: request_json is the exact immutable request
         -- to replay; resumption never depends on mutable draft state.

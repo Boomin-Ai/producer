@@ -84,4 +84,74 @@ export const ipc = {
       overrides?: Record<string, unknown>;
     }[];
   }) => invoke<{ intent_id: string; results: TargetResult[] }>("submit_post", { input }),
+
+  // --- Live (LIVE-REVIEW.md §5.4 / §8) ---
+  // Stream keys cross this boundary exactly once, inside upsert; nothing
+  // here ever returns one.
+  liveListDestinations: () => invoke<LiveDestination[]>("live_list_destinations"),
+  liveUpsertDestination: (input: {
+    id?: string;
+    preset: LivePreset;
+    label: string;
+    server?: string;
+    key?: string;
+    enabled?: boolean;
+  }) => invoke<LiveDestination>("live_upsert_destination", { input }),
+  liveDeleteDestination: (id: string) => invoke("live_delete_destination", { id }),
+  liveGoLive: () => invoke("live_go_live"),
+  liveStop: () => invoke("live_stop"),
+  liveEngineStatus: () => invoke<LiveSnapshot>("live_engine_status"),
 };
+
+export type LivePreset = "twitch" | "kick" | "youtube" | "custom";
+
+export interface LiveDestination {
+  id: string;
+  preset: LivePreset;
+  label: string;
+  server?: string | null;
+  enabled: boolean;
+  created_at: string;
+}
+
+/** Transport truth only: "live" means the RTMP session is accepting bytes,
+ * not that the platform confirms the stream (check the dashboard). */
+export type LivePhase = "idle" | "connecting" | "live" | "reconnecting" | "stopped";
+
+export interface LiveDestStatus {
+  id: string;
+  phase: LivePhase;
+  active: boolean;
+  total_frames: number;
+  dropped_frames: number;
+  bytes_sent: number;
+  congestion: number;
+  reconnects: number;
+  went_live_at_secs?: number | null;
+  stop_code?: number | null;
+  last_error?: string | null;
+}
+
+export type LiveSessionState = "idle" | "starting" | "streaming" | "stopping";
+
+export interface LiveSnapshot {
+  engine_ready: boolean;
+  bootstrap_ok: boolean;
+  graphics_backend?: string | null;
+  session_state: LiveSessionState;
+  elapsed_secs: number;
+  destinations: LiveDestStatus[];
+  disabled?: boolean;
+}
+
+export type LiveEvent =
+  | { type: "engine_ready"; ok: boolean; graphics_backend?: string | null; obs_version: string }
+  | { type: "session_state"; state: LiveSessionState }
+  | { type: "status"; elapsed_secs: number; destinations: LiveDestStatus[] }
+  | { type: "session_ended"; report: { ok: boolean; destinations: LiveDestStatus[]; notes: string[] } }
+  | { type: "engine_error"; message: string };
+
+export async function listenLiveEvents(cb: (ev: LiveEvent) => void): Promise<() => void> {
+  const { listen } = await import("@tauri-apps/api/event");
+  return listen<LiveEvent>("live://event", (e) => cb(e.payload));
+}

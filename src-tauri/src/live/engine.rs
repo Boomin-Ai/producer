@@ -246,32 +246,255 @@ pub fn bootstrap() -> EngineReport {
     report
 }
 
+// ---------------------------------------------------------------------------
+// M-L5 host contract: the LiveEngine owner — one thread owns every libobs
+// lifecycle/graph/output call (§5.1); commands arrive over a channel, and
+// immutable events flow back through the sink (which the app layer forwards
+// to the webview as IPC events).
+// ---------------------------------------------------------------------------
+
+use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+use super::graph;
+use super::multi::{DestStatus, MultiConfig, MultiReport, Session};
+
 pub enum Command {
-    // Sent by the app on quit from M-L5's host contract; the startup probe
-    // currently drops the sender instead, which shuts down the same way.
-    #[allow(dead_code)]
+    GoLive(MultiConfig),
+    StopLive,
     Shutdown,
 }
 
-/// Spawn the engine owner thread: bootstraps, reports, then holds the engine
-/// until Shutdown. All libobs calls stay on this thread.
-pub fn spawn() -> (mpsc::Sender<Command>, mpsc::Receiver<EngineReport>) {
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionState {
+    #[default]
+    Idle,
+    Starting,
+    /// Outputs exist and are connecting/sending. Transport truth only —
+    /// per-destination phases carry the detail; platform confirmation is a
+    /// dashboard concern (M-L4 finding).
+    Streaming,
+    Stopping,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum LiveEvent {
+    EngineReady {
+        ok: bool,
+        graphics_backend: Option<String>,
+        obs_version: String,
+    },
+    SessionState {
+        state: SessionState,
+    },
+    Status {
+        elapsed_secs: f64,
+        destinations: Vec<DestStatus>,
+    },
+    SessionEnded {
+        report: MultiReport,
+    },
+    EngineError {
+        message: String,
+    },
+}
+
+/// Pull-side view of the engine for IPC (`live_status`); the push side is
+/// the event sink. Updated only by the engine thread.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct Snapshot {
+    pub engine_ready: bool,
+    pub bootstrap_ok: bool,
+    pub graphics_backend: Option<String>,
+    pub session_state: SessionState,
+    pub elapsed_secs: f64,
+    pub destinations: Vec<DestStatus>,
+}
+
+pub struct LiveHandle {
+    cmd: mpsc::Sender<Command>,
+    pub snapshot: Arc<Mutex<Snapshot>>,
+    streaming: Arc<AtomicBool>,
+}
+
+impl LiveHandle {
+    pub fn go_live(&self, config: MultiConfig) -> Result<(), String> {
+        self.proxy().go_live(config)
+    }
+    pub fn stop_live(&self) -> Result<(), String> {
+        self.proxy().stop_live()
+    }
+    pub fn shutdown(&self) {
+        let _ = self.cmd.send(Command::Shutdown);
+    }
+    pub fn proxy(&self) -> LiveProxy {
+        LiveProxy {
+            cmd: self.cmd.clone(),
+            streaming: self.streaming.clone(),
+        }
+    }
+}
+
+/// Cheap clonable command sender for helper threads (harness relay).
+#[derive(Clone)]
+pub struct LiveProxy {
+    cmd: mpsc::Sender<Command>,
+    streaming: Arc<AtomicBool>,
+}
+
+impl LiveProxy {
+    pub fn go_live(&self, config: MultiConfig) -> Result<(), String> {
+        if self.streaming.load(AtomicOrdering::SeqCst) {
+            return Err("a live session is already running".into());
+        }
+        self.cmd.send(Command::GoLive(config)).map_err(|e| e.to_string())
+    }
+    pub fn stop_live(&self) -> Result<(), String> {
+        self.cmd.send(Command::StopLive).map_err(|e| e.to_string())
+    }
+}
+
+/// Start the LiveEngine owner thread. `sink` receives every event after the
+/// snapshot has been updated; it runs on the engine thread and must not
+/// block or call back into the engine.
+pub fn start(sink: impl Fn(&LiveEvent) + Send + 'static) -> LiveHandle {
     let (cmd_tx, cmd_rx) = mpsc::channel::<Command>();
-    let (report_tx, report_rx) = mpsc::channel::<EngineReport>();
+    let snapshot = Arc::new(Mutex::new(Snapshot::default()));
+    let streaming = Arc::new(AtomicBool::new(false));
+    let snap = snapshot.clone();
+    let streaming_flag = streaming.clone();
+
     std::thread::Builder::new()
         .name("live-engine".into())
         .spawn(move || {
             let report = bootstrap();
-            let _ = report_tx.send(report);
-            while let Ok(cmd) = cmd_rx.recv() {
-                match cmd {
-                    Command::Shutdown => break,
+            {
+                let mut s = snap.lock().unwrap();
+                s.engine_ready = true;
+                s.bootstrap_ok = report.ok;
+                s.graphics_backend = report.graphics_backend.clone();
+            }
+            sink(&LiveEvent::EngineReady {
+                ok: report.ok,
+                graphics_backend: report.graphics_backend.clone(),
+                obs_version: report.obs_version.clone(),
+            });
+
+            let mut capture_attached = false;
+            let mut session: Option<Session> = None;
+            let mut state = SessionState::Idle;
+            let mut last_status_emit = Instant::now();
+
+            let set_state =
+                |state: &mut SessionState, new: SessionState, snap: &Arc<Mutex<Snapshot>>, sink: &dyn Fn(&LiveEvent)| {
+                    if *state != new {
+                        *state = new;
+                        snap.lock().unwrap().session_state = new;
+                        sink(&LiveEvent::SessionState { state: new });
+                    }
+                };
+
+            loop {
+                match cmd_rx.recv_timeout(Duration::from_millis(250)) {
+                    Ok(Command::GoLive(config)) => {
+                        if session.is_some() {
+                            sink(&LiveEvent::EngineError {
+                                message: "go-live refused: session already running".into(),
+                            });
+                        } else if !report.ok {
+                            sink(&LiveEvent::EngineError {
+                                message: "go-live refused: engine bootstrap failed".into(),
+                            });
+                        } else {
+                            set_state(&mut state, SessionState::Starting, &snap, &sink);
+                            if !capture_attached {
+                                match graph::attach_capture_sources() {
+                                    Ok(()) => capture_attached = true,
+                                    Err(e) => {
+                                        sink(&LiveEvent::EngineError {
+                                            message: format!("capture attach failed: {e}"),
+                                        });
+                                        set_state(&mut state, SessionState::Idle, &snap, &sink);
+                                        continue;
+                                    }
+                                }
+                            }
+                            match Session::start(config) {
+                                Ok(s) => {
+                                    session = Some(s);
+                                    streaming_flag.store(true, AtomicOrdering::SeqCst);
+                                    set_state(&mut state, SessionState::Streaming, &snap, &sink);
+                                }
+                                Err(failed_report) => {
+                                    sink(&LiveEvent::SessionEnded { report: failed_report });
+                                    set_state(&mut state, SessionState::Idle, &snap, &sink);
+                                }
+                            }
+                        }
+                    }
+                    Ok(Command::StopLive) => {
+                        if let Some(s) = session.as_mut() {
+                            s.request_stop();
+                            set_state(&mut state, SessionState::Stopping, &snap, &sink);
+                        }
+                    }
+                    Ok(Command::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        if let Some(mut s) = session.take() {
+                            s.request_stop();
+                            let deadline = Instant::now() + Duration::from_secs(15);
+                            while !s.pump() && Instant::now() < deadline {
+                                std::thread::sleep(Duration::from_millis(200));
+                            }
+                            let report = s.finish();
+                            sink(&LiveEvent::SessionEnded { report });
+                        }
+                        break;
+                    }
+                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                }
+
+                if let Some(s) = session.as_mut() {
+                    let done = s.pump();
+                    if s.stopping() {
+                        set_state(&mut state, SessionState::Stopping, &snap, &sink);
+                    }
+                    if done {
+                        let report = session.take().unwrap().finish();
+                        streaming_flag.store(false, AtomicOrdering::SeqCst);
+                        {
+                            let mut sn = snap.lock().unwrap();
+                            sn.destinations = report.destinations.clone();
+                            sn.elapsed_secs = report.streamed_secs;
+                        }
+                        sink(&LiveEvent::SessionEnded { report });
+                        set_state(&mut state, SessionState::Idle, &snap, &sink);
+                    } else if last_status_emit.elapsed() > Duration::from_secs(1) {
+                        last_status_emit = Instant::now();
+                        let statuses = s.statuses();
+                        let elapsed = s.elapsed_secs();
+                        {
+                            let mut sn = snap.lock().unwrap();
+                            sn.destinations = statuses.clone();
+                            sn.elapsed_secs = elapsed;
+                        }
+                        sink(&LiveEvent::Status {
+                            elapsed_secs: elapsed,
+                            destinations: statuses,
+                        });
+                    }
                 }
             }
-            if unsafe { ffi::obs_initialized() } {
-                unsafe { ffi::obs_shutdown() };
-            }
+            // Process exit path: outputs already stopped above; skip
+            // obs_shutdown — teardown of a dying process, not a lifecycle.
         })
         .expect("spawn live-engine thread");
-    (cmd_tx, report_rx)
+
+    LiveHandle {
+        cmd: cmd_tx,
+        snapshot,
+        streaming,
+    }
 }

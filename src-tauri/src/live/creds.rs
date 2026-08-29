@@ -27,6 +27,14 @@ pub fn store(credential_id: &str, key: &str) -> Result<(), String> {
         .map_err(|e| format!("keychain store failed for {credential_id}: {e}"))
 }
 
+/// Remove a credential (destination deleted). Missing entries are fine.
+pub fn delete(credential_id: &str) -> Result<(), String> {
+    match keyring::Entry::new(SERVICE, credential_id).and_then(|e| e.delete_credential()) {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(format!("keychain delete failed for {credential_id}: {e}")),
+    }
+}
+
 /// Redact a secret out of any operator-facing string (§8: service/output
 /// errors may embed URLs containing keys).
 pub fn redact(text: &str, secret: &str) -> String {

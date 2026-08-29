@@ -17,6 +17,9 @@ pub struct AppState {
     /// Mid-sign-in hosted auth (api_root, token) held engine-side between
     /// OTP verification and workspace selection — never enters the webview.
     pub pending_auth: Mutex<Option<(String, String)>>,
+    /// LiveEngine facade (LIVE-REVIEW.md §5.1): commands in, events out via
+    /// the `live://event` channel; stream keys never pass through here.
+    pub live: live::Live,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -34,14 +37,23 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             let conn = store::open(&data_dir.join("producer.db"))
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
+
+            // Live engine. Legacy evidence harnesses (--live-capture-probe /
+            // --live-first-light) bootstrap on a bare thread; every other
+            // launch gets the real LiveEngine (M-L5 host contract), which
+            // also carries the --live-multistream harness.
+            let live = if live::legacy_harness_requested() {
+                live::startup_probe(&data_dir.join("live"));
+                live::Live::disabled()
+            } else {
+                live::init(app.handle().clone(), data_dir.join("live"))
+            };
+
             app.manage(AppState {
                 db: Mutex::new(conn),
                 pending_auth: Mutex::new(None),
+                live,
             });
-
-            // Live engine: bootstrap on its owner thread, record what the
-            // bundled engine discovered (M-L1 evidence for Finder launches).
-            live::startup_probe(&data_dir.join("live"));
 
             // Resume any submissions a crash left unacknowledged.
             let handle = app.handle().clone();
@@ -67,7 +79,20 @@ pub fn run() {
             ipc::submit_post,
             ipc::outbox_inspect,
             ipc::resume_outbox,
+            live::commands::live_list_destinations,
+            live::commands::live_upsert_destination,
+            live::commands::live_delete_destination,
+            live::commands::live_go_live,
+            live::commands::live_stop,
+            live::commands::live_engine_status,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // §5.5: no daemon — closing Producer ends the stream. The engine
+            // bounds the stop wait itself (≤ ~15s with an active session).
+            if let tauri::RunEvent::Exit = event {
+                app.state::<AppState>().live.shutdown();
+            }
+        });
 }
