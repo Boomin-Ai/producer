@@ -144,7 +144,12 @@ impl Live {
         Err("live engine not bundled in this build".into())
     }
 
-    #[cfg(have_engine)]
+    #[cfg(all(have_engine, target_os = "windows"))]
+    pub fn list_windows(&self) -> Result<serde_json::Value, String> {
+        // Window enumeration for the overlay picker lands in M-W2.
+        Ok(serde_json::json!([]))
+    }
+    #[cfg(all(have_engine, target_os = "macos"))]
     pub fn list_windows(&self) -> Result<serde_json::Value, String> {
         let mut buf = vec![0u8; 256 * 1024];
         let ok = unsafe {
@@ -218,7 +223,11 @@ impl Live {
 /// TCC status for the coach (M-L6). Names, not booleans, so the UI can
 /// distinguish "never asked" from "denied" — the coach copy differs.
 pub fn permissions() -> serde_json::Value {
-    #[cfg(have_engine)]
+    // Windows: no TCC — display capture needs no grant; mic/camera use the
+    // OS privacy settings, surfaced as errors at source-create time instead.
+    #[cfg(all(have_engine, target_os = "windows"))]
+    return serde_json::json!({ "screen": "granted", "camera": "granted", "mic": "granted" });
+    #[cfg(all(have_engine, target_os = "macos"))]
     unsafe {
         fn name(status: i32) -> &'static str {
             match status {
@@ -241,7 +250,12 @@ pub fn permissions() -> serde_json::Value {
 /// Fire the system prompt for a permission (mic/camera prompt in place;
 /// screen registers the app in System Settings — relaunch needed after).
 pub fn request_permission(kind: &str) -> Result<(), String> {
-    #[cfg(have_engine)]
+    #[cfg(all(have_engine, target_os = "windows"))]
+    {
+        let _ = kind;
+        return Ok(()); // no OS-level prompts to fire on Windows
+    }
+    #[cfg(all(have_engine, target_os = "macos"))]
     unsafe {
         match kind {
             "camera" => ffi::producer_av_request_access(0),
@@ -422,9 +436,16 @@ pub fn selftest_main() -> ! {
     let report = loop {
         match rx.try_recv() {
             Ok(r) => break r,
-            Err(std::sync::mpsc::TryRecvError::Empty) => unsafe {
-                ffi::CFRunLoopRunInMode(ffi::kCFRunLoopDefaultMode, 0.05, false);
-            },
+            Err(std::sync::mpsc::TryRecvError::Empty) => {
+                // macOS: drain the GCD main queue (bootstrap marshals UI tasks
+                // to it). Windows: nothing to pump; just wait.
+                #[cfg(target_os = "macos")]
+                unsafe {
+                    ffi::CFRunLoopRunInMode(ffi::kCFRunLoopDefaultMode, 0.05, false);
+                }
+                #[cfg(not(target_os = "macos"))]
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                 eprintln!("[live] engine thread died during bootstrap");
                 std::process::exit(2);

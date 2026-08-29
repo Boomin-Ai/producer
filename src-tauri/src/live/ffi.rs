@@ -84,7 +84,12 @@ pub type obs_source_audio_capture_t = extern "C" fn(
 );
 pub type raw_video_cb_t = extern "C" fn(param: *mut c_void, frame: *mut video_data);
 
+// On Windows the engine links via raw-dylib: rustc synthesizes the import
+// table for obs.dll directly from these declarations — no import .lib needed
+// (the official OBS release ships none). macOS links the framework in build.rs.
+#[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
 extern "C" {
+    pub fn obs_add_data_path(path: *const c_char);
     pub fn obs_startup(
         locale: *const c_char,
         module_config_path: *const c_char,
@@ -136,12 +141,14 @@ extern "C" {
 }
 
 // CoreGraphics TCC preflight/request for Screen Recording.
+#[cfg(target_os = "macos")]
 extern "C" {
     pub fn CGPreflightScreenCaptureAccess() -> bool;
     pub fn CGRequestScreenCaptureAccess() -> bool;
 }
 
 // obs-data settings (obs_source_create input)
+#[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
 extern "C" {
     pub fn obs_data_create() -> *mut obs_data_t;
     pub fn obs_data_release(data: *mut obs_data_t);
@@ -157,6 +164,7 @@ pub struct obs_service_resolution {
     pub cx: c_int,
     pub cy: c_int,
 }
+#[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
 extern "C" {
     pub fn obs_service_get_supported_resolutions(
         service: *const obs_service_t,
@@ -216,6 +224,7 @@ pub struct vec2 {
 
 pub type draw_callback_t = extern "C" fn(param: *mut c_void, cx: u32, cy: u32);
 
+#[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
 extern "C" {
     pub fn obs_display_create(
         graphics_data: *const gs_init_data,
@@ -257,6 +266,7 @@ extern "C" {
 }
 
 // shim.m — AppKit/AVFoundation helpers (main-thread marshalling inside)
+#[cfg(target_os = "macos")]
 extern "C" {
     pub fn producer_preview_attach(
         ns_window: *mut c_void,
@@ -286,6 +296,7 @@ extern "C" {
 }
 
 // M-L7 escape hatch: filters on the overlay window capture
+#[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
 extern "C" {
     pub fn obs_source_create_private(
         id: *const c_char,
@@ -296,6 +307,7 @@ extern "C" {
 }
 
 // M-L3: encoders, service, output — first light (LIVE-REVIEW.md F4 chain)
+#[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
 extern "C" {
     pub fn obs_get_video() -> *mut video_t;
     pub fn obs_get_audio() -> *mut audio_t;
@@ -370,6 +382,7 @@ extern "C" {
 // picker uses (window-utils.m); the SCK source has no default-display
 // behavior, it requires an explicit display_uuid.
 pub const K_CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
+#[cfg(target_os = "macos")]
 extern "C" {
     pub fn CGMainDisplayID() -> u32;
     pub fn CGDisplayCreateUUIDFromDisplayID(display: u32) -> *const c_void;
@@ -385,6 +398,7 @@ extern "C" {
 
 // Grand Central Dispatch + pthread, for marshalling OBS UI tasks onto the
 // macOS main thread per the §5.1 invariant.
+#[cfg(target_os = "macos")]
 extern "C" {
     pub static _dispatch_main_q: c_void;
     pub fn dispatch_async_f(
@@ -402,6 +416,7 @@ extern "C" {
 
 // CoreFoundation run-loop pump for headless self-test mode (drains the GCD
 // main queue while the engine thread bootstraps).
+#[cfg(target_os = "macos")]
 extern "C" {
     pub static kCFRunLoopDefaultMode: *const c_void;
     pub fn CFRunLoopRunInMode(

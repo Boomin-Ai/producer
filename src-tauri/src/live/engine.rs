@@ -18,6 +18,7 @@ use super::ffi;
 
 /// Registration IDs the product requires, per LIVE-REVIEW.md §2.1 / M-L1.
 /// VideoToolbox encoder IDs are hardware-dynamic, asserted by substring below.
+#[cfg(target_os = "macos")]
 const REQUIRED_SOURCES: &[&str] = &[
     "screen_capture",          // mac-capture (ScreenCaptureKit display)
     "window_capture",          // mac-capture (SCK window)
@@ -29,8 +30,29 @@ const REQUIRED_SOURCES: &[&str] = &[
     "text_ft2_source", // text-freetype2
     "color_source",
 ];
+#[cfg(target_os = "macos")]
 const REQUIRED_ENCODERS: &[&str] = &["obs_x264", "CoreAudio_AAC"];
+#[cfg(target_os = "macos")]
 const VT_ENCODER_SUBSTRING: &str = "videotoolbox";
+
+#[cfg(target_os = "windows")]
+const REQUIRED_SOURCES: &[&str] = &[
+    "monitor_capture",       // win-capture (display: DXGI/WGC)
+    "window_capture",        // win-capture
+    "wasapi_input_capture",  // win-wasapi (mic)
+    "wasapi_output_capture", // win-wasapi (desktop audio)
+    "dshow_input",           // win-dshow (webcam)
+    "image_source",          // image-source (image/GIF)
+    "text_gdiplus",          // obs-text
+    "color_source",
+];
+#[cfg(target_os = "windows")]
+const REQUIRED_ENCODERS: &[&str] = &["obs_x264", "ffmpeg_aac"];
+/// Hardware encoders are dynamic (NVENC/QSV/AMF register only when the GPU
+/// supports them); reported by substring, preferred at stream setup, never
+/// required.
+#[cfg(target_os = "windows")]
+const VT_ENCODER_SUBSTRING: &str = "nvenc";
 const REQUIRED_OUTPUTS: &[&str] = &["rtmp_output", "flv_output"];
 const REQUIRED_SERVICES: &[&str] = &["rtmp_common", "rtmp_custom"];
 
@@ -49,9 +71,18 @@ pub struct EngineReport {
     pub errors: Vec<String>,
 }
 
+/// Windows: none of the allowlisted plugins issue OBS_TASK_UI work (that is a
+/// Qt-frontend pattern); run any task inline on the calling thread. Revisited
+/// at the preview milestone if a plugin proves otherwise.
+#[cfg(target_os = "windows")]
+extern "C" fn ui_task_handler(task: ffi::obs_task_t, param: *mut c_void, _wait: bool) {
+    task(param);
+}
+
 /// Marshal an OBS UI task onto the macOS main thread (GCD main queue).
 /// `wait` tasks run synchronously; nested main-thread calls run inline to
 /// avoid deadlocking dispatch_sync on the main queue.
+#[cfg(target_os = "macos")]
 extern "C" fn ui_task_handler(task: ffi::obs_task_t, param: *mut c_void, wait: bool) {
     struct Ctx {
         task: ffi::obs_task_t,
@@ -166,6 +197,7 @@ pub fn bootstrap() -> EngineReport {
 
     // Dev-mode escape hatch: outside a .app bundle, NSBundle's builtInPlugInsURL
     // does not point at the engine artifact; allow an explicit override.
+    #[cfg(target_os = "macos")]
     if let Ok(plugins_dir) = std::env::var("PRODUCER_ENGINE_PLUGINS") {
         let bin = CString::new(format!("{plugins_dir}/%module%.plugin/Contents/MacOS")).unwrap();
         let data =
@@ -173,19 +205,53 @@ pub fn bootstrap() -> EngineReport {
         unsafe { ffi::obs_add_module_path(bin.as_ptr(), data.as_ptr()) };
     }
 
-    // Metal preferred, OpenGL fallback (A5 / F9); record the actual backend.
-    match reset_video("libobs-metal.dylib") {
-        Ok(()) => report.graphics_backend = Some("metal".into()),
-        Err(metal_rc) => match reset_video("libobs-opengl.dylib") {
+    // Windows layout law: everything lives beside Producer.exe (build.rs copies
+    // the artifact there for dev; the installer places it there for real).
+    //   <exe>/obs-plugins/64bit/*.dll + <exe>/data/obs-plugins/<module>/
+    //   <exe>/data/libobs/  (effect shaders — libobs finds these only if told)
+    #[cfg(target_os = "windows")]
+    {
+        let exe_dir = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+            .unwrap_or_default();
+        let norm = |p: std::path::PathBuf| p.to_string_lossy().replace('\\', "/");
+        let libobs_data = CString::new(format!("{}/", norm(exe_dir.join("data/libobs")))).unwrap();
+        unsafe { ffi::obs_add_data_path(libobs_data.as_ptr()) };
+        let bin = CString::new(norm(exe_dir.join("obs-plugins/64bit"))).unwrap();
+        let data = CString::new(format!(
+            "{}/%module%",
+            norm(exe_dir.join("data/obs-plugins"))
+        ))
+        .unwrap();
+        unsafe { ffi::obs_add_module_path(bin.as_ptr(), data.as_ptr()) };
+    }
+
+    // macOS: Metal preferred, OpenGL fallback (A5 / F9).
+    // Windows: D3D11 is THE renderer (OBS's own default), OpenGL fallback.
+    // Record the actual backend either way.
+    #[cfg(target_os = "macos")]
+    let (primary, primary_name, fallback, fallback_name) = (
+        "libobs-metal.dylib",
+        "metal",
+        "libobs-opengl.dylib",
+        "opengl",
+    );
+    #[cfg(target_os = "windows")]
+    let (primary, primary_name, fallback, fallback_name) =
+        ("libobs-d3d11.dll", "d3d11", "libobs-opengl.dll", "opengl");
+    match reset_video(primary) {
+        Ok(()) => report.graphics_backend = Some(primary_name.into()),
+        Err(primary_rc) => match reset_video(fallback) {
             Ok(()) => {
-                report.graphics_backend = Some("opengl".into());
+                report.graphics_backend = Some(fallback_name.into());
                 report.errors.push(format!(
-                    "metal backend unavailable (rc={metal_rc}), fell back to opengl"
+                    "{primary_name} backend unavailable (rc={primary_rc}), fell back to {fallback_name}"
                 ));
             }
-            Err(gl_rc) => {
+            Err(fb_rc) => {
                 report.errors.push(format!(
-                    "obs_reset_video failed: metal rc={metal_rc}, opengl rc={gl_rc}"
+                    "obs_reset_video failed: {primary_name} rc={primary_rc}, {fallback_name} rc={fb_rc}"
                 ));
                 return report;
             }
@@ -413,6 +479,7 @@ struct Preview {
     display: *mut ffi::obs_display_t,
 }
 
+#[cfg(target_os = "macos")]
 extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, _cx: u32, _cy: u32) {
     unsafe {
         let mut ovi: std::mem::MaybeUninit<ffi::obs_video_info> = std::mem::MaybeUninit::zeroed();
@@ -431,6 +498,19 @@ extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, _cx: u32, _cy: u32
     }
 }
 
+/// Windows preview lands in M-W6: same obs_display machinery, but bound to an
+/// HWND child region instead of an NSView (no shim needed — gs_window takes
+/// the HWND directly on Windows).
+#[cfg(target_os = "windows")]
+impl Preview {
+    fn attach(_window: *mut std::os::raw::c_void, _rect: PreviewRect) -> Result<Preview, String> {
+        Err("in-app preview lands in M-W6 (HWND obs_display path)".into())
+    }
+    fn set_rect(&mut self, _rect: PreviewRect) {}
+    fn detach(self) {}
+}
+
+#[cfg(target_os = "macos")]
 impl Preview {
     // A10 finding (crash 2026-08-28): libobs-metal's swapchain create/resize/
     // destroy are Swift and dispatch_assert the MAIN queue — OBS Studio's Qt

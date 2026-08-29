@@ -54,8 +54,112 @@ extern "C" fn video_cb(_param: *mut c_void, _frame: *mut ffi::video_data) {
     VIDEO_FRAMES.fetch_add(1, Ordering::Relaxed);
 }
 
+/// Display-capture source id: SCK on macOS, DXGI duplicator on Windows.
+#[cfg(target_os = "macos")]
+pub(crate) const SCREEN_SOURCE_ID: &str = "screen_capture";
+#[cfg(target_os = "windows")]
+pub(crate) const SCREEN_SOURCE_ID: &str = "monitor_capture";
+#[cfg(target_os = "macos")]
+pub(crate) const MIC_SOURCE_ID: &str = "coreaudio_input_capture";
+#[cfg(target_os = "windows")]
+pub(crate) const MIC_SOURCE_ID: &str = "wasapi_input_capture";
+
+/// Settings for the display-capture source. Neither platform has default-
+/// display behavior in its capture source (the OBS picker UI always writes an
+/// id): macOS SCK requires display_uuid (M-L2 finding), and Windows'
+/// duplicator defaults monitor_id to the literal "DUMMY"
+/// (duplicator-monitor-capture.c:40) — so we resolve the primary monitor's
+/// device name the same way its fallback matcher compares them (szDevice).
+unsafe fn screen_capture_settings() -> Result<*mut ffi::obs_data_t, String> {
+    let settings = ffi::obs_data_create();
+    #[cfg(target_os = "macos")]
+    {
+        let uuid = main_display_uuid().ok_or("could not resolve main display UUID")?;
+        let key = CString::new("display_uuid").unwrap();
+        let val = CString::new(uuid).unwrap();
+        ffi::obs_data_set_string(settings, key.as_ptr(), val.as_ptr());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let device = primary_monitor_device().ok_or("could not resolve primary monitor")?;
+        let key = CString::new("monitor_id").unwrap();
+        let val = CString::new(device).unwrap();
+        ffi::obs_data_set_string(settings, key.as_ptr(), val.as_ptr());
+    }
+    Ok(settings)
+}
+
+/// Primary monitor's GDI device name (e.g. "\\.\DISPLAY1") via user32 —
+/// matches duplicator-monitor-capture.c's enum_monitor_fallback comparison.
+#[cfg(target_os = "windows")]
+fn primary_monitor_device() -> Option<String> {
+    #[repr(C)]
+    struct MonitorInfoExA {
+        cb_size: u32,
+        rc_monitor: [i32; 4],
+        rc_work: [i32; 4],
+        dw_flags: u32,
+        sz_device: [u8; 32],
+    }
+    const MONITORINFOF_PRIMARY: u32 = 1;
+    #[link(name = "user32")]
+    extern "system" {
+        fn EnumDisplayMonitors(
+            hdc: *mut c_void,
+            clip: *const c_void,
+            cb: extern "system" fn(*mut c_void, *mut c_void, *mut c_void, isize) -> i32,
+            data: isize,
+        ) -> i32;
+        fn GetMonitorInfoA(monitor: *mut c_void, info: *mut MonitorInfoExA) -> i32;
+    }
+    extern "system" fn cb(
+        monitor: *mut c_void,
+        _hdc: *mut c_void,
+        _rect: *mut c_void,
+        data: isize,
+    ) -> i32 {
+        let out = unsafe { &mut *(data as *mut Option<String>) };
+        let mut info = MonitorInfoExA {
+            cb_size: std::mem::size_of::<MonitorInfoExA>() as u32,
+            rc_monitor: [0; 4],
+            rc_work: [0; 4],
+            dw_flags: 0,
+            sz_device: [0; 32],
+        };
+        if unsafe { GetMonitorInfoA(monitor, &mut info) } != 0
+            && info.dw_flags & MONITORINFOF_PRIMARY != 0
+        {
+            let end = info
+                .sz_device
+                .iter()
+                .position(|b| *b == 0)
+                .unwrap_or(info.sz_device.len());
+            *out = Some(String::from_utf8_lossy(&info.sz_device[..end]).into_owned());
+            return 0; // stop enumeration
+        }
+        1
+    }
+    let mut out: Option<String> = None;
+    unsafe {
+        EnumDisplayMonitors(
+            ptr::null_mut(),
+            ptr::null(),
+            cb,
+            &mut out as *mut Option<String> as isize,
+        )
+    };
+    out
+}
+
+/// Windows has no main-thread marshalling requirement on these paths; run inline.
+#[cfg(target_os = "windows")]
+pub(crate) fn on_main_thread<T: Send, F: FnOnce() -> T + Send>(f: F) -> T {
+    f()
+}
+
 /// Run a closure on the macOS main thread (blocking) — used for the TCC
 /// preflight/request calls, which can present system UI.
+#[cfg(target_os = "macos")]
 pub(crate) fn on_main_thread<T: Send, F: FnOnce() -> T + Send>(f: F) -> T {
     if unsafe { ffi::pthread_main_np() } == 1 {
         return f();
@@ -85,6 +189,7 @@ pub(crate) fn on_main_thread<T: Send, F: FnOnce() -> T + Send>(f: F) -> T {
 
 /// UUID string of the main display, via the same CoreGraphics calls OBS's
 /// display picker uses.
+#[cfg(target_os = "macos")]
 fn main_display_uuid() -> Option<String> {
     unsafe {
         let uuid = ffi::CGDisplayCreateUUIDFromDisplayID(ffi::CGMainDisplayID());
@@ -178,56 +283,65 @@ impl SceneGraph {
             let Some(window_id) = window_id else {
                 return Ok(());
             };
-            let settings = ffi::obs_data_create();
-            // mac-sck-common.h: ScreenCaptureWindowStream = 1
-            ffi::obs_data_set_int(settings, CString::new("type").unwrap().as_ptr(), 1);
-            ffi::obs_data_set_int(
-                settings,
-                CString::new("window").unwrap().as_ptr(),
-                window_id as i64,
-            );
-            ffi::obs_data_set_bool(
-                settings,
-                CString::new("show_cursor").unwrap().as_ptr(),
-                false,
-            );
-            let id = CString::new("screen_capture").unwrap();
-            let name = CString::new("Overlay").unwrap();
-            let src = ffi::obs_source_create(id.as_ptr(), name.as_ptr(), settings, ptr::null_mut());
-            ffi::obs_data_release(settings);
-            if src.is_null() {
-                return Err("overlay window capture creation failed".into());
+            #[cfg(target_os = "windows")]
+            {
+                let _ = (window_id, color_key);
+                return Err("overlay window capture on Windows lands in M-W2".into());
             }
-            if color_key {
-                let fsettings = ffi::obs_data_create();
-                ffi::obs_data_set_string(
-                    fsettings,
-                    CString::new("key_color_type").unwrap().as_ptr(),
-                    CString::new("green").unwrap().as_ptr(),
+            #[cfg(target_os = "macos")]
+            {
+                let settings = ffi::obs_data_create();
+                // mac-sck-common.h: ScreenCaptureWindowStream = 1
+                ffi::obs_data_set_int(settings, CString::new("type").unwrap().as_ptr(), 1);
+                ffi::obs_data_set_int(
+                    settings,
+                    CString::new("window").unwrap().as_ptr(),
+                    window_id as i64,
                 );
-                let fid = CString::new("color_key_filter_v2").unwrap();
-                let fname = CString::new("overlay-key").unwrap();
-                let filter =
-                    ffi::obs_source_create_private(fid.as_ptr(), fname.as_ptr(), fsettings);
-                ffi::obs_data_release(fsettings);
-                if !filter.is_null() {
-                    ffi::obs_source_filter_add(src, filter);
-                    ffi::obs_source_release(filter);
+                ffi::obs_data_set_bool(
+                    settings,
+                    CString::new("show_cursor").unwrap().as_ptr(),
+                    false,
+                );
+                let id = CString::new("screen_capture").unwrap();
+                let name = CString::new("Overlay").unwrap();
+                let src =
+                    ffi::obs_source_create(id.as_ptr(), name.as_ptr(), settings, ptr::null_mut());
+                ffi::obs_data_release(settings);
+                if src.is_null() {
+                    return Err("overlay window capture creation failed".into());
                 }
+                if color_key {
+                    let fsettings = ffi::obs_data_create();
+                    ffi::obs_data_set_string(
+                        fsettings,
+                        CString::new("key_color_type").unwrap().as_ptr(),
+                        CString::new("green").unwrap().as_ptr(),
+                    );
+                    let fid = CString::new("color_key_filter_v2").unwrap();
+                    let fname = CString::new("overlay-key").unwrap();
+                    let filter =
+                        ffi::obs_source_create_private(fid.as_ptr(), fname.as_ptr(), fsettings);
+                    ffi::obs_data_release(fsettings);
+                    if !filter.is_null() {
+                        ffi::obs_source_filter_add(src, filter);
+                        ffi::obs_source_release(filter);
+                    }
+                }
+                let item = ffi::obs_scene_add(self.scene, src);
+                if item.is_null() {
+                    ffi::obs_source_release(src);
+                    return Err("scene add failed for overlay".into());
+                }
+                let (bw, bh) = Self::base_size();
+                ffi::obs_sceneitem_set_bounds_type(item, ffi::OBS_BOUNDS_SCALE_INNER);
+                let bounds = ffi::vec2 { x: bw, y: bh };
+                ffi::obs_sceneitem_set_bounds(item, &bounds);
+                let pos = ffi::vec2 { x: 0.0, y: 0.0 };
+                ffi::obs_sceneitem_set_pos(item, &pos);
+                ffi::obs_sceneitem_set_visible(item, true);
+                self.overlay = Some((item, src, window_id));
             }
-            let item = ffi::obs_scene_add(self.scene, src);
-            if item.is_null() {
-                ffi::obs_source_release(src);
-                return Err("scene add failed for overlay".into());
-            }
-            let (bw, bh) = Self::base_size();
-            ffi::obs_sceneitem_set_bounds_type(item, ffi::OBS_BOUNDS_SCALE_INNER);
-            let bounds = ffi::vec2 { x: bw, y: bh };
-            ffi::obs_sceneitem_set_bounds(item, &bounds);
-            let pos = ffi::vec2 { x: 0.0, y: 0.0 };
-            ffi::obs_sceneitem_set_pos(item, &pos);
-            ffi::obs_sceneitem_set_visible(item, true);
-            self.overlay = Some((item, src, window_id));
         }
         Ok(())
     }
@@ -253,12 +367,8 @@ impl SceneGraph {
                     ffi::obs_source_release(src);
                 }
                 (true, None) => {
-                    let uuid = main_display_uuid().ok_or("could not resolve main display UUID")?;
-                    let settings = ffi::obs_data_create();
-                    let key = CString::new("display_uuid").unwrap();
-                    let val = CString::new(uuid).unwrap();
-                    ffi::obs_data_set_string(settings, key.as_ptr(), val.as_ptr());
-                    let id = CString::new("screen_capture").unwrap();
+                    let settings = screen_capture_settings()?;
+                    let id = CString::new(SCREEN_SOURCE_ID).unwrap();
                     let name = CString::new("Screen").unwrap();
                     let src = ffi::obs_source_create(
                         id.as_ptr(),
@@ -292,6 +402,11 @@ impl SceneGraph {
                     ffi::obs_sceneitem_remove(item);
                     ffi::obs_source_release(src);
                 }
+                #[cfg(target_os = "windows")]
+                (true, None) => {
+                    return Err("camera (win-dshow device enumeration) lands in M-W2".into());
+                }
+                #[cfg(target_os = "macos")]
                 (true, None) => {
                     // mac-avcapture needs an explicit device id (same lesson
                     // as SCK's display_uuid).
@@ -361,7 +476,7 @@ impl SceneGraph {
                     ffi::obs_source_release(src);
                 }
                 (true, None) => {
-                    let id = CString::new("coreaudio_input_capture").unwrap();
+                    let id = CString::new(MIC_SOURCE_ID).unwrap();
                     let name = CString::new("Mic").unwrap();
                     let src = ffi::obs_source_create(
                         id.as_ptr(),
@@ -385,13 +500,9 @@ impl SceneGraph {
 /// attach it to output channels 0/1. The channels hold their own references,
 /// so local refs are released before returning. Engine thread only.
 pub fn attach_capture_sources() -> Result<(), String> {
-    let uuid = main_display_uuid().ok_or("could not resolve main display UUID")?;
     unsafe {
-        let settings = ffi::obs_data_create();
-        let key = CString::new("display_uuid").unwrap();
-        let val = CString::new(uuid).unwrap();
-        ffi::obs_data_set_string(settings, key.as_ptr(), val.as_ptr());
-        let screen_id = CString::new("screen_capture").unwrap();
+        let settings = screen_capture_settings()?;
+        let screen_id = CString::new(SCREEN_SOURCE_ID).unwrap();
         let screen_name = CString::new("Live Screen").unwrap();
         let screen = ffi::obs_source_create(
             screen_id.as_ptr(),
@@ -403,7 +514,7 @@ pub fn attach_capture_sources() -> Result<(), String> {
         if screen.is_null() {
             return Err("screen_capture source creation failed".into());
         }
-        let mic_id = CString::new("coreaudio_input_capture").unwrap();
+        let mic_id = CString::new(MIC_SOURCE_ID).unwrap();
         let mic_name = CString::new("Live Mic").unwrap();
         let mic = ffi::obs_source_create(
             mic_id.as_ptr(),
@@ -443,41 +554,54 @@ pub struct CaptureProbeReport {
 pub fn capture_probe(window: Duration) -> CaptureProbeReport {
     let mut notes = Vec::new();
 
-    // Real TCC, up front. A grant issued while this process is running does
-    // not always apply to it — the relaunch note tells the operator what to do.
-    let granted = on_main_thread(|| unsafe { ffi::CGPreflightScreenCaptureAccess() });
-    let mut prompted = false;
-    if !granted {
-        prompted = true;
-        let now_granted = on_main_thread(|| unsafe { ffi::CGRequestScreenCaptureAccess() });
-        notes.push(format!(
-            "screen recording not granted at launch; prompt requested (immediate result: {now_granted}). \
-             If you just granted it, relaunch and re-run the probe."
-        ));
-    }
+    // Real TCC, up front (macOS only — Windows display capture needs no grant).
+    // A grant issued while this process is running does not always apply to
+    // it — the relaunch note tells the operator what to do.
+    #[cfg(target_os = "macos")]
+    let (granted, prompted) = {
+        let granted = on_main_thread(|| unsafe { ffi::CGPreflightScreenCaptureAccess() });
+        let mut prompted = false;
+        if !granted {
+            prompted = true;
+            let now_granted = on_main_thread(|| unsafe { ffi::CGRequestScreenCaptureAccess() });
+            notes.push(format!(
+                "screen recording not granted at launch; prompt requested (immediate result: {now_granted}). \
+                 If you just granted it, relaunch and re-run the probe."
+            ));
+        }
+        (granted, prompted)
+    };
+    #[cfg(target_os = "windows")]
+    let (granted, prompted) = (true, false);
 
     AUDIO_CALLBACKS.store(0, Ordering::Relaxed);
     AUDIO_FRAMES.store(0, Ordering::Relaxed);
     AUDIO_PEAK_MICRO.store(0, Ordering::Relaxed);
     VIDEO_FRAMES.store(0, Ordering::Relaxed);
 
-    let screen_id = CString::new("screen_capture").unwrap();
+    let screen_id = CString::new(SCREEN_SOURCE_ID).unwrap();
     let screen_name = CString::new("M-L2 Screen").unwrap();
-    let mic_id = CString::new("coreaudio_input_capture").unwrap();
+    let mic_id = CString::new(MIC_SOURCE_ID).unwrap();
     let mic_name = CString::new("M-L2 Mic").unwrap();
 
-    // The SCK source requires an explicit display_uuid (no default-display
-    // behavior); the mic source's NULL settings mean the default input device.
-    let screen_settings = unsafe { ffi::obs_data_create() };
-    match main_display_uuid() {
-        Some(uuid) => {
-            let key = CString::new("display_uuid").unwrap();
-            let val = CString::new(uuid.clone()).unwrap();
-            unsafe { ffi::obs_data_set_string(screen_settings, key.as_ptr(), val.as_ptr()) };
-            notes.push(format!("capturing display_uuid {uuid}"));
+    // macOS: the SCK source requires an explicit display_uuid (no default-
+    // display behavior). Windows: monitor_capture defaults to the primary
+    // monitor. Mic NULL settings mean the default input device on both.
+    let screen_settings = match unsafe { screen_capture_settings() } {
+        Ok(s) => {
+            #[cfg(target_os = "macos")]
+            notes.push("capturing main display (explicit display_uuid)".into());
+            #[cfg(target_os = "windows")]
+            if let Some(dev) = primary_monitor_device() {
+                notes.push(format!("capturing primary monitor {dev}"));
+            }
+            s
         }
-        None => notes.push("could not resolve main display UUID".into()),
-    }
+        Err(e) => {
+            notes.push(format!("display resolution failed: {e}"));
+            unsafe { ffi::obs_data_create() }
+        }
+    };
     let screen = unsafe {
         ffi::obs_source_create(
             screen_id.as_ptr(),
