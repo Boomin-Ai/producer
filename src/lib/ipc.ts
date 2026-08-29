@@ -101,7 +101,29 @@ export const ipc = {
   liveGoLive: () => invoke("live_go_live"),
   liveStop: () => invoke("live_stop"),
   liveEngineStatus: () => invoke<LiveSnapshot>("live_engine_status"),
+  liveSetSources: (screen: boolean, camera: boolean, mic: boolean) =>
+    invoke("live_set_sources", { screen, camera, mic }),
+  liveAttachPreview: (x: number, y: number, w: number, h: number) =>
+    invoke("live_attach_preview", { x, y, w, h }),
+  liveMovePreview: (x: number, y: number, w: number, h: number) =>
+    invoke("live_move_preview", { x, y, w, h }),
+  liveDetachPreview: () => invoke("live_detach_preview"),
+  livePermissions: () => invoke<LivePermissions>("live_permissions"),
+  liveRequestPermission: (kind: "screen" | "camera" | "mic") =>
+    invoke("live_request_permission", { kind }),
 };
+
+export interface LivePermissions {
+  screen: string;
+  camera: string;
+  mic: string;
+}
+
+export interface LiveSources {
+  screen: boolean;
+  camera: boolean;
+  mic: boolean;
+}
 
 export type LivePreset = "twitch" | "kick" | "youtube" | "custom";
 
@@ -141,6 +163,8 @@ export interface LiveSnapshot {
   session_state: LiveSessionState;
   elapsed_secs: number;
   destinations: LiveDestStatus[];
+  sources?: LiveSources;
+  preview_attached?: boolean;
   disabled?: boolean;
 }
 
@@ -149,6 +173,7 @@ export type LiveEvent =
   | { type: "session_state"; state: LiveSessionState }
   | { type: "status"; elapsed_secs: number; destinations: LiveDestStatus[] }
   | { type: "session_ended"; report: { ok: boolean; destinations: LiveDestStatus[]; notes: string[] } }
+  | { type: "sources_changed"; sources: LiveSources }
   | { type: "engine_error"; message: string };
 
 export async function listenLiveEvents(cb: (ev: LiveEvent) => void): Promise<() => void> {

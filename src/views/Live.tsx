@@ -4,8 +4,10 @@ import {
   listenLiveEvents,
   type LiveDestination,
   type LiveDestStatus,
+  type LivePermissions,
   type LivePreset,
   type LiveSnapshot,
+  type LiveSources,
 } from "../lib/ipc";
 
 // Transport-truthful copy (M-L4 finding: an RTMP session can look healthy
@@ -29,6 +31,149 @@ function fmtBitrate(bytes: number, secs: number): string {
   if (secs <= 0) return "—";
   const kbps = (bytes * 8) / secs / 1000;
   return kbps > 1000 ? `${(kbps / 1000).toFixed(1)} Mbps` : `${Math.round(kbps)} kbps`;
+}
+
+/** Native OBS preview (A6): reserves layout space; the engine overlays an
+ * NSView at exactly this rect and keeps it in sync on resize/scroll. */
+function PreviewPanel() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const attached = useRef(false);
+
+  useEffect(() => {
+    let raf = 0;
+    const sync = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(async () => {
+        const el = ref.current;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        if (r.width < 10 || r.height < 10) return;
+        try {
+          if (!attached.current) {
+            await ipc.liveAttachPreview(r.x, r.y, r.width, r.height);
+            attached.current = true;
+          } else {
+            await ipc.liveMovePreview(r.x, r.y, r.width, r.height);
+          }
+        } catch {
+          // engine not ready yet; retry on next layout change
+        }
+      });
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    if (ref.current) ro.observe(ref.current);
+    window.addEventListener("resize", sync);
+    window.addEventListener("scroll", sync, true);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      window.removeEventListener("resize", sync);
+      window.removeEventListener("scroll", sync, true);
+      if (attached.current) {
+        attached.current = false;
+        ipc.liveDetachPreview().catch(() => {});
+      }
+    };
+  }, []);
+
+  return <div ref={ref} className="live-preview" />;
+}
+
+const PERM_LABEL: Record<string, string> = {
+  granted: "Granted",
+  denied: "Denied",
+  restricted: "Restricted",
+  not_determined: "Not asked yet",
+  denied_or_not_determined: "Not granted",
+  unknown: "Unknown",
+};
+
+/** First-run TCC coach (§5.4): explains each permission, fires the prompts,
+ * and spells out the Screen Recording toggle + relaunch dance. */
+function PermissionsCoach({ sources }: { sources: LiveSources }) {
+  const [perms, setPerms] = useState<LivePermissions | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const p = await ipc.livePermissions();
+        if (alive) setPerms(p);
+      } catch {
+        /* engine absent */
+      }
+    };
+    load();
+    const t = setInterval(load, 3000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
+
+  if (!perms) return null;
+  const rows: { kind: "screen" | "camera" | "mic"; label: string; status: string; needed: boolean; hint?: string }[] = [
+    {
+      kind: "screen",
+      label: "Screen Recording",
+      status: perms.screen,
+      needed: sources.screen,
+      hint: "macOS grants this in System Settings › Privacy & Security › Screen & System Audio Recording (add Producer with +, toggle on), then relaunch Producer.",
+    },
+    { kind: "camera", label: "Camera", status: perms.camera, needed: sources.camera },
+    { kind: "mic", label: "Microphone", status: perms.mic, needed: sources.mic },
+  ];
+  const pending = rows.filter((r) => r.needed && r.status !== "granted");
+  if (pending.length === 0) return null;
+
+  return (
+    <div className="live-coach">
+      <div className="live-coach-title">Permissions needed</div>
+      {pending.map((r) => (
+        <div key={r.kind} className="live-coach-row">
+          <div>
+            <strong>{r.label}</strong> · {PERM_LABEL[r.status] ?? r.status}
+            {r.hint && <div className="live-coach-hint">{r.hint}</div>}
+          </div>
+          <button onClick={() => ipc.liveRequestPermission(r.kind)}>
+            {r.kind === "screen" ? "Request" : "Allow…"}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SourceToggles({
+  sources,
+  disabled,
+  onChange,
+}: {
+  sources: LiveSources;
+  disabled: boolean;
+  onChange: (s: LiveSources) => void;
+}) {
+  const toggles: { key: keyof LiveSources; label: string }[] = [
+    { key: "screen", label: "Screen" },
+    { key: "camera", label: "Camera" },
+    { key: "mic", label: "Mic" },
+  ];
+  return (
+    <div className="live-sources">
+      {toggles.map((t) => (
+        <button
+          key={t.key}
+          className={`live-source-toggle${sources[t.key] ? " on" : ""}`}
+          disabled={disabled}
+          onClick={() => onChange({ ...sources, [t.key]: !sources[t.key] })}
+        >
+          {t.label}
+        </button>
+      ))}
+      <span className="live-sources-note">Camera appears picture-in-picture.</span>
+    </div>
+  );
 }
 
 function DestinationEditor({
@@ -115,11 +260,14 @@ export function LiveView() {
   const [editing, setEditing] = useState<LiveDestination | null>(null);
   const [adding, setAdding] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
+  const [sources, setSources] = useState<LiveSources>({ screen: false, camera: false, mic: false });
   const unlisten = useRef<(() => void) | null>(null);
 
   const refresh = useCallback(async () => {
     setDestinations(await ipc.liveListDestinations());
-    setSnapshot(await ipc.liveEngineStatus());
+    const snap = await ipc.liveEngineStatus();
+    setSnapshot(snap);
+    if (snap.sources) setSources(snap.sources);
   }, []);
 
   useEffect(() => {
@@ -134,6 +282,8 @@ export function LiveView() {
       } else if (ev.type === "session_ended") {
         setStatuses(new Map(ev.report.destinations.map((d) => [d.id, d])));
         if (!ev.report.ok && ev.report.notes.length > 0) setBanner(ev.report.notes.join(" · "));
+      } else if (ev.type === "sources_changed") {
+        setSources(ev.sources);
       } else if (ev.type === "engine_error") {
         setBanner(ev.message);
       } else if (ev.type === "engine_ready" && !ev.ok) {
@@ -168,8 +318,27 @@ export function LiveView() {
   return (
     <div className="live-view">
       <div className="section-head">
-        <span className="section-label">Live destinations</span>
+        <span className="section-label">Live</span>
         {snapshot?.graphics_backend && <span className="live-backend">engine: {snapshot.graphics_backend}</span>}
+      </div>
+
+      {engineOk && <PreviewPanel />}
+      <SourceToggles
+        sources={sources}
+        disabled={!engineOk}
+        onChange={async (s) => {
+          setSources(s);
+          try {
+            await ipc.liveSetSources(s.screen, s.camera, s.mic);
+          } catch (e) {
+            setBanner(String(e));
+          }
+        }}
+      />
+      <PermissionsCoach sources={sources} />
+
+      <div className="section-head">
+        <span className="section-label">Destinations</span>
       </div>
 
       {banner && <div className="live-error">{banner}</div>}

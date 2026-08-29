@@ -171,6 +171,99 @@ extern "C" {
     pub fn bfree(ptr: *mut c_void);
 }
 
+// M-L6: preview display (A6), implicit scene, camera PiP
+pub enum obs_display_t {}
+pub enum obs_scene_t {}
+pub enum obs_sceneitem_t {}
+
+// graphics/graphics.h enum gs_color_format / gs_zstencil_format
+pub const GS_BGRA: c_int = 5;
+pub const GS_ZS_NONE: c_int = 0;
+// obs.h enum obs_bounds_type
+pub const OBS_BOUNDS_SCALE_INNER: c_int = 2;
+
+/// graphics/graphics.h struct gs_window (macOS arm: a single NSView* slot)
+#[repr(C)]
+pub struct gs_window {
+    pub view: *mut c_void,
+}
+
+/// graphics/graphics.h struct gs_init_data
+#[repr(C)]
+pub struct gs_init_data {
+    pub window: gs_window,
+    pub cx: u32,
+    pub cy: u32,
+    pub num_backbuffers: u32,
+    pub format: c_int,
+    pub zsformat: c_int,
+    pub adapter: u32,
+}
+
+/// graphics/vec2.h struct vec2
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct vec2 {
+    pub x: f32,
+    pub y: f32,
+}
+
+pub type draw_callback_t = extern "C" fn(param: *mut c_void, cx: u32, cy: u32);
+
+extern "C" {
+    pub fn obs_display_create(graphics_data: *const gs_init_data, background_color: u32) -> *mut obs_display_t;
+    pub fn obs_display_destroy(display: *mut obs_display_t);
+    pub fn obs_display_resize(display: *mut obs_display_t, cx: u32, cy: u32);
+    pub fn obs_display_add_draw_callback(display: *mut obs_display_t, draw: draw_callback_t, param: *mut c_void);
+    pub fn obs_display_remove_draw_callback(display: *mut obs_display_t, draw: draw_callback_t, param: *mut c_void);
+    pub fn obs_render_main_texture();
+    pub fn obs_get_video_info(ovi: *mut obs_video_info) -> bool;
+
+    pub fn gs_viewport_push();
+    pub fn gs_viewport_pop();
+    pub fn gs_projection_push();
+    pub fn gs_projection_pop();
+    pub fn gs_ortho(left: f32, right: f32, top: f32, bottom: f32, znear: f32, zfar: f32);
+
+    pub fn obs_scene_create(name: *const c_char) -> *mut obs_scene_t;
+    pub fn obs_scene_release(scene: *mut obs_scene_t);
+    pub fn obs_scene_get_source(scene: *const obs_scene_t) -> *mut obs_source_t;
+    pub fn obs_scene_add(scene: *mut obs_scene_t, source: *mut obs_source_t) -> *mut obs_sceneitem_t;
+    pub fn obs_sceneitem_remove(item: *mut obs_sceneitem_t);
+    pub fn obs_sceneitem_set_pos(item: *mut obs_sceneitem_t, pos: *const vec2);
+    pub fn obs_sceneitem_set_bounds_type(item: *mut obs_sceneitem_t, bounds_type: c_int);
+    pub fn obs_sceneitem_set_bounds(item: *mut obs_sceneitem_t, bounds: *const vec2);
+    pub fn obs_sceneitem_set_visible(item: *mut obs_sceneitem_t, visible: bool) -> bool;
+}
+
+// shim.m — AppKit/AVFoundation helpers (main-thread marshalling inside)
+extern "C" {
+    pub fn producer_preview_attach(
+        ns_window: *mut c_void,
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+        out_px_w: *mut f64,
+        out_px_h: *mut f64,
+    ) -> *mut c_void;
+    pub fn producer_preview_set_frame(
+        view: *mut c_void,
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+        out_px_w: *mut f64,
+        out_px_h: *mut f64,
+    );
+    pub fn producer_preview_detach(view: *mut c_void);
+    pub fn producer_av_authorization_status(media_type: c_int) -> c_int;
+    pub fn producer_av_request_access(media_type: c_int);
+    pub fn producer_screen_capture_preflight() -> c_int;
+    pub fn producer_screen_capture_request();
+    pub fn producer_default_camera_id(buf: *mut c_char, buflen: c_int) -> c_int;
+}
+
 // M-L3: encoders, service, output — first light (LIVE-REVIEW.md F4 chain)
 extern "C" {
     pub fn obs_get_video() -> *mut video_t;

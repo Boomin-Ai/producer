@@ -197,3 +197,55 @@ pub fn live_stop(state: State<'_, AppState>) -> EngineResult<()> {
 pub fn live_engine_status(state: State<'_, AppState>) -> EngineResult<serde_json::Value> {
     Ok(state.live.status())
 }
+
+#[tauri::command]
+pub fn live_set_sources(
+    state: State<'_, AppState>,
+    screen: bool,
+    camera: bool,
+    mic: bool,
+) -> EngineResult<()> {
+    state.live.set_sources(screen, camera, mic).map_err(EngineError::Other)
+}
+
+#[tauri::command]
+pub fn live_attach_preview(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+) -> EngineResult<()> {
+    use tauri::Manager;
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| EngineError::Other("main window missing".into()))?;
+    let ns_window = window
+        .ns_window()
+        .map_err(|e| EngineError::Other(format!("ns_window: {e}")))? as usize;
+    state
+        .live
+        .attach_preview(ns_window, x, y, w, h)
+        .map_err(EngineError::Other)
+}
+
+#[tauri::command]
+pub fn live_move_preview(state: State<'_, AppState>, x: f64, y: f64, w: f64, h: f64) -> EngineResult<()> {
+    state.live.move_preview(x, y, w, h).map_err(EngineError::Other)
+}
+
+#[tauri::command]
+pub fn live_detach_preview(state: State<'_, AppState>) -> EngineResult<()> {
+    state.live.detach_preview().map_err(EngineError::Other)
+}
+
+#[tauri::command]
+pub fn live_permissions() -> EngineResult<serde_json::Value> {
+    Ok(crate::live::permissions())
+}
+
+#[tauri::command]
+pub fn live_request_permission(kind: String) -> EngineResult<()> {
+    crate::live::request_permission(&kind).map_err(EngineError::Other)
+}

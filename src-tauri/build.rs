@@ -37,6 +37,18 @@ fn link_live_engine() {
     println!("cargo:rustc-link-search=framework={}", frameworks.display());
     println!("cargo:rustc-link-lib=framework=libobs");
     println!("cargo:rustc-link-lib=framework=CoreFoundation");
+
+    // AppKit/AVFoundation shim (M-L6 preview + TCC + device lookup).
+    println!("cargo:rerun-if-changed=src/live/shim.m");
+    cc::Build::new()
+        .file("src/live/shim.m")
+        .flag("-fobjc-arc")
+        .flag("-fmodules")
+        .compile("producer_live_shim");
+    println!("cargo:rustc-link-lib=framework=AppKit");
+    println!("cargo:rustc-link-lib=framework=AVFoundation");
+    println!("cargo:rustc-link-lib=framework=CoreGraphics");
+    println!("cargo:rustc-link-lib=framework=CoreMedia");
     // Bundled app resolves the engine beside the executable. Debug builds may
     // also run from target/, so they get an extra rpath into the artifact;
     // release binaries carry ONLY the bundle-relative rpath so the M-L1

@@ -263,7 +263,28 @@ use super::multi::{DestStatus, MultiConfig, MultiReport, Session};
 pub enum Command {
     GoLive(MultiConfig),
     StopLive,
+    SetSources {
+        screen: bool,
+        camera: bool,
+        mic: bool,
+    },
+    AttachPreview {
+        /// NSWindow* of the Tauri window, as usize.
+        window: usize,
+        rect: PreviewRect,
+    },
+    MovePreview(PreviewRect),
+    DetachPreview,
     Shutdown,
+}
+
+/// CSS-point rect of the preview area, top-left origin, webview coordinates.
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+pub struct PreviewRect {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Default)]
@@ -297,6 +318,9 @@ pub enum LiveEvent {
     SessionEnded {
         report: MultiReport,
     },
+    SourcesChanged {
+        sources: graph::SourcesState,
+    },
     EngineError {
         message: String,
     },
@@ -312,6 +336,8 @@ pub struct Snapshot {
     pub session_state: SessionState,
     pub elapsed_secs: f64,
     pub destinations: Vec<DestStatus>,
+    pub sources: graph::SourcesState,
+    pub preview_attached: bool,
 }
 
 pub struct LiveHandle {
@@ -327,6 +353,22 @@ impl LiveHandle {
     pub fn stop_live(&self) -> Result<(), String> {
         self.proxy().stop_live()
     }
+    pub fn set_sources(&self, screen: bool, camera: bool, mic: bool) -> Result<(), String> {
+        self.cmd
+            .send(Command::SetSources { screen, camera, mic })
+            .map_err(|e| e.to_string())
+    }
+    pub fn attach_preview(&self, window: usize, rect: PreviewRect) -> Result<(), String> {
+        self.cmd
+            .send(Command::AttachPreview { window, rect })
+            .map_err(|e| e.to_string())
+    }
+    pub fn move_preview(&self, rect: PreviewRect) -> Result<(), String> {
+        self.cmd.send(Command::MovePreview(rect)).map_err(|e| e.to_string())
+    }
+    pub fn detach_preview(&self) -> Result<(), String> {
+        self.cmd.send(Command::DetachPreview).map_err(|e| e.to_string())
+    }
     pub fn shutdown(&self) {
         let _ = self.cmd.send(Command::Shutdown);
     }
@@ -334,6 +376,96 @@ impl LiveHandle {
         LiveProxy {
             cmd: self.cmd.clone(),
             streaming: self.streaming.clone(),
+        }
+    }
+}
+
+/// The A6 integration: obs_display bound to an NSView hosted over the Tauri
+/// webview (shim.m owns the AppKit side; Streamlabs precedent). Draw callback
+/// runs on the OBS graphics thread and only renders — no state mutation
+/// (§5.1). Owned by the engine thread.
+struct Preview {
+    view: *mut std::os::raw::c_void,
+    display: *mut ffi::obs_display_t,
+}
+
+extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, _cx: u32, _cy: u32) {
+    unsafe {
+        let mut ovi: std::mem::MaybeUninit<ffi::obs_video_info> = std::mem::MaybeUninit::zeroed();
+        let (bw, bh) = if ffi::obs_get_video_info(ovi.as_mut_ptr()) {
+            let ovi = ovi.assume_init();
+            (ovi.base_width as f32, ovi.base_height as f32)
+        } else {
+            (1280.0, 720.0)
+        };
+        ffi::gs_viewport_push();
+        ffi::gs_projection_push();
+        ffi::gs_ortho(0.0, bw, 0.0, bh, -100.0, 100.0);
+        ffi::obs_render_main_texture();
+        ffi::gs_projection_pop();
+        ffi::gs_viewport_pop();
+    }
+}
+
+impl Preview {
+    // A10 finding (crash 2026-08-28): libobs-metal's swapchain create/resize/
+    // destroy are Swift and dispatch_assert the MAIN queue — OBS Studio's Qt
+    // UI satisfies this implicitly. Per §5.1 these are AppKit-adjacent ops,
+    // so every obs_display lifecycle call is marshalled to the main thread;
+    // draw callbacks still run on the OBS graphics thread.
+    fn attach(ns_window: *mut std::os::raw::c_void, rect: PreviewRect) -> Result<Preview, String> {
+        unsafe {
+            let (mut px_w, mut px_h) = (0f64, 0f64);
+            let view = ffi::producer_preview_attach(ns_window, rect.x, rect.y, rect.w, rect.h, &mut px_w, &mut px_h);
+            if view.is_null() {
+                return Err("NSView creation failed".into());
+            }
+            let view_addr = view as usize;
+            let (cx, cy) = (px_w.max(1.0) as u32, px_h.max(1.0) as u32);
+            let display_addr = graph::on_main_thread(move || {
+                let init = ffi::gs_init_data {
+                    window: ffi::gs_window {
+                        view: view_addr as *mut std::os::raw::c_void,
+                    },
+                    cx,
+                    cy,
+                    num_backbuffers: 0,
+                    format: ffi::GS_BGRA,
+                    zsformat: ffi::GS_ZS_NONE,
+                    adapter: 0,
+                };
+                ffi::obs_display_create(&init, 0) as usize
+            });
+            if display_addr == 0 {
+                ffi::producer_preview_detach(view);
+                return Err("obs_display_create failed".into());
+            }
+            let display = display_addr as *mut ffi::obs_display_t;
+            ffi::obs_display_add_draw_callback(display, preview_draw, std::ptr::null_mut());
+            Ok(Preview { view, display })
+        }
+    }
+
+    fn set_rect(&mut self, rect: PreviewRect) {
+        unsafe {
+            let (mut px_w, mut px_h) = (0f64, 0f64);
+            ffi::producer_preview_set_frame(self.view, rect.x, rect.y, rect.w, rect.h, &mut px_w, &mut px_h);
+            let display_addr = self.display as usize;
+            let (cx, cy) = (px_w.max(1.0) as u32, px_h.max(1.0) as u32);
+            graph::on_main_thread(move || {
+                ffi::obs_display_resize(display_addr as *mut ffi::obs_display_t, cx, cy);
+            });
+        }
+    }
+
+    fn detach(self) {
+        unsafe {
+            ffi::obs_display_remove_draw_callback(self.display, preview_draw, std::ptr::null_mut());
+            let display_addr = self.display as usize;
+            graph::on_main_thread(move || {
+                ffi::obs_display_destroy(display_addr as *mut ffi::obs_display_t);
+            });
+            ffi::producer_preview_detach(self.view);
         }
     }
 }
@@ -383,7 +515,22 @@ pub fn start(sink: impl Fn(&LiveEvent) + Send + 'static) -> LiveHandle {
                 obs_version: report.obs_version.clone(),
             });
 
-            let mut capture_attached = false;
+            // The implicit scene (§2.2) exists from engine start; sources are
+            // added/removed by user toggles (which is when TCC prompts fire).
+            let mut scene = if report.ok {
+                match graph::SceneGraph::create() {
+                    Ok(s) => Some(s),
+                    Err(e) => {
+                        sink(&LiveEvent::EngineError {
+                            message: format!("scene create failed: {e}"),
+                        });
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+            let mut preview: Option<Preview> = None;
             let mut session: Option<Session> = None;
             let mut state = SessionState::Idle;
             let mut last_status_emit = Instant::now();
@@ -410,18 +557,6 @@ pub fn start(sink: impl Fn(&LiveEvent) + Send + 'static) -> LiveHandle {
                             });
                         } else {
                             set_state(&mut state, SessionState::Starting, &snap, &sink);
-                            if !capture_attached {
-                                match graph::attach_capture_sources() {
-                                    Ok(()) => capture_attached = true,
-                                    Err(e) => {
-                                        sink(&LiveEvent::EngineError {
-                                            message: format!("capture attach failed: {e}"),
-                                        });
-                                        set_state(&mut state, SessionState::Idle, &snap, &sink);
-                                        continue;
-                                    }
-                                }
-                            }
                             match Session::start(config) {
                                 Ok(s) => {
                                     session = Some(s);
@@ -441,7 +576,52 @@ pub fn start(sink: impl Fn(&LiveEvent) + Send + 'static) -> LiveHandle {
                             set_state(&mut state, SessionState::Stopping, &snap, &sink);
                         }
                     }
+                    Ok(Command::SetSources { screen, camera, mic }) => {
+                        if let Some(g) = scene.as_mut() {
+                            for (label, result) in [
+                                ("screen", g.set_screen(screen)),
+                                ("camera", g.set_camera(camera)),
+                                ("mic", g.set_mic(mic)),
+                            ] {
+                                if let Err(e) = result {
+                                    sink(&LiveEvent::EngineError {
+                                        message: format!("{label}: {e}"),
+                                    });
+                                }
+                            }
+                            let sources = g.state();
+                            snap.lock().unwrap().sources = sources;
+                            sink(&LiveEvent::SourcesChanged { sources });
+                        }
+                    }
+                    Ok(Command::AttachPreview { window, rect }) => {
+                        if preview.is_none() {
+                            match Preview::attach(window as *mut std::os::raw::c_void, rect) {
+                                Ok(p) => {
+                                    preview = Some(p);
+                                    snap.lock().unwrap().preview_attached = true;
+                                }
+                                Err(e) => sink(&LiveEvent::EngineError {
+                                    message: format!("preview attach failed: {e}"),
+                                }),
+                            }
+                        }
+                    }
+                    Ok(Command::MovePreview(rect)) => {
+                        if let Some(p) = preview.as_mut() {
+                            p.set_rect(rect);
+                        }
+                    }
+                    Ok(Command::DetachPreview) => {
+                        if let Some(p) = preview.take() {
+                            p.detach();
+                            snap.lock().unwrap().preview_attached = false;
+                        }
+                    }
                     Ok(Command::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        if let Some(p) = preview.take() {
+                            p.detach();
+                        }
                         if let Some(mut s) = session.take() {
                             s.request_stop();
                             let deadline = Instant::now() + Duration::from_secs(15);

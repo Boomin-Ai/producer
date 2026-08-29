@@ -108,6 +108,94 @@ impl Live {
     }
     #[cfg(not(have_engine))]
     pub fn shutdown(&self) {}
+
+    #[cfg(have_engine)]
+    pub fn set_sources(&self, screen: bool, camera: bool, mic: bool) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .set_sources(screen, camera, mic)
+    }
+    #[cfg(not(have_engine))]
+    pub fn set_sources(&self, _s: bool, _c: bool, _m: bool) -> Result<(), String> {
+        Err("live engine not bundled in this build".into())
+    }
+
+    #[cfg(have_engine)]
+    pub fn attach_preview(&self, window: usize, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .attach_preview(window, engine::PreviewRect { x, y, w, h })
+    }
+    #[cfg(not(have_engine))]
+    pub fn attach_preview(&self, _win: usize, _x: f64, _y: f64, _w: f64, _h: f64) -> Result<(), String> {
+        Err("live engine not bundled in this build".into())
+    }
+
+    #[cfg(have_engine)]
+    pub fn move_preview(&self, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .move_preview(engine::PreviewRect { x, y, w, h })
+    }
+    #[cfg(not(have_engine))]
+    pub fn move_preview(&self, _x: f64, _y: f64, _w: f64, _h: f64) -> Result<(), String> {
+        Err("live engine not bundled in this build".into())
+    }
+
+    #[cfg(have_engine)]
+    pub fn detach_preview(&self) -> Result<(), String> {
+        self.handle.as_ref().ok_or("live engine not running")?.detach_preview()
+    }
+    #[cfg(not(have_engine))]
+    pub fn detach_preview(&self) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+/// TCC status for the coach (M-L6). Names, not booleans, so the UI can
+/// distinguish "never asked" from "denied" — the coach copy differs.
+pub fn permissions() -> serde_json::Value {
+    #[cfg(have_engine)]
+    unsafe {
+        fn name(status: i32) -> &'static str {
+            match status {
+                3 => "granted",
+                2 => "denied",
+                1 => "restricted",
+                _ => "not_determined",
+            }
+        }
+        return serde_json::json!({
+            "screen": if ffi::producer_screen_capture_preflight() == 1 { "granted" } else { "denied_or_not_determined" },
+            "camera": name(ffi::producer_av_authorization_status(0)),
+            "mic": name(ffi::producer_av_authorization_status(1)),
+        });
+    }
+    #[cfg(not(have_engine))]
+    serde_json::json!({ "screen": "unknown", "camera": "unknown", "mic": "unknown" })
+}
+
+/// Fire the system prompt for a permission (mic/camera prompt in place;
+/// screen registers the app in System Settings — relaunch needed after).
+pub fn request_permission(kind: &str) -> Result<(), String> {
+    #[cfg(have_engine)]
+    unsafe {
+        match kind {
+            "camera" => ffi::producer_av_request_access(0),
+            "mic" => ffi::producer_av_request_access(1),
+            "screen" => ffi::producer_screen_capture_request(),
+            other => return Err(format!("unknown permission {other}")),
+        }
+        return Ok(());
+    }
+    #[cfg(not(have_engine))]
+    {
+        let _ = kind;
+        Err("live engine not bundled in this build".into())
+    }
 }
 
 /// Start the LiveEngine for the app: events flow to the webview as

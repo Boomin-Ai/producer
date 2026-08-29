@@ -85,6 +85,12 @@ pub fn run() {
             live::commands::live_go_live,
             live::commands::live_stop,
             live::commands::live_engine_status,
+            live::commands::live_set_sources,
+            live::commands::live_attach_preview,
+            live::commands::live_move_preview,
+            live::commands::live_detach_preview,
+            live::commands::live_permissions,
+            live::commands::live_request_permission,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
