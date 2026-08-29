@@ -275,10 +275,11 @@ pub fn live_set_overlay(
     state: State<'_, AppState>,
     window_id: Option<u32>,
     color_key: bool,
+    url: Option<String>,
 ) -> EngineResult<()> {
     state
         .live
-        .set_overlay(window_id, color_key)
+        .set_overlay(window_id, color_key, url)
         .map_err(EngineError::Other)
 }
 

@@ -85,11 +85,7 @@ extern "C" fn ui_task_handler(task: ffi::obs_task_t, param: *mut c_void, wait: b
                 task,
                 param: param as usize,
             }));
-            ffi::dispatch_async_f(
-                &ffi::_dispatch_main_q as *const c_void,
-                ctx as *mut c_void,
-                run,
-            );
+            ffi::dispatch_async_f(&ffi::_dispatch_main_q as *const c_void, ctx as *mut c_void, run);
         }
     }
 }
@@ -138,6 +134,12 @@ fn reset_video(module: &str) -> Result<(), i32> {
 /// Full F3 bootstrap. MUST be called on the live-engine thread, never the
 /// main thread and never more than once per process.
 pub fn bootstrap() -> EngineReport {
+    bootstrap_with_config(None)
+}
+
+/// module_config_path feeds obs_module_config_path() — obs-browser derives
+/// its CEF cache dir from it (M-L7.1); harmless for every other plugin.
+pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> EngineReport {
     let mut report = EngineReport {
         ok: false,
         obs_version: String::new(),
@@ -153,7 +155,13 @@ pub fn bootstrap() -> EngineReport {
     };
 
     let locale = CString::new("en-US").unwrap();
-    if !unsafe { ffi::obs_startup(locale.as_ptr(), ptr::null(), ptr::null_mut()) } {
+    let config_c = module_config_dir
+        .and_then(|p| {
+            let _ = std::fs::create_dir_all(p);
+            CString::new(p.to_string_lossy().into_owned()).ok()
+        });
+    let config_ptr = config_c.as_ref().map_or(ptr::null(), |c| c.as_ptr());
+    if !unsafe { ffi::obs_startup(locale.as_ptr(), config_ptr, ptr::null_mut()) } {
         report.errors.push("obs_startup failed".into());
         return report;
     }
@@ -179,14 +187,14 @@ pub fn bootstrap() -> EngineReport {
         Err(metal_rc) => match reset_video("libobs-opengl.dylib") {
             Ok(()) => {
                 report.graphics_backend = Some("opengl".into());
-                report.errors.push(format!(
-                    "metal backend unavailable (rc={metal_rc}), fell back to opengl"
-                ));
+                report
+                    .errors
+                    .push(format!("metal backend unavailable (rc={metal_rc}), fell back to opengl"));
             }
             Err(gl_rc) => {
-                report.errors.push(format!(
-                    "obs_reset_video failed: metal rc={metal_rc}, opengl rc={gl_rc}"
-                ));
+                report
+                    .errors
+                    .push(format!("obs_reset_video failed: metal rc={metal_rc}, opengl rc={gl_rc}"));
                 return report;
             }
         },
@@ -208,9 +216,7 @@ pub fn bootstrap() -> EngineReport {
     unsafe { ffi::obs_load_all_modules2(&mut mfi) };
     for i in 0..mfi.count {
         let name = unsafe { CStr::from_ptr(*mfi.failed_modules.add(i)) };
-        report
-            .failed_modules
-            .push(name.to_string_lossy().into_owned());
+        report.failed_modules.push(name.to_string_lossy().into_owned());
     }
     unsafe { ffi::obs_module_failure_info_free(&mut mfi) };
 
@@ -243,7 +249,9 @@ pub fn bootstrap() -> EngineReport {
         }
     }
     if report.videotoolbox_encoders.is_empty() {
-        report.missing_ids.push("<any VideoToolbox encoder>".into());
+        report
+            .missing_ids
+            .push("<any VideoToolbox encoder>".into());
     }
 
     report.ok = report.missing_ids.is_empty() && report.failed_modules.is_empty();
@@ -272,10 +280,7 @@ pub enum Command {
         camera: bool,
         mic: bool,
     },
-    SetOverlay {
-        window_id: Option<u32>,
-        color_key: bool,
-    },
+    SetOverlay(graph::OverlaySpec),
     AttachPreview {
         /// NSWindow* of the Tauri window, as usize.
         window: usize,
@@ -363,20 +368,11 @@ impl LiveHandle {
     }
     pub fn set_sources(&self, screen: bool, camera: bool, mic: bool) -> Result<(), String> {
         self.cmd
-            .send(Command::SetSources {
-                screen,
-                camera,
-                mic,
-            })
+            .send(Command::SetSources { screen, camera, mic })
             .map_err(|e| e.to_string())
     }
-    pub fn set_overlay(&self, window_id: Option<u32>, color_key: bool) -> Result<(), String> {
-        self.cmd
-            .send(Command::SetOverlay {
-                window_id,
-                color_key,
-            })
-            .map_err(|e| e.to_string())
+    pub fn set_overlay(&self, spec: graph::OverlaySpec) -> Result<(), String> {
+        self.cmd.send(Command::SetOverlay(spec)).map_err(|e| e.to_string())
     }
     pub fn attach_preview(&self, window: usize, rect: PreviewRect) -> Result<(), String> {
         self.cmd
@@ -384,14 +380,10 @@ impl LiveHandle {
             .map_err(|e| e.to_string())
     }
     pub fn move_preview(&self, rect: PreviewRect) -> Result<(), String> {
-        self.cmd
-            .send(Command::MovePreview(rect))
-            .map_err(|e| e.to_string())
+        self.cmd.send(Command::MovePreview(rect)).map_err(|e| e.to_string())
     }
     pub fn detach_preview(&self) -> Result<(), String> {
-        self.cmd
-            .send(Command::DetachPreview)
-            .map_err(|e| e.to_string())
+        self.cmd.send(Command::DetachPreview).map_err(|e| e.to_string())
     }
     pub fn shutdown(&self) {
         let _ = self.cmd.send(Command::Shutdown);
@@ -440,9 +432,7 @@ impl Preview {
     fn attach(ns_window: *mut std::os::raw::c_void, rect: PreviewRect) -> Result<Preview, String> {
         unsafe {
             let (mut px_w, mut px_h) = (0f64, 0f64);
-            let view = ffi::producer_preview_attach(
-                ns_window, rect.x, rect.y, rect.w, rect.h, &mut px_w, &mut px_h,
-            );
+            let view = ffi::producer_preview_attach(ns_window, rect.x, rect.y, rect.w, rect.h, &mut px_w, &mut px_h);
             if view.is_null() {
                 return Err("NSView creation failed".into());
             }
@@ -475,9 +465,7 @@ impl Preview {
     fn set_rect(&mut self, rect: PreviewRect) {
         unsafe {
             let (mut px_w, mut px_h) = (0f64, 0f64);
-            ffi::producer_preview_set_frame(
-                self.view, rect.x, rect.y, rect.w, rect.h, &mut px_w, &mut px_h,
-            );
+            ffi::producer_preview_set_frame(self.view, rect.x, rect.y, rect.w, rect.h, &mut px_w, &mut px_h);
             let display_addr = self.display as usize;
             let (cx, cy) = (px_w.max(1.0) as u32, px_h.max(1.0) as u32);
             graph::on_main_thread(move || {
@@ -510,9 +498,7 @@ impl LiveProxy {
         if self.streaming.load(AtomicOrdering::SeqCst) {
             return Err("a live session is already running".into());
         }
-        self.cmd
-            .send(Command::GoLive(config))
-            .map_err(|e| e.to_string())
+        self.cmd.send(Command::GoLive(config)).map_err(|e| e.to_string())
     }
     pub fn stop_live(&self) -> Result<(), String> {
         self.cmd.send(Command::StopLive).map_err(|e| e.to_string())
@@ -522,7 +508,7 @@ impl LiveProxy {
 /// Start the LiveEngine owner thread. `sink` receives every event after the
 /// snapshot has been updated; it runs on the engine thread and must not
 /// block or call back into the engine.
-pub fn start(sink: impl Fn(&LiveEvent) + Send + 'static) -> LiveHandle {
+pub fn start(module_config_dir: std::path::PathBuf, sink: impl Fn(&LiveEvent) + Send + 'static) -> LiveHandle {
     let (cmd_tx, cmd_rx) = mpsc::channel::<Command>();
     let snapshot = Arc::new(Mutex::new(Snapshot::default()));
     let streaming = Arc::new(AtomicBool::new(false));
@@ -532,7 +518,7 @@ pub fn start(sink: impl Fn(&LiveEvent) + Send + 'static) -> LiveHandle {
     std::thread::Builder::new()
         .name("live-engine".into())
         .spawn(move || {
-            let report = bootstrap();
+            let report = bootstrap_with_config(Some(&module_config_dir));
             {
                 let mut s = snap.lock().unwrap();
                 s.engine_ready = true;
@@ -565,16 +551,14 @@ pub fn start(sink: impl Fn(&LiveEvent) + Send + 'static) -> LiveHandle {
             let mut state = SessionState::Idle;
             let mut last_status_emit = Instant::now();
 
-            let set_state = |state: &mut SessionState,
-                             new: SessionState,
-                             snap: &Arc<Mutex<Snapshot>>,
-                             sink: &dyn Fn(&LiveEvent)| {
-                if *state != new {
-                    *state = new;
-                    snap.lock().unwrap().session_state = new;
-                    sink(&LiveEvent::SessionState { state: new });
-                }
-            };
+            let set_state =
+                |state: &mut SessionState, new: SessionState, snap: &Arc<Mutex<Snapshot>>, sink: &dyn Fn(&LiveEvent)| {
+                    if *state != new {
+                        *state = new;
+                        snap.lock().unwrap().session_state = new;
+                        sink(&LiveEvent::SessionState { state: new });
+                    }
+                };
 
             loop {
                 match cmd_rx.recv_timeout(Duration::from_millis(250)) {
@@ -596,9 +580,7 @@ pub fn start(sink: impl Fn(&LiveEvent) + Send + 'static) -> LiveHandle {
                                     set_state(&mut state, SessionState::Streaming, &snap, &sink);
                                 }
                                 Err(failed_report) => {
-                                    sink(&LiveEvent::SessionEnded {
-                                        report: failed_report,
-                                    });
+                                    sink(&LiveEvent::SessionEnded { report: failed_report });
                                     set_state(&mut state, SessionState::Idle, &snap, &sink);
                                 }
                             }
@@ -610,11 +592,7 @@ pub fn start(sink: impl Fn(&LiveEvent) + Send + 'static) -> LiveHandle {
                             set_state(&mut state, SessionState::Stopping, &snap, &sink);
                         }
                     }
-                    Ok(Command::SetSources {
-                        screen,
-                        camera,
-                        mic,
-                    }) => {
+                    Ok(Command::SetSources { screen, camera, mic }) => {
                         if let Some(g) = scene.as_mut() {
                             for (label, result) in [
                                 ("screen", g.set_screen(screen)),
@@ -628,22 +606,19 @@ pub fn start(sink: impl Fn(&LiveEvent) + Send + 'static) -> LiveHandle {
                                 }
                             }
                             let sources = g.state();
-                            snap.lock().unwrap().sources = sources;
+                            snap.lock().unwrap().sources = sources.clone();
                             sink(&LiveEvent::SourcesChanged { sources });
                         }
                     }
-                    Ok(Command::SetOverlay {
-                        window_id,
-                        color_key,
-                    }) => {
+                    Ok(Command::SetOverlay(spec)) => {
                         if let Some(g) = scene.as_mut() {
-                            if let Err(e) = g.set_overlay(window_id, color_key) {
+                            if let Err(e) = g.set_overlay(spec) {
                                 sink(&LiveEvent::EngineError {
                                     message: format!("overlay: {e}"),
                                 });
                             }
                             let sources = g.state();
-                            snap.lock().unwrap().sources = sources;
+                            snap.lock().unwrap().sources = sources.clone();
                             sink(&LiveEvent::SourcesChanged { sources });
                         }
                     }
