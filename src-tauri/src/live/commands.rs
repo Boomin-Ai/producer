@@ -259,15 +259,21 @@ pub fn live_attach_preview(
         let scale = window.scale_factor().unwrap_or(1.0);
         let (px, py) = ((x * scale) as i32, (y * scale) as i32);
         let (pw, ph) = (((w * scale) as i32).max(1), ((h * scale) as i32).max(1));
-        let (tx, rx) = std::sync::mpsc::channel();
-        app.run_on_main_thread(move || {
-            let child = win_preview_child::create(parent as *mut _, px, py, pw, ph);
-            let _ = tx.send(child as usize);
-        })
-        .map_err(|e| EngineError::Other(format!("main-thread dispatch: {e}")))?;
-        let child = rx
-            .recv_timeout(std::time::Duration::from_secs(3))
-            .map_err(|_| EngineError::Other("preview child creation timed out".into()))?;
+        // Tauri sync commands run ON the main thread — dispatch-and-wait from
+        // here self-deadlocks (froze the whole app). On the owner thread,
+        // create directly; only genuinely-foreign threads dispatch.
+        let child = if win_preview_child::on_owner_thread(parent as *mut _) {
+            win_preview_child::create(parent as *mut _, px, py, pw, ph) as usize
+        } else {
+            let (tx, rx) = std::sync::mpsc::channel();
+            app.run_on_main_thread(move || {
+                let child = win_preview_child::create(parent as *mut _, px, py, pw, ph);
+                let _ = tx.send(child as usize);
+            })
+            .map_err(|e| EngineError::Other(format!("main-thread dispatch: {e}")))?;
+            rx.recv_timeout(std::time::Duration::from_secs(3))
+                .map_err(|_| EngineError::Other("preview child creation timed out".into()))?
+        };
         if child == 0 {
             return Err(EngineError::Other(
                 "preview child window creation failed".into(),
@@ -326,6 +332,18 @@ pub(crate) mod win_preview_child {
         fn GetWindow(hwnd: *mut c_void, cmd: u32) -> *mut c_void;
         fn GetWindowLongW(hwnd: *mut c_void, idx: i32) -> i32;
         fn SetWindowLongW(hwnd: *mut c_void, idx: i32, value: i32) -> i32;
+        fn GetWindowThreadProcessId(hwnd: *mut c_void, pid: *mut u32) -> u32;
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetCurrentThreadId() -> u32;
+    }
+    /// True when the calling thread owns `hwnd` (== the UI thread). Tauri runs
+    /// sync commands ON the main thread, so dispatch-and-wait from a command
+    /// self-deadlocks (the M-W6 freeze); when already on the owner thread,
+    /// window ops must run directly.
+    pub fn on_owner_thread(hwnd: *mut c_void) -> bool {
+        unsafe { GetWindowThreadProcessId(hwnd, std::ptr::null_mut()) == GetCurrentThreadId() }
     }
     const GW_CHILD: u32 = 5;
     const GW_HWNDNEXT: u32 = 2;
@@ -409,9 +427,13 @@ pub fn live_move_preview(
                 .unwrap_or(1.0);
             let (px, py) = ((x * scale) as i32, (y * scale) as i32);
             let (pw, ph) = (((w * scale) as i32).max(1), ((h * scale) as i32).max(1));
-            let _ = app.run_on_main_thread(move || {
+            if win_preview_child::on_owner_thread(child as *mut _) {
                 win_preview_child::move_to(child, px, py, pw, ph);
-            });
+            } else {
+                let _ = app.run_on_main_thread(move || {
+                    win_preview_child::move_to(child, px, py, pw, ph);
+                });
+            }
             return state
                 .live
                 .move_preview(0.0, 0.0, pw as f64, ph as f64)
@@ -433,7 +455,11 @@ pub fn live_detach_preview(app: tauri::AppHandle, state: State<'_, AppState>) ->
     {
         let child = win_preview_child::CHILD.swap(0, std::sync::atomic::Ordering::SeqCst);
         if child != 0 {
-            let _ = app.run_on_main_thread(move || win_preview_child::destroy(child));
+            if win_preview_child::on_owner_thread(child as *mut _) {
+                win_preview_child::destroy(child);
+            } else {
+                let _ = app.run_on_main_thread(move || win_preview_child::destroy(child));
+            }
         }
     }
     #[cfg(not(all(have_engine, target_os = "windows")))]
