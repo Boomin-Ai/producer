@@ -18,7 +18,7 @@
   "patchset": {
     "dir": "engine/patches",
     "target": "plugins/obs-browser",
-    "sha256": "9da1c3816a777920a0450fe3fdd8d226976c0c2752564cc0ed5a4c08dc416315"
+    "sha256": "21281fe9577e52f7297b6831c7ca42d6ef91f152c64c19985100a3dabe662e5d"
   },
   "fallback": {
     "mode": "official-release-extract",

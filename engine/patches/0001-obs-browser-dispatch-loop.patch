@@ -149,6 +149,37 @@ index b25d9ac..4c93fec 100644
  	QTimer frameTimer;
  #endif
  
+diff --git a/browser-client.cpp b/browser-client.cpp
+index bf7baad..4d9855c 100644
+--- a/browser-client.cpp
++++ b/browser-client.cpp
+@@ -23,9 +23,11 @@
+ #include <obs-frontend-api.h>
+ #include <obs.hpp>
+ #include <util/platform.h>
++#ifndef ENABLE_BROWSER_DISPATCH_LOOP
+ #include <QApplication>
+ #include <QThread>
+ #include <QToolTip>
++#endif
+ #if defined(__APPLE__) && CHROME_VERSION_BUILD > 4430
+ #include <IOSurface/IOSurface.h>
+ #endif
+@@ -295,9 +297,14 @@ void BrowserClient::GetViewRect(CefRefPtr<CefBrowser>, CefRect &rect)
+ 
+ bool BrowserClient::OnTooltip(CefRefPtr<CefBrowser>, CefString &text)
+ {
++#ifdef ENABLE_BROWSER_DISPATCH_LOOP
++	/* no Qt UI to host a tooltip; suppress (handled, draw nothing) */
++	UNUSED_PARAMETER(text);
++#else
+ 	std::string str_text = text;
+ 	QMetaObject::invokeMethod(QCoreApplication::instance()->thread(),
+ 				  [str_text]() { QToolTip::showText(QCursor::pos(), str_text.c_str()); });
++#endif
+ 	return true;
+ }
+ 
 diff --git a/cmake/os-macos.cmake b/cmake/os-macos.cmake
 index 6d6dc51..77ad8fe 100644
 --- a/cmake/os-macos.cmake
@@ -303,10 +334,50 @@ index 95a168c..478e6f4 100644
  	if (manager_thread.joinable()) {
  		if (!QueueCEFTask([]() { CefQuitMessageLoop(); }))
 diff --git a/obs-browser-source.cpp b/obs-browser-source.cpp
-index 6e80fbc..7a0c628 100644
+index 6e80fbc..565f6aa 100644
 --- a/obs-browser-source.cpp
 +++ b/obs-browser-source.cpp
-@@ -168,7 +168,7 @@ void BrowserSource::ExecuteOnBrowser(BrowserFunc func, bool async)
+@@ -22,7 +22,6 @@
+ #include "wide-string.hpp"
+ #include <nlohmann/json.hpp>
+ #include <util/threading.h>
+-#include <QApplication>
+ #include <util/dstr.h>
+ #include <functional>
+ #include <thread>
+@@ -33,10 +32,15 @@
+ #endif
+ 
+ #ifdef ENABLE_BROWSER_QT_LOOP
++#include <QApplication>
+ #include <QEventLoop>
+ #include <QThread>
+ #endif
+ 
++#ifdef ENABLE_BROWSER_DISPATCH_LOOP
++#include <pthread.h>
++#endif
++
+ #if !defined(_WIN32) && !defined(__APPLE__)
+ #include "drm-format.hpp"
+ #endif
+@@ -153,6 +157,15 @@ void BrowserSource::ExecuteOnBrowser(BrowserFunc func, bool async)
+ 				func(cefBrowser);
+ 			return;
+ 		}
++#elif defined(ENABLE_BROWSER_DISPATCH_LOOP)
++		/* same deadlock guard as the Qt loop: with the external pump the
++		 * CEF UI thread IS the main thread — a synchronous wait from it
++		 * would never be serviced */
++		if (pthread_main_np()) {
++			if (!!cefBrowser)
++				func(cefBrowser);
++			return;
++		}
+ #endif
+ 		os_event_t *finishedEvent;
+ 		os_event_init(&finishedEvent, OS_EVENT_TYPE_AUTO);
+@@ -168,7 +181,7 @@ void BrowserSource::ExecuteOnBrowser(BrowserFunc func, bool async)
  	} else {
  		CefRefPtr<CefBrowser> browser = GetBrowser();
  		if (!!browser) {
@@ -315,7 +386,7 @@ index 6e80fbc..7a0c628 100644
  			QueueBrowserTask(cefBrowser, func);
  #else
  			QueueCEFTask([=]() { func(browser); });
-@@ -630,7 +630,7 @@ void BrowserSource::Render()
+@@ -630,7 +643,7 @@ void BrowserSource::Render()
  
  #if defined(BROWSER_EXTERNAL_BEGIN_FRAME_ENABLED) && defined(ENABLE_BROWSER_SHARED_TEXTURE)
  	SignalBeginFrame();
