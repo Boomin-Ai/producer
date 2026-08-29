@@ -133,6 +133,18 @@ impl Live {
     }
 
     #[cfg(have_engine)]
+    pub fn set_mic_audio(&self, volume: Option<f32>, muted: Option<bool>) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .set_mic_audio(volume, muted)
+    }
+    #[cfg(not(have_engine))]
+    pub fn set_mic_audio(&self, _v: Option<f32>, _m: Option<bool>) -> Result<(), String> {
+        Err("live engine not bundled in this build".into())
+    }
+
+    #[cfg(have_engine)]
     pub fn set_overlay(
         &self,
         window_id: Option<u32>,

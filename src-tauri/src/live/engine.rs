@@ -283,6 +283,10 @@ pub enum Command {
         camera: bool,
         mic: bool,
     },
+    SetMicAudio {
+        volume: Option<f32>,
+        muted: Option<bool>,
+    },
     SetOverlay(graph::OverlaySpec),
     AttachPreview {
         /// NSWindow* of the Tauri window, as usize.
@@ -337,6 +341,11 @@ pub enum LiveEvent {
     SourcesChanged {
         sources: graph::SourcesState,
     },
+    /// Mic meter tick (~8 Hz while the mic is on): peak absolute sample
+    /// since the previous tick, 0..=1.
+    Levels {
+        mic_peak: f64,
+    },
     EngineError {
         message: String,
     },
@@ -376,6 +385,12 @@ impl LiveHandle {
                 camera,
                 mic,
             })
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn set_mic_audio(&self, volume: Option<f32>, muted: Option<bool>) -> Result<(), String> {
+        self.cmd
+            .send(Command::SetMicAudio { volume, muted })
             .map_err(|e| e.to_string())
     }
     pub fn set_overlay(&self, spec: graph::OverlaySpec) -> Result<(), String> {
@@ -572,6 +587,7 @@ pub fn start(
             let mut session: Option<Session> = None;
             let mut state = SessionState::Idle;
             let mut last_status_emit = Instant::now();
+            let mut last_levels_emit = Instant::now();
 
             let set_state = |state: &mut SessionState,
                              new: SessionState,
@@ -585,7 +601,8 @@ pub fn start(
             };
 
             loop {
-                match cmd_rx.recv_timeout(Duration::from_millis(250)) {
+                // 120ms tick: meters want ~8Hz; command latency stays low.
+                match cmd_rx.recv_timeout(Duration::from_millis(120)) {
                     Ok(Command::GoLive(config)) => {
                         if session.is_some() {
                             sink(&LiveEvent::EngineError {
@@ -635,6 +652,14 @@ pub fn start(
                                     });
                                 }
                             }
+                            let sources = g.state();
+                            snap.lock().unwrap().sources = sources.clone();
+                            sink(&LiveEvent::SourcesChanged { sources });
+                        }
+                    }
+                    Ok(Command::SetMicAudio { volume, muted }) => {
+                        if let Some(g) = scene.as_mut() {
+                            g.set_mic_audio(volume, muted);
                             let sources = g.state();
                             snap.lock().unwrap().sources = sources.clone();
                             sink(&LiveEvent::SourcesChanged { sources });
@@ -692,6 +717,16 @@ pub fn start(
                         break;
                     }
                     Err(mpsc::RecvTimeoutError::Timeout) => {}
+                }
+
+                // Mic meter stream — only while a mic source exists.
+                if scene.as_ref().is_some_and(|g| g.state().mic)
+                    && last_levels_emit.elapsed() > Duration::from_millis(110)
+                {
+                    last_levels_emit = Instant::now();
+                    sink(&LiveEvent::Levels {
+                        mic_peak: graph::take_mic_peak(),
+                    });
                 }
 
                 if let Some(s) = session.as_mut() {

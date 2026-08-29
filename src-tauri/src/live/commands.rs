@@ -303,6 +303,51 @@ pub fn live_screen_coach(action: String) -> EngineResult<()> {
     crate::live::screen_grant_coach(&action).map_err(EngineError::Other)
 }
 
+#[tauri::command]
+pub fn live_set_mic_audio(
+    state: State<'_, AppState>,
+    volume: Option<f32>,
+    muted: Option<bool>,
+) -> EngineResult<()> {
+    state
+        .live
+        .set_mic_audio(volume, muted)
+        .map_err(EngineError::Other)
+}
+
+/// Day-one chat: the platform's own popout chat in a compact companion
+/// window (cookies persist in the webview data store, so one login lasts).
+/// Host-allowlisted — this must never become an arbitrary-URL opener.
+#[tauri::command]
+pub fn live_open_chat(app: tauri::AppHandle, url: String) -> EngineResult<()> {
+    use tauri::Manager;
+    let parsed = tauri::Url::parse(&url).map_err(|e| EngineError::Other(e.to_string()))?;
+    let host_ok = parsed.scheme() == "https"
+        && parsed.host_str().is_some_and(|h| {
+            h == "www.twitch.tv"
+                || h == "twitch.tv"
+                || h == "kick.com"
+                || h == "www.youtube.com"
+                || h == "youtube.com"
+        });
+    if !host_ok {
+        return Err(EngineError::Other(
+            "chat url must be a twitch/kick/youtube page".into(),
+        ));
+    }
+    let label = "chat";
+    if let Some(existing) = app.get_webview_window(label) {
+        let _ = existing.close();
+    }
+    tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::External(parsed))
+        .title("Chat")
+        .inner_size(380.0, 640.0)
+        .always_on_top(true)
+        .build()
+        .map_err(|e| EngineError::Other(e.to_string()))?;
+    Ok(())
+}
+
 // ── Live rooms: switchable show documents (control-room home) ───────────────
 
 #[derive(Debug, Serialize)]

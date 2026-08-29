@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ipc,
   listenLiveEvents,
@@ -232,33 +232,146 @@ function OverlayPicker({ activeWindow, activeUrl }: { activeWindow: number | nul
   );
 }
 
-function SourceToggles({
-  sources,
+/** One video tile in the sources sheet: name + eye toggle. */
+function SourceTile({
+  label,
+  sub,
+  on,
   disabled,
-  onChange,
+  onToggle,
+  children,
 }: {
-  sources: LiveSources;
-  disabled: boolean;
-  onChange: (s: LiveSources) => void;
+  label: string;
+  sub?: string;
+  on: boolean;
+  disabled?: boolean;
+  onToggle: () => void;
+  children?: ReactNode;
 }) {
-  const toggles: { key: keyof LiveSources; label: string }[] = [
-    { key: "screen", label: "Screen" },
-    { key: "camera", label: "Camera" },
-    { key: "mic", label: "Mic" },
-  ];
   return (
-    <div className="live-sources">
-      {toggles.map((t) => (
-        <button
-          key={t.key}
-          className={`live-source-toggle${sources[t.key] ? " on" : ""}`}
-          disabled={disabled}
-          onClick={() => onChange({ ...sources, [t.key]: !sources[t.key] })}
-        >
-          {t.label}
+    <div className={`st-tile${on ? " on" : ""}`}>
+      <button className="st-tile-body" disabled={disabled} onClick={onToggle}>
+        <span className="st-eye">{on ? "●" : "○"}</span>
+        <span className="st-tile-name">{label}</span>
+        {sub && <span className="st-tile-sub">{sub}</span>}
+      </button>
+      {children}
+    </div>
+  );
+}
+
+/** Vertical mic strip: real meter (engine peak stream), fader, mute. */
+function MicStrip({
+  on,
+  level,
+  volume,
+  muted,
+  onToggle,
+  onVolume,
+  onMute,
+}: {
+  on: boolean;
+  level: number;
+  volume: number;
+  muted: boolean;
+  onToggle: () => void;
+  onVolume: (v: number) => void;
+  onMute: () => void;
+}) {
+  const ui = Math.cbrt(Math.max(0, Math.min(1, volume)));
+  const db = volume > 0.001 ? Math.round(20 * Math.log10(volume)) : -60;
+  return (
+    <div className={`st-strip${on ? " on" : ""}${muted ? " muted" : ""}`}>
+      <div className="st-strip-columns">
+        <div className="st-meter">
+          <div className="st-meter-fill" style={{ height: `${Math.round(level * 100)}%` }} />
+        </div>
+        <div className="st-fader">
+          <input
+            type="range"
+            min={0}
+            max={1000}
+            value={Math.round(ui * 1000)}
+            disabled={!on}
+            onChange={(e) => {
+              const u = Number(e.target.value) / 1000;
+              onVolume(u * u * u);
+            }}
+          />
+        </div>
+      </div>
+      <div className="st-strip-db">{muted ? "muted" : `${db <= -60 ? "-∞" : db} dB`}</div>
+      <div className="st-strip-actions">
+        <button className={`st-mute${muted ? " active" : ""}`} disabled={!on} onClick={onMute} title="Mute">
+          {muted ? "🔇" : "🎙"}
         </button>
-      ))}
-      <span className="live-sources-note">Camera appears picture-in-picture.</span>
+        <button className="st-strip-toggle" onClick={onToggle}>
+          {on ? "Mic on" : "Mic off"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Day-one chat: platform popout chat in a compact companion window.
+ * Channel names are remembered locally — no OAuth involved. */
+function ChatPopover({ onClose }: { onClose: () => void }) {
+  const [twitch, setTwitch] = useState(() => localStorage.getItem("producer.chat.twitch") ?? "");
+  const [kick, setKick] = useState(() => localStorage.getItem("producer.chat.kick") ?? "");
+  const [error, setError] = useState<string | null>(null);
+
+  async function open(url: string, storeKey: string, value: string) {
+    try {
+      localStorage.setItem(storeKey, value.trim());
+      await ipc.liveOpenChat(url);
+      onClose();
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  return (
+    <div className="st-chat-pop">
+      <div className="st-chat-row">
+        <span className="st-chat-label">Twitch</span>
+        <input
+          value={twitch}
+          onChange={(e) => setTwitch(e.target.value)}
+          placeholder="channel name"
+        />
+        <button
+          disabled={!twitch.trim()}
+          onClick={() =>
+            open(
+              `https://www.twitch.tv/popout/${encodeURIComponent(twitch.trim().toLowerCase())}/chat`,
+              "producer.chat.twitch",
+              twitch,
+            )
+          }
+        >
+          Open
+        </button>
+      </div>
+      <div className="st-chat-row">
+        <span className="st-chat-label">Kick</span>
+        <input value={kick} onChange={(e) => setKick(e.target.value)} placeholder="channel name" />
+        <button
+          disabled={!kick.trim()}
+          onClick={() =>
+            open(
+              `https://kick.com/popout/${encodeURIComponent(kick.trim().toLowerCase())}/chat`,
+              "producer.chat.kick",
+              kick,
+            )
+          }
+        >
+          Open
+        </button>
+      </div>
+      <div className="st-chat-hint">
+        Opens the platform&rsquo;s own chat in a small window — sign in once, it remembers you.
+      </div>
+      {error && <div className="live-error">{error}</div>}
     </div>
   );
 }
@@ -348,6 +461,10 @@ export function LiveView({ room }: { room?: { id: string; name: string; config: 
   const [adding, setAdding] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [sources, setSources] = useState<LiveSources>({ screen: false, camera: false, mic: false });
+  const [micLevel, setMicLevel] = useState(0);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const sheetAutoOpened = useRef(false);
   const unlisten = useRef<(() => void) | null>(null);
   const roomApplied = useRef(false);
   const roomId = room?.id ?? null;
@@ -365,6 +482,9 @@ export function LiveView({ room }: { room?: { id: string; name: string; config: 
         const cfg = JSON.parse(room.config || "{}") as Partial<LiveSources>;
         if (typeof cfg.screen === "boolean") {
           await ipc.liveSetSources(cfg.screen, cfg.camera ?? false, cfg.mic ?? false);
+          if (cfg.mic_volume != null || cfg.mic_muted != null) {
+            await ipc.liveSetMicAudio({ volume: cfg.mic_volume, muted: cfg.mic_muted });
+          }
           if (cfg.overlay_window != null || cfg.overlay_url) {
             await ipc.liveSetOverlay(cfg.overlay_window ?? null, true, cfg.overlay_url ?? null);
           }
@@ -373,6 +493,12 @@ export function LiveView({ room }: { room?: { id: string; name: string; config: 
       } catch {
         /* malformed config — start clean */
       }
+    }
+    // A room with nothing configured greets you with the sources sheet.
+    if (!sheetAutoOpened.current) {
+      sheetAutoOpened.current = true;
+      const s = snap.sources;
+      if (snap.engine_ready && s && !s.screen && !s.camera && !s.mic) setSheetOpen(true);
     }
   }, [room]);
 
@@ -395,6 +521,11 @@ export function LiveView({ room }: { room?: { id: string; name: string; config: 
         if (roomId) {
           ipc.liveUpdateRoom(roomId, { config: JSON.stringify(ev.sources) }).catch(() => {});
         }
+      } else if (ev.type === "levels") {
+        // peak → dB → 0..1 over a 50dB window, with a falling ballistic.
+        const db = ev.mic_peak > 0.00001 ? 20 * Math.log10(ev.mic_peak) : -60;
+        const pct = Math.max(0, Math.min(1, (db + 50) / 50));
+        setMicLevel((prev) => Math.max(pct, prev * 0.78));
       } else if (ev.type === "engine_error") {
         setBanner(ev.message);
       } else if (ev.type === "engine_ready" && !ev.ok) {
@@ -427,125 +558,149 @@ export function LiveView({ room }: { room?: { id: string; name: string; config: 
     }
   }
 
+  async function setSrc(patch: Partial<Pick<LiveSources, "screen" | "camera" | "mic">>) {
+    const next = { ...sources, ...patch };
+    setSources(next);
+    try {
+      await ipc.liveSetSources(next.screen, next.camera, next.mic);
+    } catch (e) {
+      setBanner(String(e));
+    }
+  }
+
+  const overlayActive = sources.overlay_window != null || !!sources.overlay_url;
+  const enabledDests = destinations.filter((d) => d.enabled);
+
   return (
-    <div className="live-view">
-      <div className="section-head">
-        <span className="section-label">Live</span>
-        {snapshot?.graphics_backend && <span className="live-backend">engine: {snapshot.graphics_backend}</span>}
+    <div className="stage-wrap">
+      <div className="stage">
+        {engineOk && <PreviewPanel />}
+        {!engineOk && snapshot && (
+          <div className="stage-msg">
+            {snapshot.disabled ? "Live engine not bundled in this build." : "Warming up the engine…"}
+          </div>
+        )}
+        <div className="stage-float">
+          <PermissionsCoach sources={sources} />
+          {banner && <div className="live-error">{banner}</div>}
+        </div>
       </div>
 
-      {engineOk && <PreviewPanel />}
-      <SourceToggles
-        sources={sources}
-        disabled={!engineOk}
-        onChange={async (s) => {
-          setSources(s);
-          try {
-            await ipc.liveSetSources(s.screen, s.camera, s.mic);
-          } catch (e) {
-            setBanner(String(e));
-          }
-        }}
-      />
-      <PermissionsCoach sources={sources} />
-
-      <details className="live-overlay-details" open={sources.overlay_window != null || sources.overlay_url != null}>
-        <summary>
-          Overlay {sources.overlay_window != null || sources.overlay_url != null ? "· active" : ""}
-        </summary>
-        <OverlayPicker activeWindow={sources.overlay_window ?? null} activeUrl={sources.overlay_url ?? null} />
-      </details>
-
-      <div className="section-head">
-        <span className="section-label">Destinations</span>
-      </div>
-
-      {banner && <div className="live-error">{banner}</div>}
-      {!engineOk && snapshot && (
-        <div className="live-error">
-          {snapshot.disabled ? "Live engine not bundled in this build." : "Live engine is starting…"}
+      {sheetOpen && (
+        <div className="stage-sheet">
+          <div className="st-tiles">
+            <SourceTile
+              label="Screen"
+              sub="your display, full frame"
+              on={sources.screen}
+              disabled={!engineOk}
+              onToggle={() => setSrc({ screen: !sources.screen })}
+            />
+            <SourceTile
+              label="Camera"
+              sub="picture-in-picture"
+              on={sources.camera}
+              disabled={!engineOk}
+              onToggle={() => setSrc({ camera: !sources.camera })}
+            />
+            <div className={`st-tile${overlayActive ? " on" : ""} st-tile-overlay`}>
+              <div className="st-tile-body as-label">
+                <span className="st-eye">{overlayActive ? "●" : "○"}</span>
+                <span className="st-tile-name">Overlay</span>
+                <span className="st-tile-sub">alerts · browser · window</span>
+              </div>
+              <OverlayPicker
+                activeWindow={sources.overlay_window ?? null}
+                activeUrl={sources.overlay_url ?? null}
+              />
+            </div>
+          </div>
+          <MicStrip
+            on={sources.mic}
+            level={sources.mic && !sources.mic_muted ? micLevel : 0}
+            volume={sources.mic_volume ?? 1}
+            muted={sources.mic_muted ?? false}
+            onToggle={() => setSrc({ mic: !sources.mic })}
+            onVolume={(v) => {
+              setSources((s) => ({ ...s, mic_volume: v }));
+              ipc.liveSetMicAudio({ volume: v }).catch((e) => setBanner(String(e)));
+            }}
+            onMute={() => {
+              const m = !(sources.mic_muted ?? false);
+              setSources((s) => ({ ...s, mic_muted: m }));
+              ipc.liveSetMicAudio({ muted: m }).catch((e) => setBanner(String(e)));
+            }}
+          />
         </div>
       )}
 
-      <div className="live-rows">
-        {destinations.map((d) => {
-          const st = statuses.get(d.id);
-          const phase = st ? PHASE_COPY[st.phase] ?? PHASE_COPY.idle : PHASE_COPY.idle;
-          return (
-            <div key={d.id} className={`live-row${d.enabled ? "" : " disabled"}`}>
-              <span className={`live-dot ${st ? phase.tone : "muted"}`} />
-              <div className="live-row-main">
-                <div className="live-row-title">
-                  {d.label} <span className="live-preset">{d.preset}</span>
-                </div>
-                <div className="live-row-sub">
-                  {st && streaming ? (
-                    <>
-                      {phase.label}
-                      {st.phase === "live" && ` · ${fmtBitrate(st.bytes_sent, elapsed)} · ${st.total_frames} frames`}
-                      {st.dropped_frames > 0 && ` · ${st.dropped_frames} dropped`}
-                      {st.reconnects > 0 && ` · ${st.reconnects} reconnects`}
-                      {st.phase === "live" && " · confirm on the platform dashboard"}
-                    </>
-                  ) : (
-                    <>key stored in Keychain{d.server ? ` · ${d.server}` : ""}</>
-                  )}
-                  {st?.last_error && <span className="live-error-inline"> · {st.last_error}</span>}
-                </div>
-              </div>
-              {!streaming && (
-                <>
-                  <button className="live-toggle" onClick={() => toggleEnabled(d)} title="Include when going live">
-                    {d.enabled ? "On" : "Off"}
-                  </button>
-                  <button onClick={() => setEditing(d)}>Edit</button>
-                  <button
-                    onClick={async () => {
-                      await ipc.liveDeleteDestination(d.id);
-                      refresh();
-                    }}
-                  >
-                    ✕
-                  </button>
-                </>
-              )}
-            </div>
-          );
-        })}
-        {destinations.length === 0 && !adding && (
-          <div className="side-soon">Add a destination to go live. Keys go straight to the macOS Keychain.</div>
-        )}
-      </div>
-
       {(adding || editing) && (
-        <DestinationEditor
-          existing={editing}
-          onSaved={() => {
-            setAdding(false);
-            setEditing(null);
-            refresh();
-          }}
-          onCancel={() => {
-            setAdding(false);
-            setEditing(null);
-          }}
-        />
-      )}
-      {!adding && !editing && !streaming && (
-        <button onClick={() => setAdding(true)}>+ Add destination</button>
+        <div className="stage-editor">
+          <DestinationEditor
+            existing={editing}
+            onSaved={() => {
+              setAdding(false);
+              setEditing(null);
+              refresh();
+            }}
+            onCancel={() => {
+              setAdding(false);
+              setEditing(null);
+            }}
+          />
+        </div>
       )}
 
-      <div className="live-actions">
+      <div className="stage-bar">
+        <button
+          className={`stage-btn${sheetOpen ? " active" : ""}`}
+          onClick={() => setSheetOpen((o) => !o)}
+        >
+          Sources
+        </button>
+        <div className="stage-chat-anchor">
+          <button className={`stage-btn${chatOpen ? " active" : ""}`} onClick={() => setChatOpen((o) => !o)}>
+            Chat
+          </button>
+          {chatOpen && <ChatPopover onClose={() => setChatOpen(false)} />}
+        </div>
+
+        <div className="stage-dests">
+          {destinations.map((d) => {
+            const st = statuses.get(d.id);
+            const phase = st ? PHASE_COPY[st.phase] ?? PHASE_COPY.idle : PHASE_COPY.idle;
+            return (
+              <button
+                key={d.id}
+                className={`stage-dest${d.enabled ? "" : " off"}`}
+                title={
+                  streaming && st
+                    ? `${phase.label} · ${fmtBitrate(st.bytes_sent, elapsed)}${st.dropped_frames > 0 ? ` · ${st.dropped_frames} dropped` : ""}${st.last_error ? ` · ${st.last_error}` : ""}`
+                    : `${d.preset} · click: on/off · double-click: edit`
+                }
+                onClick={() => !streaming && toggleEnabled(d)}
+                onDoubleClick={() => !streaming && setEditing(d)}
+              >
+                <span className={`live-dot ${streaming && st ? phase.tone : d.enabled ? "ready" : "muted"}`} />
+                {d.label}
+              </button>
+            );
+          })}
+          {!streaming && (
+            <button className="stage-dest add" onClick={() => setAdding(true)} title="Add a live channel">
+              +
+            </button>
+          )}
+        </div>
+
         {streaming ? (
-          <button className="live-stop" onClick={() => ipc.liveStop()} disabled={state === "stopping"}>
-            {state === "stopping" ? "Stopping…" : `STOP (${Math.floor(elapsed / 60)}:${String(Math.floor(elapsed % 60)).padStart(2, "0")})`}
+          <button className="stage-stop" onClick={() => ipc.liveStop()} disabled={state === "stopping"}>
+            {state === "stopping"
+              ? "Stopping…"
+              : `STOP · ${Math.floor(elapsed / 60)}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}
           </button>
         ) : (
-          <button
-            className="live-go"
-            onClick={goLive}
-            disabled={!engineOk || destinations.filter((d) => d.enabled).length === 0}
-          >
+          <button className="stage-go" onClick={goLive} disabled={!engineOk || enabledDests.length === 0}>
             GO LIVE
           </button>
         )}

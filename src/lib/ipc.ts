@@ -128,6 +128,9 @@ export const ipc = {
   liveListWindows: () => invoke<LiveWindow[]>("live_list_windows"),
   liveSetOverlay: (windowId: number | null, colorKey: boolean, url?: string | null) =>
     invoke("live_set_overlay", { windowId, colorKey, url: url ?? null }),
+  liveSetMicAudio: (patch: { volume?: number; muted?: boolean }) =>
+    invoke("live_set_mic_audio", { volume: patch.volume ?? null, muted: patch.muted ?? null }),
+  liveOpenChat: (url: string) => invoke("live_open_chat", { url }),
 };
 
 export interface LiveWindow {
@@ -155,6 +158,8 @@ export interface LiveSources {
   screen: boolean;
   camera: boolean;
   mic: boolean;
+  mic_volume?: number;
+  mic_muted?: boolean;
   overlay_window?: number | null;
   overlay_url?: string | null;
 }
@@ -208,6 +213,7 @@ export type LiveEvent =
   | { type: "status"; elapsed_secs: number; destinations: LiveDestStatus[] }
   | { type: "session_ended"; report: { ok: boolean; destinations: LiveDestStatus[]; notes: string[] } }
   | { type: "sources_changed"; sources: LiveSources }
+  | { type: "levels"; mic_peak: number }
   | { type: "engine_error"; message: string };
 
 export async function listenLiveEvents(cb: (ev: LiveEvent) => void): Promise<() => void> {

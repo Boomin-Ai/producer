@@ -115,16 +115,33 @@ fn main_display_uuid() -> Option<String> {
     }
 }
 
-#[derive(Debug, Clone, Default, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SourcesState {
     pub screen: bool,
     pub camera: bool,
     pub mic: bool,
+    /// Mic gain multiplier (0..=1 linear; the UI applies its own taper).
+    pub mic_volume: f32,
+    pub mic_muted: bool,
     /// Window-capture overlay (D1's sanctioned v1 escape hatch); the CGWindowID
     /// being captured, if any.
     pub overlay_window: Option<u32>,
     /// Native CEF overlay URL (M-L7.1); requires a browser-capable engine.
     pub overlay_url: Option<String>,
+}
+
+impl Default for SourcesState {
+    fn default() -> Self {
+        SourcesState {
+            screen: false,
+            camera: false,
+            mic: false,
+            mic_volume: 1.0,
+            mic_muted: false,
+            overlay_window: None,
+            overlay_url: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -144,6 +161,8 @@ pub struct SceneGraph {
     screen: Option<(*mut ffi::obs_sceneitem_t, *mut ffi::obs_source_t)>,
     camera: Option<(*mut ffi::obs_sceneitem_t, *mut ffi::obs_source_t)>,
     mic: Option<*mut ffi::obs_source_t>,
+    mic_volume: f32,
+    mic_muted: bool,
     overlay: Option<(
         *mut ffi::obs_sceneitem_t,
         *mut ffi::obs_source_t,
@@ -165,6 +184,8 @@ impl SceneGraph {
                 screen: None,
                 camera: None,
                 mic: None,
+                mic_volume: 1.0,
+                mic_muted: false,
                 overlay: None,
             })
         }
@@ -175,6 +196,8 @@ impl SceneGraph {
             screen: self.screen.is_some(),
             camera: self.camera.is_some(),
             mic: self.mic.is_some(),
+            mic_volume: self.mic_volume,
+            mic_muted: self.mic_muted,
             overlay_window: self.overlay.as_ref().and_then(|(_, _, spec)| match spec {
                 OverlaySpec::Window { id, .. } => Some(*id),
                 _ => None,
@@ -428,6 +451,7 @@ impl SceneGraph {
                 (true, Some(existing)) => self.mic = Some(existing),
                 (false, None) => {}
                 (false, Some(src)) => {
+                    ffi::obs_source_remove_audio_capture_callback(src, audio_cb, ptr::null_mut());
                     ffi::obs_set_output_source(1, ptr::null_mut());
                     ffi::obs_source_release(src);
                 }
@@ -443,6 +467,11 @@ impl SceneGraph {
                     if src.is_null() {
                         return Err("mic source creation failed".into());
                     }
+                    // The meter rides the capture callback (audio thread →
+                    // one atomic, §5.1); volume/mute survive re-creation.
+                    ffi::obs_source_add_audio_capture_callback(src, audio_cb, ptr::null_mut());
+                    ffi::obs_source_set_volume(src, self.mic_volume);
+                    ffi::obs_source_set_muted(src, self.mic_muted);
                     ffi::obs_set_output_source(1, src);
                     self.mic = Some(src);
                 }
@@ -450,6 +479,29 @@ impl SceneGraph {
         }
         Ok(())
     }
+
+    /// Mic gain/mute. Values persist on the graph so toggling the mic off
+    /// and on keeps the fader where the user left it.
+    pub fn set_mic_audio(&mut self, volume: Option<f32>, muted: Option<bool>) {
+        if let Some(v) = volume {
+            self.mic_volume = v.clamp(0.0, 1.0);
+        }
+        if let Some(m) = muted {
+            self.mic_muted = m;
+        }
+        if let Some(src) = self.mic {
+            unsafe {
+                ffi::obs_source_set_volume(src, self.mic_volume);
+                ffi::obs_source_set_muted(src, self.mic_muted);
+            }
+        }
+    }
+}
+
+/// Peak absolute mic sample since the last call (0..=1), consumed on read —
+/// the engine tick turns this into the meter event stream.
+pub fn take_mic_peak() -> f64 {
+    AUDIO_PEAK_MICRO.swap(0, Ordering::Relaxed) as f64 / 1_000_000.0
 }
 
 /// Create the default capture graph (SCK main display + default mic) and

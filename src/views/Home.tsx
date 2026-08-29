@@ -333,7 +333,7 @@ export function Home({
       )}
 
       {view.kind === "room" && (
-        <main className="cr-page">
+        <main className="cr-page stage-page">
           <LiveView key={view.room.id} room={view.room} />
         </main>
       )}

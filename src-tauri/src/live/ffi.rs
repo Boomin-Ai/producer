@@ -117,6 +117,8 @@ extern "C" {
     pub fn obs_set_output_source(channel: u32, source: *mut obs_source_t);
     pub fn obs_source_get_width(source: *mut obs_source_t) -> u32;
     pub fn obs_source_get_height(source: *mut obs_source_t) -> u32;
+    pub fn obs_source_set_volume(source: *mut obs_source_t, volume: f32);
+    pub fn obs_source_set_muted(source: *mut obs_source_t, muted: bool);
     pub fn obs_source_add_audio_capture_callback(
         source: *mut obs_source_t,
         callback: obs_source_audio_capture_t,

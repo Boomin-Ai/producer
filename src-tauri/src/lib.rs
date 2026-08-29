@@ -97,6 +97,8 @@ pub fn run() {
             live::commands::live_list_windows,
             live::commands::live_screen_coach,
             live::commands::firstlight_resume,
+            live::commands::live_set_mic_audio,
+            live::commands::live_open_chat,
             live::commands::live_list_rooms,
             live::commands::live_create_room,
             live::commands::live_update_room,
