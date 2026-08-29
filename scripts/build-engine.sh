@@ -46,7 +46,9 @@ cp "$REPO_ROOT/engine/producer-project-include.cmake" "$SRC_DIR/producer-project
 # Shallow clones have no tags, so git-describe versioning fails ("fb4d98b
 # format invalid") — hand OBS its version from the lock instead.
 cmake --preset producer-macos -S "$SRC_DIR" -DOBS_VERSION_OVERRIDE="$OBS_REF"
-cmake --build --preset producer-macos
+# `cmake --build --preset` has no -S flag; presets resolve from cwd, so run
+# the build from inside the source tree.
+(cd "$SRC_DIR" && cmake --build --preset producer-macos)
 
 # assemble artifact from the build tree's bundle-style output
 BUILD="$SRC_DIR/build_producer"
