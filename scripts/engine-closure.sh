@@ -6,9 +6,11 @@ set -euo pipefail
 
 CONTENTS="${1:?usage: engine-closure.sh /path/to/OBS.app/Contents}"
 
-PLUGINS=(mac-capture mac-avcapture mac-videotoolbox coreaudio-encoder obs-x264
-  obs-outputs rtmp-services image-source text-freetype2 obs-filters
-  obs-transitions)
+# ONE plugin list. A private copy here once drifted from engine-lib.sh and
+# let obs-ffmpeg ship without libavdevice — the exact failure class this
+# gate exists to catch. Never fork this list again.
+source "$(dirname "${BASH_SOURCE[0]}")/engine-lib.sh"
+PLUGINS=("${ENGINE_PLUGINS[@]}")
 
 seeds=("$CONTENTS/Frameworks/libobs.framework/Versions/A/libobs"
   "$CONTENTS/Frameworks/libobs-metal.dylib"
