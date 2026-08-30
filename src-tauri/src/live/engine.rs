@@ -110,16 +110,17 @@ fn enum_ids(f: unsafe extern "C" fn(usize, *mut *const c_char) -> bool) -> Vec<S
     out
 }
 
-fn reset_video(module: &str) -> Result<(), i32> {
+fn reset_video(module: &str, height: u32, fps: u32) -> Result<(), i32> {
+    let width = height * 16 / 9;
     let module_c = CString::new(module).unwrap();
     let mut ovi = ffi::obs_video_info {
         graphics_module: module_c.as_ptr(),
-        fps_num: 30,
+        fps_num: fps,
         fps_den: 1,
-        base_width: 1280,
-        base_height: 720,
-        output_width: 1280,
-        output_height: 720,
+        base_width: width,
+        base_height: height,
+        output_width: width,
+        output_height: height,
         output_format: ffi::VIDEO_FORMAT_NV12,
         adapter: 0,
         gpu_conversion: true,
@@ -185,9 +186,9 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
     }
 
     // Metal preferred, OpenGL fallback (A5 / F9); record the actual backend.
-    match reset_video("libobs-metal.dylib") {
+    match reset_video("libobs-metal.dylib", 720, 30) {
         Ok(()) => report.graphics_backend = Some("metal".into()),
-        Err(metal_rc) => match reset_video("libobs-opengl.dylib") {
+        Err(metal_rc) => match reset_video("libobs-opengl.dylib", 720, 30) {
             Ok(()) => {
                 report.graphics_backend = Some("opengl".into());
                 report.errors.push(format!(
@@ -287,6 +288,12 @@ pub enum Command {
         volume: Option<f32>,
         muted: Option<bool>,
     },
+    /// Output video settings (OBS-style, our flavor): 16:9 height + fps.
+    /// Refused while a session is running.
+    SetVideo {
+        height: u32,
+        fps: u32,
+    },
     SetOverlay(graph::OverlaySpec),
     AttachPreview {
         /// NSWindow* of the Tauri window, as usize.
@@ -346,6 +353,10 @@ pub enum LiveEvent {
     Levels {
         mic_peak: f64,
     },
+    VideoChanged {
+        height: u32,
+        fps: u32,
+    },
     EngineError {
         message: String,
     },
@@ -363,6 +374,8 @@ pub struct Snapshot {
     pub destinations: Vec<DestStatus>,
     pub sources: graph::SourcesState,
     pub preview_attached: bool,
+    pub video_height: u32,
+    pub video_fps: u32,
 }
 
 pub struct LiveHandle {
@@ -391,6 +404,12 @@ impl LiveHandle {
     pub fn set_mic_audio(&self, volume: Option<f32>, muted: Option<bool>) -> Result<(), String> {
         self.cmd
             .send(Command::SetMicAudio { volume, muted })
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn set_video(&self, height: u32, fps: u32) -> Result<(), String> {
+        self.cmd
+            .send(Command::SetVideo { height, fps })
             .map_err(|e| e.to_string())
     }
     pub fn set_overlay(&self, spec: graph::OverlaySpec) -> Result<(), String> {
@@ -560,6 +579,8 @@ pub fn start(
                 let mut s = snap.lock().unwrap();
                 s.engine_ready = true;
                 s.bootstrap_ok = report.ok;
+                s.video_height = 720;
+                s.video_fps = 30;
                 s.graphics_backend = report.graphics_backend.clone();
             }
             sink(&LiveEvent::EngineReady {
@@ -663,6 +684,38 @@ pub fn start(
                             let sources = g.state();
                             snap.lock().unwrap().sources = sources.clone();
                             sink(&LiveEvent::SourcesChanged { sources });
+                        }
+                    }
+                    Ok(Command::SetVideo { height, fps }) => {
+                        if session.is_some() {
+                            sink(&LiveEvent::EngineError {
+                                message: "stop the stream to change video settings".into(),
+                            });
+                        } else if !(height == 720 || height == 1080) || !(fps == 30 || fps == 60) {
+                            sink(&LiveEvent::EngineError {
+                                message: "video settings must be 720p/1080p at 30/60fps".into(),
+                            });
+                        } else {
+                            let module = match report.graphics_backend.as_deref() {
+                                Some("metal") => "libobs-metal.dylib",
+                                _ => "libobs-opengl.dylib",
+                            };
+                            match reset_video(module, height, fps) {
+                                Ok(()) => {
+                                    if let Some(g) = scene.as_mut() {
+                                        g.relayout();
+                                    }
+                                    {
+                                        let mut sn = snap.lock().unwrap();
+                                        sn.video_height = height;
+                                        sn.video_fps = fps;
+                                    }
+                                    sink(&LiveEvent::VideoChanged { height, fps });
+                                }
+                                Err(rc) => sink(&LiveEvent::EngineError {
+                                    message: format!("video reset failed (rc={rc})"),
+                                }),
+                            }
                         }
                     }
                     Ok(Command::SetOverlay(spec)) => {

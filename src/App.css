@@ -50,6 +50,11 @@ body {
 }
 
 button {
+  /* WKWebView refuses flex/grid layout inside a button unless the native
+   * appearance is stripped — without it, custom-layout buttons collapse
+   * to content width. */
+  -webkit-appearance: none;
+  appearance: none;
   font-family: var(--font);
   font-size: 13px;
   font-weight: 600;
@@ -2648,20 +2653,14 @@ textarea::placeholder {
   width: 100%;
   flex: 1;
   min-height: 0;
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
+  container-type: size;
 }
 
 .rm-canvas .live-preview {
-  position: absolute;
-  inset: 0;
-  margin: auto;
-  width: 100%;
-  height: 100%;
-  max-width: calc(min(100%, (100vh - 220px) * 16 / 9));
-  max-height: 100%;
+  width: min(100%, 100cqh * 16 / 9);
   aspect-ratio: 16 / 9;
   border-radius: 8px;
   border: none;
@@ -3131,4 +3130,145 @@ textarea::placeholder {
 /* the mixer popover reuses the strip at a fixed height */
 .rm-pop-mixer .rm-strip {
   height: 210px;
+}
+
+/* ── Sheet v2: settings are controls (VIDEO | AUDIO groups) ────────────── */
+
+.rm-sheet {
+  padding: 10px 28px 22px;
+}
+
+.rm-sheet-body {
+  height: 248px;
+  align-items: stretch;
+  gap: 26px;
+}
+
+.rm-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.rm-group-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: oklch(0.55 0.025 250);
+}
+
+.rm-tiles {
+  flex: 1;
+  min-height: 0;
+}
+
+.rm-tile {
+  flex-shrink: 0;
+  width: 168px;
+  transition: transform 0.15s ease;
+}
+
+.rm-tile:hover {
+  transform: translateY(-2px);
+  border-color: transparent;
+}
+
+.rm-tile-canvas {
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.rm-tile.on .rm-tile-canvas {
+  box-shadow:
+    0 0 0 1px oklch(0.75 0.14 165 / 0.25),
+    0 10px 30px -14px oklch(0.75 0.14 165 / 0.5);
+}
+
+.rm-quality {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.rm-quality-set {
+  display: flex;
+  background: oklch(0.16 0.035 250);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.rm-q {
+  border: none;
+  background: transparent;
+  border-radius: 999px;
+  padding: 5px 13px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: oklch(0.62 0.025 250);
+}
+
+.rm-q:hover {
+  color: oklch(0.94 0.008 250);
+  border-color: transparent;
+}
+
+.rm-q.on {
+  background: var(--mint);
+  color: #08110d;
+}
+
+.rm-q:disabled {
+  opacity: 0.55;
+}
+
+.rm-strips {
+  flex: 1;
+  min-height: 0;
+}
+
+.rm-strip {
+  flex-shrink: 0;
+}
+
+.rm-addsource {
+  flex-shrink: 0;
+  align-self: stretch;
+  margin: 22px 0 0;
+}
+
+/* stage polish: pills breathe, states glow */
+
+.rm-pills {
+  padding-bottom: 2px;
+}
+
+.rm-pill,
+.rm-circle {
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.rm-pill.off {
+  background: oklch(0.24 0.07 25 / 0.55);
+}
+
+.rm-golive {
+  box-shadow: 0 10px 28px -12px rgba(220, 38, 38, 0.65);
+}
+
+.rm-scene-thumb {
+  transition: border-color 0.15s ease;
+}
+
+.rm-scene:hover .rm-scene-thumb {
+  border-color: oklch(0.36 0.045 250);
+}
+
+.rm-scene.active:hover .rm-scene-thumb {
+  border-color: var(--mint);
 }

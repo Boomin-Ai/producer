@@ -374,6 +374,7 @@ impl SceneGraph {
                 }
             }
         }
+        self.layout_camera();
         Ok(())
     }
 
@@ -424,25 +425,41 @@ impl SceneGraph {
                         ffi::obs_source_release(src);
                         return Err("scene add failed for camera".into());
                     }
-                    // Picture-in-picture, bottom-right, 28% of frame width.
-                    let (bw, bh) = Self::base_size();
-                    let pip_w = bw * 0.28;
-                    let pip_h = pip_w * 9.0 / 16.0;
-                    let margin = 24.0;
-                    ffi::obs_sceneitem_set_bounds_type(item, ffi::OBS_BOUNDS_SCALE_INNER);
-                    let bounds = ffi::vec2 { x: pip_w, y: pip_h };
-                    ffi::obs_sceneitem_set_bounds(item, &bounds);
-                    let pos = ffi::vec2 {
-                        x: bw - pip_w - margin,
-                        y: bh - pip_h - margin,
-                    };
-                    ffi::obs_sceneitem_set_pos(item, &pos);
                     ffi::obs_sceneitem_set_visible(item, true);
                     self.camera = Some((item, src));
+                    self.layout_camera();
                 }
             }
         }
         Ok(())
+    }
+
+    /// Camera placement follows the scene: full-frame when it's the only
+    /// video source ("Full cam"), picture-in-picture bottom-right when the
+    /// screen is up ("PiP"). Engine thread only.
+    fn layout_camera(&mut self) {
+        let Some((item, _)) = self.camera else { return };
+        let (bw, bh) = Self::base_size();
+        unsafe {
+            ffi::obs_sceneitem_set_bounds_type(item, ffi::OBS_BOUNDS_SCALE_INNER);
+            if self.screen.is_some() {
+                let pip_w = bw * 0.28;
+                let pip_h = pip_w * 9.0 / 16.0;
+                let margin = 24.0;
+                let bounds = ffi::vec2 { x: pip_w, y: pip_h };
+                ffi::obs_sceneitem_set_bounds(item, &bounds);
+                let pos = ffi::vec2 {
+                    x: bw - pip_w - margin,
+                    y: bh - pip_h - margin,
+                };
+                ffi::obs_sceneitem_set_pos(item, &pos);
+            } else {
+                let bounds = ffi::vec2 { x: bw, y: bh };
+                ffi::obs_sceneitem_set_bounds(item, &bounds);
+                let pos = ffi::vec2 { x: 0.0, y: 0.0 };
+                ffi::obs_sceneitem_set_pos(item, &pos);
+            }
+        }
     }
 
     pub fn set_mic(&mut self, on: bool) -> Result<(), String> {
@@ -478,6 +495,19 @@ impl SceneGraph {
             }
         }
         Ok(())
+    }
+
+    /// Re-fit scene items after a video-settings change: camera placement
+    /// and the overlay's full-frame bounds both derive from the base size.
+    pub fn relayout(&mut self) {
+        self.layout_camera();
+        if let Some((item, _, _)) = self.overlay {
+            let (bw, bh) = Self::base_size();
+            unsafe {
+                let bounds = ffi::vec2 { x: bw, y: bh };
+                ffi::obs_sceneitem_set_bounds(item, &bounds);
+            }
+        }
     }
 
     /// Mic gain/mute. Values persist on the graph so toggling the mic off

@@ -30,7 +30,10 @@ cp -R "$STAGE/licenses/." "$CONTENTS/Resources/licenses/" 2>/dev/null || true
 # binaries arrived with (OBS's or a previous run's).
 # Secure timestamps are required by notarization on every nested Mach-O.
 # (Changed from --timestamp=none per the release-pipeline handoff note.)
-sign() { codesign --force --timestamp --options runtime --sign "$IDENT" "$@"; }
+# Local dev iteration: CODESIGN_TIMESTAMP=none skips the per-file network
+# roundtrip to Apple's timestamp server (NEVER set it for release builds).
+TS_FLAG="--timestamp${CODESIGN_TIMESTAMP:+=$CODESIGN_TIMESTAMP}"
+sign() { codesign --force "$TS_FLAG" --options runtime --sign "$IDENT" "$@"; }
 if [[ $IDENT == "-" ]]; then
   # ad-hoc signatures cannot carry the hardened runtime flag usefully in dev
   sign() { codesign --force --sign - "$@"; }
@@ -57,7 +60,7 @@ for helper in "$CONTENTS/Frameworks/"*" Helper"*.app; do
     *) ent="$STAGE/signing/entitlements-helper.plist" ;;
   esac
   if [[ $IDENT != "-" && -f $ent ]]; then
-    codesign --force --timestamp --options runtime --entitlements "$ent" --sign "$IDENT" "$helper"
+    codesign --force "$TS_FLAG" --options runtime --entitlements "$ent" --sign "$IDENT" "$helper"
   else
     sign "$helper"
   fi

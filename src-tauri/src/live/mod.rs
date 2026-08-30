@@ -145,6 +145,18 @@ impl Live {
     }
 
     #[cfg(have_engine)]
+    pub fn set_video(&self, height: u32, fps: u32) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .set_video(height, fps)
+    }
+    #[cfg(not(have_engine))]
+    pub fn set_video(&self, _h: u32, _f: u32) -> Result<(), String> {
+        Err("live engine not bundled in this build".into())
+    }
+
+    #[cfg(have_engine)]
     pub fn set_overlay(
         &self,
         window_id: Option<u32>,

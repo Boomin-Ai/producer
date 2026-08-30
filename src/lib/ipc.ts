@@ -130,6 +130,7 @@ export const ipc = {
     invoke("live_set_overlay", { windowId, colorKey, url: url ?? null }),
   liveSetMicAudio: (patch: { volume?: number; muted?: boolean }) =>
     invoke("live_set_mic_audio", { volume: patch.volume ?? null, muted: patch.muted ?? null }),
+  liveSetVideo: (height: number, fps: number) => invoke("live_set_video", { height, fps }),
   liveOpenChat: (url: string) => invoke("live_open_chat", { url }),
 };
 
@@ -205,6 +206,8 @@ export interface LiveSnapshot {
   sources?: LiveSources;
   preview_attached?: boolean;
   disabled?: boolean;
+  video_height?: number;
+  video_fps?: number;
 }
 
 export type LiveEvent =
@@ -214,6 +217,7 @@ export type LiveEvent =
   | { type: "session_ended"; report: { ok: boolean; destinations: LiveDestStatus[]; notes: string[] } }
   | { type: "sources_changed"; sources: LiveSources }
   | { type: "levels"; mic_peak: number }
+  | { type: "video_changed"; height: number; fps: number }
   | { type: "engine_error"; message: string };
 
 export async function listenLiveEvents(cb: (ev: LiveEvent) => void): Promise<() => void> {

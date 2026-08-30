@@ -557,6 +557,7 @@ export function LiveView({
   const [micPopOpen, setMicPopOpen] = useState(false);
   const [overlayOpen, setOverlayOpen] = useState(false);
   const sheetAutoOpened = useRef(false);
+  const videoApplied = useRef(false);
   const unlisten = useRef<(() => void) | null>(null);
   const roomApplied = useRef(false);
   const roomId = room?.id ?? null;
@@ -586,6 +587,21 @@ export function LiveView({
         /* malformed config — start clean */
       }
     }
+    // Stored video settings (global, OBS-style) re-apply when idle.
+    if (!videoApplied.current && snap.engine_ready && snap.session_state === "idle") {
+      videoApplied.current = true;
+      try {
+        const stored = JSON.parse(localStorage.getItem("producer.video") ?? "null") as {
+          h: number;
+          f: number;
+        } | null;
+        if (stored && (stored.h !== (snap.video_height || 720) || stored.f !== (snap.video_fps || 30))) {
+          await ipc.liveSetVideo(stored.h, stored.f);
+        }
+      } catch {
+        /* bad stored value — engine default stands */
+      }
+    }
     // A room with nothing configured greets you with the sources sheet.
     if (!sheetAutoOpened.current) {
       sheetAutoOpened.current = true;
@@ -613,6 +629,8 @@ export function LiveView({
         if (roomId) {
           ipc.liveUpdateRoom(roomId, { config: JSON.stringify(ev.sources) }).catch(() => {});
         }
+      } else if (ev.type === "video_changed") {
+        setSnapshot((s) => (s ? { ...s, video_height: ev.height, video_fps: ev.fps } : s));
       } else if (ev.type === "levels") {
         // peak → dB → 0..1 over a 50dB window, with a falling ballistic.
         const db = ev.mic_peak > 0.00001 ? 20 * Math.log10(ev.mic_peak) : -60;
@@ -684,6 +702,17 @@ export function LiveView({
     setSources((s) => ({ ...s, mic_muted: m }));
     ipc.liveSetMicAudio({ muted: m }).catch((e) => setBanner(String(e)));
   };
+
+  const vh = snapshot?.video_height || 720;
+  const vf = snapshot?.video_fps || 30;
+  async function setVideoCfg(h: number, f: number) {
+    try {
+      await ipc.liveSetVideo(h, f);
+      localStorage.setItem("producer.video", JSON.stringify({ h, f }));
+    } catch (e) {
+      setBanner(String(e));
+    }
+  }
 
   const closePops = () => {
     setRoomsOpen(false);
@@ -787,8 +816,8 @@ export function LiveView({
             )}
           </div>
 
-          <span className="rm-chip rm-chip-static" title="Encoder controls arrive with custom encoding">
-            LIVE STREAM · 720P
+          <span className="rm-chip rm-chip-static" title="Video settings live in the Sources sheet">
+            LIVE STREAM · {vh}P{vf === 60 ? " · 60" : ""}
           </span>
 
           {streaming ? (
@@ -966,48 +995,82 @@ export function LiveView({
           <div className="rm-sheet-head">
             <span className="rm-sheet-handle" />
             <button className="rm-sheet-label" onClick={() => setSheetOpen(false)}>
-              SOURCES{activeScene ? ` · ${scenePresets.find((p) => p.key === activeScene)?.label.toUpperCase()} SCENE` : ""}
+              SOURCES &amp; SETTINGS
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 9l6 6 6-6" transform="rotate(180 12 12)" />
               </svg>
             </button>
           </div>
           <div className="rm-sheet-body">
-            <div className="rm-tiles">
-              <button
-                className={`rm-tile${sources.screen ? " on" : ""}`}
-                disabled={!engineOk}
-                onClick={() => setSrc({ screen: !sources.screen })}
-              >
-                <span className="rm-tile-canvas">{ic.screen}</span>
-                <span className="rm-tile-row">
-                  <span>Screen</span>
-                  <span className="rm-eye">{ic.eye}</span>
+            <div className="rm-group">
+              <span className="rm-group-label">VIDEO</span>
+              <div className="rm-tiles">
+                <button
+                  className={`rm-tile${sources.screen ? " on" : ""}`}
+                  disabled={!engineOk}
+                  onClick={() => setSrc({ screen: !sources.screen })}
+                >
+                  <span className="rm-tile-canvas">{ic.screen}</span>
+                  <span className="rm-tile-row">
+                    <span>Screen</span>
+                    <span className="rm-eye">{ic.eye}</span>
+                  </span>
+                </button>
+                <button
+                  className={`rm-tile${sources.camera ? " on" : ""}`}
+                  disabled={!engineOk}
+                  onClick={() => setSrc({ camera: !sources.camera })}
+                >
+                  <span className="rm-tile-canvas">{ic.cam}</span>
+                  <span className="rm-tile-row">
+                    <span>Camera</span>
+                    <span className="rm-eye">{ic.eye}</span>
+                  </span>
+                </button>
+                <button className={`rm-tile${overlayActive ? " on" : ""}`} onClick={() => setOverlayOpen(true)}>
+                  <span className="rm-tile-canvas">{ic.link}</span>
+                  <span className="rm-tile-row">
+                    <span>Alerts</span>
+                    <span className="rm-eye">{ic.eye}</span>
+                  </span>
+                </button>
+              </div>
+              <div className="rm-quality">
+                <span className="rm-quality-set">
+                  {[720, 1080].map((h) => (
+                    <button
+                      key={h}
+                      className={`rm-q${vh === h ? " on" : ""}`}
+                      disabled={streaming || !engineOk}
+                      title={streaming ? "Stop the stream to change video settings" : undefined}
+                      onClick={() => setVideoCfg(h, vf)}
+                    >
+                      {h}p
+                    </button>
+                  ))}
                 </span>
-              </button>
-              <button
-                className={`rm-tile${sources.camera ? " on" : ""}`}
-                disabled={!engineOk}
-                onClick={() => setSrc({ camera: !sources.camera })}
-              >
-                <span className="rm-tile-canvas">{ic.cam}</span>
-                <span className="rm-tile-row">
-                  <span>Camera</span>
-                  <span className="rm-eye">{ic.eye}</span>
+                <span className="rm-quality-set">
+                  {[30, 60].map((f) => (
+                    <button
+                      key={f}
+                      className={`rm-q${vf === f ? " on" : ""}`}
+                      disabled={streaming || !engineOk}
+                      title={streaming ? "Stop the stream to change video settings" : undefined}
+                      onClick={() => setVideoCfg(vh, f)}
+                    >
+                      {f} fps
+                    </button>
+                  ))}
                 </span>
-              </button>
-              <button className={`rm-tile${overlayActive ? " on" : ""}`} onClick={() => setOverlayOpen(true)}>
-                <span className="rm-tile-canvas">{ic.link}</span>
-                <span className="rm-tile-row">
-                  <span>Alerts</span>
-                  <span className="rm-eye">{ic.eye}</span>
-                </span>
-              </button>
+              </div>
             </div>
             <div className="rm-sheet-div" />
-            <div className="rm-strips">
-              {micStrip}
-              <MeterStrip label="Desktop" icon={ic.cast} level={0} volume={0.5} muted soon />
+            <div className="rm-group">
+              <span className="rm-group-label">AUDIO</span>
+              <div className="rm-strips">
+                {micStrip}
+                <MeterStrip label="Desktop" icon={ic.cast} level={0} volume={0.5} muted soon />
+              </div>
             </div>
             <div className="rm-sheet-div" />
             <button className="rm-addsource" title="More source types arrive with the scene editor" disabled>
