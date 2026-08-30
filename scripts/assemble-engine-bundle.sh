@@ -25,6 +25,12 @@ cp -R "$STAGE/PlugIns/." "$CONTENTS/PlugIns/"
 mkdir -p "$CONTENTS/Resources/licenses"
 cp -R "$STAGE/licenses/." "$CONTENTS/Resources/licenses/" 2>/dev/null || true
 
+# Recording/replay: obs-ffmpeg-mux sits beside the Producer executable
+# (libobs resolves it relative to the running binary).
+if [[ -f "$STAGE/bin/obs-ffmpeg-mux" ]]; then
+  cp "$STAGE/bin/obs-ffmpeg-mux" "$CONTENTS/MacOS/"
+fi
+
 # Inner→outer signing: leaf dylibs, then framework bundles, then plugin
 # bundles, then the app itself. --force replaces the signatures the engine
 # binaries arrived with (OBS's or a previous run's).
@@ -49,6 +55,9 @@ if [[ -d "$CONTENTS/Frameworks/Chromium Embedded Framework.framework" ]]; then
   find "$CONTENTS/Frameworks/Chromium Embedded Framework.framework" -name "*.dylib" -type f -print0 \
     | while IFS= read -r -d '' f; do sign "$f"; done
   sign "$CONTENTS/Frameworks/Chromium Embedded Framework.framework"
+fi
+if [[ -f "$CONTENTS/MacOS/obs-ffmpeg-mux" ]]; then
+  sign "$CONTENTS/MacOS/obs-ffmpeg-mux"
 fi
 for helper in "$CONTENTS/Frameworks/"*" Helper"*.app; do
   [[ -d $helper ]] || continue

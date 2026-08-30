@@ -20,6 +20,10 @@ done
 if [[ -f "$CONTENTS/PlugIns/obs-browser.plugin/Contents/MacOS/obs-browser" ]]; then
   seeds+=("$CONTENTS/PlugIns/obs-browser.plugin/Contents/MacOS/obs-browser")
 fi
+# obs-ffmpeg-mux: bin/ in the artifact stage, MacOS/ in the assembled app.
+for mux in "$CONTENTS/bin/obs-ffmpeg-mux" "$CONTENTS/MacOS/obs-ffmpeg-mux"; do
+  [[ -f $mux ]] && seeds+=("$mux")
+done
 
 declare -a seen=()
 queue=("${seeds[@]}")

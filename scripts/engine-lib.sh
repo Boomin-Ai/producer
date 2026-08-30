@@ -11,7 +11,7 @@ CACHE_DIR="$REPO_ROOT/engine/cache"
 # LIVE-REVIEW.md §5.2 — the only plugins shipped.
 ENGINE_PLUGINS=(mac-capture mac-avcapture mac-videotoolbox coreaudio-encoder
   obs-x264 obs-outputs rtmp-services image-source text-freetype2 obs-filters
-  obs-transitions)
+  obs-transitions obs-ffmpeg)
 
 lock_get() { python3 -c "import json,sys; d=json.load(open('$LOCK_FILE')); print(eval('d'+sys.argv[1]))" "$1"; }
 

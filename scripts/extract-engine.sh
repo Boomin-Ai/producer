@@ -35,6 +35,14 @@ cp -R "$SRC/Frameworks/libobs.framework" "$STAGE/Frameworks/"
 cp "$SRC/Frameworks/libobs-metal.dylib" "$SRC/Frameworks/libobs-opengl.dylib" "$STAGE/Frameworks/"
 
 # allowlisted plugins (bundles carry their own Resources data trees)
+# Recording helper (artifact rev 2): lives beside OBS's own executable.
+if [[ -f "$OBS_APP/Contents/MacOS/obs-ffmpeg-mux" ]]; then
+  mkdir -p "$STAGE/bin"
+  cp "$OBS_APP/Contents/MacOS/obs-ffmpeg-mux" "$STAGE/bin/"
+else
+  echo "WARN: official bundle has no obs-ffmpeg-mux at Contents/MacOS — recording unavailable in fallback engine" >&2
+fi
+
 for p in "${ENGINE_PLUGINS[@]}"; do
   cp -R "$SRC/PlugIns/$p.plugin" "$STAGE/PlugIns/"
 done

@@ -7,8 +7,8 @@
 # with Xcode installed. On CLT-only machines this fails fast; use
 # extract-engine.sh (R1 fallback) locally instead.
 #
-# Note: obs-ffmpeg is ungated upstream at 32.1.2, so it is *built* here but is
-# NOT shipped — artifact assembly copies only the §5.2 allowlist.
+# Note: obs-ffmpeg ships as of artifact rev 2 (recording/replay outputs);
+# artifact assembly still copies only the §5.2 allowlist.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/engine-lib.sh"
 
@@ -99,6 +99,16 @@ for p in "${ENGINE_PLUGINS[@]}"; do
   [[ -n $bundle ]] || { echo "FATAL: $p.plugin not produced by build" >&2; exit 1; }
   cp -R "$bundle" "$STAGE/PlugIns/"
 done
+# Recording/replay (obs-ffmpeg): the plugin spawns obs-ffmpeg-mux, which
+# libobs resolves NEXT TO THE HOST EXECUTABLE (os_get_executable_path_ptr in
+# platform-cocoa.m) — stage it under bin/ for assembly into Contents/MacOS/.
+MUX="$(find "$BUILD" -name obs-ffmpeg-mux -type f -perm +111 -not -path "*.dSYM/*" | head -1)"
+[[ -n $MUX ]] || { echo "FATAL: obs-ffmpeg-mux not produced by build" >&2; exit 1; }
+mkdir -p "$STAGE/bin"
+cp "$MUX" "$STAGE/bin/"
+# It runs from Contents/MacOS; its ffmpeg dylibs live one level up.
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$STAGE/bin/obs-ffmpeg-mux" 2>/dev/null || true
+
 # obs-deps runtime dylibs (ffmpeg, x264, freetype, mbedtls, srt, rist) from .deps
 [[ -d "$SRC_DIR/.deps" ]] || { echo "FATAL: $SRC_DIR/.deps missing after build" >&2; exit 1; }
 # Closure copy runs to a FIXED POINT: the walk can only recurse into dylibs
