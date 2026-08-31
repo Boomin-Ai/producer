@@ -52,18 +52,8 @@
   img { max-width: 100%; }
   .wrap { position: relative; z-index: 1; max-width: 1020px; margin: 0 auto; padding: 0 24px; }
 
-  .annc {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 60;
-    text-align: center; padding: 8px 16px;
-    font-size: 12px; font-weight: 500; letter-spacing: 0.06em;
-    font-variant-numeric: tabular-nums;
-    color: var(--dim); background: rgba(6, 7, 10, 0.85);
-    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    border-bottom: 1px solid var(--line);
-  }
-
   /* ── fixed nav ── */
-  .navbar { position: fixed; top: 46px; left: 0; right: 0; z-index: 55; padding: 0 24px; }
+  .navbar { position: fixed; top: 16px; left: 0; right: 0; z-index: 55; padding: 0 24px; }
   .navbar .bar {
     max-width: 1180px; margin: 0 auto;
     display: flex; align-items: center; gap: 16px;
@@ -103,7 +93,7 @@
 
   /* ── beat 0: hero, centered, full width ── */
   .hero {
-    position: absolute; z-index: 4; left: 0; right: 0; top: 17vh;
+    position: absolute; z-index: 4; left: 0; right: 0; top: 15vh;
     text-align: center; padding: 0 24px;
     transition: opacity 700ms var(--ease), transform 700ms var(--ease), filter 700ms ease;
   }
@@ -120,6 +110,18 @@
     margin-bottom: 18px;
   }
   .verified img { width: 16px; height: 16px; }
+  /* React Bits "shiny text": a bright band sweeping across the label */
+  .verified .shiny {
+    background-image: linear-gradient(110deg,
+      rgba(238, 240, 243, 0.62) 42%,
+      #ffffff 50%,
+      rgba(238, 240, 243, 0.62) 58%);
+    background-size: 240% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    animation: shiny-sweep 4.5s linear infinite;
+  }
+  @keyframes shiny-sweep { from { background-position: 240% 0; } to { background-position: -140% 0; } }
 
   /* headline — Syne, uppercase, boomin.ai/producer scale */
   h1 {
@@ -374,7 +376,7 @@
   footer .spacer { flex: 1; }
 
   @media (prefers-reduced-motion: reduce) {
-    h1 .l2::before, .live-pill.on, .stage-mock .beam, .stage-mock .onair i, .closing .chair, .compose .caret { animation: none; }
+    h1 .l2::before, .verified .shiny, .live-pill.on, .stage-mock .beam, .stage-mock .onair i, .closing .chair, .compose .caret { animation: none; }
     .say, .panel, .hero { transition: none; }
   }
 </style>
@@ -382,8 +384,6 @@
 <body>
 
 <canvas id="bg" aria-hidden="true"></canvas>
-
-<div class="annc"><span id="annc-ver"></span>up to date — updates install themselves</div>
 
 <div class="navbar">
   <div class="bar">
@@ -404,7 +404,7 @@
 
     <!-- beat 0 — hero -->
     <div class="hero">
-      <span class="verified"><img src="meta.svg" alt="" />Meta Verified Technology Partner</span>
+      <span class="verified"><img src="meta.svg" alt="" /><span class="shiny">Meta Verified Technology Partner</span></span>
       <h1>
         <span class="l1">Stop posting.</span>
         <span class="l2" data-text="Start producing.">Start producing.</span>
@@ -639,7 +639,6 @@
       .then(function (meta) {
         var v = meta && meta.version ? meta.version : null;
         note.innerHTML = (v ? v + " · " : "") + links;
-        if (v) document.getElementById("annc-ver").textContent = v + " — ";
       })
       .catch(function () { note.innerHTML = links; });
   })();
