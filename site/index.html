@@ -171,14 +171,14 @@
   /* A — control room: hero crop → left lane → out left */
   #panelA { width: min(1120px, 92vw); }
   .scene[data-stage="0"] #panelA { opacity: 1; transform: translateX(-50%) translateY(62vh) scale(1); }
-  .scene[data-stage="1"] #panelA { opacity: 1; transform: translateX(calc(-50% - 24vw)) translateY(14vh) scale(0.72); }
+  .scene[data-stage="1"] #panelA { opacity: 1; transform: translateX(calc(-50% - 24vw)) translateY(24vh) scale(0.72); }
   .scene[data-stage="2"] #panelA,
-  .scene[data-stage="3"] #panelA { opacity: 0; transform: translateX(calc(-50% - 95vw)) translateY(14vh) scale(0.70); filter: blur(6px); }
+  .scene[data-stage="3"] #panelA { opacity: 0; transform: translateX(calc(-50% - 95vw)) translateY(24vh) scale(0.70); filter: blur(6px); }
 
   /* B — live stage: in from right → out right */
-  #panelB { width: min(1120px, 92vw); opacity: 0; transform: translateX(calc(-50% + 95vw)) translateY(14vh) scale(0.70); }
-  .scene[data-stage="2"] #panelB { opacity: 1; transform: translateX(calc(-50% + 24vw)) translateY(14vh) scale(0.72); }
-  .scene[data-stage="3"] #panelB { opacity: 0; transform: translateX(calc(-50% + 95vw)) translateY(14vh) scale(0.70); filter: blur(6px); }
+  #panelB { width: min(1120px, 92vw); opacity: 0; transform: translateX(calc(-50% + 95vw)) translateY(24vh) scale(0.70); }
+  .scene[data-stage="2"] #panelB { opacity: 1; transform: translateX(calc(-50% + 24vw)) translateY(24vh) scale(0.72); }
+  .scene[data-stage="3"] #panelB { opacity: 0; transform: translateX(calc(-50% + 95vw)) translateY(24vh) scale(0.70); filter: blur(6px); }
 
   /* C — composer: rises from the bottom, centered */
   #panelC { width: min(900px, 92vw); transform: translateX(-50%) translateY(78vh) scale(0.7); }
