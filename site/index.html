@@ -857,7 +857,7 @@
     if (!scene || !hero) return;
     function place() {
       var top = hero.getBoundingClientRect().top - scene.getBoundingClientRect().top;
-      scene.style.setProperty("--panel0", Math.round(top + hero.offsetHeight + 34) + "px");
+      scene.style.setProperty("--panel0", Math.round(top + hero.offsetHeight + 48) + "px");
     }
     place();
     window.addEventListener("resize", place);
