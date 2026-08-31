@@ -381,7 +381,10 @@ pub fn live_set_source_device(
     kind: String,
     device: String,
 ) -> EngineResult<()> {
-    state.live.set_device(kind, device).map_err(EngineError::Other)
+    state
+        .live
+        .set_device(kind, device)
+        .map_err(EngineError::Other)
 }
 
 /// Add an item from the open list (media/image/text/color/window). The spec
@@ -396,14 +399,19 @@ pub fn live_add_source(
 ) -> EngineResult<()> {
     #[cfg(have_engine)]
     {
-        let spec: crate::live::graph::ExtraSpec =
-            serde_json::from_value(spec).map_err(|e| EngineError::Other(format!("bad source spec: {e}")))?;
-        return state.live.add_extra(id, label, spec).map_err(EngineError::Other);
+        let spec: crate::live::graph::ExtraSpec = serde_json::from_value(spec)
+            .map_err(|e| EngineError::Other(format!("bad source spec: {e}")))?;
+        return state
+            .live
+            .add_extra(id, label, spec)
+            .map_err(EngineError::Other);
     }
     #[cfg(not(have_engine))]
     {
         let _ = (id, label, spec);
-        Err(EngineError::Other("live engine not bundled in this build".into()))
+        Err(EngineError::Other(
+            "live engine not bundled in this build".into(),
+        ))
     }
 }
 
@@ -427,7 +435,9 @@ pub async fn live_pick_file(app: tauri::AppHandle, kind: String) -> EngineResult
         "image" => dialog.add_filter("Images", &["png", "jpg", "jpeg", "gif", "webp", "bmp"]),
         _ => dialog.add_filter(
             "Media",
-            &["mp4", "mov", "m4v", "mkv", "webm", "mp3", "m4a", "wav", "aac", "flac"],
+            &[
+                "mp4", "mov", "m4v", "mkv", "webm", "mp3", "m4a", "wav", "aac", "flac",
+            ],
         ),
     };
     let (tx, mut rx) = tauri::async_runtime::channel(1);
@@ -450,7 +460,10 @@ pub fn live_play_stinger(state: State<'_, AppState>, path: String) -> EngineResu
 /// returns the file path it's writing.
 #[tauri::command]
 pub fn live_start_recording(state: State<'_, AppState>, stamp: String) -> EngineResult<String> {
-    state.live.start_recording(stamp).map_err(EngineError::Other)
+    state
+        .live
+        .start_recording(stamp)
+        .map_err(EngineError::Other)
 }
 
 #[tauri::command]

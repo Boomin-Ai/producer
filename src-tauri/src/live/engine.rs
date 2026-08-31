@@ -288,14 +288,27 @@ use super::multi::{DestStatus, MultiConfig, MultiReport, Session};
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum FilterOp {
     List,
-    Add { kind: String, name: String },
-    Remove { name: String },
-    Enable { name: String, on: bool },
+    Add {
+        kind: String,
+        name: String,
+    },
+    Remove {
+        name: String,
+    },
+    Enable {
+        name: String,
+        on: bool,
+    },
     /// 0 up, 1 down, 2 top, 3 bottom.
-    Reorder { name: String, movement: i32 },
-    Update { name: String, settings: serde_json::Value },
+    Reorder {
+        name: String,
+        movement: i32,
+    },
+    Update {
+        name: String,
+        settings: serde_json::Value,
+    },
 }
-
 
 pub enum Command {
     GoLive(MultiConfig),
@@ -559,7 +572,11 @@ impl LiveHandle {
     ) -> Result<Vec<super::filters::FilterState>, String> {
         let (tx, rx) = std::sync::mpsc::channel();
         self.cmd
-            .send(Command::Filters { source, op, reply: tx })
+            .send(Command::Filters {
+                source,
+                op,
+                reply: tx,
+            })
             .map_err(|e| e.to_string())?;
         rx.recv_timeout(std::time::Duration::from_secs(5))
             .map_err(|_| "the engine did not answer in time".to_string())?
@@ -581,7 +598,9 @@ impl LiveHandle {
     }
 
     pub fn stop_stinger(&self) -> Result<(), String> {
-        self.cmd.send(Command::StopStinger).map_err(|e| e.to_string())
+        self.cmd
+            .send(Command::StopStinger)
+            .map_err(|e| e.to_string())
     }
 
     pub fn set_device(&self, kind: String, device: String) -> Result<(), String> {
@@ -590,7 +609,12 @@ impl LiveHandle {
             .map_err(|e| e.to_string())
     }
 
-    pub fn add_extra(&self, id: String, label: String, spec: graph::ExtraSpec) -> Result<(), String> {
+    pub fn add_extra(
+        &self,
+        id: String,
+        label: String,
+        spec: graph::ExtraSpec,
+    ) -> Result<(), String> {
         self.cmd
             .send(Command::AddExtra { id, label, spec })
             .map_err(|e| e.to_string())
@@ -797,13 +821,11 @@ pub fn start(
 ) -> LiveHandle {
     // Wrap the caller's sink once: every EngineError leaving the engine is
     // rewritten, no matter which of the many call sites produced it.
-    let sink = move |ev: &LiveEvent| {
-        match ev {
-            LiveEvent::EngineError { message } => sink(&LiveEvent::EngineError {
-                message: user_facing(message),
-            }),
-            other => sink(other),
-        }
+    let sink = move |ev: &LiveEvent| match ev {
+        LiveEvent::EngineError { message } => sink(&LiveEvent::EngineError {
+            message: user_facing(message),
+        }),
+        other => sink(other),
     };
     let (cmd_tx, cmd_rx) = mpsc::channel::<Command>();
     let snapshot = Arc::new(Mutex::new(Snapshot::default()));

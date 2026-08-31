@@ -94,7 +94,9 @@ pub async fn fetch_for_twitch(room_id: &str) -> EmoteMap {
         }
     }
     if let Ok(r) = http
-        .get(format!("https://api.betterttv.net/3/cached/users/twitch/{room_id}"))
+        .get(format!(
+            "https://api.betterttv.net/3/cached/users/twitch/{room_id}"
+        ))
         .send()
         .await
     {

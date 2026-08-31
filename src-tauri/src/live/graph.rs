@@ -284,7 +284,6 @@ pub struct SceneGraph {
     stinger_duration: i64,
 }
 
-
 /// One selectable device/display for a source's picker.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct DeviceOption {
@@ -315,8 +314,12 @@ unsafe fn options_from(props: *mut ffi::obs_properties_t, prop: &str) -> Vec<Dev
             continue;
         }
         out.push(DeviceOption {
-            id: std::ffi::CStr::from_ptr(value).to_string_lossy().into_owned(),
-            name: std::ffi::CStr::from_ptr(name).to_string_lossy().into_owned(),
+            id: std::ffi::CStr::from_ptr(value)
+                .to_string_lossy()
+                .into_owned(),
+            name: std::ffi::CStr::from_ptr(name)
+                .to_string_lossy()
+                .into_owned(),
             disabled: ffi::obs_property_list_item_disabled(p, i),
         });
     }
@@ -481,7 +484,10 @@ impl SceneGraph {
             let (src_w, src_h) = if src.is_null() {
                 (0, 0)
             } else {
-                (ffi::obs_source_get_width(src), ffi::obs_source_get_height(src))
+                (
+                    ffi::obs_source_get_width(src),
+                    ffi::obs_source_get_height(src),
+                )
             };
             // Items without bounds report their source size as extent.
             let (w, h) = if bounds.x > 0.0 && bounds.y > 0.0 {
@@ -770,13 +776,29 @@ impl SceneGraph {
     fn create_stinger(&mut self, path: &str) -> Result<i64, String> {
         unsafe {
             let settings = ffi::obs_data_create();
-            ffi::obs_data_set_bool(settings, CString::new("is_local_file").unwrap().as_ptr(), true);
+            ffi::obs_data_set_bool(
+                settings,
+                CString::new("is_local_file").unwrap().as_ptr(),
+                true,
+            );
             let v = CString::new(path).map_err(|_| "bad stinger path")?;
-            ffi::obs_data_set_string(settings, CString::new("local_file").unwrap().as_ptr(), v.as_ptr());
+            ffi::obs_data_set_string(
+                settings,
+                CString::new("local_file").unwrap().as_ptr(),
+                v.as_ptr(),
+            );
             ffi::obs_data_set_bool(settings, CString::new("looping").unwrap().as_ptr(), false);
             ffi::obs_data_set_bool(settings, CString::new("hw_decode").unwrap().as_ptr(), true);
-            ffi::obs_data_set_bool(settings, CString::new("close_when_inactive").unwrap().as_ptr(), false);
-            ffi::obs_data_set_bool(settings, CString::new("restart_on_activate").unwrap().as_ptr(), true);
+            ffi::obs_data_set_bool(
+                settings,
+                CString::new("close_when_inactive").unwrap().as_ptr(),
+                false,
+            );
+            ffi::obs_data_set_bool(
+                settings,
+                CString::new("restart_on_activate").unwrap().as_ptr(),
+                true,
+            );
             let id = CString::new("ffmpeg_source").unwrap();
             let name = CString::new("__stinger__").unwrap();
             let src = ffi::obs_source_create(id.as_ptr(), name.as_ptr(), settings, ptr::null_mut());
@@ -826,9 +848,17 @@ impl SceneGraph {
             let (type_id, kind, settings): (&str, &'static str, *mut ffi::obs_data_t) = match spec {
                 ExtraSpec::Media { path, looping } => {
                     let d = ffi::obs_data_create();
-                    ffi::obs_data_set_bool(d, CString::new("is_local_file").unwrap().as_ptr(), true);
+                    ffi::obs_data_set_bool(
+                        d,
+                        CString::new("is_local_file").unwrap().as_ptr(),
+                        true,
+                    );
                     let v = CString::new(path.as_str()).map_err(|_| "bad path")?;
-                    ffi::obs_data_set_string(d, CString::new("local_file").unwrap().as_ptr(), v.as_ptr());
+                    ffi::obs_data_set_string(
+                        d,
+                        CString::new("local_file").unwrap().as_ptr(),
+                        v.as_ptr(),
+                    );
                     ffi::obs_data_set_bool(d, CString::new("looping").unwrap().as_ptr(), *looping);
                     ffi::obs_data_set_bool(d, CString::new("hw_decode").unwrap().as_ptr(), true);
                     ("ffmpeg_source", "media", d)
@@ -856,7 +886,10 @@ impl SceneGraph {
                     );
                     ffi::obs_data_set_obj(d, CString::new("font").unwrap().as_ptr(), font);
                     ffi::obs_data_release(font);
-                    let c = color.as_deref().and_then(parse_color).unwrap_or(0xFFFF_FFFFu32 as i64);
+                    let c = color
+                        .as_deref()
+                        .and_then(parse_color)
+                        .unwrap_or(0xFFFF_FFFFu32 as i64);
                     ffi::obs_data_set_int(d, CString::new("color1").unwrap().as_ptr(), c);
                     ffi::obs_data_set_int(d, CString::new("color2").unwrap().as_ptr(), c);
                     ("text_ft2_source_v2", "text", d)
@@ -874,17 +907,24 @@ impl SceneGraph {
                     let d = ffi::obs_data_create();
                     // mac-sck-common.h: ScreenCaptureWindowStream = 1
                     ffi::obs_data_set_int(d, CString::new("type").unwrap().as_ptr(), 1);
-                    ffi::obs_data_set_int(d, CString::new("window").unwrap().as_ptr(), *window as i64);
+                    ffi::obs_data_set_int(
+                        d,
+                        CString::new("window").unwrap().as_ptr(),
+                        *window as i64,
+                    );
                     ffi::obs_data_set_bool(d, CString::new("show_cursor").unwrap().as_ptr(), false);
                     ("screen_capture", "window", d)
                 }
             };
             let tid = CString::new(type_id).unwrap();
             let name = CString::new(id).map_err(|_| "bad id")?;
-            let src = ffi::obs_source_create(tid.as_ptr(), name.as_ptr(), settings, ptr::null_mut());
+            let src =
+                ffi::obs_source_create(tid.as_ptr(), name.as_ptr(), settings, ptr::null_mut());
             ffi::obs_data_release(settings);
             if src.is_null() {
-                return Err(format!("{type_id} creation failed — is its module in this engine?"));
+                return Err(format!(
+                    "{type_id} creation failed — is its module in this engine?"
+                ));
             }
             let item = ffi::obs_scene_add(self.scene, src);
             if item.is_null() {
@@ -1011,7 +1051,8 @@ impl SceneGraph {
                         Some(d) => d,
                         None => {
                             let mut buf = [0i8; 256];
-                            if ffi::producer_default_camera_id(buf.as_mut_ptr(), buf.len() as i32) == 0
+                            if ffi::producer_default_camera_id(buf.as_mut_ptr(), buf.len() as i32)
+                                == 0
                             {
                                 return Err("no camera device found".into());
                             }
@@ -1197,7 +1238,11 @@ impl SceneGraph {
             }
             if kind == "camera" {
                 // Keep the webcam's own audio out of the mix (mic is separate).
-                ffi::obs_data_set_bool(settings, CString::new("enable_audio").unwrap().as_ptr(), false);
+                ffi::obs_data_set_bool(
+                    settings,
+                    CString::new("enable_audio").unwrap().as_ptr(),
+                    false,
+                );
             }
             if kind == "screen" {
                 // SCK display mode: ScreenCaptureDisplayStream = 0.

@@ -9,11 +9,20 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+# --stage <dir> puts the result in a build stage (source path); with no
+# argument it stages into the current artifact (local DMG path).
+STAGE_DIR=""
+if [[ ${1:-} == "--stage" ]]; then
+  STAGE_DIR="${2:?--stage needs a directory}"
+fi
+
 EXT_ID="ai.boomin.producer.camera-extension"
 PLUGIN_BUNDLE_ID="ai.boomin.producer.mac-virtualcam"
 SRC="engine/obs-studio/plugins/mac-virtualcam/src"
 LIBOBS="engine/obs-studio/libobs"
-ART="engine/artifacts/producer-libobs-macos-arm64-a023c6871ea8"
+# Never hardcode the artifact hash — it changes with every obs.lock edit.
+source scripts/engine-lib.sh
+ART="${STAGE_DIR:-engine/artifacts/$(artifact_name)}"
 OUT="engine/virtualcam-plugin/mac-virtualcam.plugin"
 # UUIDs must match the extension's Info.plist exactly — they are the device
 # identity both halves agree on.

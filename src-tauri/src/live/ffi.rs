@@ -487,7 +487,10 @@ extern "C" {
     pub fn obs_properties_destroy(props: *mut obs_properties_t);
     pub fn obs_properties_first(props: *mut obs_properties_t) -> *mut obs_property_t;
     pub fn obs_property_next(prop: *mut *mut obs_property_t) -> bool;
-    pub fn obs_properties_get(props: *mut obs_properties_t, name: *const c_char) -> *mut obs_property_t;
+    pub fn obs_properties_get(
+        props: *mut obs_properties_t,
+        name: *const c_char,
+    ) -> *mut obs_property_t;
     pub fn obs_property_name(prop: *mut obs_property_t) -> *const c_char;
     pub fn obs_property_list_item_count(prop: *mut obs_property_t) -> usize;
     pub fn obs_property_list_item_name(prop: *mut obs_property_t, idx: usize) -> *const c_char;

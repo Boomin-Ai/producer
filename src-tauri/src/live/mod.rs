@@ -15,9 +15,9 @@ pub mod graph;
 #[cfg(have_engine)]
 pub mod filters;
 #[cfg(have_engine)]
-mod record;
-#[cfg(have_engine)]
 pub mod multi;
+#[cfg(have_engine)]
+mod record;
 #[cfg(have_engine)]
 pub mod stream;
 
@@ -185,14 +185,24 @@ impl Live {
     }
 
     #[cfg(have_engine)]
-    pub fn add_extra(&self, id: String, label: String, spec: graph::ExtraSpec) -> Result<(), String> {
+    pub fn add_extra(
+        &self,
+        id: String,
+        label: String,
+        spec: graph::ExtraSpec,
+    ) -> Result<(), String> {
         self.handle
             .as_ref()
             .ok_or("live engine not running")?
             .add_extra(id, label, spec)
     }
     #[cfg(not(have_engine))]
-    pub fn add_extra(&self, _id: String, _label: String, _spec: serde_json::Value) -> Result<(), String> {
+    pub fn add_extra(
+        &self,
+        _id: String,
+        _label: String,
+        _spec: serde_json::Value,
+    ) -> Result<(), String> {
         Err("live engine not bundled in this build".into())
     }
 
@@ -280,7 +290,11 @@ impl Live {
             .filters(source, op)
     }
     #[cfg(not(have_engine))]
-    pub fn filters(&self, _source: String, _op: serde_json::Value) -> Result<Vec<serde_json::Value>, String> {
+    pub fn filters(
+        &self,
+        _source: String,
+        _op: serde_json::Value,
+    ) -> Result<Vec<serde_json::Value>, String> {
         Ok(Vec::new())
     }
 
@@ -698,12 +712,23 @@ pub fn startup_probe(report_dir: &Path) {
             if run_props {
                 // Device pickers must be written against the property names
                 // libobs actually exposes, not remembered ones.
-                for id in ["macos-avcapture", "coreaudio_input_capture", "screen_capture"] {
+                for id in [
+                    "macos-avcapture",
+                    "coreaudio_input_capture",
+                    "screen_capture",
+                ] {
                     println!("=== {id} ===");
                     for line in graph::list_property_names(id) {
                         println!("  prop: {line}");
                     }
-                    for prop in ["device", "device_id", "display_uuid", "display", "window", "application"] {
+                    for prop in [
+                        "device",
+                        "device_id",
+                        "display_uuid",
+                        "display",
+                        "window",
+                        "application",
+                    ] {
                         let opts = graph::list_property_options(id, prop);
                         if !opts.is_empty() {
                             println!("  -- {prop} options --");

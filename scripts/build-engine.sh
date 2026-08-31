@@ -95,10 +95,25 @@ for lib in libobs-metal.dylib libobs-opengl.dylib; do
   find "$BUILD" -name "$lib" -path "*Release*" -not -path "*.dSYM/*" | head -1 | xargs -I{} cp {} "$STAGE/Frameworks/"
 done
 for p in "${ENGINE_PLUGINS[@]}"; do
+  # mac-virtualcam is the one plugin CMake must NOT provide. Upstream's build
+  # of it carries OBS's bundle id, mach service and device UUID, so it can
+  # only ever pair with OBS's extension — ours would never be found. It is
+  # also gated behind ENABLE_VIRTUALCAM and links OBS::frontend-api, which a
+  # zero-Qt preset does not build. We compile it ourselves instead, from the
+  # same pinned source, with Producer's identifiers.
+  if [[ $p == mac-virtualcam ]]; then
+    continue
+  fi
   bundle="$(find "$BUILD" -name "$p.plugin" -maxdepth 6 -type d | head -1)"
   [[ -n $bundle ]] || { echo "FATAL: $p.plugin not produced by build" >&2; exit 1; }
   cp -R "$bundle" "$STAGE/PlugIns/"
 done
+
+# Build and stage the rebranded virtual-camera plugin + camera extension.
+"$(dirname "${BASH_SOURCE[0]}")/build-virtualcam-plugin.sh" --stage "$STAGE"
+"$(dirname "${BASH_SOURCE[0]}")/build-camera-extension.sh"
+[[ -d "$STAGE/PlugIns/mac-virtualcam.plugin" ]] \
+  || { echo "FATAL: mac-virtualcam.plugin not staged" >&2; exit 1; }
 # Recording/replay (obs-ffmpeg): the plugin spawns obs-ffmpeg-mux, which
 # libobs resolves NEXT TO THE HOST EXECUTABLE (os_get_executable_path_ptr in
 # platform-cocoa.m) — stage it under bin/ for assembly into Contents/MacOS/.

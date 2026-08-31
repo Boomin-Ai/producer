@@ -166,13 +166,8 @@ fn parse_privmsg(line: &str) -> Option<ChatMsg> {
             .find_map(|kv| kv.strip_prefix(key)?.strip_prefix('=').map(unescape_tag))
             .filter(|v| !v.is_empty())
     };
-    let user = tag("display-name").unwrap_or_else(|| {
-        prefix
-            .split('!')
-            .next()
-            .unwrap_or("someone")
-            .to_string()
-    });
+    let user = tag("display-name")
+        .unwrap_or_else(|| prefix.split('!').next().unwrap_or("someone").to_string());
 
     // Twitch names its own emotes per message (id + char range), so these
     // cost no network call at all.
@@ -243,6 +238,9 @@ mod tests {
     #[test]
     fn keeps_colons_inside_message_text() {
         let line = ":a!a@a.tmi.twitch.tv PRIVMSG #c :check this: https://boomin.ai";
-        assert_eq!(parse_privmsg(line).unwrap().text, "check this: https://boomin.ai");
+        assert_eq!(
+            parse_privmsg(line).unwrap().text,
+            "check this: https://boomin.ai"
+        );
     }
 }

@@ -25,7 +25,8 @@ use super::{backoff, ChatEvent, ChatHub, ChatMsg};
 /// A stale version still works (a two-year-old one returned 200); only a
 /// malformed one 404s. Used when scraping the live value fails.
 const FALLBACK_CLIENT_VERSION: &str = "2.20260828.01.00";
-const CHAT_URL: &str = "https://www.youtube.com/youtubei/v1/live_chat/get_live_chat?prettyPrint=false";
+const CHAT_URL: &str =
+    "https://www.youtube.com/youtubei/v1/live_chat/get_live_chat?prettyPrint=false";
 
 fn env_or(key: &str, fallback: &str) -> String {
     std::env::var(key)
@@ -106,11 +107,15 @@ async fn bootstrap(client: &reqwest::Client, channel: &str) -> Result<Bootstrap,
         return Err("YouTube served a consent page — chat can't start from here".into());
     }
 
-    let video = between(&page, r#"<link rel="canonical" href="https://www.youtube.com/watch?v="#, "\"")
-        .or_else(|| between(&page, r#""canonicalBaseUrl":"/watch?v="#, "\""))
-        .or_else(|| between(&page, r#""videoId":""#, "\""))
-        .map(|s| s.to_string())
-        .ok_or_else(|| format!("{handle} isn't live right now"))?;
+    let video = between(
+        &page,
+        r#"<link rel="canonical" href="https://www.youtube.com/watch?v="#,
+        "\"",
+    )
+    .or_else(|| between(&page, r#""canonicalBaseUrl":"/watch?v="#, "\""))
+    .or_else(|| between(&page, r#""videoId":""#, "\""))
+    .map(|s| s.to_string())
+    .ok_or_else(|| format!("{handle} isn't live right now"))?;
 
     // The /live page IS the watch page when live; re-fetch only if we had to
     // fall back to a videoId found elsewhere.
@@ -136,7 +141,11 @@ async fn bootstrap(client: &reqwest::Client, channel: &str) -> Result<Bootstrap,
     let chat = v
         .pointer("/contents/twoColumnWatchNextResults/conversationBar/liveChatRenderer")
         .ok_or("this stream has chat turned off")?;
-    if chat.get("isReplay").and_then(Value::as_bool).unwrap_or(false) {
+    if chat
+        .get("isReplay")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
         return Err("that stream has ended — its chat is a replay".into());
     }
     let continuation = chat
@@ -167,7 +176,10 @@ fn runs_text(runs: &Value) -> String {
         if let Some(t) = r.get("text").and_then(Value::as_str) {
             out.push_str(t);
         } else if let Some(e) = r.get("emoji") {
-            let custom = e.get("isCustomEmoji").and_then(Value::as_bool).unwrap_or(false);
+            let custom = e
+                .get("isCustomEmoji")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
             let shortcut = e
                 .pointer("/shortcuts/0")
                 .and_then(Value::as_str)
@@ -193,7 +205,10 @@ pub async fn run(hub: ChatHub, channel: String, stop: Arc<AtomicBool>, connected
         reqwest::header::USER_AGENT,
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36".parse().unwrap(),
     );
-    headers.insert(reqwest::header::ACCEPT_LANGUAGE, "en-US,en;q=0.9".parse().unwrap());
+    headers.insert(
+        reqwest::header::ACCEPT_LANGUAGE,
+        "en-US,en;q=0.9".parse().unwrap(),
+    );
     headers.insert(reqwest::header::COOKIE, "SOCS=CAI".parse().unwrap());
     let client = match reqwest::Client::builder()
         .timeout(Duration::from_secs(20))
@@ -265,7 +280,9 @@ pub async fn run(hub: ChatHub, channel: String, stop: Arc<AtomicBool>, connected
                     connected.store(false, Ordering::SeqCst);
                     hub.emit(ChatEvent::Disconnected {
                         platform: "youtube".into(),
-                        reason: Some("YouTube refused this chat (region-locked or sign-in required)".into()),
+                        reason: Some(
+                            "YouTube refused this chat (region-locked or sign-in required)".into(),
+                        ),
                     });
                     return;
                 }
@@ -289,7 +306,11 @@ pub async fn run(hub: ChatHub, channel: String, stop: Arc<AtomicBool>, connected
                     let Some(m) = item.get("liveChatTextMessageRenderer") else {
                         continue;
                     };
-                    let id = m.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
+                    let id = m
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string();
                     if id.is_empty() || seen.contains(&id) {
                         continue;
                     }
@@ -302,7 +323,11 @@ pub async fn run(hub: ChatHub, channel: String, stop: Arc<AtomicBool>, connected
                         .and_then(Value::as_str)
                         .unwrap_or("viewer")
                         .to_string();
-                    let text = runs_text(m.get("message").and_then(|v| v.get("runs")).unwrap_or(&Value::Null));
+                    let text = runs_text(
+                        m.get("message")
+                            .and_then(|v| v.get("runs"))
+                            .unwrap_or(&Value::Null),
+                    );
                     if text.trim().is_empty() {
                         continue;
                     }

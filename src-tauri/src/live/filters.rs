@@ -36,7 +36,11 @@ struct EnumCtx {
 pub const INTERNAL_PREFIX: &str = "__producer_";
 pub const OPACITY_FILTER: &str = "__producer_opacity";
 
-extern "C" fn collect(_parent: *mut ffi::obs_source_t, filter: *mut ffi::obs_source_t, param: *mut c_void) {
+extern "C" fn collect(
+    _parent: *mut ffi::obs_source_t,
+    filter: *mut ffi::obs_source_t,
+    param: *mut c_void,
+) {
     let ctx = unsafe { &mut *(param as *mut EnumCtx) };
     unsafe {
         let name = ffi::obs_source_get_name(filter);
@@ -44,7 +48,10 @@ extern "C" fn collect(_parent: *mut ffi::obs_source_t, filter: *mut ffi::obs_sou
         if name.is_null() || kind.is_null() {
             return;
         }
-        if CStr::from_ptr(name).to_string_lossy().starts_with(INTERNAL_PREFIX) {
+        if CStr::from_ptr(name)
+            .to_string_lossy()
+            .starts_with(INTERNAL_PREFIX)
+        {
             return;
         }
         ctx.out.push(FilterState {

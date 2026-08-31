@@ -31,7 +31,10 @@ const MESSAGE_EVENTS: &[&str] = &[
 ];
 
 fn env_or(key: &str, fallback: &str) -> String {
-    std::env::var(key).ok().filter(|v| !v.is_empty()).unwrap_or_else(|| fallback.to_string())
+    std::env::var(key)
+        .ok()
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| fallback.to_string())
 }
 
 fn socket_url() -> String {
@@ -45,7 +48,12 @@ fn socket_url() -> String {
 
 /// `channel` here is the numeric chatroom id, already resolved (see
 /// `commands::kick_resolve_chatroom` for why that is a separate step).
-pub async fn run(hub: ChatHub, chatroom_id: String, stop: Arc<AtomicBool>, connected: Arc<AtomicBool>) {
+pub async fn run(
+    hub: ChatHub,
+    chatroom_id: String,
+    stop: Arc<AtomicBool>,
+    connected: Arc<AtomicBool>,
+) {
     let mut attempt = 0u32;
     while !stop.load(Ordering::SeqCst) {
         match session(&hub, &chatroom_id, &stop, &connected).await {
@@ -81,7 +89,10 @@ async fn session(
         .map_err(|e| format!("connect failed: {e}"))?;
 
     // Both channel spellings are in the wild and a spare subscription is free.
-    for chan in [format!("chatrooms.{chatroom_id}.v2"), format!("chatrooms.{chatroom_id}")] {
+    for chan in [
+        format!("chatrooms.{chatroom_id}.v2"),
+        format!("chatrooms.{chatroom_id}"),
+    ] {
         let sub = serde_json::json!({
             "event": "pusher:subscribe",
             "data": { "channel": chan, "auth": "" }
@@ -133,11 +144,18 @@ async fn session(
                 let _ = ws.send(Message::Text(pong.to_string())).await;
             }
             "pusher:error" => {
-                return Err(format!("pusher rejected us: {}", env.get("data").unwrap_or(&Value::Null)));
+                return Err(format!(
+                    "pusher rejected us: {}",
+                    env.get("data").unwrap_or(&Value::Null)
+                ));
             }
             e if MESSAGE_EVENTS.contains(&e) => {
                 // Pusher nests the real payload as a JSON *string*.
-                if let Some(msg) = env.get("data").and_then(Value::as_str).and_then(parse_message) {
+                if let Some(msg) = env
+                    .get("data")
+                    .and_then(Value::as_str)
+                    .and_then(parse_message)
+                {
                     if !msg.id.is_empty() {
                         if recent.contains(&msg.id) {
                             continue;
@@ -150,7 +168,10 @@ async fn session(
                     hub.emit(ChatEvent::Message { msg });
                 }
             }
-            "" | "pusher:pong" | "pusher_internal:subscription_succeeded" | "pusher:connection_established" => {}
+            ""
+            | "pusher:pong"
+            | "pusher_internal:subscription_succeeded"
+            | "pusher:connection_established" => {}
             other => {
                 // Kick renames events without notice; leave a trail.
                 eprintln!("kick chat: unhandled event {other}");
@@ -167,7 +188,11 @@ fn parse_message(raw: &str) -> Option<ChatMsg> {
     Some(ChatMsg {
         emotes: None,
         platform: "kick".into(),
-        id: v.get("id").and_then(Value::as_str).unwrap_or_default().to_string(),
+        id: v
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
         user: sender
             .get("username")
             .and_then(Value::as_str)
@@ -275,7 +300,10 @@ pub async fn resolve_chatroom(slug: &str) -> Result<String, String> {
             res.status()
         ));
     }
-    let body: Value = res.json().await.map_err(|e| format!("unreadable reply: {e}"))?;
+    let body: Value = res
+        .json()
+        .await
+        .map_err(|e| format!("unreadable reply: {e}"))?;
     body.get("chatroom")
         .and_then(|c| c.get("id"))
         .and_then(Value::as_u64)

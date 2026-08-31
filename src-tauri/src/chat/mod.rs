@@ -9,11 +9,11 @@
 //! dead Kick socket never stalls Twitch. Messages fan out to the webview on
 //! the `chat://event` channel.
 
+pub mod commands;
 mod emotes;
 mod kick;
 mod twitch;
 mod youtube;
-pub mod commands;
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -43,9 +43,17 @@ pub struct ChatMsg {
 pub enum ChatEvent {
     /// Transport truth only: connected means the socket is joined, not that
     /// the channel is live.
-    Connected { platform: String, channel: String },
-    Disconnected { platform: String, reason: Option<String> },
-    Message { msg: ChatMsg },
+    Connected {
+        platform: String,
+        channel: String,
+    },
+    Disconnected {
+        platform: String,
+        reason: Option<String>,
+    },
+    Message {
+        msg: ChatMsg,
+    },
     /// A channel's emote vocabulary (7TV + BTTV), sent once after joining.
     EmoteSet {
         platform: String,
@@ -88,7 +96,12 @@ impl ChatHub {
     /// Join `channel` on `platform`, replacing any existing reader for it.
     /// Kick reads by numeric chatroom id, so `target` carries that; Twitch
     /// reads by login name. `channel` is always the human-facing name.
-    pub fn connect(&self, platform: &str, channel: &str, target: Option<String>) -> Result<(), String> {
+    pub fn connect(
+        &self,
+        platform: &str,
+        channel: &str,
+        target: Option<String>,
+    ) -> Result<(), String> {
         let platform = platform.to_ascii_lowercase();
         let channel = channel.trim().trim_start_matches('#').to_string();
         if channel.is_empty() {
