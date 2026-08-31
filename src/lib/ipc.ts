@@ -111,7 +111,14 @@ export const ipc = {
   livePermissions: () => invoke<LivePermissions>("live_permissions"),
   liveRequestPermission: (kind: "screen" | "camera" | "mic") =>
     invoke("live_request_permission", { kind }),
-  liveScreenCoach: (action: "chip_show" | "chip_hide" | "open_settings") =>
+  liveScreenCoach: (
+    action:
+      | "chip_show"
+      | "chip_hide"
+      | "open_settings"
+      | "open_camera_settings"
+      | "open_mic_settings",
+  ) =>
     invoke("live_screen_coach", { action }),
   firstlightResume: (action: "set" | "take" | "clear") =>
     invoke<boolean>("firstlight_resume", { action }),
@@ -131,6 +138,9 @@ export const ipc = {
   liveSetMicAudio: (patch: { volume?: number; muted?: boolean }) =>
     invoke("live_set_mic_audio", { volume: patch.volume ?? null, muted: patch.muted ?? null }),
   liveSetVideo: (height: number, fps: number) => invoke("live_set_video", { height, fps }),
+  /** Stage editor: commit=false at gesture rate, commit=true on release. */
+  liveSetTransform: (id: string, patch: LiveTransformPatch, commit: boolean) =>
+    invoke("live_set_transform", { id, patch, commit }),
   livePreviewHidden: (hidden: boolean) => invoke("live_preview_hidden", { hidden }),
   liveOpenChat: (url: string) => invoke("live_open_chat", { url }),
 };
@@ -156,6 +166,40 @@ export interface LivePermissions {
   mic: string;
 }
 
+/** One scene item's live geometry, canvas coordinates (UI-P1). */
+export interface LiveItem {
+  id: string;
+  kind: string;
+  label: string;
+  visible: boolean;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rot: number;
+  crop_left: number;
+  crop_top: number;
+  crop_right: number;
+  crop_bottom: number;
+  z: number;
+  src_w: number;
+  src_h: number;
+}
+
+export interface LiveTransformPatch {
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+  rot?: number;
+  crop_left?: number;
+  crop_top?: number;
+  crop_right?: number;
+  crop_bottom?: number;
+  z?: number;
+  visible?: boolean;
+}
+
 export interface LiveSources {
   screen: boolean;
   camera: boolean;
@@ -164,6 +208,10 @@ export interface LiveSources {
   mic_muted?: boolean;
   overlay_window?: number | null;
   overlay_url?: string | null;
+  items?: LiveItem[];
+  camera_device?: string | null;
+  mic_device?: string | null;
+  screen_device?: string | null;
 }
 
 export type LivePreset = "twitch" | "kick" | "youtube" | "custom";
@@ -226,3 +274,107 @@ export async function listenLiveEvents(cb: (ev: LiveEvent) => void): Promise<() 
   const { listen } = await import("@tauri-apps/api/event");
   return listen<LiveEvent>("live://event", (e) => cb(e.payload));
 }
+
+// --- Live chat (P2.5) ---------------------------------------------------
+// Read-only ingest: Twitch via anonymous IRC, Kick via its public Pusher
+// stream. No credential crosses this boundary; sending needs an account and
+// arrives with Connect.
+
+export interface ChatMsg {
+  platform: string;
+  id: string;
+  user: string;
+  color: string | null;
+  text: string;
+  /** Emotes named in this message (Twitch's own), name → image URL. */
+  emotes?: Record<string, string>;
+}
+
+export interface ChatConnection {
+  platform: string;
+  channel: string;
+  connected: boolean;
+}
+
+export type ChatEvent =
+  | { type: "connected"; platform: string; channel: string }
+  | { type: "disconnected"; platform: string; reason: string | null }
+  | { type: "message"; msg: ChatMsg }
+  | { type: "emote_set"; platform: string; emotes: Record<string, string> };
+
+export const chat = {
+  connect: (platform: string, channel: string, chatroomId?: string) =>
+    invoke("chat_connect", { platform, channel, chatroomId: chatroomId ?? null }),
+  disconnect: (platform: string) => invoke("chat_disconnect", { platform }),
+  status: () => invoke<ChatConnection[]>("chat_status"),
+  /** Kick only: slug → chatroom id. Cache it; it never changes. */
+  resolveKickChatroom: (slug: string) => invoke<string>("kick_resolve_chatroom", { slug }),
+};
+
+export async function listenChat(cb: (ev: ChatEvent) => void): Promise<() => void> {
+  const { listen } = await import("@tauri-apps/api/event");
+  return listen<ChatEvent>("chat://event", (e) => cb(e.payload));
+}
+
+/** One selectable device behind a source's picker (UI-P2.9). */
+export interface DeviceOption {
+  id: string;
+  name: string;
+  disabled: boolean;
+}
+
+export const devices = {
+  /** kind: "camera" | "mic" | "screen" */
+  list: (kind: string) => invoke<DeviceOption[]>("live_source_devices", { kind }),
+  set: (kind: string, device: string) => invoke("live_set_source_device", { kind, device }),
+};
+
+/** Open-list source spec (UI-P2.10 item-list model). Tagged for serde. */
+export type ExtraSpec =
+  | { kind: "media"; path: string; looping?: boolean }
+  | { kind: "image"; path: string }
+  | { kind: "text"; text: string; size?: number; color?: string }
+  | { kind: "color"; color: string }
+  | { kind: "window"; window: number };
+
+export const extraSources = {
+  add: (id: string, label: string, spec: ExtraSpec) =>
+    invoke("live_add_source", { id, label, spec }),
+  remove: (id: string) => invoke("live_remove_source", { id }),
+  /** Native file dialog; resolves null if the user cancels. */
+  pickFile: (kind: "media" | "image") => invoke<string | null>("live_pick_file", { kind }),
+};
+
+export const stinger = {
+  /** Open the clip ahead of the cut so playing it is instant. */
+  prepare: (path: string) => invoke("live_prepare_stinger", { path }),
+  /** Starts the clip over the stage; resolves its duration in ms (0 = the
+   * file hasn't reported one, use your configured length). */
+  play: (path: string) => invoke<number>("live_play_stinger", { path }),
+  stop: () => invoke("live_stop_stinger"),
+};
+
+export const recording = {
+  /** stamp names the file; resolves the path being written. */
+  start: (stamp: string) => invoke<string>("live_start_recording", { stamp }),
+  stop: () => invoke<string | null>("live_stop_recording"),
+  reveal: (path: string) => invoke("live_reveal_file", { path }),
+};
+
+export interface VcamStatus {
+  state: "idle" | "requested" | "needs_approval" | "active" | "failed" | "unavailable";
+  installed: boolean;
+  error: string | null;
+}
+
+export const vcam = {
+  status: () => invoke<VcamStatus>("live_vcam_status"),
+  /** Asks macOS to install the camera extension; the user approves once. */
+  activate: () => invoke("live_vcam_activate"),
+  /** Starts/stops sending the program feed to the virtual camera. */
+  output: (on: boolean) => invoke<boolean>("live_vcam_output", { on }),
+};
+
+/** Per-item opacity 0–1, for scene fades. Fire-and-forget at frame rate. */
+export const setOpacity = (id: string, opacity: number) =>
+  invoke("live_set_opacity", { id, opacity });

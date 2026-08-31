@@ -3,13 +3,56 @@
  * switches the whole show, not just the picture. Persisted as JSON in
  * live_rooms.config (see live_update_room). */
 
-import { DEFAULT_LAYOUT, type Layout } from "./layout";
+import { DEFAULT_LAYOUT, normalize, type DockSizes, type Layout } from "./layout";
+import type { ExtraSpec } from "./ipc";
+
+/** One item's appearance inside a scene: visibility, geometry (canvas
+ * units), stacking. Scenes are LOOKS — applying one never creates or
+ * destroys sources, it only re-dresses the ones on stage. */
+export interface SceneItemLook {
+  visible: boolean;
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+  z?: number;
+}
+
+/** How a scene arrives on air. `cut` is instant (the default and what most
+ * streamers use); `move` glides items from their current geometry into the
+ * scene's — free for us because scenes are looks over ONE graph, where OBS
+ * needs a plugin. `fade` dissolves items in and out (libobs items have no
+ * opacity, so it rides a colour filter, same as OBS does internally).
+ * `stinger` covers the switch with a video. */
+export type TransitionKind = "cut" | "move" | "fade" | "stinger";
+
+export interface SceneTransition {
+  kind: TransitionKind;
+  /** Milliseconds; ignored by `cut`. */
+  ms?: number;
+  /** Absolute path to the stinger clip. */
+  stinger?: string;
+}
 
 export interface RoomScene {
   id: string;
   name: string;
+  /** Per-scene override; absent = use the room default. */
+  transition?: SceneTransition;
+  /** Legacy flags — still written so old builds stay readable; the built-in
+   * scenes also derive their recipes from these. */
   screen: boolean;
   camera: boolean;
+  /** Full captured look, keyed by item id (custom scenes). Built-ins leave
+   * this unset and compute a canvas-sized recipe at apply time. */
+  look?: Record<string, SceneItemLook>;
+}
+
+/** One open-list item the room respawns on open (id is room-owned). */
+export interface RoomExtra {
+  id: string;
+  label: string;
+  spec: ExtraSpec;
 }
 
 export interface RoomSources {
@@ -20,6 +63,7 @@ export interface RoomSources {
   mic_muted?: boolean;
   overlay_window?: number | null;
   overlay_url?: string | null;
+  extras?: RoomExtra[];
 }
 
 export interface RoomConfig {
@@ -28,6 +72,12 @@ export interface RoomConfig {
   scenes: RoomScene[];
   /** destination id → included when this room goes live. */
   channels: Record<string, boolean>;
+  /** Scene the room mounts into when it opens. */
+  active_scene?: string;
+  /** Dock sizing the user dragged (per room, like the layout itself). */
+  sizes?: DockSizes;
+  /** Room-wide default transition; a scene may override it. */
+  transition?: SceneTransition;
 }
 
 export const DEFAULT_SCENES: RoomScene[] = [
@@ -64,13 +114,9 @@ export function parseConfig(raw: string | null | undefined): RoomConfig {
   }
   if (v.sources && typeof v.sources === "object") base.sources = v.sources as RoomSources;
   if (v.layout && typeof v.layout === "object") {
-    const l = v.layout as Partial<Layout>;
-    base.layout = {
-      left: Array.isArray(l.left) ? l.left : [],
-      right: Array.isArray(l.right) ? l.right : [],
-      bottom: Array.isArray(l.bottom) ? l.bottom : [],
-      hidden: Array.isArray(l.hidden) ? l.hidden : [],
-    };
+    // Through normalize, never verbatim: a room saved when a panel still
+    // existed must not be able to ask for one that has since been retired.
+    base.layout = normalize(v.layout as Partial<Layout>);
   }
   if (Array.isArray(v.scenes) && v.scenes.length) {
     base.scenes = (v.scenes as RoomScene[]).filter(
@@ -79,6 +125,9 @@ export function parseConfig(raw: string | null | undefined): RoomConfig {
     if (base.scenes.length === 0) base.scenes = DEFAULT_SCENES.map((s) => ({ ...s }));
   }
   if (v.channels && typeof v.channels === "object") base.channels = v.channels as Record<string, boolean>;
+  if (typeof v.active_scene === "string") base.active_scene = v.active_scene;
+  if (v.sizes && typeof v.sizes === "object") base.sizes = v.sizes as DockSizes;
+  if (v.transition && typeof v.transition === "object") base.transition = v.transition as SceneTransition;
   return base;
 }
 

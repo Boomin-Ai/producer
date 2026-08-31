@@ -2363,18 +2363,6 @@ textarea::placeholder {
   padding: 5px 12px;
 }
 
-/* destination editor as a floating card above the bar */
-
-.stage-editor {
-  margin: 12px 16px 0;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: #10141f;
-  max-width: 520px;
-  flex-shrink: 0;
-}
-
 /* chat popover */
 
 .stage-chat-anchor {
@@ -2657,13 +2645,18 @@ textarea::placeholder {
   align-items: center;
   justify-content: center;
   container-type: size;
+  padding: 10px;
+  border-radius: 14px;
+  background: oklch(0.125 0.022 250);
 }
 
 .rm-canvas .live-preview {
+  position: relative;
   width: min(100%, 100cqh * 16 / 9);
   aspect-ratio: 16 / 9;
   border-radius: 8px;
-  border: none;
+  /* hairline frame so the output edge is legible even over dark video */
+  border: 1px solid oklch(0.32 0.04 250 / 0.55);
 }
 
 .rm-canvas-msg {
@@ -2910,28 +2903,54 @@ textarea::placeholder {
 .rm-sheet {
   flex-shrink: 0;
   background: oklch(0.2 0.038 250);
-  border-radius: 18px 18px 0 0;
+  border-radius: 16px 16px 0 0;
   box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.45);
-  padding: 10px 28px 20px;
+  position: relative;
+  padding: 2px 22px 10px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 0;
   animation: st-rise 0.22s ease;
 }
 
+/* Sheet collapse — from scratch, one rule set for every state.
+ * The hot zone is INVISIBLE, always: hover feedback is the pill itself
+ * brightening — never a background shape, so there is nothing to mismatch
+ * at either end. Strip open: pill hidden entirely until hovered. */
 .rm-sheet-head {
+  position: absolute;
+  top: -7px;
+  left: 0;
+  right: 0;
+  height: 15px;
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
+  z-index: 5;
+  cursor: pointer;
+  /* Invisible by design: the ONLY hover feedback is the handle itself.
+   * Nothing paints here, so there is no shape to mismatch at either end. */
+  background: none;
+  border-radius: 0;
 }
 
 .rm-sheet-handle {
-  width: 44px;
-  height: 5px;
+  width: 36px;
+  height: 3px;
   border-radius: 999px;
   background: oklch(0.32 0.045 250);
+  transition:
+    background 0.12s ease,
+    width 0.12s ease,
+    opacity 0.12s ease;
 }
+
+.rm-sheet-head:hover .rm-sheet-handle {
+  width: 46px;
+  background: var(--mint);
+}
+
+
 
 .rm-sheet-label {
   position: absolute;
@@ -3010,7 +3029,7 @@ textarea::placeholder {
 
 .rm-strips {
   display: flex;
-  gap: 26px;
+  gap: 12px;
   align-items: stretch;
 }
 
@@ -3018,11 +3037,15 @@ textarea::placeholder {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
+  padding: 10px 10px 8px;
+  border: 1px solid oklch(0.26 0.035 250 / 0.7);
+  border-radius: 12px;
+  background: oklch(0.175 0.032 250 / 0.65);
 }
 
 .rm-strip.dead {
-  opacity: 0.55;
+  opacity: 0.35;
 }
 
 .rm-strip-cols {
@@ -3034,9 +3057,18 @@ textarea::placeholder {
 }
 
 .rm-meter {
-  width: 8px;
-  border-radius: 999px;
-  background: oklch(0.16 0.035 250);
+  width: 6px;
+  border-radius: 3px;
+  /* Faint scale ticks up the track — the console read. */
+  background:
+    repeating-linear-gradient(
+      180deg,
+      oklch(0.3 0.035 250 / 0.9) 0,
+      oklch(0.3 0.035 250 / 0.9) 1px,
+      transparent 1px,
+      transparent 12.5%
+    ),
+    oklch(0.14 0.03 250);
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -3045,8 +3077,8 @@ textarea::placeholder {
 
 .rm-meter-fill {
   width: 100%;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #3ddca6 0%, oklch(0.55 0.14 165) 100%);
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(180deg, #ff6459 0%, #ffc247 10%, #3ddca6 28%, oklch(0.55 0.13 168) 100%);
   transition: height 90ms linear;
 }
 
@@ -3076,10 +3108,22 @@ textarea::placeholder {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  width: 26px;
-  height: 14px;
-  border-radius: 5px;
-  background: oklch(0.94 0.008 250);
+  width: 24px;
+  height: 11px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, oklch(0.97 0.005 250), oklch(0.82 0.012 250));
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* fader-cap center line */
+.rm-fader-thumb::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  top: 50%;
+  height: 1px;
+  background: oklch(0.4 0.02 250);
 }
 
 .rm-fader.disabled .rm-fader-thumb {
@@ -3087,25 +3131,35 @@ textarea::placeholder {
 }
 
 .rm-strip-db {
-  font-size: 10px;
+  font-size: 10.5px;
   font-variant-numeric: tabular-nums;
-  color: oklch(0.55 0.025 250);
+  letter-spacing: 0.02em;
+  color: oklch(0.68 0.02 250);
 }
 
 .rm-strip-icon {
-  border: none;
-  background: none;
-  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid oklch(0.3 0.035 250);
+  border-radius: 8px;
+  background: oklch(0.22 0.032 250);
+  padding: 0;
   color: oklch(0.94 0.008 250);
 }
 
 .rm-strip-icon.muted {
-  color: oklch(0.6 0.16 25);
+  color: oklch(0.72 0.17 25);
+  border-color: oklch(0.45 0.12 25 / 0.6);
+  background: oklch(0.24 0.06 25 / 0.5);
 }
 
 .rm-strip-name {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
   color: oklch(0.94 0.008 250);
 }
 
@@ -3740,14 +3794,15 @@ textarea::placeholder {
 /* ── Controls live in the panel; the stage is pure canvas ──────────────── */
 
 .rm-center {
-  padding: 16px 16px 10px;
+  padding: 16px 16px 2px;
   gap: 10px;
 }
 
 /* sheet is always present; collapsed shows just its header */
 
 .rm-sheet.collapsed {
-  padding-bottom: 10px;
+  height: 16px;
+  padding-bottom: 0;
 }
 
 .rm-sheet-label {
@@ -3902,6 +3957,57 @@ textarea::placeholder {
   border: 1px solid oklch(0.24 0.04 250);
   border-radius: 10px;
   padding: 8px 10px;
+}
+
+/* sources panel: draggable stack rows */
+.rm-row-grip {
+  display: inline-flex;
+  align-items: center;
+  color: oklch(0.45 0.02 250);
+  cursor: grab;
+  touch-action: none;
+  margin-right: 2px;
+}
+.rm-row-grip:active {
+  cursor: grabbing;
+}
+.rm-row.dragging {
+  opacity: 0.45;
+}
+.rm-row.drop-before {
+  box-shadow: inset 0 2px 0 var(--mint);
+}
+.rm-row.drop-after {
+  box-shadow: inset 0 -2px 0 var(--mint);
+}
+
+/* sources panel: hover-revealed add button + row controls */
+.rm-src-add {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.rm-panel-sources:hover .rm-src-add,
+.rm-src-add.open,
+.rm-src-add:focus-visible {
+  opacity: 1;
+}
+.rm-panel-sources .rm-row .rm-row-edit {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.rm-panel-sources .rm-row:hover .rm-row-edit,
+.rm-panel-sources .rm-row .rm-row-edit:focus-visible {
+  opacity: 1;
+}
+/* a hidden source keeps its eye faintly lit so the dim row explains itself */
+.rm-panel-sources .rm-row:not(:hover) .rm-row-eye.off {
+  opacity: 0.5;
+}
+.rm-pop-empty {
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: oklch(0.55 0.025 250);
+  white-space: nowrap;
 }
 
 .rm-row.off {
@@ -4168,10 +4274,6 @@ textarea::placeholder {
   padding-top: 8px;
 }
 
-.rm-sheet-head {
-  height: 22px;
-  margin-bottom: 4px;
-}
 
 .rm-sheet-label {
   top: -2px;
@@ -4237,13 +4339,6 @@ textarea::placeholder {
 
 /* scene rows: chevron + LIVE state, red while on air */
 
-.rm-scene-chev {
-  display: grid;
-  place-items: center;
-  color: oklch(0.42 0.03 250);
-  flex-shrink: 0;
-}
-
 .rm-scene-row.active:not(.onair) {
   background: oklch(0.24 0.06 200 / 0.6);
 }
@@ -4255,7 +4350,6 @@ textarea::placeholder {
 }
 
 .rm-scene-row.onair .rm-scene-icon,
-.rm-scene-row.onair .rm-scene-chev,
 .rm-scene-row.onair .rm-scene-name {
   color: #fff;
 }
@@ -4325,22 +4419,6 @@ textarea::placeholder {
 
 /* the whole bar collapses/expands, and says so on hover */
 
-.rm-sheet-head {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  height: 30px;
-  margin: -4px -28px 4px;
-  border-radius: 14px 14px 0 0;
-  cursor: pointer;
-  transition: background 0.16s ease;
-}
-
-.rm-sheet-head:hover {
-  background: oklch(0.23 0.042 250);
-}
 
 .rm-sheet-handle {
   width: 44px;
@@ -4457,8 +4535,10 @@ textarea::placeholder {
 .rm-dock-bottom > .rm-panel {
   flex: 1 1 0;
   min-width: 0;
-  padding: 0 22px;
-  border-right: 1px solid oklch(0.25 0.04 250);
+  padding: 0 16px;
+  /* No floating rules: sections separate by rhythm, not by borders that
+   * connect to nothing. */
+  border-right: none;
 }
 
 .rm-dock-bottom > .rm-panel:first-child {
@@ -4466,7 +4546,6 @@ textarea::placeholder {
 }
 
 .rm-dock-bottom > .rm-panel:last-child {
-  border-right: none;
   padding-right: 4px;
 }
 
@@ -4498,6 +4577,7 @@ textarea::placeholder {
   flex-direction: column;
   gap: 8px;
   overflow: hidden;
+  position: relative;
 }
 
 .rm-panel-body > .rm-rows,
@@ -4919,19 +4999,17 @@ textarea::placeholder {
 
 /* docks announce themselves the moment a drag starts */
 
+/* Grammar: SOLID = a thing you can move. DASHED = empty space that can
+ * receive one. Containers get NO outline — they are implied by what they
+ * hold — and "you're about to drop here" is a tint, never another border. */
 .rm-dock.armed {
-  outline: 1.5px dashed oklch(0.34 0.05 250);
-  outline-offset: -6px;
   border-radius: 14px;
-  transition:
-    outline-color 0.14s ease,
-    background 0.14s ease;
+  background: oklch(0.15 0.028 250 / 0.6);
+  transition: background 0.14s ease;
 }
 
 .rm-dock.armed.hot {
-  outline-color: var(--mint);
-  outline-style: solid;
-  background: oklch(0.28 0.07 175 / 0.14);
+  background: oklch(0.28 0.07 175 / 0.16);
 }
 
 /* the landing line between panels */
@@ -5044,19 +5122,33 @@ textarea::placeholder {
 }
 
 .rm-dock.armed {
-  outline: 1.5px dashed oklch(0.32 0.045 250);
-  outline-offset: -6px;
   border-radius: 14px;
 }
 
 .layout-edit .rm-panel {
   border-radius: 12px;
-  outline: 1px solid oklch(0.28 0.045 250);
-  outline-offset: 4px;
+  background: oklch(0.205 0.038 250);
+  border: 1px solid oklch(0.32 0.045 250);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  margin: 6px;
 }
 
 .layout-edit .rm-panel-head {
   cursor: default;
+}
+
+/* Edit mode: the grid is the subject. Panel content recedes — dimmed,
+ * inert, and border-less — so dock outlines never fight component borders. */
+.layout-edit .rm-panel-body {
+  opacity: 0.35;
+  filter: saturate(0.5);
+  pointer-events: none;
+}
+
+.layout-edit .rm-panel-body * {
+  border-color: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* the edit bar */
@@ -5132,4 +5224,1076 @@ textarea::placeholder {
 .rm-editbar {
   position: relative;
   z-index: 45;
+}
+
+/* ── System banner: one place for platform-level trouble ───────────────── */
+
+.sys-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(760px, 92vw);
+  padding: 11px 12px 11px 16px;
+  border-radius: 12px;
+  background: oklch(0.22 0.06 25 / 0.96);
+  border: 1px solid oklch(0.45 0.13 25 / 0.7);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+  animation: sys-banner-in 0.2s ease;
+}
+
+@keyframes sys-banner-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.sys-banner-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: oklch(0.72 0.18 25);
+  flex-shrink: 0;
+}
+
+.sys-banner-text {
+  font-size: 13px;
+  line-height: 1.45;
+  color: oklch(0.94 0.02 25);
+}
+
+.sys-banner-raw {
+  font-size: 11px;
+  color: oklch(0.7 0.05 25);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+  flex-shrink: 1;
+}
+
+.sys-banner-x {
+  all: unset;
+  cursor: pointer;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  color: oklch(0.8 0.05 25);
+  font-size: 12px;
+}
+
+.sys-banner-x:hover {
+  background: oklch(0.32 0.09 25);
+  color: #fff;
+}
+
+/* Portaled popovers position themselves in the viewport, so they must not
+   inherit the old anchored offsets — and they sit above every backdrop. */
+.rm-pop-portal {
+  z-index: 130;
+  overflow-y: auto;
+  /* NB: no translate here — the element is positioned in viewport
+     coordinates, so any transform would offset it from its anchor. */
+  animation: rm-pop-in 0.12s ease;
+}
+
+@keyframes rm-pop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.rm-pop-portal.rm-pop-layout,
+.rm-pop-portal.rm-pop-dests,
+.rm-pop-portal.rm-pop-quality,
+.rm-pop-portal.rm-pop-add {
+  top: auto;
+  right: auto;
+  bottom: auto;
+  left: auto;
+}
+
+/* ── Tighter room: empty docks take no space, no stray placeholders ────── */
+
+/* An empty dock is nothing at all until you're editing the layout. */
+.rm-dock-side.empty {
+  display: none;
+}
+
+.layout-edit .rm-dock-side.empty {
+  display: flex;
+  width: 84px;
+  padding: 8px 10px 12px;
+  justify-content: flex-start;
+}
+
+/* The "+" is edit-mode furniture only — never on hover, never when idle. */
+.rm-dock.empty .rm-add-anchor,
+.rm-dock:hover .rm-add-anchor {
+  display: none;
+}
+
+.layout-edit .rm-dock .rm-add-anchor {
+  display: flex;
+}
+
+/* Close the gaps between stage, docks and the bottom row. */
+.rm-center {
+  padding: 8px 10px 6px;
+  gap: 8px;
+}
+
+.rm-dock-side {
+  padding: 6px 8px 8px;
+  gap: 8px;
+}
+
+.rm-body {
+  gap: 0;
+}
+
+.rm-sheet {
+  padding: 8px 16px 14px;
+}
+
+.rm-sheet-head {
+  height: 22px;
+  margin: -2px -16px 2px;
+}
+
+/* ── Stage editor: selection, handles, snap guides ─────────────────────── */
+
+.stage-editor {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  touch-action: none;
+  /* Never let a drag on the stage turn into a text selection. */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.se-sel {
+  position: absolute;
+  pointer-events: none;
+}
+
+/* Each edge is its own line so a cropped side can differ from an intact
+ * one — an outline can't be styled per side. */
+.se-edge {
+  position: absolute;
+  pointer-events: none;
+}
+
+.se-edge.n,
+.se-edge.s {
+  left: -1px;
+  right: -1px;
+  height: 0;
+  border-top: 1.5px solid var(--mint);
+}
+
+.se-edge.e,
+.se-edge.w {
+  top: -1px;
+  bottom: -1px;
+  width: 0;
+  border-left: 1.5px solid var(--mint);
+}
+
+.se-edge.n { top: -1px; }
+.se-edge.s { bottom: -1px; }
+.se-edge.w { left: -1px; }
+.se-edge.e { right: -1px; }
+
+.se-edge.cut {
+  border-color: #ff5a5a;
+  border-style: dashed;
+}
+
+.se-sel.cropped .se-label {
+  background: rgba(255, 90, 90, 0.92);
+  color: #1a0505;
+}
+
+.se-label {
+  position: absolute;
+  top: -30px;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: oklch(0.22 0.045 250);
+  border: 1px solid oklch(0.32 0.05 250);
+  color: oklch(0.94 0.008 250);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: 7px;
+  padding: 3px 6px 3px 9px;
+  pointer-events: auto;
+}
+
+
+.se-handle {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  background: #fff;
+  border: 1.5px solid oklch(0.3 0.05 250);
+  border-radius: 3px;
+  pointer-events: auto;
+  z-index: 7;
+}
+
+.se-nw { left: -6px; top: -6px; cursor: nwse-resize; }
+.se-n  { left: calc(50% - 5.5px); top: -6px; cursor: ns-resize; }
+.se-ne { right: -6px; top: -6px; cursor: nesw-resize; }
+.se-e  { right: -6px; top: calc(50% - 5.5px); cursor: ew-resize; }
+.se-se { right: -6px; bottom: -6px; cursor: nwse-resize; }
+.se-s  { left: calc(50% - 5.5px); bottom: -6px; cursor: ns-resize; }
+.se-sw { left: -6px; bottom: -6px; cursor: nesw-resize; }
+.se-w  { left: -6px; top: calc(50% - 5.5px); cursor: ew-resize; }
+
+.se-guide {
+  position: absolute;
+  background: var(--mint);
+  box-shadow: 0 0 8px oklch(0.75 0.14 165 / 0.7);
+  pointer-events: none;
+}
+
+.se-guide.v { top: 0; bottom: 0; width: 1.5px; }
+.se-guide.h { left: 0; right: 0; height: 1.5px; }
+
+/* ── Chat: connect sheet ───────────────────────────────────────────────── */
+
+.rm-chat-plug.live {
+  color: var(--mint);
+}
+
+.rm-pop-chat {
+  min-width: 268px;
+}
+
+.rm-chatsetup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.rm-chatsetup-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.rm-chatsetup-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: oklch(0.6 0.02 250);
+}
+
+.rm-chatsetup-on {
+  margin-left: auto;
+  color: var(--mint);
+  letter-spacing: 0.04em;
+}
+
+.rm-chatsetup-input {
+  width: 100%;
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #0b0f18;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.rm-chatsetup-input:focus {
+  outline: none;
+  border-color: var(--mint);
+}
+
+.rm-chatsetup-err {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #f0b429;
+}
+
+.rm-chatsetup-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rm-chatsetup-note {
+  flex: 1;
+  font-size: 11px;
+  line-height: 1.4;
+  color: oklch(0.52 0.02 250);
+}
+
+/* ── Source device pickers ─────────────────────────────────────────────── */
+
+.rm-pop-devices {
+  min-width: 240px;
+  max-width: 340px;
+}
+
+.rm-devices {
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+}
+
+.rm-devices-head {
+  padding: 6px 8px 8px;
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: oklch(0.55 0.025 250);
+}
+
+.rm-devices-empty {
+  padding: 4px 8px 10px;
+  font-size: 12.5px;
+  color: oklch(0.55 0.025 250);
+}
+
+.rm-device {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 9px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rm-device:hover:not(:disabled) {
+  background: oklch(0.26 0.02 250 / 0.55);
+}
+
+.rm-device:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.rm-device-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rm-devices-empty > div {
+  line-height: 1.45;
+  margin-bottom: 8px;
+}
+
+.rm-device-grant {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 999px;
+  background: #f0b429;
+  color: #171205;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.rm-addsource {
+  gap: 9px;
+}
+
+/* ── Open-list source mini-editors ─────────────────────────────────────── */
+
+.rm-srcform {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 8px 8px;
+  min-width: 220px;
+}
+
+.rm-srcform input[type="text"],
+.rm-srcform input:not([type]) {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: oklch(0.19 0.02 250);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.rm-srcform-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rm-srcform-row input[type="color"] {
+  width: 44px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  padding: 2px;
+}
+
+.rm-srcform-hex {
+  font-size: 12.5px;
+  color: oklch(0.65 0.02 250);
+  font-variant-numeric: tabular-nums;
+}
+
+.rm-srcform-add {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #08110c;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.rm-srcform-add:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ── Source settings strip (sheet-docked sources) ──────────────────────── */
+
+.rm-srcstrip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  margin: 0 4px 5px;
+  border: 1px solid oklch(0.27 0.035 250 / 0.8);
+  border-radius: 10px;
+  background: oklch(0.17 0.032 250 / 0.7);
+  animation: rm-pop-in 0.14s ease;
+}
+
+.rm-srcstrip-icon {
+  display: inline-flex;
+  color: oklch(0.7 0.02 250);
+}
+
+.rm-srcstrip-name {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: oklch(0.94 0.008 250);
+}
+
+.rm-srcstrip-sep {
+  width: 1px;
+  height: 18px;
+  background: oklch(0.28 0.035 250);
+}
+
+.rm-srcstrip-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border: 1px solid oklch(0.3 0.035 250);
+  border-radius: 999px;
+  background: oklch(0.22 0.032 250);
+  color: oklch(0.9 0.01 250);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rm-srcstrip-chip:hover {
+  border-color: oklch(0.4 0.045 250);
+}
+
+.rm-srcstrip-x {
+  margin-left: auto;
+  display: inline-flex;
+  border: none;
+  background: none;
+  padding: 4px;
+  color: oklch(0.55 0.025 250);
+  cursor: pointer;
+}
+
+.rm-srcstrip-x:hover {
+  color: oklch(0.9 0.01 250);
+}
+
+.rm-row-edit.on {
+  color: var(--mint);
+}
+
+/* scene rename input matches the row it replaces */
+.rm-scene-rename {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid oklch(0.35 0.05 250);
+  border-radius: 6px;
+  background: oklch(0.16 0.03 250);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 3px 7px;
+}
+
+/* With a strip open, the strip IS the sheet's top edge: full-bleed, its
+ * top corners are the sheet's corners — one shape, so no nested double
+ * rounding at either end. The handle rides its edge, smaller. */
+.rm-sheet.has-strip {
+  padding-top: 0;
+}
+
+.rm-sheet.has-strip .rm-srcstrip {
+  margin: 0 -22px 4px;
+  padding: 3px 26px;
+  border-radius: 16px 16px 12px 12px;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+}
+
+.rm-sheet.has-strip .rm-sheet-handle {
+  opacity: 0;
+  width: 28px;
+  height: 2px;
+}
+
+.rm-sheet.has-strip .rm-sheet-head:hover .rm-sheet-handle {
+  opacity: 1;
+}
+
+/* strip: inline device list spans the row, scrolls sideways if crowded */
+.rm-srcstrip-list {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.rm-srcstrip-list::-webkit-scrollbar {
+  display: none;
+}
+
+.rm-srcstrip-chip.on {
+  border-color: oklch(0.55 0.11 168 / 0.8);
+  background: oklch(0.26 0.05 168 / 0.5);
+  color: oklch(0.96 0.01 168);
+}
+
+.rm-srcstrip-chip.grant {
+  border-color: oklch(0.6 0.12 85 / 0.7);
+  background: oklch(0.3 0.07 85 / 0.4);
+  color: #f0b429;
+}
+
+.rm-srcstrip-chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.rm-srcstrip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--mint);
+}
+
+.rm-srcstrip-note {
+  font-size: 12px;
+  color: oklch(0.55 0.025 250);
+}
+
+
+
+
+/* ── Output bay: the program area reads as a monitor, distinct from the
+ * shell — darker backdrop around the picture + a hairline frame. ── */
+
+/* ── Dock splitters: drag to resize, persisted per room ────────────────── */
+
+.rm-split {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  /* Above the invisible drop slots that share this gap — otherwise they
+   * swallow the pointer and the splitter never sees the drag. */
+  z-index: 8;
+  touch-action: none;
+}
+
+.rm-split-h {
+  width: 12px;
+  margin: 0 -3px;
+  cursor: col-resize;
+  align-self: stretch;
+}
+
+.rm-split-v {
+  width: 14px;
+  margin: 0 -5px;
+  cursor: col-resize;
+  align-self: stretch;
+}
+
+.rm-split-grab {
+  width: 2px;
+  height: 34px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background 0.12s ease;
+}
+
+.rm-split-h .rm-split-grab {
+  height: 44px;
+}
+
+.rm-split:hover .rm-split-grab,
+.rm-split:active .rm-split-grab {
+  background: var(--mint);
+}
+
+/* chat emotes: inline images sized to the text they replace */
+.rm-emote {
+  height: 1.65em;
+  vertical-align: middle;
+  margin: -0.3em 0;
+  object-fit: contain;
+}
+
+/* ── Chat: jump back to live ───────────────────────────────────────────── */
+
+.rm-chat-panel-wrap {
+  position: relative;
+}
+
+.rm-chat-jump {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 52px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  border: 1px solid oklch(0.45 0.1 168 / 0.55);
+  border-radius: 999px;
+  background: oklch(0.26 0.06 168 / 0.95);
+  backdrop-filter: blur(8px);
+  color: oklch(0.96 0.02 168);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  animation: rm-pop-in 0.14s ease;
+}
+
+.rm-chat-jump:hover {
+  background: oklch(0.31 0.07 168 / 0.98);
+}
+
+/* the chevron points down: back toward the newest line */
+.rm-chat-jump svg {
+  transform: rotate(0deg);
+}
+
+/* scene row: what it'll do on air, and its settings gear */
+.rm-scene-tr {
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: oklch(0.52 0.03 250);
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: oklch(0.24 0.03 250 / 0.7);
+  flex-shrink: 0;
+}
+
+.rm-scene-row.active .rm-scene-tr {
+  color: oklch(0.62 0.05 168);
+  background: oklch(0.26 0.05 168 / 0.5);
+}
+
+.rm-scene-gear {
+  display: inline-flex;
+  border: none;
+  background: none;
+  padding: 2px;
+  color: oklch(0.55 0.025 250);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+
+.rm-scene-row:hover .rm-scene-gear,
+.rm-scene-gear.on {
+  opacity: 1;
+}
+
+.rm-scene-gear.on,
+.rm-scene-gear:hover {
+  color: var(--mint);
+}
+
+.rm-panel-plus.on {
+  color: var(--mint);
+}
+
+/* scenes header: the room's transition, named rather than a mute gear */
+.rm-scene-default {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  margin-right: 2px;
+  border: 1px solid oklch(0.28 0.035 250);
+  border-radius: 999px;
+  background: oklch(0.2 0.03 250);
+  color: oklch(0.66 0.02 250);
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rm-scene-default:hover,
+.rm-scene-default.on {
+  border-color: oklch(0.45 0.09 168 / 0.6);
+  color: oklch(0.9 0.03 168);
+}
+
+.rm-scene-default svg {
+  width: 11px;
+  height: 11px;
+}
+
+/* ── Record: a peer of Go Live, not a setting ──────────────────────────── */
+
+.rm-rec {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border: 1px solid oklch(0.32 0.04 250);
+  border-radius: 999px;
+  background: oklch(0.21 0.03 250);
+  color: oklch(0.88 0.012 250);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.rm-rec:hover:not(:disabled) {
+  border-color: oklch(0.45 0.06 250);
+}
+
+.rm-rec:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.rm-rec-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: oklch(0.55 0.02 250);
+}
+
+.rm-rec.on {
+  border-color: oklch(0.5 0.17 25 / 0.7);
+  background: oklch(0.26 0.09 25 / 0.55);
+  color: oklch(0.95 0.03 25);
+}
+
+.rm-rec.on .rm-rec-dot {
+  background: #ff4d4d;
+  animation: rm-rec-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes rm-rec-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.rm-stat-cell.rec .rm-stat-num {
+  color: #ff6b6b;
+}
+
+.rm-stat-cell.as-btn {
+  border: none;
+  background: oklch(0.2 0.03 250);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+
+.rm-stat-cell.as-btn:hover {
+  background: oklch(0.25 0.035 250);
+}
+
+/* stage editor: rotation handle and state badges */
+.se-rot {
+  position: absolute;
+  left: 50%;
+  top: -30px;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  border-radius: 999px;
+  background: var(--mint);
+  border: 2px solid oklch(0.16 0.03 250);
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+  /* Above the handles and the label, and hit-testable well beyond its
+   * painted size — a 12px dot is a coin toss with a real mouse. */
+  z-index: 9;
+  box-sizing: content-box;
+  padding: 8px;
+  margin-top: -8px;
+  background-clip: content-box;
+}
+
+.se-rot::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 26px;
+  width: 1px;
+  height: 14px;
+  margin-left: -0.5px;
+  background: var(--mint);
+  opacity: 0.6;
+}
+
+.se-rot:active {
+  cursor: grabbing;
+}
+
+.se-badge {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: oklch(0.3 0.06 168 / 0.8);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.se-crop-n {
+  position: absolute;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(255, 90, 90, 0.92);
+  color: #1a0505;
+  font-size: 9.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.se-crop-n.l { left: 8px; top: 32%; transform: translateY(-50%); }
+.se-crop-n.r { right: 8px; top: 32%; transform: translateY(-50%); }
+.se-crop-n.t { top: 8px; left: 32%; transform: translateX(-50%); }
+.se-crop-n.b { bottom: 8px; left: 32%; transform: translateX(-50%); }
+
+/* ── Filters: the chain, and one filter's properties ───────────────────── */
+
+.rm-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  flex: 1;
+}
+
+.rm-filters-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rm-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: none;
+  background: none;
+  padding: 2px 4px 2px 0;
+  color: oklch(0.6 0.025 250);
+  font-size: 11.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.rm-crumb:hover {
+  color: var(--mint);
+}
+
+/* the chevron points back, not forward */
+.rm-crumb svg {
+  transform: rotate(180deg);
+  width: 13px;
+  height: 13px;
+}
+
+.rm-filters-title {
+  font-size: 12px;
+  font-weight: 650;
+  color: oklch(0.94 0.008 250);
+}
+
+.rm-filters-head .rm-panel-plus {
+  margin-left: auto;
+}
+
+.rm-filter-ord {
+  width: 16px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: oklch(0.5 0.03 250);
+  font-variant-numeric: tabular-nums;
+}
+
+.rm-filter-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: oklch(0.55 0.025 250);
+  text-align: right;
+}
+
+.rm-addfilter {
+  cursor: pointer;
+}
+
+.rm-addfilter:hover {
+  border-color: oklch(0.45 0.09 168 / 0.6);
+}
+
+.rm-row-fx {
+  font-size: 13px;
+  font-weight: 700;
+  font-style: italic;
+  line-height: 1;
+}
+
+.rm-strip-fx {
+  border: 1px solid oklch(0.3 0.035 250);
+  border-radius: 7px;
+  background: oklch(0.22 0.032 250);
+  color: oklch(0.75 0.02 250);
+  font-size: 12px;
+  font-weight: 700;
+  font-style: italic;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.rm-strip-fx:hover:not(:disabled) {
+  color: var(--mint);
+  border-color: oklch(0.45 0.09 168 / 0.6);
+}
+
+.rm-strip-fx:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* property forms */
+.rm-props {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 4px;
+}
+
+.rm-prop {
+  display: grid;
+  grid-template-columns: 116px 1fr 58px;
+  align-items: center;
+  gap: 10px;
+}
+
+.rm-prop-label {
+  font-size: 12px;
+  color: oklch(0.75 0.02 250);
+}
+
+.rm-prop-val {
+  font-size: 11.5px;
+  color: oklch(0.6 0.025 250);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.rm-prop-choices {
+  display: flex;
+  gap: 6px;
+  grid-column: 2 / span 2;
+}
+
+.rm-prop-range {
+  width: 100%;
+  accent-color: var(--mint);
+}
+
+.rm-stat-cell.vcam .rm-stat-num {
+  color: var(--mint);
+}
+
+/* virtual camera: an output control beside Record */
+.rm-vcam.on {
+  border-color: oklch(0.5 0.11 168 / 0.75);
+  background: oklch(0.26 0.06 168 / 0.6);
+  color: oklch(0.96 0.02 168);
+}
+
+.rm-vcam svg {
+  width: 15px;
+  height: 15px;
 }

@@ -194,6 +194,7 @@ export function Home({
 }) {
   const [view, setView] = useState<MainView>({ kind: "home" });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [errorDismissed, setErrorDismissed] = useState(false);
   const updater = useUpdater();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -215,6 +216,7 @@ export function Home({
     }
     setChannels(all);
     setLoadError(firstError);
+    if (firstError) setErrorDismissed(false);
   }, [endpoints]);
 
   const loadJobs = useCallback(async () => {
@@ -272,16 +274,21 @@ export function Home({
   // The room owns the entire window, its own top bar included (mock-faithful).
   if (view.kind === "room") {
     return (
-      <LiveView
-        key={view.room.id}
-        room={view.room}
-        rooms={rooms}
-        onLeave={back}
-        onSwitchRoom={(r) => {
-          const full = rooms.find((x) => x.id === r.id);
-          if (full) setView({ kind: "room", room: full });
-        }}
-      />
+      <>
+        {loadError && !errorDismissed && (
+          <SystemBanner message={loadError} onDismiss={() => setErrorDismissed(true)} />
+        )}
+        <LiveView
+          key={view.room.id}
+          room={view.room}
+          rooms={rooms}
+          onLeave={back}
+          onSwitchRoom={(r) => {
+            const full = rooms.find((x) => x.id === r.id);
+            if (full) setView({ kind: "room", room: full });
+          }}
+        />
+      </>
     );
   }
 
@@ -317,6 +324,10 @@ export function Home({
         </div>
       </header>
 
+      {loadError && !errorDismissed && (
+        <SystemBanner message={loadError} onDismiss={() => setErrorDismissed(true)} />
+      )}
+
       {settingsOpen && (
         <SettingsSheet
           endpoints={endpoints}
@@ -337,7 +348,6 @@ export function Home({
           channels={channels}
           jobs={jobs}
           streaming={streaming}
-          loadError={loadError}
           onOpenRoom={(room) => setView({ kind: "room", room })}
           onRoomsChanged={loadLive}
           onCompose={() => setView({ kind: "compose" })}
@@ -351,8 +361,7 @@ export function Home({
             channels={channels.filter((c) => c.status === "active")}
             independents={endpoints.filter((e) => e.kind === "independent")}
             onRefreshChannels={loadChannels}
-            loadError={loadError}
-            onSubmitted={() => {
+              onSubmitted={() => {
               loadJobs();
               setView({ kind: "history" });
             }}
@@ -365,6 +374,29 @@ export function Home({
           <HistoryView jobs={jobs} channels={channels} onRefresh={loadJobs} />
         </main>
       )}
+    </div>
+  );
+}
+
+/** System-level trouble (workspace fetch, keychain, engine) belongs in one
+ * predictable place — a dismissible banner at the bottom of the app — not
+ * inline in whatever section happened to notice it. */
+function SystemBanner({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  // macOS keychain refuses to prompt while the machine is in dark wake; say
+  // so plainly instead of leaking the raw platform string.
+  const darkWake = /dark wake|no UI possible/i.test(message);
+  return (
+    <div className="sys-banner" role="status">
+      <span className="sys-banner-dot" />
+      <span className="sys-banner-text">
+        {darkWake
+          ? "macOS wouldn't unlock the keychain while the Mac was half-asleep. Wake it fully and reopen Producer."
+          : message}
+      </span>
+      {darkWake && <span className="sys-banner-raw">{message}</span>}
+      <button className="sys-banner-x" onClick={onDismiss} title="Dismiss">
+        ✕
+      </button>
     </div>
   );
 }
@@ -474,7 +506,6 @@ function ControlRoomHome({
   channels,
   jobs,
   streaming,
-  loadError,
   onOpenRoom,
   onRoomsChanged,
   onCompose,
@@ -485,7 +516,6 @@ function ControlRoomHome({
   channels: Channel[];
   jobs: Job[];
   streaming: boolean;
-  loadError: string | null;
   onOpenRoom: (room: LiveRoom) => void;
   onRoomsChanged: () => void;
   onCompose: () => void;
@@ -620,7 +650,6 @@ function ControlRoomHome({
             </div>
           </div>
         )}
-        {loadError && <div className="cr-hint error">{loadError}</div>}
       </section>
 
       <section className="cr-section">
@@ -670,13 +699,11 @@ function ComposerDetail({
   channels,
   independents,
   onRefreshChannels,
-  loadError,
   onSubmitted,
 }: {
   channels: Channel[];
   independents: EndpointInfo[];
   onRefreshChannels: () => void;
-  loadError: string | null;
   onSubmitted: () => void;
 }) {
   const [text, setText] = useState("");
@@ -1126,7 +1153,6 @@ function ComposerDetail({
                   })}
               </div>
             )}
-            {loadError && <p className="error">{loadError}</p>}
           </section>
 
           <section className="section">

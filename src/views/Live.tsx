@@ -1,4 +1,5 @@
-import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   ipc,
   listenLiveEvents,
@@ -8,13 +9,38 @@ import {
   type LivePreset,
   type LiveSnapshot,
   type LiveSources,
+  chat as chatIpc,
+  listenChat,
+  devices as deviceIpc,
+  extraSources,
+  stinger as stingerIpc,
+  recording as recIpc,
+  setOpacity,
+  vcam as vcamIpc,
+  type VcamStatus,
+  type ExtraSpec,
+  type LiveWindow,
+  type LiveTransformPatch,
+  type ChatConnection,
+  type DeviceOption,
 } from "../lib/ipc";
-import { DEMO_ALERTS, DEMO_CHAT, DEMO_VIDEO_URL, demoOn, type DemoChatMsg, type DemoPlatform } from "../lib/demo";
+import {
+  FILTER_CATALOG,
+  filters as filtersIpc,
+  specOf,
+  type FilterOp,
+  type FilterState,
+} from "../lib/filters";
+import { DEMO_CHAT, DEMO_VIDEO_URL, demoOn, type DemoPlatform } from "../lib/demo";
+import { StageEditor } from "./StageEditor";
 import {
   PANEL_META,
   PANEL_ORDER,
   PRESETS as LAYOUT_PRESETS,
   dockOf,
+  SIDE_MAX,
+  SIDE_MIN,
+  type DockSizes,
   movePanel,
   movePanelTo,
   saveLayout,
@@ -29,6 +55,10 @@ import {
   serializeConfig,
   type RoomConfig,
   type RoomScene,
+  type SceneItemLook,
+  type SceneTransition,
+  type TransitionKind,
+  type RoomExtra,
 } from "../lib/room";
 
 // Transport-truthful copy (M-L4 finding: an RTMP session can look healthy
@@ -56,7 +86,850 @@ function fmtBitrate(bytes: number, secs: number): string {
 
 /** Native OBS preview (A6): reserves layout space; the engine overlays an
  * NSView at exactly this rect and keeps it in sync on resize/scroll. */
-function PreviewPanel() {
+/** One rendered chat line, whatever platform it came from. */
+interface ChatLine {
+  platform: string;
+  user: string;
+  text: string;
+  color?: string | null;
+  emotes?: Record<string, string>;
+}
+
+/** Which channels this machine reads chat from. Not a credential — a name. */
+export interface ChatNames {
+  twitch: string;
+  kick: string;
+  youtube: string;
+}
+
+const CHAT_NAMES_KEY = "producer.chat.names";
+const KICK_ROOM_KEY = "producer.chat.kick.chatroom";
+
+function loadChatNames(): ChatNames {
+  try {
+    const raw = localStorage.getItem(CHAT_NAMES_KEY);
+    if (raw) {
+      const p = JSON.parse(raw) as Partial<ChatNames>;
+      return { twitch: p.twitch ?? "", kick: p.kick ?? "", youtube: p.youtube ?? "" };
+    }
+  } catch {
+    /* chat identity is a convenience, never a blocker */
+  }
+  return { twitch: "", kick: "", youtube: "" };
+}
+
+function saveChatNames(n: ChatNames) {
+  try {
+    localStorage.setItem(CHAT_NAMES_KEY, JSON.stringify(n));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Kick's slug→chatroom lookup is the one Cloudflare-guarded call in the
+ * chat path, and the answer never changes — so it is cached per slug and
+ * the lookup effectively runs once per channel, ever. */
+function loadKickChatroom(slug: string): string | null {
+  try {
+    const map = JSON.parse(localStorage.getItem(KICK_ROOM_KEY) ?? "{}") as Record<string, string>;
+    return map[slug.toLowerCase()] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function saveKickChatroom(slug: string, id: string) {
+  try {
+    const map = JSON.parse(localStorage.getItem(KICK_ROOM_KEY) ?? "{}") as Record<string, string>;
+    map[slug.toLowerCase()] = id;
+    localStorage.setItem(KICK_ROOM_KEY, JSON.stringify(map));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Chat channels. These are public channel names, not credentials — reading
+ * needs no account on either platform. Sending does, and arrives with
+ * Connect; this panel says so rather than pretending. */
+function ChatSetup({
+  names,
+  conns,
+  error,
+  onApply,
+}: {
+  names: ChatNames;
+  conns: ChatConnection[];
+  error: string | null;
+  onApply: (n: ChatNames) => void;
+}) {
+  const [draft, setDraft] = useState<ChatNames>(names);
+  const state = (p: string) => conns.find((c) => c.platform === p);
+  const LABEL: Record<keyof ChatNames, string> = {
+    twitch: "Twitch",
+    kick: "Kick",
+    youtube: "YouTube",
+  };
+  const HINT: Record<keyof ChatNames, string> = {
+    twitch: "channel name",
+    kick: "channel name",
+    youtube: "@handle or channel id",
+  };
+  return (
+    <form
+      className="rm-chatsetup"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onApply({
+          twitch: draft.twitch.trim(),
+          kick: draft.kick.trim(),
+          youtube: draft.youtube.trim(),
+        });
+      }}
+    >
+      {(["twitch", "kick", "youtube"] as const).map((p) => {
+        const st = state(p);
+        return (
+          <label key={p} className="rm-chatsetup-row">
+            <span className="rm-chatsetup-label">
+              <span className="rm-row-dot" style={{ background: PLATFORM_TINT[p] }} />
+              {LABEL[p]}
+              {st?.connected && <span className="rm-chatsetup-on">reading</span>}
+            </span>
+            <input
+              className="rm-chatsetup-input"
+              placeholder={HINT[p]}
+              value={draft[p]}
+              onChange={(e) => setDraft((d) => ({ ...d, [p]: e.target.value }))}
+              spellCheck={false}
+              autoCapitalize="off"
+            />
+          </label>
+        );
+      })}
+      {error && <div className="rm-chatsetup-err">{error}</div>}
+      <div className="rm-chatsetup-foot">
+        <span className="rm-chatsetup-note">Reading is public. Talking back arrives with Connect.</span>
+        <button className="rm-editbar-done" type="submit">
+          Connect
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** Vertical window list — the sidebar-docked counterpart of the strip. */
+function WindowPickerList({
+  itemId,
+  onPick,
+  onPicked,
+}: {
+  itemId: string;
+  onPick: (itemId: string, windowId: number, label: string) => Promise<void>;
+  onPicked: () => void;
+}) {
+  const [windows, setWindows] = useState<LiveWindow[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    ipc
+      .liveListWindows()
+      .then((w) => alive && setWindows(w))
+      .catch(() => alive && setWindows([]));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  if (windows === null) return <div className="rm-devices-empty">Looking…</div>;
+  if (windows.length === 0)
+    return <div className="rm-devices-empty">No windows — needs the screen-recording grant.</div>;
+  return (
+    <>
+      {windows.map((w) => (
+        <button
+          key={w.id}
+          className="rm-device"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await onPick(itemId, w.id, w.owner);
+              onPicked();
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <span className="rm-device-name">
+            {w.owner}
+            {w.title ? ` — ${w.title}` : ""}
+          </span>
+        </button>
+      ))}
+    </>
+  );
+}
+
+/** Window chips for a window source's settings strip: pick a different
+ * window without losing the item's place, size or layer — the item is
+ * replaced in situ under the same id. */
+function WindowStripList({
+  itemId,
+  onPick,
+  onPicked,
+}: {
+  itemId: string;
+  onPick: (itemId: string, windowId: number, label: string) => Promise<void>;
+  onPicked: () => void;
+}) {
+  const [windows, setWindows] = useState<LiveWindow[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    ipc
+      .liveListWindows()
+      .then((w) => alive && setWindows(w))
+      .catch(() => alive && setWindows([]));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  if (windows === null) return <span className="rm-srcstrip-note">Looking…</span>;
+  if (windows.length === 0)
+    return <span className="rm-srcstrip-note">No windows — needs the screen-recording grant.</span>;
+  return (
+    <>
+      {windows.map((w) => (
+        <button
+          key={w.id}
+          className="rm-srcstrip-chip"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await onPick(itemId, w.id, w.owner);
+              onPicked();
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {w.owner}
+          {w.title ? ` — ${w.title}` : ""}
+        </button>
+      ))}
+    </>
+  );
+}
+
+/** A scene's settings, in the same horizontal strip sources use. Scope is
+ * explicit: editing a scene sets that scene's override; the room default is
+ * reachable from the panel header. */
+function SceneSettingsStrip({
+  scene,
+  effective,
+  onSet,
+  onUpdate,
+  onClose,
+}: {
+  scene: RoomScene | null;
+  effective: SceneTransition;
+  onSet: (t: SceneTransition | undefined) => void;
+  onUpdate: () => void;
+  onClose: () => void;
+}) {
+  const KINDS: { k: TransitionKind; label: string }[] = [
+    { k: "cut", label: "None (cut)" },
+    { k: "move", label: "Move" },
+    { k: "fade", label: "Fade" },
+    { k: "stinger", label: "Stinger" },
+  ];
+  const DURS = effective.kind === "stinger" ? [800, 1200, 1600, 2400] : [200, 320, 500, 800];
+  const overridden = !!scene?.transition;
+  return (
+    <div className="rm-srcstrip">
+      <span className="rm-srcstrip-icon">{ic.screen}</span>
+      <span className="rm-srcstrip-name">{scene ? scene.name : "All scenes"}</span>
+      <span className="rm-srcstrip-sep" />
+      <div className="rm-srcstrip-list">
+        {KINDS.map((t) => (
+          <button
+            key={t.k}
+            className={`rm-srcstrip-chip${effective.kind === t.k ? " on" : ""}`}
+            onClick={() => {
+              if (t.k === "stinger") {
+                extraSources.pickFile("media").then((path) => {
+                  if (!path) return;
+                  // Open it now, not during the cut.
+                  stingerIpc.prepare(path).catch(() => {});
+                  onSet({ ...effective, kind: "stinger", stinger: path });
+                });
+              } else {
+                onSet({ ...effective, kind: t.k, stinger: undefined });
+              }
+            }}
+          >
+            {effective.kind === t.k && <span className="rm-srcstrip-dot" />}
+            {t.label}
+          </button>
+        ))}
+        {effective.kind !== "cut" && (
+          <>
+            <span className="rm-srcstrip-sep" />
+            {effective.kind === "stinger" && (
+              <span className="rm-srcstrip-note">clip length</span>
+            )}
+            {DURS.map((ms) => (
+              <button
+                key={ms}
+                className={`rm-srcstrip-chip${(effective.ms ?? (effective.kind === "stinger" ? 1200 : 320)) === ms ? " on" : ""}`}
+                onClick={() => onSet({ ...effective, ms })}
+              >
+                {ms}ms
+              </button>
+            ))}
+          </>
+        )}
+        {effective.kind === "stinger" && effective.stinger && (
+          <>
+            <span className="rm-srcstrip-sep" />
+            <span className="rm-srcstrip-note">{effective.stinger.split("/").pop()}</span>
+          </>
+        )}
+        {scene && overridden && (
+          <>
+            <span className="rm-srcstrip-sep" />
+            <button className="rm-srcstrip-chip" onClick={() => onSet(undefined)}>
+              Use room default
+            </button>
+          </>
+        )}
+        {scene && (
+          <>
+            <span className="rm-srcstrip-sep" />
+            <button
+              className="rm-srcstrip-chip"
+              title="Save what's on the stage right now as this scene"
+              onClick={onUpdate}
+            >
+              Save current look
+            </button>
+          </>
+        )}
+      </div>
+      <button className="rm-srcstrip-x" title="Close settings" onClick={onClose}>
+        {ic.x}
+      </button>
+    </div>
+  );
+}
+
+/** Experimental (founder-requested): a source's settings live in a
+ * HORIZONTAL strip above the docked panels; each chip opens its own
+ * vertical menu. One strip at a time — it's the selected source's control
+ * surface, not a tree. */
+function SourceSettingsStrip({
+  rowKey,
+  sources,
+  onClose,
+  openOverlay,
+  onPickWindow,
+}: {
+  rowKey: string;
+  sources: LiveSources;
+  onClose: () => void;
+  openOverlay: () => void;
+  onPickWindow: (itemId: string, windowId: number, label: string) => Promise<void>;
+}) {
+  const meta: Record<string, { name: string; icon: ReactNode }> = {
+    screen: { name: "Screen", icon: ic.screen },
+    camera: { name: "Camera", icon: ic.cam },
+    mic: { name: "Microphone", icon: ic.mic },
+    alerts: { name: "Overlay", icon: ic.link },
+  };
+  const windowItemId = rowKey.startsWith("window:") ? rowKey.slice(7) : null;
+  const m = windowItemId
+    ? { name: "Window", icon: ic.screen }
+    : (meta[rowKey] ?? { name: rowKey, icon: ic.link });
+  const deviceKind = rowKey === "alerts" || windowItemId ? null : rowKey; // camera | mic | screen
+  const [list, setList] = useState<DeviceOption[] | null>(null);
+  const [denied, setDenied] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!deviceKind) return;
+    let alive = true;
+    let wasDenied = false;
+    setList(null);
+    const fetchList = () =>
+      deviceIpc
+        .list(deviceKind)
+        .then((d) => alive && setList(Array.isArray(d) ? d : []))
+        .catch(() => alive && setList([]));
+    const check = () =>
+      ipc
+        .livePermissions()
+        .then((p) => {
+          if (!alive) return;
+          const st = deviceKind === "camera" ? p.camera : deviceKind === "mic" ? p.mic : p.screen;
+          const nowDenied = st !== "granted";
+          // The instant a grant lands, the device list is real — refetch it
+          // so "Allow access" turns into hardware without reopening.
+          if (wasDenied && !nowDenied) fetchList();
+          wasDenied = nowDenied;
+          setDenied(nowDenied);
+        })
+        .catch(() => {});
+    fetchList();
+    check();
+    const t = setInterval(check, 800);
+    window.addEventListener("focus", check);
+    return () => {
+      alive = false;
+      clearInterval(t);
+      window.removeEventListener("focus", check);
+    };
+  }, [deviceKind]);
+
+  const active =
+    deviceKind === "camera"
+      ? sources.camera_device
+      : deviceKind === "mic"
+        ? sources.mic_device
+        : sources.screen_device;
+
+  return (
+    <div className="rm-srcstrip">
+      <span className="rm-srcstrip-icon">{m.icon}</span>
+      <span className="rm-srcstrip-name">{m.name}</span>
+      <span className="rm-srcstrip-sep" />
+      <div className="rm-srcstrip-list">
+        {windowItemId && (
+          <WindowStripList itemId={windowItemId} onPick={onPickWindow} onPicked={onClose} />
+        )}
+        {rowKey === "alerts" && (
+          <button className="rm-srcstrip-chip" onClick={openOverlay}>
+            Configure
+            {ic.chev}
+          </button>
+        )}
+        {deviceKind && list === null && <span className="rm-srcstrip-note">Looking…</span>}
+        {deviceKind && list?.length === 0 && denied && (
+          <button
+            className="rm-srcstrip-chip grant"
+            onClick={() => {
+              if (deviceKind === "screen") ipc.liveScreenCoach("open_settings").catch(() => {});
+              else if (denied)
+                ipc
+                  .liveScreenCoach(deviceKind === "camera" ? "open_camera_settings" : "open_mic_settings")
+                  .catch(() => {});
+              else ipc.liveRequestPermission(deviceKind as "camera" | "mic").catch(() => {});
+            }}
+          >
+            Open Settings
+          </button>
+        )}
+        {deviceKind && list?.length === 0 && !denied && (
+          <span className="rm-srcstrip-note">Nothing found</span>
+        )}
+        {deviceKind &&
+          list?.map((d) => {
+            const on = active ? d.id === active : false;
+            return (
+              <button
+                key={d.id}
+                className={`rm-srcstrip-chip${on ? " on" : ""}`}
+                disabled={d.disabled || busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await deviceIpc.set(deviceKind, d.id);
+                  } catch {
+                    /* engine reports via banner */
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {on && <span className="rm-srcstrip-dot" />}
+                {d.name}
+              </button>
+            );
+          })}
+      </div>
+      <button className="rm-srcstrip-x" title="Close settings" onClick={onClose}>
+        {ic.x}
+      </button>
+    </div>
+  );
+}
+
+/** A source's filter chain, and the properties of whichever filter is open.
+ * Lives INSIDE the panel body so the stage stays fully visible while you
+ * tune — you're judging a chroma key by looking at the picture, not at a
+ * dialog that covers it. Works the same wherever the panel is docked. */
+function FilterEditor({
+  sourceId,
+  sourceLabel,
+  media,
+  onBack,
+}: {
+  sourceId: string;
+  sourceLabel: string;
+  media: "video" | "audio";
+  onBack: () => void;
+}) {
+  const [chain, setChain] = useState<FilterState[] | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const run = useCallback(
+    async (op: FilterOp) => {
+      try {
+        setChain(await filtersIpc(sourceId, op));
+        setErr(null);
+      } catch (e) {
+        setErr(String(e));
+      }
+    },
+    [sourceId],
+  );
+
+  useEffect(() => {
+    run({ op: "list" });
+  }, [run]);
+
+  const available = FILTER_CATALOG.filter((f) => f.media === media);
+  const current = chain?.find((f) => f.name === open) ?? null;
+  const spec = current ? specOf(current.kind) : null;
+
+  // A filter's identity is its name; two of a kind get numbered.
+  const nameFor = (label: string) => {
+    const taken = new Set((chain ?? []).map((f) => f.name));
+    if (!taken.has(label)) return label;
+    for (let i = 2; i < 50; i++) if (!taken.has(`${label} ${i}`)) return `${label} ${i}`;
+    return `${label} ${Date.now()}`;
+  };
+
+  if (current && spec) {
+    return (
+      <div className="rm-filters">
+        <div className="rm-filters-head">
+          <button className="rm-crumb" onClick={() => setOpen(null)}>
+            {ic.chevRight}
+            {sourceLabel} · Filters
+          </button>
+          <span className="rm-filters-title">{current.name}</span>
+        </div>
+        <div className="rm-props">
+          {spec.props.map((pr) => {
+            const raw = current.settings[pr.key];
+            if (pr.kind === "choice") {
+              return (
+                <div key={pr.key} className="rm-prop">
+                  <span className="rm-prop-label">{pr.label}</span>
+                  <div className="rm-prop-choices">
+                    {pr.choices?.map((c) => (
+                      <button
+                        key={c.value}
+                        className={`rm-srcstrip-chip${String(raw) === c.value ? " on" : ""}`}
+                        onClick={() =>
+                          run({ op: "update", name: current.name, settings: { [pr.key]: c.value } })
+                        }
+                      >
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+            const val = typeof raw === "number" ? raw : Number(raw ?? 0);
+            return (
+              <div key={pr.key} className="rm-prop">
+                <span className="rm-prop-label">{pr.label}</span>
+                <input
+                  className="rm-prop-range"
+                  type="range"
+                  min={pr.min}
+                  max={pr.max}
+                  step={pr.step}
+                  value={val}
+                  onChange={(e) =>
+                    run({
+                      op: "update",
+                      name: current.name,
+                      settings: { [pr.key]: Number(e.target.value) },
+                    })
+                  }
+                />
+                <span className="rm-prop-val">
+                  {Number.isInteger(val) ? val : val.toFixed(2)}
+                  {pr.unit ?? ""}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        {err && <div className="rm-chatsetup-err">{err}</div>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rm-filters">
+      <div className="rm-filters-head">
+        <button className="rm-crumb" onClick={onBack}>
+          {ic.chevRight}
+          Sources
+        </button>
+        <span className="rm-filters-title">{sourceLabel} · Filters</span>
+        <button className="rm-panel-plus" title="Add a filter" onClick={() => setAdding((a) => !a)}>
+          {ic.plus}
+        </button>
+      </div>
+
+      {adding && (
+        <div className="rm-rows">
+          {available.map((f) => (
+            <div
+              key={f.kind}
+              role="button"
+              tabIndex={0}
+              className="rm-row rm-addfilter"
+              onClick={() => {
+                setAdding(false);
+                run({ op: "add", kind: f.kind, name: nameFor(f.label) });
+              }}
+            >
+              <span className="rm-row-name">{f.label}</span>
+              <span className="rm-filter-hint">{f.hint}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!adding && (
+        <div className="rm-rows">
+          {chain === null && <div className="rm-rows-empty">Reading the chain…</div>}
+          {chain?.length === 0 && (
+            <div className="rm-rows-empty">
+              No filters yet.{" "}
+              {media === "audio"
+                ? "Most streamers run noise suppression, a gate, then a compressor."
+                : "Chroma key removes a green screen; colour correction fixes a dull camera."}
+            </div>
+          )}
+          {chain?.map((f, i) => (
+            <div key={f.name} className={`rm-row${f.enabled ? "" : " off"}`}>
+              <span className="rm-filter-ord">{i + 1}</span>
+              <span className="rm-row-name">{f.name}</span>
+              <button
+                className="rm-row-edit"
+                title="Move earlier in the chain"
+                disabled={i === 0}
+                onClick={() => run({ op: "reorder", name: f.name, movement: 0 })}
+              >
+                ▲
+              </button>
+              <button
+                className="rm-row-edit"
+                title="Move later in the chain"
+                disabled={i === (chain?.length ?? 1) - 1}
+                onClick={() => run({ op: "reorder", name: f.name, movement: 1 })}
+              >
+                ▼
+              </button>
+              <button
+                className={`rm-row-edit rm-row-eye${f.enabled ? "" : " off"}`}
+                title={f.enabled ? "Bypass" : "Enable"}
+                onClick={() => run({ op: "enable", name: f.name, on: !f.enabled })}
+              >
+                {ic.eye}
+              </button>
+              <button className="rm-row-edit" title="Settings" onClick={() => setOpen(f.name)}>
+                {ic.gear}
+              </button>
+              <button
+                className="rm-row-edit rm-row-remove"
+                title="Remove"
+                onClick={() => run({ op: "remove", name: f.name })}
+              >
+                {ic.x}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {err && <div className="rm-chatsetup-err">{err}</div>}
+    </div>
+  );
+}
+
+/** Mini-editors for open-list sources: enough to put the thing on the
+ * stage; refinement happens there. */
+function TextSourceForm({ onAdd }: { onAdd: (text: string) => void }) {
+  const [text, setText] = useState("");
+  return (
+    <div className="rm-srcform">
+      <div className="rm-devices-head">Text</div>
+      <input
+        autoFocus
+        placeholder="Say it big…"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && text.trim()) onAdd(text.trim());
+        }}
+      />
+      <button className="rm-srcform-add" disabled={!text.trim()} onClick={() => onAdd(text.trim())}>
+        Add to stage
+      </button>
+    </div>
+  );
+}
+
+function ColorSourceForm({ onAdd }: { onAdd: (color: string) => void }) {
+  const [color, setColor] = useState("#3ddca6");
+  return (
+    <div className="rm-srcform">
+      <div className="rm-devices-head">Color</div>
+      <div className="rm-srcform-row">
+        <input type="color" value={color} onChange={(e) => setColor(e.target.value)} />
+        <span className="rm-srcform-hex">{color}</span>
+      </div>
+      <button className="rm-srcform-add" onClick={() => onAdd(color)}>
+        Add to stage
+      </button>
+    </div>
+  );
+}
+
+function WindowSourceForm({ onAdd }: { onAdd: (id: number, title: string) => void }) {
+  const [windows, setWindows] = useState<LiveWindow[] | null>(null);
+  useEffect(() => {
+    ipc
+      .liveListWindows()
+      .then(setWindows)
+      .catch(() => setWindows([]));
+  }, []);
+  return (
+    <div className="rm-devices">
+      <div className="rm-devices-head">Window</div>
+      {windows === null && <div className="rm-devices-empty">Looking…</div>}
+      {windows?.length === 0 && (
+        <div className="rm-devices-empty">No windows found — needs the screen-recording grant.</div>
+      )}
+      {windows?.map((w) => (
+        <button key={w.id} className="rm-device" onClick={() => onAdd(w.id, w.owner)}>
+          <span className="rm-device-name">
+            {w.owner}
+            {w.title ? ` — ${w.title}` : ""}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Device picker for a source. The list comes straight from the engine, so
+ * whatever the OS exposes — built-in camera, capture card, USB mic, audio
+ * interface, second display — appears here without Producer knowing the
+ * hardware. Switching applies in place: the source keeps its position, size
+ * and place in the stack. */
+function DevicePicker({ kind, onClose }: { kind: string; onClose: () => void }) {
+  const [list, setList] = useState<DeviceOption[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [denied, setDenied] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    deviceIpc
+      .list(kind)
+      .then((d) => alive && setList(Array.isArray(d) ? d : []))
+      .catch((e) => alive && setError(String(e)));
+    // macOS gates device ENUMERATION, not just capture: without the grant
+    // the list comes back empty, which must read as "allow access", never
+    // as "you have no camera". Watch briskly so a fresh grant flips the
+    // menu to hardware while it's still open.
+    let wasDenied = false;
+    const check = () =>
+      ipc
+        .livePermissions()
+        .then((p) => {
+          if (!alive) return;
+          const status = kind === "camera" ? p.camera : kind === "mic" ? p.mic : p.screen;
+          const nowDenied = status !== "granted";
+          if (wasDenied && !nowDenied) {
+            deviceIpc
+              .list(kind)
+              .then((d) => alive && setList(Array.isArray(d) ? d : []))
+              .catch(() => {});
+          }
+          wasDenied = nowDenied;
+          setDenied(nowDenied);
+        })
+        .catch(() => {});
+    check();
+    const t = setInterval(check, 800);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [kind]);
+
+  const label = kind === "camera" ? "Camera" : kind === "mic" ? "Microphone" : "Screen recording";
+  const title = kind === "camera" ? "Camera" : kind === "mic" ? "Input device" : "Display";
+  return (
+    <div className="rm-devices">
+      <div className="rm-devices-head">{title}</div>
+      {error && <div className="rm-chatsetup-err">{error}</div>}
+      {!error && list === null && <div className="rm-devices-empty">Looking…</div>}
+      {!error && list?.length === 0 && denied && (
+        <div className="rm-devices-empty">
+          <div>{label} access isn&rsquo;t granted yet, so macOS hides the device list.</div>
+          <button
+            className="rm-device-grant"
+            onClick={() => {
+              if (kind === "screen") ipc.liveScreenCoach("open_settings").catch(() => {});
+              else ipc.liveRequestPermission(kind as "camera" | "mic").catch(() => {});
+            }}
+          >
+            {kind === "screen" ? "Open Settings" : "Allow access"}
+          </button>
+        </div>
+      )}
+      {!error && list?.length === 0 && !denied && (
+        <div className="rm-devices-empty">
+          {kind === "mic" ? "No inputs found. Plug one in and reopen." : "Nothing available."}
+        </div>
+      )}
+      {list?.map((d) => (
+        <button
+          key={d.id}
+          className="rm-device"
+          disabled={d.disabled || busy !== null}
+          onClick={async () => {
+            setBusy(d.id);
+            try {
+              await deviceIpc.set(kind, d.id);
+              onClose();
+            } catch (e) {
+              setError(String(e));
+            } finally {
+              setBusy(null);
+            }
+          }}
+        >
+          <span className="rm-device-name">{d.name}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PreviewPanel({ children }: { children?: ReactNode }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const attached = useRef(false);
 
@@ -101,30 +974,74 @@ function PreviewPanel() {
     };
   }, []);
 
-  return <div ref={ref} className="live-preview" />;
+  return (
+    <div ref={ref} className="live-preview">
+      {children}
+    </div>
+  );
+}
+
+/** The three built-in scenes as canvas-sized recipes. Deterministic z is
+ * the point: screen 0, overlay above it, camera on top — never an accident
+ * of which source happened to be created last. */
+function builtinLook(p: RoomScene, bw: number, bh: number): Record<string, SceneItemLook> {
+  const pipW = Math.round(bw * 0.28);
+  const pipH = Math.round((pipW * 9) / 16);
+  const m = Math.round(bw * 0.02);
+  const look: Record<string, SceneItemLook> = {};
+  look.screen = p.screen ? { visible: true, x: 0, y: 0, w: bw, h: bh, z: 0 } : { visible: false };
+  look.overlay = { visible: true, z: 1 };
+  look.camera = p.camera
+    ? p.screen
+      ? { visible: true, x: bw - pipW - m, y: bh - pipH - m, w: pipW, h: pipH, z: 2 }
+      : { visible: true, x: 0, y: 0, w: bw, h: bh, z: 2 }
+    : { visible: false };
+  return look;
 }
 
 /** Permission state lives with the controls, not over the canvas: a slim
  * dark banner above the pills, one line per missing grant. Screen uses the
  * First Light machinery (Settings deep-link + native drag chip). */
-function PermBanner({ sources }: { sources: LiveSources }) {
+function PermBanner({
+  sources,
+  onGranted,
+}: {
+  sources: LiveSources;
+  onGranted?: (kind: "screen" | "camera" | "mic") => void;
+}) {
   const [perms, setPerms] = useState<LivePermissions | null>(null);
+  const prevPerms = useRef<LivePermissions | null>(null);
+  const onGrantedRef = useRef(onGranted);
+  onGrantedRef.current = onGranted;
 
   useEffect(() => {
     let alive = true;
     const load = async () => {
       try {
         const p = await ipc.livePermissions();
-        if (alive) setPerms(p);
+        if (!alive) return;
+        const prev = prevPerms.current;
+        prevPerms.current = p;
+        setPerms(p);
+        if (prev) {
+          for (const k of ["screen", "camera", "mic"] as const) {
+            if (prev[k] !== "granted" && p[k] === "granted") onGrantedRef.current?.(k);
+          }
+        }
       } catch {
         /* engine absent */
       }
     };
     load();
-    const t = setInterval(load, 3000);
+    // The OS answers instantly; a slow poll here is the only reason a
+    // granted banner would linger. Check briskly, and re-check the moment
+    // the app regains focus (grants made in System Settings happen outside).
+    const t = setInterval(load, 800);
+    window.addEventListener("focus", load);
     return () => {
       alive = false;
       clearInterval(t);
+      window.removeEventListener("focus", load);
     };
   }, []);
 
@@ -139,27 +1056,41 @@ function PermBanner({ sources }: { sources: LiveSources }) {
 
   return (
     <div className="rm-perms">
-      {pending.map((r) => (
-        <div key={r.kind} className="rm-perm-row">
-          <span className="rm-perm-dot" />
-          <span className="rm-perm-text">
-            {r.label} isn&rsquo;t granted{r.kind === "screen" ? " — drag the chip in, then relaunch" : ""}
-          </span>
-          <button
-            className="rm-perm-fix"
-            onClick={() => {
-              if (r.kind === "screen") {
-                ipc.liveScreenCoach("open_settings").catch(() => {});
-                ipc.liveScreenCoach("chip_show").catch(() => {});
-              } else {
-                ipc.liveRequestPermission(r.kind).catch(() => {});
-              }
-            }}
-          >
-            {r.kind === "screen" ? "Fix in Settings" : "Allow"}
-          </button>
-        </div>
-      ))}
+      {pending.map((r) => {
+        // Once a capture permission is DENIED, macOS never prompts again —
+        // requestAccess just completes with NO and nothing appears. An
+        // "Allow" button there is a lie; Settings is the only way back.
+        const askable = r.kind !== "screen" && r.status === "not_determined";
+        return (
+          <div key={r.kind} className="rm-perm-row">
+            <span className="rm-perm-dot" />
+            <span className="rm-perm-text">
+              {r.kind === "screen"
+                ? `${r.label} isn’t granted — drag the chip in, then relaunch`
+                : askable
+                  ? `${r.label} isn’t granted`
+                  : `${r.label} was turned off — switch Producer back on in Settings`}
+            </span>
+            <button
+              className="rm-perm-fix"
+              onClick={() => {
+                if (r.kind === "screen") {
+                  ipc.liveScreenCoach("open_settings").catch(() => {});
+                  ipc.liveScreenCoach("chip_show").catch(() => {});
+                } else if (askable) {
+                  ipc.liveRequestPermission(r.kind).catch(() => {});
+                } else {
+                  ipc
+                    .liveScreenCoach(r.kind === "camera" ? "open_camera_settings" : "open_mic_settings")
+                    .catch(() => {});
+                }
+              }}
+            >
+              {r.kind === "screen" ? "Fix in Settings" : askable ? "Allow" : "Open Settings"}
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -251,8 +1182,102 @@ function OverlayPicker({ activeWindow, activeUrl }: { activeWindow: number | nul
   );
 }
 
+/** Popovers escape every scrolling/clipping ancestor by rendering into the
+ * document root and positioning against their anchor, clamped to the
+ * viewport. Any menu that lives inside a dock or panel needs this. */
+function Pop({
+  anchor,
+  align = "right",
+  className = "",
+  children,
+}: {
+  anchor: HTMLElement | null;
+  align?: "left" | "right" | "up";
+  className?: string;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [style, setStyle] = useState<React.CSSProperties>({
+    position: "fixed",
+    visibility: "hidden",
+    top: 0,
+    left: 0,
+    right: "auto",
+    bottom: "auto",
+    maxHeight: "70vh",
+  });
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !anchor) return;
+    const place = () => {
+      const a = anchor.getBoundingClientRect();
+      const r = el.getBoundingClientRect();
+      const gap = 8;
+      const pad = 10;
+      let top = align === "up" ? a.top - r.height - gap : a.bottom + gap;
+      let left =
+        align === "up"
+          ? a.left + a.width / 2 - r.width / 2
+          : align === "left"
+            ? a.left
+            : a.right - r.width;
+      // Flip up if it would fall off the bottom, then clamp both axes.
+      if (align !== "up" && top + r.height > window.innerHeight - pad) {
+        top = a.top - r.height - gap;
+      }
+      left = Math.max(pad, Math.min(left, window.innerWidth - r.width - pad));
+      top = Math.max(pad, Math.min(top, window.innerHeight - r.height - pad));
+      setStyle({ position: "fixed", top, left, right: "auto", bottom: "auto", maxHeight: "70vh" });
+    };
+    place();
+    // Content can arrive after the first measure (a device list, a fetched
+    // status), and a popover measured while it said "Looking…" would then
+    // grow straight off the bottom of the window. Re-place whenever the
+    // element's own size changes.
+    const ro = new ResizeObserver(place);
+    ro.observe(el);
+    window.addEventListener("resize", place);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", place);
+    };
+  }, [anchor, align]);
+
+  return createPortal(
+    <div ref={ref} className={`rm-pop rm-pop-portal ${className}`} style={style}>
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
 /* Icon set lifted from the Boomin Live room mocks. */
 const ic = {
+  play: (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2.5" y="4" width="19" height="16" rx="3" />
+      <path d="M10 9.2v5.6L14.8 12z" fill="currentColor" stroke="none" />
+    </svg>
+  ),
+  image: (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="16" rx="3" />
+      <circle cx="9" cy="10" r="1.6" />
+      <path d="M3.8 18.5 9.5 13l4 4 3-3 3.7 3.7" />
+    </svg>
+  ),
+  text: (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 6V4.5h14V6M12 4.5V19.5M9 19.5h6" />
+    </svg>
+  ),
+  swatch: (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none" opacity="0.5" />
+    </svg>
+  ),
   mic: (
     <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="9" y="2" width="6" height="12" rx="3" />
@@ -374,6 +1399,44 @@ const ic = {
   ),
 };
 
+/** Chat is text on the wire — "KEKW" arrives as four letters. Swap any word
+ * that names an emote for its image, so the panel reads the way the real
+ * chat does. Per-message emotes (Twitch's own) win over the channel-wide
+ * 7TV/BTTV set. */
+function ChatText({
+  text,
+  emotes,
+  channelEmotes,
+}: {
+  text: string;
+  emotes?: Record<string, string>;
+  channelEmotes: Record<string, string>;
+}) {
+  const parts = text.split(/(\s+)/);
+  return (
+    <span className="rm-chat-text">
+      {parts.map((p, i) => {
+        const url = emotes?.[p] ?? channelEmotes[p];
+        return url ? (
+          <img key={i} className="rm-emote" src={url} alt={p} title={p} loading="lazy" />
+        ) : (
+          <Fragment key={i}>{p}</Fragment>
+        );
+      })}
+    </span>
+  );
+}
+
+/** Icon per open-list source kind, for panel rows. */
+const EXTRA_ICONS: Record<string, ReactNode> = {
+  media: ic.play,
+  image: ic.image,
+  text: ic.text,
+  color: ic.swatch,
+  window: ic.screen,
+};
+
+
 const PLATFORM_TINT: Record<string, string> = {
   twitch: "#a970ff",
   kick: "#53fc18",
@@ -420,10 +1483,10 @@ function MeterStrip({
   volume,
   muted,
   disabled,
-  soon,
   onVolume,
   onMute,
   onToggle,
+  onFilters,
 }: {
   label: string;
   icon: ReactNode;
@@ -431,23 +1494,23 @@ function MeterStrip({
   volume: number;
   muted: boolean;
   disabled?: boolean;
-  soon?: boolean;
   onVolume?: (mul: number) => void;
   onMute?: () => void;
   onToggle?: () => void;
+  onFilters?: () => void;
 }) {
   const ui = Math.cbrt(Math.max(0, Math.min(1, volume)));
   const db = volume > 0.001 ? Math.round(20 * Math.log10(volume)) : -60;
-  const dead = disabled || soon;
+  const dead = disabled;
   return (
-    <div className={`rm-strip${dead ? " dead" : ""}`} title={soon ? "Desktop audio arrives soon" : undefined}>
+    <div className={`rm-strip${dead ? " dead" : ""}`}>
       <div className="rm-strip-cols">
         <div className="rm-meter">
           <div className="rm-meter-fill" style={{ height: `${Math.round((dead || muted ? 0 : level) * 100)}%` }} />
         </div>
         <Fader value={dead ? 0.35 : ui} disabled={dead} onChange={(u) => onVolume?.(u * u * u)} />
       </div>
-      <span className="rm-strip-db">{soon ? "soon" : disabled ? "off" : muted ? "muted" : `${db <= -60 ? "-∞" : db} dB`}</span>
+      <span className="rm-strip-db">{disabled ? "off" : muted ? "muted" : `${db <= -60 ? "-∞" : db} dB`}</span>
       <button className={`rm-strip-icon${muted ? " muted" : ""}`} disabled={dead} onClick={onMute} title={muted ? "Unmute" : "Mute"}>
         {icon}
       </button>
@@ -461,6 +1524,16 @@ function MeterStrip({
         </button>
       ) : (
         <span className="rm-strip-name">{label}</span>
+      )}
+      {onFilters && (
+        <button
+          className="rm-strip-fx"
+          disabled={dead}
+          title="Filters — noise suppression, gate, compressor"
+          onClick={onFilters}
+        >
+          ƒ
+        </button>
       )}
     </div>
   );
@@ -642,8 +1715,57 @@ export function LiveView({
   const [layoutEdit, setLayoutEdit] = useState(false);
   const [dragging, setDragging] = useState<PanelId | null>(null);
   const [dropHint, setDropHint] = useState<{ dock: Dock; index: number } | null>(null);
+
+  // Sources panel: pointer-drag row rearranging (stage z-order lives here).
+  const srcRowsRef = useRef<HTMLDivElement | null>(null);
+  const [srcDrag, setSrcDrag] = useState<{ key: string; over: number } | null>(null);
+  const [srcAddOpen, setSrcAddOpen] = useState(false);
+  /** Insertion index among the OTHER item rows for a pointer at clientY. */
+  const srcDropIndex = (dragKey: string, clientY: number) => {
+    const list = srcRowsRef.current;
+    if (!list) return 0;
+    const others = Array.from(list.querySelectorAll<HTMLElement>("[data-srcrow]")).filter(
+      (el) => el.dataset.srcrow !== dragKey,
+    );
+    let idx = others.length;
+    for (let i = 0; i < others.length; i++) {
+      const r = others[i].getBoundingClientRect();
+      if (clientY < r.top + r.height / 2) {
+        idx = i;
+        break;
+      }
+    }
+    return idx;
+  };
+  const commitSrcOrder = () => {
+    setSrcDrag((d) => {
+      if (d) {
+        const list = srcRowsRef.current;
+        const rendered = list
+          ? Array.from(list.querySelectorAll<HTMLElement>("[data-srcrow]")).map((el) => el.dataset.srcrow!)
+          : [];
+        const others = rendered.filter((k) => k !== d.key);
+        const order = [...others.slice(0, d.over), d.key, ...others.slice(d.over)];
+        // Rendered order is topmost-first; engine z counts from the bottom.
+        // Apply bottom-up so each set lands on a settled stack.
+        const itemId = (k: string) => (k === "alerts" ? "overlay" : k);
+        (async () => {
+          for (let i = order.length - 1; i >= 0; i--) {
+            const z = order.length - 1 - i;
+            try {
+              await ipc.liveSetTransform(itemId(order[i]), { z }, i === 0);
+            } catch {
+              /* engine not ready */
+            }
+          }
+        })();
+      }
+      return null;
+    });
+  };
   const [addMenu, setAddMenu] = useState<Dock | null>(null);
   const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null);
+  const [popAnchor, setPopAnchor] = useState<HTMLElement | null>(null);
   // The room document: dock layout, scenes, channel selection, scene state.
   const [cfg, setCfgState] = useState<RoomConfig>(() => parseConfig(room?.config));
   // Event handlers registered once must not close over a stale document.
@@ -656,6 +1778,102 @@ export function LiveView({
     else saveLayout(next.layout);
   };
   const setLayout = (l: Layout) => writeCfg({ ...cfg, layout: l });
+  const sizes: DockSizes = cfg.sizes ?? {};
+  const setSizes = (next: DockSizes) => writeCfg({ ...cfgRef.current, sizes: next });
+
+  /** Splitter drags: bottom panels trade flex weight with their neighbour;
+   * side docks take a pixel width. Live while dragging, persisted on
+   * release, so the room remembers the shape you built. */
+  const resize = useRef<{
+    kind: "bottom" | "left" | "right";
+    startX: number;
+    a?: PanelId;
+    b?: PanelId;
+    aW?: number;
+    bW?: number;
+    aPx?: number;
+    bPx?: number;
+    startPx?: number;
+  } | null>(null);
+  const [liveSizes, setLiveSizesState] = useState<DockSizes | null>(null);
+  // The pointer-up handler is created at render time, so reading state
+  // there would see the value from BEFORE the drag — the resize would
+  // revert on release. Mirror it in a ref and persist from that.
+  const liveSizesRef = useRef<DockSizes | null>(null);
+  const setLiveSizes = (v: DockSizes | null) => {
+    liveSizesRef.current = v;
+    setLiveSizesState(v);
+  };
+  const shown: DockSizes = liveSizes ?? sizes;
+
+  const beginResize = (e: React.PointerEvent, kind: "bottom" | "left" | "right", a?: PanelId, b?: PanelId) => {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    if (kind === "bottom" && a && b) {
+      const ael = document.querySelector<HTMLElement>(`[data-panel="${a}"]`);
+      const bel = document.querySelector<HTMLElement>(`[data-panel="${b}"]`);
+      resize.current = {
+        kind,
+        startX: e.clientX,
+        a,
+        b,
+        aW: sizes.weights?.[a] ?? 1,
+        bW: sizes.weights?.[b] ?? 1,
+        aPx: ael?.getBoundingClientRect().width ?? 1,
+        bPx: bel?.getBoundingClientRect().width ?? 1,
+      };
+    } else {
+      const el = document.querySelector<HTMLElement>(`[data-dock="${kind}"]`);
+      resize.current = {
+        kind,
+        startX: e.clientX,
+        startPx: el?.getBoundingClientRect().width ?? SIDE_MIN,
+      };
+    }
+    setLiveSizes(sizes);
+  };
+
+  const moveResize = (e: React.PointerEvent) => {
+    const r = resize.current;
+    if (!r || e.buttons !== 1) return;
+    const dx = e.clientX - r.startX;
+    if (r.kind === "bottom" && r.a && r.b) {
+      // Weights are proportional to measured pixels, so a drag moves the
+      // divider by exactly the distance travelled.
+      const total = (r.aPx ?? 1) + (r.bPx ?? 1);
+      const totalW = (r.aW ?? 1) + (r.bW ?? 1);
+      const aPx = Math.max(140, Math.min(total - 140, (r.aPx ?? 1) + dx));
+      const aW = (aPx / total) * totalW;
+      setLiveSizes({
+        ...sizes,
+        weights: { ...sizes.weights, [r.a]: aW, [r.b]: totalW - aW },
+      });
+    } else {
+      const raw = r.kind === "left" ? (r.startPx ?? 0) + dx : (r.startPx ?? 0) - dx;
+      const px = Math.max(SIDE_MIN, Math.min(SIDE_MAX, raw));
+      setLiveSizes({ ...sizes, [r.kind]: px });
+    }
+  };
+
+  const endResize = () => {
+    const final = liveSizesRef.current;
+    if (resize.current && final) setSizes(final);
+    resize.current = null;
+    setLiveSizes(null);
+  };
+
+  const splitter = (kind: "bottom" | "left" | "right", a?: PanelId, b?: PanelId) => (
+    <div
+      className={`rm-split rm-split-${kind === "bottom" ? "v" : "h"}`}
+      title="Drag to resize"
+      onPointerDown={(e) => beginResize(e, kind, a, b)}
+      onPointerMove={moveResize}
+      onPointerUp={endResize}
+      onPointerCancel={endResize}
+    >
+      <span className="rm-split-grab" />
+    </div>
+  );
   const scenes: RoomScene[] = cfg.scenes.length ? cfg.scenes : DEFAULT_SCENES;
   const [overlayOpen, setOverlayOpen] = useState(false);
   const videoApplied = useRef(false);
@@ -663,13 +1881,272 @@ export function LiveView({
   const demoVideoSet = useRef(false);
   const demo = demoOn();
   const [chatFilter, setChatFilter] = useState<"all" | DemoPlatform>("all");
-  const [chatMsgs, setChatMsgs] = useState<DemoChatMsg[]>(() => (demoOn() ? DEMO_CHAT.slice(0, 9) : []));
+  const [chatMsgs, setChatMsgs] = useState<ChatLine[]>(() => (demoOn() ? DEMO_CHAT.slice(0, 9) : []));
   const [chatDraft, setChatDraft] = useState("");
   const chatEnd = useRef<HTMLDivElement | null>(null);
+  const chatList = useRef<HTMLDivElement | null>(null);
+  /** Reading back through chat pauses the feed — the stream keeps arriving,
+   * the view just stops moving under you. */
+  const [chatPinned, setChatPinned] = useState(true);
+  const chatPinnedRef = useRef(true);
+  const [chatBehind, setChatBehind] = useState(0);
+  const [chatConns, setChatConns] = useState<ChatConnection[]>([]);
+  const [chatSetupOpen, setChatSetupOpen] = useState(false);
+  /** Channel-wide emote vocabulary (7TV + BTTV), keyed by name. */
+  const [channelEmotes, setChannelEmotes] = useState<Record<string, string>>({});
+  /** Which source's device picker is open ("camera" | "mic" | "screen"). */
+  const [deviceMenu, setDeviceMenu] = useState<string | null>(null);
+  /** Experimental: source settings as a horizontal strip above the docked
+   * panels — which row's settings are showing. */
+  /** R3: recording is independent of streaming — either, both, or neither. */
+  /** R13: Producer as a webcam in Zoom/Meet/Discord. Two separate things —
+   * the extension being installed (once, with the user's approval) and the
+   * output actually running. */
+  const [vcamState, setVcamState] = useState<VcamStatus | null>(null);
+  const [vcamOn, setVcamOn] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    const poll = () =>
+      vcamIpc
+        .status()
+        .then((v) => alive && setVcamState(v))
+        .catch(() => {});
+    poll();
+    const t = setInterval(poll, 2000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
+
+  const toggleVcam = async () => {
+    // Not installed yet → the first click is the install request, not a
+    // toggle. macOS then asks the user to approve it in Settings.
+    if (!vcamState?.installed && vcamState?.state !== "active") {
+      await vcamIpc.activate().catch(() => {});
+      // Poll briefly: activation answers on a delegate, and when macOS
+      // refuses it the reason is the only thing worth showing.
+      for (let i = 0; i < 12; i++) {
+        await new Promise((r) => setTimeout(r, 500));
+        const st = await vcamIpc.status().catch(() => null);
+        if (!st) continue;
+        setVcamState(st);
+        if (st.state === "failed") {
+          setBanner(st.error ?? "macOS refused the camera extension.");
+          window.setTimeout(() => setBanner(null), 12000);
+          return;
+        }
+        if (st.state === "needs_approval") {
+          setBanner("Approve Producer's camera extension in System Settings › General › Login Items & Extensions.");
+          window.setTimeout(() => setBanner(null), 12000);
+          return;
+        }
+        if (st.state === "active" || st.installed) {
+          setBanner("Virtual camera installed. Click again to start it.");
+          window.setTimeout(() => setBanner(null), 6000);
+          return;
+        }
+      }
+      setBanner("Still waiting on macOS for the camera extension.");
+      window.setTimeout(() => setBanner(null), 6000);
+      return;
+    }
+    try {
+      const on = await vcamIpc.output(!vcamOn);
+      setVcamOn(on);
+    } catch (e) {
+      setBanner(String(e));
+      window.setTimeout(() => setBanner(null), 5000);
+    }
+  };
+
+  const [recPath, setRecPath] = useState<string | null>(null);
+  const [recSince, setRecSince] = useState<number>(0);
+  const [recTick, setRecTick] = useState(0);
+  const [lastRec, setLastRec] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!recPath) return;
+    const t = setInterval(() => setRecTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [recPath]);
+
+  const toggleRecord = async () => {
+    if (recPath) {
+      const done = await recIpc.stop().catch((e) => {
+        setBanner(String(e));
+        return null;
+      });
+      setRecPath(null);
+      if (done) {
+        setLastRec(done);
+        setBanner(`Saved ${done.split("/").pop()}`);
+        window.setTimeout(() => setBanner(null), 4000);
+      }
+      return;
+    }
+    // The engine owns no clock, so the file name is stamped here.
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}.${pad(d.getMinutes())}.${pad(d.getSeconds())}`;
+    try {
+      const path = await recIpc.start(stamp);
+      setRecPath(path);
+      setRecSince(Date.now());
+      setRecTick(0);
+    } catch (e) {
+      setBanner(String(e));
+      window.setTimeout(() => setBanner(null), 5000);
+    }
+  };
+
+  // recTick only exists to re-render once a second while recording.
+  void recTick;
+  const recElapsed = recPath ? Math.floor((Date.now() - recSince) / 1000) : 0;
+
+  const [srcSettings, setSrcSettings] = useState<string | null>(null);
+  /** Which scene's settings strip is open — same grammar as sources. */
+  const [sceneSettings, setSceneSettings] = useState<string | null>(null);
+  /** Which source's filter chain the Sources panel is drilled into. */
+  const [filterFor, setFilterFor] = useState<{ id: string; label: string; media: "video" | "audio" } | null>(null);
+  /** Mini-editor popover for adding an open-list source. */
+  const [srcSubPop, setSrcSubPop] = useState<"text" | "color" | "window" | null>(null);
+
+  /** Add an open-list item and record it in the room document so it
+   * respawns when the room reopens. */
+  const addExtraSource = async (label: string, spec: ExtraSpec) => {
+    const id = `${spec.kind}-${Math.random().toString(36).slice(2, 8)}`;
+    try {
+      await extraSources.add(id, label, spec);
+      const entry: RoomExtra = { id, label, spec };
+      const c = cfgRef.current;
+      writeCfg({ ...c, sources: { ...c.sources, extras: [...(c.sources.extras ?? []), entry] } });
+    } catch (e) {
+      setBanner(String(e));
+    }
+  };
+
+  /** Re-point a window item at a different window: replaced in place under
+   * the same id, and the room document follows so it respawns correctly. */
+  const replaceWindowSource = async (itemId: string, windowId: number, label: string) => {
+    try {
+      await extraSources.remove(itemId);
+      await extraSources.add(itemId, label, { kind: "window", window: windowId });
+      const c = cfgRef.current;
+      writeCfg({
+        ...c,
+        sources: {
+          ...c.sources,
+          extras: (c.sources.extras ?? []).map((e) =>
+            e.id === itemId ? { ...e, label, spec: { kind: "window" as const, window: windowId } } : e,
+          ),
+        },
+      });
+    } catch (e) {
+      setBanner(String(e));
+    }
+  };
+
+  const removeExtraSource = (id: string) => {
+    extraSources.remove(id).catch(() => {});
+    const c = cfgRef.current;
+    writeCfg({
+      ...c,
+      sources: { ...c.sources, extras: (c.sources.extras ?? []).filter((e) => e.id !== id) },
+    });
+  };
+  const [chatNames, setChatNames] = useState<ChatNames>(loadChatNames);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const chatLive = chatConns.some((c) => c.connected);
+
+  // Never trust the shape coming back across IPC: a stub, an older host, or
+  // a failed call must not be able to blank the room.
+  const refreshChat = useCallback(
+    () =>
+      chatIpc
+        .status()
+        .then((c) => setChatConns(Array.isArray(c) ? c : []))
+        .catch(() => setChatConns([])),
+    [],
+  );
+
+  // Real chat: host-side readers emit here. Demo chatter yields the moment a
+  // real socket joins, so fake lines never mix with real ones.
+  useEffect(() => {
+    let stop: (() => void) | null = null;
+    listenChat((ev) => {
+      if (ev.type === "message") {
+        setChatMsgs((m) => [
+          // Trimming from the top while someone is reading back yanks the
+          // content out from under them; hold the backlog until they return.
+          ...(chatPinnedRef.current ? m.slice(-199) : m.slice(-1999)),
+          {
+            platform: ev.msg.platform,
+            user: ev.msg.user,
+            text: ev.msg.text,
+            color: ev.msg.color,
+            emotes: ev.msg.emotes,
+          },
+        ]);
+      } else if (ev.type === "emote_set") {
+        setChannelEmotes((prev) => ({ ...prev, ...ev.emotes }));
+      } else if (ev.type === "connected") {
+        setChatError(null);
+        refreshChat();
+      } else if (ev.type === "disconnected") {
+        if (ev.reason) setChatError(ev.reason);
+        refreshChat();
+      }
+    })
+      .then((un) => {
+        stop = un;
+      })
+      .catch(() => {});
+    refreshChat();
+    return () => stop?.();
+  }, [refreshChat]);
+
+  const connectChat = useCallback(async (names: ChatNames) => {
+    setChatError(null);
+    saveChatNames(names);
+    setChatNames(names);
+    for (const platform of ["twitch", "kick", "youtube"] as const) {
+      const name = names[platform].trim();
+      if (!name) {
+        chatIpc.disconnect(platform).catch(() => {});
+        continue;
+      }
+      try {
+        if (platform === "kick") {
+          let id = loadKickChatroom(name);
+          if (!id) {
+            id = await chatIpc.resolveKickChatroom(name);
+            saveKickChatroom(name, id);
+          }
+          await chatIpc.connect("kick", name, id);
+        } else {
+          // Twitch takes a login name; YouTube takes a handle or channel id.
+          await chatIpc.connect(platform, name);
+        }
+      } catch (e) {
+        setChatError(String(e));
+      }
+    }
+    refreshChat();
+  }, [refreshChat]);
+
+  // Rejoin saved channels when the room opens.
+  const chatAutoConnected = useRef(false);
+  useEffect(() => {
+    if (chatAutoConnected.current) return;
+    chatAutoConnected.current = true;
+    if (chatNames.twitch || chatNames.kick) connectChat(chatNames);
+  }, [chatNames, connectChat]);
 
   // Demo liveness: the chat keeps talking.
   useEffect(() => {
-    if (!demo) return;
+    if (!demo || chatLive) return;
     let i = 0;
     const t = setInterval(
       () => {
@@ -678,11 +2155,49 @@ export function LiveView({
       3800 + Math.random() * 2400,
     );
     return () => clearInterval(t);
-  }, [demo]);
+  }, [demo, chatLive]);
 
   useEffect(() => {
-    chatEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    if (chatPinnedRef.current) {
+      // Instant, never smooth: an in-flight smooth animation keeps firing
+      // scroll events and hauls the reader back down the moment they try to
+      // scroll up.
+      const el = chatList.current;
+      if (el) el.scrollTop = el.scrollHeight;
+      setChatBehind(0);
+    } else {
+      setChatBehind((n) => n + 1);
+    }
   }, [chatMsgs]);
+
+  /** Within a few px of the bottom counts as pinned — the browser's own
+   * smooth scrolling never lands exactly on zero. */
+  const onChatScroll = () => {
+    const el = chatList.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+    if (atBottom !== chatPinnedRef.current) {
+      chatPinnedRef.current = atBottom;
+      setChatPinned(atBottom);
+    }
+    if (atBottom) setChatBehind(0);
+  };
+
+  /** Any upward wheel gesture means "I'm reading" — unpin at once. */
+  const onChatWheel = (e: React.WheelEvent) => {
+    if (e.deltaY < 0 && chatPinnedRef.current) {
+      chatPinnedRef.current = false;
+      setChatPinned(false);
+    }
+  };
+
+  const jumpToLatest = () => {
+    chatPinnedRef.current = true;
+    setChatPinned(true);
+    setChatBehind(0);
+    const el = chatList.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  };
   const unlisten = useRef<(() => void) | null>(null);
   const roomApplied = useRef(false);
   const roomId = room?.id ?? null;
@@ -707,6 +2222,24 @@ export function LiveView({
         }
         setSources((s) => ({ ...s, ...saved }));
       }
+      // Item-list half of the document: clear whatever open-list items the
+      // engine is holding from the previous room, then respawn this room's.
+      const held = (snap.sources?.items ?? []).filter(
+        (i) => !["screen", "camera", "overlay"].includes(i.id),
+      );
+      for (const i of held) {
+        await extraSources.remove(i.id).catch(() => {});
+      }
+      for (const e of saved.extras ?? []) {
+        await extraSources.add(e.id, e.label, e.spec).catch(() => {});
+      }
+      const mount = parseConfig(room.config).active_scene;
+      if (mount) setPendingScene(mount);
+      // Warm the stinger the room already uses, so the first cut is instant.
+      const cfgNow = parseConfig(room.config);
+      const firstStinger =
+        cfgNow.transition?.stinger ?? cfgNow.scenes.find((x) => x.transition?.stinger)?.transition?.stinger;
+      if (firstStinger) stingerIpc.prepare(firstStinger).catch(() => {});
     }
     // Stored video settings (global, OBS-style) re-apply when idle.
     if (!videoApplied.current && snap.engine_ready && snap.session_state === "idle") {
@@ -837,20 +2370,307 @@ export function LiveView({
   const overlayActive = sources.overlay_window != null || !!sources.overlay_url;
   const enabledDests = destinations.filter((d) => d.enabled);
 
-  const activeScene = scenes.find((p) => p.screen === sources.screen && p.camera === sources.camera)?.id;
+  const [activeSceneId, setActiveSceneId] = useState<string | null>(null);
+  /** Scene to mount into once the engine is ready (set when the room's
+   * document is applied on open). */
+  const [pendingScene, setPendingScene] = useState<string | null>(null);
+  // Legacy fallback so a room saved before looks existed still highlights.
+  const activeScene =
+    activeSceneId ?? scenes.find((p) => p.screen === sources.screen && p.camera === sources.camera)?.id;
+
+  /** Apply a scene as a LOOK: sources are never created or destroyed on a
+   * switch (no flicker, no permission re-prompts, no z scramble) — only
+   * visibility, geometry and stacking change, through the same transform
+   * pipeline the stage editor uses. Missing well-known sources the scene
+   * needs are created once; nothing is ever torn down. */
+  const applyScene = async (p: RoomScene) => {
+    if (!engineOk) return;
+    try {
+      const bh = snapshot?.video_height || 720;
+      const bw = (bh * 16) / 9;
+      const look = p.look && Object.keys(p.look).length ? p.look : builtinLook(p, bw, bh);
+      const needScreen = look.screen?.visible ?? false;
+      const needCamera = look.camera?.visible ?? false;
+      if ((needScreen && !sources.screen) || (needCamera && !sources.camera)) {
+        await ipc.liveSetSources(sources.screen || needScreen, sources.camera || needCamera, sources.mic);
+      }
+      // Only address items that actually exist (or were just created) — a
+      // transform on a missing id is an engine error, not a no-op.
+      const exists = new Set([
+        ...(sources.items ?? []).map((i) => i.id),
+        ...(sources.screen || needScreen ? ["screen"] : []),
+        ...(sources.camera || needCamera ? ["camera"] : []),
+        ...(overlayActive ? ["overlay"] : []),
+      ]);
+      const entries = Object.entries(look).filter(([id]) => exists.has(id));
+      // Hidden first (plain visibility flips), then visible bottom-to-top so
+      // z-order lands exactly as the scene says.
+      for (const [id, l] of entries.filter(([, l]) => !l.visible)) {
+        void l;
+        ipc.liveSetTransform(id, { visible: false }, true).catch(() => {});
+      }
+      const visible = entries
+        .filter(([, l]) => l.visible)
+        .sort((a, b) => (a[1].z ?? 0) - (b[1].z ?? 0));
+
+      const tr = p.transition ?? cfgRef.current.transition ?? { kind: "cut" as const };
+
+      // Stinger: the clip covers the stage, the scene changes UNDERNEATH it
+      // at the halfway point, and the clip plays out to reveal the result.
+      // The cut is never seen — that's the whole trick.
+      if (tr.kind === "stinger" && tr.stinger) {
+        const applyLook = () => {
+          const vis = entries
+            .filter(([, l]) => l.visible)
+            .sort((a, b) => (a[1].z ?? 0) - (b[1].z ?? 0));
+          for (const [id, l] of entries.filter(([, l]) => !l.visible)) {
+            void l;
+            ipc.liveSetTransform(id, { visible: false }, true).catch(() => {});
+          }
+          vis.forEach(([id, l], i) => {
+            const patch: LiveTransformPatch = { visible: true, z: i };
+            if (l.x != null && l.y != null && l.w != null && l.h != null) {
+              patch.x = l.x;
+              patch.y = l.y;
+              patch.w = l.w;
+              patch.h = l.h;
+            }
+            ipc.liveSetTransform(id, patch, true).catch(() => {});
+          });
+        };
+        setActiveSceneId(p.id);
+        writeCfg({ ...cfgRef.current, active_scene: p.id });
+        try {
+          const reported = await stingerIpc.play(tr.stinger);
+          const total = reported > 0 ? reported : (tr.ms ?? 1200);
+          window.setTimeout(applyLook, Math.round(total / 2));
+          window.setTimeout(() => stingerIpc.stop().catch(() => {}), total + 120);
+        } catch (e) {
+          // A missing or unreadable clip must never cost the switch itself —
+          // and must never be left covering the stage.
+          setBanner(String(e));
+          window.setTimeout(() => setBanner(null), 2600);
+          stingerIpc.stop().catch(() => {});
+          applyLook();
+        }
+        return;
+      }
+
+      // `move` glides items from where they are into where the scene wants
+      // them — the same transform pipeline, just walked over time. Only
+      // possible because scenes are looks over one graph.
+      const animate = (tr.kind === "move" || tr.kind === "fade") && !!sources.items?.length;
+      const dur = Math.max(80, Math.min(2000, tr.ms ?? 320));
+
+      if (!animate) {
+        visible.forEach(([id, l], i) => {
+          const patch: LiveTransformPatch = { visible: true, z: i };
+          if (l.x != null && l.y != null && l.w != null && l.h != null) {
+            patch.x = l.x;
+            patch.y = l.y;
+            patch.w = l.w;
+            patch.h = l.h;
+          }
+          ipc.liveSetTransform(id, patch, true).catch(() => {});
+        });
+      } else {
+        const from = new Map((sources.items ?? []).map((it) => [it.id, it]));
+
+        if (tr.kind === "fade") {
+          // Items that stay simply stay — only what enters or leaves
+          // dissolves. Anything that MOVES is `move`'s job, and the two can
+          // be combined by picking one per scene.
+          const leaving = entries.filter(([, l]) => !l.visible).map(([id]) => id);
+          const arriving = visible
+            .map(([id]) => id)
+            .filter((id) => !(from.get(id)?.visible ?? false));
+          // Arriving items start transparent, then become visible so the
+          // first frame drawn is already at zero rather than a hard pop.
+          for (const id of arriving) {
+            setOpacity(id, 0).catch(() => {});
+            ipc.liveSetTransform(id, { visible: true }, false).catch(() => {});
+          }
+          visible.forEach(([id, l], i) => {
+            const patch: LiveTransformPatch = { visible: true, z: i };
+            if (l.x != null && l.y != null && l.w != null && l.h != null) {
+              patch.x = l.x;
+              patch.y = l.y;
+              patch.w = l.w;
+              patch.h = l.h;
+            }
+            ipc.liveSetTransform(id, patch, false).catch(() => {});
+          });
+          const t0f = performance.now();
+          const stepFade = () => {
+            const k = Math.min(1, (performance.now() - t0f) / dur);
+            for (const id of arriving) setOpacity(id, k).catch(() => {});
+            for (const id of leaving) setOpacity(id, 1 - k).catch(() => {});
+            if (k < 1) {
+              requestAnimationFrame(stepFade);
+              return;
+            }
+            // Settle: hide what left and restore its opacity, so the next
+            // scene that shows it doesn't inherit a transparent source.
+            for (const id of leaving) {
+              ipc.liveSetTransform(id, { visible: false }, true).catch(() => {});
+              setOpacity(id, 1).catch(() => {});
+            }
+            visible.forEach(([id], i) => {
+              setOpacity(id, 1).catch(() => {});
+              ipc.liveSetTransform(id, { visible: true, z: i }, true).catch(() => {});
+            });
+          };
+          requestAnimationFrame(stepFade);
+          setActiveSceneId(p.id);
+          writeCfg({ ...cfgRef.current, active_scene: p.id });
+          return;
+        }
+
+        // Make everything visible and correctly stacked up front, then move.
+        visible.forEach(([id], i) => {
+          ipc.liveSetTransform(id, { visible: true, z: i }, false).catch(() => {});
+        });
+        const t0 = performance.now();
+        const step = () => {
+          const k = Math.min(1, (performance.now() - t0) / dur);
+          // ease-out cubic: quick off the mark, settles gently
+          const e = 1 - Math.pow(1 - k, 3);
+          const done = k >= 1;
+          visible.forEach(([id, l], i) => {
+            const a = from.get(id);
+            if (!a || l.x == null || l.y == null || l.w == null || l.h == null) {
+              if (done) ipc.liveSetTransform(id, { visible: true, z: i }, true).catch(() => {});
+              return;
+            }
+            ipc
+              .liveSetTransform(
+                id,
+                {
+                  visible: true,
+                  z: i,
+                  x: a.x + (l.x - a.x) * e,
+                  y: a.y + (l.y - a.y) * e,
+                  w: a.w + (l.w - a.w) * e,
+                  h: a.h + (l.h - a.h) * e,
+                },
+                done,
+              )
+              .catch(() => {});
+          });
+          if (!done) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      }
+      setActiveSceneId(p.id);
+      const c = cfgRef.current;
+      writeCfg({ ...c, active_scene: p.id });
+    } catch (e) {
+      setBanner(String(e));
+    }
+  };
 
   const addScene = () => {
     const n = scenes.length + 1;
+    // Save the CURRENT look, extras included — the scene is a snapshot of
+    // the whole stage, not just which slots are on.
+    const look: Record<string, SceneItemLook> = Object.fromEntries(
+      (sources.items ?? []).map((i) => [
+        i.id,
+        { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z },
+      ]),
+    );
     const next: RoomScene = {
       id: `s${Date.now().toString(36)}`,
       name: `Scene ${n}`,
       screen: sources.screen,
       camera: sources.camera,
+      look,
     };
     writeCfg({ ...cfg, scenes: [...scenes, next] });
+    setActiveSceneId(next.id);
   };
 
   const removeScene = (id: string) => writeCfg({ ...cfg, scenes: scenes.filter((s) => s.id !== id) });
+
+  /** Re-record a scene from what's on the stage right now. Without this, a
+   * built-in look can never be corrected — you'd fix the stage, switch away,
+   * and the old recipe would undo you every time. */
+  const updateScene = (id: string) => {
+    const look: Record<string, SceneItemLook> = Object.fromEntries(
+      (sources.items ?? []).map((i) => [
+        i.id,
+        { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z },
+      ]),
+    );
+    const base = cfgRef.current;
+    writeCfg({
+      ...base,
+      scenes: (base.scenes.length ? base.scenes : DEFAULT_SCENES).map((x) =>
+        x.id === id ? { ...x, look, screen: sources.screen, camera: sources.camera } : x,
+      ),
+    });
+    setBanner("Scene updated to the current stage.");
+    window.setTimeout(() => setBanner(null), 2200);
+  };
+
+  /** What a scene will actually do: its own override, else the room default,
+   * else a plain cut. */
+  const transitionFor = (sc: RoomScene | null): SceneTransition =>
+    sc?.transition ?? cfg.transition ?? { kind: "cut" };
+
+  /** Write a transition: a scene id overrides that scene, null sets the
+   * room default every scene inherits. */
+  const setTransition = (sceneId: string | null, t: SceneTransition | undefined) => {
+    const c = cfgRef.current;
+    if (sceneId === null) {
+      writeCfg({ ...c, transition: t });
+    } else {
+      writeCfg({
+        ...c,
+        scenes: (c.scenes.length ? c.scenes : DEFAULT_SCENES).map((x) =>
+          x.id === sceneId ? { ...x, transition: t } : x,
+        ),
+      });
+    }
+  };
+
+  const [renamingScene, setRenamingScene] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const commitRename = () => {
+    const id = renamingScene;
+    setRenamingScene(null);
+    const name = renameDraft.trim();
+    if (!id || !name) return;
+    writeCfg({ ...cfg, scenes: scenes.map((x) => (x.id === id ? { ...x, name } : x)) });
+  };
+
+  // R1: ⌘1–⌘9 cut to a scene. The rows have advertised these since the
+  // first build with nothing listening. Ignored while typing so chat and
+  // rename fields keep their own keys.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.metaKey || e.altKey || e.ctrlKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      const n = Number(e.key);
+      if (!Number.isInteger(n) || n < 1 || n > 9) return;
+      const sc = scenes[n - 1];
+      if (!sc) return;
+      e.preventDefault();
+      applyScene(sc);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  // Mount the room into its saved scene once the engine can take it.
+  useEffect(() => {
+    if (!pendingScene || !engineOk) return;
+    const sc = scenes.find((x) => x.id === pendingScene);
+    setPendingScene(null);
+    if (sc) applyScene(sc);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingScene, engineOk]);
 
   const destChip =
     enabledDests.length > 0 ? enabledDests.map((d) => d.label).join(" + ") : "Add channels";
@@ -886,9 +2706,14 @@ export function LiveView({
     setMicPopOpen(false);
     setOverlayOpen(false);
     setChatOpen(false);
+    setSrcAddOpen(false);
+    setDeviceMenu(null);
+    setSrcSubPop(null);
+    setSceneSettings(null);
   };
   const anyPop =
-    roomsOpen || destsOpen || qualityOpen || micPopOpen || overlayOpen || chatOpen || panelMenu !== null || layoutMenu || addMenu !== null || adding || !!editing;
+    roomsOpen || destsOpen || qualityOpen || micPopOpen || overlayOpen || chatOpen || srcAddOpen || deviceMenu !== null || srcSubPop !== null ||
+    (sceneSettings !== null && dockOf(layout, "scenes") !== "bottom") || panelMenu !== null || layoutMenu || addMenu !== null || adding || !!editing;
 
   const micStrip = (
     <MeterStrip
@@ -901,6 +2726,14 @@ export function LiveView({
       onVolume={setVolume}
       onMute={toggleMute}
       onToggle={() => setSrc({ mic: !sources.mic })}
+      onFilters={() => {
+        // The mic's chain lives in the Sources panel navigator; make sure
+        // that panel is actually visible before sending them there.
+        if (dockOf(layout, "sources") === "hidden") {
+          setLayout(movePanel(layout, "sources", dockOf(layout, "mixer")));
+        }
+        setFilterFor({ id: "mic", label: "Microphone", media: "audio" });
+      }}
     />
   );
 
@@ -917,12 +2750,48 @@ export function LiveView({
                 role="button"
                 tabIndex={0}
                 className={`rm-scene-row${activeScene === p.id ? " active" : ""}${activeScene === p.id && streaming ? " onair" : ""}`}
-                onClick={() => engineOk && setSrc({ screen: p.screen, camera: p.camera })}
-                onKeyDown={(e) => e.key === "Enter" && engineOk && setSrc({ screen: p.screen, camera: p.camera })}
+                onClick={() => applyScene(p)}
+                onKeyDown={(e) => e.key === "Enter" && applyScene(p)}
               >
-                <span className="rm-scene-chev">{ic.chevRight}</span>
                 <span className="rm-scene-icon">{ic.screen}</span>
-                <span className="rm-scene-name">{p.name}</span>
+                {/* What this scene will do on air, dimmed so the name still
+                 * leads. Only shown when it isn't a plain cut. */}
+                {transitionFor(p).kind !== "cut" && (
+                  <span className="rm-scene-tr">
+                    {transitionFor(p).kind === "move"
+                      ? "Move"
+                      : transitionFor(p).kind === "fade"
+                        ? "Fade"
+                        : "Stinger"}
+                  </span>
+                )}
+                {renamingScene === p.id ? (
+                  <input
+                    className="rm-scene-rename"
+                    autoFocus
+                    value={renameDraft}
+                    onChange={(e) => setRenameDraft(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === "Enter") commitRename();
+                      if (e.key === "Escape") setRenamingScene(null);
+                    }}
+                    onBlur={commitRename}
+                  />
+                ) : (
+                  <span
+                    className="rm-scene-name"
+                    title="Double-click to rename"
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      setRenamingScene(p.id);
+                      setRenameDraft(p.name);
+                    }}
+                  >
+                    {p.name}
+                  </span>
+                )}
                 {activeScene === p.id ? (
                   <>
                     <span className="rm-scene-live">{streaming ? "Live" : "On"}</span>
@@ -930,6 +2799,17 @@ export function LiveView({
                   </>
                 ) : (
                   <>
+                    <button
+                      className={`rm-scene-gear${sceneSettings === p.id ? " on" : ""}`}
+                      title="Scene settings"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPopAnchor(e.currentTarget);
+                        setSceneSettings((k) => (k === p.id ? null : p.id));
+                      }}
+                    >
+                      {ic.gear}
+                    </button>
                     <span className="rm-scene-key">{i < 9 ? `⌘${i + 1}` : ""}</span>
                     {!DEFAULT_SCENES.some((d) => d.id === p.id) && (
                       <button
@@ -949,40 +2829,6 @@ export function LiveView({
             ))}
           </div>
         );
-      case "alerts":
-        return (
-          <div className="rm-alerts">
-            {demo ? (
-              <>
-                {DEMO_ALERTS.map((a, i) => (
-                  <div key={i} className="rm-alert">
-                    <span className="rm-alert-dot" style={{ background: PLATFORM_TINT[a.platform] }} />
-                    <div className="rm-alert-body">
-                      <div className="rm-alert-line">
-                        <strong>{a.user}</strong>
-                        {a.detail && <span className="rm-alert-chip">{a.detail}</span>}
-                      </div>
-                      <div className="rm-alert-kind">
-                        {a.kind === "follow" ? "followed" : a.kind === "sub" ? "subscribed" : a.kind === "tip" ? "tipped" : "raided"}
-                        {a.message && <span className="rm-alert-msg"> — “{a.message}”</span>}
-                      </div>
-                    </div>
-                    <span className="rm-alert-ago">{a.ago}</span>
-                  </div>
-                ))}
-                <div className="rm-alert rm-alert-sys">
-                  <span className="rm-alert-dot sys" />
-                  <div className="rm-alert-body">
-                    <div className="rm-alert-kind">Stream started</div>
-                  </div>
-                  <span className="rm-alert-ago">32m</span>
-                </div>
-              </>
-            ) : (
-              <div className="rm-alerts-empty">Follows, subs, and tips land here when you're live.</div>
-            )}
-          </div>
-        );
       case "chat":
         return (
           <>
@@ -997,24 +2843,35 @@ export function LiveView({
                 </button>
               ))}
             </div>
-            <div className="rm-chat-list">
+            <div className="rm-chat-list" ref={chatList} onScroll={onChatScroll} onWheel={onChatWheel}>
               {chatMsgs
                 .filter((m) => chatFilter === "all" || m.platform === chatFilter)
                 .map((m, i) => (
                   <div key={i} className="rm-chat-msg">
-                    <span className="rm-chat-user" style={{ color: PLATFORM_TINT[m.platform] }}>
+                    <span
+                      className="rm-chat-user"
+                      style={{ color: m.color || PLATFORM_TINT[m.platform as DemoPlatform] }}
+                    >
                       {m.user}
                     </span>
-                    <span className="rm-chat-text">{m.text}</span>
+                    <ChatText text={m.text} emotes={m.emotes} channelEmotes={channelEmotes} />
                   </div>
                 ))}
               {chatMsgs.length === 0 && (
                 <div className="rm-alerts-empty">
-                  Chat flows in here live. Pop out the platform chat to talk back until native send lands.
+                  {chatLive
+                    ? "Connected — waiting for the first message."
+                    : "Connect your Twitch or Kick channel to read chat here."}
                 </div>
               )}
               <div ref={chatEnd} />
             </div>
+            {!chatPinned && (
+              <button className="rm-chat-jump" onClick={jumpToLatest}>
+                {ic.chev}
+                {chatBehind > 0 ? `${chatBehind} new message${chatBehind === 1 ? "" : "s"}` : "Jump to latest"}
+              </button>
+            )}
             <form
               className="rm-chat-input"
               onSubmit={(e) => {
@@ -1034,56 +2891,164 @@ export function LiveView({
             </form>
           </>
         );
-      case "sources":
+      case "sources": {
+        if (filterFor) {
+          return (
+            <FilterEditor
+              sourceId={filterFor.id}
+              sourceLabel={filterFor.label}
+              media={filterFor.media}
+              onBack={() => setFilterFor(null)}
+            />
+          );
+        }
+        const liveItems = sources.items ?? [];
+        const itemIdFor = (key: string) => (key === "alerts" ? "overlay" : key);
+        const itemFor = (key: string) => liveItems.find((i) => i.id === itemIdFor(key));
+        const activeRows = (
+          [
+            sources.screen && { key: "screen", label: "Screen", icon: ic.screen, device: "screen", remove: () => setSrc({ screen: false }) },
+            sources.camera && { key: "camera", label: "Camera", icon: ic.cam, device: "camera", remove: () => setSrc({ camera: false }) },
+            overlayActive && { key: "alerts", label: "Overlay", icon: ic.link, remove: () => ipc.liveSetOverlay(null, false).catch(() => {}) },
+            // Audio is a source, like OBS: the picker lives here, the fader
+            // lives in the mixer.
+            sources.mic && { key: "mic", label: "Microphone", icon: ic.mic, device: "mic", audio: true, remove: () => setSrc({ mic: false }) },
+            // Open-list items, straight from engine truth.
+            ...liveItems
+              .filter((i) => !["screen", "camera", "overlay"].includes(i.id))
+              .map((i) => ({
+                key: i.id,
+                label: i.label || i.kind,
+                icon: EXTRA_ICONS[i.kind] ?? ic.link,
+                // Window items are re-selectable: same strip, list of windows.
+                device: i.kind === "window" ? `window:${i.id}` : undefined,
+                remove: () => removeExtraSource(i.id),
+              })),
+          ].filter(Boolean) as {
+            key: string;
+            label: string;
+            icon: ReactNode;
+            device?: string;
+            audio?: boolean;
+            remove: () => void;
+          }[]
+        ).sort((a, b) => {
+          const ia = itemFor(a.key);
+          const ib = itemFor(b.key);
+          if (ia && ib) return ib.z - ia.z; // topmost first
+          if (ia) return -1;
+          if (ib) return 1;
+          return 0;
+        });
         return (
           <>
-              <div className="rm-rows">
-                {(
-                  [
-                    { key: "screen", label: "Screen", icon: ic.screen, on: sources.screen, act: () => setSrc({ screen: !sources.screen }) },
-                    { key: "camera", label: "Camera", icon: ic.cam, on: sources.camera, act: () => setSrc({ camera: !sources.camera }) },
-                    { key: "alerts", label: "Alerts & overlays", icon: ic.link, on: overlayActive, act: () => setOverlayOpen(true) },
-                    { key: "guest", label: "Guest", icon: ic.invite, on: false, soon: true, act: () => {} },
-                  ] as const
-                ).map((t) => {
-                  const soon = "soon" in t && t.soon;
+              <div className="rm-rows" ref={srcRowsRef}>
+                {activeRows.length === 0 && (
+                  <div className="rm-rows-empty">Nothing on the stage — add a source with +</div>
+                )}
+                {activeRows.map((t) => {
+                  const item = itemFor(t.key);
+                  const hidden = item ? !item.visible : false;
+                  const others = srcDrag ? activeRows.filter((r) => itemFor(r.key) && r.key !== srcDrag.key).map((r) => r.key) : [];
+                  const oi = others.indexOf(t.key);
+                  const dropCls = srcDrag && oi >= 0
+                    ? oi === srcDrag.over
+                      ? " drop-before"
+                      : srcDrag.over === others.length && oi === others.length - 1
+                        ? " drop-after"
+                        : ""
+                    : "";
                   return (
-                    <div key={t.key} className={`rm-row${t.on ? "" : " off"}${soon ? " soon" : ""}`}>
+                    <div
+                      key={t.key}
+                      data-srcrow={item ? t.key : undefined}
+                      className={`rm-row${hidden ? " off" : ""}${srcDrag?.key === t.key ? " dragging" : ""}${dropCls}`}
+                    >
+                      {item && (
+                        <span
+                          className="rm-row-grip"
+                          title="Drag to rearrange"
+                          onPointerDown={(e) => {
+                            e.preventDefault();
+                            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                            setSrcDrag({ key: t.key, over: srcDropIndex(t.key, e.clientY) });
+                          }}
+                          onPointerMove={(e) => {
+                            if (e.buttons !== 1) return;
+                            setSrcDrag((d) => (d ? { ...d, over: srcDropIndex(d.key, e.clientY) } : d));
+                          }}
+                          onPointerUp={() => commitSrcOrder()}
+                          onPointerCancel={() => setSrcDrag(null)}
+                        >
+                          {ic.grip}
+                        </span>
+                      )}
                       <span className="rm-row-icon">{t.icon}</span>
                       <span className="rm-row-name">{t.label}</span>
-                      {soon ? (
-                        <span className="rm-soon">SOON</span>
-                      ) : (
-                        <>
-                          {t.key === "alerts" && (
-                            <button className="rm-row-edit" onClick={() => setOverlayOpen(true)} title="Configure">
-                              {ic.gear}
-                            </button>
-                          )}
-                          <button
-                            className={`rm-switch${t.on ? " on" : ""}`}
-                            disabled={!engineOk}
-                            onClick={() => (t.key === "alerts" ? setOverlayOpen(true) : t.act())}
-                          >
-                            <span className="rm-switch-knob" />
-                          </button>
-                        </>
+                      <button
+                        className="rm-row-edit rm-row-fx"
+                        title="Filters"
+                        onClick={() =>
+                          setFilterFor({
+                            id: t.key === "alerts" ? "overlay" : t.key,
+                            label: t.label,
+                            media: t.key === "mic" ? "audio" : "video",
+                          })
+                        }
+                      >
+                        ƒ
+                      </button>
+                      {(t.key === "alerts" || t.device) && (
+                        <button
+                          className={`rm-row-edit${srcSettings === t.key ? " on" : ""}`}
+                          title="Source settings"
+                          onClick={(e) => {
+                            // Docked in the sheet → horizontal settings strip
+                            // above the panels. Docked on a sidebar → the
+                            // strip has nowhere to live, so pop vertically
+                            // right here.
+                            if (dockOf(layout, "sources") === "bottom") {
+                              setSrcSettings((k) => (k === t.key ? null : t.key));
+                            } else if (t.key === "alerts") {
+                              setOverlayOpen(true);
+                            } else if (t.device) {
+                              setPopAnchor(e.currentTarget);
+                              setDeviceMenu((d) => (d === t.device ? null : t.device!));
+                            }
+                          }}
+                        >
+                          {ic.gear}
+                        </button>
                       )}
+                      {item && (
+                        <button
+                          className={`rm-row-edit rm-row-eye${hidden ? " off" : ""}`}
+                          title={hidden ? "Show on stage" : "Hide from stage"}
+                          onClick={() => ipc.liveSetTransform(item.id, { visible: hidden }, true).catch(() => {})}
+                        >
+                          {ic.eye}
+                        </button>
+                      )}
+                      <button className="rm-row-edit rm-row-remove" title="Remove from this room" onClick={t.remove}>
+                        {ic.x}
+                      </button>
                     </div>
                   );
                 })}
               </div>
-              <button className="rm-addrow" disabled title="More source types arrive with the scene editor">
-                {ic.plus} Add source <span className="rm-soon">SOON</span>
-              </button>
           </>
         );
+      }
       case "mixer":
         return (
               <div className="rm-strips">
-                {micStrip}
-                <MeterStrip label="Desktop" icon={ic.cast} level={0} volume={0.5} muted soon />
-                <MeterStrip label="Music" icon={ic.chat} level={0} volume={0.4} muted soon />
+                {sources.mic ? (
+                  micStrip
+                ) : (
+                  <div className="rm-rows-empty">
+                    No audio sources. Add a microphone from Sources.
+                  </div>
+                )}
               </div>
         );
       case "channels":
@@ -1136,6 +3101,26 @@ export function LiveView({
               <span className="rm-stat-num">{vh}p{vf === 60 ? "60" : ""}</span>
               <span className="rm-stat-label">output</span>
             </div>
+            <div className={`rm-stat-cell${recPath ? " rec" : ""}`}>
+              <span className="rm-stat-num">
+                {recPath
+                  ? `${Math.floor(recElapsed / 60)}:${String(recElapsed % 60).padStart(2, "0")}`
+                  : "—"}
+              </span>
+              <span className="rm-stat-label">
+                {recPath ? "recording" : lastRec ? "last take saved" : "not recording"}
+              </span>
+            </div>
+            {lastRec && !recPath && (
+              <button
+                className="rm-stat-cell as-btn"
+                onClick={() => recIpc.reveal(lastRec).catch(() => {})}
+                title={lastRec}
+              >
+                <span className="rm-stat-num">↗</span>
+                <span className="rm-stat-label">show in Finder</span>
+              </button>
+            )}
           </div>
         );
       }
@@ -1145,31 +3130,148 @@ export function LiveView({
   const panelExtra = (id: PanelId) => {
     if (id === "scenes")
       return (
-        <button className="rm-panel-plus" title="Save the current look as a scene" onClick={addScene}>
-          {ic.plus}
-        </button>
+        <>
+          {/* A bare gear says nothing. Show the room's transition by name so
+           * the control explains itself and doubles as status. */}
+          <button
+            className={`rm-scene-default${sceneSettings === "__room__" ? " on" : ""}`}
+            title="Transition used by every scene that has no override"
+            onClick={(e) => {
+              setPopAnchor(e.currentTarget);
+              setSceneSettings((k) => (k === "__room__" ? null : "__room__"));
+            }}
+          >
+            {(cfg.transition?.kind ?? "cut") === "cut"
+              ? "None"
+              : (cfg.transition?.kind ?? "cut") === "move"
+                ? `Move ${cfg.transition?.ms ?? 320}ms`
+                : (cfg.transition?.kind ?? "cut") === "fade"
+                  ? `Fade ${cfg.transition?.ms ?? 320}ms`
+                : `Stinger ${cfg.transition?.ms ?? 1200}ms`}
+            {ic.chev}
+          </button>
+          <button className="rm-panel-plus" title="Save the current look as a scene" onClick={addScene}>
+            {ic.plus}
+          </button>
+        </>
       );
     if (id === "chat")
       return (
-        <div className="rm-pop-anchor">
-          <button className="rm-panel-plus" title="Pop out platform chat" onClick={() => setChatOpen((o) => !o)}>
+        <>
+          <button
+            className={`rm-panel-plus rm-chat-plug${chatLive ? " live" : ""}`}
+            title={chatLive ? "Chat channels" : "Connect your chat"}
+            onClick={(e) => {
+              setPopAnchor(e.currentTarget);
+              setChatSetupOpen((o) => !o);
+            }}
+          >
+            {ic.link}
+          </button>
+          {chatSetupOpen && (
+            <Pop anchor={popAnchor} align="right" className="rm-pop-chat">
+              <ChatSetup
+                names={chatNames}
+                conns={chatConns}
+                error={chatError}
+                onApply={(n) => {
+                  setChatSetupOpen(false);
+                  connectChat(n);
+                }}
+              />
+            </Pop>
+          )}
+          <button
+            className="rm-panel-plus"
+            title="Pop out platform chat"
+            onClick={(e) => {
+              setPopAnchor(e.currentTarget);
+              setChatOpen((o) => !o);
+            }}
+          >
             {ic.ext}
           </button>
           {chatOpen && (
-            <div className="rm-pop rm-pop-right">
+            <Pop anchor={popAnchor} align="right">
               <ChatPopover onClose={() => setChatOpen(false)} />
-            </div>
+            </Pop>
           )}
-        </div>
+        </>
       );
-    if (id === "sources")
+    if (id === "sources") {
+      const addable = [
+        !sources.screen && { key: "screen", label: "Screen", icon: ic.screen, act: () => setSrc({ screen: true }) },
+        !sources.camera && { key: "camera", label: "Camera", icon: ic.cam, act: () => setSrc({ camera: true }) },
+        !overlayActive && { key: "alerts", label: "Overlay", icon: ic.link, act: () => setOverlayOpen(true) },
+        !sources.mic && { key: "mic", label: "Microphone", icon: ic.mic, act: () => setSrc({ mic: true }) },
+        {
+          key: "media",
+          label: "Media file",
+          icon: ic.play,
+          act: async () => {
+            const path = await extraSources.pickFile("media").catch(() => null);
+            if (path) {
+              const base = path.split("/").pop() ?? "Media";
+              addExtraSource(base, { kind: "media", path, looping: true });
+            }
+          },
+        },
+        {
+          key: "image",
+          label: "Image",
+          icon: ic.image,
+          act: async () => {
+            const path = await extraSources.pickFile("image").catch(() => null);
+            if (path) {
+              const base = path.split("/").pop() ?? "Image";
+              addExtraSource(base, { kind: "image", path });
+            }
+          },
+        },
+        { key: "text", label: "Text", icon: ic.text, act: () => setSrcSubPop("text") },
+        { key: "color", label: "Color", icon: ic.swatch, act: () => setSrcSubPop("color") },
+        { key: "window", label: "Window capture", icon: ic.screen, act: () => setSrcSubPop("window") },
+      ].filter(Boolean) as { key: string; label: string; icon: ReactNode; act: () => void }[];
       return (
-        <span className="rm-card-sub">
-          {[sources.screen && "screen", sources.camera && "camera", overlayActive && "alerts"]
-            .filter(Boolean)
-            .join(" · ") || "nothing in the scene"}
-        </span>
+        <>
+          <button
+            className={`rm-panel-plus rm-src-add${srcAddOpen ? " open" : ""}`}
+            title="Add a source"
+            onClick={(e) => {
+              setPopAnchor(e.currentTarget);
+              setSrcAddOpen((o) => !o);
+            }}
+          >
+            {ic.plus}
+          </button>
+          {srcAddOpen && (
+            <Pop anchor={popAnchor} align="right">
+              {addable.length === 0 ? (
+                <div className="rm-pop-empty">Everything is on the stage</div>
+              ) : (
+                addable.map((t) => (
+                  // div, not button: WKWebView can't flex-lay-out button
+                  // children (they stack), same trap as the scene tiles.
+                  <div
+                    key={t.key}
+                    role="button"
+                    tabIndex={0}
+                    className="rm-device rm-addsource"
+                    onClick={() => {
+                      setSrcAddOpen(false);
+                      t.act();
+                    }}
+                  >
+                    <span className="rm-row-icon">{t.icon}</span>
+                    <span className="rm-device-name">{t.label}</span>
+                  </div>
+                ))
+              )}
+            </Pop>
+          )}
+        </>
       );
+    }
     if (id === "mixer")
       return <span className="rm-card-sub">{sources.mic ? (sources.mic_muted ? "mic muted" : "mic open") : "mic off"}</span>;
     return null;
@@ -1250,12 +3352,19 @@ export function LiveView({
         <button
           className="rm-add-panel"
           title="Add a panel here"
-          onClick={() => setAddMenu((m) => (m === dock ? null : dock))}
+          onClick={(e) => {
+            setPopAnchor(e.currentTarget);
+            setAddMenu((m) => (m === dock ? null : dock));
+          }}
         >
           {ic.plus}
         </button>
         {addMenu === dock && (
-          <div className={`rm-pop rm-pop-add${dock === "bottom" ? " rm-pop-up" : " rm-pop-right"}`}>
+          <Pop
+            anchor={popAnchor}
+            align={dock === "bottom" ? "up" : dock === "left" ? "left" : "right"}
+            className="rm-pop-add"
+          >
             <div className="rm-pop-title">ADD PANEL</div>
             {available.map((id) => (
               <button
@@ -1273,7 +3382,7 @@ export function LiveView({
               </button>
             ))}
             {available.length === 0 && <div className="rm-rows-empty">Everything is already here.</div>}
-          </div>
+          </Pop>
         )}
       </div>
     );
@@ -1285,6 +3394,9 @@ export function LiveView({
       <>
         {ids.map((id, i) => (
           <Fragment key={id}>
+            {/* Splitters only between neighbours in the bottom row; side
+             * docks resize against the stage, not against each other. */}
+            {dock === "bottom" && i > 0 && !layoutEdit && splitter("bottom", ids[i - 1], id)}
             {slot(dock, i)}
             {renderPanel(id)}
           </Fragment>
@@ -1295,8 +3407,21 @@ export function LiveView({
     );
   };
 
-  const renderPanel = (id: PanelId) => (
-    <section key={id} data-panel={id} className={`rm-panel rm-panel-${id}${dragging === id ? " dragging" : ""}`}>
+  const renderPanel = (id: PanelId) => {
+    // Belt to normalize's braces: an unknown id must never render, because
+    // one missing entry in the inventory would otherwise blank the room.
+    if (!PANEL_META[id]) return null;
+    return (
+    <section
+      key={id}
+      data-panel={id}
+      className={`rm-panel rm-panel-${id}${dragging === id ? " dragging" : ""}`}
+      style={
+        dockOf(layout, id) === "bottom" && shown.weights?.[id]
+          ? { flexGrow: shown.weights[id], flexBasis: 0 }
+          : undefined
+      }
+    >
       <div className="rm-panel-head">
         <span
           className="rm-grip"
@@ -1322,7 +3447,8 @@ export function LiveView({
       </div>
       <div className="rm-panel-body">{panelBody(id)}</div>
     </section>
-  );
+    );
+  };
 
   return (
     <div className={`room${layoutEdit ? " layout-edit" : ""}`}>
@@ -1334,12 +3460,18 @@ export function LiveView({
             PRODUCER
           </span>
           <div className="rm-pop-anchor">
-            <button className="rm-room-chip" onClick={() => setRoomsOpen((o) => !o)}>
+            <button
+              className="rm-room-chip"
+              onClick={(e) => {
+                setPopAnchor(e.currentTarget);
+                setRoomsOpen((o) => !o);
+              }}
+            >
               {room?.name ?? "Live"}
               {ic.chev}
             </button>
             {roomsOpen && (
-              <div className="rm-pop rm-pop-left">
+              <Pop anchor={popAnchor} align="left">
                 {rooms
                   .filter((r) => r.id !== room?.id)
                   .map((r) => (
@@ -1357,7 +3489,7 @@ export function LiveView({
                 <button className="rm-pop-row dim" onClick={() => onLeave?.()}>
                   ← Control room
                 </button>
-              </div>
+              </Pop>
             )}
           </div>
         </div>
@@ -1373,13 +3505,20 @@ export function LiveView({
           )}
 
           <div className="rm-pop-anchor">
-            <button className="rm-chip" onClick={() => setDestsOpen((o) => !o)} title="Channels this room goes out to">
+            <button
+              className="rm-chip"
+              title="Channels this room goes out to"
+              onClick={(e) => {
+                setPopAnchor(e.currentTarget);
+                setDestsOpen((o) => !o);
+              }}
+            >
               {ic.cast}
               <span>{destChip}</span>
               {ic.chev}
             </button>
             {destsOpen && (
-              <div className="rm-pop rm-pop-right rm-pop-dests">
+              <Pop anchor={popAnchor} align="right" className="rm-pop-dests">
                 <div className="rm-pop-title">CHANNELS</div>
                 {destinations.map((d) => {
                   const st = statuses.get(d.id);
@@ -1416,17 +3555,24 @@ export function LiveView({
                     + Add channel
                   </button>
                 )}
-              </div>
+              </Pop>
             )}
           </div>
 
           <div className="rm-pop-anchor">
-            <button className="rm-chip" onClick={() => setQualityOpen((o) => !o)} title="Output video settings">
+            <button
+              className="rm-chip"
+              title="Output video settings"
+              onClick={(e) => {
+                setPopAnchor(e.currentTarget);
+                setQualityOpen((o) => !o);
+              }}
+            >
               {vh}p · {vf}
               {ic.chev}
             </button>
             {qualityOpen && (
-              <div className="rm-pop rm-pop-right rm-pop-quality">
+              <Pop anchor={popAnchor} align="right" className="rm-pop-quality">
                 <div className="rm-pop-title">VIDEO {streaming && <span className="rm-card-sub">locked while live</span>}</div>
                 <div className="rm-ctrl-row">
                   <span className="rm-ctrl-label">Resolution</span>
@@ -1452,9 +3598,46 @@ export function LiveView({
                   <span className="rm-ctrl-label">Bitrate</span>
                   <span className="rm-ctrl-value" title="Producer negotiates the best rate every channel accepts">Auto</span>
                 </div>
-              </div>
+              </Pop>
             )}
           </div>
+
+          {/* Virtual camera is an OUTPUT — peer to Record and Go Live, not a
+            * number. It lived in Stream Health and read as a read-only stat;
+            * the founder looked straight at it and didn't see a control. */}
+          <button
+            className={`rm-rec rm-vcam${vcamOn ? " on" : ""}`}
+            onClick={toggleVcam}
+            disabled={!engineOk}
+            title={
+              vcamState?.installed
+                ? "Appear as a webcam in Zoom, Meet and Discord"
+                : "Install Producer's virtual camera (one approval in System Settings)"
+            }
+          >
+            {ic.cam}
+            {vcamState?.state === "needs_approval"
+              ? "Approve"
+              : vcamOn
+                ? "Cam on"
+                : vcamState?.installed
+                  ? "Virtual cam"
+                  : "Install cam"}
+          </button>
+
+          {/* Record sits beside Go Live because it is a peer of it, not a
+            * setting: you can record without ever going live. */}
+          <button
+            className={`rm-rec${recPath ? " on" : ""}`}
+            onClick={toggleRecord}
+            disabled={!engineOk}
+            title={recPath ? `Recording to ${recPath.split("/").pop()}` : "Record locally"}
+          >
+            <span className="rm-rec-dot" />
+            {recPath
+              ? `${Math.floor(recElapsed / 60)}:${String(recElapsed % 60).padStart(2, "0")}`
+              : "Record"}
+          </button>
 
           {streaming ? (
             <button className="rm-golive stop" onClick={() => ipc.liveStop()} disabled={state === "stopping"}>
@@ -1501,12 +3684,18 @@ export function LiveView({
             Editing layout — drag a panel by its grip, or use + to add one
           </span>
           <div className="rm-pop-anchor">
-            <button className="rm-editbar-btn" onClick={() => setLayoutMenu((o) => !o)}>
+            <button
+              className="rm-editbar-btn"
+              onClick={(e) => {
+                setPopAnchor(e.currentTarget);
+                setLayoutMenu((o) => !o);
+              }}
+            >
               Presets
               {ic.chev}
             </button>
             {layoutMenu && (
-              <div className="rm-pop rm-pop-layout">
+              <Pop anchor={popAnchor} align="right" className="rm-pop-layout">
                 {LAYOUT_PRESETS.map((p) => (
                   <button
                     key={p.key}
@@ -1525,7 +3714,7 @@ export function LiveView({
                     <span className="rm-preset-note">{p.note}</span>
                   </button>
                 ))}
-              </div>
+              </Pop>
             )}
           </div>
           <button className="rm-editbar-done" onClick={() => setLayoutEdit(false)}>
@@ -1535,11 +3724,31 @@ export function LiveView({
       )}
 
       <div className="rm-body">
-        <aside data-dock="left" className={`rm-dock rm-dock-side${layout.left.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "left" ? " hot" : ""}`}>{renderDock("left")}</aside>
+        <aside
+          data-dock="left"
+          className={`rm-dock rm-dock-side${layout.left.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "left" ? " hot" : ""}`}
+          style={layout.left.length && shown.left ? { width: shown.left, flex: "0 0 auto" } : undefined}
+        >
+          {renderDock("left")}
+        </aside>
+        {layout.left.length > 0 && !layoutEdit && splitter("left")}
 
         <div className="rm-center">
           <div className="rm-canvas">
-            {engineOk && <PreviewPanel />}
+            {engineOk && (
+              <PreviewPanel>
+                <StageEditor
+                  items={sources.items ?? []}
+                  baseW={(vh * 16) / 9}
+                  baseH={vh}
+                  disabled={!engineOk}
+                  onOrder={(id, dir) => {
+                    const it = (sources.items ?? []).find((i) => i.id === id);
+                    if (it) ipc.liveSetTransform(id, { z: it.z + dir }, true).catch(() => {});
+                  }}
+                />
+              </PreviewPanel>
+            )}
             {!engineOk && snapshot && (
               <div className="rm-canvas-msg">
                 {snapshot.disabled ? "Live engine not bundled in this build." : "Warming up the engine…"}
@@ -1549,11 +3758,143 @@ export function LiveView({
 
           <div className="rm-float">{banner && <div className="rm-banner">{banner}</div>}</div>
 
-          <PermBanner sources={sources} />
+          <PermBanner
+            sources={sources}
+            onGranted={(kind) => {
+              // A source created while the grant was missing is bound to
+              // nothing — macOS does not retrofit access onto a live
+              // capture session. Bounce just that source so the grant
+              // takes effect without a relaunch or a second Allow.
+              const b = sources;
+              const bounce = async (screen: boolean, camera: boolean, mic: boolean, on: () => Promise<unknown>) => {
+                try {
+                  await ipc.liveSetSources(screen, camera, mic);
+                  await on();
+                } catch {
+                  /* engine reports via banner */
+                }
+              };
+              if (kind === "mic" && b.mic)
+                bounce(b.screen, b.camera, false, () => ipc.liveSetSources(b.screen, b.camera, true));
+              if (kind === "camera" && b.camera)
+                bounce(b.screen, false, b.mic, () => ipc.liveSetSources(b.screen, true, b.mic));
+              if (kind === "screen" && b.screen)
+                bounce(false, b.camera, b.mic, () => ipc.liveSetSources(true, b.camera, b.mic));
+            }}
+          />
         </div>
 
-        <aside data-dock="right" className={`rm-dock rm-dock-side${layout.right.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "right" ? " hot" : ""}`}>{renderDock("right")}</aside>
+        {layout.right.length > 0 && !layoutEdit && splitter("right")}
+        <aside
+          data-dock="right"
+          className={`rm-dock rm-dock-side${layout.right.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "right" ? " hot" : ""}`}
+          style={layout.right.length && shown.right ? { width: shown.right, flex: "0 0 auto" } : undefined}
+        >
+          {renderDock("right")}
+        </aside>
       </div>
+
+      {sceneSettings && dockOf(layout, "scenes") !== "bottom" && (
+        <Pop anchor={popAnchor} align="right" className="rm-pop-devices">
+          <div className="rm-devices">
+            <div className="rm-devices-head">Transition</div>
+            {sceneSettings !== "__room__" && (
+              <button
+                className="rm-device"
+                onClick={() => {
+                  updateScene(sceneSettings);
+                  setSceneSettings(null);
+                }}
+              >
+                <span className="rm-device-name">Save current look</span>
+              </button>
+            )}
+            {sceneSettings !== "__room__" &&
+              scenes.find((x) => x.id === sceneSettings)?.transition && (
+                <button
+                  className="rm-device"
+                  onClick={() => {
+                    setTransition(sceneSettings, undefined);
+                    setSceneSettings(null);
+                  }}
+                >
+                  <span className="rm-device-name">Use room default</span>
+                </button>
+              )}
+            {(["cut", "move", "fade", "stinger"] as const).map((k) => (
+              <button
+                key={k}
+                className="rm-device"
+                onClick={() => {
+                  const sc = sceneSettings === "__room__" ? null : scenes.find((x) => x.id === sceneSettings) ?? null;
+                  const eff = sceneSettings === "__room__" ? cfg.transition ?? { kind: "cut" as const } : transitionFor(sc);
+                  const target = sceneSettings === "__room__" ? null : sceneSettings;
+                  if (k === "stinger") {
+                    extraSources.pickFile("media").then((path) => {
+                      if (!path) return;
+                      stingerIpc.prepare(path).catch(() => {});
+                      setTransition(target, { ...eff, kind: "stinger", stinger: path });
+                    });
+                  } else {
+                    setTransition(target, { ...eff, kind: k, stinger: undefined });
+                  }
+                  setSceneSettings(null);
+                }}
+              >
+                <span className="rm-device-name">
+                  {k === "cut" ? "None (cut)" : k === "move" ? "Move" : k === "fade" ? "Fade" : "Stinger…"}
+                </span>
+              </button>
+            ))}
+          </div>
+        </Pop>
+      )}
+
+      {srcSubPop && (
+        <Pop anchor={popAnchor} align="right" className="rm-pop-devices">
+          {srcSubPop === "text" && (
+            <TextSourceForm
+              onAdd={(text) => {
+                setSrcSubPop(null);
+                addExtraSource("Text", { kind: "text", text });
+              }}
+            />
+          )}
+          {srcSubPop === "color" && (
+            <ColorSourceForm
+              onAdd={(color) => {
+                setSrcSubPop(null);
+                addExtraSource("Color", { kind: "color", color });
+              }}
+            />
+          )}
+          {srcSubPop === "window" && (
+            <WindowSourceForm
+              onAdd={(id, title) => {
+                setSrcSubPop(null);
+                addExtraSource(title, { kind: "window", window: id });
+              }}
+            />
+          )}
+        </Pop>
+      )}
+
+      {deviceMenu && (
+        <Pop anchor={popAnchor} align="right" className="rm-pop-devices">
+          {deviceMenu.startsWith("window:") ? (
+            <div className="rm-devices">
+              <div className="rm-devices-head">Window</div>
+              <WindowPickerList
+                itemId={deviceMenu.slice(7)}
+                onPick={replaceWindowSource}
+                onPicked={() => setDeviceMenu(null)}
+              />
+            </div>
+          ) : (
+            <DevicePicker kind={deviceMenu} onClose={() => setDeviceMenu(null)} />
+          )}
+        </Pop>
+      )}
 
       {dragging && ghost && (
         <div className="rm-ghost" style={{ left: ghost.x, top: ghost.y }}>
@@ -1567,7 +3908,7 @@ export function LiveView({
           <div className="rm-pop-backdrop" onClick={() => setOverlayOpen(false)} />
           <div className="rm-editor rm-editor-overlay">
             <div className="rm-editor-head">
-              <span className="rm-group-label">ALERTS &amp; OVERLAYS</span>
+              <span className="rm-group-label">OVERLAY</span>
               <button className="rm-panel-plus" onClick={() => setOverlayOpen(false)} title="Close">
                 {ic.x}
               </button>
@@ -1601,7 +3942,7 @@ export function LiveView({
       )}
 
       {(layout.bottom.length > 0 || dragging) && (
-        <div className={`rm-sheet${sheetOpen ? "" : " collapsed"}`}>
+        <div className={`rm-sheet${sheetOpen ? "" : " collapsed"}${sheetOpen && srcSettings && dockOf(layout, "sources") === "bottom" ? " has-strip" : ""}`}>
           <div
             className="rm-sheet-head"
             role="button"
@@ -1617,6 +3958,30 @@ export function LiveView({
               <span className="rm-live-dot" />
               You&rsquo;re on air — scene cuts and source changes hit the broadcast instantly.
             </div>
+          )}
+          {sheetOpen && sceneSettings && dockOf(layout, "scenes") === "bottom" && (
+            <SceneSettingsStrip
+              scene={sceneSettings === "__room__" ? null : scenes.find((x) => x.id === sceneSettings) ?? null}
+              effective={
+                sceneSettings === "__room__"
+                  ? cfg.transition ?? { kind: "cut" }
+                  : transitionFor(scenes.find((x) => x.id === sceneSettings) ?? null)
+              }
+              onSet={(t) => setTransition(sceneSettings === "__room__" ? null : sceneSettings, t)}
+              onUpdate={() => {
+                if (sceneSettings !== "__room__") updateScene(sceneSettings);
+              }}
+              onClose={() => setSceneSettings(null)}
+            />
+          )}
+          {sheetOpen && srcSettings && dockOf(layout, "sources") === "bottom" && (
+            <SourceSettingsStrip
+              rowKey={srcSettings}
+              sources={sources}
+              onClose={() => setSrcSettings(null)}
+              openOverlay={() => setOverlayOpen(true)}
+              onPickWindow={replaceWindowSource}
+            />
           )}
           {(sheetOpen || dragging) && (
             <div data-dock="bottom" className={`rm-dock rm-dock-bottom${layoutEdit ? " armed" : ""}${dropHint?.dock === "bottom" ? " hot" : ""}`}>{renderDock("bottom")}</div>
