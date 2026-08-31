@@ -162,6 +162,28 @@
   .sub b { color: var(--text); font-weight: 500; }
   .cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; justify-content: center; }
   .cta-row .pill { padding: 13px 26px; font-size: 15px; }
+  /* inside a BorderGlow the pill goes dark charcoal like the app's
+     ProducerGlowButton — a white fill drowns the coloured glow */
+  .border-glow-card .pill.solid {
+    color: #fff; font-weight: 700;
+    border: 1px solid transparent;
+    /* the composer's resting gradient border — BorderGlow's travelling
+       light rides on top of this, it doesn't replace it */
+    background:
+      linear-gradient(#1c1c1f, #1c1c1f) padding-box,
+      linear-gradient(110deg,
+        rgba(34, 211, 238, 0.55), rgba(168, 85, 247, 0.5),
+        rgba(244, 114, 182, 0.42), rgba(251, 191, 36, 0.34)) border-box;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 18px 48px rgba(0, 0, 0, 0.45);
+  }
+  .border-glow-card .pill.solid:hover {
+    background:
+      linear-gradient(#232327, #232327) padding-box,
+      linear-gradient(110deg,
+        rgba(34, 211, 238, 0.8), rgba(168, 85, 247, 0.72),
+        rgba(244, 114, 182, 0.6), rgba(251, 191, 36, 0.5)) border-box;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 22px 56px rgba(0, 0, 0, 0.55);
+  }
 
   /* ── React Bits BorderGlow, ported to vanilla ──────────────────────────
      Same component the Boomin app wraps its Producer CTA in
@@ -314,7 +336,7 @@
 
   /* A — control room: whole app under the hero → ZOOM IN and slide left */
   #panelA { width: min(1120px, 92vw); }
-  .scene[data-stage="0"] #panelA { opacity: 1; transform: translateX(-50%) translateY(60vh) scale(1); }
+  .scene[data-stage="0"] #panelA { opacity: 1; transform: translateX(-50%) translateY(var(--panel0, 60vh)) scale(1); }
   .scene[data-stage="1"] #panelA { opacity: 1; transform: translateX(calc(-50% - 74vw)) translateY(9vh) scale(1.75); }
   .scene[data-stage="2"] #panelA,
   .scene[data-stage="3"] #panelA { opacity: 0; transform: translateX(calc(-50% - 130vw)) translateY(9vh) scale(1.9); filter: blur(7px); }
@@ -338,7 +360,7 @@
     #say3 { top: 12vh; left: 24px; width: auto; transform: none; }
     .scene[data-stage="3"] #say3 { transform: none; }
     #panelA, #panelB { width: 94vw; }
-    .scene[data-stage="0"] #panelA { transform: translateX(-50%) translateY(64vh) scale(1); }
+    .scene[data-stage="0"] #panelA { transform: translateX(-50%) translateY(var(--panel0, 64vh)) scale(1); }
     .scene[data-stage="1"] #panelA { transform: translateX(-50%) translateY(40vh) scale(0.92); }
     .scene[data-stage="2"] #panelA, .scene[data-stage="3"] #panelA { transform: translateX(calc(-50% - 100vw)) translateY(40vh) scale(0.9); }
     #panelB { transform: translateX(calc(-50% + 100vw)) translateY(40vh) scale(0.9); }
@@ -826,6 +848,21 @@
     img.addEventListener("load", function () { box.classList.add("has-real"); });
     if (img.complete && img.naturalWidth > 0) box.classList.add("has-real");
   });
+
+  // ── Park the hero panel just below the hero, whatever the screen height.
+  //    A fixed vh guess collides with the CTA on short laptop displays. ──
+  (function () {
+    var scene = document.getElementById("scene");
+    var hero = document.querySelector(".hero");
+    if (!scene || !hero) return;
+    function place() {
+      var top = hero.getBoundingClientRect().top - scene.getBoundingClientRect().top;
+      scene.style.setProperty("--panel0", Math.round(top + hero.offsetHeight + 34) + "px");
+    }
+    place();
+    window.addEventListener("resize", place);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);
+  })();
 
   // ── Pinned scene: stage follows scroll. ──
   (function () {
