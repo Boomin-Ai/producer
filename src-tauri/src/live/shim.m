@@ -6,6 +6,7 @@
 
 #import <AppKit/AppKit.h>
 #import <AVFoundation/AVFoundation.h>
+#import <CoreMediaIO/CMIOHardware.h>
 #import <SystemExtensions/SystemExtensions.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <WebKit/WebKit.h>
@@ -381,18 +382,46 @@ int producer_vcam_state(char *buf, int len) {
 // Is the virtual camera already present as a capture device? That is the
 // only proof that matters — the extension can be installed from a previous
 // run with no request outstanding.
+// 🔴 AVFoundation HIDES an app's own camera extension from it (deliberate:
+// Apple preventing self-capture feedback). Checking through AVCaptureDevice
+// therefore reports "not installed" forever inside Producer while every
+// other app sees the camera fine. The CMIO C API does not filter — it is
+// how OBS's plugin detects its own extension, and how we must.
 int producer_vcam_installed(void) {
-    AVCaptureDeviceDiscoverySession *s = [AVCaptureDeviceDiscoverySession
-        discoverySessionWithDeviceTypes:@[ AVCaptureDeviceTypeExternal ]
-                              mediaType:AVMediaTypeVideo
-                               position:AVCaptureDevicePositionUnspecified];
-    for (AVCaptureDevice *d in s.devices) {
-        if ([d.localizedName containsString:@"Virtual Camera"] ||
-            [d.localizedName containsString:@"OBS"]) {
-            return 1;
+    CMIOObjectPropertyAddress addr = {
+        kCMIOHardwarePropertyDevices,
+        kCMIOObjectPropertyScopeGlobal,
+        kCMIOObjectPropertyElementMain,
+    };
+    UInt32 size = 0;
+    if (CMIOObjectGetPropertyDataSize(kCMIOObjectSystemObject, &addr, 0, NULL, &size) != 0 || size == 0)
+        return 0;
+    UInt32 count = size / sizeof(CMIOObjectID);
+    CMIOObjectID *devices = malloc(size);
+    if (!devices) return 0;
+    UInt32 used = 0;
+    int found = 0;
+    if (CMIOObjectGetPropertyData(kCMIOObjectSystemObject, &addr, 0, NULL, size, &used, devices) == 0) {
+        CMIOObjectPropertyAddress uidAddr = {
+            kCMIODevicePropertyDeviceUID,
+            kCMIOObjectPropertyScopeGlobal,
+            kCMIOObjectPropertyElementMain,
+        };
+        for (UInt32 i = 0; i < count && !found; i++) {
+            CFStringRef uid = NULL;
+            UInt32 got = 0;
+            if (CMIOObjectGetPropertyData(devices[i], &uidAddr, 0, NULL, sizeof(uid), &got, &uid) == 0 && uid) {
+                // The extension's device UUID — the identity both halves share.
+                if (CFStringCompare(uid, CFSTR("7626645E-4425-469E-9D8B-97E0FA59AC75"), 0) ==
+                    kCFCompareEqualTo) {
+                    found = 1;
+                }
+                CFRelease(uid);
+            }
         }
     }
-    return 0;
+    free(devices);
+    return found;
 }
 
 // Camera / microphone privacy panes. Needed because once a user denies a
@@ -418,7 +447,25 @@ void producer_open_mic_settings(void) {
 // Default camera uniqueID (mac-avcapture requires an explicit device id, the
 // same way SCK required an explicit display UUID). Returns 1 on success.
 int producer_default_camera_id(char *buf, int buflen) {
+    // Never default to our OWN virtual camera: the stage would capture its own
+    // output (an infinite feedback loop) and hold the CMIO device open so the
+    // virtual-camera output could no longer start. macOS will happily hand it
+    // back as the "default" device once a real camera is denied or absent.
     AVCaptureDevice *device = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
+    if (device && [device.localizedName containsString:@"Producer Virtual Camera"]) {
+        device = nil;
+        AVCaptureDeviceDiscoverySession *s = [AVCaptureDeviceDiscoverySession
+            discoverySessionWithDeviceTypes:@[ AVCaptureDeviceTypeBuiltInWideAngleCamera,
+                                               AVCaptureDeviceTypeExternal ]
+                                  mediaType:AVMediaTypeVideo
+                                   position:AVCaptureDevicePositionUnspecified];
+        for (AVCaptureDevice *d in s.devices) {
+            if (![d.localizedName containsString:@"Producer Virtual Camera"]) {
+                device = d;
+                break;
+            }
+        }
+    }
     if (!device) return 0;
     const char *uid = device.uniqueID.UTF8String;
     if (!uid || (int)strlen(uid) >= buflen) return 0;

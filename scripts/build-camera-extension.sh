@@ -77,12 +77,12 @@ cat > "$BUNDLE/Contents/Info.plist" <<PLIST
 	<key>CFBundlePackageType</key>
 	<string>SYSX</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.1</string>
+	<string>1.2</string>
 	<!-- 🔴 BUMP THIS whenever the extension changes. macOS will NOT replace an
 	     installed system extension that carries the same version, so a fixed
 	     build silently keeps running the broken copy already registered. -->
 	<key>CFBundleVersion</key>
-	<string>2</string>
+	<string>3</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 	<key>NSSystemExtensionUsageDescription</key>

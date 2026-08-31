@@ -354,12 +354,27 @@ pub fn device_picker_spec(kind: &str) -> Option<(&'static str, &'static [&'stati
 /// Devices for one picker, straight from libobs — the same list OBS shows,
 /// so USB mics, audio interfaces and capture cards appear without us knowing
 /// anything about them.
+/// Producer's own virtual camera must never be selectable as a camera SOURCE:
+/// pointing the stage at its own output is an infinite feedback loop, and it
+/// holds the CMIO device open so the virtual-camera output can no longer
+/// start. Excluded from the picker and from default selection.
+pub const VCAM_DEVICE_NAME: &str = "Producer Virtual Camera";
+
+fn drop_own_vcam(kind: &str, opts: Vec<DeviceOption>) -> Vec<DeviceOption> {
+    if kind != "camera" {
+        return opts;
+    }
+    opts.into_iter()
+        .filter(|o| !o.name.contains(VCAM_DEVICE_NAME))
+        .collect()
+}
+
 pub fn devices_for(kind: &str) -> Vec<DeviceOption> {
     let Some((source_id, props)) = device_picker_spec(kind) else {
         return Vec::new();
     };
     for prop in props {
-        let opts = list_property_options(source_id, prop);
+        let opts = drop_own_vcam(kind, list_property_options(source_id, prop));
         if !opts.is_empty() {
             return opts;
         }
@@ -1141,7 +1156,7 @@ impl SceneGraph {
                 let props = ffi::obs_source_properties(src);
                 if !props.is_null() {
                     for prop in props_names {
-                        let opts = options_from(props, prop);
+                        let opts = drop_own_vcam(kind, options_from(props, prop));
                         if !opts.is_empty() {
                             ffi::obs_properties_destroy(props);
                             return opts;

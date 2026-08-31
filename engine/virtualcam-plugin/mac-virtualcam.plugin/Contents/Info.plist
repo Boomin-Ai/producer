@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>ai.boomin.producer.mac-virtualcam</string>
+	<key>CFBundleName</key>
+	<string>mac-virtualcam</string>
+	<key>CFBundleExecutable</key>
+	<string>mac-virtualcam</string>
+	<key>CFBundlePackageType</key>
+	<string>BNDL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.2</string>
+	<key>CFBundleVersion</key>
+	<string>3</string>
+	<key>OBSCameraDeviceUUID</key>
+	<string>7626645E-4425-469E-9D8B-97E0FA59AC75</string>
+	<key>OBSCameraSourceUUID</key>
+	<string>A8D7B8AA-65AD-4D21-9C42-66480DBFA8E1</string>
+	<key>OBSCameraSinkUUID</key>
+	<string>A3F16177-7044-4DD8-B900-72E2419F7A9A</string>
+</dict>
+</plist>

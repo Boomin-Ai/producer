@@ -107,14 +107,20 @@ ditto -c -k --keepParent "$APP" "$ZIP"
 # `--wait` crashes notarytool 1.0(38) with Bus error 10 on this machine after
 # the upload succeeds — the submission is fine, the waiter is not. Submit,
 # capture the id, then poll with `info`, which is stable.
-SUB_ID="$(xcrun notarytool submit "$ZIP" --keychain-profile "$PROFILE" 2>&1 \
-  | awk '/^  id: /{print $2; exit}')"
+# Capture the whole submission output FIRST. Parsing it through an awk that
+# exits on the first match closes the pipe under notarytool and kills it with
+# SIGPIPE mid-upload (the script then dies with 141).
+SUB_OUT="$(xcrun notarytool submit "$ZIP" --keychain-profile "$PROFILE" 2>&1 || true)"
+printf '%s\n' "$SUB_OUT" | head -6
+SUB_ID="$(printf '%s\n' "$SUB_OUT" | sed -n 's/^  id: //p' | head -1)"
 [[ -n ${SUB_ID:-} ]] || { echo "submission failed — no id returned" >&2; exit 1; }
 echo "submission: $SUB_ID"
 for _ in $(seq 1 60); do
   sleep 15
+  # xargs trims: a stray leading space made every comparison below fail, so
+  # an Accepted submission looped to the timeout and never stapled.
   st="$(xcrun notarytool info "$SUB_ID" --keychain-profile "$PROFILE" 2>/dev/null \
-    | awk '/^  status: /{ $1=""; sub(/^ *status: */,""); print; exit }')"
+    | sed -n 's/^  *status: *//p' | head -1 | xargs)"
   echo "  status: ${st:-unknown}"
   [[ $st == "Accepted" ]] && break
   if [[ $st == "Invalid" || $st == "Rejected" ]]; then

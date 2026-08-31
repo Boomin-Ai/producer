@@ -46,6 +46,7 @@ fn link_live_engine() {
         .flag("-fmodules")
         .compile("producer_live_shim");
     println!("cargo:rustc-link-lib=framework=AppKit");
+    println!("cargo:rustc-link-lib=framework=CoreMediaIO");
     println!("cargo:rustc-link-lib=framework=AVFoundation");
     // Virtual camera (R13): OSSystemExtensionManager activation.
     println!("cargo:rustc-link-lib=framework=SystemExtensions");
