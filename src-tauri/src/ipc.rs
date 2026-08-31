@@ -233,6 +233,21 @@ fn endpoint_access(
 
 /// Begin channel authorization on an endpoint — returns the browser URL a
 /// human completes (the endpoint enforces primary-token-only).
+/// Register a local room server-side (idempotent by external_ref).
+#[tauri::command]
+pub async fn room_register(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    title: String,
+    external_ref: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .register_room(&title, &external_ref)
+        .await
+}
+
 /// Invite a guest to a room; returns {guest, invite_url, render_url}.
 #[tauri::command]
 pub async fn room_guest_invite(

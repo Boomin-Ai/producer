@@ -6463,3 +6463,14 @@ textarea::placeholder {
   text-align: center;
   padding: 2px 0;
 }
+
+.rm-health-idle {
+  color: oklch(0.6 0.02 250);
+  font-weight: 600;
+}
+
+.rm-health-num.rec {
+  color: #ff6b6b;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}

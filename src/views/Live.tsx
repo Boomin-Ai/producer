@@ -13,6 +13,7 @@ import {
   listenChat,
   devices as deviceIpc,
   extraSources,
+  registerRoom,
   roomGuestInvite,
   stinger as stingerIpc,
   recording as recIpc,
@@ -838,12 +839,18 @@ function WindowSourceForm({ onAdd }: { onAdd: (id: number, title: string) => voi
  * are a friend with a laptop rather than a Boomin brand. */
 function GuestForm({
   roomId,
+  roomName,
+  serverRoomId,
   micLabel,
   onAdd,
+  onServerRoom,
 }: {
   roomId: string | null;
+  roomName: string;
+  serverRoomId?: string;
   micLabel?: string;
   onAdd: (label: string, url: string, inviteUrl?: string) => void;
+  onServerRoom: (id: string) => void;
 }) {
   const [name, setName] = useState("");
   const [pasted, setPasted] = useState("");
@@ -866,7 +873,17 @@ function GuestForm({
       const eps = await ipc.listEndpoints();
       const ep = eps.find((e) => e.kind === "connected") ?? eps[0];
       if (!ep) throw new Error("Connect a Boomin workspace first.");
-      const res = await roomGuestInvite(ep.id, roomId, name.trim() || undefined);
+      // Rooms are local documents and exist offline; the platform only needs
+      // to know about one the first time it does something server-side.
+      // Registration is idempotent by our local id, so calling it whenever
+      // we lack a cached id is safe.
+      let sid = serverRoomId;
+      if (!sid) {
+        const reg = await registerRoom(ep.id, roomName || "Room", roomId);
+        sid = reg.room.id;
+        onServerRoom(sid);
+      }
+      const res = await roomGuestInvite(ep.id, sid, name.trim() || undefined);
       // Both URLs are returned once only — put the source on the stage now.
       onAdd(name.trim() || "Guest", withMic(res.render_url), res.invite_url);
       setInvite(res.invite_url);
@@ -1784,14 +1801,10 @@ export interface RoomInfo {
 
 export function LiveView({
   room,
-  rooms = [],
   onLeave,
-  onSwitchRoom,
 }: {
   room?: RoomInfo;
-  rooms?: RoomInfo[];
   onLeave?: () => void;
-  onSwitchRoom?: (room: RoomInfo) => void;
 }) {
   const [destinations, setDestinations] = useState<LiveDestination[]>([]);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
@@ -1812,7 +1825,6 @@ export function LiveView({
   const [micLevel, setMicLevel] = useState(0);
   const [sheetOpen, setSheetOpen] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
-  const [roomsOpen, setRoomsOpen] = useState(false);
   const [micPopOpen, setMicPopOpen] = useState(false);
   const [destsOpen, setDestsOpen] = useState(false);
   const [qualityOpen, setQualityOpen] = useState(false);
@@ -2828,7 +2840,6 @@ export function LiveView({
   }
 
   const closePops = () => {
-    setRoomsOpen(false);
     setDestsOpen(false);
     setQualityOpen(false);
     setPanelMenu(null);
@@ -2843,7 +2854,7 @@ export function LiveView({
     setSceneSettings(null);
   };
   const anyPop =
-    roomsOpen || destsOpen || qualityOpen || micPopOpen || overlayOpen || chatOpen || srcAddOpen || deviceMenu !== null || srcSubPop !== null ||
+    destsOpen || qualityOpen || micPopOpen || overlayOpen || chatOpen || srcAddOpen || deviceMenu !== null || srcSubPop !== null ||
     (sceneSettings !== null && dockOf(layout, "scenes") !== "bottom") || panelMenu !== null || layoutMenu || addMenu !== null || adding || !!editing;
 
   const micStrip = (
@@ -3539,51 +3550,23 @@ export function LiveView({
                 : "Not live"
             }
           />
-          <span className="rm-brand" data-tauri-drag-region>
-            PRODUCER
-          </span>
-          <div className="rm-pop-anchor">
-            <button
-              className="rm-room-chip"
-              onClick={(e) => {
-                setPopAnchor(e.currentTarget);
-                setRoomsOpen((o) => !o);
-              }}
-            >
-              {room?.name ?? "Live"}
-              {ic.chev}
-            </button>
-            {roomsOpen && (
-              <Pop anchor={popAnchor} align="left">
-                {rooms
-                  .filter((r) => r.id !== room?.id)
-                  .map((r) => (
-                    <button
-                      key={r.id}
-                      className="rm-pop-row"
-                      onClick={() => {
-                        closePops();
-                        onSwitchRoom?.(r);
-                      }}
-                    >
-                      {r.name}
-                    </button>
-                  ))}
-                <button className="rm-pop-row dim" onClick={() => onLeave?.()}>
-                  ← Control room
-                </button>
-              </Pop>
-            )}
-          </div>
         </div>
 
-        {streaming && (
-          <div className="rm-health">
-            <span className="rm-health-time">
-              {`${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`}
+        {/* Always present. Moving health out of the dock was pointless if it
+          * disappears whenever you aren't live — the idle state is itself
+          * information ("engine up, nothing going out"). */}
+        <div className="rm-health">
+          {!streaming ? (
+            <span className="rm-health-idle">
+              {!engineOk ? "Starting engine" : enabledDests.length === 0 ? "No channels" : "Ready"}
             </span>
-            <span className="rm-health-sep" />
-            <span className="rm-health-num">{fmtBitrate(bytesTotal, elapsed)}</span>
+          ) : (
+            <>
+              <span className="rm-health-time">
+                {`${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`}
+              </span>
+              <span className="rm-health-sep" />
+              <span className="rm-health-num">{fmtBitrate(bytesTotal, elapsed)}</span>
             {/* Shown only when non-zero — a permanent row of zeroes trains you
               * to stop reading the row. */}
             {droppedTotal > 0 && (
@@ -3592,16 +3575,23 @@ export function LiveView({
                 <span className="rm-health-num warn">{droppedTotal} dropped</span>
               </>
             )}
-            {reconnectTotal > 0 && (
-              <>
-                <span className="rm-health-sep" />
-                <span className="rm-health-num warn">
-                  {reconnectTotal} reconnect{reconnectTotal === 1 ? "" : "s"}
-                </span>
-              </>
-            )}
-          </div>
-        )}
+              {reconnectTotal > 0 && (
+                <>
+                  <span className="rm-health-sep" />
+                  <span className="rm-health-num warn">
+                    {reconnectTotal} reconnect{reconnectTotal === 1 ? "" : "s"}
+                  </span>
+                </>
+              )}
+            </>
+          )}
+          {recPath && (
+            <>
+              <span className="rm-health-sep" />
+              <span className="rm-health-num rec">REC</span>
+            </>
+          )}
+        </div>
         {!streaming && lastRec && (
           <button
             className="rm-health-rec"
@@ -3989,6 +3979,9 @@ export function LiveView({
           {srcSubPop === "guest" && (
             <GuestForm
               roomId={room?.id ?? null}
+              roomName={room?.name ?? "Room"}
+              serverRoomId={cfg.server_room_id}
+              onServerRoom={(id) => writeCfg({ ...cfgRef.current, server_room_id: id })}
               micLabel={micDeviceLabel ?? undefined}
               onAdd={(label, url, inviteUrl) => {
                 setSrcSubPop(null);

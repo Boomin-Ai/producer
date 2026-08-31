@@ -74,6 +74,10 @@ export interface RoomConfig {
   channels: Record<string, boolean>;
   /** Scene the room mounts into when it opens. */
   active_scene?: string;
+  /** The platform's id for this room, cached after lazy registration. The
+   * local id stays authoritative offline; this is only the seam for
+   * server-side features (guests today, broadcasts later). */
+  server_room_id?: string;
   /** Dock sizing the user dragged (per room, like the layout itself). */
   sizes?: DockSizes;
   /** Room-wide default transition; a scene may override it. */
@@ -126,6 +130,7 @@ export function parseConfig(raw: string | null | undefined): RoomConfig {
   }
   if (v.channels && typeof v.channels === "object") base.channels = v.channels as Record<string, boolean>;
   if (typeof v.active_scene === "string") base.active_scene = v.active_scene;
+  if (typeof v.server_room_id === "string") base.server_room_id = v.server_room_id;
   if (v.sizes && typeof v.sizes === "object") base.sizes = v.sizes as DockSizes;
   if (v.transition && typeof v.transition === "object") base.transition = v.transition as SceneTransition;
   return base;

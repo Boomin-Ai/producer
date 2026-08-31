@@ -281,12 +281,7 @@ export function Home({
         <LiveView
           key={view.room.id}
           room={view.room}
-          rooms={rooms}
           onLeave={back}
-          onSwitchRoom={(r) => {
-            const full = rooms.find((x) => x.id === r.id);
-            if (full) setView({ kind: "room", room: full });
-          }}
         />
       </>
     );

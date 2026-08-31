@@ -64,6 +64,25 @@ impl ProducerClient {
         self
     }
 
+    /// Producer's own endpoints hang off the connected base
+    /// (…/v1/app/producer). Platform-wide routes do NOT — they live at the
+    /// API root, so they must be resolved against the ORIGIN rather than
+    /// appended, or you get /v1/app/producer/v1/app/live/... and a 404 that
+    /// reads like a missing feature.
+    fn root_url(&self, path: &str) -> String {
+        let origin = match self.base_url.find("/v1/") {
+            Some(i) => &self.base_url[..i],
+            None => self.base_url.trim_end_matches('/'),
+        };
+        let mut url = format!("{origin}{path}");
+        if let Some(slug) = &self.brand_slug {
+            url.push(if path.contains('?') { '&' } else { '?' });
+            url.push_str("brandSlug=");
+            url.push_str(slug);
+        }
+        url
+    }
+
     fn url(&self, path: &str) -> String {
         let mut url = format!("{}{}", self.base_url, path);
         if let Some(slug) = &self.brand_slug {
@@ -125,6 +144,28 @@ impl ProducerClient {
     /// joined:false and changes nothing, so onboarding can be re-run safely.
     /// `rejoin` must only ever be true from an explicit user action — a brand
     /// that deliberately LEFT must never be silently re-listed at login.
+    /// Register a local room with the platform, lazily, the first time it
+    /// needs anything server-side. Idempotent by `external_ref` (our local
+    /// uuid), so a retry, a reinstall or a second machine converges on the
+    /// SAME server room instead of scattering guests across duplicates.
+    /// Never called at room creation or app start — Producer must keep
+    /// working offline and streaming to RTMP without a Boomin session.
+    pub async fn register_room(&self, title: &str, external_ref: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.root_url("/v1/app/live/rooms"))
+            .bearer_auth(&self.token)
+            .json(&serde_json::json!({ "title": title, "external_ref": external_ref }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     /// Invite a guest to a live room. Returns the invite link (for the guest)
     /// and the render URL (for Producer's browser source) — both are returned
     /// ONCE ONLY, so the caller must persist them immediately.
@@ -145,7 +186,7 @@ impl ProducerClient {
         }
         let resp = self
             .http
-            .post(self.url(&format!("/v1/app/live/rooms/{room_id}/guests")))
+            .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/guests")))
             .bearer_auth(&self.token)
             .json(&Value::Object(body))
             .send()
@@ -162,7 +203,7 @@ impl ProducerClient {
     pub async fn network_connections(&self) -> EngineResult<Value> {
         let resp = self
             .http
-            .get(self.url("/v1/app/network/connections"))
+            .get(self.root_url("/v1/app/network/connections"))
             .bearer_auth(&self.token)
             .send()
             .await?;
@@ -177,7 +218,7 @@ impl ProducerClient {
     pub async fn network_join(&self, rejoin: bool) -> EngineResult<Value> {
         let resp = self
             .http
-            .post(self.url("/v1/app/network/join"))
+            .post(self.root_url("/v1/app/network/join"))
             .bearer_auth(&self.token)
             .json(&serde_json::json!({ "rejoin": rejoin }))
             .send()

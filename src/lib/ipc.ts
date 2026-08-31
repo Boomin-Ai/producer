@@ -411,3 +411,12 @@ export const networkConnections = (endpointId: string) =>
     "network_connections",
     { endpointId },
   );
+
+/** Register a local room with the platform. Idempotent by external_ref, so
+ * it's safe to call unconditionally on first server-side need. */
+export const registerRoom = (endpointId: string, title: string, externalRef: string) =>
+  invoke<{ room: { id: string }; created: boolean }>("room_register", {
+    endpointId,
+    title,
+    externalRef,
+  });

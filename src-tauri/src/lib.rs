@@ -81,6 +81,7 @@ pub fn run() {
             ipc::boomin_select_brand,
             ipc::connect_channel,
             ipc::network_join,
+            ipc::room_register,
             ipc::room_guest_invite,
             ipc::network_connections,
             ipc::upload_media,
