@@ -342,11 +342,23 @@
 
   /* composer mock */
   .compose { padding: 24px; }
+  /* composer field — boomin.ai/producer's gradient border: a solid fill on
+     padding-box over a spectrum on border-box, panning so the outline moves */
   .compose .caption {
-    border: 1px solid var(--line); border-radius: 12px; padding: 18px;
+    border: 1px solid transparent; border-radius: 20px; padding: 18px;
     color: var(--faint); font-size: 15.5px; min-height: 92px;
-    background: rgba(255, 255, 255, 0.015);
+    background:
+      linear-gradient(rgba(5, 10, 22, 0.78), rgba(5, 10, 22, 0.78)) padding-box,
+      linear-gradient(110deg,
+        rgba(34, 211, 238, 0.45), rgba(168, 85, 247, 0.42),
+        rgba(244, 114, 182, 0.36), rgba(251, 191, 36, 0.3),
+        rgba(34, 211, 238, 0.45)) border-box;
+    background-size: auto, 300% 100%;
+    background-position: 0 0, 0 0;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 48px rgba(0, 0, 0, 0.45);
+    animation: composer-pan 7s linear infinite;
   }
+  @keyframes composer-pan { to { background-position: 0 0, 300% 0; } }
   .compose .caret { display: inline-block; width: 1px; height: 1.1em; background: var(--mint); vertical-align: text-bottom; margin-right: 2px; animation: blink 1.1s step-end infinite; }
   @keyframes blink { 50% { opacity: 0; } }
   .compose .row { display: flex; align-items: center; gap: 8px; margin-top: 15px; flex-wrap: wrap; }
@@ -376,7 +388,7 @@
   footer .spacer { flex: 1; }
 
   @media (prefers-reduced-motion: reduce) {
-    h1 .l2::before, .verified .shiny, .live-pill.on, .stage-mock .beam, .stage-mock .onair i, .closing .chair, .compose .caret { animation: none; }
+    h1 .l2::before, .verified .shiny, .compose .caption, .live-pill.on, .stage-mock .beam, .stage-mock .onair i, .closing .chair, .compose .caret { animation: none; }
     .say, .panel, .hero { transition: none; }
   }
 </style>
@@ -420,7 +432,6 @@
           <svg class="ico-win" viewBox="0 0 88 88" fill="currentColor" aria-hidden="true"><path d="m0 12.402 35.687-4.86.016 34.423-35.67.203zm35.67 33.529.028 34.453L.028 75.48.026 45.7zm4.326-39.025L87.314 0v41.527l-47.318.376zm47.329 39.349-.011 41.34-47.318-6.678-.066-34.739z"/></svg>
           <span class="dl-label">Download</span>
         </a>
-        <a class="pill" href="https://github.com/Boomin-Ai/producer">View source</a>
       </div>
       <p class="trust"><span id="dl-note"></span></p>
     </div>
