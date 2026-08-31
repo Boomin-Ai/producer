@@ -884,9 +884,19 @@ function GuestForm({
         onServerRoom(sid);
       }
       const res = await roomGuestInvite(ep.id, sid, name.trim() || undefined);
+      // Accept the link wherever it sits: it is issued ONCE, so a field-name
+      // difference must not cost a real invite.
+      const raw = res as unknown as Record<string, unknown> & {
+        guest?: Record<string, unknown>;
+      };
+      const invite =
+        (raw.invite_url as string | undefined) ??
+        (raw.inviteUrl as string | undefined) ??
+        (raw.guest?.invite_url as string | undefined) ??
+        (raw.join_url as string | undefined);
       // Both URLs are returned once only — put the source on the stage now.
-      onAdd(name.trim() || "Guest", withMic(res.render_url), res.invite_url);
-      setInvite(res.invite_url);
+      onAdd(name.trim() || "Guest", withMic(res.render_url), invite);
+      if (invite) setInvite(invite);
     } catch (e) {
       setErr(String(e));
     } finally {
@@ -1816,7 +1826,7 @@ export function LiveView({
   const droppedTotal = [...statuses.values()].reduce((n, st) => n + st.dropped_frames, 0);
   const reconnectTotal = [...statuses.values()].reduce((n, st) => n + st.reconnects, 0);
   const bytesTotal = [...statuses.values()].reduce((n, st) => n + st.bytes_sent, 0);
-  const healthWarn = droppedTotal > 0 || reconnectTotal > 0;
+
   const [elapsed, setElapsed] = useState(0);
   const [editing, setEditing] = useState<LiveDestination | null>(null);
   const [adding, setAdding] = useState(false);
@@ -1891,6 +1901,12 @@ export function LiveView({
   cfgRef.current = cfg;
   const layout = cfg.layout;
   const writeCfg = (next: RoomConfig) => {
+    // Update the ref SYNCHRONOUSLY. Engine events arrive faster than React
+    // re-renders, and they merge against cfgRef — a stale ref meant a
+    // SourcesChanged landing between a write and its render would resurrect
+    // the previous value and silently drop what was just written (this ate
+    // guest invite links).
+    cfgRef.current = next;
     setCfgState(next);
     if (room) ipc.liveUpdateRoom(room.id, { config: serializeConfig(next) }).catch(() => {});
     else saveLayout(next.layout);
@@ -2158,11 +2174,18 @@ export function LiveView({
 
   /** Add an open-list item and record it in the room document so it
    * respawns when the room reopens. */
-  const addExtraSource = async (label: string, spec: ExtraSpec) => {
+  const addExtraSource = async (label: string, spec: ExtraSpec, inviteUrl?: string) => {
     const id = `${spec.kind}-${Math.random().toString(36).slice(2, 8)}`;
     try {
       await extraSources.add(id, label, spec);
-      const entry: RoomExtra = { id, label, spec };
+      // A guest invite link is issued ONCE and never reissued, so it lives on
+      // the room document rather than only in the dialog that created it.
+      const entry: RoomExtra = {
+        id,
+        label,
+        spec,
+        ...(inviteUrl ? { invite_url: inviteUrl } : {}),
+      };
       const c = cfgRef.current;
       writeCfg({ ...c, sources: { ...c.sources, extras: [...(c.sources.extras ?? []), entry] } });
     } catch (e) {
@@ -2450,7 +2473,14 @@ export function LiveView({
         // The room document follows the scene, without disturbing the rest
         // of the document (layout, scenes, channels).
         if (roomId) {
-          const next = { ...cfgRef.current, sources: ev.sources };
+          // The engine owns screen/camera/mic/items/devices, but `extras` is
+          // OURS — the open-list items and, for guests, their once-only invite
+          // link. Assigning ev.sources wholesale deleted them on every source
+          // change, which is why guests didn't survive a reopen.
+          const next = {
+            ...cfgRef.current,
+            sources: { ...ev.sources, extras: cfgRef.current.sources.extras },
+          };
           cfgRef.current = next;
           setCfgState(next);
           ipc.liveUpdateRoom(roomId, { config: serializeConfig(next) }).catch(() => {});
@@ -2477,6 +2507,54 @@ export function LiveView({
 
   const state = snapshot?.session_state ?? "idle";
   const streaming = state === "streaming" || state === "starting" || state === "stopping";
+
+  // OBS's network-quality model, followed exactly (OBSBasicStatusBar.cpp):
+  // congestion is smoothed toward the worse of the last two samples, then
+  // averaged over 4 seconds, then bucketed at 0 / 0.3333 / 0.6667 / 1.0.
+  // Averaging matters — raw congestion spikes constantly and an unsmoothed
+  // indicator would flicker between "excellent" and "bad" every second.
+  const congestionNow = Math.max(
+    0,
+    Math.min(1, [...statuses.values()].reduce((m, st) => Math.max(m, st.congestion), 0)),
+  );
+  const congHistory = useRef<number[]>([]);
+  const [congAvg, setCongAvg] = useState(0);
+  const lastCong = useRef(0);
+  useEffect(() => {
+    if (!streaming) {
+      congHistory.current = [];
+      lastCong.current = 0;
+      setCongAvg(0);
+      return;
+    }
+    const smoothed = Math.max(congestionNow, (congestionNow + lastCong.current) * 0.5);
+    lastCong.current = congestionNow;
+    const h = congHistory.current;
+    h.push(smoothed);
+    if (h.length >= 4) {
+      setCongAvg(h.reduce((a, b) => a + b, 0) / h.length);
+      congHistory.current = [];
+    }
+  }, [congestionNow, streaming, elapsed]);
+
+  const quality: "excellent" | "good" | "mediocre" | "bad" | "off" = !streaming
+    ? "off"
+    : congAvg <= 0.0001
+      ? "excellent"
+      : congAvg <= 0.3333
+        ? "good"
+        : congAvg <= 0.6667
+          ? "mediocre"
+          : "bad";
+  const droppedPct =
+    droppedTotal > 0
+      ? [...statuses.values()].reduce((n, st) => n + st.total_frames, 0) > 0
+        ? (droppedTotal /
+            [...statuses.values()].reduce((n, st) => n + st.total_frames, 0)) *
+          100
+        : 0
+      : 0;
+
   const engineOk = snapshot?.engine_ready && snapshot?.bootstrap_ok;
 
   /** Channel selection is part of the room document; opening a room pushes
@@ -3050,6 +3128,7 @@ export function LiveView({
                 icon: EXTRA_ICONS[i.kind] ?? ic.link,
                 // Window items are re-selectable: same strip, list of windows.
                 device: i.kind === "window" ? `window:${i.id}` : undefined,
+                inviteUrl: (cfg.sources.extras ?? []).find((e) => e.id === i.id)?.invite_url,
                 remove: () => removeExtraSource(i.id),
               })),
           ].filter(Boolean) as {
@@ -3540,22 +3619,20 @@ export function LiveView({
             * find — or that a layout can hide — is health you learn about too
             * late. Dot is always present; the numbers appear once they mean
             * something. */}
-          <span
-            className={`rm-health-dot${streaming ? (healthWarn ? " warn" : " live") : ""}`}
-            title={
-              streaming
-                ? healthWarn
-                  ? `${droppedTotal} dropped · ${reconnectTotal} reconnects`
-                  : "Healthy"
-                : "Not live"
-            }
-          />
         </div>
 
         {/* Always present. Moving health out of the dock was pointless if it
           * disappears whenever you aren't live — the idle state is itself
           * information ("engine up, nothing going out"). */}
-        <div className="rm-health">
+        <div className="rm-chip rm-health">
+          {/* Signal bars, OBS's four levels. A shape reads faster than a
+            * number when you're mid-show and only glancing. */}
+          <span className={`rm-bars q-${quality}`} title={`Network: ${quality}`}>
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
           {!streaming ? (
             <span className="rm-health-idle">
               {!engineOk ? "Starting engine" : enabledDests.length === 0 ? "No channels" : "Ready"}
@@ -3572,7 +3649,9 @@ export function LiveView({
             {droppedTotal > 0 && (
               <>
                 <span className="rm-health-sep" />
-                <span className="rm-health-num warn">{droppedTotal} dropped</span>
+                  <span className="rm-health-num warn">
+                    {droppedTotal} dropped ({droppedPct.toFixed(1)}%)
+                  </span>
               </>
             )}
               {reconnectTotal > 0 && (
@@ -3589,6 +3668,39 @@ export function LiveView({
             <>
               <span className="rm-health-sep" />
               <span className="rm-health-num rec">REC</span>
+            </>
+          )}
+          {engineOk && (
+            <>
+              <span className="rm-health-sep" />
+              <span className="rm-health-num" title="Render frames per second">
+                {(snapshot?.fps ?? 0).toFixed(0)} fps
+              </span>
+              {/* Skipped ≠ dropped. Skipped means THIS MACHINE couldn't render
+                * in time; dropped means the network couldn't send. Different
+                * causes and different fixes, so OBS shows both and so do we. */}
+              {(snapshot?.skipped_frames ?? 0) > 0 && (
+                <>
+                  <span className="rm-health-sep" />
+                  <span
+                    className="rm-health-num warn"
+                    title="Frames the renderer could not keep up with"
+                  >
+                    {snapshot?.skipped_frames} skipped
+                  </span>
+                </>
+              )}
+              <span className="rm-health-sep" />
+              <span
+                className={`rm-health-num${(snapshot?.cpu ?? 0) > 80 ? " warn" : ""}`}
+                title="Producer's CPU usage"
+              >
+                {/* One decimal: this measures Producer's share of total
+                  * system CPU, which is legitimately fractional on an 8-core
+                  * machine. Rounding to whole numbers printed a flat 0% and
+                  * read as broken. */}
+                {(snapshot?.cpu ?? 0).toFixed(1)}% CPU
+              </span>
             </>
           )}
         </div>
@@ -3984,12 +4096,10 @@ export function LiveView({
               onServerRoom={(id) => writeCfg({ ...cfgRef.current, server_room_id: id })}
               micLabel={micDeviceLabel ?? undefined}
               onAdd={(label, url, inviteUrl) => {
-                setSrcSubPop(null);
-                addExtraSource(label, { kind: "guest", url });
-                if (inviteUrl) {
-                  setBanner(`Invite link ready for ${label} — copy it from Sources.`);
-                  window.setTimeout(() => setBanner(null), 6000);
-                }
+                // Do NOT close on add when there's a link: the form is where
+                // it gets shown, and it is never reissued.
+                addExtraSource(label, { kind: "guest", url }, inviteUrl);
+                if (!inviteUrl) setSrcSubPop(null);
               }}
             />
           )}

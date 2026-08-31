@@ -171,6 +171,26 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
         CString::new(p.to_string_lossy().into_owned()).ok()
     });
     let config_ptr = config_c.as_ref().map_or(ptr::null(), |c| c.as_ptr());
+    // Chromium switches for obs-browser, set BEFORE startup so they are in
+    // place when the module loads and initialises CEF.
+    //
+    // Without this, getUserMedia inside a browser source does not prompt — it
+    // HANGS. obs-browser installs no CefPermissionHandler, and CEF's default
+    // for a media request with no handler is to never answer. That is what
+    // stalled the guest return-audio leg: a page awaiting the host mic waited
+    // forever. On macOS obs-browser forwards our argv into CefMainArgs, so a
+    // flag here reaches CEF with no engine patch.
+    //
+    // ⚠️ This grant is BLANKET, not per-origin: any browser source can now
+    // capture audio. Acceptable because every browser URL in Producer is one
+    // the user added, but the correct long-term fix is an origin-scoped
+    // CefPermissionHandler in our own obs-browser build, allowing only our
+    // guest-render origin.
+    let argv0 = CString::new("producer").unwrap();
+    let media_flag = CString::new("--use-fake-ui-for-media-stream").unwrap();
+    let cef_argv: [*const c_char; 2] = [argv0.as_ptr(), media_flag.as_ptr()];
+    unsafe { ffi::obs_set_cmdline_args(2, cef_argv.as_ptr()) };
+
     if !unsafe { ffi::obs_startup(locale.as_ptr(), config_ptr, ptr::null_mut()) } {
         report.errors.push("obs_startup failed".into());
         return report;
@@ -477,6 +497,14 @@ pub struct Snapshot {
     pub destinations: Vec<DestStatus>,
     pub sources: graph::SourcesState,
     pub preview_attached: bool,
+    /// OBS-parity health: render FPS, frames the renderer had to skip, and
+    /// process CPU. Skipped frames mean the MACHINE is behind, which is a
+    /// different failure from dropped frames (the NETWORK is behind) — OBS
+    /// shows both because the fix is different.
+    pub fps: f64,
+    pub skipped_frames: u32,
+    pub total_frames: u32,
+    pub cpu: f64,
     pub video_height: u32,
     pub video_fps: u32,
 }
@@ -877,6 +905,10 @@ pub fn start(
             let mut state = SessionState::Idle;
             let mut last_status_emit = Instant::now();
             let mut last_levels_emit = Instant::now();
+            // CPU needs a persistent sampler: one reading has nothing to
+            // compare against, so the value only means anything over time.
+            let cpu_info: *mut c_void = unsafe { ffi::os_cpu_usage_info_start() };
+            let mut last_perf = Instant::now();
 
             let set_state = |state: &mut SessionState,
                              new: SessionState,
@@ -890,6 +922,35 @@ pub fn start(
             };
 
             loop {
+                // Performance is sampled whether or not a session is running:
+                // FPS and CPU tell you the machine is struggling BEFORE you go
+                // live, which is when the information is still actionable.
+                if last_perf.elapsed() > Duration::from_secs(1) {
+                    last_perf = Instant::now();
+                    unsafe {
+                        let video = ffi::obs_get_video();
+                        let (total, skipped) = if video.is_null() {
+                            (0, 0)
+                        } else {
+                            (
+                                ffi::video_output_get_total_frames(video),
+                                ffi::video_output_get_skipped_frames(video),
+                            )
+                        };
+                        let fps = ffi::obs_get_active_fps();
+                        let cpu = if cpu_info.is_null() {
+                            0.0
+                        } else {
+                            ffi::os_cpu_usage_info_query(cpu_info)
+                        };
+                        let mut sn = snap.lock().unwrap();
+                        sn.fps = fps;
+                        sn.total_frames = total;
+                        sn.skipped_frames = skipped;
+                        sn.cpu = cpu;
+                    }
+                }
+
                 // 120ms tick: meters want ~8Hz; command latency stays low.
                 match cmd_rx.recv_timeout(Duration::from_millis(120)) {
                     Ok(Command::GoLive(config)) => {

@@ -53,6 +53,9 @@ export interface RoomExtra {
   id: string;
   label: string;
   spec: ExtraSpec;
+  /** Guests only. The platform issues this once and never again, so it lives
+   * with the room rather than only in the dialog that created it. */
+  invite_url?: string;
 }
 
 export interface RoomSources {

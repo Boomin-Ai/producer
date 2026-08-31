@@ -6284,37 +6284,15 @@ textarea::placeholder {
 
 /* ── Stream health in the header ───────────────────────────────────────── */
 
-.rm-health-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-  background: oklch(0.42 0.02 250);
-  flex-shrink: 0;
-  transition: background 0.2s ease;
-}
-
-.rm-health-dot.live {
-  background: var(--mint);
-  box-shadow: 0 0 10px oklch(0.75 0.14 165 / 0.6);
-}
-
-.rm-health-dot.warn {
-  background: #f0b429;
-  box-shadow: 0 0 10px oklch(0.8 0.15 85 / 0.55);
-}
-
+/* Health wears the same chip as Channels and Quality — it sits in the same
+ * row and should read as a peer of them, not a different species. Only the
+ * numeric treatment differs, because these are figures rather than labels. */
 .rm-health {
-  display: flex;
-  align-items: center;
   gap: 9px;
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: oklch(0.2 0.03 250 / 0.9);
-  border: 1px solid oklch(0.28 0.035 250);
-  font-size: 12px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   flex-shrink: 0;
+  max-width: none;
 }
 
 .rm-health-time {
@@ -6474,3 +6452,35 @@ textarea::placeholder {
   font-weight: 700;
   letter-spacing: 0.04em;
 }
+
+/* ── Network quality bars (OBS's four levels) ──────────────────────────── */
+
+.rm-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+.rm-bars i {
+  width: 3px;
+  border-radius: 1px;
+  background: oklch(0.32 0.02 250);
+  transition: background 0.2s ease;
+}
+
+.rm-bars i:nth-child(1) { height: 4px; }
+.rm-bars i:nth-child(2) { height: 7px; }
+.rm-bars i:nth-child(3) { height: 10px; }
+.rm-bars i:nth-child(4) { height: 13px; }
+
+/* Lit bars carry the colour; unlit stay grey, so quality reads as a shape
+   before it reads as a hue — and it still works for colour-blind users. */
+.rm-bars.q-excellent i { background: var(--mint); }
+.rm-bars.q-good i:nth-child(-n + 3) { background: var(--mint); }
+.rm-bars.q-mediocre i:nth-child(-n + 2) { background: #f0b429; }
+.rm-bars.q-bad i:nth-child(1) { background: #ff5a5a; }
+.rm-bars.q-good i:nth-child(4),
+.rm-bars.q-mediocre i:nth-child(n + 3),
+.rm-bars.q-bad i:nth-child(n + 2) { background: oklch(0.32 0.02 250); }

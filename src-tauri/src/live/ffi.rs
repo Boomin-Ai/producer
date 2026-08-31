@@ -501,6 +501,19 @@ extern "C" {
     pub fn obs_source_update(source: *mut obs_source_t, settings: *mut obs_data_t);
     pub fn obs_data_get_string(data: *mut obs_data_t, name: *const c_char) -> *const c_char;
     pub fn obs_data_set_obj(data: *mut obs_data_t, name: *const c_char, obj: *mut obs_data_t);
+
+    // --- Performance, for the OBS-style health readout ---
+    /// CEF inherits these on macOS (obs-browser passes them straight into
+    /// CefMainArgs), so this is how a browser source gets Chromium switches
+    /// without patching or rebuilding the engine.
+    pub fn obs_set_cmdline_args(argc: c_int, argv: *const *const c_char);
+    pub fn obs_get_active_fps() -> f64;
+    pub fn video_output_get_total_frames(video: *const video_t) -> u32;
+    pub fn video_output_get_skipped_frames(video: *const video_t) -> u32;
+    /// Opaque CPU sampler; must be started once and queried over time, since
+    /// a single sample has nothing to compare against.
+    pub fn os_cpu_usage_info_start() -> *mut c_void;
+    pub fn os_cpu_usage_info_query(info: *mut c_void) -> f64;
     /// Media playback (stingers). Duration is 0 until the file is opened.
     pub fn obs_source_media_get_duration(source: *mut obs_source_t) -> i64;
     pub fn obs_source_media_restart(source: *mut obs_source_t);

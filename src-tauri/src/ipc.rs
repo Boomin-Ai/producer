@@ -258,10 +258,16 @@ pub async fn room_guest_invite(
     display_name: Option<String>,
 ) -> EngineResult<Value> {
     let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
-    ProducerClient::new(&base_url, &token)
+    let res = ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)
         .invite_room_guest(&room_id, guest_brand_id, display_name)
-        .await
+        .await;
+    if let Ok(v) = &res {
+        // The invite link is issued once. Log its shape so a renamed field
+        // can never silently cost a real link again.
+        eprintln!("[guest] invite response keys: {:?}", v.as_object().map(|o| o.keys().collect::<Vec<_>>()));
+    }
+    res
 }
 
 #[tauri::command]

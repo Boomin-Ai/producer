@@ -255,6 +255,12 @@ export interface LiveSnapshot {
   sources?: LiveSources;
   preview_attached?: boolean;
   disabled?: boolean;
+  /** OBS-parity performance. Skipped frames = the machine is behind;
+   * dropped frames = the network is behind. Different fixes, so both shown. */
+  fps?: number;
+  skipped_frames?: number;
+  total_frames?: number;
+  cpu?: number;
   video_height?: number;
   video_fps?: number;
   stage_transparent?: boolean;
