@@ -515,10 +515,13 @@ pub fn live_vcam_activate() -> EngineResult<()> {
 
 #[tauri::command]
 pub fn live_vcam_output(state: State<'_, AppState>, on: bool) -> EngineResult<bool> {
-    state
-        .live
-        .set_virtual_cam(on)
-        .map_err(|e| EngineError::Other(crate::live::engine::user_facing(&e)))
+    // Upstream's own text says "OBS"; rewrite it on the way out. Only
+    // meaningful with an engine — without one there is nothing to start.
+    #[cfg(have_engine)]
+    let map = |e: String| EngineError::Other(crate::live::engine::user_facing(&e));
+    #[cfg(not(have_engine))]
+    let map = EngineError::Other;
+    state.live.set_virtual_cam(on).map_err(map)
 }
 
 #[tauri::command]

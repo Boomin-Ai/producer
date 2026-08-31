@@ -10,7 +10,11 @@ pub mod engine;
 mod ffi;
 #[cfg(have_engine)]
 pub mod graph;
+// Both touch libobs directly, so they only exist alongside the engine —
+// without the artifact there is no ffi module for them to import.
+#[cfg(have_engine)]
 pub mod filters;
+#[cfg(have_engine)]
 mod record;
 #[cfg(have_engine)]
 pub mod multi;
