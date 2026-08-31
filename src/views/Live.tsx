@@ -1882,7 +1882,6 @@ export function LiveView({
   const demo = demoOn();
   const [chatFilter, setChatFilter] = useState<"all" | DemoPlatform>("all");
   const [chatMsgs, setChatMsgs] = useState<ChatLine[]>(() => (demoOn() ? DEMO_CHAT.slice(0, 9) : []));
-  const [chatDraft, setChatDraft] = useState("");
   const chatEnd = useRef<HTMLDivElement | null>(null);
   const chatList = useRef<HTMLDivElement | null>(null);
   /** Reading back through chat pauses the feed — the stream keeps arriving,
@@ -2872,23 +2871,9 @@ export function LiveView({
                 {chatBehind > 0 ? `${chatBehind} new message${chatBehind === 1 ? "" : "s"}` : "Jump to latest"}
               </button>
             )}
-            <form
-              className="rm-chat-input"
-              onSubmit={(e) => {
-                e.preventDefault();
-                const text = chatDraft.trim();
-                if (!text) return;
-                setChatMsgs((m) => [...m.slice(-59), { platform: "twitch", user: "you", text }]);
-                setChatDraft("");
-              }}
-            >
-              <input
-                value={chatDraft}
-                onChange={(e) => setChatDraft(e.target.value)}
-                placeholder={demo ? "Say something…" : "Native chat send arrives with Connect"}
-                disabled={!demo}
-              />
-            </form>
+            {/* Read-only for now. Sending needs per-platform OAuth, which
+              * belongs with Connect; an input that quietly drops what you
+              * type is worse than no input at all. */}
           </>
         );
       case "sources": {

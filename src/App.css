@@ -3713,31 +3713,6 @@ textarea::placeholder {
   color: oklch(0.82 0.015 250);
 }
 
-.rm-chat-input {
-  flex-shrink: 0;
-}
-
-.rm-chat-input input {
-  width: 100%;
-  box-sizing: border-box;
-  background: oklch(0.2 0.038 250);
-  border: 1px solid oklch(0.26 0.042 250);
-  border-radius: 10px;
-  color: oklch(0.94 0.008 250);
-  font-family: var(--font);
-  font-size: 12.5px;
-  padding: 9px 12px;
-  outline: none;
-}
-
-.rm-chat-input input::placeholder {
-  color: oklch(0.5 0.03 250);
-}
-
-.rm-chat-input input:focus {
-  border-color: oklch(0.36 0.05 250);
-}
-
 /* dark perm banner above the pills */
 
 .rm-perms {
@@ -4522,7 +4497,13 @@ textarea::placeholder {
   gap: 10px;
   padding: 8px 14px 12px;
   min-height: 0;
-  overflow: hidden;
+  /* Never strand a panel. Panels share the rail and shrink to a usable
+   * floor; past that the rail scrolls rather than clipping whatever sits
+   * at the bottom — in edit mode the add-slot is last, so clipping made it
+   * unreachable exactly when it was needed. */
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
 }
 
 .rm-dock-bottom {
@@ -4562,7 +4543,10 @@ textarea::placeholder {
 }
 
 .rm-dock-side > .rm-panel {
+  /* A floor, not a fixed height: two panels split the rail, four still fit
+   * without any of them collapsing into a title bar. */
   flex: 1 1 auto;
+  min-height: 148px;
   overflow: hidden;
 }
 
