@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ipc,
   listenLiveEvents,
@@ -9,6 +9,27 @@ import {
   type LiveSnapshot,
   type LiveSources,
 } from "../lib/ipc";
+import { DEMO_ALERTS, DEMO_CHAT, DEMO_VIDEO_URL, demoOn, type DemoChatMsg, type DemoPlatform } from "../lib/demo";
+import {
+  PANEL_META,
+  PANEL_ORDER,
+  PRESETS as LAYOUT_PRESETS,
+  dockOf,
+  movePanel,
+  movePanelTo,
+  saveLayout,
+  type Dock,
+  type Layout,
+  type PanelId,
+} from "../lib/layout";
+import {
+  DEFAULT_SCENES,
+  markLiveRoom,
+  parseConfig,
+  serializeConfig,
+  type RoomConfig,
+  type RoomScene,
+} from "../lib/room";
 
 // Transport-truthful copy (M-L4 finding: an RTMP session can look healthy
 // while the platform discards it — only the dashboard confirms LIVE).
@@ -50,8 +71,11 @@ function PreviewPanel() {
         if (r.width < 10 || r.height < 10) return;
         try {
           if (!attached.current) {
-            await ipc.liveAttachPreview(r.x, r.y, r.width, r.height);
+            // The attach call itself reports whether the stage can be a
+            // transparent hole (preview behind the webview) — no polling.
+            const transparent = await ipc.liveAttachPreview(r.x, r.y, r.width, r.height);
             attached.current = true;
+            document.documentElement.dataset.stage = transparent ? "transparent" : "opaque";
           } else {
             await ipc.liveMovePreview(r.x, r.y, r.width, r.height);
           }
@@ -80,18 +104,10 @@ function PreviewPanel() {
   return <div ref={ref} className="live-preview" />;
 }
 
-const PERM_LABEL: Record<string, string> = {
-  granted: "Granted",
-  denied: "Denied",
-  restricted: "Restricted",
-  not_determined: "Not asked yet",
-  denied_or_not_determined: "Not granted",
-  unknown: "Unknown",
-};
-
-/** First-run TCC coach (§5.4): explains each permission, fires the prompts,
- * and spells out the Screen Recording toggle + relaunch dance. */
-function PermissionsCoach({ sources }: { sources: LiveSources }) {
+/** Permission state lives with the controls, not over the canvas: a slim
+ * dark banner above the pills, one line per missing grant. Screen uses the
+ * First Light machinery (Settings deep-link + native drag chip). */
+function PermBanner({ sources }: { sources: LiveSources }) {
   const [perms, setPerms] = useState<LivePermissions | null>(null);
 
   useEffect(() => {
@@ -113,14 +129,8 @@ function PermissionsCoach({ sources }: { sources: LiveSources }) {
   }, []);
 
   if (!perms) return null;
-  const rows: { kind: "screen" | "camera" | "mic"; label: string; status: string; needed: boolean; hint?: string }[] = [
-    {
-      kind: "screen",
-      label: "Screen Recording",
-      status: perms.screen,
-      needed: sources.screen,
-      hint: "macOS grants this in System Settings › Privacy & Security › Screen & System Audio Recording (add Producer with +, toggle on), then relaunch Producer.",
-    },
+  const rows: { kind: "screen" | "camera" | "mic"; label: string; status: string; needed: boolean }[] = [
+    { kind: "screen", label: "Screen recording", status: perms.screen, needed: sources.screen },
     { kind: "camera", label: "Camera", status: perms.camera, needed: sources.camera },
     { kind: "mic", label: "Microphone", status: perms.mic, needed: sources.mic },
   ];
@@ -128,16 +138,25 @@ function PermissionsCoach({ sources }: { sources: LiveSources }) {
   if (pending.length === 0) return null;
 
   return (
-    <div className="live-coach">
-      <div className="live-coach-title">Permissions needed</div>
+    <div className="rm-perms">
       {pending.map((r) => (
-        <div key={r.kind} className="live-coach-row">
-          <div>
-            <strong>{r.label}</strong> · {PERM_LABEL[r.status] ?? r.status}
-            {r.hint && <div className="live-coach-hint">{r.hint}</div>}
-          </div>
-          <button onClick={() => ipc.liveRequestPermission(r.kind)}>
-            {r.kind === "screen" ? "Request" : "Allow…"}
+        <div key={r.kind} className="rm-perm-row">
+          <span className="rm-perm-dot" />
+          <span className="rm-perm-text">
+            {r.label} isn&rsquo;t granted{r.kind === "screen" ? " — drag the chip in, then relaunch" : ""}
+          </span>
+          <button
+            className="rm-perm-fix"
+            onClick={() => {
+              if (r.kind === "screen") {
+                ipc.liveScreenCoach("open_settings").catch(() => {});
+                ipc.liveScreenCoach("chip_show").catch(() => {});
+              } else {
+                ipc.liveRequestPermission(r.kind).catch(() => {});
+              }
+            }}
+          >
+            {r.kind === "screen" ? "Fix in Settings" : "Allow"}
           </button>
         </div>
       ))}
@@ -309,6 +328,56 @@ const ic = {
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </svg>
   ),
+  collapseDown: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 6h16M8 11l4 4 4-4M12 15V9" />
+    </svg>
+  ),
+  grip: (
+    <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor">
+      <circle cx="3.5" cy="3" r="1.3" /><circle cx="8.5" cy="3" r="1.3" />
+      <circle cx="3.5" cy="7" r="1.3" /><circle cx="8.5" cy="7" r="1.3" />
+      <circle cx="3.5" cy="11" r="1.3" /><circle cx="8.5" cy="11" r="1.3" />
+    </svg>
+  ),
+  dots: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+      <circle cx="5" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="19" cy="12" r="1.7" />
+    </svg>
+  ),
+  layout: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18M9 14h12" />
+    </svg>
+  ),
+  chevRight: (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  ),
+  collapse: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  ),
+  sliders: (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+      <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3" />
+      <path d="M1 14h6M9 8h6M17 16h6" />
+    </svg>
+  ),
+  ext: (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <path d="M15 3h6v6M10 14L21 3" />
+    </svg>
+  ),
+};
+
+const PLATFORM_TINT: Record<string, string> = {
+  twitch: "#a970ff",
+  kick: "#53fc18",
+  youtube: "#ff4e45",
 };
 
 /** Mock-faithful slim fader: 4px track, white 26×14 thumb, pointer drag. */
@@ -354,6 +423,7 @@ function MeterStrip({
   soon,
   onVolume,
   onMute,
+  onToggle,
 }: {
   label: string;
   icon: ReactNode;
@@ -364,6 +434,7 @@ function MeterStrip({
   soon?: boolean;
   onVolume?: (mul: number) => void;
   onMute?: () => void;
+  onToggle?: () => void;
 }) {
   const ui = Math.cbrt(Math.max(0, Math.min(1, volume)));
   const db = volume > 0.001 ? Math.round(20 * Math.log10(volume)) : -60;
@@ -376,11 +447,21 @@ function MeterStrip({
         </div>
         <Fader value={dead ? 0.35 : ui} disabled={dead} onChange={(u) => onVolume?.(u * u * u)} />
       </div>
-      <span className="rm-strip-db">{soon ? "soon" : muted ? "muted" : `${db <= -60 ? "-∞" : db} dB`}</span>
+      <span className="rm-strip-db">{soon ? "soon" : disabled ? "off" : muted ? "muted" : `${db <= -60 ? "-∞" : db} dB`}</span>
       <button className={`rm-strip-icon${muted ? " muted" : ""}`} disabled={dead} onClick={onMute} title={muted ? "Unmute" : "Mute"}>
         {icon}
       </button>
-      <span className="rm-strip-name">{label}</span>
+      {onToggle ? (
+        <button
+          className={`rm-strip-name as-toggle${disabled ? " off" : ""}`}
+          onClick={onToggle}
+          title={disabled ? `Turn ${label.toLowerCase()} on` : `Turn ${label.toLowerCase()} off`}
+        >
+          {label}
+        </button>
+      ) : (
+        <span className="rm-strip-name">{label}</span>
+      )}
     </div>
   );
 }
@@ -550,14 +631,58 @@ export function LiveView({
   const [banner, setBanner] = useState<string | null>(null);
   const [sources, setSources] = useState<LiveSources>({ screen: false, camera: false, mic: false });
   const [micLevel, setMicLevel] = useState(0);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
   const [roomsOpen, setRoomsOpen] = useState(false);
-  const [destsOpen, setDestsOpen] = useState(false);
   const [micPopOpen, setMicPopOpen] = useState(false);
+  const [destsOpen, setDestsOpen] = useState(false);
+  const [qualityOpen, setQualityOpen] = useState(false);
+  const [panelMenu, setPanelMenu] = useState<PanelId | null>(null);
+  const [layoutMenu, setLayoutMenu] = useState(false);
+  const [layoutEdit, setLayoutEdit] = useState(false);
+  const [dragging, setDragging] = useState<PanelId | null>(null);
+  const [dropHint, setDropHint] = useState<{ dock: Dock; index: number } | null>(null);
+  const [addMenu, setAddMenu] = useState<Dock | null>(null);
+  const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null);
+  // The room document: dock layout, scenes, channel selection, scene state.
+  const [cfg, setCfgState] = useState<RoomConfig>(() => parseConfig(room?.config));
+  // Event handlers registered once must not close over a stale document.
+  const cfgRef = useRef(cfg);
+  cfgRef.current = cfg;
+  const layout = cfg.layout;
+  const writeCfg = (next: RoomConfig) => {
+    setCfgState(next);
+    if (room) ipc.liveUpdateRoom(room.id, { config: serializeConfig(next) }).catch(() => {});
+    else saveLayout(next.layout);
+  };
+  const setLayout = (l: Layout) => writeCfg({ ...cfg, layout: l });
+  const scenes: RoomScene[] = cfg.scenes.length ? cfg.scenes : DEFAULT_SCENES;
   const [overlayOpen, setOverlayOpen] = useState(false);
-  const sheetAutoOpened = useRef(false);
   const videoApplied = useRef(false);
+  const channelsApplied = useRef(false);
+  const demoVideoSet = useRef(false);
+  const demo = demoOn();
+  const [chatFilter, setChatFilter] = useState<"all" | DemoPlatform>("all");
+  const [chatMsgs, setChatMsgs] = useState<DemoChatMsg[]>(() => (demoOn() ? DEMO_CHAT.slice(0, 9) : []));
+  const [chatDraft, setChatDraft] = useState("");
+  const chatEnd = useRef<HTMLDivElement | null>(null);
+
+  // Demo liveness: the chat keeps talking.
+  useEffect(() => {
+    if (!demo) return;
+    let i = 0;
+    const t = setInterval(
+      () => {
+        setChatMsgs((m) => [...m.slice(-59), DEMO_CHAT[(9 + i++) % DEMO_CHAT.length]]);
+      },
+      3800 + Math.random() * 2400,
+    );
+    return () => clearInterval(t);
+  }, [demo]);
+
+  useEffect(() => {
+    chatEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [chatMsgs]);
   const unlisten = useRef<(() => void) | null>(null);
   const roomApplied = useRef(false);
   const roomId = room?.id ?? null;
@@ -571,20 +696,16 @@ export function LiveView({
     // session (switching rooms mid-stream adopts the running scene).
     if (room && !roomApplied.current && snap.engine_ready && snap.session_state === "idle") {
       roomApplied.current = true;
-      try {
-        const cfg = JSON.parse(room.config || "{}") as Partial<LiveSources>;
-        if (typeof cfg.screen === "boolean") {
-          await ipc.liveSetSources(cfg.screen, cfg.camera ?? false, cfg.mic ?? false);
-          if (cfg.mic_volume != null || cfg.mic_muted != null) {
-            await ipc.liveSetMicAudio({ volume: cfg.mic_volume, muted: cfg.mic_muted });
-          }
-          if (cfg.overlay_window != null || cfg.overlay_url) {
-            await ipc.liveSetOverlay(cfg.overlay_window ?? null, true, cfg.overlay_url ?? null);
-          }
-          setSources((s) => ({ ...s, ...cfg }));
+      const saved = parseConfig(room.config).sources;
+      if (typeof saved.screen === "boolean") {
+        await ipc.liveSetSources(saved.screen, saved.camera ?? false, saved.mic ?? false);
+        if (saved.mic_volume != null || saved.mic_muted != null) {
+          await ipc.liveSetMicAudio({ volume: saved.mic_volume, muted: saved.mic_muted });
         }
-      } catch {
-        /* malformed config — start clean */
+        if (saved.overlay_window != null || saved.overlay_url) {
+          await ipc.liveSetOverlay(saved.overlay_window ?? null, true, saved.overlay_url ?? null);
+        }
+        setSources((s) => ({ ...s, ...saved }));
       }
     }
     // Stored video settings (global, OBS-style) re-apply when idle.
@@ -602,11 +723,36 @@ export function LiveView({
         /* bad stored value — engine default stands */
       }
     }
-    // A room with nothing configured greets you with the sources sheet.
-    if (!sheetAutoOpened.current) {
-      sheetAutoOpened.current = true;
-      const s = snap.sources;
-      if (snap.engine_ready && s && !s.screen && !s.camera && !s.mic) setSheetOpen(true);
+    // Channel selection from the room document → engine flags.
+    if (!channelsApplied.current && room) {
+      channelsApplied.current = true;
+      const want = parseConfig(room.config).channels;
+      if (Object.keys(want).length) {
+        for (const d of await ipc.liveListDestinations()) {
+          const target = want[d.id];
+          if (typeof target === "boolean" && target !== d.enabled) {
+            await ipc
+              .liveUpsertDestination({ id: d.id, preset: d.preset, label: d.label, server: d.server ?? undefined, enabled: target })
+              .catch(() => {});
+          }
+        }
+        setDestinations(await ipc.liveListDestinations());
+      }
+    }
+    // Demo mode: put real gameplay footage on the canvas via the CEF
+    // browser source, so the room never demos black.
+    if (
+      demo &&
+      !demoVideoSet.current &&
+      snap.engine_ready &&
+      snap.bootstrap_ok &&
+      snap.session_state === "idle" &&
+      snap.sources &&
+      snap.sources.overlay_window == null &&
+      !snap.sources.overlay_url
+    ) {
+      demoVideoSet.current = true;
+      ipc.liveSetOverlay(null, false, DEMO_VIDEO_URL).catch(() => {});
     }
   }, [room]);
 
@@ -620,14 +766,18 @@ export function LiveView({
         setSnapshot((s) => (s ? { ...s, session_state: ev.state } : s));
         if (ev.state === "idle") setBanner(null);
       } else if (ev.type === "session_ended") {
+        markLiveRoom(null);
         setStatuses(new Map(ev.report.destinations.map((d) => [d.id, d])));
         if (!ev.report.ok && ev.report.notes.length > 0) setBanner(ev.report.notes.join(" · "));
       } else if (ev.type === "sources_changed") {
         setSources(ev.sources);
-        // The room document follows the scene: every source/overlay change
-        // is persisted so reopening the room restores it.
+        // The room document follows the scene, without disturbing the rest
+        // of the document (layout, scenes, channels).
         if (roomId) {
-          ipc.liveUpdateRoom(roomId, { config: JSON.stringify(ev.sources) }).catch(() => {});
+          const next = { ...cfgRef.current, sources: ev.sources };
+          cfgRef.current = next;
+          setCfgState(next);
+          ipc.liveUpdateRoom(roomId, { config: serializeConfig(next) }).catch(() => {});
         }
       } else if (ev.type === "video_changed") {
         setSnapshot((s) => (s ? { ...s, video_height: ev.height, video_fps: ev.fps } : s));
@@ -653,7 +803,10 @@ export function LiveView({
   const streaming = state === "streaming" || state === "starting" || state === "stopping";
   const engineOk = snapshot?.engine_ready && snapshot?.bootstrap_ok;
 
+  /** Channel selection is part of the room document; opening a room pushes
+   * it to the engine's destination flags so go-live stays honest. */
   async function toggleEnabled(d: LiveDestination) {
+    writeCfg({ ...cfg, channels: { ...cfg.channels, [d.id]: !d.enabled } });
     await ipc.liveUpsertDestination({ id: d.id, preset: d.preset, label: d.label, server: d.server ?? undefined, enabled: !d.enabled });
     refresh();
   }
@@ -662,7 +815,10 @@ export function LiveView({
     setBanner(null);
     try {
       await ipc.liveGoLive();
-      if (roomId) ipc.liveUpdateRoom(roomId, { touchLive: true }).catch(() => {});
+      if (roomId) {
+        ipc.liveUpdateRoom(roomId, { touchLive: true }).catch(() => {});
+        markLiveRoom(roomId);
+      }
     } catch (e) {
       setBanner(String(e));
     }
@@ -680,18 +836,24 @@ export function LiveView({
 
   const overlayActive = sources.overlay_window != null || !!sources.overlay_url;
   const enabledDests = destinations.filter((d) => d.enabled);
+
+  const activeScene = scenes.find((p) => p.screen === sources.screen && p.camera === sources.camera)?.id;
+
+  const addScene = () => {
+    const n = scenes.length + 1;
+    const next: RoomScene = {
+      id: `s${Date.now().toString(36)}`,
+      name: `Scene ${n}`,
+      screen: sources.screen,
+      camera: sources.camera,
+    };
+    writeCfg({ ...cfg, scenes: [...scenes, next] });
+  };
+
+  const removeScene = (id: string) => writeCfg({ ...cfg, scenes: scenes.filter((s) => s.id !== id) });
+
   const destChip =
     enabledDests.length > 0 ? enabledDests.map((d) => d.label).join(" + ") : "Add channels";
-
-  // The mock's scenes are real presets over the implicit scene.
-  const scenePresets: { key: string; label: string; screen: boolean; camera: boolean }[] = [
-    { key: "pip", label: "PiP", screen: true, camera: true },
-    { key: "cam", label: "Full cam", screen: false, camera: true },
-    { key: "screen", label: "Screen", screen: true, camera: false },
-  ];
-  const activeScene = scenePresets.find(
-    (p) => p.screen === sources.screen && p.camera === sources.camera,
-  )?.key;
 
   const setVolume = (v: number) => {
     setSources((s) => ({ ...s, mic_volume: v }));
@@ -717,11 +879,16 @@ export function LiveView({
   const closePops = () => {
     setRoomsOpen(false);
     setDestsOpen(false);
+    setQualityOpen(false);
+    setPanelMenu(null);
+    setLayoutMenu(false);
+    setAddMenu(null);
     setMicPopOpen(false);
     setOverlayOpen(false);
     setChatOpen(false);
   };
-  const anyPop = roomsOpen || destsOpen || micPopOpen || overlayOpen || chatOpen;
+  const anyPop =
+    roomsOpen || destsOpen || qualityOpen || micPopOpen || overlayOpen || chatOpen || panelMenu !== null || layoutMenu || addMenu !== null || adding || !!editing;
 
   const micStrip = (
     <MeterStrip
@@ -733,11 +900,432 @@ export function LiveView({
       disabled={!sources.mic}
       onVolume={setVolume}
       onMute={toggleMute}
+      onToggle={() => setSrc({ mic: !sources.mic })}
     />
   );
 
+
+  // ── Panels: everything that isn't the stage is a dockable panel ────────
+  const panelBody = (id: PanelId) => {
+    switch (id) {
+      case "scenes":
+        return (
+          <div className="rm-scenes">
+            {scenes.map((p, i) => (
+              <div
+                key={p.id}
+                role="button"
+                tabIndex={0}
+                className={`rm-scene-row${activeScene === p.id ? " active" : ""}${activeScene === p.id && streaming ? " onair" : ""}`}
+                onClick={() => engineOk && setSrc({ screen: p.screen, camera: p.camera })}
+                onKeyDown={(e) => e.key === "Enter" && engineOk && setSrc({ screen: p.screen, camera: p.camera })}
+              >
+                <span className="rm-scene-chev">{ic.chevRight}</span>
+                <span className="rm-scene-icon">{ic.screen}</span>
+                <span className="rm-scene-name">{p.name}</span>
+                {activeScene === p.id ? (
+                  <>
+                    <span className="rm-scene-live">{streaming ? "Live" : "On"}</span>
+                    <span className="rm-scene-rec" />
+                  </>
+                ) : (
+                  <>
+                    <span className="rm-scene-key">{i < 9 ? `⌘${i + 1}` : ""}</span>
+                    {!DEFAULT_SCENES.some((d) => d.id === p.id) && (
+                      <button
+                        className="rm-scene-x"
+                        title="Remove scene"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeScene(p.id);
+                        }}
+                      >
+                        {ic.x}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      case "alerts":
+        return (
+          <div className="rm-alerts">
+            {demo ? (
+              <>
+                {DEMO_ALERTS.map((a, i) => (
+                  <div key={i} className="rm-alert">
+                    <span className="rm-alert-dot" style={{ background: PLATFORM_TINT[a.platform] }} />
+                    <div className="rm-alert-body">
+                      <div className="rm-alert-line">
+                        <strong>{a.user}</strong>
+                        {a.detail && <span className="rm-alert-chip">{a.detail}</span>}
+                      </div>
+                      <div className="rm-alert-kind">
+                        {a.kind === "follow" ? "followed" : a.kind === "sub" ? "subscribed" : a.kind === "tip" ? "tipped" : "raided"}
+                        {a.message && <span className="rm-alert-msg"> — “{a.message}”</span>}
+                      </div>
+                    </div>
+                    <span className="rm-alert-ago">{a.ago}</span>
+                  </div>
+                ))}
+                <div className="rm-alert rm-alert-sys">
+                  <span className="rm-alert-dot sys" />
+                  <div className="rm-alert-body">
+                    <div className="rm-alert-kind">Stream started</div>
+                  </div>
+                  <span className="rm-alert-ago">32m</span>
+                </div>
+              </>
+            ) : (
+              <div className="rm-alerts-empty">Follows, subs, and tips land here when you're live.</div>
+            )}
+          </div>
+        );
+      case "chat":
+        return (
+          <>
+            <div className="rm-chat-chips">
+              {(["all", "twitch", "kick", "youtube"] as const).map((p) => (
+                <button
+                  key={p}
+                  className={`rm-chat-chip${chatFilter === p ? " on" : ""}`}
+                  onClick={() => setChatFilter(p)}
+                >
+                  {p === "all" ? "All" : p === "youtube" ? "YouTube" : p[0].toUpperCase() + p.slice(1)}
+                </button>
+              ))}
+            </div>
+            <div className="rm-chat-list">
+              {chatMsgs
+                .filter((m) => chatFilter === "all" || m.platform === chatFilter)
+                .map((m, i) => (
+                  <div key={i} className="rm-chat-msg">
+                    <span className="rm-chat-user" style={{ color: PLATFORM_TINT[m.platform] }}>
+                      {m.user}
+                    </span>
+                    <span className="rm-chat-text">{m.text}</span>
+                  </div>
+                ))}
+              {chatMsgs.length === 0 && (
+                <div className="rm-alerts-empty">
+                  Chat flows in here live. Pop out the platform chat to talk back until native send lands.
+                </div>
+              )}
+              <div ref={chatEnd} />
+            </div>
+            <form
+              className="rm-chat-input"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const text = chatDraft.trim();
+                if (!text) return;
+                setChatMsgs((m) => [...m.slice(-59), { platform: "twitch", user: "you", text }]);
+                setChatDraft("");
+              }}
+            >
+              <input
+                value={chatDraft}
+                onChange={(e) => setChatDraft(e.target.value)}
+                placeholder={demo ? "Say something…" : "Native chat send arrives with Connect"}
+                disabled={!demo}
+              />
+            </form>
+          </>
+        );
+      case "sources":
+        return (
+          <>
+              <div className="rm-rows">
+                {(
+                  [
+                    { key: "screen", label: "Screen", icon: ic.screen, on: sources.screen, act: () => setSrc({ screen: !sources.screen }) },
+                    { key: "camera", label: "Camera", icon: ic.cam, on: sources.camera, act: () => setSrc({ camera: !sources.camera }) },
+                    { key: "alerts", label: "Alerts & overlays", icon: ic.link, on: overlayActive, act: () => setOverlayOpen(true) },
+                    { key: "guest", label: "Guest", icon: ic.invite, on: false, soon: true, act: () => {} },
+                  ] as const
+                ).map((t) => {
+                  const soon = "soon" in t && t.soon;
+                  return (
+                    <div key={t.key} className={`rm-row${t.on ? "" : " off"}${soon ? " soon" : ""}`}>
+                      <span className="rm-row-icon">{t.icon}</span>
+                      <span className="rm-row-name">{t.label}</span>
+                      {soon ? (
+                        <span className="rm-soon">SOON</span>
+                      ) : (
+                        <>
+                          {t.key === "alerts" && (
+                            <button className="rm-row-edit" onClick={() => setOverlayOpen(true)} title="Configure">
+                              {ic.gear}
+                            </button>
+                          )}
+                          <button
+                            className={`rm-switch${t.on ? " on" : ""}`}
+                            disabled={!engineOk}
+                            onClick={() => (t.key === "alerts" ? setOverlayOpen(true) : t.act())}
+                          >
+                            <span className="rm-switch-knob" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <button className="rm-addrow" disabled title="More source types arrive with the scene editor">
+                {ic.plus} Add source <span className="rm-soon">SOON</span>
+              </button>
+          </>
+        );
+      case "mixer":
+        return (
+              <div className="rm-strips">
+                {micStrip}
+                <MeterStrip label="Desktop" icon={ic.cast} level={0} volume={0.5} muted soon />
+                <MeterStrip label="Music" icon={ic.chat} level={0} volume={0.4} muted soon />
+              </div>
+        );
+      case "channels":
+        return (
+          <div className="rm-rows">
+            {destinations.map((d) => {
+              const st = statuses.get(d.id);
+              const phase = st ? PHASE_COPY[st.phase] ?? PHASE_COPY.idle : PHASE_COPY.idle;
+              return (
+                <div key={d.id} className={`rm-row${d.enabled ? "" : " off"}`}>
+                  <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />
+                  <span className="rm-row-name">{d.label}</span>
+                  <span className="rm-row-sub">
+                    {streaming && st
+                      ? `${phase.label}${st.phase === "live" ? ` · ${fmtBitrate(st.bytes_sent, elapsed)}` : ""}`
+                      : d.preset}
+                  </span>
+                  <button className={`rm-switch${d.enabled ? " on" : ""}`} disabled={streaming} onClick={() => toggleEnabled(d)}>
+                    <span className="rm-switch-knob" />
+                  </button>
+                </div>
+              );
+            })}
+            {destinations.length === 0 && <div className="rm-rows-empty">No channels yet.</div>}
+          </div>
+        );
+      case "stats": {
+        const sent = [...statuses.values()].reduce((n, st) => n + st.bytes_sent, 0);
+        const dropped = [...statuses.values()].reduce((n, st) => n + st.dropped_frames, 0);
+        const recon = [...statuses.values()].reduce((n, st) => n + st.reconnects, 0);
+        return (
+          <div className="rm-stats">
+            <div className="rm-stat-cell">
+              <span className="rm-stat-num">{streaming ? fmtBitrate(sent, elapsed) : "—"}</span>
+              <span className="rm-stat-label">upload</span>
+            </div>
+            <div className="rm-stat-cell">
+              <span className="rm-stat-num">{`${Math.floor(elapsed / 60)}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}</span>
+              <span className="rm-stat-label">uptime</span>
+            </div>
+            <div className={`rm-stat-cell${dropped > 0 ? " warn" : ""}`}>
+              <span className="rm-stat-num">{dropped}</span>
+              <span className="rm-stat-label">dropped</span>
+            </div>
+            <div className={`rm-stat-cell${recon > 0 ? " warn" : ""}`}>
+              <span className="rm-stat-num">{recon}</span>
+              <span className="rm-stat-label">reconnects</span>
+            </div>
+            <div className="rm-stat-cell">
+              <span className="rm-stat-num">{vh}p{vf === 60 ? "60" : ""}</span>
+              <span className="rm-stat-label">output</span>
+            </div>
+          </div>
+        );
+      }
+    }
+  };
+
+  const panelExtra = (id: PanelId) => {
+    if (id === "scenes")
+      return (
+        <button className="rm-panel-plus" title="Save the current look as a scene" onClick={addScene}>
+          {ic.plus}
+        </button>
+      );
+    if (id === "chat")
+      return (
+        <div className="rm-pop-anchor">
+          <button className="rm-panel-plus" title="Pop out platform chat" onClick={() => setChatOpen((o) => !o)}>
+            {ic.ext}
+          </button>
+          {chatOpen && (
+            <div className="rm-pop rm-pop-right">
+              <ChatPopover onClose={() => setChatOpen(false)} />
+            </div>
+          )}
+        </div>
+      );
+    if (id === "sources")
+      return (
+        <span className="rm-card-sub">
+          {[sources.screen && "screen", sources.camera && "camera", overlayActive && "alerts"]
+            .filter(Boolean)
+            .join(" · ") || "nothing in the scene"}
+        </span>
+      );
+    if (id === "mixer")
+      return <span className="rm-card-sub">{sources.mic ? (sources.mic_muted ? "mic muted" : "mic open") : "mic off"}</span>;
+    return null;
+  };
+
+  const slot = (dock: Dock, index: number) => (
+    <div
+      key={`${dock}-slot-${index}`}
+      className={`rm-slot${layoutEdit ? " armed" : ""}${
+        dropHint && dropHint.dock === dock && dropHint.index === index ? " hot" : ""
+      }`}
+    />
+  );
+
+  /** WKWebView's HTML5 drag-and-drop is unreliable, so panels drag on raw
+   * pointer events (the dnd-kit / VS Code approach): capture the pointer,
+   * follow it with a ghost, and work out the drop from geometry. */
+  const dragRef = useRef<{ id: PanelId; x: number; y: number; moved: boolean } | null>(null);
+
+  const hitTest = (x: number, y: number): { dock: Dock; index: number } | null => {
+    const docks = Array.from(document.querySelectorAll<HTMLElement>("[data-dock]"));
+    for (const el of docks) {
+      const r = el.getBoundingClientRect();
+      const pad = 16;
+      if (x < r.left - pad || x > r.right + pad || y < r.top - pad || y > r.bottom + pad) continue;
+      const dock = el.dataset.dock as Dock;
+      const horizontal = dock === "bottom";
+      const panels = Array.from(el.querySelectorAll<HTMLElement>("[data-panel]"));
+      let index = panels.length;
+      for (let i = 0; i < panels.length; i++) {
+        const pr = panels[i].getBoundingClientRect();
+        const mid = horizontal ? pr.left + pr.width / 2 : pr.top + pr.height / 2;
+        if ((horizontal ? x : y) < mid) {
+          index = i;
+          break;
+        }
+      }
+      return { dock, index };
+    }
+    return null;
+  };
+
+  const gripDown = (id: PanelId) => (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    dragRef.current = { id, x: e.clientX, y: e.clientY, moved: false };
+  };
+
+  const gripMove = (e: React.PointerEvent) => {
+    const d = dragRef.current;
+    if (!d) return;
+    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 5) return;
+    if (!d.moved) {
+      d.moved = true;
+      setDragging(d.id);
+    }
+    setGhost({ x: e.clientX, y: e.clientY });
+    setDropHint(hitTest(e.clientX, e.clientY));
+  };
+
+  const gripUp = (e: React.PointerEvent) => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    if (d?.moved) {
+      const target = hitTest(e.clientX, e.clientY);
+      if (target) setLayout(movePanelTo(layout, d.id, target.dock, target.index));
+    }
+    setDragging(null);
+    setDropHint(null);
+    setGhost(null);
+  };
+
+  const addButton = (dock: Dock) => {
+    const available = PANEL_ORDER.filter((id) => dockOf(layout, id) !== dock);
+    return (
+      <div className="rm-pop-anchor rm-add-anchor" key={`${dock}-add`}>
+        <button
+          className="rm-add-panel"
+          title="Add a panel here"
+          onClick={() => setAddMenu((m) => (m === dock ? null : dock))}
+        >
+          {ic.plus}
+        </button>
+        {addMenu === dock && (
+          <div className={`rm-pop rm-pop-add${dock === "bottom" ? " rm-pop-up" : " rm-pop-right"}`}>
+            <div className="rm-pop-title">ADD PANEL</div>
+            {available.map((id) => (
+              <button
+                key={id}
+                className="rm-pop-row"
+                onClick={() => {
+                  setLayout(movePanelTo(layout, id, dock, layout[dock].length));
+                  setAddMenu(null);
+                }}
+              >
+                <span className="rm-add-name">{PANEL_META[id].title}</span>
+                <span className="rm-add-where">
+                  {dockOf(layout, id) === "hidden" ? "hidden" : `from ${dockOf(layout, id)}`}
+                </span>
+              </button>
+            ))}
+            {available.length === 0 && <div className="rm-rows-empty">Everything is already here.</div>}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderDock = (dock: Dock) => {
+    const ids = layout[dock];
+    return (
+      <>
+        {ids.map((id, i) => (
+          <Fragment key={id}>
+            {slot(dock, i)}
+            {renderPanel(id)}
+          </Fragment>
+        ))}
+        {slot(dock, ids.length)}
+        {addButton(dock)}
+      </>
+    );
+  };
+
+  const renderPanel = (id: PanelId) => (
+    <section key={id} data-panel={id} className={`rm-panel rm-panel-${id}${dragging === id ? " dragging" : ""}`}>
+      <div className="rm-panel-head">
+        <span
+          className="rm-grip"
+          title="Drag to move this panel"
+          onPointerDown={gripDown(id)}
+          onPointerMove={gripMove}
+          onPointerUp={gripUp}
+          onPointerCancel={gripUp}
+        >
+          {ic.grip}
+        </span>
+        <span className="rm-group-label">{PANEL_META[id].title.toUpperCase()}</span>
+        <div className="rm-panel-actions">
+          {panelExtra(id)}
+          <button
+            className="rm-panel-plus rm-panel-hide"
+            title="Hide this panel"
+            onClick={() => setLayout(movePanel(layout, id, "hidden"))}
+          >
+            {ic.x}
+          </button>
+        </div>
+      </div>
+      <div className="rm-panel-body">{panelBody(id)}</div>
+    </section>
+  );
+
   return (
-    <div className="room">
+    <div className={`room${layoutEdit ? " layout-edit" : ""}`}>
       {anyPop && <div className="rm-pop-backdrop" onClick={closePops} />}
 
       <header className="rm-top" data-tauri-drag-region>
@@ -774,39 +1362,55 @@ export function LiveView({
           </div>
         </div>
 
+        <div className="rm-top-drag" data-tauri-drag-region />
+
         <div className="rm-top-right">
+          {streaming && (
+            <span className="rm-live-pill">
+              <span className="rm-live-dot" />
+              {`${Math.floor(elapsed / 60)}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}
+            </span>
+          )}
+
           <div className="rm-pop-anchor">
-            <button className="rm-chip" onClick={() => setDestsOpen((o) => !o)} title="Live channels">
+            <button className="rm-chip" onClick={() => setDestsOpen((o) => !o)} title="Channels this room goes out to">
               {ic.cast}
               <span>{destChip}</span>
+              {ic.chev}
             </button>
             {destsOpen && (
               <div className="rm-pop rm-pop-right rm-pop-dests">
+                <div className="rm-pop-title">CHANNELS</div>
                 {destinations.map((d) => {
                   const st = statuses.get(d.id);
                   const phase = st ? PHASE_COPY[st.phase] ?? PHASE_COPY.idle : PHASE_COPY.idle;
                   return (
-                    <div key={d.id} className={`rm-dest-row${d.enabled ? "" : " off"}`}>
-                      <span className={`live-dot ${streaming && st ? phase.tone : d.enabled ? "ready" : "muted"}`} />
-                      <span className="rm-dest-name">{d.label}</span>
-                      <span className="rm-dest-sub">
+                    <div key={d.id} className={`rm-row${d.enabled ? "" : " off"}`}>
+                      <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />
+                      <span className="rm-row-name">{d.label}</span>
+                      <span className="rm-row-sub">
                         {streaming && st
-                          ? `${phase.label}${st.phase === "live" ? ` · ${fmtBitrate(st.bytes_sent, elapsed)}` : ""}${st.dropped_frames > 0 ? ` · ${st.dropped_frames} drop` : ""}`
+                          ? `${phase.label}${st.phase === "live" ? ` · ${fmtBitrate(st.bytes_sent, elapsed)}` : ""}`
                           : d.preset}
                       </span>
                       {!streaming && (
-                        <>
-                          <button className="rm-mini" onClick={() => toggleEnabled(d)}>
-                            {d.enabled ? "On" : "Off"}
-                          </button>
-                          <button className="rm-mini" onClick={() => setEditing(d)}>
-                            Edit
-                          </button>
-                        </>
+                        <button className="rm-row-edit" onClick={() => setEditing(d)} title="Edit channel">
+                          {ic.gear}
+                        </button>
                       )}
+                      <button
+                        className={`rm-switch${d.enabled ? " on" : ""}`}
+                        disabled={streaming}
+                        onClick={() => toggleEnabled(d)}
+                      >
+                        <span className="rm-switch-knob" />
+                      </button>
                     </div>
                   );
                 })}
+                {destinations.length === 0 && (
+                  <div className="rm-rows-empty">No channels yet — add Twitch, Kick, or YouTube.</div>
+                )}
                 {!streaming && (
                   <button className="rm-pop-row dim" onClick={() => setAdding(true)}>
                     + Add channel
@@ -816,51 +1420,122 @@ export function LiveView({
             )}
           </div>
 
-          <span className="rm-chip rm-chip-static" title="Video settings live in the Sources sheet">
-            LIVE STREAM · {vh}P{vf === 60 ? " · 60" : ""}
-          </span>
+          <div className="rm-pop-anchor">
+            <button className="rm-chip" onClick={() => setQualityOpen((o) => !o)} title="Output video settings">
+              {vh}p · {vf}
+              {ic.chev}
+            </button>
+            {qualityOpen && (
+              <div className="rm-pop rm-pop-right rm-pop-quality">
+                <div className="rm-pop-title">VIDEO {streaming && <span className="rm-card-sub">locked while live</span>}</div>
+                <div className="rm-ctrl-row">
+                  <span className="rm-ctrl-label">Resolution</span>
+                  <span className="rm-quality-set">
+                    {[720, 1080].map((h) => (
+                      <button key={h} className={`rm-q${vh === h ? " on" : ""}`} disabled={streaming || !engineOk} onClick={() => setVideoCfg(h, vf)}>
+                        {h}p
+                      </button>
+                    ))}
+                  </span>
+                </div>
+                <div className="rm-ctrl-row">
+                  <span className="rm-ctrl-label">Frame rate</span>
+                  <span className="rm-quality-set">
+                    {[30, 60].map((f) => (
+                      <button key={f} className={`rm-q${vf === f ? " on" : ""}`} disabled={streaming || !engineOk} onClick={() => setVideoCfg(vh, f)}>
+                        {f}
+                      </button>
+                    ))}
+                  </span>
+                </div>
+                <div className="rm-ctrl-row">
+                  <span className="rm-ctrl-label">Bitrate</span>
+                  <span className="rm-ctrl-value" title="Producer negotiates the best rate every channel accepts">Auto</span>
+                </div>
+              </div>
+            )}
+          </div>
 
           {streaming ? (
             <button className="rm-golive stop" onClick={() => ipc.liveStop()} disabled={state === "stopping"}>
-              {ic.onair}
-              {state === "stopping"
-                ? "Stopping…"
-                : `Stop · ${Math.floor(elapsed / 60)}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}
+              <span className="rm-big-icon">■</span>
+              {state === "stopping" ? "Stopping…" : "End stream"}
             </button>
           ) : (
-            <button className="rm-golive" onClick={goLive} disabled={!engineOk || enabledDests.length === 0}>
+            <button
+              className="rm-golive"
+              onClick={goLive}
+              disabled={!engineOk || enabledDests.length === 0}
+              title={enabledDests.length === 0 ? "Turn on a channel first" : undefined}
+            >
               {ic.onair}
               Go Live
             </button>
           )}
 
-          <button className="rm-leave" onClick={() => onLeave?.()} title="Leave room">
-            {ic.x}
+          <button
+            className={`rm-icon-chip${layoutEdit ? " on" : ""}`}
+            onClick={() => {
+              setLayoutEdit((e) => !e);
+              setLayoutMenu(false);
+            }}
+            title={layoutEdit ? "Done editing layout" : "Edit layout"}
+          >
+            {ic.layout}
+          </button>
+
+          <button
+            className="rm-leave"
+            onClick={() => onLeave?.()}
+            title={streaming ? "Collapse — the stream keeps running" : "Collapse room"}
+          >
+            {ic.collapseDown}
           </button>
         </div>
       </header>
 
-      <div className="rm-body">
-        <aside className="rm-scenes">
-          <button className="rm-addscene" title="Custom scenes arrive with the scene editor" disabled>
-            + Add scene
-          </button>
-          {scenePresets.map((p) => (
-            <button
-              key={p.key}
-              className={`rm-scene${activeScene === p.key ? " active" : ""}`}
-              disabled={!engineOk}
-              onClick={() => setSrc({ screen: p.screen, camera: p.camera })}
-            >
-              <span className={`rm-scene-thumb ${p.key}`}>
-                {p.key !== "cam" && <span className="rm-scene-main" />}
-                {p.key !== "screen" && <span className={`rm-scene-cam${p.key === "cam" ? " full" : ""}`} />}
-              </span>
-              <span className="rm-scene-name">{p.label}</span>
+      {layoutEdit && (
+        <div className="rm-editbar">
+          <span className="rm-editbar-dot" />
+          <span className="rm-editbar-text">
+            Editing layout — drag a panel by its grip, or use + to add one
+          </span>
+          <div className="rm-pop-anchor">
+            <button className="rm-editbar-btn" onClick={() => setLayoutMenu((o) => !o)}>
+              Presets
+              {ic.chev}
             </button>
-          ))}
-          <span className="rm-scenes-note">Cuts hit the broadcast instantly.</span>
-        </aside>
+            {layoutMenu && (
+              <div className="rm-pop rm-pop-layout">
+                {LAYOUT_PRESETS.map((p) => (
+                  <button
+                    key={p.key}
+                    className="rm-preset"
+                    onClick={() => {
+                      setLayout({
+                        left: [...p.layout.left],
+                        right: [...p.layout.right],
+                        bottom: [...p.layout.bottom],
+                        hidden: [...p.layout.hidden],
+                      });
+                      setLayoutMenu(false);
+                    }}
+                  >
+                    <span className="rm-preset-name">{p.label}</span>
+                    <span className="rm-preset-note">{p.note}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button className="rm-editbar-done" onClick={() => setLayoutEdit(false)}>
+            Done
+          </button>
+        </div>
+      )}
+
+      <div className="rm-body">
+        <aside data-dock="left" className={`rm-dock rm-dock-side${layout.left.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "left" ? " hot" : ""}`}>{renderDock("left")}</aside>
 
         <div className="rm-center">
           <div className="rm-canvas">
@@ -872,103 +1547,38 @@ export function LiveView({
             )}
           </div>
 
-          <div className="rm-float">
-            <PermissionsCoach sources={sources} />
-            {banner && <div className="live-error">{banner}</div>}
-          </div>
+          <div className="rm-float">{banner && <div className="rm-banner">{banner}</div>}</div>
 
-          <div className="rm-pills">
-            <div className="rm-pop-anchor">
-              <div className={`rm-pill${sources.mic ? "" : " off"}`}>
-                <button
-                  className="rm-pill-main"
-                  disabled={!engineOk}
-                  onClick={() => setSrc({ mic: !sources.mic })}
-                  title={sources.mic ? "Mic on — click to turn off" : "Mic off — click to turn on"}
-                >
-                  {ic.mic}
-                </button>
-                <button className="rm-pill-chev" onClick={() => setMicPopOpen((o) => !o)}>
-                  {ic.chev}
-                </button>
-              </div>
-              {micPopOpen && <div className="rm-pop rm-pop-up rm-pop-mixer">{micStrip}</div>}
-            </div>
-
-            <button
-              className={`rm-circle${sources.camera ? "" : " off"}`}
-              disabled={!engineOk}
-              onClick={() => setSrc({ camera: !sources.camera })}
-              title={sources.camera ? "Camera on" : "Camera off"}
-            >
-              {ic.cam}
-            </button>
-
-            <button
-              className={`rm-circle${sources.screen ? "" : " off"}`}
-              disabled={!engineOk}
-              onClick={() => setSrc({ screen: !sources.screen })}
-              title={sources.screen ? "Screen share on" : "Share your screen"}
-            >
-              {ic.screen}
-            </button>
-
-            <button className="rm-circle off soon" title="Guests arrive with the Producer network" disabled>
-              {ic.invite}
-            </button>
-
-            <div className="rm-pop-anchor">
-              <button
-                className={`rm-circle${overlayActive ? "" : " off"}`}
-                onClick={() => setOverlayOpen((o) => !o)}
-                title="Overlay — alerts, browser, window"
-              >
-                {ic.plus}
-              </button>
-              {overlayOpen && (
-                <div className="rm-pop rm-pop-up rm-pop-overlay">
-                  <OverlayPicker
-                    activeWindow={sources.overlay_window ?? null}
-                    activeUrl={sources.overlay_url ?? null}
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="rm-pop-anchor">
-              <button className={`rm-circle${chatOpen ? "" : " off"}`} onClick={() => setChatOpen((o) => !o)} title="Chat">
-                {ic.chat}
-              </button>
-              {chatOpen && (
-                <div className="rm-pop rm-pop-up">
-                  <ChatPopover onClose={() => setChatOpen(false)} />
-                </div>
-              )}
-            </div>
-          </div>
+          <PermBanner sources={sources} />
         </div>
 
-        <aside className="rm-rail">
-          <button className={`rm-rail-item${sheetOpen ? " active" : ""}`} onClick={() => setSheetOpen((o) => !o)}>
-            {ic.invite}
-            <span>Sources</span>
-          </button>
-          <button className={`rm-rail-item${overlayActive ? " active" : ""}`} onClick={() => setOverlayOpen(true)}>
-            {ic.link}
-            <span>Graphics</span>
-          </button>
-          <div className="rm-rail-item soon">
-            <span className="rm-soon">SOON</span>
-            {ic.plus}
-            <span>Widgets</span>
-          </div>
-          <div className="rm-rail-item soon">
-            <span className="rm-soon">SOON</span>
-            {ic.chat}
-            <span>Music</span>
-          </div>
-        </aside>
+        <aside data-dock="right" className={`rm-dock rm-dock-side${layout.right.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "right" ? " hot" : ""}`}>{renderDock("right")}</aside>
       </div>
+
+      {dragging && ghost && (
+        <div className="rm-ghost" style={{ left: ghost.x, top: ghost.y }}>
+          <span className="rm-grip">{ic.grip}</span>
+          {PANEL_META[dragging].title}
+        </div>
+      )}
+
+      {overlayOpen && (
+        <>
+          <div className="rm-pop-backdrop" onClick={() => setOverlayOpen(false)} />
+          <div className="rm-editor rm-editor-overlay">
+            <div className="rm-editor-head">
+              <span className="rm-group-label">ALERTS &amp; OVERLAYS</span>
+              <button className="rm-panel-plus" onClick={() => setOverlayOpen(false)} title="Close">
+                {ic.x}
+              </button>
+            </div>
+            <OverlayPicker
+              activeWindow={sources.overlay_window ?? null}
+              activeUrl={sources.overlay_url ?? null}
+            />
+          </div>
+        </>
+      )}
 
       {(adding || editing) && (
         <>
@@ -990,94 +1600,27 @@ export function LiveView({
         </>
       )}
 
-      {sheetOpen && (
-        <div className="rm-sheet">
-          <div className="rm-sheet-head">
+      {(layout.bottom.length > 0 || dragging) && (
+        <div className={`rm-sheet${sheetOpen ? "" : " collapsed"}`}>
+          <div
+            className="rm-sheet-head"
+            role="button"
+            tabIndex={0}
+            title={sheetOpen ? "Hide the bottom row" : "Show the bottom row"}
+            onClick={() => setSheetOpen((o) => !o)}
+            onKeyDown={(e) => e.key === "Enter" && setSheetOpen((o) => !o)}
+          >
             <span className="rm-sheet-handle" />
-            <button className="rm-sheet-label" onClick={() => setSheetOpen(false)}>
-              SOURCES &amp; SETTINGS
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 9l6 6 6-6" transform="rotate(180 12 12)" />
-              </svg>
-            </button>
           </div>
-          <div className="rm-sheet-body">
-            <div className="rm-group">
-              <span className="rm-group-label">VIDEO</span>
-              <div className="rm-tiles">
-                <button
-                  className={`rm-tile${sources.screen ? " on" : ""}`}
-                  disabled={!engineOk}
-                  onClick={() => setSrc({ screen: !sources.screen })}
-                >
-                  <span className="rm-tile-canvas">{ic.screen}</span>
-                  <span className="rm-tile-row">
-                    <span>Screen</span>
-                    <span className="rm-eye">{ic.eye}</span>
-                  </span>
-                </button>
-                <button
-                  className={`rm-tile${sources.camera ? " on" : ""}`}
-                  disabled={!engineOk}
-                  onClick={() => setSrc({ camera: !sources.camera })}
-                >
-                  <span className="rm-tile-canvas">{ic.cam}</span>
-                  <span className="rm-tile-row">
-                    <span>Camera</span>
-                    <span className="rm-eye">{ic.eye}</span>
-                  </span>
-                </button>
-                <button className={`rm-tile${overlayActive ? " on" : ""}`} onClick={() => setOverlayOpen(true)}>
-                  <span className="rm-tile-canvas">{ic.link}</span>
-                  <span className="rm-tile-row">
-                    <span>Alerts</span>
-                    <span className="rm-eye">{ic.eye}</span>
-                  </span>
-                </button>
-              </div>
-              <div className="rm-quality">
-                <span className="rm-quality-set">
-                  {[720, 1080].map((h) => (
-                    <button
-                      key={h}
-                      className={`rm-q${vh === h ? " on" : ""}`}
-                      disabled={streaming || !engineOk}
-                      title={streaming ? "Stop the stream to change video settings" : undefined}
-                      onClick={() => setVideoCfg(h, vf)}
-                    >
-                      {h}p
-                    </button>
-                  ))}
-                </span>
-                <span className="rm-quality-set">
-                  {[30, 60].map((f) => (
-                    <button
-                      key={f}
-                      className={`rm-q${vf === f ? " on" : ""}`}
-                      disabled={streaming || !engineOk}
-                      title={streaming ? "Stop the stream to change video settings" : undefined}
-                      onClick={() => setVideoCfg(vh, f)}
-                    >
-                      {f} fps
-                    </button>
-                  ))}
-                </span>
-              </div>
+          {sheetOpen && streaming && (
+            <div className="rm-livewarn">
+              <span className="rm-live-dot" />
+              You&rsquo;re on air — scene cuts and source changes hit the broadcast instantly.
             </div>
-            <div className="rm-sheet-div" />
-            <div className="rm-group">
-              <span className="rm-group-label">AUDIO</span>
-              <div className="rm-strips">
-                {micStrip}
-                <MeterStrip label="Desktop" icon={ic.cast} level={0} volume={0.5} muted soon />
-              </div>
-            </div>
-            <div className="rm-sheet-div" />
-            <button className="rm-addsource" title="More source types arrive with the scene editor" disabled>
-              {ic.plus}
-              <span>Add source</span>
-            </button>
-          </div>
+          )}
+          {(sheetOpen || dragging) && (
+            <div data-dock="bottom" className={`rm-dock rm-dock-bottom${layoutEdit ? " armed" : ""}${dropHint?.dock === "bottom" ? " hot" : ""}`}>{renderDock("bottom")}</div>
+          )}
         </div>
       )}
     </div>

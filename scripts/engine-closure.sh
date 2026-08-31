@@ -6,9 +6,11 @@ set -euo pipefail
 
 CONTENTS="${1:?usage: engine-closure.sh /path/to/OBS.app/Contents}"
 
-# ONE plugin list. A private copy here once drifted from engine-lib.sh and
-# let obs-ffmpeg ship without libavdevice — the exact failure class this
-# gate exists to catch. Never fork this list again.
+# 🔴 ONE plugin list, always. A private copy here once drifted from
+# engine-lib.sh and shipped obs-ffmpeg without libavdevice/libavfilter while
+# this gate stayed green — the exact failure class the gate exists to catch.
+# It regressed a second time on 2026-08-31 via `git checkout` of this file,
+# breaking obs-ffmpeg AND mac-virtualcam at dyld load. Never fork the list.
 source "$(dirname "${BASH_SOURCE[0]}")/engine-lib.sh"
 PLUGINS=("${ENGINE_PLUGINS[@]}")
 
@@ -18,14 +20,18 @@ seeds=("$CONTENTS/Frameworks/libobs.framework/Versions/A/libobs"
 for p in "${PLUGINS[@]}"; do
   seeds+=("$CONTENTS/PlugIns/$p.plugin/Contents/MacOS/$p")
 done
-# M-L7.1: obs-browser joins the walk when the artifact carries it
-if [[ -f "$CONTENTS/PlugIns/obs-browser.plugin/Contents/MacOS/obs-browser" ]]; then
+# M-L7.1: obs-browser joins the walk when the artifact carries it.
+#
+# 🔴 Only when we are walking something we SHIP. Pointed at OBS.app (the
+# extract path's dependency discovery), this used to seed OBS's own
+# obs-browser — which links Qt directly, unlike the patched Qt-free build we
+# actually ship. That dragged QtCore/QtGui/QtWidgets into every extraction
+# and tripped this gate on an artifact that was never going to contain them.
+# CLOSURE_SEED_EXTRAS=0 says "seed only the allowlisted plugin set".
+if [[ ${CLOSURE_SEED_EXTRAS:-1} == 1 &&
+      -f "$CONTENTS/PlugIns/obs-browser.plugin/Contents/MacOS/obs-browser" ]]; then
   seeds+=("$CONTENTS/PlugIns/obs-browser.plugin/Contents/MacOS/obs-browser")
 fi
-# obs-ffmpeg-mux: bin/ in the artifact stage, MacOS/ in the assembled app.
-for mux in "$CONTENTS/bin/obs-ffmpeg-mux" "$CONTENTS/MacOS/obs-ffmpeg-mux"; do
-  [[ -f $mux ]] && seeds+=("$mux")
-done
 
 declare -a seen=()
 queue=("${seeds[@]}")

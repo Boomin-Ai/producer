@@ -104,7 +104,7 @@ export const ipc = {
   liveSetSources: (screen: boolean, camera: boolean, mic: boolean) =>
     invoke("live_set_sources", { screen, camera, mic }),
   liveAttachPreview: (x: number, y: number, w: number, h: number) =>
-    invoke("live_attach_preview", { x, y, w, h }),
+    invoke<boolean>("live_attach_preview", { x, y, w, h }),
   liveMovePreview: (x: number, y: number, w: number, h: number) =>
     invoke("live_move_preview", { x, y, w, h }),
   liveDetachPreview: () => invoke("live_detach_preview"),
@@ -131,6 +131,7 @@ export const ipc = {
   liveSetMicAudio: (patch: { volume?: number; muted?: boolean }) =>
     invoke("live_set_mic_audio", { volume: patch.volume ?? null, muted: patch.muted ?? null }),
   liveSetVideo: (height: number, fps: number) => invoke("live_set_video", { height, fps }),
+  livePreviewHidden: (hidden: boolean) => invoke("live_preview_hidden", { hidden }),
   liveOpenChat: (url: string) => invoke("live_open_chat", { url }),
 };
 
@@ -208,6 +209,7 @@ export interface LiveSnapshot {
   disabled?: boolean;
   video_height?: number;
   video_fps?: number;
+  stage_transparent?: boolean;
 }
 
 export type LiveEvent =

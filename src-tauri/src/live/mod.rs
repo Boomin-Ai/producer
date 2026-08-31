@@ -100,7 +100,19 @@ impl Live {
     #[cfg(have_engine)]
     pub fn status(&self) -> serde_json::Value {
         match &self.handle {
-            Some(h) => serde_json::to_value(h.snapshot.lock().unwrap().clone()).unwrap_or_default(),
+            Some(h) => {
+                let mut v =
+                    serde_json::to_value(h.snapshot.lock().unwrap().clone()).unwrap_or_default();
+                if let Some(obj) = v.as_object_mut() {
+                    obj.insert(
+                        "stage_transparent".into(),
+                        serde_json::Value::Bool(
+                            engine::STAGE_TRANSPARENT.load(std::sync::atomic::Ordering::SeqCst),
+                        ),
+                    );
+                }
+                v
+            }
             None => serde_json::json!({ "engine_ready": false, "disabled": true }),
         }
     }
@@ -239,6 +251,18 @@ impl Live {
     }
 
     #[cfg(have_engine)]
+    pub fn set_preview_hidden(&self, hidden: bool) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .set_preview_hidden(hidden)
+    }
+    #[cfg(not(have_engine))]
+    pub fn set_preview_hidden(&self, _h: bool) -> Result<(), String> {
+        Ok(())
+    }
+
+    #[cfg(have_engine)]
     pub fn detach_preview(&self) -> Result<(), String> {
         self.handle
             .as_ref()
@@ -272,6 +296,21 @@ pub fn permissions() -> serde_json::Value {
     }
     #[cfg(not(have_engine))]
     serde_json::json!({ "screen": "unknown", "camera": "unknown", "mic": "unknown" })
+}
+
+/// Make the webview see-through so the preview can sit BEHIND it, and
+/// report whether WebKit allowed it. Main thread, synchronous — the answer
+/// must be known before the UI decides how to paint the stage.
+#[cfg(have_engine)]
+pub fn prepare_stage(ns_window: usize) -> bool {
+    let ok =
+        unsafe { ffi::producer_preview_prepare_window(ns_window as *mut std::ffi::c_void) } == 1;
+    engine::STAGE_TRANSPARENT.store(ok, std::sync::atomic::Ordering::SeqCst);
+    ok
+}
+#[cfg(not(have_engine))]
+pub fn prepare_stage(_ns_window: usize) -> bool {
+    false
 }
 
 /// Fire the system prompt for a permission (mic/camera prompt in place;

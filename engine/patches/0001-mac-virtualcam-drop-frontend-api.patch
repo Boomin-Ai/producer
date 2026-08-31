@@ -1,0 +1,16 @@
+Drop the unused obs-frontend-api link from mac-virtualcam.
+
+The virtual camera plugin links OBS::frontend-api in CMake but never calls a
+single frontend function — `grep -r obs_frontend src/obs-plugin/` returns
+nothing. That link is what drags QtCore/QtGui/QtWidgets into the closure,
+which our zero-Qt gate (LIVE-REVIEW.md A9) correctly refuses.
+
+Removing it leaves the plugin's behaviour identical: it registers the
+`virtualcam_output` and talks to the CoreMediaIO system extension over the
+app group. Neither path touches the frontend.
+
+--- a/plugins/mac-virtualcam/src/obs-plugin/CMakeLists.txt
++++ b/plugins/mac-virtualcam/src/obs-plugin/CMakeLists.txt
+@@ -6,7 +6,7 @@
+-target_link_libraries(mac-virtualcam PRIVATE OBS::mach-protocol OBS::libobs OBS::frontend-api)
++target_link_libraries(mac-virtualcam PRIVATE OBS::mach-protocol OBS::libobs)

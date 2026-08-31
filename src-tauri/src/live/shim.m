@@ -7,6 +7,7 @@
 #import <AppKit/AppKit.h>
 #import <AVFoundation/AVFoundation.h>
 #import <CoreGraphics/CoreGraphics.h>
+#import <WebKit/WebKit.h>
 
 static void run_on_main(void (^block)(void)) {
     if ([NSThread isMainThread]) {
@@ -23,10 +24,51 @@ static NSRect frame_from_css(NSView *content, double x, double y, double w, doub
     return NSMakeRect(x, ch - y - h, w, h);
 }
 
-// Returns a retained NSView* (as void*) added above the webview; writes the
+static NSView *find_webview(NSView *v) {
+    // wry wraps WKWebView in its own subclass, so match the class TREE.
+    if ([v isKindOfClass:[WKWebView class]]) return v;
+    for (NSView *sub in v.subviews) {
+        NSView *hit = find_webview(sub);
+        if (hit) return hit;
+    }
+    return nil;
+}
+
+// The preview lives UNDER the webview so HTML (menus, dialogs, banners) can
+// float over the stage the way it does over anything else. That only works
+// if the webview stops painting its own opaque background — then the window
+// itself provides the app's base color and the preview shows through the
+// transparent hole the room's CSS leaves for it.
+int producer_preview_prepare_window(void *ns_window) {
+    __block int ok = 0;
+    run_on_main(^{
+        NSWindow *win = (__bridge NSWindow *)ns_window;
+        if (!win) return;
+        win.opaque = YES;
+        win.backgroundColor = [NSColor colorWithSRGBRed:1.0 / 255.0
+                                                  green:6.0 / 255.0
+                                                   blue:16.0 / 255.0
+                                                  alpha:1.0];
+        WKWebView *wk = (WKWebView *)find_webview(win.contentView);
+        if (wk) {
+            @try {
+                [wk setValue:@NO forKey:@"drawsBackground"];
+                ok = 1;
+            } @catch (NSException *e) {
+                (void)e; // WebKit changed: caller keeps the opaque path
+            }
+            if (@available(macOS 12.0, *)) {
+                wk.underPageBackgroundColor = [NSColor clearColor];
+            }
+        }
+    });
+    return ok;
+}
+
+// Returns a retained NSView* (as void*) added BELOW the webview; writes the
 // backing pixel size (for obs_display) into out_px_w/out_px_h.
 void *producer_preview_attach(void *ns_window, double x, double y, double w, double h,
-                              double *out_px_w, double *out_px_h) {
+                              int below_webview, double *out_px_w, double *out_px_h) {
     __block NSView *view = nil;
     run_on_main(^{
         NSWindow *win = (__bridge NSWindow *)ns_window;
@@ -37,7 +79,9 @@ void *producer_preview_attach(void *ns_window, double x, double y, double w, dou
         view.layer.backgroundColor = CGColorGetConstantColor(kCGColorBlack);
         view.layer.cornerRadius = 8; // the stage canvas is a rounded card
         view.layer.masksToBounds = YES;
-        [content addSubview:view positioned:NSWindowAbove relativeTo:nil];
+        [content addSubview:view
+                 positioned:(below_webview ? NSWindowBelow : NSWindowAbove)
+                 relativeTo:nil];
         double scale = win.backingScaleFactor > 0 ? win.backingScaleFactor : 1.0;
         *out_px_w = w * scale;
         *out_px_h = h * scale;
@@ -55,6 +99,16 @@ void producer_preview_set_frame(void *view_ptr, double x, double y, double w, do
         double scale = view.window.backingScaleFactor > 0 ? view.window.backingScaleFactor : 1.0;
         *out_px_w = w * scale;
         *out_px_h = h * scale;
+    });
+}
+
+// Popovers and menus are HTML, and the preview NSView sits ABOVE the
+// webview — so anything the UI floats over the stage would be hidden by it.
+// The room hides the preview for as long as a menu is open.
+void producer_preview_set_hidden(void *view_ptr, int hidden) {
+    run_on_main(^{
+        NSView *view = (__bridge NSView *)view_ptr;
+        view.hidden = hidden ? YES : NO;
     });
 }
 

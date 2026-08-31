@@ -35,20 +35,37 @@ cp -R "$SRC/Frameworks/libobs.framework" "$STAGE/Frameworks/"
 cp "$SRC/Frameworks/libobs-metal.dylib" "$SRC/Frameworks/libobs-opengl.dylib" "$STAGE/Frameworks/"
 
 # allowlisted plugins (bundles carry their own Resources data trees)
-# Recording helper (artifact rev 2): lives beside OBS's own executable.
-if [[ -f "$OBS_APP/Contents/MacOS/obs-ffmpeg-mux" ]]; then
+# Recording helper (artifact rev 2): obs-ffmpeg spawns obs-ffmpeg-mux as a
+# separate process and finds it NEXT TO the host executable, so it travels
+# with the artifact and the assemble step drops it into Contents/MacOS.
+if [[ -f "$SRC/MacOS/obs-ffmpeg-mux" ]]; then
   mkdir -p "$STAGE/bin"
-  cp "$OBS_APP/Contents/MacOS/obs-ffmpeg-mux" "$STAGE/bin/"
+  cp "$SRC/MacOS/obs-ffmpeg-mux" "$STAGE/bin/"
 else
-  echo "WARN: official bundle has no obs-ffmpeg-mux at Contents/MacOS — recording unavailable in fallback engine" >&2
+  echo "WARN: official bundle has no obs-ffmpeg-mux — recording unavailable" >&2
 fi
 
 for p in "${ENGINE_PLUGINS[@]}"; do
   cp -R "$SRC/PlugIns/$p.plugin" "$STAGE/PlugIns/"
 done
 
+# The virtual camera is TWO pieces: the plugin above, which registers the
+# `virtualcam_output`, and a CoreMediaIO system extension that other apps see
+# as a camera. The extension is a separate bundle the host embeds and
+# activates (UI-POWER.md R13) — carry it beside the plugins.
+if [[ -d "$SRC/Library/SystemExtensions" ]]; then
+  mkdir -p "$STAGE/SystemExtensions"
+  cp -R "$SRC/Library/SystemExtensions/." "$STAGE/SystemExtensions/"
+else
+  echo "WARN: official bundle has no camera system extension — virtual camera unavailable" >&2
+fi
+
 # dependency closure: copy every @rpath dylib the shipped set links, transitively
-"$REPO_ROOT/scripts/engine-closure.sh" "$SRC" | grep -v '^#' | while read -r dep; do
+# Discovery walks the SOURCE bundle for deps of the plugins we are about to
+# copy — and only those. OBS's own obs-browser lives there too but we never
+# ship it (ours is a separately built, Qt-free one), so seeding it here would
+# pull its Qt closure into an artifact that has no use for it.
+CLOSURE_SEED_EXTRAS=0 "$REPO_ROOT/scripts/engine-closure.sh" "$SRC" | grep -v '^#' | while read -r dep; do
   [[ -f "$SRC/Frameworks/$dep" && ! -f "$STAGE/Frameworks/$dep" ]] \
     && cp "$SRC/Frameworks/$dep" "$STAGE/Frameworks/"
 done

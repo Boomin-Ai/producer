@@ -99,6 +99,7 @@ pub fn run() {
             live::commands::firstlight_resume,
             live::commands::live_set_mic_audio,
             live::commands::live_set_video,
+            live::commands::live_preview_hidden,
             live::commands::live_open_chat,
             live::commands::live_list_rooms,
             live::commands::live_create_room,

@@ -34,6 +34,11 @@ const VT_ENCODER_SUBSTRING: &str = "videotoolbox";
 const REQUIRED_OUTPUTS: &[&str] = &["rtmp_output", "flv_output"];
 const REQUIRED_SERVICES: &[&str] = &["rtmp_common", "rtmp_custom"];
 
+/// Whether the stage renders as a transparent hole (preview BELOW the
+/// webview) — the UI mirrors this so its CSS matches the native stacking.
+pub static STAGE_TRANSPARENT: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
 #[derive(Debug, Clone, Serialize)]
 pub struct EngineReport {
     pub ok: bool,
@@ -301,6 +306,7 @@ pub enum Command {
         rect: PreviewRect,
     },
     MovePreview(PreviewRect),
+    SetPreviewHidden(bool),
     DetachPreview,
     Shutdown,
 }
@@ -427,6 +433,12 @@ impl LiveHandle {
             .send(Command::MovePreview(rect))
             .map_err(|e| e.to_string())
     }
+    pub fn set_preview_hidden(&self, hidden: bool) -> Result<(), String> {
+        self.cmd
+            .send(Command::SetPreviewHidden(hidden))
+            .map_err(|e| e.to_string())
+    }
+
     pub fn detach_preview(&self) -> Result<(), String> {
         self.cmd
             .send(Command::DetachPreview)
@@ -479,8 +491,19 @@ impl Preview {
     fn attach(ns_window: *mut std::os::raw::c_void, rect: PreviewRect) -> Result<Preview, String> {
         unsafe {
             let (mut px_w, mut px_h) = (0f64, 0f64);
+            // Whether the stage is a transparent hole was decided (on the
+            // main thread) by live_attach_preview before this command was
+            // queued; here we only honour it.
+            let transparent = STAGE_TRANSPARENT.load(AtomicOrdering::SeqCst);
             let view = ffi::producer_preview_attach(
-                ns_window, rect.x, rect.y, rect.w, rect.h, &mut px_w, &mut px_h,
+                ns_window,
+                rect.x,
+                rect.y,
+                rect.w,
+                rect.h,
+                transparent as i32,
+                &mut px_w,
+                &mut px_h,
             );
             if view.is_null() {
                 return Err("NSView creation failed".into());
@@ -746,6 +769,13 @@ pub fn start(
                     Ok(Command::MovePreview(rect)) => {
                         if let Some(p) = preview.as_mut() {
                             p.set_rect(rect);
+                        }
+                    }
+                    Ok(Command::SetPreviewHidden(hidden)) => {
+                        if let Some(p) = preview.as_ref() {
+                            unsafe {
+                                ffi::producer_preview_set_hidden(p.view, if hidden { 1 } else { 0 })
+                            };
                         }
                     }
                     Ok(Command::DetachPreview) => {

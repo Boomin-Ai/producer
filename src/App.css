@@ -3272,3 +3272,1864 @@ textarea::placeholder {
 .rm-scene.active:hover .rm-scene-thumb {
   border-color: var(--mint);
 }
+
+/* ── Sheet v3: StreamSync density, Producer tokens ─────────────────────── */
+
+.rm-sheet {
+  background: oklch(0.19 0.037 250);
+}
+
+.rm-sheet-body {
+  height: 272px;
+  gap: 16px;
+}
+
+.rm-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: oklch(0.155 0.034 250);
+  border: 1px solid oklch(0.26 0.042 250);
+  border-radius: 14px;
+  padding: 14px 18px 16px;
+  flex-shrink: 0;
+}
+
+.rm-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.rm-card-sub {
+  font-size: 11px;
+  color: oklch(0.55 0.025 250);
+}
+
+.rm-tiles {
+  flex: initial;
+  gap: 12px;
+}
+
+.rm-tile {
+  all: unset;
+}
+
+.rm-tile {
+  box-sizing: border-box;
+  width: 148px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  background: oklch(0.19 0.038 250);
+  border: 1px solid oklch(0.26 0.042 250);
+  border-radius: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.rm-tile:hover {
+  transform: translateY(-2px);
+}
+
+.rm-tile.on {
+  background: oklch(0.21 0.05 200 / 0.5);
+  border-color: oklch(0.7 0.13 165 / 0.55);
+  box-shadow: 0 12px 30px -16px oklch(0.75 0.14 165 / 0.55);
+}
+
+.rm-tile-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: oklch(0.55 0.025 250);
+}
+
+.rm-tile.on .rm-tile-top {
+  color: oklch(0.94 0.008 250);
+}
+
+.rm-tile.on .rm-eye {
+  color: var(--mint);
+}
+
+.rm-tile-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: oklch(0.94 0.008 250);
+}
+
+.rm-tile-state {
+  font-size: 11px;
+  color: oklch(0.55 0.025 250);
+}
+
+.rm-tile.on .rm-tile-state {
+  color: var(--mint);
+}
+
+.rm-ctrl-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.rm-ctrl-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 26px;
+  min-height: 30px;
+}
+
+.rm-ctrl-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: oklch(0.62 0.025 250);
+}
+
+.rm-ctrl-value {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: oklch(0.94 0.008 250);
+  padding-right: 6px;
+}
+
+.rm-strips {
+  flex: 1;
+  min-height: 0;
+  justify-content: center;
+  padding: 0 6px;
+}
+
+.rm-addsource {
+  all: unset;
+  box-sizing: border-box;
+  flex: 0 0 170px;
+  align-self: stretch;
+  margin: 0;
+  border: 1.5px dashed oklch(0.3 0.045 250);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: oklch(0.55 0.025 250);
+  font-size: 12px;
+  font-family: var(--font);
+  cursor: default;
+}
+
+.rm-scene {
+  cursor: pointer;
+}
+
+.rm-scene-thumb {
+  box-shadow: inset 0 0 0 1px oklch(0.26 0.042 250);
+}
+
+.rm-scene.active .rm-scene-thumb {
+  box-shadow:
+    inset 0 0 0 1.5px var(--mint),
+    0 10px 26px -14px oklch(0.75 0.14 165 / 0.5);
+}
+
+.rm-scene-live {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #08110d;
+  background: var(--mint);
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+
+.rm-scene-thumb,
+.rm-scene.active .rm-scene-thumb {
+  border-color: transparent; /* the inset ring is the edge now */
+}
+
+/* ── Side panels: scenes+alerts left, multistream chat right ───────────── */
+
+.rm-left {
+  width: 224px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 6px 14px 12px;
+  gap: 10px;
+  min-height: 0;
+}
+
+.rm-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 2px 0;
+}
+
+.rm-panel-plus {
+  all: unset;
+  cursor: pointer;
+  color: oklch(0.55 0.025 250);
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
+
+.rm-panel-plus:hover {
+  color: oklch(0.94 0.008 250);
+  background: oklch(0.22 0.04 250);
+}
+
+.rm-scenes {
+  width: auto;
+  padding: 0;
+  overflow: visible;
+  flex-shrink: 0;
+  gap: 10px;
+}
+
+.rm-scene-thumb {
+  height: 74px;
+}
+
+.rm-alerts-head {
+  margin-top: 8px;
+}
+
+.rm-alerts {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 2px;
+}
+
+.rm-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 8px 9px;
+  border-radius: 10px;
+  background: oklch(0.185 0.037 250);
+}
+
+.rm-alert-sys {
+  background: none;
+}
+
+.rm-alert-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+
+.rm-alert-dot.sys {
+  background: oklch(0.45 0.04 250);
+}
+
+.rm-alert-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.rm-alert-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: oklch(0.94 0.008 250);
+}
+
+.rm-alert-line strong {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rm-alert-chip {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #08110d;
+  background: var(--mint);
+  border-radius: 4px;
+  padding: 1.5px 5px;
+  flex-shrink: 0;
+}
+
+.rm-alert-kind {
+  font-size: 11px;
+  color: oklch(0.55 0.025 250);
+  margin-top: 1px;
+}
+
+.rm-alert-msg {
+  color: oklch(0.72 0.02 250);
+}
+
+.rm-alert-ago {
+  font-size: 10.5px;
+  color: oklch(0.45 0.04 250);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.rm-alerts-empty {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: oklch(0.5 0.03 250);
+  padding: 8px 4px;
+}
+
+/* chat panel */
+
+.rm-chatpanel {
+  width: 264px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 14px 14px;
+  min-height: 0;
+  border-left: 1px solid oklch(0.22 0.04 250);
+}
+
+.rm-chat-chips {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.rm-chat-chip {
+  all: unset;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: oklch(0.62 0.025 250);
+  background: oklch(0.2 0.038 250);
+  border-radius: 999px;
+  padding: 5px 11px;
+}
+
+.rm-chat-chip.on {
+  background: oklch(0.94 0.008 250);
+  color: #0b0e14;
+}
+
+.rm-chat-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 4px;
+}
+
+.rm-chat-msg {
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.rm-chat-user {
+  font-weight: 700;
+  margin-right: 6px;
+}
+
+.rm-chat-text {
+  color: oklch(0.82 0.015 250);
+}
+
+.rm-chat-input {
+  flex-shrink: 0;
+}
+
+.rm-chat-input input {
+  width: 100%;
+  box-sizing: border-box;
+  background: oklch(0.2 0.038 250);
+  border: 1px solid oklch(0.26 0.042 250);
+  border-radius: 10px;
+  color: oklch(0.94 0.008 250);
+  font-family: var(--font);
+  font-size: 12.5px;
+  padding: 9px 12px;
+  outline: none;
+}
+
+.rm-chat-input input::placeholder {
+  color: oklch(0.5 0.03 250);
+}
+
+.rm-chat-input input:focus {
+  border-color: oklch(0.36 0.05 250);
+}
+
+/* dark perm banner above the pills */
+
+.rm-perms {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.rm-perm-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: oklch(0.2 0.038 250);
+  border: 1px solid oklch(0.34 0.09 85 / 0.45);
+  border-radius: 999px;
+  padding: 7px 8px 7px 14px;
+}
+
+.rm-perm-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: oklch(0.75 0.15 85);
+  flex-shrink: 0;
+}
+
+.rm-perm-text {
+  font-size: 12.5px;
+  color: oklch(0.82 0.015 250);
+}
+
+.rm-perm-fix {
+  all: unset;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 700;
+  color: #08110d;
+  background: oklch(0.75 0.15 85);
+  border-radius: 999px;
+  padding: 5px 12px;
+}
+
+.rm-banner {
+  background: oklch(0.24 0.07 25 / 0.9);
+  border: 1px solid oklch(0.45 0.14 25 / 0.6);
+  color: oklch(0.9 0.03 25);
+  font-size: 12.5px;
+  border-radius: 10px;
+  padding: 8px 14px;
+}
+
+/* ── Controls live in the panel; the stage is pure canvas ──────────────── */
+
+.rm-center {
+  padding: 16px 16px 10px;
+  gap: 10px;
+}
+
+/* sheet is always present; collapsed shows just its header */
+
+.rm-sheet.collapsed {
+  padding-bottom: 10px;
+}
+
+.rm-sheet-label {
+  cursor: pointer;
+}
+
+.rm-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* guest tile */
+
+.rm-tile.soon {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.rm-tile.soon:hover {
+  transform: none;
+}
+
+.rm-tile.soon .rm-soon {
+  font-size: 8px;
+}
+
+/* mic/desktop name doubles as the source on/off */
+
+.rm-strip-name.as-toggle {
+  all: unset;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  color: oklch(0.94 0.008 250);
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: oklch(0.24 0.05 200 / 0.5);
+}
+
+.rm-strip-name.as-toggle.off {
+  background: oklch(0.22 0.04 250);
+  color: oklch(0.55 0.025 250);
+}
+
+.rm-strip-name.as-toggle:hover {
+  background: oklch(0.3 0.05 200 / 0.6);
+}
+
+/* chat edge tab when the panel is hidden */
+
+.rm-chat-tab {
+  all: unset;
+  cursor: pointer;
+  align-self: stretch;
+  width: 40px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-left: 1px solid oklch(0.22 0.04 250);
+  color: oklch(0.55 0.025 250);
+}
+
+.rm-chat-tab span {
+  writing-mode: vertical-rl;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.rm-chat-tab:hover {
+  color: oklch(0.94 0.008 250);
+  background: oklch(0.18 0.036 250);
+}
+
+.rm-editor-overlay {
+  top: 50%;
+  left: 50%;
+  right: auto;
+  transform: translate(-50%, -50%);
+  width: 440px;
+}
+
+.rm-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+/* ── Panel v4: three columns (channels+sources | controls+video | mix) ─── */
+
+.rm-sheet-body {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(260px, 1fr) minmax(240px, 0.9fr);
+  gap: 0;
+  height: 268px;
+  align-items: stretch;
+}
+
+.rm-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 22px;
+  min-width: 0;
+  border-right: 1px solid oklch(0.25 0.04 250);
+}
+
+.rm-col:first-child {
+  padding-left: 4px;
+}
+
+.rm-col:last-child {
+  border-right: none;
+  padding-right: 4px;
+}
+
+.rm-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 22px;
+}
+
+.rm-col-head + .rm-col-head,
+.rm-rows + .rm-col-head,
+.rm-two + .rm-col-head {
+  margin-top: 6px;
+}
+
+/* rows: channels + sources share one language */
+
+.rm-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.rm-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: oklch(0.175 0.036 250);
+  border: 1px solid oklch(0.24 0.04 250);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.rm-row.off {
+  opacity: 0.62;
+}
+
+.rm-row.soon {
+  opacity: 0.5;
+}
+
+.rm-row-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.rm-row-icon {
+  display: grid;
+  place-items: center;
+  color: oklch(0.72 0.02 250);
+  flex-shrink: 0;
+}
+
+.rm-row-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.rm-row-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: oklch(0.94 0.008 250);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rm-row-sub {
+  font-size: 11px;
+  color: oklch(0.52 0.03 250);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.rm-row .rm-soon {
+  margin-left: auto;
+}
+
+.rm-row-edit {
+  all: unset;
+  cursor: pointer;
+  color: oklch(0.5 0.03 250);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.rm-row-edit svg {
+  width: 14px;
+  height: 14px;
+}
+
+.rm-row-edit:hover {
+  color: oklch(0.94 0.008 250);
+}
+
+.rm-row-sub + .rm-switch,
+.rm-row-name + .rm-switch {
+  margin-left: auto;
+}
+
+.rm-switch {
+  all: unset;
+  cursor: pointer;
+  width: 34px;
+  height: 19px;
+  border-radius: 999px;
+  background: oklch(0.3 0.035 250);
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.16s ease;
+}
+
+.rm-switch.on {
+  background: var(--mint);
+}
+
+.rm-switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.16s ease;
+}
+
+.rm-switch.on .rm-switch-knob {
+  transform: translateX(15px);
+}
+
+.rm-rows-empty {
+  font-size: 11.5px;
+  color: oklch(0.5 0.03 250);
+  padding: 6px 2px;
+}
+
+/* controls column */
+
+.rm-big {
+  all: unset;
+  cursor: pointer;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 62px;
+  border-radius: 12px;
+  background: #dc2626;
+  color: #fff;
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: 0 12px 30px -14px rgba(220, 38, 38, 0.8);
+}
+
+.rm-big:hover {
+  filter: brightness(1.08);
+}
+
+.rm-big[disabled] {
+  cursor: default;
+  background: oklch(0.26 0.045 250);
+  color: oklch(0.5 0.03 250);
+  box-shadow: none;
+}
+
+.rm-big.stop {
+  background: oklch(0.4 0.15 25);
+}
+
+.rm-big-icon {
+  font-size: 11px;
+}
+
+.rm-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.rm-sub {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 46px;
+  border-radius: 10px;
+  background: oklch(0.175 0.036 250);
+  border: 1px solid oklch(0.24 0.04 250);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  color: oklch(0.6 0.025 250);
+}
+
+/* audio column keeps the vertical strips */
+
+.rm-col-audio .rm-strips {
+  flex: 1;
+  min-height: 0;
+  gap: 22px;
+  justify-content: flex-start;
+  padding-top: 2px;
+}
+
+/* top bar status */
+
+.rm-live-pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: oklch(0.3 0.14 25);
+  border-radius: 999px;
+  padding: 6px 13px;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
+.rm-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fff;
+  animation: rm-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes rm-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.rm-stat {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: oklch(0.6 0.025 250);
+}
+
+.rm-stat svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* panel v4 fit: taller, columns scroll on their own */
+
+.rm-sheet-body {
+  height: 340px;
+}
+
+.rm-col {
+  overflow: hidden;
+}
+
+.rm-rows {
+  flex: 0 1 auto;
+}
+
+.rm-col-audio .rm-strips {
+  gap: 30px;
+  padding: 4px 4px 8px;
+}
+
+.rm-col-audio .rm-strip {
+  min-width: 54px;
+}
+
+/* Record / Clip read as one line */
+
+.rm-sub {
+  flex-direction: row;
+  gap: 7px;
+  height: 42px;
+}
+
+.rm-sub .rm-soon {
+  font-size: 7.5px;
+  padding: 2px 4px;
+}
+
+/* sheet header sits clear of the columns */
+
+.rm-sheet {
+  padding-top: 8px;
+}
+
+.rm-sheet-head {
+  height: 22px;
+  margin-bottom: 4px;
+}
+
+.rm-sheet-label {
+  top: -2px;
+}
+
+/* scenes as rows (reference anatomy) — leaves the alerts feed room */
+
+.rm-scene-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: oklch(0.175 0.036 250);
+  border: 1px solid oklch(0.24 0.04 250);
+  cursor: pointer;
+}
+
+.rm-scene-row:hover {
+  background: oklch(0.2 0.04 250);
+}
+
+.rm-scene-row.active {
+  background: oklch(0.22 0.06 200 / 0.55);
+  border-color: oklch(0.7 0.13 165 / 0.5);
+}
+
+.rm-scene-icon {
+  display: grid;
+  place-items: center;
+  color: oklch(0.6 0.03 250);
+}
+
+.rm-scene-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.rm-scene-row.active .rm-scene-icon {
+  color: var(--mint);
+}
+
+.rm-scene-row .rm-scene-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.rm-scene-row .rm-scene-live {
+  position: static;
+  font-size: 8.5px;
+}
+
+.rm-scene-key {
+  font-size: 10.5px;
+  color: oklch(0.45 0.03 250);
+  font-variant-numeric: tabular-nums;
+}
+
+.rm-scenes {
+  gap: 5px;
+}
+
+/* scene rows: chevron + LIVE state, red while on air */
+
+.rm-scene-chev {
+  display: grid;
+  place-items: center;
+  color: oklch(0.42 0.03 250);
+  flex-shrink: 0;
+}
+
+.rm-scene-row.active:not(.onair) {
+  background: oklch(0.24 0.06 200 / 0.6);
+}
+
+.rm-scene-row.onair {
+  background: #dc2626;
+  border-color: #dc2626;
+  box-shadow: 0 10px 26px -14px rgba(220, 38, 38, 0.9);
+}
+
+.rm-scene-row.onair .rm-scene-icon,
+.rm-scene-row.onair .rm-scene-chev,
+.rm-scene-row.onair .rm-scene-name {
+  color: #fff;
+}
+
+.rm-scene-row.onair .rm-scene-live {
+  background: rgba(0, 0, 0, 0.28);
+  color: #fff;
+}
+
+.rm-scene-rec {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2.5px solid #fff;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.rm-scene-row:not(.onair) .rm-scene-rec {
+  border-color: var(--mint);
+}
+
+.rm-scene-rec::after {
+  content: "";
+  position: absolute;
+  inset: 2.5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.rm-scene-row.onair .rm-scene-rec::after {
+  background: #fff;
+}
+
+.rm-scene-row:not(.onair) .rm-scene-rec::after {
+  background: var(--mint);
+}
+
+/* on-air editing warning */
+
+.rm-livewarn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 4px 10px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: oklch(0.28 0.1 25 / 0.55);
+  border: 1px solid oklch(0.45 0.14 25 / 0.5);
+  font-size: 12px;
+  color: oklch(0.88 0.04 25);
+}
+
+.rm-livewarn .rm-live-dot {
+  background: #f87171;
+}
+
+/* ── Window drag + collapse bar + two-column live panel ────────────────── */
+
+/* a real draggable strip between the header's two groups */
+.rm-top-drag,
+.cr-top-drag {
+  flex: 1;
+  align-self: stretch;
+  min-width: 40px;
+}
+
+/* the whole bar collapses/expands, and says so on hover */
+
+.rm-sheet-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 30px;
+  margin: -4px -28px 4px;
+  border-radius: 14px 14px 0 0;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+
+.rm-sheet-head:hover {
+  background: oklch(0.23 0.042 250);
+}
+
+.rm-sheet-handle {
+  width: 44px;
+  height: 5px;
+  border-radius: 999px;
+  background: oklch(0.34 0.045 250);
+  transition:
+    width 0.16s ease,
+    background 0.16s ease;
+}
+
+.rm-sheet-head:hover .rm-sheet-handle {
+  width: 72px;
+  background: var(--mint);
+}
+
+.rm-sheet-label {
+  position: absolute;
+  right: 28px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: oklch(0.5 0.03 250);
+  transition: color 0.16s ease;
+}
+
+.rm-sheet-head:hover .rm-sheet-label {
+  color: oklch(0.85 0.015 250);
+}
+
+/* panel now holds only what you touch on air */
+
+.rm-sheet-body {
+  grid-template-columns: minmax(300px, 1fr) minmax(260px, 0.8fr);
+  height: 250px;
+}
+
+.rm-addrow {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1.5px dashed oklch(0.28 0.045 250);
+  color: oklch(0.5 0.03 250);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rm-addrow svg {
+  width: 14px;
+  height: 14px;
+}
+
+.rm-addrow .rm-soon {
+  margin-left: auto;
+}
+
+/* header popovers */
+
+.rm-pop-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: oklch(0.5 0.03 250);
+  padding: 4px 6px 8px;
+}
+
+.rm-pop-quality {
+  min-width: 300px;
+  padding: 10px 14px 14px;
+}
+
+.rm-pop-dests {
+  padding: 10px 12px 12px;
+}
+
+.rm-pop-dests .rm-row {
+  margin-bottom: 5px;
+}
+
+.rm-chip svg:last-child {
+  color: oklch(0.5 0.03 250);
+}
+
+/* ── Docks: panels the user arranges (our OBS-style layout) ────────────── */
+
+.rm-dock-side {
+  width: 268px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 14px 12px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.rm-dock-bottom {
+  display: flex;
+  gap: 0;
+  align-items: stretch;
+  height: 250px;
+}
+
+.rm-dock-bottom > .rm-panel {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 22px;
+  border-right: 1px solid oklch(0.25 0.04 250);
+}
+
+.rm-dock-bottom > .rm-panel:first-child {
+  padding-left: 4px;
+}
+
+.rm-dock-bottom > .rm-panel:last-child {
+  border-right: none;
+  padding-right: 4px;
+}
+
+.rm-dock-bottom > .rm-panel-mixer {
+  flex: 0 1 auto;
+  min-width: 240px;
+}
+
+.rm-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.rm-dock-side > .rm-panel {
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.rm-dock-side > .rm-panel-scenes {
+  flex: 0 0 auto;
+}
+
+.rm-panel-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.rm-panel-body > .rm-rows,
+.rm-panel-body > .rm-alerts,
+.rm-panel-body > .rm-chat-list {
+  overflow-y: auto;
+}
+
+/* panel menu */
+
+.rm-pop-panel {
+  min-width: 240px;
+}
+
+.rm-pop-hint {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: oklch(0.55 0.03 250);
+  padding: 0 6px 8px;
+}
+
+.rm-pop-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: oklch(0.45 0.03 250);
+  padding: 8px 6px 4px;
+}
+
+.rm-pop-row.on {
+  background: oklch(0.24 0.06 200 / 0.6);
+  color: var(--mint);
+}
+
+.rm-pop-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+/* layout menu */
+
+.rm-icon-chip {
+  all: unset;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  border: 1px solid oklch(0.3 0.045 250);
+  color: oklch(0.7 0.02 250);
+}
+
+.rm-icon-chip:hover {
+  color: oklch(0.94 0.008 250);
+  background: oklch(0.2 0.038 250);
+}
+
+.rm-pop-layout {
+  min-width: 320px;
+}
+
+.rm-preset {
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  font-family: var(--font);
+}
+
+.rm-preset:hover {
+  background: oklch(0.24 0.04 250);
+}
+
+.rm-preset-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: oklch(0.94 0.008 250);
+}
+
+.rm-preset-note {
+  font-size: 11px;
+  color: oklch(0.55 0.03 250);
+}
+
+.rm-panel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 6px 5px 11px;
+}
+
+.rm-panel-row-name {
+  font-size: 12.5px;
+  color: oklch(0.85 0.015 250);
+}
+
+.rm-dockset {
+  display: flex;
+  gap: 3px;
+  background: oklch(0.16 0.035 250);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.rm-dockbtn {
+  all: unset;
+  cursor: pointer;
+  width: 24px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  font-size: 12px;
+  color: oklch(0.5 0.03 250);
+}
+
+.rm-dockbtn:hover {
+  color: oklch(0.94 0.008 250);
+}
+
+.rm-dockbtn.on {
+  background: var(--mint);
+  color: #08110d;
+}
+
+/* stream health panel */
+
+.rm-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-content: flex-start;
+}
+
+.rm-stat-cell {
+  flex: 1 1 84px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: oklch(0.175 0.036 250);
+  border: 1px solid oklch(0.24 0.04 250);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.rm-stat-cell.warn {
+  border-color: oklch(0.45 0.14 60 / 0.6);
+}
+
+.rm-stat-num {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: oklch(0.94 0.008 250);
+}
+
+.rm-stat-label {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: oklch(0.52 0.03 250);
+}
+
+/* the collapse bar has no name now — it's just the grabber */
+
+.rm-sheet-head {
+  justify-content: center;
+}
+
+/* ── Rooms are documents: live cards, collapse, per-room scenes ────────── */
+
+.cr-room.onair {
+  border-color: #dc2626;
+  background: oklch(0.22 0.07 25 / 0.5);
+  box-shadow: 0 14px 34px -18px rgba(220, 38, 38, 0.9);
+}
+
+.cr-room-live {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  border-radius: 999px;
+  padding: 4px 9px;
+}
+
+.cr-room.onair .cr-room-del {
+  display: none;
+}
+
+/* remove-scene affordance (custom scenes only) */
+
+.rm-scene-x {
+  all: unset;
+  cursor: pointer;
+  display: none;
+  color: oklch(0.5 0.03 250);
+}
+
+.rm-scene-x svg {
+  width: 13px;
+  height: 13px;
+}
+
+.rm-scene-row:hover .rm-scene-x {
+  display: grid;
+  place-items: center;
+}
+
+.rm-scene-row:hover .rm-scene-x:hover {
+  color: oklch(0.94 0.008 250);
+}
+
+/* ── Drag-and-drop docks: grip to move, + to add, slots to land in ─────── */
+
+.rm-panel-head {
+  cursor: grab;
+  user-select: none;
+}
+
+.rm-panel-head:active {
+  cursor: grabbing;
+}
+
+.rm-grip {
+  display: grid;
+  place-items: center;
+  color: oklch(0.38 0.03 250);
+  margin-right: -2px;
+}
+
+.rm-panel-head:hover .rm-grip {
+  color: oklch(0.7 0.02 250);
+}
+
+.rm-panel.dragging {
+  opacity: 0.4;
+}
+
+.rm-panel-hide {
+  opacity: 0;
+}
+
+.rm-panel:hover .rm-panel-hide {
+  opacity: 1;
+}
+
+/* landing slots — invisible until a drag starts */
+
+.rm-slot {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  transition:
+    background 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.rm-dock-side > .rm-slot {
+  height: 4px;
+  margin: -6px 0;
+}
+
+.rm-dock-bottom > .rm-slot {
+  width: 4px;
+  align-self: stretch;
+  margin: 0 -3px;
+}
+
+.rm-slot.armed {
+  background: oklch(0.3 0.045 250);
+}
+
+.rm-slot.hot {
+  background: var(--mint);
+  box-shadow: 0 0 12px oklch(0.75 0.14 165 / 0.6);
+}
+
+.rm-dock-side > .rm-slot.hot {
+  height: 5px;
+}
+
+.rm-dock-bottom > .rm-slot.hot {
+  width: 5px;
+}
+
+/* per-dock add */
+
+.rm-add-anchor {
+  flex-shrink: 0;
+  display: flex;
+}
+
+.rm-dock-bottom .rm-add-anchor {
+  align-items: center;
+  padding-left: 10px;
+}
+
+.rm-add-panel {
+  all: unset;
+  cursor: pointer;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  color: oklch(0.45 0.03 250);
+  border: 1.5px dashed oklch(0.28 0.045 250);
+  border-radius: 10px;
+}
+
+.rm-dock-side .rm-add-panel {
+  width: 100%;
+  height: 34px;
+}
+
+.rm-dock-bottom .rm-add-panel {
+  width: 38px;
+  height: 100%;
+}
+
+.rm-add-panel:hover {
+  color: var(--mint);
+  border-color: oklch(0.5 0.1 165 / 0.6);
+  background: oklch(0.2 0.04 200 / 0.4);
+}
+
+.rm-dock-side.empty {
+  width: 74px;
+  padding: 8px 10px 12px;
+  justify-content: flex-start;
+}
+
+.rm-pop-add {
+  min-width: 230px;
+}
+
+.rm-pop-add .rm-pop-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rm-add-name {
+  font-size: 13px;
+}
+
+.rm-add-where {
+  font-size: 10.5px;
+  color: oklch(0.5 0.03 250);
+  font-weight: 500;
+}
+
+/* an empty bottom dock still accepts a drop */
+
+.rm-sheet .rm-dock-bottom:empty {
+  min-height: 60px;
+}
+
+/* ── The stage is a hole in the UI: the preview sits behind the webview ──
+ * Everything from the page root down to the canvas is transparent so the
+ * native preview shows through; the window itself paints the base color
+ * (#010610, matching the old stage backdrop). Panels paint themselves. */
+
+[data-stage="transparent"],
+[data-stage="transparent"] body,
+[data-stage="transparent"] #root,
+[data-stage="transparent"] .room,
+[data-stage="transparent"] .rm-body,
+[data-stage="transparent"] .rm-center,
+[data-stage="transparent"] .rm-canvas,
+[data-stage="transparent"] .rm-canvas .live-preview {
+  background: transparent;
+}
+
+/* Fallback (WebKit refused a see-through webview): the stage stays painted
+   and the preview layers above, so keep the room's own dark ground. */
+[data-stage="opaque"] .rm-center {
+  background: oklch(0.12 0.03 250);
+}
+
+/* the control room still needs its own opaque ground */
+.cr {
+  background: var(--rail-bg);
+}
+
+/* ── Pointer-driven panel drag: ghost, armed docks, landing line ───────── */
+
+.rm-grip {
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  padding: 2px 3px;
+  border-radius: 5px;
+}
+
+.rm-grip:hover {
+  background: oklch(0.26 0.045 250);
+}
+
+.rm-grip:active {
+  cursor: grabbing;
+}
+
+.rm-panel-head {
+  cursor: default;
+}
+
+/* docks announce themselves the moment a drag starts */
+
+.rm-dock.armed {
+  outline: 1.5px dashed oklch(0.34 0.05 250);
+  outline-offset: -6px;
+  border-radius: 14px;
+  transition:
+    outline-color 0.14s ease,
+    background 0.14s ease;
+}
+
+.rm-dock.armed.hot {
+  outline-color: var(--mint);
+  outline-style: solid;
+  background: oklch(0.28 0.07 175 / 0.14);
+}
+
+/* the landing line between panels */
+
+.rm-slot.armed {
+  background: oklch(0.32 0.045 250);
+}
+
+.rm-slot.hot {
+  background: var(--mint);
+  box-shadow: 0 0 14px oklch(0.75 0.14 165 / 0.75);
+}
+
+.rm-dock-side > .rm-slot.armed {
+  height: 3px;
+  margin: -5px 0;
+}
+
+.rm-dock-side > .rm-slot.hot {
+  height: 6px;
+  margin: -4px 0;
+}
+
+.rm-dock-bottom > .rm-slot.armed {
+  width: 3px;
+}
+
+.rm-dock-bottom > .rm-slot.hot {
+  width: 6px;
+}
+
+/* what you're carrying */
+
+.rm-ghost {
+  position: fixed;
+  z-index: 200;
+  transform: translate(14px, 10px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  background: oklch(0.24 0.045 250);
+  border: 1px solid var(--mint);
+  color: oklch(0.96 0.008 250);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+.rm-ghost .rm-grip {
+  background: none;
+  color: var(--mint);
+}
+
+/* The dock "+" is an affordance, not furniture: it shows when the dock is
+   empty, when you hover the dock, or while a panel is in flight. */
+
+.rm-add-anchor {
+  display: none;
+}
+
+.rm-dock.empty .rm-add-anchor,
+.rm-dock:hover .rm-add-anchor,
+.rm-dock.armed .rm-add-anchor {
+  display: flex;
+}
+
+.rm-dock-side .rm-add-panel {
+  height: 28px;
+  opacity: 0.75;
+}
+
+.rm-dock-side .rm-add-panel:hover {
+  opacity: 1;
+}
+
+/* ── Layout edit mode: nothing shows until you ask for it ──────────────── */
+
+/* grips, hide buttons, dock outlines and + are edit-mode only */
+.rm-grip,
+.rm-panel-hide,
+.rm-add-anchor {
+  display: none;
+}
+
+.layout-edit .rm-grip,
+.layout-edit .rm-panel-hide {
+  display: grid;
+  place-items: center;
+}
+
+.layout-edit .rm-add-anchor {
+  display: flex;
+}
+
+.rm-panel-hide {
+  opacity: 1;
+}
+
+/* no hover-revealed furniture anywhere */
+.rm-dock:hover .rm-add-anchor {
+  display: none;
+}
+
+.layout-edit .rm-dock:hover .rm-add-anchor {
+  display: flex;
+}
+
+.rm-dock.armed {
+  outline: 1.5px dashed oklch(0.32 0.045 250);
+  outline-offset: -6px;
+  border-radius: 14px;
+}
+
+.layout-edit .rm-panel {
+  border-radius: 12px;
+  outline: 1px solid oklch(0.28 0.045 250);
+  outline-offset: 4px;
+}
+
+.layout-edit .rm-panel-head {
+  cursor: default;
+}
+
+/* the edit bar */
+
+.rm-editbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 16px 8px;
+  padding: 8px 10px 8px 16px;
+  border-radius: 999px;
+  background: oklch(0.22 0.05 200 / 0.55);
+  border: 1px solid oklch(0.55 0.11 165 / 0.45);
+}
+
+.rm-editbar-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mint);
+  flex-shrink: 0;
+}
+
+.rm-editbar-text {
+  font-size: 12.5px;
+  color: oklch(0.86 0.02 200);
+  margin-right: auto;
+}
+
+.rm-editbar-btn {
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: oklch(0.9 0.015 250);
+  border: 1px solid oklch(0.35 0.05 250);
+  border-radius: 999px;
+  padding: 5px 12px;
+}
+
+.rm-editbar-btn:hover {
+  border-color: var(--mint);
+}
+
+.rm-editbar-done {
+  all: unset;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #08110d;
+  background: var(--mint);
+  border-radius: 999px;
+  padding: 6px 16px;
+}
+
+.rm-icon-chip.on {
+  background: var(--mint);
+  border-color: var(--mint);
+  color: #08110d;
+}
+
+.rm-editbar .rm-pop-layout {
+  top: calc(100% + 8px);
+  right: 0;
+}
+
+/* the edit bar and its controls always sit above any click-catcher */
+.rm-editbar {
+  position: relative;
+  z-index: 45;
+}

@@ -226,7 +226,7 @@ pub fn live_attach_preview(
     y: f64,
     w: f64,
     h: f64,
-) -> EngineResult<()> {
+) -> EngineResult<bool> {
     #[cfg(target_os = "macos")]
     {
         use tauri::Manager;
@@ -237,10 +237,14 @@ pub fn live_attach_preview(
             .ns_window()
             .map_err(|e| EngineError::Other(format!("ns_window: {e}")))?
             as usize;
+        // Decide the stage treatment here, synchronously, so the answer is
+        // already true by the time the engine thread attaches the view.
+        let transparent = crate::live::prepare_stage(ns_window);
         state
             .live
             .attach_preview(ns_window, x, y, w, h)
-            .map_err(EngineError::Other)
+            .map_err(EngineError::Other)?;
+        Ok(transparent)
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -304,8 +308,19 @@ pub fn live_screen_coach(action: String) -> EngineResult<()> {
 }
 
 #[tauri::command]
+pub fn live_preview_hidden(state: State<'_, AppState>, hidden: bool) -> EngineResult<()> {
+    state
+        .live
+        .set_preview_hidden(hidden)
+        .map_err(EngineError::Other)
+}
+
+#[tauri::command]
 pub fn live_set_video(state: State<'_, AppState>, height: u32, fps: u32) -> EngineResult<()> {
-    state.live.set_video(height, fps).map_err(EngineError::Other)
+    state
+        .live
+        .set_video(height, fps)
+        .map_err(EngineError::Other)
 }
 
 #[tauri::command]

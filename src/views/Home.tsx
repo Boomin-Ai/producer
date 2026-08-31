@@ -5,6 +5,8 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Channel, EndpointInfo, Job, LiveDestination, LiveRoom, LiveSnapshot } from "../lib/ipc";
 import type { TargetResult } from "../lib/ipc";
 import { ipc } from "../lib/ipc";
+import { demoOn, setDemo } from "../lib/demo";
+import { liveRoomId } from "../lib/room";
 import { useUpdater } from "../lib/updater";
 import { DestinationEditor, LiveView } from "./Live";
 
@@ -298,6 +300,8 @@ export function Home({
           {title && <span className="cr-title">{title}</span>}
           {streaming && <span className="cr-live-pill">LIVE</span>}
         </div>
+        <div className="cr-top-drag" data-tauri-drag-region />
+
         <div className="cr-top-right">
           {updater.state === "ready" && (
             <button className="cr-update" onClick={updater.restart} title={`Producer ${updater.version} is staged`}>
@@ -438,6 +442,23 @@ function SettingsSheet({
           </div>
         </div>
 
+        <div className="cr-label" style={{ marginTop: 28 }}>
+          DEV
+        </div>
+        <div className="cr-sheet-rows">
+          <div className="cr-sheet-row">
+            <span className="cr-sheet-row-name">Demo data</span>
+            <span className="cr-sheet-row-sub">fake chat, alerts &amp; canvas footage</span>
+            <Switch
+              on={demoOn()}
+              onChange={(v) => {
+                setDemo(v);
+                window.location.reload();
+              }}
+            />
+          </div>
+        </div>
+
         <div className="cr-hint" style={{ marginTop: "auto" }}>
           Stream keys never leave the macOS Keychain. Channel connections are managed in your Boomin
           workspace.
@@ -471,6 +492,7 @@ function ControlRoomHome({
   onHistory: () => void;
 }) {
   const [naming, setNaming] = useState(false);
+  const liveRoom = streaming ? liveRoomId() : null;
   const [name, setName] = useState("");
   const [addingDest, setAddingDest] = useState(false);
   const [editingDest, setEditingDest] = useState<LiveDestination | null>(null);
@@ -497,14 +519,27 @@ function ControlRoomHome({
         </div>
         <div className="cr-rooms">
           {rooms.map((room) => (
-            <button key={room.id} className="cr-room" onClick={() => onOpenRoom(room)}>
+            <button
+              key={room.id}
+              className={`cr-room${liveRoom === room.id ? " onair" : ""}`}
+              onClick={() => onOpenRoom(room)}
+            >
               <span className="cr-room-name">{room.name}</span>
-              <span className="cr-room-meta">{fmtAgo(room.last_live_at)}</span>
+              <span className="cr-room-meta">
+                {liveRoom === room.id ? "streaming now — click to return" : fmtAgo(room.last_live_at)}
+              </span>
+              {liveRoom === room.id && (
+                <span className="cr-room-live">
+                  <span className="rm-live-dot" />
+                  LIVE
+                </span>
+              )}
               <span
                 className="cr-room-del"
-                title="Delete room"
+                title={liveRoom === room.id ? "Stop the stream first" : "Delete room"}
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (liveRoom === room.id) return;
                   ipc.liveDeleteRoom(room.id).then(onRoomsChanged);
                 }}
               >
