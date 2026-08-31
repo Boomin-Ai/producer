@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="favicon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
 <style>
   :root {
     --ink: #050609;
@@ -103,22 +103,50 @@
 
   /* ── beat 0: hero, centered, full width ── */
   .hero {
-    position: absolute; z-index: 4; left: 0; right: 0; top: 15vh;
+    position: absolute; z-index: 4; left: 0; right: 0; top: 17vh;
     text-align: center; padding: 0 24px;
     transition: opacity 700ms var(--ease), transform 700ms var(--ease), filter 700ms ease;
   }
   .scene:not([data-stage="0"]) .hero { opacity: 0; transform: translateY(-40px); filter: blur(8px); pointer-events: none; }
-  h1 { font-weight: 700; letter-spacing: -0.03em; line-height: 1.02; text-wrap: balance; }
-  h1 .l1 { display: block; font-size: clamp(40px, 6.6vw, 78px); }
-  h1 .l2 {
-    display: block; font-size: clamp(40px, 6.6vw, 78px);
-    color: var(--glow);
-    text-shadow:
-      0 0 18px rgba(255, 236, 203, 0.4),
-      0 0 70px rgba(255, 196, 107, 0.25),
-      0 0 130px rgba(255, 180, 90, 0.15);
+  /* Meta Verified badge — same treatment as boomin.ai/producer */
+  .verified {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    background: rgba(255, 255, 255, 0.035);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-radius: 999px; padding: 7px 14px;
+    font-size: 13.5px; font-weight: 500; color: #eef0f3;
+    margin-bottom: 18px;
   }
-  .sub { margin: 22px auto 0; font-size: 17px; color: var(--dim); max-width: 52ch; text-wrap: pretty; }
+  .verified img { width: 16px; height: 16px; }
+
+  /* headline — Syne, uppercase, boomin.ai/producer scale */
+  h1 {
+    font-family: "Syne", var(--font); font-weight: 700;
+    text-transform: uppercase; letter-spacing: -0.02em; line-height: 1.08;
+    text-wrap: balance;
+  }
+  h1 .l1 { display: block; font-size: clamp(19px, 2.9vw, 35px); color: rgba(242, 243, 245, 0.85); }
+  h1 .l2 {
+    display: block; font-size: clamp(30px, 5.25vw, 70px); white-space: nowrap;
+    position: relative; color: #fff;
+    filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.85)) drop-shadow(0 14px 38px rgba(0, 0, 0, 0.7));
+  }
+  /* shine: a blurred spectrum copy panning behind the white type */
+  h1 .l2::before {
+    content: attr(data-text);
+    position: absolute; inset: 0; z-index: -1;
+    color: transparent; opacity: 0.55;
+    background-image: linear-gradient(100deg, #22d3ee, #60a5fa, #8b5cf6, #f472b6, #fbbf24, #22d3ee);
+    background-size: 250% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    filter: blur(0.12em) saturate(1.5);
+    animation: shine-pan 8s linear infinite;
+  }
+  @keyframes shine-pan { to { background-position: 250% 0; } }
+
+  .sub { margin: 18px auto 0; font-size: 17px; color: var(--dim); max-width: 52ch; text-wrap: pretty; }
   .sub b { color: var(--text); font-weight: 500; }
   .cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; justify-content: center; }
   .cta-row .pill { padding: 13px 26px; font-size: 15px; }
@@ -346,7 +374,7 @@
   footer .spacer { flex: 1; }
 
   @media (prefers-reduced-motion: reduce) {
-    .live-pill.on, .stage-mock .beam, .stage-mock .onair i, .closing .chair, .compose .caret { animation: none; }
+    h1 .l2::before, .live-pill.on, .stage-mock .beam, .stage-mock .onair i, .closing .chair, .compose .caret { animation: none; }
     .say, .panel, .hero { transition: none; }
   }
 </style>
@@ -376,9 +404,10 @@
 
     <!-- beat 0 — hero -->
     <div class="hero">
+      <span class="verified"><img src="meta.svg" alt="" />Meta Verified Technology Partner</span>
       <h1>
         <span class="l1">Stop posting.</span>
-        <span class="l2">Start producing.</span>
+        <span class="l2" data-text="Start producing.">Start producing.</span>
       </h1>
       <p class="sub">
         The open-source control room on your desktop — rooms that
