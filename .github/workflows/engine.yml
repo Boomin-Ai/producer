@@ -20,6 +20,10 @@ on:
       - "scripts/build-engine.sh"
       - "scripts/engine-lib.sh"
       - "scripts/engine-closure.sh"
+      # The virtual-camera pair is built by these on both engine paths, so a
+      # change to either must be validated like any other engine change.
+      - "scripts/build-virtualcam-plugin.sh"
+      - "scripts/build-camera-extension.sh"
   workflow_dispatch:
 
 jobs:
