@@ -208,6 +208,16 @@ pub struct gs_init_data {
     pub adapter: u32,
 }
 
+/// obs.h struct obs_sceneitem_crop — pixel crop per edge, pre-transform.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct obs_sceneitem_crop {
+    pub left: c_int,
+    pub top: c_int,
+    pub right: c_int,
+    pub bottom: c_int,
+}
+
 /// graphics/vec2.h struct vec2
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -253,6 +263,19 @@ extern "C" {
     ) -> *mut obs_sceneitem_t;
     pub fn obs_sceneitem_remove(item: *mut obs_sceneitem_t);
     pub fn obs_sceneitem_set_pos(item: *mut obs_sceneitem_t, pos: *const vec2);
+    pub fn obs_sceneitem_get_pos(item: *mut obs_sceneitem_t, pos: *mut vec2);
+    pub fn obs_sceneitem_set_rot(item: *mut obs_sceneitem_t, rot_deg: f32);
+    pub fn obs_sceneitem_get_rot(item: *mut obs_sceneitem_t) -> f32;
+    pub fn obs_sceneitem_set_scale(item: *mut obs_sceneitem_t, scale: *const vec2);
+    pub fn obs_sceneitem_get_scale(item: *mut obs_sceneitem_t, scale: *mut vec2);
+    pub fn obs_sceneitem_set_crop(item: *mut obs_sceneitem_t, crop: *const obs_sceneitem_crop);
+    pub fn obs_sceneitem_get_crop(item: *mut obs_sceneitem_t, crop: *mut obs_sceneitem_crop);
+    pub fn obs_sceneitem_set_order_position(item: *mut obs_sceneitem_t, position: c_int);
+    pub fn obs_sceneitem_get_order_position(item: *mut obs_sceneitem_t) -> c_int;
+    pub fn obs_sceneitem_get_bounds(item: *mut obs_sceneitem_t, bounds: *mut vec2);
+    pub fn obs_sceneitem_get_bounds_type(item: *mut obs_sceneitem_t) -> c_int;
+    pub fn obs_sceneitem_visible(item: *mut obs_sceneitem_t) -> bool;
+    pub fn obs_sceneitem_get_source(item: *mut obs_sceneitem_t) -> *mut obs_source_t;
     pub fn obs_sceneitem_set_bounds_type(item: *mut obs_sceneitem_t, bounds_type: c_int);
     pub fn obs_sceneitem_set_bounds(item: *mut obs_sceneitem_t, bounds: *const vec2);
     pub fn obs_sceneitem_set_visible(item: *mut obs_sceneitem_t, visible: bool) -> bool;
@@ -291,6 +314,14 @@ extern "C" {
     pub fn producer_drag_chip_show();
     pub fn producer_drag_chip_hide();
     pub fn producer_open_screen_settings();
+    pub fn producer_open_camera_settings();
+    /// Virtual camera (R13): ask macOS to install the bundled CMIO extension.
+    pub fn producer_vcam_activate();
+    /// 0 idle, 1 requested, 2 needs approval, 3 active, 4 failed; fills `buf`
+    /// with the last error.
+    pub fn producer_vcam_state(buf: *mut c_char, len: c_int) -> c_int;
+    pub fn producer_vcam_installed() -> c_int;
+    pub fn producer_open_mic_settings();
 }
 
 // M-L7 escape hatch: filters on the overlay window capture
@@ -301,6 +332,30 @@ extern "C" {
         settings: *mut obs_data_t,
     ) -> *mut obs_source_t;
     pub fn obs_source_filter_add(source: *mut obs_source_t, filter: *mut obs_source_t);
+    pub fn obs_source_filter_remove(source: *mut obs_source_t, filter: *mut obs_source_t);
+    pub fn obs_source_get_filter_by_name(
+        source: *mut obs_source_t,
+        name: *const c_char,
+    ) -> *mut obs_source_t;
+    /// Walks a source's filter chain in render order.
+    pub fn obs_source_enum_filters(
+        source: *mut obs_source_t,
+        callback: extern "C" fn(*mut obs_source_t, *mut obs_source_t, *mut c_void),
+        param: *mut c_void,
+    );
+    /// order: 0 = up, 1 = down, 2 = top, 3 = bottom (obs_order_movement).
+    pub fn obs_source_filter_set_order(
+        source: *mut obs_source_t,
+        filter: *mut obs_source_t,
+        movement: c_int,
+    );
+    pub fn obs_source_get_name(source: *mut obs_source_t) -> *const c_char;
+    pub fn obs_source_get_id(source: *mut obs_source_t) -> *const c_char;
+    pub fn obs_source_set_enabled(source: *mut obs_source_t, enabled: bool);
+    pub fn obs_source_enabled(source: *const obs_source_t) -> bool;
+    pub fn obs_data_get_double(data: *mut obs_data_t, name: *const c_char) -> f64;
+    pub fn obs_data_get_bool(data: *mut obs_data_t, name: *const c_char) -> bool;
+    pub fn obs_data_set_double(data: *mut obs_data_t, name: *const c_char, val: f64);
 }
 
 // M-L3: encoders, service, output — first light (LIVE-REVIEW.md F4 chain)
@@ -417,4 +472,34 @@ extern "C" {
         seconds: f64,
         return_after_source_handled: bool,
     ) -> i32;
+}
+
+// --- Source properties (device enumeration, UI-P2.9) --------------------
+pub enum obs_properties_t {}
+pub enum obs_property_t {}
+
+extern "C" {
+    /// Properties for a source TYPE, without needing an instance.
+    pub fn obs_get_source_properties(id: *const c_char) -> *mut obs_properties_t;
+    /// Properties for a live INSTANCE — some modules (mac-avcapture) only
+    /// populate device lists here, never on the bare type.
+    pub fn obs_source_properties(source: *mut obs_source_t) -> *mut obs_properties_t;
+    pub fn obs_properties_destroy(props: *mut obs_properties_t);
+    pub fn obs_properties_first(props: *mut obs_properties_t) -> *mut obs_property_t;
+    pub fn obs_property_next(prop: *mut *mut obs_property_t) -> bool;
+    pub fn obs_properties_get(props: *mut obs_properties_t, name: *const c_char) -> *mut obs_property_t;
+    pub fn obs_property_name(prop: *mut obs_property_t) -> *const c_char;
+    pub fn obs_property_list_item_count(prop: *mut obs_property_t) -> usize;
+    pub fn obs_property_list_item_name(prop: *mut obs_property_t, idx: usize) -> *const c_char;
+    pub fn obs_property_list_item_string(prop: *mut obs_property_t, idx: usize) -> *const c_char;
+    pub fn obs_property_list_item_disabled(prop: *mut obs_property_t, idx: usize) -> bool;
+
+    pub fn obs_source_get_settings(source: *mut obs_source_t) -> *mut obs_data_t;
+    pub fn obs_source_update(source: *mut obs_source_t, settings: *mut obs_data_t);
+    pub fn obs_data_get_string(data: *mut obs_data_t, name: *const c_char) -> *const c_char;
+    pub fn obs_data_set_obj(data: *mut obs_data_t, name: *const c_char, obj: *mut obs_data_t);
+    /// Media playback (stingers). Duration is 0 until the file is opened.
+    pub fn obs_source_media_get_duration(source: *mut obs_source_t) -> i64;
+    pub fn obs_source_media_restart(source: *mut obs_source_t);
+    pub fn obs_source_media_stop(source: *mut obs_source_t);
 }

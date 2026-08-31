@@ -316,6 +316,222 @@ pub fn live_preview_hidden(state: State<'_, AppState>, hidden: bool) -> EngineRe
 }
 
 #[tauri::command]
+pub fn live_set_transform(
+    state: State<'_, AppState>,
+    id: String,
+    patch: serde_json::Value,
+    commit: bool,
+) -> EngineResult<()> {
+    #[cfg(have_engine)]
+    {
+        let patch: crate::live::graph::TransformPatch =
+            serde_json::from_value(patch).map_err(|e| EngineError::Other(e.to_string()))?;
+        state
+            .live
+            .set_transform(id, patch, commit)
+            .map_err(EngineError::Other)
+    }
+    #[cfg(not(have_engine))]
+    {
+        state
+            .live
+            .set_transform(id, patch, commit)
+            .map_err(EngineError::Other)
+    }
+}
+
+/// Devices behind a source picker: cameras and capture cards, microphones
+/// and audio interfaces, displays. Straight from libobs, so anything the OS
+/// exposes shows up without Producer knowing the hardware.
+#[tauri::command]
+pub fn live_source_devices(
+    state: State<'_, AppState>,
+    kind: String,
+) -> EngineResult<serde_json::Value> {
+    // HARD RULE: never ask libobs to enumerate a device class the OS has not
+    // granted. AVFoundation blocks inside the properties call until the TCC
+    // prompt is answered, and that call runs on the engine-owner thread —
+    // so an ungranted camera would freeze the preview and the stream, not
+    // just this menu. Permission state is cheap and non-blocking; check it
+    // first and let the UI ask for the grant instead.
+    let perms = crate::live::permissions();
+    let needed = match kind.as_str() {
+        "camera" => Some("camera"),
+        "screen" => Some("screen"),
+        // CoreAudio enumerates inputs without a grant; only capture is gated.
+        _ => None,
+    };
+    if let Some(key) = needed {
+        let granted = perms
+            .get(key)
+            .and_then(|v| v.as_str())
+            .map(|s| s == "granted")
+            .unwrap_or(false);
+        if !granted {
+            return Ok(serde_json::Value::Array(Vec::new()));
+        }
+    }
+    let list = state.live.list_devices(kind).map_err(EngineError::Other)?;
+    Ok(serde_json::to_value(list).unwrap_or(serde_json::Value::Array(Vec::new())))
+}
+
+#[tauri::command]
+pub fn live_set_source_device(
+    state: State<'_, AppState>,
+    kind: String,
+    device: String,
+) -> EngineResult<()> {
+    state.live.set_device(kind, device).map_err(EngineError::Other)
+}
+
+/// Add an item from the open list (media/image/text/color/window). The spec
+/// arrives as tagged JSON and is validated by serde before it can touch the
+/// engine; the room document owns the id.
+#[tauri::command]
+pub fn live_add_source(
+    state: State<'_, AppState>,
+    id: String,
+    label: String,
+    spec: serde_json::Value,
+) -> EngineResult<()> {
+    #[cfg(have_engine)]
+    {
+        let spec: crate::live::graph::ExtraSpec =
+            serde_json::from_value(spec).map_err(|e| EngineError::Other(format!("bad source spec: {e}")))?;
+        return state.live.add_extra(id, label, spec).map_err(EngineError::Other);
+    }
+    #[cfg(not(have_engine))]
+    {
+        let _ = (id, label, spec);
+        Err(EngineError::Other("live engine not bundled in this build".into()))
+    }
+}
+
+#[tauri::command]
+pub fn live_remove_source(state: State<'_, AppState>, id: String) -> EngineResult<()> {
+    state.live.remove_extra(id).map_err(EngineError::Other)
+}
+
+/// Native file picker for media/image sources.
+///
+/// 🔴 MUST be async with the CALLBACK api. A sync `#[tauri::command]` runs on
+/// the main thread, and `blocking_pick_file()` then blocks that thread while
+/// waiting for a dialog which itself needs the main thread to appear — the
+/// app deadlocks into a spinning beachball and has to be force-quit. Async +
+/// callback keeps the main thread free to actually draw the panel.
+#[tauri::command]
+pub async fn live_pick_file(app: tauri::AppHandle, kind: String) -> EngineResult<Option<String>> {
+    use tauri_plugin_dialog::DialogExt;
+    let dialog = app.dialog().clone().file();
+    let dialog = match kind.as_str() {
+        "image" => dialog.add_filter("Images", &["png", "jpg", "jpeg", "gif", "webp", "bmp"]),
+        _ => dialog.add_filter(
+            "Media",
+            &["mp4", "mov", "m4v", "mkv", "webm", "mp3", "m4a", "wav", "aac", "flac"],
+        ),
+    };
+    let (tx, mut rx) = tauri::async_runtime::channel(1);
+    dialog.pick_file(move |f| {
+        let _ = tx.blocking_send(f);
+    });
+    let picked = rx.recv().await.flatten();
+    Ok(picked
+        .and_then(|f| f.into_path().ok())
+        .map(|p| p.to_string_lossy().into_owned()))
+}
+
+/// Start the stinger over the stage; returns its duration in ms (0 = unknown).
+#[tauri::command]
+pub fn live_play_stinger(state: State<'_, AppState>, path: String) -> EngineResult<i64> {
+    state.live.play_stinger(path).map_err(EngineError::Other)
+}
+
+/// Start recording. The stamp comes from the UI so the engine owns no clock;
+/// returns the file path it's writing.
+#[tauri::command]
+pub fn live_start_recording(state: State<'_, AppState>, stamp: String) -> EngineResult<String> {
+    state.live.start_recording(stamp).map_err(EngineError::Other)
+}
+
+#[tauri::command]
+pub fn live_stop_recording(state: State<'_, AppState>) -> EngineResult<Option<String>> {
+    state.live.stop_recording().map_err(EngineError::Other)
+}
+
+/// Reveal a finished recording in Finder.
+#[tauri::command]
+pub fn live_reveal_file(path: String) -> EngineResult<()> {
+    std::process::Command::new("open")
+        .arg("-R")
+        .arg(&path)
+        .spawn()
+        .map_err(|e| EngineError::Other(e.to_string()))?;
+    Ok(())
+}
+
+/// One door for the whole filter chain: list, add, remove, enable, reorder,
+/// update. Every call answers with the chain's new state so the UI never has
+/// to model it separately.
+#[tauri::command]
+pub fn live_set_opacity(state: State<'_, AppState>, id: String, opacity: f64) -> EngineResult<()> {
+    state
+        .live
+        .set_item_opacity(id, opacity)
+        .map_err(EngineError::Other)
+}
+
+#[tauri::command]
+pub fn live_filters(
+    state: State<'_, AppState>,
+    source: String,
+    op: serde_json::Value,
+) -> EngineResult<serde_json::Value> {
+    #[cfg(have_engine)]
+    {
+        let op: crate::live::engine::FilterOp = serde_json::from_value(op)
+            .map_err(|e| EngineError::Other(format!("bad filter op: {e}")))?;
+        let list = state.live.filters(source, op).map_err(EngineError::Other)?;
+        return Ok(serde_json::to_value(list).unwrap_or(serde_json::Value::Array(Vec::new())));
+    }
+    #[cfg(not(have_engine))]
+    {
+        let _ = (source, op);
+        Ok(serde_json::Value::Array(Vec::new()))
+    }
+}
+
+/// Virtual camera: activation is a system-extension install (needs user
+/// approval, once), separate from starting the output.
+#[tauri::command]
+pub fn live_vcam_status() -> EngineResult<serde_json::Value> {
+    Ok(crate::live::vcam_status())
+}
+
+#[tauri::command]
+pub fn live_vcam_activate() -> EngineResult<()> {
+    crate::live::vcam_activate();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn live_vcam_output(state: State<'_, AppState>, on: bool) -> EngineResult<bool> {
+    state
+        .live
+        .set_virtual_cam(on)
+        .map_err(|e| EngineError::Other(crate::live::engine::user_facing(&e)))
+}
+
+#[tauri::command]
+pub fn live_prepare_stinger(state: State<'_, AppState>, path: String) -> EngineResult<()> {
+    state.live.prepare_stinger(path).map_err(EngineError::Other)
+}
+
+#[tauri::command]
+pub fn live_stop_stinger(state: State<'_, AppState>) -> EngineResult<()> {
+    state.live.stop_stinger().map_err(EngineError::Other)
+}
+
+#[tauri::command]
 pub fn live_set_video(state: State<'_, AppState>, height: u32, fps: u32) -> EngineResult<()> {
     state
         .live

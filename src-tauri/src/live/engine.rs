@@ -15,6 +15,7 @@ use std::sync::mpsc;
 use serde::Serialize;
 
 use super::ffi;
+use super::record;
 
 /// Registration IDs the product requires, per LIVE-REVIEW.md §2.1 / M-L1.
 /// VideoToolbox encoder IDs are hardware-dynamic, asserted by substring below.
@@ -281,6 +282,21 @@ use std::time::{Duration, Instant};
 use super::graph;
 use super::multi::{DestStatus, MultiConfig, MultiReport, Session};
 
+/// What to do to a source's filter chain. Every op answers with the chain's
+/// new state, so the UI never has to guess what happened.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(tag = "op", rename_all = "snake_case")]
+pub enum FilterOp {
+    List,
+    Add { kind: String, name: String },
+    Remove { name: String },
+    Enable { name: String, on: bool },
+    /// 0 up, 1 down, 2 top, 3 bottom.
+    Reorder { name: String, movement: i32 },
+    Update { name: String, settings: serde_json::Value },
+}
+
+
 pub enum Command {
     GoLive(MultiConfig),
     StopLive,
@@ -292,6 +308,74 @@ pub enum Command {
     SetMicAudio {
         volume: Option<f32>,
         muted: Option<bool>,
+    },
+    /// Stage-editor transform (UI-P1). `commit: false` applies silently at
+    /// gesture rate; `commit: true` (pointer-up) echoes SourcesChanged so
+    /// the UI and room document settle on engine truth.
+    SetTransform {
+        id: String,
+        patch: graph::TransformPatch,
+        commit: bool,
+    },
+    /// Devices behind a source's picker (camera / mic / screen). Carries its
+    /// own reply channel: obs_* calls must happen on the engine-owner thread
+    /// (§5.1), so the caller asks and waits rather than touching libobs.
+    ListDevices {
+        kind: String,
+        reply: std::sync::mpsc::Sender<Vec<graph::DeviceOption>>,
+    },
+    /// Start the stinger clip over everything; replies with its duration in
+    /// ms (0 = not known yet, use the configured length).
+    PlayStinger {
+        path: String,
+        reply: std::sync::mpsc::Sender<Result<i64, String>>,
+    },
+    /// Start recording to ~/Movies/Producer. `stamp` names the file; the
+    /// engine never reads a clock.
+    StartRecording {
+        stamp: String,
+        reply: std::sync::mpsc::Sender<Result<String, String>>,
+    },
+    StopRecording {
+        reply: std::sync::mpsc::Sender<Option<String>>,
+    },
+    /// Per-item opacity for scene fades. Gesture-rate, fire-and-forget: a
+    /// reply per animation frame would be pure latency.
+    SetItemOpacity {
+        id: String,
+        opacity: f64,
+    },
+    /// Filters are per source and ordered — every op names the source and,
+    /// except for List/Add, the filter within it.
+    Filters {
+        source: String,
+        op: FilterOp,
+        reply: std::sync::mpsc::Sender<Result<Vec<super::filters::FilterState>, String>>,
+    },
+    /// Open the clip ahead of time so the cut itself is instant.
+    PrepareStinger {
+        path: String,
+    },
+    StopStinger,
+    /// Virtual camera output — Producer appears as a webcam in other apps.
+    SetVirtualCam {
+        on: bool,
+        reply: std::sync::mpsc::Sender<Result<bool, String>>,
+    },
+    /// Point a live source at a different device, keeping its transform.
+    SetDevice {
+        kind: String,
+        device: String,
+    },
+    /// Add an open-list scene item (UI-P2.10). Id and label come from the
+    /// room document so items respawn with stable identity.
+    AddExtra {
+        id: String,
+        label: String,
+        spec: graph::ExtraSpec,
+    },
+    RemoveExtra {
+        id: String,
     },
     /// Output video settings (OBS-style, our flavor): 16:9 height + fps.
     /// Refused while a session is running.
@@ -410,6 +494,111 @@ impl LiveHandle {
     pub fn set_mic_audio(&self, volume: Option<f32>, muted: Option<bool>) -> Result<(), String> {
         self.cmd
             .send(Command::SetMicAudio { volume, muted })
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn set_transform(
+        &self,
+        id: String,
+        patch: graph::TransformPatch,
+        commit: bool,
+    ) -> Result<(), String> {
+        self.cmd
+            .send(Command::SetTransform { id, patch, commit })
+            .map_err(|e| e.to_string())
+    }
+
+    /// Blocks the caller (a Tauri command thread, never the UI) until the
+    /// engine answers; a wedged engine yields an empty list, not a hang.
+    pub fn list_devices(&self, kind: String) -> Result<Vec<graph::DeviceOption>, String> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.cmd
+            .send(Command::ListDevices { kind, reply: tx })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(std::time::Duration::from_secs(5))
+            .map_err(|_| "the engine did not answer in time".to_string())
+    }
+
+    pub fn play_stinger(&self, path: String) -> Result<i64, String> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.cmd
+            .send(Command::PlayStinger { path, reply: tx })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(std::time::Duration::from_secs(5))
+            .map_err(|_| "the engine did not answer in time".to_string())?
+    }
+
+    pub fn start_recording(&self, stamp: String) -> Result<String, String> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.cmd
+            .send(Command::StartRecording { stamp, reply: tx })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(std::time::Duration::from_secs(10))
+            .map_err(|_| "the engine did not answer in time".to_string())?
+    }
+
+    pub fn stop_recording(&self) -> Result<Option<String>, String> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.cmd
+            .send(Command::StopRecording { reply: tx })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(std::time::Duration::from_secs(15))
+            .map_err(|_| "the engine did not answer in time".to_string())
+    }
+
+    pub fn set_item_opacity(&self, id: String, opacity: f64) -> Result<(), String> {
+        self.cmd
+            .send(Command::SetItemOpacity { id, opacity })
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn filters(
+        &self,
+        source: String,
+        op: FilterOp,
+    ) -> Result<Vec<super::filters::FilterState>, String> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.cmd
+            .send(Command::Filters { source, op, reply: tx })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(std::time::Duration::from_secs(5))
+            .map_err(|_| "the engine did not answer in time".to_string())?
+    }
+
+    pub fn set_virtual_cam(&self, on: bool) -> Result<bool, String> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.cmd
+            .send(Command::SetVirtualCam { on, reply: tx })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(std::time::Duration::from_secs(10))
+            .map_err(|_| "the engine did not answer in time".to_string())?
+    }
+
+    pub fn prepare_stinger(&self, path: String) -> Result<(), String> {
+        self.cmd
+            .send(Command::PrepareStinger { path })
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn stop_stinger(&self) -> Result<(), String> {
+        self.cmd.send(Command::StopStinger).map_err(|e| e.to_string())
+    }
+
+    pub fn set_device(&self, kind: String, device: String) -> Result<(), String> {
+        self.cmd
+            .send(Command::SetDevice { kind, device })
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn add_extra(&self, id: String, label: String, spec: graph::ExtraSpec) -> Result<(), String> {
+        self.cmd
+            .send(Command::AddExtra { id, label, spec })
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn remove_extra(&self, id: String) -> Result<(), String> {
+        self.cmd
+            .send(Command::RemoveExtra { id })
             .map_err(|e| e.to_string())
     }
 
@@ -584,10 +773,38 @@ impl LiveProxy {
 /// Start the LiveEngine owner thread. `sink` receives every event after the
 /// snapshot has been updated; it runs on the engine thread and must not
 /// block or call back into the engine.
+/// Upstream modules speak in their own brand and their own UI vocabulary —
+/// mac-virtualcam's "Please allow OBS to install…" is a compiled string we
+/// cannot patch. Every message that can reach a user passes through here, so
+/// nothing says OBS in Producer's window.
+pub fn user_facing(message: &str) -> String {
+    let m = message.trim();
+    let lower = m.to_ascii_lowercase();
+    if lower.contains("virtual camera") && lower.contains("not installed") {
+        return "The virtual camera isn't installed yet. Approve Producer's \
+camera extension in System Settings › General › Login Items & Extensions › \
+Camera Extensions, then try again."
+            .replace('\n', "");
+    }
+    m.replace("OBS Studio", "Producer")
+        .replace("obs-studio", "Producer")
+        .replace("OBS", "Producer")
+}
+
 pub fn start(
     module_config_dir: std::path::PathBuf,
     sink: impl Fn(&LiveEvent) + Send + 'static,
 ) -> LiveHandle {
+    // Wrap the caller's sink once: every EngineError leaving the engine is
+    // rewritten, no matter which of the many call sites produced it.
+    let sink = move |ev: &LiveEvent| {
+        match ev {
+            LiveEvent::EngineError { message } => sink(&LiveEvent::EngineError {
+                message: user_facing(message),
+            }),
+            other => sink(other),
+        }
+    };
     let (cmd_tx, cmd_rx) = mpsc::channel::<Command>();
     let snapshot = Arc::new(Mutex::new(Snapshot::default()));
     let streaming = Arc::new(AtomicBool::new(false));
@@ -614,6 +831,12 @@ pub fn start(
 
             // The implicit scene (§2.2) exists from engine start; sources are
             // added/removed by user toggles (which is when TCC prompts fire).
+            // Recording lives beside the session, not inside it: you can
+            // record without streaming and keep recording after a stream ends.
+            let mut recorder: Option<record::Recorder> = None;
+            // The virtual camera runs independently of streaming and
+            // recording — all three can be on at once.
+            let mut vcam: Option<*mut ffi::obs_output_t> = None;
             let mut scene = if report.ok {
                 match graph::SceneGraph::create() {
                     Ok(s) => Some(s),
@@ -707,6 +930,186 @@ pub fn start(
                             let sources = g.state();
                             snap.lock().unwrap().sources = sources.clone();
                             sink(&LiveEvent::SourcesChanged { sources });
+                        }
+                    }
+                    Ok(Command::SetTransform { id, patch, commit }) => {
+                        if let Some(g) = scene.as_mut() {
+                            if let Err(e) = g.set_transform(&id, &patch) {
+                                sink(&LiveEvent::EngineError { message: e });
+                            } else if commit {
+                                let sources = g.state();
+                                snap.lock().unwrap().sources = sources.clone();
+                                sink(&LiveEvent::SourcesChanged { sources });
+                            }
+                        }
+                    }
+                    Ok(Command::ListDevices { kind, reply }) => {
+                        let list = match scene.as_ref() {
+                            Some(g) => g.devices(&kind),
+                            None => graph::devices_for(&kind),
+                        };
+                        let _ = reply.send(list);
+                    }
+                    Ok(Command::PlayStinger { path, reply }) => {
+                        let r = match scene.as_mut() {
+                            Some(g) => g.play_stinger(&path),
+                            None => Err("no scene".into()),
+                        };
+                        if let Err(e) = &r {
+                            sink(&LiveEvent::EngineError { message: e.clone() });
+                        }
+                        let _ = reply.send(r);
+                    }
+                    Ok(Command::StartRecording { stamp, reply }) => {
+                        if recorder.is_some() {
+                            let _ = reply.send(Err("already recording".into()));
+                        } else {
+                            // Recording rides the same canvas as the stream at
+                            // a quality bitrate; 1080p gets more headroom.
+                            let br = if snap.lock().unwrap().video_height >= 1080 { 12000 } else { 8000 };
+                            match record::Recorder::start(&stamp, br) {
+                                Ok(r) => {
+                                    let p = r.path();
+                                    recorder = Some(r);
+                                    let _ = reply.send(Ok(p));
+                                }
+                                Err(e) => {
+                                    sink(&LiveEvent::EngineError { message: e.clone() });
+                                    let _ = reply.send(Err(e));
+                                }
+                            }
+                        }
+                    }
+                    Ok(Command::StopRecording { reply }) => {
+                        let _ = reply.send(recorder.take().map(|r| r.stop()));
+                    }
+                    Ok(Command::SetItemOpacity { id, opacity }) => {
+                        if let Some(g) = scene.as_ref() {
+                            if let Some(src) = g.source_by_id(&id) {
+                                let _ = super::filters::set_opacity(src, opacity);
+                            }
+                        }
+                    }
+                    Ok(Command::Filters { source, op, reply }) => {
+                        let r = (|| -> Result<Vec<super::filters::FilterState>, String> {
+                            let g = scene.as_ref().ok_or("no scene")?;
+                            let src = g
+                                .source_by_id(&source)
+                                .ok_or_else(|| format!("{source} is not on the stage"))?;
+                            match &op {
+                                FilterOp::List => {}
+                                FilterOp::Add { kind, name } => super::filters::add(src, kind, name)?,
+                                FilterOp::Remove { name } => super::filters::remove(src, name)?,
+                                FilterOp::Enable { name, on } => {
+                                    super::filters::set_enabled(src, name, *on)?
+                                }
+                                FilterOp::Reorder { name, movement } => {
+                                    super::filters::reorder(src, name, *movement)?
+                                }
+                                FilterOp::Update { name, settings } => {
+                                    super::filters::update(src, name, settings)?
+                                }
+                            }
+                            Ok(super::filters::list(src))
+                        })();
+                        if let Err(e) = &r {
+                            sink(&LiveEvent::EngineError { message: e.clone() });
+                        }
+                        let _ = reply.send(r);
+                    }
+                    Ok(Command::SetVirtualCam { on, reply }) => {
+                        let r = (|| -> Result<bool, String> {
+                            unsafe {
+                                if !on {
+                                    if let Some(o) = vcam.take() {
+                                        ffi::obs_output_stop(o);
+                                        ffi::obs_output_release(o);
+                                    }
+                                    return Ok(false);
+                                }
+                                if vcam.is_some() {
+                                    return Ok(true);
+                                }
+                                let id = CString::new("virtualcam_output").unwrap();
+                                let name = CString::new("Producer Virtual Camera").unwrap();
+                                let out = ffi::obs_output_create(
+                                    id.as_ptr(),
+                                    name.as_ptr(),
+                                    ptr::null_mut(),
+                                    ptr::null_mut(),
+                                );
+                                if out.is_null() {
+                                    return Err("this engine has no virtual camera output".into());
+                                }
+                                if !ffi::obs_output_start(out) {
+                                    let e = ffi::obs_output_get_last_error(out);
+                                    // Upstream's text is OBS-branded; it reaches
+                                    // the user as a command error, which never
+                                    // passes through the event sink.
+                                    let msg = if e.is_null() {
+                                        "the virtual camera refused to start — is the extension approved?".to_string()
+                                    } else {
+                                        user_facing(&CStr::from_ptr(e).to_string_lossy())
+                                    };
+                                    ffi::obs_output_release(out);
+                                    return Err(msg);
+                                }
+                                vcam = Some(out);
+                                Ok(true)
+                            }
+                        })();
+                        if let Err(e) = &r {
+                            sink(&LiveEvent::EngineError { message: e.clone() });
+                        }
+                        let _ = reply.send(r);
+                    }
+                    Ok(Command::PrepareStinger { path }) => {
+                        if let Some(g) = scene.as_mut() {
+                            if let Err(e) = g.prepare_stinger(&path) {
+                                sink(&LiveEvent::EngineError { message: e });
+                            }
+                        }
+                    }
+                    Ok(Command::StopStinger) => {
+                        if let Some(g) = scene.as_mut() {
+                            // Hide, don't destroy: the next cut reuses it.
+                            g.hide_stinger();
+                        }
+                    }
+                    Ok(Command::SetDevice { kind, device }) => {
+                        if let Some(g) = scene.as_mut() {
+                            match g.set_device(&kind, &device) {
+                                Ok(()) => {
+                                    let sources = g.state();
+                                    snap.lock().unwrap().sources = sources.clone();
+                                    sink(&LiveEvent::SourcesChanged { sources });
+                                }
+                                Err(e) => sink(&LiveEvent::EngineError { message: e }),
+                            }
+                        }
+                    }
+                    Ok(Command::AddExtra { id, label, spec }) => {
+                        if let Some(g) = scene.as_mut() {
+                            match g.add_extra(&id, &label, &spec) {
+                                Ok(()) => {
+                                    let sources = g.state();
+                                    snap.lock().unwrap().sources = sources.clone();
+                                    sink(&LiveEvent::SourcesChanged { sources });
+                                }
+                                Err(e) => sink(&LiveEvent::EngineError { message: e }),
+                            }
+                        }
+                    }
+                    Ok(Command::RemoveExtra { id }) => {
+                        if let Some(g) = scene.as_mut() {
+                            match g.remove_extra(&id) {
+                                Ok(()) => {
+                                    let sources = g.state();
+                                    snap.lock().unwrap().sources = sources.clone();
+                                    sink(&LiveEvent::SourcesChanged { sources });
+                                }
+                                Err(e) => sink(&LiveEvent::EngineError { message: e }),
+                            }
                         }
                     }
                     Ok(Command::SetVideo { height, fps }) => {

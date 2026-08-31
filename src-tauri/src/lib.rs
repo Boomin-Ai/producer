@@ -1,4 +1,5 @@
 mod boomin;
+mod chat;
 mod client;
 mod error;
 mod ipc;
@@ -20,6 +21,8 @@ pub struct AppState {
     /// LiveEngine facade (LIVE-REVIEW.md §5.1): commands in, events out via
     /// the `live://event` channel; stream keys never pass through here.
     pub live: live::Live,
+    /// Platform chat readers (host-side sockets; see chat::mod docs).
+    pub chat: chat::ChatHub,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -55,6 +58,7 @@ pub fn run() {
                 db: Mutex::new(conn),
                 pending_auth: Mutex::new(None),
                 live,
+                chat: chat::ChatHub::new(app.handle().clone()),
             });
 
             // Resume any submissions a crash left unacknowledged.
@@ -99,12 +103,33 @@ pub fn run() {
             live::commands::firstlight_resume,
             live::commands::live_set_mic_audio,
             live::commands::live_set_video,
+            live::commands::live_set_transform,
+            live::commands::live_source_devices,
+            live::commands::live_add_source,
+            live::commands::live_remove_source,
+            live::commands::live_pick_file,
+            live::commands::live_play_stinger,
+            live::commands::live_prepare_stinger,
+            live::commands::live_vcam_status,
+            live::commands::live_vcam_activate,
+            live::commands::live_vcam_output,
+            live::commands::live_filters,
+            live::commands::live_set_opacity,
+            live::commands::live_start_recording,
+            live::commands::live_stop_recording,
+            live::commands::live_reveal_file,
+            live::commands::live_stop_stinger,
+            live::commands::live_set_source_device,
             live::commands::live_preview_hidden,
             live::commands::live_open_chat,
             live::commands::live_list_rooms,
             live::commands::live_create_room,
             live::commands::live_update_room,
             live::commands::live_delete_room,
+            chat::commands::chat_connect,
+            chat::commands::chat_disconnect,
+            chat::commands::chat_status,
+            chat::commands::kick_resolve_chatroom,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -126,7 +151,9 @@ pub fn run() {
                 // engine bounds the stop wait itself (≤ ~15s with an active
                 // session).
                 tauri::RunEvent::Exit => {
-                    app.state::<AppState>().live.shutdown();
+                    let state = app.state::<AppState>();
+                    state.chat.disconnect_all();
+                    state.live.shutdown();
                 }
                 _ => {}
             }

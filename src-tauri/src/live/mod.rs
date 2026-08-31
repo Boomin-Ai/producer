@@ -10,6 +10,8 @@ pub mod engine;
 mod ffi;
 #[cfg(have_engine)]
 pub mod graph;
+pub mod filters;
+mod record;
 #[cfg(have_engine)]
 pub mod multi;
 #[cfg(have_engine)]
@@ -157,6 +159,176 @@ impl Live {
     }
 
     #[cfg(have_engine)]
+    pub fn set_transform(
+        &self,
+        id: String,
+        patch: graph::TransformPatch,
+        commit: bool,
+    ) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .set_transform(id, patch, commit)
+    }
+    #[cfg(not(have_engine))]
+    pub fn set_transform(
+        &self,
+        _id: String,
+        _patch: serde_json::Value,
+        _commit: bool,
+    ) -> Result<(), String> {
+        Err("live engine not bundled in this build".into())
+    }
+
+    #[cfg(have_engine)]
+    pub fn add_extra(&self, id: String, label: String, spec: graph::ExtraSpec) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .add_extra(id, label, spec)
+    }
+    #[cfg(not(have_engine))]
+    pub fn add_extra(&self, _id: String, _label: String, _spec: serde_json::Value) -> Result<(), String> {
+        Err("live engine not bundled in this build".into())
+    }
+
+    #[cfg(have_engine)]
+    pub fn remove_extra(&self, id: String) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .remove_extra(id)
+    }
+    #[cfg(not(have_engine))]
+    pub fn remove_extra(&self, _id: String) -> Result<(), String> {
+        Err("live engine not bundled in this build".into())
+    }
+
+    #[cfg(have_engine)]
+    pub fn list_devices(&self, kind: String) -> Result<Vec<graph::DeviceOption>, String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .list_devices(kind)
+    }
+    #[cfg(not(have_engine))]
+    pub fn list_devices(&self, _kind: String) -> Result<Vec<serde_json::Value>, String> {
+        Ok(Vec::new())
+    }
+
+    #[cfg(have_engine)]
+    pub fn play_stinger(&self, path: String) -> Result<i64, String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .play_stinger(path)
+    }
+    #[cfg(not(have_engine))]
+    pub fn play_stinger(&self, _path: String) -> Result<i64, String> {
+        Err("live engine not bundled in this build".into())
+    }
+
+    #[cfg(have_engine)]
+    pub fn start_recording(&self, stamp: String) -> Result<String, String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .start_recording(stamp)
+    }
+    #[cfg(not(have_engine))]
+    pub fn start_recording(&self, _stamp: String) -> Result<String, String> {
+        Err("live engine not bundled in this build".into())
+    }
+
+    #[cfg(have_engine)]
+    pub fn stop_recording(&self) -> Result<Option<String>, String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .stop_recording()
+    }
+    #[cfg(not(have_engine))]
+    pub fn stop_recording(&self) -> Result<Option<String>, String> {
+        Ok(None)
+    }
+
+    #[cfg(have_engine)]
+    pub fn set_item_opacity(&self, id: String, opacity: f64) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .set_item_opacity(id, opacity)
+    }
+    #[cfg(not(have_engine))]
+    pub fn set_item_opacity(&self, _id: String, _opacity: f64) -> Result<(), String> {
+        Ok(())
+    }
+
+    #[cfg(have_engine)]
+    pub fn filters(
+        &self,
+        source: String,
+        op: engine::FilterOp,
+    ) -> Result<Vec<filters::FilterState>, String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .filters(source, op)
+    }
+    #[cfg(not(have_engine))]
+    pub fn filters(&self, _source: String, _op: serde_json::Value) -> Result<Vec<serde_json::Value>, String> {
+        Ok(Vec::new())
+    }
+
+    #[cfg(have_engine)]
+    pub fn set_virtual_cam(&self, on: bool) -> Result<bool, String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .set_virtual_cam(on)
+    }
+    #[cfg(not(have_engine))]
+    pub fn set_virtual_cam(&self, _on: bool) -> Result<bool, String> {
+        Err("live engine not bundled in this build".into())
+    }
+
+    #[cfg(have_engine)]
+    pub fn prepare_stinger(&self, path: String) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .prepare_stinger(path)
+    }
+    #[cfg(not(have_engine))]
+    pub fn prepare_stinger(&self, _path: String) -> Result<(), String> {
+        Ok(())
+    }
+
+    #[cfg(have_engine)]
+    pub fn stop_stinger(&self) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .stop_stinger()
+    }
+    #[cfg(not(have_engine))]
+    pub fn stop_stinger(&self) -> Result<(), String> {
+        Ok(())
+    }
+
+    #[cfg(have_engine)]
+    pub fn set_device(&self, kind: String, device: String) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .set_device(kind, device)
+    }
+    #[cfg(not(have_engine))]
+    pub fn set_device(&self, _kind: String, _device: String) -> Result<(), String> {
+        Err("live engine not bundled in this build".into())
+    }
+
+    #[cfg(have_engine)]
     pub fn set_video(&self, height: u32, fps: u32) -> Result<(), String> {
         self.handle
             .as_ref()
@@ -298,6 +470,41 @@ pub fn permissions() -> serde_json::Value {
     serde_json::json!({ "screen": "unknown", "camera": "unknown", "mic": "unknown" })
 }
 
+/// Virtual camera activation state for the UI. `installed` is the only proof
+/// that matters — the extension can already be present from an earlier run
+/// with no request outstanding.
+pub fn vcam_status() -> serde_json::Value {
+    #[cfg(have_engine)]
+    unsafe {
+        let mut buf = [0i8; 512];
+        let state = ffi::producer_vcam_state(buf.as_mut_ptr(), buf.len() as i32);
+        let err = std::ffi::CStr::from_ptr(buf.as_ptr())
+            .to_string_lossy()
+            .into_owned();
+        let installed = ffi::producer_vcam_installed() == 1;
+        return serde_json::json!({
+            "state": match state {
+                1 => "requested",
+                2 => "needs_approval",
+                3 => "active",
+                4 => "failed",
+                _ => "idle",
+            },
+            "installed": installed,
+            "error": if err.is_empty() { serde_json::Value::Null } else { serde_json::Value::from(err) },
+        });
+    }
+    #[cfg(not(have_engine))]
+    serde_json::json!({ "state": "unavailable", "installed": false, "error": null })
+}
+
+pub fn vcam_activate() {
+    #[cfg(have_engine)]
+    unsafe {
+        ffi::producer_vcam_activate();
+    }
+}
+
 /// Make the webview see-through so the preview can sit BEHIND it, and
 /// report whether WebKit allowed it. Main thread, synchronous — the answer
 /// must be known before the UI decides how to paint the stage.
@@ -344,6 +551,8 @@ pub fn screen_grant_coach(action: &str) -> Result<(), String> {
             "chip_show" => ffi::producer_drag_chip_show(),
             "chip_hide" => ffi::producer_drag_chip_hide(),
             "open_settings" => ffi::producer_open_screen_settings(),
+            "open_camera_settings" => ffi::producer_open_camera_settings(),
+            "open_mic_settings" => ffi::producer_open_mic_settings(),
             other => return Err(format!("unknown coach action {other}")),
         }
         return Ok(());
@@ -464,6 +673,7 @@ pub fn startup_probe(report_dir: &Path) {
     let report_dir = report_dir.to_path_buf();
     let args: Vec<String> = std::env::args().collect();
     let run_capture_probe = args.iter().any(|a| a == "--live-capture-probe");
+    let run_props = args.iter().any(|a| a == "--live-props");
     let first_light_cred = args
         .iter()
         .position(|a| a == "--live-first-light")
@@ -480,6 +690,26 @@ pub fn startup_probe(report_dir: &Path) {
             if !report.ok {
                 eprintln!("[live] skipping live harness: bootstrap not ok");
                 return;
+            }
+            if run_props {
+                // Device pickers must be written against the property names
+                // libobs actually exposes, not remembered ones.
+                for id in ["macos-avcapture", "coreaudio_input_capture", "screen_capture"] {
+                    println!("=== {id} ===");
+                    for line in graph::list_property_names(id) {
+                        println!("  prop: {line}");
+                    }
+                    for prop in ["device", "device_id", "display_uuid", "display", "window", "application"] {
+                        let opts = graph::list_property_options(id, prop);
+                        if !opts.is_empty() {
+                            println!("  -- {prop} options --");
+                            for o in opts {
+                                println!("     {} = {}", o.name, o.id);
+                            }
+                        }
+                    }
+                }
+                std::process::exit(0);
             }
             if run_capture_probe {
                 let capture = graph::capture_probe(std::time::Duration::from_secs(8));
@@ -500,7 +730,8 @@ pub fn startup_probe(_report_dir: &Path) {
 
 /// True when a legacy harness flag is present (init() must not also run).
 pub fn legacy_harness_requested() -> bool {
-    std::env::args().any(|a| a == "--live-capture-probe" || a == "--live-first-light")
+    std::env::args()
+        .any(|a| a == "--live-capture-probe" || a == "--live-first-light" || a == "--live-props")
 }
 
 /// PRODUCER_LIVE_SELFTEST=1 entry: bootstrap headless, print the JSON report

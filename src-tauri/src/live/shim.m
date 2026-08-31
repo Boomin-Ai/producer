@@ -6,6 +6,7 @@
 
 #import <AppKit/AppKit.h>
 #import <AVFoundation/AVFoundation.h>
+#import <SystemExtensions/SystemExtensions.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <WebKit/WebKit.h>
 
@@ -283,6 +284,133 @@ void producer_open_screen_settings(void) {
         NSURL *url = [NSURL
             URLWithString:
                 @"x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"];
+        [[NSWorkspace sharedWorkspace] openURL:url];
+    });
+}
+
+// ── Virtual camera: system-extension activation (R13) ──────────────────
+//
+// macOS installs a CoreMediaIO extension only from a notarized app, and only
+// after the user approves it in System Settings. The request is asynchronous
+// and its result arrives on a delegate, so activation state is a small
+// state machine the UI polls rather than a call that returns an answer.
+//
+// 0 = unknown/idle, 1 = requested, 2 = needs user approval, 3 = active,
+// 4 = failed.
+static int g_vcam_state = 0;
+static char g_vcam_error[512] = {0};
+
+@interface ProducerExtensionDelegate : NSObject <OSSystemExtensionRequestDelegate>
+@end
+
+@implementation ProducerExtensionDelegate
+- (OSSystemExtensionReplacementAction)request:(OSSystemExtensionRequest *)request
+                  actionForReplacingExtension:(OSSystemExtensionProperties *)existing
+                               withExtension:(OSSystemExtensionProperties *)ext {
+    // Always take the copy inside this app bundle; a stale one from another
+    // install would talk a different protocol.
+    return OSSystemExtensionReplacementActionReplace;
+}
+
+- (void)requestNeedsUserApproval:(OSSystemExtensionRequest *)request {
+    g_vcam_state = 2;
+}
+
+- (void)request:(OSSystemExtensionRequest *)request
+    didFinishWithResult:(OSSystemExtensionRequestResult)result {
+    g_vcam_state = 3;
+}
+
+- (void)request:(OSSystemExtensionRequest *)request didFailWithError:(NSError *)error {
+    g_vcam_state = 4;
+    snprintf(g_vcam_error, sizeof(g_vcam_error), "%s",
+             error.localizedDescription.UTF8String ?: "activation failed");
+}
+@end
+
+static ProducerExtensionDelegate *g_vcam_delegate = nil;
+
+// The extension's bundle id — read from the bundle we actually ship so the
+// two can never drift apart.
+static NSString *producer_camera_extension_id(void) {
+    NSURL *dir = [[NSBundle mainBundle] builtInPlugInsURL];
+    NSURL *ext = [[[dir URLByDeletingLastPathComponent]
+        URLByAppendingPathComponent:@"Library"]
+        URLByAppendingPathComponent:@"SystemExtensions"];
+    NSArray *items = [[NSFileManager defaultManager] contentsOfDirectoryAtURL:ext
+                                                  includingPropertiesForKeys:nil
+                                                                     options:0
+                                                                       error:nil];
+    for (NSURL *u in items) {
+        if ([u.pathExtension isEqualToString:@"systemextension"]) {
+            return [u.lastPathComponent stringByDeletingPathExtension];
+        }
+    }
+    return nil;
+}
+
+void producer_vcam_activate(void) {
+    run_on_main(^{
+        NSString *ident = producer_camera_extension_id();
+        if (!ident) {
+            g_vcam_state = 4;
+            snprintf(g_vcam_error, sizeof(g_vcam_error),
+                     "no camera extension is bundled with this build");
+            return;
+        }
+        if (!g_vcam_delegate) {
+            g_vcam_delegate = [ProducerExtensionDelegate new];
+        }
+        g_vcam_state = 1;
+        g_vcam_error[0] = 0;
+        OSSystemExtensionRequest *req =
+            [OSSystemExtensionRequest activationRequestForExtension:ident
+                                                              queue:dispatch_get_main_queue()];
+        req.delegate = g_vcam_delegate;
+        [[OSSystemExtensionManager sharedManager] submitRequest:req];
+    });
+}
+
+int producer_vcam_state(char *buf, int len) {
+    if (buf && len > 0) {
+        snprintf(buf, (size_t)len, "%s", g_vcam_error);
+    }
+    return g_vcam_state;
+}
+
+// Is the virtual camera already present as a capture device? That is the
+// only proof that matters — the extension can be installed from a previous
+// run with no request outstanding.
+int producer_vcam_installed(void) {
+    AVCaptureDeviceDiscoverySession *s = [AVCaptureDeviceDiscoverySession
+        discoverySessionWithDeviceTypes:@[ AVCaptureDeviceTypeExternal ]
+                              mediaType:AVMediaTypeVideo
+                               position:AVCaptureDevicePositionUnspecified];
+    for (AVCaptureDevice *d in s.devices) {
+        if ([d.localizedName containsString:@"Virtual Camera"] ||
+            [d.localizedName containsString:@"OBS"]) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// Camera / microphone privacy panes. Needed because once a user denies a
+// capture permission, -requestAccessForMediaType: NEVER prompts again — it
+// silently completes with NO. Settings is the only way back, so the UI has
+// to send them there rather than offering an Allow button that does nothing.
+void producer_open_camera_settings(void) {
+    run_on_main(^{
+        NSURL *url = [NSURL
+            URLWithString:@"x-apple.systempreferences:com.apple.preference.security?Privacy_Camera"];
+        [[NSWorkspace sharedWorkspace] openURL:url];
+    });
+}
+
+void producer_open_mic_settings(void) {
+    run_on_main(^{
+        NSURL *url = [NSURL
+            URLWithString:@"x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"];
         [[NSWorkspace sharedWorkspace] openURL:url];
     });
 }
