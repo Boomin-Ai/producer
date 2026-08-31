@@ -168,21 +168,21 @@
   .panel.has-real .real { display: block; }
   .panel.has-real .mock { display: none; }
 
-  /* A — control room: hero crop → left lane → out left */
+  /* A — control room: whole app under the hero → ZOOM IN and slide left */
   #panelA { width: min(1120px, 92vw); }
-  .scene[data-stage="0"] #panelA { opacity: 1; transform: translateX(-50%) translateY(62vh) scale(1); }
-  .scene[data-stage="1"] #panelA { opacity: 1; transform: translateX(calc(-50% - 24vw)) translateY(24vh) scale(0.72); }
+  .scene[data-stage="0"] #panelA { opacity: 1; transform: translateX(-50%) translateY(60vh) scale(1); }
+  .scene[data-stage="1"] #panelA { opacity: 1; transform: translateX(calc(-50% - 74vw)) translateY(9vh) scale(1.75); }
   .scene[data-stage="2"] #panelA,
-  .scene[data-stage="3"] #panelA { opacity: 0; transform: translateX(calc(-50% - 95vw)) translateY(24vh) scale(0.70); filter: blur(6px); }
+  .scene[data-stage="3"] #panelA { opacity: 0; transform: translateX(calc(-50% - 130vw)) translateY(9vh) scale(1.9); filter: blur(7px); }
 
-  /* B — live stage: in from right → out right */
-  #panelB { width: min(1120px, 92vw); opacity: 0; transform: translateX(calc(-50% + 95vw)) translateY(24vh) scale(0.70); }
-  .scene[data-stage="2"] #panelB { opacity: 1; transform: translateX(calc(-50% + 24vw)) translateY(24vh) scale(0.72); }
-  .scene[data-stage="3"] #panelB { opacity: 0; transform: translateX(calc(-50% + 95vw)) translateY(24vh) scale(0.70); filter: blur(6px); }
+  /* B — live stage: zoomed in, enters from the right, bleeds off that edge */
+  #panelB { width: min(1120px, 92vw); opacity: 0; transform: translateX(calc(-50% + 130vw)) translateY(9vh) scale(1.9); }
+  .scene[data-stage="2"] #panelB { opacity: 1; transform: translateX(calc(-50% + 74vw)) translateY(9vh) scale(1.75); }
+  .scene[data-stage="3"] #panelB { opacity: 0; transform: translateX(calc(-50% + 130vw)) translateY(9vh) scale(1.9); filter: blur(7px); }
 
-  /* C — composer: rises from the bottom, centered */
-  #panelC { width: min(900px, 92vw); transform: translateX(-50%) translateY(78vh) scale(0.7); }
-  .scene[data-stage="3"] #panelC { opacity: 1; transform: translateX(-50%) translateY(42vh) scale(0.85); }
+  /* C — composer: rises from the bottom, centered, zoomed in */
+  #panelC { width: min(900px, 92vw); transform: translateX(-50%) translateY(96vh) scale(1.1); }
+  .scene[data-stage="3"] #panelC { opacity: 1; transform: translateX(-50%) translateY(44vh) scale(1.15); }
 
   /* ── mobile: one column, text on top, panel cropped below ── */
   @media (max-width: 900px) {
@@ -254,9 +254,11 @@
   .run-row .when { margin-left: auto; font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
 
   /* live stage mock */
-  .stage-mock { display: grid; grid-template-columns: 1fr 300px; }
+  /* rail first: the zoom bleeds off the right edge, so the destinations
+     must sit on the left to stay in frame */
+  .stage-mock { display: grid; grid-template-columns: 300px 1fr; }
   .stage-mock .preview {
-    position: relative; margin: 20px; border-radius: 12px; overflow: hidden;
+    position: relative; margin: 20px 20px 20px 0; border-radius: 12px; overflow: hidden;
     background:
       radial-gradient(70% 90% at 50% 10%, rgba(255, 196, 107, 0.16), transparent 60%),
       radial-gradient(60% 80% at 85% 90%, rgba(61, 220, 166, 0.10), transparent 60%),
@@ -290,7 +292,7 @@
     font-size: 10.5px; font-weight: 600; color: var(--faint); letter-spacing: 0.08em;
   }
   .stage-mock .gobar .golive { margin-left: auto; color: #0a0b0e; background: var(--live); border-radius: 8px; padding: 5px 14px; font-weight: 700; font-size: 12.5px; letter-spacing: 0.02em; }
-  .stage-mock .rail { padding: 20px 20px 20px 0; display: flex; flex-direction: column; gap: 10px; }
+  .stage-mock .rail { padding: 20px 0 20px 20px; display: flex; flex-direction: column; gap: 10px; }
   .dest { border: 1px solid var(--line); border-radius: 11px; padding: 12px 14px; background: rgba(255, 255, 255, 0.018); }
   .dest .row1 { display: flex; align-items: center; gap: 9px; }
   .dest .row1 img { width: 17px; height: 17px; }
@@ -448,13 +450,6 @@
     <div class="panel" id="panelB">
       <img class="real" src="shots/live.png" alt="A Producer room mid-broadcast, streaming to Twitch, YouTube, and Kick" />
       <div class="mock stage-mock" aria-hidden="true">
-        <div class="preview">
-          <div class="beam"></div>
-          <img class="chairline" src="chair.png" alt="" />
-          <span class="onair"><i></i>ON AIR</span>
-          <span class="clock" id="uptime">00:12:34</span>
-          <div class="gobar"><span>DESKTOP</span><span>·</span><span>CAMERA</span><span>·</span><span>MIC</span><span class="golive">LIVE</span></div>
-        </div>
         <div class="rail">
           <div class="dest" data-kbps="6000">
             <div class="row1"><img src="twitch.svg" alt="" /><span class="name">Twitch</span><span class="live-pill on">LIVE</span></div>
@@ -472,6 +467,13 @@
             <div class="stats"><span>1080p60</span><span class="kbps">6400 kbps</span></div>
           </div>
           <div class="dest add">+ Add destination — Custom RTMP</div>
+        </div>
+        <div class="preview">
+          <div class="beam"></div>
+          <img class="chairline" src="chair.png" alt="" />
+          <span class="onair"><i></i>ON AIR</span>
+          <span class="clock" id="uptime">00:12:34</span>
+          <div class="gobar"><span>DESKTOP</span><span>·</span><span>CAMERA</span><span>·</span><span>MIC</span><span class="golive">LIVE</span></div>
         </div>
       </div>
     </div>
