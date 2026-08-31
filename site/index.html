@@ -110,18 +110,28 @@
     margin-bottom: 18px;
   }
   .verified img { width: 16px; height: 16px; }
-  /* React Bits "shiny text": a bright band sweeping across the label */
+  /* React Bits "shiny text": dim base, bright band sweeping across the label */
   .verified .shiny {
     background-image: linear-gradient(110deg,
-      rgba(238, 240, 243, 0.62) 42%,
-      #ffffff 50%,
-      rgba(238, 240, 243, 0.62) 58%);
-    background-size: 240% 100%;
+      rgba(226, 232, 240, 0.35) 35%,
+      #ffffff 47%,
+      #ffffff 53%,
+      rgba(226, 232, 240, 0.35) 65%);
+    background-size: 200% 100%;
     -webkit-background-clip: text; background-clip: text;
     color: transparent;
-    animation: shiny-sweep 4.5s linear infinite;
+    animation: shiny-sweep 3s linear infinite;
   }
-  @keyframes shiny-sweep { from { background-position: 240% 0; } to { background-position: -140% 0; } }
+  @keyframes shiny-sweep { from { background-position: 150% 0; } to { background-position: -150% 0; } }
+  /* and a specular streak travelling across the pill itself */
+  .verified { position: relative; overflow: hidden; }
+  .verified::after {
+    content: ""; position: absolute; top: 0; bottom: 0; width: 45%;
+    background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+    animation: pill-sheen 3s linear infinite;
+    pointer-events: none;
+  }
+  @keyframes pill-sheen { from { left: -60%; } to { left: 120%; } }
 
   /* headline — Syne, uppercase, boomin.ai/producer scale */
   h1 {
@@ -388,7 +398,7 @@
   footer .spacer { flex: 1; }
 
   @media (prefers-reduced-motion: reduce) {
-    h1 .l2::before, .verified .shiny, .compose .caption, .live-pill.on, .stage-mock .beam, .stage-mock .onair i, .closing .chair, .compose .caret { animation: none; }
+    h1 .l2::before, .verified .shiny, .verified::after, .compose .caption, .live-pill.on, .stage-mock .beam, .stage-mock .onair i, .closing .chair, .compose .caret { animation: none; }
     .say, .panel, .hero { transition: none; }
   }
 </style>
