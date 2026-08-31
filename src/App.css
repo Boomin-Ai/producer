@@ -6438,3 +6438,28 @@ textarea::placeholder {
   line-height: 1.5;
   color: oklch(0.62 0.025 250);
 }
+
+/* guest invite link */
+.rm-guest-link {
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: oklch(0.17 0.02 250);
+  color: oklch(0.8 0.02 250);
+  font-size: 11.5px;
+  word-break: break-all;
+  line-height: 1.45;
+  user-select: all;
+}
+
+.rm-guest-note,
+.rm-guest-or {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: oklch(0.55 0.025 250);
+}
+
+.rm-guest-or {
+  text-align: center;
+  padding: 2px 0;
+}

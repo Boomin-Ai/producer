@@ -125,6 +125,55 @@ impl ProducerClient {
     /// joined:false and changes nothing, so onboarding can be re-run safely.
     /// `rejoin` must only ever be true from an explicit user action — a brand
     /// that deliberately LEFT must never be silently re-listed at login.
+    /// Invite a guest to a live room. Returns the invite link (for the guest)
+    /// and the render URL (for Producer's browser source) — both are returned
+    /// ONCE ONLY, so the caller must persist them immediately.
+    /// `guest_brand_id` is optional: naming a brand needs an active network
+    /// connection, omitting it produces an anonymous link anyone can open.
+    pub async fn invite_room_guest(
+        &self,
+        room_id: &str,
+        guest_brand_id: Option<String>,
+        display_name: Option<String>,
+    ) -> EngineResult<Value> {
+        let mut body = serde_json::Map::new();
+        if let Some(b) = guest_brand_id {
+            body.insert("guest_brand_id".into(), Value::String(b));
+        }
+        if let Some(n) = display_name {
+            body.insert("display_name".into(), Value::String(n));
+        }
+        let resp = self
+            .http
+            .post(self.url(&format!("/v1/app/live/rooms/{room_id}/guests")))
+            .bearer_auth(&self.token)
+            .json(&Value::Object(body))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// Brands this brand is connected to — the "pick a connected brand" path.
+    pub async fn network_connections(&self) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .get(self.url("/v1/app/network/connections"))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     pub async fn network_join(&self, rejoin: bool) -> EngineResult<Value> {
         let resp = self
             .http

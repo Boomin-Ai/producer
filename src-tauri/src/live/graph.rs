@@ -228,6 +228,13 @@ pub enum ExtraSpec {
     Color { color: String },
     /// One window via SCK (same mechanism as the overlay's window mode).
     Window { window: u32 },
+    /// A remote guest, rendered by the Connect guest page over a peer-to-peer
+    /// WebRTC connection. This is a browser source with a specific contract:
+    /// one URL PER GUEST, so each guest gets independent geometry on the stage
+    /// and — because reroute_audio makes it its own audio source — an
+    /// independent fader in the mixer. A single room page would fuse every
+    /// guest into one track that can never be separated again.
+    Guest { url: String },
 }
 
 struct ExtraItem {
@@ -902,6 +909,28 @@ impl SceneGraph {
                     ffi::obs_data_set_int(d, CString::new("width").unwrap().as_ptr(), bw as i64);
                     ffi::obs_data_set_int(d, CString::new("height").unwrap().as_ptr(), bh as i64);
                     ("color_source_v3", "color", d)
+                }
+                ExtraSpec::Guest { url } => {
+                    let (bw, bh) = Self::base_size();
+                    let d = ffi::obs_data_create();
+                    let k_url = CString::new("url").unwrap();
+                    let v_url = CString::new(url.clone()).map_err(|_| "bad guest url")?;
+                    ffi::obs_data_set_string(d, k_url.as_ptr(), v_url.as_ptr());
+                    ffi::obs_data_set_int(d, CString::new("width").unwrap().as_ptr(), bw as i64);
+                    ffi::obs_data_set_int(d, CString::new("height").unwrap().as_ptr(), bh as i64);
+                    // The guest's voice must land in the mixer as this
+                    // source's own strip, not on the desktop bus.
+                    ffi::obs_data_set_bool(d, CString::new("reroute_audio").unwrap().as_ptr(), true);
+                    // A guest page is a live call: never suspend it when the
+                    // source is hidden, or muting a guest would disconnect
+                    // them mid-conversation.
+                    ffi::obs_data_set_bool(d, CString::new("shutdown").unwrap().as_ptr(), false);
+                    ffi::obs_data_set_bool(
+                        d,
+                        CString::new("restart_when_active").unwrap().as_ptr(),
+                        false,
+                    );
+                    ("browser_source", "guest", d)
                 }
                 ExtraSpec::Window { window } => {
                     let d = ffi::obs_data_create();

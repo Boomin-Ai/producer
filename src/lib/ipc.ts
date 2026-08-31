@@ -335,7 +335,8 @@ export type ExtraSpec =
   | { kind: "image"; path: string }
   | { kind: "text"; text: string; size?: number; color?: string }
   | { kind: "color"; color: string }
-  | { kind: "window"; window: number };
+  | { kind: "window"; window: number }
+  | { kind: "guest"; url: string };
 
 export const extraSources = {
   add: (id: string, label: string, spec: ExtraSpec) =>
@@ -383,3 +384,30 @@ export const setOpacity = (id: string, opacity: number) =>
  * action — a brand that deliberately left must never be silently re-listed. */
 export const networkJoin = (endpointId: string, rejoin = false) =>
   invoke<{ joined: boolean; status: string }>("network_join", { endpointId, rejoin });
+
+export interface GuestInvite {
+  guest: { id: string; display_name?: string | null; status: string };
+  invite_url: string;
+  render_url: string;
+}
+
+/** Both URLs come back ONCE ONLY — persist them immediately. Omitting
+ * guestBrandId yields an anonymous link that needs no Boomin account. */
+export const roomGuestInvite = (
+  endpointId: string,
+  roomId: string,
+  displayName?: string,
+  guestBrandId?: string,
+) =>
+  invoke<GuestInvite>("room_guest_invite", {
+    endpointId,
+    roomId,
+    guestBrandId: guestBrandId ?? null,
+    displayName: displayName ?? null,
+  });
+
+export const networkConnections = (endpointId: string) =>
+  invoke<{ connections?: { brandId: string; name: string; slug?: string }[] }>(
+    "network_connections",
+    { endpointId },
+  );

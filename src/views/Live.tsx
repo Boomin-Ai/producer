@@ -13,6 +13,7 @@ import {
   listenChat,
   devices as deviceIpc,
   extraSources,
+  roomGuestInvite,
   stinger as stingerIpc,
   recording as recIpc,
   setOpacity,
@@ -832,6 +833,102 @@ function WindowSourceForm({ onAdd }: { onAdd: (id: number, title: string) => voi
   );
 }
 
+/** Add a remote guest. Two paths: paste a render URL you already have, or
+ * create an invitation — anonymous by default, since most guests on a show
+ * are a friend with a laptop rather than a Boomin brand. */
+function GuestForm({
+  roomId,
+  micLabel,
+  onAdd,
+}: {
+  roomId: string | null;
+  micLabel?: string;
+  onAdd: (label: string, url: string, inviteUrl?: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [pasted, setPasted] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [invite, setInvite] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  /** The render page opens the host mic for the guest's return audio. Browser
+   * device ids are salted per-origin and can never match libobs's, so the
+   * only value that crosses is the human label. */
+  const withMic = (url: string) =>
+    micLabel ? `${url}${url.includes("?") ? "&" : "?"}mic=${encodeURIComponent(micLabel)}` : url;
+
+  const createInvite = async () => {
+    if (!roomId) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const eps = await ipc.listEndpoints();
+      const ep = eps.find((e) => e.kind === "connected") ?? eps[0];
+      if (!ep) throw new Error("Connect a Boomin workspace first.");
+      const res = await roomGuestInvite(ep.id, roomId, name.trim() || undefined);
+      // Both URLs are returned once only — put the source on the stage now.
+      onAdd(name.trim() || "Guest", withMic(res.render_url), res.invite_url);
+      setInvite(res.invite_url);
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (invite) {
+    return (
+      <div className="rm-srcform">
+        <div className="rm-devices-head">Send this to your guest</div>
+        <div className="rm-guest-link">{invite}</div>
+        <button
+          className="rm-srcform-add"
+          onClick={() => {
+            navigator.clipboard?.writeText(invite).catch(() => {});
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1600);
+          }}
+        >
+          {copied ? "Copied" : "Copy link"}
+        </button>
+        <div className="rm-guest-note">
+          They join in a browser — no account needed. Their video appears here
+          when they connect.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rm-srcform">
+      <div className="rm-devices-head">Guest</div>
+      <input
+        placeholder="Their name (optional)"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+      <button className="rm-srcform-add" disabled={busy || !roomId} onClick={createInvite}>
+        {busy ? "Creating…" : "Create invite link"}
+      </button>
+      <div className="rm-guest-or">or paste a link you were given</div>
+      <input
+        placeholder="https://boomin.ai/connect/guest/render/…"
+        value={pasted}
+        onChange={(e) => setPasted(e.target.value)}
+      />
+      <button
+        className="rm-srcform-add"
+        disabled={!pasted.trim().startsWith("http")}
+        onClick={() => onAdd(name.trim() || "Guest", withMic(pasted.trim()))}
+      >
+        Add to stage
+      </button>
+      {err && <div className="rm-chatsetup-err">{err}</div>}
+    </div>
+  );
+}
+
 /** Device picker for a source. The list comes straight from the engine, so
  * whatever the OS exposes — built-in camera, capture card, USB mic, audio
  * interface, second display — appears here without Producer knowing the
@@ -1434,6 +1531,7 @@ const EXTRA_ICONS: Record<string, ReactNode> = {
   text: ic.text,
   color: ic.swatch,
   window: ic.screen,
+  guest: ic.invite,
 };
 
 
@@ -1903,6 +2001,32 @@ export function LiveView({
   const [channelEmotes, setChannelEmotes] = useState<Record<string, string>>({});
   /** Which source's device picker is open ("camera" | "mic" | "screen"). */
   const [deviceMenu, setDeviceMenu] = useState<string | null>(null);
+  /** Human label of the mic the show is actually using. The guest render page
+   * opens the host mic for return audio and can only match by label — browser
+   * device ids are salted per origin and can never equal libobs's. */
+  const [micDeviceLabel, setMicDeviceLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!sources.mic) {
+      setMicDeviceLabel(null);
+      return;
+    }
+    let alive = true;
+    deviceIpc
+      .list("mic")
+      .then((list) => {
+        if (!alive || !Array.isArray(list)) return;
+        const id = sources.mic_device;
+        const hit = id ? list.find((d) => d.id === id) : undefined;
+        // No explicit selection means the system default, which the page
+        // also falls back to — so send nothing rather than guess wrong.
+        setMicDeviceLabel(hit?.name ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [sources.mic, sources.mic_device]);
   /** Experimental: source settings as a horizontal strip above the docked
    * panels — which row's settings are showing. */
   /** R3: recording is independent of streaming — either, both, or neither. */
@@ -2018,7 +2142,7 @@ export function LiveView({
   /** Which source's filter chain the Sources panel is drilled into. */
   const [filterFor, setFilterFor] = useState<{ id: string; label: string; media: "video" | "audio" } | null>(null);
   /** Mini-editor popover for adding an open-list source. */
-  const [srcSubPop, setSrcSubPop] = useState<"text" | "color" | "window" | null>(null);
+  const [srcSubPop, setSrcSubPop] = useState<"text" | "color" | "window" | "guest" | null>(null);
 
   /** Add an open-list item and record it in the room document so it
    * respawns when the room reopens. */
@@ -3175,6 +3299,7 @@ export function LiveView({
         { key: "text", label: "Text", icon: ic.text, act: () => setSrcSubPop("text") },
         { key: "color", label: "Color", icon: ic.swatch, act: () => setSrcSubPop("color") },
         { key: "window", label: "Window capture", icon: ic.screen, act: () => setSrcSubPop("window") },
+        { key: "guest", label: "Guest", icon: ic.invite, act: () => setSrcSubPop("guest") },
       ].filter(Boolean) as { key: string; label: string; icon: ReactNode; act: () => void }[];
       return (
         <>
@@ -3858,6 +3983,20 @@ export function LiveView({
               onAdd={(color) => {
                 setSrcSubPop(null);
                 addExtraSource("Color", { kind: "color", color });
+              }}
+            />
+          )}
+          {srcSubPop === "guest" && (
+            <GuestForm
+              roomId={room?.id ?? null}
+              micLabel={micDeviceLabel ?? undefined}
+              onAdd={(label, url, inviteUrl) => {
+                setSrcSubPop(null);
+                addExtraSource(label, { kind: "guest", url });
+                if (inviteUrl) {
+                  setBanner(`Invite link ready for ${label} — copy it from Sources.`);
+                  window.setTimeout(() => setBanner(null), 6000);
+                }
               }}
             />
           )}
