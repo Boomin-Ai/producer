@@ -35,6 +35,12 @@ jobs:
           sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s /Applications/Xcode_16.2.app
           xcodebuild -version
 
+      # simde is a header-only SSE shim libobs needs on arm64. A CMake build
+      # of OBS gets it from obs-deps; our standalone virtual-camera plugin
+      # build compiles outside that, so it needs the headers directly.
+      - name: Install simde
+        run: brew install simde
+
       - name: Build engine from pinned source
         run: ./scripts/build-engine.sh
 
