@@ -378,3 +378,8 @@ export const vcam = {
 /** Per-item opacity 0–1, for scene fades. Fire-and-forget at frame rate. */
 export const setOpacity = (id: string, opacity: number) =>
   invoke("live_set_opacity", { id, opacity });
+
+/** Join the Brand Network. Idempotent; `rejoin` only from explicit user
+ * action — a brand that deliberately left must never be silently re-listed. */
+export const networkJoin = (endpointId: string, rejoin = false) =>
+  invoke<{ joined: boolean; status: string }>("network_join", { endpointId, rejoin });

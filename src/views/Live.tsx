@@ -1698,6 +1698,14 @@ export function LiveView({
   const [destinations, setDestinations] = useState<LiveDestination[]>([]);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
   const [statuses, setStatuses] = useState<Map<string, LiveDestStatus>>(new Map());
+
+  // Header health. Derived every render, never stored: a health number that
+  // can go stale is worse than none when you're deciding whether to keep
+  // streaming.
+  const droppedTotal = [...statuses.values()].reduce((n, st) => n + st.dropped_frames, 0);
+  const reconnectTotal = [...statuses.values()].reduce((n, st) => n + st.reconnects, 0);
+  const bytesTotal = [...statuses.values()].reduce((n, st) => n + st.bytes_sent, 0);
+  const healthWarn = droppedTotal > 0 || reconnectTotal > 0;
   const [elapsed, setElapsed] = useState(0);
   const [editing, setEditing] = useState<LiveDestination | null>(null);
   const [adding, setAdding] = useState(false);
@@ -3060,55 +3068,6 @@ export function LiveView({
             {destinations.length === 0 && <div className="rm-rows-empty">No channels yet.</div>}
           </div>
         );
-      case "stats": {
-        const sent = [...statuses.values()].reduce((n, st) => n + st.bytes_sent, 0);
-        const dropped = [...statuses.values()].reduce((n, st) => n + st.dropped_frames, 0);
-        const recon = [...statuses.values()].reduce((n, st) => n + st.reconnects, 0);
-        return (
-          <div className="rm-stats">
-            <div className="rm-stat-cell">
-              <span className="rm-stat-num">{streaming ? fmtBitrate(sent, elapsed) : "—"}</span>
-              <span className="rm-stat-label">upload</span>
-            </div>
-            <div className="rm-stat-cell">
-              <span className="rm-stat-num">{`${Math.floor(elapsed / 60)}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}</span>
-              <span className="rm-stat-label">uptime</span>
-            </div>
-            <div className={`rm-stat-cell${dropped > 0 ? " warn" : ""}`}>
-              <span className="rm-stat-num">{dropped}</span>
-              <span className="rm-stat-label">dropped</span>
-            </div>
-            <div className={`rm-stat-cell${recon > 0 ? " warn" : ""}`}>
-              <span className="rm-stat-num">{recon}</span>
-              <span className="rm-stat-label">reconnects</span>
-            </div>
-            <div className="rm-stat-cell">
-              <span className="rm-stat-num">{vh}p{vf === 60 ? "60" : ""}</span>
-              <span className="rm-stat-label">output</span>
-            </div>
-            <div className={`rm-stat-cell${recPath ? " rec" : ""}`}>
-              <span className="rm-stat-num">
-                {recPath
-                  ? `${Math.floor(recElapsed / 60)}:${String(recElapsed % 60).padStart(2, "0")}`
-                  : "—"}
-              </span>
-              <span className="rm-stat-label">
-                {recPath ? "recording" : lastRec ? "last take saved" : "not recording"}
-              </span>
-            </div>
-            {lastRec && !recPath && (
-              <button
-                className="rm-stat-cell as-btn"
-                onClick={() => recIpc.reveal(lastRec).catch(() => {})}
-                title={lastRec}
-              >
-                <span className="rm-stat-num">↗</span>
-                <span className="rm-stat-label">show in Finder</span>
-              </button>
-            )}
-          </div>
-        );
-      }
     }
   };
 
@@ -3441,6 +3400,20 @@ export function LiveView({
 
       <header className="rm-top" data-tauri-drag-region>
         <div className="rm-top-left" data-tauri-drag-region>
+          {/* Stream health lives here, not in a dock. Health you have to go
+            * find — or that a layout can hide — is health you learn about too
+            * late. Dot is always present; the numbers appear once they mean
+            * something. */}
+          <span
+            className={`rm-health-dot${streaming ? (healthWarn ? " warn" : " live") : ""}`}
+            title={
+              streaming
+                ? healthWarn
+                  ? `${droppedTotal} dropped · ${reconnectTotal} reconnects`
+                  : "Healthy"
+                : "Not live"
+            }
+          />
           <span className="rm-brand" data-tauri-drag-region>
             PRODUCER
           </span>
@@ -3479,6 +3452,41 @@ export function LiveView({
           </div>
         </div>
 
+        {streaming && (
+          <div className="rm-health">
+            <span className="rm-health-time">
+              {`${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`}
+            </span>
+            <span className="rm-health-sep" />
+            <span className="rm-health-num">{fmtBitrate(bytesTotal, elapsed)}</span>
+            {/* Shown only when non-zero — a permanent row of zeroes trains you
+              * to stop reading the row. */}
+            {droppedTotal > 0 && (
+              <>
+                <span className="rm-health-sep" />
+                <span className="rm-health-num warn">{droppedTotal} dropped</span>
+              </>
+            )}
+            {reconnectTotal > 0 && (
+              <>
+                <span className="rm-health-sep" />
+                <span className="rm-health-num warn">
+                  {reconnectTotal} reconnect{reconnectTotal === 1 ? "" : "s"}
+                </span>
+              </>
+            )}
+          </div>
+        )}
+        {!streaming && lastRec && (
+          <button
+            className="rm-health-rec"
+            onClick={() => recIpc.reveal(lastRec).catch(() => {})}
+            title={lastRec}
+          >
+            {ic.play}
+            Last take
+          </button>
+        )}
         <div className="rm-top-drag" data-tauri-drag-region />
 
         <div className="rm-top-right">

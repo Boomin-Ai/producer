@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { hasTauri, ipc, type LivePermissions } from "../lib/ipc";
+import { hasTauri, ipc, vcam as vcamIpc, type LivePermissions } from "../lib/ipc";
 import { Wordmark } from "./Onboarding";
 
 /** First Light — the first-launch experience. A cinematic intro (once,
@@ -211,6 +211,11 @@ type PermState = LivePermissions | null;
 
 function Permissions({ onDone }: { onDone: () => void }) {
   const [perms, setPerms] = useState<PermState>(null);
+  // The virtual camera is a system EXTENSION, not a TCC permission: macOS
+  // installs it, the user approves it in Settings, and it only becomes a real
+  // device afterwards. Optional by design — you can stream all day without it.
+  const [vcam, setVcam] = useState<{ state: string; installed: boolean; error?: string | null } | null>(null);
+  const [vcamAsked, setVcamAsked] = useState(false);
   // Screen Recording only takes effect for processes launched after the
   // grant. If it flips to granted during THIS run, a relaunch is required.
   const initialScreen = useRef<string | null>(null);
@@ -228,6 +233,8 @@ function Permissions({ onDone }: { onDone: () => void }) {
         if (!alive) return;
         if (initialScreen.current === null) initialScreen.current = p.screen;
         setPerms(p);
+        const v = await vcamIpc.status().catch(() => null);
+        if (alive && v) setVcam(v);
       } catch {
         /* engine-less build — rows render as unavailable */
       }
@@ -274,9 +281,10 @@ function Permissions({ onDone }: { onDone: () => void }) {
     <div className="fl-screen">
       <div className="fl-body">
         <Wordmark />
-        <h1 className="fl-h1">Three quick permissions</h1>
+        <h1 className="fl-h1">Permissions</h1>
         <p className="fl-sub">
-          macOS asks once. With Producer signed and notarized, these grants survive updates.
+          macOS asks once. Producer is signed and notarized, so these grants survive updates.
+          The first three are what streaming needs; the last is optional.
         </p>
 
         <PermRow
@@ -324,6 +332,42 @@ function Permissions({ onDone }: { onDone: () => void }) {
           }
         />
 
+        <PermRow
+          title="Virtual camera"
+          optional
+          detail={
+            vcam?.installed
+              ? "Producer can appear as a webcam in Zoom, Meet and Discord."
+              : vcam?.state === "needs_approval"
+                ? "Approve “Producer Virtual Camera” in System Settings › General › Login Items & Extensions › Camera Extensions."
+                : vcam?.state === "failed"
+                  ? vcam.error || "macOS refused the camera extension."
+                  : "Optional. Lets Producer appear as a webcam in Zoom, Meet and Discord."
+          }
+          status={vcam?.installed ? "granted" : vcam ? "pending" : "unknown"}
+          action={
+            vcam?.installed ? null : vcam?.state === "needs_approval" ? (
+              <button
+                className="fl-primary"
+                onClick={() => ipc.liveScreenCoach("open_settings").catch(() => {})}
+              >
+                Open Settings
+              </button>
+            ) : (
+              <button
+                className="fl-ghost"
+                disabled={vcamAsked && vcam?.state === "requested"}
+                onClick={() => {
+                  setVcamAsked(true);
+                  vcamIpc.activate().catch(() => {});
+                }}
+              >
+                {vcamAsked && vcam?.state === "requested" ? "Installing…" : "Install"}
+              </button>
+            )
+          }
+        />
+
         <div className="fl-actions">
           <button className={allSet ? "fl-primary" : "fl-ghost"} onClick={onDone} disabled={needsRelaunch}>
             {allSet ? "Continue" : "Skip for now"}
@@ -339,17 +383,24 @@ function PermRow({
   detail,
   status,
   action,
+  optional,
 }: {
   title: string;
   detail: string;
   status: "granted" | "pending" | "unknown";
   action: React.ReactNode;
+  /** Optional rows never block Continue and say so, so nobody thinks a
+   * half-finished list means a broken app. */
+  optional?: boolean;
 }) {
   return (
     <div className={`fl-perm ${status === "granted" ? "is-granted" : ""}`}>
       <div className="fl-perm-check">{status === "granted" ? "✓" : ""}</div>
       <div className="fl-perm-text">
-        <div className="fl-perm-title">{title}</div>
+        <div className="fl-perm-title">
+          {title}
+          {optional && <span className="fl-perm-optional">optional</span>}
+        </div>
         <div className="fl-perm-detail">{detail}</div>
       </div>
       <div className="fl-perm-action">

@@ -5,7 +5,7 @@
  * the top bar (brand, room, channels, quality, GO LIVE) and the canvas.
  * Beginners pick a preset; everyone else moves panels one by one. */
 
-export type PanelId = "scenes" | "sources" | "mixer" | "chat" | "channels" | "stats";
+export type PanelId = "scenes" | "sources" | "mixer" | "chat" | "channels";
 
 export type Dock = "left" | "right" | "bottom" | "hidden";
 
@@ -22,10 +22,12 @@ export const PANEL_META: Record<PanelId, { title: string; hint: string }> = {
   mixer: { title: "Audio mixer", hint: "Levels, mute, and gain per input" },
   chat: { title: "Chat", hint: "Every platform's chat, merged" },
   channels: { title: "Channels", hint: "Where this room goes out" },
-  stats: { title: "Stream health", hint: "Bitrate, dropped frames, uptime" },
+
 };
 
-export const PANEL_ORDER: PanelId[] = ["scenes", "sources", "mixer", "chat", "channels", "stats"];
+// Stream health is deliberately NOT here: it lives in the header, always
+// visible. Health you have to dock is health you find out about too late.
+export const PANEL_ORDER: PanelId[] = ["scenes", "sources", "mixer", "chat", "channels"];
 
 /** Per-room sizing: bottom panels carry a flex weight (they share one row),
  * side docks carry a pixel width. Absent = the built-in default. */
@@ -44,25 +46,25 @@ export const PRESETS: { key: string; label: string; note: string; layout: Layout
     key: "simple",
     label: "Simple",
     note: "Stage plus the two things you touch live",
-    layout: { left: [], right: [], bottom: ["sources", "mixer"], hidden: ["scenes", "chat", "channels", "stats"] },
+    layout: { left: [], right: [], bottom: ["sources", "mixer"], hidden: ["scenes", "chat", "channels"] },
   },
   {
     key: "streamer",
     label: "Streamer",
     note: "Scenes left, chat right, controls below",
-    layout: { left: ["scenes"], right: ["chat"], bottom: ["sources", "mixer"], hidden: ["channels", "stats"] },
+    layout: { left: ["scenes"], right: ["chat"], bottom: ["sources", "mixer"], hidden: ["channels"] },
   },
   {
     key: "chat",
     label: "Chat first",
     note: "Big chat, everything else compact",
-    layout: { left: ["scenes"], right: ["chat"], bottom: ["sources", "mixer"], hidden: ["channels", "stats"] },
+    layout: { left: ["scenes"], right: ["chat"], bottom: ["sources", "mixer"], hidden: ["channels"] },
   },
   {
     key: "studio",
     label: "Studio",
     note: "Everything on deck, including health",
-    layout: { left: ["scenes"], right: ["chat", "channels"], bottom: ["sources", "mixer", "stats"], hidden: [] },
+    layout: { left: ["scenes"], right: ["chat", "channels"], bottom: ["sources", "mixer"], hidden: [] },
   },
 ];
 

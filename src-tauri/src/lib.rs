@@ -80,6 +80,7 @@ pub fn run() {
             ipc::boomin_connect,
             ipc::boomin_select_brand,
             ipc::connect_channel,
+            ipc::network_join,
             ipc::upload_media,
             ipc::list_jobs,
             ipc::submit_post,

@@ -121,6 +121,26 @@ impl ProducerClient {
 
     /// Begin channel authorization (contract: connect-session). Returns the
     /// one-time browser URL a human completes — primary token only.
+    /// Join the Brand Network. Idempotent server-side: a second call returns
+    /// joined:false and changes nothing, so onboarding can be re-run safely.
+    /// `rejoin` must only ever be true from an explicit user action — a brand
+    /// that deliberately LEFT must never be silently re-listed at login.
+    pub async fn network_join(&self, rejoin: bool) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.url("/v1/app/network/join"))
+            .bearer_auth(&self.token)
+            .json(&serde_json::json!({ "rejoin": rejoin }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let body: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&body, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     pub async fn create_connect_session(&self, platform: &str) -> EngineResult<Value> {
         let resp = self
             .http

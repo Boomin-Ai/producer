@@ -6281,3 +6281,160 @@ textarea::placeholder {
   width: 15px;
   height: 15px;
 }
+
+/* ── Stream health in the header ───────────────────────────────────────── */
+
+.rm-health-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: oklch(0.42 0.02 250);
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+
+.rm-health-dot.live {
+  background: var(--mint);
+  box-shadow: 0 0 10px oklch(0.75 0.14 165 / 0.6);
+}
+
+.rm-health-dot.warn {
+  background: #f0b429;
+  box-shadow: 0 0 10px oklch(0.8 0.15 85 / 0.55);
+}
+
+.rm-health {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: oklch(0.2 0.03 250 / 0.9);
+  border: 1px solid oklch(0.28 0.035 250);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.rm-health-time {
+  color: oklch(0.95 0.01 250);
+  font-weight: 650;
+}
+
+.rm-health-num {
+  color: oklch(0.68 0.02 250);
+}
+
+.rm-health-num.warn {
+  color: #f0b429;
+}
+
+.rm-health-sep {
+  width: 1px;
+  height: 11px;
+  background: oklch(0.32 0.035 250);
+}
+
+.rm-health-rec {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  border: 1px solid oklch(0.28 0.035 250);
+  background: oklch(0.2 0.03 250);
+  color: oklch(0.7 0.02 250);
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.rm-health-rec:hover {
+  color: var(--mint);
+  border-color: oklch(0.45 0.09 168 / 0.6);
+}
+
+.rm-health-rec svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* onboarding: optional permission rows say so */
+.fl-perm-optional {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: oklch(0.3 0.02 250);
+  color: oklch(0.65 0.02 250);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+/* ── Brand Network opt-in ──────────────────────────────────────────────── */
+
+.net-optin {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  max-width: 440px;
+  margin: 6px auto 0;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: oklch(0.2 0.03 250);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.14s ease,
+    background 0.14s ease;
+}
+
+.net-optin:hover {
+  border-color: oklch(0.4 0.06 250);
+}
+
+.net-optin.on {
+  border-color: oklch(0.5 0.11 168 / 0.7);
+  background: oklch(0.24 0.05 168 / 0.4);
+}
+
+.net-box {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border: 1.5px solid oklch(0.4 0.04 250);
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #08110c;
+}
+
+.net-box.on {
+  background: var(--mint);
+  border-color: var(--mint);
+}
+
+.net-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.net-title {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.net-detail {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: oklch(0.62 0.025 250);
+}

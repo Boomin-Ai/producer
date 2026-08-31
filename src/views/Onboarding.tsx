@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { hasTauri, ipc } from "../lib/ipc";
+import { hasTauri, ipc, networkJoin } from "../lib/ipc";
 
 export function Wordmark() {
   return (
@@ -56,7 +56,10 @@ export function Onboarding({ onConnected, onCancel }: { onConnected: () => void;
 }
 
 function BoominLogin({ onBack, onConnected }: { onBack: () => void; onConnected: () => void }) {
-  const [step, setStep] = useState<"email" | "code" | "brand">("email");
+  const [step, setStep] = useState<"email" | "code" | "brand" | "network">("email");
+  // Opt-in, and OFF by default: a network listing is a public projection of
+  // the brand, so it should never happen because someone clicked through.
+  const [joinNetwork, setJoinNetwork] = useState(false);
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [brands, setBrands] = useState<{ slug: string; name: string }[]>([]);
@@ -87,7 +90,7 @@ function BoominLogin({ onBack, onConnected }: { onBack: () => void; onConnected:
         setBrands(result.brands);
         setStep("brand");
       } else {
-        onConnected();
+        setStep("network");
       }
     } catch (e) {
       setError(String(e));
@@ -101,12 +104,69 @@ function BoominLogin({ onBack, onConnected }: { onBack: () => void; onConnected:
     setError(null);
     try {
       await ipc.boominSelectBrand(slug);
-      onConnected();
+      setStep("network");
     } catch (e) {
       setError(String(e));
     } finally {
       setBusy(false);
     }
+  }
+
+  if (step === "network") {
+    const finish = async () => {
+      setBusy(true);
+      if (joinNetwork) {
+        try {
+          // Best-effort: joining must never block getting into the app. If
+          // the call fails the user is connected anyway and can join later.
+          const eps = await ipc.listEndpoints();
+          const ep = eps.find((e) => e.kind === "connected") ?? eps[0];
+          if (ep) await networkJoin(ep.id);
+        } catch {
+          /* surfaced later in settings, never a blocker here */
+        }
+      }
+      setBusy(false);
+      onConnected();
+    };
+    return (
+      <div className="onboarding">
+        <Wordmark />
+        <h1>
+          <strong>Join the Brand Network?</strong>
+        </h1>
+        <p className="muted">
+          Optional, and free. You can change this any time.
+        </p>
+        <div
+          className={`net-optin${joinNetwork ? " on" : ""}`}
+          role="button"
+          tabIndex={0}
+          onClick={() => setJoinNetwork((v) => !v)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setJoinNetwork((v) => !v);
+            }
+          }}
+        >
+          <span className={`net-box${joinNetwork ? " on" : ""}`}>{joinNetwork ? "✓" : ""}</span>
+          <span className="net-text">
+            <span className="net-title">Join the Brand Network</span>
+            <span className="net-detail">
+              Your brand becomes discoverable, and open to guest appearances, brand deals
+              and content collaboration.
+            </span>
+          </span>
+        </div>
+        {error && <p className="error">{error}</p>}
+        <div className="form-actions" style={{ justifyContent: "center", marginTop: 18 }}>
+          <button type="button" className="primary" disabled={busy} onClick={finish}>
+            {busy ? "Finishing…" : joinNetwork ? "Join and continue" : "Continue"}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (step === "brand") {
