@@ -77,6 +77,9 @@ fi
 # also claims an app group; no profile of ours authorizes it, and an
 # unauthorized entitlement makes the installer report "code signature
 # invalid" even though `codesign --verify` calls the bundle valid on disk.
+# Fail the build if the plugin-list fork ever comes back (it has, twice).
+"$(cd "$(dirname "$0")" && pwd)/check-engine-lists.sh"
+
 PROFILE_SRC="$(cd "$(dirname "$0")" && pwd)/embedded.provisionprofile"
 if [[ -f $PROFILE_SRC ]]; then
   cp "$PROFILE_SRC" "$CONTENTS/embedded.provisionprofile"
