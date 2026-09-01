@@ -641,9 +641,11 @@ function GuestPanel({
   // render_url is the server's own statement of "this one may go on the
   // host". Waiting guests have none, so the gate is enforced there rather
   // than by us choosing not to draw someone.
+  const onStage = items.filter((i) => i.visible).length;
   const waiting = roster.filter((g) => !g.render_url);
   const live = roster.filter((g) => !!g.render_url);
-  const CAP = 4;
+  const ROOM_CAP = 8;
+  const STAGE_CAP = 4;
 
   const copy = async () => {
     const url = link ?? (await onLink());
@@ -659,7 +661,8 @@ function GuestPanel({
         <span className="rm-row-icon">{ic.invite}</span>
         <span className="rm-row-name">Guest</span>
         <span className="rm-guest-count">
-          {live.length}/{CAP}
+          {live.length}/{ROOM_CAP}
+          {onStage > 0 && <em className="rm-guest-onstage">{onStage} on screen</em>}
           {waiting.length > 0 && <em className="rm-guest-wait">{waiting.length} waiting</em>}
         </span>
         <button className="rm-row-edit" title="Copy the room's guest link" onClick={copy}>
@@ -687,8 +690,8 @@ function GuestPanel({
               <span className="rm-guest-state">waiting</span>
               <button
                 className="rm-guest-admit"
-                disabled={live.length >= CAP}
-                title={live.length >= CAP ? `Room is full (${CAP})` : "Put them on the stage"}
+                disabled={live.length >= ROOM_CAP}
+                title={live.length >= ROOM_CAP ? `Room is full (${ROOM_CAP})` : "Bring them into the room"}
                 onClick={() => onAdmit(g.id)}
               >
                 Admit
@@ -716,8 +719,14 @@ function GuestPanel({
                   * conversation while off screen. */}
                 <button
                   className={`rm-guest-stage${item?.visible ? " on" : ""}`}
-                  title={item?.visible ? "Take off screen (stays in the room)" : "Put on screen"}
-                  disabled={!item}
+                  title={
+                    item?.visible
+                      ? "Take off screen (stays in the room)"
+                      : onStage >= STAGE_CAP
+                        ? `Four on screen is the limit — take one down first`
+                        : "Put on screen"
+                  }
+                  disabled={!item || (!item.visible && onStage >= STAGE_CAP)}
                   onClick={() => item && onShow(item.id, !item.visible)}
                 >
                   {item?.visible ? "On screen" : "Show"}
@@ -2353,6 +2362,38 @@ export function LiveView({
   rosterRef.current = roster;
   const endpointRef = useRef<string | null>(null);
 
+  /** Bring a guest on or off screen with a dissolve rather than a cut.
+   * Guests appear and vanish while the show is LIVE, so a hard pop is visible
+   * to the audience — and we already have the opacity path the fade
+   * transition uses. Audio moves with the picture. */
+  const fadeGuest = (id: string, show: boolean, ms = 260) => {
+    if (show) {
+      setOpacity(id, 0).catch(() => {});
+      ipc.liveSetTransform(id, { visible: true }, true).catch(() => {});
+      setSourceAudio(id, undefined, false).catch(() => {});
+    } else {
+      // Mute immediately on the way out — a voice lingering over a dissolve
+      // is worse than a cut.
+      setSourceAudio(id, undefined, true).catch(() => {});
+    }
+    const t0 = performance.now();
+    const step = () => {
+      const k = Math.min(1, (performance.now() - t0) / ms);
+      setOpacity(id, show ? k : 1 - k).catch(() => {});
+      if (k < 1) {
+        requestAnimationFrame(step);
+        return;
+      }
+      if (!show) {
+        ipc.liveSetTransform(id, { visible: false }, true).catch(() => {});
+        // Leave them at full opacity so the next show starts from a known
+        // state rather than inheriting a transparent source.
+        setOpacity(id, 1).catch(() => {});
+      }
+    };
+    requestAnimationFrame(step);
+  };
+
   const admitGuest = async (id: string) => {
     if (!endpointRef.current || !cfg.server_room_id) return;
     // The guest's return video IS the virtual camera — the render page opens
@@ -3182,7 +3223,17 @@ export function LiveView({
           }
         }
         for (const id of present) {
-          if (!wanted.has(id)) await extraSources.remove(id).catch(() => {});
+          if (!wanted.has(id)) {
+            // Someone whose laptop died shouldn't blink off the broadcast.
+            // Fade first, then destroy — and only if they were on screen.
+            const it = (sources.items ?? []).find((i) => i.id === id);
+            if (it?.visible) {
+              fadeGuest(id, false);
+              window.setTimeout(() => extraSources.remove(id).catch(() => {}), 320);
+            } else {
+              await extraSources.remove(id).catch(() => {});
+            }
+          }
         }
 
         // Re-flow the panel to match the current count.
@@ -3586,13 +3637,7 @@ export function LiveView({
             onAdmit={admitGuest}
             onRemove={removeGuest}
             onMute={(id, muted) => setSourceAudio(id, undefined, muted).catch(() => {})}
-            onShow={(id, show) => {
-              // Going on screen is going live: video and voice move together,
-              // so nobody is heard from a room they aren't visible in. The
-              // mute button still overrides afterwards.
-              ipc.liveSetTransform(id, { visible: show }, true).catch(() => {});
-              setSourceAudio(id, undefined, !show).catch(() => {});
-            }}
+            onShow={(id, show) => fadeGuest(id, show)}
           />
         );
       case "mixer":

@@ -6726,3 +6726,10 @@ textarea::placeholder {
   min-width: 52px;
   text-align: center;
 }
+
+.rm-guest-onstage {
+  margin-left: 8px;
+  font-style: normal;
+  color: oklch(0.75 0.1 168);
+  font-weight: 650;
+}
