@@ -292,7 +292,7 @@ export function Home({
   }
 
   return (
-    <div className="cr">
+    <div className={view.kind === "home" ? "cr cr--vibrant" : "cr"}>
       <header className="cr-top" data-tauri-drag-region>
         <div className="cr-top-left" data-tauri-drag-region>
           {view.kind !== "home" && (
@@ -340,6 +340,14 @@ export function Home({
         />
       )}
 
+      {view.kind === "home" && (
+        <HomeRail
+          brandName={endpoints[0]?.name ?? "Workspace"}
+          onJump={(id) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          onCompose={() => setView({ kind: "compose" })}
+          onSettings={() => setSettingsOpen(true)}
+        />
+      )}
       {view.kind === "home" && (
         <ControlRoomHome
           rooms={rooms}
@@ -541,7 +549,7 @@ function ControlRoomHome({
 
   return (
     <main className="cr-home">
-      <section className="cr-section">
+      <section className="cr-section" id="sec-onair">
         <div className="cr-label">
           ON AIR
           {streaming && <span className="cr-live-pill">LIVE</span>}
@@ -603,7 +611,7 @@ function ControlRoomHome({
         </div>
       </section>
 
-      <section className="cr-section">
+      <section className="cr-section" id="sec-channels">
         <div className="cr-label">CHANNELS</div>
         <div className="cr-channels">
           {destinations.map((d) => (
@@ -656,7 +664,7 @@ function ControlRoomHome({
         * running show. */}
       <NetworkStrip />
 
-      <section className="cr-section">
+      <section className="cr-section" id="sec-rundown">
         <div className="cr-label">
           RUNDOWN
           <span className="cr-label-actions">
@@ -1335,7 +1343,7 @@ function NetworkStrip() {
   };
 
   return (
-    <section className="cr-section">
+    <section className="cr-section" id="sec-network">
       <div className="cr-label">
         NETWORK
         <span className="cr-label-actions">
@@ -1380,5 +1388,83 @@ function NetworkStrip() {
       </div>
       {note && <div className="cr-hint">{note}</div>}
     </section>
+  );
+}
+
+
+/** Icons-only side rail on the control room home — floating inset glass,
+ * macOS-styling: translucent card, heavy backdrop blur, hairline border.
+ * Navigation is scroll-to-section; compose and settings ride the bottom. */
+const railIc = {
+  onair: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+      <circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none" />
+      <path d="M7.5 16.5a6.4 6.4 0 0 1 0-9M16.5 7.5a6.4 6.4 0 0 1 0 9" />
+      <path d="M4.8 19.2a10.2 10.2 0 0 1 0-14.4M19.2 4.8a10.2 10.2 0 0 1 0 14.4" />
+    </svg>
+  ),
+  channels: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3.5" y="6.5" width="17" height="12" rx="2.5" />
+      <path d="m8.5 3 3.5 3.5L15.5 3" />
+    </svg>
+  ),
+  network: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+      <circle cx="9" cy="8.5" r="3" />
+      <path d="M3.8 19c.6-3 2.8-4.7 5.2-4.7s4.6 1.7 5.2 4.7" />
+      <circle cx="17" cy="7" r="2.2" />
+      <path d="M15.6 12.7c2.4.2 4.2 1.7 4.8 4.3" />
+    </svg>
+  ),
+  rundown: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+      <path d="M8.5 6h11M8.5 12h11M8.5 18h11" />
+      <circle cx="4.5" cy="6" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="4.5" cy="12" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="4.5" cy="18" r="1.2" fill="currentColor" stroke="none" />
+    </svg>
+  ),
+  plus: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  ),
+  gear: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14.2 3h-4l-.4 2.5a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2 1.2l.4 2.5h4l.4-2.5a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z" />
+    </svg>
+  ),
+};
+
+function HomeRail({
+  brandName,
+  avatarUrl,
+  onJump,
+  onCompose,
+  onSettings,
+}: {
+  brandName: string;
+  /** The brand's avatar once the session serves it; initial until then. */
+  avatarUrl?: string | null;
+  onJump: (id: string) => void;
+  onCompose: () => void;
+  onSettings: () => void;
+}) {
+  return (
+    <nav className="home-rail">
+      <div className="home-rail-avatar" title={brandName}>
+        {avatarUrl ? <img src={avatarUrl} alt="" /> : <span>{(brandName[0] ?? "?").toUpperCase()}</span>}
+        <i className="home-rail-presence" />
+      </div>
+      <button title="On air" onClick={() => onJump("sec-onair")}>{railIc.onair}</button>
+      <button title="Channels" onClick={() => onJump("sec-channels")}>{railIc.channels}</button>
+      <button title="Network" onClick={() => onJump("sec-network")}>{railIc.network}</button>
+      <button title="Rundown" onClick={() => onJump("sec-rundown")}>{railIc.rundown}</button>
+      <div className="home-rail-spring" />
+      <button title="New post" onClick={onCompose}>{railIc.plus}</button>
+      <button title="Settings" onClick={onSettings}>{railIc.gear}</button>
+    </nav>
   );
 }

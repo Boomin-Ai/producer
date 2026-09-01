@@ -19,7 +19,6 @@ import {
   setSyncOffset,
   type RoomGuest,
   type LiveItem,
-  roomGuestInvite,
   stinger as stingerIpc,
   recording as recIpc,
   setOpacity,
@@ -1037,128 +1036,6 @@ function WindowSourceForm({ onAdd }: { onAdd: (id: number, title: string) => voi
   );
 }
 
-/** Add a remote guest. Two paths: paste a render URL you already have, or
- * create an invitation — anonymous by default, since most guests on a show
- * are a friend with a laptop rather than a Boomin brand. */
-function GuestForm({
-  roomId,
-  roomName,
-  serverRoomId,
-  micLabel,
-  onAdd,
-  onServerRoom,
-}: {
-  roomId: string | null;
-  roomName: string;
-  serverRoomId?: string;
-  micLabel?: string;
-  onAdd: (label: string, url: string, inviteUrl?: string) => void;
-  onServerRoom: (id: string) => void;
-}) {
-  const [name, setName] = useState("");
-  const [pasted, setPasted] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [invite, setInvite] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  /** The render page opens the host mic for the guest's return audio. Browser
-   * device ids are salted per-origin and can never match libobs's, so the
-   * only value that crosses is the human label. */
-  const withMic = (url: string) =>
-    micLabel ? `${url}${url.includes("?") ? "&" : "?"}mic=${encodeURIComponent(micLabel)}` : url;
-
-  const createInvite = async () => {
-    if (!roomId) return;
-    setBusy(true);
-    setErr(null);
-    try {
-      const eps = await ipc.listEndpoints();
-      const ep = eps.find((e) => e.kind === "connected") ?? eps[0];
-      if (!ep) throw new Error("Connect a Boomin workspace first.");
-      // Rooms are local documents and exist offline; the platform only needs
-      // to know about one the first time it does something server-side.
-      // Registration is idempotent by our local id, so calling it whenever
-      // we lack a cached id is safe.
-      let sid = serverRoomId;
-      if (!sid) {
-        const reg = await registerRoom(ep.id, roomName || "Room", roomId);
-        sid = reg.room.id;
-        onServerRoom(sid);
-      }
-      const res = await roomGuestInvite(ep.id, sid, name.trim() || undefined);
-      // Accept the link wherever it sits: it is issued ONCE, so a field-name
-      // difference must not cost a real invite.
-      const raw = res as unknown as Record<string, unknown> & {
-        guest?: Record<string, unknown>;
-      };
-      const invite =
-        (raw.invite_url as string | undefined) ??
-        (raw.inviteUrl as string | undefined) ??
-        (raw.guest?.invite_url as string | undefined) ??
-        (raw.join_url as string | undefined);
-      // Both URLs are returned once only — put the source on the stage now.
-      onAdd(name.trim() || "Guest", withMic(res.render_url), invite);
-      if (invite) setInvite(invite);
-    } catch (e) {
-      setErr(String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (invite) {
-    return (
-      <div className="rm-srcform">
-        <div className="rm-devices-head">Send this to your guest</div>
-        <div className="rm-guest-link">{invite}</div>
-        <button
-          className="rm-srcform-add"
-          onClick={() => {
-            navigator.clipboard?.writeText(invite).catch(() => {});
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 1600);
-          }}
-        >
-          {copied ? "Copied" : "Copy link"}
-        </button>
-        <div className="rm-guest-note">
-          They join in a browser — no account needed. Their video appears here
-          when they connect.
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="rm-srcform">
-      <div className="rm-devices-head">Guest</div>
-      <input
-        placeholder="Their name (optional)"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
-      <button className="rm-srcform-add" disabled={busy || !roomId} onClick={createInvite}>
-        {busy ? "Creating…" : "Create invite link"}
-      </button>
-      <div className="rm-guest-or">or paste a link you were given</div>
-      <input
-        placeholder="https://boomin.ai/connect/guest/render/…"
-        value={pasted}
-        onChange={(e) => setPasted(e.target.value)}
-      />
-      <button
-        className="rm-srcform-add"
-        disabled={!pasted.trim().startsWith("http")}
-        onClick={() => onAdd(name.trim() || "Guest", withMic(pasted.trim()))}
-      >
-        Add to stage
-      </button>
-      {err && <div className="rm-chatsetup-err">{err}</div>}
-    </div>
-  );
-}
-
 /** Device picker for a source. The list comes straight from the engine, so
  * whatever the OS exposes — built-in camera, capture card, USB mic, audio
  * interface, second display — appears here without Producer knowing the
@@ -2080,11 +1957,19 @@ export function LiveView({
         // Rendered order is topmost-first; engine z counts from the bottom.
         // Apply bottom-up so each set lands on a settled stack.
         const itemId = (k: string) => (k === "alerts" ? "overlay" : k);
+        // The Guests row is one BLOCK: expand it into the guest layers
+        // (topmost first, internal order preserved) so the block moves
+        // through the stack as a unit.
+        const guestIds = (sources.items ?? [])
+          .filter((i) => i.kind === "guest")
+          .sort((a, b) => b.z - a.z)
+          .map((i) => i.id);
+        const expanded = order.flatMap((k) => (k === "guests" ? guestIds : [k]));
         (async () => {
-          for (let i = order.length - 1; i >= 0; i--) {
-            const z = order.length - 1 - i;
+          for (let i = expanded.length - 1; i >= 0; i--) {
+            const z = expanded.length - 1 - i;
             try {
-              await ipc.liveSetTransform(itemId(order[i]), { z }, i === 0);
+              await ipc.liveSetTransform(itemId(expanded[i]), { z }, i === 0);
             } catch {
               /* engine not ready */
             }
@@ -2377,6 +2262,10 @@ export function LiveView({
   const rosterRef = useRef<RoomGuest[]>([]);
   rosterRef.current = roster;
   const endpointRef = useRef<string | null>(null);
+  // Which guests the auto-layout last arranged. The tick may not re-flow an
+  // unchanged set: the host dragging a guest smaller must WIN — auto-layout
+  // exists for joins/leaves, not as a 3-second undo of manual placement.
+  const guestLayoutRef = useRef<string | null>(null);
   // Last stage list we told the server about (sorted, joined). The tick runs
   // every 3s but the stage rarely changes — an unchanged list is not news.
   const stagePostedRef = useRef<string | null>(null);
@@ -2464,7 +2353,7 @@ export function LiveView({
   /** Which source's filter chain the Sources panel is drilled into. */
   const [filterFor, setFilterFor] = useState<{ id: string; label: string; media: "video" | "audio" } | null>(null);
   /** Mini-editor popover for adding an open-list source. */
-  const [srcSubPop, setSrcSubPop] = useState<"text" | "color" | "window" | "guest" | null>(null);
+  const [srcSubPop, setSrcSubPop] = useState<"text" | "color" | "window" | null>(null);
 
   /** Add an open-list item and record it in the room document so it
    * respawns when the room reopens. */
@@ -3262,10 +3151,14 @@ export function LiveView({
         // visibility — otherwise arranging the grid would quietly put someone
         // on air.
         const shown = (sources.items ?? []).filter((i) => i.kind === "guest" && i.visible);
-        shown.forEach((it, i) => {
-          const r = guestSlot(i, shown.length, bw, bh);
-          ipc.liveSetTransform(it.id, r, true).catch(() => {});
-        });
+        const layoutKey = shown.map((i) => i.id).sort().join(",");
+        if (layoutKey !== guestLayoutRef.current) {
+          guestLayoutRef.current = layoutKey;
+          shown.forEach((it, i) => {
+            const r = guestSlot(i, shown.length, bw, bh);
+            ipc.liveSetTransform(it.id, r, true).catch(() => {});
+          });
+        }
 
         // Tell the server who is on stage — the FULL list, on registration and
         // on every change. Source ids are `guest-<uuid8>`, so map back through
@@ -3523,6 +3416,12 @@ export function LiveView({
           );
         }
         const liveItems = sources.items ?? [];
+        const guestItems = liveItems.filter((i) => i.kind === "guest");
+        const revealGuests = () => {
+          if (dockOf(layout, "guests") === "hidden") {
+            setLayout(movePanel(layout, "guests", dockOf(layout, "sources")));
+          }
+        };
         const itemIdFor = (key: string) => (key === "alerts" ? "overlay" : key);
         const itemFor = (key: string) => liveItems.find((i) => i.id === itemIdFor(key));
         const activeRows = (
@@ -3533,9 +3432,19 @@ export function LiveView({
             // Audio is a source, like OBS: the picker lives here, the fader
             // lives in the mixer.
             sources.mic && { key: "mic", label: "Microphone", icon: ic.mic, device: "mic", audio: true, remove: () => setSrc({ mic: false }) },
+            // One collapsed Guest COMPONENT row — the dock must show that
+            // guest cameras are part of this scene, but people are managed
+            // per-person in the Guests panel, so it opens that instead of
+            // exposing eye/remove that could quietly change who is on air.
+            guestItems.length > 0 && {
+              key: "guests",
+              label: `Guests · ${guestItems.filter((g) => g.visible).length}/${guestItems.length} on screen`,
+              icon: ic.invite,
+              remove: revealGuests,
+            },
             // Open-list items, straight from engine truth. Guests are
-            // excluded here: they collapse into one Guest component rather
-            // than appearing as a row per person.
+            // excluded here: they collapse into the Guest component above
+            // rather than appearing as a row per person.
             ...liveItems
               .filter((i) => !["screen", "camera", "overlay"].includes(i.id) && i.kind !== "guest")
               .map((i) => ({
@@ -3556,11 +3465,18 @@ export function LiveView({
             remove: () => void;
           }[]
         ).sort((a, b) => {
-          const ia = itemFor(a.key);
-          const ib = itemFor(b.key);
-          if (ia && ib) return ib.z - ia.z; // topmost first
-          if (ia) return -1;
-          if (ib) return 1;
+          // Microphone (audio-only, grip-less) stays at the bottom. The
+          // Guests COMPONENT sorts into the stack at its block's z — it
+          // drags as one layer, so it must render where its layers sit.
+          const rank = (k: string) => (k === "mic" ? 1 : 0);
+          if (rank(a.key) !== rank(b.key)) return rank(a.key) - rank(b.key);
+          const zOf = (k: string) =>
+            k === "guests" ? Math.max(...guestItems.map((g) => g.z)) : itemFor(k)?.z;
+          const za = zOf(a.key);
+          const zb = zOf(b.key);
+          if (za != null && zb != null) return zb - za; // topmost first
+          if (za != null) return -1;
+          if (zb != null) return 1;
           return 0;
         });
         return (
@@ -3584,10 +3500,10 @@ export function LiveView({
                   return (
                     <div
                       key={t.key}
-                      data-srcrow={item ? t.key : undefined}
+                      data-srcrow={item || t.key === "guests" ? t.key : undefined}
                       className={`rm-row${hidden ? " off" : ""}${srcDrag?.key === t.key ? " dragging" : ""}${dropCls}`}
                     >
-                      {item && (
+                      {(item || t.key === "guests") && (
                         <span
                           className="rm-row-grip"
                           title="Drag to rearrange"
@@ -3608,6 +3524,7 @@ export function LiveView({
                       )}
                       <span className="rm-row-icon">{t.icon}</span>
                       <span className="rm-row-name">{t.label}</span>
+                      {t.key !== "guests" && (
                       <button
                         className="rm-row-edit rm-row-fx"
                         title="Filters"
@@ -3621,6 +3538,7 @@ export function LiveView({
                       >
                         ƒ
                       </button>
+                      )}
                       {(t.key === "alerts" || t.device) && (
                         <button
                           className={`rm-row-edit${srcSettings === t.key ? " on" : ""}`}
@@ -3652,9 +3570,15 @@ export function LiveView({
                           {ic.eye}
                         </button>
                       )}
-                      <button className="rm-row-edit rm-row-remove" title="Remove from this room" onClick={t.remove}>
-                        {ic.x}
-                      </button>
+                      {t.key === "guests" ? (
+                        <button className="rm-row-edit" title="Manage in the Guests panel" onClick={t.remove}>
+                          {ic.gear}
+                        </button>
+                      ) : (
+                        <button className="rm-row-edit rm-row-remove" title="Remove from this room" onClick={t.remove}>
+                          {ic.x}
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -3844,7 +3768,19 @@ export function LiveView({
         { key: "text", label: "Text", icon: ic.text, act: () => setSrcSubPop("text") },
         { key: "color", label: "Color", icon: ic.swatch, act: () => setSrcSubPop("color") },
         { key: "window", label: "Window capture", icon: ic.screen, act: () => setSrcSubPop("window") },
-        { key: "guest", label: "Guest", icon: ic.invite, act: () => setSrcSubPop("guest") },
+        {
+          // Guests are COMPONENTS — real people admitted through the Guests
+          // panel — not name-typed sources. A guest source cannot exist
+          // without one, so "adding" a guest means opening that panel.
+          key: "guest",
+          label: "Guest — via Guests panel",
+          icon: ic.invite,
+          act: () => {
+            if (dockOf(layout, "guests") === "hidden") {
+              setLayout(movePanel(layout, "guests", dockOf(layout, "sources")));
+            }
+          },
+        },
       ].filter(Boolean) as { key: string; label: string; icon: ReactNode; act: () => void }[];
       return (
         <>
@@ -4540,21 +4476,6 @@ export function LiveView({
               onAdd={(color) => {
                 setSrcSubPop(null);
                 addExtraSource("Color", { kind: "color", color });
-              }}
-            />
-          )}
-          {srcSubPop === "guest" && (
-            <GuestForm
-              roomId={room?.id ?? null}
-              roomName={room?.name ?? "Room"}
-              serverRoomId={cfg.server_room_id}
-              onServerRoom={(id) => writeCfg({ ...cfgRef.current, server_room_id: id })}
-              micLabel={micDeviceLabel ?? undefined}
-              onAdd={(label, url, inviteUrl) => {
-                // Do NOT close on add when there's a link: the form is where
-                // it gets shown, and it is never reissued.
-                addExtraSource(label, { kind: "guest", url }, inviteUrl);
-                if (!inviteUrl) setSrcSubPop(null);
               }}
             />
           )}
