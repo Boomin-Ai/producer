@@ -276,6 +276,20 @@ pub async fn room_guest_revoke(
 }
 
 #[tauri::command]
+pub async fn room_set_stage(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+    on_stage: Vec<String>,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .set_stage(&room_id, &on_stage)
+        .await
+}
+
+#[tauri::command]
 pub async fn room_guests(
     state: State<'_, AppState>,
     endpoint_id: String,

@@ -2377,6 +2377,9 @@ export function LiveView({
   const rosterRef = useRef<RoomGuest[]>([]);
   rosterRef.current = roster;
   const endpointRef = useRef<string | null>(null);
+  // Last stage list we told the server about (sorted, joined). The tick runs
+  // every 3s but the stage rarely changes — an unchanged list is not news.
+  const stagePostedRef = useRef<string | null>(null);
 
   /** Bring a guest on or off screen with a dissolve rather than a cut.
    * Guests appear and vanish while the show is LIVE, so a hard pop is visible
@@ -3263,6 +3266,26 @@ export function LiveView({
           const r = guestSlot(i, shown.length, bw, bh);
           ipc.liveSetTransform(it.id, r, true).catch(() => {});
         });
+
+        // Tell the server who is on stage — the FULL list, on registration and
+        // on every change. Source ids are `guest-<uuid8>`, so map back through
+        // the roster rather than un-truncating. Fire-and-forget: the server
+        // list is a cache for reconnecting guests, never read back here —
+        // scene-item visibility in the engine stays the only truth.
+        const stageIds = shown
+          .map((it) => live.find((g) => `guest-${g.id.slice(0, 8)}` === it.id)?.id)
+          .filter((id): id is string => !!id)
+          .sort();
+        const stageKey = stageIds.join(",");
+        if (stageKey !== stagePostedRef.current && endpointRef.current && cfg.server_room_id) {
+          stagePostedRef.current = stageKey;
+          guestsIpc
+            .setStage(endpointRef.current, cfg.server_room_id, stageIds)
+            .catch(() => {
+              // Retry on the next tick rather than losing the change.
+              stagePostedRef.current = null;
+            });
+        }
       } catch (e) {
         if (alive) setGuestErr(String(e).replace(/^Error:\s*/, ""));
       }

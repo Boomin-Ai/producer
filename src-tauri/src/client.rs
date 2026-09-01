@@ -235,6 +235,27 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
+    /// Push the CURRENT stage set. Always the FULL list, never a delta, so a
+    /// dropped call is corrected by the next one instead of compounding. The
+    /// server filters to admitted guests of THIS room and enforces the room's
+    /// stage capacity, so it — not Producer — has the last word on what a
+    /// reconnecting guest reads back.
+    pub async fn set_stage(&self, room_id: &str, on_stage: &[String]) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/stage")))
+            .bearer_auth(&self.token)
+            .json(&serde_json::json!({ "on_stage": on_stage }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     /// Invite a guest to a live room. Returns the invite link (for the guest)
     /// and the render URL (for Producer's browser source) — both are returned
     /// ONCE ONLY, so the caller must persist them immediately.

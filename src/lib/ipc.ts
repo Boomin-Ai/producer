@@ -498,6 +498,10 @@ export const guests = {
    * is public, so nobody reaches the broadcast unreviewed. */
   admit: (endpointId: string, roomId: string, guestId: string) =>
     invoke("room_guest_admit", { endpointId, roomId, guestId }),
+  /** The full on-stage guest list. Sent on every change — a reconnecting
+   * guest reads this back to learn who is on air. */
+  setStage: (endpointId: string, roomId: string, onStage: string[]) =>
+    invoke("room_set_stage", { endpointId, roomId, onStage }),
   revoke: (endpointId: string, guestId: string) =>
     invoke("room_guest_revoke", { endpointId, guestId }),
 };
