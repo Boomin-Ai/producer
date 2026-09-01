@@ -704,9 +704,24 @@ function GuestPanel({
           {live.map((g) => {
             const item = items.find((i) => i.id === `guest-${g.id.slice(0, 8)}`);
             const muted = item?.muted ?? false;
+            const q = (g.quality ?? g.connection_quality ?? "unknown") as string;
             return (
               <div key={g.id} className="rm-guest">
                 <span className="rm-guest-name">{g.display_name || "Guest"}</span>
+                {/* Health of what actually reaches the show. Neutral when
+                  * unknown — never green on a stale reading. */}
+                <span
+                  className={`rm-qual ${q}`}
+                  title={
+                    q === "good"
+                      ? "Connection healthy"
+                      : q === "degraded"
+                        ? "Connection struggling — they may break up on air"
+                        : q === "failing"
+                          ? "Connection failing — don't put them up yet"
+                          : "No recent reading"
+                  }
+                />
                 <span className={`rm-guest-live${item?.visible ? "" : " off"}`}>
                   <span className="rm-guest-dot" />
                   {item?.visible ? "on screen" : "in room"}
@@ -727,6 +742,7 @@ function GuestPanel({
                         : "Put on screen"
                   }
                   disabled={!item || (!item.visible && onStage >= STAGE_CAP)}
+                  data-warn={!item?.visible && q === "failing" ? "1" : undefined}
                   onClick={() => item && onShow(item.id, !item.visible)}
                 >
                   {item?.visible ? "On screen" : "Show"}

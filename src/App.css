@@ -6733,3 +6733,31 @@ textarea::placeholder {
   color: oklch(0.75 0.1 168);
   font-weight: 650;
 }
+
+/* guest connection health — neutral when unknown, never a stale green */
+.rm-qual {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: oklch(0.45 0.02 250);
+}
+
+.rm-qual.good {
+  background: var(--mint);
+}
+
+.rm-qual.degraded {
+  background: #f0b429;
+}
+
+.rm-qual.failing {
+  background: #ff5a5a;
+  animation: rm-rec-pulse 1.4s ease-in-out infinite;
+}
+
+/* putting a failing guest up is allowed, but it shouldn't look routine */
+.rm-guest-stage[data-warn="1"] {
+  border-color: oklch(0.55 0.14 25 / 0.7);
+  color: oklch(0.85 0.08 25);
+}

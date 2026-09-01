@@ -475,6 +475,13 @@ export interface RoomGuest {
   state: "waiting" | "invited" | "connected" | "admitted" | "left" | string;
   render_url?: string | null;
   joined_via?: string | null;
+  /** Connection health, measured on the RENDER page — what actually reaches
+   * the show, not the guest's view of their own uplink. A stale reading
+   * reports `unknown` rather than the last value: a confident "good" from
+   * four minutes ago is what puts someone on air seconds before they fall
+   * over. Tolerant of either field name until the contract settles. */
+  quality?: "good" | "degraded" | "failing" | "unknown" | string | null;
+  connection_quality?: "good" | "degraded" | "failing" | "unknown" | string | null;
   avatar_url?: string | null;
   joined_at?: string | null;
   last_seen_at?: string | null;
