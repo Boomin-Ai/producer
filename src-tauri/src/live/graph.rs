@@ -982,7 +982,13 @@ impl SceneGraph {
                 let pos = ffi::vec2 { x: 80.0, y: 80.0 };
                 ffi::obs_sceneitem_set_pos(item, &pos);
             }
-            ffi::obs_sceneitem_set_visible(item, true);
+            // Guests are created HIDDEN: being admitted puts someone in the
+            // room, not on the air. Every other kind appears immediately —
+            // you added it because you want to see it. Doing this here rather
+            // than with a follow-up transform removes a race where the hide
+            // could arrive before the item existed.
+            let born_visible = !matches!(spec, ExtraSpec::Guest { .. });
+            ffi::obs_sceneitem_set_visible(item, born_visible);
             self.extras.push(ExtraItem {
                 id: id.to_string(),
                 kind,

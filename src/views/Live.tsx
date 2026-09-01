@@ -585,6 +585,7 @@ function GuestPanel({
   onAdmit,
   onRemove,
   onMute,
+  onShow,
 }: {
   roster: RoomGuest[];
   link: string | null;
@@ -594,11 +595,15 @@ function GuestPanel({
   onAdmit: (id: string) => void;
   onRemove: (id: string) => void;
   onMute: (sourceId: string, muted: boolean) => void;
+  onShow: (sourceId: string, show: boolean) => void;
 }) {
   const [open, setOpen] = useState(true);
   const [copied, setCopied] = useState(false);
-  const waiting = roster.filter((g) => g.state === "waiting" || g.state === "invited");
-  const live = roster.filter((g) => g.state === "connected");
+  // render_url is the server's own statement of "this one may go on the
+  // host". Waiting guests have none, so the gate is enforced there rather
+  // than by us choosing not to draw someone.
+  const waiting = roster.filter((g) => !g.render_url);
+  const live = roster.filter((g) => !!g.render_url);
   const CAP = 4;
 
   const copy = async () => {
@@ -660,10 +665,24 @@ function GuestPanel({
             return (
               <div key={g.id} className="rm-guest">
                 <span className="rm-guest-name">{g.display_name || "Guest"}</span>
-                <span className="rm-guest-live">
+                <span className={`rm-guest-live${item?.visible ? "" : " off"}`}>
                   <span className="rm-guest-dot" />
-                  on stage
+                  {item?.visible ? "on screen" : "in room"}
                 </span>
+                {/* At panel size everyone is already connected and audible,
+                  * so "on screen" is a visibility flip on a source that
+                  * exists — instant, with none of the connect delay that
+                  * makes promotion awkward at larger scales. Audio is
+                  * deliberately independent: a guest can stay in the
+                  * conversation while off screen. */}
+                <button
+                  className={`rm-guest-stage${item?.visible ? " on" : ""}`}
+                  title={item?.visible ? "Take off screen (stays in the room)" : "Put on screen"}
+                  disabled={!item}
+                  onClick={() => item && onShow(item.id, !item.visible)}
+                >
+                  {item?.visible ? "On screen" : "Show"}
+                </button>
                 <button
                   className={`rm-row-edit${muted ? " muted" : ""}`}
                   title={muted ? "Unmute" : "Mute"}
@@ -2328,7 +2347,7 @@ export function LiveView({
         writeCfg({ ...cfgRef.current, server_room_id: sid });
       }
       const res = await guestsIpc.joinLink(ep.id, sid!);
-      const url = res.url ?? res.join_url ?? null;
+      const url = res.join_url ?? res.url ?? null;
       if (url) {
         setGuestLink(url);
         writeCfg({ ...cfgRef.current, guest_link: url });
@@ -3101,7 +3120,7 @@ export function LiveView({
         // deliberately NOT on the broadcast: the room link is public, so
         // auto-admitting would put an unknown person on air with a name they
         // chose themselves.
-        const live = list.filter((g) => g.state === "connected" && g.render_url);
+        const live = list.filter((g) => !!g.render_url);
         const present = new Set(
           (sources.items ?? []).filter((i) => i.kind === "guest").map((i) => i.id),
         );
@@ -3119,6 +3138,8 @@ export function LiveView({
             await extraSources
               .add(id, g.display_name || "Guest", { kind: "guest", url: u.toString() })
               .catch(() => {});
+            // Hidden-at-birth is the engine's job (see add_extra): sending a
+            // follow-up hide raced the creation and errored with "no item".
           }
         }
         for (const id of present) {
@@ -3128,10 +3149,13 @@ export function LiveView({
         // Re-flow the panel to match the current count.
         const bh = snapshot?.video_height || 720;
         const bw = (bh * 16) / 9;
-        const ids = [...wanted.keys()];
-        ids.forEach((id, i) => {
-          const r = guestSlot(i, ids.length, bw, bh);
-          ipc.liveSetTransform(id, { ...r, visible: true }, true).catch(() => {});
+        // Only guests actually on screen get a slot, and layout NEVER flips
+        // visibility — otherwise arranging the grid would quietly put someone
+        // on air.
+        const shown = (sources.items ?? []).filter((i) => i.kind === "guest" && i.visible);
+        shown.forEach((it, i) => {
+          const r = guestSlot(i, shown.length, bw, bh);
+          ipc.liveSetTransform(it.id, r, true).catch(() => {});
         });
       } catch (e) {
         if (alive) setGuestErr(String(e).replace(/^Error:\s*/, ""));
@@ -3507,21 +3531,25 @@ export function LiveView({
                 })}
               </div>
 
-              {/* One component for the whole panel — guests are people, not
-                * a list of sources. */}
-              <GuestPanel
-                roster={roster}
-                link={guestLink}
-                error={guestErr}
-                items={liveItems.filter((i) => i.kind === "guest")}
-                onLink={ensureGuestLink}
-                onAdmit={admitGuest}
-                onRemove={removeGuest}
-                onMute={(id, muted) => setSourceAudio(id, undefined, muted).catch(() => {})}
-              />
           </>
         );
       }
+      case "guests":
+        // Guests are people you monitor for the length of a show, like chat —
+        // so this is a dockable panel of its own, not a row inside Sources.
+        return (
+          <GuestPanel
+            roster={roster}
+            link={guestLink}
+            error={guestErr}
+            items={(sources.items ?? []).filter((i) => i.kind === "guest")}
+            onLink={ensureGuestLink}
+            onAdmit={admitGuest}
+            onRemove={removeGuest}
+            onMute={(id, muted) => setSourceAudio(id, undefined, muted).catch(() => {})}
+            onShow={(id, show) => ipc.liveSetTransform(id, { visible: show }, true).catch(() => {})}
+          />
+        );
       case "mixer":
         return (
               <div className="rm-strips">

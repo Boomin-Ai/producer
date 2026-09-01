@@ -6686,3 +6686,34 @@ textarea::placeholder {
 .rm-row-edit.muted {
   color: #ff6b6b;
 }
+
+.rm-guest-stage {
+  padding: 4px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: oklch(0.62 0.025 250);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rm-guest-stage.on {
+  border-color: oklch(0.5 0.11 168 / 0.7);
+  background: oklch(0.26 0.06 168 / 0.55);
+  color: oklch(0.95 0.02 168);
+}
+
+.rm-guest-stage:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.rm-guest-live.off {
+  color: oklch(0.55 0.025 250);
+}
+
+.rm-guest-live.off .rm-guest-dot {
+  background: oklch(0.45 0.02 250);
+}

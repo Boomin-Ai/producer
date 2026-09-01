@@ -468,9 +468,14 @@ export const network = {
 export interface RoomGuest {
   id: string;
   display_name?: string | null;
-  state: "invited" | "connected" | "left" | string;
+  /** `render_url` is null while waiting — the waiting room is enforced
+   * server-side, not by us declining to render someone. */
+  state: "waiting" | "invited" | "connected" | "admitted" | "left" | string;
   render_url?: string | null;
+  joined_via?: string | null;
+  avatar_url?: string | null;
   joined_at?: string | null;
+  last_seen_at?: string | null;
 }
 
 /** Guests arrive through the room link on their own, so the roster — not our
@@ -479,7 +484,7 @@ export const guests = {
   roster: (endpointId: string, roomId: string) =>
     invoke<{ guests?: RoomGuest[] }>("room_guests", { endpointId, roomId }),
   joinLink: (endpointId: string, roomId: string) =>
-    invoke<{ url?: string; join_url?: string }>("room_join_link", { endpointId, roomId }),
+    invoke<{ join_url?: string; url?: string }>("room_join_link", { endpointId, roomId }),
   /** A guest who joined by link waits until the host admits them — the link
    * is public, so nobody reaches the broadcast unreviewed. */
   admit: (endpointId: string, roomId: string, guestId: string) =>

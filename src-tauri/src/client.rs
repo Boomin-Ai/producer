@@ -184,13 +184,15 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
-    /// The room's shareable join link.
+    /// The room's shareable join link. `join_url` is readable ONLY at
+    /// rotation, so the caller must persist what comes back — there is no
+    /// way to ask for it again without invalidating everyone using it.
     pub async fn room_join_link(&self, room_id: &str) -> EngineResult<Value> {
         let resp = self
             .http
-            .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/join-link")))
+            .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/guest-link")))
             .bearer_auth(&self.token)
-            .json(&serde_json::json!({}))
+            .json(&serde_json::json!({ "enabled": true }))
             .send()
             .await?;
         if !resp.status().is_success() {
@@ -201,10 +203,10 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
-    pub async fn admit_guest(&self, room_id: &str, guest_id: &str) -> EngineResult<Value> {
+    pub async fn admit_guest(&self, _room_id: &str, guest_id: &str) -> EngineResult<Value> {
         let resp = self
             .http
-            .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/guests/{guest_id}/admit")))
+            .post(self.root_url(&format!("/v1/app/live/guests/{guest_id}/admit")))
             .bearer_auth(&self.token)
             .json(&serde_json::json!({}))
             .send()
