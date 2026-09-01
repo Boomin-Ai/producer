@@ -551,6 +551,12 @@ extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, _cx: u32, _cy: u32
                     }
                     let effect = ffi::obs_get_base_effect(ffi::OBS_EFFECT_DEFAULT);
                     if !effect.is_null() {
+                        // Frames are already sRGB-encoded pixels; with the
+                        // framebuffer's sRGB encoder left on they get encoded
+                        // TWICE (mids darken — the "preview slightly dark"
+                        // finding). Pass through raw.
+                        let prev_srgb = ffi::gs_framebuffer_srgb_enabled();
+                        ffi::gs_enable_framebuffer_srgb(false);
                         let image = std::ffi::CString::new("image").unwrap();
                         let tech = std::ffi::CString::new("Draw").unwrap();
                         let param = ffi::gs_effect_get_param_by_name(effect, image.as_ptr());
@@ -558,6 +564,7 @@ extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, _cx: u32, _cy: u32
                         while ffi::gs_effect_loop(effect, tech.as_ptr()) {
                             ffi::gs_draw_sprite(PREVIEW_TEX, 0, frame.width, frame.height);
                         }
+                        ffi::gs_enable_framebuffer_srgb(prev_srgb);
                     }
                 }
             }
@@ -647,7 +654,10 @@ impl Preview {
                 format: ffi::VIDEO_FORMAT_BGRA,
                 width: 1280,
                 height: 720,
-                range: 0,
+                // FULL range: the canvas is limited-range internally; without
+                // expansion the preview renders Y16-235 as-is — slightly dark
+                // and flat (M-W6 epilogue finding).
+                range: 2,
                 colorspace: 0,
             };
             ffi::obs_add_raw_video_callback(

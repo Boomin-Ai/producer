@@ -325,6 +325,8 @@ extern "C" {
 
     pub fn gs_clear(clear_flags: u32, color: *const vec4, depth: f32, stencil: u8);
     pub fn gs_set_viewport(x: c_int, y: c_int, width: c_int, height: c_int);
+    pub fn gs_framebuffer_srgb_enabled() -> bool;
+    pub fn gs_enable_framebuffer_srgb(enabled: bool);
     pub fn gs_viewport_push();
     pub fn gs_viewport_pop();
     pub fn gs_projection_push();
