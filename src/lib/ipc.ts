@@ -426,3 +426,36 @@ export const registerRoom = (endpointId: string, title: string, externalRef: str
     title,
     externalRef,
   });
+
+export interface NetworkStatus {
+  membership?: { status?: string } | null;
+  /** live_now is DERIVED from open broadcasts, not a heartbeat — it can
+   * under-report but never invents presence. Label it "live now", not
+   * "online", because that's what it actually measures. */
+  network?: { live_now?: number; members?: number };
+}
+
+export interface NetworkInvitation {
+  id: string;
+  direction: "inbox" | "outbox";
+  status: string;
+  message?: string | null;
+  created_at?: string;
+  /** Always the COUNTERPART brand, whichever side of the pair it is. */
+  brand: { id: string; name: string; slug?: string; avatar_url?: string | null };
+}
+
+export const network = {
+  status: (endpointId: string) => invoke<NetworkStatus>("network_status", { endpointId }),
+  invitations: (endpointId: string, direction: "inbox" | "outbox") =>
+    invoke<{ invitations?: NetworkInvitation[] }>("network_invitations", { endpointId, direction }),
+  /** Slugs are unique platform-wide, so a slug addresses a brand on its own. */
+  invite: (endpointId: string, toSlug: string, message?: string) =>
+    invoke<{ kind: "invited" | "connected"; invitation?: NetworkInvitation }>("network_invite", {
+      endpointId,
+      toSlug,
+      message: message ?? null,
+    }),
+  act: (endpointId: string, id: string, action: "accept" | "decline" | "revoke") =>
+    invoke("network_invitation_action", { endpointId, id, action }),
+};

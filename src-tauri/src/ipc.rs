@@ -282,6 +282,56 @@ pub async fn network_connections(
         .await
 }
 
+#[tauri::command]
+pub async fn network_status(state: State<'_, AppState>, endpoint_id: String) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .network_status()
+        .await
+}
+
+#[tauri::command]
+pub async fn network_invitations(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    direction: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .network_invitations(&direction)
+        .await
+}
+
+#[tauri::command]
+pub async fn network_invite(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    to_slug: String,
+    message: Option<String>,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .network_invite(&to_slug, message)
+        .await
+}
+
+#[tauri::command]
+pub async fn network_invitation_action(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    id: String,
+    action: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .network_invitation_action(&id, &action)
+        .await
+}
+
 /// Join the Brand Network for a connected endpoint's brand.
 #[tauri::command]
 pub async fn network_join(

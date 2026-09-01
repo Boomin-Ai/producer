@@ -199,6 +199,77 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
+    /// Network status: membership, live-now count, member count.
+    pub async fn network_status(&self) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .get(self.root_url("/v1/app/network"))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    pub async fn network_invitations(&self, direction: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .get(self.root_url(&format!("/v1/app/network/invitations?direction={direction}")))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// Invite by SLUG. Slugs are unique platform-wide, so they address a brand
+    /// on their own — resolution happens server-side, which also avoids
+    /// handing out a slug-existence oracle.
+    pub async fn network_invite(&self, to_slug: &str, message: Option<String>) -> EngineResult<Value> {
+        let mut body = serde_json::Map::new();
+        body.insert("to_slug".into(), Value::String(to_slug.to_string()));
+        if let Some(m) = message {
+            body.insert("message".into(), Value::String(m));
+        }
+        let resp = self
+            .http
+            .post(self.root_url("/v1/app/network/invitations"))
+            .bearer_auth(&self.token)
+            .json(&Value::Object(body))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// action: accept | decline | revoke
+    pub async fn network_invitation_action(&self, id: &str, action: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.root_url(&format!("/v1/app/network/invitations/{id}/{action}")))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     /// Brands this brand is connected to — the "pick a connected brand" path.
     pub async fn network_connections(&self) -> EngineResult<Value> {
         let resp = self

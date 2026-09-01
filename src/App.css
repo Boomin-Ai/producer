@@ -6484,3 +6484,98 @@ textarea::placeholder {
 .rm-bars.q-good i:nth-child(4),
 .rm-bars.q-mediocre i:nth-child(n + 3),
 .rm-bars.q-bad i:nth-child(n + 2) { background: oklch(0.32 0.02 250); }
+
+/* ── Brand Network on the control room ─────────────────────────────────── */
+
+.net-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 650;
+  color: oklch(0.75 0.02 250);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.net-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--mint);
+  box-shadow: 0 0 8px oklch(0.75 0.14 165 / 0.7);
+}
+
+.net-of {
+  color: oklch(0.5 0.02 250);
+  font-weight: 500;
+}
+
+.net-invites {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.net-invite {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border: 1px solid oklch(0.45 0.09 168 / 0.45);
+  border-radius: 12px;
+  background: oklch(0.22 0.04 168 / 0.35);
+}
+
+.net-invite-name {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.net-invite-msg {
+  flex: 1;
+  font-size: 12.5px;
+  color: oklch(0.62 0.025 250);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.net-decline {
+  border: 1px solid var(--border);
+  background: transparent;
+  border-radius: 999px;
+  padding: 6px 13px;
+  font-size: 12.5px;
+  color: oklch(0.65 0.02 250);
+  cursor: pointer;
+}
+
+.net-decline:hover {
+  color: var(--text);
+  border-color: oklch(0.42 0.04 250);
+}
+
+.net-invite-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.net-slug {
+  flex: 1;
+  max-width: 380px;
+  padding: 10px 13px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: oklch(0.19 0.02 250);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.net-slug:focus {
+  outline: none;
+  border-color: oklch(0.45 0.09 168 / 0.6);
+}

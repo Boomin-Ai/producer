@@ -4,7 +4,11 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Channel, EndpointInfo, Job, LiveDestination, LiveRoom, LiveSnapshot } from "../lib/ipc";
 import type { TargetResult } from "../lib/ipc";
-import { ipc } from "../lib/ipc";
+import { ipc,
+  network,
+  type NetworkStatus,
+  type NetworkInvitation,
+} from "../lib/ipc";
 import { demoOn, setDemo } from "../lib/demo";
 import { liveRoomId } from "../lib/room";
 import { useUpdater } from "../lib/updater";
@@ -647,6 +651,11 @@ function ControlRoomHome({
         )}
       </section>
 
+      {/* Network lives at HOME, never inside a room: a failed network call
+        * here is harmless, whereas mid-broadcast it would be noise over a
+        * running show. */}
+      <NetworkStrip />
+
       <section className="cr-section">
         <div className="cr-label">
           RUNDOWN
@@ -1251,5 +1260,125 @@ function HistoryView({
         )}
       </div>
     </>
+  );
+}
+
+/** Brand Network at a glance: how many are live, who's waiting on you, and a
+ * slug field to invite someone. Slugs are unique platform-wide, so typing one
+ * addresses a brand exactly — no picker needed. */
+function NetworkStrip() {
+  const [endpointId, setEndpointId] = useState<string | null>(null);
+  const [status, setStatus] = useState<NetworkStatus | null>(null);
+  const [inbox, setInbox] = useState<NetworkInvitation[]>([]);
+  const [slug, setSlug] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  const load = useCallback(async (id: string) => {
+    const [st, inv] = await Promise.all([
+      network.status(id).catch(() => null),
+      network.invitations(id, "inbox").catch(() => null),
+    ]);
+    if (st) setStatus(st);
+    setInbox(inv?.invitations ?? []);
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    ipc
+      .listEndpoints()
+      .then((eps) => {
+        const ep = eps.find((e) => e.kind === "connected") ?? eps[0];
+        if (!alive || !ep) return;
+        setEndpointId(ep.id);
+        load(ep.id);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [load]);
+
+  // Not connected, or not a member: nothing useful to show, so show nothing
+  // rather than an empty shell.
+  if (!endpointId || !status?.membership) return null;
+
+  const liveNow = status.network?.live_now ?? 0;
+  const members = status.network?.members ?? 0;
+
+  const invite = async () => {
+    const s = slug.trim().replace(/^@/, "");
+    if (!s) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      const res = await network.invite(endpointId, s);
+      // A counter-invite IS acceptance: inviting someone who already invited
+      // you returns a connection, not a second invitation.
+      setNote(
+        res.kind === "connected"
+          ? `Connected with ${res.invitation?.brand?.name ?? s}.`
+          : `Invited ${res.invitation?.brand?.name ?? s}.`,
+      );
+      setSlug("");
+      load(endpointId);
+    } catch (e) {
+      setNote(String(e).replace(/^Error:\s*/, ""));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const act = async (id: string, action: "accept" | "decline") => {
+    await network.act(endpointId, id, action).catch(() => {});
+    load(endpointId);
+  };
+
+  return (
+    <section className="cr-section">
+      <div className="cr-label">
+        NETWORK
+        <span className="cr-label-actions">
+          <span className="net-count">
+            <span className="net-dot" />
+            {liveNow} live now
+            <span className="net-of">of {members}</span>
+          </span>
+        </span>
+      </div>
+
+      {inbox.length > 0 && (
+        <div className="net-invites">
+          {inbox.map((i) => (
+            <div key={i.id} className="net-invite">
+              <span className="net-invite-name">{i.brand?.name ?? i.brand?.slug}</span>
+              {i.message && <span className="net-invite-msg">{i.message}</span>}
+              <button className="cr-primary" onClick={() => act(i.id, "accept")}>
+                Accept
+              </button>
+              <button className="net-decline" onClick={() => act(i.id, "decline")}>
+                Decline
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="net-invite-row">
+        <input
+          className="net-slug"
+          placeholder="Invite by handle — e.g. kleveland"
+          value={slug}
+          onChange={(e) => setSlug(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") invite();
+          }}
+        />
+        <button className="cr-primary" disabled={busy || !slug.trim()} onClick={invite}>
+          {busy ? "Sending…" : "Invite"}
+        </button>
+      </div>
+      {note && <div className="cr-hint">{note}</div>}
+    </section>
   );
 }
