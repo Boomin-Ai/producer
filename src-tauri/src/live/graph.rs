@@ -136,6 +136,11 @@ pub struct ItemState {
     pub z: i32,
     pub src_w: u32,
     pub src_h: u32,
+    /// Audio facts, so the mixer can show a strip for anything that makes
+    /// sound rather than only the microphone.
+    pub has_audio: bool,
+    pub volume: f32,
+    pub muted: bool,
 }
 
 /// Patch semantics: only present fields are applied — the stage editor
@@ -519,6 +524,10 @@ impl SceneGraph {
                 z: ffi::obs_sceneitem_get_order_position(item),
                 src_w,
                 src_h,
+                // OBS_SOURCE_AUDIO = 1 << 1
+                has_audio: !src.is_null() && (ffi::obs_source_get_output_flags(src) & 0x2) != 0,
+                volume: if src.is_null() { 1.0 } else { ffi::obs_source_get_volume(src) },
+                muted: !src.is_null() && ffi::obs_source_muted(src),
             });
         };
         if let Some((item, _)) = self.screen {
@@ -1313,6 +1322,27 @@ impl SceneGraph {
 
     /// Mic gain/mute. Values persist on the graph so toggling the mic off
     /// and on keeps the fader where the user left it.
+    /// Volume/mute for ANY source, not just the mic — guests, media and
+    /// overlays all reach the mix and all deserve a fader.
+    pub fn set_source_audio(&mut self, id: &str, volume: Option<f32>, muted: Option<bool>) -> Result<(), String> {
+        if id == "mic" {
+            self.set_mic_audio(volume, muted);
+            return Ok(());
+        }
+        let src = self
+            .source_by_id(id)
+            .ok_or_else(|| format!("{id} is not on the stage"))?;
+        unsafe {
+            if let Some(v) = volume {
+                ffi::obs_source_set_volume(src, v.clamp(0.0, 1.0));
+            }
+            if let Some(m) = muted {
+                ffi::obs_source_set_muted(src, m);
+            }
+        }
+        Ok(())
+    }
+
     pub fn set_mic_audio(&mut self, volume: Option<f32>, muted: Option<bool>) {
         if let Some(v) = volume {
             self.mic_volume = v.clamp(0.0, 1.0);

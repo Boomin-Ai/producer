@@ -267,6 +267,28 @@ impl Live {
     }
 
     #[cfg(have_engine)]
+    pub fn set_source_audio(
+        &self,
+        id: String,
+        volume: Option<f32>,
+        muted: Option<bool>,
+    ) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .set_source_audio(id, volume, muted)
+    }
+    #[cfg(not(have_engine))]
+    pub fn set_source_audio(
+        &self,
+        _id: String,
+        _volume: Option<f32>,
+        _muted: Option<bool>,
+    ) -> Result<(), String> {
+        Err("live engine not bundled in this build".into())
+    }
+
+    #[cfg(have_engine)]
     pub fn set_item_opacity(&self, id: String, opacity: f64) -> Result<(), String> {
         self.handle
             .as_ref()

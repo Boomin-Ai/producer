@@ -118,6 +118,11 @@ extern "C" {
     pub fn obs_source_get_width(source: *mut obs_source_t) -> u32;
     pub fn obs_source_get_height(source: *mut obs_source_t) -> u32;
     pub fn obs_source_set_volume(source: *mut obs_source_t, volume: f32);
+    pub fn obs_source_get_volume(source: *mut obs_source_t) -> f32;
+    pub fn obs_source_muted(source: *mut obs_source_t) -> bool;
+    /// Non-zero when the source produces audio — how we know which items
+    /// deserve a mixer strip without guessing from their kind.
+    pub fn obs_source_get_output_flags(source: *mut obs_source_t) -> u32;
     pub fn obs_source_set_muted(source: *mut obs_source_t, muted: bool);
     pub fn obs_source_add_audio_capture_callback(
         source: *mut obs_source_t,

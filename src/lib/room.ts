@@ -77,6 +77,9 @@ export interface RoomConfig {
   channels: Record<string, boolean>;
   /** Scene the room mounts into when it opens. */
   active_scene?: string;
+  /** The room's shareable guest link, cached so it survives restarts and can
+   * be copied without a round trip. */
+  guest_link?: string;
   /** The platform's id for this room, cached after lazy registration. The
    * local id stays authoritative offline; this is only the seam for
    * server-side features (guests today, broadcasts later). */
@@ -134,6 +137,7 @@ export function parseConfig(raw: string | null | undefined): RoomConfig {
   if (v.channels && typeof v.channels === "object") base.channels = v.channels as Record<string, boolean>;
   if (typeof v.active_scene === "string") base.active_scene = v.active_scene;
   if (typeof v.server_room_id === "string") base.server_room_id = v.server_room_id;
+  if (typeof v.guest_link === "string") base.guest_link = v.guest_link;
   if (v.sizes && typeof v.sizes === "object") base.sizes = v.sizes as DockSizes;
   if (v.transition && typeof v.transition === "object") base.transition = v.transition as SceneTransition;
   return base;

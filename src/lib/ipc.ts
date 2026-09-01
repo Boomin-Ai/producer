@@ -184,6 +184,11 @@ export interface LiveItem {
   z: number;
   src_w: number;
   src_h: number;
+  /** Audio facts, so the mixer can show a strip for anything that makes
+   * sound rather than only the microphone. */
+  has_audio: boolean;
+  volume: number;
+  muted: boolean;
 }
 
 export interface LiveTransformPatch {
@@ -459,3 +464,30 @@ export const network = {
   act: (endpointId: string, id: string, action: "accept" | "decline" | "revoke") =>
     invoke("network_invitation_action", { endpointId, id, action }),
 };
+
+export interface RoomGuest {
+  id: string;
+  display_name?: string | null;
+  state: "invited" | "connected" | "left" | string;
+  render_url?: string | null;
+  joined_at?: string | null;
+}
+
+/** Guests arrive through the room link on their own, so the roster — not our
+ * own bookkeeping — is the source of truth for who is present. */
+export const guests = {
+  roster: (endpointId: string, roomId: string) =>
+    invoke<{ guests?: RoomGuest[] }>("room_guests", { endpointId, roomId }),
+  joinLink: (endpointId: string, roomId: string) =>
+    invoke<{ url?: string; join_url?: string }>("room_join_link", { endpointId, roomId }),
+  /** A guest who joined by link waits until the host admits them — the link
+   * is public, so nobody reaches the broadcast unreviewed. */
+  admit: (endpointId: string, roomId: string, guestId: string) =>
+    invoke("room_guest_admit", { endpointId, roomId, guestId }),
+  revoke: (endpointId: string, guestId: string) =>
+    invoke("room_guest_revoke", { endpointId, guestId }),
+};
+
+/** Volume/mute for any audio-bearing source, guests included. */
+export const setSourceAudio = (id: string, volume?: number, muted?: boolean) =>
+  invoke("live_set_source_audio", { id, volume: volume ?? null, muted: muted ?? null });

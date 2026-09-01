@@ -372,6 +372,13 @@ pub enum Command {
     StopRecording {
         reply: std::sync::mpsc::Sender<Option<String>>,
     },
+    /// Volume/mute for any audio-bearing source — guests included, not just
+    /// the mic.
+    SetSourceAudio {
+        id: String,
+        volume: Option<f32>,
+        muted: Option<bool>,
+    },
     /// Per-item opacity for scene fades. Gesture-rate, fire-and-forget: a
     /// reply per animation frame would be pure latency.
     SetItemOpacity {
@@ -585,6 +592,17 @@ impl LiveHandle {
             .map_err(|e| e.to_string())?;
         rx.recv_timeout(std::time::Duration::from_secs(15))
             .map_err(|_| "the engine did not answer in time".to_string())
+    }
+
+    pub fn set_source_audio(
+        &self,
+        id: String,
+        volume: Option<f32>,
+        muted: Option<bool>,
+    ) -> Result<(), String> {
+        self.cmd
+            .send(Command::SetSourceAudio { id, volume, muted })
+            .map_err(|e| e.to_string())
     }
 
     pub fn set_item_opacity(&self, id: String, opacity: f64) -> Result<(), String> {
@@ -1065,6 +1083,18 @@ pub fn start(
                     }
                     Ok(Command::StopRecording { reply }) => {
                         let _ = reply.send(recorder.take().map(|r| r.stop()));
+                    }
+                    Ok(Command::SetSourceAudio { id, volume, muted }) => {
+                        if let Some(g) = scene.as_mut() {
+                            match g.set_source_audio(&id, volume, muted) {
+                                Ok(()) => {
+                                    let sources = g.state();
+                                    snap.lock().unwrap().sources = sources.clone();
+                                    sink(&LiveEvent::SourcesChanged { sources });
+                                }
+                                Err(e) => sink(&LiveEvent::EngineError { message: e }),
+                            }
+                        }
                     }
                     Ok(Command::SetItemOpacity { id, opacity }) => {
                         if let Some(g) = scene.as_ref() {

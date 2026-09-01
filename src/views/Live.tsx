@@ -13,7 +13,11 @@ import {
   listenChat,
   devices as deviceIpc,
   extraSources,
+  guests as guestsIpc,
   registerRoom,
+  setSourceAudio,
+  type RoomGuest,
+  type LiveItem,
   roomGuestInvite,
   stinger as stingerIpc,
   recording as recIpc,
@@ -561,6 +565,122 @@ function SourceSettingsStrip({
       <button className="rm-srcstrip-x" title="Close settings" onClick={onClose}>
         {ic.x}
       </button>
+    </div>
+  );
+}
+
+/** The Guest component: one row for the whole panel, expanding to whoever is
+ * in it. Guests arrive through a shared room link, so the list is the server's
+ * roster rather than anything Producer decided.
+ *
+ * Waiting guests are shown but NOT on the broadcast. The link is public, so
+ * admitting is an explicit act — otherwise anyone holding the URL would appear
+ * on air under a name they typed themselves. */
+function GuestPanel({
+  roster,
+  link,
+  error,
+  items,
+  onLink,
+  onAdmit,
+  onRemove,
+  onMute,
+}: {
+  roster: RoomGuest[];
+  link: string | null;
+  error: string | null;
+  items: LiveItem[];
+  onLink: () => Promise<string | null>;
+  onAdmit: (id: string) => void;
+  onRemove: (id: string) => void;
+  onMute: (sourceId: string, muted: boolean) => void;
+}) {
+  const [open, setOpen] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const waiting = roster.filter((g) => g.state === "waiting" || g.state === "invited");
+  const live = roster.filter((g) => g.state === "connected");
+  const CAP = 4;
+
+  const copy = async () => {
+    const url = link ?? (await onLink());
+    if (!url) return;
+    await navigator.clipboard.writeText(url).catch(() => {});
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  };
+
+  return (
+    <div className="rm-guests">
+      <div className="rm-row rm-guest-head">
+        <span className="rm-row-icon">{ic.invite}</span>
+        <span className="rm-row-name">Guest</span>
+        <span className="rm-guest-count">
+          {live.length}/{CAP}
+          {waiting.length > 0 && <em className="rm-guest-wait">{waiting.length} waiting</em>}
+        </span>
+        <button className="rm-row-edit" title="Copy the room's guest link" onClick={copy}>
+          {copied ? "✓" : ic.link}
+        </button>
+        <button
+          className="rm-row-edit"
+          title={open ? "Collapse" : "Expand"}
+          onClick={() => setOpen((o) => !o)}
+        >
+          {ic.chev}
+        </button>
+      </div>
+
+      {open && (
+        <div className="rm-guest-list">
+          {roster.length === 0 && (
+            <div className="rm-rows-empty">
+              No one yet. Copy the link and share it — guests join from any browser.
+            </div>
+          )}
+          {waiting.map((g) => (
+            <div key={g.id} className="rm-guest waiting">
+              <span className="rm-guest-name">{g.display_name || "Guest"}</span>
+              <span className="rm-guest-state">waiting</span>
+              <button
+                className="rm-guest-admit"
+                disabled={live.length >= CAP}
+                title={live.length >= CAP ? `Room is full (${CAP})` : "Put them on the stage"}
+                onClick={() => onAdmit(g.id)}
+              >
+                Admit
+              </button>
+              <button className="rm-row-edit" title="Remove" onClick={() => onRemove(g.id)}>
+                {ic.x}
+              </button>
+            </div>
+          ))}
+          {live.map((g) => {
+            const item = items.find((i) => i.id === `guest-${g.id.slice(0, 8)}`);
+            const muted = item?.muted ?? false;
+            return (
+              <div key={g.id} className="rm-guest">
+                <span className="rm-guest-name">{g.display_name || "Guest"}</span>
+                <span className="rm-guest-live">
+                  <span className="rm-guest-dot" />
+                  on stage
+                </span>
+                <button
+                  className={`rm-row-edit${muted ? " muted" : ""}`}
+                  title={muted ? "Unmute" : "Mute"}
+                  disabled={!item}
+                  onClick={() => item && onMute(item.id, !muted)}
+                >
+                  {ic.mic}
+                </button>
+                <button className="rm-row-edit" title="Remove" onClick={() => onRemove(g.id)}>
+                  {ic.x}
+                </button>
+              </div>
+            );
+          })}
+          {error && <div className="rm-chatsetup-err">{error}</div>}
+        </div>
+      )}
     </div>
   );
 }
@@ -2164,6 +2284,62 @@ export function LiveView({
   void recTick;
   const recElapsed = recPath ? Math.floor((Date.now() - recSince) / 1000) : 0;
 
+  // ── Guest panel ────────────────────────────────────────────────────────
+  // Guests arrive through the room link on their own, so the server roster is
+  // the source of truth and the local scene is reconciled against it — never
+  // the other way round.
+  const [roster, setRoster] = useState<RoomGuest[]>([]);
+  const [guestLink, setGuestLink] = useState<string | null>(cfg.guest_link ?? null);
+  const [guestErr, setGuestErr] = useState<string | null>(null);
+  const rosterRef = useRef<RoomGuest[]>([]);
+  rosterRef.current = roster;
+  const endpointRef = useRef<string | null>(null);
+
+  const admitGuest = async (id: string) => {
+    if (!endpointRef.current || !cfg.server_room_id) return;
+    // The guest's return video IS the virtual camera — the render page opens
+    // it as a capture device and sends it down the peer connection it already
+    // holds. Start it on admit so nobody discovers it was off after someone
+    // is already talking into oblivion.
+    if (!vcamOn && vcamState?.installed) {
+      await vcamIpc.output(true).catch(() => {});
+    }
+    await guestsIpc.admit(endpointRef.current, cfg.server_room_id, id).catch((e) =>
+      setGuestErr(String(e).replace(/^Error:\s*/, "")),
+    );
+  };
+
+  const removeGuest = async (id: string) => {
+    if (!endpointRef.current || !cfg.server_room_id) return;
+    await guestsIpc.revoke(endpointRef.current, id).catch(() => {});
+  };
+
+  /** Mint (or reuse) the room's shareable link. */
+  const ensureGuestLink = async () => {
+    if (guestLink) return guestLink;
+    try {
+      const eps = await ipc.listEndpoints();
+      const ep = eps.find((e) => e.kind === "connected") ?? eps[0];
+      if (!ep) throw new Error("Connect a Boomin workspace first.");
+      let sid = cfg.server_room_id;
+      if (!sid) {
+        const reg = await registerRoom(ep.id, room?.name ?? "Room", room?.id ?? "");
+        sid = reg.room.id;
+        writeCfg({ ...cfgRef.current, server_room_id: sid });
+      }
+      const res = await guestsIpc.joinLink(ep.id, sid!);
+      const url = res.url ?? res.join_url ?? null;
+      if (url) {
+        setGuestLink(url);
+        writeCfg({ ...cfgRef.current, guest_link: url });
+      }
+      return url;
+    } catch (e) {
+      setGuestErr(String(e).replace(/^Error:\s*/, ""));
+      return null;
+    }
+  };
+
   const [srcSettings, setSrcSettings] = useState<string | null>(null);
   /** Which scene's settings strip is open — same grammar as sources. */
   const [sceneSettings, setSceneSettings] = useState<string | null>(null);
@@ -2884,6 +3060,91 @@ export function LiveView({
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  /** Where a guest sits on stage, given how many are on. One fills the frame,
+   * two split it, three or four make a grid — recomputed whenever the roster
+   * changes so joining or leaving re-flows the panel. */
+  const guestSlot = useCallback(
+    (index: number, total: number, bw: number, bh: number) => {
+      if (total <= 1) return { x: 0, y: 0, w: bw, h: bh };
+      if (total === 2) {
+        const w = bw / 2;
+        return { x: index * w, y: 0, w, h: bh };
+      }
+      const cols = 2;
+      const rows = 2;
+      const w = bw / cols;
+      const h = bh / rows;
+      return { x: (index % cols) * w, y: Math.floor(index / cols) * h, w, h };
+    },
+    [],
+  );
+
+  // Poll the roster and reconcile browser sources against it.
+  useEffect(() => {
+    if (!room?.id || !cfg.server_room_id) return;
+    let alive = true;
+    const tick = async () => {
+      try {
+        if (!endpointRef.current) {
+          const eps = await ipc.listEndpoints();
+          const ep = eps.find((e) => e.kind === "connected") ?? eps[0];
+          if (!ep) return;
+          endpointRef.current = ep.id;
+        }
+        const res = await guestsIpc.roster(endpointRef.current, cfg.server_room_id!);
+        if (!alive) return;
+        const list = res.guests ?? [];
+        setRoster(list);
+        setGuestErr(null);
+
+        // Only guests the host has admitted get a source. A waiting guest is
+        // deliberately NOT on the broadcast: the room link is public, so
+        // auto-admitting would put an unknown person on air with a name they
+        // chose themselves.
+        const live = list.filter((g) => g.state === "connected" && g.render_url);
+        const present = new Set(
+          (sources.items ?? []).filter((i) => i.kind === "guest").map((i) => i.id),
+        );
+        const wanted = new Map(live.map((g) => [`guest-${g.id.slice(0, 8)}`, g]));
+
+        for (const [id, g] of wanted) {
+          if (!present.has(id)) {
+            // &program= names the virtual camera so the page captures the
+            // SHOW rather than guessing at a device; &mic= does the same for
+            // the host's microphone. Both are labels, because a browser's
+            // deviceIds are salted per origin and can never match ours.
+            const u = new URL(g.render_url!);
+            if (micDeviceLabel) u.searchParams.set("mic", micDeviceLabel);
+            u.searchParams.set("program", "Producer Virtual Camera");
+            await extraSources
+              .add(id, g.display_name || "Guest", { kind: "guest", url: u.toString() })
+              .catch(() => {});
+          }
+        }
+        for (const id of present) {
+          if (!wanted.has(id)) await extraSources.remove(id).catch(() => {});
+        }
+
+        // Re-flow the panel to match the current count.
+        const bh = snapshot?.video_height || 720;
+        const bw = (bh * 16) / 9;
+        const ids = [...wanted.keys()];
+        ids.forEach((id, i) => {
+          const r = guestSlot(i, ids.length, bw, bh);
+          ipc.liveSetTransform(id, { ...r, visible: true }, true).catch(() => {});
+        });
+      } catch (e) {
+        if (alive) setGuestErr(String(e).replace(/^Error:\s*/, ""));
+      }
+    };
+    tick();
+    const t = setInterval(tick, 3000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [room?.id, cfg.server_room_id, sources.items, snapshot?.video_height, guestSlot]);
+
   // Mount the room into its saved scene once the engine can take it.
   useEffect(() => {
     if (!pendingScene || !engineOk) return;
@@ -3119,9 +3380,11 @@ export function LiveView({
             // Audio is a source, like OBS: the picker lives here, the fader
             // lives in the mixer.
             sources.mic && { key: "mic", label: "Microphone", icon: ic.mic, device: "mic", audio: true, remove: () => setSrc({ mic: false }) },
-            // Open-list items, straight from engine truth.
+            // Open-list items, straight from engine truth. Guests are
+            // excluded here: they collapse into one Guest component rather
+            // than appearing as a row per person.
             ...liveItems
-              .filter((i) => !["screen", "camera", "overlay"].includes(i.id))
+              .filter((i) => !["screen", "camera", "overlay"].includes(i.id) && i.kind !== "guest")
               .map((i) => ({
                 key: i.id,
                 label: i.label || i.kind,
@@ -3243,15 +3506,50 @@ export function LiveView({
                   );
                 })}
               </div>
+
+              {/* One component for the whole panel — guests are people, not
+                * a list of sources. */}
+              <GuestPanel
+                roster={roster}
+                link={guestLink}
+                error={guestErr}
+                items={liveItems.filter((i) => i.kind === "guest")}
+                onLink={ensureGuestLink}
+                onAdmit={admitGuest}
+                onRemove={removeGuest}
+                onMute={(id, muted) => setSourceAudio(id, undefined, muted).catch(() => {})}
+              />
           </>
         );
       }
       case "mixer":
         return (
               <div className="rm-strips">
-                {sources.mic ? (
-                  micStrip
-                ) : (
+                {sources.mic && micStrip}
+                {/* Every audio-bearing source gets a strip, not just the mic —
+                  * a guest you cannot level is only half a guest. */}
+                {(sources.items ?? [])
+                  // Guests and media genuinely carry audio. Screen and camera
+                  // advertise the capability but produce no track in our
+                  // graph, and a row of silent faders just buries the ones
+                  // that matter.
+                  .filter((i) => i.has_audio && (i.kind === "guest" || i.kind === "media"))
+                  .map((i) => (
+                    <MeterStrip
+                      key={i.id}
+                      label={i.label || i.kind}
+                      icon={i.kind === "guest" ? ic.invite : ic.play}
+                      level={0}
+                      volume={i.volume ?? 1}
+                      muted={i.muted ?? false}
+                      onVolume={(v) => setSourceAudio(i.id, v).catch(() => {})}
+                      onMute={() => setSourceAudio(i.id, undefined, !i.muted).catch(() => {})}
+                    />
+                  ))}
+                {!sources.mic &&
+                  (sources.items ?? []).every(
+                    (i) => !(i.has_audio && (i.kind === "guest" || i.kind === "media")),
+                  ) && (
                   <div className="rm-rows-empty">
                     No audio sources. Add a microphone from Sources.
                   </div>

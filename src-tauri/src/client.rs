@@ -166,6 +166,73 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
+    /// Who is in this room right now. Producer polls this and reconciles its
+    /// browser sources against it — guests arrive via the room link on their
+    /// own, so the roster is the only way to learn about them.
+    pub async fn room_guests(&self, room_id: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .get(self.root_url(&format!("/v1/app/live/rooms/{room_id}/guests")))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// The room's shareable join link.
+    pub async fn room_join_link(&self, room_id: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/join-link")))
+            .bearer_auth(&self.token)
+            .json(&serde_json::json!({}))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    pub async fn admit_guest(&self, room_id: &str, guest_id: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/guests/{guest_id}/admit")))
+            .bearer_auth(&self.token)
+            .json(&serde_json::json!({}))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    pub async fn revoke_guest(&self, guest_id: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.root_url(&format!("/v1/app/live/guests/{guest_id}/revoke")))
+            .bearer_auth(&self.token)
+            .json(&serde_json::json!({}))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     /// Invite a guest to a live room. Returns the invite link (for the guest)
     /// and the render URL (for Producer's browser source) — both are returned
     /// ONCE ONLY, so the caller must persist them immediately.

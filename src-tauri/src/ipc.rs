@@ -248,6 +248,59 @@ pub async fn room_register(
         .await
 }
 
+#[tauri::command]
+pub async fn room_guest_admit(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+    guest_id: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .admit_guest(&room_id, &guest_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn room_guest_revoke(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    guest_id: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .revoke_guest(&guest_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn room_guests(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .room_guests(&room_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn room_join_link(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .room_join_link(&room_id)
+        .await
+}
+
 /// Invite a guest to a room; returns {guest, invite_url, render_url}.
 #[tauri::command]
 pub async fn room_guest_invite(

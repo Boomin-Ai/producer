@@ -486,6 +486,19 @@ pub fn live_reveal_file(path: String) -> EngineResult<()> {
 /// update. Every call answers with the chain's new state so the UI never has
 /// to model it separately.
 #[tauri::command]
+pub fn live_set_source_audio(
+    state: State<'_, AppState>,
+    id: String,
+    volume: Option<f32>,
+    muted: Option<bool>,
+) -> EngineResult<()> {
+    state
+        .live
+        .set_source_audio(id, volume, muted)
+        .map_err(EngineError::Other)
+}
+
+#[tauri::command]
 pub fn live_set_opacity(state: State<'_, AppState>, id: String, opacity: f64) -> EngineResult<()> {
     state
         .live
