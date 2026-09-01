@@ -89,6 +89,7 @@ pub fn run() {
             ipc::room_guest_invite,
             ipc::room_guests,
             ipc::room_guest_admit,
+            ipc::room_set_stage,
             ipc::room_guest_revoke,
             ipc::room_join_link,
             ipc::network_connections,
