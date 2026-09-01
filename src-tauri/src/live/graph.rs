@@ -139,6 +139,8 @@ pub struct ItemState {
     /// Audio facts, so the mixer can show a strip for anything that makes
     /// sound rather than only the microphone.
     pub has_audio: bool,
+    /// A/V sync offset in ms, positive = audio delayed.
+    pub sync_ms: i64,
     pub volume: f32,
     pub muted: bool,
 }
@@ -526,6 +528,7 @@ impl SceneGraph {
                 src_h,
                 // OBS_SOURCE_AUDIO = 1 << 1
                 has_audio: !src.is_null() && (ffi::obs_source_get_output_flags(src) & 0x2) != 0,
+                sync_ms: if src.is_null() { 0 } else { ffi::obs_source_get_sync_offset(src) / 1_000_000 },
                 volume: if src.is_null() { 1.0 } else { ffi::obs_source_get_volume(src) },
                 muted: !src.is_null() && ffi::obs_source_muted(src),
             });
@@ -683,6 +686,9 @@ impl SceneGraph {
                         CString::new("reroute_audio").unwrap().as_ptr(),
                         true,
                     );
+                    // PRODUCER_TEST_MONITOR=1 forces this source to
+                    // MONITOR_ONLY so a recording can be inspected for leaks.
+                    // Applied after creation, below.
                     let id = CString::new("browser_source").unwrap();
                     let name = CString::new("Overlay").unwrap();
                     let src = ffi::obs_source_create(
@@ -717,6 +723,10 @@ impl SceneGraph {
                     ffi::obs_source_filter_add(src, filter);
                     ffi::obs_source_release(filter);
                 }
+            }
+            if std::env::var("PRODUCER_TEST_MONITOR").as_deref() == Ok("1") {
+                ffi::obs_source_set_monitoring_type(src, 1);
+                eprintln!("[test] overlay forced to MONITOR_ONLY");
             }
             let item = ffi::obs_scene_add(self.scene, src);
             if item.is_null() {
@@ -862,6 +872,9 @@ impl SceneGraph {
         }
         unsafe {
             let (type_id, kind, settings): (&str, &'static str, *mut ffi::obs_data_t) = match spec {
+                // PRODUCER_TEST_MONITOR=1 forces media sources to MONITOR_ONLY
+                // so a recording can be inspected for leaks against a known
+                // loud signal. Applied after creation.
                 ExtraSpec::Media { path, looping } => {
                     let d = ffi::obs_data_create();
                     ffi::obs_data_set_bool(
@@ -987,8 +1000,20 @@ impl SceneGraph {
             // you added it because you want to see it. Doing this here rather
             // than with a follow-up transform removes a race where the hide
             // could arrive before the item existed.
+            // Leak test: force this source monitor-only so a recording can be
+            // inspected against a known loud signal. Env-gated, dev only.
+            if std::env::var("PRODUCER_TEST_MONITOR").as_deref() == Ok("1") {
+                ffi::obs_source_set_monitoring_type(src, 1);
+                eprintln!("[test] {id} forced to MONITOR_ONLY");
+            }
             let born_visible = !matches!(spec, ExtraSpec::Guest { .. });
             ffi::obs_sceneitem_set_visible(item, born_visible);
+            // A guest in the room is SEEN, NOT HEARD: they arrive muted and
+            // stay muted until put on screen. Preview is for judging whether
+            // someone is ready, not for putting their kitchen into the show.
+            if !born_visible {
+                ffi::obs_source_set_muted(src, true);
+            }
             self.extras.push(ExtraItem {
                 id: id.to_string(),
                 kind,
@@ -1328,6 +1353,42 @@ impl SceneGraph {
 
     /// Mic gain/mute. Values persist on the graph so toggling the mic off
     /// and on keeps the fader where the user left it.
+    /// A/V sync offset for any source, in MILLISECONDS (positive delays the
+    /// audio to meet late video). Guests arrive with audio and video on
+    /// different paths and capture cards have their own fixed lag, so this is
+    /// the same per-source correction OBS exposes — dialled in once, steady
+    /// thereafter.
+    pub fn set_sync_offset(&mut self, id: &str, ms: i64) -> Result<(), String> {
+        let src = self
+            .source_by_id(id)
+            .ok_or_else(|| format!("{id} is not on the stage"))?;
+        unsafe { ffi::obs_source_set_sync_offset(src, ms.clamp(-2000, 2000) * 1_000_000) };
+        Ok(())
+    }
+
+    /// Cue: let the HOST hear a source that is not on air.
+    ///
+    /// MONITOR_ONLY is the load-bearing primitive for the green room. libobs
+    /// gates monitor-only audio out inside obs-source.c BEFORE it is placed in
+    /// the source's audio output, so it reaches no mix at all — not the
+    /// stream, not the recording, not any track of a multi-track profile.
+    /// Verified in source and empirically (see PRODUCER_TEST_MONITOR).
+    pub fn set_cue(&mut self, id: &str, on: bool) -> Result<(), String> {
+        let src = self
+            .source_by_id(id)
+            .ok_or_else(|| format!("{id} is not on the stage"))?;
+        unsafe {
+            // Cue implies audible: a muted source is silent everywhere,
+            // monitoring included.
+            ffi::obs_source_set_muted(src, false);
+            ffi::obs_source_set_monitoring_type(src, if on { 1 } else { 0 });
+            if !on {
+                ffi::obs_source_set_muted(src, true);
+            }
+        }
+        Ok(())
+    }
+
     /// Volume/mute for ANY source, not just the mic — guests, media and
     /// overlays all reach the mix and all deserve a fader.
     pub fn set_source_audio(&mut self, id: &str, volume: Option<f32>, muted: Option<bool>) -> Result<(), String> {

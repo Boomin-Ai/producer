@@ -181,6 +181,8 @@ export interface LiveItem {
   crop_top: number;
   crop_right: number;
   crop_bottom: number;
+  /** A/V sync offset in ms; positive means audio is delayed to meet video. */
+  sync_ms?: number;
   z: number;
   src_w: number;
   src_h: number;
@@ -496,3 +498,8 @@ export const guests = {
 /** Volume/mute for any audio-bearing source, guests included. */
 export const setSourceAudio = (id: string, volume?: number, muted?: boolean) =>
   invoke("live_set_source_audio", { id, volume: volume ?? null, muted: muted ?? null });
+
+/** A/V sync offset in ms, positive delays the audio. Same per-source control
+ * OBS exposes — capture cards and remote guests each have a steady lag. */
+export const setSyncOffset = (id: string, ms: number) =>
+  invoke("live_set_sync_offset", { id, ms });

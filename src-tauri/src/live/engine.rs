@@ -372,6 +372,11 @@ pub enum Command {
     StopRecording {
         reply: std::sync::mpsc::Sender<Option<String>>,
     },
+    /// A/V sync offset in ms for any source.
+    SetSyncOffset {
+        id: String,
+        ms: i64,
+    },
     /// Volume/mute for any audio-bearing source — guests included, not just
     /// the mic.
     SetSourceAudio {
@@ -592,6 +597,12 @@ impl LiveHandle {
             .map_err(|e| e.to_string())?;
         rx.recv_timeout(std::time::Duration::from_secs(15))
             .map_err(|_| "the engine did not answer in time".to_string())
+    }
+
+    pub fn set_sync_offset(&self, id: String, ms: i64) -> Result<(), String> {
+        self.cmd
+            .send(Command::SetSyncOffset { id, ms })
+            .map_err(|e| e.to_string())
     }
 
     pub fn set_source_audio(
@@ -1083,6 +1094,18 @@ pub fn start(
                     }
                     Ok(Command::StopRecording { reply }) => {
                         let _ = reply.send(recorder.take().map(|r| r.stop()));
+                    }
+                    Ok(Command::SetSyncOffset { id, ms }) => {
+                        if let Some(g) = scene.as_mut() {
+                            match g.set_sync_offset(&id, ms) {
+                                Ok(()) => {
+                                    let sources = g.state();
+                                    snap.lock().unwrap().sources = sources.clone();
+                                    sink(&LiveEvent::SourcesChanged { sources });
+                                }
+                                Err(e) => sink(&LiveEvent::EngineError { message: e }),
+                            }
+                        }
                     }
                     Ok(Command::SetSourceAudio { id, volume, muted }) => {
                         if let Some(g) = scene.as_mut() {

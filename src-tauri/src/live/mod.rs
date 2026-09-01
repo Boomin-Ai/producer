@@ -267,6 +267,18 @@ impl Live {
     }
 
     #[cfg(have_engine)]
+    pub fn set_sync_offset(&self, id: String, ms: i64) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .set_sync_offset(id, ms)
+    }
+    #[cfg(not(have_engine))]
+    pub fn set_sync_offset(&self, _id: String, _ms: i64) -> Result<(), String> {
+        Err("live engine not bundled in this build".into())
+    }
+
+    #[cfg(have_engine)]
     pub fn set_source_audio(
         &self,
         id: String,

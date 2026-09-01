@@ -16,6 +16,7 @@ import {
   guests as guestsIpc,
   registerRoom,
   setSourceAudio,
+  setSyncOffset,
   type RoomGuest,
   type LiveItem,
   roomGuestInvite,
@@ -435,12 +436,14 @@ function SceneSettingsStrip({
  * surface, not a tree. */
 function SourceSettingsStrip({
   rowKey,
+  items,
   sources,
   onClose,
   openOverlay,
   onPickWindow,
 }: {
   rowKey: string;
+  items: LiveItem[];
   sources: LiveSources;
   onClose: () => void;
   openOverlay: () => void;
@@ -496,6 +499,8 @@ function SourceSettingsStrip({
     };
   }, [deviceKind]);
 
+  // Only sources that actually carry audio can drift against their video.
+  const syncItem = items.find((i) => i.id === (rowKey === "alerts" ? "overlay" : rowKey) && i.has_audio);
   const active =
     deviceKind === "camera"
       ? sources.camera_device
@@ -536,6 +541,40 @@ function SourceSettingsStrip({
         )}
         {deviceKind && list?.length === 0 && !denied && (
           <span className="rm-srcstrip-note">Nothing found</span>
+        )}
+        {/* A/V sync, the control OBS calls sync offset. Audio and video reach
+          * the engine by different paths — a capture card has a fixed lag, a
+          * remote guest has a network one — and the drift is steady, so a
+          * fixed nudge fixes it. Clap on camera and dial until it lines up. */}
+        {syncItem && (
+          <>
+            <span className="rm-srcstrip-sep" />
+            <span className="rm-srcstrip-note">A/V sync</span>
+            <button
+              className="rm-srcstrip-chip"
+              title="Delay the audio 20ms less"
+              onClick={() => setSyncOffset(syncItem.id, (syncItem.sync_ms ?? 0) - 20).catch(() => {})}
+            >
+              −20
+            </button>
+            <span className="rm-srcstrip-sync">{syncItem.sync_ms ?? 0}ms</span>
+            <button
+              className="rm-srcstrip-chip"
+              title="Delay the audio 20ms more"
+              onClick={() => setSyncOffset(syncItem.id, (syncItem.sync_ms ?? 0) + 20).catch(() => {})}
+            >
+              +20
+            </button>
+            {(syncItem.sync_ms ?? 0) !== 0 && (
+              <button
+                className="rm-srcstrip-chip"
+                title="Back to zero"
+                onClick={() => setSyncOffset(syncItem.id, 0).catch(() => {})}
+              >
+                Reset
+              </button>
+            )}
+          </>
         )}
         {deviceKind &&
           list?.map((d) => {
@@ -3547,7 +3586,13 @@ export function LiveView({
             onAdmit={admitGuest}
             onRemove={removeGuest}
             onMute={(id, muted) => setSourceAudio(id, undefined, muted).catch(() => {})}
-            onShow={(id, show) => ipc.liveSetTransform(id, { visible: show }, true).catch(() => {})}
+            onShow={(id, show) => {
+              // Going on screen is going live: video and voice move together,
+              // so nobody is heard from a room they aren't visible in. The
+              // mute button still overrides afterwards.
+              ipc.liveSetTransform(id, { visible: show }, true).catch(() => {});
+              setSourceAudio(id, undefined, !show).catch(() => {});
+            }}
           />
         );
       case "mixer":
@@ -4538,6 +4583,7 @@ export function LiveView({
           {sheetOpen && srcSettings && dockOf(layout, "sources") === "bottom" && (
             <SourceSettingsStrip
               rowKey={srcSettings}
+              items={sources.items ?? []}
               sources={sources}
               onClose={() => setSrcSettings(null)}
               openOverlay={() => setOverlayOpen(true)}

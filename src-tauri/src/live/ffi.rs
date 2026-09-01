@@ -124,6 +124,18 @@ extern "C" {
     /// deserve a mixer strip without guessing from their kind.
     pub fn obs_source_get_output_flags(source: *mut obs_source_t) -> u32;
     pub fn obs_source_set_muted(source: *mut obs_source_t, muted: bool);
+    /// 0 NONE, 1 MONITOR_ONLY, 2 MONITOR_AND_OUTPUT. MONITOR_ONLY is what
+    /// makes cue possible: libobs gates the audio out at the SOURCE, before
+    /// it enters any mix, so it cannot reach stream, recording or any output.
+    pub fn obs_source_set_monitoring_type(source: *mut obs_source_t, mt: c_int);
+    pub fn obs_source_get_monitoring_type(source: *mut obs_source_t) -> c_int;
+    /// A/V sync offset in NANOSECONDS, positive = delay the audio. This is
+    /// the same control OBS exposes per source; capture cards and remote
+    /// guests both arrive with audio and video on different paths, and the
+    /// drift is steady per source rather than random, so a fixed offset
+    /// corrects it.
+    pub fn obs_source_set_sync_offset(source: *mut obs_source_t, offset_ns: i64);
+    pub fn obs_source_get_sync_offset(source: *const obs_source_t) -> i64;
     pub fn obs_source_add_audio_capture_callback(
         source: *mut obs_source_t,
         callback: obs_source_audio_capture_t,

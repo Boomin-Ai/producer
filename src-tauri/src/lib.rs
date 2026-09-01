@@ -128,6 +128,7 @@ pub fn run() {
             live::commands::live_filters,
             live::commands::live_set_opacity,
             live::commands::live_set_source_audio,
+            live::commands::live_set_sync_offset,
             live::commands::live_start_recording,
             live::commands::live_stop_recording,
             live::commands::live_reveal_file,

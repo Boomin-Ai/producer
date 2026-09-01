@@ -486,6 +486,11 @@ pub fn live_reveal_file(path: String) -> EngineResult<()> {
 /// update. Every call answers with the chain's new state so the UI never has
 /// to model it separately.
 #[tauri::command]
+pub fn live_set_sync_offset(state: State<'_, AppState>, id: String, ms: i64) -> EngineResult<()> {
+    state.live.set_sync_offset(id, ms).map_err(EngineError::Other)
+}
+
+#[tauri::command]
 pub fn live_set_source_audio(
     state: State<'_, AppState>,
     id: String,

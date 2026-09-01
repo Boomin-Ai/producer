@@ -6717,3 +6717,12 @@ textarea::placeholder {
 .rm-guest-live.off .rm-guest-dot {
   background: oklch(0.45 0.02 250);
 }
+
+.rm-srcstrip-sync {
+  font-size: 12px;
+  font-weight: 650;
+  color: oklch(0.8 0.02 250);
+  font-variant-numeric: tabular-nums;
+  min-width: 52px;
+  text-align: center;
+}
