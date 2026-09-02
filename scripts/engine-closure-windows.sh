@@ -77,18 +77,20 @@ fi
 # Windows ships a "python3" App Execution Alias that EXISTS on PATH and fails
 # when run, so presence is not proof. Probe each candidate by actually executing
 # it — otherwise the scan silently no-ops and the gate reports a false pass.
-python_bin=""
-for cand in python3 python py; do
-  if command -v "$cand" >/dev/null 2>&1 && "$cand" -c "pass" >/dev/null 2>&1; then
-    python_bin="$cand"; break
-  fi
-done
-[[ -n $python_bin ]] || { echo "FATAL: a working python is required for the Qt scan" >&2; exit 1; }
+# resolve_python (engine-lib.sh) probes candidates by EXECUTING them, because
+# Windows ships a python3 App Execution Alias that exists on PATH and fails when
+# run - so presence is not proof, and a silent no-op here reads as a clean pass.
+python_bin="$(resolve_python)"
 
-"$python_bin" - "$STAGE" <<'PY' || fail=1
+# host_path: native Windows python cannot open an MSYS /c/... path. Without this
+# an absolute stage path walks NOTHING, prints "scanned 0 binaries" and PASSES.
+"$python_bin" - "$(host_path "$STAGE")" <<'PY'
 import os, re, sys
 
 stage = sys.argv[1]
+if not os.path.isdir(stage):
+    print(f"  FAIL python cannot see the stage dir: {stage}", file=sys.stderr)
+    sys.exit(1)
 # Import-table names, not display strings: a binary that LINKS Qt must reference
 # the DLL by name. Case-insensitive because import casing is not normalised.
 pattern = re.compile(rb"Qt[56][A-Za-z]*\.dll", re.IGNORECASE)
@@ -112,6 +114,11 @@ for root, _, names in os.walk(stage):
             offenders.append((os.path.relpath(path, stage), hits))
 
 print(f"  scanned {scanned} binaries for Qt imports")
+# A scan that examined nothing is not a pass. Any real engine has dozens of
+# binaries; zero means the walk went somewhere wrong.
+if scanned == 0:
+    print("  FAIL scanned 0 binaries - the Qt scan examined nothing", file=sys.stderr)
+    sys.exit(1)
 if offenders:
     print("  FAIL Qt found in the shipped closure:", file=sys.stderr)
     for rel, hits in offenders:

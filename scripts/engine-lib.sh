@@ -59,7 +59,50 @@ check_plugin_lists() {
 # Back-compat: existing macOS callers still read ENGINE_PLUGINS directly.
 mapfile -t ENGINE_PLUGINS < <(engine_plugins macos)
 
-lock_get() { python3 -c "import json,sys; d=json.load(open('$LOCK_FILE')); print(eval('d'+sys.argv[1]))" "$1"; }
+# A WORKING python, resolved by EXECUTION rather than presence, memoised.
+#
+# Windows ships a "python3" App Execution Alias that EXISTS on PATH and fails
+# when run (it prints a Store advert to stderr and exits non-zero), so
+# `command -v python3` proves nothing. Without this probe lock_get returns EMPTY
+# on such a box and the callers cheerfully build with an empty OBS commit and an
+# artifact named producer-libobs-macos--<hash>. Order keeps macOS on python3,
+# the interpreter it has always used.
+PYTHON_BIN=""
+resolve_python() {
+  if [[ -n $PYTHON_BIN ]]; then echo "$PYTHON_BIN"; return 0; fi
+  local cand
+  for cand in python3 python py; do
+    if command -v "$cand" >/dev/null 2>&1 && "$cand" -c pass >/dev/null 2>&1; then
+      PYTHON_BIN="$cand"; echo "$cand"; return 0
+    fi
+  done
+  echo "FATAL: no working python found (tried python3, python, py)" >&2
+  return 1
+}
+
+# host_path <path> - a path the HOST interpreter can open.
+#
+# The pythons on a Windows box are native Windows builds; they cannot open an
+# MSYS path like /c/Users/x. Git Bash hands us exactly those. cygpath -m gives
+# back C:/Users/x - a real Windows path that still uses forward slashes, so it
+# needs no re-escaping inside a python string literal. cygpath does not exist on
+# macOS, where the path was already fine, so this is a no-op there.
+host_path() {
+  if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else echo "$1"; fi
+}
+
+# lock_get <python-index-expr> - read one value out of engine/obs.lock.
+# Fails loudly on an empty read: every caller feeds a build input, and an empty
+# one is worse than an error because it yields a plausible-looking wrong build.
+lock_get() {
+  local py out
+  py="$(resolve_python)" || return 1
+  local lock; lock="$(host_path "$LOCK_FILE")"
+  out="$("$py" -c "import json,sys; d=json.load(open('$lock')); print(eval('d'+sys.argv[1]))" "$1")" \
+    || { echo "FATAL: lock_get $1 failed against $LOCK_FILE" >&2; return 1; }
+  [[ -n $out ]] || { echo "FATAL: lock_get $1 read empty from $LOCK_FILE" >&2; return 1; }
+  printf '%s\n' "$out"
+}
 
 # sha256 of a file, portable. macOS has shasum; Windows runners and some Linux
 # images only have sha256sum. Both print "<hash>  <path>", so the cut is shared.
@@ -84,15 +127,19 @@ lock_hash() { sha256_of "$LOCK_FILE" | cut -c1-12; }
 # for all platforms, or release.yml cannot find the engine it computes the name
 # for.
 artifact_name() {
-  local os="${1:-macos}"
-  local arch="${2:-$(lock_get "['arch']")}"
+  local os="${1:-macos}" arch="${2:-}"
+  # NOT `local arch="${2:-$(lock_get ...)}"`: a failing command substitution in a
+  # `local` declaration does NOT trip set -e, so that spelling silently yields an
+  # empty arch and a name like producer-libobs-macos--<hash>.
+  if [[ -z $arch ]]; then arch="$(lock_get "['arch']")" || return 1; fi
   echo "producer-libobs-${os}-${arch}-$(lock_hash)"
 }
 
 # write_manifest <stage_dir> <provenance>
 write_manifest() {
   local stage="$1" provenance="$2"
-  python3 - "$stage" "$provenance" "$LOCK_FILE" <<'EOF'
+  local py; py="$(resolve_python)" || return 1
+  "$py" - "$(host_path "$stage")" "$provenance" "$(host_path "$LOCK_FILE")" <<'EOF'
 import hashlib, json, os, sys
 stage, provenance, lock_file = sys.argv[1:4]
 files = {}
