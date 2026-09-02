@@ -6751,3 +6751,53 @@ textarea::placeholder {
 .chn-name {
   font-size: 13.5px;
 }
+
+/* Guests: zero top padding; media inherits the card's own corner radius. */
+.rm-panel-guests .rm-panel-body {
+  padding: 0 !important;
+}
+.rm-panel-guests .rm-guest-list > :first-child.rm-gcard,
+.rm-panel-guests .rm-gcard:first-child {
+  border-top: none;
+  border-radius: var(--r-card) var(--r-card) 0 0;
+}
+.rm-panel-guests .rm-gcard:last-child {
+  border-radius: 0 0 var(--r-card) var(--r-card);
+}
+.rm-panel-guests .rm-gcard:only-child {
+  border-radius: var(--r-card);
+}
+
+/* Scenes, content-first: tight top-anchored rows. */
+.rm-panel-scenes .rm-panel-body {
+  padding: 4px 8px 8px;
+}
+.rm-scenes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rm-scene-row {
+  min-height: 38px;
+}
+
+/* Stats, content-first: top-anchored, tighter grid. */
+.rm-panel-stats .rm-panel-body {
+  padding: 6px 10px 10px;
+}
+.stx { gap: 8px; }
+.stx-grid { gap: 6px; }
+.stx-tile { padding: 7px 9px; }
+
+/* Mixer, content-first: strips start at the top-left, whisper surfaces. */
+.rm-panel-mixer .rm-panel-body {
+  padding: 6px 8px 8px;
+}
+.rm-strips {
+  justify-content: flex-start;
+  align-items: stretch;
+  gap: 8px;
+}
+.rm-strip {
+  padding: 10px 10px 8px;
+}
