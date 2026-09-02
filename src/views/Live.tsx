@@ -3706,21 +3706,31 @@ export function LiveView({
               </div>
         );
       case "channels": {
-        // ONE LINE, EVERYWHERE. Channels are tap-pills: the pill IS the
-        // switch — lit = armed, dim = off. Editing/adding channels lives in
-        // Settings; the controller only ARMS.
-        // The CONTROLLER: transport up top (this is the room's cockpit —
-        // moved here from the header so it docks like everything else),
-        // channel rows below.
+        // THE CONTROLLER, flat and honest: one toolbar row that wraps
+        // naturally when narrow. No dock-specific geometry, no group
+        // scaffolding — a control is 36px tall, Go Live is 40, and the
+        // segmented channel group is one instrument. Structure IS the style.
         return (
-          <>
-          <div className={`rm-ctl${streaming ? " onair" : ""}`}>
-          <div className="rm-ctl-group">
-            <span className="rm-ctl-lbl">Output</span>
-            <div className="rm-ctl-row">
-          <div className="rm-pop-anchor">
+          <div className="ctl">
+            {streaming ? (
+              <button className="ctl-golive stop" onClick={() => ipc.liveStop()} disabled={state === "stopping"}>
+                <span className="rm-big-icon">■</span>
+                {state === "stopping" ? "Stopping…" : "End stream"}
+              </button>
+            ) : (
+              <button
+                className="ctl-golive"
+                onClick={goLive}
+                disabled={!engineOk || enabledDests.length === 0}
+                title={enabledDests.length === 0 ? "Turn on a channel first" : undefined}
+              >
+                {ic.onair}
+                Go Live
+              </button>
+            )}
+
             <button
-              className="rm-chip"
+              className="ctl-chip"
               title="Output video settings"
               onClick={(e) => {
                 setPopAnchor(e.currentTarget);
@@ -3730,6 +3740,66 @@ export function LiveView({
               {vh}p · {vf}
               {ic.chev}
             </button>
+
+            <button
+              className={`ctl-chip${vcamOn ? " on" : ""}`}
+              onClick={toggleVcam}
+              disabled={!engineOk}
+              title={
+                vcamState?.installed
+                  ? "Appear as a webcam in Zoom, Meet and Discord"
+                  : "Install Producer's virtual camera (one approval in System Settings)"
+              }
+            >
+              {ic.cam}
+              {vcamState?.state === "needs_approval"
+                ? "Approve"
+                : vcamOn
+                  ? "Cam on"
+                  : vcamState?.installed
+                    ? "Virtual cam"
+                    : "Install cam"}
+            </button>
+
+            <button
+              className={`ctl-chip${recPath ? " rec" : ""}`}
+              onClick={toggleRecord}
+              disabled={!engineOk}
+              title={recPath ? `Recording to ${recPath.split("/").pop()}` : "Record locally"}
+            >
+              <span className="rm-rec-dot" />
+              {recPath
+                ? `${Math.floor(recElapsed / 60)}:${String(recElapsed % 60).padStart(2, "0")}`
+                : "Record"}
+            </button>
+
+            <div className="ctl-chans">
+              {destinations.map((d) => {
+                const st = statuses.get(d.id);
+                const phase = st ? PHASE_COPY[st.phase] ?? PHASE_COPY.idle : PHASE_COPY.idle;
+                return (
+                  <button
+                    key={d.id}
+                    className={`ctl-chan${d.enabled ? " on" : ""}`}
+                    disabled={streaming}
+                    title={
+                      streaming && st
+                        ? `${d.label} · ${phase.label}`
+                        : d.enabled
+                          ? `${d.label} armed — tap to disarm`
+                          : `Tap to arm ${d.label}`
+                    }
+                    onClick={() => toggleEnabled(d)}
+                  >
+                    <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />
+                    {d.label}
+                    {streaming && st && <span className={`rm-chan-phase ${st.phase}`} />}
+                  </button>
+                );
+              })}
+              {destinations.length === 0 && <span className="ctl-empty">No channels — add them in Settings</span>}
+            </div>
+
             {qualityOpen && (
               <Pop anchor={popAnchor} align="right" className="rm-pop-quality">
                 <div className="rm-pop-title">VIDEO {streaming && <span className="rm-card-sub">locked while live</span>}</div>
@@ -3760,96 +3830,6 @@ export function LiveView({
               </Pop>
             )}
           </div>
-
-          {/* Virtual camera is an OUTPUT — peer to Record and Go Live, not a
-            * number. It lived in Stream Health and read as a read-only stat;
-            * the founder looked straight at it and didn't see a control. */}
-            </div>
-          </div>
-          <div className="rm-ctl-group">
-            <span className="rm-ctl-lbl">Capture</span>
-            <div className="rm-ctl-row">
-          <button
-            className={`rm-rec rm-vcam${vcamOn ? " on" : ""}`}
-            onClick={toggleVcam}
-            disabled={!engineOk}
-            title={
-              vcamState?.installed
-                ? "Appear as a webcam in Zoom, Meet and Discord"
-                : "Install Producer's virtual camera (one approval in System Settings)"
-            }
-          >
-            {ic.cam}
-            {vcamState?.state === "needs_approval"
-              ? "Approve"
-              : vcamOn
-                ? "Cam on"
-                : vcamState?.installed
-                  ? "Virtual cam"
-                  : "Install cam"}
-          </button>
-
-          {/* Record sits beside Go Live because it is a peer of it, not a
-            * setting: you can record without ever going live. */}
-          <button
-            className={`rm-rec${recPath ? " on" : ""}`}
-            onClick={toggleRecord}
-            disabled={!engineOk}
-            title={recPath ? `Recording to ${recPath.split("/").pop()}` : "Record locally"}
-          >
-            <span className="rm-rec-dot" />
-            {recPath
-              ? `${Math.floor(recElapsed / 60)}:${String(recElapsed % 60).padStart(2, "0")}`
-              : "Record"}
-          </button>
-
-            </div>
-          </div>
-          {streaming ? (
-            <button className="rm-golive stop" onClick={() => ipc.liveStop()} disabled={state === "stopping"}>
-              <span className="rm-big-icon">■</span>
-              {state === "stopping" ? "Stopping…" : "End stream"}
-            </button>
-          ) : (
-            <button
-              className="rm-golive"
-              onClick={goLive}
-              disabled={!engineOk || enabledDests.length === 0}
-              title={enabledDests.length === 0 ? "Turn on a channel first" : undefined}
-            >
-              {ic.onair}
-              Go Live
-            </button>
-          )}
-
-          </div>
-          <div className="rm-rows">
-            {destinations.map((d) => {
-              const st = statuses.get(d.id);
-              const phase = st ? PHASE_COPY[st.phase] ?? PHASE_COPY.idle : PHASE_COPY.idle;
-              return (
-                <button
-                  key={d.id}
-                  className={`rm-chan${d.enabled ? " on" : ""}`}
-                  disabled={streaming}
-                  title={
-                    streaming && st
-                      ? `${d.label} · ${phase.label}`
-                      : d.enabled
-                        ? `${d.label} armed — tap to disarm`
-                        : `Tap to arm ${d.label}`
-                  }
-                  onClick={() => toggleEnabled(d)}
-                >
-                  <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />
-                  {d.label}
-                  {streaming && st && <span className={`rm-chan-phase ${st.phase}`} />}
-                </button>
-              );
-            })}
-            {destinations.length === 0 && <div className="rm-rows-empty">No channels yet.</div>}
-          </div>
-          </>
         );
       }
     }

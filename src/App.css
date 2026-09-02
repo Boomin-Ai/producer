@@ -3,6 +3,30 @@
    (the web app's light tokens), Instrument Sans, small-caps section
    labels, dark pill primary actions, soft status chips. */
 
+/* ═══ DESIGN TOKENS — the room's single source of truth ═══════════════════
+   Every new rule uses these; ad-hoc values are the decay this replaces. */
+:root {
+  --surface-1: rgba(255, 255, 255, 0.03);
+  --surface-2: rgba(255, 255, 255, 0.055);
+  --surface-3: rgba(255, 255, 255, 0.09);
+  --line-1: rgba(255, 255, 255, 0.07);
+  --line-2: rgba(255, 255, 255, 0.12);
+  --fg-1: #eef1f6;
+  --fg-2: rgba(235, 238, 244, 0.62);
+  --fg-3: rgba(235, 238, 244, 0.38);
+  --mint: #34d399;
+  --red: #ef4444;
+  --amber: #fbbf24;
+  --r-card: 12px;
+  --r-ctl: 9px;
+  --r-pill: 999px;
+  --h-header: 48px;
+  --h-ctl: 32px;
+  --h-row: 40px;
+  --pad-card: 12px;
+  --gap: 8px;
+}
+
 :root {
   /* control-room dark surface (Boomin Live room language) */
   --bg: #0a0d13;
@@ -1116,65 +1140,6 @@ textarea::placeholder {
 }
 
 /* --- Live (LIVE-REVIEW.md §5.4) --- */
-.live-view {
-  max-width: 560px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 24px;
-}
-.live-backend {
-  font-size: 11px;
-  color: var(--muted-fg);
-}
-.live-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.live-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--card);
-}
-.live-row.disabled {
-  opacity: 0.55;
-}
-.live-row-main {
-  flex: 1;
-  min-width: 0;
-}
-.live-row-title {
-  font-weight: 600;
-  font-size: 13px;
-}
-.live-preset {
-  font-size: 11px;
-  color: var(--muted-fg);
-  text-transform: uppercase;
-  margin-left: 6px;
-}
-.live-row-sub {
-  font-size: 12px;
-  color: var(--muted-fg);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.live-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  flex: none;
-  background: #cbd5e1;
-}
-.live-dot.ok { background: #16a34a; }
-.live-dot.warn { background: #f59e0b; }
-.live-dot.muted { background: #cbd5e1; }
 .live-error {
   font-size: 12px;
   color: #b91c1c;
@@ -1183,7 +1148,6 @@ textarea::placeholder {
   border-radius: 8px;
   padding: 8px 10px;
 }
-.live-error-inline { color: #b91c1c; }
 .live-editor {
   display: flex;
   flex-direction: column;
@@ -1208,28 +1172,6 @@ textarea::placeholder {
   gap: 8px;
 }
 .live-editor-row > * { flex: 1; }
-.live-actions {
-  display: flex;
-  justify-content: center;
-  padding-top: 6px;
-}
-.live-go,
-.live-stop {
-  font-size: 14px;
-  letter-spacing: 0.08em;
-  padding: 10px 34px;
-}
-.live-go {
-  background: #dc2626;
-  border-color: #dc2626;
-  color: #fff;
-}
-.live-go:hover { border-color: #b91c1c; background: #b91c1c; }
-.live-stop {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: var(--primary-fg);
-}
 
 /* --- Live M-L6: preview, sources, coach --- */
 .live-preview {
@@ -1239,59 +1181,8 @@ textarea::placeholder {
   border-radius: 10px;
   border: 1px solid var(--border);
 }
-.live-sources {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.live-source-toggle.on {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: var(--primary-fg);
-}
-.live-sources-note {
-  font-size: 11px;
-  color: var(--muted-fg);
-  margin-left: auto;
-}
-.live-coach {
-  border: 1px solid #fde68a;
-  background: #fffbeb;
-  border-radius: 10px;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.live-coach-title {
-  font-weight: 700;
-  font-size: 12px;
-}
-.live-coach-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 12px;
-}
-.live-coach-hint {
-  color: var(--muted-fg);
-  font-size: 11px;
-  max-width: 380px;
-}
 
 /* --- Live M-L7 escape hatch: overlay picker --- */
-.live-overlay-details {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 8px 12px;
-  background: var(--card);
-  font-size: 12px;
-}
-.live-overlay-details summary {
-  cursor: pointer;
-  font-weight: 600;
-}
 .live-overlay {
   display: flex;
   flex-direction: column;
@@ -1320,12 +1211,6 @@ textarea::placeholder {
 }
 
 /* --- auto-update affordance --- */
-.update-ready {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #3ddca6;
-}
 .update-dot {
   width: 7px;
   height: 7px;
@@ -2050,327 +1935,6 @@ textarea::placeholder {
 
 /* ── Room stage (facelift v1): full-bleed preview, bottom bar, sheet ───── */
 
-.cr-page.stage-page {
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.stage-wrap {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.stage {
-  flex: 1;
-  position: relative;
-  min-height: 0;
-  margin: 0 16px;
-  border-radius: 14px;
-  overflow: hidden;
-  background: #05070c;
-  border: 1px solid var(--border);
-}
-
-.stage .live-preview {
-  position: absolute;
-  inset: 0;
-  width: auto;
-  height: auto;
-  aspect-ratio: auto;
-  border-radius: 0;
-  border: none;
-}
-
-.stage-msg {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: var(--muted-fg);
-  font-size: 14px;
-}
-
-.stage-float {
-  position: absolute;
-  top: 14px;
-  left: 14px;
-  right: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  pointer-events: none;
-}
-
-.stage-float > * {
-  pointer-events: auto;
-}
-
-/* bottom control bar */
-
-.stage-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px 14px;
-  flex-shrink: 0;
-}
-
-.stage-btn {
-  border-radius: 10px;
-  padding: 9px 16px;
-  font-size: 13px;
-}
-
-.stage-btn.active {
-  border-color: var(--mint);
-  color: var(--mint);
-}
-
-.stage-dests {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: 8px;
-  flex-wrap: wrap;
-  flex: 1;
-  min-width: 0;
-}
-
-.stage-dest {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border-radius: 999px;
-  padding: 7px 14px;
-  font-size: 12.5px;
-}
-
-.stage-dest.off {
-  opacity: 0.4;
-}
-
-.stage-dest.add {
-  padding: 7px 12px;
-}
-
-.live-dot.ready {
-  background: var(--mint);
-}
-
-.stage-go {
-  background: var(--mint);
-  border-color: var(--mint);
-  color: #08110d;
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  border-radius: 12px;
-  padding: 12px 28px;
-}
-
-.stage-stop {
-  background: var(--red);
-  border-color: var(--red);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 800;
-  border-radius: 12px;
-  padding: 12px 22px;
-}
-
-/* sources sheet */
-
-.stage-sheet {
-  display: flex;
-  gap: 18px;
-  align-items: stretch;
-  margin: 12px 16px 0;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: #10141f;
-  animation: st-rise 0.22s ease;
-  flex-shrink: 0;
-}
-
-@keyframes st-rise {
-  from {
-    transform: translateY(14px);
-    opacity: 0;
-  }
-  to {
-    transform: none;
-    opacity: 1;
-  }
-}
-
-.st-tiles {
-  display: flex;
-  gap: 12px;
-  flex: 1;
-  min-width: 0;
-  align-items: flex-start;
-  flex-wrap: wrap;
-}
-
-.st-tile {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--card);
-  min-width: 150px;
-  overflow: hidden;
-}
-
-.st-tile.on {
-  border-color: oklch(0.55 0.12 165 / 0.6);
-}
-
-.st-tile-body {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  width: 100%;
-  border: none;
-  background: none;
-  border-radius: 0;
-  text-align: left;
-  padding: 14px 16px;
-}
-
-.st-tile-body.as-label {
-  cursor: default;
-}
-
-.st-eye {
-  font-size: 11px;
-  color: var(--muted-fg);
-}
-
-.st-tile.on .st-eye {
-  color: var(--mint);
-}
-
-.st-tile-name {
-  font-size: 14.5px;
-  font-weight: 700;
-}
-
-.st-tile-sub {
-  font-size: 11.5px;
-  color: var(--muted-fg);
-}
-
-.st-tile-overlay {
-  min-width: 320px;
-}
-
-.st-tile-overlay .live-overlay {
-  padding: 0 14px 14px;
-}
-
-/* mic strip — vertical meter + fader */
-
-.st-strip {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--card);
-  padding: 14px 18px 12px;
-  flex-shrink: 0;
-}
-
-.st-strip.on {
-  border-color: oklch(0.55 0.12 165 / 0.6);
-}
-
-.st-strip.muted {
-  border-color: oklch(0.5 0.1 25 / 0.6);
-}
-
-.st-strip-columns {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  height: 130px;
-}
-
-.st-meter {
-  width: 8px;
-  height: 100%;
-  border-radius: 4px;
-  background: oklch(0.22 0.03 250);
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  overflow: hidden;
-}
-
-.st-meter-fill {
-  width: 100%;
-  border-radius: 4px;
-  background: linear-gradient(180deg, #ffd166 0%, var(--mint) 30%);
-  transition: height 90ms linear;
-}
-
-.st-fader {
-  height: 100%;
-  width: 28px;
-  display: grid;
-  place-items: center;
-}
-
-.st-fader input[type="range"] {
-  -webkit-appearance: slider-vertical;
-  appearance: slider-vertical;
-  width: 24px;
-  height: 126px;
-  accent-color: var(--mint);
-  background: transparent;
-  border: none;
-  padding: 0;
-}
-
-.st-strip-db {
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--muted-fg);
-}
-
-.st-strip-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.st-mute {
-  padding: 5px 10px;
-  border-radius: 8px;
-  font-size: 13px;
-}
-
-.st-mute.active {
-  border-color: var(--red);
-}
-
-.st-strip-toggle {
-  font-size: 12px;
-  padding: 5px 12px;
-}
-
-/* chat popover */
-
-.stage-chat-anchor {
-  position: relative;
-}
-
 .st-chat-pop {
   position: absolute;
   bottom: calc(100% + 10px);
@@ -2885,6 +2449,19 @@ textarea::placeholder {
   padding: 3px 9px;
   font-size: 11.5px;
   color: oklch(0.94 0.008 250);
+}
+
+/* rise animation for sheet + editor (relocated from the retired
+   facelift block — both consumers are alive) */
+@keyframes st-rise {
+  from {
+    transform: translateY(14px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
 }
 
 .rm-editor {
@@ -4697,42 +4274,6 @@ textarea::placeholder {
 
 /* stream health panel */
 
-.rm-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-content: flex-start;
-}
-
-.rm-stat-cell {
-  flex: 1 1 84px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  background: oklch(0.175 0.036 250);
-  border: 1px solid oklch(0.24 0.04 250);
-  border-radius: 10px;
-  padding: 10px 12px;
-}
-
-.rm-stat-cell.warn {
-  border-color: oklch(0.45 0.14 60 / 0.6);
-}
-
-.rm-stat-num {
-  font-size: 16px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: oklch(0.94 0.008 250);
-}
-
-.rm-stat-label {
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  color: oklch(0.52 0.03 250);
-}
-
-/* the collapse bar has no name now — it's just the grabber */
 
 .rm-sheet-head {
   justify-content: center;
@@ -6967,21 +6508,6 @@ textarea::placeholder {
 }
 
 /* ── Controller panel: the room's cockpit ────────────────────────────────── */
-.rm-ctl {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 2px 2px 10px;
-  border-bottom: 0.5px solid rgba(255, 255, 255, 0.07);
-  margin-bottom: 8px;
-}
-.rm-ctl .rm-golive {
-  order: -1;
-  min-height: 40px;
-  padding: 0 18px;
-  font-size: 14px;
-}
 /* Sleeker top bar: identity + health only, tighter vertical rhythm. */
 .rm-top {
   min-height: 44px;
@@ -7012,45 +6538,6 @@ textarea::placeholder {
    Obsidian card, mint GO LIVE. The transport is the room's identity — it
    gets the same language as the glass rail: near-black, hairlines, one
    confident accent. */
-.rm-ctl {
-  background: rgba(5, 8, 13, 0.55);
-  border: 0.5px solid rgba(255, 255, 255, 0.07);
-  border-radius: 14px;
-  padding: 10px;
-  margin-bottom: 10px;
-}
-.rm-ctl .rm-golive {
-  background: var(--mint, #34d399);
-  color: #06251b;
-  border-radius: 12px;
-  min-height: 42px;
-  padding: 0 22px;
-  font-size: 14px;
-  box-shadow: 0 6px 18px oklch(0.75 0.14 165 / 0.22);
-}
-.rm-ctl .rm-golive:hover {
-  filter: brightness(1.06);
-}
-.rm-ctl .rm-golive.stop {
-  background: #dc2626;
-  color: #fff;
-  box-shadow: 0 6px 18px rgba(220, 38, 38, 0.25);
-}
-.rm-ctl .rm-rec,
-.rm-ctl .rm-chip {
-  min-height: 36px;
-  border-radius: 11px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 0.5px solid rgba(255, 255, 255, 0.08);
-}
-.rm-ctl .rm-rec.on {
-  background: rgba(220, 38, 38, 0.16);
-  border-color: rgba(220, 38, 38, 0.45);
-}
-.rm-ctl .rm-vcam.on {
-  background: oklch(0.28 0.07 175 / 0.2);
-  border-color: oklch(0.75 0.14 165 / 0.5);
-}
 
 /* ── Layout edit, redrawn: chrome BEHIND the components ───────────────────
    The dock becomes a recessed well underneath its panels — a surface they
@@ -7110,24 +6597,6 @@ textarea::placeholder {
   background: transparent;
   border: none;
 }
-.rm-dock-top .rm-panel-channels .rm-rows {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow-x: auto;
-}
-.rm-dock-top .rm-panel-channels .rm-rows .rm-row {
-  flex: 0 0 auto;
-  border-radius: 999px;
-  padding: 4px 6px 4px 12px;
-  gap: 8px;
-}
-.rm-dock-top .rm-panel-channels .rm-row-sub {
-  display: none;
-}
 .rm-dock-top .rm-panel-channels {
   max-height: none;
   overflow: visible;
@@ -7135,47 +6604,10 @@ textarea::placeholder {
 
 /* Minimal controller: no wrapper card — the components ARE the interface.
    (The obsidian box read as chrome; removed on request.) */
-.rm-ctl {
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  padding: 2px 0 10px;
-}
-.rm-dock-top .rm-ctl {
-  padding: 4px;
-}
-
 /* One-line controller in the top dock; channel TAP-PILLS are the switches. */
 .rm-dock-top .rm-panel-channels .rm-panel-body {
   flex-wrap: nowrap;
 }
-.rm-dock-top .rm-panel-channels .rm-rows {
-  flex-wrap: nowrap;
-}
-.rm-chan {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 14px;
-  border-radius: 999px;
-  border: 0.5px solid rgba(255, 255, 255, 0.09);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(235, 238, 244, 0.5);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
-}
-.rm-chan.on {
-  background: oklch(0.28 0.07 175 / 0.22);
-  border-color: oklch(0.75 0.14 165 / 0.45);
-  color: #eef1f6;
-}
-.rm-chan:disabled {
-  cursor: default;
-  opacity: 0.7;
-}
-
 /* ── Mixer, signature pass ────────────────────────────────────────────────
    DAW-grade minimal: whisper cards, hairlines, a continuous mint meter, a
    pill thumb. Muted strips fall back into the dark instead of shouting. */
@@ -7271,22 +6703,6 @@ textarea::placeholder {
   min-width: 0;
   overflow-x: auto;
 }
-.rm-ctl {
-  flex: 0 0 auto;
-  flex-wrap: nowrap;
-  margin-bottom: 0;
-  border-bottom: none;
-  padding: 4px 0;
-}
-.rm-panel-channels .rm-rows {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 6px;
-  flex: 1 1 auto;
-  min-width: 0;
-}
 
 /* ═══ ADAPTIVE PANELS ══════════════════════════════════════════════════════
    Every panel is a container-query context: its BODY measures its own width
@@ -7298,10 +6714,7 @@ textarea::placeholder {
   container-name: panel;
 }
 .rm-panel button,
-.rm-chan,
 .rm-chip,
-.rm-rec,
-.rm-golive,
 .rm-guest-stage {
   white-space: nowrap;
 }
@@ -7310,23 +6723,6 @@ textarea::placeholder {
 /* Default (mid): transport one row, pills wrap in a cloud beneath. */
 .rm-panel-channels .rm-panel-body {
   display: block;
-  overflow: visible;
-}
-.rm-ctl {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 4px 0;
-}
-.rm-panel-channels .rm-rows {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
   overflow: visible;
 }
 /* WIDE (top dock, roomy bottom): ONE LINE — pills inline with transport. */
@@ -7344,30 +6740,8 @@ textarea::placeholder {
     min-width: 0;
     overflow-x: auto;
   }
-  .rm-panel-channels .rm-rows {
-    flex-wrap: nowrap;
-    margin-top: 0;
-    flex: 1 1 auto;
-    min-width: 0;
-  }
 }
 /* NARROW (side rail): stack — Go Live full width, controls grid, pills wrap. */
-@container panel (max-width: 320px) {
-  .rm-ctl {
-    flex-wrap: wrap;
-    overflow: visible;
-  }
-  .rm-ctl .rm-golive {
-    width: 100%;
-    justify-content: center;
-    order: -1;
-  }
-  .rm-ctl .rm-chip,
-  .rm-ctl .rm-rec {
-    flex: 1 1 40%;
-    justify-content: center;
-  }
-}
 
 /* ── Top dock semantics: list panels turn sideways, chat stays a column ── */
 .rm-panel[data-in="top"] .rm-rows,
@@ -7407,63 +6781,6 @@ textarea::placeholder {
    accent, tabular time. ON AIR transforms the surface instead of adding a
    badge. Research notes: dark-first ~#07080a family, hairlines not shadows,
    airy tracking on small caps. */
-.rm-ctl {
-  gap: 14px;
-  align-items: stretch;
-}
-.rm-ctl-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  flex: 0 0 auto;
-}
-.rm-ctl-lbl {
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(235, 238, 244, 0.32);
-  padding-left: 2px;
-  user-select: none;
-}
-.rm-ctl-row {
-  display: flex;
-  gap: 8px;
-  flex: 1 1 auto;
-  align-items: stretch;
-  min-width: 0;
-}
-.rm-ctl-row .rm-pop-anchor {
-  display: flex;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.rm-ctl-row .rm-pop-anchor > .rm-chip {
-  width: 100%;
-}
-.rm-ctl-row .rm-chip,
-.rm-ctl-row .rm-rec {
-  height: auto;
-  justify-content: center;
-  font-variant-numeric: tabular-nums;
-}
-.rm-ctl .rm-golive {
-  min-width: 148px;
-  font-weight: 800;
-  letter-spacing: 0.01em;
-  border-radius: 12px;
-  justify-content: center;
-  align-self: stretch;
-  height: auto;
-}
-/* ON AIR: the surface itself changes state */
-.rm-ctl.onair .rm-golive.stop {
-  box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.35), 0 6px 22px rgba(220, 38, 38, 0.28);
-}
-.rm-panel-channels:has(.rm-ctl.onair) {
-  border-color: rgba(220, 38, 38, 0.28);
-}
 /* channel pills carry their live phase */
 .rm-chan-phase {
   width: 7px;
@@ -7486,28 +6803,6 @@ textarea::placeholder {
 }
 
 /* dock forms, group-aware */
-.rm-panel[data-in="top"].rm-panel-channels .rm-ctl-lbl {
-  display: none; /* one-line dock: labels would add a second line */
-}
-.rm-panel[data-in="top"].rm-panel-channels .rm-ctl-group {
-  flex-direction: row;
-}
-.rm-panel[data-in="bottom"].rm-panel-channels .rm-ctl > .rm-ctl-group {
-  flex: 1 1 0;
-}
-.rm-panel[data-in="bottom"].rm-panel-channels .rm-ctl .rm-golive {
-  flex: 1.5 1 0;
-  min-width: 0;
-  font-size: 15px;
-}
-@container panel (max-width: 320px) {
-  .rm-ctl .rm-ctl-group {
-    width: 100%;
-  }
-  .rm-ctl .rm-ctl-row {
-    flex-wrap: wrap;
-  }
-}
 
 /* ═══ CONTROLLER: RESPONSIVE IN ANY DOCK ═══════════════════════════════════
    Width decides the form — squeeze the panel and it reshapes live:
@@ -7524,52 +6819,6 @@ textarea::placeholder {
   height: 100%;
   overflow: visible;
 }
-.rm-panel-channels .rm-ctl,
-.rm-panel-channels .rm-rows {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-items: stretch;
-  min-width: 0;
-  max-width: 100%;
-  overflow-x: auto;
-  margin: 0;
-}
-@container panel (min-width: 700px) {
-  .rm-panel-channels .rm-panel-body {
-    flex-direction: row;
-    align-items: center;
-    gap: 14px;
-  }
-  .rm-panel-channels .rm-ctl,
-  .rm-panel-channels .rm-rows {
-    flex: 0 0 auto;
-    overflow: visible;
-  }
-}
-@container panel (min-width: 340px) and (max-width: 699px) {
-  .rm-panel-channels .rm-ctl > .rm-ctl-group {
-    flex: 1 1 0;
-  }
-  .rm-panel-channels .rm-ctl .rm-golive {
-    flex: 1.5 1 0;
-    min-width: 0;
-  }
-}
-@container panel (max-width: 339px) {
-  .rm-panel-channels .rm-ctl {
-    flex-wrap: wrap;
-    overflow: visible;
-  }
-  .rm-panel-channels .rm-ctl .rm-golive {
-    width: 100%;
-    order: -1;
-  }
-  .rm-panel-channels .rm-rows {
-    flex-wrap: wrap;
-    overflow: visible;
-  }
-}
 /* the law: top dock is always the one-line form */
 .rm-panel[data-in="top"].rm-panel-channels .rm-panel-body {
   flex-direction: row !important;
@@ -7582,45 +6831,6 @@ textarea::placeholder {
   flex-wrap: nowrap;
 }
 
-/* ═══ CHANNELS: SEGMENTED TOGGLE GROUP (shadcn grammar) ════════════════════
-   One bordered container, compact items with hairline dividers. Active =
-   elevated surface + lit text; the whole group reads as one instrument. */
-.rm-panel-channels .rm-rows {
-  align-items: center;
-  gap: 0;
-  border: 0.5px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  overflow: hidden;
-  width: fit-content;
-  background: rgba(255, 255, 255, 0.02);
-}
-.rm-chan {
-  border: none;
-  border-radius: 0;
-  border-left: 0.5px solid rgba(255, 255, 255, 0.07);
-  background: transparent;
-  padding: 0 12px;
-  height: 32px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: rgba(235, 238, 244, 0.45);
-  gap: 7px;
-}
-.rm-chan:first-child {
-  border-left: none;
-}
-.rm-chan:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-.rm-chan.on {
-  background: rgba(255, 255, 255, 0.07);
-  color: #eef1f6;
-  box-shadow: inset 0 -1.5px 0 var(--mint, #34d399);
-}
-.rm-chan .rm-row-dot {
-  width: 6px;
-  height: 6px;
-}
 
 /* ═══ GUEST CARDS: the feed IS the row ════════════════════════════════════
    A guest is their live thumbnail. Identity rides a bottom gradient; the
@@ -7758,55 +6968,6 @@ textarea::placeholder {
   justify-content: center !important;
   align-items: flex-start !important;
 }
-.rm-panel-channels .rm-ctl {
-  flex: 0 0 auto !important;
-  align-items: flex-end;
-  gap: 12px;
-}
-.rm-panel-channels .rm-ctl .rm-golive {
-  flex: 0 0 auto !important;
-  width: auto !important;
-  height: 40px !important;
-  min-height: 40px !important;
-  min-width: 0 !important;
-  padding: 0 22px;
-  font-size: 14px;
-}
-.rm-panel-channels .rm-ctl-group {
-  flex: 0 0 auto !important;
-}
-.rm-panel-channels .rm-ctl-row {
-  flex: 0 0 auto !important;
-  align-items: center;
-}
-.rm-panel-channels .rm-ctl-row .rm-chip,
-.rm-panel-channels .rm-ctl-row .rm-rec {
-  height: 36px !important;
-  min-height: 36px !important;
-  flex: 0 0 auto !important;
-  width: auto !important;
-  padding: 0 14px;
-  white-space: nowrap;
-}
-.rm-panel-channels .rm-ctl-row .rm-pop-anchor {
-  flex: 0 0 auto !important;
-}
-.rm-panel-channels .rm-ctl-row .rm-pop-anchor > .rm-chip {
-  width: auto !important;
-}
-.rm-panel-channels .rm-rows {
-  flex: 0 0 auto !important;
-  align-self: flex-start;
-}
-.rm-chan {
-  flex: 0 0 auto !important;
-  height: 32px !important;
-}
-/* CAPTURE buttons sit in one row, not a stack */
-.rm-panel-channels .rm-ctl-row {
-  flex-direction: row;
-}
-
 /* ═══ SCENES IN THE TOP DOCK: HORIZONTAL CHIPS ═════════════════════════════ */
 .rm-panel[data-in="top"].rm-panel-scenes .rm-panel-body,
 .rm-panel[data-in="top"] .rm-scenes {
@@ -7832,52 +6993,164 @@ textarea::placeholder {
   display: none;
 }
 
-/* ═══ MIXER IN THE TOP DOCK: horizontal console meters ═════════════════════
-   Each channel = name + a thin left-to-right level bar. Faders, dB, fx live
-   in the full form; up top it's pure monitoring. */
-.rm-panel[data-in="top"] .rm-strips {
+
+/* ═══ THE CONTROLLER — final form. One toolbar. ════════════════════════════
+   Flat flex row, wraps only when narrow. Uniform heights (40/36/32),
+   hairlines, one accent. No dock-specific geometry: sleek by construction. */
+.ctl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.ctl-golive {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 11px;
+  background: var(--mint, #34d399);
+  color: #06251b;
+  font-size: 13.5px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ctl-golive:hover { filter: brightness(1.06); }
+.ctl-golive:disabled { opacity: 0.45; cursor: default; }
+.ctl-golive.stop {
+  background: #dc2626;
+  color: #fff;
+  box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.35), 0 4px 16px rgba(220, 38, 38, 0.25);
+}
+.ctl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 13px;
+  border: 0.5px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(235, 238, 244, 0.78);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.ctl-chip:hover { background: rgba(255, 255, 255, 0.08); color: #eef1f6; }
+.ctl-chip:disabled { opacity: 0.45; cursor: default; }
+.ctl-chip.on {
+  background: oklch(0.28 0.07 175 / 0.2);
+  border-color: oklch(0.75 0.14 165 / 0.5);
+  color: #eef1f6;
+}
+.ctl-chip.rec {
+  background: rgba(220, 38, 38, 0.15);
+  border-color: rgba(220, 38, 38, 0.45);
+  color: #fca5a5;
+}
+.ctl-chans {
+  display: inline-flex;
+  align-items: stretch;
+  height: 36px;
+  border: 0.5px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.02);
+}
+.ctl-chan {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 13px;
+  border: none;
+  border-left: 0.5px solid rgba(255, 255, 255, 0.07);
+  background: transparent;
+  color: rgba(235, 238, 244, 0.45);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ctl-chan:first-child { border-left: none; }
+.ctl-chan:hover { background: rgba(255, 255, 255, 0.05); }
+.ctl-chan.on { background: rgba(255, 255, 255, 0.07); color: #eef1f6; }
+.ctl-chan:disabled { cursor: default; }
+.ctl-empty {
+  font-size: 12px;
+  color: rgba(235, 238, 244, 0.4);
+  padding: 0 10px;
+  align-self: center;
+}
+
+/* ═══ TOP DOCK IS SLIM. ALWAYS. ═══════════════════════════════════════════
+   Native control height plus breathing room — never a second storey. Panel
+   chrome compresses, bodies run inline, nothing may wrap. */
+.rm-dock-top .rm-panel {
+  max-height: 76px;
+}
+.rm-dock-top .rm-panel-head {
+  padding: 2px 6px 0;
+  min-height: 0;
+}
+.rm-dock-top .rm-panel-head .rm-group-label {
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+  opacity: 0.6;
+}
+.rm-dock-top .rm-panel-body {
+  padding-top: 2px;
+  padding-bottom: 6px;
+}
+.rm-dock-top .ctl {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+/* mixer up top: name + thin bar, INLINE — a status row, not strips */
+.rm-dock-top .rm-strips {
   flex-direction: row;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   overflow-x: auto;
+  padding: 2px 0;
 }
-.rm-panel[data-in="top"] .rm-strip {
-  flex-direction: column-reverse;
-  align-items: stretch;
-  gap: 4px;
-  width: 120px;
+.rm-dock-top .rm-strip {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  width: auto;
   flex: 0 0 auto;
-  padding: 6px 8px;
+  padding: 0;
+  height: 26px;
   background: transparent;
   border: none;
   box-shadow: none;
 }
-.rm-panel[data-in="top"] .rm-strip .rm-fader,
-.rm-panel[data-in="top"] .rm-strip .rm-strip-db,
-.rm-panel[data-in="top"] .rm-strip .rm-strip-fx {
+.rm-dock-top .rm-strip .rm-fader,
+.rm-dock-top .rm-strip .rm-strip-db,
+.rm-dock-top .rm-strip .rm-strip-fx {
   display: none;
 }
-.rm-strip.horizontal .rm-meter,
-.rm-panel[data-in="top"] .rm-strip .rm-meter {
-  width: 100%;
-  height: 4px;
+.rm-dock-top .rm-strip .rm-meter {
+  width: 72px;
+  height: 3px;
   border-radius: 999px;
 }
-.rm-strip.horizontal .rm-meter-fill {
-  border-radius: 999px;
-  background: linear-gradient(to right, #34d399 0%, #34d399 62%, #fbbf24 82%, #f87171 100%);
-  transition: width 90ms linear;
-}
-.rm-panel[data-in="top"] .rm-strip-name {
-  font-size: 10.5px;
-  text-align: left;
+.rm-dock-top .rm-strip-name {
+  font-size: 11px;
+  order: -1;
+  max-width: 84px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.rm-panel[data-in="top"] .rm-strip-icon {
-  width: 22px;
-  height: 22px;
-  align-self: flex-end;
+.rm-dock-top .rm-strip .rm-strip-icon {
+  width: 20px;
+  height: 20px;
 }
