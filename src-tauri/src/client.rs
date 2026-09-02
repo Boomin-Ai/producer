@@ -396,6 +396,16 @@ impl ProducerClient {
     /// deliberately no list call: the desktop can resolve a handle it was
     /// handed, nothing more.
     pub async fn network_lookup(&self, slug: &str) -> EngineResult<Value> {
+        // Handles are [a-z0-9._-]; strip anything else BEFORE it reaches the
+        // query string, so pasted junk ("@Name!", "a&b") can neither corrupt
+        // the URL nor smuggle a second query parameter past root_url.
+        let slug: String = slug
+            .trim()
+            .trim_start_matches('@')
+            .to_lowercase()
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+            .collect();
         let resp = self
             .http
             .get(self.root_url(&format!("/v1/app/network/lookup?slug={slug}")))

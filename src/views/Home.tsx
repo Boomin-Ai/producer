@@ -685,14 +685,14 @@ function ControlRoomHome({
   }
 
   return (
-    <main className="cr-home">
+    <main className={`cr-home${surface === "rooms" ? " has-net-rail" : ""}`}>
       {surface === "rooms" && (
-      <div className="cr-split">
+      <>
       {/* Network lives at HOME, never inside a room: a failed network call
         * here is harmless, whereas mid-broadcast it would be noise over a
-        * running show. */}
+        * running show. The rail is FIXED against the icon rail — attached,
+        * full height, part of the furniture rather than a floating card. */}
       <NetworkRail />
-      <div className="cr-split-main">
       <LiveNowStrip />
       <section className="cr-section" id="sec-onair">
         <div className="cr-label">
@@ -757,8 +757,7 @@ function ControlRoomHome({
         </div>
       </section>
 
-      </div>
-      </div>
+      </>
       )}
 
       {surface === "manager" && (
@@ -1690,23 +1689,34 @@ function RoomShareChip({ room, onChanged }: { room: LiveRoom; onChanged: () => v
     const prev = vis;
     setBusy(true);
     setVis(next);
+    // The SERVER is the exposure truth. Once the PATCH lands, the room IS
+    // `next` on the network — so the chip must never roll back past that
+    // point, or the UI would read Private while the stage is publicly open.
+    let patched = false;
     try {
       const eps = await ipc.listEndpoints();
       const ep = eps.find((x) => x.kind === "connected") ?? eps[0];
       if (!ep) throw new Error("no endpoint");
-      const cfg = parseConfig(room.config);
-      let sid = cfg.server_room_id;
+      let sid = parseConfig(room.config).server_room_id;
       if (!sid) {
         const reg = await registerRoom(ep.id, room.name, room.id);
         sid = reg.room.id;
       }
       await roomSetVisibility(ep.id, sid, next);
+      patched = true;
+      // Read-modify-write against FRESH config, not the click-time snapshot —
+      // a guest link or slot binding saved in the meantime must survive.
+      const fresh = (await ipc.liveListRooms()).find((r) => r.id === room.id);
+      const cfg = parseConfig(fresh?.config ?? room.config);
       await ipc.liveUpdateRoom(room.id, {
         config: serializeConfig({ ...cfg, server_room_id: sid, visibility: next }),
       });
       onChanged();
     } catch {
-      setVis(prev);
+      // Before the PATCH: nothing changed anywhere — roll the chip back.
+      // After it: the server moved; keep showing `next` (the local mirror
+      // heals on the next successful write).
+      if (!patched) setVis(prev);
     } finally {
       setBusy(false);
     }

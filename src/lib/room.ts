@@ -96,6 +96,11 @@ export interface RoomConfig {
   slot_bindings?: Record<string, string>;
   /** Room-wide default transition; a scene may override it. */
   transition?: SceneTransition;
+  /** Dock-level surface ownership. true = the DOCK paints the card background
+   * and its components render flat inside one shared surface; absent/false =
+   * every panel owns its own card (the default look). Dock-level by decree —
+   * never per component. */
+  dock_bg?: Partial<Record<"top" | "left" | "right" | "bottom", boolean>>;
 }
 
 export const DEFAULT_SCENES: RoomScene[] = [
@@ -157,6 +162,13 @@ export function parseConfig(raw: string | null | undefined): RoomConfig {
     ) as Record<string, string>;
   }
   if (v.sizes && typeof v.sizes === "object") base.sizes = v.sizes as DockSizes;
+  if (v.dock_bg && typeof v.dock_bg === "object") {
+    base.dock_bg = Object.fromEntries(
+      Object.entries(v.dock_bg as Record<string, unknown>).filter(
+        ([k, val]) => ["top", "left", "right", "bottom"].includes(k) && typeof val === "boolean",
+      ),
+    ) as RoomConfig["dock_bg"];
+  }
   if (v.transition && typeof v.transition === "object") base.transition = v.transition as SceneTransition;
   return base;
 }

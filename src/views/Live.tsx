@@ -3447,10 +3447,7 @@ export function LiveView({
                   </span>
                 )}
                 {activeScene === p.id ? (
-                  <>
-                    <span className="rm-scene-live">{streaming ? "Live" : "On"}</span>
-                    <span className="rm-scene-rec" />
-                  </>
+                  <span className="rm-scene-live">{streaming ? "Live" : "On"}</span>
                 ) : (
                   <>
                     <button
@@ -4261,6 +4258,29 @@ export function LiveView({
     );
   };
 
+  /** Dock-level surface ownership (edit mode only): the DOCK paints one card
+   * and its components go flat, or every panel keeps its own card. Dock-level
+   * by decree — never per component. */
+  const bgToggle = (dock: Dock) => {
+    if (!layoutEdit || dock === "hidden") return null;
+    const on = !!cfg.dock_bg?.[dock];
+    return (
+      <button
+        key={`${dock}-bg`}
+        className={`rm-dock-bgbtn${on ? " on" : ""}`}
+        title={on ? "Dock owns the background — click to give each panel its own card" : "Panels own their cards — click to merge this dock into one surface"}
+        onClick={() => {
+          const c = cfgRef.current;
+          writeCfg({ ...c, dock_bg: { ...c.dock_bg, [dock]: !on } });
+        }}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <rect x="4" y="4" width="16" height="16" rx="4" fill={on ? "currentColor" : "none"} fillOpacity={on ? 0.35 : 0} />
+        </svg>
+      </button>
+    );
+  };
+
   const renderDock = (dock: Dock) => {
     const ids = layout[dock];
     return (
@@ -4276,6 +4296,7 @@ export function LiveView({
         ))}
         {slot(dock, ids.length)}
         {addButton(dock)}
+        {bgToggle(dock)}
       </>
     );
   };
@@ -4341,6 +4362,19 @@ export function LiveView({
             * late. Dot is always present; the numbers appear once they mean
             * something. */}
         </div>
+
+        {/* Edit layout lives at the FAR LEFT — it reshapes the whole room, so
+          * it sits apart from the transport cluster on the right. */}
+        <button
+          className={`rm-icon-chip${layoutEdit ? " on" : ""}`}
+          onClick={() => {
+            setLayoutEdit((e) => !e);
+            setLayoutMenu(false);
+          }}
+          title={layoutEdit ? "Done editing layout" : "Edit layout"}
+        >
+          {ic.layout}
+        </button>
 
         {/* Always present. Moving health out of the dock was pointless if it
           * disappears whenever you aren't live — the idle state is itself
@@ -4521,17 +4555,6 @@ export function LiveView({
             </Pop>
           )}
 
-          <button
-            className={`rm-icon-chip${layoutEdit ? " on" : ""}`}
-            onClick={() => {
-              setLayoutEdit((e) => !e);
-              setLayoutMenu(false);
-            }}
-            title={layoutEdit ? "Done editing layout" : "Edit layout"}
-          >
-            {ic.layout}
-          </button>
-
           {streaming && (
             <span className="hd-live">
               <span className="stg-live-dot" />
@@ -4601,7 +4624,7 @@ export function LiveView({
       {(layout.top.length > 0 || layoutEdit) && (
         <div
           data-dock="top"
-          className={`rm-dock rm-dock-top${layout.top.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "top" ? " hot" : ""}`}
+          className={`rm-dock rm-dock-top${layout.top.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "top" ? " hot" : ""}${cfg.dock_bg?.top ? " dock-bg" : ""}`}
         >
           {renderDock("top")}
         </div>
@@ -4610,7 +4633,7 @@ export function LiveView({
       <div className="rm-body">
         <aside
           data-dock="left"
-          className={`rm-dock rm-dock-side${layout.left.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "left" ? " hot" : ""}`}
+          className={`rm-dock rm-dock-side${layout.left.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "left" ? " hot" : ""}${cfg.dock_bg?.left ? " dock-bg" : ""}`}
           style={layout.left.length && shown.left ? { width: shown.left, flex: "0 0 auto" } : undefined}
         >
           {renderDock("left")}
@@ -4719,7 +4742,7 @@ export function LiveView({
         {layout.right.length > 0 && !layoutEdit && splitter("right")}
         <aside
           data-dock="right"
-          className={`rm-dock rm-dock-side${layout.right.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "right" ? " hot" : ""}`}
+          className={`rm-dock rm-dock-side${layout.right.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "right" ? " hot" : ""}${cfg.dock_bg?.right ? " dock-bg" : ""}`}
           style={layout.right.length && shown.right ? { width: shown.right, flex: "0 0 auto" } : undefined}
         >
           {renderDock("right")}
@@ -4917,7 +4940,7 @@ export function LiveView({
             />
           )}
           {(sheetOpen || dragging) && (
-            <div data-dock="bottom" className={`rm-dock rm-dock-bottom${layoutEdit ? " armed" : ""}${dropHint?.dock === "bottom" ? " hot" : ""}`}>{renderDock("bottom")}</div>
+            <div data-dock="bottom" className={`rm-dock rm-dock-bottom${layoutEdit ? " armed" : ""}${dropHint?.dock === "bottom" ? " hot" : ""}${cfg.dock_bg?.bottom ? " dock-bg" : ""}`}>{renderDock("bottom")}</div>
           )}
         </div>
       )}

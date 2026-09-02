@@ -3117,34 +3117,10 @@ textarea::placeholder {
   color: #fff;
 }
 
-.rm-scene-rec {
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  border: 2.5px solid #fff;
-  flex-shrink: 0;
-  position: relative;
-}
 
-.rm-scene-row:not(.onair) .rm-scene-rec {
-  border-color: var(--mint);
-}
 
-.rm-scene-rec::after {
-  content: "";
-  position: absolute;
-  inset: 2.5px;
-  border-radius: 50%;
-  background: currentColor;
-}
 
-.rm-scene-row.onair .rm-scene-rec::after {
-  background: #fff;
-}
 
-.rm-scene-row:not(.onair) .rm-scene-rec::after {
-  background: var(--mint);
-}
 
 /* on-air editing warning */
 
@@ -5077,33 +5053,32 @@ textarea::placeholder {
 
 /* ── Brand Network on the control room ─────────────────────────────────── */
 
-/* Split home: the network rail is a real left column, not a floating card.
- * Sticky so the rail stays put while the rooms grid scrolls. */
-.cr-split {
-  display: flex;
-  gap: 32px;
-  align-items: flex-start;
-}
-.cr-split-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 44px;
-}
-
+/* The network rail is ATTACHED furniture, not a floating card: fixed against
+ * the icon rail's right edge, full height, one hairline where it meets the
+ * content. It scrolls internally; the rooms grid scrolls beside it. */
 .net-rail {
-  width: 248px;
-  flex: none;
-  position: sticky;
+  position: fixed;
+  right: 0;
   top: 0;
+  bottom: 0;
+  width: 236px;
+  z-index: 30;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 14px;
-  border-radius: var(--r-card);
-  border: 1px solid var(--line-1);
+  padding: 52px 14px 14px;
+  border-left: 1px solid var(--line-1);
+  border-radius: 0;
   background: var(--surface-1);
+  overflow-y: auto;
+}
+
+/* Content clears the icon rail on the left and the network rail on the
+ * right — it must never slide underneath either. */
+.cr-home.has-net-rail {
+  margin: 0 260px 0 96px;
+  width: auto;
+  max-width: 980px;
 }
 .net-rail-head {
   display: flex;
@@ -5230,6 +5205,11 @@ textarea::placeholder {
   flex: none;
 }
 .net-state.on { color: var(--mint); }
+
+/* The find row must LIVE INSIDE the rail — input yields, button never spills. */
+.net-rail .net-invite-row { gap: 8px; min-width: 0; }
+.net-rail .net-slug { flex: 1 1 auto; min-width: 0; max-width: none; padding: 8px 10px; font-size: 12.5px; }
+.net-rail .net-invite-row .cr-primary { flex: none; padding: 7px 12px; }
 
 /* Live-now cards on the home main column. */
 .net-live {
@@ -5943,8 +5923,10 @@ textarea::placeholder {
 }
 /* WIDE (top dock, roomy bottom): ONE LINE — pills inline with transport. */
 @container panel (min-width: 600px) {
-  .rm-panel-channels .rm-panel-body,
-  .rm-panel-body {
+  /* Channels ONLY. A bare .rm-panel-body here once un-clipped EVERY wide
+   * panel — scene rows bled over the neighbouring dock. A panel never gets
+   * to paint outside itself. */
+  .rm-panel-channels .rm-panel-body {
     overflow: visible;
   }
   .rm-ctl-line,
@@ -6398,6 +6380,50 @@ textarea::placeholder {
 .rm-panel-body {
   padding: 8px var(--pad-card) var(--pad-card);
 }
+
+/* ── Dock-owned backgrounds (dock_bg) ─────────────────────────────────────
+   The DOCK is one card; its components render flat inside it. Configured at
+   the dock level (edit mode), never per component — turning it on turns the
+   components' own cards OFF. */
+.rm-dock.dock-bg {
+  background: var(--surface-1);
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-card);
+}
+.rm-dock.dock-bg > .rm-panel {
+  background: none;
+  border: none;
+  border-radius: 0;
+}
+/* Hairline seams where cards used to separate the panels. */
+.rm-dock-side.dock-bg > .rm-panel ~ .rm-panel {
+  border-top: 0.5px solid var(--line-1);
+}
+.rm-dock-bottom.dock-bg > .rm-panel ~ .rm-panel,
+.rm-dock-top.dock-bg > .rm-panel ~ .rm-panel {
+  border-left: 0.5px solid var(--line-1);
+}
+/* Guests keep their card radius on the outer corners via the dock's own. */
+.rm-dock.dock-bg > .rm-panel-guests .rm-gcard:first-child,
+.rm-dock.dock-bg > .rm-panel-guests .rm-gcard:last-child {
+  border-radius: 0;
+}
+
+.rm-dock-bgbtn {
+  align-self: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  border: 1px solid var(--line-1);
+  background: var(--surface-2);
+  color: var(--fg-3);
+}
+.rm-dock-bgbtn:hover { color: var(--fg-1); border-color: var(--line-2); }
+.rm-dock-bgbtn.on { color: var(--mint); border-color: oklch(0.75 0.14 165 / 0.4); }
 
 /* ── Channels card ── */
 .chn { display: flex; flex-direction: column; gap: 2px; }
