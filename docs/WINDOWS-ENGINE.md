@@ -349,6 +349,59 @@ Two consequences that are easy to get wrong:
    only once Windows is green, or mark the Windows job `continue-on-error` so
    runs conclude green while it is still WIP. Do not merge a lock edit and hope.
 
+## The engine boots (rung 1.5)
+
+`PRODUCER_LIVE_SELFTEST=1` exits 0 on Windows against the CI-built engine:
+`ok=true`, `graphics_backend=d3d11` (no OpenGL fallback), zero failed modules,
+zero missing ids, 57 sources including `browser_source` with CEF
+127.0.6533.120. Five defects sat between a green `cargo check` and that line,
+and none of them were visible to the compiler --- see the commit for the full
+list. The two most transferable:
+
+- **`raw-dylib` is a statement about WHERE a symbol lives.** It was applied to
+  extern blocks declaring macOS SYSTEM symbols (CoreFoundation, GCD, CFRunLoop),
+  so rustc synthesised imports for `CFRelease` and friends FROM obs.dll and the
+  process died at load with `STATUS_ENTRYPOINT_NOT_FOUND`. System frameworks
+  must be `cfg`-gated to their OS, not linked differently on another one. The
+  fastest way to find it: parse obs.dll's export table and diff it against the
+  FFI declarations.
+- **libobs data paths REQUIRE a trailing slash.** `check_path()` does
+  `dstr_copy(out, path); dstr_cat(out, file)` with no separator inserted, so
+  `.../data/libobs` yields `.../data/libobsformat_conversion.effect` and every
+  effect lookup fails. It surfaces as `obs_reset_video failed: d3d11 rc=-1,
+  opengl rc=-1` --- a graphics error with a filesystem cause. OBS's own defaults
+  all carry the slash.
+
+Also worth knowing: with a null `module_config_dir`, `obs_module_config_path`
+falls back to the process CWD and win-capture writes `win-capture/*.json`
+there. Dev-selftest-only today (the app always passes a real dir), but a guard
+belongs on the full-engine path.
+
+## Windows device vocabulary, enumerated from a real machine
+
+`--live-props` dumps the property names libobs actually exposes, which is the
+only trustworthy source for picker code. The id list is per-platform for the
+same reason everything else here is. Names only --- run it yourself for values:
+
+| source | properties that matter |
+|---|---|
+| `dshow_input` (camera) | `video_device_id`, `audio_device_id`, `res_type`, `resolution`, `frame_interval`, `video_format`, `buffering`, `hw_decode`, `deactivate_when_not_showing`, `audio_output_mode` |
+| `wasapi_input_capture` (mic) | `device_id`, `use_device_timing` |
+| `wasapi_output_capture` (desktop audio) | `device_id`, `use_device_timing` |
+| `monitor_capture` (display) | `method`, `monitor_id`, `capture_cursor`, `force_sdr` |
+| `window_capture` | `window`, `method`, `priority`, `client_area`, `cursor` |
+| `browser_source` (guests) | `url`, `width`, `height`, `fps_custom`, `fps`, `css`, `reroute_audio`, `shutdown` |
+
+Three notes for picker work:
+
+- Audio devices are identified by GUID strings (`{0.0.1.00000000}.{...}`) with
+  `default` as a valid id --- not by index.
+- `window_capture`'s ids are `title:windowclass:executable`, with `:` in the
+  title escaped as `#3A`. Parse accordingly.
+- `browser_source`'s `shutdown` is shutdown-on-invisible. It DESTROYS the
+  browser when the source stops showing, which matters for anything that
+  renders a guest outside the composited scene.
+
 ## Still open
 
 - `obs.lock` carries no Windows dependency pins. OBS 32.1.2 has no

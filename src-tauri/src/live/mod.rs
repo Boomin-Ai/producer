@@ -762,13 +762,22 @@ pub fn startup_probe(report_dir: &Path) {
                 return;
             }
             if run_props {
-                // Device pickers must be written against the property names
-                // libobs actually exposes, not remembered ones.
-                for id in [
-                    "macos-avcapture",
-                    "coreaudio_input_capture",
-                    "screen_capture",
-                ] {
+                // Device pickers must be written against the property names libobs
+                // actually exposes, not remembered ones -- and the ids differ per
+                // platform, so dumping the macOS set on Windows would just print
+                // nothing and teach us nothing.
+                #[cfg(target_os = "macos")]
+                let probe_ids = ["macos-avcapture", "coreaudio_input_capture", "screen_capture"];
+                #[cfg(target_os = "windows")]
+                let probe_ids = [
+                    "dshow_input",
+                    "wasapi_input_capture",
+                    "wasapi_output_capture",
+                    "monitor_capture",
+                    "window_capture",
+                    "browser_source",
+                ];
+                for id in probe_ids {
                     println!("=== {id} ===");
                     for line in graph::list_property_names(id) {
                         println!("  prop: {line}");
