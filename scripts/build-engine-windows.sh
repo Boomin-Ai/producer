@@ -14,13 +14,15 @@
 # The producer-macos preset sets it TRUE because obs-browser's
 # cmake/os-macos.cmake hard-requires Qt6 and defines ENABLE_BROWSER_QT_LOOP —
 # Producer has no QApplication, so the macOS build needs the libdispatch pump
-# the patchset adds. cmake/os-windows.cmake never defines a Qt loop at all: CEF
-# runs its own multi-threaded message loop there. So Windows needs the property
-# the patch creates, and already has it.
+# the patchset adds. cmake/os-windows.cmake defines no Qt loop and calls no
+# find_package(Qt6), so CEF pumps its own multi-threaded message loop and Windows
+# needs no pump patch at all.
 #
-# The patch is still APPLIED and still verified against the same sha256, because
-# every code hunk is guarded by that define and is therefore inert here. One
-# lock, one patchset hash, no per-platform divergence to drift.
+# The patch is still REQUIRED here, for a different reason: browser-client.cpp
+# and obs-browser-source.cpp include Qt headers UNCONDITIONALLY upstream, which
+# is fine for a build that has the frontend and fatal for one that does not. The
+# patch guards those includes on ENABLE_BROWSER_QT_LOOP - Qt is present - rather
+# than on the pump, so one patchset serves both platforms with one hash.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/engine-lib.sh"
 

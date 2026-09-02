@@ -137,13 +137,37 @@ with a negative control (`PRODUCER_ENGINE_DIR=/nonexistent` correctly reports
 
 Two corrections to the plan above:
 
-- **The obs-browser patchset is not needed on Windows.** `cmake/os-windows.cmake`
-  never defines a Qt loop; CEF runs its own multi-threaded message loop there.
-  Windows already HAS the property the macOS patch creates. The patch is still
-  applied and still sha-verified, because every hunk is guarded by
-  `ENABLE_BROWSER_DISPATCH_LOOP` and is therefore inert — so obs.lock keeps ONE
-  patchset hash for both platforms. `producer-windows` sets that preset var
-  FALSE; `producer-macos` sets it TRUE.
+- **The obs-browser patchset IS needed on Windows, for a different reason than on
+  macOS.** `cmake/os-windows.cmake` defines no Qt loop and calls no
+  `find_package(Qt6)`, so every `ENABLE_BROWSER_QT_LOOP` region compiles out and
+  CEF pumps its own multi-threaded message loop. That much was right. What it
+  missed is that TWO files include Qt headers UNCONDITIONALLY:
+  browser-client.cpp (`QApplication`/`QThread`/`QToolTip`, plus an unguarded
+  `QToolTip` call in `OnTooltip`) and obs-browser-source.cpp (`QApplication`).
+  Upstream gets away with it because its Windows build has the frontend, and
+  therefore Qt, present. Ours does not:
+  `error C1083: Cannot open include file: 'QApplication'`.
+
+  The fix was an ontology correction to the patch, not a special case. It had
+  guarded those includes with `#ifndef ENABLE_BROWSER_DISPATCH_LOOP` -- "we are
+  not using the libdispatch pump" -- which is a statement about the PUMP, and is
+  true on Windows. They are now guarded with `#ifdef ENABLE_BROWSER_QT_LOOP` --
+  "Qt is present" -- which is the property actually being tested, is upstream's
+  own signal for it, and is false in both our builds. Two lines, one meaning,
+  both platforms.
+
+  `producer-windows` still sets `ENABLE_BROWSER_DISPATCH_LOOP` FALSE and
+  `producer-macos` TRUE: the pump genuinely differs per platform, the Qt question
+  does not. Changing the patch re-keyed both artifacts --- see the pinning note
+  below.
+
+- **`CMAKE_COMPILE_WARNING_AS_ERROR` is FALSE on Windows.** OBS defaults it ON
+  (`cmake/common/compiler_common.cmake`) and we build a subset configuration
+  upstream never tests, so we hit MSVC warnings in UPSTREAM code that upstream CI
+  does not --- C4244 double-to-int in obs-browser-source.cpp's
+  non-shared-texture frame-rate path. Failing our engine build on a warning we
+  will not fix in someone else's source buys no signal.
+
 - **No import library is required to link.** An extracted OBS release ships no
   `obs.lib`, which is why the extract-based spike could not link the normal way.
   The extern blocks in `ffi.rs` carry

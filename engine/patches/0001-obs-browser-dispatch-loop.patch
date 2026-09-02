@@ -157,7 +157,7 @@ index bf7baad..4d9855c 100644
  #include <obs-frontend-api.h>
  #include <obs.hpp>
  #include <util/platform.h>
-+#ifndef ENABLE_BROWSER_DISPATCH_LOOP
++#ifdef ENABLE_BROWSER_QT_LOOP
  #include <QApplication>
  #include <QThread>
  #include <QToolTip>
@@ -169,13 +169,13 @@ index bf7baad..4d9855c 100644
  
  bool BrowserClient::OnTooltip(CefRefPtr<CefBrowser>, CefString &text)
  {
-+#ifdef ENABLE_BROWSER_DISPATCH_LOOP
-+	/* no Qt UI to host a tooltip; suppress (handled, draw nothing) */
-+	UNUSED_PARAMETER(text);
-+#else
++#ifdef ENABLE_BROWSER_QT_LOOP
  	std::string str_text = text;
  	QMetaObject::invokeMethod(QCoreApplication::instance()->thread(),
  				  [str_text]() { QToolTip::showText(QCursor::pos(), str_text.c_str()); });
++#else
++	/* no Qt UI to host a tooltip; suppress (handled, draw nothing) */
++	UNUSED_PARAMETER(text);
 +#endif
  	return true;
  }
