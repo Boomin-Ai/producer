@@ -49,7 +49,6 @@ import {
   type DockSizes,
   movePanel,
   movePanelTo,
-  saveLayout,
   type Dock,
   type Layout,
   type PanelId,
@@ -617,10 +616,8 @@ function SourceSettingsStrip({
 function GuestPanel({
   thumbs,
   roster,
-  link,
   error,
   items,
-  onLink,
   onAdmit,
   onRemove,
   onMute,
@@ -628,17 +625,13 @@ function GuestPanel({
 }: {
   thumbs: Record<string, string>;
   roster: RoomGuest[];
-  link: string | null;
   error: string | null;
   items: LiveItem[];
-  onLink: () => Promise<string | null>;
   onAdmit: (id: string) => void;
   onRemove: (id: string) => void;
   onMute: (sourceId: string, muted: boolean) => void;
   onShow: (sourceId: string, show: boolean) => void;
 }) {
-  const [open, setOpen] = useState(true);
-  const [copied, setCopied] = useState(false);
   // render_url is the server's own statement of "this one may go on the
   // host". Waiting guests have none, so the gate is enforced there rather
   // than by us choosing not to draw someone.
@@ -648,37 +641,11 @@ function GuestPanel({
   const ROOM_CAP = 8;
   const STAGE_CAP = 4;
 
-  const copy = async () => {
-    const url = link ?? (await onLink());
-    if (!url) return;
-    await navigator.clipboard.writeText(url).catch(() => {});
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
-  };
 
   return (
     <div className="rm-guests">
-      <div className="rm-row rm-guest-head">
-        <span className="rm-row-icon">{ic.invite}</span>
-        <span className="rm-row-name">Guest</span>
-        <span className="rm-guest-count">
-          {live.length}/{ROOM_CAP}
-          {onStage > 0 && <em className="rm-guest-onstage">{onStage} on screen</em>}
-          {waiting.length > 0 && <em className="rm-guest-wait">{waiting.length} waiting</em>}
-        </span>
-        <button className="rm-row-edit" title="Copy the room's guest link" onClick={copy}>
-          {copied ? "✓" : ic.link}
-        </button>
-        <button
-          className="rm-row-edit"
-          title={open ? "Collapse" : "Expand"}
-          onClick={() => setOpen((o) => !o)}
-        >
-          {ic.chev}
-        </button>
-      </div>
 
-      {open && (
+      {(
         <div className="rm-guest-list">
           {roster.length === 0 && (
             <div className="rm-rows-empty">
@@ -687,8 +654,8 @@ function GuestPanel({
           )}
           {waiting.map((g) => (
             <div key={g.id} className="rm-guest waiting">
+              <span className="rm-wait-dot" />
               <span className="rm-guest-name">{g.display_name || "Guest"}</span>
-              <span className="rm-guest-state">waiting</span>
               <button
                 className="rm-guest-admit"
                 disabled={live.length >= ROOM_CAP}
@@ -1639,6 +1606,30 @@ const EXTRA_ICONS: Record<string, ReactNode> = {
 };
 
 
+/** Brand marks (twitch/youtube via svgl.app; kick authored to brand green). */
+const PLATFORM_LOGO: Record<string, ReactNode> = {
+  twitch: (
+    <svg width="15" height="15" viewBox="0 0 2400 2800">
+      <path fill="#fff" d="m2200 1300-400 400h-400l-350 350v-350H600V200h1600z" />
+      <g fill="#9146ff">
+        <path d="M500 0 0 500v1800h600v500l500-500h400l900-900V0zm1700 1300-400 400h-400l-350 350v-350H600V200h1600z" />
+        <path d="M1700 550h200v600h-200zm-550 0h200v600h-200z" />
+      </g>
+    </svg>
+  ),
+  youtube: (
+    <svg width="17" height="12" viewBox="0 0 256 180">
+      <path fill="red" d="M250.346 28.075A32.18 32.18 0 0 0 227.69 5.418C207.824 0 127.87 0 127.87 0S47.912.164 28.046 5.582A32.18 32.18 0 0 0 5.39 28.24c-5.408 35.298-7.505 89.084.152 122.97a32.18 32.18 0 0 0 22.656 22.657c19.866 5.418 99.822 5.418 99.822 5.418s79.955 0 99.82-5.418a32.18 32.18 0 0 0 22.657-22.657c5.71-35.348 7.467-89.1-.15-123.134" />
+      <path fill="#fff" d="m102.421 128.06 66.328-38.418-66.328-38.418z" />
+    </svg>
+  ),
+  kick: (
+    <svg width="14" height="14" viewBox="0 0 32 32">
+      <path fill="#53fc18" d="M4 2h8v8h4V6h4V2h8v10h-4v4h4v10h-8v-4h-4v-4h-4v8H4z" />
+    </svg>
+  ),
+};
+
 const PLATFORM_TINT: Record<string, string> = {
   twitch: "#a970ff",
   kick: "#53fc18",
@@ -1905,6 +1896,9 @@ export function LiveView({
 }) {
   const [destinations, setDestinations] = useState<LiveDestination[]>([]);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
+  /** 60s render-load history for the stats sparkline (1Hz, CPU share). */
+  const loadHist = useRef<number[]>([]);
+  const snapRef = useRef<LiveSnapshot | null>(null);
   /** Live guest previews, source-id → data URL (15fps demand-driven). */
   const [guestThumbs, setGuestThumbs] = useState<Record<string, string>>({});
 
@@ -1932,6 +1926,10 @@ export function LiveView({
   const [banner, setBanner] = useState<string | null>(null);
   const [sources, setSources] = useState<LiveSources>({ screen: false, camera: false, mic: false });
   const [micLevel, setMicLevel] = useState(0);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+  useEffect(() => {
+    import("@tauri-apps/api/app").then(({ getVersion }) => getVersion()).then(setAppVersion).catch(() => {});
+  }, []);
   /** Per-source meter levels for audio-bearing extras (guests, media). */
   const [extraLevels, setExtraLevels] = useState<Record<string, number>>({});
   const [sheetOpen, setSheetOpen] = useState(true);
@@ -2026,8 +2024,9 @@ export function LiveView({
     // guest invite links).
     cfgRef.current = next;
     setCfgState(next);
+    // Room-less sessions keep layout in memory only: the old localStorage
+    // write was never read back anywhere (audited) — half-wired dead code.
     if (room) ipc.liveUpdateRoom(room.id, { config: serializeConfig(next) }).catch(() => {});
-    else saveLayout(next.layout);
   };
   const setLayout = (l: Layout) => writeCfg({ ...cfg, layout: l });
   const sizes: DockSizes = cfg.sizes ?? {};
@@ -2734,6 +2733,7 @@ export function LiveView({
     };
   }, [refresh, roomId]);
 
+  snapRef.current = snapshot;
   const state = snapshot?.session_state ?? "idle";
   const streaming = state === "streaming" || state === "starting" || state === "stopping";
 
@@ -2785,6 +2785,14 @@ export function LiveView({
       : 0;
 
   const engineOk = snapshot?.engine_ready && snapshot?.bootstrap_ok;
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      loadHist.current.push(snapRef.current?.cpu ?? 0);
+      if (loadHist.current.length > 60) loadHist.current.shift();
+    }, 1000);
+    return () => window.clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     if (!engineOk || !sceneSettled || !mountVeil) return;
     // A beat of settle time: lifting mid-populate trades one flicker for
@@ -3272,6 +3280,18 @@ export function LiveView({
     setSources((s) => ({ ...s, mic_volume: v }));
     ipc.liveSetMicAudio({ volume: v }).catch((e) => setBanner(String(e)));
   };
+  const [keyFor, setKeyFor] = useState<string | null>(null);
+  const [keyVal, setKeyVal] = useState("");
+  const saveChannelKey = async (d: LiveDestination) => {
+    try {
+      await ipc.liveUpsertDestination({ id: d.id, preset: d.preset, label: d.label, server: d.server ?? undefined, key: keyVal, enabled: d.enabled });
+      setDestinations(await ipc.liveListDestinations());
+      setKeyFor(null);
+      setKeyVal("");
+    } catch (e) {
+      setBanner(String(e));
+    }
+  };
   const toggleMute = () => {
     const m = !(sources.mic_muted ?? false);
     setSources((s) => ({ ...s, mic_muted: m }));
@@ -3660,10 +3680,8 @@ export function LiveView({
           <GuestPanel
             thumbs={guestThumbs}
             roster={roster}
-            link={guestLink}
             error={guestErr}
             items={(sources.items ?? []).filter((i) => i.kind === "guest")}
-            onLink={ensureGuestLink}
             onAdmit={admitGuest}
             onRemove={removeGuest}
             onMute={(id, muted) => setSourceAudio(id, undefined, muted).catch(() => {})}
@@ -3706,156 +3724,150 @@ export function LiveView({
               </div>
         );
       case "channels": {
-        // ONE LINE, EVERYWHERE. Channels are tap-pills: the pill IS the
-        // switch — lit = armed, dim = off. Editing/adding channels lives in
-        // Settings; the controller only ARMS.
-        // The CONTROLLER: transport up top (this is the room's cockpit —
-        // moved here from the header so it docks like everything else),
-        // channel rows below.
+        // Channels card: brand mark · name · phase · switch. Clicking a row
+        // (off the switch) opens INLINE key entry — the key goes straight to
+        // the Keychain via the same upsert the editor uses.
+        const chnTop = dockOf(layout, "channels") === "top";
+        if (chnTop) {
+          // Top bar: the LOGO is the toggle. Lit = armed. Nothing else.
+          return (
+            <div className="chn chn-icons">
+              {destinations.map((d) => {
+                const st = statuses.get(d.id);
+                return (
+                  <button
+                    key={d.id}
+                    className={`chn-ico${d.enabled ? " on" : ""}`}
+                    disabled={streaming}
+                    title={`${d.label} — ${d.enabled ? "armed" : "off"}${streaming && st ? ` · ${(PHASE_COPY[st.phase] ?? PHASE_COPY.idle).label}` : ""}`}
+                    onClick={() => toggleEnabled(d)}
+                  >
+                    {PLATFORM_LOGO[d.preset] ?? <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />}
+                    {streaming && st && <span className={`rm-chan-phase ${st.phase}`} />}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        }
         return (
-          <>
-          <div className={`rm-ctl${streaming ? " onair" : ""}`}>
-          <div className="rm-ctl-group">
-            <span className="rm-ctl-lbl">Output</span>
-            <div className="rm-ctl-row">
-          <div className="rm-pop-anchor">
-            <button
-              className="rm-chip"
-              title="Output video settings"
-              onClick={(e) => {
-                setPopAnchor(e.currentTarget);
-                setQualityOpen((o) => !o);
-              }}
-            >
-              {vh}p · {vf}
-              {ic.chev}
-            </button>
-            {qualityOpen && (
-              <Pop anchor={popAnchor} align="right" className="rm-pop-quality">
-                <div className="rm-pop-title">VIDEO {streaming && <span className="rm-card-sub">locked while live</span>}</div>
-                <div className="rm-ctrl-row">
-                  <span className="rm-ctrl-label">Resolution</span>
-                  <span className="rm-quality-set">
-                    {[720, 1080].map((h) => (
-                      <button key={h} className={`rm-q${vh === h ? " on" : ""}`} disabled={streaming || !engineOk} onClick={() => setVideoCfg(h, vf)}>
-                        {h}p
-                      </button>
-                    ))}
-                  </span>
-                </div>
-                <div className="rm-ctrl-row">
-                  <span className="rm-ctrl-label">Frame rate</span>
-                  <span className="rm-quality-set">
-                    {[30, 60].map((f) => (
-                      <button key={f} className={`rm-q${vf === f ? " on" : ""}`} disabled={streaming || !engineOk} onClick={() => setVideoCfg(vh, f)}>
-                        {f}
-                      </button>
-                    ))}
-                  </span>
-                </div>
-                <div className="rm-ctrl-row">
-                  <span className="rm-ctrl-label">Bitrate</span>
-                  <span className="rm-ctrl-value" title="Producer negotiates the best rate every channel accepts">Auto</span>
-                </div>
-              </Pop>
-            )}
-          </div>
-
-          {/* Virtual camera is an OUTPUT — peer to Record and Go Live, not a
-            * number. It lived in Stream Health and read as a read-only stat;
-            * the founder looked straight at it and didn't see a control. */}
-            </div>
-          </div>
-          <div className="rm-ctl-group">
-            <span className="rm-ctl-lbl">Capture</span>
-            <div className="rm-ctl-row">
-          <button
-            className={`rm-rec rm-vcam${vcamOn ? " on" : ""}`}
-            onClick={toggleVcam}
-            disabled={!engineOk}
-            title={
-              vcamState?.installed
-                ? "Appear as a webcam in Zoom, Meet and Discord"
-                : "Install Producer's virtual camera (one approval in System Settings)"
-            }
-          >
-            {ic.cam}
-            {vcamState?.state === "needs_approval"
-              ? "Approve"
-              : vcamOn
-                ? "Cam on"
-                : vcamState?.installed
-                  ? "Virtual cam"
-                  : "Install cam"}
-          </button>
-
-          {/* Record sits beside Go Live because it is a peer of it, not a
-            * setting: you can record without ever going live. */}
-          <button
-            className={`rm-rec${recPath ? " on" : ""}`}
-            onClick={toggleRecord}
-            disabled={!engineOk}
-            title={recPath ? `Recording to ${recPath.split("/").pop()}` : "Record locally"}
-          >
-            <span className="rm-rec-dot" />
-            {recPath
-              ? `${Math.floor(recElapsed / 60)}:${String(recElapsed % 60).padStart(2, "0")}`
-              : "Record"}
-          </button>
-
-            </div>
-          </div>
-          {streaming ? (
-            <button className="rm-golive stop" onClick={() => ipc.liveStop()} disabled={state === "stopping"}>
-              <span className="rm-big-icon">■</span>
-              {state === "stopping" ? "Stopping…" : "End stream"}
-            </button>
-          ) : (
-            <button
-              className="rm-golive"
-              onClick={goLive}
-              disabled={!engineOk || enabledDests.length === 0}
-              title={enabledDests.length === 0 ? "Turn on a channel first" : undefined}
-            >
-              {ic.onair}
-              Go Live
-            </button>
-          )}
-
-          </div>
-          <div className="rm-rows">
+          <div className="chn">
             {destinations.map((d) => {
               const st = statuses.get(d.id);
               const phase = st ? PHASE_COPY[st.phase] ?? PHASE_COPY.idle : PHASE_COPY.idle;
+              const open = keyFor === d.id;
               return (
-                <button
-                  key={d.id}
-                  className={`rm-chan${d.enabled ? " on" : ""}`}
-                  disabled={streaming}
-                  title={
-                    streaming && st
-                      ? `${d.label} · ${phase.label}`
-                      : d.enabled
-                        ? `${d.label} armed — tap to disarm`
-                        : `Tap to arm ${d.label}`
-                  }
-                  onClick={() => toggleEnabled(d)}
-                >
-                  <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />
-                  {d.label}
-                  {streaming && st && <span className={`rm-chan-phase ${st.phase}`} />}
-                </button>
+                <div key={d.id} className={`chn-item${open ? " open" : ""}`}>
+                  <div
+                    className={`chn-row${d.enabled ? "" : " off"}`}
+                    onClick={() => {
+                      if (streaming) return;
+                      setKeyVal("");
+                      setKeyFor(open ? null : d.id);
+                    }}
+                  >
+                    <span className="chn-logo">{PLATFORM_LOGO[d.preset] ?? <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />}</span>
+                    <span className="chn-name">{d.label}</span>
+                    {streaming && st && (
+                      <span className="chn-sub">
+                        {phase.label}
+                        <span className={`rm-chan-phase ${st.phase}`} />
+                      </span>
+                    )}
+                    <button
+                      className={`rm-switch${d.enabled ? " on" : ""}`}
+                      disabled={streaming}
+                      title={d.enabled ? "Disarm" : "Arm"}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleEnabled(d);
+                      }}
+                    >
+                      <span className="rm-switch-knob" />
+                    </button>
+                  </div>
+                  {open && (
+                    <div className="chn-key" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="password"
+                        autoFocus
+                        placeholder="Stream key (stored in Keychain — paste to replace)"
+                        value={keyVal}
+                        onChange={(e) => setKeyVal(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && keyVal && saveChannelKey(d)}
+                      />
+                      <button className="chn-key-save" disabled={!keyVal} onClick={() => saveChannelKey(d)}>
+                        Save
+                      </button>
+                    </div>
+                  )}
+                </div>
               );
             })}
-            {destinations.length === 0 && <div className="rm-rows-empty">No channels yet.</div>}
+            {destinations.length === 0 && (
+              <div className="rm-rows-empty">No channels — add them in Settings</div>
+            )}
           </div>
-          </>
+        );
+      }
+      case "stats": {
+        // The numbers behind the health dot. Real data only.
+        const fmtT = (secs: number) =>
+          `${String(Math.floor(secs / 60)).padStart(2, "0")}:${String(Math.floor(secs % 60)).padStart(2, "0")}`;
+        return (
+          <div className="stx">
+            <div className="stx-grid">
+              <div className="stx-tile"><span className="stx-lbl">FPS</span><span className="stx-num">{(snapshot?.fps ?? 0).toFixed(0)}</span></div>
+              <div className="stx-tile"><span className="stx-lbl">CPU</span><span className="stx-num">{(snapshot?.cpu ?? 0).toFixed(1)}%</span></div>
+              <div className="stx-tile"><span className="stx-lbl">Bitrate</span><span className="stx-num">{streaming ? fmtBitrate(bytesTotal, elapsed) : "—"}</span></div>
+              <div className="stx-tile"><span className="stx-lbl">Dropped</span><span className={`stx-num${droppedTotal > 0 ? " warn" : ""}`}>{streaming ? `${droppedTotal} (${droppedPct.toFixed(1)}%)` : "—"}</span></div>
+              <div className="stx-tile"><span className="stx-lbl">Live time</span><span className="stx-num">{streaming ? fmtT(elapsed) : "—"}</span></div>
+            </div>
+            {(snapshot?.skipped_frames ?? 0) > 0 || reconnectTotal > 0 ? (
+              <div className="stx-warns">
+                {(snapshot?.skipped_frames ?? 0) > 0 && <span>{snapshot?.skipped_frames} skipped (renderer)</span>}
+                {reconnectTotal > 0 && <span>{reconnectTotal} reconnect{reconnectTotal === 1 ? "" : "s"}</span>}
+              </div>
+            ) : null}
+            <div className="stx-chart" title="Render load (CPU share), last 60s">
+              <span className="stx-lbl">Render load</span>
+              <svg viewBox="0 0 120 28" preserveAspectRatio="none">
+                <polyline
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  points={loadHist.current.map((v, k) => `${(k / 59) * 120},${28 - Math.min(1, v / 100) * 26 - 1}`).join(" ")}
+                />
+              </svg>
+            </div>
+              </div>
         );
       }
     }
   };
 
   const panelExtra = (id: PanelId) => {
+    if (id === "guests") {
+      const liveGuests = roster.filter((g) => g.state !== "waiting" && g.render_url);
+      const waitingN = roster.filter((g) => g.state === "waiting").length;
+      return (
+        <>
+          <span className="rm-cnt">
+            {liveGuests.length}/8{waitingN > 0 && <em>{waitingN} waiting</em>}
+          </span>
+          <button
+            className="rm-panel-plus"
+            title="Copy the room's guest link"
+            onClick={async () => {
+              const url = guestLink ?? (await ensureGuestLink());
+              if (url) await navigator.clipboard.writeText(url).catch(() => {});
+            }}
+          >
+            {ic.link}
+          </button>
+        </>
+      );
+    }
     if (id === "scenes")
       return (
         <>
@@ -4214,8 +4226,6 @@ export function LiveView({
           * disappears whenever you aren't live — the idle state is itself
           * information ("engine up, nothing going out"). */}
         <div className="rm-chip rm-health">
-          {/* Signal bars, OBS's four levels. A shape reads faster than a
-            * number when you're mid-show and only glancing. */}
           <span className={`rm-bars q-${quality}`} title={`Network: ${quality}`}>
             <i />
             <i />
@@ -4227,69 +4237,14 @@ export function LiveView({
               {!engineOk ? "Starting engine" : enabledDests.length === 0 ? "No channels" : "Ready"}
             </span>
           ) : (
-            <>
-              <span className="rm-health-time">
-                {`${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`}
-              </span>
-              <span className="rm-health-sep" />
-              <span className="rm-health-num">{fmtBitrate(bytesTotal, elapsed)}</span>
-            {/* Shown only when non-zero — a permanent row of zeroes trains you
-              * to stop reading the row. */}
-            {droppedTotal > 0 && (
-              <>
-                <span className="rm-health-sep" />
-                  <span className="rm-health-num warn">
-                    {droppedTotal} dropped ({droppedPct.toFixed(1)}%)
-                  </span>
-              </>
-            )}
-              {reconnectTotal > 0 && (
-                <>
-                  <span className="rm-health-sep" />
-                  <span className="rm-health-num warn">
-                    {reconnectTotal} reconnect{reconnectTotal === 1 ? "" : "s"}
-                  </span>
-                </>
-              )}
-            </>
-          )}
-          {recPath && (
-            <>
-              <span className="rm-health-sep" />
-              <span className="rm-health-num rec">REC</span>
-            </>
+            <span className="rm-health-time">
+              {`${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`}
+            </span>
           )}
           {engineOk && (
             <>
               <span className="rm-health-sep" />
-              <span className="rm-health-num" title="Render frames per second">
-                {(snapshot?.fps ?? 0).toFixed(0)} fps
-              </span>
-              {/* Skipped ≠ dropped. Skipped means THIS MACHINE couldn't render
-                * in time; dropped means the network couldn't send. Different
-                * causes and different fixes, so OBS shows both and so do we. */}
-              {(snapshot?.skipped_frames ?? 0) > 0 && (
-                <>
-                  <span className="rm-health-sep" />
-                  <span
-                    className="rm-health-num warn"
-                    title="Frames the renderer could not keep up with"
-                  >
-                    {snapshot?.skipped_frames} skipped
-                  </span>
-                </>
-              )}
-              <span className="rm-health-sep" />
-              <span
-                className={`rm-health-num${(snapshot?.cpu ?? 0) > 80 ? " warn" : ""}`}
-                title="Producer's CPU usage"
-              >
-                {/* One decimal: this measures Producer's share of total
-                  * system CPU, which is legitimately fractional on an 8-core
-                  * machine. Rounding to whole numbers printed a flat 0% and
-                  * read as broken. */}
-                {(snapshot?.cpu ?? 0).toFixed(1)}% CPU
-              </span>
+              <span className="rm-health-num">{(snapshot?.fps ?? 0).toFixed(0)} fps</span>
             </>
           )}
         </div>
@@ -4311,6 +4266,97 @@ export function LiveView({
               <span className="rm-live-dot" />
               {`${Math.floor(elapsed / 60)}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}
             </span>
+          )}
+
+          <button
+            className="hd-chip"
+            title="Output video settings"
+            onClick={(e) => {
+              setPopAnchor(e.currentTarget);
+              setQualityOpen((o) => !o);
+            }}
+          >
+            {vh}p · {vf}
+            {ic.chev}
+          </button>
+
+          <button
+            className={`hd-chip${vcamOn ? " on" : ""}`}
+            onClick={toggleVcam}
+            disabled={!engineOk}
+            title={
+              vcamState?.installed
+                ? "Appear as a webcam in Zoom, Meet and Discord"
+                : "Install Producer's virtual camera (one approval in System Settings)"
+            }
+          >
+            {ic.cam}
+            {vcamState?.state === "needs_approval"
+              ? "Approve"
+              : vcamOn
+                ? "Cam on"
+                : vcamState?.installed
+                  ? "Virtual cam"
+                  : "Install cam"}
+          </button>
+
+          <button
+            className={`hd-chip${recPath ? " rec" : ""}`}
+            onClick={toggleRecord}
+            disabled={!engineOk}
+            title={recPath ? `Recording to ${recPath.split("/").pop()}` : "Record locally"}
+          >
+            <span className="rm-rec-dot" />
+            {recPath
+              ? `${Math.floor(recElapsed / 60)}:${String(recElapsed % 60).padStart(2, "0")}`
+              : "Record"}
+          </button>
+
+          {streaming ? (
+            <button className="hd-golive stop" onClick={() => ipc.liveStop()} disabled={state === "stopping"}>
+              <span className="rm-big-icon">■</span>
+              {state === "stopping" ? "Stopping…" : "End"}
+            </button>
+          ) : (
+            <button
+              className="hd-golive"
+              onClick={goLive}
+              disabled={!engineOk || enabledDests.length === 0}
+              title={enabledDests.length === 0 ? "Arm a channel first" : undefined}
+            >
+              {ic.onair}
+              GO LIVE
+            </button>
+          )}
+
+          {qualityOpen && (
+            <Pop anchor={popAnchor} align="right" className="rm-pop-quality">
+              <div className="rm-pop-title">VIDEO {streaming && <span className="rm-card-sub">locked while live</span>}</div>
+              <div className="rm-ctrl-row">
+                <span className="rm-ctrl-label">Resolution</span>
+                <span className="rm-quality-set">
+                  {[720, 1080].map((h) => (
+                    <button key={h} className={`rm-q${vh === h ? " on" : ""}`} disabled={streaming || !engineOk} onClick={() => setVideoCfg(h, vf)}>
+                      {h}p
+                    </button>
+                  ))}
+                </span>
+              </div>
+              <div className="rm-ctrl-row">
+                <span className="rm-ctrl-label">Frame rate</span>
+                <span className="rm-quality-set">
+                  {[30, 60].map((f) => (
+                    <button key={f} className={`rm-q${vf === f ? " on" : ""}`} disabled={streaming || !engineOk} onClick={() => setVideoCfg(vh, f)}>
+                      {f}
+                    </button>
+                  ))}
+                </span>
+              </div>
+              <div className="rm-ctrl-row">
+                <span className="rm-ctrl-label">Bitrate</span>
+                <span className="rm-ctrl-value" title="Producer negotiates the best rate every channel accepts">Auto</span>
+              </div>
+            </Pop>
           )}
 
           <button
@@ -4426,6 +4472,55 @@ export function LiveView({
             )}
           </div>
 
+          {/* Stage overlays: HTML floats above the hole-mode preview. */}
+          {streaming && (
+            <div className="stg-live">
+              <span className="stg-live-dot" />
+              LIVE {`${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}
+            </div>
+          )}
+          {engineOk && (
+            <div className="stg-bar">
+              <button
+                className={`stg-btn${sources.mic_muted ? " off" : ""}`}
+                title={sources.mic_muted ? "Unmute mic" : "Mute mic"}
+                onClick={toggleMute}
+              >
+                {ic.mic}
+              </button>
+              {(() => {
+                const cam = (sources.items ?? []).find((i) => i.id === "camera");
+                return cam ? (
+                  <button
+                    className={`stg-btn${cam.visible ? "" : " off"}`}
+                    title={cam.visible ? "Hide camera" : "Show camera"}
+                    onClick={() => ipc.liveSetTransform("camera", { visible: !cam.visible }, true).catch(() => {})}
+                  >
+                    {ic.cam}
+                  </button>
+                ) : null;
+              })()}
+              {(() => {
+                const scr = (sources.items ?? []).find((i) => i.id === "screen");
+                return scr ? (
+                  <button
+                    className={`stg-btn${scr.visible ? "" : " off"}`}
+                    title={scr.visible ? "Hide screen" : "Show screen"}
+                    onClick={() => ipc.liveSetTransform("screen", { visible: !scr.visible }, true).catch(() => {})}
+                  >
+                    {ic.screen}
+                  </button>
+                ) : null;
+              })()}
+              <button
+                className={`stg-btn${recPath ? " rec" : ""}`}
+                title={recPath ? "Stop recording" : "Record"}
+                onClick={toggleRecord}
+              >
+                <span className="rm-rec-dot" />
+              </button>
+            </div>
+          )}
           <div className="rm-float">{banner && <div className="rm-banner">{banner}</div>}</div>
 
           <PermBanner
@@ -4665,6 +4760,24 @@ export function LiveView({
           )}
         </div>
       )}
+      <footer className="rm-foot">
+        <span className="rm-foot-item">Producer v{appVersion ?? "…"}</span>
+        <span className="rm-foot-item">
+          Stream health
+          <span className={`stg-meter foot q-${quality}`}>
+            {Array.from({ length: 6 }).map((_, k) => (
+              <i key={k} className={(quality === "excellent" ? 6 : quality === "good" ? 4 : quality === "mediocre" ? 2 : quality === "bad" ? 1 : 0) > k ? "on" : ""} />
+            ))}
+          </span>
+          <span className="rm-foot-q">{quality === "off" ? "idle" : quality}</span>
+        </span>
+        {recPath && (
+          <span className="rm-foot-item rec">
+            <span className="rm-rec-dot" /> Recording {`${Math.floor(recElapsed / 60)}:${String(recElapsed % 60).padStart(2, "0")}`}
+          </span>
+        )}
+        <span className="rm-foot-item dim">{snapshot?.graphics_backend ?? ""}</span>
+      </footer>
     </div>
   );
 }

@@ -1,13 +1,12 @@
 /** Panel inventory + dock layout (our take on OBS docks).
  *
  * Everything in the room that isn't the stage is a PANEL, and every panel
- * lives in one of three docks — or is hidden. The chrome that never moves:
- * the top bar (brand, room, stream health) and the canvas. Transport —
- * GO LIVE, record, virtual cam, channels — is the CONTROLLER panel, dockable
- * like everything else but never hideable (a hidden Go Live is a dead room).
+ * lives in one of four docks — or is hidden. The chrome that never moves:
+ * the 48px header (health, output, virtual cam, record, GO LIVE) and the
+ * canvas. Everything else is a card.
  * Beginners pick a preset; everyone else moves panels one by one. */
 
-export type PanelId = "scenes" | "sources" | "mixer" | "chat" | "channels" | "guests";
+export type PanelId = "scenes" | "sources" | "mixer" | "chat" | "channels" | "guests" | "stats";
 
 export type Dock = "top" | "left" | "right" | "bottom" | "hidden";
 
@@ -24,14 +23,15 @@ export const PANEL_META: Record<PanelId, { title: string; hint: string }> = {
   sources: { title: "Sources", hint: "What's in the scene right now" },
   mixer: { title: "Audio mixer", hint: "Levels, mute, and gain per input" },
   chat: { title: "Chat", hint: "Every platform's chat, merged" },
-  channels: { title: "Controller", hint: "Go live, record, virtual cam, and where this room goes out" },
+  channels: { title: "Channels", hint: "Where this room goes out" },
+  stats: { title: "Stats", hint: "FPS, CPU, bitrate, drops — the numbers behind the health dot" },
   guests: { title: "Guests", hint: "Who's in the room, and who's on screen" },
 
 };
 
 // Stream health is deliberately NOT here: it lives in the header, always
 // visible. Health you have to dock is health you find out about too late.
-export const PANEL_ORDER: PanelId[] = ["scenes", "sources", "mixer", "chat", "channels", "guests"];
+export const PANEL_ORDER: PanelId[] = ["scenes", "sources", "mixer", "chat", "channels", "guests", "stats"];
 
 /** Per-room sizing: bottom panels carry a flex weight (they share one row),
  * side docks carry a pixel width. Absent = the built-in default. */
@@ -47,53 +47,35 @@ export const SIDE_MAX = 560;
 
 export const PRESETS: { key: string; label: string; note: string; layout: Layout }[] = [
   {
+    key: "studio",
+    label: "Studio",
+    note: "The full desk — scenes and guests left, chat and channels right",
+    layout: {
+      top: [],
+      left: ["scenes", "guests", "sources"],
+      right: ["chat", "channels"],
+      bottom: ["mixer", "stats"],
+      hidden: [],
+    },
+  },
+  {
     key: "simple",
     label: "Simple",
     note: "Stage plus the two things you touch live",
-    layout: { top: [], left: [], right: [], bottom: ["sources", "mixer", "channels"], hidden: ["scenes", "chat",] },
-  },
-  {
-    key: "streamer",
-    label: "Streamer",
-    note: "Scenes left, chat right, controls below",
-    layout: { top: [], left: ["scenes"], right: ["chat"], bottom: ["sources", "mixer", "channels"], hidden: [] },
+    layout: { top: [], left: [], right: [], bottom: ["sources", "mixer"], hidden: ["scenes", "chat", "channels", "guests", "stats"] },
   },
   {
     key: "chat",
     label: "Chat first",
-    note: "Big chat, everything else compact",
-    layout: { top: [], left: ["scenes"], right: ["chat"], bottom: ["sources", "mixer", "channels"], hidden: [] },
+    note: "The conversation gets the column; controls stay below",
+    layout: { top: [], left: [], right: ["chat"], bottom: ["sources", "mixer", "guests"], hidden: ["scenes", "channels", "stats"] },
   },
-  {
-    key: "studio",
-    label: "Studio",
-    note: "Everything on deck, including health",
-    layout: { top: [], left: ["scenes"], right: ["chat", "channels"], bottom: ["sources", "mixer"], hidden: [] },
-  },
-];
+]
 
-export const DEFAULT_LAYOUT: Layout = PRESETS[1].layout;
+export const DEFAULT_LAYOUT: Layout = PRESETS.find((p) => p.key === "studio")!.layout;
 
-const KEY = "producer.layout.v1";
 
-export function loadLayout(): Layout {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return clone(DEFAULT_LAYOUT);
-    const parsed = JSON.parse(raw) as Partial<Layout>;
-    return normalize(parsed);
-  } catch {
-    return clone(DEFAULT_LAYOUT);
-  }
-}
 
-export function saveLayout(l: Layout) {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(l));
-  } catch {
-    /* layout is a convenience, never a blocker */
-  }
-}
 
 function clone(l: Layout): Layout {
   return {
@@ -127,13 +109,12 @@ export function normalize(p: Partial<Layout>): Layout {
     return out;
   };
   const l: Layout = { top: take(p.top), left: take(p.left), right: take(p.right), bottom: take(p.bottom), hidden: take(p.hidden) };
-  for (const id of PANEL_ORDER) if (!seen.has(id)) l.hidden.push(id);
-  // The Controller carries GO LIVE — a layout that hides it bricks the room.
-  const ci = l.hidden.indexOf("channels");
-  if (ci >= 0) {
-    l.hidden.splice(ci, 1);
-    l.bottom.push("channels");
-  }
+  // A panel absent from EVERY array was never seen by this layout's owner —
+  // it cannot have been deliberately hidden. Introduce it at its natural
+  // dock ONCE; after the first save the user's placement (incl. hidden)
+  // wins forever. Hidden stays the default for future panels.
+  const INTRO_DOCK: Partial<Record<PanelId, Dock>> = { stats: "bottom" };
+  for (const id of PANEL_ORDER) if (!seen.has(id)) l[INTRO_DOCK[id] ?? "hidden"].push(id);
   return l;
 }
 
