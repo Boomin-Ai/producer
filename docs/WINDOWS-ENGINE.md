@@ -276,6 +276,44 @@ learned the hard way:
 2. **Check the whole payload, not its most famous file.** libcef.dll present is
    not CEF present.
 
+## Two kinds of fact, checked separately
+
+The one lesson worth carrying out of this port:
+
+> **Build-system facts and source facts are different facts. Checking one is
+> not evidence about the other.**
+
+`cmake/os-windows.cmake` defines no Qt loop and calls no `find_package(Qt6)`.
+Verified, and true. From it I concluded obs-browser was Qt-free on Windows and
+said so twice. The sources include Qt unconditionally anyway, and the build died
+on `C1083: Cannot open include file: 'QApplication'`.
+
+The repo now carries one example of each biting from the opposite direction:
+this one, and the `-DOBS_VERSION_OVERRIDE` case, where the source-level logic in
+versionconfig.cmake was exactly what the docs said and the build system still
+defeated it by spawning a NESTED cmake the argument never reached.
+
+## How a release consumes the engine, and what a lock edit costs
+
+`release.yml`'s arm64 job computes
+`producer-libobs-macos-<arch>-<sha256(obs.lock)[0:12]>` from the CHECKED-OUT
+lock, then searches the last **10 green `engine.yml` runs** for a run artifact
+containing that name, verifies its sha256, and fails hard if it finds none. The
+search is NOT branch-filtered, so a green run on a feature branch counts.
+
+Two consequences that are easy to get wrong:
+
+1. **A lock edit re-keys BOTH platforms**, because the hash covers the whole
+   file. After any lock change reaches main, one green `engine.yml` run must
+   happen before any tag.
+2. **`--status success` filters on the RUN, not the job.** A red Windows job
+   makes the whole run red, and the macOS artifact inside it becomes invisible
+   to `release.yml` even though the macOS job succeeded and uploaded it. So
+   while the Windows job is a work in progress, merging a lock edit to main
+   would leave macOS releases with no findable engine. Either land the lock edit
+   only once Windows is green, or mark the Windows job `continue-on-error` so
+   runs conclude green while it is still WIP. Do not merge a lock edit and hope.
+
 ## Still open
 
 - `obs.lock` carries no Windows dependency pins. OBS 32.1.2 has no
