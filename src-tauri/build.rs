@@ -93,6 +93,24 @@ fn find_default_artifact(os: &str) -> Option<PathBuf> {
         })
         .collect();
     candidates.sort_by_key(|p| p.metadata().and_then(|m| m.modified()).ok());
+
+    // The asymmetry above is fine when there is ONE artifact. After a lock edit
+    // there are usually two for the same OS -- built under the old lock and the
+    // new -- and then mtime decides silently. A checkout, a re-extract or a touch
+    // can reorder them, and linking the wrong engine looks exactly like linking
+    // the right one until something renders black at runtime. Say which one won.
+    if candidates.len() > 1 {
+        let names: Vec<String> = candidates
+            .iter()
+            .filter_map(|p| p.file_name().and_then(|n| n.to_str()).map(String::from))
+            .collect();
+        println!(
+            "cargo:warning=multiple {os} engine artifacts present ({}); linking the most recently modified: {}",
+            names.join(", "),
+            names.last().map(String::as_str).unwrap_or("?")
+        );
+    }
+
     candidates.pop()
 }
 
