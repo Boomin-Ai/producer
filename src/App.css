@@ -43,7 +43,9 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  /* The window base coat is native glass (shim.m). Views paint their own
+     opaque grounds; the ONLY bare region is home's rail gutter. */
+  background: transparent;
   color: var(--fg);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -5856,11 +5858,13 @@ textarea::placeholder {
 }
 
 .rm-split-grab {
-  width: 2px;
+  /* Always faintly visible: the panel structure should read at a glance,
+     not only under the cursor. */
+  width: 3px;
   height: 34px;
   border-radius: 999px;
-  background: transparent;
-  transition: background 0.12s ease;
+  background: rgba(255, 255, 255, 0.14);
+  transition: background 0.12s ease, height 0.12s ease;
 }
 
 .rm-split-h .rm-split-grab {
@@ -5870,6 +5874,7 @@ textarea::placeholder {
 .rm-split:hover .rm-split-grab,
 .rm-split:active .rm-split-grab {
   background: var(--mint);
+  height: 52px;
 }
 
 /* chat emotes: inline images sized to the text they replace */
@@ -6762,31 +6767,67 @@ textarea::placeholder {
   color: oklch(0.85 0.08 25);
 }
 
+/* Every top-level view is opaque at its root — no view may depend on the
+   body for its ground, because the body is glass. */
+#root > * {
+  background: var(--bg);
+}
+/* The one exception: home's glass column — flush full height at x 0..68.
+   The content's curved left edge is a REAL fixed element with border-radius
+   (WebKit demotes background-attachment:fixed on composited layers, so
+   gradient-composed curves scroll away; an element cannot). */
+#root > .cr.cr--vibrant {
+  isolation: isolate;
+  background: transparent;
+}
+/* The opaque ground, viewport-pinned: an element-height gradient can leave
+   the window bottom bare; a fixed sheet cannot. */
+#root > .cr.cr--vibrant::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 88px;
+  z-index: -1;
+  background: var(--rail-bg);
+}
+#root > .cr.cr--vibrant::before {
+  content: "";
+  position: fixed;
+  left: 72px;
+  top: 0;
+  bottom: 0;
+  width: 16px;
+  z-index: -1;
+  background: var(--rail-bg);
+  border-radius: 16px 0 0 16px;
+}
+
 /* ── Home rail — full-height frosted column, inset + rounded ───────────── */
 .cr.cr--vibrant .cr-home {
-  margin-left: 76px;
-  padding-left: 24px;
+  margin-left: 88px;
+  padding-left: 6px;
 }
 .home-rail {
   position: fixed;
-  left: 8px;
-  top: 8px;
-  bottom: 8px;
-  width: 60px;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 72px;
   z-index: 40;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  padding: 44px 0 12px; /* clear the traffic lights */
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.045);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
-  backdrop-filter: blur(18px) saturate(150%);
-  border: 0.5px solid rgba(255, 255, 255, 0.09);
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.32), inset 0 0.5px 0 rgba(255, 255, 255, 0.08);
+  padding: 48px 0 14px; /* clear the traffic lights */
+  /* Bare: the native material itself is obsidian (vibrant-dark, shim.m),
+     so every glass pixel matches — including the curve notches. */
+  background: transparent;
 }
 .home-rail-avatar {
+  cursor: pointer;
+  padding: 0;
   position: relative;
   width: 40px;
   height: 40px;
@@ -6818,6 +6859,7 @@ textarea::placeholder {
   border: 2px solid #0d1117;
 }
 .home-rail button {
+  padding: 0; /* WebKit's default button padding skews the glyph */
   width: 38px;
   height: 38px;
   display: grid;
@@ -6838,4 +6880,88 @@ textarea::placeholder {
 }
 .home-rail-spring {
   flex: 1;
+}
+
+/* ── Room mount veil ─────────────────────────────────────────────────────── */
+.rm-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  background: var(--bg);
+}
+.rm-veil-spin {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2.5px solid rgba(255, 255, 255, 0.14);
+  border-top-color: rgba(235, 238, 244, 0.85);
+  animation: rm-veil-rot 0.8s linear infinite;
+}
+.rm-veil-note {
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: rgba(235, 238, 244, 0.55);
+}
+@keyframes rm-veil-rot {
+  to { transform: rotate(360deg); }
+}
+
+.home-rail button.on {
+  background: rgba(255, 255, 255, 0.92);
+  color: #0b0e14;
+}
+.home-rail button.on:hover {
+  background: #fff;
+  color: #0b0e14;
+}
+
+.home-rail button svg,
+.home-rail-avatar span {
+  display: block;
+}
+
+/* Narrow guest panel: rows compress instead of clipping their controls. */
+.rm-guest-head {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.rm-guest-count,
+.rm-guest-wait {
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.rm-guests .rm-row-name,
+.rm-guest-head > span:first-of-type {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Popovers may never outgrow the window. */
+.rm-pop {
+  max-width: calc(100vw - 24px);
+}
+
+/* The room's transparent-hole stage (preview below the webview) must beat
+   the opaque view net above — same ID specificity plus the attribute. */
+[data-stage="transparent"] #root > * {
+  background: transparent;
+}
+
+/* Live guest previews in the panel — the feed itself, before the stage. */
+.rm-guest-thumb {
+  width: 62px;
+  height: 35px;
+  border-radius: 7px;
+  object-fit: cover;
+  background: #0a0d13;
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+  flex: 0 0 auto;
+}
+.rm-guest-thumb.empty {
+  display: inline-block;
 }

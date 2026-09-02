@@ -150,6 +150,24 @@ pub fn bootstrap() -> EngineReport {
 
 /// module_config_path feeds obs_module_config_path() — obs-browser derives
 /// its CEF cache dir from it (M-L7.1); harmless for every other plugin.
+/// The video mode the user last chose, persisted beside the module config so
+/// BOOT can start there directly — booting 720p30 and resetting to the stored
+/// mode afterwards tears the Metal pipeline down on the main thread at every
+/// room open (the beach ball).
+pub fn stored_video(dir: Option<&std::path::Path>) -> (u32, u32) {
+    let fallback = (720u32, 30u32);
+    let Some(dir) = dir else { return fallback };
+    let Ok(txt) = std::fs::read_to_string(dir.join("video.json")) else { return fallback };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&txt) else { return fallback };
+    let h = v.get("h").and_then(|x| x.as_u64()).unwrap_or(720) as u32;
+    let f = v.get("f").and_then(|x| x.as_u64()).unwrap_or(30) as u32;
+    if (h == 720 || h == 1080) && (f == 30 || f == 60) { (h, f) } else { fallback }
+}
+
+pub fn persist_video(dir: &std::path::Path, h: u32, f: u32) {
+    let _ = std::fs::write(dir.join("video.json"), format!("{{\"h\":{h},\"f\":{f}}}"));
+}
+
 pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> EngineReport {
     let mut report = EngineReport {
         ok: false,
@@ -188,8 +206,15 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
     // guest-render origin.
     let argv0 = CString::new("producer").unwrap();
     let media_flag = CString::new("--use-fake-ui-for-media-stream").unwrap();
+    // Dev builds expose the render pages' devtools — guest issues are
+    // otherwise invisible (CEF has no window, no console, no network tab).
+    #[cfg(debug_assertions)]
+    let debug_flag = CString::new("--remote-debugging-port=9223").unwrap();
+    #[cfg(debug_assertions)]
+    let cef_argv: [*const c_char; 3] = [argv0.as_ptr(), media_flag.as_ptr(), debug_flag.as_ptr()];
+    #[cfg(not(debug_assertions))]
     let cef_argv: [*const c_char; 2] = [argv0.as_ptr(), media_flag.as_ptr()];
-    unsafe { ffi::obs_set_cmdline_args(2, cef_argv.as_ptr()) };
+    unsafe { ffi::obs_set_cmdline_args(cef_argv.len() as i32, cef_argv.as_ptr()) };
 
     if !unsafe { ffi::obs_startup(locale.as_ptr(), config_ptr, ptr::null_mut()) } {
         report.errors.push("obs_startup failed".into());
@@ -212,9 +237,10 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
     }
 
     // Metal preferred, OpenGL fallback (A5 / F9); record the actual backend.
-    match reset_video("libobs-metal.dylib", 720, 30) {
+    let (boot_h, boot_f) = stored_video(module_config_dir);
+    match reset_video("libobs-metal.dylib", boot_h, boot_f) {
         Ok(()) => report.graphics_backend = Some("metal".into()),
-        Err(metal_rc) => match reset_video("libobs-opengl.dylib", 720, 30) {
+        Err(metal_rc) => match reset_video("libobs-opengl.dylib", boot_h, boot_f) {
             Ok(()) => {
                 report.graphics_backend = Some("opengl".into());
                 report.errors.push(format!(
@@ -463,6 +489,18 @@ pub enum SessionState {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct ExtraPeak {
+    pub id: String,
+    pub peak: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GuestThumb {
+    pub id: String,
+    pub rgba: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum LiveEvent {
     EngineReady {
@@ -487,6 +525,14 @@ pub enum LiveEvent {
     /// since the previous tick, 0..=1.
     Levels {
         mic_peak: f64,
+        extra_peaks: Vec<ExtraPeak>,
+    },
+    /// Live guest previews (~1 Hz): 128x72 RGBA, base64 — the panel shows a
+    /// real feed for everyone in the room, on stage or not.
+    GuestThumbs {
+        w: u32,
+        h: u32,
+        thumbs: Vec<GuestThumb>,
     },
     VideoChanged {
         height: u32,
@@ -898,8 +944,9 @@ pub fn start(
                 let mut s = snap.lock().unwrap();
                 s.engine_ready = true;
                 s.bootstrap_ok = report.ok;
-                s.video_height = 720;
-                s.video_fps = 30;
+                let (h, f) = stored_video(Some(&module_config_dir));
+                s.video_height = h;
+                s.video_fps = f;
                 s.graphics_backend = report.graphics_backend.clone();
             }
             sink(&LiveEvent::EngineReady {
@@ -934,6 +981,7 @@ pub fn start(
             let mut state = SessionState::Idle;
             let mut last_status_emit = Instant::now();
             let mut last_levels_emit = Instant::now();
+            let mut last_thumbs_emit = Instant::now();
             // CPU needs a persistent sampler: one reading has nothing to
             // compare against, so the value only means anything over time.
             let cpu_info: *mut c_void = unsafe { ffi::os_cpu_usage_info_start() };
@@ -1272,6 +1320,7 @@ pub fn start(
                                         sn.video_height = height;
                                         sn.video_fps = fps;
                                     }
+                                    persist_video(&module_config_dir, height, fps);
                                     sink(&LiveEvent::VideoChanged { height, fps });
                                 }
                                 Err(rc) => sink(&LiveEvent::EngineError {
@@ -1341,14 +1390,48 @@ pub fn start(
                     Err(mpsc::RecvTimeoutError::Timeout) => {}
                 }
 
-                // Mic meter stream — only while a mic source exists.
-                if scene.as_ref().is_some_and(|g| g.state().mic)
+                // Meter stream — while a mic OR any metered extra (guest,
+                // media) exists; guests must meter with the host mic off.
+                if scene
+                    .as_ref()
+                    .is_some_and(|g| g.state().mic || !g.take_extra_peaks_ids_empty())
                     && last_levels_emit.elapsed() > Duration::from_millis(110)
                 {
                     last_levels_emit = Instant::now();
                     sink(&LiveEvent::Levels {
                         mic_peak: graph::take_mic_peak(),
+                        extra_peaks: scene
+                            .as_ref()
+                            .map(|g| {
+                                g.take_extra_peaks()
+                                    .into_iter()
+                                    .map(|(id, peak)| ExtraPeak { id, peak })
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
                     });
+                }
+
+                if last_thumbs_emit.elapsed() > Duration::from_millis(900) {
+                    last_thumbs_emit = Instant::now();
+                    if let Some(g) = scene.as_mut() {
+                        let raw = g.guest_thumbs();
+                        if !raw.is_empty() {
+                            use base64::Engine as _;
+                            let thumbs = raw
+                                .into_iter()
+                                .map(|(id, rgba)| GuestThumb {
+                                    id,
+                                    rgba: base64::engine::general_purpose::STANDARD.encode(rgba),
+                                })
+                                .collect();
+                            sink(&LiveEvent::GuestThumbs {
+                                w: graph::THUMB_W,
+                                h: graph::THUMB_H,
+                                thumbs,
+                            });
+                        }
+                    }
                 }
 
                 if let Some(s) = session.as_mut() {

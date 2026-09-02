@@ -50,6 +50,69 @@ extern "C" fn audio_cb(
     AUDIO_PEAK_MICRO.fetch_max((peak * 1_000_000.0) as u64, Ordering::Relaxed);
 }
 
+/// Per-extra audio peaks, keyed by source pointer. Fixed atomic slots — the
+/// audio thread must never take a lock (§5.1); 16 covers room cap with room
+/// to spare.
+const PEAK_SLOT: (std::sync::atomic::AtomicUsize, std::sync::atomic::AtomicU64) = (
+    std::sync::atomic::AtomicUsize::new(0),
+    std::sync::atomic::AtomicU64::new(0),
+);
+static EXTRA_PEAKS: [(std::sync::atomic::AtomicUsize, std::sync::atomic::AtomicU64); 16] =
+    [PEAK_SLOT; 16];
+
+extern "C" fn extra_audio_cb(
+    _param: *mut c_void,
+    source: *mut ffi::obs_source_t,
+    audio: *const ffi::audio_data,
+    muted: bool,
+) {
+    if muted || audio.is_null() {
+        return;
+    }
+    let audio = unsafe { &*audio };
+    let plane = audio.data[0] as *const f32;
+    if plane.is_null() {
+        return;
+    }
+    let mut peak = 0f32;
+    for i in 0..audio.frames as usize {
+        let s = unsafe { *plane.add(i) }.abs();
+        if s > peak {
+            peak = s;
+        }
+    }
+    let key = source as usize;
+    for (slot_src, slot_peak) in EXTRA_PEAKS.iter() {
+        if slot_src.load(Ordering::Relaxed) == key {
+            slot_peak.fetch_max((peak * 1_000_000.0) as u64, Ordering::Relaxed);
+            return;
+        }
+    }
+}
+
+fn peak_slot_register(src: *mut ffi::obs_source_t) {
+    let key = src as usize;
+    for (slot_src, slot_peak) in EXTRA_PEAKS.iter() {
+        if slot_src
+            .compare_exchange(0, key, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
+        {
+            slot_peak.store(0, Ordering::Relaxed);
+            return;
+        }
+    }
+}
+
+fn peak_slot_release(src: *mut ffi::obs_source_t) {
+    let key = src as usize;
+    for (slot_src, slot_peak) in EXTRA_PEAKS.iter() {
+        if slot_src.load(Ordering::Relaxed) == key {
+            slot_src.store(0, Ordering::Relaxed);
+            slot_peak.store(0, Ordering::Relaxed);
+        }
+    }
+}
+
 extern "C" fn video_cb(_param: *mut c_void, _frame: *mut ffi::video_data) {
     VIDEO_FRAMES.fetch_add(1, Ordering::Relaxed);
 }
@@ -296,6 +359,10 @@ pub struct SceneGraph {
     stinger: Option<(*mut ffi::obs_sceneitem_t, *mut ffi::obs_source_t)>,
     stinger_path: Option<String>,
     stinger_duration: i64,
+    /// Cached GPU objects for guest thumbnails (one texrender + staging
+    /// surface reused every tick — creating them per frame would thrash).
+    thumb_rt: *mut std::os::raw::c_void,
+    thumb_ss: *mut std::os::raw::c_void,
 }
 
 /// One selectable device/display for a source's picker.
@@ -454,6 +521,8 @@ impl SceneGraph {
                 mic_device: None,
                 screen_device: None,
                 extras: Vec::new(),
+                thumb_rt: std::ptr::null_mut(),
+                thumb_ss: std::ptr::null_mut(),
                 stinger: None,
                 stinger_path: None,
                 stinger_duration: 0,
@@ -1014,6 +1083,11 @@ impl SceneGraph {
             if !born_visible {
                 ffi::obs_source_set_muted(src, true);
             }
+            // Meter every audio-bearing extra the mixer shows a strip for.
+            if matches!(kind, "guest" | "media") {
+                peak_slot_register(src);
+                ffi::obs_source_add_audio_capture_callback(src, extra_audio_cb, ptr::null_mut());
+            }
             self.extras.push(ExtraItem {
                 id: id.to_string(),
                 kind,
@@ -1033,6 +1107,12 @@ impl SceneGraph {
             .position(|e| e.id == id)
             .ok_or_else(|| format!("no item named {id}"))?;
         let e = self.extras.remove(idx);
+        if matches!(e.kind, "guest" | "media") {
+            unsafe {
+                ffi::obs_source_remove_audio_capture_callback(e.src, extra_audio_cb, ptr::null_mut());
+            }
+            peak_slot_release(e.src);
+        }
         unsafe {
             ffi::obs_sceneitem_remove(e.item);
             ffi::obs_source_release(e.src);
@@ -1619,5 +1699,86 @@ pub fn capture_probe(window: Duration) -> CaptureProbeReport {
         mic_audio_frames: AUDIO_FRAMES.load(Ordering::Relaxed),
         mic_peak_level: AUDIO_PEAK_MICRO.load(Ordering::Relaxed) as f64 / 1_000_000.0,
         notes,
+    }
+}
+
+
+impl SceneGraph {
+    /// Cheap gate: does any metered extra exist at all?
+    pub fn take_extra_peaks_ids_empty(&self) -> bool {
+        !self.extras.iter().any(|e| matches!(e.kind, "guest" | "media"))
+    }
+
+    /// Peak-and-reset for every metered extra since the last call, 0..=1.
+    pub fn take_extra_peaks(&self) -> Vec<(String, f64)> {
+        let mut out = Vec::new();
+        for e in &self.extras {
+            if !matches!(e.kind, "guest" | "media") {
+                continue;
+            }
+            let key = e.src as usize;
+            for (slot_src, slot_peak) in EXTRA_PEAKS.iter() {
+                if slot_src.load(Ordering::Relaxed) == key {
+                    let v = slot_peak.swap(0, Ordering::Relaxed) as f64 / 1_000_000.0;
+                    out.push((e.id.clone(), v));
+                }
+            }
+        }
+        out
+    }
+}
+
+pub const THUMB_W: u32 = 128;
+pub const THUMB_H: u32 = 72;
+
+impl SceneGraph {
+    /// Live thumbnails of every GUEST source, visible or hidden — the panel
+    /// shows who is actually on a feed before anyone reaches the stage. GPU
+    /// render into a cached 128x72 target, staged back to RGBA rows.
+    pub fn guest_thumbs(&mut self) -> Vec<(String, Vec<u8>)> {
+        let mut out = Vec::new();
+        unsafe {
+            ffi::obs_enter_graphics();
+            if self.thumb_rt.is_null() {
+                self.thumb_rt = ffi::gs_texrender_create(ffi::GS_RGBA, ffi::GS_ZS_NONE);
+            }
+            if self.thumb_ss.is_null() {
+                self.thumb_ss = ffi::gs_stagesurface_create(THUMB_W, THUMB_H, ffi::GS_RGBA);
+            }
+            if self.thumb_rt.is_null() || self.thumb_ss.is_null() {
+                ffi::obs_leave_graphics();
+                return out;
+            }
+            for e in &self.extras {
+                if e.kind != "guest" || e.src.is_null() {
+                    continue;
+                }
+                let sw = ffi::obs_source_get_width(e.src).max(1);
+                let sh = ffi::obs_source_get_height(e.src).max(1);
+                ffi::gs_texrender_reset(self.thumb_rt);
+                if !ffi::gs_texrender_begin(self.thumb_rt, THUMB_W, THUMB_H) {
+                    continue;
+                }
+                let clear = ffi::vec4 { x: 0.0, y: 0.0, z: 0.0, w: 1.0 };
+                ffi::gs_clear(1, &clear, 0.0, 0); // GS_CLEAR_COLOR
+                ffi::gs_ortho(0.0, sw as f32, 0.0, sh as f32, -100.0, 100.0);
+                ffi::obs_source_video_render(e.src);
+                ffi::gs_texrender_end(self.thumb_rt);
+                ffi::gs_stage_texture(self.thumb_ss, ffi::gs_texrender_get_texture(self.thumb_rt));
+                let mut data: *mut u8 = std::ptr::null_mut();
+                let mut linesize: u32 = 0;
+                if ffi::gs_stagesurface_map(self.thumb_ss, &mut data, &mut linesize) && !data.is_null() {
+                    let mut rgba = Vec::with_capacity((THUMB_W * THUMB_H * 4) as usize);
+                    for row in 0..THUMB_H {
+                        let src_row = data.add((row * linesize) as usize);
+                        rgba.extend_from_slice(std::slice::from_raw_parts(src_row, (THUMB_W * 4) as usize));
+                    }
+                    ffi::gs_stagesurface_unmap(self.thumb_ss);
+                    out.push((e.id.clone(), rgba));
+                }
+            }
+            ffi::obs_leave_graphics();
+        }
+        out
     }
 }

@@ -615,6 +615,7 @@ function SourceSettingsStrip({
  * admitting is an explicit act — otherwise anyone holding the URL would appear
  * on air under a name they typed themselves. */
 function GuestPanel({
+  thumbs,
   roster,
   link,
   error,
@@ -625,6 +626,7 @@ function GuestPanel({
   onMute,
   onShow,
 }: {
+  thumbs: Record<string, string>;
   roster: RoomGuest[];
   link: string | null;
   error: string | null;
@@ -706,6 +708,11 @@ function GuestPanel({
             const q = (g.quality ?? g.connection_quality ?? "unknown") as string;
             return (
               <div key={g.id} className="rm-guest">
+                {thumbs[`guest-${g.id.slice(0, 8)}`] ? (
+                  <img className="rm-guest-thumb" src={thumbs[`guest-${g.id.slice(0, 8)}`]} alt="" />
+                ) : (
+                  <span className="rm-guest-thumb empty" />
+                )}
                 <span className="rm-guest-name">{g.display_name || "Guest"}</span>
                 {/* Health of what actually reaches the show. Neutral when
                   * unknown — never green on a stale reading. */}
@@ -722,7 +729,6 @@ function GuestPanel({
                   }
                 />
                 <span className={`rm-guest-live${item?.visible ? "" : " off"}`}>
-                  <span className="rm-guest-dot" />
                   {item?.visible ? "on screen" : "in room"}
                 </span>
                 {/* At panel size everyone is already connected and audible,
@@ -1173,6 +1179,8 @@ function PreviewPanel({ children }: { children?: ReactNode }) {
       window.removeEventListener("scroll", sync, true);
       if (attached.current) {
         attached.current = false;
+        // Home must not inherit the hole: its ground rules assume opaque.
+        document.documentElement.dataset.stage = "opaque";
         ipc.liveDetachPreview().catch(() => {});
       }
     };
@@ -1898,6 +1906,17 @@ export function LiveView({
 }) {
   const [destinations, setDestinations] = useState<LiveDestination[]>([]);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
+  /** Live guest previews, source-id → data URL (~1 Hz from the engine). */
+  const [guestThumbs, setGuestThumbs] = useState<Record<string, string>>({});
+  // Mount veil: the engine takes a beat to bootstrap, and permission grants
+  // bounce sources — both look like a broken room if the half-built UI shows.
+  // The veil holds until the engine is truly ready, and returns during
+  // post-Allow source restarts.
+  const [mountVeil, setMountVeil] = useState(true);
+  const [veilNote, setVeilNote] = useState("Preparing the stage…");
+  // engineOk means the ENGINE booted — the room is configured only after the
+  // stored video mode is applied and the pending scene has been laid out.
+  const [sceneSettled, setSceneSettled] = useState(false);
   const [statuses, setStatuses] = useState<Map<string, LiveDestStatus>>(new Map());
 
   // Header health. Derived every render, never stored: a health number that
@@ -1913,6 +1932,8 @@ export function LiveView({
   const [banner, setBanner] = useState<string | null>(null);
   const [sources, setSources] = useState<LiveSources>({ screen: false, camera: false, mic: false });
   const [micLevel, setMicLevel] = useState(0);
+  /** Per-source meter levels for audio-bearing extras (guests, media). */
+  const [extraLevels, setExtraLevels] = useState<Record<string, number>>({});
   const [sheetOpen, setSheetOpen] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
   const [micPopOpen, setMicPopOpen] = useState(false);
@@ -2675,6 +2696,35 @@ export function LiveView({
         const db = ev.mic_peak > 0.00001 ? 20 * Math.log10(ev.mic_peak) : -60;
         const pct = Math.max(0, Math.min(1, (db + 50) / 50));
         setMicLevel((prev) => Math.max(pct, prev * 0.78));
+        if (ev.extra_peaks?.length) {
+          setExtraLevels((prev) => {
+            const next = { ...prev };
+            for (const p of ev.extra_peaks) {
+              const db = p.peak > 0.00001 ? 20 * Math.log10(p.peak) : -60;
+              const pctX = Math.max(0, Math.min(1, (db + 50) / 50));
+              next[p.id] = Math.max(pctX, (prev[p.id] ?? 0) * 0.78);
+            }
+            return next;
+          });
+        }
+      } else if (ev.type === "guest_thumbs") {
+        // RGBA rows → canvas → data URL. ~1 Hz and 128x72, so the cost is
+        // trivial; doing it here keeps the panel a plain <img>.
+        const canvas = document.createElement("canvas");
+        canvas.width = ev.w;
+        canvas.height = ev.h;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          const next: Record<string, string> = {};
+          for (const t of ev.thumbs) {
+            const bin = atob(t.rgba);
+            const px = new Uint8ClampedArray(bin.length);
+            for (let i = 0; i < bin.length; i++) px[i] = bin.charCodeAt(i);
+            ctx.putImageData(new ImageData(px, ev.w, ev.h), 0, 0);
+            next[t.id] = canvas.toDataURL("image/jpeg", 0.7);
+          }
+          setGuestThumbs((prev) => ({ ...prev, ...next }));
+        }
       } else if (ev.type === "engine_error") {
         setBanner(ev.message);
       } else if (ev.type === "engine_ready" && !ev.ok) {
@@ -2739,6 +2789,18 @@ export function LiveView({
       : 0;
 
   const engineOk = snapshot?.engine_ready && snapshot?.bootstrap_ok;
+  useEffect(() => {
+    if (!engineOk || !sceneSettled || !mountVeil) return;
+    // A beat of settle time: lifting mid-populate trades one flicker for
+    // another.
+    const t = window.setTimeout(() => setMountVeil(false), 350);
+    return () => window.clearTimeout(t);
+  }, [engineOk, sceneSettled, mountVeil]);
+  // Hard cap: a wedged step may never trap the user behind the veil.
+  useEffect(() => {
+    const t = window.setTimeout(() => setMountVeil(false), 8000);
+    return () => window.clearTimeout(t);
+  }, []);
 
   /** Channel selection is part of the room document; opening a room pushes
    * it to the engine's destination flags so go-live stays honest. */
@@ -3193,10 +3255,19 @@ export function LiveView({
 
   // Mount the room into its saved scene once the engine can take it.
   useEffect(() => {
-    if (!pendingScene || !engineOk) return;
+    if (!engineOk) return;
+    if (!pendingScene) {
+      setSceneSettled(true);
+      return;
+    }
     const sc = scenes.find((x) => x.id === pendingScene);
     setPendingScene(null);
-    if (sc) applyScene(sc);
+    void (async () => {
+      if (sc) await applyScene(sc);
+      // The apply's transforms land engine-side just after the awaits;
+      // half a beat covers the tail of the animation frames.
+      window.setTimeout(() => setSceneSettled(true), 500);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingScene, engineOk]);
 
@@ -3592,6 +3663,7 @@ export function LiveView({
         // so this is a dockable panel of its own, not a row inside Sources.
         return (
           <GuestPanel
+            thumbs={guestThumbs}
             roster={roster}
             link={guestLink}
             error={guestErr}
@@ -3620,7 +3692,7 @@ export function LiveView({
                       key={i.id}
                       label={i.label || i.kind}
                       icon={i.kind === "guest" ? ic.invite : ic.play}
-                      level={0}
+                      level={extraLevels[i.id] ?? 0}
                       volume={i.volume ?? 1}
                       muted={i.muted ?? false}
                       onVolume={(v) => setSourceAudio(i.id, v).catch(() => {})}
@@ -4002,6 +4074,12 @@ export function LiveView({
 
   return (
     <div className={`room${layoutEdit ? " layout-edit" : ""}`}>
+      {mountVeil && (
+        <div className="rm-veil">
+          <span className="rm-veil-spin" />
+          <span className="rm-veil-note">{veilNote}</span>
+        </div>
+      )}
       {anyPop && <div className="rm-pop-backdrop" onClick={closePops} />}
 
       <header className="rm-top" data-tauri-drag-region>
@@ -4378,11 +4456,17 @@ export function LiveView({
               // takes effect without a relaunch or a second Allow.
               const b = sources;
               const bounce = async (screen: boolean, camera: boolean, mic: boolean, on: () => Promise<unknown>) => {
+                // The grant is confirmed but the sources restart to bind it —
+                // hold the veil over the flicker instead of showing it.
+                setVeilNote("Applying access…");
+                setMountVeil(true);
                 try {
                   await ipc.liveSetSources(screen, camera, mic);
                   await on();
                 } catch {
                   /* engine reports via banner */
+                } finally {
+                  window.setTimeout(() => setMountVeil(false), 300);
                 }
               };
               if (kind === "mic" && b.mic)

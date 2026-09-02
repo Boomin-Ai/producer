@@ -41,11 +41,65 @@ static NSView *find_webview(NSView *v) {
 // if the webview stops painting its own opaque background — then the window
 // itself provides the app's base color and the preview shows through the
 // transparent hole the room's CSS leaves for it.
+static NSVisualEffectView *find_vibrancy(NSView *content) {
+    for (NSView *sub in content.subviews) {
+        if ([sub isKindOfClass:[NSVisualEffectView class]]) return (NSVisualEffectView *)sub;
+    }
+    return nil;
+}
+
+// Real glass: the window's solid base coat becomes an NSVisualEffectView that
+// blurs whatever sits behind the window. The webview stops drawing its own
+// background so CSS decides, region by region, what is opaque and what shows
+// the glass. Idempotent; returns 1 when the effect view is in place.
+int producer_apply_window_vibrancy(void *ns_window) {
+    __block int ok = 0;
+    run_on_main(^{
+        NSWindow *win = (__bridge NSWindow *)ns_window;
+        if (!win) return;
+        NSView *content = win.contentView;
+        if (!content) return;
+        win.opaque = NO;
+        win.backgroundColor = [NSColor clearColor];
+        if (!find_vibrancy(content)) {
+            NSVisualEffectView *fx = [[NSVisualEffectView alloc] initWithFrame:content.bounds];
+            fx.material = NSVisualEffectMaterialHUDWindow;
+            fx.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+            fx.state = NSVisualEffectStateActive;
+            // Obsidian: render the material in vibrant-dark so EVERY glass
+            // pixel is dark at the source — no CSS tint layer can cover the
+            // curve notches, and a tint that lives here never seams.
+            fx.appearance = [NSAppearance appearanceNamed:NSAppearanceNameVibrantDark];
+            fx.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+            [content addSubview:fx positioned:NSWindowBelow relativeTo:nil];
+        }
+        WKWebView *wk = (WKWebView *)find_webview(content);
+        if (wk) {
+            @try {
+                [wk setValue:@NO forKey:@"drawsBackground"];
+            } @catch (NSException *e) {
+                (void)e;
+            }
+            if (@available(macOS 12.0, *)) {
+                wk.underPageBackgroundColor = [NSColor clearColor];
+            }
+        }
+        ok = 1;
+    });
+    return ok;
+}
+
 int producer_preview_prepare_window(void *ns_window) {
     __block int ok = 0;
     run_on_main(^{
         NSWindow *win = (__bridge NSWindow *)ns_window;
         if (!win) return;
+        // A ROOM must behave exactly as it always has: preview BELOW the
+        // webview, HTML (outlines, popovers) above it. Glass floats the
+        // preview over the page, which buries every stage overlay — so
+        // entering a room strips the effect view; Home re-applies it.
+        NSVisualEffectView *fx = find_vibrancy(win.contentView);
+        if (fx) [fx removeFromSuperview];
         win.opaque = YES;
         win.backgroundColor = [NSColor colorWithSRGBRed:1.0 / 255.0
                                                   green:6.0 / 255.0
