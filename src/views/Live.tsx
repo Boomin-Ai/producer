@@ -1934,6 +1934,10 @@ export function LiveView({
   const [banner, setBanner] = useState<string | null>(null);
   const [sources, setSources] = useState<LiveSources>({ screen: false, camera: false, mic: false });
   const [micLevel, setMicLevel] = useState(0);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+  useEffect(() => {
+    import("@tauri-apps/api/app").then(({ getVersion }) => getVersion()).then(setAppVersion).catch(() => {});
+  }, []);
   /** Per-source meter levels for audio-bearing extras (guests, media). */
   const [extraLevels, setExtraLevels] = useState<Record<string, number>>({});
   const [sheetOpen, setSheetOpen] = useState(true);
@@ -4391,6 +4395,62 @@ export function LiveView({
             )}
           </div>
 
+          {/* Stage overlays: HTML floats above the hole-mode preview. */}
+          {streaming && (
+            <div className="stg-live">
+              <span className="stg-live-dot" />
+              LIVE {`${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}
+            </div>
+          )}
+          {engineOk && (
+            <div className="stg-meter" title="Mic level">
+              {Array.from({ length: 8 }).map((_, k) => (
+                <i key={k} className={micLevel * 8 > k ? "on" : ""} />
+              ))}
+            </div>
+          )}
+          {engineOk && (
+            <div className="stg-bar">
+              <button
+                className={`stg-btn${sources.mic_muted ? " off" : ""}`}
+                title={sources.mic_muted ? "Unmute mic" : "Mute mic"}
+                onClick={toggleMute}
+              >
+                {ic.mic}
+              </button>
+              {(() => {
+                const cam = (sources.items ?? []).find((i) => i.id === "camera");
+                return cam ? (
+                  <button
+                    className={`stg-btn${cam.visible ? "" : " off"}`}
+                    title={cam.visible ? "Hide camera" : "Show camera"}
+                    onClick={() => ipc.liveSetTransform("camera", { visible: !cam.visible }, true).catch(() => {})}
+                  >
+                    {ic.cam}
+                  </button>
+                ) : null;
+              })()}
+              {(() => {
+                const scr = (sources.items ?? []).find((i) => i.id === "screen");
+                return scr ? (
+                  <button
+                    className={`stg-btn${scr.visible ? "" : " off"}`}
+                    title={scr.visible ? "Hide screen" : "Show screen"}
+                    onClick={() => ipc.liveSetTransform("screen", { visible: !scr.visible }, true).catch(() => {})}
+                  >
+                    {ic.screen}
+                  </button>
+                ) : null;
+              })()}
+              <button
+                className={`stg-btn${recPath ? " rec" : ""}`}
+                title={recPath ? "Stop recording" : "Record"}
+                onClick={toggleRecord}
+              >
+                <span className="rm-rec-dot" />
+              </button>
+            </div>
+          )}
           <div className="rm-float">{banner && <div className="rm-banner">{banner}</div>}</div>
 
           <PermBanner
@@ -4630,6 +4690,24 @@ export function LiveView({
           )}
         </div>
       )}
+      <footer className="rm-foot">
+        <span className="rm-foot-item">Producer v{appVersion ?? "…"}</span>
+        <span className="rm-foot-item">
+          Stream health
+          <span className={`stg-meter foot q-${quality}`}>
+            {Array.from({ length: 6 }).map((_, k) => (
+              <i key={k} className={(quality === "excellent" ? 6 : quality === "good" ? 4 : quality === "mediocre" ? 2 : quality === "bad" ? 1 : 0) > k ? "on" : ""} />
+            ))}
+          </span>
+          <span className="rm-foot-q">{quality === "off" ? "idle" : quality}</span>
+        </span>
+        {recPath && (
+          <span className="rm-foot-item rec">
+            <span className="rm-rec-dot" /> Recording {`${Math.floor(recElapsed / 60)}:${String(recElapsed % 60).padStart(2, "0")}`}
+          </span>
+        )}
+        <span className="rm-foot-item dim">{snapshot?.graphics_backend ?? ""}</span>
+      </footer>
     </div>
   );
 }

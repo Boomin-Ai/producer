@@ -7319,3 +7319,112 @@ textarea::placeholder {
   font-size: 12px;
   cursor: pointer;
 }
+
+/* ── Stage overlays + floating toolbar (P5) ── */
+.stg-live {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 12;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 26px;
+  padding: 0 11px;
+  border-radius: var(--r-pill);
+  background: rgba(3, 5, 9, 0.72);
+  border: 0.5px solid var(--line-2);
+  color: var(--fg-1);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.stg-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+  animation: rm-chan-pulse 1.6s ease-in-out infinite;
+}
+.stg-meter {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 12;
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 16px;
+  pointer-events: none;
+}
+.stg-meter i {
+  width: 3px;
+  border-radius: 1px;
+  background: var(--line-2);
+  height: 100%;
+}
+.stg-meter i:nth-child(1) { height: 30%; } .stg-meter i:nth-child(2) { height: 42%; }
+.stg-meter i:nth-child(3) { height: 54%; } .stg-meter i:nth-child(4) { height: 66%; }
+.stg-meter i:nth-child(5) { height: 78%; } .stg-meter i:nth-child(6) { height: 88%; }
+.stg-meter i:nth-child(7) { height: 94%; } .stg-meter i:nth-child(8) { height: 100%; }
+.stg-meter i.on { background: var(--mint); }
+.stg-meter.foot { position: static; height: 10px; }
+.stg-bar {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border-radius: var(--r-pill);
+  background: rgba(3, 5, 9, 0.72);
+  border: 0.5px solid var(--line-2);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.stg-btn {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--fg-1);
+  cursor: pointer;
+}
+.stg-btn:hover { background: var(--surface-3); }
+.stg-btn.off { color: var(--fg-3); background: transparent; }
+.stg-btn.rec { background: rgba(239, 68, 68, 0.2); }
+.stg-btn.rec .rm-rec-dot { background: var(--red); }
+
+/* ── Footer strip (P6) ── */
+.rm-foot {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  height: 30px;
+  padding: 0 14px;
+  border-top: 0.5px solid var(--line-1);
+  font-size: 11px;
+  color: var(--fg-3);
+}
+.rm-foot-item { display: inline-flex; align-items: center; gap: 7px; }
+.rm-foot-item.rec { color: #fca5a5; }
+.rm-foot-item.dim { margin-left: auto; opacity: 0.7; }
+.rm-foot-q { text-transform: capitalize; color: var(--fg-2); }
+
+/* ── Mixer, reference anatomy (P6): name top, LED ticks, controls bottom ── */
+.rm-strip { flex-direction: column; }
+.rm-strip .rm-strip-name { order: -2; font-size: 11.5px; }
+.rm-strip .rm-strip-fx { order: -1; }
+.rm-meter { overflow: hidden; }
+.rm-meter-fill {
+  -webkit-mask-image: repeating-linear-gradient(to top, #000 0 3px, transparent 3px 5px);
+  mask-image: repeating-linear-gradient(to top, #000 0 3px, transparent 3px 5px);
+}
