@@ -53,7 +53,7 @@ import {
   type Dock,
   type Layout,
   type PanelId,
-  BOTTOM_MIN, BOTTOM_MAX, BOTTOM_SLIM, TOP_MIN, TOP_MAX,
+  BOTTOM_MAX, TOP_MAX, ROW_SNAP, ROW_MINI,
 } from "../lib/layout";
 import {
   DEFAULT_SCENES,
@@ -2067,7 +2067,7 @@ export function LiveView({
   const shown: DockSizes = liveSizes ?? sizes;
   /** A short bottom dock IS the top form — the form system has one slim axis,
    * so panels collapse into exactly the console shapes they wear up top. */
-  const bottomSlim = !!shown.bottom && shown.bottom <= BOTTOM_SLIM;
+  const bottomSlim = !!shown.bottom && shown.bottom <= ROW_SNAP;
   const formDockOf = (id: PanelId): Dock => {
     const d = dockOf(layout, id);
     return d === "bottom" && bottomSlim ? "top" : d;
@@ -2116,7 +2116,7 @@ export function LiveView({
         axis,
         startX: e.clientX,
         startY: e.clientY,
-        startPx: (axis === "x" ? rect?.width : rect?.height) ?? (kind === "top" ? TOP_MIN : SIDE_MIN),
+        startPx: (axis === "x" ? rect?.width : rect?.height) ?? (kind === "top" ? ROW_MINI : SIDE_MIN),
       };
     }
     setLiveSizes(sizes);
@@ -2144,12 +2144,15 @@ export function LiveView({
       // Handles sit on the stage side of every dock, so growth is always a
       // drag TOWARD the stage: left +, right −, top +, bottom −.
       const raw = r.kind === "left" || r.kind === "top" ? (r.startPx ?? 0) + d : (r.startPx ?? 0) - d;
+      // Row docks have a universal MINI view: under the snap threshold they
+      // warp straight to ROW_MINI (console form for every panel) instead of
+      // lingering at broken in-between heights.
       const px =
-        r.kind === "top"
-          ? Math.max(TOP_MIN, Math.min(TOP_MAX, raw))
-          : r.kind === "bottom"
-            ? Math.max(BOTTOM_MIN, Math.min(BOTTOM_MAX, raw))
-            : Math.max(SIDE_MIN, Math.min(SIDE_MAX, raw));
+        r.kind === "top" || r.kind === "bottom"
+          ? raw < ROW_SNAP
+            ? ROW_MINI
+            : Math.min(r.kind === "top" ? TOP_MAX : BOTTOM_MAX, raw)
+          : Math.max(SIDE_MIN, Math.min(SIDE_MAX, raw));
       setLiveSizes({ ...sizes, [r.kind]: px });
     }
   };

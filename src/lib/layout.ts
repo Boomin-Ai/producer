@@ -50,11 +50,13 @@ export interface DockSizes {
 
 export const SIDE_MIN = 200;
 export const SIDE_MAX = 560;
-export const BOTTOM_MIN = 88;
 export const BOTTOM_MAX = 480;
-export const BOTTOM_SLIM = 140;
-export const TOP_MIN = 48;
 export const TOP_MAX = 240;
+/** The universal mini view: dragging any row dock under ROW_SNAP warps it to
+ * exactly ROW_MINI, where every panel wears its console (top) form. One
+ * threshold, one landing size — no broken in-between heights. */
+export const ROW_SNAP = 120;
+export const ROW_MINI = 56;
 
 export const PRESETS: { key: string; label: string; note: string; layout: Layout }[] = [
   {

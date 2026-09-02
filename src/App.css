@@ -6406,7 +6406,9 @@ textarea::placeholder {
 .room:not(.layout-edit) .rm-panel { position: relative; }
 .room:not(.layout-edit) .rm-panel:not(.rm-panel-guests) > .rm-panel-head {
   position: absolute;
-  top: 6px;
+  /* Bottom-right, like the guest rail: the one corner in-content headers
+   * (Filters' own back/+ row lives top) never claim. */
+  bottom: 6px;
   right: 6px;
   z-index: 6;
   padding: 0;
@@ -6414,6 +6416,12 @@ textarea::placeholder {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.14s ease;
+}
+/* Console rows are one line tall — center the pill on the row instead. */
+.room:not(.layout-edit) .rm-panel[data-in="top"]:not(.rm-panel-guests) > .rm-panel-head {
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
 }
 .room:not(.layout-edit) .rm-panel:not(.rm-panel-guests):hover > .rm-panel-head,
 .room:not(.layout-edit) .rm-panel:not(.rm-panel-guests) > .rm-panel-head:focus-within {
