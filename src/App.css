@@ -6377,6 +6377,43 @@ textarea::placeholder {
   letter-spacing: 0.08em;
   color: var(--fg-3);
 }
+
+/* ── Titles are EDIT-MODE chrome ──────────────────────────────────────────
+   Live, a panel is ALL content: no label row eating the top of the dock.
+   Actions float in on hover, top-right — the guest rail's pattern,
+   generalized by decree. Edit mode restores the full head (grip, title,
+   hide) because that is when you need to know which card is which. Guests
+   keep their own bottom-right chrome, already built this way. */
+.room:not(.layout-edit) .rm-panel { position: relative; }
+.room:not(.layout-edit) .rm-panel:not(.rm-panel-guests) > .rm-panel-head {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 6;
+  padding: 0;
+  min-height: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.14s ease;
+}
+.room:not(.layout-edit) .rm-panel:not(.rm-panel-guests):hover > .rm-panel-head,
+.room:not(.layout-edit) .rm-panel:not(.rm-panel-guests) > .rm-panel-head:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+.room:not(.layout-edit) .rm-panel-head .rm-group-label,
+.room:not(.layout-edit) .rm-panel-head .rm-grip,
+.room:not(.layout-edit) .rm-panel-head .rm-panel-hide {
+  display: none;
+}
+/* A quiet plate behind the floating actions so they read over any content. */
+.room:not(.layout-edit) .rm-panel:not(.rm-panel-guests) .rm-panel-actions {
+  background: oklch(0.13 0.02 250 / 0.82);
+  border: 1px solid var(--line-1);
+  border-radius: 999px;
+  padding: 3px 6px;
+  backdrop-filter: blur(8px);
+}
 .rm-panel-body {
   padding: 8px var(--pad-card) var(--pad-card);
 }
