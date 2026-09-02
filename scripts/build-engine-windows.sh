@@ -95,8 +95,14 @@ echo "build output: $OUT"
 rm -rf "$STAGE"
 mkdir -p "$STAGE/bin" "$STAGE/obs-plugins/64bit" "$STAGE/data" "$STAGE/licenses"
 
-cp "$OUT"/*.dll "$STAGE/bin/" 2>/dev/null || true
-cp "$OUT"/*.exe "$STAGE/bin/" 2>/dev/null || true
+# WHOLESALE, not *.dll + *.exe. CEF's Windows runtime payload sits in this same
+# directory and is mostly NOT a DLL: icudtl.dat (CefInitialize hard-fails without
+# it), resources.pak / chrome_*.pak, v8_context_snapshot.bin, and locales/ - a
+# SUBDIRECTORY no *.dll glob can ever match. Miss any of them and obs-browser
+# loads, then dies at init, and the failure reads as "guests are broken" three
+# rungs later instead of "staging is incomplete" right here. obs64.exe rides
+# along; it is inert and useful for debugging.
+cp -R "$OUT"/. "$STAGE/bin/"
 # THE IMPORT LIBRARY. A source build produces obs.lib; an extracted release does
 # not. Staging it means Windows devs can link the normal way — raw-dylib in
 # ffi.rs is what makes the extract ALSO work, not a replacement for this.
@@ -128,8 +134,11 @@ DATA_SRC="$BUILD/rundir/Release/data"
 # shipping an engine that silently cannot render a guest.
 [[ -f "$STAGE/obs-plugins/64bit/obs-browser.dll" ]] \
   || { echo "FATAL: obs-browser.dll not staged — guests cannot work without it" >&2; exit 1; }
-ls "$STAGE/bin"/libcef.dll >/dev/null 2>&1 \
-  || echo "WARNING: libcef.dll not in bin/ — check where the CEF payload landed" >&2
+# CEF is not one file. Check the load-bearing pieces here, where the message can
+# name the cause; engine-closure-windows.sh asserts the same set again as a gate.
+for cef in libcef.dll icudtl.dat locales; do
+  [[ -e "$STAGE/bin/$cef" ]] || echo "WARNING: CEF payload missing $cef in bin/ - obs-browser will fail at init" >&2
+done
 
 cp "$SRC_DIR/COPYING" "$STAGE/licenses/" 2>/dev/null || true
 

@@ -45,14 +45,31 @@ done < <(engine_plugins windows)
 # ── 2. obs-browser + CEF, called out separately ──────────────────────────────
 if [[ -f "$STAGE/obs-plugins/64bit/obs-browser.dll" ]]; then
   echo "  ok   obs-browser present"
+  # CEF IS NOT ONE FILE. libcef.dll alone is not a loadable CEF: init reads
+  # icudtl.dat and the locales/ directory, and dies without them. A staging step
+  # that copies only *.dll passes a libcef-only check and still ships an engine
+  # where every guest tile is black. So these are FAILURES, not warnings - same
+  # severity as a missing libcef.dll, because the outcome is identical.
+  for cef in libcef.dll icudtl.dat locales; do
+    if [[ -e "$STAGE/bin/$cef" ]]; then
+      echo "  ok   CEF payload $cef"
+    else
+      echo "  FAIL CEF payload MISSING: bin/$cef - obs-browser cannot initialise" >&2
+      found="$(find "$STAGE" -name "$cef" -print -quit 2>/dev/null || true)"
+      [[ -n $found ]] && echo "       (it exists at $found - staging put it in the wrong place)" >&2
+      fail=1
+    fi
+  done
+  # The .pak set is versioned by CEF build (resources.pak, chrome_100_percent.pak,
+  # ...), so glob rather than pinning a list that will rot at the next CEF bump.
+  if ! compgen -G "$STAGE/bin/*.pak" >/dev/null; then
+    echo "  FAIL no CEF .pak resources in bin/ (resources.pak, chrome_*.pak)" >&2
+    fail=1
+  else
+    echo "  ok   CEF .pak resources present"
+  fi
 else
-  echo "  FAIL obs-browser MISSING — guests cannot render without it" >&2
-  fail=1
-fi
-if compgen -G "$STAGE/bin/libcef.dll" >/dev/null || compgen -G "$STAGE/**/libcef.dll" >/dev/null; then
-  echo "  ok   CEF payload present"
-else
-  echo "  FAIL libcef.dll MISSING — obs-browser cannot load" >&2
+  echo "  FAIL obs-browser MISSING - guests cannot render without it" >&2
   fail=1
 fi
 

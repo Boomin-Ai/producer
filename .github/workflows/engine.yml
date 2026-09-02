@@ -84,8 +84,24 @@ jobs:
       - uses: actions/checkout@v4
 
       # zstd for pack_artifact; the runner has cmake and VS 2022 already.
+      #
+      # windows-2022 has TWO tars - Git Bash GNU tar and System32 bsdtar - and
+      # which one `shell: bash` resolves depends on PATH, while zstd WRITE support
+      # differs by build (GNU tar shells out to a zstd binary; system bsdtar may
+      # lack the codec entirely). So prove the capability in two seconds here
+      # rather than discovering it inside pack_artifact after a 40-minute compile.
       - name: Install zstd
         run: choco install zstandard -y --no-progress
+
+      - name: tar/zstd capability smoke
+        run: |
+          tar --version
+          command -v zstd && zstd --version || echo "no zstd binary on PATH - bsdtar may still carry the codec"
+          t=$(mktemp -d)
+          echo hi > "$t/probe"
+          tar -C "$t" --zstd -cf "$t/probe.tar.zst" probe
+          tar --zstd -tf "$t/probe.tar.zst"
+          echo "OK: this tar can write and read .tar.zst"
 
       - name: Build engine from pinned source
         run: ./scripts/build-engine-windows.sh
