@@ -1638,6 +1638,30 @@ const EXTRA_ICONS: Record<string, ReactNode> = {
 };
 
 
+/** Brand marks (twitch/youtube via svgl.app; kick authored to brand green). */
+const PLATFORM_LOGO: Record<string, ReactNode> = {
+  twitch: (
+    <svg width="15" height="15" viewBox="0 0 2400 2800">
+      <path fill="#fff" d="m2200 1300-400 400h-400l-350 350v-350H600V200h1600z" />
+      <g fill="#9146ff">
+        <path d="M500 0 0 500v1800h600v500l500-500h400l900-900V0zm1700 1300-400 400h-400l-350 350v-350H600V200h1600z" />
+        <path d="M1700 550h200v600h-200zm-550 0h200v600h-200z" />
+      </g>
+    </svg>
+  ),
+  youtube: (
+    <svg width="17" height="12" viewBox="0 0 256 180">
+      <path fill="red" d="M250.346 28.075A32.18 32.18 0 0 0 227.69 5.418C207.824 0 127.87 0 127.87 0S47.912.164 28.046 5.582A32.18 32.18 0 0 0 5.39 28.24c-5.408 35.298-7.505 89.084.152 122.97a32.18 32.18 0 0 0 22.656 22.657c19.866 5.418 99.822 5.418 99.822 5.418s79.955 0 99.82-5.418a32.18 32.18 0 0 0 22.657-22.657c5.71-35.348 7.467-89.1-.15-123.134" />
+      <path fill="#fff" d="m102.421 128.06 66.328-38.418-66.328-38.418z" />
+    </svg>
+  ),
+  kick: (
+    <svg width="14" height="14" viewBox="0 0 32 32">
+      <path fill="#53fc18" d="M4 2h8v8h4V6h4V2h8v10h-4v4h4v10h-8v-4h-4v-4h-4v8H4z" />
+    </svg>
+  ),
+};
+
 const PLATFORM_TINT: Record<string, string> = {
   twitch: "#a970ff",
   kick: "#53fc18",
@@ -3288,6 +3312,18 @@ export function LiveView({
     setSources((s) => ({ ...s, mic_volume: v }));
     ipc.liveSetMicAudio({ volume: v }).catch((e) => setBanner(String(e)));
   };
+  const [keyFor, setKeyFor] = useState<string | null>(null);
+  const [keyVal, setKeyVal] = useState("");
+  const saveChannelKey = async (d: LiveDestination) => {
+    try {
+      await ipc.liveUpsertDestination({ id: d.id, preset: d.preset, label: d.label, server: d.server ?? undefined, key: keyVal, enabled: d.enabled });
+      setDestinations(await ipc.liveListDestinations());
+      setKeyFor(null);
+      setKeyVal("");
+    } catch (e) {
+      setBanner(String(e));
+    }
+  };
   const toggleMute = () => {
     const m = !(sources.mic_muted ?? false);
     setSources((s) => ({ ...s, mic_muted: m }));
@@ -3722,29 +3758,58 @@ export function LiveView({
               </div>
         );
       case "channels": {
-        // Channels card: where the room goes out. Transport lives in the
-        // header; this card only ARMS and reports per-channel phase.
+        // Channels card: brand mark · name · phase · switch. Clicking a row
+        // (off the switch) opens INLINE key entry — the key goes straight to
+        // the Keychain via the same upsert the editor uses.
         return (
           <div className="chn">
             {destinations.map((d) => {
               const st = statuses.get(d.id);
               const phase = st ? PHASE_COPY[st.phase] ?? PHASE_COPY.idle : PHASE_COPY.idle;
+              const open = keyFor === d.id;
               return (
-                <div key={d.id} className={`chn-row${d.enabled ? "" : " off"}`}>
-                  <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />
-                  <span className="chn-name">{d.label}</span>
-                  <span className="chn-sub">
-                    {streaming && st ? phase.label : d.preset}
-                    {streaming && st && <span className={`rm-chan-phase ${st.phase}`} />}
-                  </span>
-                  <button
-                    className={`rm-switch${d.enabled ? " on" : ""}`}
-                    disabled={streaming}
-                    title={d.enabled ? "Disarm" : "Arm"}
-                    onClick={() => toggleEnabled(d)}
+                <div key={d.id} className={`chn-item${open ? " open" : ""}`}>
+                  <div
+                    className={`chn-row${d.enabled ? "" : " off"}`}
+                    onClick={() => {
+                      if (streaming) return;
+                      setKeyVal("");
+                      setKeyFor(open ? null : d.id);
+                    }}
                   >
-                    <span className="rm-switch-knob" />
-                  </button>
+                    <span className="chn-logo">{PLATFORM_LOGO[d.preset] ?? <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />}</span>
+                    <span className="chn-name">{d.label}</span>
+                    <span className="chn-sub">
+                      {streaming && st ? phase.label : d.preset}
+                      {streaming && st && <span className={`rm-chan-phase ${st.phase}`} />}
+                    </span>
+                    <button
+                      className={`rm-switch${d.enabled ? " on" : ""}`}
+                      disabled={streaming}
+                      title={d.enabled ? "Disarm" : "Arm"}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleEnabled(d);
+                      }}
+                    >
+                      <span className="rm-switch-knob" />
+                    </button>
+                  </div>
+                  {open && (
+                    <div className="chn-key" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="password"
+                        autoFocus
+                        placeholder="Stream key (stored in Keychain — paste to replace)"
+                        value={keyVal}
+                        onChange={(e) => setKeyVal(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && keyVal && saveChannelKey(d)}
+                      />
+                      <button className="chn-key-save" disabled={!keyVal} onClick={() => saveChannelKey(d)}>
+                        Save
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
