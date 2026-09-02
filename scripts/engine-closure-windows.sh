@@ -60,6 +60,17 @@ if [[ -f "$STAGE/obs-plugins/64bit/obs-browser.dll" ]]; then
       fail=1
     fi
   done
+  # THE CEF SUBPROCESS EXECUTABLE, and it lives in obs-plugins/64bit next to the
+  # plugin DLL rather than in bin/. Same severity as libcef.dll: without it the
+  # plugin loads, CefInitialize succeeds, and every browser source is black
+  # because no render/GPU/network subprocess can spawn - a failure nothing else
+  # here would catch.
+  if [[ -f "$STAGE/obs-plugins/64bit/obs-browser-page.exe" ]]; then
+    echo "  ok   CEF subprocess obs-browser-page.exe"
+  else
+    echo "  FAIL obs-browser-page.exe MISSING - browser sources render black" >&2
+    fail=1
+  fi
   # The .pak set is versioned by CEF build (resources.pak, chrome_100_percent.pak,
   # ...), so glob rather than pinning a list that will rot at the next CEF bump.
   if ! compgen -G "$STAGE/bin/*.pak" >/dev/null; then
@@ -68,15 +79,19 @@ if [[ -f "$STAGE/obs-plugins/64bit/obs-browser.dll" ]]; then
   else
     echo "  ok   CEF .pak resources present"
   fi
+  # CEF angle/vulkan sidecars. cp -R scoops these, so this is a WARN rather than
+  # a gate failure - but listing what it verified tells a future reader the sweep
+  # was real rather than assumed.
+  for side in libEGL.dll libGLESv2.dll d3dcompiler_47.dll vk_swiftshader.dll vk_swiftshader_icd.json; do
+    if [[ -e "$STAGE/bin/$side" ]]; then echo "  ok   CEF sidecar $side"
+    else echo "  warn CEF sidecar absent: $side (GPU fallback may be degraded)"; fi
+  done
 else
   echo "  FAIL obs-browser MISSING - guests cannot render without it" >&2
   fail=1
 fi
 
 # ── 3. zero-Qt scan ──────────────────────────────────────────────────────────
-# Windows ships a "python3" App Execution Alias that EXISTS on PATH and fails
-# when run, so presence is not proof. Probe each candidate by actually executing
-# it — otherwise the scan silently no-ops and the gate reports a false pass.
 # resolve_python (engine-lib.sh) probes candidates by EXECUTING them, because
 # Windows ships a python3 App Execution Alias that exists on PATH and fails when
 # run - so presence is not proof, and a silent no-op here reads as a clean pass.

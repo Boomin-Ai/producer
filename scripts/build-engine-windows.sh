@@ -73,7 +73,23 @@ fi
 cp "$REPO_ROOT/engine/producer-presets.json" "$SRC_DIR/CMakeUserPresets.json"
 cp "$REPO_ROOT/engine/producer-project-include.cmake" "$SRC_DIR/producer-project-include.cmake"
 
+# VERSIONING. OBS derives its version from `git describe` unless
+# OBS_VERSION_OVERRIDE is defined (cmake/common/versionconfig.cmake). A shallow
+# clone has no tags, so describe returns "fb4d98b-modified", the canonical-version
+# regex does not match it, and configure dies with
+#   list index: 1 out of range   /   VERSION "fb4d98b-modified" format invalid
+#
+# The -D is the macOS fix and is kept, but on the Windows runner it did NOT take
+# effect - CI run 33580195037 hit exactly the describe-derived error above - so
+# ALSO give the shallow clone the tag the lock names. describe then yields
+# "32.1.2-modified", which the regex DOES match, and the version is right
+# whichever path versionconfig takes. Belt and braces, deliberately.
+git -C "$SRC_DIR" tag -f "$OBS_REF" "$OBS_COMMIT" >/dev/null
+echo "obs version: describe=$(git -C "$SRC_DIR" describe --always --tags --dirty=-modified) ref=[$OBS_REF]"
+
+set -x
 cmake --preset producer-windows -S "$SRC_DIR" -DOBS_VERSION_OVERRIDE="$OBS_REF"
+set +x
 # `cmake --build --preset` has no -S; presets resolve from cwd (same quirk the
 # macOS script documents).
 (cd "$SRC_DIR" && cmake --build --preset producer-windows)
@@ -125,6 +141,23 @@ while read -r p; do
   fi
 done < <(engine_plugins windows)
 [[ $missing -eq 0 ]] || { echo "FATAL: allowlisted plugins missing from the build" >&2; exit 1; }
+
+# THE CEF SUBPROCESS EXECUTABLE. On Windows obs-browser spawns its render, GPU
+# and network processes as a separate exe, and it ships in obs-plugins/64bit
+# NEXT TO the plugin DLL - not in bin/. The loop above copies $p.dll only, so
+# without this it is silently dropped, and that failure is the worst shape there
+# is: the plugin loads, CefInitialize succeeds, and every browser source is black
+# because no subprocess can spawn. Its absence means the CEF build half-failed,
+# so this is fatal rather than a warning.
+if engine_plugins windows | grep -qx obs-browser; then
+  if [[ -f "$PLUGIN_SRC/obs-browser-page.exe" ]]; then
+    cp "$PLUGIN_SRC/obs-browser-page.exe" "$STAGE/obs-plugins/64bit/"
+    echo "staged CEF subprocess: obs-browser-page.exe"
+  else
+    echo "FATAL: obs-browser-page.exe not in $PLUGIN_SRC - the CEF build half-failed" >&2
+    exit 1
+  fi
+fi
 
 # Plugin data (locale, effects, and obs-browser's CEF payload).
 DATA_SRC="$BUILD/rundir/Release/data"
