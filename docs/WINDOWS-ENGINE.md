@@ -245,6 +245,22 @@ artifact on both platforms and buy nothing.
 
 Do not "fix" this in either direction without that argument changing.
 
+### The name identifies the INPUTS, not the build
+
+`lock_hash` is `sha256(engine/obs.lock)`, so the artifact name pins the SOURCE
+and the patchset --- not the build scripts. A fix to build-engine-windows.sh
+changes what the artifact CONTAINS while leaving its name identical. That is
+exactly what happened when obs-deps staging was added: two green runs, two
+artifacts both called `producer-libobs-windows-x64-b5a0b76dc157`, one of them
+missing eleven DLLs.
+
+`release.yml` survives this because it iterates `gh run list` newest-first and
+breaks at the first match, so the most recent build of a given lock wins. Worth
+knowing that it is run ORDERING doing that work, not the hash --- if the search
+ever became order-insensitive, it could resolve a stale artifact by a name that
+looks correct. The closure gate is the real defence: a broken artifact does not
+reach a green run at all.
+
 libdshowcapture also carries its own submodule
 (`external/capture-device-support`), so it is initialised `--recursive` —
 scoped to that one path, so obs-websocket does not drag in a dependency tree for
