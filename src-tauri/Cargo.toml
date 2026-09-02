@@ -1,6 +1,6 @@
 [package]
 name = "producer"
-version = "0.4.1"
+version = "0.4.2"
 description = "Producer by Boomin — the open-source studio for creators: post everywhere, stream everywhere."
 authors = ["Boomin"]
 license = "AGPL-3.0-only"
@@ -37,3 +37,4 @@ futures-util = { version = "0.3", default-features = false, features = ["sink", 
 rand = "0.8"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
+base64 = "0.22"

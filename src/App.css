@@ -6951,3 +6951,17 @@ textarea::placeholder {
 [data-stage="transparent"] #root > * {
   background: transparent;
 }
+
+/* Live guest previews in the panel — the feed itself, before the stage. */
+.rm-guest-thumb {
+  width: 62px;
+  height: 35px;
+  border-radius: 7px;
+  object-fit: cover;
+  background: #0a0d13;
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+  flex: 0 0 auto;
+}
+.rm-guest-thumb.empty {
+  display: inline-block;
+}

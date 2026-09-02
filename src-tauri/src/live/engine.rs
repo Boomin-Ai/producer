@@ -489,6 +489,18 @@ pub enum SessionState {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct ExtraPeak {
+    pub id: String,
+    pub peak: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GuestThumb {
+    pub id: String,
+    pub rgba: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum LiveEvent {
     EngineReady {
@@ -513,6 +525,14 @@ pub enum LiveEvent {
     /// since the previous tick, 0..=1.
     Levels {
         mic_peak: f64,
+        extra_peaks: Vec<ExtraPeak>,
+    },
+    /// Live guest previews (~1 Hz): 128x72 RGBA, base64 — the panel shows a
+    /// real feed for everyone in the room, on stage or not.
+    GuestThumbs {
+        w: u32,
+        h: u32,
+        thumbs: Vec<GuestThumb>,
     },
     VideoChanged {
         height: u32,
@@ -961,6 +981,7 @@ pub fn start(
             let mut state = SessionState::Idle;
             let mut last_status_emit = Instant::now();
             let mut last_levels_emit = Instant::now();
+            let mut last_thumbs_emit = Instant::now();
             // CPU needs a persistent sampler: one reading has nothing to
             // compare against, so the value only means anything over time.
             let cpu_info: *mut c_void = unsafe { ffi::os_cpu_usage_info_start() };
@@ -1369,14 +1390,48 @@ pub fn start(
                     Err(mpsc::RecvTimeoutError::Timeout) => {}
                 }
 
-                // Mic meter stream — only while a mic source exists.
-                if scene.as_ref().is_some_and(|g| g.state().mic)
+                // Meter stream — while a mic OR any metered extra (guest,
+                // media) exists; guests must meter with the host mic off.
+                if scene
+                    .as_ref()
+                    .is_some_and(|g| g.state().mic || !g.take_extra_peaks_ids_empty())
                     && last_levels_emit.elapsed() > Duration::from_millis(110)
                 {
                     last_levels_emit = Instant::now();
                     sink(&LiveEvent::Levels {
                         mic_peak: graph::take_mic_peak(),
+                        extra_peaks: scene
+                            .as_ref()
+                            .map(|g| {
+                                g.take_extra_peaks()
+                                    .into_iter()
+                                    .map(|(id, peak)| ExtraPeak { id, peak })
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
                     });
+                }
+
+                if last_thumbs_emit.elapsed() > Duration::from_millis(900) {
+                    last_thumbs_emit = Instant::now();
+                    if let Some(g) = scene.as_mut() {
+                        let raw = g.guest_thumbs();
+                        if !raw.is_empty() {
+                            use base64::Engine as _;
+                            let thumbs = raw
+                                .into_iter()
+                                .map(|(id, rgba)| GuestThumb {
+                                    id,
+                                    rgba: base64::engine::general_purpose::STANDARD.encode(rgba),
+                                })
+                                .collect();
+                            sink(&LiveEvent::GuestThumbs {
+                                w: graph::THUMB_W,
+                                h: graph::THUMB_H,
+                                thumbs,
+                            });
+                        }
+                    }
                 }
 
                 if let Some(s) = session.as_mut() {

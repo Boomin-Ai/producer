@@ -116,6 +116,21 @@ extern "C" {
     pub fn obs_source_release(source: *mut obs_source_t);
     pub fn obs_set_output_source(channel: u32, source: *mut obs_source_t);
     pub fn obs_source_get_width(source: *mut obs_source_t) -> u32;
+    pub fn obs_source_video_render(source: *mut obs_source_t);
+    pub fn obs_enter_graphics();
+    pub fn obs_leave_graphics();
+    pub fn gs_texrender_create(format: c_int, zsformat: c_int) -> *mut c_void;
+    pub fn gs_texrender_destroy(texrender: *mut c_void);
+    pub fn gs_texrender_reset(texrender: *mut c_void);
+    pub fn gs_texrender_begin(texrender: *mut c_void, cx: u32, cy: u32) -> bool;
+    pub fn gs_texrender_end(texrender: *mut c_void);
+    pub fn gs_texrender_get_texture(texrender: *const c_void) -> *mut c_void;
+    pub fn gs_stagesurface_create(width: u32, height: u32, format: c_int) -> *mut c_void;
+    pub fn gs_stagesurface_destroy(stagesurf: *mut c_void);
+    pub fn gs_stage_texture(stagesurf: *mut c_void, texture: *mut c_void);
+    pub fn gs_stagesurface_map(stagesurf: *mut c_void, data: *mut *mut u8, linesize: *mut u32) -> bool;
+    pub fn gs_stagesurface_unmap(stagesurf: *mut c_void);
+    pub fn gs_clear(clear_flags: u32, color: *const vec4, depth: f32, stencil: u8);
     pub fn obs_source_get_height(source: *mut obs_source_t) -> u32;
     pub fn obs_source_set_volume(source: *mut obs_source_t, volume: f32);
     pub fn obs_source_get_volume(source: *mut obs_source_t) -> f32;
@@ -203,6 +218,7 @@ pub enum obs_sceneitem_t {}
 
 // graphics/graphics.h enum gs_color_format / gs_zstencil_format
 pub const GS_BGRA: c_int = 5;
+pub const GS_RGBA: c_int = 3;
 pub const GS_ZS_NONE: c_int = 0;
 // obs.h enum obs_bounds_type
 pub const OBS_BOUNDS_SCALE_INNER: c_int = 2;
@@ -236,6 +252,15 @@ pub struct obs_sceneitem_crop {
 }
 
 /// graphics/vec2.h struct vec2
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct vec4 {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub w: f32,
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct vec2 {
