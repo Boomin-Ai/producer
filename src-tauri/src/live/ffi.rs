@@ -131,6 +131,12 @@ extern "C" {
     pub fn gs_stagesurface_map(stagesurf: *mut c_void, data: *mut *mut u8, linesize: *mut u32) -> bool;
     pub fn gs_stagesurface_unmap(stagesurf: *mut c_void);
     pub fn gs_clear(clear_flags: u32, color: *const vec4, depth: f32, stencil: u8);
+    pub fn obs_queue_task(
+        task_type: c_int,
+        task: extern "C" fn(*mut c_void),
+        param: *mut c_void,
+        wait: bool,
+    );
     pub fn obs_source_get_height(source: *mut obs_source_t) -> u32;
     pub fn obs_source_set_volume(source: *mut obs_source_t, volume: f32);
     pub fn obs_source_get_volume(source: *mut obs_source_t) -> f32;
@@ -219,6 +225,7 @@ pub enum obs_sceneitem_t {}
 // graphics/graphics.h enum gs_color_format / gs_zstencil_format
 pub const GS_BGRA: c_int = 5;
 pub const GS_RGBA: c_int = 3;
+pub const OBS_TASK_GRAPHICS: c_int = 1;
 pub const GS_ZS_NONE: c_int = 0;
 // obs.h enum obs_bounds_type
 pub const OBS_BOUNDS_SCALE_INNER: c_int = 2;

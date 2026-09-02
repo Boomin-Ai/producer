@@ -1732,53 +1732,89 @@ pub const THUMB_W: u32 = 128;
 pub const THUMB_H: u32 = 72;
 
 impl SceneGraph {
-    /// Live thumbnails of every GUEST source, visible or hidden — the panel
-    /// shows who is actually on a feed before anyone reaches the stage. GPU
-    /// render into a cached 128x72 target, staged back to RGBA rows.
+    /// Live thumbnails of every GUEST source, visible or hidden. The capture
+    /// MUST run on THE graphics thread: libobs-metal's render-target state is
+    /// thread-confined, and calling it from the engine thread crashed v0.4.2
+    /// in the wild (device_get_render_target, EXC_BAD_ACCESS — the same
+    /// family as the A10 swapchain finding). obs_queue_task(GRAPHICS, wait)
+    /// is the sanctioned door.
     pub fn guest_thumbs(&mut self) -> Vec<(String, Vec<u8>)> {
-        let mut out = Vec::new();
-        unsafe {
-            ffi::obs_enter_graphics();
-            if self.thumb_rt.is_null() {
-                self.thumb_rt = ffi::gs_texrender_create(ffi::GS_RGBA, ffi::GS_ZS_NONE);
-            }
-            if self.thumb_ss.is_null() {
-                self.thumb_ss = ffi::gs_stagesurface_create(THUMB_W, THUMB_H, ffi::GS_RGBA);
-            }
-            if self.thumb_rt.is_null() || self.thumb_ss.is_null() {
-                ffi::obs_leave_graphics();
-                return out;
-            }
-            for e in &self.extras {
-                if e.kind != "guest" || e.src.is_null() {
-                    continue;
-                }
-                let sw = ffi::obs_source_get_width(e.src).max(1);
-                let sh = ffi::obs_source_get_height(e.src).max(1);
-                ffi::gs_texrender_reset(self.thumb_rt);
-                if !ffi::gs_texrender_begin(self.thumb_rt, THUMB_W, THUMB_H) {
-                    continue;
-                }
-                let clear = ffi::vec4 { x: 0.0, y: 0.0, z: 0.0, w: 1.0 };
-                ffi::gs_clear(1, &clear, 0.0, 0); // GS_CLEAR_COLOR
-                ffi::gs_ortho(0.0, sw as f32, 0.0, sh as f32, -100.0, 100.0);
-                ffi::obs_source_video_render(e.src);
-                ffi::gs_texrender_end(self.thumb_rt);
-                ffi::gs_stage_texture(self.thumb_ss, ffi::gs_texrender_get_texture(self.thumb_rt));
-                let mut data: *mut u8 = std::ptr::null_mut();
-                let mut linesize: u32 = 0;
-                if ffi::gs_stagesurface_map(self.thumb_ss, &mut data, &mut linesize) && !data.is_null() {
-                    let mut rgba = Vec::with_capacity((THUMB_W * THUMB_H * 4) as usize);
-                    for row in 0..THUMB_H {
-                        let src_row = data.add((row * linesize) as usize);
-                        rgba.extend_from_slice(std::slice::from_raw_parts(src_row, (THUMB_W * 4) as usize));
-                    }
-                    ffi::gs_stagesurface_unmap(self.thumb_ss);
-                    out.push((e.id.clone(), rgba));
-                }
-            }
-            ffi::obs_leave_graphics();
+        struct ThumbJob {
+            targets: Vec<(String, *mut ffi::obs_source_t)>,
+            rt: *mut std::os::raw::c_void,
+            ss: *mut std::os::raw::c_void,
+            out: Vec<(String, Vec<u8>)>,
         }
-        out
+
+        extern "C" fn run(param: *mut c_void) {
+            // Graphics thread: the context is current; no enter/leave needed.
+            let job = unsafe { &mut *(param as *mut ThumbJob) };
+            unsafe {
+                if job.rt.is_null() {
+                    job.rt = ffi::gs_texrender_create(ffi::GS_RGBA, ffi::GS_ZS_NONE);
+                }
+                if job.ss.is_null() {
+                    job.ss = ffi::gs_stagesurface_create(THUMB_W, THUMB_H, ffi::GS_RGBA);
+                }
+                if job.rt.is_null() || job.ss.is_null() {
+                    return;
+                }
+                for (id, src) in &job.targets {
+                    let sw = ffi::obs_source_get_width(*src).max(1);
+                    let sh = ffi::obs_source_get_height(*src).max(1);
+                    ffi::gs_texrender_reset(job.rt);
+                    if !ffi::gs_texrender_begin(job.rt, THUMB_W, THUMB_H) {
+                        continue;
+                    }
+                    let clear = ffi::vec4 { x: 0.0, y: 0.0, z: 0.0, w: 1.0 };
+                    ffi::gs_clear(1, &clear, 0.0, 0); // GS_CLEAR_COLOR
+                    ffi::gs_ortho(0.0, sw as f32, 0.0, sh as f32, -100.0, 100.0);
+                    ffi::obs_source_video_render(*src);
+                    ffi::gs_texrender_end(job.rt);
+                    ffi::gs_stage_texture(job.ss, ffi::gs_texrender_get_texture(job.rt));
+                    let mut data: *mut u8 = std::ptr::null_mut();
+                    let mut linesize: u32 = 0;
+                    if ffi::gs_stagesurface_map(job.ss, &mut data, &mut linesize) && !data.is_null() {
+                        let mut rgba = Vec::with_capacity((THUMB_W * THUMB_H * 4) as usize);
+                        for row in 0..THUMB_H {
+                            let src_row = data.add((row * linesize) as usize);
+                            rgba.extend_from_slice(std::slice::from_raw_parts(src_row, (THUMB_W * 4) as usize));
+                        }
+                        ffi::gs_stagesurface_unmap(job.ss);
+                        job.out.push((id.clone(), rgba));
+                    }
+                }
+            }
+        }
+
+        let targets: Vec<(String, *mut ffi::obs_source_t)> = self
+            .extras
+            .iter()
+            .filter(|e| e.kind == "guest" && !e.src.is_null())
+            .map(|e| (e.id.clone(), e.src))
+            .collect();
+        if targets.is_empty() {
+            return Vec::new();
+        }
+        let mut job = ThumbJob {
+            targets,
+            rt: self.thumb_rt,
+            ss: self.thumb_ss,
+            out: Vec::new(),
+        };
+        unsafe {
+            // wait=true: `job` lives on this stack frame; the engine thread
+            // blocks (~1ms for a few 128x72 renders) until the graphics
+            // thread has finished with it.
+            ffi::obs_queue_task(
+                ffi::OBS_TASK_GRAPHICS,
+                run,
+                &mut job as *mut ThumbJob as *mut c_void,
+                true,
+            );
+        }
+        self.thumb_rt = job.rt;
+        self.thumb_ss = job.ss;
+        job.out
     }
 }
