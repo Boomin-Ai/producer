@@ -2140,7 +2140,7 @@ export function LiveView({
   const channelsApplied = useRef(false);
   const demoVideoSet = useRef(false);
   const demo = demoOn();
-  const [chatFilter, setChatFilter] = useState<"all" | DemoPlatform>("all");
+  const [chatOn, setChatOn] = useState<Record<string, boolean>>({ twitch: true, kick: true, youtube: true });
   const [chatMsgs, setChatMsgs] = useState<ChatLine[]>(() => (demoOn() ? DEMO_CHAT.slice(0, 9) : []));
   const chatEnd = useRef<HTMLDivElement | null>(null);
   const chatList = useRef<HTMLDivElement | null>(null);
@@ -3455,19 +3455,20 @@ export function LiveView({
         return (
           <>
             <div className="rm-chat-chips">
-              {(["all", "twitch", "kick", "youtube"] as const).map((p) => (
+              {(["twitch", "kick", "youtube"] as const).map((p) => (
                 <button
                   key={p}
-                  className={`rm-chat-chip${chatFilter === p ? " on" : ""}`}
-                  onClick={() => setChatFilter(p)}
+                  className={`rm-chat-chip${chatOn[p] ? " on" : ""}`}
+                  title={chatOn[p] ? `Hide ${p}` : `Show ${p}`}
+                  onClick={() => setChatOn((f) => ({ ...f, [p]: !f[p] }))}
                 >
-                  {p === "all" ? "All" : p === "youtube" ? "YouTube" : p[0].toUpperCase() + p.slice(1)}
+                  {p === "youtube" ? "YouTube" : p[0].toUpperCase() + p.slice(1)}
                 </button>
               ))}
             </div>
             <div className="rm-chat-list" ref={chatList} onScroll={onChatScroll} onWheel={onChatWheel}>
               {chatMsgs
-                .filter((m) => chatFilter === "all" || m.platform === chatFilter)
+                .filter((m) => chatOn[m.platform] !== false)
                 .map((m, i) => (
                   <div key={i} className="rm-chat-msg">
                     <span
