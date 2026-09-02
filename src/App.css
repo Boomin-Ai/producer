@@ -6696,3 +6696,58 @@ textarea::placeholder {
 .rm-guest-admit:hover { filter: brightness(1.06); }
 .rm-guest-admit:disabled { opacity: 0.4; cursor: default; }
 .rm-guest.waiting .rm-row-edit { flex: 0 0 auto; }
+
+/* No haze: the identity strip loses its gradient wash — a text shadow
+   carries legibility, the image stays clean. */
+.rm-gcard-id {
+  background: none;
+  padding: 10px 10px 8px;
+}
+.rm-gcard-name,
+.rm-gcard-id .rm-qual {
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+}
+/* Hover chrome moves to the top-LEFT so it never covers the waiting row's
+   Admit / remove on the right. */
+.rm-panel-guests .rm-panel-head {
+  right: auto;
+  left: 6px;
+}
+
+/* Chrome lives bottom-right — the one corner content never claims
+   (waiting rows top, names bottom-left). Collision now impossible. */
+.rm-panel-guests .rm-panel-head {
+  top: auto;
+  left: auto;
+  bottom: 6px;
+  right: 6px;
+}
+
+/* Channels, guest-grade: content-first from the top, tight rhythm, nothing
+   redundant. The switch hugs the row's right edge. */
+.rm-panel-channels .rm-panel-body {
+  display: block !important;
+  height: auto !important;
+  padding: 6px 8px 8px;
+}
+.chn {
+  gap: 0;
+}
+.chn-item + .chn-item {
+  border-top: 0.5px solid var(--line-1);
+  border-radius: 0;
+}
+.chn-row {
+  height: 42px;
+  padding: 0 4px;
+  gap: 10px;
+}
+.chn-row .rm-switch {
+  margin-left: auto;
+}
+.chn-sub {
+  margin-left: 0;
+}
+.chn-name {
+  font-size: 13.5px;
+}

@@ -3768,10 +3768,12 @@ export function LiveView({
                   >
                     <span className="chn-logo">{PLATFORM_LOGO[d.preset] ?? <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />}</span>
                     <span className="chn-name">{d.label}</span>
-                    <span className="chn-sub">
-                      {streaming && st ? phase.label : d.preset}
-                      {streaming && st && <span className={`rm-chan-phase ${st.phase}`} />}
-                    </span>
+                    {streaming && st && (
+                      <span className="chn-sub">
+                        {phase.label}
+                        <span className={`rm-chan-phase ${st.phase}`} />
+                      </span>
+                    )}
                     <button
                       className={`rm-switch${d.enabled ? " on" : ""}`}
                       disabled={streaming}
