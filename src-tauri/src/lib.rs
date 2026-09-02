@@ -120,6 +120,7 @@ pub fn run() {
             live::commands::live_move_preview,
             live::commands::live_detach_preview,
             live::commands::live_permissions,
+            live::commands::live_set_thumb_rate,
             live::commands::live_home_glass,
             live::commands::live_request_permission,
             live::commands::live_set_overlay,

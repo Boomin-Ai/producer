@@ -357,6 +357,7 @@ pub enum FilterOp {
 }
 
 pub enum Command {
+    SetThumbRate { fps: u32 },
     GoLive(MultiConfig),
     StopLive,
     SetSources {
@@ -527,7 +528,7 @@ pub enum LiveEvent {
         mic_peak: f64,
         extra_peaks: Vec<ExtraPeak>,
     },
-    /// Live guest previews (~3 Hz): 256x144 JPEG, base64 — the panel shows a
+    /// Live guest previews (~7 Hz): 256x144 JPEG, base64 — the panel shows a
     /// real feed for everyone in the room, on stage or not. JPEG at the
     /// source keeps the event ~12KB per guest instead of ~200KB of raw RGBA.
     GuestThumbs {
@@ -549,6 +550,12 @@ pub enum LiveEvent {
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct Snapshot {
     pub engine_ready: bool,
+    /// Thumbnail readback instrumentation (docs/THUMB-PIPELINE-V2.md,
+    /// amendment 1): worst map wait and count of >200µs maps since boot.
+    #[serde(default)]
+    pub thumb_wait_us_max: u64,
+    #[serde(default)]
+    pub thumb_slow_maps: u64,
     pub bootstrap_ok: bool,
     pub graphics_backend: Option<String>,
     pub session_state: SessionState,
@@ -626,6 +633,11 @@ impl LiveHandle {
             .map_err(|e| e.to_string())?;
         rx.recv_timeout(std::time::Duration::from_secs(5))
             .map_err(|_| "the engine did not answer in time".to_string())?
+    }
+
+    /// Demand control (docs/THUMB-PIPELINE-V2.md): 0 = previews off.
+    pub fn set_thumb_rate(&self, fps: u32) {
+        let _ = self.cmd.send(Command::SetThumbRate { fps });
     }
 
     pub fn start_recording(&self, stamp: String) -> Result<String, String> {
@@ -921,17 +933,122 @@ Camera Extensions, then try again."
 
 pub fn start(
     module_config_dir: std::path::PathBuf,
-    sink: impl Fn(&LiveEvent) + Send + 'static,
+    sink: impl Fn(&LiveEvent) + Send + Sync + 'static,
 ) -> LiveHandle {
     // Wrap the caller's sink once: every EngineError leaving the engine is
     // rewritten, no matter which of the many call sites produced it.
-    let sink = move |ev: &LiveEvent| match ev {
+    // Arc'd because the thumbnail ENCODER thread emits events too.
+    let sink_arc = std::sync::Arc::new(move |ev: &LiveEvent| match ev {
         LiveEvent::EngineError { message } => sink(&LiveEvent::EngineError {
             message: user_facing(message),
         }),
         other => sink(other),
+    });
+    // Plain-closure shim: Arc<F> is not itself callable, and every internal
+    // call site expects `sink(ev)`. The engine thread gets this; the encoder
+    // thread builds its own from another clone.
+    let sink = {
+        let s = sink_arc.clone();
+        move |ev: &LiveEvent| (*s)(ev)
     };
     let (cmd_tx, cmd_rx) = mpsc::channel::<Command>();
+    // Preview distribution primitive (docs/THUMB-PIPELINE-V2.md): graphics
+    // thread produces via thumb_render_cb, this thread encodes and emits.
+    let hub = std::sync::Arc::new(graph::ThumbHub::new());
+    {
+        let hub = hub.clone();
+        let sink = {
+            let s = sink_arc.clone();
+            move |ev: &LiveEvent| (*s)(ev)
+        };
+        std::thread::Builder::new()
+            .name("thumb-encoder".into())
+            .spawn(move || {
+                use base64::Engine as _;
+                let mut jpg: Vec<u8> = Vec::with_capacity(32 * 1024);
+                let mut scratch: Vec<u8> = Vec::new();
+                #[cfg(debug_assertions)]
+                let mut dumped: std::collections::HashSet<String> = std::collections::HashSet::new();
+                loop {
+                    {
+                        let flag = hub.wake_flag.lock().unwrap();
+                        let (mut flag, _) = hub
+                            .wake
+                            .wait_timeout(flag, Duration::from_millis(500))
+                            .unwrap();
+                        *flag = false;
+                    }
+                    // Drain ready slots. Locks are held only long enough to
+                    // SWAP the buffer out — the graphics thread must never
+                    // find this thread camped on a slot (latest-frame-wins).
+                    let mut work: Vec<(String, Vec<u8>)> = Vec::new();
+                    {
+                        let mut slots = hub.slots.lock().unwrap();
+                        for (id, slot) in slots.iter_mut() {
+                            if slot.ready {
+                                slot.ready = false;
+                                scratch.clear();
+                                std::mem::swap(&mut scratch, &mut slot.rgba);
+                                work.push((id.clone(), std::mem::take(&mut scratch)));
+                            }
+                        }
+                    }
+                    if work.is_empty() {
+                        continue;
+                    }
+                    let mut thumbs = Vec::with_capacity(work.len());
+                    for (id, rgba) in &work {
+                        if rgba.len() != (graph::THUMB_W * graph::THUMB_H * 4) as usize {
+                            continue;
+                        }
+                        jpg.clear();
+                        let enc = jpeg_encoder::Encoder::new(&mut jpg, 62);
+                        if enc
+                            .encode(
+                                rgba,
+                                graph::THUMB_W as u16,
+                                graph::THUMB_H as u16,
+                                jpeg_encoder::ColorType::Rgba,
+                            )
+                            .is_ok()
+                        {
+                            #[cfg(debug_assertions)]
+                            if dumped.insert(id.clone()) {
+                                let _ = std::fs::create_dir_all("/tmp/producer-thumbs");
+                                let _ = std::fs::write(
+                                    format!("/tmp/producer-thumbs/{id}.jpg"),
+                                    &jpg,
+                                );
+                            }
+                            thumbs.push(GuestThumb {
+                                id: id.clone(),
+                                jpeg: base64::engine::general_purpose::STANDARD.encode(&jpg),
+                            });
+                        }
+                    }
+                    // hand buffers back so the graphics thread reuses them
+                    {
+                        let mut slots = hub.slots.lock().unwrap();
+                        for (id, rgba) in work {
+                            if let Some(slot) = slots.get_mut(&id) {
+                                if slot.rgba.capacity() == 0 {
+                                    slot.rgba = rgba;
+                                }
+                            }
+                        }
+                    }
+                    if !thumbs.is_empty() {
+                        sink(&LiveEvent::GuestThumbs {
+                            w: graph::THUMB_W,
+                            h: graph::THUMB_H,
+                            thumbs,
+                        });
+                    }
+                }
+            })
+            .expect("spawn thumb-encoder thread");
+    }
+    let hub_engine = hub.clone();
     let snapshot = Arc::new(Mutex::new(Snapshot::default()));
     let streaming = Arc::new(AtomicBool::new(false));
     let snap = snapshot.clone();
@@ -949,6 +1066,16 @@ pub fn start(
                 s.video_height = h;
                 s.video_fps = f;
                 s.graphics_backend = report.graphics_backend.clone();
+            }
+            if report.ok {
+                // Preview capture rides the compositor: registered once, for
+                // the life of the process. hub_engine's Arc keeps it alive.
+                unsafe {
+                    ffi::obs_add_main_render_callback(
+                        graph::thumb_render_cb,
+                        std::sync::Arc::as_ptr(&hub_engine) as *mut std::os::raw::c_void,
+                    );
+                }
             }
             sink(&LiveEvent::EngineReady {
                 ok: report.ok,
@@ -982,7 +1109,6 @@ pub fn start(
             let mut state = SessionState::Idle;
             let mut last_status_emit = Instant::now();
             let mut last_levels_emit = Instant::now();
-            let mut last_thumbs_emit = Instant::now();
             // CPU needs a persistent sampler: one reading has nothing to
             // compare against, so the value only means anything over time.
             let cpu_info: *mut c_void = unsafe { ffi::os_cpu_usage_info_start() };
@@ -1297,6 +1423,11 @@ pub fn start(
                             }
                         }
                     }
+                    Ok(Command::SetThumbRate { fps }) => {
+                        hub_engine
+                            .fps
+                            .store(fps.min(30), std::sync::atomic::Ordering::Relaxed);
+                    }
                     Ok(Command::SetVideo { height, fps }) => {
                         if session.is_some() {
                             sink(&LiveEvent::EngineError {
@@ -1388,7 +1519,11 @@ pub fn start(
                         }
                         break;
                     }
-                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        if let Some(g) = scene.as_ref() {
+                            hub_engine.publish_targets(g);
+                        }
+                    }
                 }
 
                 // Meter stream — while a mic OR any metered extra (guest,
@@ -1413,38 +1548,6 @@ pub fn start(
                     });
                 }
 
-                if last_thumbs_emit.elapsed() > Duration::from_millis(300) {
-                    last_thumbs_emit = Instant::now();
-                    if let Some(g) = scene.as_mut() {
-                        let raw = g.guest_thumbs();
-                        if !raw.is_empty() {
-                            use base64::Engine as _;
-                            let thumbs = raw
-                                .into_iter()
-                                .filter_map(|(id, rgba)| {
-                                    let mut jpg = Vec::new();
-                                    let enc = jpeg_encoder::Encoder::new(&mut jpg, 62);
-                                    enc.encode(
-                                        &rgba,
-                                        graph::THUMB_W as u16,
-                                        graph::THUMB_H as u16,
-                                        jpeg_encoder::ColorType::Rgba,
-                                    )
-                                    .ok()?;
-                                    Some(GuestThumb {
-                                        id,
-                                        jpeg: base64::engine::general_purpose::STANDARD.encode(jpg),
-                                    })
-                                })
-                                .collect();
-                            sink(&LiveEvent::GuestThumbs {
-                                w: graph::THUMB_W,
-                                h: graph::THUMB_H,
-                                thumbs,
-                            });
-                        }
-                    }
-                }
 
                 if let Some(s) = session.as_mut() {
                     let done = s.pump();
@@ -1463,6 +1566,15 @@ pub fn start(
                         set_state(&mut state, SessionState::Idle, &snap, &sink);
                     } else if last_status_emit.elapsed() > Duration::from_secs(1) {
                         last_status_emit = Instant::now();
+                        {
+                            let mut sn = snap.lock().unwrap();
+                            sn.thumb_wait_us_max = hub_engine
+                                .readback_wait_us_max
+                                .load(std::sync::atomic::Ordering::Relaxed);
+                            sn.thumb_slow_maps = hub_engine
+                                .readback_slow_maps
+                                .load(std::sync::atomic::Ordering::Relaxed);
+                        }
                         let statuses = s.statuses();
                         let elapsed = s.elapsed_secs();
                         {

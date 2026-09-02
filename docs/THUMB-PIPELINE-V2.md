@@ -70,6 +70,19 @@ memcpy → slot, notify    binary frame → Channel
 
 30fps doubles the numbers and still fits. Rate is a config, not a rewrite.
 
+## Review amendments (frozen)
+
+1. **No absolute "zero stalls" claims.** K=2 ring ships first WITH
+   instrumentation: `thumbnail_readback_wait_us` (max + slow-map counter).
+   If p99 climbs past ~200µs under load, K=3 — decided from data.
+2. **Latest-frame-wins is a first-class invariant.** Preview frames are
+   DISPOSABLE. No capture, encoder, transport, or UI stage may accumulate
+   history: the graphics thread try-locks the slot and DROPS the frame if
+   the encoder holds it; slots carry a seq so receivers can discard stale.
+3. **Budget numbers are hypotheses, not canon.** The same instrumentation
+   feeds a future Render Load telemetry strip (render frame time, readback
+   wait, encoder utilization, drops) — a real chart, not a decorative one.
+
 ## Phases
 
 - **P1 (engine, the contained upgrade):** ring buffers + graphics-cadence

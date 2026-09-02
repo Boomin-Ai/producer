@@ -7621,3 +7621,130 @@ textarea::placeholder {
   width: 6px;
   height: 6px;
 }
+
+/* ═══ GUEST CARDS: the feed IS the row ════════════════════════════════════
+   A guest is their live thumbnail. Identity rides a bottom gradient; the
+   controls exist only under the cursor. On-screen = mint ring + ON tag. */
+.rm-gcard {
+  position: relative;
+  width: 176px;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0a0d13;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  flex: 0 0 auto;
+  transition: border-color 0.15s ease, transform 0.12s ease;
+}
+.rm-gcard:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.rm-gcard.on {
+  border-color: oklch(0.75 0.14 165 / 0.65);
+  box-shadow: 0 0 0 1px oklch(0.75 0.14 165 / 0.35);
+}
+.rm-gcard-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.rm-gcard-img.empty {
+  background:
+    radial-gradient(120px 70px at 50% 45%, rgba(255, 255, 255, 0.05), transparent 70%),
+    #0a0d13;
+}
+.rm-gcard-id {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 10px 7px;
+  background: linear-gradient(to top, rgba(3, 5, 9, 0.85), transparent);
+  pointer-events: none;
+}
+.rm-gcard-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #eef1f6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.rm-gcard-live {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #06251b;
+  background: var(--mint, #34d399);
+  border-radius: 5px;
+  padding: 2px 5px;
+}
+.rm-gcard-ctl {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(3, 5, 9, 0.55);
+  opacity: 0;
+  transition: opacity 0.14s ease;
+}
+.rm-gcard:hover .rm-gcard-ctl,
+.rm-gcard:focus-within .rm-gcard-ctl {
+  opacity: 1;
+}
+/* cards flow in a wrap grid inside the panel */
+.rm-guests {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Guest cards flex with the dock: they share each row and grow to fill it,
+   aspect-locked, however wide the dock is dragged. */
+.rm-gcard {
+  width: auto;
+  flex: 1 1 200px;
+  min-width: 150px;
+  max-width: 100%;
+}
+.rm-guests {
+  width: 100%;
+  align-content: flex-start;
+}
+
+/* .rm-guests was born a COLUMN list; the card grid must be a row-wrap or
+   flex-basis grows cards VERTICALLY (the portrait-card bug). */
+.rm-guests {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  align-content: flex-start;
+}
+.rm-gcard {
+  height: auto;
+}
+
+/* THE RULE: a guest card spans the full width of its dock. However wide you
+   drag it, that's the thumbnail. One card per row. Height follows 16:9. */
+.rm-guests {
+  flex-direction: column;
+  align-items: stretch;
+  align-content: stretch;
+}
+.rm-gcard {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  flex: 0 0 auto;
+}

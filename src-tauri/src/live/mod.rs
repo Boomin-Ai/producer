@@ -437,6 +437,15 @@ impl Live {
     }
 
     #[cfg(have_engine)]
+    pub fn set_thumb_rate(&self, fps: u32) {
+        if let Some(h) = self.handle.as_ref() {
+            h.set_thumb_rate(fps);
+        }
+    }
+    #[cfg(not(have_engine))]
+    pub fn set_thumb_rate(&self, _fps: u32) {}
+
+    #[cfg(have_engine)]
     pub fn attach_preview(
         &self,
         window: usize,

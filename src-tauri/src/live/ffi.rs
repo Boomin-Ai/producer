@@ -131,6 +131,16 @@ extern "C" {
     pub fn gs_stagesurface_map(stagesurf: *mut c_void, data: *mut *mut u8, linesize: *mut u32) -> bool;
     pub fn gs_stagesurface_unmap(stagesurf: *mut c_void);
     pub fn gs_clear(clear_flags: u32, color: *const vec4, depth: f32, stencil: u8);
+    pub fn obs_add_main_render_callback(
+        cb: extern "C" fn(*mut c_void, u32, u32),
+        param: *mut c_void,
+    );
+    pub fn obs_source_get_ref(source: *mut obs_source_t) -> *mut obs_source_t;
+    pub fn obs_source_inc_showing(source: *mut obs_source_t);
+    pub fn obs_source_dec_showing(source: *mut obs_source_t);
+    pub fn gs_blend_state_push();
+    pub fn gs_blend_state_pop();
+    pub fn gs_blend_function(src: c_int, dest: c_int);
     pub fn obs_queue_task(
         task_type: c_int,
         task: extern "C" fn(*mut c_void),
@@ -226,6 +236,8 @@ pub enum obs_sceneitem_t {}
 pub const GS_BGRA: c_int = 5;
 pub const GS_RGBA: c_int = 3;
 pub const OBS_TASK_GRAPHICS: c_int = 1;
+pub const GS_BLEND_ZERO: c_int = 0;
+pub const GS_BLEND_ONE: c_int = 1;
 pub const GS_ZS_NONE: c_int = 0;
 // obs.h enum obs_bounds_type
 pub const OBS_BOUNDS_SCALE_INNER: c_int = 2;

@@ -298,6 +298,12 @@ pub fn live_permissions() -> EngineResult<serde_json::Value> {
 }
 
 #[tauri::command]
+pub fn live_set_thumb_rate(state: State<'_, AppState>, fps: u32) -> EngineResult<()> {
+    state.live.set_thumb_rate(fps);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn live_home_glass(app: tauri::AppHandle) -> EngineResult<()> {
     // Home wears the glass; rooms strip it on preview attach (shim.m). This
     // is the way back when the user leaves a room.

@@ -707,62 +707,51 @@ function GuestPanel({
             const muted = item?.muted ?? false;
             const q = (g.quality ?? g.connection_quality ?? "unknown") as string;
             return (
-              <div key={g.id} className="rm-guest">
+              <div key={g.id} className={`rm-gcard${item?.visible ? " on" : ""}`}>
                 {thumbs[`guest-${g.id.slice(0, 8)}`] ? (
-                  <img className="rm-guest-thumb" src={thumbs[`guest-${g.id.slice(0, 8)}`]} alt="" />
+                  <img className="rm-gcard-img" src={thumbs[`guest-${g.id.slice(0, 8)}`]} alt="" />
                 ) : (
-                  <span className="rm-guest-thumb empty" />
+                  <span className="rm-gcard-img empty" />
                 )}
-                <span className="rm-guest-name">{g.display_name || "Guest"}</span>
-                {/* Health of what actually reaches the show. Neutral when
-                  * unknown — never green on a stale reading. */}
-                <span
-                  className={`rm-qual ${q}`}
-                  title={
-                    q === "good"
-                      ? "Connection healthy"
-                      : q === "degraded"
-                        ? "Connection struggling — they may break up on air"
-                        : q === "failing"
-                          ? "Connection failing — don't put them up yet"
-                          : "No recent reading"
-                  }
-                />
-                <span className={`rm-guest-live${item?.visible ? "" : " off"}`}>
-                  {item?.visible ? "on screen" : "in room"}
-                </span>
-                {/* At panel size everyone is already connected and audible,
-                  * so "on screen" is a visibility flip on a source that
-                  * exists — instant, with none of the connect delay that
-                  * makes promotion awkward at larger scales. Audio is
-                  * deliberately independent: a guest can stay in the
-                  * conversation while off screen. */}
-                <button
-                  className={`rm-guest-stage${item?.visible ? " on" : ""}`}
-                  title={
-                    item?.visible
-                      ? "Take off screen (stays in the room)"
-                      : onStage >= STAGE_CAP
-                        ? `Four on screen is the limit — take one down first`
+                {/* Identity strip: always visible — name and the health of
+                  * what actually reaches the show. Neutral when unknown. */}
+                <div className="rm-gcard-id">
+                  <span className={`rm-qual ${q}`} title={
+                    q === "good" ? "Connection healthy"
+                      : q === "degraded" ? "Connection struggling — they may break up on air"
+                      : q === "failing" ? "Connection failing — don't put them up yet"
+                      : "No recent reading"
+                  } />
+                  <span className="rm-gcard-name">{g.display_name || "Guest"}</span>
+                  {item?.visible && <span className="rm-gcard-live">ON</span>}
+                </div>
+                {/* Controls: the card is the feed; hands appear on hover. */}
+                <div className="rm-gcard-ctl">
+                  <button
+                    className={`rm-guest-stage${item?.visible ? " on" : ""}`}
+                    title={
+                      item?.visible ? "Take off screen (stays in the room)"
+                        : onStage >= STAGE_CAP ? `Four on screen is the limit — take one down first`
                         : "Put on screen"
-                  }
-                  disabled={!item || (!item.visible && onStage >= STAGE_CAP)}
-                  data-warn={!item?.visible && q === "failing" ? "1" : undefined}
-                  onClick={() => item && onShow(item.id, !item.visible)}
-                >
-                  {item?.visible ? "On screen" : "Show"}
-                </button>
-                <button
-                  className={`rm-row-edit${muted ? " muted" : ""}`}
-                  title={muted ? "Unmute" : "Mute"}
-                  disabled={!item}
-                  onClick={() => item && onMute(item.id, !muted)}
-                >
-                  {ic.mic}
-                </button>
-                <button className="rm-row-edit" title="Remove" onClick={() => onRemove(g.id)}>
-                  {ic.x}
-                </button>
+                    }
+                    disabled={!item || (!item.visible && onStage >= STAGE_CAP)}
+                    data-warn={!item?.visible && q === "failing" ? "1" : undefined}
+                    onClick={() => item && onShow(item.id, !item.visible)}
+                  >
+                    {item?.visible ? "On screen" : "Show"}
+                  </button>
+                  <button
+                    className={`rm-row-edit${muted ? " muted" : ""}`}
+                    title={muted ? "Unmute" : "Mute"}
+                    disabled={!item}
+                    onClick={() => item && onMute(item.id, !muted)}
+                  >
+                    {ic.mic}
+                  </button>
+                  <button className="rm-row-edit" title="Remove" onClick={() => onRemove(g.id)}>
+                    {ic.x}
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -1906,8 +1895,9 @@ export function LiveView({
 }) {
   const [destinations, setDestinations] = useState<LiveDestination[]>([]);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
-  /** Live guest previews, source-id → data URL (~1 Hz from the engine). */
+  /** Live guest previews, source-id → data URL (15fps demand-driven). */
   const [guestThumbs, setGuestThumbs] = useState<Record<string, string>>({});
+
   // Mount veil: the engine takes a beat to bootstrap, and permission grants
   // bounce sources — both look like a broken room if the half-built UI shows.
   // The veil holds until the engine is truly ready, and returns during
@@ -2009,6 +1999,15 @@ export function LiveView({
   const cfgRef = useRef(cfg);
   cfgRef.current = cfg;
   const layout = cfg.layout;
+  // Demand control (docs/THUMB-PIPELINE-V2.md): pay for preview frames only
+  // while the guests panel is somewhere visible. 0 on hide and on unmount.
+  const guestsDock = dockOf(layout, "guests");
+  useEffect(() => {
+    ipc.liveSetThumbRate(guestsDock === "hidden" ? 0 : 15).catch(() => {});
+    return () => {
+      ipc.liveSetThumbRate(0).catch(() => {});
+    };
+  }, [guestsDock]);
   const writeCfg = (next: RoomConfig) => {
     // Update the ref SYNCHRONOUSLY. Engine events arrive faster than React
     // re-renders, and they merge against cfgRef — a stale ref meant a
