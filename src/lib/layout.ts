@@ -6,7 +6,7 @@
  * canvas. Everything else is a card.
  * Beginners pick a preset; everyone else moves panels one by one. */
 
-export type PanelId = "scenes" | "sources" | "mixer" | "chat" | "channels" | "guests" | "stats";
+export type PanelId = "scenes" | "sources" | "mixer" | "chat" | "channels" | "guests" | "stats" | "updates";
 
 export type Dock = "top" | "left" | "right" | "bottom" | "hidden";
 
@@ -25,13 +25,14 @@ export const PANEL_META: Record<PanelId, { title: string; hint: string }> = {
   chat: { title: "Chat", hint: "Every platform's chat, merged" },
   channels: { title: "Channels", hint: "Where this room goes out" },
   stats: { title: "Stats", hint: "FPS, CPU, bitrate, drops — the numbers behind the health dot" },
+  updates: { title: "Updates", hint: "What shipped — every entry links to its exact PR" },
   guests: { title: "Guests", hint: "Who's in the room, and who's on screen" },
 
 };
 
 // Stream health is deliberately NOT here: it lives in the header, always
 // visible. Health you have to dock is health you find out about too late.
-export const PANEL_ORDER: PanelId[] = ["scenes", "sources", "mixer", "chat", "channels", "guests", "stats"];
+export const PANEL_ORDER: PanelId[] = ["scenes", "sources", "mixer", "chat", "channels", "guests", "stats", "updates"];
 
 /** Per-room sizing: bottom panels carry a flex weight (they share one row),
  * side docks carry a pixel width. Absent = the built-in default. */
@@ -113,7 +114,7 @@ export function normalize(p: Partial<Layout>): Layout {
   // it cannot have been deliberately hidden. Introduce it at its natural
   // dock ONCE; after the first save the user's placement (incl. hidden)
   // wins forever. Hidden stays the default for future panels.
-  const INTRO_DOCK: Partial<Record<PanelId, Dock>> = { stats: "bottom" };
+  const INTRO_DOCK: Partial<Record<PanelId, Dock>> = { stats: "bottom", updates: "right" };
   for (const id of PANEL_ORDER) if (!seen.has(id)) l[INTRO_DOCK[id] ?? "hidden"].push(id);
   return l;
 }

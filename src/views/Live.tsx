@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   ipc,
   listenLiveEvents,
@@ -1927,6 +1928,14 @@ export function LiveView({
   const [sources, setSources] = useState<LiveSources>({ screen: false, camera: false, mic: false });
   const [micLevel, setMicLevel] = useState(0);
   const [appVersion, setAppVersion] = useState<string | null>(null);
+  type RepoRelease = { tag_name: string; name: string | null; body: string | null; published_at: string; html_url: string };
+  const [releases, setReleases] = useState<RepoRelease[] | null | "err">(null);
+  useEffect(() => {
+    fetch("https://api.github.com/repos/Boomin-Ai/producer/releases?per_page=15")
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((rs: RepoRelease[]) => setReleases(rs))
+      .catch(() => setReleases("err"));
+  }, []);
   useEffect(() => {
     import("@tauri-apps/api/app").then(({ getVersion }) => getVersion()).then(setAppVersion).catch(() => {});
   }, []);
@@ -3807,6 +3816,62 @@ export function LiveView({
             {destinations.length === 0 && (
               <div className="rm-rows-empty">No channels — add them in Settings</div>
             )}
+          </div>
+        );
+      }
+      case "updates": {
+        // The stream of what shipped. Every #N reference is a real link to
+        // the exact PR/issue; the version header opens the release itself.
+        const REPO = "https://github.com/Boomin-Ai/producer";
+        const linkify = (text: string) =>
+          text.split(/(#\d+|https?:\/\/\S+)/g).map((part, k) => {
+            if (/^#\d+$/.test(part)) {
+              return (
+                <a key={k} className="upd-ref" onClick={() => openUrl(`${REPO}/issues/${part.slice(1)}`).catch(() => {})}>
+                  {part}
+                </a>
+              );
+            }
+            if (/^https?:\/\//.test(part)) {
+              return (
+                <a key={k} className="upd-ref" onClick={() => openUrl(part).catch(() => {})}>
+                  {part.replace(/^https?:\/\/(www\.)?/, "").slice(0, 40)}
+                </a>
+              );
+            }
+            return part;
+          });
+        return (
+          <div className="upd">
+            {releases === null && <div className="rm-rows-empty">Checking for updates…</div>}
+            {releases === "err" && (
+              <div className="rm-rows-empty">
+                The update stream goes live when the repo does.
+              </div>
+            )}
+            {Array.isArray(releases) &&
+              releases.map((r) => (
+                <div key={r.tag_name} className="upd-item">
+                  <div className="upd-head" onClick={() => openUrl(r.html_url).catch(() => {})}>
+                    <span className="upd-tag">{r.tag_name}</span>
+                    <span className="upd-name">{r.name || ""}</span>
+                    <span className="upd-date">
+                      {new Date(r.published_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                    </span>
+                  </div>
+                  {r.body && (
+                    <div className="upd-body">
+                      {r.body
+                        .split("\n")
+                        .filter((l) => l.trim())
+                        .slice(0, 6)
+                        .map((l, k) => (
+                          <p key={k}>{linkify(l.replace(/^[-*#\s]+/, ""))}</p>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              ))}
           </div>
         );
       }
