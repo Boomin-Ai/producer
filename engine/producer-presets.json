@@ -50,12 +50,52 @@
           "value": "${sourceDir}/.deps/cef_binary_6533_macos_arm64"
         }
       }
+    },
+    {
+      "name": "producer-windows",
+      "displayName": "Producer engine (Windows x64)",
+      "description": "libobs + the Windows plugin allowlist, plus obs-browser/CEF. No frontend, no Qt, no websocket, no scripting. NOTE ENABLE_BROWSER_DISPATCH_LOOP is FALSE here and true on macOS: obs-browser's cmake/os-windows.cmake never defines ENABLE_BROWSER_QT_LOOP, so CEF runs its own multi-threaded message loop and the libdispatch pump the macOS build needs has nothing to replace. The patchset still applies cleanly (every hunk is guarded by that define) so obs.lock keeps ONE patchset hash for both platforms.",
+      "inherits": [
+        "windows-x64"
+      ],
+      "binaryDir": "${sourceDir}/build_producer",
+      "cacheVariables": {
+        "CMAKE_PROJECT_INCLUDE": {
+          "type": "FILEPATH",
+          "value": "${sourceDir}/producer-project-include.cmake"
+        },
+        "ENABLE_FRONTEND": false,
+        "ENABLE_UI": false,
+        "ENABLE_SCRIPTING": false,
+        "ENABLE_BROWSER_PANELS": false,
+        "ENABLE_WEBSOCKET": false,
+        "ENABLE_WEBRTC": false,
+        "ENABLE_AJA": false,
+        "ENABLE_DECKLINK": false,
+        "ENABLE_VST": false,
+        "ENABLE_VLC": false,
+        "ENABLE_LIBFDK": false,
+        "ENABLE_SERVICE_UPDATES": false,
+        "ENABLE_TEST_INPUT": false,
+        "ENABLE_BROWSER": true,
+        "ENABLE_BROWSER_DISPATCH_LOOP": false,
+        "ENABLE_VIRTUALCAM": false,
+        "CEF_ROOT_DIR": {
+          "type": "PATH",
+          "value": "${sourceDir}/.deps/cef_binary_6533_windows_x64"
+        }
+      }
     }
   ],
   "buildPresets": [
     {
       "name": "producer-macos",
       "configurePreset": "producer-macos",
+      "configuration": "Release"
+    },
+    {
+      "name": "producer-windows",
+      "configurePreset": "producer-windows",
       "configuration": "Release"
     }
   ]
