@@ -119,3 +119,121 @@ API and cross-platform already.
 preview HWND shows the composite; a browser-source guest renders (CDP
 9223 verifies); go-live to one RTMP destination; THEN win-dshow virtual
 camera. In that order — each step is independently shippable.
+
+---
+
+# Verified reality (2026-09-02, rung 1 + first CI runs)
+
+Everything above was written from the macOS side before any Windows build had
+run. This section is what the port actually found. Where the two disagree, this
+section wins.
+
+## Rung 1 is done
+
+`build.rs` links the engine on Windows and sets `have_engine`, so the ~48
+`cfg(have_engine)` sites compile for real. Confirmed in cargo's build record,
+with a negative control (`PRODUCER_ENGINE_DIR=/nonexistent` correctly reports
+"building without live support").
+
+Two corrections to the plan above:
+
+- **The obs-browser patchset is not needed on Windows.** `cmake/os-windows.cmake`
+  never defines a Qt loop; CEF runs its own multi-threaded message loop there.
+  Windows already HAS the property the macOS patch creates. The patch is still
+  applied and still sha-verified, because every hunk is guarded by
+  `ENABLE_BROWSER_DISPATCH_LOOP` and is therefore inert — so obs.lock keeps ONE
+  patchset hash for both platforms. `producer-windows` sets that preset var
+  FALSE; `producer-macos` sets it TRUE.
+- **No import library is required to link.** An extracted OBS release ships no
+  `obs.lib`, which is why the extract-based spike could not link the normal way.
+  The extern blocks in `ffi.rs` carry
+  `#[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]`,
+  which needs no import lib at all. `raw-dylib` is a SOURCE attribute — it is
+  not a valid `cargo:rustc-link-lib` kind, and build.rs must not emit one.
+  A source build does produce `obs.lib` and it is staged anyway, so linking the
+  ordinary way keeps working.
+
+Also fixed on the way: `macos-private-api` was enabled unconditionally in
+`Cargo.toml`, so bare `cargo check` on Windows failed on main. Releases worked
+because the tauri CLI rewrites Cargo.toml before building. It is now
+target-scoped.
+
+## The engine artifact on Windows
+
+    bin/                obs.dll + its dep closure + THE WHOLE CEF PAYLOAD
+    obs-plugins/64bit/  the allowlist + obs-browser-page.exe
+    data/               libobs + per-plugin data
+    licenses/ manifest.json
+
+Build output lives at `build_producer/rundir/Release/{bin/64bit,
+obs-plugins/64bit,data}` — the Windows CMake setup writes runtime outputs
+straight into rundir, with no post-build copy step.
+
+**Stage `bin/` wholesale.** CEF's payload is mostly not DLLs: `icudtl.dat`
+(CefInitialize hard-fails without it), `resources.pak` / `chrome_*.pak`,
+`v8_context_snapshot.bin`, and `locales/` — a subdirectory no `*.dll` glob can
+match.
+
+**`obs-browser-page.exe` is the CEF subprocess, and it ships in
+`obs-plugins/64bit/`, not `bin/`.** Without it the plugin loads, CefInitialize
+succeeds, and every browser source is black because no render/GPU/network
+subprocess can spawn. Guests ARE browser sources. The closure gate treats it at
+the same severity as `libcef.dll`.
+
+## The Windows plugin allowlist is not the macOS one renamed
+
+`win-dshow` is BOTH camera input and virtual camera, replacing `mac-avcapture`
+and `mac-virtualcam` at once. `win-wasapi` takes `coreaudio-encoder`'s capture
+role. And the trap the shared/per-os split exists to catch: **the freetype text
+source is `text-freetype2` on macOS and `obs-text` on Windows.** It is not
+shared. `check_plugin_lists()` asserts the per-os lists stay disjoint from the
+shared one.
+
+## Windows-runner facts that cost real CI runs
+
+- **Line endings are load-bearing.** Git for Windows ships `core.autocrlf=true`
+  in its system config and `actions/checkout` does not override it. A CRLF
+  checkout changes `sha256(obs.lock)` — which IS the artifact identity — so the
+  two platforms would name their artifacts off different hashes from the same
+  lock. It also breaks the patchset sha256, and Git Bash treats a trailing CR as
+  part of a token. `.gitattributes` pins the hash-critical and Bash-executed
+  files to LF. (LF: `a023c6871ea8`. CRLF: `a6b79a815958`.)
+- **`python3` on Windows may be an App Execution Alias** that exists on PATH and
+  fails when run. Probe interpreters by EXECUTING them; presence is not proof.
+  `resolve_python()` in engine-lib.sh does this.
+- **The pythons on Windows are native builds** and cannot open the MSYS
+  `/d/a/...` paths Git Bash hands them. `host_path()` converts with `cygpath -m`
+  (forward slashes, so no re-escaping inside a python string literal) and is a
+  no-op on macOS. Before this, the Qt scan given an absolute path walked NOTHING
+  and reported a clean pass.
+- **macOS ships bash 3.2**, so nothing in `scripts/` may use `mapfile`,
+  `readarray`, `declare -A`, `${x,,}` or `[[ -v ]]`.
+- **A shallow clone has no tags**, so OBS's `git describe` versioning yields
+  `fb4d98b-modified` and configure dies with `list index: 1 out of range` /
+  `VERSION ... format invalid`. `-DOBS_VERSION_OVERRIDE` is the documented fix
+  and did NOT take effect on the Windows runner, so the build also tags the
+  clone with the lock's ref.
+- `tar --cd` is bsdtar-only; `-C` works on both bsdtar and GNU tar.
+
+## Gate philosophy
+
+`engine-closure-windows.sh` is a sibling of the macOS gate, not a port — the
+macOS one is otool/@rpath/.framework to its bones. It over-approximates on
+purpose: a false alarm is cheap, a false pass ships a broken engine. Two rules
+learned the hard way:
+
+1. **A gate that examines nothing is not a clean closure.** It fails if python
+   cannot see the stage dir, and fails if the Qt scan examined zero binaries.
+2. **Check the whole payload, not its most famous file.** libcef.dll present is
+   not CEF present.
+
+## Still open
+
+- `obs.lock` carries no Windows dependency pins. OBS 32.1.2 has no
+  `buildspec.json` at the repo root, so the obs-deps/CEF hashes cannot be read
+  from the source tree — add them after CI reports what it actually fetched,
+  which is a truer pin than a guessed one.
+- Rungs 2-5: room opens -> preview HWND composites -> browser-source guest
+  renders -> RTMP out -> win-dshow virtual camera.
+- The local R1-fallback extract has 13 plugins and NO obs-browser, so guests
+  cannot work against it. Rung 4 needs a CI-built engine.
