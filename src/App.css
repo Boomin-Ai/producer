@@ -6841,3 +6841,15 @@ textarea::placeholder {
 /* What's-new stream inside the settings sheet */
 .upd-sheet { margin-top: 6px; }
 .upd-sheet .upd-item { padding: 9px 2px; }
+
+/* Updates panel scrolls: the body is a proper flex scroll region. */
+.rm-panel-updates {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.rm-panel-updates .rm-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
