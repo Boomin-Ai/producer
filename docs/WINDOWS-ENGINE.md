@@ -189,6 +189,27 @@ source is `text-freetype2` on macOS and `obs-text` on Windows.** It is not
 shared. `check_plugin_lists()` asserts the per-os lists stay disjoint from the
 shared one.
 
+## What obs.lock pins, and what it deliberately does not
+
+**The lock pins what we MODIFY. The obs commit pins everything else,
+transitively. Adding a pin re-keys both platforms' artifacts.**
+
+That is why `submodules` names `plugins/obs-browser` and
+`plugins/obs-websocket` and not `deps/libdshowcapture/src`, and the asymmetry is
+deliberate rather than an oversight. We patch obs-browser, so its exact content
+is ours to assert. libdshowcapture we take as-is: `submodule update --init`
+checks out the gitlink SHA recorded in the pinned obs commit, with no branch
+tracking involved, so it is already determined byte-for-byte by
+`obs.commit`. Restating a determined fact in the lock would re-key every
+artifact on both platforms and buy nothing.
+
+Do not "fix" this in either direction without that argument changing.
+
+libdshowcapture also carries its own submodule
+(`external/capture-device-support`), so it is initialised `--recursive` —
+scoped to that one path, so obs-websocket does not drag in a dependency tree for
+a plugin built with `ENABLE_WEBSOCKET` FALSE.
+
 ## Windows-runner facts that cost real CI runs
 
 - **Line endings are load-bearing.** Git for Windows ships `core.autocrlf=true`
@@ -211,8 +232,12 @@ shared one.
 - **A shallow clone has no tags**, so OBS's `git describe` versioning yields
   `fb4d98b-modified` and configure dies with `list index: 1 out of range` /
   `VERSION ... format invalid`. `-DOBS_VERSION_OVERRIDE` is the documented fix
-  and did NOT take effect on the Windows runner, so the build also tags the
-  clone with the lock's ref.
+  and did NOT take effect, because `architecture.cmake` spawns a NESTED cmake for
+  the 32-bit sub-build and that child does not inherit command-line cache
+  entries. The build tags the clone with the lock's ref instead. This is not
+  redundancy — it is the only fix with the right SCOPE: an argument lives in the
+  process you passed it to, a tag lives in the repo where every nested tool
+  finds it.
 - `tar --cd` is bsdtar-only; `-C` works on both bsdtar and GNU tar.
 
 ## Gate philosophy

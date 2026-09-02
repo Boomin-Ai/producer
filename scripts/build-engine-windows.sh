@@ -51,7 +51,13 @@ git -C "$SRC_DIR" checkout -q "$OBS_COMMIT"
 # obs commit, and the obs commit pins this submodule. The two that ARE pinned are
 # pinned because we patch obs-browser and therefore care about its exact content.
 # This one is transitively pinned and unpatched.
-git -C "$SRC_DIR" submodule update --init --depth 1 plugins/obs-browser plugins/obs-websocket deps/libdshowcapture/src
+git -C "$SRC_DIR" submodule update --init --depth 1 plugins/obs-browser plugins/obs-websocket
+# --recursive for this one only: libdshowcapture carries its OWN submodule,
+# external/capture-device-support (Elgato AV device support), and
+# virtualcam-module names files from it as sources too. Recursion is scoped here
+# rather than applied to all three so obs-websocket does not drag in its own
+# dependency tree for a plugin we build with ENABLE_WEBSOCKET FALSE.
+git -C "$SRC_DIR" submodule update --init --recursive --depth 1 deps/libdshowcapture/src
 for sub in plugins/obs-browser plugins/obs-websocket; do
   want="$(lock_get "['submodules']['$sub']")"
   have="$(git -C "$SRC_DIR/$sub" rev-parse HEAD)"
