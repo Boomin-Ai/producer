@@ -50,12 +50,53 @@
           "value": "${sourceDir}/.deps/cef_binary_6533_macos_arm64"
         }
       }
+    },
+    {
+      "name": "producer-windows",
+      "displayName": "Producer engine (Windows x64)",
+      "description": "libobs + the Windows plugin allowlist, plus obs-browser/CEF. No frontend, no Qt, no websocket, no scripting. NOTE ENABLE_BROWSER_DISPATCH_LOOP is FALSE here and true on macOS: obs-browser's cmake/os-windows.cmake never defines ENABLE_BROWSER_QT_LOOP, so CEF runs its own multi-threaded message loop and the libdispatch pump the macOS build needs has nothing to replace. The patchset still applies cleanly (every hunk is guarded by that define) so obs.lock keeps ONE patchset hash for both platforms. CMAKE_COMPILE_WARNING_AS_ERROR is FALSE: OBS defaults it ON (cmake/common/compiler_common.cmake), and we build a subset configuration upstream never tests, so we hit MSVC warnings in UPSTREAM code that upstream CI does not - C4244 double-to-int in obs-browser-source.cpp under the non-shared-texture frame-rate path. Failing our engine build on a warning we will not fix in someone else's source buys no signal.",
+      "inherits": [
+        "windows-x64"
+      ],
+      "binaryDir": "${sourceDir}/build_producer",
+      "cacheVariables": {
+        "CMAKE_PROJECT_INCLUDE": {
+          "type": "FILEPATH",
+          "value": "${sourceDir}/producer-project-include.cmake"
+        },
+        "CMAKE_COMPILE_WARNING_AS_ERROR": false,
+        "ENABLE_FRONTEND": false,
+        "ENABLE_UI": false,
+        "ENABLE_SCRIPTING": false,
+        "ENABLE_BROWSER_PANELS": false,
+        "ENABLE_WEBSOCKET": false,
+        "ENABLE_WEBRTC": false,
+        "ENABLE_AJA": false,
+        "ENABLE_DECKLINK": false,
+        "ENABLE_VST": false,
+        "ENABLE_VLC": false,
+        "ENABLE_LIBFDK": false,
+        "ENABLE_SERVICE_UPDATES": false,
+        "ENABLE_TEST_INPUT": false,
+        "ENABLE_BROWSER": true,
+        "ENABLE_BROWSER_DISPATCH_LOOP": false,
+        "ENABLE_VIRTUALCAM": false,
+        "CEF_ROOT_DIR": {
+          "type": "PATH",
+          "value": "${sourceDir}/.deps/cef_binary_6533_windows_x64"
+        }
+      }
     }
   ],
   "buildPresets": [
     {
       "name": "producer-macos",
       "configurePreset": "producer-macos",
+      "configuration": "Release"
+    },
+    {
+      "name": "producer-windows",
+      "configurePreset": "producer-windows",
       "configuration": "Release"
     }
   ]

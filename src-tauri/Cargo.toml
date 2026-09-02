@@ -14,12 +14,22 @@ edition = "2021"
 name = "producer_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+# The transparent/vibrancy window is macOS-only by design, so the feature that
+# unlocks it is too. Pairs with macOSPrivateApi in tauri.macos.conf.json.
+[target.'cfg(target_os = "macos")'.dependencies]
+tauri = { version = "2", features = ["macos-private-api"] }
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 cc = "1"
 
 [dependencies]
-tauri = { version = "2", features = ["macos-private-api", "protocol-asset"] }
+# macos-private-api is NOT here: it is enabled per-target below. The
+# macOSPrivateApi allowlist entry lives in tauri.macos.conf.json (the
+# per-platform overlay), which is not merged on other platforms — so enabling
+# the feature unconditionally makes tauri-build fail the config/feature
+# consistency check on Windows and Linux.
+tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }

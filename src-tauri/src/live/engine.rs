@@ -116,6 +116,21 @@ fn enum_ids(f: unsafe extern "C" fn(usize, *mut *const c_char) -> bool) -> Vec<S
     out
 }
 
+/// The graphics module for a backend name recorded at boot.
+///
+/// A later reset MUST reuse the backend the engine actually booted with, and
+/// the module names are per-platform: handing obs_reset_video a `.dylib` name on
+/// Windows fails the reset and takes the graphics device with it. The boot path
+/// chooses the backend; this maps its recorded name back to a module.
+#[cfg(target_os = "macos")]
+fn graphics_module(backend: Option<&str>) -> &'static str {
+    if backend == Some("metal") { "libobs-metal.dylib" } else { "libobs-opengl.dylib" }
+}
+#[cfg(target_os = "windows")]
+fn graphics_module(backend: Option<&str>) -> &'static str {
+    if backend == Some("d3d11") { "libobs-d3d11.dll" } else { "libobs-opengl.dll" }
+}
+
 fn reset_video(module: &str, height: u32, fps: u32) -> Result<(), i32> {
     let width = height * 16 / 9;
     let module_c = CString::new(module).unwrap();
@@ -236,20 +251,32 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
         unsafe { ffi::obs_add_module_path(bin.as_ptr(), data.as_ptr()) };
     }
 
-    // Metal preferred, OpenGL fallback (A5 / F9); record the actual backend.
+    // Preferred backend, OpenGL fallback (A5 / F9); record the actual backend.
+    // The module NAMES are the only platform difference — obs_reset_video's
+    // contract is identical, so the preference/fallback shape is shared rather
+    // than duplicated per platform.
     let (boot_h, boot_f) = stored_video(module_config_dir);
-    match reset_video("libobs-metal.dylib", boot_h, boot_f) {
-        Ok(()) => report.graphics_backend = Some("metal".into()),
-        Err(metal_rc) => match reset_video("libobs-opengl.dylib", boot_h, boot_f) {
+    #[cfg(target_os = "macos")]
+    let (primary, primary_name) = ("libobs-metal.dylib", "metal");
+    #[cfg(target_os = "windows")]
+    let (primary, primary_name) = ("libobs-d3d11.dll", "d3d11");
+    #[cfg(target_os = "macos")]
+    let fallback = "libobs-opengl.dylib";
+    #[cfg(target_os = "windows")]
+    let fallback = "libobs-opengl.dll";
+
+    match reset_video(primary, boot_h, boot_f) {
+        Ok(()) => report.graphics_backend = Some(primary_name.into()),
+        Err(primary_rc) => match reset_video(fallback, boot_h, boot_f) {
             Ok(()) => {
                 report.graphics_backend = Some("opengl".into());
                 report.errors.push(format!(
-                    "metal backend unavailable (rc={metal_rc}), fell back to opengl"
+                    "{primary_name} backend unavailable (rc={primary_rc}), fell back to opengl"
                 ));
             }
             Err(gl_rc) => {
                 report.errors.push(format!(
-                    "obs_reset_video failed: metal rc={metal_rc}, opengl rc={gl_rc}"
+                    "obs_reset_video failed: {primary_name} rc={primary_rc}, opengl rc={gl_rc}"
                 ));
                 return report;
             }
@@ -1306,10 +1333,7 @@ pub fn start(
                                 message: "video settings must be 720p/1080p at 30/60fps".into(),
                             });
                         } else {
-                            let module = match report.graphics_backend.as_deref() {
-                                Some("metal") => "libobs-metal.dylib",
-                                _ => "libobs-opengl.dylib",
-                            };
+                            let module = graphics_module(report.graphics_backend.as_deref());
                             match reset_video(module, height, fps) {
                                 Ok(()) => {
                                     if let Some(g) = scene.as_mut() {

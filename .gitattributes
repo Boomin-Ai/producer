@@ -1,0 +1,24 @@
+# Line endings are load-bearing on the Windows engine path.
+#
+# Git for Windows ships core.autocrlf=true in its system config, and
+# actions/checkout does not override it, so a windows-2022 runner checks text
+# files out with CRLF unless told otherwise. Three things break when it does:
+#
+#   1. lock_hash() is sha256(engine/obs.lock), and the artifact identity is the
+#      first 12 of it. A CRLF checkout hashes differently from the macOS
+#      runner's LF checkout, so the two platforms would name their artifacts
+#      with DIFFERENT hash suffixes off the same lock -- silently breaking the
+#      one-lock-one-identity property release.yml depends on.
+#      (Measured: LF a023c6871ea8, CRLF a6b79a815958.)
+#   2. The patchset sha256 in the lock is computed over the .patch bytes, so a
+#      CRLF checkout fails patchset verification outright.
+#   3. Git Bash runs the build scripts, and bash treats a trailing \r as part of
+#      the token: a CRLF script dies with "$'\r': command not found".
+#
+# Pin the hash-critical and Bash-executed files to LF everywhere.
+*.sh        text eol=lf
+*.patch     text eol=lf
+*.lock      text eol=lf
+*.cmake     text eol=lf
+*.json      text eol=lf
+*.yml       text eol=lf
