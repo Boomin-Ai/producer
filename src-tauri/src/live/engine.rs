@@ -241,10 +241,22 @@ fn windows_engine_root() -> Option<std::path::PathBuf> {
     None
 }
 
-/// Full F3 bootstrap. MUST be called on the live-engine thread, never the
-/// main thread and never more than once per process.
+/// Full F3 bootstrap, HARNESS ENTRY ONLY. MUST be called on the live-engine
+/// thread, never the main thread and never more than once per process.
+///
+/// A null module_config_dir makes obs_module_config_path fall back to the
+/// PROCESS CWD, and plugins write there: win-capture drops
+/// `win-capture/compatibility.json` beside whatever the user launched from.
+/// Tolerable for a selftest, never for the shipped app --- so the app cannot
+/// reach it. bootstrap_with_config takes a &Path, not an Option, and this is
+/// the only route to None. The guard is the signature, not a runtime check.
 pub fn bootstrap() -> EngineReport {
-    bootstrap_with_config(None)
+    bootstrap_inner(None)
+}
+
+/// The engine as the app boots it: a real config directory, always.
+pub fn bootstrap_with_config(module_config_dir: &std::path::Path) -> EngineReport {
+    bootstrap_inner(Some(module_config_dir))
 }
 
 /// module_config_path feeds obs_module_config_path() — obs-browser derives
@@ -275,7 +287,7 @@ pub fn persist_video(dir: &std::path::Path, h: u32, f: u32) {
     let _ = std::fs::write(dir.join("video.json"), format!("{{\"h\":{h},\"f\":{f}}}"));
 }
 
-pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> EngineReport {
+fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport {
     let mut report = EngineReport {
         ok: false,
         obs_version: String::new(),
@@ -1297,7 +1309,7 @@ pub fn start(
     std::thread::Builder::new()
         .name("live-engine".into())
         .spawn(move || {
-            let report = bootstrap_with_config(Some(&module_config_dir));
+            let report = bootstrap_with_config(&module_config_dir);
             // The real boot leaves its report on disk (beside the legacy
             // harness's), phases included — readable without a debugger.
             if let Some(dir) = module_config_dir.parent() {
