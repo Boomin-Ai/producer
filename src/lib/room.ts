@@ -84,6 +84,10 @@ export interface RoomConfig {
    * local id stays authoritative offline; this is only the seam for
    * server-side features (guests today, broadcasts later). */
   server_room_id?: string;
+  /** Network exposure, mirrored locally so the control renders offline.
+   * Producer is the only writer, so the local copy is authoritative;
+   * changing it forces registration and a server PATCH. */
+  visibility?: "private" | "connections" | "public";
   /** Dock sizing the user dragged (per room, like the layout itself). */
   sizes?: DockSizes;
   /** Guest-slot occupancy: slot item id → guest item id. Slots are scene
@@ -141,6 +145,9 @@ export function parseConfig(raw: string | null | undefined): RoomConfig {
   if (v.channels && typeof v.channels === "object") base.channels = v.channels as Record<string, boolean>;
   if (typeof v.active_scene === "string") base.active_scene = v.active_scene;
   if (typeof v.server_room_id === "string") base.server_room_id = v.server_room_id;
+  if (v.visibility === "connections" || v.visibility === "public" || v.visibility === "private") {
+    base.visibility = v.visibility;
+  }
   if (typeof v.guest_link === "string") base.guest_link = v.guest_link;
   if (v.slot_bindings && typeof v.slot_bindings === "object") {
     base.slot_bindings = Object.fromEntries(

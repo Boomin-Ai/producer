@@ -392,6 +392,74 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
+    /// Exact-handle lookup — Producer's whole discovery surface. There is
+    /// deliberately no list call: the desktop can resolve a handle it was
+    /// handed, nothing more.
+    pub async fn network_lookup(&self, slug: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .get(self.root_url(&format!("/v1/app/network/lookup?slug={slug}")))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// Open stages visible to this brand: connections' rooms + public rooms.
+    pub async fn network_live_rooms(&self) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .get(self.root_url("/v1/app/network/rooms/live"))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// Knock on a visible open stage; lands in the host's waiting room and
+    /// returns a guest join URL to open in the browser.
+    pub async fn network_enter_room(&self, room_id: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.root_url(&format!("/v1/app/network/rooms/{room_id}/enter")))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// Network exposure of a SERVER room: private | connections | public.
+    pub async fn room_set_visibility(&self, room_id: &str, visibility: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .patch(self.root_url(&format!("/v1/app/live/rooms/{room_id}")))
+            .bearer_auth(&self.token)
+            .json(&serde_json::json!({ "visibility": visibility }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     pub async fn create_connect_session(&self, platform: &str) -> EngineResult<Value> {
         let resp = self
             .http
