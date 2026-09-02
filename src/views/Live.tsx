@@ -1675,7 +1675,7 @@ function MeterStrip({
     const u = Math.max(0, Math.min(1, t));
     onVolume?.(u * u * u);
   };
-  const pct = `${Math.round((dead || muted ? 0 : level) * 100)}%`;
+  const lvl = Math.round((dead || muted ? 0 : level) * 100);
   return (
     <div className={`rm-strip${horizontal ? " horizontal" : ""}${dead ? " dead" : ""}`}>
       <div
@@ -1691,7 +1691,10 @@ function MeterStrip({
           fromEvent(e);
         }}
       >
-        <div className="rm-track-fill" style={horizontal ? { width: pct } : { height: pct }} />
+        <div
+          className="rm-track-fill"
+          style={horizontal ? { clipPath: `inset(0 ${100 - lvl}% 0 0)` } : { clipPath: `inset(${100 - lvl}% 0 0 0)` }}
+        />
         <div
           className="rm-track-thumb"
           style={horizontal ? { left: `calc(${(dead ? 0.35 : ui) * 100}% - 7px)` } : { top: `calc(${(1 - (dead ? 0.35 : ui)) * 100}% - 7px)` }}
@@ -2056,9 +2059,15 @@ export function LiveView({
   /** A short bottom dock IS the top form — the form system has one slim axis,
    * so panels collapse into exactly the console shapes they wear up top. */
   const bottomSlim = !!shown.bottom && shown.bottom <= ROW_SNAP;
+  const topExpanded = !!shown.top && shown.top > ROW_SNAP;
+  /** Form follows SIZE, not dock identity: a short row dock wears the console
+   * (top) forms, an expanded one wears the full (bottom) forms — top and
+   * bottom are the same axis at different heights. */
   const formDockOf = (id: PanelId): Dock => {
     const d = dockOf(layout, id);
-    return d === "bottom" && bottomSlim ? "top" : d;
+    if (d === "bottom" && bottomSlim) return "top";
+    if (d === "top" && topExpanded) return "bottom";
+    return d;
   };
 
   const beginResize = (
@@ -2193,6 +2202,7 @@ export function LiveView({
   const demoVideoSet = useRef(false);
   const demo = demoOn();
   const [chatOn, setChatOn] = useState<Record<string, boolean>>({ twitch: true, kick: true, youtube: true });
+  const [chatChipsOpen, setChatChipsOpen] = useState(false);
   const [chatMsgs, setChatMsgs] = useState<ChatLine[]>(() => (demoOn() ? DEMO_CHAT.slice(0, 9) : []));
   const chatEnd = useRef<HTMLDivElement | null>(null);
   const chatList = useRef<HTMLDivElement | null>(null);
@@ -3541,19 +3551,44 @@ export function LiveView({
       case "chat":
         return (
           <>
-            <div className="rm-chat-chips">
-              {(["twitch", "kick", "youtube"] as const).map((p) => (
-                <button
-                  key={p}
-                  className={`rm-chat-chip${chatOn[p] ? " on" : ""}`}
-                  title={chatOn[p] ? `Hide ${p}` : `Show ${p}`}
-                  onClick={() => setChatOn((f) => ({ ...f, [p]: !f[p] }))}
-                >
-                  <span className="rm-chip-logo">{PLATFORM_LOGO[p]}</span>
-                  <span className="rm-chip-name">{p === "youtube" ? "YouTube" : p[0].toUpperCase() + p.slice(1)}</span>
-                </button>
-              ))}
-            </div>
+            {(() => {
+              const chatMini = formDockOf("chat") === "top";
+              const all = ["twitch", "kick", "youtube"] as const;
+              const active = all.filter((p) => chatOn[p] !== false);
+              const lead = active[0] ?? "twitch";
+              const rest = Math.max(active.length - 1, 0);
+              // Mini form: ONE logo + "+n more you're streaming to"; the
+              // cluster expands to the full toggleable set on demand.
+              if (chatMini && !chatChipsOpen) {
+                return (
+                  <div className="rm-chat-chips mini">
+                    <button className="rm-chat-chip on" title="Chat channels" onClick={() => setChatChipsOpen(true)}>
+                      <span className="rm-chip-logo">{PLATFORM_LOGO[lead]}</span>
+                    </button>
+                    {rest > 0 && (
+                      <button className="rm-chip-more" title="Show all chat channels" onClick={() => setChatChipsOpen(true)}>
+                        +{rest}
+                      </button>
+                    )}
+                  </div>
+                );
+              }
+              return (
+                <div className="rm-chat-chips" onMouseLeave={() => chatMini && setChatChipsOpen(false)}>
+                  {all.map((p) => (
+                    <button
+                      key={p}
+                      className={`rm-chat-chip${chatOn[p] ? " on" : ""}`}
+                      title={chatOn[p] ? `Hide ${p}` : `Show ${p}`}
+                      onClick={() => setChatOn((f) => ({ ...f, [p]: !f[p] }))}
+                    >
+                      <span className="rm-chip-logo">{PLATFORM_LOGO[p]}</span>
+                      <span className="rm-chip-name">{p === "youtube" ? "YouTube" : p[0].toUpperCase() + p.slice(1)}</span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
             <div className="rm-chat-list" ref={chatList} onScroll={onChatScroll} onWheel={onChatWheel}>
               {chatMsgs
                 .filter((m) => chatOn[m.platform] !== false)
@@ -4663,7 +4698,7 @@ export function LiveView({
           {(topOpen || layoutEdit) && (
             <div
               data-dock="top"
-              className={`rm-dock rm-dock-top${layout.top.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "top" ? " hot" : ""}${cfg.dock_bg?.top ? " dock-bg" : ""}${shown.top ? " sized" : ""}`}
+              className={`rm-dock rm-dock-top${layout.top.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "top" ? " hot" : ""}${cfg.dock_bg?.top ? " dock-bg" : ""}${shown.top ? " sized" : ""}${topExpanded ? " expanded" : ""}`}
               style={topOpen && shown.top ? { height: shown.top } : undefined}
             >
               {renderDock("top")}
