@@ -18,8 +18,10 @@ on:
       - "engine/producer-project-include.cmake"
       - "engine/patches/**"
       - "scripts/build-engine.sh"
+      - "scripts/build-engine-windows.sh"
       - "scripts/engine-lib.sh"
       - "scripts/engine-closure.sh"
+      - "scripts/engine-closure-windows.sh"
       # The virtual-camera pair is built by these on both engine paths, so a
       # change to either must be validated like any other engine change.
       - "scripts/build-virtualcam-plugin.sh"
@@ -57,6 +59,62 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: producer-libobs-macos-arm64
+          path: |
+            engine/artifacts/*.tar.zst
+            engine/artifacts/*.sha256
+          if-no-files-found: error
+
+  # ── Windows x64 ─────────────────────────────────────────────────────────────
+  # Same lock, same patchset, same manifest writer; different build body. See
+  # docs/WINDOWS-ENGINE.md and scripts/build-engine-windows.sh for why the
+  # dispatch-loop patch is applied but NOT enabled here (obs-browser is already
+  # Qt-free on Windows, so CEF pumps its own message loop).
+  #
+  # This job is what makes GUESTS possible on Windows: guests are browser
+  # sources, and the extracted-release engine the port started against carries
+  # no obs-browser at all.
+  build-windows-x64:
+    runs-on: windows-2022
+    timeout-minutes: 120
+    defaults:
+      run:
+        # Git Bash, so the sibling script and engine-lib.sh run unmodified.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      # zstd for pack_artifact; the runner has cmake and VS 2022 already.
+      #
+      # windows-2022 has TWO tars - Git Bash GNU tar and System32 bsdtar - and
+      # which one `shell: bash` resolves depends on PATH, while zstd WRITE support
+      # differs by build (GNU tar shells out to a zstd binary; system bsdtar may
+      # lack the codec entirely). So prove the capability in two seconds here
+      # rather than discovering it inside pack_artifact after a 40-minute compile.
+      - name: Install zstd
+        run: choco install zstandard -y --no-progress
+
+      - name: tar/zstd capability smoke
+        run: |
+          tar --version
+          command -v zstd && zstd --version || echo "no zstd binary on PATH - bsdtar may still carry the codec"
+          t=$(mktemp -d)
+          echo hi > "$t/probe"
+          tar -C "$t" --zstd -cf "$t/probe.tar.zst" probe
+          tar --zstd -tf "$t/probe.tar.zst"
+          echo "OK: this tar can write and read .tar.zst"
+
+      - name: Build engine from pinned source
+        run: ./scripts/build-engine-windows.sh
+
+      - name: Zero-Qt closure gate
+        run: |
+          stage=$(ls -d engine/artifacts/producer-libobs-windows-x64-*/ | head -1)
+          ./scripts/engine-closure-windows.sh "$stage"
+
+      - name: Upload engine artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: producer-libobs-windows-x64
           path: |
             engine/artifacts/*.tar.zst
             engine/artifacts/*.sha256
