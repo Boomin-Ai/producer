@@ -6557,14 +6557,40 @@ textarea::placeholder {
   min-height: 0;
   overflow-y: auto;
 }
-/* Slim bottom = the console: one row, centered, no vertical scroll. */
+/* Slim bottom = the console: one row, centered, no vertical scroll — and
+ * EXACTLY the top rail's mass. The sheet sheds its card padding so the
+ * universal minimum reads identically on both edges of the stage. */
 .rm-dock-bottom.slim {
   align-items: center;
-  padding-top: 4px;
-  padding-bottom: 4px;
+  padding: 2px 8px;
+}
+.rm-sheet:has(> .rm-dock-bottom.slim) {
+  padding: 2px 12px 2px;
+  border-radius: 10px 10px 0 0;
 }
 
 .rm-editbar-text { flex: 1; }
+
+/* Console rows scroll by trackpad only — a visible scroll rail over one-line
+ * content reads as a broken overlay, not an affordance. */
+.rm-dock-top .rm-panel-body,
+.rm-dock-top .rm-panel-body *,
+.rm-dock-bottom.slim .rm-panel-body,
+.rm-dock-bottom.slim .rm-panel-body *,
+.rm-panel[data-in="top"] .rm-rows,
+.rm-panel[data-in="top"] .rm-guests {
+  scrollbar-width: none;
+}
+.rm-dock-top .rm-panel-body::-webkit-scrollbar,
+.rm-dock-top .rm-panel-body *::-webkit-scrollbar,
+.rm-dock-bottom.slim .rm-panel-body::-webkit-scrollbar,
+.rm-dock-bottom.slim .rm-panel-body *::-webkit-scrollbar,
+.rm-panel[data-in="top"] .rm-rows::-webkit-scrollbar,
+.rm-panel[data-in="top"] .rm-guests::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
 
 /* ── Channels card ── */
 .chn { display: flex; flex-direction: column; gap: 2px; }
