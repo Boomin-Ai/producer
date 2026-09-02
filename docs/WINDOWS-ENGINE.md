@@ -402,6 +402,59 @@ Three notes for picker work:
   browser when the source stops showing, which matters for anything that
   renders a guest outside the composited scene.
 
+## The standalone-render contract
+
+Rendering a source OUTSIDE the composited scene --- a thumbnail, a preview tile,
+any `gs_texrender` pass --- has three requirements, and missing any one of them
+produces a BLACK frame with no error anywhere. All three are cross-platform;
+they are recorded here because rung 3+ needs them and because two of the three
+cost the macOS session a day.
+
+Upstream already has the canonical sequence. From
+`frontend/utility/ScreenshotObj.cpp` at the pinned commit, verbatim:
+
+```c
+gs_blend_state_push();
+gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
+if (source) {
+        obs_source_inc_showing(source);
+        obs_source_video_render(source);
+        obs_source_dec_showing(source);
+} else {
+        obs_render_main_texture();
+}
+gs_blend_state_pop();
+```
+
+Copy it. Do not reinvent it.
+
+1. **Right thread.** Every render-target call goes through
+   `obs_queue_task(OBS_TASK_GRAPHICS, ...)`. This is the v0.4.3 hotfix rule and
+   it applies to any D3D11 readback the Windows port adds.
+2. **Clean blend state.** A standalone render inherits whatever blend function
+   the context last used, and a leftover `(ZERO, x)` multiplies every pixel to
+   nothing. The push/`GS_BLEND_ONE, GS_BLEND_ZERO`/pop above is why OBS's own
+   screenshots work. It presents as "readback is broken" when it is "blend
+   state is dirty" --- and it hits EVERY source type, so a camera that renders
+   black is this, not a visibility problem.
+3. **Showing refs.** libobs derives "showing" from scene/output references, not
+   from who calls `obs_source_video_render`. A source that is not showing gets
+   `WasHidden(true)` forwarded to CEF and STOPS PRODUCING FRAMES;
+   obs-browser's whole render body is `if (texture) { ... }`, so it then draws
+   nothing. `obs_source_inc_showing`/`dec_showing` is the contract for
+   "I am rendering this outside a scene".
+
+   Two follow-ons: the repaint after `WasHidden(false)` is ASYNC, so the first
+   capture after inc_showing still gets the stale or empty texture --- allow a
+   frame or two. And `browser_source`'s `shutdown` property
+   (shutdown-on-invisible) DESTROYS the browser on hide, so with it set,
+   recreation takes far longer than that.
+
+Diagnostic shortcut, learned the expensive way: **render a CAMERA source
+through the same path as a control.** Camera green + browser black isolates to
+the showing gate. BOTH black is blend state, because a camera has no
+visibility-gated frame production to lose.
+
 ## Still open
 
 - `obs.lock` carries no Windows dependency pins. OBS 32.1.2 has no
