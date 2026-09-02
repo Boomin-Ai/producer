@@ -815,6 +815,20 @@ pub fn legacy_harness_requested() -> bool {
         .any(|a| a == "--live-capture-probe" || a == "--live-first-light" || a == "--live-props")
 }
 
+/// One idle tick while the engine thread bootstraps.
+///
+/// macOS MUST keep its run loop turning here: bootstrap marshals UI tasks to the
+/// main thread, and this IS the main thread, so a plain block would deadlock
+/// against itself. Windows does no such marshalling, so it just waits.
+#[cfg(all(have_engine, target_os = "macos"))]
+fn idle_tick() {
+    unsafe { ffi::CFRunLoopRunInMode(ffi::kCFRunLoopDefaultMode, 0.05, false) };
+}
+#[cfg(all(have_engine, target_os = "windows"))]
+fn idle_tick() {
+    std::thread::sleep(std::time::Duration::from_millis(20));
+}
+
 /// PRODUCER_LIVE_SELFTEST=1 entry: bootstrap headless, print the JSON report
 /// on stdout, exit 0 iff every M-L1 required ID was discovered.
 #[cfg(have_engine)]
@@ -831,9 +845,7 @@ pub fn selftest_main() -> ! {
     let report = loop {
         match rx.try_recv() {
             Ok(r) => break r,
-            Err(std::sync::mpsc::TryRecvError::Empty) => unsafe {
-                ffi::CFRunLoopRunInMode(ffi::kCFRunLoopDefaultMode, 0.05, false);
-            },
+            Err(std::sync::mpsc::TryRecvError::Empty) => idle_tick(),
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                 eprintln!("[live] engine thread died during bootstrap");
                 std::process::exit(2);

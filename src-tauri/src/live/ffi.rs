@@ -105,6 +105,11 @@ extern "C" {
     pub fn obs_module_failure_info_free(mfi: *mut obs_module_failure_info);
     pub fn obs_post_load_modules();
     pub fn obs_log_loaded_modules();
+    // Deprecated upstream at 32.1.2 but still exported and still the only way to
+    // tell libobs where its OWN data lives. Windows resolves that with the
+    // relative path "../../data/libobs/" against the process CWD, which is right
+    // for obs64.exe and never right for us.
+    pub fn obs_add_data_path(path: *const c_char);
     pub fn obs_add_module_path(bin: *const c_char, data: *const c_char);
     pub fn obs_enum_source_types(idx: usize, id: *mut *const c_char) -> bool;
     pub fn obs_enum_encoder_types(idx: usize, id: *mut *const c_char) -> bool;
@@ -197,17 +202,6 @@ extern "C" {
         param: *mut c_void,
     );
     pub fn obs_remove_raw_video_callback(callback: raw_video_cb_t, param: *mut c_void);
-}
-
-// CoreGraphics TCC preflight/request for Screen Recording.
-// raw-dylib: an EXTRACTED OBS release ships obs.dll with no obs.lib, and
-// MSVC cannot link a DLL without an import library. raw-dylib makes rustc
-// synthesise the import stubs from the DLL name, so a downloaded release
-// works as a dev engine. Harmless when a source build DID produce a .lib.
-#[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
-extern "C" {
-    pub fn CGPreflightScreenCaptureAccess() -> bool;
-    pub fn CGRequestScreenCaptureAccess() -> bool;
 }
 
 // obs-data settings (obs_source_create input)
@@ -539,11 +533,12 @@ extern "C" {
 // picker uses (window-utils.m); the SCK source has no default-display
 // behavior, it requires an explicit display_uuid.
 pub const K_CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
-// raw-dylib: an EXTRACTED OBS release ships obs.dll with no obs.lib, and
-// MSVC cannot link a DLL without an import library. raw-dylib makes rustc
-// synthesise the import stubs from the DLL name, so a downloaded release
-// works as a dev engine. Harmless when a source build DID produce a .lib.
-#[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
+// macOS SYSTEM symbols, not libobs ones: this block must not EXIST on Windows.
+// It was annotated with the obs raw-dylib attribute in the first pass, which
+// made rustc synthesise imports for them FROM obs.dll -- and the process then
+// died at load with STATUS_ENTRYPOINT_NOT_FOUND, because obs.dll of course
+// exports no CoreFoundation.
+#[cfg(target_os = "macos")]
 extern "C" {
     pub fn CGMainDisplayID() -> u32;
     pub fn CGDisplayCreateUUIDFromDisplayID(display: u32) -> *const c_void;
@@ -559,11 +554,12 @@ extern "C" {
 
 // Grand Central Dispatch + pthread, for marshalling OBS UI tasks onto the
 // macOS main thread per the §5.1 invariant.
-// raw-dylib: an EXTRACTED OBS release ships obs.dll with no obs.lib, and
-// MSVC cannot link a DLL without an import library. raw-dylib makes rustc
-// synthesise the import stubs from the DLL name, so a downloaded release
-// works as a dev engine. Harmless when a source build DID produce a .lib.
-#[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
+// macOS SYSTEM symbols, not libobs ones: this block must not EXIST on Windows.
+// It was annotated with the obs raw-dylib attribute in the first pass, which
+// made rustc synthesise imports for them FROM obs.dll -- and the process then
+// died at load with STATUS_ENTRYPOINT_NOT_FOUND, because obs.dll of course
+// exports no CoreFoundation.
+#[cfg(target_os = "macos")]
 extern "C" {
     pub static _dispatch_main_q: c_void;
     pub fn dispatch_async_f(
@@ -581,11 +577,12 @@ extern "C" {
 
 // CoreFoundation run-loop pump for headless self-test mode (drains the GCD
 // main queue while the engine thread bootstraps).
-// raw-dylib: an EXTRACTED OBS release ships obs.dll with no obs.lib, and
-// MSVC cannot link a DLL without an import library. raw-dylib makes rustc
-// synthesise the import stubs from the DLL name, so a downloaded release
-// works as a dev engine. Harmless when a source build DID produce a .lib.
-#[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
+// macOS SYSTEM symbols, not libobs ones: this block must not EXIST on Windows.
+// It was annotated with the obs raw-dylib attribute in the first pass, which
+// made rustc synthesise imports for them FROM obs.dll -- and the process then
+// died at load with STATUS_ENTRYPOINT_NOT_FOUND, because obs.dll of course
+// exports no CoreFoundation.
+#[cfg(target_os = "macos")]
 extern "C" {
     pub static kCFRunLoopDefaultMode: *const c_void;
     pub fn CFRunLoopRunInMode(

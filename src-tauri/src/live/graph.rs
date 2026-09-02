@@ -117,6 +117,7 @@ extern "C" fn video_cb(_param: *mut c_void, _frame: *mut ffi::video_data) {
     VIDEO_FRAMES.fetch_add(1, Ordering::Relaxed);
 }
 
+#[cfg(target_os = "macos")]
 /// Run a closure on the macOS main thread (blocking) — used for the TCC
 /// preflight/request calls, which can present system UI.
 struct MainCtx<F, T> {
@@ -182,8 +183,18 @@ extern "C" fn run_timed<F: FnOnce() -> T, T>(ctx: *mut c_void) {
     );
 }
 
+/// Windows has no main-thread affinity for these calls. The macOS version
+/// exists because AVFoundation/CoreMedia TCC prompts must be raised on the
+/// main thread; Windows prompts per-app at capture time and needs no
+/// marshalling, so this is a direct call.
+#[cfg(target_os = "windows")]
+pub(crate) fn on_main_thread<T: Send, F: FnOnce() -> T + Send>(f: F) -> T {
+    f()
+}
+
 /// UUID string of the main display, via the same CoreGraphics calls OBS's
 /// display picker uses.
+#[cfg(target_os = "macos")]
 fn main_display_uuid() -> Option<String> {
     unsafe {
         let uuid = ffi::CGDisplayCreateUUIDFromDisplayID(ffi::CGMainDisplayID());
@@ -212,6 +223,15 @@ fn main_display_uuid() -> Option<String> {
                 .into_owned(),
         )
     }
+}
+
+/// Windows has no display-UUID concept: win-capture's monitor_capture picks a
+/// monitor by id, not by CoreGraphics UUID. Screen capture on Windows is its
+/// own piece of work; until it lands, returning None makes the callers surface
+/// their existing error rather than pretend a display was chosen.
+#[cfg(target_os = "windows")]
+fn main_display_uuid() -> Option<String> {
+    None
 }
 
 /// Live geometry of one scene item, in canvas coordinates (base size).
@@ -1661,11 +1681,18 @@ pub fn capture_probe(window: Duration) -> CaptureProbeReport {
 
     // Real TCC, up front. A grant issued while this process is running does
     // not always apply to it — the relaunch note tells the operator what to do.
-    let granted = on_main_thread(|| unsafe { ffi::CGPreflightScreenCaptureAccess() });
+    // Through the shim, not CoreGraphics directly: shim.m calls
+    // CGPreflightScreenCaptureAccess on macOS and shim_win.c answers for
+    // Windows, where there is no screen-recording permission gate at all.
+    // One call site, both platforms, and no CoreGraphics symbol in Rust.
+    let granted = on_main_thread(|| unsafe { ffi::producer_screen_capture_preflight() } == 1);
     let mut prompted = false;
     if !granted {
         prompted = true;
-        let now_granted = on_main_thread(|| unsafe { ffi::CGRequestScreenCaptureAccess() });
+        let now_granted = on_main_thread(|| unsafe {
+            ffi::producer_screen_capture_request();
+            ffi::producer_screen_capture_preflight() == 1
+        });
         notes.push(format!(
             "screen recording not granted at launch; prompt requested (immediate result: {now_granted}). \
              If you just granted it, relaunch and re-run the probe."
