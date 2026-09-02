@@ -43,7 +43,8 @@ while read -r p; do
 done < <(engine_plugins windows)
 
 # ── 2. obs-browser + CEF, called out separately ──────────────────────────────
-if [[ -f "$STAGE/obs-plugins/64bit/obs-browser.dll" ]]; then
+PLUGDIR="$STAGE/obs-plugins/64bit"
+if [[ -f "$PLUGDIR/obs-browser.dll" ]]; then
   echo "  ok   obs-browser present"
   # CEF IS NOT ONE FILE. libcef.dll alone is not a loadable CEF: init reads
   # icudtl.dat and the locales/ directory, and dies without them. A staging step
@@ -51,10 +52,10 @@ if [[ -f "$STAGE/obs-plugins/64bit/obs-browser.dll" ]]; then
   # where every guest tile is black. So these are FAILURES, not warnings - same
   # severity as a missing libcef.dll, because the outcome is identical.
   for cef in libcef.dll icudtl.dat locales; do
-    if [[ -e "$STAGE/bin/$cef" ]]; then
+    if [[ -e "$PLUGDIR/$cef" ]]; then
       echo "  ok   CEF payload $cef"
     else
-      echo "  FAIL CEF payload MISSING: bin/$cef - obs-browser cannot initialise" >&2
+      echo "  FAIL CEF payload MISSING: obs-plugins/64bit/$cef - obs-browser cannot initialise" >&2
       found="$(find "$STAGE" -name "$cef" -print -quit 2>/dev/null || true)"
       [[ -n $found ]] && echo "       (it exists at $found - staging put it in the wrong place)" >&2
       fail=1
@@ -65,7 +66,7 @@ if [[ -f "$STAGE/obs-plugins/64bit/obs-browser.dll" ]]; then
   # plugin loads, CefInitialize succeeds, and every browser source is black
   # because no render/GPU/network subprocess can spawn - a failure nothing else
   # here would catch.
-  if [[ -f "$STAGE/obs-plugins/64bit/obs-browser-page.exe" ]]; then
+  if [[ -f "$PLUGDIR/obs-browser-page.exe" ]]; then
     echo "  ok   CEF subprocess obs-browser-page.exe"
   else
     echo "  FAIL obs-browser-page.exe MISSING - browser sources render black" >&2
@@ -73,8 +74,8 @@ if [[ -f "$STAGE/obs-plugins/64bit/obs-browser.dll" ]]; then
   fi
   # The .pak set is versioned by CEF build (resources.pak, chrome_100_percent.pak,
   # ...), so glob rather than pinning a list that will rot at the next CEF bump.
-  if ! compgen -G "$STAGE/bin/*.pak" >/dev/null; then
-    echo "  FAIL no CEF .pak resources in bin/ (resources.pak, chrome_*.pak)" >&2
+  if ! compgen -G "$PLUGDIR/*.pak" >/dev/null; then
+    echo "  FAIL no CEF .pak resources beside obs-browser.dll (resources.pak, chrome_*.pak)" >&2
     fail=1
   else
     echo "  ok   CEF .pak resources present"
@@ -83,7 +84,7 @@ if [[ -f "$STAGE/obs-plugins/64bit/obs-browser.dll" ]]; then
   # a gate failure - but listing what it verified tells a future reader the sweep
   # was real rather than assumed.
   for side in libEGL.dll libGLESv2.dll d3dcompiler_47.dll vk_swiftshader.dll vk_swiftshader_icd.json; do
-    if [[ -e "$STAGE/bin/$side" ]]; then echo "  ok   CEF sidecar $side"
+    if [[ -e "$PLUGDIR/$side" ]]; then echo "  ok   CEF sidecar $side"
     else echo "  warn CEF sidecar absent: $side (GPU fallback may be degraded)"; fi
   done
 else

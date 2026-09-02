@@ -137,13 +137,11 @@ echo "build output: $OUT"
 rm -rf "$STAGE"
 mkdir -p "$STAGE/bin" "$STAGE/obs-plugins/64bit" "$STAGE/data" "$STAGE/licenses"
 
-# WHOLESALE, not *.dll + *.exe. CEF's Windows runtime payload sits in this same
-# directory and is mostly NOT a DLL: icudtl.dat (CefInitialize hard-fails without
-# it), resources.pak / chrome_*.pak, v8_context_snapshot.bin, and locales/ - a
-# SUBDIRECTORY no *.dll glob can ever match. Miss any of them and obs-browser
-# loads, then dies at init, and the failure reads as "guests are broken" three
-# rungs later instead of "staging is incomplete" right here. obs64.exe rides
-# along; it is inert and useful for debugging.
+# WHOLESALE, not *.dll + *.exe. obs.dll's dependency closure in rundir's bin
+# includes non-DLL runtime files, and a *.dll glob would silently drop them.
+# (The CEF payload is NOT here - it goes beside obs-browser.dll in
+# obs-plugins/64bit; see the CEF section below for the three reasons why.)
+# obs64.exe rides along; it is inert and useful for debugging.
 cp -R "$OUT"/. "$STAGE/bin/"
 # THE IMPORT LIBRARY. A source build produces obs.lib; an extracted release does
 # not. Staging it means Windows devs can link the normal way — raw-dylib in
@@ -198,11 +196,40 @@ DATA_SRC="$BUILD/rundir/Release/data"
 # shipping an engine that silently cannot render a guest.
 [[ -f "$STAGE/obs-plugins/64bit/obs-browser.dll" ]] \
   || { echo "FATAL: obs-browser.dll not staged — guests cannot work without it" >&2; exit 1; }
-# CEF is not one file. Check the load-bearing pieces here, where the message can
-# name the cause; engine-closure-windows.sh asserts the same set again as a gate.
-for cef in libcef.dll icudtl.dat locales; do
-  [[ -e "$STAGE/bin/$cef" ]] || echo "WARNING: CEF payload missing $cef in bin/ - obs-browser will fail at init" >&2
-done
+# CEF PAYLOAD - goes in obs-plugins/64bit, NEXT TO obs-browser.dll. Not bin/.
+# Three independent mechanisms point at the module's own directory, and each was
+# READ rather than inferred:
+#
+#   1. libobs os_dlopen (libobs/util/platform-windows.c) calls
+#      SetDllDirectoryW(<the module's own directory>) before LoadLibraryW, so
+#      obs-browser.dll's import of libcef.dll resolves from obs-plugins/64bit.
+#   2. obs-browser sets locales_dir_path to <module dir>/locales explicitly.
+#   3. obs-browser does NOT set resources_dir_path, and CEF's documented default
+#      for it is the directory containing libcef.dll - so icudtl.dat and the .pak
+#      set must sit beside libcef.dll too.
+#
+# This is also exactly how a real OBS Windows install is laid out. Staging from
+# CEF_ROOT rather than from rundir keeps it deterministic and avoids scooping
+# non-allowlisted plugins out of the build tree.
+if engine_plugins windows | grep -qx obs-browser; then
+  CEF_ROOT=""
+  for cand in "$SRC_DIR"/.deps/cef_binary_*_windows_x64; do
+    [[ -f "$cand/Release/libcef.dll" ]] && { CEF_ROOT="$cand"; break; }
+  done
+  [[ -n $CEF_ROOT ]] || { echo "FATAL: no CEF distribution under $SRC_DIR/.deps" >&2; exit 1; }
+  echo "CEF: $CEF_ROOT"
+  # *.lib is a link-time input, not a runtime file, and cef_sandbox.lib alone is
+  # hundreds of megabytes - shipping it would bloat every artifact for nothing.
+  find "$CEF_ROOT/Release" -maxdepth 1 -type f ! -name "*.lib" -exec cp {} "$STAGE/obs-plugins/64bit/" \;
+  cp -R "$CEF_ROOT/Resources/." "$STAGE/obs-plugins/64bit/"
+
+  # Fatal, not a warning: after an explicit copy from the CEF distribution, a
+  # missing piece means the distribution itself is wrong.
+  for cef in libcef.dll icudtl.dat locales; do
+    [[ -e "$STAGE/obs-plugins/64bit/$cef" ]] || { echo "FATAL: CEF payload missing $cef after staging from $CEF_ROOT" >&2; exit 1; }
+  done
+  echo "staged CEF payload beside obs-browser.dll"
+fi
 
 cp "$SRC_DIR/COPYING" "$STAGE/licenses/" 2>/dev/null || true
 

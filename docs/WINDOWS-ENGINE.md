@@ -184,8 +184,8 @@ target-scoped.
 
 ## The engine artifact on Windows
 
-    bin/                obs.dll + its dep closure + THE WHOLE CEF PAYLOAD
-    obs-plugins/64bit/  the allowlist + obs-browser-page.exe
+    bin/                obs.dll + its dependency closure
+    obs-plugins/64bit/  the allowlist, obs-browser-page.exe, AND ALL OF CEF
     data/               libobs + per-plugin data
     licenses/ manifest.json
 
@@ -193,10 +193,26 @@ Build output lives at `build_producer/rundir/Release/{bin/64bit,
 obs-plugins/64bit,data}` — the Windows CMake setup writes runtime outputs
 straight into rundir, with no post-build copy step.
 
-**Stage `bin/` wholesale.** CEF's payload is mostly not DLLs: `icudtl.dat`
-(CefInitialize hard-fails without it), `resources.pak` / `chrome_*.pak`,
-`v8_context_snapshot.bin`, and `locales/` — a subdirectory no `*.dll` glob can
-match.
+**Stage `bin/` wholesale.** obs.dll's dependency closure includes non-DLL
+runtime files, and a `*.dll` glob silently drops them.
+
+**THE ENTIRE CEF PAYLOAD GOES IN `obs-plugins/64bit`, BESIDE obs-browser.dll ---
+not in `bin/`.** Three independent mechanisms all resolve to the module's own
+directory, and each was read in the source rather than inferred:
+
+1. `os_dlopen` (libobs/util/platform-windows.c) calls
+   `SetDllDirectoryW(<the module's own directory>)` before `LoadLibraryW`, so
+   obs-browser.dll's import of libcef.dll resolves from `obs-plugins/64bit`.
+2. obs-browser sets `locales_dir_path` to `<module dir>/locales` explicitly.
+3. obs-browser does NOT set `resources_dir_path`, and CEF's documented default
+   for it is the directory containing libcef.dll --- so `icudtl.dat` and the
+   `.pak` set must sit beside libcef.dll too.
+
+This is also exactly how a real OBS Windows install is laid out. It is staged
+from `CEF_ROOT` (`.deps/cef_binary_*_windows_x64/{Release,Resources}`) rather
+than from rundir: deterministic, and it cannot accidentally scoop
+non-allowlisted plugins out of the build tree. `*.lib` is excluded --- link-time
+input, not runtime, and `cef_sandbox.lib` alone is hundreds of megabytes.
 
 **`obs-browser-page.exe` is the CEF subprocess, and it ships in
 `obs-plugins/64bit/`, not `bin/`.** Without it the plugin loads, CefInitialize
