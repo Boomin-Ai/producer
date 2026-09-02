@@ -6853,3 +6853,29 @@ textarea::placeholder {
   min-height: 0;
   overflow-y: auto;
 }
+
+/* Scenes: names never wrap; in a narrow card the ornaments yield —
+   transition chip and shortcut go, gear comes back on hover. */
+.rm-scene-name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@container panel (max-width: 320px) {
+  .rm-scene-tr,
+  .rm-scene-key {
+    display: none;
+  }
+  .rm-scene-gear {
+    display: none;
+  }
+  .rm-scene-row:hover .rm-scene-gear,
+  .rm-scene-row.active .rm-scene-gear {
+    display: inline-flex;
+  }
+  .rm-scene-row {
+    gap: 8px;
+    padding: 0 8px;
+  }
+}
