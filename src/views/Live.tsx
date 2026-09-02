@@ -3727,6 +3727,29 @@ export function LiveView({
         // Channels card: brand mark · name · phase · switch. Clicking a row
         // (off the switch) opens INLINE key entry — the key goes straight to
         // the Keychain via the same upsert the editor uses.
+        const chnTop = dockOf(layout, "channels") === "top";
+        if (chnTop) {
+          // Top bar: the LOGO is the toggle. Lit = armed. Nothing else.
+          return (
+            <div className="chn chn-icons">
+              {destinations.map((d) => {
+                const st = statuses.get(d.id);
+                return (
+                  <button
+                    key={d.id}
+                    className={`chn-ico${d.enabled ? " on" : ""}`}
+                    disabled={streaming}
+                    title={`${d.label} — ${d.enabled ? "armed" : "off"}${streaming && st ? ` · ${(PHASE_COPY[st.phase] ?? PHASE_COPY.idle).label}` : ""}`}
+                    onClick={() => toggleEnabled(d)}
+                  >
+                    {PLATFORM_LOGO[d.preset] ?? <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />}
+                    {streaming && st && <span className={`rm-chan-phase ${st.phase}`} />}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        }
         return (
           <div className="chn">
             {destinations.map((d) => {

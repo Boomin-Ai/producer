@@ -6479,3 +6479,121 @@ textarea::placeholder {
   font-weight: 700;
   cursor: pointer;
 }
+
+/* Guests internals: thumbnails run to the card's corners — media wants
+   edges, not mats. */
+.rm-panel-guests .rm-panel-body {
+  padding: 6px;
+}
+.rm-panel-guests .rm-guest-list {
+  gap: 6px;
+}
+.rm-gcard {
+  border-radius: 9px;
+}
+
+/* Top-bar channels: the logo IS the switch. Armed = lit + ringed. */
+.chn-icons { gap: 6px; }
+.chn-ico {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 0.5px solid transparent;
+  border-radius: var(--r-ctl);
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.32;
+  filter: grayscale(1);
+  transition: opacity 0.15s ease, filter 0.15s ease, background 0.15s ease;
+}
+.chn-ico:hover { opacity: 0.6; filter: grayscale(0.4); }
+.chn-ico.on {
+  opacity: 1;
+  filter: none;
+  background: var(--surface-2);
+  border-color: oklch(0.75 0.14 165 / 0.55);
+}
+.chn-ico:disabled { cursor: default; }
+.chn-ico .rm-chan-phase {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+}
+
+/* Channel tiles: block-level logos, dead-center, larger glyphs. */
+.chn-ico svg {
+  display: block;
+  width: 21px;
+  height: 21px;
+}
+.chn-ico { padding: 0; }
+
+/* Guest panel: near-zero padding — it IS the thumbnails. */
+.rm-panel-guests .rm-panel-body {
+  padding: 3px;
+}
+.rm-panel-guests .rm-panel-head {
+  padding: 6px 9px 0;
+}
+.rm-panel-guests .rm-guest-list {
+  gap: 4px;
+}
+.rm-gcard { border-radius: 8px; }
+
+/* Guests: the thumbnails ARE the body. Zero padding, edge-to-edge media,
+   the panel's own rounded corners do the clipping. */
+.rm-panel-guests {
+  overflow: hidden;
+}
+.rm-panel-guests .rm-panel-body {
+  padding: 4px 0 0;
+}
+.rm-panel-guests .rm-guest-list {
+  gap: 1px;
+}
+.rm-panel-guests .rm-gcard {
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  border-top: 0.5px solid var(--line-1);
+}
+.rm-panel-guests .rm-guest.waiting {
+  border-radius: 0;
+  margin: 0 6px;
+}
+
+/* Stats, TOP-BAR form: a one-line readout — label·value pairs, no tiles,
+   no chart. Every panel owns a form per dock; every panel goes anywhere. */
+.rm-panel[data-in="top"] .stx {
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  overflow-x: auto;
+}
+.rm-panel[data-in="top"] .stx-grid {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 16px;
+}
+.rm-panel[data-in="top"] .stx-tile {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  flex: 0 0 auto;
+}
+.rm-panel[data-in="top"] .stx-num { font-size: 13px; }
+.rm-panel[data-in="top"] .stx-chart,
+.rm-panel[data-in="top"] .stx-lastrec {
+  display: none;
+}
+.rm-panel[data-in="top"] .stx-warns {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
