@@ -6945,3 +6945,25 @@ textarea::placeholder {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* Settings sheet scrolls — WHAT'S NEW made it taller than the viewport. */
+.cr-sheet {
+  overflow-y: auto;
+  max-height: 100vh;
+}
+
+/* A guest ON SCREEN doesn't need a big preview — they're on the stage.
+   Their card collapses to a slim live strip; hiding them re-expands it. */
+.rm-panel-guests .rm-gcard.on {
+  aspect-ratio: auto;
+  height: 46px;
+}
+.rm-panel-guests .rm-gcard.on .rm-gcard-img {
+  object-position: center 30%;
+}
+.rm-panel-guests .rm-gcard.on .rm-gcard-id {
+  padding: 0 10px;
+  top: 0;
+  display: flex;
+  align-items: center;
+}
