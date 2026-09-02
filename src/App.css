@@ -6879,3 +6879,9 @@ textarea::placeholder {
     padding: 0 8px;
   }
 }
+
+/* Header channels chip: armed logos at a glance, popover to arm/disarm. */
+.hd-chans { gap: 5px; }
+.hd-chan-logo { display: grid; place-items: center; }
+.hd-chan-logo svg { display: block; width: 14px; height: 14px; }
+.rm-pop-dests .chn-row { height: 38px; }

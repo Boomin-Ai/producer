@@ -4334,6 +4334,55 @@ export function LiveView({
           )}
 
           <button
+            className="hd-chip hd-chans"
+            title="Channels this room goes out to"
+            onClick={(e) => {
+              setPopAnchor(e.currentTarget);
+              setDestsOpen((o) => !o);
+            }}
+          >
+            {enabledDests.length > 0 ? (
+              enabledDests.map((d) => (
+                <span key={d.id} className="hd-chan-logo">
+                  {PLATFORM_LOGO[d.preset] ?? <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />}
+                </span>
+              ))
+            ) : (
+              <span>Channels</span>
+            )}
+            {ic.chev}
+          </button>
+          {destsOpen && (
+            <Pop anchor={popAnchor} align="right" className="rm-pop-dests">
+              <div className="rm-pop-title">CHANNELS</div>
+              {destinations.map((d) => {
+                const st = statuses.get(d.id);
+                const phase = st ? PHASE_COPY[st.phase] ?? PHASE_COPY.idle : PHASE_COPY.idle;
+                return (
+                  <div key={d.id} className="chn-row" style={{ minWidth: 220 }}>
+                    <span className="chn-logo">{PLATFORM_LOGO[d.preset] ?? <span className="rm-row-dot" />}</span>
+                    <span className="chn-name">{d.label}</span>
+                    {streaming && st && (
+                      <span className="chn-sub">
+                        {phase.label}
+                        <span className={`rm-chan-phase ${st.phase}`} />
+                      </span>
+                    )}
+                    <button
+                      className={`rm-switch${d.enabled ? " on" : ""}`}
+                      disabled={streaming}
+                      onClick={() => toggleEnabled(d)}
+                    >
+                      <span className="rm-switch-knob" />
+                    </button>
+                  </div>
+                );
+              })}
+              {destinations.length === 0 && <div className="rm-rows-empty">No channels yet.</div>}
+            </Pop>
+          )}
+
+          <button
             className="hd-chip"
             title="Output video settings"
             onClick={(e) => {
