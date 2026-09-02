@@ -275,6 +275,15 @@ learned the hard way:
    cannot see the stage dir, and fails if the Qt scan examined zero binaries.
 2. **Check the whole payload, not its most famous file.** libcef.dll present is
    not CEF present.
+3. **Over-approximate: assert things whose failure mechanism you do not know
+   yet.** `obs-browser-page.exe` was made a fatal check on the macOS session's
+   advice, purely on consequence --- browser sources go black and nothing else
+   would catch it. Only later did the build reveal WHY it would go missing:
+   obs-browser's `cmake/os-windows.cmake` declares
+   `add_executable(obs-browser-helper WIN32 EXCLUDE_FROM_ALL)`, so the default
+   target never builds it. The check found the thing it was written to find, for
+   a reason nobody had guessed. A gate justified by consequence outlives the
+   mechanisms you happen to know about.
 
 ## Two kinds of fact, checked separately
 
@@ -292,6 +301,16 @@ The repo now carries one example of each biting from the opposite direction:
 this one, and the `-DOBS_VERSION_OVERRIDE` case, where the source-level logic in
 versionconfig.cmake was exactly what the docs said and the build system still
 defeated it by spawning a NESTED cmake the argument never reached.
+
+The concrete rule that falls out, for obs-browser specifically:
+
+> **obs-browser sources assume Qt unconditionally unless already guarded.
+> Before adding ANY source file to the build, grep it for `Q[A-Z]` first.**
+
+This has now bitten both platforms independently --- macOS in engine.yml run
+33243835356 ("CEF patch fixup 1: guard the remaining unconditional Qt
+references") and Windows here. Two data points on two platforms is a pattern,
+not an anecdote.
 
 ## How a release consumes the engine, and what a lock edit costs
 
