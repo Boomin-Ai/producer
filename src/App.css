@@ -6441,3 +6441,41 @@ textarea::placeholder {
 .rm-row-name { font-size: 13px; color: var(--fg-1); }
 .rm-row-edit { color: var(--fg-3); }
 .rm-row-edit:hover { color: var(--fg-1); }
+
+/* ── Guests: chrome owns count + link; the body is pure content ── */
+.rm-cnt {
+  font-size: 11px;
+  color: var(--fg-3);
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.rm-cnt em {
+  font-style: normal;
+  color: var(--amber);
+}
+.rm-guest-list { display: flex; flex-direction: column; gap: 8px; }
+/* waiting rows, native to the card */
+.rm-guest.waiting {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: var(--h-row);
+  padding: 0 6px;
+  border-radius: var(--r-ctl);
+  background: var(--surface-2);
+  border: 0.5px solid rgba(251, 191, 36, 0.25);
+}
+.rm-guest-state { font-size: 11px; color: var(--amber); margin-left: auto; }
+.rm-guest-admit {
+  height: 26px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--r-ctl);
+  background: var(--mint);
+  color: #06251b;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}

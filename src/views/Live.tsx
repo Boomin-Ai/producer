@@ -616,10 +616,8 @@ function SourceSettingsStrip({
 function GuestPanel({
   thumbs,
   roster,
-  link,
   error,
   items,
-  onLink,
   onAdmit,
   onRemove,
   onMute,
@@ -627,17 +625,13 @@ function GuestPanel({
 }: {
   thumbs: Record<string, string>;
   roster: RoomGuest[];
-  link: string | null;
   error: string | null;
   items: LiveItem[];
-  onLink: () => Promise<string | null>;
   onAdmit: (id: string) => void;
   onRemove: (id: string) => void;
   onMute: (sourceId: string, muted: boolean) => void;
   onShow: (sourceId: string, show: boolean) => void;
 }) {
-  const [open, setOpen] = useState(true);
-  const [copied, setCopied] = useState(false);
   // render_url is the server's own statement of "this one may go on the
   // host". Waiting guests have none, so the gate is enforced there rather
   // than by us choosing not to draw someone.
@@ -647,37 +641,11 @@ function GuestPanel({
   const ROOM_CAP = 8;
   const STAGE_CAP = 4;
 
-  const copy = async () => {
-    const url = link ?? (await onLink());
-    if (!url) return;
-    await navigator.clipboard.writeText(url).catch(() => {});
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
-  };
 
   return (
     <div className="rm-guests">
-      <div className="rm-row rm-guest-head">
-        <span className="rm-row-icon">{ic.invite}</span>
-        <span className="rm-row-name">Guest</span>
-        <span className="rm-guest-count">
-          {live.length}/{ROOM_CAP}
-          {onStage > 0 && <em className="rm-guest-onstage">{onStage} on screen</em>}
-          {waiting.length > 0 && <em className="rm-guest-wait">{waiting.length} waiting</em>}
-        </span>
-        <button className="rm-row-edit" title="Copy the room's guest link" onClick={copy}>
-          {copied ? "✓" : ic.link}
-        </button>
-        <button
-          className="rm-row-edit"
-          title={open ? "Collapse" : "Expand"}
-          onClick={() => setOpen((o) => !o)}
-        >
-          {ic.chev}
-        </button>
-      </div>
 
-      {open && (
+      {(
         <div className="rm-guest-list">
           {roster.length === 0 && (
             <div className="rm-rows-empty">
@@ -3712,10 +3680,8 @@ export function LiveView({
           <GuestPanel
             thumbs={guestThumbs}
             roster={roster}
-            link={guestLink}
             error={guestErr}
             items={(sources.items ?? []).filter((i) => i.kind === "guest")}
-            onLink={ensureGuestLink}
             onAdmit={admitGuest}
             onRemove={removeGuest}
             onMute={(id, muted) => setSourceAudio(id, undefined, muted).catch(() => {})}
@@ -3856,6 +3822,27 @@ export function LiveView({
   };
 
   const panelExtra = (id: PanelId) => {
+    if (id === "guests") {
+      const liveGuests = roster.filter((g) => g.state !== "waiting" && g.render_url);
+      const waitingN = roster.filter((g) => g.state === "waiting").length;
+      return (
+        <>
+          <span className="rm-cnt">
+            {liveGuests.length}/8{waitingN > 0 && <em>{waitingN} waiting</em>}
+          </span>
+          <button
+            className="rm-panel-plus"
+            title="Copy the room's guest link"
+            onClick={async () => {
+              const url = guestLink ?? (await ensureGuestLink());
+              if (url) await navigator.clipboard.writeText(url).catch(() => {});
+            }}
+          >
+            {ic.link}
+          </button>
+        </>
+      );
+    }
     if (id === "scenes")
       return (
         <>
