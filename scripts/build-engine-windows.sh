@@ -143,6 +143,28 @@ mkdir -p "$STAGE/bin" "$STAGE/obs-plugins/64bit" "$STAGE/data" "$STAGE/licenses"
 # obs-plugins/64bit; see the CEF section below for the three reasons why.)
 # obs64.exe rides along; it is inert and useful for debugging.
 cp -R "$OUT"/. "$STAGE/bin/"
+
+# THE obs-deps RUNTIME. rundir's bin holds what WE built; obs.dll's dependency
+# closure --- ffmpeg, zlib, x264, curl, rist, srt --- lives in the prebuilt
+# obs-deps bundle, and the no-frontend build never copies it into rundir. Same
+# shape as the CEF miss: the piece a full OBS build gets for free from a step we
+# do not run.
+#
+# This went unnoticed for a while because a dev box had those DLLs beside the
+# executable from an unrelated OBS extract, and the loader prefers the exe's own
+# directory --- so the app ran on the WRONG libobs while appearing to prove the
+# artifact worked. The import-closure check in engine-closure-windows.sh exists
+# because of that.
+#
+# Copy generously here and let the gate be exact: it walks every PE in the
+# artifact and fails on any import that is neither shipped nor a real system DLL.
+DEPS_ROOT=""
+for cand in "$SRC_DIR"/.deps/obs-deps-*-x64; do
+  [[ -d "$cand/bin" ]] && { DEPS_ROOT="$cand"; break; }
+done
+[[ -n $DEPS_ROOT ]] || { echo "FATAL: no obs-deps x64 bundle under $SRC_DIR/.deps" >&2; exit 1; }
+echo "obs-deps: $DEPS_ROOT"
+find "$DEPS_ROOT/bin" -maxdepth 1 -name "*.dll" -exec cp -n {} "$STAGE/bin/" \;
 # THE IMPORT LIBRARY. A source build produces obs.lib; an extracted release does
 # not. Staging it means Windows devs can link the normal way — raw-dylib in
 # ffi.rs is what makes the extract ALSO work, not a replacement for this.

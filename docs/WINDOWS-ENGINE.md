@@ -402,6 +402,55 @@ Three notes for picker work:
   browser when the source stops showing, which matters for anything that
   renders a guest outside the composited scene.
 
+## There is exactly one valid shipped layout
+
+`producer.exe` imports `obs.dll` statically, so the loader resolves it BEFORE
+any of our code runs --- and it searches the executable's own directory, not
+subdirectories of it. So the bundle must FLATTEN the artifact's `bin/` beside
+the exe, with `obs-plugins/` and `data/` as siblings:
+
+    producer.exe
+    obs.dll, libobs-d3d11.dll, avcodec-61.dll, ...   (contents of bin/)
+    obs-plugins/64bit/...
+    data/...
+
+`windows_engine_root()` probes for exactly that and nothing else. An engine at
+`<exe_dir>/engine` is not an alternative layout --- obs.dll could never load
+from there, so that code would be unreachable.
+
+Verified end to end: that layout boots with NO `PATH` entry and NO
+`PRODUCER_ENGINE_DIR` --- `ok=true`, d3d11, 12/12 modules, browser_source
+present.
+
+### The dev-box trap this hid
+
+Because the loader prefers the executable's own directory, an OBS extract
+copied into `target/debug/` for early dev work meant the app was running on
+**that** `obs.dll`, not the artifact's --- with `PATH` pointing at the artifact
+and having no effect, since the exe directory wins. A selftest reported
+`ok=true` while libobs came from a completely different build.
+
+It hid a real defect: the artifact's `bin/` had obs.dll but NOT its dependency
+closure. `rundir/Release/bin/64bit` holds what WE build; ffmpeg, zlib, x264,
+curl, rist and srt live in the prebuilt obs-deps bundle, and the no-frontend
+build never copies them into rundir. Exactly the same shape as the CEF miss:
+the piece a full OBS build gets for free from a step we do not run.
+
+To check what a running process ACTUALLY loaded, rather than what you believe
+it loaded:
+
+```powershell
+(Get-Process -Id <pid>).Modules | Where-Object { $_.ModuleName -match 'obs' } |
+  Select-Object ModuleName, FileName
+```
+
+The gate now closes this permanently: it walks every PE in the artifact, reads
+its import table, and fails on any dependency that is neither shipped nor a
+real Windows system DLL. System-ness is tested by existence in System32 rather
+than a hand-kept list, so it cannot rot. This is the Windows analogue of the
+macOS gate's @rpath closure walk, which the first version of this gate simply
+did not have.
+
 ## The standalone-render contract
 
 Rendering a source OUTSIDE the composited scene --- a thumbnail, a preview tile,

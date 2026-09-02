@@ -232,11 +232,16 @@ fn windows_engine_root() -> Option<std::path::PathBuf> {
             return Some(dir);
         }
     }
+    // BESIDE THE EXECUTABLE, and nowhere else. There is exactly one valid
+    // shipped layout on Windows, and it is not a choice: producer.exe imports
+    // obs.dll statically, so the loader resolves it BEFORE any of our code runs,
+    // and it searches the executable's own directory --- not subdirectories of
+    // it. An engine at <exe_dir>/engine could never load at all, so probing for
+    // one there would be a candidate we can never reach. The bundle must
+    // flatten bin/ beside the exe, with obs-plugins/ and data/ as siblings.
     let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
-    for cand in [exe_dir.clone(), exe_dir.join("engine")] {
-        if looks_right(&cand) {
-            return Some(cand);
-        }
+    if looks_right(&exe_dir) {
+        return Some(exe_dir);
     }
     None
 }
