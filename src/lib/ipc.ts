@@ -139,6 +139,9 @@ export const ipc = {
     invoke("live_set_mic_audio", { volume: patch.volume ?? null, muted: patch.muted ?? null }),
   liveSetVideo: (height: number, fps: number) => invoke("live_set_video", { height, fps }),
   liveHomeGlass: () => invoke("live_home_glass"),
+  /** Preview demand control: fps the engine should spend on guest thumbs
+   * (0 = off). The UI asks for what it can actually display. */
+  liveSetThumbRate: (fps: number) => invoke("live_set_thumb_rate", { fps }),
   /** Stage editor: commit=false at gesture rate, commit=true on release. */
   liveSetTransform: (id: string, patch: LiveTransformPatch, commit: boolean) =>
     invoke("live_set_transform", { id, patch, commit }),
@@ -281,7 +284,7 @@ export type LiveEvent =
   | { type: "session_ended"; report: { ok: boolean; destinations: LiveDestStatus[]; notes: string[] } }
   | { type: "sources_changed"; sources: LiveSources }
   | { type: "levels"; mic_peak: number; extra_peaks: { id: string; peak: number }[] }
-  | { type: "guest_thumbs"; w: number; h: number; thumbs: { id: string; rgba: string }[] }
+  | { type: "guest_thumbs"; w: number; h: number; thumbs: { id: string; jpeg: string }[] }
   | { type: "video_changed"; height: number; fps: number }
   | { type: "engine_error"; message: string };
 

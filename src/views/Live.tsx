@@ -707,62 +707,51 @@ function GuestPanel({
             const muted = item?.muted ?? false;
             const q = (g.quality ?? g.connection_quality ?? "unknown") as string;
             return (
-              <div key={g.id} className="rm-guest">
+              <div key={g.id} className={`rm-gcard${item?.visible ? " on" : ""}`}>
                 {thumbs[`guest-${g.id.slice(0, 8)}`] ? (
-                  <img className="rm-guest-thumb" src={thumbs[`guest-${g.id.slice(0, 8)}`]} alt="" />
+                  <img className="rm-gcard-img" src={thumbs[`guest-${g.id.slice(0, 8)}`]} alt="" />
                 ) : (
-                  <span className="rm-guest-thumb empty" />
+                  <span className="rm-gcard-img empty" />
                 )}
-                <span className="rm-guest-name">{g.display_name || "Guest"}</span>
-                {/* Health of what actually reaches the show. Neutral when
-                  * unknown — never green on a stale reading. */}
-                <span
-                  className={`rm-qual ${q}`}
-                  title={
-                    q === "good"
-                      ? "Connection healthy"
-                      : q === "degraded"
-                        ? "Connection struggling — they may break up on air"
-                        : q === "failing"
-                          ? "Connection failing — don't put them up yet"
-                          : "No recent reading"
-                  }
-                />
-                <span className={`rm-guest-live${item?.visible ? "" : " off"}`}>
-                  {item?.visible ? "on screen" : "in room"}
-                </span>
-                {/* At panel size everyone is already connected and audible,
-                  * so "on screen" is a visibility flip on a source that
-                  * exists — instant, with none of the connect delay that
-                  * makes promotion awkward at larger scales. Audio is
-                  * deliberately independent: a guest can stay in the
-                  * conversation while off screen. */}
-                <button
-                  className={`rm-guest-stage${item?.visible ? " on" : ""}`}
-                  title={
-                    item?.visible
-                      ? "Take off screen (stays in the room)"
-                      : onStage >= STAGE_CAP
-                        ? `Four on screen is the limit — take one down first`
+                {/* Identity strip: always visible — name and the health of
+                  * what actually reaches the show. Neutral when unknown. */}
+                <div className="rm-gcard-id">
+                  <span className={`rm-qual ${q}`} title={
+                    q === "good" ? "Connection healthy"
+                      : q === "degraded" ? "Connection struggling — they may break up on air"
+                      : q === "failing" ? "Connection failing — don't put them up yet"
+                      : "No recent reading"
+                  } />
+                  <span className="rm-gcard-name">{g.display_name || "Guest"}</span>
+                  {item?.visible && <span className="rm-gcard-live">ON</span>}
+                </div>
+                {/* Controls: the card is the feed; hands appear on hover. */}
+                <div className="rm-gcard-ctl">
+                  <button
+                    className={`rm-guest-stage${item?.visible ? " on" : ""}`}
+                    title={
+                      item?.visible ? "Take off screen (stays in the room)"
+                        : onStage >= STAGE_CAP ? `Four on screen is the limit — take one down first`
                         : "Put on screen"
-                  }
-                  disabled={!item || (!item.visible && onStage >= STAGE_CAP)}
-                  data-warn={!item?.visible && q === "failing" ? "1" : undefined}
-                  onClick={() => item && onShow(item.id, !item.visible)}
-                >
-                  {item?.visible ? "On screen" : "Show"}
-                </button>
-                <button
-                  className={`rm-row-edit${muted ? " muted" : ""}`}
-                  title={muted ? "Unmute" : "Mute"}
-                  disabled={!item}
-                  onClick={() => item && onMute(item.id, !muted)}
-                >
-                  {ic.mic}
-                </button>
-                <button className="rm-row-edit" title="Remove" onClick={() => onRemove(g.id)}>
-                  {ic.x}
-                </button>
+                    }
+                    disabled={!item || (!item.visible && onStage >= STAGE_CAP)}
+                    data-warn={!item?.visible && q === "failing" ? "1" : undefined}
+                    onClick={() => item && onShow(item.id, !item.visible)}
+                  >
+                    {item?.visible ? "On screen" : "Show"}
+                  </button>
+                  <button
+                    className={`rm-row-edit${muted ? " muted" : ""}`}
+                    title={muted ? "Unmute" : "Mute"}
+                    disabled={!item}
+                    onClick={() => item && onMute(item.id, !muted)}
+                  >
+                    {ic.mic}
+                  </button>
+                  <button className="rm-row-edit" title="Remove" onClick={() => onRemove(g.id)}>
+                    {ic.x}
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -1693,6 +1682,7 @@ function MeterStrip({
   label,
   icon,
   level,
+  horizontal,
   volume,
   muted,
   disabled,
@@ -1704,6 +1694,8 @@ function MeterStrip({
   label: string;
   icon: ReactNode;
   level: number;
+  /** Top-dock form: name + a thin left-to-right level bar. */
+  horizontal?: boolean;
   volume: number;
   muted: boolean;
   disabled?: boolean;
@@ -1716,10 +1708,17 @@ function MeterStrip({
   const db = volume > 0.001 ? Math.round(20 * Math.log10(volume)) : -60;
   const dead = disabled;
   return (
-    <div className={`rm-strip${dead ? " dead" : ""}`}>
+    <div className={`rm-strip${horizontal ? " horizontal" : ""}${dead ? " dead" : ""}`}>
       <div className="rm-strip-cols">
         <div className="rm-meter">
-          <div className="rm-meter-fill" style={{ height: `${Math.round((dead || muted ? 0 : level) * 100)}%` }} />
+          <div
+            className="rm-meter-fill"
+            style={
+              horizontal
+                ? { width: `${Math.round((dead || muted ? 0 : level) * 100)}%`, height: "100%" }
+                : { height: `${Math.round((dead || muted ? 0 : level) * 100)}%` }
+            }
+          />
         </div>
         <Fader value={dead ? 0.35 : ui} disabled={dead} onChange={(u) => onVolume?.(u * u * u)} />
       </div>
@@ -1906,8 +1905,9 @@ export function LiveView({
 }) {
   const [destinations, setDestinations] = useState<LiveDestination[]>([]);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
-  /** Live guest previews, source-id → data URL (~1 Hz from the engine). */
+  /** Live guest previews, source-id → data URL (15fps demand-driven). */
   const [guestThumbs, setGuestThumbs] = useState<Record<string, string>>({});
+
   // Mount veil: the engine takes a beat to bootstrap, and permission grants
   // bounce sources — both look like a broken room if the half-built UI shows.
   // The veil holds until the engine is truly ready, and returns during
@@ -2009,6 +2009,15 @@ export function LiveView({
   const cfgRef = useRef(cfg);
   cfgRef.current = cfg;
   const layout = cfg.layout;
+  // Demand control (docs/THUMB-PIPELINE-V2.md): pay for preview frames only
+  // while the guests panel is somewhere visible. 0 on hide and on unmount.
+  const guestsDock = dockOf(layout, "guests");
+  useEffect(() => {
+    ipc.liveSetThumbRate(guestsDock === "hidden" ? 0 : 15).catch(() => {});
+    return () => {
+      ipc.liveSetThumbRate(0).catch(() => {});
+    };
+  }, [guestsDock]);
   const writeCfg = (next: RoomConfig) => {
     // Update the ref SYNCHRONOUSLY. Engine events arrive faster than React
     // re-renders, and they merge against cfgRef — a stale ref meant a
@@ -2708,23 +2717,10 @@ export function LiveView({
           });
         }
       } else if (ev.type === "guest_thumbs") {
-        // RGBA rows → canvas → data URL. ~1 Hz and 128x72, so the cost is
-        // trivial; doing it here keeps the panel a plain <img>.
-        const canvas = document.createElement("canvas");
-        canvas.width = ev.w;
-        canvas.height = ev.h;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          const next: Record<string, string> = {};
-          for (const t of ev.thumbs) {
-            const bin = atob(t.rgba);
-            const px = new Uint8ClampedArray(bin.length);
-            for (let i = 0; i < bin.length; i++) px[i] = bin.charCodeAt(i);
-            ctx.putImageData(new ImageData(px, ev.w, ev.h), 0, 0);
-            next[t.id] = canvas.toDataURL("image/jpeg", 0.7);
-          }
-          setGuestThumbs((prev) => ({ ...prev, ...next }));
-        }
+        // Already JPEG from the engine — a data URL is all the UI needs.
+        const next: Record<string, string> = {};
+        for (const t of ev.thumbs) next[t.id] = `data:image/jpeg;base64,${t.jpeg}`;
+        setGuestThumbs((prev) => ({ ...prev, ...next }));
       } else if (ev.type === "engine_error") {
         setBanner(ev.message);
       } else if (ev.type === "engine_ready" && !ev.ok) {
@@ -3271,8 +3267,6 @@ export function LiveView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingScene, engineOk]);
 
-  const destChip =
-    enabledDests.length > 0 ? enabledDests.map((d) => d.label).join(" + ") : "Add channels";
 
   const setVolume = (v: number) => {
     setSources((s) => ({ ...s, mic_volume: v }));
@@ -3315,6 +3309,7 @@ export function LiveView({
 
   const micStrip = (
     <MeterStrip
+      horizontal={dockOf(layout, "mixer") === "top"}
       label="Mic"
       icon={ic.mic}
       level={micLevel}
@@ -3689,6 +3684,7 @@ export function LiveView({
                   .filter((i) => i.has_audio && (i.kind === "guest" || i.kind === "media"))
                   .map((i) => (
                     <MeterStrip
+                      horizontal={dockOf(layout, "mixer") === "top"}
                       key={i.id}
                       label={i.label || i.kind}
                       icon={i.kind === "guest" ? ic.invite : ic.play}
@@ -3709,30 +3705,153 @@ export function LiveView({
                 )}
               </div>
         );
-      case "channels":
+      case "channels": {
+        // ONE LINE, EVERYWHERE. Channels are tap-pills: the pill IS the
+        // switch — lit = armed, dim = off. Editing/adding channels lives in
+        // Settings; the controller only ARMS.
+        // The CONTROLLER: transport up top (this is the room's cockpit —
+        // moved here from the header so it docks like everything else),
+        // channel rows below.
         return (
+          <>
+          <div className={`rm-ctl${streaming ? " onair" : ""}`}>
+          <div className="rm-ctl-group">
+            <span className="rm-ctl-lbl">Output</span>
+            <div className="rm-ctl-row">
+          <div className="rm-pop-anchor">
+            <button
+              className="rm-chip"
+              title="Output video settings"
+              onClick={(e) => {
+                setPopAnchor(e.currentTarget);
+                setQualityOpen((o) => !o);
+              }}
+            >
+              {vh}p · {vf}
+              {ic.chev}
+            </button>
+            {qualityOpen && (
+              <Pop anchor={popAnchor} align="right" className="rm-pop-quality">
+                <div className="rm-pop-title">VIDEO {streaming && <span className="rm-card-sub">locked while live</span>}</div>
+                <div className="rm-ctrl-row">
+                  <span className="rm-ctrl-label">Resolution</span>
+                  <span className="rm-quality-set">
+                    {[720, 1080].map((h) => (
+                      <button key={h} className={`rm-q${vh === h ? " on" : ""}`} disabled={streaming || !engineOk} onClick={() => setVideoCfg(h, vf)}>
+                        {h}p
+                      </button>
+                    ))}
+                  </span>
+                </div>
+                <div className="rm-ctrl-row">
+                  <span className="rm-ctrl-label">Frame rate</span>
+                  <span className="rm-quality-set">
+                    {[30, 60].map((f) => (
+                      <button key={f} className={`rm-q${vf === f ? " on" : ""}`} disabled={streaming || !engineOk} onClick={() => setVideoCfg(vh, f)}>
+                        {f}
+                      </button>
+                    ))}
+                  </span>
+                </div>
+                <div className="rm-ctrl-row">
+                  <span className="rm-ctrl-label">Bitrate</span>
+                  <span className="rm-ctrl-value" title="Producer negotiates the best rate every channel accepts">Auto</span>
+                </div>
+              </Pop>
+            )}
+          </div>
+
+          {/* Virtual camera is an OUTPUT — peer to Record and Go Live, not a
+            * number. It lived in Stream Health and read as a read-only stat;
+            * the founder looked straight at it and didn't see a control. */}
+            </div>
+          </div>
+          <div className="rm-ctl-group">
+            <span className="rm-ctl-lbl">Capture</span>
+            <div className="rm-ctl-row">
+          <button
+            className={`rm-rec rm-vcam${vcamOn ? " on" : ""}`}
+            onClick={toggleVcam}
+            disabled={!engineOk}
+            title={
+              vcamState?.installed
+                ? "Appear as a webcam in Zoom, Meet and Discord"
+                : "Install Producer's virtual camera (one approval in System Settings)"
+            }
+          >
+            {ic.cam}
+            {vcamState?.state === "needs_approval"
+              ? "Approve"
+              : vcamOn
+                ? "Cam on"
+                : vcamState?.installed
+                  ? "Virtual cam"
+                  : "Install cam"}
+          </button>
+
+          {/* Record sits beside Go Live because it is a peer of it, not a
+            * setting: you can record without ever going live. */}
+          <button
+            className={`rm-rec${recPath ? " on" : ""}`}
+            onClick={toggleRecord}
+            disabled={!engineOk}
+            title={recPath ? `Recording to ${recPath.split("/").pop()}` : "Record locally"}
+          >
+            <span className="rm-rec-dot" />
+            {recPath
+              ? `${Math.floor(recElapsed / 60)}:${String(recElapsed % 60).padStart(2, "0")}`
+              : "Record"}
+          </button>
+
+            </div>
+          </div>
+          {streaming ? (
+            <button className="rm-golive stop" onClick={() => ipc.liveStop()} disabled={state === "stopping"}>
+              <span className="rm-big-icon">■</span>
+              {state === "stopping" ? "Stopping…" : "End stream"}
+            </button>
+          ) : (
+            <button
+              className="rm-golive"
+              onClick={goLive}
+              disabled={!engineOk || enabledDests.length === 0}
+              title={enabledDests.length === 0 ? "Turn on a channel first" : undefined}
+            >
+              {ic.onair}
+              Go Live
+            </button>
+          )}
+
+          </div>
           <div className="rm-rows">
             {destinations.map((d) => {
               const st = statuses.get(d.id);
               const phase = st ? PHASE_COPY[st.phase] ?? PHASE_COPY.idle : PHASE_COPY.idle;
               return (
-                <div key={d.id} className={`rm-row${d.enabled ? "" : " off"}`}>
+                <button
+                  key={d.id}
+                  className={`rm-chan${d.enabled ? " on" : ""}`}
+                  disabled={streaming}
+                  title={
+                    streaming && st
+                      ? `${d.label} · ${phase.label}`
+                      : d.enabled
+                        ? `${d.label} armed — tap to disarm`
+                        : `Tap to arm ${d.label}`
+                  }
+                  onClick={() => toggleEnabled(d)}
+                >
                   <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />
-                  <span className="rm-row-name">{d.label}</span>
-                  <span className="rm-row-sub">
-                    {streaming && st
-                      ? `${phase.label}${st.phase === "live" ? ` · ${fmtBitrate(st.bytes_sent, elapsed)}` : ""}`
-                      : d.preset}
-                  </span>
-                  <button className={`rm-switch${d.enabled ? " on" : ""}`} disabled={streaming} onClick={() => toggleEnabled(d)}>
-                    <span className="rm-switch-knob" />
-                  </button>
-                </div>
+                  {d.label}
+                  {streaming && st && <span className={`rm-chan-phase ${st.phase}`} />}
+                </button>
               );
             })}
             {destinations.length === 0 && <div className="rm-rows-empty">No channels yet.</div>}
           </div>
+          </>
         );
+      }
     }
   };
 
@@ -4037,6 +4156,7 @@ export function LiveView({
     <section
       key={id}
       data-panel={id}
+      data-in={dockOf(layout, id)}
       className={`rm-panel rm-panel-${id}${dragging === id ? " dragging" : ""}`}
       style={
         dockOf(layout, id) === "bottom" && shown.weights?.[id]
@@ -4193,158 +4313,6 @@ export function LiveView({
             </span>
           )}
 
-          <div className="rm-pop-anchor">
-            <button
-              className="rm-chip"
-              title="Channels this room goes out to"
-              onClick={(e) => {
-                setPopAnchor(e.currentTarget);
-                setDestsOpen((o) => !o);
-              }}
-            >
-              {ic.cast}
-              <span>{destChip}</span>
-              {ic.chev}
-            </button>
-            {destsOpen && (
-              <Pop anchor={popAnchor} align="right" className="rm-pop-dests">
-                <div className="rm-pop-title">CHANNELS</div>
-                {destinations.map((d) => {
-                  const st = statuses.get(d.id);
-                  const phase = st ? PHASE_COPY[st.phase] ?? PHASE_COPY.idle : PHASE_COPY.idle;
-                  return (
-                    <div key={d.id} className={`rm-row${d.enabled ? "" : " off"}`}>
-                      <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />
-                      <span className="rm-row-name">{d.label}</span>
-                      <span className="rm-row-sub">
-                        {streaming && st
-                          ? `${phase.label}${st.phase === "live" ? ` · ${fmtBitrate(st.bytes_sent, elapsed)}` : ""}`
-                          : d.preset}
-                      </span>
-                      {!streaming && (
-                        <button className="rm-row-edit" onClick={() => setEditing(d)} title="Edit channel">
-                          {ic.gear}
-                        </button>
-                      )}
-                      <button
-                        className={`rm-switch${d.enabled ? " on" : ""}`}
-                        disabled={streaming}
-                        onClick={() => toggleEnabled(d)}
-                      >
-                        <span className="rm-switch-knob" />
-                      </button>
-                    </div>
-                  );
-                })}
-                {destinations.length === 0 && (
-                  <div className="rm-rows-empty">No channels yet — add Twitch, Kick, or YouTube.</div>
-                )}
-                {!streaming && (
-                  <button className="rm-pop-row dim" onClick={() => setAdding(true)}>
-                    + Add channel
-                  </button>
-                )}
-              </Pop>
-            )}
-          </div>
-
-          <div className="rm-pop-anchor">
-            <button
-              className="rm-chip"
-              title="Output video settings"
-              onClick={(e) => {
-                setPopAnchor(e.currentTarget);
-                setQualityOpen((o) => !o);
-              }}
-            >
-              {vh}p · {vf}
-              {ic.chev}
-            </button>
-            {qualityOpen && (
-              <Pop anchor={popAnchor} align="right" className="rm-pop-quality">
-                <div className="rm-pop-title">VIDEO {streaming && <span className="rm-card-sub">locked while live</span>}</div>
-                <div className="rm-ctrl-row">
-                  <span className="rm-ctrl-label">Resolution</span>
-                  <span className="rm-quality-set">
-                    {[720, 1080].map((h) => (
-                      <button key={h} className={`rm-q${vh === h ? " on" : ""}`} disabled={streaming || !engineOk} onClick={() => setVideoCfg(h, vf)}>
-                        {h}p
-                      </button>
-                    ))}
-                  </span>
-                </div>
-                <div className="rm-ctrl-row">
-                  <span className="rm-ctrl-label">Frame rate</span>
-                  <span className="rm-quality-set">
-                    {[30, 60].map((f) => (
-                      <button key={f} className={`rm-q${vf === f ? " on" : ""}`} disabled={streaming || !engineOk} onClick={() => setVideoCfg(vh, f)}>
-                        {f}
-                      </button>
-                    ))}
-                  </span>
-                </div>
-                <div className="rm-ctrl-row">
-                  <span className="rm-ctrl-label">Bitrate</span>
-                  <span className="rm-ctrl-value" title="Producer negotiates the best rate every channel accepts">Auto</span>
-                </div>
-              </Pop>
-            )}
-          </div>
-
-          {/* Virtual camera is an OUTPUT — peer to Record and Go Live, not a
-            * number. It lived in Stream Health and read as a read-only stat;
-            * the founder looked straight at it and didn't see a control. */}
-          <button
-            className={`rm-rec rm-vcam${vcamOn ? " on" : ""}`}
-            onClick={toggleVcam}
-            disabled={!engineOk}
-            title={
-              vcamState?.installed
-                ? "Appear as a webcam in Zoom, Meet and Discord"
-                : "Install Producer's virtual camera (one approval in System Settings)"
-            }
-          >
-            {ic.cam}
-            {vcamState?.state === "needs_approval"
-              ? "Approve"
-              : vcamOn
-                ? "Cam on"
-                : vcamState?.installed
-                  ? "Virtual cam"
-                  : "Install cam"}
-          </button>
-
-          {/* Record sits beside Go Live because it is a peer of it, not a
-            * setting: you can record without ever going live. */}
-          <button
-            className={`rm-rec${recPath ? " on" : ""}`}
-            onClick={toggleRecord}
-            disabled={!engineOk}
-            title={recPath ? `Recording to ${recPath.split("/").pop()}` : "Record locally"}
-          >
-            <span className="rm-rec-dot" />
-            {recPath
-              ? `${Math.floor(recElapsed / 60)}:${String(recElapsed % 60).padStart(2, "0")}`
-              : "Record"}
-          </button>
-
-          {streaming ? (
-            <button className="rm-golive stop" onClick={() => ipc.liveStop()} disabled={state === "stopping"}>
-              <span className="rm-big-icon">■</span>
-              {state === "stopping" ? "Stopping…" : "End stream"}
-            </button>
-          ) : (
-            <button
-              className="rm-golive"
-              onClick={goLive}
-              disabled={!engineOk || enabledDests.length === 0}
-              title={enabledDests.length === 0 ? "Turn on a channel first" : undefined}
-            >
-              {ic.onair}
-              Go Live
-            </button>
-          )}
-
           <button
             className={`rm-icon-chip${layoutEdit ? " on" : ""}`}
             onClick={() => {
@@ -4391,6 +4359,7 @@ export function LiveView({
                     className="rm-preset"
                     onClick={() => {
                       setLayout({
+                        top: [...p.layout.top],
                         left: [...p.layout.left],
                         right: [...p.layout.right],
                         bottom: [...p.layout.bottom],
@@ -4409,6 +4378,18 @@ export function LiveView({
           <button className="rm-editbar-done" onClick={() => setLayoutEdit(false)}>
             Done
           </button>
+        </div>
+      )}
+
+      {/* The TOP DOCK: a real dock — drag any panel up here (Controller
+        * belongs; chat while chatting; whatever the show needs). Renders only
+        * when populated or while editing, so the default room stays clean. */}
+      {(layout.top.length > 0 || layoutEdit) && (
+        <div
+          data-dock="top"
+          className={`rm-dock rm-dock-top${layout.top.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "top" ? " hot" : ""}`}
+        >
+          {renderDock("top")}
         </div>
       )}
 

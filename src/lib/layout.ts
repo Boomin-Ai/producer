@@ -2,14 +2,17 @@
  *
  * Everything in the room that isn't the stage is a PANEL, and every panel
  * lives in one of three docks — or is hidden. The chrome that never moves:
- * the top bar (brand, room, channels, quality, GO LIVE) and the canvas.
+ * the top bar (brand, room, stream health) and the canvas. Transport —
+ * GO LIVE, record, virtual cam, channels — is the CONTROLLER panel, dockable
+ * like everything else but never hideable (a hidden Go Live is a dead room).
  * Beginners pick a preset; everyone else moves panels one by one. */
 
 export type PanelId = "scenes" | "sources" | "mixer" | "chat" | "channels" | "guests";
 
-export type Dock = "left" | "right" | "bottom" | "hidden";
+export type Dock = "top" | "left" | "right" | "bottom" | "hidden";
 
 export interface Layout {
+  top: PanelId[];
   left: PanelId[];
   right: PanelId[];
   bottom: PanelId[];
@@ -21,7 +24,7 @@ export const PANEL_META: Record<PanelId, { title: string; hint: string }> = {
   sources: { title: "Sources", hint: "What's in the scene right now" },
   mixer: { title: "Audio mixer", hint: "Levels, mute, and gain per input" },
   chat: { title: "Chat", hint: "Every platform's chat, merged" },
-  channels: { title: "Channels", hint: "Where this room goes out" },
+  channels: { title: "Controller", hint: "Go live, record, virtual cam, and where this room goes out" },
   guests: { title: "Guests", hint: "Who's in the room, and who's on screen" },
 
 };
@@ -47,25 +50,25 @@ export const PRESETS: { key: string; label: string; note: string; layout: Layout
     key: "simple",
     label: "Simple",
     note: "Stage plus the two things you touch live",
-    layout: { left: [], right: [], bottom: ["sources", "mixer"], hidden: ["scenes", "chat", "channels"] },
+    layout: { top: [], left: [], right: [], bottom: ["sources", "mixer", "channels"], hidden: ["scenes", "chat",] },
   },
   {
     key: "streamer",
     label: "Streamer",
     note: "Scenes left, chat right, controls below",
-    layout: { left: ["scenes"], right: ["chat"], bottom: ["sources", "mixer"], hidden: ["channels"] },
+    layout: { top: [], left: ["scenes"], right: ["chat"], bottom: ["sources", "mixer", "channels"], hidden: [] },
   },
   {
     key: "chat",
     label: "Chat first",
     note: "Big chat, everything else compact",
-    layout: { left: ["scenes"], right: ["chat"], bottom: ["sources", "mixer"], hidden: ["channels"] },
+    layout: { top: [], left: ["scenes"], right: ["chat"], bottom: ["sources", "mixer", "channels"], hidden: [] },
   },
   {
     key: "studio",
     label: "Studio",
     note: "Everything on deck, including health",
-    layout: { left: ["scenes"], right: ["chat", "channels"], bottom: ["sources", "mixer"], hidden: [] },
+    layout: { top: [], left: ["scenes"], right: ["chat", "channels"], bottom: ["sources", "mixer"], hidden: [] },
   },
 ];
 
@@ -93,7 +96,13 @@ export function saveLayout(l: Layout) {
 }
 
 function clone(l: Layout): Layout {
-  return { left: [...l.left], right: [...l.right], bottom: [...l.bottom], hidden: [...l.hidden] };
+  return {
+    top: [...(l.top ?? [])],
+    left: [...l.left],
+    right: [...l.right],
+    bottom: [...l.bottom],
+    hidden: [...l.hidden],
+  };
 }
 
 /** Every panel appears exactly once; unknown ids are dropped, new panels
@@ -117,12 +126,19 @@ export function normalize(p: Partial<Layout>): Layout {
     }
     return out;
   };
-  const l: Layout = { left: take(p.left), right: take(p.right), bottom: take(p.bottom), hidden: take(p.hidden) };
+  const l: Layout = { top: take(p.top), left: take(p.left), right: take(p.right), bottom: take(p.bottom), hidden: take(p.hidden) };
   for (const id of PANEL_ORDER) if (!seen.has(id)) l.hidden.push(id);
+  // The Controller carries GO LIVE — a layout that hides it bricks the room.
+  const ci = l.hidden.indexOf("channels");
+  if (ci >= 0) {
+    l.hidden.splice(ci, 1);
+    l.bottom.push("channels");
+  }
   return l;
 }
 
 export function dockOf(l: Layout, id: PanelId): Dock {
+  if (l.top.includes(id)) return "top";
   if (l.left.includes(id)) return "left";
   if (l.right.includes(id)) return "right";
   if (l.bottom.includes(id)) return "bottom";
@@ -131,7 +147,7 @@ export function dockOf(l: Layout, id: PanelId): Dock {
 
 export function movePanel(l: Layout, id: PanelId, to: Dock): Layout {
   const next = clone(l);
-  for (const d of ["left", "right", "bottom", "hidden"] as Dock[]) {
+  for (const d of ["top", "left", "right", "bottom", "hidden"] as Dock[]) {
     next[d] = next[d].filter((x) => x !== id);
   }
   next[to].push(id);
@@ -155,6 +171,7 @@ export function shiftPanel(l: Layout, id: PanelId, delta: number): Layout {
 export function movePanelTo(l: Layout, id: PanelId, to: Dock, index: number): Layout {
   const from = dockOf(l, id);
   const next: Layout = {
+    top: l.top.filter((x) => x !== id),
     left: l.left.filter((x) => x !== id),
     right: l.right.filter((x) => x !== id),
     bottom: l.bottom.filter((x) => x !== id),

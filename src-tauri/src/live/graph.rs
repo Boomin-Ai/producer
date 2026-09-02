@@ -1728,93 +1728,230 @@ impl SceneGraph {
     }
 }
 
-pub const THUMB_W: u32 = 128;
-pub const THUMB_H: u32 = 72;
+pub const THUMB_W: u32 = 256;
+pub const THUMB_H: u32 = 144;
 
-impl SceneGraph {
-    /// Live thumbnails of every GUEST source, visible or hidden. The capture
-    /// MUST run on THE graphics thread: libobs-metal's render-target state is
-    /// thread-confined, and calling it from the engine thread crashed v0.4.2
-    /// in the wild (device_get_render_target, EXC_BAD_ACCESS — the same
-    /// family as the A10 swapchain finding). obs_queue_task(GRAPHICS, wait)
-    /// is the sanctioned door.
-    pub fn guest_thumbs(&mut self) -> Vec<(String, Vec<u8>)> {
-        struct ThumbJob {
-            targets: Vec<(String, *mut ffi::obs_source_t)>,
-            rt: *mut std::os::raw::c_void,
-            ss: *mut std::os::raw::c_void,
-            out: Vec<(String, Vec<u8>)>,
+
+// ═══ ThumbHub — the preview distribution primitive (docs/THUMB-PIPELINE-V2) ═
+// Graphics thread produces (on the compositor's own cadence, deferred-map
+// ring, latest-frame-wins slots); a dedicated encoder thread consumes.
+// The engine thread's only involvement is publishing the target list.
+
+pub struct ThumbTarget {
+    pub id: String,
+    /// OWNED reference (obs_source_get_ref by the publisher); released when
+    /// the target list is replaced. The graphics callback may use it freely.
+    pub src: *mut ffi::obs_source_t,
+}
+unsafe impl Send for ThumbTarget {}
+
+pub struct ThumbSlot {
+    pub seq: u64,
+    pub ready: bool,
+    pub rgba: Vec<u8>,
+}
+
+struct ThumbRing {
+    rt: *mut std::os::raw::c_void,
+    surfs: [*mut std::os::raw::c_void; 2],
+    pending: [bool; 2],
+    idx: usize,
+}
+
+pub struct ThumbHub {
+    pub targets: std::sync::Mutex<Vec<ThumbTarget>>,
+    pub fps: std::sync::atomic::AtomicU32,
+    frame_no: std::sync::atomic::AtomicU32,
+    rings: std::sync::Mutex<std::collections::HashMap<String, ThumbRing>>,
+    pub slots: std::sync::Mutex<std::collections::HashMap<String, ThumbSlot>>,
+    pub wake: std::sync::Condvar,
+    pub wake_flag: std::sync::Mutex<bool>,
+    /// Instrumentation (review amendment 1): worst map wait + count > 200µs.
+    pub readback_wait_us_max: std::sync::atomic::AtomicU64,
+    pub readback_slow_maps: std::sync::atomic::AtomicU64,
+}
+unsafe impl Send for ThumbHub {}
+unsafe impl Sync for ThumbHub {}
+
+impl ThumbHub {
+    pub fn new() -> Self {
+        ThumbHub {
+            targets: std::sync::Mutex::new(Vec::new()),
+            fps: std::sync::atomic::AtomicU32::new(0),
+            frame_no: std::sync::atomic::AtomicU32::new(0),
+            rings: std::sync::Mutex::new(std::collections::HashMap::new()),
+            slots: std::sync::Mutex::new(std::collections::HashMap::new()),
+            wake: std::sync::Condvar::new(),
+            wake_flag: std::sync::Mutex::new(false),
+            readback_wait_us_max: std::sync::atomic::AtomicU64::new(0),
+            readback_slow_maps: std::sync::atomic::AtomicU64::new(0),
         }
+    }
 
-        extern "C" fn run(param: *mut c_void) {
-            // Graphics thread: the context is current; no enter/leave needed.
-            let job = unsafe { &mut *(param as *mut ThumbJob) };
-            unsafe {
-                if job.rt.is_null() {
-                    job.rt = ffi::gs_texrender_create(ffi::GS_RGBA, ffi::GS_ZS_NONE);
-                }
-                if job.ss.is_null() {
-                    job.ss = ffi::gs_stagesurface_create(THUMB_W, THUMB_H, ffi::GS_RGBA);
-                }
-                if job.rt.is_null() || job.ss.is_null() {
-                    return;
-                }
-                for (id, src) in &job.targets {
-                    let sw = ffi::obs_source_get_width(*src).max(1);
-                    let sh = ffi::obs_source_get_height(*src).max(1);
-                    ffi::gs_texrender_reset(job.rt);
-                    if !ffi::gs_texrender_begin(job.rt, THUMB_W, THUMB_H) {
-                        continue;
-                    }
-                    let clear = ffi::vec4 { x: 0.0, y: 0.0, z: 0.0, w: 1.0 };
-                    ffi::gs_clear(1, &clear, 0.0, 0); // GS_CLEAR_COLOR
-                    ffi::gs_ortho(0.0, sw as f32, 0.0, sh as f32, -100.0, 100.0);
-                    ffi::obs_source_video_render(*src);
-                    ffi::gs_texrender_end(job.rt);
-                    ffi::gs_stage_texture(job.ss, ffi::gs_texrender_get_texture(job.rt));
-                    let mut data: *mut u8 = std::ptr::null_mut();
-                    let mut linesize: u32 = 0;
-                    if ffi::gs_stagesurface_map(job.ss, &mut data, &mut linesize) && !data.is_null() {
-                        let mut rgba = Vec::with_capacity((THUMB_W * THUMB_H * 4) as usize);
-                        for row in 0..THUMB_H {
-                            let src_row = data.add((row * linesize) as usize);
-                            rgba.extend_from_slice(std::slice::from_raw_parts(src_row, (THUMB_W * 4) as usize));
-                        }
-                        ffi::gs_stagesurface_unmap(job.ss);
-                        job.out.push((id.clone(), rgba));
-                    }
-                }
-            }
-        }
-
-        let targets: Vec<(String, *mut ffi::obs_source_t)> = self
+    /// Engine thread: replace the target list with the scene's current guest
+    /// sources. Takes refs for the new list, releases the old list's refs.
+    pub fn publish_targets(&self, scene: &SceneGraph) {
+        // Ref-free same-check first: this runs on the engine idle tick, so
+        // the common case (nothing changed) must cost only a compare.
+        let mut wanted: Vec<(&str, *mut ffi::obs_source_t)> = scene
             .extras
             .iter()
             .filter(|e| e.kind == "guest" && !e.src.is_null())
-            .map(|e| (e.id.clone(), e.src))
+            .map(|e| (e.id.as_str(), e.src))
             .collect();
-        if targets.is_empty() {
-            return Vec::new();
+        // Debug discriminator: the camera is a KNOWN-GOOD renderer. If its
+        // thumb has pixels while guests are black, the readback path is fine
+        // and the problem is browser-source-specific; if BOTH are black, the
+        // capture path itself is broken.
+        #[cfg(debug_assertions)]
+        if let Some((_, cam)) = scene.camera {
+            if !cam.is_null() {
+                wanted.push(("camera", cam));
+            }
         }
-        let mut job = ThumbJob {
-            targets,
-            rt: self.thumb_rt,
-            ss: self.thumb_ss,
-            out: Vec::new(),
-        };
+        {
+            let cur = self.targets.lock().unwrap();
+            if cur.len() == wanted.len()
+                && cur
+                    .iter()
+                    .zip(wanted.iter())
+                    .all(|(a, (id, src))| a.id == *id && a.src == *src)
+            {
+                return;
+            }
+        }
+        let mut next: Vec<ThumbTarget> = Vec::new();
         unsafe {
-            // wait=true: `job` lives on this stack frame; the engine thread
-            // blocks (~1ms for a few 128x72 renders) until the graphics
-            // thread has finished with it.
-            ffi::obs_queue_task(
-                ffi::OBS_TASK_GRAPHICS,
-                run,
-                &mut job as *mut ThumbJob as *mut c_void,
-                true,
-            );
+            for (id, src) in wanted {
+                let r = ffi::obs_source_get_ref(src);
+                if !r.is_null() {
+                    // libobs's "I render this outside a scene" contract:
+                    // without a showing ref, a HIDDEN browser source has told
+                    // CEF WasHidden(true) — no frames, texture torn down, and
+                    // its video_render body is `if (texture)`: silent black.
+                    ffi::obs_source_inc_showing(r);
+                    next.push(ThumbTarget { id: id.to_string(), src: r });
+                }
+            }
         }
-        self.thumb_rt = job.rt;
-        self.thumb_ss = job.ss;
-        job.out
+        let old = std::mem::replace(&mut *self.targets.lock().unwrap(), next);
+        unsafe {
+            for t in old {
+                ffi::obs_source_dec_showing(t.src);
+                ffi::obs_source_release(t.src);
+            }
+        }
     }
+}
+
+/// The graphics-thread capture step: registered with
+/// obs_add_main_render_callback, so it rides the compositor's cadence.
+/// Deferred map: stage into surfs[idx], map surfs[idx^1] whose copy was
+/// issued a full frame ago. Slot handoff is try_lock — the frame is DROPPED
+/// if the encoder holds the slot (latest-frame-wins, review amendment 2).
+pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _cy: u32) {
+    let hub = unsafe { &*(param as *const ThumbHub) };
+    let fps = hub.fps.load(std::sync::atomic::Ordering::Relaxed);
+    if fps == 0 {
+        return;
+    }
+    let n = hub.frame_no.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let divisor = (60 / fps.clamp(1, 60)).max(1);
+    if n % divisor != 0 {
+        return;
+    }
+    let targets = hub.targets.lock().unwrap();
+    let mut rings = hub.rings.lock().unwrap();
+    unsafe {
+        // retire rings for departed guests
+        let ids: std::collections::HashSet<&str> = targets.iter().map(|t| t.id.as_str()).collect();
+        rings.retain(|id, ring| {
+            if ids.contains(id.as_str()) {
+                true
+            } else {
+                ffi::gs_texrender_destroy(ring.rt);
+                for s in ring.surfs {
+                    ffi::gs_stagesurface_destroy(s);
+                }
+                false
+            }
+        });
+        for t in targets.iter() {
+            let ring = rings.entry(t.id.clone()).or_insert_with(|| ThumbRing {
+                rt: ffi::gs_texrender_create(ffi::GS_RGBA, ffi::GS_ZS_NONE),
+                surfs: [
+                    ffi::gs_stagesurface_create(THUMB_W, THUMB_H, ffi::GS_RGBA),
+                    ffi::gs_stagesurface_create(THUMB_W, THUMB_H, ffi::GS_RGBA),
+                ],
+                pending: [false, false],
+                idx: 0,
+            });
+            if ring.rt.is_null() || ring.surfs[0].is_null() || ring.surfs[1].is_null() {
+                continue;
+            }
+            // stage this frame into surfs[idx]
+            let sw = ffi::obs_source_get_width(t.src).max(1);
+            let sh = ffi::obs_source_get_height(t.src).max(1);
+            ffi::gs_texrender_reset(ring.rt);
+            if ffi::gs_texrender_begin(ring.rt, THUMB_W, THUMB_H) {
+                let clear = ffi::vec4 { x: 0.0, y: 0.0, z: 0.0, w: 1.0 };
+                ffi::gs_clear(1, &clear, 0.0, 0);
+                ffi::gs_ortho(0.0, sw as f32, 0.0, sh as f32, -100.0, 100.0);
+                // NEVER trust ambient blend state for a standalone source
+                // render — a leftover (ZERO, x) function multiplies every
+                // pixel to nothing. OBS's own screenshot code forces ONE/ZERO
+                // for exactly this reason (the all-black-thumbnails bug).
+                ffi::gs_blend_state_push();
+                ffi::gs_blend_function(ffi::GS_BLEND_ONE, ffi::GS_BLEND_ZERO);
+                ffi::obs_source_video_render(t.src);
+                ffi::gs_blend_state_pop();
+                ffi::gs_texrender_end(ring.rt);
+                ffi::gs_stage_texture(ring.surfs[ring.idx], ffi::gs_texrender_get_texture(ring.rt));
+                ring.pending[ring.idx] = true;
+            }
+            // map the OTHER surface — its copy was issued last tick
+            let aged = ring.idx ^ 1;
+            if ring.pending[aged] {
+                let t0 = std::time::Instant::now();
+                let mut data: *mut u8 = std::ptr::null_mut();
+                let mut linesize: u32 = 0;
+                if ffi::gs_stagesurface_map(ring.surfs[aged], &mut data, &mut linesize)
+                    && !data.is_null()
+                {
+                    let waited = t0.elapsed().as_micros() as u64;
+                    let prev = hub.readback_wait_us_max.load(std::sync::atomic::Ordering::Relaxed);
+                    if waited > prev {
+                        hub.readback_wait_us_max
+                            .store(waited, std::sync::atomic::Ordering::Relaxed);
+                    }
+                    if waited > 200 {
+                        hub.readback_slow_maps
+                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    }
+                    if let Ok(mut slots) = hub.slots.try_lock() {
+                        let slot = slots.entry(t.id.clone()).or_insert_with(|| ThumbSlot {
+                            seq: 0,
+                            ready: false,
+                            rgba: Vec::with_capacity((THUMB_W * THUMB_H * 4) as usize),
+                        });
+                        slot.rgba.clear();
+                        for row in 0..THUMB_H {
+                            let src_row = data.add((row * linesize) as usize);
+                            slot.rgba.extend_from_slice(std::slice::from_raw_parts(
+                                src_row,
+                                (THUMB_W * 4) as usize,
+                            ));
+                        }
+                        slot.seq += 1;
+                        slot.ready = true;
+                    } // else: encoder busy — this frame is disposable
+                    ffi::gs_stagesurface_unmap(ring.surfs[aged]);
+                }
+                ring.pending[aged] = false;
+            }
+            ring.idx = aged;
+        }
+    }
+    *hub.wake_flag.lock().unwrap() = true;
+    hub.wake.notify_one();
 }

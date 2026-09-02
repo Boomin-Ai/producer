@@ -1,6 +1,6 @@
 [package]
 name = "producer"
-version = "0.4.3"
+version = "0.4.4"
 description = "Producer by Boomin — the open-source studio for creators: post everywhere, stream everywhere."
 authors = ["Boomin"]
 license = "AGPL-3.0-only"
@@ -16,20 +16,22 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 # The transparent/vibrancy window is macOS-only by design, so the feature that
 # unlocks it is too. Pairs with macOSPrivateApi in tauri.macos.conf.json.
-[target.'cfg(target_os = "macos")'.dependencies]
-tauri = { version = "2", features = ["macos-private-api"] }
-
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 cc = "1"
 
 [dependencies]
-# macos-private-api is NOT here: it is enabled per-target below. The
+# macos-private-api is declared PLAIN and macOSPrivateApi lives in the BASE
+# config: tauri-build's feature/config check parses Cargo.toml textually and
+# cannot see target-scoped features (macOS build broke), while a feature
+# without the config flag fails the same check (Windows broke). Symmetric
+# declarations satisfy the check on BOTH platforms; the feature is inert off
+# macOS. The
 # macOSPrivateApi allowlist entry lives in tauri.macos.conf.json (the
 # per-platform overlay), which is not merged on other platforms — so enabling
 # the feature unconditionally makes tauri-build fail the config/feature
 # consistency check on Windows and Linux.
-tauri = { version = "2", features = ["protocol-asset"] }
+tauri = { version = "2", features = ["protocol-asset", "macos-private-api"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
@@ -48,3 +50,4 @@ rand = "0.8"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
 base64 = "0.22"
+jpeg-encoder = "0.6"
