@@ -6571,6 +6571,123 @@ textarea::placeholder {
 
 .rm-editbar-text { flex: 1; }
 
+/* ── One-track mixer: the meter IS the fader ────────────────────────────── */
+.rm-strip .rm-track {
+  position: relative;
+  align-self: center;
+  width: 16px;
+  flex: 1;
+  min-height: 40px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 0.5px solid var(--line-1);
+  cursor: ns-resize;
+  touch-action: none;
+}
+.rm-track-fill {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  bottom: 1px;
+  border-radius: 999px;
+  background: linear-gradient(0deg, oklch(0.62 0.11 165), var(--mint));
+  opacity: 0.85;
+  transition: height 60ms linear;
+}
+.rm-track-thumb {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 26px;
+  height: 13px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.rm-strip.dead .rm-track { cursor: default; opacity: 0.5; }
+.rm-strip.horizontal .rm-track {
+  width: auto;
+  min-height: 0;
+  height: 12px;
+  flex: 1;
+  align-self: center;
+  cursor: ew-resize;
+}
+.rm-strip.horizontal .rm-track-fill {
+  top: 1px;
+  bottom: 1px;
+  left: 1px;
+  right: auto;
+  transition: width 60ms linear;
+}
+.rm-strip.horizontal .rm-track-thumb {
+  top: 50%;
+  left: auto;
+  transform: translateY(-50%);
+  width: 13px;
+  height: 20px;
+}
+
+/* ── Chat, mini form: the latest message with the previous peeking through;
+   chips collapse to their marks and push out over the text on hover. ── */
+.rm-chat-chip { display: inline-flex; align-items: center; gap: 6px; }
+.rm-chip-logo { display: inline-flex; width: 14px; height: 14px; align-items: center; justify-content: center; }
+.rm-chip-logo svg, .rm-chip-logo img { width: 14px; height: 14px; }
+.rm-panel-chat[data-in="top"] .rm-panel-body {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.rm-panel-chat[data-in="top"] .rm-chat-chips {
+  flex: none;
+  display: flex;
+  gap: 4px;
+  z-index: 2;
+}
+.rm-panel-chat[data-in="top"] .rm-chip-name {
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width 0.16s ease;
+}
+.rm-panel-chat[data-in="top"] .rm-chat-chip:hover .rm-chip-name { max-width: 72px; }
+.rm-panel-chat[data-in="top"] .rm-chat-list {
+  flex: 1;
+  min-width: 0;
+  max-height: 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+  /* The previous message pokes through, fading up and out. */
+  mask-image: linear-gradient(180deg, transparent 0, #000 62%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 62%);
+}
+.rm-panel-chat[data-in="top"] .rm-chat-msg {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Edit mode, softened: generous radii, and every panel's title sits
+   dead-center as a quiet pill — grip left, hide right, name in the middle,
+   uniformly across all seven components. ── */
+.layout-edit .rm-panel { border-radius: 16px; }
+.rm-slot.armed { border-radius: 12px; }
+.rm-add-panel { border-radius: 12px; }
+.layout-edit .rm-panel-head { position: relative; }
+.layout-edit .rm-panel-head .rm-group-label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-1);
+  white-space: nowrap;
+}
+
 /* Console rows scroll by trackpad only — a visible scroll rail over one-line
  * content reads as a broken overlay, not an affordance. */
 .rm-dock-top .rm-panel-body,

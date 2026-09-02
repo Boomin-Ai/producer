@@ -1633,38 +1633,10 @@ const PLATFORM_TINT: Record<string, string> = {
 };
 
 /** Mock-faithful slim fader: 4px track, white 26×14 thumb, pointer drag. */
-function Fader({ value, disabled, onChange }: { value: number; disabled?: boolean; onChange: (ui: number) => void }) {
-  const track = useRef<HTMLDivElement | null>(null);
-
-  function fromEvent(e: { clientY: number }) {
-    const el = track.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const ui = 1 - Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
-    onChange(ui);
-  }
-
-  return (
-    <div
-      ref={track}
-      className={`rm-fader${disabled ? " disabled" : ""}`}
-      onPointerDown={(e) => {
-        if (disabled) return;
-        (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-        fromEvent(e);
-      }}
-      onPointerMove={(e) => {
-        if (disabled || e.buttons !== 1) return;
-        fromEvent(e);
-      }}
-    >
-      <div className="rm-fader-track" />
-      <div className="rm-fader-thumb" style={{ top: `calc(${(1 - value) * 100}% - 7px)` }} />
-    </div>
-  );
-}
-
-/** Vertical meter + fader strip, straight from the sources-sheet mock. */
+/** One track per voice: the level meter IS the volume slider. Two parallel
+ * lines said the same thing twice — the fill shows what's coming through,
+ * the thumb on the same rail sets how much of it goes out. Draggable in
+ * every form, the mini console included. */
 function MeterStrip({
   label,
   icon,
@@ -1694,20 +1666,36 @@ function MeterStrip({
   const ui = Math.cbrt(Math.max(0, Math.min(1, volume)));
   const db = volume > 0.001 ? Math.round(20 * Math.log10(volume)) : -60;
   const dead = disabled;
+  const track = useRef<HTMLDivElement | null>(null);
+  const fromEvent = (e: { clientX: number; clientY: number }) => {
+    const el = track.current;
+    if (!el || dead) return;
+    const r = el.getBoundingClientRect();
+    const t = horizontal ? (e.clientX - r.left) / r.width : 1 - (e.clientY - r.top) / r.height;
+    const u = Math.max(0, Math.min(1, t));
+    onVolume?.(u * u * u);
+  };
+  const pct = `${Math.round((dead || muted ? 0 : level) * 100)}%`;
   return (
     <div className={`rm-strip${horizontal ? " horizontal" : ""}${dead ? " dead" : ""}`}>
-      <div className="rm-strip-cols">
-        <div className="rm-meter">
-          <div
-            className="rm-meter-fill"
-            style={
-              horizontal
-                ? { width: `${Math.round((dead || muted ? 0 : level) * 100)}%`, height: "100%" }
-                : { height: `${Math.round((dead || muted ? 0 : level) * 100)}%` }
-            }
-          />
-        </div>
-        <Fader value={dead ? 0.35 : ui} disabled={dead} onChange={(u) => onVolume?.(u * u * u)} />
+      <div
+        ref={track}
+        className="rm-track"
+        onPointerDown={(e) => {
+          if (dead) return;
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+          fromEvent(e);
+        }}
+        onPointerMove={(e) => {
+          if (dead || e.buttons !== 1) return;
+          fromEvent(e);
+        }}
+      >
+        <div className="rm-track-fill" style={horizontal ? { width: pct } : { height: pct }} />
+        <div
+          className="rm-track-thumb"
+          style={horizontal ? { left: `calc(${(dead ? 0.35 : ui) * 100}% - 7px)` } : { top: `calc(${(1 - (dead ? 0.35 : ui)) * 100}% - 7px)` }}
+        />
       </div>
       <span className="rm-strip-db">{disabled ? "off" : muted ? "muted" : `${db <= -60 ? "-∞" : db} dB`}</span>
       <button className={`rm-strip-icon${muted ? " muted" : ""}`} disabled={dead} onClick={onMute} title={muted ? "Unmute" : "Mute"}>
@@ -3561,7 +3549,8 @@ export function LiveView({
                   title={chatOn[p] ? `Hide ${p}` : `Show ${p}`}
                   onClick={() => setChatOn((f) => ({ ...f, [p]: !f[p] }))}
                 >
-                  {p === "youtube" ? "YouTube" : p[0].toUpperCase() + p.slice(1)}
+                  <span className="rm-chip-logo">{PLATFORM_LOGO[p]}</span>
+                  <span className="rm-chip-name">{p === "youtube" ? "YouTube" : p[0].toUpperCase() + p.slice(1)}</span>
                 </button>
               ))}
             </div>
@@ -3811,7 +3800,10 @@ export function LiveView({
         // Channels card: brand mark · name · phase · switch. Clicking a row
         // (off the switch) opens INLINE key entry — the key goes straight to
         // the Keychain via the same upsert the editor uses.
-        const chnTop = formDockOf("channels") === "top";
+        // Icon toggles are the channels form in EVERY dock — the logos ARE
+        // the component. The rows form (with key entry) lives on in the
+        // header popover and Home settings.
+        const chnTop = true;
         if (chnTop) {
           // Top bar: the LOGO is the toggle. Lit = armed. Nothing else.
           return (
@@ -4213,7 +4205,7 @@ export function LiveView({
       const pad = 16;
       if (x < r.left - pad || x > r.right + pad || y < r.top - pad || y > r.bottom + pad) continue;
       const dock = el.dataset.dock as Dock;
-      const horizontal = dock === "bottom";
+      const horizontal = dock === "bottom" || dock === "top";
       const panels = Array.from(el.querySelectorAll<HTMLElement>("[data-panel]"));
       let index = panels.length;
       for (let i = 0; i < panels.length; i++) {
