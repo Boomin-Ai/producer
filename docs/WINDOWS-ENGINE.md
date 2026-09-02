@@ -520,6 +520,42 @@ through the same path as a control.** Camera green + browser black isolates to
 the showing gate. BOTH black is blend state, because a camera has no
 visibility-gated frame production to lose.
 
+## The signature failure class
+
+> **When a subset build fails, ask what the FULL build does that we skipped.**
+
+Three of this port's hardest bugs are the same bug wearing different clothes,
+and all three are a step a complete OBS build performs that ours does not:
+
+| symptom | what the full build does for free |
+|---|---|
+| `C1083: Cannot open include file: 'QApplication'` | ships the frontend, so Qt headers are present |
+| browser sources would render black (`obs-browser-page.exe` absent) | builds the `EXCLUDE_FROM_ALL` helper as a dependency of a target we do not build |
+| artifact missing eleven DLLs (ffmpeg, zlib, x264, curl, rist, srt) | copies the obs-deps runtime into rundir during packaging |
+
+Ask it early. It is faster than reading the failure.
+
+## Debugging: check belief against the process
+
+The FIRST move whenever "it works" arrives before you understand why:
+
+```powershell
+(Get-Process -Id <pid>).Modules |
+  Where-Object { $_.ModuleName -match 'obs' } |
+  Select-Object ModuleName, FileName
+```
+
+(macOS: `vmmap <pid>` or `lsof -p <pid>`.)
+
+That one line turned "the engine boots against the CI artifact" into "the
+engine boots against an extract someone left in target/debug" --- and the
+correction exposed a defect the false belief was hiding. On Windows especially:
+**the loader prefers the executable's own directory over PATH**, so a stale DLL
+beside the exe silently wins over the one you carefully put on the path.
+
+Second move, for the artifact rather than the process: run the closure gate. It
+answers "is this thing self-contained" without needing to run it at all.
+
 ## Still open
 
 - `obs.lock` carries no Windows dependency pins. OBS 32.1.2 has no
