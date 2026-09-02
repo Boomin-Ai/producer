@@ -86,6 +86,10 @@ export interface RoomConfig {
   server_room_id?: string;
   /** Dock sizing the user dragged (per room, like the layout itself). */
   sizes?: DockSizes;
+  /** Guest-slot occupancy: slot item id → guest item id. Slots are scene
+   * furniture (gslot-N extras); guests pop into them and pop out, the slot
+   * geometry never moves. */
+  slot_bindings?: Record<string, string>;
   /** Room-wide default transition; a scene may override it. */
   transition?: SceneTransition;
 }
@@ -138,6 +142,13 @@ export function parseConfig(raw: string | null | undefined): RoomConfig {
   if (typeof v.active_scene === "string") base.active_scene = v.active_scene;
   if (typeof v.server_room_id === "string") base.server_room_id = v.server_room_id;
   if (typeof v.guest_link === "string") base.guest_link = v.guest_link;
+  if (v.slot_bindings && typeof v.slot_bindings === "object") {
+    base.slot_bindings = Object.fromEntries(
+      Object.entries(v.slot_bindings as Record<string, unknown>).filter(
+        ([k, val]) => k.startsWith("gslot-") && typeof val === "string",
+      ),
+    ) as Record<string, string>;
+  }
   if (v.sizes && typeof v.sizes === "object") base.sizes = v.sizes as DockSizes;
   if (v.transition && typeof v.transition === "object") base.transition = v.transition as SceneTransition;
   return base;

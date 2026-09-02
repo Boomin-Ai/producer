@@ -6927,3 +6927,21 @@ textarea::placeholder {
   background: var(--surface-3);
   transform: none;
 }
+
+/* THE live indicator: one pill, header far-right, beside collapse. */
+.hd-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: var(--h-ctl);
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  background: rgba(239, 68, 68, 0.14);
+  border: 0.5px solid rgba(239, 68, 68, 0.45);
+  color: #ffb4aa;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

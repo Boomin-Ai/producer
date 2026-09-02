@@ -636,11 +636,9 @@ function GuestPanel({
   // render_url is the server's own statement of "this one may go on the
   // host". Waiting guests have none, so the gate is enforced there rather
   // than by us choosing not to draw someone.
-  const onStage = items.filter((i) => i.visible).length;
   const waiting = roster.filter((g) => !g.render_url);
   const live = roster.filter((g) => !!g.render_url);
   const ROOM_CAP = 8;
-  const STAGE_CAP = 4;
 
 
   return (
@@ -697,12 +695,8 @@ function GuestPanel({
                 <div className="rm-gcard-ctl">
                   <button
                     className={`rm-guest-stage${item?.visible ? " on" : ""}`}
-                    title={
-                      item?.visible ? "Take off screen (stays in the room)"
-                        : onStage >= STAGE_CAP ? `Four on screen is the limit — take one down first`
-                        : "Put on screen"
-                    }
-                    disabled={!item || (!item.visible && onStage >= STAGE_CAP)}
+                    title={item?.visible ? "Take off screen (stays in the room)" : "Pop into the next free guest slot"}
+                    disabled={!item}
                     data-warn={!item?.visible && q === "failing" ? "1" : undefined}
                     onClick={() => item && onShow(item.id, !item.visible)}
                   >
@@ -2303,7 +2297,6 @@ export function LiveView({
   // Which guests the auto-layout last arranged. The tick may not re-flow an
   // unchanged set: the host dragging a guest smaller must WIN — auto-layout
   // exists for joins/leaves, not as a 3-second undo of manual placement.
-  const guestLayoutRef = useRef<string | null>(null);
   // Last stage list we told the server about (sorted, joined). The tick runs
   // every 3s but the stage rarely changes — an unchanged list is not news.
   const stagePostedRef = useRef<string | null>(null);
@@ -2312,6 +2305,42 @@ export function LiveView({
    * Guests appear and vanish while the show is LIVE, so a hard pop is visible
    * to the audience — and we already have the opacity path the fade
    * transition uses. Audio moves with the picture. */
+  /** Scene furniture: gslot-N extras, sorted. */
+  const slotItems = () =>
+    (sources.items ?? []).filter((i) => i.id.startsWith("gslot-")).sort((a, b) => a.id.localeCompare(b.id));
+  const freeSlot = () => {
+    const b = cfgRef.current.slot_bindings ?? {};
+    const liveIds = new Set((sources.items ?? []).map((i) => i.id));
+    return slotItems().find((sl) => !b[sl.id] || !liveIds.has(b[sl.id]));
+  };
+  /** Show = pop the guest INTO a designed slot. No slot, no show. */
+  const showGuestInSlot = async (guestItemId: string) => {
+    const sl = freeSlot();
+    if (!sl) {
+      setBanner("Scene is full — add a Guest slot (Sources → + → Guest slot)");
+      return;
+    }
+    const b = cfgRef.current.slot_bindings ?? {};
+    writeCfg({ ...cfgRef.current, slot_bindings: { ...b, [sl.id]: guestItemId } });
+    await ipc.liveSetTransform(sl.id, { visible: false }, true).catch(() => {});
+    await ipc
+      .liveSetTransform(guestItemId, { x: sl.x, y: sl.y, w: sl.w, h: sl.h, visible: false }, true)
+      .catch(() => {});
+    fadeGuest(guestItemId, true);
+  };
+  /** Hide = pop out; the slot placeholder returns exactly where it was. */
+  const hideGuestFromSlot = (guestItemId: string) => {
+    const b = cfgRef.current.slot_bindings ?? {};
+    const slotId = Object.keys(b).find((k) => b[k] === guestItemId);
+    if (slotId) {
+      const nb = { ...b };
+      delete nb[slotId];
+      writeCfg({ ...cfgRef.current, slot_bindings: nb });
+      ipc.liveSetTransform(slotId, { visible: true }, true).catch(() => {});
+    }
+    fadeGuest(guestItemId, false);
+  };
+
   const fadeGuest = (id: string, show: boolean, ms = 260) => {
     if (show) {
       setOpacity(id, 0).catch(() => {});
@@ -3219,20 +3248,23 @@ export function LiveView({
           }
         }
 
-        // Re-flow the panel to match the current count.
-        const bh = snapshot?.video_height || 720;
-        const bw = (bh * 16) / 9;
-        // Only guests actually on screen get a slot, and layout NEVER flips
-        // visibility — otherwise arranging the grid would quietly put someone
-        // on air.
+        // SLOT MODEL: the scene owns guest geometry. No auto-layout — a shown
+        // guest occupies the slot it was bound to and nothing else moves.
         const shown = (sources.items ?? []).filter((i) => i.kind === "guest" && i.visible);
-        const layoutKey = shown.map((i) => i.id).sort().join(",");
-        if (layoutKey !== guestLayoutRef.current) {
-          guestLayoutRef.current = layoutKey;
-          shown.forEach((it, i) => {
-            const r = guestSlot(i, shown.length, bw, bh);
-            ipc.liveSetTransform(it.id, r, true).catch(() => {});
-          });
+        // Reconcile: bindings whose guest source no longer exists free their
+        // slot — the placeholder returns at its own geometry.
+        {
+          const b = cfgRef.current.slot_bindings ?? {};
+          const liveIds = new Set((sources.items ?? []).map((i) => i.id));
+          const stale = Object.entries(b).filter(([, gid]) => !liveIds.has(gid));
+          if (stale.length) {
+            const nb = { ...b };
+            for (const [slotId] of stale) {
+              delete nb[slotId];
+              ipc.liveSetTransform(slotId, { visible: true }, true).catch(() => {});
+            }
+            writeCfg({ ...cfgRef.current, slot_bindings: nb });
+          }
         }
 
         // Tell the server who is on stage — the FULL list, on registration and
@@ -3695,7 +3727,7 @@ export function LiveView({
             onAdmit={admitGuest}
             onRemove={removeGuest}
             onMute={(id, muted) => setSourceAudio(id, undefined, muted).catch(() => {})}
-            onShow={(id, show) => fadeGuest(id, show)}
+            onShow={(id, show) => (show ? void showGuestInSlot(id) : hideGuestFromSlot(id))}
           />
         );
       case "mixer":
@@ -4036,6 +4068,28 @@ export function LiveView({
         },
         { key: "text", label: "Text", icon: ic.text, act: () => setSrcSubPop("text") },
         { key: "color", label: "Color", icon: ic.swatch, act: () => setSrcSubPop("color") },
+        {
+          key: "gslot",
+          label: "Guest slot",
+          icon: ic.invite,
+          act: () => {
+            const n = slotItems().length + 1;
+            const id = `gslot-${n}`;
+            extraSources
+              .add(id, `Guest ${n}`, { kind: "color", color: "#10151d" })
+              .then(() => {
+                const c = cfgRef.current;
+                writeCfg({
+                  ...c,
+                  sources: {
+                    ...c.sources,
+                    extras: [...(c.sources.extras ?? []), { id, label: `Guest ${n}`, spec: { kind: "color", color: "#10151d" } }],
+                  },
+                });
+              })
+              .catch((e) => setBanner(String(e)));
+          },
+        },
         { key: "window", label: "Window capture", icon: ic.screen, act: () => setSrcSubPop("window") },
         {
           // Guests are COMPONENTS — real people admitted through the Guests
@@ -4304,7 +4358,7 @@ export function LiveView({
             </span>
           ) : (
             <span className="rm-health-time">
-              {`${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`}
+              {`${Math.floor(elapsed / 60)}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}
             </span>
           )}
           {engineOk && (
@@ -4327,13 +4381,6 @@ export function LiveView({
         <div className="rm-top-drag" data-tauri-drag-region />
 
         <div className="rm-top-right">
-          {streaming && (
-            <span className="rm-live-pill">
-              <span className="rm-live-dot" />
-              {`${Math.floor(elapsed / 60)}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}
-            </span>
-          )}
-
           <button
             className="hd-chip hd-chans"
             title="Channels this room goes out to"
@@ -4485,6 +4532,12 @@ export function LiveView({
             {ic.layout}
           </button>
 
+          {streaming && (
+            <span className="hd-live">
+              <span className="stg-live-dot" />
+              LIVE {`${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}
+            </span>
+          )}
           <button
             className="rm-leave"
             onClick={() => onLeave?.()}
@@ -4587,13 +4640,6 @@ export function LiveView({
             )}
           </div>
 
-          {/* Stage overlays: HTML floats above the hole-mode preview. */}
-          {streaming && (
-            <div className="stg-live">
-              <span className="stg-live-dot" />
-              LIVE {`${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}
-            </div>
-          )}
           {engineOk && (
             <div className="stg-bar">
               <button
