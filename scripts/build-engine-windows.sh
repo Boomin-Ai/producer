@@ -112,6 +112,14 @@ set +x
 # macOS script documents).
 (cd "$SRC_DIR" && cmake --build --preset producer-windows)
 
+# obs-browser-helper is declared EXCLUDE_FROM_ALL in obs-browser's
+# cmake/os-windows.cmake, so the default target does NOT build it. It is the CEF
+# subprocess (OUTPUT_NAME obs-browser-page), and browser sources cannot render a
+# single frame without it, so build it by name.
+if engine_plugins windows | grep -qx obs-browser; then
+  (cd "$SRC_DIR" && cmake --build --preset producer-windows --target obs-browser-helper)
+fi
+
 BUILD="$SRC_DIR/build_producer"
 # Multi-config generator: Release lives in a subdir. rundir is what OBS's own
 # install step assembles.
@@ -168,11 +176,16 @@ done < <(engine_plugins windows)
 # because no subprocess can spawn. Its absence means the CEF build half-failed,
 # so this is fatal rather than a warning.
 if engine_plugins windows | grep -qx obs-browser; then
-  if [[ -f "$PLUGIN_SRC/obs-browser-page.exe" ]]; then
-    cp "$PLUGIN_SRC/obs-browser-page.exe" "$STAGE/obs-plugins/64bit/"
-    echo "staged CEF subprocess: obs-browser-page.exe"
+  # rundir first: set_target_properties_obs stages it there via a post-build copy.
+  # The build-tree fallback covers a helper that built but was not copied, which
+  # is a different failure from one that never built at all.
+  page="$PLUGIN_SRC/obs-browser-page.exe"
+  [[ -f $page ]] || page="$(find "$BUILD" -name obs-browser-page.exe -print -quit 2>/dev/null || true)"
+  if [[ -n $page && -f $page ]]; then
+    cp "$page" "$STAGE/obs-plugins/64bit/"
+    echo "staged CEF subprocess: obs-browser-page.exe ($page)"
   else
-    echo "FATAL: obs-browser-page.exe not in $PLUGIN_SRC - the CEF build half-failed" >&2
+    echo "FATAL: obs-browser-page.exe not built - browser sources cannot render" >&2
     exit 1
   fi
 fi
