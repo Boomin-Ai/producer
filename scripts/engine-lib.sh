@@ -57,7 +57,13 @@ check_plugin_lists() {
 }
 
 # Back-compat: existing macOS callers still read ENGINE_PLUGINS directly.
-mapfile -t ENGINE_PLUGINS < <(engine_plugins macos)
+#
+# NOT `mapfile`/`readarray`: macOS ships bash 3.2 (GPLv2), where both are
+# missing entirely - `mapfile: command not found`, exit 127, before the build
+# even starts. A read loop is the spelling that works on both bashes.
+ENGINE_PLUGINS=()
+while IFS= read -r _plugin; do ENGINE_PLUGINS+=("$_plugin"); done < <(engine_plugins macos)
+unset _plugin
 
 # A WORKING python, resolved by EXECUTION rather than presence, memoised.
 #
