@@ -1173,6 +1173,8 @@ function PreviewPanel({ children }: { children?: ReactNode }) {
       window.removeEventListener("scroll", sync, true);
       if (attached.current) {
         attached.current = false;
+        // Home must not inherit the hole: its ground rules assume opaque.
+        document.documentElement.dataset.stage = "opaque";
         ipc.liveDetachPreview().catch(() => {});
       }
     };
@@ -1898,6 +1900,15 @@ export function LiveView({
 }) {
   const [destinations, setDestinations] = useState<LiveDestination[]>([]);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
+  // Mount veil: the engine takes a beat to bootstrap, and permission grants
+  // bounce sources — both look like a broken room if the half-built UI shows.
+  // The veil holds until the engine is truly ready, and returns during
+  // post-Allow source restarts.
+  const [mountVeil, setMountVeil] = useState(true);
+  const [veilNote, setVeilNote] = useState("Preparing the stage…");
+  // engineOk means the ENGINE booted — the room is configured only after the
+  // stored video mode is applied and the pending scene has been laid out.
+  const [sceneSettled, setSceneSettled] = useState(false);
   const [statuses, setStatuses] = useState<Map<string, LiveDestStatus>>(new Map());
 
   // Header health. Derived every render, never stored: a health number that
@@ -2739,6 +2750,18 @@ export function LiveView({
       : 0;
 
   const engineOk = snapshot?.engine_ready && snapshot?.bootstrap_ok;
+  useEffect(() => {
+    if (!engineOk || !sceneSettled || !mountVeil) return;
+    // A beat of settle time: lifting mid-populate trades one flicker for
+    // another.
+    const t = window.setTimeout(() => setMountVeil(false), 350);
+    return () => window.clearTimeout(t);
+  }, [engineOk, sceneSettled, mountVeil]);
+  // Hard cap: a wedged step may never trap the user behind the veil.
+  useEffect(() => {
+    const t = window.setTimeout(() => setMountVeil(false), 8000);
+    return () => window.clearTimeout(t);
+  }, []);
 
   /** Channel selection is part of the room document; opening a room pushes
    * it to the engine's destination flags so go-live stays honest. */
@@ -3193,10 +3216,19 @@ export function LiveView({
 
   // Mount the room into its saved scene once the engine can take it.
   useEffect(() => {
-    if (!pendingScene || !engineOk) return;
+    if (!engineOk) return;
+    if (!pendingScene) {
+      setSceneSettled(true);
+      return;
+    }
     const sc = scenes.find((x) => x.id === pendingScene);
     setPendingScene(null);
-    if (sc) applyScene(sc);
+    void (async () => {
+      if (sc) await applyScene(sc);
+      // The apply's transforms land engine-side just after the awaits;
+      // half a beat covers the tail of the animation frames.
+      window.setTimeout(() => setSceneSettled(true), 500);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingScene, engineOk]);
 
@@ -4002,6 +4034,12 @@ export function LiveView({
 
   return (
     <div className={`room${layoutEdit ? " layout-edit" : ""}`}>
+      {mountVeil && (
+        <div className="rm-veil">
+          <span className="rm-veil-spin" />
+          <span className="rm-veil-note">{veilNote}</span>
+        </div>
+      )}
       {anyPop && <div className="rm-pop-backdrop" onClick={closePops} />}
 
       <header className="rm-top" data-tauri-drag-region>
@@ -4378,11 +4416,17 @@ export function LiveView({
               // takes effect without a relaunch or a second Allow.
               const b = sources;
               const bounce = async (screen: boolean, camera: boolean, mic: boolean, on: () => Promise<unknown>) => {
+                // The grant is confirmed but the sources restart to bind it —
+                // hold the veil over the flicker instead of showing it.
+                setVeilNote("Applying access…");
+                setMountVeil(true);
                 try {
                   await ipc.liveSetSources(screen, camera, mic);
                   await on();
                 } catch {
                   /* engine reports via banner */
+                } finally {
+                  window.setTimeout(() => setMountVeil(false), 300);
                 }
               };
               if (kind === "mic" && b.mic)

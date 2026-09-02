@@ -298,6 +298,24 @@ pub fn live_permissions() -> EngineResult<serde_json::Value> {
 }
 
 #[tauri::command]
+pub fn live_home_glass(app: tauri::AppHandle) -> EngineResult<()> {
+    // Home wears the glass; rooms strip it on preview attach (shim.m). This
+    // is the way back when the user leaves a room.
+    #[cfg(all(target_os = "macos", have_engine))]
+    {
+        use tauri::Manager;
+        if let Some(window) = app.get_webview_window("main") {
+            if let Ok(ns) = window.ns_window() {
+                unsafe { crate::live::ffi::producer_apply_window_vibrancy(ns) };
+            }
+        }
+    }
+    #[cfg(not(all(target_os = "macos", have_engine)))]
+    let _ = app;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn live_request_permission(kind: String) -> EngineResult<()> {
     crate::live::request_permission(&kind).map_err(EngineError::Other)
 }

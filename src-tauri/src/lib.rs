@@ -38,6 +38,17 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            // Real glass base coat (see shim.m): must run at startup so the
+            // home rail's gutter shows the desktop before any room attaches.
+            #[cfg(all(target_os = "macos", have_engine))]
+            {
+                use tauri::Manager;
+                if let Some(window) = app.get_webview_window("main") {
+                    if let Ok(ns) = window.ns_window() {
+                        unsafe { live::ffi::producer_apply_window_vibrancy(ns) };
+                    }
+                }
+            }
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let conn = store::open(&data_dir.join("producer.db"))
@@ -109,6 +120,7 @@ pub fn run() {
             live::commands::live_move_preview,
             live::commands::live_detach_preview,
             live::commands::live_permissions,
+            live::commands::live_home_glass,
             live::commands::live_request_permission,
             live::commands::live_set_overlay,
             live::commands::live_list_windows,

@@ -198,6 +198,14 @@ export function Home({
 }) {
   const [view, setView] = useState<MainView>({ kind: "home" });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Home is SURFACES, not one long page: Rooms (the stage list) and Manager
+  // (channels, network, rundown — productions soon). The rail switches them.
+  const [surface, setSurface] = useState<"rooms" | "manager">("rooms");
+  // Rooms strip the window glass so stage overlays work (shim.m); returning
+  // home puts it back.
+  useEffect(() => {
+    if (view.kind === "home") ipc.liveHomeGlass().catch(() => {});
+  }, [view.kind]);
   const [errorDismissed, setErrorDismissed] = useState(false);
   const updater = useUpdater();
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -314,12 +322,6 @@ export function Home({
               <span className="update-dot" /> Restart to update
             </button>
           )}
-          <button className="cr-gear" onClick={() => setSettingsOpen(true)} title="Settings">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <circle cx="12" cy="12" r="3.2" />
-              <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01A1.7 1.7 0 0 0 10 4.09V4a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01c.26.63.87 1.04 1.56 1.04H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51.94z" />
-            </svg>
-          </button>
         </div>
       </header>
 
@@ -330,6 +332,9 @@ export function Home({
       {settingsOpen && (
         <SettingsSheet
           endpoints={endpoints}
+          destinations={destinations}
+          channels={channels}
+          onChannelsChanged={loadLive}
           onAddEndpoint={() => {
             setSettingsOpen(false);
             onAddEndpoint();
@@ -343,15 +348,16 @@ export function Home({
       {view.kind === "home" && (
         <HomeRail
           brandName={endpoints[0]?.name ?? "Workspace"}
-          onJump={(id) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          surface={surface}
+          onSurface={setSurface}
           onCompose={() => setView({ kind: "compose" })}
           onSettings={() => setSettingsOpen(true)}
         />
       )}
       {view.kind === "home" && (
         <ControlRoomHome
+          surface={surface}
           rooms={rooms}
-          destinations={destinations}
           channels={channels}
           jobs={jobs}
           streaming={streaming}
@@ -408,14 +414,86 @@ function SystemBanner({ message, onDismiss }: { message: string; onDismiss: () =
   );
 }
 
+
+/** Channels — live destinations + social channels. Lives in SETTINGS (the
+ * profile popout): channels are workspace facts you configure, not a surface
+ * you work in. */
+function ChannelsBlock({
+  destinations,
+  channels,
+  onChanged,
+}: {
+  destinations: LiveDestination[];
+  channels: Channel[];
+  onChanged: () => void;
+}) {
+  const [addingDest, setAddingDest] = useState(false);
+  const [editingDest, setEditingDest] = useState<LiveDestination | null>(null);
+  return (
+      <section className="cr-section" id="sec-channels">
+        <div className="cr-label">CHANNELS</div>
+        <div className="cr-channels">
+          {destinations.map((d) => (
+            <button
+              key={d.id}
+              className={`cr-chip${d.enabled ? "" : " off"}`}
+              title={`${d.preset} · key in Keychain — click to edit`}
+              onClick={() => setEditingDest(d)}
+            >
+              <span className="cr-chip-dot" style={{ background: PRESET_TONE[d.preset] ?? "#8b93a7" }} />
+              {d.label}
+              <span className="cr-chip-kind">live</span>
+            </button>
+          ))}
+          {channels.map((c) => (
+            <span key={c.id} className="cr-chip static" title={`${c.platform} via ${c.endpoint_kind === "connected" ? "Boomin" : "self-hosted"}`}>
+              <span className="cr-chip-dot" style={{ background: PRESET_TONE[c.platform] ?? "#8b93a7" }} />
+              {c.display_name}
+              <span className="cr-chip-kind">{c.platform}</span>
+            </span>
+          ))}
+          <button className="cr-chip add" onClick={() => setAddingDest(true)}>
+            + Add
+          </button>
+        </div>
+        {(addingDest || editingDest) && (
+          <div className="cr-dest-editor">
+            <DestinationEditor
+              existing={editingDest}
+              onSaved={() => {
+                setAddingDest(false);
+                setEditingDest(null);
+                onChanged();
+              }}
+              onCancel={() => {
+                setAddingDest(false);
+                setEditingDest(null);
+              }}
+            />
+            <div className="cr-hint">
+              Live channels stream from rooms. Social channels join through your Boomin workspace and
+              receive posts.
+            </div>
+          </div>
+        )}
+      </section>
+  );
+}
+
 function SettingsSheet({
   endpoints,
+  destinations,
+  channels,
+  onChannelsChanged,
   onAddEndpoint,
   onRemoveEndpoint,
   updater,
   onClose,
 }: {
   endpoints: EndpointInfo[];
+  destinations: LiveDestination[];
+  channels: Channel[];
+  onChannelsChanged: () => void;
   onAddEndpoint: () => void;
   onRemoveEndpoint: (id: string) => void;
   updater: { state: string; version: string | null; restart: () => void };
@@ -432,6 +510,7 @@ function SettingsSheet({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+      <ChannelsBlock destinations={destinations} channels={channels} onChanged={onChannelsChanged} />
 
   return (
     <>
@@ -498,18 +577,14 @@ function SettingsSheet({
           </div>
         </div>
 
-        <div className="cr-hint" style={{ marginTop: "auto" }}>
-          Stream keys never leave the macOS Keychain. Channel connections are managed in your Boomin
-          workspace.
-        </div>
       </aside>
     </>
   );
 }
 
 function ControlRoomHome({
+  surface,
   rooms,
-  destinations,
   channels,
   jobs,
   streaming,
@@ -518,8 +593,8 @@ function ControlRoomHome({
   onCompose,
   onHistory,
 }: {
+  surface: "rooms" | "manager";
   rooms: LiveRoom[];
-  destinations: LiveDestination[];
   channels: Channel[];
   jobs: Job[];
   streaming: boolean;
@@ -531,8 +606,6 @@ function ControlRoomHome({
   const [naming, setNaming] = useState(false);
   const liveRoom = streaming ? liveRoomId() : null;
   const [name, setName] = useState("");
-  const [addingDest, setAddingDest] = useState(false);
-  const [editingDest, setEditingDest] = useState<LiveDestination | null>(null);
 
   const upcoming = jobs.filter((j) => ["scheduled", "queued", "publishing"].includes(j.state));
   const recent = jobs.filter((j) => !["scheduled", "queued", "publishing"].includes(j.state)).slice(0, 3);
@@ -549,6 +622,8 @@ function ControlRoomHome({
 
   return (
     <main className="cr-home">
+      {surface === "rooms" && (
+      <>
       <section className="cr-section" id="sec-onair">
         <div className="cr-label">
           ON AIR
@@ -611,58 +686,16 @@ function ControlRoomHome({
         </div>
       </section>
 
-      <section className="cr-section" id="sec-channels">
-        <div className="cr-label">CHANNELS</div>
-        <div className="cr-channels">
-          {destinations.map((d) => (
-            <button
-              key={d.id}
-              className={`cr-chip${d.enabled ? "" : " off"}`}
-              title={`${d.preset} · key in Keychain — click to edit`}
-              onClick={() => setEditingDest(d)}
-            >
-              <span className="cr-chip-dot" style={{ background: PRESET_TONE[d.preset] ?? "#8b93a7" }} />
-              {d.label}
-              <span className="cr-chip-kind">live</span>
-            </button>
-          ))}
-          {channels.map((c) => (
-            <span key={c.id} className="cr-chip static" title={`${c.platform} via ${c.endpoint_kind === "connected" ? "Boomin" : "self-hosted"}`}>
-              <span className="cr-chip-dot" style={{ background: PRESET_TONE[c.platform] ?? "#8b93a7" }} />
-              {c.display_name}
-              <span className="cr-chip-kind">{c.platform}</span>
-            </span>
-          ))}
-          <button className="cr-chip add" onClick={() => setAddingDest(true)}>
-            + Add
-          </button>
-        </div>
-        {(addingDest || editingDest) && (
-          <div className="cr-dest-editor">
-            <DestinationEditor
-              existing={editingDest}
-              onSaved={() => {
-                setAddingDest(false);
-                setEditingDest(null);
-                onRoomsChanged();
-              }}
-              onCancel={() => {
-                setAddingDest(false);
-                setEditingDest(null);
-              }}
-            />
-            <div className="cr-hint">
-              Live channels stream from rooms. Social channels join through your Boomin workspace and
-              receive posts.
-            </div>
-          </div>
-        )}
-      </section>
-
       {/* Network lives at HOME, never inside a room: a failed network call
         * here is harmless, whereas mid-broadcast it would be noise over a
         * running show. */}
       <NetworkStrip />
+      </>
+      )}
+
+      {surface === "manager" && (
+      <>
+
 
       <section className="cr-section" id="sec-rundown">
         <div className="cr-label">
@@ -703,6 +736,8 @@ function ControlRoomHome({
           </div>
         )}
       </section>
+      </>
+      )}
     </main>
   );
 }
@@ -1403,26 +1438,11 @@ const railIc = {
       <path d="M4.8 19.2a10.2 10.2 0 0 1 0-14.4M19.2 4.8a10.2 10.2 0 0 1 0 14.4" />
     </svg>
   ),
-  channels: (
+  manager: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3.5" y="6.5" width="17" height="12" rx="2.5" />
-      <path d="m8.5 3 3.5 3.5L15.5 3" />
-    </svg>
-  ),
-  network: (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
-      <circle cx="9" cy="8.5" r="3" />
-      <path d="M3.8 19c.6-3 2.8-4.7 5.2-4.7s4.6 1.7 5.2 4.7" />
-      <circle cx="17" cy="7" r="2.2" />
-      <path d="M15.6 12.7c2.4.2 4.2 1.7 4.8 4.3" />
-    </svg>
-  ),
-  rundown: (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
-      <path d="M8.5 6h11M8.5 12h11M8.5 18h11" />
-      <circle cx="4.5" cy="6" r="1.2" fill="currentColor" stroke="none" />
-      <circle cx="4.5" cy="12" r="1.2" fill="currentColor" stroke="none" />
-      <circle cx="4.5" cy="18" r="1.2" fill="currentColor" stroke="none" />
+      <rect x="3.5" y="9" width="17" height="10.5" rx="2" />
+      <path d="m4 9 1.6-4.2 15 2.4-.6 1.8" />
+      <path d="m8.2 5.6 2.4 3.1M13 6.4l2.4 3.1" />
     </svg>
   ),
   plus: (
@@ -1430,41 +1450,40 @@ const railIc = {
       <path d="M12 5v14M5 12h14" />
     </svg>
   ),
-  gear: (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="3.2" />
-      <path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14.2 3h-4l-.4 2.5a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2 1.2l.4 2.5h4l.4-2.5a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z" />
-    </svg>
-  ),
 };
 
 function HomeRail({
   brandName,
   avatarUrl,
-  onJump,
+  surface,
+  onSurface,
   onCompose,
   onSettings,
 }: {
   brandName: string;
   /** The brand's avatar once the session serves it; initial until then. */
   avatarUrl?: string | null;
-  onJump: (id: string) => void;
+  surface: "rooms" | "manager";
+  onSurface: (s: "rooms" | "manager") => void;
   onCompose: () => void;
   onSettings: () => void;
 }) {
   return (
     <nav className="home-rail">
-      <div className="home-rail-avatar" title={brandName}>
+      {/* The profile IS the settings entry — workspace identity and its
+        * controls live behind one button. */}
+      <button className="home-rail-avatar" title={`${brandName} — settings`} onClick={onSettings}>
         {avatarUrl ? <img src={avatarUrl} alt="" /> : <span>{(brandName[0] ?? "?").toUpperCase()}</span>}
         <i className="home-rail-presence" />
-      </div>
-      <button title="On air" onClick={() => onJump("sec-onair")}>{railIc.onair}</button>
-      <button title="Channels" onClick={() => onJump("sec-channels")}>{railIc.channels}</button>
-      <button title="Network" onClick={() => onJump("sec-network")}>{railIc.network}</button>
-      <button title="Rundown" onClick={() => onJump("sec-rundown")}>{railIc.rundown}</button>
+      </button>
+      <button className={surface === "rooms" ? "on" : ""} title="Rooms" onClick={() => onSurface("rooms")}>
+        {railIc.onair}
+      </button>
+      <button className={surface === "manager" ? "on" : ""} title="Manager" onClick={() => onSurface("manager")}>
+        {railIc.manager}
+      </button>
       <div className="home-rail-spring" />
       <button title="New post" onClick={onCompose}>{railIc.plus}</button>
-      <button title="Settings" onClick={onSettings}>{railIc.gear}</button>
     </nav>
   );
 }

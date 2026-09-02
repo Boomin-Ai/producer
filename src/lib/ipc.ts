@@ -138,6 +138,7 @@ export const ipc = {
   liveSetMicAudio: (patch: { volume?: number; muted?: boolean }) =>
     invoke("live_set_mic_audio", { volume: patch.volume ?? null, muted: patch.muted ?? null }),
   liveSetVideo: (height: number, fps: number) => invoke("live_set_video", { height, fps }),
+  liveHomeGlass: () => invoke("live_home_glass"),
   /** Stage editor: commit=false at gesture rate, commit=true on release. */
   liveSetTransform: (id: string, patch: LiveTransformPatch, commit: boolean) =>
     invoke("live_set_transform", { id, patch, commit }),

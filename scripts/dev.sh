@@ -14,6 +14,10 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 # needs the signing key and has no business in a dev loop.
 npx tauri build --debug --bundles app --config '{"bundle":{"createUpdaterArtifacts":false}}'
 
+# A running instance keeps plugins mapped and codesign gets "Operation not
+# permitted" rewriting them — close it before touching the bundle.
+pkill -f "bundle/macos/Producer.app" 2>/dev/null && sleep 1
+
 APP="src-tauri/target/debug/bundle/macos/Producer.app"
 [[ -d $APP ]] || { echo "FATAL: $APP missing after build" >&2; exit 1; }
 

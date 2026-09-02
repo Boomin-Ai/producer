@@ -7,7 +7,7 @@ pub mod creds;
 #[cfg(have_engine)]
 pub mod engine;
 #[cfg(have_engine)]
-mod ffi;
+pub(crate) mod ffi;
 #[cfg(have_engine)]
 pub mod graph;
 // Both touch libobs directly, so they only exist alongside the engine —
