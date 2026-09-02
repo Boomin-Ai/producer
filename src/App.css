@@ -5712,7 +5712,8 @@ textarea::placeholder {
 
 
 /* ── Top dock: a horizontal panel row between the header and the stage ──── */
-.rm-dock-top {
+.rm-dock-top ,
+.rm-dock-bottom.slim  {
   display: flex;
   flex-direction: row;
   align-items: stretch;
@@ -5720,7 +5721,8 @@ textarea::placeholder {
   padding: 6px 10px 2px;
   min-height: 0;
 }
-.rm-dock-top .rm-panel {
+.rm-dock-top .rm-panel ,
+.rm-dock-bottom.slim .rm-panel  {
   flex: 1 1 0;
   min-width: 0;
   max-height: 260px;
@@ -5780,20 +5782,23 @@ textarea::placeholder {
 /* ── Controller in the TOP dock: one strip, not a stack ───────────────────
    Docked up top it reads as a console: transport cluster left, channels as
    compact pills flowing right. Same components, dock-aware arrangement. */
-.rm-dock-top .rm-panel-channels .rm-panel-body {
+.rm-dock-top .rm-panel-channels .rm-panel-body ,
+.rm-dock-bottom.slim .rm-panel-channels .rm-panel-body  {
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 0;
 }
-.rm-dock-top .rm-ctl {
+.rm-dock-top .rm-ctl ,
+.rm-dock-bottom.slim .rm-ctl  {
   flex: 0 0 auto;
   margin-bottom: 0;
   padding: 4px;
   background: transparent;
   border: none;
 }
-.rm-dock-top .rm-panel-channels {
+.rm-dock-top .rm-panel-channels ,
+.rm-dock-bottom.slim .rm-panel-channels  {
   max-height: none;
   overflow: visible;
 }
@@ -5801,7 +5806,8 @@ textarea::placeholder {
 /* Minimal controller: no wrapper card — the components ARE the interface.
    (The obsidian box read as chrome; removed on request.) */
 /* One-line controller in the top dock; channel TAP-PILLS are the switches. */
-.rm-dock-top .rm-panel-channels .rm-panel-body {
+.rm-dock-top .rm-panel-channels .rm-panel-body ,
+.rm-dock-bottom.slim .rm-panel-channels .rm-panel-body  {
   flex-wrap: nowrap;
 }
 /* ── Mixer, signature pass ────────────────────────────────────────────────
@@ -6222,28 +6228,34 @@ textarea::placeholder {
 /* ═══ TOP DOCK IS SLIM. ALWAYS. ═══════════════════════════════════════════
    Native control height plus breathing room — never a second storey. Panel
    chrome compresses, bodies run inline, nothing may wrap. */
-.rm-dock-top .rm-panel {
+.rm-dock-top .rm-panel ,
+.rm-dock-bottom.slim .rm-panel  {
   max-height: 76px;
 }
-.rm-dock-top .rm-panel-head {
+.rm-dock-top .rm-panel-head ,
+.rm-dock-bottom.slim .rm-panel-head  {
   padding: 2px 6px 0;
   min-height: 0;
 }
-.rm-dock-top .rm-panel-head .rm-group-label {
+.rm-dock-top .rm-panel-head .rm-group-label ,
+.rm-dock-bottom.slim .rm-panel-head .rm-group-label  {
   font-size: 8.5px;
   letter-spacing: 0.12em;
   opacity: 0.6;
 }
-.rm-dock-top .rm-panel-body {
+.rm-dock-top .rm-panel-body ,
+.rm-dock-bottom.slim .rm-panel-body  {
   padding-top: 2px;
   padding-bottom: 6px;
 }
-.rm-dock-top .ctl {
+.rm-dock-top .ctl ,
+.rm-dock-bottom.slim .ctl  {
   flex-wrap: nowrap;
   overflow-x: auto;
 }
 /* mixer up top: name + thin bar, INLINE — a status row, not strips */
-.rm-dock-top .rm-strips {
+.rm-dock-top .rm-strips ,
+.rm-dock-bottom.slim .rm-strips  {
   flex-direction: row;
   flex-wrap: nowrap;
   align-items: center;
@@ -6251,7 +6263,8 @@ textarea::placeholder {
   overflow-x: auto;
   padding: 2px 0;
 }
-.rm-dock-top .rm-strip {
+.rm-dock-top .rm-strip ,
+.rm-dock-bottom.slim .rm-strip  {
   flex-direction: row;
   align-items: center;
   gap: 8px;
@@ -6264,16 +6277,21 @@ textarea::placeholder {
   box-shadow: none;
 }
 .rm-dock-top .rm-strip .rm-fader,
+.rm-dock-bottom.slim .rm-strip .rm-fader,
 .rm-dock-top .rm-strip .rm-strip-db,
-.rm-dock-top .rm-strip .rm-strip-fx {
+.rm-dock-bottom.slim .rm-strip .rm-strip-db,
+.rm-dock-top .rm-strip .rm-strip-fx ,
+.rm-dock-bottom.slim .rm-strip .rm-strip-fx  {
   display: none;
 }
-.rm-dock-top .rm-strip .rm-meter {
+.rm-dock-top .rm-strip .rm-meter ,
+.rm-dock-bottom.slim .rm-strip .rm-meter  {
   width: 72px;
   height: 3px;
   border-radius: 999px;
 }
-.rm-dock-top .rm-strip-name {
+.rm-dock-top .rm-strip-name ,
+.rm-dock-bottom.slim .rm-strip-name  {
   font-size: 11px;
   order: -1;
   max-width: 84px;
@@ -6281,7 +6299,8 @@ textarea::placeholder {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.rm-dock-top .rm-strip .rm-strip-icon {
+.rm-dock-top .rm-strip .rm-strip-icon ,
+.rm-dock-bottom.slim .rm-strip .rm-strip-icon  {
   width: 20px;
   height: 20px;
 }
@@ -6437,7 +6456,8 @@ textarea::placeholder {
   border-top: 0.5px solid var(--line-1);
 }
 .rm-dock-bottom.dock-bg > .rm-panel ~ .rm-panel,
-.rm-dock-top.dock-bg > .rm-panel ~ .rm-panel {
+.rm-dock-top.dock-bg > .rm-panel ~ .rm-panel ,
+.rm-dock-bottom.slim.dock-bg > .rm-panel ~ .rm-panel  {
   border-left: 0.5px solid var(--line-1);
 }
 /* Guests keep their card radius on the outer corners via the dock's own. */
@@ -6461,6 +6481,82 @@ textarea::placeholder {
 }
 .rm-dock-bgbtn:hover { color: var(--fg-1); border-color: var(--line-2); }
 .rm-dock-bgbtn.on { color: var(--mint); border-color: oklch(0.75 0.14 165 / 0.4); }
+
+/* ── One dock grammar: every boundary handle drags to resize, clicks to
+   retract; every neighbour pair has a splitter along the dock's axis. ── */
+
+/* Pair splitter in the side rails: a horizontal bar you slide up/down. */
+.rm-split-row {
+  width: 100%;
+  height: 9px;
+  cursor: ns-resize;
+}
+.rm-split-row .rm-split-grab {
+  width: 34px;
+  height: 3px;
+}
+.rm-split-row:hover .rm-split-grab,
+.rm-split-row:active .rm-split-grab {
+  width: 52px;
+  height: 3px;
+}
+.rm-split-v {
+  align-self: stretch;
+  width: 9px;
+  cursor: ew-resize;
+}
+.rm-split-h {
+  align-self: stretch;
+  width: 9px;
+  cursor: ew-resize;
+}
+/* A retracted dock leaves its handle at the edge, still clickable. */
+.rm-split-h.closed {
+  cursor: pointer;
+}
+.rm-split-h.closed .rm-split-grab {
+  background: var(--line-2);
+}
+
+/* Top dock boundary handle — the sheet head's twin, below the dock. */
+.rm-vtab {
+  position: relative;
+  height: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 6;
+  cursor: ns-resize;
+  touch-action: none;
+}
+.rm-vtab.closed { cursor: pointer; }
+.rm-sheet-head { cursor: ns-resize; touch-action: none; }
+
+/* Dragged dock heights: panels fill, interiors scroll, nothing bleeds. */
+.rm-dock-top.sized,
+.rm-dock-bottom.sized {
+  overflow: hidden;
+  align-items: stretch;
+}
+.rm-dock-top.sized .rm-panel,
+.rm-dock-bottom.sized .rm-panel {
+  max-height: 100%;
+  height: auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.rm-dock-bottom.sized .rm-panel .rm-panel-body {
+  min-height: 0;
+  overflow-y: auto;
+}
+/* Slim bottom = the console: one row, centered, no vertical scroll. */
+.rm-dock-bottom.slim {
+  align-items: center;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.rm-editbar-text { flex: 1; }
 
 /* ── Channels card ── */
 .chn { display: flex; flex-direction: column; gap: 2px; }

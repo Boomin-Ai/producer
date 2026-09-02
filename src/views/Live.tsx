@@ -53,6 +53,7 @@ import {
   type Dock,
   type Layout,
   type PanelId,
+  BOTTOM_MIN, BOTTOM_MAX, BOTTOM_SLIM, TOP_MIN, TOP_MAX,
 } from "../lib/layout";
 import {
   DEFAULT_SCENES,
@@ -1936,6 +1937,11 @@ export function LiveView({
   /** Per-source meter levels for audio-bearing extras (guests, media). */
   const [extraLevels, setExtraLevels] = useState<Record<string, number>>({});
   const [sheetOpen, setSheetOpen] = useState(true);
+  // Every dock retracts, same grammar everywhere: its boundary handle DRAGS
+  // to resize and CLICKS to hide/show.
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
+  const [topOpen, setTopOpen] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
   const [micPopOpen, setMicPopOpen] = useState(false);
   const [destsOpen, setDestsOpen] = useState(false);
@@ -1979,14 +1985,9 @@ export function LiveView({
         // Rendered order is topmost-first; engine z counts from the bottom.
         // Apply bottom-up so each set lands on a settled stack.
         const itemId = (k: string) => (k === "alerts" ? "overlay" : k);
-        // The Guests row is one BLOCK: expand it into the guest layers
-        // (topmost first, internal order preserved) so the block moves
-        // through the stack as a unit.
-        const guestIds = (sources.items ?? [])
-          .filter((i) => i.kind === "guest")
-          .sort((a, b) => b.z - a.z)
-          .map((i) => i.id);
-        const expanded = order.flatMap((k) => (k === "guests" ? guestIds : [k]));
+        // Guest layers never appear in this list (slots own their geometry
+        // and z), so the rendered order IS the full reorder set.
+        const expanded = order;
         (async () => {
           for (let i = expanded.length - 1; i >= 0; i--) {
             const z = expanded.length - 1 - i;
@@ -2039,8 +2040,13 @@ export function LiveView({
    * side docks take a pixel width. Live while dragging, persisted on
    * release, so the room remembers the shape you built. */
   const resize = useRef<{
-    kind: "bottom" | "left" | "right";
+    kind: "bottom" | "left" | "right" | "top";
     startX: number;
+    startY: number;
+    /** Pair resizes drag along the dock's own axis; dock resizes drag across it. */
+    axis: "x" | "y";
+    /** Set once the pointer travels — an unmoved release is a CLICK (retract). */
+    moved?: boolean;
     a?: PanelId;
     b?: PanelId;
     aW?: number;
@@ -2059,29 +2065,58 @@ export function LiveView({
     setLiveSizesState(v);
   };
   const shown: DockSizes = liveSizes ?? sizes;
+  /** A short bottom dock IS the top form — the form system has one slim axis,
+   * so panels collapse into exactly the console shapes they wear up top. */
+  const bottomSlim = !!shown.bottom && shown.bottom <= BOTTOM_SLIM;
+  const formDockOf = (id: PanelId): Dock => {
+    const d = dockOf(layout, id);
+    return d === "bottom" && bottomSlim ? "top" : d;
+  };
 
-  const beginResize = (e: React.PointerEvent, kind: "bottom" | "left" | "right", a?: PanelId, b?: PanelId) => {
+  const beginResize = (
+    e: React.PointerEvent,
+    kind: "bottom" | "left" | "right" | "top",
+    a?: PanelId,
+    b?: PanelId,
+    open = true,
+  ) => {
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    if (kind === "bottom" && a && b) {
-      const ael = document.querySelector<HTMLElement>(`[data-panel="${a}"]`);
-      const bel = document.querySelector<HTMLElement>(`[data-panel="${b}"]`);
+    if (!open) {
+      // A closed dock's handle can only be clicked open — nothing to resize.
+      resize.current = null;
+      return;
+    }
+    if (a && b) {
+      // PAIR resize — neighbours trade weight along the dock's own axis:
+      // side docks stack, so the slider runs up/down; top and bottom flow,
+      // so it runs left/right.
+      const axis: "x" | "y" = kind === "left" || kind === "right" ? "y" : "x";
+      const dim = (el: HTMLElement | null) =>
+        (axis === "x" ? el?.getBoundingClientRect().width : el?.getBoundingClientRect().height) ?? 1;
       resize.current = {
         kind,
+        axis,
         startX: e.clientX,
+        startY: e.clientY,
         a,
         b,
         aW: sizes.weights?.[a] ?? 1,
         bW: sizes.weights?.[b] ?? 1,
-        aPx: ael?.getBoundingClientRect().width ?? 1,
-        bPx: bel?.getBoundingClientRect().width ?? 1,
+        aPx: dim(document.querySelector<HTMLElement>(`[data-panel="${a}"]`)),
+        bPx: dim(document.querySelector<HTMLElement>(`[data-panel="${b}"]`)),
       };
     } else {
+      // DOCK resize — the boundary handle drags across the dock.
+      const axis: "x" | "y" = kind === "left" || kind === "right" ? "x" : "y";
       const el = document.querySelector<HTMLElement>(`[data-dock="${kind}"]`);
+      const rect = el?.getBoundingClientRect();
       resize.current = {
         kind,
+        axis,
         startX: e.clientX,
-        startPx: el?.getBoundingClientRect().width ?? SIDE_MIN,
+        startY: e.clientY,
+        startPx: (axis === "x" ? rect?.width : rect?.height) ?? (kind === "top" ? TOP_MIN : SIDE_MIN),
       };
     }
     setLiveSizes(sizes);
@@ -2090,40 +2125,72 @@ export function LiveView({
   const moveResize = (e: React.PointerEvent) => {
     const r = resize.current;
     if (!r || e.buttons !== 1) return;
-    const dx = e.clientX - r.startX;
-    if (r.kind === "bottom" && r.a && r.b) {
+    const d = r.axis === "y" ? e.clientY - r.startY : e.clientX - r.startX;
+    if (!r.moved && Math.abs(d) <= 4) return; // still a click until it travels
+    r.moved = true;
+    if (r.a && r.b) {
       // Weights are proportional to measured pixels, so a drag moves the
       // divider by exactly the distance travelled.
+      const floor = r.axis === "y" ? 100 : 140;
       const total = (r.aPx ?? 1) + (r.bPx ?? 1);
       const totalW = (r.aW ?? 1) + (r.bW ?? 1);
-      const aPx = Math.max(140, Math.min(total - 140, (r.aPx ?? 1) + dx));
+      const aPx = Math.max(floor, Math.min(total - floor, (r.aPx ?? 1) + d));
       const aW = (aPx / total) * totalW;
       setLiveSizes({
         ...sizes,
         weights: { ...sizes.weights, [r.a]: aW, [r.b]: totalW - aW },
       });
     } else {
-      const raw = r.kind === "left" ? (r.startPx ?? 0) + dx : (r.startPx ?? 0) - dx;
-      const px = Math.max(SIDE_MIN, Math.min(SIDE_MAX, raw));
+      // Handles sit on the stage side of every dock, so growth is always a
+      // drag TOWARD the stage: left +, right −, top +, bottom −.
+      const raw = r.kind === "left" || r.kind === "top" ? (r.startPx ?? 0) + d : (r.startPx ?? 0) - d;
+      const px =
+        r.kind === "top"
+          ? Math.max(TOP_MIN, Math.min(TOP_MAX, raw))
+          : r.kind === "bottom"
+            ? Math.max(BOTTOM_MIN, Math.min(BOTTOM_MAX, raw))
+            : Math.max(SIDE_MIN, Math.min(SIDE_MAX, raw));
       setLiveSizes({ ...sizes, [r.kind]: px });
     }
   };
 
-  const endResize = () => {
-    const final = liveSizesRef.current;
-    if (resize.current && final) setSizes(final);
+  /** Release. An unmoved release on a dock handle is a CLICK — retract. */
+  const endResize = (toggle?: () => void) => {
+    const r = resize.current;
     resize.current = null;
+    if (!r) {
+      toggle?.();
+      return;
+    }
+    if (!r.moved) {
+      setLiveSizes(null);
+      toggle?.();
+      return;
+    }
+    const final = liveSizesRef.current;
+    if (final) setSizes(final);
     setLiveSizes(null);
   };
 
-  const splitter = (kind: "bottom" | "left" | "right", a?: PanelId, b?: PanelId) => (
+  const splitter = (
+    kind: "bottom" | "left" | "right" | "top",
+    a?: PanelId,
+    b?: PanelId,
+    dockCtl?: { open: boolean; onToggle: () => void },
+  ) => (
     <div
-      className={`rm-split rm-split-${kind === "bottom" ? "v" : "h"}`}
-      title="Drag to resize"
-      onPointerDown={(e) => beginResize(e, kind, a, b)}
+      className={`rm-split ${
+        a
+          ? kind === "left" || kind === "right"
+            ? "rm-split-row"
+            : "rm-split-v"
+          : "rm-split-h"
+      }${dockCtl && !dockCtl.open ? " closed" : ""}`}
+      title={a ? "Drag to resize" : dockCtl?.open ? "Drag to resize — click to hide" : "Show this dock"}
+      onPointerDown={(e) => beginResize(e, kind, a, b, dockCtl ? dockCtl.open : true)}
       onPointerMove={moveResize}
-      onPointerUp={endResize}
-      onPointerCancel={endResize}
+      onPointerUp={() => endResize(dockCtl?.onToggle)}
+      onPointerCancel={() => endResize()}
     >
       <span className="rm-split-grab" />
     </div>
@@ -3370,7 +3437,7 @@ export function LiveView({
 
   const micStrip = (
     <MeterStrip
-      horizontal={dockOf(layout, "mixer") === "top"}
+      horizontal={formDockOf("mixer") === "top"}
       label="Mic"
       icon={ic.mic}
       level={micLevel}
@@ -3541,12 +3608,6 @@ export function LiveView({
           );
         }
         const liveItems = sources.items ?? [];
-        const guestItems = liveItems.filter((i) => i.kind === "guest");
-        const revealGuests = () => {
-          if (dockOf(layout, "guests") === "hidden") {
-            setLayout(movePanel(layout, "guests", dockOf(layout, "sources")));
-          }
-        };
         const itemIdFor = (key: string) => (key === "alerts" ? "overlay" : key);
         const itemFor = (key: string) => liveItems.find((i) => i.id === itemIdFor(key));
         const activeRows = (
@@ -3557,19 +3618,11 @@ export function LiveView({
             // Audio is a source, like OBS: the picker lives here, the fader
             // lives in the mixer.
             sources.mic && { key: "mic", label: "Microphone", icon: ic.mic, device: "mic", audio: true, remove: () => setSrc({ mic: false }) },
-            // One collapsed Guest COMPONENT row — the dock must show that
-            // guest cameras are part of this scene, but people are managed
-            // per-person in the Guests panel, so it opens that instead of
-            // exposing eye/remove that could quietly change who is on air.
-            guestItems.length > 0 && {
-              key: "guests",
-              label: `Guests · ${guestItems.filter((g) => g.visible).length}/${guestItems.length} on screen`,
-              icon: ic.invite,
-              remove: revealGuests,
-            },
-            // Open-list items, straight from engine truth. Guests are
-            // excluded here: they collapse into the Guest component above
-            // rather than appearing as a row per person.
+            // Open-list items, straight from engine truth. Guest ITEMS are
+            // excluded: slots are the general idea — guest geometry belongs
+            // to gslot scene furniture, and people are managed per-person in
+            // the Guests panel. The retired aggregate "Guests · n/m" row is
+            // exactly what slots replaced.
             ...liveItems
               .filter((i) => !["screen", "camera", "overlay"].includes(i.id) && i.kind !== "guest")
               .map((i) => ({
@@ -3590,13 +3643,10 @@ export function LiveView({
             remove: () => void;
           }[]
         ).sort((a, b) => {
-          // Microphone (audio-only, grip-less) stays at the bottom. The
-          // Guests COMPONENT sorts into the stack at its block's z — it
-          // drags as one layer, so it must render where its layers sit.
+          // Microphone (audio-only, grip-less) stays at the bottom.
           const rank = (k: string) => (k === "mic" ? 1 : 0);
           if (rank(a.key) !== rank(b.key)) return rank(a.key) - rank(b.key);
-          const zOf = (k: string) =>
-            k === "guests" ? Math.max(...guestItems.map((g) => g.z)) : itemFor(k)?.z;
+          const zOf = (k: string) => itemFor(k)?.z;
           const za = zOf(a.key);
           const zb = zOf(b.key);
           if (za != null && zb != null) return zb - za; // topmost first
@@ -3625,10 +3675,10 @@ export function LiveView({
                   return (
                     <div
                       key={t.key}
-                      data-srcrow={item || t.key === "guests" ? t.key : undefined}
+                      data-srcrow={item ? t.key : undefined}
                       className={`rm-row${hidden ? " off" : ""}${srcDrag?.key === t.key ? " dragging" : ""}${dropCls}`}
                     >
-                      {(item || t.key === "guests") && (
+                      {item && (
                         <span
                           className="rm-row-grip"
                           title="Drag to rearrange"
@@ -3649,7 +3699,6 @@ export function LiveView({
                       )}
                       <span className="rm-row-icon">{t.icon}</span>
                       <span className="rm-row-name">{t.label}</span>
-                      {t.key !== "guests" && (
                       <button
                         className="rm-row-edit rm-row-fx"
                         title="Filters"
@@ -3663,7 +3712,6 @@ export function LiveView({
                       >
                         ƒ
                       </button>
-                      )}
                       {(t.key === "alerts" || t.device) && (
                         <button
                           className={`rm-row-edit${srcSettings === t.key ? " on" : ""}`}
@@ -3695,15 +3743,9 @@ export function LiveView({
                           {ic.eye}
                         </button>
                       )}
-                      {t.key === "guests" ? (
-                        <button className="rm-row-edit" title="Manage in the Guests panel" onClick={t.remove}>
-                          {ic.gear}
-                        </button>
-                      ) : (
-                        <button className="rm-row-edit rm-row-remove" title="Remove from this room" onClick={t.remove}>
-                          {ic.x}
-                        </button>
-                      )}
+                      <button className="rm-row-edit rm-row-remove" title="Remove from this room" onClick={t.remove}>
+                        {ic.x}
+                      </button>
                     </div>
                   );
                 })}
@@ -3741,7 +3783,7 @@ export function LiveView({
                   .filter((i) => i.has_audio && (i.kind === "guest" || i.kind === "media"))
                   .map((i) => (
                     <MeterStrip
-                      horizontal={dockOf(layout, "mixer") === "top"}
+                      horizontal={formDockOf("mixer") === "top"}
                       key={i.id}
                       label={i.label || i.kind}
                       icon={i.kind === "guest" ? ic.invite : ic.play}
@@ -3766,7 +3808,7 @@ export function LiveView({
         // Channels card: brand mark · name · phase · switch. Clicking a row
         // (off the switch) opens INLINE key entry — the key goes straight to
         // the Keychain via the same upsert the editor uses.
-        const chnTop = dockOf(layout, "channels") === "top";
+        const chnTop = formDockOf("channels") === "top";
         if (chnTop) {
           // Top bar: the LOGO is the toggle. Lit = armed. Nothing else.
           return (
@@ -4287,9 +4329,9 @@ export function LiveView({
       <>
         {ids.map((id, i) => (
           <Fragment key={id}>
-            {/* Splitters only between neighbours in the bottom row; side
-             * docks resize against the stage, not against each other. */}
-            {dock === "bottom" && i > 0 && !layoutEdit && splitter("bottom", ids[i - 1], id)}
+            {/* A splitter between every pair of neighbours, in every dock —
+             * up/down in the side rails, left/right in the rows. */}
+            {dock !== "hidden" && i > 0 && !layoutEdit && splitter(dock, ids[i - 1], id)}
             {slot(dock, i)}
             {renderPanel(id)}
           </Fragment>
@@ -4309,10 +4351,10 @@ export function LiveView({
     <section
       key={id}
       data-panel={id}
-      data-in={dockOf(layout, id)}
+      data-in={formDockOf(id)}
       className={`rm-panel rm-panel-${id}${dragging === id ? " dragging" : ""}`}
       style={
-        dockOf(layout, id) === "bottom" && shown.weights?.[id]
+        dockOf(layout, id) !== "hidden" && shown.weights?.[id]
           ? { flexGrow: shown.weights[id], flexBasis: 0 }
           : undefined
       }
@@ -4574,9 +4616,6 @@ export function LiveView({
       {layoutEdit && (
         <div className="rm-editbar">
           <span className="rm-editbar-dot" />
-          <span className="rm-editbar-text">
-            Editing layout — drag a panel by its grip, or use + to add one
-          </span>
           <div className="rm-pop-anchor">
             <button
               className="rm-editbar-btn"
@@ -4615,6 +4654,9 @@ export function LiveView({
           <button className="rm-editbar-done" onClick={() => setLayoutEdit(false)}>
             Done
           </button>
+          <span className="rm-editbar-text">
+            Editing layout — drag a panel by its grip, or use + to add one
+          </span>
         </div>
       )}
 
@@ -4622,23 +4664,46 @@ export function LiveView({
         * belongs; chat while chatting; whatever the show needs). Renders only
         * when populated or while editing, so the default room stays clean. */}
       {(layout.top.length > 0 || layoutEdit) && (
-        <div
-          data-dock="top"
-          className={`rm-dock rm-dock-top${layout.top.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "top" ? " hot" : ""}${cfg.dock_bg?.top ? " dock-bg" : ""}`}
-        >
-          {renderDock("top")}
-        </div>
+        <>
+          {(topOpen || layoutEdit) && (
+            <div
+              data-dock="top"
+              className={`rm-dock rm-dock-top${layout.top.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "top" ? " hot" : ""}${cfg.dock_bg?.top ? " dock-bg" : ""}${shown.top ? " sized" : ""}`}
+              style={topOpen && shown.top ? { height: shown.top } : undefined}
+            >
+              {renderDock("top")}
+            </div>
+          )}
+          {!layoutEdit && (
+            <div
+              className={`rm-vtab rm-vtab-top${topOpen ? "" : " closed"}`}
+              role="button"
+              tabIndex={0}
+              title={topOpen ? "Drag to resize — click to hide" : "Show the top dock"}
+              onPointerDown={(e) => beginResize(e, "top", undefined, undefined, topOpen)}
+              onPointerMove={moveResize}
+              onPointerUp={() => endResize(() => setTopOpen((o) => !o))}
+              onPointerCancel={() => endResize()}
+              onKeyDown={(e) => e.key === "Enter" && setTopOpen((o) => !o)}
+            >
+              <span className="rm-sheet-handle" />
+            </div>
+          )}
+        </>
       )}
 
       <div className="rm-body">
-        <aside
-          data-dock="left"
-          className={`rm-dock rm-dock-side${layout.left.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "left" ? " hot" : ""}${cfg.dock_bg?.left ? " dock-bg" : ""}`}
-          style={layout.left.length && shown.left ? { width: shown.left, flex: "0 0 auto" } : undefined}
-        >
-          {renderDock("left")}
-        </aside>
-        {layout.left.length > 0 && !layoutEdit && splitter("left")}
+        {(leftOpen || layoutEdit) && (
+          <aside
+            data-dock="left"
+            className={`rm-dock rm-dock-side${layout.left.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "left" ? " hot" : ""}${cfg.dock_bg?.left ? " dock-bg" : ""}`}
+            style={layout.left.length && shown.left ? { width: shown.left, flex: "0 0 auto" } : undefined}
+          >
+            {renderDock("left")}
+          </aside>
+        )}
+        {layout.left.length > 0 && !layoutEdit &&
+          splitter("left", undefined, undefined, { open: leftOpen, onToggle: () => setLeftOpen((o) => !o) })}
 
         <div className="rm-center">
           <div className="rm-canvas">
@@ -4739,14 +4804,17 @@ export function LiveView({
           />
         </div>
 
-        {layout.right.length > 0 && !layoutEdit && splitter("right")}
-        <aside
-          data-dock="right"
-          className={`rm-dock rm-dock-side${layout.right.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "right" ? " hot" : ""}${cfg.dock_bg?.right ? " dock-bg" : ""}`}
-          style={layout.right.length && shown.right ? { width: shown.right, flex: "0 0 auto" } : undefined}
-        >
-          {renderDock("right")}
-        </aside>
+        {layout.right.length > 0 && !layoutEdit &&
+          splitter("right", undefined, undefined, { open: rightOpen, onToggle: () => setRightOpen((o) => !o) })}
+        {(rightOpen || layoutEdit) && (
+          <aside
+            data-dock="right"
+            className={`rm-dock rm-dock-side${layout.right.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "right" ? " hot" : ""}${cfg.dock_bg?.right ? " dock-bg" : ""}`}
+            style={layout.right.length && shown.right ? { width: shown.right, flex: "0 0 auto" } : undefined}
+          >
+            {renderDock("right")}
+          </aside>
+        )}
       </div>
 
       {sceneSettings && dockOf(layout, "scenes") !== "bottom" && (
@@ -4902,8 +4970,11 @@ export function LiveView({
             className="rm-sheet-head"
             role="button"
             tabIndex={0}
-            title={sheetOpen ? "Hide the bottom row" : "Show the bottom row"}
-            onClick={() => setSheetOpen((o) => !o)}
+            title={sheetOpen ? "Drag to resize — click to hide" : "Show the bottom row"}
+            onPointerDown={(e) => beginResize(e, "bottom", undefined, undefined, sheetOpen)}
+            onPointerMove={moveResize}
+            onPointerUp={() => endResize(() => setSheetOpen((o) => !o))}
+            onPointerCancel={() => endResize()}
             onKeyDown={(e) => e.key === "Enter" && setSheetOpen((o) => !o)}
           >
             <span className="rm-sheet-handle" />
@@ -4940,7 +5011,11 @@ export function LiveView({
             />
           )}
           {(sheetOpen || dragging) && (
-            <div data-dock="bottom" className={`rm-dock rm-dock-bottom${layoutEdit ? " armed" : ""}${dropHint?.dock === "bottom" ? " hot" : ""}${cfg.dock_bg?.bottom ? " dock-bg" : ""}`}>{renderDock("bottom")}</div>
+            <div
+              data-dock="bottom"
+              className={`rm-dock rm-dock-bottom${layoutEdit ? " armed" : ""}${dropHint?.dock === "bottom" ? " hot" : ""}${cfg.dock_bg?.bottom ? " dock-bg" : ""}${shown.bottom ? " sized" : ""}${bottomSlim ? " slim" : ""}`}
+              style={shown.bottom ? { height: shown.bottom } : undefined}
+            >{renderDock("bottom")}</div>
           )}
         </div>
       )}

@@ -37,14 +37,24 @@ export const PANEL_ORDER: PanelId[] = ["scenes", "sources", "mixer", "chat", "ch
 /** Per-room sizing: bottom panels carry a flex weight (they share one row),
  * side docks carry a pixel width. Absent = the built-in default. */
 export interface DockSizes {
-  /** panel id → flex weight in the bottom row (1 = default share). */
+  /** panel id → flex weight along its dock's axis (1 = default share).
+   * One map for all docks — a panel has one weight, applied wherever it is. */
   weights?: Partial<Record<PanelId, number>>;
   left?: number;
   right?: number;
+  /** Dock heights (px). Bottom under BOTTOM_SLIM collapses its panels into
+   * their slim (top-dock) forms — the dock axes share one form system. */
+  bottom?: number;
+  top?: number;
 }
 
 export const SIDE_MIN = 200;
 export const SIDE_MAX = 560;
+export const BOTTOM_MIN = 88;
+export const BOTTOM_MAX = 480;
+export const BOTTOM_SLIM = 140;
+export const TOP_MIN = 48;
+export const TOP_MAX = 240;
 
 export const PRESETS: { key: string; label: string; note: string; layout: Layout }[] = [
   {
