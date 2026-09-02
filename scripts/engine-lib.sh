@@ -17,9 +17,22 @@ lock_get() { python3 -c "import json,sys; d=json.load(open('$LOCK_FILE')); print
 
 lock_hash() { shasum -a 256 "$LOCK_FILE" | cut -c1-12; }
 
+# artifact_name [os] [arch]
+#
+# Defaults reproduce the macOS name exactly, so every existing caller is
+# unchanged. The lock's `arch` field is DE FACTO the macOS arch — it has one
+# reader (this function) and nothing else in the tree consults it — so the
+# Windows port takes arguments rather than growing a per-platform lock section.
+#
+# NOTE the hash covers the WHOLE lock file, so editing it re-keys EVERY
+# platform's artifact name at once. That is deliberate (one lock, one identity)
+# but it means a lock edit must be followed immediately by rebuilding artifacts
+# for all platforms, or release.yml cannot find the engine it computes the name
+# for.
 artifact_name() {
-  local arch; arch="$(lock_get "['arch']")"
-  echo "producer-libobs-macos-${arch}-$(lock_hash)"
+  local os="${1:-macos}"
+  local arch="${2:-$(lock_get "['arch']")}"
+  echo "producer-libobs-${os}-${arch}-$(lock_hash)"
 }
 
 # write_manifest <stage_dir> <provenance>

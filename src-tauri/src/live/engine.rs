@@ -236,20 +236,32 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
         unsafe { ffi::obs_add_module_path(bin.as_ptr(), data.as_ptr()) };
     }
 
-    // Metal preferred, OpenGL fallback (A5 / F9); record the actual backend.
+    // Preferred backend, OpenGL fallback (A5 / F9); record the actual backend.
+    // The module NAMES are the only platform difference — obs_reset_video's
+    // contract is identical, so the preference/fallback shape is shared rather
+    // than duplicated per platform.
     let (boot_h, boot_f) = stored_video(module_config_dir);
-    match reset_video("libobs-metal.dylib", boot_h, boot_f) {
-        Ok(()) => report.graphics_backend = Some("metal".into()),
-        Err(metal_rc) => match reset_video("libobs-opengl.dylib", boot_h, boot_f) {
+    #[cfg(target_os = "macos")]
+    let (primary, primary_name) = ("libobs-metal.dylib", "metal");
+    #[cfg(target_os = "windows")]
+    let (primary, primary_name) = ("libobs-d3d11.dll", "d3d11");
+    #[cfg(target_os = "macos")]
+    let fallback = "libobs-opengl.dylib";
+    #[cfg(target_os = "windows")]
+    let fallback = "libobs-opengl.dll";
+
+    match reset_video(primary, boot_h, boot_f) {
+        Ok(()) => report.graphics_backend = Some(primary_name.into()),
+        Err(primary_rc) => match reset_video(fallback, boot_h, boot_f) {
             Ok(()) => {
                 report.graphics_backend = Some("opengl".into());
                 report.errors.push(format!(
-                    "metal backend unavailable (rc={metal_rc}), fell back to opengl"
+                    "{primary_name} backend unavailable (rc={primary_rc}), fell back to opengl"
                 ));
             }
             Err(gl_rc) => {
                 report.errors.push(format!(
-                    "obs_reset_video failed: metal rc={metal_rc}, opengl rc={gl_rc}"
+                    "obs_reset_video failed: {primary_name} rc={primary_rc}, opengl rc={gl_rc}"
                 ));
                 return report;
             }
