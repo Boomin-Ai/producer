@@ -6837,3 +6837,7 @@ textarea::placeholder {
 .rm-panel[data-in="top"] .upd-item { padding: 0 14px 0 0; border: none; flex: 0 0 auto; }
 .rm-panel[data-in="top"] .upd-item:not(:first-child),
 .rm-panel[data-in="top"] .upd-body { display: none; }
+
+/* What's-new stream inside the settings sheet */
+.upd-sheet { margin-top: 6px; }
+.upd-sheet .upd-item { padding: 9px 2px; }

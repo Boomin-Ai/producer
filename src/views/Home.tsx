@@ -500,6 +500,30 @@ function SettingsSheet({
   onClose: () => void;
 }) {
   const [appVersion, setAppVersion] = useState<string | null>(null);
+  type RepoRelease = { tag_name: string; name: string | null; body: string | null; published_at: string; html_url: string };
+  const [releases, setReleases] = useState<RepoRelease[] | null | "err">(null);
+  useEffect(() => {
+    fetch("https://api.github.com/repos/Boomin-Ai/producer/releases?per_page=8")
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((rs: RepoRelease[]) => setReleases(rs))
+      .catch(() => setReleases("err"));
+  }, []);
+  const linkifyRel = (text: string) =>
+    text.split(/(#\d+|https?:\/\/\S+)/g).map((part, k) => {
+      if (/^#\d+$/.test(part))
+        return (
+          <a key={k} className="upd-ref" onClick={() => openUrl(`https://github.com/Boomin-Ai/producer/issues/${part.slice(1)}`).catch(() => {})}>
+            {part}
+          </a>
+        );
+      if (/^https?:\/\//.test(part))
+        return (
+          <a key={k} className="upd-ref" onClick={() => openUrl(part).catch(() => {})}>
+            {part.replace(/^https?:\/\/(www\.)?/, "").slice(0, 40)}
+          </a>
+        );
+      return part;
+    });
 
   useEffect(() => {
     import("@tauri-apps/api/app")
@@ -558,6 +582,39 @@ function SettingsSheet({
               <span className="cr-sheet-row-sub">up to date — updates install themselves</span>
             )}
           </div>
+        </div>
+
+        <div className="cr-label" style={{ marginTop: 28 }}>
+          WHAT'S NEW
+        </div>
+        <div className="upd upd-sheet">
+          {releases === null && <div className="cr-sheet-row-sub">Checking…</div>}
+          {releases === "err" && (
+            <div className="cr-sheet-row-sub">The update stream goes live when the repo does.</div>
+          )}
+          {Array.isArray(releases) &&
+            releases.map((r) => (
+              <div key={r.tag_name} className="upd-item">
+                <div className="upd-head" onClick={() => openUrl(r.html_url).catch(() => {})}>
+                  <span className="upd-tag">{r.tag_name}</span>
+                  <span className="upd-name">{r.name || ""}</span>
+                  <span className="upd-date">
+                    {new Date(r.published_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                  </span>
+                </div>
+                {r.body && (
+                  <div className="upd-body">
+                    {r.body
+                      .split("\n")
+                      .filter((l) => l.trim())
+                      .slice(0, 4)
+                      .map((l, k) => (
+                        <p key={k}>{linkifyRel(l.replace(/^[-*#\s]+/, ""))}</p>
+                      ))}
+                  </div>
+                )}
+              </div>
+            ))}
         </div>
 
         <div className="cr-label" style={{ marginTop: 28 }}>
