@@ -4480,13 +4480,6 @@ export function LiveView({
             </div>
           )}
           {engineOk && (
-            <div className="stg-meter" title="Mic level">
-              {Array.from({ length: 8 }).map((_, k) => (
-                <i key={k} className={micLevel * 8 > k ? "on" : ""} />
-              ))}
-            </div>
-          )}
-          {engineOk && (
             <div className="stg-bar">
               <button
                 className={`stg-btn${sources.mic_muted ? " off" : ""}`}
