@@ -7748,3 +7748,136 @@ textarea::placeholder {
   max-width: none;
   flex: 0 0 auto;
 }
+
+/* ═══ CONTROLLER GEOMETRY, FINAL — shadcn density, no inflated controls ════
+   The rule that fixes the blobs: CONTROLS NEVER STRETCH. Uniform heights
+   (Go Live 40, everything else 36), auto widths, baseline-aligned console
+   row; panels fill with SPACE, not by inflating buttons. Overrides every
+   earlier stretch experiment by force. */
+.rm-panel-channels .rm-panel-body {
+  justify-content: center !important;
+  align-items: flex-start !important;
+}
+.rm-panel-channels .rm-ctl {
+  flex: 0 0 auto !important;
+  align-items: flex-end;
+  gap: 12px;
+}
+.rm-panel-channels .rm-ctl .rm-golive {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  min-width: 0 !important;
+  padding: 0 22px;
+  font-size: 14px;
+}
+.rm-panel-channels .rm-ctl-group {
+  flex: 0 0 auto !important;
+}
+.rm-panel-channels .rm-ctl-row {
+  flex: 0 0 auto !important;
+  align-items: center;
+}
+.rm-panel-channels .rm-ctl-row .rm-chip,
+.rm-panel-channels .rm-ctl-row .rm-rec {
+  height: 36px !important;
+  min-height: 36px !important;
+  flex: 0 0 auto !important;
+  width: auto !important;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+.rm-panel-channels .rm-ctl-row .rm-pop-anchor {
+  flex: 0 0 auto !important;
+}
+.rm-panel-channels .rm-ctl-row .rm-pop-anchor > .rm-chip {
+  width: auto !important;
+}
+.rm-panel-channels .rm-rows {
+  flex: 0 0 auto !important;
+  align-self: flex-start;
+}
+.rm-chan {
+  flex: 0 0 auto !important;
+  height: 32px !important;
+}
+/* CAPTURE buttons sit in one row, not a stack */
+.rm-panel-channels .rm-ctl-row {
+  flex-direction: row;
+}
+
+/* ═══ SCENES IN THE TOP DOCK: HORIZONTAL CHIPS ═════════════════════════════ */
+.rm-panel[data-in="top"].rm-panel-scenes .rm-panel-body,
+.rm-panel[data-in="top"] .rm-scenes {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.rm-panel[data-in="top"] .rm-scene-row {
+  flex: 0 0 auto;
+  width: auto;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+/* chips drop the per-row shortcut hint — hover chrome, not resting chrome */
+.rm-panel[data-in="top"] .rm-scene-row kbd,
+.rm-panel[data-in="top"] .rm-scene-row .rm-scene-kbd {
+  display: none;
+}
+
+/* ═══ MIXER IN THE TOP DOCK: horizontal console meters ═════════════════════
+   Each channel = name + a thin left-to-right level bar. Faders, dB, fx live
+   in the full form; up top it's pure monitoring. */
+.rm-panel[data-in="top"] .rm-strips {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 14px;
+  overflow-x: auto;
+}
+.rm-panel[data-in="top"] .rm-strip {
+  flex-direction: column-reverse;
+  align-items: stretch;
+  gap: 4px;
+  width: 120px;
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+.rm-panel[data-in="top"] .rm-strip .rm-fader,
+.rm-panel[data-in="top"] .rm-strip .rm-strip-db,
+.rm-panel[data-in="top"] .rm-strip .rm-strip-fx {
+  display: none;
+}
+.rm-strip.horizontal .rm-meter,
+.rm-panel[data-in="top"] .rm-strip .rm-meter {
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+}
+.rm-strip.horizontal .rm-meter-fill {
+  border-radius: 999px;
+  background: linear-gradient(to right, #34d399 0%, #34d399 62%, #fbbf24 82%, #f87171 100%);
+  transition: width 90ms linear;
+}
+.rm-panel[data-in="top"] .rm-strip-name {
+  font-size: 10.5px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rm-panel[data-in="top"] .rm-strip-icon {
+  width: 22px;
+  height: 22px;
+  align-self: flex-end;
+}

@@ -1682,6 +1682,7 @@ function MeterStrip({
   label,
   icon,
   level,
+  horizontal,
   volume,
   muted,
   disabled,
@@ -1693,6 +1694,8 @@ function MeterStrip({
   label: string;
   icon: ReactNode;
   level: number;
+  /** Top-dock form: name + a thin left-to-right level bar. */
+  horizontal?: boolean;
   volume: number;
   muted: boolean;
   disabled?: boolean;
@@ -1705,10 +1708,17 @@ function MeterStrip({
   const db = volume > 0.001 ? Math.round(20 * Math.log10(volume)) : -60;
   const dead = disabled;
   return (
-    <div className={`rm-strip${dead ? " dead" : ""}`}>
+    <div className={`rm-strip${horizontal ? " horizontal" : ""}${dead ? " dead" : ""}`}>
       <div className="rm-strip-cols">
         <div className="rm-meter">
-          <div className="rm-meter-fill" style={{ height: `${Math.round((dead || muted ? 0 : level) * 100)}%` }} />
+          <div
+            className="rm-meter-fill"
+            style={
+              horizontal
+                ? { width: `${Math.round((dead || muted ? 0 : level) * 100)}%`, height: "100%" }
+                : { height: `${Math.round((dead || muted ? 0 : level) * 100)}%` }
+            }
+          />
         </div>
         <Fader value={dead ? 0.35 : ui} disabled={dead} onChange={(u) => onVolume?.(u * u * u)} />
       </div>
@@ -3299,6 +3309,7 @@ export function LiveView({
 
   const micStrip = (
     <MeterStrip
+      horizontal={dockOf(layout, "mixer") === "top"}
       label="Mic"
       icon={ic.mic}
       level={micLevel}
@@ -3673,6 +3684,7 @@ export function LiveView({
                   .filter((i) => i.has_audio && (i.kind === "guest" || i.kind === "media"))
                   .map((i) => (
                     <MeterStrip
+                      horizontal={dockOf(layout, "mixer") === "top"}
                       key={i.id}
                       label={i.label || i.kind}
                       icon={i.kind === "guest" ? ic.invite : ic.play}
