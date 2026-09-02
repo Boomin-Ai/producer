@@ -41,7 +41,17 @@ if [[ ! -d $SRC_DIR/.git ]]; then
 fi
 git -C "$SRC_DIR" fetch --depth 1 origin "$OBS_COMMIT"
 git -C "$SRC_DIR" checkout -q "$OBS_COMMIT"
-git -C "$SRC_DIR" submodule update --init --depth 1 plugins/obs-browser plugins/obs-websocket
+# deps/libdshowcapture/src is a THIRD submodule, and Windows needs it: win-dshow
+# is both the camera input and the virtual camera, and its virtualcam-module
+# CMakeLists names dshowcapture.hpp as a source regardless of ENABLE_VIRTUALCAM.
+# Without it the GENERATE step fails with "Cannot find source file". macOS has no
+# win-dshow, which is why build-engine.sh inits only the other two.
+#
+# It is not in the lock submodules map and does not need to be: the lock pins the
+# obs commit, and the obs commit pins this submodule. The two that ARE pinned are
+# pinned because we patch obs-browser and therefore care about its exact content.
+# This one is transitively pinned and unpatched.
+git -C "$SRC_DIR" submodule update --init --depth 1 plugins/obs-browser plugins/obs-websocket deps/libdshowcapture/src
 for sub in plugins/obs-browser plugins/obs-websocket; do
   want="$(lock_get "['submodules']['$sub']")"
   have="$(git -C "$SRC_DIR/$sub" rev-parse HEAD)"
