@@ -497,7 +497,7 @@ pub struct ExtraPeak {
 #[derive(Debug, Clone, Serialize)]
 pub struct GuestThumb {
     pub id: String,
-    pub rgba: String,
+    pub jpeg: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -527,8 +527,9 @@ pub enum LiveEvent {
         mic_peak: f64,
         extra_peaks: Vec<ExtraPeak>,
     },
-    /// Live guest previews (~1 Hz): 128x72 RGBA, base64 — the panel shows a
-    /// real feed for everyone in the room, on stage or not.
+    /// Live guest previews (~3 Hz): 256x144 JPEG, base64 — the panel shows a
+    /// real feed for everyone in the room, on stage or not. JPEG at the
+    /// source keeps the event ~12KB per guest instead of ~200KB of raw RGBA.
     GuestThumbs {
         w: u32,
         h: u32,
@@ -1412,7 +1413,7 @@ pub fn start(
                     });
                 }
 
-                if last_thumbs_emit.elapsed() > Duration::from_millis(900) {
+                if last_thumbs_emit.elapsed() > Duration::from_millis(300) {
                     last_thumbs_emit = Instant::now();
                     if let Some(g) = scene.as_mut() {
                         let raw = g.guest_thumbs();
@@ -1420,9 +1421,20 @@ pub fn start(
                             use base64::Engine as _;
                             let thumbs = raw
                                 .into_iter()
-                                .map(|(id, rgba)| GuestThumb {
-                                    id,
-                                    rgba: base64::engine::general_purpose::STANDARD.encode(rgba),
+                                .filter_map(|(id, rgba)| {
+                                    let mut jpg = Vec::new();
+                                    let enc = jpeg_encoder::Encoder::new(&mut jpg, 62);
+                                    enc.encode(
+                                        &rgba,
+                                        graph::THUMB_W as u16,
+                                        graph::THUMB_H as u16,
+                                        jpeg_encoder::ColorType::Rgba,
+                                    )
+                                    .ok()?;
+                                    Some(GuestThumb {
+                                        id,
+                                        jpeg: base64::engine::general_purpose::STANDARD.encode(jpg),
+                                    })
                                 })
                                 .collect();
                             sink(&LiveEvent::GuestThumbs {

@@ -281,7 +281,7 @@ export type LiveEvent =
   | { type: "session_ended"; report: { ok: boolean; destinations: LiveDestStatus[]; notes: string[] } }
   | { type: "sources_changed"; sources: LiveSources }
   | { type: "levels"; mic_peak: number; extra_peaks: { id: string; peak: number }[] }
-  | { type: "guest_thumbs"; w: number; h: number; thumbs: { id: string; rgba: string }[] }
+  | { type: "guest_thumbs"; w: number; h: number; thumbs: { id: string; jpeg: string }[] }
   | { type: "video_changed"; height: number; fps: number }
   | { type: "engine_error"; message: string };
 

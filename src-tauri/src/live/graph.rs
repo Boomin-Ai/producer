@@ -1728,8 +1728,8 @@ impl SceneGraph {
     }
 }
 
-pub const THUMB_W: u32 = 128;
-pub const THUMB_H: u32 = 72;
+pub const THUMB_W: u32 = 256;
+pub const THUMB_H: u32 = 144;
 
 impl SceneGraph {
     /// Live thumbnails of every GUEST source, visible or hidden. The capture
