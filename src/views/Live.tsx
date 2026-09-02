@@ -49,7 +49,6 @@ import {
   type DockSizes,
   movePanel,
   movePanelTo,
-  saveLayout,
   type Dock,
   type Layout,
   type PanelId,
@@ -1905,6 +1904,9 @@ export function LiveView({
 }) {
   const [destinations, setDestinations] = useState<LiveDestination[]>([]);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
+  /** 60s render-load history for the stats sparkline (1Hz, CPU share). */
+  const loadHist = useRef<number[]>([]);
+  const snapRef = useRef<LiveSnapshot | null>(null);
   /** Live guest previews, source-id → data URL (15fps demand-driven). */
   const [guestThumbs, setGuestThumbs] = useState<Record<string, string>>({});
 
@@ -2026,8 +2028,9 @@ export function LiveView({
     // guest invite links).
     cfgRef.current = next;
     setCfgState(next);
+    // Room-less sessions keep layout in memory only: the old localStorage
+    // write was never read back anywhere (audited) — half-wired dead code.
     if (room) ipc.liveUpdateRoom(room.id, { config: serializeConfig(next) }).catch(() => {});
-    else saveLayout(next.layout);
   };
   const setLayout = (l: Layout) => writeCfg({ ...cfg, layout: l });
   const sizes: DockSizes = cfg.sizes ?? {};
@@ -2734,6 +2737,7 @@ export function LiveView({
     };
   }, [refresh, roomId]);
 
+  snapRef.current = snapshot;
   const state = snapshot?.session_state ?? "idle";
   const streaming = state === "streaming" || state === "starting" || state === "stopping";
 
@@ -2785,6 +2789,14 @@ export function LiveView({
       : 0;
 
   const engineOk = snapshot?.engine_ready && snapshot?.bootstrap_ok;
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      loadHist.current.push(snapRef.current?.cpu ?? 0);
+      if (loadHist.current.length > 60) loadHist.current.shift();
+    }, 1000);
+    return () => window.clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     if (!engineOk || !sceneSettled || !mountVeil) return;
     // A beat of settle time: lifting mid-populate trades one flicker for
@@ -3706,130 +3718,69 @@ export function LiveView({
               </div>
         );
       case "channels": {
-        // THE CONTROLLER, flat and honest: one toolbar row that wraps
-        // naturally when narrow. No dock-specific geometry, no group
-        // scaffolding — a control is 36px tall, Go Live is 40, and the
-        // segmented channel group is one instrument. Structure IS the style.
+        // Channels card: where the room goes out. Transport lives in the
+        // header; this card only ARMS and reports per-channel phase.
         return (
-          <div className="ctl">
-            {streaming ? (
-              <button className="ctl-golive stop" onClick={() => ipc.liveStop()} disabled={state === "stopping"}>
-                <span className="rm-big-icon">■</span>
-                {state === "stopping" ? "Stopping…" : "End stream"}
-              </button>
-            ) : (
-              <button
-                className="ctl-golive"
-                onClick={goLive}
-                disabled={!engineOk || enabledDests.length === 0}
-                title={enabledDests.length === 0 ? "Turn on a channel first" : undefined}
-              >
-                {ic.onair}
-                Go Live
-              </button>
-            )}
-
-            <button
-              className="ctl-chip"
-              title="Output video settings"
-              onClick={(e) => {
-                setPopAnchor(e.currentTarget);
-                setQualityOpen((o) => !o);
-              }}
-            >
-              {vh}p · {vf}
-              {ic.chev}
-            </button>
-
-            <button
-              className={`ctl-chip${vcamOn ? " on" : ""}`}
-              onClick={toggleVcam}
-              disabled={!engineOk}
-              title={
-                vcamState?.installed
-                  ? "Appear as a webcam in Zoom, Meet and Discord"
-                  : "Install Producer's virtual camera (one approval in System Settings)"
-              }
-            >
-              {ic.cam}
-              {vcamState?.state === "needs_approval"
-                ? "Approve"
-                : vcamOn
-                  ? "Cam on"
-                  : vcamState?.installed
-                    ? "Virtual cam"
-                    : "Install cam"}
-            </button>
-
-            <button
-              className={`ctl-chip${recPath ? " rec" : ""}`}
-              onClick={toggleRecord}
-              disabled={!engineOk}
-              title={recPath ? `Recording to ${recPath.split("/").pop()}` : "Record locally"}
-            >
-              <span className="rm-rec-dot" />
-              {recPath
-                ? `${Math.floor(recElapsed / 60)}:${String(recElapsed % 60).padStart(2, "0")}`
-                : "Record"}
-            </button>
-
-            <div className="ctl-chans">
-              {destinations.map((d) => {
-                const st = statuses.get(d.id);
-                const phase = st ? PHASE_COPY[st.phase] ?? PHASE_COPY.idle : PHASE_COPY.idle;
-                return (
+          <div className="chn">
+            {destinations.map((d) => {
+              const st = statuses.get(d.id);
+              const phase = st ? PHASE_COPY[st.phase] ?? PHASE_COPY.idle : PHASE_COPY.idle;
+              return (
+                <div key={d.id} className={`chn-row${d.enabled ? "" : " off"}`}>
+                  <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />
+                  <span className="chn-name">{d.label}</span>
+                  <span className="chn-sub">
+                    {streaming && st ? phase.label : d.preset}
+                    {streaming && st && <span className={`rm-chan-phase ${st.phase}`} />}
+                  </span>
                   <button
-                    key={d.id}
-                    className={`ctl-chan${d.enabled ? " on" : ""}`}
+                    className={`rm-switch${d.enabled ? " on" : ""}`}
                     disabled={streaming}
-                    title={
-                      streaming && st
-                        ? `${d.label} · ${phase.label}`
-                        : d.enabled
-                          ? `${d.label} armed — tap to disarm`
-                          : `Tap to arm ${d.label}`
-                    }
+                    title={d.enabled ? "Disarm" : "Arm"}
                     onClick={() => toggleEnabled(d)}
                   >
-                    <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />
-                    {d.label}
-                    {streaming && st && <span className={`rm-chan-phase ${st.phase}`} />}
+                    <span className="rm-switch-knob" />
                   </button>
-                );
-              })}
-              {destinations.length === 0 && <span className="ctl-empty">No channels — add them in Settings</span>}
-            </div>
-
-            {qualityOpen && (
-              <Pop anchor={popAnchor} align="right" className="rm-pop-quality">
-                <div className="rm-pop-title">VIDEO {streaming && <span className="rm-card-sub">locked while live</span>}</div>
-                <div className="rm-ctrl-row">
-                  <span className="rm-ctrl-label">Resolution</span>
-                  <span className="rm-quality-set">
-                    {[720, 1080].map((h) => (
-                      <button key={h} className={`rm-q${vh === h ? " on" : ""}`} disabled={streaming || !engineOk} onClick={() => setVideoCfg(h, vf)}>
-                        {h}p
-                      </button>
-                    ))}
-                  </span>
                 </div>
-                <div className="rm-ctrl-row">
-                  <span className="rm-ctrl-label">Frame rate</span>
-                  <span className="rm-quality-set">
-                    {[30, 60].map((f) => (
-                      <button key={f} className={`rm-q${vf === f ? " on" : ""}`} disabled={streaming || !engineOk} onClick={() => setVideoCfg(vh, f)}>
-                        {f}
-                      </button>
-                    ))}
-                  </span>
-                </div>
-                <div className="rm-ctrl-row">
-                  <span className="rm-ctrl-label">Bitrate</span>
-                  <span className="rm-ctrl-value" title="Producer negotiates the best rate every channel accepts">Auto</span>
-                </div>
-              </Pop>
+              );
+            })}
+            {destinations.length === 0 && (
+              <div className="rm-rows-empty">No channels — add them in Settings</div>
             )}
           </div>
+        );
+      }
+      case "stats": {
+        // The numbers behind the health dot. Real data only.
+        const fmtT = (secs: number) =>
+          `${String(Math.floor(secs / 60)).padStart(2, "0")}:${String(Math.floor(secs % 60)).padStart(2, "0")}`;
+        return (
+          <div className="stx">
+            <div className="stx-grid">
+              <div className="stx-tile"><span className="stx-lbl">FPS</span><span className="stx-num">{(snapshot?.fps ?? 0).toFixed(0)}</span></div>
+              <div className="stx-tile"><span className="stx-lbl">CPU</span><span className="stx-num">{(snapshot?.cpu ?? 0).toFixed(1)}%</span></div>
+              <div className="stx-tile"><span className="stx-lbl">Bitrate</span><span className="stx-num">{streaming ? fmtBitrate(bytesTotal, elapsed) : "—"}</span></div>
+              <div className="stx-tile"><span className="stx-lbl">Dropped</span><span className={`stx-num${droppedTotal > 0 ? " warn" : ""}`}>{streaming ? `${droppedTotal} (${droppedPct.toFixed(1)}%)` : "—"}</span></div>
+              <div className="stx-tile"><span className="stx-lbl">Live time</span><span className="stx-num">{streaming ? fmtT(elapsed) : "—"}</span></div>
+            </div>
+            {(snapshot?.skipped_frames ?? 0) > 0 || reconnectTotal > 0 ? (
+              <div className="stx-warns">
+                {(snapshot?.skipped_frames ?? 0) > 0 && <span>{snapshot?.skipped_frames} skipped (renderer)</span>}
+                {reconnectTotal > 0 && <span>{reconnectTotal} reconnect{reconnectTotal === 1 ? "" : "s"}</span>}
+              </div>
+            ) : null}
+            <div className="stx-chart" title="Render load (CPU share), last 60s">
+              <span className="stx-lbl">Render load</span>
+              <svg viewBox="0 0 120 28" preserveAspectRatio="none">
+                <polyline
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  points={loadHist.current.map((v, k) => `${(k / 59) * 120},${28 - Math.min(1, v / 100) * 26 - 1}`).join(" ")}
+                />
+              </svg>
+            </div>
+              </div>
         );
       }
     }
@@ -4194,8 +4145,6 @@ export function LiveView({
           * disappears whenever you aren't live — the idle state is itself
           * information ("engine up, nothing going out"). */}
         <div className="rm-chip rm-health">
-          {/* Signal bars, OBS's four levels. A shape reads faster than a
-            * number when you're mid-show and only glancing. */}
           <span className={`rm-bars q-${quality}`} title={`Network: ${quality}`}>
             <i />
             <i />
@@ -4207,69 +4156,14 @@ export function LiveView({
               {!engineOk ? "Starting engine" : enabledDests.length === 0 ? "No channels" : "Ready"}
             </span>
           ) : (
-            <>
-              <span className="rm-health-time">
-                {`${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`}
-              </span>
-              <span className="rm-health-sep" />
-              <span className="rm-health-num">{fmtBitrate(bytesTotal, elapsed)}</span>
-            {/* Shown only when non-zero — a permanent row of zeroes trains you
-              * to stop reading the row. */}
-            {droppedTotal > 0 && (
-              <>
-                <span className="rm-health-sep" />
-                  <span className="rm-health-num warn">
-                    {droppedTotal} dropped ({droppedPct.toFixed(1)}%)
-                  </span>
-              </>
-            )}
-              {reconnectTotal > 0 && (
-                <>
-                  <span className="rm-health-sep" />
-                  <span className="rm-health-num warn">
-                    {reconnectTotal} reconnect{reconnectTotal === 1 ? "" : "s"}
-                  </span>
-                </>
-              )}
-            </>
-          )}
-          {recPath && (
-            <>
-              <span className="rm-health-sep" />
-              <span className="rm-health-num rec">REC</span>
-            </>
+            <span className="rm-health-time">
+              {`${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`}
+            </span>
           )}
           {engineOk && (
             <>
               <span className="rm-health-sep" />
-              <span className="rm-health-num" title="Render frames per second">
-                {(snapshot?.fps ?? 0).toFixed(0)} fps
-              </span>
-              {/* Skipped ≠ dropped. Skipped means THIS MACHINE couldn't render
-                * in time; dropped means the network couldn't send. Different
-                * causes and different fixes, so OBS shows both and so do we. */}
-              {(snapshot?.skipped_frames ?? 0) > 0 && (
-                <>
-                  <span className="rm-health-sep" />
-                  <span
-                    className="rm-health-num warn"
-                    title="Frames the renderer could not keep up with"
-                  >
-                    {snapshot?.skipped_frames} skipped
-                  </span>
-                </>
-              )}
-              <span className="rm-health-sep" />
-              <span
-                className={`rm-health-num${(snapshot?.cpu ?? 0) > 80 ? " warn" : ""}`}
-                title="Producer's CPU usage"
-              >
-                {/* One decimal: this measures Producer's share of total
-                  * system CPU, which is legitimately fractional on an 8-core
-                  * machine. Rounding to whole numbers printed a flat 0% and
-                  * read as broken. */}
-                {(snapshot?.cpu ?? 0).toFixed(1)}% CPU
-              </span>
+              <span className="rm-health-num">{(snapshot?.fps ?? 0).toFixed(0)} fps</span>
             </>
           )}
         </div>
@@ -4291,6 +4185,97 @@ export function LiveView({
               <span className="rm-live-dot" />
               {`${Math.floor(elapsed / 60)}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}
             </span>
+          )}
+
+          <button
+            className="hd-chip"
+            title="Output video settings"
+            onClick={(e) => {
+              setPopAnchor(e.currentTarget);
+              setQualityOpen((o) => !o);
+            }}
+          >
+            {vh}p · {vf}
+            {ic.chev}
+          </button>
+
+          <button
+            className={`hd-chip${vcamOn ? " on" : ""}`}
+            onClick={toggleVcam}
+            disabled={!engineOk}
+            title={
+              vcamState?.installed
+                ? "Appear as a webcam in Zoom, Meet and Discord"
+                : "Install Producer's virtual camera (one approval in System Settings)"
+            }
+          >
+            {ic.cam}
+            {vcamState?.state === "needs_approval"
+              ? "Approve"
+              : vcamOn
+                ? "Cam on"
+                : vcamState?.installed
+                  ? "Virtual cam"
+                  : "Install cam"}
+          </button>
+
+          <button
+            className={`hd-chip${recPath ? " rec" : ""}`}
+            onClick={toggleRecord}
+            disabled={!engineOk}
+            title={recPath ? `Recording to ${recPath.split("/").pop()}` : "Record locally"}
+          >
+            <span className="rm-rec-dot" />
+            {recPath
+              ? `${Math.floor(recElapsed / 60)}:${String(recElapsed % 60).padStart(2, "0")}`
+              : "Record"}
+          </button>
+
+          {streaming ? (
+            <button className="hd-golive stop" onClick={() => ipc.liveStop()} disabled={state === "stopping"}>
+              <span className="rm-big-icon">■</span>
+              {state === "stopping" ? "Stopping…" : "End"}
+            </button>
+          ) : (
+            <button
+              className="hd-golive"
+              onClick={goLive}
+              disabled={!engineOk || enabledDests.length === 0}
+              title={enabledDests.length === 0 ? "Arm a channel first" : undefined}
+            >
+              {ic.onair}
+              GO LIVE
+            </button>
+          )}
+
+          {qualityOpen && (
+            <Pop anchor={popAnchor} align="right" className="rm-pop-quality">
+              <div className="rm-pop-title">VIDEO {streaming && <span className="rm-card-sub">locked while live</span>}</div>
+              <div className="rm-ctrl-row">
+                <span className="rm-ctrl-label">Resolution</span>
+                <span className="rm-quality-set">
+                  {[720, 1080].map((h) => (
+                    <button key={h} className={`rm-q${vh === h ? " on" : ""}`} disabled={streaming || !engineOk} onClick={() => setVideoCfg(h, vf)}>
+                      {h}p
+                    </button>
+                  ))}
+                </span>
+              </div>
+              <div className="rm-ctrl-row">
+                <span className="rm-ctrl-label">Frame rate</span>
+                <span className="rm-quality-set">
+                  {[30, 60].map((f) => (
+                    <button key={f} className={`rm-q${vf === f ? " on" : ""}`} disabled={streaming || !engineOk} onClick={() => setVideoCfg(vh, f)}>
+                      {f}
+                    </button>
+                  ))}
+                </span>
+              </div>
+              <div className="rm-ctrl-row">
+                <span className="rm-ctrl-label">Bitrate</span>
+                <span className="rm-ctrl-value" title="Producer negotiates the best rate every channel accepts">Auto</span>
+              </div>
+            </Pop>
           )}
 
           <button
