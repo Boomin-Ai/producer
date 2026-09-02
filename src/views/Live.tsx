@@ -654,8 +654,8 @@ function GuestPanel({
           )}
           {waiting.map((g) => (
             <div key={g.id} className="rm-guest waiting">
+              <span className="rm-wait-dot" />
               <span className="rm-guest-name">{g.display_name || "Guest"}</span>
-              <span className="rm-guest-state">waiting</span>
               <button
                 className="rm-guest-admit"
                 disabled={live.length >= ROOM_CAP}

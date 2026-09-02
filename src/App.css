@@ -6597,3 +6597,102 @@ textarea::placeholder {
   flex: 0 0 auto;
   white-space: nowrap;
 }
+
+/* Guests: no title at all — the thumbnails speak. Kill the last left inset. */
+.rm-panel-guests .rm-group-label {
+  display: none;
+}
+.rm-panel-guests .rm-panel-head {
+  padding: 4px 8px 0;
+}
+.rm-panel-guests .rm-panel-head .rm-cnt {
+  margin-left: auto;
+}
+.rm-panel-guests .rm-panel-body {
+  padding: 4px 0 0 !important;
+}
+.rm-panel-guests .rm-guest-list {
+  padding: 0;
+  margin: 0;
+}
+.rm-panel-guests .rm-gcard {
+  margin: 0;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Guests chrome is invisible until hover — then floats over the media. */
+.rm-panel-guests {
+  position: relative;
+}
+.rm-panel-guests .rm-panel-head {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  left: auto;
+  z-index: 5;
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  background: rgba(3, 5, 9, 0.78);
+  border: 0.5px solid var(--line-2);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+.rm-panel-guests:hover .rm-panel-head {
+  opacity: 1;
+  pointer-events: auto;
+}
+.rm-panel-guests .rm-panel-body {
+  padding: 0 !important;
+}
+
+/* Waiting row, producer-brand: quiet surface, amber pulse, mint Admit pill.
+   One line, never wraps, nothing shouts. */
+.rm-panel-guests .rm-guest.waiting,
+.rm-guest.waiting {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 9px;
+  min-height: 38px;
+  margin: 0;
+  padding: 0 8px;
+  border: none;
+  border-top: 0.5px solid var(--line-1);
+  border-radius: 0;
+  background: var(--surface-1);
+}
+.rm-wait-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--amber);
+  animation: rm-chan-pulse 1.8s ease-in-out infinite;
+  flex: 0 0 auto;
+}
+.rm-guest.waiting .rm-guest-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg-1);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rm-guest-admit {
+  margin-left: auto;
+  height: 26px;
+  padding: 0 13px;
+  border: none;
+  border-radius: var(--r-pill);
+  background: var(--mint);
+  color: #06251b;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.rm-guest-admit:hover { filter: brightness(1.06); }
+.rm-guest-admit:disabled { opacity: 0.4; cursor: default; }
+.rm-guest.waiting .rm-row-edit { flex: 0 0 auto; }
