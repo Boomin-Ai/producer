@@ -6701,25 +6701,28 @@ textarea::placeholder {
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
-  align-items: stretch;
+  align-items: flex-start; /* tiles keep their shape; never stretched tall */
   gap: 8px;
   padding: 6px;
   overflow-x: auto;
   overflow-y: hidden;
 }
 .rm-panel-guests[data-in="bottom"] .rm-gcard {
+  /* A tile, whatever the rail's height: height is capped (viewport-
+   * relative), width follows 16:9. Stretching to a tall rail made a 9:16
+   * portrait — a card must never change shape with the dock. */
   flex: 0 0 auto;
-  align-self: stretch;
-  height: auto;
-  min-height: 96px;
+  align-self: flex-start;
+  height: clamp(90px, 20vh, 200px);
+  min-height: 0;
   width: auto;
-  min-width: 170px;
+  min-width: 0;
   max-width: none;
   aspect-ratio: 16 / 9;
   border-radius: 10px !important;
 }
 .rm-panel-guests[data-in="bottom"] .rm-gcard.on {
-  height: auto;
+  height: clamp(90px, 20vh, 200px);
 }
 
 /* Channels in a SIDE rail: each toggle expands into a row that says its
