@@ -2629,7 +2629,19 @@ export function LiveView({
         ...(inviteUrl ? { invite_url: inviteUrl } : {}),
       };
       const c = cfgRef.current;
-      writeCfg({ ...c, sources: { ...c.sources, extras: [...(c.sources.extras ?? []), entry] } });
+      // A new source belongs to the scene you added it in. Scenes are looks
+      // over ONE graph, so without this every other scene would inherit it
+      // visible (a guest slot added in PiP showed up in Full cam and Screen).
+      // The active scene gets it visible; every other scene with a look
+      // records it hidden. Geometry fills in via the write-through capture.
+      const active = activeSceneRef.current;
+      const scenes = (c.scenes.length ? c.scenes : DEFAULT_SCENES).map((sc) => {
+        if (!sc.look && sc.id !== active) return sc;
+        const look = { ...(sc.look ?? {}) };
+        look[id] = { ...(look[id] ?? {}), visible: sc.id === active };
+        return { ...sc, look };
+      });
+      writeCfg({ ...c, scenes, sources: { ...c.sources, extras: [...(c.sources.extras ?? []), entry] } });
     } catch (e) {
       setBanner(String(e));
     }
@@ -4515,19 +4527,6 @@ export function LiveView({
           },
         },
         { key: "window", label: "Window capture", icon: ic.screen, act: () => setSrcSubPop("window") },
-        {
-          // Guests are COMPONENTS — real people admitted through the Guests
-          // panel — not name-typed sources. A guest source cannot exist
-          // without one, so "adding" a guest means opening that panel.
-          key: "guest",
-          label: "Guest — via Guests panel",
-          icon: ic.invite,
-          act: () => {
-            if (dockOf(layout, "guests") === "hidden") {
-              setLayout(movePanel(layout, "guests", dockOf(layout, "sources")));
-            }
-          },
-        },
       ].filter(Boolean) as { key: string; label: string; icon: ReactNode; act: () => void }[];
       return (
         <>
