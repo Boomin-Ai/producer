@@ -8048,29 +8048,31 @@ button.ks-key:hover { border-color: var(--line-2); }
    until you scroll; WebView2 on Windows paints the classic light-grey ones
    inside our dark UI. Style them thin and dark everywhere so both platforms
    read the same. */
-* {
+/* Windows ONLY: any ::-webkit-scrollbar rule turns macOS's invisible overlay
+   scrollbars into always-painted classic ones — the opposite of the intent. */
+html[data-platform="win"] * {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
-*::-webkit-scrollbar {
+html[data-platform="win"] *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
-*::-webkit-scrollbar-track {
+html[data-platform="win"] *::-webkit-scrollbar-track {
   background: transparent;
 }
-*::-webkit-scrollbar-thumb {
+html[data-platform="win"] *::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.18);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
-*::-webkit-scrollbar-thumb:hover {
+html[data-platform="win"] *::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.32);
   background-clip: padding-box;
 }
-*::-webkit-scrollbar-corner,
-*::-webkit-scrollbar-button {
+html[data-platform="win"] *::-webkit-scrollbar-corner,
+html[data-platform="win"] *::-webkit-scrollbar-button {
   background: transparent;
   display: none;
 }
