@@ -459,6 +459,55 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
+    /// Every deal this brand is party to (client or beneficiary), newest first.
+    pub async fn network_deals(&self) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .get(self.root_url("/v1/app/network/deals"))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// Propose an appearance deal: this brand (the host) pays the counterparty
+    /// to appear on one of ITS server rooms. Presence there is delivery —
+    /// admitting the guest flips the funded deal to delivered server-side.
+    /// Pricing is server-owned; only amount/title/room travel.
+    pub async fn network_propose_deal(
+        &self,
+        connection_id: &str,
+        beneficiary_brand_id: &str,
+        room_id: &str,
+        title: &str,
+        amount_cents: u64,
+    ) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.root_url("/v1/app/network/deals"))
+            .bearer_auth(&self.token)
+            .json(&serde_json::json!({
+                "connection_id": connection_id,
+                "beneficiary_brand_id": beneficiary_brand_id,
+                "room_id": room_id,
+                "title": title,
+                "amount_cents": amount_cents,
+            }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     /// Network exposure of a SERVER room: private | connections | public.
     pub async fn room_set_visibility(
         &self,
