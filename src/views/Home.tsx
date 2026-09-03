@@ -1451,6 +1451,7 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
   const [booking, setBooking] = useState<string | null>(null);
   const [bookRoom, setBookRoom] = useState("");
   const [bookAmt, setBookAmt] = useState("");
+  const [bookMin, setBookMin] = useState("");
 
   const load = useCallback(async (id: string) => {
     const [st, inv, cn, dl] = await Promise.all([
@@ -1492,10 +1493,12 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
         roomId: sid,
         title: `Appearance on ${room.name}`,
         amountCents: bookCents,
+        minStageMinutes: Number(bookMin) >= 1 ? Math.min(720, Math.round(Number(bookMin))) : null,
       });
       setNote(`Proposed $${(bookCents / 100).toFixed(2)} to ${c.counterparty.name}. They accept in Boomin; you fund it there.`);
       setBooking(null);
       setBookAmt("");
+      setBookMin("");
       void load(endpointId);
     } catch (e) {
       setNote(String(e).replace(/^Error:\s*/, ""));
@@ -1636,7 +1639,9 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
                       <span key={d.id} className={`net-deal ${d.status}`} title={d.title}>
                         {d.status} · ${(d.amount_cents / 100).toFixed(0)}
                         {d.role === "beneficiary" ? " · you earn" : ""}
-                        {d.appearance ? " · admitted" : ""}
+                        {d.min_stage_minutes != null
+                          ? ` · ${Math.floor((d.stage_seconds ?? 0) / 60)}/${d.min_stage_minutes}m on stage`
+                          : d.appearance ? " · admitted" : ""}
                       </span>
                     ))}
                   </div>
@@ -1660,11 +1665,21 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
                         if (e.key === "Enter") void book(c);
                       }}
                     />
+                    <input
+                      className="net-slug"
+                      inputMode="numeric"
+                      placeholder="min"
+                      title="Minimum minutes on stage before it counts as delivered (blank = presence only)"
+                      value={bookMin}
+                      onChange={(e) => setBookMin(e.target.value)}
+                    />
                     <button className="cr-primary" disabled={busy || bookCents < 500} onClick={() => void book(c)}>
                       Propose
                     </button>
                     <div className="cr-hint">
-                      Presence is delivery: admitting @{c.counterparty.slug} to that room settles it. Minimum $5.
+                      {Number(bookMin) >= 1
+                        ? `Delivered the moment @${c.counterparty.slug} has been on your stage ${Math.min(720, Math.round(Number(bookMin)))} min. Cutting them early still counts. Minimum $5.`
+                        : `Presence is delivery: admitting @${c.counterparty.slug} to that room settles it. Add minutes for a stage minimum. Minimum $5.`}
                     </div>
                   </div>
                 )}
