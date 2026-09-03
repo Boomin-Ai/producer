@@ -260,6 +260,9 @@ export interface LiveSnapshot {
   engine_ready: boolean;
   bootstrap_ok: boolean;
   graphics_backend?: string | null;
+  /** Boot phase timings (name, ms): startup, reset_video, reset_audio,
+   * load_modules (CEF lives here), post_load. */
+  boot_phases_ms?: [string, number][];
   session_state: LiveSessionState;
   elapsed_secs: number;
   destinations: LiveDestStatus[];

@@ -53,6 +53,11 @@ pub struct EngineReport {
     pub outputs: Vec<String>,
     pub services: Vec<String>,
     pub errors: Vec<String>,
+    /// Boot phase timings (name, ms) in order: startup, reset_video,
+    /// reset_audio, load_modules (CEF initialises inside obs-browser's
+    /// module load — on this critical path by obs-browser's own design),
+    /// post_load. You cannot halve what you have not measured.
+    pub boot_phases_ms: Vec<(String, u64)>,
 }
 
 /// Marshal an OBS UI task onto the macOS main thread (GCD main queue).
@@ -196,6 +201,14 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
         outputs: Vec::new(),
         services: Vec::new(),
         errors: Vec::new(),
+        boot_phases_ms: Vec::new(),
+    };
+    let mut phase_t = Instant::now();
+    let mut phase = |report: &mut EngineReport, name: &str| {
+        let ms = phase_t.elapsed().as_millis() as u64;
+        report.boot_phases_ms.push((name.to_string(), ms));
+        eprintln!("[live] boot phase {name}: {ms} ms");
+        phase_t = Instant::now();
     };
 
     let locale = CString::new("en-US").unwrap();
@@ -238,6 +251,7 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
     report.obs_version = unsafe { CStr::from_ptr(ffi::obs_get_version_string()) }
         .to_string_lossy()
         .into_owned();
+    phase(&mut report, "startup");
 
     // §5.1: OBS UI tasks are marshalled to the macOS main thread from the start.
     unsafe { ffi::obs_set_ui_task_handler(ui_task_handler) };
@@ -283,6 +297,7 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
         },
     }
 
+    phase(&mut report, "reset_video");
     let oai = ffi::obs_audio_info {
         samples_per_sec: 48000,
         speakers: ffi::SPEAKERS_STEREO,
@@ -291,6 +306,7 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
         report.errors.push("obs_reset_audio failed".into());
         return report;
     }
+    phase(&mut report, "reset_audio");
 
     let mut mfi = ffi::obs_module_failure_info {
         failed_modules: ptr::null_mut(),
@@ -304,11 +320,13 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
             .push(name.to_string_lossy().into_owned());
     }
     unsafe { ffi::obs_module_failure_info_free(&mut mfi) };
+    phase(&mut report, "load_modules");
 
     // F3 ★: validate required IDs, then obs_post_load_modules. VideoToolbox
     // registers its encoders during post-load, so VT is re-checked after it.
     unsafe { ffi::obs_post_load_modules() };
     unsafe { ffi::obs_log_loaded_modules() };
+    phase(&mut report, "post_load");
 
     report.sources = enum_ids(ffi::obs_enum_source_types);
     report.encoders = enum_ids(ffi::obs_enum_encoder_types);
@@ -585,6 +603,9 @@ pub struct Snapshot {
     pub thumb_slow_maps: u64,
     pub bootstrap_ok: bool,
     pub graphics_backend: Option<String>,
+    /// Boot phase timings from the EngineReport, for the room's own readout.
+    #[serde(default)]
+    pub boot_phases_ms: Vec<(String, u64)>,
     pub session_state: SessionState,
     pub elapsed_secs: f64,
     pub destinations: Vec<DestStatus>,
@@ -1093,6 +1114,7 @@ pub fn start(
                 s.video_height = h;
                 s.video_fps = f;
                 s.graphics_backend = report.graphics_backend.clone();
+                s.boot_phases_ms = report.boot_phases_ms.clone();
             }
             if report.ok {
                 // Preview capture rides the compositor: registered once, for

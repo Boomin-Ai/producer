@@ -1898,6 +1898,18 @@ export function LiveView({
   // engineOk means the ENGINE booted — the room is configured only after the
   // stored video mode is applied and the pending scene has been laid out.
   const [sceneSettled, setSceneSettled] = useState(false);
+  /** Mount instrumentation: wall-clock from mount to each gate. The footer
+   * shows the total so every build proves (or disproves) a speedup. */
+  const mountT0 = useRef(performance.now());
+  const mountMarks = useRef<Record<string, number>>({});
+  const mark = (k: string) => {
+    if (mountMarks.current[k] == null) mountMarks.current[k] = Math.round(performance.now() - mountT0.current);
+  };
+  const [mountMs, setMountMs] = useState<number | null>(null);
+  /** Set after the mount apply: the NEXT sources_changed from the engine is
+   * the settle signal — the engine acknowledging the transforms — instead
+   * of a timer guessing how long that takes. */
+  const settleOnSources = useRef(false);
   const [statuses, setStatuses] = useState<Map<string, LiveDestStatus>>(new Map());
 
   // Header health. Derived every render, never stored: a health number that
@@ -2805,6 +2817,10 @@ export function LiveView({
         setStatuses(new Map(ev.report.destinations.map((d) => [d.id, d])));
         if (!ev.report.ok && ev.report.notes.length > 0) setBanner(ev.report.notes.join(" · "));
       } else if (ev.type === "sources_changed") {
+        if (settleOnSources.current) {
+          settleOnSources.current = false;
+          setSceneSettled(true);
+        }
         setSources(ev.sources);
         // The room document follows the scene, without disturbing the rest
         // of the document (layout, scenes, channels).
@@ -2846,8 +2862,12 @@ export function LiveView({
         setGuestThumbs((prev) => ({ ...prev, ...next }));
       } else if (ev.type === "engine_error") {
         setBanner(ev.message);
-      } else if (ev.type === "engine_ready" && !ev.ok) {
-        setBanner("Live engine failed to initialize — see engine report.");
+      } else if (ev.type === "engine_ready") {
+        if (!ev.ok) setBanner("Live engine failed to initialize — see engine report.");
+        // A room opened DURING boot must apply the moment the engine is up —
+        // previously nothing re-ran refresh on success, so the veil rode to
+        // its cap and the room mounted unconfigured.
+        else void refresh();
       }
     }).then((un) => {
       unlisten.current = un;
@@ -2918,11 +2938,28 @@ export function LiveView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
+    if (engineOk) mark("engine");
+  }, [engineOk]);
+  useEffect(() => {
     if (!engineOk || !sceneSettled || !mountVeil) return;
-    // A beat of settle time: lifting mid-populate trades one flicker for
-    // another.
-    const t = window.setTimeout(() => setMountVeil(false), 350);
-    return () => window.clearTimeout(t);
+    // Lift on the frame AFTER the settled state paints — the first frame the
+    // user sees is the finished room, and not one tick later than that.
+    mark("settled");
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        setMountVeil(false);
+        mark("veil");
+        const m = mountMarks.current;
+        setMountMs(m.veil);
+        console.info("[room] mount timings ms", { ...m, boot_phases: snapRef.current?.boot_phases_ms });
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engineOk, sceneSettled, mountVeil]);
   // Hard cap: a wedged step may never trap the user behind the veil.
   useEffect(() => {
@@ -3038,7 +3075,7 @@ export function LiveView({
    * visibility, geometry and stacking change, through the same transform
    * pipeline the stage editor uses. Missing well-known sources the scene
    * needs are created once; nothing is ever torn down. */
-  const applyScene = async (p: RoomScene) => {
+  const applyScene = async (p: RoomScene, opts?: { cut?: boolean }) => {
     if (!engineOk) return;
     try {
       const bh = snapshot?.video_height || 720;
@@ -3068,7 +3105,9 @@ export function LiveView({
         .filter(([, l]) => l.visible)
         .sort((a, b) => (a[1].z ?? 0) - (b[1].z ?? 0));
 
-      const tr = p.transition ?? cfgRef.current.transition ?? { kind: "cut" as const };
+      const tr: SceneTransition = opts?.cut
+        ? { kind: "cut" }
+        : p.transition ?? cfgRef.current.transition ?? { kind: "cut" as const };
 
       // Stinger: the clip covers the stage, the scene changes UNDERNEATH it
       // at the halfway point, and the clip plays out to reveal the result.
@@ -3455,10 +3494,22 @@ export function LiveView({
     const sc = scenes.find((x) => x.id === pendingScene);
     setPendingScene(null);
     void (async () => {
-      if (sc) await applyScene(sc);
-      // The apply's transforms land engine-side just after the awaits;
-      // half a beat covers the tail of the animation frames.
-      window.setTimeout(() => setSceneSettled(true), 500);
+      // Mount CUTS: transitions are for switching in front of an audience,
+      // not for laying out a room nobody is watching yet.
+      if (sc) {
+        settleOnSources.current = true;
+        await applyScene(sc, { cut: true });
+        mark("applied");
+        // Belt: an empty look sends no transforms, so nothing would answer.
+        window.setTimeout(() => {
+          if (settleOnSources.current) {
+            settleOnSources.current = false;
+            setSceneSettled(true);
+          }
+        }, 250);
+      } else {
+        setSceneSettled(true);
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingScene, engineOk]);
@@ -5191,6 +5242,11 @@ export function LiveView({
       )}
       <footer className="rm-foot">
         <span className="rm-foot-item">Producer v{appVersion ?? "…"}</span>
+        {mountMs != null && (
+          <span className="rm-foot-item dim-inline" title="Room open → stage ready (engine boot phases in the console)">
+            opened in {(mountMs / 1000).toFixed(2)}s
+          </span>
+        )}
         <span className="rm-foot-item">
           Stream health
           <span className={`stg-meter foot q-${quality}`}>

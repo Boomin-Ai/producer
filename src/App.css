@@ -7061,6 +7061,7 @@ button.ks-key:hover { border-color: var(--line-2); }
 .rm-foot-item { display: inline-flex; align-items: center; gap: 7px; }
 .rm-foot-item.rec { color: #fca5a5; }
 .rm-foot-item.dim { margin-left: auto; opacity: 0.7; }
+.rm-foot-item.dim-inline { opacity: 0.6; font-variant-numeric: tabular-nums; }
 .rm-foot-q { text-transform: capitalize; color: var(--fg-2); }
 
 /* ── Mixer, reference anatomy (P6): name top, LED ticks, controls bottom ── */
