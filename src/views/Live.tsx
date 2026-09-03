@@ -4796,32 +4796,8 @@ export function LiveView({
           {ic.layout}
         </button>
 
-        {/* Always present. Moving health out of the dock was pointless if it
-          * disappears whenever you aren't live — the idle state is itself
-          * information ("engine up, nothing going out"). */}
-        <div className="rm-chip rm-health">
-          <span className={`rm-bars q-${quality}`} title={`Network: ${quality}`}>
-            <i />
-            <i />
-            <i />
-            <i />
-          </span>
-          {!streaming ? (
-            <span className="rm-health-idle">
-              {!engineOk ? "Starting engine" : enabledDests.length === 0 ? "No channels" : "Ready"}
-            </span>
-          ) : (
-            <span className="rm-health-time">
-              {`${Math.floor(elapsed / 60)}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}
-            </span>
-          )}
-          {engineOk && (
-            <>
-              <span className="rm-health-sep" />
-              <span className="rm-health-num">{(snapshot?.fps ?? 0).toFixed(0)} fps</span>
-            </>
-          )}
-        </div>
+        {/* The header's health chip was the footer's stream-health meter said
+          * twice; the footer keeps it (with fps), the LIVE pill keeps time. */}
         {!streaming && lastRec && (
           <button
             className="rm-health-rec"
@@ -5025,6 +5001,25 @@ export function LiveView({
           <button className="rm-editbar-done" onClick={() => setLayoutEdit(false)}>
             Done
           </button>
+          {/* Where the stage's quick controls float — an edge of the canvas. */}
+          <span className="rm-editbar-ctl" title="Quick controls position">
+            {(["left", "top", "bottom", "right"] as const).map((pos) => (
+              <button
+                key={pos}
+                className={`rm-editbar-pos${(cfg.stage_bar ?? "bottom") === pos ? " on" : ""}`}
+                title={`Controls on the ${pos}`}
+                onClick={() => writeCfg({ ...cfgRef.current, stage_bar: pos })}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <rect x="3" y="3" width="18" height="18" rx="4" />
+                  {pos === "left" && <rect x="5" y="8" width="4" height="8" rx="1" fill="currentColor" stroke="none" />}
+                  {pos === "right" && <rect x="15" y="8" width="4" height="8" rx="1" fill="currentColor" stroke="none" />}
+                  {pos === "top" && <rect x="8" y="5" width="8" height="4" rx="1" fill="currentColor" stroke="none" />}
+                  {pos === "bottom" && <rect x="8" y="15" width="8" height="4" rx="1" fill="currentColor" stroke="none" />}
+                </svg>
+              </button>
+            ))}
+          </span>
           <span className="rm-editbar-text">
             Editing layout — drag a panel by its grip, or use + to add one
           </span>
@@ -5132,7 +5127,7 @@ export function LiveView({
           </div>
 
           {engineOk && (
-            <div className="stg-bar">
+            <div className={`stg-bar pos-${cfg.stage_bar ?? "bottom"}`}>
               <button
                 className={`stg-btn${sources.mic_muted ? " off" : ""}`}
                 title={sources.mic_muted ? "Unmute mic" : "Mute mic"}
@@ -5409,6 +5404,12 @@ export function LiveView({
         {mountMs != null && (
           <span className="rm-foot-item dim-inline" title="Room open → stage ready (engine boot phases in the console)">
             opened in {(mountMs / 1000).toFixed(2)}s
+          </span>
+        )}
+        {engineOk && (
+          <span className="rm-foot-item dim-inline">
+            {!streaming && enabledDests.length === 0 ? "No channels · " : ""}
+            {(snapshot?.fps ?? 0).toFixed(0)} fps
           </span>
         )}
         <span className="rm-foot-item">

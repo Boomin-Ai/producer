@@ -6571,6 +6571,64 @@ textarea::placeholder {
 
 .rm-editbar-text { flex: 1; }
 
+/* ── Quick fixes round ─────────────────────────────────────────────────── */
+/* Quick controls: an edge of the canvas, chosen in edit mode. */
+.stg-bar.pos-top { top: 14px; bottom: auto; }
+.stg-bar.pos-left,
+.stg-bar.pos-right {
+  top: 50%;
+  bottom: auto;
+  left: 14px;
+  transform: translateY(-50%);
+  flex-direction: column;
+}
+.stg-bar.pos-right { left: auto; right: 14px; }
+/* Icons dead-center: block-level SVGs, no baseline slack. */
+.stg-btn { line-height: 0; padding: 0; }
+.stg-btn svg { display: block; margin: 0; }
+.rm-editbar-ctl { display: inline-flex; gap: 4px; margin-left: 6px; }
+.rm-editbar-pos {
+  width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 8px; border: 1px solid var(--line-1); background: transparent; color: var(--fg-3);
+}
+.rm-editbar-pos.on { color: var(--mint); border-color: oklch(0.75 0.14 165 / 0.5); background: var(--surface-2); }
+
+/* Mini mixer: the live/muted state must be VISIBLE — label back, small. */
+.rm-strip.horizontal .rm-strip-db { display: inline-flex !important; font-size: 10px; letter-spacing: 0.06em; color: var(--fg-3); }
+.rm-strip.horizontal .rm-strip-icon { position: relative; }
+.rm-strip.horizontal .rm-strip-icon:not(.muted)::after {
+  content: ""; position: absolute; top: -2px; right: -2px; width: 7px; height: 7px; border-radius: 999px;
+  background: var(--mint); box-shadow: 0 0 6px oklch(0.75 0.14 165 / 0.8);
+}
+.rm-strip.horizontal .rm-strip-icon.muted { color: var(--red); }
+
+/* Mini guests: small thumbnails in a row, not one long bar. */
+.rm-panel[data-in="top"] .rm-guest-list {
+  display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 6px; overflow-x: auto;
+}
+.rm-panel[data-in="top"] .rm-gcard {
+  flex: 0 0 auto; width: 72px; height: 40px; border-radius: 8px !important; overflow: hidden; margin: 0;
+}
+.rm-panel[data-in="top"] .rm-gcard .rm-gcard-id,
+.rm-panel[data-in="top"] .rm-gcard .rm-gcard-chrome { display: none; }
+.rm-panel[data-in="top"] .rm-gcard img,
+.rm-panel[data-in="top"] .rm-gcard canvas { width: 100%; height: 100%; object-fit: cover; }
+
+/* Chat chips lose their names in a narrow side rail. */
+@container panel (max-width: 320px) {
+  .rm-chat-chips .rm-chip-name { display: none; }
+}
+
+/* A fully collapsed bottom rail is JUST its handle, like every other dock. */
+.rm-sheet.collapsed {
+  padding: 0 !important;
+  min-height: 0;
+  height: 14px;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0;
+}
+
 /* ── One-track mixer: the meter IS the fader ────────────────────────────── */
 .rm-strip .rm-track {
   position: relative;

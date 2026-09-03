@@ -101,6 +101,8 @@ export interface RoomConfig {
    * every panel owns its own card (the default look). Dock-level by decree —
    * never per component. */
   dock_bg?: Partial<Record<"top" | "left" | "right" | "bottom", boolean>>;
+  /** Where the stage's quick controls float: an edge of the canvas. */
+  stage_bar?: "bottom" | "top" | "left" | "right";
 }
 
 export const DEFAULT_SCENES: RoomScene[] = [
@@ -162,6 +164,9 @@ export function parseConfig(raw: string | null | undefined): RoomConfig {
     ) as Record<string, string>;
   }
   if (v.sizes && typeof v.sizes === "object") base.sizes = v.sizes as DockSizes;
+  if (v.stage_bar === "bottom" || v.stage_bar === "top" || v.stage_bar === "left" || v.stage_bar === "right") {
+    base.stage_bar = v.stage_bar;
+  }
   if (v.dock_bg && typeof v.dock_bg === "object") {
     base.dock_bg = Object.fromEntries(
       Object.entries(v.dock_bg as Record<string, unknown>).filter(
