@@ -12,6 +12,40 @@ export function Wordmark() {
 
 type Door = "chooser" | "boomin" | "server";
 
+/** Remembered once a Boomin account has connected on this machine, so an
+ * empty endpoint list after that means "signed out", not "never seen". */
+const SIGNED_IN_KEY = "producer.signedin.v1";
+export function hasSignedInBefore(): boolean {
+  try {
+    return localStorage.getItem(SIGNED_IN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function rememberSignedIn() {
+  try {
+    localStorage.setItem(SIGNED_IN_KEY, "1");
+  } catch {
+    /* storage unavailable — the chooser shows next time, nothing worse */
+  }
+}
+
+/** The sign-in screen: straight to email + code, no pitch, no network
+ * opt-in — for someone who already knows the product (signed out, or a
+ * returning machine). "Use your own server" stays reachable as a footnote. */
+export function SignIn({ onConnected }: { onConnected: () => void }) {
+  const [door, setDoor] = useState<"boomin" | "server">("boomin");
+  if (door === "server") return <ServerForm onBack={() => setDoor("boomin")} onConnected={onConnected} />;
+  return (
+    <BoominLogin
+      direct
+      onBack={() => setDoor("server")}
+      backLabel="Use your own server"
+      onConnected={onConnected}
+    />
+  );
+}
+
 export function Onboarding({ onConnected, onCancel }: { onConnected: () => void; onCancel?: () => void }) {
   const [door, setDoor] = useState<Door>("chooser");
 
@@ -56,7 +90,19 @@ export function Onboarding({ onConnected, onCancel }: { onConnected: () => void;
   );
 }
 
-function BoominLogin({ onBack, onConnected }: { onBack: () => void; onConnected: () => void }) {
+function BoominLogin({
+  onBack,
+  onConnected,
+  direct = false,
+  backLabel = "Back",
+}: {
+  onBack: () => void;
+  onConnected: () => void;
+  /** Sign-in mode: skip the network opt-in step — you're coming back, not
+   *  joining. */
+  direct?: boolean;
+  backLabel?: string;
+}) {
   const [step, setStep] = useState<"email" | "code" | "brand" | "network">("email");
   // Opt-in, and OFF by default: a network listing is a public projection of
   // the brand, so it should never happen because someone clicked through.
@@ -87,11 +133,14 @@ function BoominLogin({ onBack, onConnected }: { onBack: () => void; onConnected:
     setError(null);
     try {
       const result = await ipc.boominConnect(email.trim(), code.trim(), apiRoot.trim() || undefined);
+      rememberSignedIn();
       // The workspace just connected becomes the active one.
       if ((result as { id?: string } | null)?.id) setActiveEndpointId(String((result as { id?: string }).id));
       if (result?.needs_brand && result.brands?.length) {
         setBrands(result.brands);
         setStep("brand");
+      } else if (direct) {
+        onConnected();
       } else {
         setStep("network");
       }
@@ -108,7 +157,8 @@ function BoominLogin({ onBack, onConnected }: { onBack: () => void; onConnected:
     try {
       const r = await ipc.boominSelectBrand(slug);
       if (r?.id) setActiveEndpointId(r.id);
-      setStep("network");
+      if (direct) onConnected();
+      else setStep("network");
     } catch (e) {
       setError(String(e));
     } finally {
@@ -181,8 +231,8 @@ function BoominLogin({ onBack, onConnected }: { onBack: () => void; onConnected:
           <strong>Which workspace?</strong>
         </h1>
         <p className="muted">
-          This account has several brands — Producer connects one at a time.
-          You can add the others later from &ldquo;Add endpoint&rdquo;.
+          This account has several brands — pick the one to open first. The
+          others are one click away in the workspace switcher.
         </p>
         <div className="brand-list">
           {brands.map((b) => (
@@ -206,8 +256,9 @@ function BoominLogin({ onBack, onConnected }: { onBack: () => void; onConnected:
     <div className="onboarding">
       <Wordmark />
       <h1>
-        <strong>Sign in with Boomin.</strong>
+        <strong>{direct ? "Welcome back." : "Sign in with Boomin."}</strong>
       </h1>
+      {direct && <p className="muted">Sign in with the email on your Boomin account.</p>}
       <form
         className="server-form"
         onSubmit={(e) => {
@@ -258,7 +309,7 @@ function BoominLogin({ onBack, onConnected }: { onBack: () => void; onConnected:
         {error && <p className="error">{error}</p>}
         <div className="form-actions">
           <button type="button" className="ghost" onClick={step === "code" ? () => setStep("email") : onBack}>
-            Back
+            {step === "code" ? "Back" : backLabel}
           </button>
           <button type="submit" disabled={busy}>
             {busy ? "Working…" : step === "email" ? "Email me a code" : "Verify & connect"}

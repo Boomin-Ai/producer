@@ -8181,3 +8181,7 @@ button.ks-key:hover { border-color: var(--line-2); }
 .deal-sheet { overflow-x: hidden; overflow-y: auto; }
 .deal-sheet .cr-hint, .deal-term > p, .deal-agree, .deal-link p { overflow-wrap: anywhere; word-break: break-word; }
 .deal-sheet .cr-hint { user-select: text; -webkit-user-select: text; }
+
+/* ── sign out (workspace popout foot) ─────────────────────────────────── */
+.ws-signout .ws-pop-name { color: var(--fg-2); }
+.ws-signout:hover .ws-pop-name { color: #fca5a5; }

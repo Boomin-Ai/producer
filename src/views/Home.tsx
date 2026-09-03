@@ -203,12 +203,14 @@ function fmtAgo(iso: string | null): string {
 export function Home({
   endpoints,
   onAddEndpoint,
+  onSignOut,
   onRemoveEndpoint,
   onEndpointsChanged,
 }: {
   endpoints: EndpointInfo[];
   onAddEndpoint: () => void;
   onRemoveEndpoint: (id: string) => void;
+  onSignOut?: () => void;
   /** A brand was bound as a new workspace from the popout — reload the endpoint list. */
   onEndpointsChanged?: () => void;
 }) {
@@ -389,6 +391,7 @@ export function Home({
       )}
       {view.kind === "home" && profileOpen && (
         <WorkspacePopout
+          onSignOut={onSignOut}
           endpoints={endpoints}
           activeId={activeId}
           onSwitch={(id) => {
@@ -2343,12 +2346,14 @@ function WorkspacePopout({
   activeId,
   onSwitch,
   onSettings,
+  onSignOut,
   onClose,
 }: {
   endpoints: EndpointInfo[];
   activeId: string | null;
   onSwitch: (endpointId: string) => void;
   onSettings: () => void;
+  onSignOut?: () => void;
   onClose: () => void;
 }) {
   const active = endpoints.find((e) => e.id === activeId) ?? endpoints.find((e) => e.kind === "connected") ?? endpoints[0];
@@ -2448,6 +2453,18 @@ function WorkspacePopout({
           <button className="ws-row" onClick={onSettings}>
             <span className="ws-pop-name">Settings</span>
           </button>
+          {onSignOut && endpoints.some((e) => e.kind === "connected") && (
+            <button
+              className="ws-row ws-signout"
+              onClick={() => {
+                onClose();
+                onSignOut();
+              }}
+            >
+              <span className="ws-pop-name">Sign out</span>
+              <span className="ws-pop-slug">{active?.kind === "connected" ? "of Boomin on this Mac" : ""}</span>
+            </button>
+          )}
         </div>
       </div>
     </>
