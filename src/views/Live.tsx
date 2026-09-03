@@ -1907,6 +1907,23 @@ export function LiveView({
     if (mountMarks.current[k] == null) mountMarks.current[k] = Math.round(performance.now() - mountT0.current);
   };
   const [mountMs, setMountMs] = useState<number | null>(null);
+  /** Largest gap between 100ms ticks until the veil lifts — a ready room
+   * that cannot paint for seconds is a MAIN-THREAD stall, not engine work. */
+  const stallMax = useRef(0);
+  useEffect(() => {
+    let last = performance.now();
+    const t = window.setInterval(() => {
+      const now = performance.now();
+      const gap = now - last - 100;
+      if (gap > stallMax.current) stallMax.current = gap;
+      last = now;
+    }, 100);
+    return () => window.clearInterval(t);
+  }, []);
+  /** sources_changed events seen — the settle signal is "one more than when
+   * the mount apply started", never "the next one" (that consumed the
+   * set-sources echo and settled BEFORE the scene was applied). */
+  const srcEvCount = useRef(0);
   /** Set after the mount apply: the NEXT sources_changed from the engine is
    * the settle signal — the engine acknowledging the transforms — instead
    * of a timer guessing how long that takes. */
@@ -2818,6 +2835,7 @@ export function LiveView({
         setStatuses(new Map(ev.report.destinations.map((d) => [d.id, d])));
         if (!ev.report.ok && ev.report.notes.length > 0) setBanner(ev.report.notes.join(" · "));
       } else if (ev.type === "sources_changed") {
+        srcEvCount.current += 1;
         if (settleOnSources.current) {
           settleOnSources.current = false;
           setSceneSettled(true);
@@ -2953,7 +2971,12 @@ export function LiveView({
         mark("veil");
         const m = mountMarks.current;
         setMountMs(m.veil);
-        const report = { ...m, boot_phases: snapRef.current?.boot_phases_ms ?? null, at: new Date().toISOString() };
+        const report = {
+          ...m,
+          stall_max_ms: Math.round(stallMax.current),
+          boot_phases: snapRef.current?.boot_phases_ms ?? null,
+          at: new Date().toISOString(),
+        };
         console.info("[room] mount timings ms", report);
         roomOpenReport(report).catch(() => {});
       });
@@ -3500,16 +3523,22 @@ export function LiveView({
       // Mount CUTS: transitions are for switching in front of an audience,
       // not for laying out a room nobody is watching yet.
       if (sc) {
-        settleOnSources.current = true;
+        const seen0 = srcEvCount.current;
         await applyScene(sc, { cut: true });
         mark("applied");
-        // Belt: an empty look sends no transforms, so nothing would answer.
-        window.setTimeout(() => {
-          if (settleOnSources.current) {
-            settleOnSources.current = false;
-            setSceneSettled(true);
-          }
-        }, 250);
+        if (srcEvCount.current > seen0) {
+          // The transforms' commit already echoed back during the apply.
+          setSceneSettled(true);
+        } else {
+          settleOnSources.current = true;
+          // Belt: an empty look sends no transforms, so nothing would answer.
+          window.setTimeout(() => {
+            if (settleOnSources.current) {
+              settleOnSources.current = false;
+              setSceneSettled(true);
+            }
+          }, 250);
+        }
       } else {
         setSceneSettled(true);
       }
