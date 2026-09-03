@@ -2359,9 +2359,7 @@ export function LiveView({
   const [stageSel, setStageSel] = useState<string | null>(null);
   /** Delete on the stage keymap: same effect as the row's ✕, per kind. */
   const deleteStageItem = (id: string) => {
-    if (id === "screen") return void setSrc({ screen: false });
-    if (id === "camera") return void setSrc({ camera: false });
-    if (id === "overlay") return void ipc.liveSetOverlay(null, false).catch(() => {});
+    if (id === "screen" || id === "camera" || id === "overlay") return removeCoreSource(id);
     const it = (sources.items ?? []).find((i) => i.id === id);
     if (!it) return;
     if (it.kind === "guest") return void hideGuestFromSlot(id);
@@ -2755,6 +2753,47 @@ export function LiveView({
         return { ...sc, look };
       }),
       sources: { ...c.sources, extras: (c.sources.extras ?? []).filter((e) => e.id !== id) },
+    });
+  };
+  /** MEMBERSHIP delete for the well-known sources (screen/camera/overlay).
+   * Before this they were exempt: "remove" tore the engine source down
+   * globally, the scene's look still listed it, and the next applyScene
+   * re-created it — the edit undid itself on every switch. Now, exactly like
+   * extras: leave THIS scene's look (materialized from the stage if the scene
+   * was still running on its built-in recipe); tear the source down only when
+   * no other scene needs it. */
+  const removeCoreSource = (id: "screen" | "camera" | "overlay") => {
+    const c = cfgRef.current;
+    const active = activeSceneRef.current;
+    const all = c.scenes.length ? c.scenes : DEFAULT_SCENES;
+    const realLook = (sc: RoomScene) => !!(sc.look && Object.keys(sc.look).length);
+    // A scene needs a core source if its look lists it, or — still on the
+    // built-in recipe — its flags imply it (overlay is always in a recipe).
+    const needs = (sc: RoomScene) =>
+      realLook(sc) ? id in sc.look! : id === "overlay" ? true : id === "screen" ? sc.screen : sc.camera;
+    const stillUsed = all.some((sc) => sc.id !== active && needs(sc));
+    const stage: Record<string, SceneItemLook> = Object.fromEntries(
+      (sourcesRef.current.items ?? [])
+        .filter((i) => i.kind !== "guest")
+        .map((i) => [i.id, { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z }]),
+    );
+    const leaveScene = (sc: RoomScene) => {
+      const look = { ...(realLook(sc) ? sc.look! : stage) };
+      delete look[id];
+      return { ...sc, look, ...(id === "screen" ? { screen: false } : id === "camera" ? { camera: false } : {}) };
+    };
+    window.clearTimeout(lookTimer.current); // a pending capture would re-list it
+    if (active && stillUsed) {
+      ipc.liveSetTransform(id, { visible: false }, true).catch(() => {});
+      writeCfg({ ...c, scenes: all.map((sc) => (sc.id === active ? leaveScene(sc) : sc)) });
+      return;
+    }
+    // No scene needs it: the source leaves the graph, every look is scrubbed.
+    if (id === "overlay") ipc.liveSetOverlay(null, false).catch(() => {});
+    else void setSrc(id === "screen" ? { screen: false } : { camera: false });
+    writeCfg({
+      ...c,
+      scenes: all.map((sc) => (sc.id === active || (sc.look && id in sc.look) ? leaveScene(sc) : sc)),
     });
   };
   const [chatNames, setChatNames] = useState<ChatNames>(loadChatNames);
@@ -3241,24 +3280,42 @@ export function LiveView({
   const sourcesRef = useRef(sources);
   sourcesRef.current = sources;
   const activeSceneRef = useRef<string | null>(null);
+  /** The scene a capture is owed to — bound when the edit happens, not when
+   * the debounce fires, or an edit made in scene A followed by a quick switch
+   * would be written into scene B (and A never learns of it). */
+  const lookOwed = useRef<string | null>(null);
+  const captureLookNow = (sceneId: string) => {
+    if (!roomApplied.current) return;
+    const items = (sourcesRef.current.items ?? []).filter((i) => i.kind !== "guest");
+    if (!items.length) return;
+    const look: Record<string, SceneItemLook> = Object.fromEntries(
+      items.map((i) => [i.id, { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z }]),
+    );
+    const base = cfgRef.current;
+    writeCfg({
+      ...base,
+      scenes: (base.scenes.length ? base.scenes : DEFAULT_SCENES).map((x) =>
+        x.id === sceneId ? { ...x, look, screen: sourcesRef.current.screen, camera: sourcesRef.current.camera } : x,
+      ),
+    });
+  };
   const captureActiveLook = () => {
+    const sceneId = activeSceneRef.current;
+    if (!sceneId) return;
     window.clearTimeout(lookTimer.current);
+    lookOwed.current = sceneId;
     lookTimer.current = window.setTimeout(() => {
-      const sceneId = activeSceneRef.current;
-      if (!sceneId || !roomApplied.current) return;
-      const items = (sourcesRef.current.items ?? []).filter((i) => i.kind !== "guest");
-      if (!items.length) return;
-      const look: Record<string, SceneItemLook> = Object.fromEntries(
-        items.map((i) => [i.id, { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z }]),
-      );
-      const base = cfgRef.current;
-      writeCfg({
-        ...base,
-        scenes: (base.scenes.length ? base.scenes : DEFAULT_SCENES).map((x) =>
-          x.id === sceneId ? { ...x, look, screen: sourcesRef.current.screen, camera: sourcesRef.current.camera } : x,
-        ),
-      });
+      lookOwed.current = null;
+      captureLookNow(sceneId);
     }, 1200); // past the next engine poll, so the capture reads settled truth
+  };
+  /** Settle any owed capture before the stage changes underneath it. */
+  const flushActiveLook = () => {
+    const owed = lookOwed.current;
+    if (!owed) return;
+    window.clearTimeout(lookTimer.current);
+    lookOwed.current = null;
+    captureLookNow(owed);
   };
 
   async function setSrc(patch: Partial<Pick<LiveSources, "screen" | "camera" | "mic">>) {
@@ -3293,6 +3350,9 @@ export function LiveView({
     // drops it, or the outline (and Delete) would follow you to items that
     // aren't even on this look.
     setStageSel(null);
+    // What you edited in the scene you're leaving is written to THAT scene
+    // before its stage is repainted as another one.
+    flushActiveLook();
     if (!engineOk) return;
     try {
       const bh = snapshot?.video_height || 720;
@@ -3313,13 +3373,14 @@ export function LiveView({
       ]);
       const entries = Object.entries(look).filter(([id]) => exists.has(id));
       // MEMBERSHIP: a scene's look is the set of sources that belong to it.
-      // An extra the look does not mention is not in this scene — hide it.
-      // Core sources (screen/camera/overlay) and guests (slot-managed) are
-      // room-level and stay under their own rules.
+      // Anything the look does not mention is not in this scene — hide it.
+      // Screen/camera/overlay follow the same rule as every other source
+      // (a scene that dropped its camera stays camera-less); only guests are
+      // exempt, because slots — not scenes — carry their geometry.
       const realLook = !!(p.look && Object.keys(p.look).length);
       if (realLook) {
         for (const it of sources.items ?? []) {
-          if (["screen", "camera", "overlay"].includes(it.id) || it.kind === "guest") continue;
+          if (it.kind === "guest") continue;
           if (!(it.id in look) && it.visible) {
             ipc.liveSetTransform(it.id, { visible: false }, true).catch(() => {});
           }
@@ -3536,10 +3597,9 @@ export function LiveView({
     // Save the CURRENT look, extras included — the scene is a snapshot of
     // the whole stage, not just which slots are on.
     const look: Record<string, SceneItemLook> = Object.fromEntries(
-      (sources.items ?? []).map((i) => [
-        i.id,
-        { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z },
-      ]),
+      (sources.items ?? [])
+        .filter((i) => i.kind !== "guest") // slots carry guest geometry; ids are transient
+        .map((i) => [i.id, { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z }]),
     );
     const next: RoomScene = {
       id: `s${Date.now().toString(36)}`,
@@ -3559,10 +3619,9 @@ export function LiveView({
    * and the old recipe would undo you every time. */
   const updateScene = (id: string) => {
     const look: Record<string, SceneItemLook> = Object.fromEntries(
-      (sources.items ?? []).map((i) => [
-        i.id,
-        { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z },
-      ]),
+      (sources.items ?? [])
+        .filter((i) => i.kind !== "guest") // slots carry guest geometry; ids are transient
+        .map((i) => [i.id, { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z }]),
     );
     const base = cfgRef.current;
     writeCfg({
@@ -4084,11 +4143,18 @@ export function LiveView({
         const liveItems = sources.items ?? [];
         const itemIdFor = (key: string) => (key === "alerts" ? "overlay" : key);
         const itemFor = (key: string) => liveItems.find((i) => i.id === itemIdFor(key));
+        // Membership: a scene with a look lists only its own sources — the
+        // well-known ones included (a source kept alive for another scene is
+        // not a row here).
+        const inScene = (id: string) => {
+          const sc = scenes.find((x) => x.id === activeScene);
+          return !sc?.look || Object.keys(sc.look).length === 0 || id in sc.look;
+        };
         const activeRows = (
           [
-            sources.screen && { key: "screen", label: "Screen", icon: ic.screen, device: "screen", remove: () => setSrc({ screen: false }) },
-            sources.camera && { key: "camera", label: "Camera", icon: ic.cam, device: "camera", remove: () => setSrc({ camera: false }) },
-            overlayActive && { key: "alerts", label: "Overlay", icon: ic.link, remove: () => ipc.liveSetOverlay(null, false).catch(() => {}) },
+            sources.screen && inScene("screen") && { key: "screen", label: "Screen", icon: ic.screen, device: "screen", remove: () => removeCoreSource("screen") },
+            sources.camera && inScene("camera") && { key: "camera", label: "Camera", icon: ic.cam, device: "camera", remove: () => removeCoreSource("camera") },
+            overlayActive && inScene("overlay") && { key: "alerts", label: "Overlay", icon: ic.link, remove: () => removeCoreSource("overlay") },
             // Audio is a source, like OBS: the picker lives here, the fader
             // lives in the mixer.
             sources.mic && { key: "mic", label: "Microphone", icon: ic.mic, device: "mic", audio: true, remove: () => setSrc({ mic: false }) },
@@ -4099,11 +4165,7 @@ export function LiveView({
             // exactly what slots replaced.
             ...liveItems
               .filter((i) => !["screen", "camera", "overlay"].includes(i.id) && i.kind !== "guest")
-              // Membership: a scene with a look lists only its own sources.
-              .filter((i) => {
-                const sc = scenes.find((x) => x.id === activeScene);
-                return !sc?.look || Object.keys(sc.look).length === 0 || i.id in sc.look;
-              })
+              .filter((i) => inScene(i.id))
               .map((i) => ({
                 key: i.id,
                 label: i.label || i.kind,
@@ -5279,7 +5341,10 @@ export function LiveView({
                   <button
                     className={`stg-btn${cam.visible ? "" : " off"}`}
                     title={cam.visible ? "Hide camera" : "Show camera"}
-                    onClick={() => ipc.liveSetTransform("camera", { visible: !cam.visible }, true).catch(() => {})}
+                    onClick={() => {
+                      ipc.liveSetTransform("camera", { visible: !cam.visible }, true).catch(() => {});
+                      captureActiveLook();
+                    }}
                   >
                     {ic.cam}
                   </button>
@@ -5291,7 +5356,10 @@ export function LiveView({
                   <button
                     className={`stg-btn${scr.visible ? "" : " off"}`}
                     title={scr.visible ? "Hide screen" : "Show screen"}
-                    onClick={() => ipc.liveSetTransform("screen", { visible: !scr.visible }, true).catch(() => {})}
+                    onClick={() => {
+                      ipc.liveSetTransform("screen", { visible: !scr.visible }, true).catch(() => {});
+                      captureActiveLook();
+                    }}
                   >
                     {ic.screen}
                   </button>
