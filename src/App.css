@@ -8169,3 +8169,4 @@ button.ks-key:hover { border-color: var(--line-2); }
 .deal-sheet-acts .net-accept, .deal-sheet-acts .net-decline { height: 34px; font-size: 13px; }
 .deal-sheet-acts > .net-decline:only-child { grid-column: 1 / -1; }
 .hd-link { gap: 6px; }
+.net-decline.danger { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, transparent); }

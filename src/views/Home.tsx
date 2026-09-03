@@ -1526,7 +1526,9 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
           ? "Accepted. They fund it in Boomin; the escrow shows here once it lands."
           : r.deal.status === "declined"
             ? "Declined."
-            : `Deal ${r.deal.status}.`,
+            : r.deal.status === "cancelled"
+              ? action === "cancel" && !r.deal.funded_at ? "Withdrawn." : "Cancelled."
+              : `Deal ${r.deal.status}.`,
       );
       void load(endpointId);
     } catch (e) {
@@ -1927,7 +1929,7 @@ function DealSheet({
   deal: NetworkDeal;
   otherName: string;
   busy: boolean;
-  onAct: (a: "accept" | "decline") => void;
+  onAct: (a: "accept" | "decline" | "cancel") => void;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -1938,6 +1940,7 @@ function DealSheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   const earn = d.role === "beneficiary";
+  const [confirmWithdraw, setConfirmWithdraw] = useState(false);
   const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
   const feeBps = d.platform_fee_bps ?? 1000;
   const feeCents = d.platform_fee_cents ?? Math.floor((d.amount_cents * feeBps) / 10_000);
@@ -1989,6 +1992,23 @@ function DealSheet({
             <>
               <button className="net-accept" disabled={busy} onClick={() => onAct("accept")}>Accept {usd(d.amount_cents)}</button>
               <button className="net-decline" disabled={busy} onClick={() => onAct("decline")}>Decline</button>
+            </>
+          ) : !earn && d.status === "proposed" ? (
+            confirmWithdraw ? (
+              <>
+                <button className="net-decline danger" disabled={busy} onClick={() => onAct("cancel")}>Yes, withdraw it</button>
+                <button className="net-decline" onClick={() => setConfirmWithdraw(false)}>Keep it</button>
+              </>
+            ) : (
+              <>
+                <button className="net-decline" onClick={() => setConfirmWithdraw(true)}>Withdraw proposal</button>
+                <button className="net-decline" onClick={onClose}>Close</button>
+              </>
+            )
+          ) : !earn && d.status === "accepted" ? (
+            <>
+              <button className="net-decline" disabled={busy} onClick={() => onAct("cancel")}>Cancel deal</button>
+              <button className="net-decline" onClick={onClose}>Close</button>
             </>
           ) : (
             <button className="net-decline" onClick={onClose}>Close</button>
