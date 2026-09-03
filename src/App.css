@@ -6623,24 +6623,12 @@ textarea::placeholder {
  * icon, no controls — they float in over the right edge on hover, so the
  * name keeps its full width until you reach for it. */
 @container panel (max-width: 320px) {
-  .rm-panel-sources .rm-row { position: relative; }
-  .rm-panel-sources .rm-row .rm-row-icon { display: none; }
+  /* At rest: icon + title, nothing else. On hover: the icon DROPS and every
+   * control takes its place, in flow — grip, filters, settings, eye, ✕. */
   .rm-panel-sources .rm-row .rm-row-name { flex: 1; min-width: 0; }
   .rm-panel-sources .rm-row .rm-row-edit { display: none; }
-  .rm-panel-sources .rm-row:hover .rm-row-edit {
-    display: inline-flex;
-  }
-  .rm-panel-sources .rm-row:hover .rm-row-name {
-    /* leave room for the floating controls */
-    padding-right: 96px;
-  }
-  .rm-panel-sources .rm-row:hover > .rm-row-edit {
-    position: absolute;
-    right: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: var(--surface-3);
-  }
+  .rm-panel-sources .rm-row:hover .rm-row-icon { display: none; }
+  .rm-panel-sources .rm-row:hover .rm-row-edit { display: inline-flex; }
 }
 
 /* Guests in a ROW dock (bottom, or an expanded top): people side by side,
@@ -6787,17 +6775,13 @@ textarea::placeholder {
 /* Grips appear on hover; the name gets the row until you reach for it. */
 .rm-panel[data-in="left"] .rm-row-grip,
 .rm-panel[data-in="right"] .rm-row-grip {
-  width: 0;
-  margin-right: 0;
-  opacity: 0;
-  overflow: hidden;
-  transition: width 0.14s ease, opacity 0.14s ease;
+  /* display, not width 0: a zero-width flex item still owns a gap, which
+   * left grip-less rows (Microphone) sitting further left than the rest. */
+  display: none;
 }
 .rm-panel[data-in="left"] .rm-row:hover .rm-row-grip,
 .rm-panel[data-in="right"] .rm-row:hover .rm-row-grip {
-  width: 14px;
-  margin-right: 2px;
-  opacity: 1;
+  display: inline-flex;
 }
 .rm-panel[data-in="left"] .rm-row-name,
 .rm-panel[data-in="right"] .rm-row-name {
