@@ -131,11 +131,19 @@ fn enum_ids(f: unsafe extern "C" fn(usize, *mut *const c_char) -> bool) -> Vec<S
 /// chooses the backend; this maps its recorded name back to a module.
 #[cfg(target_os = "macos")]
 fn graphics_module(backend: Option<&str>) -> &'static str {
-    if backend == Some("metal") { "libobs-metal.dylib" } else { "libobs-opengl.dylib" }
+    if backend == Some("metal") {
+        "libobs-metal.dylib"
+    } else {
+        "libobs-opengl.dylib"
+    }
 }
 #[cfg(target_os = "windows")]
 fn graphics_module(backend: Option<&str>) -> &'static str {
-    if backend == Some("d3d11") { "libobs-d3d11.dll" } else { "libobs-opengl.dll" }
+    if backend == Some("d3d11") {
+        "libobs-d3d11.dll"
+    } else {
+        "libobs-opengl.dll"
+    }
 }
 
 fn reset_video(module: &str, height: u32, fps: u32) -> Result<(), i32> {
@@ -179,11 +187,19 @@ pub fn bootstrap() -> EngineReport {
 pub fn stored_video(dir: Option<&std::path::Path>) -> (u32, u32) {
     let fallback = (720u32, 30u32);
     let Some(dir) = dir else { return fallback };
-    let Ok(txt) = std::fs::read_to_string(dir.join("video.json")) else { return fallback };
-    let Ok(v) = serde_json::from_str::<serde_json::Value>(&txt) else { return fallback };
+    let Ok(txt) = std::fs::read_to_string(dir.join("video.json")) else {
+        return fallback;
+    };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&txt) else {
+        return fallback;
+    };
     let h = v.get("h").and_then(|x| x.as_u64()).unwrap_or(720) as u32;
     let f = v.get("f").and_then(|x| x.as_u64()).unwrap_or(30) as u32;
-    if (h == 720 || h == 1080) && (f == 30 || f == 60) { (h, f) } else { fallback }
+    if (h == 720 || h == 1080) && (f == 30 || f == 60) {
+        (h, f)
+    } else {
+        fallback
+    }
 }
 
 pub fn persist_video(dir: &std::path::Path, h: u32, f: u32) {
@@ -404,7 +420,9 @@ pub enum FilterOp {
 }
 
 pub enum Command {
-    SetThumbRate { fps: u32 },
+    SetThumbRate {
+        fps: u32,
+    },
     GoLive(MultiConfig),
     StopLive,
     SetSources {
@@ -513,7 +531,6 @@ pub enum Command {
     DetachPreview,
     Shutdown,
 }
-
 
 /// Variant name for the engine-loop stall log (no reflection in Rust).
 fn cmd_name(c: &Command) -> &'static str {
@@ -920,25 +937,21 @@ impl Preview {
                 &mut px_h,
             );
             {
-
                 let ms = t_shim.elapsed().as_millis();
 
                 if ms > 150 {
-
                     if let Some(dir) = crate::live::report_dir() {
-
                         use std::io::Write;
 
-                        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("slow-cmds.log")) {
-
+                        if let Ok(mut f) = std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(dir.join("slow-cmds.log"))
+                        {
                             let _ = f.write_all(format!("shim-attach {ms}ms\n").as_bytes());
-
                         }
-
                     }
-
                 }
-
             }
             if view.is_null() {
                 return Err("NSView creation failed".into());
@@ -1074,7 +1087,8 @@ pub fn start(
                 let mut jpg: Vec<u8> = Vec::with_capacity(32 * 1024);
                 let mut scratch: Vec<u8> = Vec::new();
                 #[cfg(debug_assertions)]
-                let mut dumped: std::collections::HashSet<String> = std::collections::HashSet::new();
+                let mut dumped: std::collections::HashSet<String> =
+                    std::collections::HashSet::new();
                 loop {
                     {
                         let flag = hub.wake_flag.lock().unwrap();
@@ -1121,10 +1135,8 @@ pub fn start(
                             #[cfg(debug_assertions)]
                             if dumped.insert(id.clone()) {
                                 let _ = std::fs::create_dir_all("/tmp/producer-thumbs");
-                                let _ = std::fs::write(
-                                    format!("/tmp/producer-thumbs/{id}.jpg"),
-                                    &jpg,
-                                );
+                                let _ =
+                                    std::fs::write(format!("/tmp/producer-thumbs/{id}.jpg"), &jpg);
                             }
                             thumbs.push(GuestThumb {
                                 id: id.clone(),

@@ -332,7 +332,10 @@ pub async fn room_guest_invite(
     if let Ok(v) = &res {
         // The invite link is issued once. Log its shape so a renamed field
         // can never silently cost a real link again.
-        eprintln!("[guest] invite response keys: {:?}", v.as_object().map(|o| o.keys().collect::<Vec<_>>()));
+        eprintln!(
+            "[guest] invite response keys: {:?}",
+            v.as_object().map(|o| o.keys().collect::<Vec<_>>())
+        );
     }
     res
 }
@@ -350,7 +353,10 @@ pub async fn network_connections(
 }
 
 #[tauri::command]
-pub async fn network_status(state: State<'_, AppState>, endpoint_id: String) -> EngineResult<Value> {
+pub async fn network_status(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+) -> EngineResult<Value> {
     let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
     ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)

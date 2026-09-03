@@ -308,7 +308,9 @@ impl ProducerClient {
     pub async fn network_invitations(&self, direction: &str) -> EngineResult<Value> {
         let resp = self
             .http
-            .get(self.root_url(&format!("/v1/app/network/invitations?direction={direction}")))
+            .get(self.root_url(&format!(
+                "/v1/app/network/invitations?direction={direction}"
+            )))
             .bearer_auth(&self.token)
             .send()
             .await?;
@@ -323,7 +325,11 @@ impl ProducerClient {
     /// Invite by SLUG. Slugs are unique platform-wide, so they address a brand
     /// on their own — resolution happens server-side, which also avoids
     /// handing out a slug-existence oracle.
-    pub async fn network_invite(&self, to_slug: &str, message: Option<String>) -> EngineResult<Value> {
+    pub async fn network_invite(
+        &self,
+        to_slug: &str,
+        message: Option<String>,
+    ) -> EngineResult<Value> {
         let mut body = serde_json::Map::new();
         body.insert("to_slug".into(), Value::String(to_slug.to_string()));
         if let Some(m) = message {
@@ -454,7 +460,11 @@ impl ProducerClient {
     }
 
     /// Network exposure of a SERVER room: private | connections | public.
-    pub async fn room_set_visibility(&self, room_id: &str, visibility: &str) -> EngineResult<Value> {
+    pub async fn room_set_visibility(
+        &self,
+        room_id: &str,
+        visibility: &str,
+    ) -> EngineResult<Value> {
         let resp = self
             .http
             .patch(self.root_url(&format!("/v1/app/live/rooms/{room_id}")))

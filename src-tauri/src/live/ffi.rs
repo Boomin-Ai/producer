@@ -137,7 +137,11 @@ extern "C" {
     pub fn gs_stagesurface_create(width: u32, height: u32, format: c_int) -> *mut c_void;
     pub fn gs_stagesurface_destroy(stagesurf: *mut c_void);
     pub fn gs_stage_texture(stagesurf: *mut c_void, texture: *mut c_void);
-    pub fn gs_stagesurface_map(stagesurf: *mut c_void, data: *mut *mut u8, linesize: *mut u32) -> bool;
+    pub fn gs_stagesurface_map(
+        stagesurf: *mut c_void,
+        data: *mut *mut u8,
+        linesize: *mut u32,
+    ) -> bool;
     pub fn gs_stagesurface_unmap(stagesurf: *mut c_void);
     pub fn gs_clear(clear_flags: u32, color: *const vec4, depth: f32, stencil: u8);
     pub fn obs_add_main_render_callback(

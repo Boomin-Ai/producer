@@ -49,7 +49,9 @@ fn row_from_db(r: &rusqlite::Row<'_>) -> rusqlite::Result<DestinationRow> {
 }
 
 #[tauri::command]
-pub async fn live_list_destinations(state: State<'_, AppState>) -> EngineResult<Vec<DestinationRow>> {
+pub async fn live_list_destinations(
+    state: State<'_, AppState>,
+) -> EngineResult<Vec<DestinationRow>> {
     let conn = state.db.lock().expect("db mutex poisoned");
     let mut stmt = conn.prepare(
         "SELECT id, preset, label, server, enabled, created_at FROM live_destinations ORDER BY created_at",
@@ -489,7 +491,10 @@ pub async fn live_play_stinger(state: State<'_, AppState>, path: String) -> Engi
 /// Start recording. The stamp comes from the UI so the engine owns no clock;
 /// returns the file path it's writing.
 #[tauri::command]
-pub async fn live_start_recording(state: State<'_, AppState>, stamp: String) -> EngineResult<String> {
+pub async fn live_start_recording(
+    state: State<'_, AppState>,
+    stamp: String,
+) -> EngineResult<String> {
     state
         .live
         .start_recording(stamp)
@@ -516,8 +521,15 @@ pub async fn live_reveal_file(path: String) -> EngineResult<()> {
 /// update. Every call answers with the chain's new state so the UI never has
 /// to model it separately.
 #[tauri::command]
-pub async fn live_set_sync_offset(state: State<'_, AppState>, id: String, ms: i64) -> EngineResult<()> {
-    state.live.set_sync_offset(id, ms).map_err(EngineError::Other)
+pub async fn live_set_sync_offset(
+    state: State<'_, AppState>,
+    id: String,
+    ms: i64,
+) -> EngineResult<()> {
+    state
+        .live
+        .set_sync_offset(id, ms)
+        .map_err(EngineError::Other)
 }
 
 #[tauri::command]
@@ -534,7 +546,11 @@ pub async fn live_set_source_audio(
 }
 
 #[tauri::command]
-pub async fn live_set_opacity(state: State<'_, AppState>, id: String, opacity: f64) -> EngineResult<()> {
+pub async fn live_set_opacity(
+    state: State<'_, AppState>,
+    id: String,
+    opacity: f64,
+) -> EngineResult<()> {
     state
         .live
         .set_item_opacity(id, opacity)
