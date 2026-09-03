@@ -356,6 +356,14 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
     #[cfg(target_os = "windows")]
     let _engine_root = windows_engine_root();
     #[cfg(target_os = "windows")]
+    if let Some(root) = _engine_root.as_ref() {
+        // The DirectShow virtual camera modules ride in the engine's plugin data.
+        let dir = root.join("data").join("obs-plugins").join("win-dshow");
+        if let Ok(c) = CString::new(dir.to_string_lossy().into_owned()) {
+            unsafe { ffi::producer_vcam_set_module_dir(c.as_ptr()) };
+        }
+    }
+    #[cfg(target_os = "windows")]
     match _engine_root.as_ref() {
         Some(root) => {
             // TRAILING SLASH IS LOAD-BEARING. libobs's check_path() does

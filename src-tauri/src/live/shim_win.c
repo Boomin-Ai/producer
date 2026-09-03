@@ -137,7 +137,7 @@ static void ensure_class(void)
     wc.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
     wc.lpfnWndProc = preview_wndproc;
     wc.hInstance = GetModuleHandleW(NULL);
-    wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
+    wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
     wc.lpszClassName = PRODUCER_PREVIEW_CLASS;
     g_preview_class = RegisterClassExW(&wc);
 }
@@ -395,25 +395,114 @@ void producer_open_mic_settings(void)
  * producer_vcam_installed reports 0 until the win-dshow virtual camera ships —
  * the last rung of the ladder. Reporting 1 would make the UI offer a button
  * that silently does nothing, which is worse than an honestly absent feature. */
-void producer_vcam_activate(void) {}
 
-/* CONTRACT: the return value is the STATE CODE and buf receives an ERROR
- * STRING — not, as a first pass here assumed, a JSON blob. Writing JSON into
- * buf made vcam_status() read its length (22) as the state, fall through to
- * "idle", and surface the JSON as an error; the UI then offered an Install
- * button wired to a no-op. 5 is the Windows-only "unsupported" code, added to
- * the match in live/mod.rs, and the buffer stays empty because there is no
- * error to report — the feature simply does not exist here yet. */
-int producer_vcam_state(char *buf, int len)
+/* ── Virtual camera ────────────────────────────────────────────────────────
+ * On Windows the virtual camera is win-dshow's DirectShow source filter,
+ * obs-virtualcam-module64.dll (and the 32-bit twin for 32-bit apps), shipped
+ * in data/obs-plugins/win-dshow and registered as a COM server with
+ * regsvr32 -- exactly what OBS's own virtualcam-install.bat does. Registration
+ * writes HKCR\CLSID\{VIRTUALCAM_GUID}, so "installed" is a registry probe and
+ * "activate" is an elevated regsvr32 (UAC prompt), tracked through the same
+ * state codes the macOS system-extension flow reports:
+ *   0 idle  1 requested  3 active  4 failed  (5 = unsupported, unused now) */
+#include <shellapi.h>
+
+#define PRODUCER_VCAM_CLSID L"{A3FCE0F5-3493-419F-958A-ABA1250EC20B}" /* VIRTUALCAM_GUID in the preset */
+
+static wchar_t g_vcam_dir[MAX_PATH] = L"";
+static int g_vcam_state = 0;
+static char g_vcam_error[256] = "";
+
+/* Rust hands us <engine>/data/obs-plugins/win-dshow at boot. */
+void producer_vcam_set_module_dir(const char *dir)
 {
-    if (buf && len > 0)
-        buf[0] = 0; /* NUL terminator: no error to report */
-    return 5;
+    if (!dir) {
+        g_vcam_dir[0] = 0;
+        return;
+    }
+    MultiByteToWideChar(CP_UTF8, 0, dir, -1, g_vcam_dir, MAX_PATH);
+}
+
+static int vcam_registered(void)
+{
+    HKEY key;
+    if (RegOpenKeyExW(HKEY_CLASSES_ROOT, L"CLSID\\" PRODUCER_VCAM_CLSID, 0, KEY_READ, &key) == ERROR_SUCCESS) {
+        RegCloseKey(key);
+        return 1;
+    }
+    return 0;
 }
 
 int producer_vcam_installed(void)
 {
-    return 0;
+    return vcam_registered();
+}
+
+/* regsvr32 /s <dll>, elevated. Blocks until regsvr32 exits so the result is
+ * known synchronously; the UI already treats activate as a long call. */
+static int regsvr32(const wchar_t *dll)
+{
+    wchar_t args[MAX_PATH + 16];
+    _snwprintf_s(args, MAX_PATH + 16, _TRUNCATE, L"/i /s \"%s\"", dll);
+    SHELLEXECUTEINFOW sei = {0};
+    sei.cbSize = sizeof(sei);
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI;
+    sei.lpVerb = L"runas";
+    sei.lpFile = L"regsvr32.exe";
+    sei.lpParameters = args;
+    sei.nShow = SW_HIDE;
+    if (!ShellExecuteExW(&sei) || !sei.hProcess)
+        return 0; /* UAC declined or launch failed */
+    WaitForSingleObject(sei.hProcess, 60000);
+    DWORD code = 1;
+    GetExitCodeProcess(sei.hProcess, &code);
+    CloseHandle(sei.hProcess);
+    return code == 0;
+}
+
+void producer_vcam_activate(void)
+{
+    g_vcam_error[0] = 0;
+    if (vcam_registered()) {
+        g_vcam_state = 3;
+        return;
+    }
+    if (!g_vcam_dir[0]) {
+        g_vcam_state = 4;
+        snprintf(g_vcam_error, sizeof(g_vcam_error), "virtual camera module directory unknown");
+        return;
+    }
+    g_vcam_state = 1;
+    wchar_t dll64[MAX_PATH], dll32[MAX_PATH];
+    _snwprintf_s(dll64, MAX_PATH, _TRUNCATE, L"%s\obs-virtualcam-module64.dll", g_vcam_dir);
+    _snwprintf_s(dll32, MAX_PATH, _TRUNCATE, L"%s\obs-virtualcam-module32.dll", g_vcam_dir);
+    if (GetFileAttributesW(dll64) == INVALID_FILE_ATTRIBUTES) {
+        g_vcam_state = 4;
+        snprintf(g_vcam_error, sizeof(g_vcam_error), "obs-virtualcam-module64.dll is not in the engine");
+        return;
+    }
+    if (!regsvr32(dll64)) {
+        g_vcam_state = 4;
+        snprintf(g_vcam_error, sizeof(g_vcam_error), "registration was declined or failed (64-bit)");
+        return;
+    }
+    /* the 32-bit module is optional: it serves 32-bit apps only */
+    if (GetFileAttributesW(dll32) != INVALID_FILE_ATTRIBUTES)
+        regsvr32(dll32);
+    g_vcam_state = vcam_registered() ? 3 : 4;
+    if (g_vcam_state == 4)
+        snprintf(g_vcam_error, sizeof(g_vcam_error), "regsvr32 succeeded but the CLSID is not registered");
+}
+
+int producer_vcam_state(char *buf, int len)
+{
+    if (buf && len > 0) {
+        strncpy_s(buf, (size_t)len, g_vcam_error, _TRUNCATE);
+    }
+    /* a filter registered by an earlier run is active without a request */
+    if (g_vcam_state == 0 && vcam_registered())
+        g_vcam_state = 3;
+    return g_vcam_state;
 }
 
 /* macOS drag affordance; no Windows counterpart yet. */

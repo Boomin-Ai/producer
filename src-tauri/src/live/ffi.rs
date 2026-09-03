@@ -431,6 +431,8 @@ extern "C" {
     pub fn producer_open_camera_settings();
     /// Virtual camera (R13): ask macOS to install the bundled CMIO extension.
     pub fn producer_vcam_activate();
+    #[cfg(target_os = "windows")]
+    pub fn producer_vcam_set_module_dir(dir: *const c_char);
     /// 0 idle, 1 requested, 2 needs approval, 3 active, 4 failed; fills `buf`
     /// with the last error.
     pub fn producer_vcam_state(buf: *mut c_char, len: c_int) -> c_int;
