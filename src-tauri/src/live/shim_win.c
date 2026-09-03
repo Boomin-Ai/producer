@@ -222,16 +222,21 @@ void producer_preview_detach(void *view_ptr)
 }
 
 /* macOS-only: prepares the window for the transparent-hole preview mode. */
-/* EXPERIMENT (transparent-hole mode on Windows): tauri.windows.conf.json makes
- * the window and WebView2 transparent; the room punches a CSS hole at the stage
- * and, with this returning 1, places the preview BELOW the webview so the UI
- * (handles, toasts, outlines) draws over the video instead of vanishing behind
- * it. Whether a sibling child HWND shows through a transparent WebView2 is the
- * question this answers empirically. */
+/* FLOAT MODE ONLY, and now known why. The transparent-hole mode was tried:
+ * tauri.windows.conf.json transparent + the room's CSS hole + this returning 1
+ * to place the preview BELOW the webview. A transparent WebView2 reveals the
+ * DESKTOP behind the top-level window, not a sibling child HWND beneath it --
+ * DWM composes the webview's visual over the window, and sibling children are
+ * not part of what shows through -- and the room's transparent chain made the
+ * whole app see-through. So the preview stays ABOVE the webview, mouse input is
+ * forwarded down (preview_wndproc), and the stage rect is inset by the outline
+ * width so item outlines at the stage edge stay visible. A real hole needs
+ * WebView2 composition hosting (the preview as a DComp visual in the same
+ * tree), which is a wry/tauri-level change. */
 int producer_preview_prepare_window(void *ns_window)
 {
     (void)ns_window;
-    return 1;
+    return 0;
 }
 
 /* macOS-only by design — see the header note. */
