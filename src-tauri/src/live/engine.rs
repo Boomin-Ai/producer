@@ -512,6 +512,40 @@ pub enum Command {
     Shutdown,
 }
 
+
+/// Variant name for the engine-loop stall log (no reflection in Rust).
+fn cmd_name(c: &Command) -> &'static str {
+    match c {
+        Command::SetThumbRate { .. } => "SetThumbRate",
+        Command::GoLive { .. } => "GoLive",
+        Command::StopLive { .. } => "StopLive",
+        Command::SetSources { .. } => "SetSources",
+        Command::SetMicAudio { .. } => "SetMicAudio",
+        Command::SetTransform { .. } => "SetTransform",
+        Command::ListDevices { .. } => "ListDevices",
+        Command::PlayStinger { .. } => "PlayStinger",
+        Command::StartRecording { .. } => "StartRecording",
+        Command::StopRecording { .. } => "StopRecording",
+        Command::SetSyncOffset { .. } => "SetSyncOffset",
+        Command::SetSourceAudio { .. } => "SetSourceAudio",
+        Command::SetItemOpacity { .. } => "SetItemOpacity",
+        Command::Filters { .. } => "Filters",
+        Command::PrepareStinger { .. } => "PrepareStinger",
+        Command::StopStinger { .. } => "StopStinger",
+        Command::SetVirtualCam { .. } => "SetVirtualCam",
+        Command::SetDevice { .. } => "SetDevice",
+        Command::AddExtra { .. } => "AddExtra",
+        Command::RemoveExtra { .. } => "RemoveExtra",
+        Command::SetVideo { .. } => "SetVideo",
+        Command::SetOverlay { .. } => "SetOverlay",
+        Command::AttachPreview { .. } => "AttachPreview",
+        Command::MovePreview { .. } => "MovePreview",
+        Command::SetPreviewHidden { .. } => "SetPreviewHidden",
+        Command::DetachPreview { .. } => "DetachPreview",
+        Command::Shutdown { .. } => "Shutdown",
+    }
+}
+
 /// CSS-point rect of the preview area, top-left origin, webview coordinates.
 #[derive(Debug, Clone, Copy, serde::Deserialize)]
 pub struct PreviewRect {
@@ -1189,7 +1223,24 @@ pub fn start(
                 }
             };
 
+            // Stall log: any loop iteration over 150ms is written with the
+            // command it was handling (or "idle"). The frame probe showed the
+            // loop asleep for ~4.6s during room open — this names the sleeper.
+            let mut iter_prev: Option<(Instant, &'static str)> = None;
             loop {
+                if let Some((t0, label)) = iter_prev.take() {
+                    let ms = t0.elapsed().as_millis();
+                    if ms > 150 {
+                        if let Some(dir) = module_config_dir.parent() {
+                            use std::io::Write;
+                            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("slow-cmds.log")) {
+                                let _ = f.write_all(format!("{} {} {}ms\n", probe_t0.elapsed().as_millis(), label, ms).as_bytes());
+                            }
+                        }
+                    }
+                }
+                let iter_t0 = Instant::now();
+                let mut iter_label: &'static str = "idle";
                 // Performance is sampled whether or not a session is running:
                 // FPS and CPU tell you the machine is struggling BEFORE you go
                 // live, which is when the information is still actionable.
@@ -1255,7 +1306,12 @@ pub fn start(
                 }
 
                 // 120ms tick: meters want ~8Hz; command latency stays low.
-                match cmd_rx.recv_timeout(Duration::from_millis(120)) {
+                let received = cmd_rx.recv_timeout(Duration::from_millis(120));
+                if let Ok(c) = &received {
+                    iter_label = cmd_name(c);
+                }
+                iter_prev = Some((iter_t0, iter_label));
+                match received {
                     Ok(Command::GoLive(config)) => {
                         if session.is_some() {
                             sink(&LiveEvent::EngineError {
