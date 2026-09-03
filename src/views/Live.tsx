@@ -1097,10 +1097,14 @@ function PreviewPanel({ children }: { children?: ReactNode }) {
   const attached = useRef(false);
 
   useEffect(() => {
+    // Coalesced on a MACROTASK, not an animation frame: once the native
+    // preview sits over the webview WebKit may deem the page occluded and
+    // halt rAF — a dock resize would then leave the stage misplaced until
+    // frames resume. Timers keep running.
     let raf = 0;
     const sync = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(async () => {
+      window.clearTimeout(raf);
+      raf = window.setTimeout(async () => {
         const el = ref.current;
         if (!el) return;
         const r = el.getBoundingClientRect();
@@ -1118,7 +1122,7 @@ function PreviewPanel({ children }: { children?: ReactNode }) {
         } catch {
           // engine not ready yet; retry on next layout change
         }
-      });
+      }, 0);
     };
     sync();
     const ro = new ResizeObserver(sync);
@@ -1126,7 +1130,7 @@ function PreviewPanel({ children }: { children?: ReactNode }) {
     window.addEventListener("resize", sync);
     window.addEventListener("scroll", sync, true);
     return () => {
-      cancelAnimationFrame(raf);
+      window.clearTimeout(raf);
       ro.disconnect();
       window.removeEventListener("resize", sync);
       window.removeEventListener("scroll", sync, true);
@@ -1899,6 +1903,9 @@ export function LiveView({
   // engineOk means the ENGINE booted — the room is configured only after the
   // stored video mode is applied and the pending scene has been laid out.
   const [sceneSettled, setSceneSettled] = useState(false);
+  /** The room DOCUMENT has been pushed to the engine. Before this, "no
+   * pending scene" means nothing — it is simply too early to know. */
+  const [docApplied, setDocApplied] = useState(false);
   /** Mount instrumentation: wall-clock from mount to each gate. The footer
    * shows the total so every build proves (or disproves) a speedup. */
   const mountT0 = useRef(performance.now());
@@ -2767,6 +2774,7 @@ export function LiveView({
       }
       const mount = parseConfig(room.config).active_scene;
       if (mount) setPendingScene(mount);
+      setDocApplied(true);
       // Warm the stinger the room already uses, so the first cut is instant.
       const cfgNow = parseConfig(room.config);
       const firstStinger =
@@ -2961,12 +2969,13 @@ export function LiveView({
   }, [engineOk]);
   useEffect(() => {
     if (!engineOk || !sceneSettled || !mountVeil) return;
-    // Lift on the frame AFTER the settled state paints — the first frame the
-    // user sees is the finished room, and not one tick later than that.
+    // Lift on a MACROTASK, never an animation frame: WebKit halts rAF while
+    // it deems the view occluded, and the native Metal preview attaches over
+    // the webview right here — measured: main thread free (stall 3ms), rAF
+    // starved for 5.1s. Timers keep running; readiness rides them.
     mark("settled");
-    let raf2 = 0;
-    const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
+    const t = window.setTimeout(() => {
+      {
         setMountVeil(false);
         mark("veil");
         const m = mountMarks.current;
@@ -2979,12 +2988,9 @@ export function LiveView({
         };
         console.info("[room] mount timings ms", report);
         roomOpenReport(report).catch(() => {});
-      });
-    });
-    return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
-    };
+      }
+    }, 0);
+    return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engineOk, sceneSettled, mountVeil]);
   // Hard cap: a wedged step may never trap the user behind the veil.
@@ -3512,7 +3518,7 @@ export function LiveView({
 
   // Mount the room into its saved scene once the engine can take it.
   useEffect(() => {
-    if (!engineOk) return;
+    if (!engineOk || !docApplied) return;
     if (!pendingScene) {
       setSceneSettled(true);
       return;
@@ -3544,7 +3550,7 @@ export function LiveView({
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingScene, engineOk]);
+  }, [pendingScene, engineOk, docApplied]);
 
 
   const setVolume = (v: number) => {
