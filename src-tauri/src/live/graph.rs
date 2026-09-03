@@ -599,10 +599,8 @@ pub fn device_picker_spec(kind: &str) -> Option<(&'static str, &'static [&'stati
 /// that serves us. Renaming it means our own VIRTUALCAM_GUID plus a patch to the
 /// module; until then the label must be the truth, because the guest render
 /// page finds the device BY LABEL.
-/// Identical on both platforms: macOS bakes it into the camera extension
-/// (build-camera-extension.sh), Windows patches it into the DirectShow filter
-/// (engine/patches/win-dshow). The guest page matches the device by this label.
-pub const VCAM_DEVICE_NAME: &str = "Producer Virtual Camera";
+/// Defined ungated in live/mod.rs (the no-engine build reports it too).
+pub use super::VCAM_DEVICE_NAME;
 
 fn drop_own_vcam(kind: &str, opts: Vec<DeviceOption>) -> Vec<DeviceOption> {
     if kind != "camera" {

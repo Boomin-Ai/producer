@@ -854,6 +854,9 @@ pub fn firstlight_resume(app: tauri::AppHandle, action: String) -> EngineResult<
 /// graphics thread reads on its next frame.
 #[tauri::command]
 pub fn live_set_selection(id: Option<String>) -> EngineResult<()> {
+    #[cfg(have_engine)]
     crate::live::engine::set_preview_selection(id.filter(|s| !s.is_empty()));
+    #[cfg(not(have_engine))]
+    let _ = id;
     Ok(())
 }

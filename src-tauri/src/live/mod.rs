@@ -4,6 +4,12 @@
 
 pub mod commands;
 pub mod creds;
+
+/// The virtual camera's label, identical on both platforms: macOS bakes it
+/// into the camera extension (build-camera-extension.sh), Windows patches it
+/// into the DirectShow filter (engine/patches/win-dshow). The guest page
+/// matches the device by this label. Ungated: the no-engine build reports it.
+pub const VCAM_DEVICE_NAME: &str = "Producer Virtual Camera";
 #[cfg(have_engine)]
 pub mod engine;
 #[cfg(have_engine)]
@@ -553,13 +559,13 @@ pub fn vcam_status() -> serde_json::Value {
                 _ => "idle",
             },
             "installed": installed,
-            "device_name": graph::VCAM_DEVICE_NAME,
+            "device_name": VCAM_DEVICE_NAME,
             // every string that can reach a user passes through user_facing
             "error": if err.is_empty() { serde_json::Value::Null } else { serde_json::Value::from(engine::user_facing(&err)) },
         });
     }
     #[cfg(not(have_engine))]
-    serde_json::json!({ "state": "unavailable", "installed": false, "device_name": graph::VCAM_DEVICE_NAME, "error": null })
+    serde_json::json!({ "state": "unavailable", "installed": false, "device_name": VCAM_DEVICE_NAME, "error": null })
 }
 
 pub fn vcam_activate() {
@@ -649,9 +655,11 @@ pub fn report_dir() -> Option<PathBuf> {
 /// HWND created on the engine thread hangs the UI the moment anything sends it
 /// a message --- which is what "Producer (Not Responding)" looked like.
 pub(crate) static MAIN_APP: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
+#[cfg(have_engine)]
 pub(crate) static MAIN_THREAD: std::sync::OnceLock<std::thread::ThreadId> =
     std::sync::OnceLock::new();
 
+#[cfg(have_engine)]
 pub fn init(app: tauri::AppHandle, report_dir: PathBuf) -> Live {
     let _ = REPORT_DIR.set(report_dir.clone());
     use tauri::Emitter;
