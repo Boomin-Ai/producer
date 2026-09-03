@@ -487,6 +487,16 @@ void producer_vcam_activate(void)
 {
     g_vcam_error[0] = 0;
     if (vcam_registered()) {
+        /* Riding an existing registration (typically OBS Studio's) means an OBS
+         * update can swap the filter binary under us; say whose DLL served. */
+        HKEY k;
+        if (RegOpenKeyExW(HKEY_CLASSES_ROOT, L"CLSID\\" PRODUCER_VCAM_CLSID L"\\InprocServer32", 0, KEY_READ, &k) == ERROR_SUCCESS) {
+            wchar_t path[MAX_PATH] = L"";
+            DWORD sz = sizeof(path);
+            RegQueryValueExW(k, NULL, NULL, NULL, (LPBYTE)path, &sz);
+            RegCloseKey(k);
+            fwprintf(stderr, L"[vcam] already registered, served by %s\n", path);
+        }
         g_vcam_state = 3;
         return;
     }

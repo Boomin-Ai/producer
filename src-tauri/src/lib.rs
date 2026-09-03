@@ -139,6 +139,7 @@ pub fn run() {
             live::commands::live_set_mic_audio,
             live::commands::live_set_video,
             live::commands::live_set_transform,
+            live::commands::live_set_selection,
             live::commands::live_source_devices,
             live::commands::live_add_source,
             live::commands::live_remove_source,

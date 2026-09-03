@@ -1044,6 +1044,109 @@ struct Preview {
 
 static PREVIEW_DRAWS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+/// The stage item the room has selected, by source name, drawn natively as an
+/// outline + handles inside the preview. In float mode the preview HWND covers
+/// the stage, so anything the webview paints over the video is hidden --- OBS
+/// Studio draws its selection inside the display for the same reason.
+pub static PREVIEW_SELECTION: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+pub fn set_preview_selection(name: Option<String>) {
+    *PREVIEW_SELECTION.lock().unwrap() = name;
+}
+
+/// Draw the selected item's outline and eight handles in the base (canvas)
+/// coordinate space preview_draw already set up. 1-px line loops follow
+/// rotation; handles are small quads centred on corners and edge midpoints.
+#[cfg(target_os = "windows")]
+unsafe fn draw_selection(bw: f32, bh: f32, cx: u32, cy: u32) {
+    let Some(name) = PREVIEW_SELECTION.lock().unwrap().clone() else { return };
+    let scene_src = ffi::obs_get_output_source(0);
+    if scene_src.is_null() {
+        return;
+    }
+    let scene = ffi::obs_scene_from_source(scene_src);
+    let mut item: *mut ffi::obs_sceneitem_t = std::ptr::null_mut();
+    if !scene.is_null() {
+        // extras are named by their id; the built-ins by their labels
+        for cand in [name.clone(), capitalize(&name)] {
+            if let Ok(c) = CString::new(cand) {
+                item = ffi::obs_scene_find_source(scene, c.as_ptr());
+                if !item.is_null() {
+                    break;
+                }
+            }
+        }
+    }
+    ffi::obs_source_release(scene_src);
+    if item.is_null() {
+        return;
+    }
+    let mut m: ffi::matrix4 = std::mem::zeroed();
+    ffi::obs_sceneitem_get_box_transform(item, &mut m);
+    let xf = |px: f32, py: f32| -> (f32, f32) {
+        (m.x.x * px + m.y.x * py + m.t.x, m.x.y * px + m.y.y * py + m.t.y)
+    };
+    let corners = [xf(0.0, 0.0), xf(1.0, 0.0), xf(1.0, 1.0), xf(0.0, 1.0)];
+
+    let solid = ffi::obs_get_base_effect(3); // OBS_EFFECT_SOLID
+    if solid.is_null() {
+        return;
+    }
+    let c_color = CString::new("color").unwrap();
+    let c_tech = CString::new("Solid").unwrap();
+    let param = ffi::gs_effect_get_param_by_name(solid, c_color.as_ptr());
+    let tech = ffi::gs_effect_get_technique(solid, c_tech.as_ptr());
+    if param.is_null() || tech.is_null() {
+        return;
+    }
+    // Producer green (#22c55e), opaque.
+    let green = ffi::vec4 { x: 0.133, y: 0.773, z: 0.369, w: 1.0 };
+    ffi::gs_effect_set_vec4(param, &green);
+    // canvas px per display px, so handles keep a constant size on screen
+    let sx = bw / cx.max(1) as f32;
+    let sy = bh / cy.max(1) as f32;
+    let handle = 7.0f32;
+    let passes = ffi::gs_technique_begin(tech);
+    for i in 0..passes {
+        if !ffi::gs_technique_begin_pass(tech, i) {
+            continue;
+        }
+        // outline: two 1-px line loops, the second nudged, so it reads as 2 px
+        for nudge in [0.0f32, 1.0] {
+            ffi::gs_render_start(true);
+            for k in 0..=4 {
+                let (x, y) = corners[k % 4];
+                ffi::gs_vertex2f(x + nudge * sx, y + nudge * sy);
+            }
+            ffi::gs_render_stop(3); // GS_LINESTRIP
+        }
+        let mids = [
+            ((corners[0].0 + corners[1].0) / 2.0, (corners[0].1 + corners[1].1) / 2.0),
+            ((corners[1].0 + corners[2].0) / 2.0, (corners[1].1 + corners[2].1) / 2.0),
+            ((corners[2].0 + corners[3].0) / 2.0, (corners[2].1 + corners[3].1) / 2.0),
+            ((corners[3].0 + corners[0].0) / 2.0, (corners[3].1 + corners[0].1) / 2.0),
+        ];
+        for (x, y) in corners.iter().chain(mids.iter()) {
+            ffi::gs_matrix_push();
+            ffi::gs_matrix_translate3f(x - handle * sx / 2.0, y - handle * sy / 2.0, 0.0);
+            ffi::gs_matrix_scale3f(handle * sx, handle * sy, 1.0);
+            ffi::gs_draw_sprite(std::ptr::null_mut(), 0, 1, 1);
+            ffi::gs_matrix_pop();
+        }
+        ffi::gs_technique_end_pass(tech);
+    }
+    ffi::gs_technique_end(tech);
+}
+
+#[cfg(target_os = "windows")]
+fn capitalize(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+        None => String::new(),
+    }
+}
+
 extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, cx: u32, cy: u32) {
     // Diagnostic breadcrumb for the Windows port: proves the display's draw
     // callback runs at all, and at what size. Throttled so it cannot flood.

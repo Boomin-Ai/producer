@@ -127,6 +127,13 @@ extern "C" {
     pub fn obs_source_release(source: *mut obs_source_t);
     pub fn obs_get_output_source(channel: u32) -> *mut obs_source_t;
     pub fn obs_get_main_texture() -> *mut c_void;
+    pub fn obs_scene_from_source(source: *const obs_source_t) -> *mut c_void;
+    pub fn obs_scene_find_source(scene: *mut c_void, name: *const c_char) -> *mut obs_sceneitem_t;
+    pub fn obs_sceneitem_get_box_transform(item: *const obs_sceneitem_t, transform: *mut matrix4);
+    pub fn gs_render_start(b_new: bool);
+    pub fn gs_render_stop(mode: c_int);
+    pub fn gs_vertex2f(x: f32, y: f32);
+    pub fn gs_matrix_scale3f(x: f32, y: f32, z: f32);
     pub fn gs_get_color_space() -> c_int;
     pub fn gs_effect_set_texture(param: *mut c_void, val: *mut c_void);
     pub fn gs_enable_framebuffer_srgb(enable: bool);
@@ -324,6 +331,15 @@ pub struct vec4 {
     pub y: f32,
     pub z: f32,
     pub w: f32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct matrix4 {
+    pub x: vec4,
+    pub y: vec4,
+    pub z: vec4,
+    pub t: vec4,
 }
 
 #[repr(C)]

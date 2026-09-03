@@ -847,3 +847,13 @@ pub fn firstlight_resume(app: tauri::AppHandle, action: String) -> EngineResult<
         other => Err(EngineError::Other(format!("unknown resume action {other}"))),
     }
 }
+
+/// The stage item the room has selected (by item id), or null. Drawn natively
+/// inside the preview on Windows, where the float-mode preview window would
+/// otherwise hide the webview's outline. No engine hop: a shared value the
+/// graphics thread reads on its next frame.
+#[tauri::command]
+pub fn live_set_selection(id: Option<String>) -> EngineResult<()> {
+    crate::live::engine::set_preview_selection(id.filter(|s| !s.is_empty()));
+    Ok(())
+}
