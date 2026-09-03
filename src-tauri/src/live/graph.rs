@@ -120,11 +120,13 @@ extern "C" fn video_cb(_param: *mut c_void, _frame: *mut ffi::video_data) {
 #[cfg(target_os = "macos")]
 /// Run a closure on the macOS main thread (blocking) — used for the TCC
 /// preflight/request calls, which can present system UI.
+#[cfg(target_os = "macos")]
 struct MainCtx<F, T> {
     f: Option<F>,
     out: Option<T>,
 }
 
+#[cfg(target_os = "macos")]
 pub(crate) fn on_main_thread<T: Send, F: FnOnce() -> T + Send>(f: F) -> T {
     if unsafe { ffi::pthread_main_np() } == 1 {
         return f();
@@ -170,8 +172,10 @@ pub(crate) fn on_main_thread<T: Send, F: FnOnce() -> T + Send>(f: F) -> T {
 }
 
 /// Block duration of the last main-thread hop (ms), set by run_timed.
+#[cfg(target_os = "macos")]
 static MAIN_HOP_START: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+#[cfg(target_os = "macos")]
 extern "C" fn run_timed<F: FnOnce() -> T, T>(ctx: *mut c_void) {
     let t0 = Instant::now();
     let ctx = unsafe { &mut *(ctx as *mut MainCtx<F, T>) };
