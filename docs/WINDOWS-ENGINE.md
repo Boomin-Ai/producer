@@ -645,6 +645,23 @@ Two facts that matter:
   win-dshow patch: a second patchset target and a lock re-key, so a deliberate
   step.
 
+### Selection outline: drawn natively, in the display's colour space
+
+In float mode the webview's selection outline is hidden under the video, so the
+room mirrors its selected item id to `live_set_selection` and `preview_draw`
+draws the item's `obs_sceneitem_get_box_transform` as a 2-px line loop plus
+eight handles --- inside the DISPLAY pass only, never the mix (the mix feeds the
+encoder, the recording, the virtual camera and the guests). This is how OBS
+Studio draws its own selection.
+
+The colour has to be colour-space aware. On an HDR monitor the preview
+swapchain is scRGB (FP16): values are linear and SDR white sits at
+`sdr_white_level / 80`. A plain #22c55e written there reads dim and
+yellow-shifted. And the white level itself should be the DISPLAY's, not OBS's
+300-nit default: `producer_sdr_white_nits()` reads
+`DISPLAYCONFIG_SDR_WHITE_LEVEL` (240 on the MSI here) so the preview and its
+outline match the SDR desktop around them.
+
 ### Still open from rung 2
 
 - **Float-mode occlusion.** The preview is an opaque child HWND above the
