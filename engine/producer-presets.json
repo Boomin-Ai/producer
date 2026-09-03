@@ -54,7 +54,7 @@
     {
       "name": "producer-windows",
       "displayName": "Producer engine (Windows x64)",
-      "description": "libobs + the Windows plugin allowlist, plus obs-browser/CEF. No frontend, no Qt, no websocket, no scripting. NOTE ENABLE_BROWSER_DISPATCH_LOOP is FALSE here and true on macOS: obs-browser's cmake/os-windows.cmake never defines ENABLE_BROWSER_QT_LOOP, so CEF runs its own multi-threaded message loop and the libdispatch pump the macOS build needs has nothing to replace. The patchset still applies cleanly (every hunk is guarded by that define) so obs.lock keeps ONE patchset hash for both platforms. CMAKE_COMPILE_WARNING_AS_ERROR is FALSE: OBS defaults it ON (cmake/common/compiler_common.cmake), and we build a subset configuration upstream never tests, so we hit MSVC warnings in UPSTREAM code that upstream CI does not - C4244 double-to-int in obs-browser-source.cpp under the non-shared-texture frame-rate path. Failing our engine build on a warning we will not fix in someone else's source buys no signal. ENABLE_VIRTUALCAM is TRUE here and FALSE on macOS: on macOS the virtual camera is a separate system extension built by build-camera-extension.sh, while on Windows it is win-dshow's own DirectShow filter (obs-virtualcam-module64/32.dll) built by this same CMake tree and registered with regsvr32 at install time.",
+      "description": "libobs + the Windows plugin allowlist, plus obs-browser/CEF. No frontend, no Qt, no websocket, no scripting. NOTE ENABLE_BROWSER_DISPATCH_LOOP is FALSE here and true on macOS: obs-browser's cmake/os-windows.cmake never defines ENABLE_BROWSER_QT_LOOP, so CEF runs its own multi-threaded message loop and the libdispatch pump the macOS build needs has nothing to replace. The patchset still applies cleanly (every hunk is guarded by that define) so obs.lock keeps ONE patchset hash for both platforms. CMAKE_COMPILE_WARNING_AS_ERROR is FALSE: OBS defaults it ON (cmake/common/compiler_common.cmake), and we build a subset configuration upstream never tests, so we hit MSVC warnings in UPSTREAM code that upstream CI does not - C4244 double-to-int in obs-browser-source.cpp under the non-shared-texture frame-rate path. Failing our engine build on a warning we will not fix in someone else's source buys no signal. ENABLE_VIRTUALCAM is TRUE here and FALSE on macOS: on macOS the virtual camera is a separate system extension built by build-camera-extension.sh, while on Windows it is win-dshow's own DirectShow filter (obs-virtualcam-module64/32.dll) built by this same CMake tree and registered with regsvr32 at install time. VIRTUALCAM_GUID is Producer's own: the filter must not ride OBS Studio's registration on a machine that has it, and its FriendlyName is patched to Producer Virtual Camera (engine/patches/win-dshow).",
       "inherits": [
         "windows-x64"
       ],
@@ -84,6 +84,10 @@
         "CEF_ROOT_DIR": {
           "type": "PATH",
           "value": "${sourceDir}/.deps/cef_binary_6533_windows_x64"
+        },
+        "VIRTUALCAM_GUID": {
+          "type": "STRING",
+          "value": "FD88CA2B-8414-4137-966D-34152BE01AF6"
         }
       }
     }

@@ -696,3 +696,21 @@ outline match the SDR desktop around them.
   renders -> RTMP out -> win-dshow virtual camera.
 - The local R1-fallback extract has 13 plugins and NO obs-browser, so guests
   cannot work against it. Rung 4 needs a CI-built engine.
+
+## Virtual camera identity (verified 2026-09-03)
+
+Nothing user-visible may say OBS. On Windows the whole camera surface is two
+compiled literals in `plugins/win-dshow/virtualcam-module/virtualcam-module.cpp`
+(the COM server description and the DirectShow FriendlyName) — patched to
+"Producer Virtual Camera" by `engine/patches/win-dshow/`, the second entry in
+`obs.lock`'s `patchsets` list (apply target `.`, the obs-studio root; the
+obs-browser entry applies inside the submodule). The filter's own CLSID is
+Producer's (`VIRTUALCAM_GUID` in the producer-windows preset, mirrored in
+`shim_win.c`; `check-engine-lists.sh` asserts they agree), so a machine with
+OBS Studio installed no longer serves our camera from OBS's DLL — "Install cam"
+registers ours (elevated `regsvr32 /i /s`). Label is the same constant as macOS
+(`graph::VCAM_DEVICE_NAME`), which the guest page matches on.
+
+Remaining OBS-visible surfaces on Windows (Mac session's inventory, to sweep):
+`obs-browser-page.exe` (CEF helper, Task Manager) and any runtime text not
+routed through `engine::user_facing`.

@@ -66,26 +66,8 @@ for sub in plugins/obs-browser plugins/obs-websocket; do
   [[ $want == "$have" ]] || { echo "FATAL: $sub at $have, lock wants $want" >&2; exit 1; }
 done
 
-# ── patchset: same verification as macOS, idempotent ─────────────────────────
-patchset="$(lock_get "['patchset']")"
-if [[ $patchset != "None" ]]; then
-  patch_dir="$REPO_ROOT/$(lock_get "['patchset']['dir']")"
-  patch_target="$SRC_DIR/$(lock_get "['patchset']['target']")"
-  want_sha="$(lock_get "['patchset']['sha256']")"
-  have_sha="$(cat $(ls "$patch_dir"/*.patch | sort) > /tmp/patchcat && sha256_of /tmp/patchcat)"
-  [[ $want_sha == "$have_sha" ]] || { echo "FATAL: patchset sha256 mismatch (lock $want_sha, files $have_sha)" >&2; exit 1; }
-  for patch in $(ls "$patch_dir"/*.patch | sort); do
-    if git -C "$patch_target" apply --check "$patch" 2>/dev/null; then
-      git -C "$patch_target" apply "$patch"
-      echo "patch applied: $(basename "$patch")"
-    elif git -C "$patch_target" apply --reverse --check "$patch" 2>/dev/null; then
-      echo "patch already present: $(basename "$patch")"
-    else
-      echo "FATAL: patch neither applies nor is present: $(basename "$patch")" >&2
-      exit 1
-    fi
-  done
-fi
+# ── patchsets: same verification as macOS, same code (engine-lib.sh) ─────────
+apply_patchsets "$SRC_DIR"
 
 # ── configure + build ────────────────────────────────────────────────────────
 cp "$REPO_ROOT/engine/producer-presets.json" "$SRC_DIR/CMakeUserPresets.json"

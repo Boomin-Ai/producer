@@ -430,7 +430,9 @@ void producer_open_mic_settings(void)
  *   0 idle  1 requested  3 active  4 failed  (5 = unsupported, unused now) */
 #include <shellapi.h>
 
-#define PRODUCER_VCAM_CLSID L"{A3FCE0F5-3493-419F-958A-ABA1250EC20B}" /* VIRTUALCAM_GUID in the preset */
+/* Producer's OWN CLSID -- NOT OBS Studio's {A3FCE0F5-...}. Must equal VIRTUALCAM_GUID in
+ * engine/producer-presets.json (producer-windows); scripts/check-engine-lists.sh asserts it. */
+#define PRODUCER_VCAM_CLSID L"{FD88CA2B-8414-4137-966D-34152BE01AF6}"
 
 static wchar_t g_vcam_dir[MAX_PATH] = L"";
 static int g_vcam_state = 0;

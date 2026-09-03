@@ -179,3 +179,48 @@ pack_artifact() {
   echo "packed: $ARTIFACT_DIR/$name.tar.zst"
   cat "$ARTIFACT_DIR/$name.tar.zst.sha256"
 }
+
+# apply_patchsets <obs source dir>
+#
+# obs.lock carries a LIST of patchsets, each with its own apply target: the
+# obs-browser one applies inside the submodule (its paths are relative to
+# plugins/obs-browser, which is its own git repo), the win-dshow one applies at
+# the obs-studio root. Every patchset is sha256-verified against the lock,
+# applied idempotently (a tree that already carries it is detected and
+# skipped), and the same code runs on both platforms: patches whose hunks are
+# irrelevant on a platform are still applied so the lock stays one identity.
+apply_patchsets() {
+  local src="$1" count i dir target want have patch
+  count="$(lock_get "['patchsets']" | python_len)" || return 1
+  for ((i = 0; i < count; i++)); do
+    dir="$REPO_ROOT/$(lock_get "['patchsets'][$i]['dir']")"
+    target="$src/$(lock_get "['patchsets'][$i]['target']")"
+    want="$(lock_get "['patchsets'][$i]['sha256']")"
+    have="$(cat $(ls "$dir"/*.patch | sort) > "$src/.patchcat" && sha256_of "$src/.patchcat")"
+    rm -f "$src/.patchcat"
+    [[ $want == "$have" ]] || { echo "FATAL: patchset $dir sha256 mismatch (lock $want, files $have)" >&2; return 1; }
+    for patch in $(ls "$dir"/*.patch | sort); do
+      if git -C "$target" apply --check "$patch" 2>/dev/null; then
+        git -C "$target" apply "$patch"
+        echo "patch applied: $(basename "$patch") @ $(lock_get "['patchsets'][$i]['target']")"
+      elif git -C "$target" apply --reverse --check "$patch" 2>/dev/null; then
+        echo "patch already present: $(basename "$patch")"
+      else
+        echo "FATAL: patch neither applies nor is present: $patch" >&2
+        return 1
+      fi
+    done
+  done
+}
+
+# Length of a python-list printed by lock_get (e.g. "[{...}, {...}]").
+python_len() {
+  local py; py="$(resolve_python)" || return 1
+  "$py" -c "import sys,ast; print(len(ast.literal_eval(sys.stdin.read())))"
+}
+
+# lock_get_file <json file> <python expr over d> -- like lock_get, any JSON file.
+lock_get_file() {
+  local py; py="$(resolve_python)" || return 1
+  "$py" -c "import json,sys; d=json.load(open(sys.argv[1])); print(eval(sys.argv[2]))" "$(host_path "$REPO_ROOT/$1")" "$2"
+}
