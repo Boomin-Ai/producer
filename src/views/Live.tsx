@@ -4195,6 +4195,20 @@ export function LiveView({
                     onClick={() => toggleEnabled(d)}
                   >
                     {PLATFORM_LOGO[d.preset] ?? <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />}
+                    {/* In a side rail the toggle expands into a row and says
+                      * its state; in the top/bottom rows it stays a logo. */}
+                    <span className="chn-ico-txt">
+                      <b>{d.label}</b>
+                      <i>
+                        {!d.enabled
+                          ? "Off"
+                          : !streaming
+                            ? "Ready"
+                            : st && st.phase === "live"
+                              ? "On"
+                              : (st && (PHASE_COPY[st.phase] ?? PHASE_COPY.idle).label) || "Starting"}
+                      </i>
+                    </span>
                     {streaming && st && <span className={`rm-chan-phase ${st.phase}`} />}
                   </button>
                 );
