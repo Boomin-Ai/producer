@@ -464,6 +464,23 @@ pub async fn network_invitation_action(
         .await
 }
 
+/// Everything the webview needs to mount the server's settings console in
+/// one round trip: whether the server advertises one (self-hosted servers
+/// don't — the open-source app bundles no Boomin UI), and a fresh one-time
+/// handoff code. The keychain token stays here.
+#[tauri::command]
+pub async fn console_open(state: State<'_, AppState>, endpoint_id: String) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    let client = ProducerClient::new(&base_url, &token).with_brand(brand_slug.clone());
+    let session = client.get_session().await?;
+    let console = session.server.get("console").cloned().unwrap_or(Value::Null);
+    if console.is_null() {
+        return Ok(serde_json::json!({ "console": Value::Null, "handoff": Value::Null, "brand_slug": brand_slug }));
+    }
+    let handoff = client.auth_handoff(brand_slug.as_deref()).await?;
+    Ok(serde_json::json!({ "console": console, "handoff": handoff, "brand_slug": brand_slug }))
+}
+
 #[tauri::command]
 pub async fn network_lookup(
     state: State<'_, AppState>,

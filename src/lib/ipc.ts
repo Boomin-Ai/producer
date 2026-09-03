@@ -64,6 +64,14 @@ export const ipc = {
       { email, code, apiRoot: apiRoot || null },
     ),
   boominSelectBrand: (brandSlug: string) => invoke<{ id?: string }>("boomin_select_brand", { brandSlug }),
+  /** The server's runtime-delivered settings console (null when it has none)
+   *  plus a one-time handoff code to sign it in. */
+  consoleOpen: (endpointId: string) =>
+    invoke<{
+      console: { contract: number; runtime: string; console: string } | null;
+      handoff: { code: string; expires_at: string } | null;
+      brand_slug: string | null;
+    }>("console_open", { endpointId }),
   /** Every brand this account can act in — live from the API, for the switcher. */
   boominListBrands: (endpointId: string) =>
     invoke<{ brands: { slug: string; name: string }[] }>("boomin_list_brands", { endpointId }),
