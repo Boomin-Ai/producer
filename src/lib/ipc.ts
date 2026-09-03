@@ -560,6 +560,14 @@ export interface NetworkDeal {
   delivered_by?: "presence" | "stage_minimum" | "host_ended" | "beneficiary" | null;
   min_stage_minutes?: number | null;
   stage_seconds?: number | null;
+  deliverable?: string | null;
+  platform_fee_bps?: number;
+  platform_fee_cents?: number;
+  fee_locked?: boolean;
+  review_days?: number;
+  propose_expires_at?: string | null;
+  funded_at?: string | null;
+  delivered_at?: string | null;
   created_at: string;
 }
 

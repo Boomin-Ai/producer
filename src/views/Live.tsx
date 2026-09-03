@@ -4933,6 +4933,22 @@ export function LiveView({
 
         <div className="rm-top-right">
           <button
+            className="hd-chip hd-link"
+            title="Copy this room's guest link"
+            onClick={async () => {
+              const url = guestLink ?? (await ensureGuestLink());
+              if (!url) return;
+              try {
+                await navigator.clipboard.writeText(url);
+                setBanner("Room link copied — send it to your guests.");
+              } catch {
+                setBanner(url);
+              }
+            }}
+          >
+            {ic.link ?? "🔗"} Link
+          </button>
+          <button
             className="hd-chip hd-chans"
             title="Channels this room goes out to"
             onClick={(e) => {

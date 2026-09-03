@@ -5,6 +5,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Channel, EndpointInfo, Job, LiveDestination, LiveRoom, LiveSnapshot } from "../lib/ipc";
 import type { TargetResult } from "../lib/ipc";
 import { WORKSPACE_EVENT, activeEndpointId, resolveActiveEndpoint, setActiveEndpointId } from "../lib/workspace";
+import { copyText, ensureRoomJoinLink } from "../lib/roomLink";
 import { ipc,
   network,
   networkConnections,
@@ -266,6 +267,12 @@ export function Home({
   const loadLive = useCallback(async () => {
     try {
       const ep = await resolveActiveEndpoint();
+      if (ep?.id !== activeId) {
+        // Workspace changed: nothing from the previous one may linger, not
+        // even for a frame — it belongs to another brand.
+        setRooms([]);
+        setDestinations([]);
+      }
       setActiveId(ep?.id ?? null);
       setRooms(await ipc.liveListRooms(ep?.id ?? undefined));
       setDestinations(await ipc.liveListDestinations(ep?.id ?? undefined));
@@ -790,6 +797,7 @@ function ControlRoomHome({
               >
                 ✕
               </span>
+              <RoomLinkChip room={room} onChanged={onRoomsChanged} />
               <RoomShareChip room={room} onChanged={onRoomsChanged} />
             </button>
           ))}
@@ -1486,6 +1494,8 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
   const [bookRoom, setBookRoom] = useState("");
   const [bookAmt, setBookAmt] = useState("");
   const [bookMin, setBookMin] = useState("");
+  /** The deal whose sheet (terms + answer) is open. */
+  const [dealOpen, setDealOpen] = useState<string | null>(null);
 
   const load = useCallback(async (id: string) => {
     const [st, inv, cn, dl] = await Promise.all([
@@ -1563,6 +1573,19 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
   };
 
   useEffect(() => {
+    // SWEEP first: this component outlives a workspace switch, and every
+    // piece of it — inbox, connections, deals, the Find card, the note, an
+    // open booking — belongs to the brand that just left.
+    setStatus(null);
+    setInbox([]);
+    setConns([]);
+    setDeals([]);
+    setCard(null);
+    setNote(null);
+    setSlug("");
+    setBooking(null);
+    setDealOpen(null);
+    setTab("connected");
     if (endpointId) void load(endpointId);
   }, [endpointId, load]);
 
@@ -1726,31 +1749,19 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
                                 ? earn ? `${amt} delivered — awaiting release` : `${amt} delivered — release in Boomin`
                                 : `${amt} · ${d.status}`;
                       return (
-                        <div key={d.id} className={`net-deal ${d.status}`} title={d.title}>
+                        <button
+                          key={d.id}
+                          className={`net-deal ${d.status}`}
+                          title="Terms and details"
+                          onClick={() => setDealOpen(d.id)}
+                        >
                           <span className="net-deal-line">
                             <i className="net-deal-dot" />
                             {line}
+                            <span className="net-deal-more">{earn && d.status === "proposed" ? "Review ›" : "Details ›"}</span>
                           </span>
                           {detail && <span className="net-deal-sub">{detail}</span>}
-                          {earn && d.status === "proposed" && (
-                            <span className="net-deal-acts">
-                              <button
-                                className="net-accept"
-                                disabled={busy}
-                                onClick={() => void dealAct(d.id, "accept")}
-                              >
-                                Accept
-                              </button>
-                              <button
-                                className="net-decline"
-                                disabled={busy}
-                                onClick={() => void dealAct(d.id, "decline")}
-                              >
-                                Decline
-                              </button>
-                            </span>
-                          )}
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -1861,7 +1872,130 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
           {note && <div className="cr-hint">{note}</div>}
         </div>
       )}
+      {dealOpen && (() => {
+        const d = deals.find((x) => x.id === dealOpen);
+        if (!d) return null;
+        const other = conns.find((c) => c.connection.id === d.connection_id)?.counterparty;
+        return (
+          <DealSheet
+            deal={d}
+            otherName={other?.name ?? "the other brand"}
+            busy={busy}
+            onAct={(a) => void dealAct(d.id, a).then(() => setDealOpen(null))}
+            onClose={() => setDealOpen(null)}
+          />
+        );
+      })()}
     </aside>
+  );
+}
+
+/** A room's guest link, one click from the card. Mints it on first use. */
+function RoomLinkChip({ room, onChanged }: { room: LiveRoom; onChanged: () => void }) {
+  const [state, setState] = useState<"idle" | "busy" | "copied" | "err">("idle");
+  const go = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (state === "busy") return;
+    setState("busy");
+    try {
+      const url = await ensureRoomJoinLink(room);
+      setState((await copyText(url)) ? "copied" : "err");
+      onChanged();
+    } catch {
+      setState("err");
+    }
+    window.setTimeout(() => setState("idle"), 1800);
+  };
+  return (
+    <span className={`cr-room-link ${state}`} title="Copy this room's guest link" onClick={go}>
+      {state === "copied" ? "Copied" : state === "busy" ? "…" : state === "err" ? "No link" : "Link"}
+    </span>
+  );
+}
+
+const DEAL_TERMS_URL = "https://boomin.ai/terms/deals";
+
+/** The deal, in full, and the answer — a protective layer: nobody accepts
+ * money terms from a chip. What is shown here is what the terms page says. */
+function DealSheet({
+  deal: d,
+  otherName,
+  busy,
+  onAct,
+  onClose,
+}: {
+  deal: NetworkDeal;
+  otherName: string;
+  busy: boolean;
+  onAct: (a: "accept" | "decline") => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const earn = d.role === "beneficiary";
+  const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
+  const feeBps = d.platform_fee_bps ?? 1000;
+  const feeCents = d.platform_fee_cents ?? Math.floor((d.amount_cents * feeBps) / 10_000);
+  const net = d.net_to_beneficiary_cents ?? d.amount_cents - feeCents;
+  const review = d.review_days ?? 7;
+  const expires = d.propose_expires_at ? new Date(d.propose_expires_at).toLocaleDateString() : null;
+  const delivery =
+    d.min_stage_minutes != null
+      ? `By the clock: delivered once ${earn ? "you have" : `${otherName} has`} been on ${earn ? `${otherName}'s` : "your"} stage ${d.min_stage_minutes} min, as published by the host's Producer. If the host removes ${earn ? "you" : "them"} early after ${earn ? "you were" : "they were"} on stage, it is delivered anyway.`
+      : d.room_id
+        ? `By presence: delivered the moment the host admits ${earn ? "you" : otherName} into "${d.room_title ?? "the room"}". The admission is the evidence.`
+        : `By hand: ${earn ? "you mark" : `${otherName} marks`} it delivered when the work is done.`;
+  return (
+    <>
+      <div className="ws-pop-backdrop" onClick={onClose} />
+      <div className="deal-sheet" role="dialog">
+        <div className="deal-sheet-head">
+          <span className="deal-sheet-title">{d.title}</span>
+          <button className="cr-back" onClick={onClose} title="Close">✕</button>
+        </div>
+        <div className="deal-sheet-sub">
+          {earn ? `${otherName} pays you` : `You pay ${otherName}`} · <span className="deal-status">{d.status}</span>
+        </div>
+
+        <div className="deal-money">
+          <div><span>Amount</span><b>{usd(d.amount_cents)}</b></div>
+          <div><span>Boomin fee ({(feeBps / 100).toFixed(1)}%{d.fee_locked ? ", locked" : ""})</span><b>−{usd(feeCents)}</b></div>
+          <div className="deal-net"><span>{earn ? "You receive" : `${otherName} receives`}</span><b>{usd(net)}</b></div>
+        </div>
+
+        <div className="deal-terms">
+          <div className="deal-term"><span>Deliverable</span><p>{d.deliverable || (d.room_id ? `Appearance on "${d.room_title ?? "the room"}"` : "As titled")}</p></div>
+          <div className="deal-term"><span>Delivered</span><p>{delivery}</p></div>
+          <div className="deal-term"><span>Escrow</span><p>{earn ? `${otherName} funds` : "You fund"} the full {usd(d.amount_cents)} after acceptance (14-day window). Held by Boomin; nothing is charged at acceptance.</p></div>
+          <div className="deal-term"><span>Release</span><p>{earn ? otherName : "You"} can release right after delivery. Silence auto-releases after {review} day{review === 1 ? "" : "s"}. A dispute in that window freezes the escrow until resolved.</p></div>
+          <div className="deal-term"><span>Cancel</span><p>Either side before funding. After funding only {earn ? "you" : otherName} can cancel, which refunds in full. Delivered deals are released or disputed, never cancelled.</p></div>
+          {expires && <div className="deal-term"><span>Expires</span><p>Unanswered, this proposal expires {expires}.</p></div>}
+        </div>
+
+        <div className="deal-agree">
+          {earn
+            ? "By accepting you agree to deliver as written, to the delivery rule above, and to the fee shown."
+            : "By funding you agree the escrow is released by delivery as written, by your release, or by the review window."}{" "}
+          <a onClick={() => openUrl(DEAL_TERMS_URL).catch(() => {})}>Full deal terms ›</a>
+        </div>
+
+        <div className="deal-sheet-acts">
+          {earn && d.status === "proposed" ? (
+            <>
+              <button className="net-accept" disabled={busy} onClick={() => onAct("accept")}>Accept {usd(d.amount_cents)}</button>
+              <button className="net-decline" disabled={busy} onClick={() => onAct("decline")}>Decline</button>
+            </>
+          ) : (
+            <button className="net-decline" onClick={onClose}>Close</button>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -1875,6 +2009,8 @@ function LiveNowStrip() {
   const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
+    setRooms([]);
+    setNote(null);
     if (!endpointId) return;
     let alive = true;
     const poll = () => {
