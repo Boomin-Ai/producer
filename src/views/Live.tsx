@@ -68,7 +68,7 @@ import {
   type TransitionKind,
   type RoomExtra,
 } from "../lib/room";
-import { takeRoomClick } from "../lib/perf";
+import { homePaintedMs, takeRoomClick } from "../lib/perf";
 
 // Transport-truthful copy (M-L4 finding: an RTMP session can look healthy
 // while the platform discards it — only the dashboard confirms LIVE).
@@ -1917,6 +1917,8 @@ export function LiveView({
   const mountMarks = useRef<Record<string, number>>({
     mount: Math.round(performance.now() - mountT0.current),
     since_launch: Math.round(performance.now()),
+    // App launch → home painted; the rest of since_launch is the human.
+    home_painted: homePaintedMs() ?? -1,
   });
   const mark = (k: string) => {
     if (mountMarks.current[k] == null) mountMarks.current[k] = Math.round(performance.now() - mountT0.current);

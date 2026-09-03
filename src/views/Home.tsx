@@ -17,7 +17,7 @@ import { ipc,
   type NetworkLiveRoom,
 } from "../lib/ipc";
 import { demoOn, setDemo } from "../lib/demo";
-import { markRoomClick } from "../lib/perf";
+import { markHomePainted, markRoomClick } from "../lib/perf";
 import { KEYMAP, getKey, setKey, resetKey, displayKey, type KeyBinding } from "../lib/keys";
 import { liveRoomId, parseConfig, serializeConfig } from "../lib/room";
 import { useUpdater } from "../lib/updater";
@@ -694,6 +694,10 @@ function ControlRoomHome({
   onHistory: () => void;
 }) {
   const [naming, setNaming] = useState(false);
+  useEffect(() => {
+    // Post-commit ≈ first paint of the home. One-shot, module-level.
+    markHomePainted();
+  }, []);
   const liveRoom = streaming ? liveRoomId() : null;
   const [name, setName] = useState("");
 

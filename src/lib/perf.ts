@@ -16,3 +16,15 @@ export function takeRoomClick(): number | null {
   roomClickAt = null;
   return t;
 }
+
+let homePaintedAt: number | null = null;
+
+/** Call once when the home screen has painted — separates app-launch cost
+ * from the user's own reaction time inside `since_launch`. */
+export function markHomePainted() {
+  if (homePaintedAt == null) homePaintedAt = Math.round(performance.now());
+}
+
+export function homePaintedMs(): number | null {
+  return homePaintedAt;
+}
