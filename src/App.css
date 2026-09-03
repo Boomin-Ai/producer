@@ -6602,6 +6602,36 @@ textarea::placeholder {
 }
 .rm-strip.horizontal .rm-strip-icon.muted { color: var(--red); }
 
+/* Mini guests: a tight strip of thumbnails, sized to content — never a
+ * long empty pill. Name rides the thumb; on-stage keeps its mint ring. */
+.rm-dock-bottom.slim > .rm-panel-guests,
+.rm-dock-top:not(.expanded) > .rm-panel-guests {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 44%;
+}
+.rm-panel[data-in="top"] .rm-gcard {
+  border: 1px solid var(--line-2) !important;
+  background: #05070b;
+}
+.rm-panel[data-in="top"] .rm-gcard.on {
+  border-color: oklch(0.75 0.14 165 / 0.7) !important;
+  box-shadow: 0 0 0 1px oklch(0.75 0.14 165 / 0.35);
+}
+.rm-panel[data-in="top"] .rm-gcard .rm-gcard-id {
+  display: block !important;
+  position: absolute;
+  left: 4px;
+  bottom: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  max-width: calc(100% - 8px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 /* Mini guests: small thumbnails in a row, not one long bar. */
 .rm-panel[data-in="top"] .rm-guest-list {
   display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 6px; overflow-x: auto;
@@ -6609,7 +6639,6 @@ textarea::placeholder {
 .rm-panel[data-in="top"] .rm-gcard {
   flex: 0 0 auto; width: 72px; height: 40px; border-radius: 8px !important; overflow: hidden; margin: 0;
 }
-.rm-panel[data-in="top"] .rm-gcard .rm-gcard-id,
 .rm-panel[data-in="top"] .rm-gcard .rm-gcard-chrome { display: none; }
 .rm-panel[data-in="top"] .rm-gcard img,
 .rm-panel[data-in="top"] .rm-gcard canvas { width: 100%; height: 100%; object-fit: cover; }
@@ -6710,11 +6739,13 @@ textarea::placeholder {
   cursor: ew-resize;
 }
 .rm-strip.horizontal .rm-track-fill {
+  /* Full-size box, revealed by clip-path — `right: auto` left this a
+   * zero-width element, so the level moved invisibly in the mini form. */
   top: 1px;
   bottom: 1px;
   left: 1px;
-  right: auto;
-  transition: width 60ms linear;
+  right: 1px;
+  transition: clip-path 60ms linear;
 }
 .rm-strip.horizontal .rm-track-thumb {
   top: 50%;

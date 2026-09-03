@@ -47,6 +47,8 @@ export function StageEditor({
   onDelete?: (id: string) => void;
   /** Fires after every committed edit — the room mirrors it into the scene. */
   onCommit?: () => void;
+  /** Selection driven from OUTSIDE (a rail row click): lights the item up. */
+  selectId?: string | null;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [selected, setSelectedRaw] = useState<string | null>(null);
@@ -54,6 +56,9 @@ export function StageEditor({
     setSelectedRaw(id);
     onSelect?.(id);
   };
+  useEffect(() => {
+    if (selectId !== undefined) setSelectedRaw(selectId);
+  }, [selectId]);
   const [drag, setDrag] = useState<LiveItem | null>(null); // optimistic geometry
   const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({ v: [], h: [] });
   const gesture = useRef<Gesture | null>(null);

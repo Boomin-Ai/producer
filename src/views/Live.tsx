@@ -4039,6 +4039,9 @@ export function LiveView({
                       key={t.key}
                       data-srcrow={item ? t.key : undefined}
                       className={`rm-row${hidden ? " off" : ""}${srcDrag?.key === t.key ? " dragging" : ""}${stageSel === itemIdFor(t.key) ? " sel" : ""}${dropCls}`}
+                      // Clicking a row lights its output on the stage — selection
+                      // is shared state in both directions.
+                      onClick={() => item && setStageSel(stageSel === item.id ? null : item.id)}
                     >
                       {item && (
                         <span
@@ -5111,6 +5114,7 @@ export function LiveView({
                     captureActiveLook();
                   }}
                   onSelect={setStageSel}
+                  selectId={stageSel}
                   onDelete={(id) => {
                     deleteStageItem(id);
                     captureActiveLook();
