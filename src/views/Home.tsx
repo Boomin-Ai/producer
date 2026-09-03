@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { ConsoleHost } from "./Console";
 import type { Channel, EndpointInfo, Job, LiveDestination, LiveRoom, LiveSnapshot } from "../lib/ipc";
 import type { TargetResult } from "../lib/ipc";
 import { WORKSPACE_EVENT, activeEndpointId, resolveActiveEndpoint, setActiveEndpointId } from "../lib/workspace";
@@ -40,7 +41,9 @@ type MainView =
   | { kind: "home" }
   | { kind: "room"; room: LiveRoom }
   | { kind: "compose" }
-  | { kind: "history" };
+  | { kind: "history" }
+  /** The server's settings console (Brand settings, Payments, members…), delivered at runtime. */
+  | { kind: "console"; section: string };
 
 interface Attached {
   upload_id: string;
@@ -233,6 +236,7 @@ export function Home({
   // all key on it; the profile popout switches it.
   const [activeId, setActiveId] = useState<string | null>(() => activeEndpointId());
   const [profileOpen, setProfileOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [destinations, setDestinations] = useState<LiveDestination[]>([]);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -316,7 +320,7 @@ export function Home({
     loadJobs();
   };
 
-  const title = view.kind === "compose" ? "New post" : view.kind === "history" ? "Rundown" : null;
+  const title = view.kind === "compose" ? "New post" : view.kind === "history" ? "Rundown" : view.kind === "console" ? "Settings" : null;
 
   // The room owns the entire window, its own top bar included (mock-faithful).
   if (view.kind === "room") {
@@ -356,6 +360,27 @@ export function Home({
             <button className="cr-update" onClick={updater.restart} title={`Producer ${updater.version} is staged`}>
               <span className="update-dot" /> Restart to update
             </button>
+          )}
+          {/* You, not the brand: app + workspaces, and sign out. The brand's
+            * own settings live behind the gear on the brand (rail popout). */}
+          <button
+            className="cr-profile"
+            title="Account"
+            onClick={() => { setAccountOpen((v) => !v); setProfileOpen(false); }}
+          >
+            {((endpoints.find((e) => e.id === activeId) ?? endpoints[0])?.name?.[0] ?? "?").toUpperCase()}
+          </button>
+          {accountOpen && (
+            <>
+              <div className="cr-menu-backdrop" onClick={() => setAccountOpen(false)} />
+              <div className="cr-menu">
+                <button onClick={() => { setAccountOpen(false); setView({ kind: "console", section: "general" }); }}>Brand settings</button>
+                <button onClick={() => { setAccountOpen(false); setSettingsOpen(true); }}>App &amp; workspaces</button>
+                {onSignOut && endpoints.some((e) => e.kind === "connected") && (
+                  <button className="danger" onClick={() => { setAccountOpen(false); onSignOut(); }}>Sign out</button>
+                )}
+              </div>
+            </>
           )}
         </div>
       </header>
@@ -404,7 +429,22 @@ export function Home({
             setProfileOpen(false);
             setSettingsOpen(true);
           }}
+          onOpenConsole={(section, endpointId) => {
+            if (endpointId && endpointId !== activeId) {
+              setActiveEndpointId(endpointId);
+              setActiveId(endpointId);
+              onEndpointsChanged?.();
+            }
+            setProfileOpen(false);
+            setView({ kind: "console", section });
+          }}
           onClose={() => setProfileOpen(false)}
+        />
+      )}
+      {view.kind === "console" && (
+        <ConsoleHost
+          endpoint={endpoints.find((e) => e.id === activeId) ?? endpoints.find((e) => e.kind === "connected") ?? null}
+          section={view.section}
         />
       )}
       {view.kind === "home" && (
@@ -590,8 +630,6 @@ function SettingsSheet({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-      <ChannelsBlock destinations={destinations} channels={channels} onChanged={onChannelsChanged} />
-
   return (
     <>
       <div className="cr-sheet-backdrop" onClick={onClose} />
@@ -711,6 +749,7 @@ function SettingsSheet({
           </div>
         </div>
 
+              <ChannelsBlock destinations={destinations} channels={channels} onChanged={onChannelsChanged} />
       </aside>
     </>
   );
@@ -2336,6 +2375,12 @@ function KeyRow({ b }: { b: KeyBinding }) {
  * macOS-styling: translucent card, heavy backdrop blur, hairline border.
  * Navigation is scroll-to-section; compose and settings ride the bottom. */
 const railIc = {
+  gear: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  ),
   onair: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
       <circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none" />
@@ -2367,6 +2412,7 @@ function WorkspacePopout({
   activeId,
   onSwitch,
   onSettings,
+  onOpenConsole,
   onSignOut,
   onClose,
 }: {
@@ -2374,6 +2420,8 @@ function WorkspacePopout({
   activeId: string | null;
   onSwitch: (endpointId: string) => void;
   onSettings: () => void;
+  /** The gear on a brand: that brand's settings console (switching first when needed). */
+  onOpenConsole?: (section: string, endpointId?: string) => void;
   onSignOut?: () => void;
   onClose: () => void;
 }) {
@@ -2449,9 +2497,21 @@ function WorkspacePopout({
                 <span className="ws-ava sm">{(b.name?.[0] ?? "B").toUpperCase()}</span>
                 <span className="ws-pop-txt">
                   <span className="ws-pop-name">{b.name}</span>
-                  <span className="ws-pop-slug">@{b.slug}{bound ? "" : " · not set up yet"}</span>
+                  <span className="ws-pop-slug">@{b.slug}{bound ? "" : " · not on this Mac"}</span>
                 </span>
                 {isCurrent ? <i className="ws-dot" /> : busy === b.slug ? <span className="ws-pop-slug">…</span> : null}
+                {bound && onOpenConsole && (
+                  <span
+                    className="ws-gear"
+                    role="button"
+                    tabIndex={0}
+                    title={`${b.name} settings`}
+                    onClick={(e) => { e.stopPropagation(); onOpenConsole("general", bound.id); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); onOpenConsole("general", bound.id); } }}
+                  >
+                    {railIc.gear}
+                  </span>
+                )}
               </button>
             );
           })}

@@ -427,6 +427,29 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
+    /// One-time sign-in code for the runtime-delivered console
+    /// (@boomin/components/console): the webview never sees THIS token —
+    /// the console exchanges the code for its own in-memory session.
+    pub async fn auth_handoff(&self, brand_slug: Option<&str>) -> EngineResult<Value> {
+        let body = match brand_slug {
+            Some(slug) => serde_json::json!({ "brand_slug": slug }),
+            None => serde_json::json!({}),
+        };
+        let resp = self
+            .http
+            .post(self.root_url("/v1/app/auth/handoff"))
+            .bearer_auth(&self.token)
+            .json(&body)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let body: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&body, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     pub async fn network_join(&self, rejoin: bool) -> EngineResult<Value> {
         let resp = self
             .http

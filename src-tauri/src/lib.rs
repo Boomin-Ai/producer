@@ -100,6 +100,7 @@ pub fn run() {
             ipc::network_invite,
             ipc::network_invitation_action,
             ipc::network_lookup,
+            ipc::console_open,
             ipc::network_live_rooms,
             ipc::network_enter_room,
             ipc::network_deals,
