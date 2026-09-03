@@ -103,6 +103,7 @@ pub fn run() {
             ipc::network_enter_room,
             ipc::network_deals,
             ipc::network_propose_deal,
+            ipc::network_deal_action,
             ipc::room_set_visibility,
             ipc::live_room_open_report,
             ipc::room_register,

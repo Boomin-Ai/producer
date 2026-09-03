@@ -366,6 +366,23 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
+    /// One deal transition as THIS brand (accept | decline | cancel); the server
+    /// decides whether this side may make the move.
+    pub async fn network_deal_action(&self, id: &str, action: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.root_url(&format!("/v1/app/network/deals/{id}/{action}")))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     /// Brands this brand is connected to — the "pick a connected brand" path.
     pub async fn network_connections(&self) -> EngineResult<Value> {
         let resp = self

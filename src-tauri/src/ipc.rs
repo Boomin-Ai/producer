@@ -522,6 +522,23 @@ pub async fn network_propose_deal(
         .await
 }
 
+#[tauri::command]
+pub async fn network_deal_action(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    id: String,
+    action: String,
+) -> EngineResult<Value> {
+    if !matches!(action.as_str(), "accept" | "decline" | "cancel") {
+        return Err(EngineError::Other("unsupported deal action".into()));
+    }
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .network_deal_action(&id, &action)
+        .await
+}
+
 /// The room's mount timings, written beside the engine report so a room
 /// open can be read off disk (engine → applied → settled → veil, plus the
 /// boot phases) — the ruler every speedup is measured against.

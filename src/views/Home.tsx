@@ -1505,6 +1505,27 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
 
   const bookCents = Math.round((Number(bookAmt) || 0) * 100);
 
+  const dealAct = async (id: string, action: "accept" | "decline" | "cancel") => {
+    if (!endpointId) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      const r = await network.dealAction(endpointId, id, action);
+      setNote(
+        r.deal.status === "accepted"
+          ? "Accepted. They fund it in Boomin; the escrow shows here once it lands."
+          : r.deal.status === "declined"
+            ? "Declined."
+            : `Deal ${r.deal.status}.`,
+      );
+      void load(endpointId);
+    } catch (e) {
+      setNote(String(e).replace(/^Error:\s*/, ""));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const book = async (c: NetworkConnectionRow) => {
     const room = rooms.find((r) => r.id === bookRoom);
     if (!endpointId || !room || bookCents < 500) return;
@@ -1529,7 +1550,7 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
         amountCents: bookCents,
         minStageMinutes: Number(bookMin) >= 1 ? Math.min(720, Math.round(Number(bookMin))) : null,
       });
-      setNote(`Proposed $${(bookCents / 100).toFixed(2)} to ${c.counterparty.name}. They accept in Boomin; you fund it there.`);
+      setNote(`Proposal sent to ${c.counterparty.name}. You'll get an email when they answer.`);
       setBooking(null);
       setBookAmt("");
       setBookMin("");
@@ -1683,15 +1704,55 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
                 )}
                 {ds.length > 0 && (
                   <div className="net-deals">
-                    {ds.map((d) => (
-                      <span key={d.id} className={`net-deal ${d.status}`} title={d.title}>
-                        {d.status} · ${(d.amount_cents / 100).toFixed(0)}
-                        {d.role === "beneficiary" ? " · you earn" : ""}
-                        {d.min_stage_minutes != null
-                          ? ` · ${Math.floor((d.stage_seconds ?? 0) / 60)}/${d.min_stage_minutes}m on stage`
-                          : d.appearance ? " · admitted" : ""}
-                      </span>
-                    ))}
+                    {ds.map((d) => {
+                      const amt = `$${(d.amount_cents / 100).toFixed(d.amount_cents % 100 ? 2 : 0)}`;
+                      const earn = d.role === "beneficiary";
+                      const detail =
+                        d.min_stage_minutes != null
+                          ? `${Math.floor((d.stage_seconds ?? 0) / 60)} of ${d.min_stage_minutes} min on stage`
+                          : d.appearance
+                            ? "admitted — delivered"
+                            : d.room_title
+                              ? `appearance on ${d.room_title}`
+                              : null;
+                      const line =
+                        d.status === "proposed"
+                          ? earn ? `${amt} offered to you` : `${amt} proposed`
+                          : d.status === "accepted"
+                            ? earn ? `${amt} accepted — awaiting their funding` : `${amt} accepted — fund it in Boomin`
+                            : d.status === "funded"
+                              ? earn ? `${amt} in escrow for you` : `${amt} in escrow`
+                              : d.status === "delivered"
+                                ? earn ? `${amt} delivered — awaiting release` : `${amt} delivered — release in Boomin`
+                                : `${amt} · ${d.status}`;
+                      return (
+                        <div key={d.id} className={`net-deal ${d.status}`} title={d.title}>
+                          <span className="net-deal-line">
+                            <i className="net-deal-dot" />
+                            {line}
+                          </span>
+                          {detail && <span className="net-deal-sub">{detail}</span>}
+                          {earn && d.status === "proposed" && (
+                            <span className="net-deal-acts">
+                              <button
+                                className="net-accept"
+                                disabled={busy}
+                                onClick={() => void dealAct(d.id, "accept")}
+                              >
+                                Accept
+                              </button>
+                              <button
+                                className="net-decline"
+                                disabled={busy}
+                                onClick={() => void dealAct(d.id, "decline")}
+                              >
+                                Decline
+                              </button>
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 {open && (

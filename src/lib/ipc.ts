@@ -541,6 +541,9 @@ export const network = {
       minStageMinutes: number | null;
     },
   ) => invoke<{ deal: NetworkDeal }>("network_propose_deal", { endpointId, ...input }),
+  /** accept | decline (beneficiary) · cancel (either side, before funding). */
+  dealAction: (endpointId: string, id: string, action: "accept" | "decline" | "cancel") =>
+    invoke<{ deal: NetworkDeal }>("network_deal_action", { endpointId, id, action }),
 };
 
 export interface NetworkDeal {
