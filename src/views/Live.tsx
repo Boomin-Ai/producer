@@ -1964,6 +1964,19 @@ export function LiveView({
    * (or at 10s, naming who never did). This names the culprit — camera,
    * screen capture, overlay — instead of a total. */
   const firstFramesDone = useRef(false);
+  /** The gate the veil actually waits on: every visible source has produced
+   * a frame (or the cap fired). `pendingFrames` names who is still black so
+   * the veil can say "Starting camera…" instead of hiding a black stage. */
+  const [framesReady, setFramesReady] = useState(false);
+  const [pendingFrames, setPendingFrames] = useState<string[]>([]);
+  // The frame cap: 2.5s after the document lands, stop waiting for pixels
+  // and show the stage as it is — a black source beats a trapped user.
+  const [framesCapped, setFramesCapped] = useState(false);
+  useEffect(() => {
+    if (!docApplied) return;
+    const t = window.setTimeout(() => setFramesCapped(true), 2500);
+    return () => window.clearTimeout(t);
+  }, [docApplied]);
   useEffect(() => {
     if (firstFramesDone.current || !docApplied) return;
     let alive = true;
@@ -1972,6 +1985,8 @@ export function LiveView({
     const finish = (pending: string[]) => {
       if (!alive || firstFramesDone.current) return;
       firstFramesDone.current = true;
+      setFramesReady(true);
+      setPendingFrames([]);
       mark("first_frames");
       const m = mountMarks.current;
       roomOpenReport({
@@ -1990,6 +2005,7 @@ export function LiveView({
       const items = (snap?.sources?.items ?? []).filter((i) => i.visible);
       for (const i of items) if (i.has_frame && seen[i.id] == null) seen[i.id] = Math.round(performance.now() - mountT0.current);
       const pending = items.filter((i) => !i.has_frame).map((i) => i.id);
+      setPendingFrames((p) => (p.length === pending.length && p.every((x, k) => x === pending[k]) ? p : pending));
       if (items.length && pending.length === 0) return finish([]);
       if (performance.now() - t0 > 10_000) return finish(pending);
       window.setTimeout(tick, 100);
@@ -3020,11 +3036,25 @@ export function LiveView({
   }, [engineOk]);
   useEffect(() => {
     if (!engineOk || !sceneSettled || !mountVeil) return;
+    mark("settled");
+    // 100% ready means PIXELS: hold for every visible source's first frame.
+    // The note names who we are waiting on; the cap keeps a wedged device
+    // from trapping the user (and is recorded, so it is never silent).
+    if (!framesReady && !framesCapped) {
+      const who = pendingFrames[0];
+      setVeilNote(
+        who === "camera" ? "Starting camera…"
+        : who === "screen" ? "Starting screen capture…"
+        : who === "overlay" ? "Loading overlay…"
+        : who?.startsWith("gslot") || !who ? "Preparing the stage…"
+        : "Starting sources…",
+      );
+      return;
+    }
     // Lift on a MACROTASK, never an animation frame: WebKit halts rAF while
     // it deems the view occluded, and the native Metal preview attaches over
     // the webview right here — measured: main thread free (stall 3ms), rAF
     // starved for 5.1s. Timers keep running; readiness rides them.
-    mark("settled");
     const t = window.setTimeout(() => {
       {
         setMountVeil(false);
@@ -3033,6 +3063,7 @@ export function LiveView({
         setMountMs(m.veil);
         const report = {
           ...m,
+          veil_capped: framesCapped && !framesReady,
           stall_max_ms: Math.round(stallMax.current),
           boot_phases: snapRef.current?.boot_phases_ms ?? null,
           at: new Date().toISOString(),
@@ -3043,7 +3074,7 @@ export function LiveView({
     }, 0);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engineOk, sceneSettled, mountVeil]);
+  }, [engineOk, sceneSettled, mountVeil, framesReady, framesCapped, pendingFrames]);
   // Hard cap: a wedged step may never trap the user behind the veil.
   useEffect(() => {
     const t = window.setTimeout(() => setMountVeil(false), 8000);
