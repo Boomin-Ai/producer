@@ -1262,6 +1262,7 @@ pub fn start(
             // event, so the snapshot is live truth and the UI is not churned.
             let mut last_src_refresh = Instant::now();
             let probe_t0 = Instant::now();
+            let mut probe_last = Instant::now();
 
             let set_state = |state: &mut SessionState,
                              new: SessionState,
@@ -1304,7 +1305,11 @@ pub fn start(
                         // rendered frames each tick. Appends to
                         // live/frames-probe.log; one line per tick; stops
                         // once everything has framed.
-                        let probe = g.frame_probe();
+                        // Probe at 500ms, not every refresh: obs_source_get_width
+                        // takes the capture plugin's lock, and hammering it while
+                        // the camera starts serialized the loop behind it
+                        // (sub-second 'idle' iterations after the fix).
+                        let probe = if probe_last.elapsed() > Duration::from_millis(500) { probe_last = Instant::now(); g.frame_probe() } else { Vec::new() };
                         if probe.iter().any(|(_, w, _, _)| *w == 0) {
                             if let Some(dir) = module_config_dir.parent() {
                                 let total = unsafe { ffi::obs_get_total_frames() };
