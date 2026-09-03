@@ -34,6 +34,7 @@ export function StageEditor({
   onOrder,
   onSelect,
   onDelete,
+  onCommit,
 }: {
   items: LiveItem[];
   baseW: number;
@@ -44,6 +45,8 @@ export function StageEditor({
   onSelect?: (id: string | null) => void;
   /** Delete/Backspace removes the selected source (part of the keymap). */
   onDelete?: (id: string) => void;
+  /** Fires after every committed edit — the room mirrors it into the scene. */
+  onCommit?: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [selected, setSelectedRaw] = useState<string | null>(null);
@@ -107,7 +110,8 @@ export function StageEditor({
       pending.current = null;
     }
     ipc.liveSetTransform(id, patch, true).catch(() => {});
-  }, []);
+    onCommit?.();
+  }, [onCommit]);
 
   /** Where an item's picture ACTUALLY lands on the canvas. The box the
    * engine reports is the bounds; the cropped source is fitted inside it and

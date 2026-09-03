@@ -1988,6 +1988,7 @@ export function LiveView({
               /* engine not ready */
             }
           }
+          captureActiveLook();
         })();
       }
       return null;
@@ -2950,6 +2951,66 @@ export function LiveView({
     }
   }
 
+  // ── WRITE-THROUGH (room state, mirror 1) ─────────────────────────────────
+  // The room document mirrors engine truth continuously: whatever flips a
+  // source flag — the rail, the stage toolbar, a scene, the overlay picker —
+  // the mirrored subset lands in the document a moment later. This is what
+  // makes "leave with the camera on, come back to the camera on" true.
+  // Gated on roomApplied so the previous room's engine state can never
+  // overwrite this room's document during open.
+  useEffect(() => {
+    if (!room || !roomApplied.current) return;
+    const t = window.setTimeout(() => {
+      const c = cfgRef.current;
+      const cur = c.sources ?? {};
+      const next = {
+        ...cur,
+        screen: sources.screen,
+        camera: sources.camera,
+        mic: sources.mic,
+        mic_volume: sources.mic_volume,
+        mic_muted: sources.mic_muted,
+        overlay_window: sources.overlay_window ?? null,
+        overlay_url: sources.overlay_url ?? null,
+      };
+      const KEYS = ["screen", "camera", "mic", "mic_volume", "mic_muted", "overlay_window", "overlay_url"] as const;
+      if (KEYS.some((k) => (cur as Record<string, unknown>)[k] !== (next as Record<string, unknown>)[k])) {
+        writeCfg({ ...c, sources: next });
+      }
+    }, 400);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sources.screen, sources.camera, sources.mic, sources.mic_volume, sources.mic_muted, sources.overlay_window, sources.overlay_url, room]);
+
+  // ── WRITE-THROUGH (room state, mirror 2) ─────────────────────────────────
+  /** The active scene IS what you're looking at: any real edit — drag, nudge,
+   * eye, layer, delete — re-captures the scene's look after the engine
+   * settles. No more owing the Update button a click before leaving. Guests
+   * are excluded (transient ids; slots carry their geometry). */
+  const lookTimer = useRef(0);
+  const sourcesRef = useRef(sources);
+  sourcesRef.current = sources;
+  const activeSceneRef = useRef<string | null>(null);
+  const captureActiveLook = () => {
+    window.clearTimeout(lookTimer.current);
+    lookTimer.current = window.setTimeout(() => {
+      const sceneId = activeSceneRef.current;
+      if (!sceneId || !roomApplied.current) return;
+      const items = (sourcesRef.current.items ?? []).filter((i) => i.kind !== "guest");
+      if (!items.length) return;
+      const look: Record<string, SceneItemLook> = Object.fromEntries(
+        items.map((i) => [i.id, { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z }]),
+      );
+      const base = cfgRef.current;
+      writeCfg({
+        ...base,
+        scenes: (base.scenes.length ? base.scenes : DEFAULT_SCENES).map((x) =>
+          x.id === sceneId ? { ...x, look, screen: sourcesRef.current.screen, camera: sourcesRef.current.camera } : x,
+        ),
+      });
+    }, 1200); // past the next engine poll, so the capture reads settled truth
+  };
+
   async function setSrc(patch: Partial<Pick<LiveSources, "screen" | "camera" | "mic">>) {
     const next = { ...sources, ...patch };
     setSources(next);
@@ -2970,6 +3031,7 @@ export function LiveView({
   // Legacy fallback so a room saved before looks existed still highlights.
   const activeScene =
     activeSceneId ?? scenes.find((p) => p.screen === sources.screen && p.camera === sources.camera)?.id;
+  activeSceneRef.current = activeScene ?? null;
 
   /** Apply a scene as a LOOK: sources are never created or destroyed on a
    * switch (no flicker, no permission re-prompts, no z scramble) — only
@@ -3823,7 +3885,10 @@ export function LiveView({
                         <button
                           className={`rm-row-edit rm-row-eye${hidden ? " off" : ""}`}
                           title={hidden ? "Show on stage" : "Hide from stage"}
-                          onClick={() => ipc.liveSetTransform(item.id, { visible: hidden }, true).catch(() => {})}
+                          onClick={() => {
+                            ipc.liveSetTransform(item.id, { visible: hidden }, true).catch(() => {});
+                            captureActiveLook();
+                          }}
                         >
                           {ic.eye}
                         </button>
@@ -4833,9 +4898,14 @@ export function LiveView({
                   onOrder={(id, dir) => {
                     const it = (sources.items ?? []).find((i) => i.id === id);
                     if (it) ipc.liveSetTransform(id, { z: it.z + dir }, true).catch(() => {});
+                    captureActiveLook();
                   }}
                   onSelect={setStageSel}
-                  onDelete={deleteStageItem}
+                  onDelete={(id) => {
+                    deleteStageItem(id);
+                    captureActiveLook();
+                  }}
+                  onCommit={captureActiveLook}
                 />
               </PreviewPanel>
             )}
