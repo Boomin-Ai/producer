@@ -6849,10 +6849,12 @@ button.ks-key:hover { border-color: var(--line-2); }
 /* ── Edit mode, softened: generous radii, and every panel's title sits
    dead-center as a quiet pill — grip left, hide right, name in the middle,
    uniformly across all seven components. ── */
-.layout-edit .rm-panel { border-radius: 16px; }
+.layout-edit .rm-panel { border-radius: 16px; position: relative; min-height: 76px; }
 .rm-slot.armed { border-radius: 12px; }
 .rm-add-panel { border-radius: 12px; }
-.layout-edit .rm-panel-head { position: relative; }
+/* Edit mode is about WHICH panel, not what's in it: content hides, the
+ * title sits dead-center of the card, grip and ✕ stay in the corners. */
+.layout-edit .rm-panel-body { display: none; }
 .layout-edit .rm-panel-head .rm-group-label {
   position: absolute;
   left: 50%;
@@ -6864,6 +6866,7 @@ button.ks-key:hover { border-color: var(--line-2); }
   border: 1px solid var(--line-1);
   white-space: nowrap;
 }
+.layout-edit .rm-panel-actions > :not(.rm-panel-hide) { display: none; }
 
 /* Console rows scroll by trackpad only — a visible scroll rail over one-line
  * content reads as a broken overlay, not an affordance. */
