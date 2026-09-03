@@ -1780,7 +1780,7 @@ pub fn start(
                                     return Ok(true);
                                 }
                                 let id = CString::new("virtualcam_output").unwrap();
-                                let name = CString::new("Producer Virtual Camera").unwrap();
+                                let name = CString::new(graph::VCAM_DEVICE_NAME).unwrap();
                                 let out = ffi::obs_output_create(
                                     id.as_ptr(),
                                     name.as_ptr(),

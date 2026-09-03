@@ -553,11 +553,12 @@ pub fn vcam_status() -> serde_json::Value {
                 _ => "idle",
             },
             "installed": installed,
+            "device_name": graph::VCAM_DEVICE_NAME,
             "error": if err.is_empty() { serde_json::Value::Null } else { serde_json::Value::from(err) },
         });
     }
     #[cfg(not(have_engine))]
-    serde_json::json!({ "state": "unavailable", "installed": false, "error": null })
+    serde_json::json!({ "state": "unavailable", "installed": false, "device_name": graph::VCAM_DEVICE_NAME, "error": null })
 }
 
 pub fn vcam_activate() {

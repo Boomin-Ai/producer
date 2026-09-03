@@ -222,10 +222,16 @@ void producer_preview_detach(void *view_ptr)
 }
 
 /* macOS-only: prepares the window for the transparent-hole preview mode. */
+/* EXPERIMENT (transparent-hole mode on Windows): tauri.windows.conf.json makes
+ * the window and WebView2 transparent; the room punches a CSS hole at the stage
+ * and, with this returning 1, places the preview BELOW the webview so the UI
+ * (handles, toasts, outlines) draws over the video instead of vanishing behind
+ * it. Whether a sibling child HWND shows through a transparent WebView2 is the
+ * question this answers empirically. */
 int producer_preview_prepare_window(void *ns_window)
 {
     (void)ns_window;
-    return 0;
+    return 1;
 }
 
 /* macOS-only by design — see the header note. */

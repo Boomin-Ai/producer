@@ -400,6 +400,8 @@ export const recording = {
 };
 
 export interface VcamStatus {
+  /** The camera's label as other apps see it; per platform (Windows: OBS's filter name). */
+  device_name?: string;
   state: "idle" | "requested" | "needs_approval" | "active" | "failed" | "unavailable";
   installed: boolean;
   error: string | null;

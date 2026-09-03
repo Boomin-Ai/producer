@@ -592,7 +592,17 @@ pub fn device_picker_spec(kind: &str) -> Option<(&'static str, &'static [&'stati
 /// pointing the stage at its own output is an infinite feedback loop, and it
 /// holds the CMIO device open so the virtual-camera output can no longer
 /// start. Excluded from the picker and from default selection.
+/// The virtual camera as other apps see it. macOS: our own camera extension,
+/// named by us. Windows: win-dshow's DirectShow filter, whose FriendlyName is a
+/// literal inside obs-virtualcam-module ("OBS Virtual Camera") --- and on a
+/// machine with OBS Studio installed it is OBS's registration of the same CLSID
+/// that serves us. Renaming it means our own VIRTUALCAM_GUID plus a patch to the
+/// module; until then the label must be the truth, because the guest render
+/// page finds the device BY LABEL.
+#[cfg(target_os = "macos")]
 pub const VCAM_DEVICE_NAME: &str = "Producer Virtual Camera";
+#[cfg(target_os = "windows")]
+pub const VCAM_DEVICE_NAME: &str = "OBS Virtual Camera";
 
 fn drop_own_vcam(kind: &str, opts: Vec<DeviceOption>) -> Vec<DeviceOption> {
     if kind != "camera" {

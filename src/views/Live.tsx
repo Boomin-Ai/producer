@@ -3673,7 +3673,7 @@ export function LiveView({
             // deviceIds are salted per origin and can never match ours.
             const u = new URL(g.render_url!);
             if (micDeviceLabel) u.searchParams.set("mic", micDeviceLabel);
-            u.searchParams.set("program", "Producer Virtual Camera");
+            u.searchParams.set("program", vcamState?.device_name ?? "Producer Virtual Camera");
             await extraSources
               .add(id, g.display_name || "Guest", { kind: "guest", url: u.toString() })
               .catch(() => {});
