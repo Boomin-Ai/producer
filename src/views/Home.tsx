@@ -9,6 +9,7 @@ import type { TargetResult } from "../lib/ipc";
 import { WORKSPACE_EVENT, activeEndpointId, isBoomin, resolveActiveEndpoint, setActiveEndpointId } from "../lib/workspace";
 import { PREFS_EVENT, PREF_NETWORK_INVITE_DISMISSED, prefGet, prefSet } from "../lib/prefs";
 import { copyText, ensureRoomJoinLink } from "../lib/roomLink";
+import { THIS_DEVICE } from "../lib/platform";
 import { ipc,
   firewall,
   isRoomClosedError,
@@ -2898,7 +2899,7 @@ function WorkspacePopout({
                 <span className="ws-ava sm">{(b.name?.[0] ?? "B").toUpperCase()}</span>
                 <span className="ws-pop-txt">
                   <span className="ws-pop-name">{b.name}</span>
-                  <span className="ws-pop-slug">@{b.slug}{bound ? "" : " · not on this Mac"}</span>
+                  <span className="ws-pop-slug">@{b.slug}{bound ? "" : ` · not on ${THIS_DEVICE}`}</span>
                 </span>
                 {isCurrent ? <i className="ws-dot" /> : busy === b.slug ? <span className="ws-pop-slug">…</span> : null}
                 {bound && onOpenConsole && (
@@ -2944,7 +2945,7 @@ function WorkspacePopout({
               }}
             >
               <span className="ws-pop-name">Sign out</span>
-              <span className="ws-pop-slug">{active?.kind === "connected" ? "of Boomin on this Mac" : ""}</span>
+              <span className="ws-pop-slug">{active?.kind === "connected" ? `of Boomin on ${THIS_DEVICE}` : ""}</span>
             </button>
           )}
         </div>
