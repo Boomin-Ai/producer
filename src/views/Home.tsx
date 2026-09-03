@@ -1492,6 +1492,17 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
   const [tab, setTab] = useState<"connected" | "find">("connected");
   const [slug, setSlug] = useState("");
   const [email, setEmail] = useState("");
+  /** Our handle — the open invite link is boomin.ai/connect/join/<slug>. */
+  const [ownSlug, setOwnSlug] = useState<string | null>(null);
+  useEffect(() => {
+    resolveActiveEndpoint().then((ep) => setOwnSlug(ep?.brand_slug ?? null)).catch(() => setOwnSlug(null));
+  }, [endpointId]);
+  const inviteLink = ownSlug ? `https://boomin.ai/connect/join/${ownSlug}` : null;
+  const copyInviteLink = async () => {
+    if (!inviteLink) return;
+    const ok = await copyText(inviteLink);
+    setNote(ok ? "Invite link copied. Anyone who signs up through it joins the network connected to you." : inviteLink);
+  };
   const [card, setCard] = useState<NetworkBrandCard | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -1900,6 +1911,16 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
               Invite
             </button>
           </div>
+          {inviteLink && status?.membership?.status === "joined" && (
+            <button className="net-link-btn" onClick={() => void copyInviteLink()} title={inviteLink}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
+                <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
+              </svg>
+              <span>Copy your invite link</span>
+              <span className="net-link-url">boomin.ai/connect/join/{ownSlug}</span>
+            </button>
+          )}
           {card && (
             <div className="net-card">
               {card.brand.avatar_url ? (

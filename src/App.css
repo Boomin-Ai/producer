@@ -8202,3 +8202,41 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   overscroll-behavior-x: contain;
 }
 .rm-panel[data-in="top"] .rm-rows::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+/* ── Find tab: your open invite link ─────────────────────────────────────── */
+.net-link-btn {
+  all: unset; box-sizing: border-box; cursor: pointer;
+  display: grid; grid-template-columns: 16px 1fr; column-gap: 8px; align-items: center;
+  width: 100%; margin-top: 8px; padding: 8px 10px;
+  border-radius: 10px; border: 1px dashed var(--line-2); background: var(--surface-1); color: var(--fg-2);
+  font-size: 12.5px; font-weight: 600;
+}
+.net-link-btn:hover { background: var(--surface-2); color: var(--fg-1); border-style: solid; }
+.net-link-btn svg { width: 14px; height: 14px; grid-row: span 2; }
+.net-link-url { grid-column: 2; font-size: 11px; font-weight: 500; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Front door / sign-in backdrop: a quiet aurora, not a flat void ───────── */
+.shell { position: relative; isolation: isolate; }
+.shell::before {
+  content: ""; position: fixed; inset: -20%; z-index: -2; pointer-events: none;
+  background:
+    radial-gradient(42% 38% at 22% 18%, rgba(52, 211, 153, 0.16), transparent 70%),
+    radial-gradient(38% 42% at 80% 22%, rgba(96, 165, 250, 0.13), transparent 70%),
+    radial-gradient(50% 45% at 55% 95%, rgba(167, 139, 250, 0.10), transparent 70%);
+  filter: blur(40px);
+  animation: shell-drift 28s ease-in-out infinite alternate;
+}
+.shell::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(60% 60% at 50% 45%, #000 20%, transparent 100%);
+  -webkit-mask-image: radial-gradient(60% 60% at 50% 45%, #000 20%, transparent 100%);
+}
+@keyframes shell-drift {
+  from { transform: translate3d(-2%, -1%, 0) scale(1); }
+  to { transform: translate3d(2%, 2%, 0) scale(1.06); }
+}
+@media (prefers-reduced-motion: reduce) { .shell::before { animation: none; } }
