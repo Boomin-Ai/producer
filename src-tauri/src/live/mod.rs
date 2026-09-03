@@ -554,7 +554,8 @@ pub fn vcam_status() -> serde_json::Value {
             },
             "installed": installed,
             "device_name": graph::VCAM_DEVICE_NAME,
-            "error": if err.is_empty() { serde_json::Value::Null } else { serde_json::Value::from(err) },
+            // every string that can reach a user passes through user_facing
+            "error": if err.is_empty() { serde_json::Value::Null } else { serde_json::Value::from(engine::user_facing(&err)) },
         });
     }
     #[cfg(not(have_engine))]

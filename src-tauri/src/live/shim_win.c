@@ -513,7 +513,7 @@ void producer_vcam_activate(void)
     _snwprintf_s(dll32, MAX_PATH, _TRUNCATE, L"%s\\obs-virtualcam-module32.dll", g_vcam_dir);
     if (GetFileAttributesW(dll64) == INVALID_FILE_ATTRIBUTES) {
         g_vcam_state = 4;
-        snprintf(g_vcam_error, sizeof(g_vcam_error), "obs-virtualcam-module64.dll is not in the engine");
+        snprintf(g_vcam_error, sizeof(g_vcam_error), "the virtual camera module is missing from the engine");
         return;
     }
     if (!regsvr32(dll64)) {

@@ -66,10 +66,11 @@ if [[ -f "$PLUGDIR/obs-browser.dll" ]]; then
   # plugin loads, CefInitialize succeeds, and every browser source is black
   # because no render/GPU/network subprocess can spawn - a failure nothing else
   # here would catch.
-  if [[ -f "$PLUGDIR/obs-browser-page.exe" ]]; then
-    echo "  ok   CEF subprocess obs-browser-page.exe"
+  helper_exe="$(lock_get_file engine/producer-presets.json "[c for c in d['configurePresets'] if c['name']=='producer-windows'][0]['cacheVariables']['BROWSER_HELPER_OUTPUT_NAME']['value']").exe"
+  if [[ -f "$PLUGDIR/$helper_exe" ]]; then
+    echo "  ok   CEF subprocess $helper_exe"
   else
-    echo "  FAIL obs-browser-page.exe MISSING - browser sources render black" >&2
+    echo "  FAIL $helper_exe MISSING - browser sources render black" >&2
     fail=1
   fi
   # The .pak set is versioned by CEF build (resources.pak, chrome_100_percent.pak,

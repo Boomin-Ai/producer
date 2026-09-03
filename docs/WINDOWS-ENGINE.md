@@ -714,3 +714,13 @@ registers ours (elevated `regsvr32 /i /s`). Label is the same constant as macOS
 Remaining OBS-visible surfaces on Windows (Mac session's inventory, to sweep):
 `obs-browser-page.exe` (CEF helper, Task Manager) and any runtime text not
 routed through `engine::user_facing`.
+
+### CEF helper name (verified 2026-09-03)
+
+The pinned helper carries no version resource, so Task Manager shows its bare
+exe name. It is `Producer Helper.exe` (preset `BROWSER_HELPER_OUTPUT_NAME`,
+mirroring "Producer Helper.app" on macOS): the obs-browser patch's Windows
+hunks route `OUTPUT_NAME` and the spawn path in `obs-browser-plugin.cpp`
+through that one variable, and both Windows scripts read the name from the
+preset. Engine DLLs still carry OBS in their file-Properties version info
+(19 of them); that is not a surface a user is shown and is left alone.

@@ -395,3 +395,71 @@ index 6e80fbc..565f6aa 100644
  	ProcessCef();
  #endif
  }
+diff --git a/cmake/os-windows.cmake b/cmake/os-windows.cmake
+index 1484ea7..6305f59 100644
+--- a/cmake/os-windows.cmake
++++ b/cmake/os-windows.cmake
+@@ -4,6 +4,13 @@ target_compile_definitions(obs-browser PRIVATE ENABLE_BROWSER_SHARED_TEXTURE)
+ target_link_libraries(obs-browser PRIVATE CEF::Wrapper CEF::Library d3d11 dxgi)
+ target_link_options(obs-browser PRIVATE /IGNORE:4099)
+ 
++# Producer patch: the CEF helper exe is what Task Manager shows; embedding
++# hosts name it after themselves. The plugin spawns it by this name too.
++if(NOT DEFINED BROWSER_HELPER_OUTPUT_NAME)
++  set(BROWSER_HELPER_OUTPUT_NAME "obs-browser-page")
++endif()
++target_compile_definitions(obs-browser PRIVATE BROWSER_HELPER_OUTPUT_NAME="${BROWSER_HELPER_OUTPUT_NAME}")
++
+ add_executable(obs-browser-helper WIN32 EXCLUDE_FROM_ALL)
+ add_executable(OBS::browser-helper ALIAS obs-browser-helper)
+ 
+@@ -30,4 +37,4 @@ set_target_properties_obs(
+   obs-browser-helper
+   PROPERTIES FOLDER plugins/obs-browser
+              PREFIX ""
+-             OUTPUT_NAME obs-browser-page)
++             OUTPUT_NAME "${BROWSER_HELPER_OUTPUT_NAME}")
+diff --git a/cmake/windows/obs-browser-page.manifest b/cmake/windows/obs-browser-page.manifest
+index d8d34bd..ea5353a 100644
+--- a/cmake/windows/obs-browser-page.manifest
++++ b/cmake/windows/obs-browser-page.manifest
+@@ -1,6 +1,6 @@
+ <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+ <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+-    <description>OBS Browser Page (CEF)</description>
++    <description>Browser helper (CEF)</description>
+     <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+         <security>
+             <requestedPrivileges>
+diff --git a/obs-browser-page.manifest b/obs-browser-page.manifest
+index 29a9097..cdeeb8e 100644
+--- a/obs-browser-page.manifest
++++ b/obs-browser-page.manifest
+@@ -1,6 +1,6 @@
+ <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+ <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+-    <description>OBS Browser Page (CEF)</description>
++    <description>Browser helper (CEF)</description>
+     <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+         <security>
+             <requestedPrivileges>
+diff --git a/obs-browser-plugin.cpp b/obs-browser-plugin.cpp
+index 95a168c..1368a0f 100644
+--- a/obs-browser-plugin.cpp
++++ b/obs-browser-plugin.cpp
+@@ -272,7 +272,15 @@ static void BrowserInit(void)
+ {
+ 	string path = obs_get_module_binary_path(obs_current_module());
+ 	path = path.substr(0, path.find_last_of('/') + 1);
++#ifdef _WIN32
++	/* Producer patch: the helper exe is named by the build (default obs-browser-page) */
++#ifndef BROWSER_HELPER_OUTPUT_NAME
++#define BROWSER_HELPER_OUTPUT_NAME "obs-browser-page"
++#endif
++	path += "//" BROWSER_HELPER_OUTPUT_NAME;
++#else
+ 	path += "//obs-browser-page";
++#endif
+ #ifdef _WIN32
+ 	path += ".exe";
+ 	CefMainArgs args;

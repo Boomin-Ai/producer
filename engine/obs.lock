@@ -32,8 +32,8 @@
     {
       "dir": "engine/patches",
       "target": "plugins/obs-browser",
-      "sha256": "34aa071161df4ce8e68ad7324b7410d528e3905cd8a4f30c33b25d7aac1b1d6a",
-      "note": "obs-browser: libdispatch main-thread pump for hosts without a QApplication (macOS), Qt guarded on ENABLE_BROWSER_QT_LOOP (both)"
+      "sha256": "1581c351ed25c2fbd83a8c1b394fd90a48374102095e10270a2375eb79008438",
+      "note": "obs-browser: libdispatch main-thread pump for hosts without a QApplication (macOS), Qt guarded on ENABLE_BROWSER_QT_LOOP (both); Windows: CEF helper exe named by BROWSER_HELPER_OUTPUT_NAME (plugin spawns it by the same name)"
     },
     {
       "dir": "engine/patches/win-dshow",

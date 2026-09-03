@@ -96,7 +96,7 @@ set +x
 
 # obs-browser-helper is declared EXCLUDE_FROM_ALL in obs-browser's
 # cmake/os-windows.cmake, so the default target does NOT build it. It is the CEF
-# subprocess (OUTPUT_NAME obs-browser-page), and browser sources cannot render a
+# subprocess (OUTPUT_NAME from BROWSER_HELPER_OUTPUT_NAME), and browser sources cannot render a
 # single frame without it, so build it by name.
 if engine_plugins windows | grep -qx obs-browser; then
   (cd "$SRC_DIR" && cmake --build --preset producer-windows --target obs-browser-helper)
@@ -181,13 +181,16 @@ if engine_plugins windows | grep -qx obs-browser; then
   # rundir first: set_target_properties_obs stages it there via a post-build copy.
   # The build-tree fallback covers a helper that built but was not copied, which
   # is a different failure from one that never built at all.
-  page="$PLUGIN_SRC/obs-browser-page.exe"
-  [[ -f $page ]] || page="$(find "$BUILD" -name obs-browser-page.exe -print -quit 2>/dev/null || true)"
+  # named by the preset (BROWSER_HELPER_OUTPUT_NAME -> "Producer Helper.exe"):
+  # the helper is what Task Manager shows, so it must not say obs-browser-page
+  helper_exe="$(lock_get_file engine/producer-presets.json "[c for c in d['configurePresets'] if c['name']=='producer-windows'][0]['cacheVariables']['BROWSER_HELPER_OUTPUT_NAME']['value']").exe"
+  page="$PLUGIN_SRC/$helper_exe"
+  [[ -f $page ]] || page="$(find "$BUILD" -name "$helper_exe" -print -quit 2>/dev/null || true)"
   if [[ -n $page && -f $page ]]; then
     cp "$page" "$STAGE/obs-plugins/64bit/"
-    echo "staged CEF subprocess: obs-browser-page.exe ($page)"
+    echo "staged CEF subprocess: $helper_exe ($page)"
   else
-    echo "FATAL: obs-browser-page.exe not built - browser sources cannot render" >&2
+    echo "FATAL: $helper_exe not built - browser sources cannot render" >&2
     exit 1
   fi
 fi

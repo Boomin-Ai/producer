@@ -88,6 +88,22 @@
         "VIRTUALCAM_GUID": {
           "type": "STRING",
           "value": "FD88CA2B-8414-4137-966D-34152BE01AF6"
+        },
+        "BROWSER_HELPER_OUTPUT_NAME": {
+          "type": "STRING",
+          "value": "Producer Helper"
+        },
+        "BROWSER_HELPER_FILE_DESCRIPTION": {
+          "type": "STRING",
+          "value": "Producer Helper"
+        },
+        "BROWSER_HELPER_PRODUCT_NAME": {
+          "type": "STRING",
+          "value": "Producer"
+        },
+        "BROWSER_HELPER_COMPANY_NAME": {
+          "type": "STRING",
+          "value": "Boomin"
         }
       }
     }

@@ -196,8 +196,7 @@ apply_patchsets() {
     dir="$REPO_ROOT/$(lock_get "['patchsets'][$i]['dir']")"
     target="$src/$(lock_get "['patchsets'][$i]['target']")"
     want="$(lock_get "['patchsets'][$i]['sha256']")"
-    have="$(cat $(ls "$dir"/*.patch | sort) > "$src/.patchcat" && sha256_of "$src/.patchcat")"
-    rm -f "$src/.patchcat"
+    have="$(cat $(ls "$dir"/*.patch | sort) | "$(resolve_python)" -c 'import sys,hashlib; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')"
     [[ $want == "$have" ]] || { echo "FATAL: patchset $dir sha256 mismatch (lock $want, files $have)" >&2; return 1; }
     for patch in $(ls "$dir"/*.patch | sort); do
       if git -C "$target" apply --check "$patch" 2>/dev/null; then
