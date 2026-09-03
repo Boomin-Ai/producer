@@ -1166,7 +1166,7 @@ function PreviewPanel({ children }: { children?: ReactNode }) {
       if (!l || Math.abs(l.x - r.x) > 0.5 || Math.abs(l.y - r.y) > 0.5 || Math.abs(l.w - r.width) > 0.5 || Math.abs(l.h - r.height) > 0.5) {
         void send(r).catch(() => {});
       }
-    }, 1000);
+    }, 250);
     return () => {
       window.clearInterval(tick);
       window.clearTimeout(raf);
@@ -3827,7 +3827,10 @@ export function LiveView({
   };
   const anyPop =
     destsOpen || qualityOpen || micPopOpen || chatOpen || srcAddOpen || deviceMenu !== null || srcSubPop !== null ||
-    (sceneSettings !== null && dockOf(layout, "scenes") !== "bottom") || panelMenu !== null || layoutMenu || addMenu !== null || adding || !!editing;
+    // Scene settings are a POPOVER only on a side rail; in the bottom sheet
+    // and the top rail they are a strip in the flow — a popover backdrop
+    // there would sit over the strip and eat every click.
+    (sceneSettings !== null && dockOf(layout, "scenes") !== "bottom" && dockOf(layout, "scenes") !== "top") || panelMenu !== null || layoutMenu || addMenu !== null || adding || !!editing;
 
   const micStrip = (
     <MeterStrip
