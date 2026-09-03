@@ -1169,6 +1169,13 @@ pub fn start(
             // compare against, so the value only means anything over time.
             let cpu_info: *mut c_void = unsafe { ffi::os_cpu_usage_info_start() };
             let mut last_perf = Instant::now();
+            // The sources snapshot used to change only when a COMMAND ran, so
+            // a first-frame poll read stale width=0 until some unrelated
+            // command recomputed state (report #6: three unrelated capture
+            // stacks all "framed" at the same 5s mark). Refresh it on a
+            // 100ms cadence — a handful of FFI getters — without emitting an
+            // event, so the snapshot is live truth and the UI is not churned.
+            let mut last_src_refresh = Instant::now();
 
             let set_state = |state: &mut SessionState,
                              new: SessionState,
@@ -1185,6 +1192,12 @@ pub fn start(
                 // Performance is sampled whether or not a session is running:
                 // FPS and CPU tell you the machine is struggling BEFORE you go
                 // live, which is when the information is still actionable.
+                if last_src_refresh.elapsed() > Duration::from_millis(100) {
+                    last_src_refresh = Instant::now();
+                    if let Some(g) = scene.as_ref() {
+                        snap.lock().unwrap().sources = g.state();
+                    }
+                }
                 if last_perf.elapsed() > Duration::from_secs(1) {
                     last_perf = Instant::now();
                     unsafe {
