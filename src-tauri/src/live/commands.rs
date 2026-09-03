@@ -381,6 +381,31 @@ pub async fn live_preview_hidden(state: State<'_, AppState>, hidden: bool) -> En
         .map_err(EngineError::Other)
 }
 
+/// Float-mode preview (Windows): rects the webview is painting over the stage
+/// (popovers, menus, toasts). The engine punches them out of the preview
+/// window so they show through and take the mouse. No-op where the preview
+/// already sits below the webview.
+#[tauri::command]
+pub async fn live_preview_cutouts(
+    state: State<'_, AppState>,
+    rects: Vec<crate::live::CutoutRect>,
+) -> EngineResult<()> {
+    #[cfg(have_engine)]
+    let rects: Vec<crate::live::engine::PreviewRect> = rects
+        .into_iter()
+        .map(|r| crate::live::engine::PreviewRect {
+            x: r.x,
+            y: r.y,
+            w: r.w,
+            h: r.h,
+        })
+        .collect();
+    state
+        .live
+        .set_preview_cutouts(rects)
+        .map_err(EngineError::Other)
+}
+
 #[tauri::command]
 pub async fn live_set_transform(
     state: State<'_, AppState>,

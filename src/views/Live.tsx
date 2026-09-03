@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { installStageCutouts } from "../lib/stageCutouts";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   ipc,
@@ -1927,6 +1928,11 @@ export function LiveView({
   room?: RoomInfo;
   onLeave?: () => void;
 }) {
+  // Windows float mode: popovers/toasts over the stage are punched out of
+  // the native preview so they stay visible. No-op elsewhere.
+  useEffect(() => {
+    installStageCutouts();
+  }, []);
   const [destinations, setDestinations] = useState<LiveDestination[]>([]);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
   /** 60s render-load history for the stats sparkline (1Hz, CPU share). */

@@ -695,6 +695,8 @@ pub enum Command {
     },
     MovePreview(PreviewRect),
     SetPreviewHidden(bool),
+    /// Rects (CSS px, window client coords) the preview must not cover.
+    SetPreviewCutouts(Vec<PreviewRect>),
     DetachPreview,
     Shutdown,
 }
@@ -727,6 +729,7 @@ fn cmd_name(c: &Command) -> &'static str {
         Command::AttachPreview { .. } => "AttachPreview",
         Command::MovePreview { .. } => "MovePreview",
         Command::SetPreviewHidden { .. } => "SetPreviewHidden",
+        Command::SetPreviewCutouts { .. } => "SetPreviewCutouts",
         Command::DetachPreview { .. } => "DetachPreview",
         Command::Shutdown { .. } => "Shutdown",
     }
@@ -1033,6 +1036,11 @@ impl LiveHandle {
     pub fn set_preview_hidden(&self, hidden: bool) -> Result<(), String> {
         self.cmd
             .send(Command::SetPreviewHidden(hidden))
+            .map_err(|e| e.to_string())
+    }
+    pub fn set_preview_cutouts(&self, rects: Vec<PreviewRect>) -> Result<(), String> {
+        self.cmd
+            .send(Command::SetPreviewCutouts(rects))
             .map_err(|e| e.to_string())
     }
 
@@ -2142,6 +2150,25 @@ pub fn start(
                                 { let v = p.view as usize; let h = if hidden { 1 } else { 0 }; on_window_thread(move || ffi::producer_preview_set_hidden(v as *mut std::os::raw::c_void, h)) }
                             };
                         }
+                    }
+                    Ok(Command::SetPreviewCutouts(rects)) => {
+                        // Windows float mode only: elsewhere the preview sits
+                        // below the webview and nothing needs punching out.
+                        #[cfg(target_os = "windows")]
+                        if let Some(p) = preview.as_ref() {
+                            let v = p.view as usize;
+                            let flat: Vec<f64> =
+                                rects.iter().flat_map(|r| [r.x, r.y, r.w, r.h]).collect();
+                            on_window_thread(move || unsafe {
+                                ffi::producer_preview_set_cutouts(
+                                    v as *mut std::os::raw::c_void,
+                                    flat.as_ptr(),
+                                    flat.len() as std::os::raw::c_int / 4,
+                                )
+                            });
+                        }
+                        #[cfg(not(target_os = "windows"))]
+                        let _ = rects;
                     }
                     Ok(Command::DetachPreview) => {
                         if let Some(p) = preview.take() {

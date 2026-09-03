@@ -736,3 +736,17 @@ output unconditionally and checks the filter in `virtualcam_start` (last error
 elevated cmd chain, so the user sees one UAC prompt, not two. Meet lists
 "Producer Virtual Camera" and renders the program; OBS Studio's own camera
 stays listed on machines that have OBS installed — it is not ours to remove.
+
+## Float-mode cutouts (verified 2026-09-03)
+
+The preview HWND sits above the webview, so a popover, menu, or banner that
+opens over the stage was hidden by the video (the Channels popover, error
+banners). `src/lib/stageCutouts.ts` watches the DOM for `.rm-pop`,
+`.rm-banner`/`.rm-float`, `[role=menu|dialog|listbox]` and `[data-over-stage]`,
+and reports their rects (CSS px, window coords) through `live_preview_cutouts`;
+the shim punches them out of the preview's window region (`SetWindowRgn`,
+recomputed on every frame move) so the webview shows through — and receives
+the mouse — exactly there. Verified by pixel probe: a test popover over the
+stage reads 97% webview green through the hole; removing it restores the full
+region. macOS: the command is a no-op (the preview already sits below the
+webview).

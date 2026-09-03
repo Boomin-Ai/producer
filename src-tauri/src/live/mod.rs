@@ -10,6 +10,16 @@ pub mod creds;
 /// into the DirectShow filter (engine/patches/win-dshow). The guest page
 /// matches the device by this label. Ungated: the no-engine build reports it.
 pub const VCAM_DEVICE_NAME: &str = "Producer Virtual Camera";
+
+/// Wire shape of a preview cutout (CSS px, window client coordinates). The
+/// engine build converts it to engine::PreviewRect; the stub only needs a type.
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+pub struct CutoutRect {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
 #[cfg(have_engine)]
 pub mod engine;
 #[cfg(have_engine)]
@@ -498,6 +508,18 @@ impl Live {
     }
     #[cfg(not(have_engine))]
     pub fn set_preview_hidden(&self, _h: bool) -> Result<(), String> {
+        Ok(())
+    }
+
+    #[cfg(have_engine)]
+    pub fn set_preview_cutouts(&self, rects: Vec<engine::PreviewRect>) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .set_preview_cutouts(rects)
+    }
+    #[cfg(not(have_engine))]
+    pub fn set_preview_cutouts(&self, _r: Vec<CutoutRect>) -> Result<(), String> {
         Ok(())
     }
 
