@@ -2056,6 +2056,9 @@ export function LiveView({
     setLiveSizesState(v);
   };
   const shown: DockSizes = liveSizes ?? sizes;
+  /** Weights are earned per dock; legacy bare keys were bottom-row drags. */
+  const weightOf = (dock: Dock, id: PanelId): number | undefined =>
+    shown.weights?.[`${dock}:${id}`] ?? (dock === "bottom" ? shown.weights?.[id] : undefined);
   /** A short bottom dock IS the top form — the form system has one slim axis,
    * so panels collapse into exactly the console shapes they wear up top. */
   const bottomSlim = !!shown.bottom && shown.bottom <= ROW_SNAP;
@@ -2098,8 +2101,8 @@ export function LiveView({
         startY: e.clientY,
         a,
         b,
-        aW: sizes.weights?.[a] ?? 1,
-        bW: sizes.weights?.[b] ?? 1,
+        aW: weightOf(kind, a) ?? 1,
+        bW: weightOf(kind, b) ?? 1,
         aPx: dim(document.querySelector<HTMLElement>(`[data-panel="${a}"]`)),
         bPx: dim(document.querySelector<HTMLElement>(`[data-panel="${b}"]`)),
       };
@@ -2135,7 +2138,7 @@ export function LiveView({
       const aW = (aPx / total) * totalW;
       setLiveSizes({
         ...sizes,
-        weights: { ...sizes.weights, [r.a]: aW, [r.b]: totalW - aW },
+        weights: { ...sizes.weights, [`${r.kind}:${r.a}`]: aW, [`${r.kind}:${r.b}`]: totalW - aW },
       });
     } else {
       // Handles sit on the stage side of every dock, so growth is always a
@@ -4402,11 +4405,14 @@ export function LiveView({
       data-panel={id}
       data-in={formDockOf(id)}
       className={`rm-panel rm-panel-${id}${dragging === id ? " dragging" : ""}`}
-      style={
-        dockOf(layout, id) !== "hidden" && shown.weights?.[id]
-          ? { flexGrow: shown.weights[id], flexBasis: 0 }
-          : undefined
-      }
+      style={(() => {
+        // A weight is RELATIVE to a sibling and EARNED in a specific dock:
+        // alone, or in a dock it wasn't dragged in, it must not apply — a
+        // stale weight pinned chat mid-rail while guests filled.
+        const d = dockOf(layout, id);
+        const w = d === "hidden" || layout[d].length < 2 ? undefined : weightOf(d, id);
+        return w ? { flexGrow: w, flexBasis: 0 } : undefined;
+      })()}
     >
       <div className="rm-panel-head">
         <span
