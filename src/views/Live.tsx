@@ -1957,25 +1957,49 @@ export function LiveView({
   const [adding, setAdding] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [sources, setSources] = useState<LiveSources>({ screen: false, camera: false, mic: false });
-  /** First PIXELS: every visible item reports a frame. The veil lifts on the
-   * engine's transform ack; this is the later, honest "on stage" moment —
-   * recorded so the gap between the two is a number, not a feeling. */
+  /** First PIXELS, per source. The engine's has_frame only reaches React on
+   * a sources_changed edge, so we POLL engine truth every 100ms from the
+   * moment the document is applied: each visible item's first-frame time is
+   * recorded by id, and the report is re-written when the last one lands
+   * (or at 10s, naming who never did). This names the culprit — camera,
+   * screen capture, overlay — instead of a total. */
   const firstFramesDone = useRef(false);
   useEffect(() => {
     if (firstFramesDone.current || !docApplied) return;
-    const items = (sources.items ?? []).filter((i) => i.visible);
-    if (!items.length || !items.every((i) => i.has_frame)) return;
-    firstFramesDone.current = true;
-    mark("first_frames");
-    const m = mountMarks.current;
-    roomOpenReport({
-      ...m,
-      stall_max_ms: Math.round(stallMax.current),
-      boot_phases: snapRef.current?.boot_phases_ms ?? null,
-      at: new Date().toISOString(),
-    }).catch(() => {});
+    let alive = true;
+    const seen: Record<string, number> = {};
+    const t0 = performance.now();
+    const finish = (pending: string[]) => {
+      if (!alive || firstFramesDone.current) return;
+      firstFramesDone.current = true;
+      mark("first_frames");
+      const m = mountMarks.current;
+      roomOpenReport({
+        ...m,
+        first_frame_by_item: seen,
+        never_framed: pending,
+        stall_max_ms: Math.round(stallMax.current),
+        boot_phases: snapRef.current?.boot_phases_ms ?? null,
+        at: new Date().toISOString(),
+      }).catch(() => {});
+    };
+    const tick = async () => {
+      if (!alive) return;
+      const snap = await ipc.liveEngineStatus().catch(() => null);
+      if (!alive) return;
+      const items = (snap?.sources?.items ?? []).filter((i) => i.visible);
+      for (const i of items) if (i.has_frame && seen[i.id] == null) seen[i.id] = Math.round(performance.now() - mountT0.current);
+      const pending = items.filter((i) => !i.has_frame).map((i) => i.id);
+      if (items.length && pending.length === 0) return finish([]);
+      if (performance.now() - t0 > 10_000) return finish(pending);
+      window.setTimeout(tick, 100);
+    };
+    void tick();
+    return () => {
+      alive = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sources.items, docApplied]);
+  }, [docApplied]);
   const [micLevel, setMicLevel] = useState(0);
   const [appVersion, setAppVersion] = useState<string | null>(null);
   type RepoRelease = { tag_name: string; name: string | null; body: string | null; published_at: string; html_url: string };
