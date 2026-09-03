@@ -351,6 +351,34 @@ impl ProducerClient {
     }
 
     /// action: accept | decline | revoke
+    /// Invite someone who is not (yet) on Boomin — or whose handle you don't
+    /// know — by email. The server mints a single-use link; they sign in, pick
+    /// the brand, and the membership records that WE brought them in.
+    pub async fn network_invite_email(
+        &self,
+        to_email: &str,
+        message: Option<String>,
+    ) -> EngineResult<Value> {
+        let mut body = serde_json::Map::new();
+        body.insert("to_email".into(), Value::String(to_email.to_string()));
+        if let Some(m) = message {
+            body.insert("message".into(), Value::String(m));
+        }
+        let resp = self
+            .http
+            .post(self.root_url("/v1/app/network/invitations"))
+            .bearer_auth(&self.token)
+            .json(&Value::Object(body))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     pub async fn network_invitation_action(&self, id: &str, action: &str) -> EngineResult<Value> {
         let resp = self
             .http

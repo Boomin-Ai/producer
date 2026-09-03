@@ -509,6 +509,14 @@ export const network = {
   invitations: (endpointId: string, direction: "inbox" | "outbox") =>
     invoke<{ invitations?: NetworkInvitation[] }>("network_invitations", { endpointId, direction }),
   /** Slugs are unique platform-wide, so a slug addresses a brand on its own. */
+  /** Email-addressed invite: the recipient signs in, picks the brand, and the
+   *  network records that we brought them in. */
+  inviteEmail: (endpointId: string, toEmail: string, message?: string) =>
+    invoke<{ kind: "emailed"; invite_url: string }>("network_invite_email", {
+      endpointId,
+      toEmail,
+      message: message ?? null,
+    }),
   invite: (endpointId: string, toSlug: string, message?: string) =>
     invoke<{ kind: "invited" | "connected"; invitation?: NetworkInvitation }>("network_invite", {
       endpointId,

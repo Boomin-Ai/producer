@@ -94,6 +94,7 @@ pub fn run() {
             ipc::boomin_add_brand,
             ipc::connect_channel,
             ipc::network_join,
+            ipc::network_invite_email,
             ipc::network_status,
             ipc::network_invitations,
             ipc::network_invite,

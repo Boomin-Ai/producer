@@ -1488,6 +1488,7 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
   const [deals, setDeals] = useState<NetworkDeal[]>([]);
   const [tab, setTab] = useState<"connected" | "find">("connected");
   const [slug, setSlug] = useState("");
+  const [email, setEmail] = useState("");
   const [card, setCard] = useState<NetworkBrandCard | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -1615,6 +1616,25 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
 
   const liveNow = status?.network?.live_now ?? 0;
   const members = status?.network?.members ?? 0;
+
+  /** Invite by email — for someone not on the network (or Boomin) yet. The
+   *  server emails them a single-use link; joining through it attributes
+   *  their membership to this brand. */
+  const inviteByEmail = async () => {
+    const to = email.trim();
+    if (!to || !endpointId) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      await network.inviteEmail(endpointId, to);
+      setEmail("");
+      setNote(`Invite sent to ${to}. When they join through it, they'll show up here connected to you.`);
+    } catch (e) {
+      setNote(String(e).replace(/^Error:\s*/, ""));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const find = async () => {
     const q = slug.trim().replace(/^@/, "");
@@ -1860,6 +1880,21 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
             />
             <button className="cr-primary" disabled={busy || !slug.trim()} onClick={() => void find()}>
               Find
+            </button>
+          </div>
+          <div className="net-invite-row net-email-row">
+            <input
+              className="net-slug"
+              type="email"
+              placeholder="Not on Boomin yet? Invite by email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void inviteByEmail();
+              }}
+            />
+            <button className="cr-ghost" disabled={busy || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())} onClick={() => void inviteByEmail()}>
+              Invite
             </button>
           </div>
           {card && (
