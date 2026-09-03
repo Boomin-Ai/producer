@@ -119,31 +119,67 @@ extern "C" fn video_cb(_param: *mut c_void, _frame: *mut ffi::video_data) {
 
 /// Run a closure on the macOS main thread (blocking) — used for the TCC
 /// preflight/request calls, which can present system UI.
+struct MainCtx<F, T> {
+    f: Option<F>,
+    out: Option<T>,
+}
+
 pub(crate) fn on_main_thread<T: Send, F: FnOnce() -> T + Send>(f: F) -> T {
     if unsafe { ffi::pthread_main_np() } == 1 {
         return f();
     }
-    struct Ctx<F, T> {
-        f: Option<F>,
-        out: Option<T>,
-    }
-    extern "C" fn run<F: FnOnce() -> T, T>(ctx: *mut c_void) {
-        let ctx = unsafe { &mut *(ctx as *mut Ctx<F, T>) };
-        let f = ctx.f.take().unwrap();
-        ctx.out = Some(f());
-    }
-    let mut ctx = Ctx {
+    let mut ctx = MainCtx {
         f: Some(f),
         out: None,
     };
+    // Queue wait vs. block time: the engine loop stalled ~4.5s in commands
+    // that hop to the main thread. If the WAIT is long, the main thread is
+    // busy with someone else's work; if the BLOCK is long, it is ours.
+    let t_wait = Instant::now();
+    MAIN_HOP_START.store(0, std::sync::atomic::Ordering::Relaxed);
     unsafe {
         ffi::dispatch_sync_f(
             &ffi::_dispatch_main_q as *const c_void,
-            &mut ctx as *mut Ctx<_, T> as *mut c_void,
-            run::<F, T>,
+            &mut ctx as *mut MainCtx<_, T> as *mut c_void,
+            run_timed::<F, T>,
         );
     }
+    let total = t_wait.elapsed().as_millis();
+    let block = MAIN_HOP_START.load(std::sync::atomic::Ordering::Relaxed) as u128;
+    if total > 150 {
+        if let Some(dir) = crate::live::report_dir() {
+            use std::io::Write;
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(dir.join("slow-cmds.log"))
+            {
+                let _ = f.write_all(
+                    format!(
+                        "main-hop wait={}ms block={}ms\n",
+                        total.saturating_sub(block),
+                        block
+                    )
+                    .as_bytes(),
+                );
+            }
+        }
+    }
     ctx.out.unwrap()
+}
+
+/// Block duration of the last main-thread hop (ms), set by run_timed.
+static MAIN_HOP_START: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+extern "C" fn run_timed<F: FnOnce() -> T, T>(ctx: *mut c_void) {
+    let t0 = Instant::now();
+    let ctx = unsafe { &mut *(ctx as *mut MainCtx<F, T>) };
+    let f = ctx.f.take().unwrap();
+    ctx.out = Some(f());
+    MAIN_HOP_START.store(
+        t0.elapsed().as_millis() as u64,
+        std::sync::atomic::Ordering::Relaxed,
+    );
 }
 
 /// UUID string of the main display, via the same CoreGraphics calls OBS's
@@ -199,6 +235,10 @@ pub struct ItemState {
     pub z: i32,
     pub src_w: u32,
     pub src_h: u32,
+    /// A frame has arrived: async capture sources report width 0 until their
+    /// first frame lands. The honest "on stage" signal (browser sources
+    /// report their configured size, so they count from creation).
+    pub has_frame: bool,
     /// Audio facts, so the mixer can show a strip for anything that makes
     /// sound rather than only the microphone.
     pub has_audio: bool,
@@ -530,6 +570,29 @@ impl SceneGraph {
         }
     }
 
+    /// Probe: per item (id, width, active, showing). Answers WHY a source
+    /// reports no frame — not active, not showing, or simply no width yet.
+    pub fn frame_probe(&self) -> Vec<(String, u32, bool, bool)> {
+        self.items()
+            .into_iter()
+            .map(|it| {
+                let src = self.source_by_id(&it.id).unwrap_or(std::ptr::null_mut());
+                unsafe {
+                    if src.is_null() {
+                        (it.id, 0, false, false)
+                    } else {
+                        (
+                            it.id,
+                            ffi::obs_source_get_width(src),
+                            ffi::obs_source_active(src),
+                            ffi::obs_source_showing(src),
+                        )
+                    }
+                }
+            })
+            .collect()
+    }
+
     pub fn state(&self) -> SourcesState {
         SourcesState {
             screen: self.screen.is_some(),
@@ -594,11 +657,20 @@ impl SceneGraph {
                 crop_bottom: crop.bottom,
                 z: ffi::obs_sceneitem_get_order_position(item),
                 src_w,
+                has_frame: src_w > 0,
                 src_h,
                 // OBS_SOURCE_AUDIO = 1 << 1
                 has_audio: !src.is_null() && (ffi::obs_source_get_output_flags(src) & 0x2) != 0,
-                sync_ms: if src.is_null() { 0 } else { ffi::obs_source_get_sync_offset(src) / 1_000_000 },
-                volume: if src.is_null() { 1.0 } else { ffi::obs_source_get_volume(src) },
+                sync_ms: if src.is_null() {
+                    0
+                } else {
+                    ffi::obs_source_get_sync_offset(src) / 1_000_000
+                },
+                volume: if src.is_null() {
+                    1.0
+                } else {
+                    ffi::obs_source_get_volume(src)
+                },
                 muted: !src.is_null() && ffi::obs_source_muted(src),
             });
         };
@@ -1011,7 +1083,11 @@ impl SceneGraph {
                     ffi::obs_data_set_int(d, CString::new("height").unwrap().as_ptr(), bh as i64);
                     // The guest's voice must land in the mixer as this
                     // source's own strip, not on the desktop bus.
-                    ffi::obs_data_set_bool(d, CString::new("reroute_audio").unwrap().as_ptr(), true);
+                    ffi::obs_data_set_bool(
+                        d,
+                        CString::new("reroute_audio").unwrap().as_ptr(),
+                        true,
+                    );
                     // A guest page is a live call: never suspend it when the
                     // source is hidden, or muting a guest would disconnect
                     // them mid-conversation.
@@ -1109,7 +1185,11 @@ impl SceneGraph {
         let e = self.extras.remove(idx);
         if matches!(e.kind, "guest" | "media") {
             unsafe {
-                ffi::obs_source_remove_audio_capture_callback(e.src, extra_audio_cb, ptr::null_mut());
+                ffi::obs_source_remove_audio_capture_callback(
+                    e.src,
+                    extra_audio_cb,
+                    ptr::null_mut(),
+                );
             }
             peak_slot_release(e.src);
         }
@@ -1471,7 +1551,12 @@ impl SceneGraph {
 
     /// Volume/mute for ANY source, not just the mic — guests, media and
     /// overlays all reach the mix and all deserve a fader.
-    pub fn set_source_audio(&mut self, id: &str, volume: Option<f32>, muted: Option<bool>) -> Result<(), String> {
+    pub fn set_source_audio(
+        &mut self,
+        id: &str,
+        volume: Option<f32>,
+        muted: Option<bool>,
+    ) -> Result<(), String> {
         if id == "mic" {
             self.set_mic_audio(volume, muted);
             return Ok(());
@@ -1702,11 +1787,13 @@ pub fn capture_probe(window: Duration) -> CaptureProbeReport {
     }
 }
 
-
 impl SceneGraph {
     /// Cheap gate: does any metered extra exist at all?
     pub fn take_extra_peaks_ids_empty(&self) -> bool {
-        !self.extras.iter().any(|e| matches!(e.kind, "guest" | "media"))
+        !self
+            .extras
+            .iter()
+            .any(|e| matches!(e.kind, "guest" | "media"))
     }
 
     /// Peak-and-reset for every metered extra since the last call, 0..=1.
@@ -1730,7 +1817,6 @@ impl SceneGraph {
 
 pub const THUMB_W: u32 = 256;
 pub const THUMB_H: u32 = 144;
-
 
 // ═══ ThumbHub — the preview distribution primitive (docs/THUMB-PIPELINE-V2) ═
 // Graphics thread produces (on the compositor's own cadence, deferred-map
@@ -1830,7 +1916,10 @@ impl ThumbHub {
                     // CEF WasHidden(true) — no frames, texture torn down, and
                     // its video_render body is `if (texture)`: silent black.
                     ffi::obs_source_inc_showing(r);
-                    next.push(ThumbTarget { id: id.to_string(), src: r });
+                    next.push(ThumbTarget {
+                        id: id.to_string(),
+                        src: r,
+                    });
                 }
             }
         }
@@ -1855,7 +1944,9 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
     if fps == 0 {
         return;
     }
-    let n = hub.frame_no.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let n = hub
+        .frame_no
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let divisor = (60 / fps.clamp(1, 60)).max(1);
     if n % divisor != 0 {
         return;
@@ -1894,7 +1985,12 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
             let sh = ffi::obs_source_get_height(t.src).max(1);
             ffi::gs_texrender_reset(ring.rt);
             if ffi::gs_texrender_begin(ring.rt, THUMB_W, THUMB_H) {
-                let clear = ffi::vec4 { x: 0.0, y: 0.0, z: 0.0, w: 1.0 };
+                let clear = ffi::vec4 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                    w: 1.0,
+                };
                 ffi::gs_clear(1, &clear, 0.0, 0);
                 ffi::gs_ortho(0.0, sw as f32, 0.0, sh as f32, -100.0, 100.0);
                 // NEVER trust ambient blend state for a standalone source
@@ -1919,7 +2015,9 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
                     && !data.is_null()
                 {
                     let waited = t0.elapsed().as_micros() as u64;
-                    let prev = hub.readback_wait_us_max.load(std::sync::atomic::Ordering::Relaxed);
+                    let prev = hub
+                        .readback_wait_us_max
+                        .load(std::sync::atomic::Ordering::Relaxed);
                     if waited > prev {
                         hub.readback_wait_us_max
                             .store(waited, std::sync::atomic::Ordering::Relaxed);

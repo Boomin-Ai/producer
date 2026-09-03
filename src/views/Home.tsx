@@ -6,11 +6,20 @@ import type { Channel, EndpointInfo, Job, LiveDestination, LiveRoom, LiveSnapsho
 import type { TargetResult } from "../lib/ipc";
 import { ipc,
   network,
+  networkConnections,
+  networkJoin,
+  registerRoom,
+  roomSetVisibility,
   type NetworkStatus,
   type NetworkInvitation,
+  type NetworkBrandCard,
+  type NetworkConnectionRow,
+  type NetworkLiveRoom,
 } from "../lib/ipc";
 import { demoOn, setDemo } from "../lib/demo";
-import { liveRoomId } from "../lib/room";
+import { markHomePainted, markRoomClick } from "../lib/perf";
+import { KEYMAP, getKey, setKey, resetKey, displayKey, type KeyBinding } from "../lib/keys";
+import { liveRoomId, parseConfig, serializeConfig } from "../lib/room";
 import { useUpdater } from "../lib/updater";
 import { DestinationEditor, LiveView } from "./Live";
 
@@ -361,7 +370,10 @@ export function Home({
           channels={channels}
           jobs={jobs}
           streaming={streaming}
-          onOpenRoom={(room) => setView({ kind: "room", room })}
+          onOpenRoom={(room) => {
+            markRoomClick();
+            setView({ kind: "room", room });
+          }}
           onRoomsChanged={loadLive}
           onCompose={() => setView({ kind: "compose" })}
           onHistory={() => setView({ kind: "history" })}
@@ -500,6 +512,30 @@ function SettingsSheet({
   onClose: () => void;
 }) {
   const [appVersion, setAppVersion] = useState<string | null>(null);
+  type RepoRelease = { tag_name: string; name: string | null; body: string | null; published_at: string; html_url: string };
+  const [releases, setReleases] = useState<RepoRelease[] | null | "err">(null);
+  useEffect(() => {
+    fetch("https://api.github.com/repos/Boomin-Ai/producer/releases?per_page=8")
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((rs: RepoRelease[]) => setReleases(rs))
+      .catch(() => setReleases("err"));
+  }, []);
+  const linkifyRel = (text: string) =>
+    text.split(/(#\d+|https?:\/\/\S+)/g).map((part, k) => {
+      if (/^#\d+$/.test(part))
+        return (
+          <a key={k} className="upd-ref" onClick={() => openUrl(`https://github.com/Boomin-Ai/producer/issues/${part.slice(1)}`).catch(() => {})}>
+            {part}
+          </a>
+        );
+      if (/^https?:\/\//.test(part))
+        return (
+          <a key={k} className="upd-ref" onClick={() => openUrl(part).catch(() => {})}>
+            {part.replace(/^https?:\/\/(www\.)?/, "").slice(0, 40)}
+          </a>
+        );
+      return part;
+    });
 
   useEffect(() => {
     import("@tauri-apps/api/app")
@@ -561,6 +597,60 @@ function SettingsSheet({
         </div>
 
         <div className="cr-label" style={{ marginTop: 28 }}>
+          SHORTCUTS
+        </div>
+        <div className="ks">
+          {KEYMAP.map((b) => (
+            <KeyRow key={b.id} b={b} />
+          ))}
+          {/* The grammar — fixed on purpose, listed so it can be learned. */}
+          {([
+            ["⌘1–9", "Cut to a scene"],
+            ["Arrows", "Nudge selected (⇧ ×10)"],
+            ["⌥ drag edge", "Crop instead of scale"],
+            ["Esc", "Deselect"],
+          ] as const).map(([k, label]) => (
+            <div key={k} className="ks-row fixed">
+              <span className="ks-label">{label}</span>
+              <span className="ks-key">{k}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="cr-label" style={{ marginTop: 28 }}>
+          WHAT'S NEW
+        </div>
+        <div className="upd upd-sheet">
+          {releases === null && <div className="cr-sheet-row-sub">Checking…</div>}
+          {releases === "err" && (
+            <div className="cr-sheet-row-sub">The update stream goes live when the repo does.</div>
+          )}
+          {Array.isArray(releases) &&
+            releases.map((r) => (
+              <div key={r.tag_name} className="upd-item">
+                <div className="upd-head" onClick={() => openUrl(r.html_url).catch(() => {})}>
+                  <span className="upd-tag">{r.tag_name}</span>
+                  <span className="upd-name">{r.name || ""}</span>
+                  <span className="upd-date">
+                    {new Date(r.published_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                  </span>
+                </div>
+                {r.body && (
+                  <div className="upd-body">
+                    {r.body
+                      .split("\n")
+                      .filter((l) => l.trim())
+                      .slice(0, 4)
+                      .map((l, k) => (
+                        <p key={k}>{linkifyRel(l.replace(/^[-*#\s]+/, ""))}</p>
+                      ))}
+                  </div>
+                )}
+              </div>
+            ))}
+        </div>
+
+        <div className="cr-label" style={{ marginTop: 28 }}>
           DEV
         </div>
         <div className="cr-sheet-rows">
@@ -604,6 +694,10 @@ function ControlRoomHome({
   onHistory: () => void;
 }) {
   const [naming, setNaming] = useState(false);
+  useEffect(() => {
+    // Post-commit ≈ first paint of the home. One-shot, module-level.
+    markHomePainted();
+  }, []);
   const liveRoom = streaming ? liveRoomId() : null;
   const [name, setName] = useState("");
 
@@ -621,9 +715,15 @@ function ControlRoomHome({
   }
 
   return (
-    <main className="cr-home">
+    <main className={`cr-home${surface === "rooms" ? " has-net-rail" : ""}`}>
       {surface === "rooms" && (
       <>
+      {/* Network lives at HOME, never inside a room: a failed network call
+        * here is harmless, whereas mid-broadcast it would be noise over a
+        * running show. The rail is FIXED against the icon rail — attached,
+        * full height, part of the furniture rather than a floating card. */}
+      <NetworkRail />
+      <LiveNowStrip />
       <section className="cr-section" id="sec-onair">
         <div className="cr-label">
           ON AIR
@@ -657,6 +757,7 @@ function ControlRoomHome({
               >
                 ✕
               </span>
+              <RoomShareChip room={room} onChanged={onRoomsChanged} />
             </button>
           ))}
           {naming ? (
@@ -686,10 +787,6 @@ function ControlRoomHome({
         </div>
       </section>
 
-      {/* Network lives at HOME, never inside a room: a failed network call
-        * here is harmless, whereas mid-broadcast it would be noise over a
-        * running show. */}
-      <NetworkStrip />
       </>
       )}
 
@@ -1309,62 +1406,86 @@ function HistoryView({
 /** Brand Network at a glance: how many are live, who's waiting on you, and a
  * slug field to invite someone. Slugs are unique platform-wide, so typing one
  * addresses a brand exactly — no picker needed. */
-function NetworkStrip() {
+/** Resolve the connected Boomin endpoint once — every network surface needs it. */
+function useConnectedEndpoint(): string | null {
   const [endpointId, setEndpointId] = useState<string | null>(null);
-  const [status, setStatus] = useState<NetworkStatus | null>(null);
-  const [inbox, setInbox] = useState<NetworkInvitation[]>([]);
-  const [slug, setSlug] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
-
-  const load = useCallback(async (id: string) => {
-    const [st, inv] = await Promise.all([
-      network.status(id).catch(() => null),
-      network.invitations(id, "inbox").catch(() => null),
-    ]);
-    if (st) setStatus(st);
-    setInbox(inv?.invitations ?? []);
-  }, []);
-
   useEffect(() => {
     let alive = true;
     ipc
       .listEndpoints()
       .then((eps) => {
         const ep = eps.find((e) => e.kind === "connected") ?? eps[0];
-        if (!alive || !ep) return;
-        setEndpointId(ep.id);
-        load(ep.id);
+        if (alive && ep) setEndpointId(ep.id);
       })
       .catch(() => {});
     return () => {
       alive = false;
     };
-  }, [load]);
+  }, []);
+  return endpointId;
+}
 
-  // Not connected, or not a member: nothing useful to show, so show nothing
-  // rather than an empty shell.
-  if (!endpointId || !status?.membership) return null;
+/** The network rail — a left column on the control room home.
+ *
+ * Discovery is EXACT-HANDLE ONLY, by design: Producer is never handed the
+ * directory list, so the Find tab resolves a handle you were given and
+ * nothing more. Connected shows the brands who already said yes, with the
+ * inbox of open handshakes above them. */
+function NetworkRail() {
+  const endpointId = useConnectedEndpoint();
+  const [status, setStatus] = useState<NetworkStatus | null>(null);
+  const [inbox, setInbox] = useState<NetworkInvitation[]>([]);
+  const [conns, setConns] = useState<NetworkConnectionRow[]>([]);
+  const [tab, setTab] = useState<"connected" | "find">("connected");
+  const [slug, setSlug] = useState("");
+  const [card, setCard] = useState<NetworkBrandCard | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
 
-  const liveNow = status.network?.live_now ?? 0;
-  const members = status.network?.members ?? 0;
+  const load = useCallback(async (id: string) => {
+    const [st, inv, cn] = await Promise.all([
+      network.status(id).catch(() => null),
+      network.invitations(id, "inbox").catch(() => null),
+      networkConnections(id).catch(() => null),
+    ]);
+    if (st) setStatus(st);
+    setInbox((inv?.invitations ?? []).filter((i) => i.status === "invited"));
+    setConns(cn?.connections ?? []);
+  }, []);
 
-  const invite = async () => {
-    const s = slug.trim().replace(/^@/, "");
-    if (!s) return;
+  useEffect(() => {
+    if (endpointId) void load(endpointId);
+  }, [endpointId, load]);
+
+  if (!endpointId) return null;
+
+  const liveNow = status?.network?.live_now ?? 0;
+  const members = status?.network?.members ?? 0;
+
+  const find = async () => {
+    const q = slug.trim().replace(/^@/, "");
+    if (!q || !endpointId) return;
     setBusy(true);
     setNote(null);
+    setCard(null);
     try {
-      const res = await network.invite(endpointId, s);
-      // A counter-invite IS acceptance: inviting someone who already invited
-      // you returns a connection, not a second invitation.
-      setNote(
-        res.kind === "connected"
-          ? `Connected with ${res.invitation?.brand?.name ?? s}.`
-          : `Invited ${res.invitation?.brand?.name ?? s}.`,
-      );
-      setSlug("");
-      load(endpointId);
+      setCard(await network.lookup(endpointId, q));
+    } catch (e) {
+      setNote(String(e).replace(/^Error:\s*/, ""));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const inviteCard = async () => {
+    if (!endpointId || !card) return;
+    setBusy(true);
+    try {
+      const res = await network.invite(endpointId, card.brand.slug);
+      // A counter-invite IS acceptance server-side.
+      setNote(res.kind === "connected" ? `Connected with ${card.brand.name}.` : `Invited ${card.brand.name}.`);
+      setCard(await network.lookup(endpointId, card.brand.slug).catch(() => null) ?? null);
+      void load(endpointId);
     } catch (e) {
       setNote(String(e).replace(/^Error:\s*/, ""));
     } finally {
@@ -1373,25 +1494,52 @@ function NetworkStrip() {
   };
 
   const act = async (id: string, action: "accept" | "decline") => {
+    if (!endpointId) return;
     await network.act(endpointId, id, action).catch(() => {});
-    load(endpointId);
+    void load(endpointId);
+    if (card) setCard(await network.lookup(endpointId, card.brand.slug).catch(() => null) ?? null);
   };
 
+  if (!status?.membership) {
+    return (
+      <aside className="net-rail">
+        <div className="net-rail-head">NETWORK</div>
+        <div className="cr-hint">
+          List your brand on the Boomin network to connect with other producers and open your stages to them.
+        </div>
+        <button
+          className="cr-primary"
+          onClick={() => networkJoin(endpointId).then(() => load(endpointId)).catch(() => {})}
+        >
+          Join the network
+        </button>
+      </aside>
+    );
+  }
+
   return (
-    <section className="cr-section" id="sec-network">
-      <div className="cr-label">
+    <aside className="net-rail">
+      <div className="net-rail-head">
         NETWORK
-        <span className="cr-label-actions">
-          <span className="net-count">
-            <span className="net-dot" />
-            {liveNow} live now
-            <span className="net-of">of {members}</span>
-          </span>
+        <span className="net-count">
+          <span className="net-dot" />
+          {liveNow} live
+          <span className="net-of">of {members}</span>
         </span>
       </div>
 
-      {inbox.length > 0 && (
-        <div className="net-invites">
+      <div className="net-tabs">
+        <button className={tab === "connected" ? "on" : ""} onClick={() => setTab("connected")}>
+          Connected{conns.length ? ` · ${conns.length}` : ""}
+          {inbox.length > 0 && <span className="net-badge">{inbox.length}</span>}
+        </button>
+        <button className={tab === "find" ? "on" : ""} onClick={() => setTab("find")}>
+          Find
+        </button>
+      </div>
+
+      {tab === "connected" && (
+        <div className="net-list">
           {inbox.map((i) => (
             <div key={i.id} className="net-invite">
               <span className="net-invite-name">{i.brand?.name ?? i.brand?.slug}</span>
@@ -1404,28 +1552,266 @@ function NetworkStrip() {
               </button>
             </div>
           ))}
+          {conns.map((c) => (
+            <div key={c.connection.id} className="net-conn">
+              {c.counterparty.avatarUrl ? (
+                <img className="net-ava" src={c.counterparty.avatarUrl} alt="" />
+              ) : (
+                <span className="net-ava net-ava-ph">{(c.counterparty.name || "?").slice(0, 1)}</span>
+              )}
+              <span className="net-conn-txt">
+                <span className="net-conn-name">{c.counterparty.name}</span>
+                <span className="net-conn-slug">@{c.counterparty.slug}</span>
+              </span>
+            </div>
+          ))}
+          {inbox.length === 0 && conns.length === 0 && (
+            <div className="cr-hint">No connections yet. Find a producer by their handle.</div>
+          )}
         </div>
       )}
 
-      <div className="net-invite-row">
-        <input
-          className="net-slug"
-          placeholder="Invite by handle — e.g. kleveland"
-          value={slug}
-          onChange={(e) => setSlug(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") invite();
-          }}
-        />
-        <button className="cr-primary" disabled={busy || !slug.trim()} onClick={invite}>
-          {busy ? "Sending…" : "Invite"}
-        </button>
+      {tab === "find" && (
+        <div className="net-find">
+          <div className="net-invite-row">
+            <input
+              className="net-slug"
+              placeholder="Handle — e.g. kleveland"
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void find();
+              }}
+            />
+            <button className="cr-primary" disabled={busy || !slug.trim()} onClick={() => void find()}>
+              Find
+            </button>
+          </div>
+          {card && (
+            <div className="net-card">
+              {card.brand.avatar_url ? (
+                <img className="net-ava" src={card.brand.avatar_url} alt="" />
+              ) : (
+                <span className="net-ava net-ava-ph">{(card.brand.name || "?").slice(0, 1)}</span>
+              )}
+              <span className="net-conn-txt">
+                <span className="net-conn-name">{card.brand.name}</span>
+                <span className="net-conn-slug">@{card.brand.slug}</span>
+                {card.membership.headline && <span className="net-card-head">{card.membership.headline}</span>}
+              </span>
+              {card.relationship.self ? (
+                <span className="net-state">You</span>
+              ) : card.relationship.connected ? (
+                <span className="net-state on">Connected</span>
+              ) : card.relationship.invitation?.direction === "inbox" ? (
+                <button className="cr-primary" disabled={busy} onClick={() => act(card.relationship.invitation!.id, "accept")}>
+                  Accept
+                </button>
+              ) : card.relationship.invitation ? (
+                <span className="net-state">Invited</span>
+              ) : (
+                <button className="cr-primary" disabled={busy} onClick={() => void inviteCard()}>
+                  Invite
+                </button>
+              )}
+            </div>
+          )}
+          {note && <div className="cr-hint">{note}</div>}
+        </div>
+      )}
+    </aside>
+  );
+}
+
+/** Open stages this brand may see — connections' rooms and public ones.
+ * Entering KNOCKS: the API seats us in the host's waiting room with our
+ * verified brand identity, and the guest page opens to wait for the admit. */
+function LiveNowStrip() {
+  const endpointId = useConnectedEndpoint();
+  const [rooms, setRooms] = useState<NetworkLiveRoom[]>([]);
+  const [entering, setEntering] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!endpointId) return;
+    let alive = true;
+    const poll = () => {
+      network
+        .liveRooms(endpointId)
+        .then((r) => {
+          if (alive) setRooms(r.rooms ?? []);
+        })
+        .catch(() => {});
+    };
+    poll();
+    const t = window.setInterval(poll, 30_000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, [endpointId]);
+
+  if (!endpointId || (rooms.length === 0 && !note)) return null;
+
+  const enter = async (r: NetworkLiveRoom) => {
+    setEntering(r.room_id);
+    setNote(null);
+    try {
+      const res = await network.enterRoom(endpointId, r.room_id);
+      await openUrl(res.join_url);
+      setNote(`Knocked on ${r.brand.name}'s stage — your guest seat opened in the browser.`);
+    } catch (e) {
+      setNote(String(e).replace(/^Error:\s*/, ""));
+    } finally {
+      setEntering(null);
+    }
+  };
+
+  return (
+    <section className="cr-section" id="sec-livenow">
+      <div className="cr-label">LIVE ON THE NETWORK</div>
+      <div className="net-live">
+        {rooms.map((r) => (
+          <div key={r.room_id} className="net-live-card">
+            {r.brand.avatar_url ? (
+              <img className="net-ava" src={r.brand.avatar_url} alt="" />
+            ) : (
+              <span className="net-ava net-ava-ph">{(r.brand.name || "?").slice(0, 1)}</span>
+            )}
+            <span className="net-conn-txt">
+              <span className="net-conn-name">{r.brand.name}</span>
+              <span className="net-conn-slug">{r.title ?? "Main room"}</span>
+            </span>
+            <span className={`net-live-badge${r.status === "live" ? " onair" : ""}`}>
+              {r.status === "live" ? "LIVE" : "OPEN"}
+            </span>
+            <button
+              className="cr-primary"
+              disabled={entering === r.room_id}
+              onClick={() => void enter(r)}
+            >
+              {entering === r.room_id ? "Knocking…" : "Enter"}
+            </button>
+          </div>
+        ))}
       </div>
       {note && <div className="cr-hint">{note}</div>}
     </section>
   );
 }
 
+/** Who can find this stage open on the network. Cycles private → connections
+ * → public; the first non-private setting lazily registers the room. Local
+ * config mirrors the server so the chip renders offline. */
+function RoomShareChip({ room, onChanged }: { room: LiveRoom; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [vis, setVis] = useState<"private" | "connections" | "public">(
+    () => parseConfig(room.config).visibility ?? "private",
+  );
+  useEffect(() => {
+    setVis(parseConfig(room.config).visibility ?? "private");
+  }, [room.config]);
+
+  const cycle = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (busy) return;
+    const next = vis === "private" ? "connections" : vis === "connections" ? "public" : "private";
+    const prev = vis;
+    setBusy(true);
+    setVis(next);
+    // The SERVER is the exposure truth. Once the PATCH lands, the room IS
+    // `next` on the network — so the chip must never roll back past that
+    // point, or the UI would read Private while the stage is publicly open.
+    let patched = false;
+    try {
+      const eps = await ipc.listEndpoints();
+      const ep = eps.find((x) => x.kind === "connected") ?? eps[0];
+      if (!ep) throw new Error("no endpoint");
+      let sid = parseConfig(room.config).server_room_id;
+      if (!sid) {
+        const reg = await registerRoom(ep.id, room.name, room.id);
+        sid = reg.room.id;
+      }
+      await roomSetVisibility(ep.id, sid, next);
+      patched = true;
+      // Read-modify-write against FRESH config, not the click-time snapshot —
+      // a guest link or slot binding saved in the meantime must survive.
+      const fresh = (await ipc.liveListRooms()).find((r) => r.id === room.id);
+      const cfg = parseConfig(fresh?.config ?? room.config);
+      await ipc.liveUpdateRoom(room.id, {
+        config: serializeConfig({ ...cfg, server_room_id: sid, visibility: next }),
+      });
+      onChanged();
+    } catch {
+      // Before the PATCH: nothing changed anywhere — roll the chip back.
+      // After it: the server moved; keep showing `next` (the local mirror
+      // heals on the next successful write).
+      if (!patched) setVis(prev);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const label = vis === "private" ? "Private" : vis === "connections" ? "Connections" : "Public";
+  return (
+    <span
+      className={`cr-room-share ${vis}${busy ? " busy" : ""}`}
+      title="Who can see this stage open on the network — click to change"
+      onClick={cycle}
+    >
+      {label}
+    </span>
+  );
+}
+
+
+/** One rebindable shortcut row: click the chip, press the new key. */
+function KeyRow({ b }: { b: KeyBinding }) {
+  const [cur, setCur] = useState(() => getKey(b.id));
+  const [arming, setArming] = useState(false);
+  useEffect(() => {
+    if (!arming) return;
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape") {
+        setArming(false);
+        return;
+      }
+      // Bare keys only — modifiers stay grammar, not bindings.
+      if (["Shift", "Meta", "Alt", "Control"].includes(e.key)) return;
+      setKey(b.id, e.key);
+      setCur(e.key);
+      setArming(false);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [arming, b.id]);
+  return (
+    <div className="ks-row">
+      <span className="ks-label">{b.label}</span>
+      {cur !== b.def && (
+        <button
+          className="ks-reset"
+          title={`Reset to ${displayKey(b.def)}`}
+          onClick={() => {
+            resetKey(b.id);
+            setCur(b.def);
+          }}
+        >
+          reset
+        </button>
+      )}
+      <button
+        className={`ks-key${arming ? " arming" : ""}`}
+        title="Click, then press the new key"
+        onClick={() => setArming((a) => !a)}
+      >
+        {arming ? "Press a key…" : displayKey(cur)}
+      </button>
+    </div>
+  );
+}
 
 /** Icons-only side rail on the control room home — floating inset glass,
  * macOS-styling: translucent card, heavy backdrop blur, hairline border.

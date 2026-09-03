@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   ipc,
   listenLiveEvents,
@@ -15,6 +16,7 @@ import {
   extraSources,
   guests as guestsIpc,
   registerRoom,
+  roomOpenReport,
   setSourceAudio,
   setSyncOffset,
   type RoomGuest,
@@ -52,6 +54,7 @@ import {
   type Dock,
   type Layout,
   type PanelId,
+  BOTTOM_MAX, TOP_MAX, ROW_SNAP, ROW_MINI,
 } from "../lib/layout";
 import {
   DEFAULT_SCENES,
@@ -65,6 +68,7 @@ import {
   type TransitionKind,
   type RoomExtra,
 } from "../lib/room";
+import { homePaintedMs, takeRoomClick } from "../lib/perf";
 
 // Transport-truthful copy (M-L4 finding: an RTMP session can look healthy
 // while the platform discards it — only the dashboard confirms LIVE).
@@ -635,11 +639,9 @@ function GuestPanel({
   // render_url is the server's own statement of "this one may go on the
   // host". Waiting guests have none, so the gate is enforced there rather
   // than by us choosing not to draw someone.
-  const onStage = items.filter((i) => i.visible).length;
   const waiting = roster.filter((g) => !g.render_url);
   const live = roster.filter((g) => !!g.render_url);
   const ROOM_CAP = 8;
-  const STAGE_CAP = 4;
 
 
   return (
@@ -696,12 +698,8 @@ function GuestPanel({
                 <div className="rm-gcard-ctl">
                   <button
                     className={`rm-guest-stage${item?.visible ? " on" : ""}`}
-                    title={
-                      item?.visible ? "Take off screen (stays in the room)"
-                        : onStage >= STAGE_CAP ? `Four on screen is the limit — take one down first`
-                        : "Put on screen"
-                    }
-                    disabled={!item || (!item.visible && onStage >= STAGE_CAP)}
+                    title={item?.visible ? "Take off screen (stays in the room)" : "Pop into the next free guest slot"}
+                    disabled={!item}
                     data-warn={!item?.visible && q === "failing" ? "1" : undefined}
                     onClick={() => item && onShow(item.id, !item.visible)}
                   >
@@ -1098,38 +1096,80 @@ function DevicePicker({ kind, onClose }: { kind: string; onClose: () => void }) 
 function PreviewPanel({ children }: { children?: ReactNode }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const attached = useRef(false);
+  /** Attach in flight: syncs that land meanwhile must not attach AGAIN
+   * (the engine ignores a second attach and their newer rect was lost —
+   * the "stale frame on first join" bug). They park their rect here and
+   * it is replayed as a move the moment the attach resolves. */
+  const attaching = useRef(false);
+  const pending = useRef<DOMRect | null>(null);
+  const lastSent = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
 
   useEffect(() => {
+    // Coalesced on a MACROTASK, not an animation frame: once the native
+    // preview sits over the webview WebKit may deem the page occluded and
+    // halt rAF — a dock resize would then leave the stage misplaced until
+    // frames resume. Timers keep running.
     let raf = 0;
+    const send = async (r: DOMRect) => {
+      lastSent.current = { x: r.x, y: r.y, w: r.width, h: r.height };
+      await ipc.liveMovePreview(r.x, r.y, r.width, r.height);
+    };
     const sync = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(async () => {
+      window.clearTimeout(raf);
+      raf = window.setTimeout(async () => {
         const el = ref.current;
         if (!el) return;
         const r = el.getBoundingClientRect();
         if (r.width < 10 || r.height < 10) return;
         try {
+          if (attaching.current) {
+            pending.current = r;
+            return;
+          }
           if (!attached.current) {
+            attaching.current = true;
             // The attach call itself reports whether the stage can be a
             // transparent hole (preview behind the webview) — no polling.
             const transparent = await ipc.liveAttachPreview(r.x, r.y, r.width, r.height);
+            lastSent.current = { x: r.x, y: r.y, w: r.width, h: r.height };
             attached.current = true;
+            attaching.current = false;
             document.documentElement.dataset.stage = transparent ? "transparent" : "opaque";
+            // Replay whatever the layout did while we were attaching — and
+            // re-measure regardless: the rect at attach time is rarely final.
+            const now = pending.current ?? el.getBoundingClientRect();
+            pending.current = null;
+            if (now.width >= 10 && now.height >= 10) await send(now);
           } else {
-            await ipc.liveMovePreview(r.x, r.y, r.width, r.height);
+            await send(r);
           }
         } catch {
+          attaching.current = false;
           // engine not ready yet; retry on next layout change
         }
-      });
+      }, 0);
     };
     sync();
     const ro = new ResizeObserver(sync);
     if (ref.current) ro.observe(ref.current);
     window.addEventListener("resize", sync);
     window.addEventListener("scroll", sync, true);
+    // Reconcile: a lost move (engine busy, event coalesced away) must not
+    // leave the stage misplaced — every second, if the measured rect differs
+    // from the last one sent, send it again.
+    const tick = window.setInterval(() => {
+      const el = ref.current;
+      if (!el || !attached.current || attaching.current) return;
+      const r = el.getBoundingClientRect();
+      const l = lastSent.current;
+      if (r.width < 10 || r.height < 10) return;
+      if (!l || Math.abs(l.x - r.x) > 0.5 || Math.abs(l.y - r.y) > 0.5 || Math.abs(l.w - r.width) > 0.5 || Math.abs(l.h - r.height) > 0.5) {
+        void send(r).catch(() => {});
+      }
+    }, 250);
     return () => {
-      cancelAnimationFrame(raf);
+      window.clearInterval(tick);
+      window.clearTimeout(raf);
       ro.disconnect();
       window.removeEventListener("resize", sync);
       window.removeEventListener("scroll", sync, true);
@@ -1637,38 +1677,10 @@ const PLATFORM_TINT: Record<string, string> = {
 };
 
 /** Mock-faithful slim fader: 4px track, white 26×14 thumb, pointer drag. */
-function Fader({ value, disabled, onChange }: { value: number; disabled?: boolean; onChange: (ui: number) => void }) {
-  const track = useRef<HTMLDivElement | null>(null);
-
-  function fromEvent(e: { clientY: number }) {
-    const el = track.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const ui = 1 - Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
-    onChange(ui);
-  }
-
-  return (
-    <div
-      ref={track}
-      className={`rm-fader${disabled ? " disabled" : ""}`}
-      onPointerDown={(e) => {
-        if (disabled) return;
-        (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-        fromEvent(e);
-      }}
-      onPointerMove={(e) => {
-        if (disabled || e.buttons !== 1) return;
-        fromEvent(e);
-      }}
-    >
-      <div className="rm-fader-track" />
-      <div className="rm-fader-thumb" style={{ top: `calc(${(1 - value) * 100}% - 7px)` }} />
-    </div>
-  );
-}
-
-/** Vertical meter + fader strip, straight from the sources-sheet mock. */
+/** One track per voice: the level meter IS the volume slider. Two parallel
+ * lines said the same thing twice — the fill shows what's coming through,
+ * the thumb on the same rail sets how much of it goes out. Draggable in
+ * every form, the mini console included. */
 function MeterStrip({
   label,
   icon,
@@ -1698,20 +1710,39 @@ function MeterStrip({
   const ui = Math.cbrt(Math.max(0, Math.min(1, volume)));
   const db = volume > 0.001 ? Math.round(20 * Math.log10(volume)) : -60;
   const dead = disabled;
+  const track = useRef<HTMLDivElement | null>(null);
+  const fromEvent = (e: { clientX: number; clientY: number }) => {
+    const el = track.current;
+    if (!el || dead) return;
+    const r = el.getBoundingClientRect();
+    const t = horizontal ? (e.clientX - r.left) / r.width : 1 - (e.clientY - r.top) / r.height;
+    const u = Math.max(0, Math.min(1, t));
+    onVolume?.(u * u * u);
+  };
+  const lvl = Math.round((dead || muted ? 0 : level) * 100);
   return (
     <div className={`rm-strip${horizontal ? " horizontal" : ""}${dead ? " dead" : ""}`}>
-      <div className="rm-strip-cols">
-        <div className="rm-meter">
-          <div
-            className="rm-meter-fill"
-            style={
-              horizontal
-                ? { width: `${Math.round((dead || muted ? 0 : level) * 100)}%`, height: "100%" }
-                : { height: `${Math.round((dead || muted ? 0 : level) * 100)}%` }
-            }
-          />
-        </div>
-        <Fader value={dead ? 0.35 : ui} disabled={dead} onChange={(u) => onVolume?.(u * u * u)} />
+      <div
+        ref={track}
+        className="rm-track"
+        onPointerDown={(e) => {
+          if (dead) return;
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+          fromEvent(e);
+        }}
+        onPointerMove={(e) => {
+          if (dead || e.buttons !== 1) return;
+          fromEvent(e);
+        }}
+      >
+        <div
+          className="rm-track-fill"
+          style={horizontal ? { clipPath: `inset(0 ${100 - lvl}% 0 0)` } : { clipPath: `inset(${100 - lvl}% 0 0 0)` }}
+        />
+        <div
+          className="rm-track-thumb"
+          style={horizontal ? { left: `calc(${(dead ? 0.35 : ui) * 100}% - 7px)` } : { top: `calc(${(1 - (dead ? 0.35 : ui)) * 100}% - 7px)` }}
+        />
       </div>
       <span className="rm-strip-db">{disabled ? "off" : muted ? "muted" : `${db <= -60 ? "-∞" : db} dB`}</span>
       <button className={`rm-strip-icon${muted ? " muted" : ""}`} disabled={dead} onClick={onMute} title={muted ? "Unmute" : "Mute"}>
@@ -1911,6 +1942,47 @@ export function LiveView({
   // engineOk means the ENGINE booted — the room is configured only after the
   // stored video mode is applied and the pending scene has been laid out.
   const [sceneSettled, setSceneSettled] = useState(false);
+  /** The room DOCUMENT has been pushed to the engine. Before this, "no
+   * pending scene" means nothing — it is simply too early to know. */
+  const [docApplied, setDocApplied] = useState(false);
+  /** Mount instrumentation: wall-clock from mount to each gate. The footer
+   * shows the total so every build proves (or disproves) a speedup. */
+  // t0 is the CLICK on the home tile when we have it (what the user feels),
+  // else this mount. `mount` = click→mount gap; `since_launch` = how long
+  // the app had been up — a cold first open pays device warm-ups no later
+  // open does.
+  const mountT0 = useRef(takeRoomClick() ?? performance.now());
+  const mountMarks = useRef<Record<string, number>>({
+    mount: Math.round(performance.now() - mountT0.current),
+    since_launch: Math.round(performance.now()),
+    // App launch → home painted; the rest of since_launch is the human.
+    home_painted: homePaintedMs() ?? -1,
+  });
+  const mark = (k: string) => {
+    if (mountMarks.current[k] == null) mountMarks.current[k] = Math.round(performance.now() - mountT0.current);
+  };
+  const [mountMs, setMountMs] = useState<number | null>(null);
+  /** Largest gap between 100ms ticks until the veil lifts — a ready room
+   * that cannot paint for seconds is a MAIN-THREAD stall, not engine work. */
+  const stallMax = useRef(0);
+  useEffect(() => {
+    let last = performance.now();
+    const t = window.setInterval(() => {
+      const now = performance.now();
+      const gap = now - last - 100;
+      if (gap > stallMax.current) stallMax.current = gap;
+      last = now;
+    }, 100);
+    return () => window.clearInterval(t);
+  }, []);
+  /** sources_changed events seen — the settle signal is "one more than when
+   * the mount apply started", never "the next one" (that consumed the
+   * set-sources echo and settled BEFORE the scene was applied). */
+  const srcEvCount = useRef(0);
+  /** Set after the mount apply: the NEXT sources_changed from the engine is
+   * the settle signal — the engine acknowledging the transforms — instead
+   * of a timer guessing how long that takes. */
+  const settleOnSources = useRef(false);
   const [statuses, setStatuses] = useState<Map<string, LiveDestStatus>>(new Map());
 
   // Header health. Derived every render, never stored: a health number that
@@ -1925,14 +1997,86 @@ export function LiveView({
   const [adding, setAdding] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [sources, setSources] = useState<LiveSources>({ screen: false, camera: false, mic: false });
+  /** First PIXELS, per source. The engine's has_frame only reaches React on
+   * a sources_changed edge, so we POLL engine truth every 100ms from the
+   * moment the document is applied: each visible item's first-frame time is
+   * recorded by id, and the report is re-written when the last one lands
+   * (or at 10s, naming who never did). This names the culprit — camera,
+   * screen capture, overlay — instead of a total. */
+  const firstFramesDone = useRef(false);
+  /** The gate the veil actually waits on: every visible source has produced
+   * a frame (or the cap fired). `pendingFrames` names who is still black so
+   * the veil can say "Starting camera…" instead of hiding a black stage. */
+  const [framesReady, setFramesReady] = useState(false);
+  const [pendingFrames, setPendingFrames] = useState<string[]>([]);
+  // The frame cap: 2.5s after the document lands, stop waiting for pixels
+  // and show the stage as it is — a black source beats a trapped user.
+  const [framesCapped, setFramesCapped] = useState(false);
+  useEffect(() => {
+    if (!docApplied) return;
+    const t = window.setTimeout(() => setFramesCapped(true), 2500);
+    return () => window.clearTimeout(t);
+  }, [docApplied]);
+  useEffect(() => {
+    if (firstFramesDone.current || !docApplied) return;
+    let alive = true;
+    const seen: Record<string, number> = {};
+    const t0 = performance.now();
+    const finish = (pending: string[]) => {
+      if (!alive || firstFramesDone.current) return;
+      firstFramesDone.current = true;
+      setFramesReady(true);
+      setPendingFrames([]);
+      mark("first_frames");
+      const m = mountMarks.current;
+      roomOpenReport({
+        ...m,
+        first_frame_by_item: seen,
+        never_framed: pending,
+        stall_max_ms: Math.round(stallMax.current),
+        boot_phases: snapRef.current?.boot_phases_ms ?? null,
+        at: new Date().toISOString(),
+      }).catch(() => {});
+    };
+    const tick = async () => {
+      if (!alive) return;
+      const snap = await ipc.liveEngineStatus().catch(() => null);
+      if (!alive) return;
+      const items = (snap?.sources?.items ?? []).filter((i) => i.visible);
+      for (const i of items) if (i.has_frame && seen[i.id] == null) seen[i.id] = Math.round(performance.now() - mountT0.current);
+      const pending = items.filter((i) => !i.has_frame).map((i) => i.id);
+      setPendingFrames((p) => (p.length === pending.length && p.every((x, k) => x === pending[k]) ? p : pending));
+      if (items.length && pending.length === 0) return finish([]);
+      if (performance.now() - t0 > 10_000) return finish(pending);
+      window.setTimeout(tick, 100);
+    };
+    void tick();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docApplied]);
   const [micLevel, setMicLevel] = useState(0);
   const [appVersion, setAppVersion] = useState<string | null>(null);
+  type RepoRelease = { tag_name: string; name: string | null; body: string | null; published_at: string; html_url: string };
+  const [releases, setReleases] = useState<RepoRelease[] | null | "err">(null);
+  useEffect(() => {
+    fetch("https://api.github.com/repos/Boomin-Ai/producer/releases?per_page=15")
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((rs: RepoRelease[]) => setReleases(rs))
+      .catch(() => setReleases("err"));
+  }, []);
   useEffect(() => {
     import("@tauri-apps/api/app").then(({ getVersion }) => getVersion()).then(setAppVersion).catch(() => {});
   }, []);
   /** Per-source meter levels for audio-bearing extras (guests, media). */
   const [extraLevels, setExtraLevels] = useState<Record<string, number>>({});
   const [sheetOpen, setSheetOpen] = useState(true);
+  // Every dock retracts, same grammar everywhere: its boundary handle DRAGS
+  // to resize and CLICKS to hide/show.
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
+  const [topOpen, setTopOpen] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
   const [micPopOpen, setMicPopOpen] = useState(false);
   const [destsOpen, setDestsOpen] = useState(false);
@@ -1976,14 +2120,9 @@ export function LiveView({
         // Rendered order is topmost-first; engine z counts from the bottom.
         // Apply bottom-up so each set lands on a settled stack.
         const itemId = (k: string) => (k === "alerts" ? "overlay" : k);
-        // The Guests row is one BLOCK: expand it into the guest layers
-        // (topmost first, internal order preserved) so the block moves
-        // through the stack as a unit.
-        const guestIds = (sources.items ?? [])
-          .filter((i) => i.kind === "guest")
-          .sort((a, b) => b.z - a.z)
-          .map((i) => i.id);
-        const expanded = order.flatMap((k) => (k === "guests" ? guestIds : [k]));
+        // Guest layers never appear in this list (slots own their geometry
+        // and z), so the rendered order IS the full reorder set.
+        const expanded = order;
         (async () => {
           for (let i = expanded.length - 1; i >= 0; i--) {
             const z = expanded.length - 1 - i;
@@ -1993,6 +2132,7 @@ export function LiveView({
               /* engine not ready */
             }
           }
+          captureActiveLook();
         })();
       }
       return null;
@@ -2036,8 +2176,13 @@ export function LiveView({
    * side docks take a pixel width. Live while dragging, persisted on
    * release, so the room remembers the shape you built. */
   const resize = useRef<{
-    kind: "bottom" | "left" | "right";
+    kind: "bottom" | "left" | "right" | "top";
     startX: number;
+    startY: number;
+    /** Pair resizes drag along the dock's own axis; dock resizes drag across it. */
+    axis: "x" | "y";
+    /** Set once the pointer travels — an unmoved release is a CLICK (retract). */
+    moved?: boolean;
     a?: PanelId;
     b?: PanelId;
     aW?: number;
@@ -2056,29 +2201,67 @@ export function LiveView({
     setLiveSizesState(v);
   };
   const shown: DockSizes = liveSizes ?? sizes;
+  /** Weights are earned per dock; legacy bare keys were bottom-row drags. */
+  const weightOf = (dock: Dock, id: PanelId): number | undefined =>
+    shown.weights?.[`${dock}:${id}`] ?? (dock === "bottom" ? shown.weights?.[id] : undefined);
+  /** A short bottom dock IS the top form — the form system has one slim axis,
+   * so panels collapse into exactly the console shapes they wear up top. */
+  const bottomSlim = !!shown.bottom && shown.bottom <= ROW_SNAP;
+  const topExpanded = !!shown.top && shown.top > ROW_SNAP;
+  /** Form follows SIZE, not dock identity: a short row dock wears the console
+   * (top) forms, an expanded one wears the full (bottom) forms — top and
+   * bottom are the same axis at different heights. */
+  const formDockOf = (id: PanelId): Dock => {
+    const d = dockOf(layout, id);
+    if (d === "bottom" && bottomSlim) return "top";
+    if (d === "top" && topExpanded) return "bottom";
+    return d;
+  };
 
-  const beginResize = (e: React.PointerEvent, kind: "bottom" | "left" | "right", a?: PanelId, b?: PanelId) => {
+  const beginResize = (
+    e: React.PointerEvent,
+    kind: "bottom" | "left" | "right" | "top",
+    a?: PanelId,
+    b?: PanelId,
+    open = true,
+  ) => {
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    if (kind === "bottom" && a && b) {
-      const ael = document.querySelector<HTMLElement>(`[data-panel="${a}"]`);
-      const bel = document.querySelector<HTMLElement>(`[data-panel="${b}"]`);
+    if (!open) {
+      // A closed dock's handle can only be clicked open — nothing to resize.
+      resize.current = null;
+      return;
+    }
+    if (a && b) {
+      // PAIR resize — neighbours trade weight along the dock's own axis:
+      // side docks stack, so the slider runs up/down; top and bottom flow,
+      // so it runs left/right.
+      const axis: "x" | "y" = kind === "left" || kind === "right" ? "y" : "x";
+      const dim = (el: HTMLElement | null) =>
+        (axis === "x" ? el?.getBoundingClientRect().width : el?.getBoundingClientRect().height) ?? 1;
       resize.current = {
         kind,
+        axis,
         startX: e.clientX,
+        startY: e.clientY,
         a,
         b,
-        aW: sizes.weights?.[a] ?? 1,
-        bW: sizes.weights?.[b] ?? 1,
-        aPx: ael?.getBoundingClientRect().width ?? 1,
-        bPx: bel?.getBoundingClientRect().width ?? 1,
+        aW: weightOf(kind, a) ?? 1,
+        bW: weightOf(kind, b) ?? 1,
+        aPx: dim(document.querySelector<HTMLElement>(`[data-panel="${a}"]`)),
+        bPx: dim(document.querySelector<HTMLElement>(`[data-panel="${b}"]`)),
       };
     } else {
+      // DOCK resize — the boundary handle drags across the dock.
+      const axis: "x" | "y" = kind === "left" || kind === "right" ? "x" : "y";
       const el = document.querySelector<HTMLElement>(`[data-dock="${kind}"]`);
+      const rect = el?.getBoundingClientRect();
       resize.current = {
         kind,
+        axis,
         startX: e.clientX,
-        startPx: el?.getBoundingClientRect().width ?? SIDE_MIN,
+        startY: e.clientY,
+        startPx: (axis === "x" ? rect?.width : rect?.height) ?? (kind === "top" ? ROW_MINI : SIDE_MIN),
       };
     }
     setLiveSizes(sizes);
@@ -2087,51 +2270,101 @@ export function LiveView({
   const moveResize = (e: React.PointerEvent) => {
     const r = resize.current;
     if (!r || e.buttons !== 1) return;
-    const dx = e.clientX - r.startX;
-    if (r.kind === "bottom" && r.a && r.b) {
+    const d = r.axis === "y" ? e.clientY - r.startY : e.clientX - r.startX;
+    if (!r.moved && Math.abs(d) <= 4) return; // still a click until it travels
+    r.moved = true;
+    if (r.a && r.b) {
       // Weights are proportional to measured pixels, so a drag moves the
       // divider by exactly the distance travelled.
+      const floor = r.axis === "y" ? 100 : 140;
       const total = (r.aPx ?? 1) + (r.bPx ?? 1);
       const totalW = (r.aW ?? 1) + (r.bW ?? 1);
-      const aPx = Math.max(140, Math.min(total - 140, (r.aPx ?? 1) + dx));
+      const aPx = Math.max(floor, Math.min(total - floor, (r.aPx ?? 1) + d));
       const aW = (aPx / total) * totalW;
       setLiveSizes({
         ...sizes,
-        weights: { ...sizes.weights, [r.a]: aW, [r.b]: totalW - aW },
+        weights: { ...sizes.weights, [`${r.kind}:${r.a}`]: aW, [`${r.kind}:${r.b}`]: totalW - aW },
       });
     } else {
-      const raw = r.kind === "left" ? (r.startPx ?? 0) + dx : (r.startPx ?? 0) - dx;
-      const px = Math.max(SIDE_MIN, Math.min(SIDE_MAX, raw));
+      // Handles sit on the stage side of every dock, so growth is always a
+      // drag TOWARD the stage: left +, right −, top +, bottom −.
+      const raw = r.kind === "left" || r.kind === "top" ? (r.startPx ?? 0) + d : (r.startPx ?? 0) - d;
+      // Row docks have a universal MINI view: under the snap threshold they
+      // warp straight to ROW_MINI (console form for every panel) instead of
+      // lingering at broken in-between heights.
+      const px =
+        r.kind === "top" || r.kind === "bottom"
+          ? raw < ROW_SNAP
+            ? ROW_MINI
+            : Math.min(r.kind === "top" ? TOP_MAX : BOTTOM_MAX, raw)
+          : Math.max(SIDE_MIN, Math.min(SIDE_MAX, raw));
       setLiveSizes({ ...sizes, [r.kind]: px });
     }
   };
 
-  const endResize = () => {
-    const final = liveSizesRef.current;
-    if (resize.current && final) setSizes(final);
+  /** Release. An unmoved release on a dock handle is a CLICK — retract. */
+  const endResize = (toggle?: () => void) => {
+    const r = resize.current;
     resize.current = null;
+    if (!r) {
+      toggle?.();
+      return;
+    }
+    if (!r.moved) {
+      setLiveSizes(null);
+      toggle?.();
+      return;
+    }
+    const final = liveSizesRef.current;
+    if (final) setSizes(final);
     setLiveSizes(null);
   };
 
-  const splitter = (kind: "bottom" | "left" | "right", a?: PanelId, b?: PanelId) => (
+  const splitter = (
+    kind: "bottom" | "left" | "right" | "top",
+    a?: PanelId,
+    b?: PanelId,
+    dockCtl?: { open: boolean; onToggle: () => void },
+  ) => (
     <div
-      className={`rm-split rm-split-${kind === "bottom" ? "v" : "h"}`}
-      title="Drag to resize"
-      onPointerDown={(e) => beginResize(e, kind, a, b)}
+      className={`rm-split ${
+        a
+          ? kind === "left" || kind === "right"
+            ? "rm-split-row"
+            : "rm-split-v"
+          : "rm-split-h"
+      }${dockCtl && !dockCtl.open ? " closed" : ""}`}
+      title={a ? "Drag to resize" : dockCtl?.open ? "Drag to resize — click to hide" : "Show this dock"}
+      onPointerDown={(e) => beginResize(e, kind, a, b, dockCtl ? dockCtl.open : true)}
       onPointerMove={moveResize}
-      onPointerUp={endResize}
-      onPointerCancel={endResize}
+      onPointerUp={() => endResize(dockCtl?.onToggle)}
+      onPointerCancel={() => endResize()}
     >
       <span className="rm-split-grab" />
     </div>
   );
   const scenes: RoomScene[] = cfg.scenes.length ? cfg.scenes : DEFAULT_SCENES;
-  const [overlayOpen, setOverlayOpen] = useState(false);
+  /** Overlay config drills IN like Filters — a menu inside the Sources
+   * panel, never a popout over the stage. */
+  const [overlayInline, setOverlayInline] = useState(false);
+  /** The stage's selected item — mirrored into the Sources rail highlight. */
+  const [stageSel, setStageSel] = useState<string | null>(null);
+  /** Delete on the stage keymap: same effect as the row's ✕, per kind. */
+  const deleteStageItem = (id: string) => {
+    if (id === "screen") return void setSrc({ screen: false });
+    if (id === "camera") return void setSrc({ camera: false });
+    if (id === "overlay") return void ipc.liveSetOverlay(null, false).catch(() => {});
+    const it = (sources.items ?? []).find((i) => i.id === id);
+    if (!it) return;
+    if (it.kind === "guest") return void hideGuestFromSlot(id);
+    void removeExtraSource(id);
+  };
   const videoApplied = useRef(false);
   const channelsApplied = useRef(false);
   const demoVideoSet = useRef(false);
   const demo = demoOn();
-  const [chatFilter, setChatFilter] = useState<"all" | DemoPlatform>("all");
+  const [chatOn, setChatOn] = useState<Record<string, boolean>>({ twitch: true, kick: true, youtube: true });
+  const [chatChipsOpen, setChatChipsOpen] = useState(false);
   const [chatMsgs, setChatMsgs] = useState<ChatLine[]>(() => (demoOn() ? DEMO_CHAT.slice(0, 9) : []));
   const chatEnd = useRef<HTMLDivElement | null>(null);
   const chatList = useRef<HTMLDivElement | null>(null);
@@ -2294,7 +2527,6 @@ export function LiveView({
   // Which guests the auto-layout last arranged. The tick may not re-flow an
   // unchanged set: the host dragging a guest smaller must WIN — auto-layout
   // exists for joins/leaves, not as a 3-second undo of manual placement.
-  const guestLayoutRef = useRef<string | null>(null);
   // Last stage list we told the server about (sorted, joined). The tick runs
   // every 3s but the stage rarely changes — an unchanged list is not news.
   const stagePostedRef = useRef<string | null>(null);
@@ -2303,6 +2535,42 @@ export function LiveView({
    * Guests appear and vanish while the show is LIVE, so a hard pop is visible
    * to the audience — and we already have the opacity path the fade
    * transition uses. Audio moves with the picture. */
+  /** Scene furniture: gslot-N extras, sorted. */
+  const slotItems = () =>
+    (sources.items ?? []).filter((i) => i.id.startsWith("gslot-")).sort((a, b) => a.id.localeCompare(b.id));
+  const freeSlot = () => {
+    const b = cfgRef.current.slot_bindings ?? {};
+    const liveIds = new Set((sources.items ?? []).map((i) => i.id));
+    return slotItems().find((sl) => !b[sl.id] || !liveIds.has(b[sl.id]));
+  };
+  /** Show = pop the guest INTO a designed slot. No slot, no show. */
+  const showGuestInSlot = async (guestItemId: string) => {
+    const sl = freeSlot();
+    if (!sl) {
+      setBanner("Scene is full — add a Guest slot (Sources → + → Guest slot)");
+      return;
+    }
+    const b = cfgRef.current.slot_bindings ?? {};
+    writeCfg({ ...cfgRef.current, slot_bindings: { ...b, [sl.id]: guestItemId } });
+    await ipc.liveSetTransform(sl.id, { visible: false }, true).catch(() => {});
+    await ipc
+      .liveSetTransform(guestItemId, { x: sl.x, y: sl.y, w: sl.w, h: sl.h, visible: false }, true)
+      .catch(() => {});
+    fadeGuest(guestItemId, true);
+  };
+  /** Hide = pop out; the slot placeholder returns exactly where it was. */
+  const hideGuestFromSlot = (guestItemId: string) => {
+    const b = cfgRef.current.slot_bindings ?? {};
+    const slotId = Object.keys(b).find((k) => b[k] === guestItemId);
+    if (slotId) {
+      const nb = { ...b };
+      delete nb[slotId];
+      writeCfg({ ...cfgRef.current, slot_bindings: nb });
+      ipc.liveSetTransform(slotId, { visible: true }, true).catch(() => {});
+    }
+    fadeGuest(guestItemId, false);
+  };
+
   const fadeGuest = (id: string, show: boolean, ms = 260) => {
     if (show) {
       setOpacity(id, 0).catch(() => {});
@@ -2399,7 +2667,27 @@ export function LiveView({
         ...(inviteUrl ? { invite_url: inviteUrl } : {}),
       };
       const c = cfgRef.current;
-      writeCfg({ ...c, sources: { ...c.sources, extras: [...(c.sources.extras ?? []), entry] } });
+      // A new source belongs to the scene you added it in. Scenes are looks
+      // over ONE graph, so without this every other scene would inherit it
+      // visible (a guest slot added in PiP showed up in Full cam and Screen).
+      // The active scene gets it visible; every other scene with a look
+      // records it hidden. Geometry fills in via the write-through capture.
+      // MEMBERSHIP: the new source joins the ACTIVE scene's look and no
+      // other. A scene without a look is materialized from the stage first
+      // so it has one to join. Absence from a look = not in that scene.
+      const active = activeSceneRef.current;
+      const stage: Record<string, SceneItemLook> = Object.fromEntries(
+        (sourcesRef.current.items ?? [])
+          .filter((i) => i.kind !== "guest")
+          .map((i) => [i.id, { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z }]),
+      );
+      const scenes = (c.scenes.length ? c.scenes : DEFAULT_SCENES).map((sc) => {
+        if (sc.id !== active) return sc;
+        const look = { ...(sc.look && Object.keys(sc.look).length ? sc.look : stage) };
+        look[id] = { ...(look[id] ?? {}), visible: true };
+        return { ...sc, look };
+      });
+      writeCfg({ ...c, scenes, sources: { ...c.sources, extras: [...(c.sources.extras ?? []), entry] } });
     } catch (e) {
       setBanner(String(e));
     }
@@ -2426,11 +2714,39 @@ export function LiveView({
     }
   };
 
+  /** MEMBERSHIP delete: a source leaves the scene it was deleted in. It
+   * leaves the GRAPH only when no scene references it anymore — scenes are
+   * looks over one graph, so "delete" used to be graph-wide by construction
+   * (a slot deleted in PiP vanished from Full cam and Screen too). */
   const removeExtraSource = (id: string) => {
-    extraSources.remove(id).catch(() => {});
     const c = cfgRef.current;
+    const active = activeSceneRef.current;
+    const all = c.scenes.length ? c.scenes : DEFAULT_SCENES;
+    const stillUsed = all.some((sc) => sc.id !== active && !!sc.look && id in sc.look);
+    if (active && stillUsed) {
+      // Leave THIS scene: drop the membership, hide the item, keep the source.
+      ipc.liveSetTransform(id, { visible: false }, true).catch(() => {});
+      writeCfg({
+        ...c,
+        scenes: all.map((sc) => {
+          if (sc.id !== active || !sc.look) return sc;
+          const look = { ...sc.look };
+          delete look[id];
+          return { ...sc, look };
+        }),
+      });
+      return;
+    }
+    // Last scene using it: the source leaves the graph, every look is scrubbed.
+    extraSources.remove(id).catch(() => {});
     writeCfg({
       ...c,
+      scenes: all.map((sc) => {
+        if (!sc.look || !(id in sc.look)) return sc;
+        const look = { ...sc.look };
+        delete look[id];
+        return { ...sc, look };
+      }),
       sources: { ...c.sources, extras: (c.sources.extras ?? []).filter((e) => e.id !== id) },
     });
   };
@@ -2595,9 +2911,6 @@ export function LiveView({
         if (saved.mic_volume != null || saved.mic_muted != null) {
           await ipc.liveSetMicAudio({ volume: saved.mic_volume, muted: saved.mic_muted });
         }
-        if (saved.overlay_window != null || saved.overlay_url) {
-          await ipc.liveSetOverlay(saved.overlay_window ?? null, true, saved.overlay_url ?? null);
-        }
         setSources((s) => ({ ...s, ...saved }));
       }
       // Item-list half of the document: clear whatever open-list items the
@@ -2611,8 +2924,16 @@ export function LiveView({
       for (const e of saved.extras ?? []) {
         await extraSources.add(e.id, e.label, e.spec).catch(() => {});
       }
+      // The overlay LAST: its CEF create is the slowest thing in the apply
+      // (measured 4.6s cold, holding the engine loop), so nothing else may
+      // queue behind it. Not awaited — the scene mounts around it and the
+      // first-frame gate holds the veil until it lands.
+      if (typeof saved.screen === "boolean" && (saved.overlay_window != null || saved.overlay_url)) {
+        ipc.liveSetOverlay(saved.overlay_window ?? null, true, saved.overlay_url ?? null).catch(() => {});
+      }
       const mount = parseConfig(room.config).active_scene;
       if (mount) setPendingScene(mount);
+      setDocApplied(true);
       // Warm the stinger the room already uses, so the first cut is instant.
       const cfgNow = parseConfig(room.config);
       const firstStinger =
@@ -2681,6 +3002,11 @@ export function LiveView({
         setStatuses(new Map(ev.report.destinations.map((d) => [d.id, d])));
         if (!ev.report.ok && ev.report.notes.length > 0) setBanner(ev.report.notes.join(" · "));
       } else if (ev.type === "sources_changed") {
+        srcEvCount.current += 1;
+        if (settleOnSources.current) {
+          settleOnSources.current = false;
+          setSceneSettled(true);
+        }
         setSources(ev.sources);
         // The room document follows the scene, without disturbing the rest
         // of the document (layout, scenes, channels).
@@ -2722,8 +3048,12 @@ export function LiveView({
         setGuestThumbs((prev) => ({ ...prev, ...next }));
       } else if (ev.type === "engine_error") {
         setBanner(ev.message);
-      } else if (ev.type === "engine_ready" && !ev.ok) {
-        setBanner("Live engine failed to initialize — see engine report.");
+      } else if (ev.type === "engine_ready") {
+        if (!ev.ok) setBanner("Live engine failed to initialize — see engine report.");
+        // A room opened DURING boot must apply the moment the engine is up —
+        // previously nothing re-ran refresh on success, so the veil rode to
+        // its cap and the room mounted unconfigured.
+        else void refresh();
       }
     }).then((un) => {
       unlisten.current = un;
@@ -2794,12 +3124,49 @@ export function LiveView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
+    if (engineOk) mark("engine");
+  }, [engineOk]);
+  useEffect(() => {
     if (!engineOk || !sceneSettled || !mountVeil) return;
-    // A beat of settle time: lifting mid-populate trades one flicker for
-    // another.
-    const t = window.setTimeout(() => setMountVeil(false), 350);
+    mark("settled");
+    // 100% ready means PIXELS: hold for every visible source's first frame.
+    // The note names who we are waiting on; the cap keeps a wedged device
+    // from trapping the user (and is recorded, so it is never silent).
+    if (!framesReady && !framesCapped) {
+      const who = pendingFrames[0];
+      setVeilNote(
+        who === "camera" ? "Starting camera…"
+        : who === "screen" ? "Starting screen capture…"
+        : who === "overlay" ? "Loading overlay…"
+        : who?.startsWith("gslot") || !who ? "Preparing the stage…"
+        : "Starting sources…",
+      );
+      return;
+    }
+    // Lift on a MACROTASK, never an animation frame: WebKit halts rAF while
+    // it deems the view occluded, and the native Metal preview attaches over
+    // the webview right here — measured: main thread free (stall 3ms), rAF
+    // starved for 5.1s. Timers keep running; readiness rides them.
+    const t = window.setTimeout(() => {
+      {
+        setMountVeil(false);
+        mark("veil");
+        const m = mountMarks.current;
+        setMountMs(m.veil);
+        const report = {
+          ...m,
+          veil_capped: framesCapped && !framesReady,
+          stall_max_ms: Math.round(stallMax.current),
+          boot_phases: snapRef.current?.boot_phases_ms ?? null,
+          at: new Date().toISOString(),
+        };
+        console.info("[room] mount timings ms", report);
+        roomOpenReport(report).catch(() => {});
+      }
+    }, 0);
     return () => window.clearTimeout(t);
-  }, [engineOk, sceneSettled, mountVeil]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engineOk, sceneSettled, mountVeil, framesReady, framesCapped, pendingFrames]);
   // Hard cap: a wedged step may never trap the user behind the veil.
   useEffect(() => {
     const t = window.setTimeout(() => setMountVeil(false), 8000);
@@ -2827,6 +3194,66 @@ export function LiveView({
     }
   }
 
+  // ── WRITE-THROUGH (room state, mirror 1) ─────────────────────────────────
+  // The room document mirrors engine truth continuously: whatever flips a
+  // source flag — the rail, the stage toolbar, a scene, the overlay picker —
+  // the mirrored subset lands in the document a moment later. This is what
+  // makes "leave with the camera on, come back to the camera on" true.
+  // Gated on roomApplied so the previous room's engine state can never
+  // overwrite this room's document during open.
+  useEffect(() => {
+    if (!room || !roomApplied.current) return;
+    const t = window.setTimeout(() => {
+      const c = cfgRef.current;
+      const cur = c.sources ?? {};
+      const next = {
+        ...cur,
+        screen: sources.screen,
+        camera: sources.camera,
+        mic: sources.mic,
+        mic_volume: sources.mic_volume,
+        mic_muted: sources.mic_muted,
+        overlay_window: sources.overlay_window ?? null,
+        overlay_url: sources.overlay_url ?? null,
+      };
+      const KEYS = ["screen", "camera", "mic", "mic_volume", "mic_muted", "overlay_window", "overlay_url"] as const;
+      if (KEYS.some((k) => (cur as Record<string, unknown>)[k] !== (next as Record<string, unknown>)[k])) {
+        writeCfg({ ...c, sources: next });
+      }
+    }, 400);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sources.screen, sources.camera, sources.mic, sources.mic_volume, sources.mic_muted, sources.overlay_window, sources.overlay_url, room]);
+
+  // ── WRITE-THROUGH (room state, mirror 2) ─────────────────────────────────
+  /** The active scene IS what you're looking at: any real edit — drag, nudge,
+   * eye, layer, delete — re-captures the scene's look after the engine
+   * settles. No more owing the Update button a click before leaving. Guests
+   * are excluded (transient ids; slots carry their geometry). */
+  const lookTimer = useRef(0);
+  const sourcesRef = useRef(sources);
+  sourcesRef.current = sources;
+  const activeSceneRef = useRef<string | null>(null);
+  const captureActiveLook = () => {
+    window.clearTimeout(lookTimer.current);
+    lookTimer.current = window.setTimeout(() => {
+      const sceneId = activeSceneRef.current;
+      if (!sceneId || !roomApplied.current) return;
+      const items = (sourcesRef.current.items ?? []).filter((i) => i.kind !== "guest");
+      if (!items.length) return;
+      const look: Record<string, SceneItemLook> = Object.fromEntries(
+        items.map((i) => [i.id, { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z }]),
+      );
+      const base = cfgRef.current;
+      writeCfg({
+        ...base,
+        scenes: (base.scenes.length ? base.scenes : DEFAULT_SCENES).map((x) =>
+          x.id === sceneId ? { ...x, look, screen: sourcesRef.current.screen, camera: sourcesRef.current.camera } : x,
+        ),
+      });
+    }, 1200); // past the next engine poll, so the capture reads settled truth
+  };
+
   async function setSrc(patch: Partial<Pick<LiveSources, "screen" | "camera" | "mic">>) {
     const next = { ...sources, ...patch };
     setSources(next);
@@ -2847,13 +3274,14 @@ export function LiveView({
   // Legacy fallback so a room saved before looks existed still highlights.
   const activeScene =
     activeSceneId ?? scenes.find((p) => p.screen === sources.screen && p.camera === sources.camera)?.id;
+  activeSceneRef.current = activeScene ?? null;
 
   /** Apply a scene as a LOOK: sources are never created or destroyed on a
    * switch (no flicker, no permission re-prompts, no z scramble) — only
    * visibility, geometry and stacking change, through the same transform
    * pipeline the stage editor uses. Missing well-known sources the scene
    * needs are created once; nothing is ever torn down. */
-  const applyScene = async (p: RoomScene) => {
+  const applyScene = async (p: RoomScene, opts?: { cut?: boolean }) => {
     if (!engineOk) return;
     try {
       const bh = snapshot?.video_height || 720;
@@ -2873,6 +3301,19 @@ export function LiveView({
         ...(overlayActive ? ["overlay"] : []),
       ]);
       const entries = Object.entries(look).filter(([id]) => exists.has(id));
+      // MEMBERSHIP: a scene's look is the set of sources that belong to it.
+      // An extra the look does not mention is not in this scene — hide it.
+      // Core sources (screen/camera/overlay) and guests (slot-managed) are
+      // room-level and stay under their own rules.
+      const realLook = !!(p.look && Object.keys(p.look).length);
+      if (realLook) {
+        for (const it of sources.items ?? []) {
+          if (["screen", "camera", "overlay"].includes(it.id) || it.kind === "guest") continue;
+          if (!(it.id in look) && it.visible) {
+            ipc.liveSetTransform(it.id, { visible: false }, true).catch(() => {});
+          }
+        }
+      }
       // Hidden first (plain visibility flips), then visible bottom-to-top so
       // z-order lands exactly as the scene says.
       for (const [id, l] of entries.filter(([, l]) => !l.visible)) {
@@ -2883,7 +3324,9 @@ export function LiveView({
         .filter(([, l]) => l.visible)
         .sort((a, b) => (a[1].z ?? 0) - (b[1].z ?? 0));
 
-      const tr = p.transition ?? cfgRef.current.transition ?? { kind: "cut" as const };
+      const tr: SceneTransition = opts?.cut
+        ? { kind: "cut" }
+        : p.transition ?? cfgRef.current.transition ?? { kind: "cut" as const };
 
       // Stinger: the clip covers the stage, the scene changes UNDERNEATH it
       // at the halfway point, and the clip plays out to reveal the result.
@@ -2971,7 +3414,12 @@ export function LiveView({
             ipc.liveSetTransform(id, patch, false).catch(() => {});
           });
           const t0f = performance.now();
+          // If frames starve mid-dissolve (WebKit halts rAF when it deems the
+          // view occluded), a timer still lands the end state — a guest must
+          // never be left half-transparent by a paused animation loop.
+          let fadeDone = false;
           const stepFade = () => {
+            if (fadeDone) return;
             const k = Math.min(1, (performance.now() - t0f) / dur);
             for (const id of arriving) setOpacity(id, k).catch(() => {});
             for (const id of leaving) setOpacity(id, 1 - k).catch(() => {});
@@ -2979,6 +3427,7 @@ export function LiveView({
               requestAnimationFrame(stepFade);
               return;
             }
+            fadeDone = true;
             // Settle: hide what left and restore its opacity, so the next
             // scene that shows it doesn't inherit a transparent source.
             for (const id of leaving) {
@@ -2991,6 +3440,19 @@ export function LiveView({
             });
           };
           requestAnimationFrame(stepFade);
+          window.setTimeout(() => {
+            if (!fadeDone) {
+              fadeDone = true;
+              for (const id of leaving) {
+                ipc.liveSetTransform(id, { visible: false }, true).catch(() => {});
+                setOpacity(id, 1).catch(() => {});
+              }
+              visible.forEach(([id], i) => {
+                setOpacity(id, 1).catch(() => {});
+                ipc.liveSetTransform(id, { visible: true, z: i }, true).catch(() => {});
+              });
+            }
+          }, dur + 80);
           setActiveSceneId(p.id);
           writeCfg({ ...cfgRef.current, active_scene: p.id });
           return;
@@ -3001,11 +3463,16 @@ export function LiveView({
           ipc.liveSetTransform(id, { visible: true, z: i }, false).catch(() => {});
         });
         const t0 = performance.now();
+        // Same belt as fade: if frames starve mid-glide, a timer lands every
+        // item on its target geometry, committed.
+        let moveDone = false;
         const step = () => {
+          if (moveDone) return;
           const k = Math.min(1, (performance.now() - t0) / dur);
           // ease-out cubic: quick off the mark, settles gently
           const e = 1 - Math.pow(1 - k, 3);
           const done = k >= 1;
+          if (done) moveDone = true;
           visible.forEach(([id, l], i) => {
             const a = from.get(id);
             if (!a || l.x == null || l.y == null || l.w == null || l.h == null) {
@@ -3030,6 +3497,20 @@ export function LiveView({
           if (!done) requestAnimationFrame(step);
         };
         requestAnimationFrame(step);
+        window.setTimeout(() => {
+          if (moveDone) return;
+          moveDone = true;
+          visible.forEach(([id, l], i) => {
+            const patch: LiveTransformPatch = { visible: true, z: i };
+            if (l.x != null && l.y != null && l.w != null && l.h != null) {
+              patch.x = l.x;
+              patch.y = l.y;
+              patch.w = l.w;
+              patch.h = l.h;
+            }
+            ipc.liveSetTransform(id, patch, true).catch(() => {});
+          });
+        }, dur + 80);
       }
       setActiveSceneId(p.id);
       const c = cfgRef.current;
@@ -3210,20 +3691,23 @@ export function LiveView({
           }
         }
 
-        // Re-flow the panel to match the current count.
-        const bh = snapshot?.video_height || 720;
-        const bw = (bh * 16) / 9;
-        // Only guests actually on screen get a slot, and layout NEVER flips
-        // visibility — otherwise arranging the grid would quietly put someone
-        // on air.
+        // SLOT MODEL: the scene owns guest geometry. No auto-layout — a shown
+        // guest occupies the slot it was bound to and nothing else moves.
         const shown = (sources.items ?? []).filter((i) => i.kind === "guest" && i.visible);
-        const layoutKey = shown.map((i) => i.id).sort().join(",");
-        if (layoutKey !== guestLayoutRef.current) {
-          guestLayoutRef.current = layoutKey;
-          shown.forEach((it, i) => {
-            const r = guestSlot(i, shown.length, bw, bh);
-            ipc.liveSetTransform(it.id, r, true).catch(() => {});
-          });
+        // Reconcile: bindings whose guest source no longer exists free their
+        // slot — the placeholder returns at its own geometry.
+        {
+          const b = cfgRef.current.slot_bindings ?? {};
+          const liveIds = new Set((sources.items ?? []).map((i) => i.id));
+          const stale = Object.entries(b).filter(([, gid]) => !liveIds.has(gid));
+          if (stale.length) {
+            const nb = { ...b };
+            for (const [slotId] of stale) {
+              delete nb[slotId];
+              ipc.liveSetTransform(slotId, { visible: true }, true).catch(() => {});
+            }
+            writeCfg({ ...cfgRef.current, slot_bindings: nb });
+          }
         }
 
         // Tell the server who is on stage — the FULL list, on registration and
@@ -3259,7 +3743,7 @@ export function LiveView({
 
   // Mount the room into its saved scene once the engine can take it.
   useEffect(() => {
-    if (!engineOk) return;
+    if (!engineOk || !docApplied) return;
     if (!pendingScene) {
       setSceneSettled(true);
       return;
@@ -3267,13 +3751,31 @@ export function LiveView({
     const sc = scenes.find((x) => x.id === pendingScene);
     setPendingScene(null);
     void (async () => {
-      if (sc) await applyScene(sc);
-      // The apply's transforms land engine-side just after the awaits;
-      // half a beat covers the tail of the animation frames.
-      window.setTimeout(() => setSceneSettled(true), 500);
+      // Mount CUTS: transitions are for switching in front of an audience,
+      // not for laying out a room nobody is watching yet.
+      if (sc) {
+        const seen0 = srcEvCount.current;
+        await applyScene(sc, { cut: true });
+        mark("applied");
+        if (srcEvCount.current > seen0) {
+          // The transforms' commit already echoed back during the apply.
+          setSceneSettled(true);
+        } else {
+          settleOnSources.current = true;
+          // Belt: an empty look sends no transforms, so nothing would answer.
+          window.setTimeout(() => {
+            if (settleOnSources.current) {
+              settleOnSources.current = false;
+              setSceneSettled(true);
+            }
+          }, 250);
+        }
+      } else {
+        setSceneSettled(true);
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingScene, engineOk]);
+  }, [pendingScene, engineOk, docApplied]);
 
 
   const setVolume = (v: number) => {
@@ -3316,7 +3818,7 @@ export function LiveView({
     setLayoutMenu(false);
     setAddMenu(null);
     setMicPopOpen(false);
-    setOverlayOpen(false);
+    setOverlayInline(false);
     setChatOpen(false);
     setSrcAddOpen(false);
     setDeviceMenu(null);
@@ -3324,12 +3826,15 @@ export function LiveView({
     setSceneSettings(null);
   };
   const anyPop =
-    destsOpen || qualityOpen || micPopOpen || overlayOpen || chatOpen || srcAddOpen || deviceMenu !== null || srcSubPop !== null ||
-    (sceneSettings !== null && dockOf(layout, "scenes") !== "bottom") || panelMenu !== null || layoutMenu || addMenu !== null || adding || !!editing;
+    destsOpen || qualityOpen || micPopOpen || chatOpen || srcAddOpen || deviceMenu !== null || srcSubPop !== null ||
+    // Scene settings are a POPOVER only on a side rail; in the bottom sheet
+    // and the top rail they are a strip in the flow — a popover backdrop
+    // there would sit over the strip and eat every click.
+    (sceneSettings !== null && dockOf(layout, "scenes") !== "bottom" && dockOf(layout, "scenes") !== "top") || panelMenu !== null || layoutMenu || addMenu !== null || adding || !!editing;
 
   const micStrip = (
     <MeterStrip
-      horizontal={dockOf(layout, "mixer") === "top"}
+      horizontal={formDockOf("mixer") === "top"}
       label="Mic"
       icon={ic.mic}
       level={micLevel}
@@ -3406,10 +3911,7 @@ export function LiveView({
                   </span>
                 )}
                 {activeScene === p.id ? (
-                  <>
-                    <span className="rm-scene-live">{streaming ? "Live" : "On"}</span>
-                    <span className="rm-scene-rec" />
-                  </>
+                  <span className="rm-scene-live">{streaming ? "Live" : "On"}</span>
                 ) : (
                   <>
                     <button
@@ -3445,20 +3947,70 @@ export function LiveView({
       case "chat":
         return (
           <>
-            <div className="rm-chat-chips">
-              {(["all", "twitch", "kick", "youtube"] as const).map((p) => (
-                <button
-                  key={p}
-                  className={`rm-chat-chip${chatFilter === p ? " on" : ""}`}
-                  onClick={() => setChatFilter(p)}
-                >
-                  {p === "all" ? "All" : p === "youtube" ? "YouTube" : p[0].toUpperCase() + p.slice(1)}
-                </button>
-              ))}
-            </div>
+            {(() => {
+              const chatMini = formDockOf("chat") === "top";
+              const all = ["twitch", "kick", "youtube"] as const;
+              const active = all.filter((p) => chatOn[p] !== false);
+              const lead = active[0] ?? "twitch";
+              const rest = Math.max(active.length - 1, 0);
+              // Mini form: ONE logo + "+n more you're streaming to"; the
+              // cluster expands to the full toggleable set on demand.
+              if (chatMini && !chatChipsOpen) {
+                return (
+                  <div className="rm-chat-chips mini">
+                    <button className="rm-chat-chip on" title="Chat channels" onClick={() => setChatChipsOpen(true)}>
+                      <span className="rm-chip-logo">{PLATFORM_LOGO[lead]}</span>
+                    </button>
+                    {rest > 0 && (
+                      <button className="rm-chip-more" title="Show all chat channels" onClick={() => setChatChipsOpen(true)}>
+                        +{rest}
+                      </button>
+                    )}
+                  </div>
+                );
+              }
+              return (
+                <div className="rm-chat-chips" onMouseLeave={() => chatMini && setChatChipsOpen(false)}>
+                  {all.map((p) => (
+                    <button
+                      key={p}
+                      className={`rm-chat-chip${chatOn[p] ? " on" : ""}`}
+                      title={chatOn[p] ? `Hide ${p}` : `Show ${p}`}
+                      onClick={() => setChatOn((f) => ({ ...f, [p]: !f[p] }))}
+                    >
+                      <span className="rm-chip-logo">{PLATFORM_LOGO[p]}</span>
+                      <span className="rm-chip-name">{p === "youtube" ? "YouTube" : p[0].toUpperCase() + p.slice(1)}</span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+            {formDockOf("chat") === "top" ? (
+              /* MINI: the latest message, the previous poking through above
+               * it. Rendered explicitly — no scroll/mask tricks that can
+               * quietly swallow the content in a 40px window. */
+              (() => {
+                const visible = chatMsgs.filter((m) => chatOn[m.platform] !== false).slice(-2);
+                return (
+                  <div className="rm-chat-mini">
+                    {visible.map((m, i) => (
+                      <div key={i} className={`rm-chat-msg${i === visible.length - 1 ? "" : " prev"}`}>
+                        <span className="rm-chat-user">{m.user}</span>
+                        <ChatText text={m.text} emotes={m.emotes} channelEmotes={channelEmotes} />
+                      </div>
+                    ))}
+                    {visible.length === 0 && (
+                      <div className="rm-chat-mini-empty">
+                        {chatLive ? "Connected — waiting for the first message." : "Connect chat to read it here."}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
+            ) : (
             <div className="rm-chat-list" ref={chatList} onScroll={onChatScroll} onWheel={onChatWheel}>
               {chatMsgs
-                .filter((m) => chatFilter === "all" || m.platform === chatFilter)
+                .filter((m) => chatOn[m.platform] !== false)
                 .map((m, i) => (
                   <div key={i} className="rm-chat-msg">
                     <span
@@ -3479,6 +4031,7 @@ export function LiveView({
               )}
               <div ref={chatEnd} />
             </div>
+            )}
             {!chatPinned && (
               <button className="rm-chat-jump" onClick={jumpToLatest}>
                 {ic.chev}
@@ -3491,6 +4044,23 @@ export function LiveView({
           </>
         );
       case "sources": {
+        if (overlayInline) {
+          return (
+            <div className="rm-filters">
+              <div className="rm-filters-head">
+                <button className="rm-crumb" onClick={() => setOverlayInline(false)}>
+                  {ic.chevRight}
+                  Sources
+                </button>
+                <span className="rm-filters-title">Overlay</span>
+              </div>
+              <OverlayPicker
+                activeWindow={sources.overlay_window ?? null}
+                activeUrl={sources.overlay_url ?? null}
+              />
+            </div>
+          );
+        }
         if (filterFor) {
           return (
             <FilterEditor
@@ -3502,12 +4072,6 @@ export function LiveView({
           );
         }
         const liveItems = sources.items ?? [];
-        const guestItems = liveItems.filter((i) => i.kind === "guest");
-        const revealGuests = () => {
-          if (dockOf(layout, "guests") === "hidden") {
-            setLayout(movePanel(layout, "guests", dockOf(layout, "sources")));
-          }
-        };
         const itemIdFor = (key: string) => (key === "alerts" ? "overlay" : key);
         const itemFor = (key: string) => liveItems.find((i) => i.id === itemIdFor(key));
         const activeRows = (
@@ -3518,21 +4082,18 @@ export function LiveView({
             // Audio is a source, like OBS: the picker lives here, the fader
             // lives in the mixer.
             sources.mic && { key: "mic", label: "Microphone", icon: ic.mic, device: "mic", audio: true, remove: () => setSrc({ mic: false }) },
-            // One collapsed Guest COMPONENT row — the dock must show that
-            // guest cameras are part of this scene, but people are managed
-            // per-person in the Guests panel, so it opens that instead of
-            // exposing eye/remove that could quietly change who is on air.
-            guestItems.length > 0 && {
-              key: "guests",
-              label: `Guests · ${guestItems.filter((g) => g.visible).length}/${guestItems.length} on screen`,
-              icon: ic.invite,
-              remove: revealGuests,
-            },
-            // Open-list items, straight from engine truth. Guests are
-            // excluded here: they collapse into the Guest component above
-            // rather than appearing as a row per person.
+            // Open-list items, straight from engine truth. Guest ITEMS are
+            // excluded: slots are the general idea — guest geometry belongs
+            // to gslot scene furniture, and people are managed per-person in
+            // the Guests panel. The retired aggregate "Guests · n/m" row is
+            // exactly what slots replaced.
             ...liveItems
               .filter((i) => !["screen", "camera", "overlay"].includes(i.id) && i.kind !== "guest")
+              // Membership: a scene with a look lists only its own sources.
+              .filter((i) => {
+                const sc = scenes.find((x) => x.id === activeScene);
+                return !sc?.look || Object.keys(sc.look).length === 0 || i.id in sc.look;
+              })
               .map((i) => ({
                 key: i.id,
                 label: i.label || i.kind,
@@ -3551,13 +4112,10 @@ export function LiveView({
             remove: () => void;
           }[]
         ).sort((a, b) => {
-          // Microphone (audio-only, grip-less) stays at the bottom. The
-          // Guests COMPONENT sorts into the stack at its block's z — it
-          // drags as one layer, so it must render where its layers sit.
+          // Microphone (audio-only, grip-less) stays at the bottom.
           const rank = (k: string) => (k === "mic" ? 1 : 0);
           if (rank(a.key) !== rank(b.key)) return rank(a.key) - rank(b.key);
-          const zOf = (k: string) =>
-            k === "guests" ? Math.max(...guestItems.map((g) => g.z)) : itemFor(k)?.z;
+          const zOf = (k: string) => itemFor(k)?.z;
           const za = zOf(a.key);
           const zb = zOf(b.key);
           if (za != null && zb != null) return zb - za; // topmost first
@@ -3586,10 +4144,13 @@ export function LiveView({
                   return (
                     <div
                       key={t.key}
-                      data-srcrow={item || t.key === "guests" ? t.key : undefined}
-                      className={`rm-row${hidden ? " off" : ""}${srcDrag?.key === t.key ? " dragging" : ""}${dropCls}`}
+                      data-srcrow={item ? t.key : undefined}
+                      className={`rm-row${hidden ? " off" : ""}${srcDrag?.key === t.key ? " dragging" : ""}${stageSel === itemIdFor(t.key) ? " sel" : ""}${dropCls}`}
+                      // Clicking a row lights its output on the stage — selection
+                      // is shared state in both directions.
+                      onClick={() => item && setStageSel(stageSel === item.id ? null : item.id)}
                     >
-                      {(item || t.key === "guests") && (
+                      {item && (
                         <span
                           className="rm-row-grip"
                           title="Drag to rearrange"
@@ -3610,7 +4171,6 @@ export function LiveView({
                       )}
                       <span className="rm-row-icon">{t.icon}</span>
                       <span className="rm-row-name">{t.label}</span>
-                      {t.key !== "guests" && (
                       <button
                         className="rm-row-edit rm-row-fx"
                         title="Filters"
@@ -3624,20 +4184,19 @@ export function LiveView({
                       >
                         ƒ
                       </button>
-                      )}
                       {(t.key === "alerts" || t.device) && (
                         <button
                           className={`rm-row-edit${srcSettings === t.key ? " on" : ""}`}
                           title="Source settings"
                           onClick={(e) => {
-                            // Docked in the sheet → horizontal settings strip
-                            // above the panels. Docked on a sidebar → the
-                            // strip has nowhere to live, so pop vertically
-                            // right here.
-                            if (dockOf(layout, "sources") === "bottom") {
+                            // Docked on a ROW (sheet or top rail) → the
+                            // horizontal settings strip beside the dock.
+                            // Docked on a sidebar → the strip has nowhere to
+                            // live, so pop vertically right here.
+                            if (dockOf(layout, "sources") === "bottom" || dockOf(layout, "sources") === "top") {
                               setSrcSettings((k) => (k === t.key ? null : t.key));
                             } else if (t.key === "alerts") {
-                              setOverlayOpen(true);
+                              setOverlayInline(true);
                             } else if (t.device) {
                               setPopAnchor(e.currentTarget);
                               setDeviceMenu((d) => (d === t.device ? null : t.device!));
@@ -3651,20 +4210,17 @@ export function LiveView({
                         <button
                           className={`rm-row-edit rm-row-eye${hidden ? " off" : ""}`}
                           title={hidden ? "Show on stage" : "Hide from stage"}
-                          onClick={() => ipc.liveSetTransform(item.id, { visible: hidden }, true).catch(() => {})}
+                          onClick={() => {
+                            ipc.liveSetTransform(item.id, { visible: hidden }, true).catch(() => {});
+                            captureActiveLook();
+                          }}
                         >
                           {ic.eye}
                         </button>
                       )}
-                      {t.key === "guests" ? (
-                        <button className="rm-row-edit" title="Manage in the Guests panel" onClick={t.remove}>
-                          {ic.gear}
-                        </button>
-                      ) : (
-                        <button className="rm-row-edit rm-row-remove" title="Remove from this room" onClick={t.remove}>
-                          {ic.x}
-                        </button>
-                      )}
+                      <button className="rm-row-edit rm-row-remove" title="Remove from this room" onClick={t.remove}>
+                        {ic.x}
+                      </button>
                     </div>
                   );
                 })}
@@ -3685,7 +4241,7 @@ export function LiveView({
             onAdmit={admitGuest}
             onRemove={removeGuest}
             onMute={(id, muted) => setSourceAudio(id, undefined, muted).catch(() => {})}
-            onShow={(id, show) => fadeGuest(id, show)}
+            onShow={(id, show) => (show ? void showGuestInSlot(id) : hideGuestFromSlot(id))}
           />
         );
       case "mixer":
@@ -3702,7 +4258,7 @@ export function LiveView({
                   .filter((i) => i.has_audio && (i.kind === "guest" || i.kind === "media"))
                   .map((i) => (
                     <MeterStrip
-                      horizontal={dockOf(layout, "mixer") === "top"}
+                      horizontal={formDockOf("mixer") === "top"}
                       key={i.id}
                       label={i.label || i.kind}
                       icon={i.kind === "guest" ? ic.invite : ic.play}
@@ -3727,7 +4283,10 @@ export function LiveView({
         // Channels card: brand mark · name · phase · switch. Clicking a row
         // (off the switch) opens INLINE key entry — the key goes straight to
         // the Keychain via the same upsert the editor uses.
-        const chnTop = dockOf(layout, "channels") === "top";
+        // Icon toggles are the channels form in EVERY dock — the logos ARE
+        // the component. The rows form (with key entry) lives on in the
+        // header popover and Home settings.
+        const chnTop = true;
         if (chnTop) {
           // Top bar: the LOGO is the toggle. Lit = armed. Nothing else.
           return (
@@ -3743,6 +4302,20 @@ export function LiveView({
                     onClick={() => toggleEnabled(d)}
                   >
                     {PLATFORM_LOGO[d.preset] ?? <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />}
+                    {/* In a side rail the toggle expands into a row and says
+                      * its state; in the top/bottom rows it stays a logo. */}
+                    <span className="chn-ico-txt">
+                      <b>{d.label}</b>
+                      <i>
+                        {!d.enabled
+                          ? "Off"
+                          : !streaming
+                            ? "Ready"
+                            : st && st.phase === "live"
+                              ? "On"
+                              : (st && (PHASE_COPY[st.phase] ?? PHASE_COPY.idle).label) || "Starting"}
+                      </i>
+                    </span>
                     {streaming && st && <span className={`rm-chan-phase ${st.phase}`} />}
                   </button>
                 );
@@ -3807,6 +4380,62 @@ export function LiveView({
             {destinations.length === 0 && (
               <div className="rm-rows-empty">No channels — add them in Settings</div>
             )}
+          </div>
+        );
+      }
+      case "updates": {
+        // The stream of what shipped. Every #N reference is a real link to
+        // the exact PR/issue; the version header opens the release itself.
+        const REPO = "https://github.com/Boomin-Ai/producer";
+        const linkify = (text: string) =>
+          text.split(/(#\d+|https?:\/\/\S+)/g).map((part, k) => {
+            if (/^#\d+$/.test(part)) {
+              return (
+                <a key={k} className="upd-ref" onClick={() => openUrl(`${REPO}/issues/${part.slice(1)}`).catch(() => {})}>
+                  {part}
+                </a>
+              );
+            }
+            if (/^https?:\/\//.test(part)) {
+              return (
+                <a key={k} className="upd-ref" onClick={() => openUrl(part).catch(() => {})}>
+                  {part.replace(/^https?:\/\/(www\.)?/, "").slice(0, 40)}
+                </a>
+              );
+            }
+            return part;
+          });
+        return (
+          <div className="upd">
+            {releases === null && <div className="rm-rows-empty">Checking for updates…</div>}
+            {releases === "err" && (
+              <div className="rm-rows-empty">
+                The update stream goes live when the repo does.
+              </div>
+            )}
+            {Array.isArray(releases) &&
+              releases.map((r) => (
+                <div key={r.tag_name} className="upd-item">
+                  <div className="upd-head" onClick={() => openUrl(r.html_url).catch(() => {})}>
+                    <span className="upd-tag">{r.tag_name}</span>
+                    <span className="upd-name">{r.name || ""}</span>
+                    <span className="upd-date">
+                      {new Date(r.published_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                    </span>
+                  </div>
+                  {r.body && (
+                    <div className="upd-body">
+                      {r.body
+                        .split("\n")
+                        .filter((l) => l.trim())
+                        .slice(0, 6)
+                        .map((l, k) => (
+                          <p key={k}>{linkify(l.replace(/^[-*#\s]+/, ""))}</p>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              ))}
           </div>
         );
       }
@@ -3942,7 +4571,7 @@ export function LiveView({
       const addable = [
         !sources.screen && { key: "screen", label: "Screen", icon: ic.screen, act: () => setSrc({ screen: true }) },
         !sources.camera && { key: "camera", label: "Camera", icon: ic.cam, act: () => setSrc({ camera: true }) },
-        !overlayActive && { key: "alerts", label: "Overlay", icon: ic.link, act: () => setOverlayOpen(true) },
+        !overlayActive && { key: "alerts", label: "Overlay", icon: ic.link, act: () => setOverlayInline(true) },
         !sources.mic && { key: "mic", label: "Microphone", icon: ic.mic, act: () => setSrc({ mic: true }) },
         {
           key: "media",
@@ -3970,20 +4599,29 @@ export function LiveView({
         },
         { key: "text", label: "Text", icon: ic.text, act: () => setSrcSubPop("text") },
         { key: "color", label: "Color", icon: ic.swatch, act: () => setSrcSubPop("color") },
-        { key: "window", label: "Window capture", icon: ic.screen, act: () => setSrcSubPop("window") },
         {
-          // Guests are COMPONENTS — real people admitted through the Guests
-          // panel — not name-typed sources. A guest source cannot exist
-          // without one, so "adding" a guest means opening that panel.
-          key: "guest",
-          label: "Guest — via Guests panel",
+          key: "gslot",
+          label: "Guest slot",
           icon: ic.invite,
           act: () => {
-            if (dockOf(layout, "guests") === "hidden") {
-              setLayout(movePanel(layout, "guests", dockOf(layout, "sources")));
-            }
+            const n = slotItems().length + 1;
+            const id = `gslot-${n}`;
+            extraSources
+              .add(id, `Guest ${n}`, { kind: "color", color: "#10151d" })
+              .then(() => {
+                const c = cfgRef.current;
+                writeCfg({
+                  ...c,
+                  sources: {
+                    ...c.sources,
+                    extras: [...(c.sources.extras ?? []), { id, label: `Guest ${n}`, spec: { kind: "color", color: "#10151d" } }],
+                  },
+                });
+              })
+              .catch((e) => setBanner(String(e)));
           },
         },
+        { key: "window", label: "Window capture", icon: ic.screen, act: () => setSrcSubPop("window") },
       ].filter(Boolean) as { key: string; label: string; icon: ReactNode; act: () => void }[];
       return (
         <>
@@ -4051,7 +4689,7 @@ export function LiveView({
       const pad = 16;
       if (x < r.left - pad || x > r.right + pad || y < r.top - pad || y > r.bottom + pad) continue;
       const dock = el.dataset.dock as Dock;
-      const horizontal = dock === "bottom";
+      const horizontal = dock === "bottom" || dock === "top";
       const panels = Array.from(el.querySelectorAll<HTMLElement>("[data-panel]"));
       let index = panels.length;
       for (let i = 0; i < panels.length; i++) {
@@ -4141,21 +4779,45 @@ export function LiveView({
     );
   };
 
+  /** Dock-level surface ownership (edit mode only): the DOCK paints one card
+   * and its components go flat, or every panel keeps its own card. Dock-level
+   * by decree — never per component. */
+  const bgToggle = (dock: Dock) => {
+    if (!layoutEdit || dock === "hidden") return null;
+    const on = !!cfg.dock_bg?.[dock];
+    return (
+      <button
+        key={`${dock}-bg`}
+        className={`rm-dock-bgbtn${on ? " on" : ""}`}
+        title={on ? "Dock owns the background — click to give each panel its own card" : "Panels own their cards — click to merge this dock into one surface"}
+        onClick={() => {
+          const c = cfgRef.current;
+          writeCfg({ ...c, dock_bg: { ...c.dock_bg, [dock]: !on } });
+        }}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <rect x="4" y="4" width="16" height="16" rx="4" fill={on ? "currentColor" : "none"} fillOpacity={on ? 0.35 : 0} />
+        </svg>
+      </button>
+    );
+  };
+
   const renderDock = (dock: Dock) => {
     const ids = layout[dock];
     return (
       <>
         {ids.map((id, i) => (
           <Fragment key={id}>
-            {/* Splitters only between neighbours in the bottom row; side
-             * docks resize against the stage, not against each other. */}
-            {dock === "bottom" && i > 0 && !layoutEdit && splitter("bottom", ids[i - 1], id)}
+            {/* A splitter between every pair of neighbours, in every dock —
+             * up/down in the side rails, left/right in the rows. */}
+            {dock !== "hidden" && i > 0 && !layoutEdit && splitter(dock, ids[i - 1], id)}
             {slot(dock, i)}
             {renderPanel(id)}
           </Fragment>
         ))}
         {slot(dock, ids.length)}
         {addButton(dock)}
+        {bgToggle(dock)}
       </>
     );
   };
@@ -4168,13 +4830,16 @@ export function LiveView({
     <section
       key={id}
       data-panel={id}
-      data-in={dockOf(layout, id)}
+      data-in={formDockOf(id)}
       className={`rm-panel rm-panel-${id}${dragging === id ? " dragging" : ""}`}
-      style={
-        dockOf(layout, id) === "bottom" && shown.weights?.[id]
-          ? { flexGrow: shown.weights[id], flexBasis: 0 }
-          : undefined
-      }
+      style={(() => {
+        // A weight is RELATIVE to a sibling and EARNED in a specific dock:
+        // alone, or in a dock it wasn't dragged in, it must not apply — a
+        // stale weight pinned chat mid-rail while guests filled.
+        const d = dockOf(layout, id);
+        const w = d === "hidden" || layout[d].length < 2 ? undefined : weightOf(d, id);
+        return w ? { flexGrow: w, flexBasis: 0 } : undefined;
+      })()}
     >
       <div className="rm-panel-head">
         <span
@@ -4222,32 +4887,28 @@ export function LiveView({
             * something. */}
         </div>
 
-        {/* Always present. Moving health out of the dock was pointless if it
-          * disappears whenever you aren't live — the idle state is itself
-          * information ("engine up, nothing going out"). */}
-        <div className="rm-chip rm-health">
-          <span className={`rm-bars q-${quality}`} title={`Network: ${quality}`}>
-            <i />
-            <i />
-            <i />
-            <i />
-          </span>
-          {!streaming ? (
-            <span className="rm-health-idle">
-              {!engineOk ? "Starting engine" : enabledDests.length === 0 ? "No channels" : "Ready"}
-            </span>
-          ) : (
-            <span className="rm-health-time">
-              {`${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`}
-            </span>
-          )}
-          {engineOk && (
-            <>
-              <span className="rm-health-sep" />
-              <span className="rm-health-num">{(snapshot?.fps ?? 0).toFixed(0)} fps</span>
-            </>
-          )}
-        </div>
+        {/* The way DOWN and the way AROUND both live at the FAR LEFT, apart
+          * from the transport cluster: collapse first, then edit. */}
+        <button
+          className="rm-leave"
+          onClick={() => onLeave?.()}
+          title={streaming ? "Collapse — the stream keeps running" : "Collapse room"}
+        >
+          {ic.collapseDown}
+        </button>
+        <button
+          className={`rm-icon-chip${layoutEdit ? " on" : ""}`}
+          onClick={() => {
+            setLayoutEdit((e) => !e);
+            setLayoutMenu(false);
+          }}
+          title={layoutEdit ? "Done editing layout" : "Edit layout"}
+        >
+          {ic.layout}
+        </button>
+
+        {/* The header's health chip was the footer's stream-health meter said
+          * twice; the footer keeps it (with fps), the LIVE pill keeps time. */}
         {!streaming && lastRec && (
           <button
             className="rm-health-rec"
@@ -4261,11 +4922,53 @@ export function LiveView({
         <div className="rm-top-drag" data-tauri-drag-region />
 
         <div className="rm-top-right">
-          {streaming && (
-            <span className="rm-live-pill">
-              <span className="rm-live-dot" />
-              {`${Math.floor(elapsed / 60)}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}
-            </span>
+          <button
+            className="hd-chip hd-chans"
+            title="Channels this room goes out to"
+            onClick={(e) => {
+              setPopAnchor(e.currentTarget);
+              setDestsOpen((o) => !o);
+            }}
+          >
+            {enabledDests.length > 0 ? (
+              enabledDests.map((d) => (
+                <span key={d.id} className="hd-chan-logo">
+                  {PLATFORM_LOGO[d.preset] ?? <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />}
+                </span>
+              ))
+            ) : (
+              <span>Channels</span>
+            )}
+            {ic.chev}
+          </button>
+          {destsOpen && (
+            <Pop anchor={popAnchor} align="right" className="rm-pop-dests">
+              <div className="rm-pop-title">CHANNELS</div>
+              {destinations.map((d) => {
+                const st = statuses.get(d.id);
+                const phase = st ? PHASE_COPY[st.phase] ?? PHASE_COPY.idle : PHASE_COPY.idle;
+                return (
+                  <div key={d.id} className="chn-row" style={{ minWidth: 220 }}>
+                    <span className="chn-logo">{PLATFORM_LOGO[d.preset] ?? <span className="rm-row-dot" />}</span>
+                    <span className="chn-name">{d.label}</span>
+                    {streaming && st && (
+                      <span className="chn-sub">
+                        {phase.label}
+                        <span className={`rm-chan-phase ${st.phase}`} />
+                      </span>
+                    )}
+                    <button
+                      className={`rm-switch${d.enabled ? " on" : ""}`}
+                      disabled={streaming}
+                      onClick={() => toggleEnabled(d)}
+                    >
+                      <span className="rm-switch-knob" />
+                    </button>
+                  </div>
+                );
+              })}
+              {destinations.length === 0 && <div className="rm-rows-empty">No channels yet.</div>}
+            </Pop>
           )}
 
           <button
@@ -4359,33 +5062,18 @@ export function LiveView({
             </Pop>
           )}
 
-          <button
-            className={`rm-icon-chip${layoutEdit ? " on" : ""}`}
-            onClick={() => {
-              setLayoutEdit((e) => !e);
-              setLayoutMenu(false);
-            }}
-            title={layoutEdit ? "Done editing layout" : "Edit layout"}
-          >
-            {ic.layout}
-          </button>
-
-          <button
-            className="rm-leave"
-            onClick={() => onLeave?.()}
-            title={streaming ? "Collapse — the stream keeps running" : "Collapse room"}
-          >
-            {ic.collapseDown}
-          </button>
+          {streaming && (
+            <span className="hd-live">
+              <span className="stg-live-dot" />
+              LIVE {`${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}
+            </span>
+          )}
         </div>
       </header>
 
       {layoutEdit && (
         <div className="rm-editbar">
           <span className="rm-editbar-dot" />
-          <span className="rm-editbar-text">
-            Editing layout — drag a panel by its grip, or use + to add one
-          </span>
           <div className="rm-pop-anchor">
             <button
               className="rm-editbar-btn"
@@ -4424,6 +5112,28 @@ export function LiveView({
           <button className="rm-editbar-done" onClick={() => setLayoutEdit(false)}>
             Done
           </button>
+          {/* Where the stage's quick controls float — an edge of the canvas. */}
+          <span className="rm-editbar-ctl" title="Quick controls position">
+            {(["left", "top", "bottom", "right"] as const).map((pos) => (
+              <button
+                key={pos}
+                className={`rm-editbar-pos${(cfg.stage_bar ?? "bottom") === pos ? " on" : ""}`}
+                title={`Controls on the ${pos}`}
+                onClick={() => writeCfg({ ...cfgRef.current, stage_bar: pos })}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <rect x="3" y="3" width="18" height="18" rx="4" />
+                  {pos === "left" && <rect x="5" y="8" width="4" height="8" rx="1" fill="currentColor" stroke="none" />}
+                  {pos === "right" && <rect x="15" y="8" width="4" height="8" rx="1" fill="currentColor" stroke="none" />}
+                  {pos === "top" && <rect x="8" y="5" width="8" height="4" rx="1" fill="currentColor" stroke="none" />}
+                  {pos === "bottom" && <rect x="8" y="15" width="8" height="4" rx="1" fill="currentColor" stroke="none" />}
+                </svg>
+              </button>
+            ))}
+          </span>
+          <span className="rm-editbar-text">
+            Editing layout — drag a panel by its grip, or use + to add one
+          </span>
         </div>
       )}
 
@@ -4431,23 +5141,71 @@ export function LiveView({
         * belongs; chat while chatting; whatever the show needs). Renders only
         * when populated or while editing, so the default room stays clean. */}
       {(layout.top.length > 0 || layoutEdit) && (
-        <div
-          data-dock="top"
-          className={`rm-dock rm-dock-top${layout.top.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "top" ? " hot" : ""}`}
-        >
-          {renderDock("top")}
-        </div>
+        <>
+          {(topOpen || layoutEdit) && (
+            <div
+              data-dock="top"
+              className={`rm-dock rm-dock-top${layout.top.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "top" ? " hot" : ""}${cfg.dock_bg?.top ? " dock-bg" : ""}${shown.top ? " sized" : ""}${topExpanded ? " expanded" : ""}`}
+              style={topOpen && shown.top ? { height: shown.top } : undefined}
+            >
+              {renderDock("top")}
+            </div>
+          )}
+          {(topOpen || layoutEdit) && sceneSettings && dockOf(layout, "scenes") === "top" && (
+            <SceneSettingsStrip
+              scene={sceneSettings === "__room__" ? null : scenes.find((x) => x.id === sceneSettings) ?? null}
+              effective={
+                sceneSettings === "__room__"
+                  ? cfg.transition ?? { kind: "cut" }
+                  : transitionFor(scenes.find((x) => x.id === sceneSettings) ?? null)
+              }
+              onSet={(t) => setTransition(sceneSettings === "__room__" ? null : sceneSettings, t)}
+              onUpdate={() => {
+                if (sceneSettings !== "__room__") updateScene(sceneSettings);
+              }}
+              onClose={() => setSceneSettings(null)}
+            />
+          )}
+          {(topOpen || layoutEdit) && srcSettings && dockOf(layout, "sources") === "top" && (
+            <SourceSettingsStrip
+              rowKey={srcSettings}
+              items={sources.items ?? []}
+              sources={sources}
+              onClose={() => setSrcSettings(null)}
+              openOverlay={() => { setSrcSettings(null); setOverlayInline(true); }}
+              onPickWindow={replaceWindowSource}
+            />
+          )}
+          {!layoutEdit && (
+            <div
+              className={`rm-vtab rm-vtab-top${topOpen ? "" : " closed"}`}
+              role="button"
+              tabIndex={0}
+              title={topOpen ? "Drag to resize — click to hide" : "Show the top dock"}
+              onPointerDown={(e) => beginResize(e, "top", undefined, undefined, topOpen)}
+              onPointerMove={moveResize}
+              onPointerUp={() => endResize(() => setTopOpen((o) => !o))}
+              onPointerCancel={() => endResize()}
+              onKeyDown={(e) => e.key === "Enter" && setTopOpen((o) => !o)}
+            >
+              <span className="rm-sheet-handle" />
+            </div>
+          )}
+        </>
       )}
 
       <div className="rm-body">
-        <aside
-          data-dock="left"
-          className={`rm-dock rm-dock-side${layout.left.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "left" ? " hot" : ""}`}
-          style={layout.left.length && shown.left ? { width: shown.left, flex: "0 0 auto" } : undefined}
-        >
-          {renderDock("left")}
-        </aside>
-        {layout.left.length > 0 && !layoutEdit && splitter("left")}
+        {(leftOpen || layoutEdit) && (
+          <aside
+            data-dock="left"
+            className={`rm-dock rm-dock-side${layout.left.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "left" ? " hot" : ""}${cfg.dock_bg?.left ? " dock-bg" : ""}`}
+            style={layout.left.length && shown.left ? { width: shown.left, flex: "0 0 auto" } : undefined}
+          >
+            {renderDock("left")}
+          </aside>
+        )}
+        {layout.left.length > 0 && !layoutEdit &&
+          splitter("left", undefined, undefined, { open: leftOpen, onToggle: () => setLeftOpen((o) => !o) })}
 
         <div className="rm-center">
           <div className="rm-canvas">
@@ -4461,7 +5219,15 @@ export function LiveView({
                   onOrder={(id, dir) => {
                     const it = (sources.items ?? []).find((i) => i.id === id);
                     if (it) ipc.liveSetTransform(id, { z: it.z + dir }, true).catch(() => {});
+                    captureActiveLook();
                   }}
+                  onSelect={setStageSel}
+                  selectId={stageSel}
+                  onDelete={(id) => {
+                    deleteStageItem(id);
+                    captureActiveLook();
+                  }}
+                  onCommit={captureActiveLook}
                 />
               </PreviewPanel>
             )}
@@ -4472,15 +5238,8 @@ export function LiveView({
             )}
           </div>
 
-          {/* Stage overlays: HTML floats above the hole-mode preview. */}
-          {streaming && (
-            <div className="stg-live">
-              <span className="stg-live-dot" />
-              LIVE {`${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}
-            </div>
-          )}
           {engineOk && (
-            <div className="stg-bar">
+            <div className={`stg-bar pos-${cfg.stage_bar ?? "bottom"}`}>
               <button
                 className={`stg-btn${sources.mic_muted ? " off" : ""}`}
                 title={sources.mic_muted ? "Unmute mic" : "Mute mic"}
@@ -4555,17 +5314,20 @@ export function LiveView({
           />
         </div>
 
-        {layout.right.length > 0 && !layoutEdit && splitter("right")}
-        <aside
-          data-dock="right"
-          className={`rm-dock rm-dock-side${layout.right.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "right" ? " hot" : ""}`}
-          style={layout.right.length && shown.right ? { width: shown.right, flex: "0 0 auto" } : undefined}
-        >
-          {renderDock("right")}
-        </aside>
+        {layout.right.length > 0 && !layoutEdit &&
+          splitter("right", undefined, undefined, { open: rightOpen, onToggle: () => setRightOpen((o) => !o) })}
+        {(rightOpen || layoutEdit) && (
+          <aside
+            data-dock="right"
+            className={`rm-dock rm-dock-side${layout.right.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "right" ? " hot" : ""}${cfg.dock_bg?.right ? " dock-bg" : ""}`}
+            style={layout.right.length && shown.right ? { width: shown.right, flex: "0 0 auto" } : undefined}
+          >
+            {renderDock("right")}
+          </aside>
+        )}
       </div>
 
-      {sceneSettings && dockOf(layout, "scenes") !== "bottom" && (
+      {sceneSettings && dockOf(layout, "scenes") !== "bottom" && dockOf(layout, "scenes") !== "top" && (
         <Pop anchor={popAnchor} align="right" className="rm-pop-devices">
           <div className="rm-devices">
             <div className="rm-devices-head">Transition</div>
@@ -4674,24 +5436,6 @@ export function LiveView({
         </div>
       )}
 
-      {overlayOpen && (
-        <>
-          <div className="rm-pop-backdrop" onClick={() => setOverlayOpen(false)} />
-          <div className="rm-editor rm-editor-overlay">
-            <div className="rm-editor-head">
-              <span className="rm-group-label">OVERLAY</span>
-              <button className="rm-panel-plus" onClick={() => setOverlayOpen(false)} title="Close">
-                {ic.x}
-              </button>
-            </div>
-            <OverlayPicker
-              activeWindow={sources.overlay_window ?? null}
-              activeUrl={sources.overlay_url ?? null}
-            />
-          </div>
-        </>
-      )}
-
       {(adding || editing) && (
         <>
           <div className="rm-pop-backdrop" onClick={() => (setAdding(false), setEditing(null))} />
@@ -4718,8 +5462,11 @@ export function LiveView({
             className="rm-sheet-head"
             role="button"
             tabIndex={0}
-            title={sheetOpen ? "Hide the bottom row" : "Show the bottom row"}
-            onClick={() => setSheetOpen((o) => !o)}
+            title={sheetOpen ? "Drag to resize — click to hide" : "Show the bottom row"}
+            onPointerDown={(e) => beginResize(e, "bottom", undefined, undefined, sheetOpen)}
+            onPointerMove={moveResize}
+            onPointerUp={() => endResize(() => setSheetOpen((o) => !o))}
+            onPointerCancel={() => endResize()}
             onKeyDown={(e) => e.key === "Enter" && setSheetOpen((o) => !o)}
           >
             <span className="rm-sheet-handle" />
@@ -4751,17 +5498,32 @@ export function LiveView({
               items={sources.items ?? []}
               sources={sources}
               onClose={() => setSrcSettings(null)}
-              openOverlay={() => setOverlayOpen(true)}
+              openOverlay={() => { setSrcSettings(null); setOverlayInline(true); }}
               onPickWindow={replaceWindowSource}
             />
           )}
           {(sheetOpen || dragging) && (
-            <div data-dock="bottom" className={`rm-dock rm-dock-bottom${layoutEdit ? " armed" : ""}${dropHint?.dock === "bottom" ? " hot" : ""}`}>{renderDock("bottom")}</div>
+            <div
+              data-dock="bottom"
+              className={`rm-dock rm-dock-bottom${layoutEdit ? " armed" : ""}${dropHint?.dock === "bottom" ? " hot" : ""}${cfg.dock_bg?.bottom ? " dock-bg" : ""}${shown.bottom ? " sized" : ""}${bottomSlim ? " slim" : ""}`}
+              style={shown.bottom ? { height: shown.bottom } : undefined}
+            >{renderDock("bottom")}</div>
           )}
         </div>
       )}
       <footer className="rm-foot">
         <span className="rm-foot-item">Producer v{appVersion ?? "…"}</span>
+        {mountMs != null && (
+          <span className="rm-foot-item dim-inline" title="Room open → stage ready (engine boot phases in the console)">
+            opened in {(mountMs / 1000).toFixed(2)}s
+          </span>
+        )}
+        {engineOk && (
+          <span className="rm-foot-item dim-inline">
+            {!streaming && enabledDests.length === 0 ? "No channels · " : ""}
+            {(snapshot?.fps ?? 0).toFixed(0)} fps
+          </span>
+        )}
         <span className="rm-foot-item">
           Stream health
           <span className={`stg-meter foot q-${quality}`}>

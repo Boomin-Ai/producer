@@ -176,6 +176,9 @@ export interface LiveItem {
   kind: string;
   label: string;
   visible: boolean;
+  /** The source has produced at least one frame (engine truth: reported
+   * width > 0). Absent on older engines. The honest "on stage" signal. */
+  has_frame?: boolean;
   x: number;
   y: number;
   w: number;
@@ -260,6 +263,9 @@ export interface LiveSnapshot {
   engine_ready: boolean;
   bootstrap_ok: boolean;
   graphics_backend?: string | null;
+  /** Boot phase timings (name, ms): startup, reset_video, reset_audio,
+   * load_modules (CEF lives here), post_load. */
+  boot_phases_ms?: [string, number][];
   session_state: LiveSessionState;
   elapsed_secs: number;
   destinations: LiveDestStatus[];
@@ -424,11 +430,32 @@ export const roomGuestInvite = (
     displayName: displayName ?? null,
   });
 
+export interface NetworkConnectionRow {
+  connection: { id: string; status: string; connectedAt?: string };
+  /** Always the OTHER brand of the pair. */
+  counterparty: { id: string; name: string; slug: string; avatarUrl?: string | null };
+}
 export const networkConnections = (endpointId: string) =>
-  invoke<{ connections?: { brandId: string; name: string; slug?: string }[] }>(
-    "network_connections",
-    { endpointId },
-  );
+  invoke<{ connections?: NetworkConnectionRow[] }>("network_connections", { endpointId });
+
+export interface NetworkBrandCard {
+  brand: { id: string; name: string; slug: string; avatar_url?: string | null };
+  membership: { headline?: string | null; blurb?: string | null; joined_at?: string };
+  relationship: {
+    self: boolean;
+    connected: boolean;
+    invitation?: { id: string; direction: "inbox" | "outbox" } | null;
+  };
+}
+
+export interface NetworkLiveRoom {
+  room_id: string;
+  title?: string | null;
+  visibility: "connections" | "public";
+  status: "live" | "idle";
+  connected: boolean;
+  brand: { id: string; name: string; slug: string; avatar_url?: string | null };
+}
 
 /** Register a local room with the platform. Idempotent by external_ref, so
  * it's safe to call unconditionally on first server-side need. */
@@ -470,7 +497,27 @@ export const network = {
     }),
   act: (endpointId: string, id: string, action: "accept" | "decline" | "revoke") =>
     invoke("network_invitation_action", { endpointId, id, action }),
+  /** Exact-handle lookup — the ONLY discovery surface Producer gets. */
+  lookup: (endpointId: string, slug: string) =>
+    invoke<NetworkBrandCard>("network_lookup", { endpointId, slug }),
+  liveRooms: (endpointId: string) =>
+    invoke<{ rooms?: NetworkLiveRoom[] }>("network_live_rooms", { endpointId }),
+  /** Knock on a visible open stage; the join_url opens the guest page. */
+  enterRoom: (endpointId: string, roomId: string) =>
+    invoke<{ join_url: string; resumed: boolean }>("network_enter_room", { endpointId, roomId }),
 };
+
+/** Mount timings → <app data>/live/room-open-report.json, the ruler every
+ * room-open speedup is measured against. */
+export const roomOpenReport = (report: Record<string, unknown>) =>
+  invoke("live_room_open_report", { report });
+
+/** Network exposure of a registered room (server id, not the local one). */
+export const roomSetVisibility = (
+  endpointId: string,
+  roomId: string,
+  visibility: "private" | "connections" | "public",
+) => invoke("room_set_visibility", { endpointId, roomId, visibility });
 
 export interface RoomGuest {
   id: string;

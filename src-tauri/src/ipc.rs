@@ -5,7 +5,7 @@
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 
 use crate::client::ProducerClient;
@@ -332,7 +332,10 @@ pub async fn room_guest_invite(
     if let Ok(v) = &res {
         // The invite link is issued once. Log its shape so a renamed field
         // can never silently cost a real link again.
-        eprintln!("[guest] invite response keys: {:?}", v.as_object().map(|o| o.keys().collect::<Vec<_>>()));
+        eprintln!(
+            "[guest] invite response keys: {:?}",
+            v.as_object().map(|o| o.keys().collect::<Vec<_>>())
+        );
     }
     res
 }
@@ -350,7 +353,10 @@ pub async fn network_connections(
 }
 
 #[tauri::command]
-pub async fn network_status(state: State<'_, AppState>, endpoint_id: String) -> EngineResult<Value> {
+pub async fn network_status(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+) -> EngineResult<Value> {
     let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
     ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)
@@ -396,6 +402,74 @@ pub async fn network_invitation_action(
     ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)
         .network_invitation_action(&id, &action)
+        .await
+}
+
+#[tauri::command]
+pub async fn network_lookup(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    slug: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .network_lookup(&slug)
+        .await
+}
+
+#[tauri::command]
+pub async fn network_live_rooms(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .network_live_rooms()
+        .await
+}
+
+#[tauri::command]
+pub async fn network_enter_room(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .network_enter_room(&room_id)
+        .await
+}
+
+/// The room's mount timings, written beside the engine report so a room
+/// open can be read off disk (engine → applied → settled → veil, plus the
+/// boot phases) — the ruler every speedup is measured against.
+#[tauri::command]
+pub async fn live_room_open_report(app: AppHandle, report: Value) -> EngineResult<()> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| EngineError::Other(e.to_string()))?
+        .join("live");
+    let _ = std::fs::create_dir_all(&dir);
+    let json = serde_json::to_string_pretty(&report).unwrap_or_default();
+    std::fs::write(dir.join("room-open-report.json"), json)
+        .map_err(|e| EngineError::Other(e.to_string()))
+}
+
+#[tauri::command]
+pub async fn room_set_visibility(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+    visibility: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .room_set_visibility(&room_id, &visibility)
         .await
 }
 

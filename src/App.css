@@ -1478,7 +1478,7 @@ textarea::placeholder {
 .cr-home {
   flex: 1;
   overflow-y: auto;
-  width: min(980px, calc(100vw - 72px));
+  width: min(1140px, calc(100vw - 72px));
   margin: 0 auto;
   padding: 28px 0 64px;
   display: flex;
@@ -3117,34 +3117,10 @@ textarea::placeholder {
   color: #fff;
 }
 
-.rm-scene-rec {
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  border: 2.5px solid #fff;
-  flex-shrink: 0;
-  position: relative;
-}
 
-.rm-scene-row:not(.onair) .rm-scene-rec {
-  border-color: var(--mint);
-}
 
-.rm-scene-rec::after {
-  content: "";
-  position: absolute;
-  inset: 2.5px;
-  border-radius: 50%;
-  background: currentColor;
-}
 
-.rm-scene-row.onair .rm-scene-rec::after {
-  background: #fff;
-}
 
-.rm-scene-row:not(.onair) .rm-scene-rec::after {
-  background: var(--mint);
-}
 
 /* on-air editing warning */
 
@@ -5077,6 +5053,213 @@ textarea::placeholder {
 
 /* ── Brand Network on the control room ─────────────────────────────────── */
 
+/* The network rail is ATTACHED furniture, not a floating card: fixed against
+ * the icon rail's right edge, full height, one hairline where it meets the
+ * content. It scrolls internally; the rooms grid scrolls beside it. */
+.net-rail {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 236px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 52px 14px 14px;
+  border-left: 1px solid var(--line-1);
+  border-radius: 0;
+  background: var(--surface-1);
+  overflow-y: auto;
+}
+
+/* Content clears the icon rail on the left and the network rail on the
+ * right — it must never slide underneath either. */
+.cr-home.has-net-rail {
+  margin: 0 260px 0 96px;
+  width: auto;
+  max-width: 980px;
+}
+.net-rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--fg-3);
+}
+
+.net-tabs {
+  display: flex;
+  gap: 6px;
+}
+.net-tabs button {
+  flex: 1;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 650;
+  border-radius: var(--r-ctl);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--fg-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.net-tabs button.on {
+  background: var(--surface-2);
+  border-color: var(--line-1);
+  color: var(--fg-1);
+}
+.net-badge {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--mint);
+  color: #06251a;
+  font-size: 10.5px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.net-list,
+.net-find {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.net-conn,
+.net-card,
+.net-live-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 6px 8px;
+  border-radius: var(--r-ctl);
+}
+.net-conn:hover { background: var(--surface-2); }
+.net-card {
+  border: 1px solid var(--line-1);
+  background: var(--surface-2);
+  padding: 10px;
+}
+
+.net-ava {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  object-fit: cover;
+  flex: none;
+}
+.net-ava-ph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-3);
+  color: var(--fg-2);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.net-conn-txt {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.net-conn-name {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--fg-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.net-conn-slug {
+  font-size: 11.5px;
+  color: var(--fg-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.net-card-head {
+  font-size: 11.5px;
+  color: var(--fg-2);
+  margin-top: 2px;
+}
+
+.net-state {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--fg-3);
+  flex: none;
+}
+.net-state.on { color: var(--mint); }
+
+/* The find row must LIVE INSIDE the rail — input yields, button never spills. */
+.net-rail .net-invite-row { gap: 8px; min-width: 0; }
+.net-rail .net-slug { flex: 1 1 auto; min-width: 0; max-width: none; padding: 8px 10px; font-size: 12.5px; }
+.net-rail .net-invite-row .cr-primary { flex: none; padding: 7px 12px; }
+
+/* Live-now cards on the home main column. */
+.net-live {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.net-live-card {
+  border: 1px solid var(--line-1);
+  background: var(--surface-1);
+  border-radius: var(--r-card);
+  padding: 12px;
+}
+.net-live-badge {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--mint);
+  border: 1px solid oklch(0.75 0.14 165 / 0.35);
+  border-radius: 999px;
+  padding: 3px 8px;
+  flex: none;
+}
+.net-live-badge.onair {
+  color: #fff;
+  background: var(--red);
+  border-color: transparent;
+}
+
+/* Room card share chip — bottom-right, out of the delete button's corner. */
+.cr-room-share {
+  position: absolute;
+  bottom: 10px;
+  right: 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line-1);
+  color: var(--fg-3);
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+.cr-room-share:hover { color: var(--fg-1); border-color: var(--line-2); }
+.cr-room-share.connections { color: var(--mint); border-color: oklch(0.75 0.14 165 / 0.4); }
+.cr-room-share.public { color: var(--amber); border-color: oklch(0.85 0.12 85 / 0.4); }
+.cr-room-share.busy { opacity: 0.5; pointer-events: none; }
+
 .net-count {
   display: inline-flex;
   align-items: center;
@@ -5529,7 +5712,8 @@ textarea::placeholder {
 
 
 /* ── Top dock: a horizontal panel row between the header and the stage ──── */
-.rm-dock-top {
+.rm-dock-top ,
+.rm-dock-bottom.slim  {
   display: flex;
   flex-direction: row;
   align-items: stretch;
@@ -5537,7 +5721,8 @@ textarea::placeholder {
   padding: 6px 10px 2px;
   min-height: 0;
 }
-.rm-dock-top .rm-panel {
+.rm-dock-top:not(.expanded) .rm-panel ,
+.rm-dock-bottom.slim .rm-panel  {
   flex: 1 1 0;
   min-width: 0;
   max-height: 260px;
@@ -5597,20 +5782,23 @@ textarea::placeholder {
 /* ── Controller in the TOP dock: one strip, not a stack ───────────────────
    Docked up top it reads as a console: transport cluster left, channels as
    compact pills flowing right. Same components, dock-aware arrangement. */
-.rm-dock-top .rm-panel-channels .rm-panel-body {
+.rm-dock-top:not(.expanded) .rm-panel-channels .rm-panel-body ,
+.rm-dock-bottom.slim .rm-panel-channels .rm-panel-body  {
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 0;
 }
-.rm-dock-top .rm-ctl {
+.rm-dock-top:not(.expanded) .rm-ctl ,
+.rm-dock-bottom.slim .rm-ctl  {
   flex: 0 0 auto;
   margin-bottom: 0;
   padding: 4px;
   background: transparent;
   border: none;
 }
-.rm-dock-top .rm-panel-channels {
+.rm-dock-top:not(.expanded) .rm-panel-channels ,
+.rm-dock-bottom.slim .rm-panel-channels  {
   max-height: none;
   overflow: visible;
 }
@@ -5618,7 +5806,8 @@ textarea::placeholder {
 /* Minimal controller: no wrapper card — the components ARE the interface.
    (The obsidian box read as chrome; removed on request.) */
 /* One-line controller in the top dock; channel TAP-PILLS are the switches. */
-.rm-dock-top .rm-panel-channels .rm-panel-body {
+.rm-dock-top:not(.expanded) .rm-panel-channels .rm-panel-body ,
+.rm-dock-bottom.slim .rm-panel-channels .rm-panel-body  {
   flex-wrap: nowrap;
 }
 /* ── Mixer, signature pass ────────────────────────────────────────────────
@@ -5740,8 +5929,10 @@ textarea::placeholder {
 }
 /* WIDE (top dock, roomy bottom): ONE LINE — pills inline with transport. */
 @container panel (min-width: 600px) {
-  .rm-panel-channels .rm-panel-body,
-  .rm-panel-body {
+  /* Channels ONLY. A bare .rm-panel-body here once un-clipped EVERY wide
+   * panel — scene rows bled over the neighbouring dock. A panel never gets
+   * to paint outside itself. */
+  .rm-panel-channels .rm-panel-body {
     overflow: visible;
   }
   .rm-ctl-line,
@@ -6037,28 +6228,34 @@ textarea::placeholder {
 /* ═══ TOP DOCK IS SLIM. ALWAYS. ═══════════════════════════════════════════
    Native control height plus breathing room — never a second storey. Panel
    chrome compresses, bodies run inline, nothing may wrap. */
-.rm-dock-top .rm-panel {
+.rm-dock-top:not(.expanded) .rm-panel ,
+.rm-dock-bottom.slim .rm-panel  {
   max-height: 76px;
 }
-.rm-dock-top .rm-panel-head {
+.rm-dock-top:not(.expanded) .rm-panel-head ,
+.rm-dock-bottom.slim .rm-panel-head  {
   padding: 2px 6px 0;
   min-height: 0;
 }
-.rm-dock-top .rm-panel-head .rm-group-label {
+.rm-dock-top:not(.expanded) .rm-panel-head .rm-group-label ,
+.rm-dock-bottom.slim .rm-panel-head .rm-group-label  {
   font-size: 8.5px;
   letter-spacing: 0.12em;
   opacity: 0.6;
 }
-.rm-dock-top .rm-panel-body {
+.rm-dock-top:not(.expanded) .rm-panel-body ,
+.rm-dock-bottom.slim .rm-panel-body  {
   padding-top: 2px;
   padding-bottom: 6px;
 }
-.rm-dock-top .ctl {
+.rm-dock-top:not(.expanded) .ctl ,
+.rm-dock-bottom.slim .ctl  {
   flex-wrap: nowrap;
   overflow-x: auto;
 }
 /* mixer up top: name + thin bar, INLINE — a status row, not strips */
-.rm-dock-top .rm-strips {
+.rm-dock-top:not(.expanded) .rm-strips ,
+.rm-dock-bottom.slim .rm-strips  {
   flex-direction: row;
   flex-wrap: nowrap;
   align-items: center;
@@ -6066,7 +6263,8 @@ textarea::placeholder {
   overflow-x: auto;
   padding: 2px 0;
 }
-.rm-dock-top .rm-strip {
+.rm-dock-top:not(.expanded) .rm-strip ,
+.rm-dock-bottom.slim .rm-strip  {
   flex-direction: row;
   align-items: center;
   gap: 8px;
@@ -6078,17 +6276,22 @@ textarea::placeholder {
   border: none;
   box-shadow: none;
 }
-.rm-dock-top .rm-strip .rm-fader,
-.rm-dock-top .rm-strip .rm-strip-db,
-.rm-dock-top .rm-strip .rm-strip-fx {
+.rm-dock-top:not(.expanded) .rm-strip .rm-fader,
+.rm-dock-bottom.slim .rm-strip .rm-fader,
+.rm-dock-top:not(.expanded) .rm-strip .rm-strip-db,
+.rm-dock-bottom.slim .rm-strip .rm-strip-db,
+.rm-dock-top:not(.expanded) .rm-strip .rm-strip-fx ,
+.rm-dock-bottom.slim .rm-strip .rm-strip-fx  {
   display: none;
 }
-.rm-dock-top .rm-strip .rm-meter {
+.rm-dock-top:not(.expanded) .rm-strip .rm-meter ,
+.rm-dock-bottom.slim .rm-strip .rm-meter  {
   width: 72px;
   height: 3px;
   border-radius: 999px;
 }
-.rm-dock-top .rm-strip-name {
+.rm-dock-top:not(.expanded) .rm-strip-name ,
+.rm-dock-bottom.slim .rm-strip-name  {
   font-size: 11px;
   order: -1;
   max-width: 84px;
@@ -6096,7 +6299,8 @@ textarea::placeholder {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.rm-dock-top .rm-strip .rm-strip-icon {
+.rm-dock-top:not(.expanded) .rm-strip .rm-strip-icon ,
+.rm-dock-bottom.slim .rm-strip .rm-strip-icon  {
   width: 20px;
   height: 20px;
 }
@@ -6192,8 +6396,736 @@ textarea::placeholder {
   letter-spacing: 0.08em;
   color: var(--fg-3);
 }
+
+/* ── Titles are EDIT-MODE chrome ──────────────────────────────────────────
+   Live, a panel is ALL content: no label row eating the top of the dock.
+   Actions float in on hover, top-right — the guest rail's pattern,
+   generalized by decree. Edit mode restores the full head (grip, title,
+   hide) because that is when you need to know which card is which. Guests
+   keep their own bottom-right chrome, already built this way. */
+.room:not(.layout-edit) .rm-panel { position: relative; }
+.room:not(.layout-edit) .rm-panel:not(.rm-panel-guests) > .rm-panel-head {
+  position: absolute;
+  /* Bottom-right, like the guest rail: the one corner in-content headers
+   * (Filters' own back/+ row lives top) never claim. */
+  bottom: 6px;
+  right: 6px;
+  z-index: 6;
+  padding: 0;
+  min-height: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.14s ease;
+}
+/* Console rows are one line tall — center the pill on the row instead. */
+.room:not(.layout-edit) .rm-panel[data-in="top"]:not(.rm-panel-guests) > .rm-panel-head {
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
+}
+.room:not(.layout-edit) .rm-panel:not(.rm-panel-guests):hover > .rm-panel-head,
+.room:not(.layout-edit) .rm-panel:not(.rm-panel-guests) > .rm-panel-head:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+.room:not(.layout-edit) .rm-panel-head .rm-group-label,
+.room:not(.layout-edit) .rm-panel-head .rm-grip,
+.room:not(.layout-edit) .rm-panel-head .rm-panel-hide {
+  display: none;
+}
+/* A quiet plate behind the floating actions so they read over any content. */
+.room:not(.layout-edit) .rm-panel:not(.rm-panel-guests) .rm-panel-actions {
+  background: oklch(0.13 0.02 250 / 0.82);
+  border: 1px solid var(--line-1);
+  border-radius: 999px;
+  padding: 3px 6px;
+  backdrop-filter: blur(8px);
+}
 .rm-panel-body {
   padding: 8px var(--pad-card) var(--pad-card);
+}
+
+/* ── Dock-owned backgrounds (dock_bg) ─────────────────────────────────────
+   The DOCK is one card; its components render flat inside it. Configured at
+   the dock level (edit mode), never per component — turning it on turns the
+   components' own cards OFF. */
+.rm-dock.dock-bg {
+  background: var(--surface-1);
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-card);
+}
+.rm-dock.dock-bg > .rm-panel {
+  background: none;
+  border: none;
+  border-radius: 0;
+}
+/* Hairline seams where cards used to separate the panels. */
+.rm-dock-side.dock-bg > .rm-panel ~ .rm-panel {
+  border-top: 0.5px solid var(--line-1);
+}
+.rm-dock-bottom.dock-bg > .rm-panel ~ .rm-panel,
+.rm-dock-top.dock-bg > .rm-panel ~ .rm-panel ,
+.rm-dock-bottom.slim.dock-bg > .rm-panel ~ .rm-panel  {
+  border-left: 0.5px solid var(--line-1);
+}
+/* Guests keep their card radius on the outer corners via the dock's own. */
+.rm-dock.dock-bg > .rm-panel-guests .rm-gcard:first-child,
+.rm-dock.dock-bg > .rm-panel-guests .rm-gcard:last-child {
+  border-radius: 0;
+}
+
+.rm-dock-bgbtn {
+  align-self: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  border: 1px solid var(--line-1);
+  background: var(--surface-2);
+  color: var(--fg-3);
+}
+.rm-dock-bgbtn:hover { color: var(--fg-1); border-color: var(--line-2); }
+.rm-dock-bgbtn.on { color: var(--mint); border-color: oklch(0.75 0.14 165 / 0.4); }
+
+/* ── One dock grammar: every boundary handle drags to resize, clicks to
+   retract; every neighbour pair has a splitter along the dock's axis. ── */
+
+/* Pair splitter in the side rails: a horizontal bar you slide up/down. */
+.rm-split-row {
+  width: 100%;
+  height: 9px;
+  cursor: ns-resize;
+}
+.rm-split-row .rm-split-grab {
+  width: 34px;
+  height: 3px;
+}
+.rm-split-row:hover .rm-split-grab,
+.rm-split-row:active .rm-split-grab {
+  width: 52px;
+  height: 3px;
+}
+.rm-split-v {
+  align-self: stretch;
+  width: 9px;
+  cursor: ew-resize;
+}
+.rm-split-h {
+  align-self: stretch;
+  width: 9px;
+  cursor: ew-resize;
+}
+/* A retracted dock leaves its handle at the edge, still clickable. */
+.rm-split-h.closed {
+  cursor: pointer;
+}
+.rm-split-h.closed .rm-split-grab {
+  background: var(--line-2);
+}
+
+/* Top dock boundary handle — the sheet head's twin, below the dock. */
+.rm-vtab {
+  position: relative;
+  height: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 6;
+  cursor: ns-resize;
+  touch-action: none;
+}
+.rm-vtab.closed { cursor: pointer; }
+.rm-sheet-head { cursor: ns-resize; touch-action: none; }
+
+/* Dragged dock heights: panels fill, interiors scroll, nothing bleeds. */
+.rm-dock-top.sized,
+.rm-dock-bottom.sized {
+  overflow: hidden;
+  align-items: stretch;
+}
+.rm-dock-top.sized .rm-panel,
+.rm-dock-bottom.sized .rm-panel {
+  max-height: 100%;
+  height: auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.rm-dock-bottom.sized .rm-panel .rm-panel-body {
+  min-height: 0;
+  overflow-y: auto;
+}
+/* Slim bottom = the console: one row, centered, no vertical scroll — and
+ * EXACTLY the top rail's mass. The sheet sheds its card padding so the
+ * universal minimum reads identically on both edges of the stage. */
+.rm-dock-bottom.slim {
+  align-items: center;
+  padding: 2px 8px;
+}
+.rm-sheet:has(> .rm-dock-bottom.slim) {
+  padding: 2px 12px 2px;
+  border-radius: 10px 10px 0 0;
+}
+
+.rm-editbar-text { flex: 1; }
+
+/* ── Quick fixes round ─────────────────────────────────────────────────── */
+/* Quick controls: an edge of the canvas, chosen in edit mode. */
+.stg-bar.pos-top { top: 14px; bottom: auto; }
+.stg-bar.pos-left,
+.stg-bar.pos-right {
+  top: 50%;
+  bottom: auto;
+  left: 14px;
+  transform: translateY(-50%);
+  flex-direction: column;
+}
+.stg-bar.pos-right { left: auto; right: 14px; }
+/* Icons dead-center: block-level SVGs, no baseline slack. */
+.stg-btn { line-height: 0; padding: 0; }
+.stg-btn svg { display: block; margin: 0; }
+.rm-editbar-ctl { display: inline-flex; gap: 4px; margin-left: 6px; }
+.rm-editbar-pos {
+  width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 8px; border: 1px solid var(--line-1); background: transparent; color: var(--fg-3);
+}
+.rm-editbar-pos.on { color: var(--mint); border-color: oklch(0.75 0.14 165 / 0.5); background: var(--surface-2); }
+
+/* Mini mixer: the live/muted state must be VISIBLE — label back, small. */
+.rm-strip.horizontal .rm-strip-db { display: inline-flex !important; font-size: 10px; letter-spacing: 0.06em; color: var(--fg-3); }
+.rm-strip.horizontal .rm-strip-icon { position: relative; }
+.rm-strip.horizontal .rm-strip-icon:not(.muted)::after {
+  content: ""; position: absolute; top: -2px; right: -2px; width: 7px; height: 7px; border-radius: 999px;
+  background: var(--mint); box-shadow: 0 0 6px oklch(0.75 0.14 165 / 0.8);
+}
+.rm-strip.horizontal .rm-strip-icon.muted { color: var(--red); }
+
+/* Mini guests: a tight strip of thumbnails, sized to content — never a
+ * long empty pill. Name rides the thumb; on-stage keeps its mint ring. */
+.rm-dock-bottom.slim > .rm-panel-guests,
+.rm-dock-top:not(.expanded) > .rm-panel-guests {
+  /* Sized to content — but content must HAVE a size: a list at width:100%
+   * has no intrinsic width, and flex-basis auto + min-width 0 collapsed the
+   * panel to nothing ("guests doesn't mount in the top bar"). */
+  flex: 0 1 auto;
+  min-width: 132px;
+  max-width: 44%;
+}
+.rm-panel[data-in="top"] .rm-panel-body {
+  display: flex;
+  align-items: center;
+  min-height: 0;
+}
+.rm-panel[data-in="top"] .rm-guests {
+  width: max-content;
+  max-width: 100%;
+  margin: 0;
+}
+.rm-panel[data-in="top"] .rm-guest-list {
+  width: max-content;
+  max-width: 100%;
+}
+.rm-panel[data-in="top"] .rm-gcard {
+  border: 1px solid var(--line-2) !important;
+  background: #05070b;
+}
+.rm-panel[data-in="top"] .rm-gcard.on {
+  border-color: oklch(0.75 0.14 165 / 0.7) !important;
+  box-shadow: 0 0 0 1px oklch(0.75 0.14 165 / 0.35);
+}
+.rm-panel[data-in="top"] .rm-gcard .rm-gcard-id {
+  display: block !important;
+  position: absolute;
+  left: 4px;
+  bottom: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  max-width: calc(100% - 8px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Mini guests: small thumbnails in a row, not one long bar. */
+.rm-panel[data-in="top"] .rm-guest-list {
+  display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 6px; overflow-x: auto;
+}
+.rm-panel[data-in="top"] .rm-gcard {
+  flex: 0 0 auto; width: 72px; height: 40px; border-radius: 8px !important; overflow: hidden; margin: 0;
+}
+.rm-panel[data-in="top"] .rm-gcard .rm-gcard-chrome { display: none; }
+.rm-panel[data-in="top"] .rm-gcard img,
+.rm-panel[data-in="top"] .rm-gcard canvas { width: 100%; height: 100%; object-fit: cover; }
+
+/* Chat chips lose their names in a narrow side rail. */
+@container panel (max-width: 320px) {
+  .rm-chat-chips .rm-chip-name { display: none; }
+}
+
+/* Sources in a NARROW side rail: the title owns the row. No leading type
+ * icon, no controls — they float in over the right edge on hover, so the
+ * name keeps its full width until you reach for it. */
+@container panel (max-width: 320px) {
+  /* At rest: icon + title, nothing else. On hover: the icon DROPS and every
+   * control takes its place, in flow — grip, filters, settings, eye, ✕. */
+  .rm-panel-sources .rm-row .rm-row-name { flex: 1; min-width: 0; }
+  .rm-panel-sources .rm-row .rm-row-edit { display: none; }
+  .rm-panel-sources .rm-row:hover .rm-row-icon { display: none; }
+  .rm-panel-sources .rm-row:hover .rm-row-edit { display: inline-flex; }
+}
+
+/* Guests in a ROW dock (bottom, or an expanded top): people side by side,
+ * cards sized by the rail's height, never one stretched card. */
+/* The whole chain is FLEX, never percentage heights: body → wrapper → list
+ * → cards, so a card's height is the rail's height even when no ancestor
+ * has a definite height (a 100% chain resolved to nothing — empty panel). */
+.rm-panel-guests[data-in="bottom"] .rm-panel-body {
+  display: flex !important;
+  flex-direction: column;
+  min-height: 0;
+  height: auto !important;
+}
+.rm-panel-guests[data-in="bottom"] .rm-guests {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.rm-panel-guests[data-in="bottom"] .rm-guest-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-start; /* tiles keep their shape; never stretched tall */
+  gap: 8px;
+  padding: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.rm-panel-guests[data-in="bottom"] .rm-gcard {
+  /* A tile, whatever the rail's height: height is capped (viewport-
+   * relative), width follows 16:9. Stretching to a tall rail made a 9:16
+   * portrait — a card must never change shape with the dock. */
+  flex: 0 0 auto;
+  align-self: flex-start;
+  height: clamp(90px, 20vh, 200px);
+  min-height: 0;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px !important;
+}
+.rm-panel-guests[data-in="bottom"] .rm-gcard.on {
+  height: clamp(90px, 20vh, 200px);
+}
+
+/* Channels in a SIDE rail: each toggle expands into a row that says its
+ * state — logo, name, Ready / On / Off. Rows keep the logo-only form. */
+.chn-ico-txt { display: none; }
+.rm-panel-channels[data-in="left"] .chn-icons,
+.rm-panel-channels[data-in="right"] .chn-icons {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.rm-panel-channels[data-in="left"] .chn-ico,
+.rm-panel-channels[data-in="right"] .chn-ico {
+  width: 100%;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 0 10px;
+}
+.rm-panel-channels[data-in="left"] .chn-ico-txt,
+.rm-panel-channels[data-in="right"] .chn-ico-txt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.15;
+  min-width: 0;
+  filter: none;
+}
+.chn-ico-txt b { font-size: 12.5px; font-weight: 650; color: var(--fg-1); }
+.chn-ico-txt i { font-style: normal; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-3); }
+.chn-ico.on .chn-ico-txt i { color: var(--mint); }
+
+/* Guests: NO panel chrome. The thumbnails ARE the dock's surface — no
+ * background, no hairline, no padding, so they run larger. */
+.room:not(.layout-edit) .rm-panel-guests {
+  background: none !important;
+  border: none !important;
+  box-shadow: none;
+}
+.room:not(.layout-edit) .rm-panel-guests .rm-panel-body { padding: 0 !important; }
+.room:not(.layout-edit) .rm-panel-guests .rm-guest-list { padding: 0 !important; gap: 4px; }
+.room:not(.layout-edit) .rm-panel-guests[data-in="bottom"] .rm-guest-list { padding: 0 !important; }
+
+/* Scenes in the console bar: the transition control is just its arrow (the
+ * name "MOVE 320MS" cannot live on one line beside the chips), and the chip
+ * row keeps clear space under the floating actions. */
+.rm-panel-scenes[data-in="top"] .rm-scene-default {
+  font-size: 0;
+  padding: 0 6px;
+  min-width: 0;
+  gap: 0;
+}
+.rm-panel-scenes[data-in="top"] .rm-scene-default svg {
+  width: 14px;
+  height: 14px;
+}
+.rm-panel-scenes[data-in="top"] .rm-scenes {
+  padding-right: 76px;
+}
+
+/* A fully collapsed bottom rail is JUST its handle, like every other dock. */
+.rm-sheet.collapsed {
+  padding: 0 !important;
+  min-height: 0;
+  height: 14px;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0;
+}
+
+/* ── One-track mixer: the meter IS the fader ────────────────────────────── */
+.rm-strip .rm-track {
+  position: relative;
+  align-self: center;
+  width: 16px;
+  flex: 1;
+  min-height: 40px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 0.5px solid var(--line-1);
+  cursor: ns-resize;
+  touch-action: none;
+}
+.rm-track-fill {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  bottom: 1px;
+  border-radius: 999px;
+  background: linear-gradient(0deg, oklch(0.62 0.11 165), var(--mint));
+  opacity: 0.85;
+  transition: height 60ms linear;
+}
+.rm-track-thumb {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 26px;
+  height: 13px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.rm-strip.dead .rm-track { cursor: default; opacity: 0.5; }
+.rm-strip.horizontal .rm-track {
+  width: auto;
+  min-height: 0;
+  height: 12px;
+  flex: 1;
+  align-self: center;
+  cursor: ew-resize;
+}
+.rm-strip.horizontal .rm-track-fill {
+  /* Full-size box, revealed by clip-path — `right: auto` left this a
+   * zero-width element, so the level moved invisibly in the mini form. */
+  top: 1px;
+  bottom: 1px;
+  left: 1px;
+  right: 1px;
+  transition: clip-path 60ms linear;
+}
+.rm-strip.horizontal .rm-track-thumb {
+  top: 50%;
+  left: auto;
+  transform: translateY(-50%);
+  width: 13px;
+  height: 20px;
+}
+
+/* The WARM SCALE: colors anchor to the rail, not the fill — green through
+ * amber into red at the top, the same read the old segmented meter gave.
+ * The rail shows the whole scale faintly; the fill is the vivid clip of it;
+ * a light redline marks where hot begins so you can SEE where you sit. */
+.rm-strip .rm-track::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: 999px;
+  background: linear-gradient(to top, var(--mint) 0%, var(--mint) 55%, var(--amber) 80%, var(--red) 96%);
+  opacity: 0.14;
+}
+.rm-track-fill {
+  inset: 1px;
+  height: auto;
+  width: auto;
+  background: linear-gradient(to top, var(--mint) 0%, var(--mint) 55%, var(--amber) 80%, var(--red) 96%);
+}
+.rm-strip .rm-track::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 12%;
+  height: 1px;
+  background: var(--red);
+  opacity: 0.45;
+}
+.rm-strip.horizontal .rm-track::before,
+.rm-strip.horizontal .rm-track-fill {
+  background: linear-gradient(to right, var(--mint) 0%, var(--mint) 55%, var(--amber) 80%, var(--red) 96%);
+}
+.rm-strip.horizontal .rm-track::after {
+  left: auto;
+  right: 12%;
+  top: 2px;
+  bottom: 2px;
+  height: auto;
+  width: 1px;
+}
+/* The mini strip must hold a REAL rail — it collapsed to the thumb when the
+ * console form declared strips non-growing. */
+.rm-strip.horizontal .rm-track {
+  flex: 0 0 96px;
+  min-width: 96px;
+}
+
+/* ── Side-mount ergonomics ──────────────────────────────────────────────── */
+/* Grips appear on hover; the name gets the row until you reach for it. */
+.rm-panel[data-in="left"] .rm-row-grip,
+.rm-panel[data-in="right"] .rm-row-grip {
+  /* display, not width 0: a zero-width flex item still owns a gap, which
+   * left grip-less rows (Microphone) sitting further left than the rest. */
+  display: none;
+}
+.rm-panel[data-in="left"] .rm-row:hover .rm-row-grip,
+.rm-panel[data-in="right"] .rm-row:hover .rm-row-grip {
+  display: inline-flex;
+}
+.rm-panel[data-in="left"] .rm-row-name,
+.rm-panel[data-in="right"] .rm-row-name {
+  flex: 1;
+  min-width: 0;
+}
+/* Filter picker on a side mount: title above its description, full width. */
+.rm-panel[data-in="left"] .rm-addfilter,
+.rm-panel[data-in="right"] .rm-addfilter {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  height: auto;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.rm-panel[data-in="left"] .rm-addfilter .rm-filter-hint,
+.rm-panel[data-in="right"] .rm-addfilter .rm-filter-hint {
+  text-align: left;
+  white-space: normal;
+}
+
+/* Chat mini cluster: one mark + how many more you're streaming to. */
+.rm-chip-more {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line-1);
+  background: var(--surface-2);
+  color: var(--fg-2);
+  font-size: 11px;
+  font-weight: 700;
+}
+.rm-chip-more:hover { color: var(--fg-1); border-color: var(--line-2); }
+
+/* ── Expanded top dock = the bottom bar, up top. Form follows SIZE: past
+   ROW_SNAP the console rules above stop applying (every one is gated on
+   :not(.expanded)) and panels wear their full forms. ── */
+.rm-dock-top.expanded {
+  align-items: stretch;
+}
+.rm-dock-top.expanded .rm-panel {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+}
+.rm-dock-top.expanded .rm-panel .rm-panel-body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Chat is greedy in the side rails: nothing in the way, it takes the whole
+ * rail; siblings keep their minimums and chat absorbs the rest. */
+.rm-dock-side > .rm-panel-chat {
+  flex: 999 1 auto;
+}
+
+
+/* ── Chat, mini form: the latest message with the previous peeking through;
+   chips collapse to their marks and push out over the text on hover. ── */
+.rm-chat-chip { display: inline-flex; align-items: center; gap: 6px; }
+.rm-chip-logo { display: inline-flex; width: 14px; height: 14px; align-items: center; justify-content: center; }
+.rm-chip-logo svg, .rm-chip-logo img { width: 14px; height: 14px; }
+.rm-panel-chat[data-in="top"] .rm-panel-body {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.rm-panel-chat[data-in="top"] .rm-chat-chips {
+  flex: none;
+  display: flex;
+  gap: 4px;
+  z-index: 2;
+}
+.rm-panel-chat[data-in="top"] .rm-chip-name {
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width 0.16s ease;
+}
+.rm-panel-chat[data-in="top"] .rm-chat-chip:hover .rm-chip-name { max-width: 72px; }
+.rm-chat-mini {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+}
+.rm-chat-mini .rm-chat-msg {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+.rm-chat-mini .rm-chat-msg.prev {
+  opacity: 0.4;
+  font-size: 11px;
+}
+/* Stage selection mirrored into the rail. */
+.rm-row.sel {
+  border: 1px solid oklch(0.75 0.14 165 / 0.55);
+  background: oklch(0.24 0.05 168 / 0.25);
+}
+
+/* Shortcuts in Settings: label · (reset) · key chip. */
+.ks { display: flex; flex-direction: column; gap: 6px; }
+.ks-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 2px 4px;
+}
+.ks-label { flex: 1; font-size: 13px; color: var(--fg-1); }
+.ks-row.fixed .ks-label { color: var(--fg-2); }
+.ks-key {
+  min-width: 64px;
+  padding: 4px 10px;
+  border-radius: var(--r-ctl);
+  border: 1px solid var(--line-1);
+  background: var(--surface-2);
+  color: var(--fg-1);
+  font-size: 12px;
+  font-weight: 650;
+  text-align: center;
+}
+.ks-row.fixed .ks-key {
+  border-style: dashed;
+  color: var(--fg-3);
+  background: transparent;
+}
+button.ks-key:hover { border-color: var(--line-2); }
+.ks-key.arming { color: var(--mint); border-color: oklch(0.75 0.14 165 / 0.5); }
+.ks-reset {
+  font-size: 11px;
+  color: var(--fg-3);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.ks-reset:hover { color: var(--fg-1); }
+
+.rm-chat-mini-empty {
+  font-size: 12px;
+  color: var(--fg-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Edit mode, softened: generous radii, and every panel's title sits
+   dead-center as a quiet pill — grip left, hide right, name in the middle,
+   uniformly across all seven components. ── */
+.layout-edit .rm-panel { border-radius: 16px; position: relative; min-height: 76px; }
+.rm-slot.armed { border-radius: 12px; }
+.rm-add-panel { border-radius: 12px; }
+/* Edit mode is about WHICH panel, not what's in it: content hides, the
+ * title sits dead-center of the card, grip and ✕ stay in the corners.
+ * !important is earned here — console forms re-display specific bodies
+ * with deeper selectors, and edit mode outranks every form. */
+.layout-edit .rm-panel .rm-panel-body { display: none !important; }
+.layout-edit .rm-panel-head .rm-group-label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-2);
+  color: var(--fg-1);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  z-index: 2;
+}
+.layout-edit .rm-panel-actions > :not(.rm-panel-hide) { display: none; }
+/* Guests hide their chrome live — edit mode brings the full head back so
+ * the card is labeled like every other panel. */
+.layout-edit .rm-panel-guests .rm-panel-head {
+  position: static;
+  opacity: 1;
+  pointer-events: auto;
+  padding: 8px var(--pad-card) 0;
+}
+.layout-edit .rm-panel-guests .rm-group-label { display: inline-flex; }
+.layout-edit .rm-panel-guests .rm-cnt { display: none; }
+
+/* Console rows scroll by trackpad only — a visible scroll rail over one-line
+ * content reads as a broken overlay, not an affordance. */
+.rm-dock-top:not(.expanded) .rm-panel-body,
+.rm-dock-top:not(.expanded) .rm-panel-body *,
+.rm-dock-bottom.slim .rm-panel-body,
+.rm-dock-bottom.slim .rm-panel-body *,
+.rm-panel[data-in="top"] .rm-rows,
+.rm-panel[data-in="top"] .rm-guests {
+  scrollbar-width: none;
+}
+.rm-dock-top:not(.expanded) .rm-panel-body::-webkit-scrollbar,
+.rm-dock-top:not(.expanded) .rm-panel-body *::-webkit-scrollbar,
+.rm-dock-bottom.slim .rm-panel-body::-webkit-scrollbar,
+.rm-dock-bottom.slim .rm-panel-body *::-webkit-scrollbar,
+.rm-panel[data-in="top"] .rm-rows::-webkit-scrollbar,
+.rm-panel[data-in="top"] .rm-guests::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 /* ── Channels card ── */
@@ -6331,7 +7263,9 @@ textarea::placeholder {
   cursor: pointer;
 }
 .stg-btn:hover { background: var(--surface-3); }
-.stg-btn.off { color: var(--fg-3); background: transparent; }
+/* Uniform circles: an OFF control dims, it never loses its shape — mixed
+ * bare icons and circles read as misalignment. */
+.stg-btn.off { color: var(--fg-3); background: var(--surface-2); opacity: 0.55; }
 .stg-btn.rec { background: rgba(239, 68, 68, 0.2); }
 .stg-btn.rec .rm-rec-dot { background: var(--red); }
 
@@ -6349,6 +7283,7 @@ textarea::placeholder {
 .rm-foot-item { display: inline-flex; align-items: center; gap: 7px; }
 .rm-foot-item.rec { color: #fca5a5; }
 .rm-foot-item.dim { margin-left: auto; opacity: 0.7; }
+.rm-foot-item.dim-inline { opacity: 0.6; font-variant-numeric: tabular-nums; }
 .rm-foot-q { text-transform: capitalize; color: var(--fg-2); }
 
 /* ── Mixer, reference anatomy (P6): name top, LED ticks, controls bottom ── */
@@ -6414,8 +7349,8 @@ textarea::placeholder {
   border-radius: var(--r-ctl);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
 }
-.rm-dock-top .rm-panel { overflow: hidden; }
-.rm-dock-top .rm-panel:has(.chn-key) { overflow: visible; }
+.rm-dock-top:not(.expanded) .rm-panel { overflow: hidden; }
+.rm-dock-top:not(.expanded) .rm-panel:has(.chn-key) { overflow: visible; }
 
 /* ── P4: left-column rows on tokens (guests keep their cards, by decree) ── */
 .rm-scene-row {
@@ -6800,4 +7735,170 @@ textarea::placeholder {
 }
 .rm-strip {
   padding: 10px 10px 8px;
+}
+
+/* ── Updates panel: the shipping stream ── */
+.upd { display: flex; flex-direction: column; }
+.upd-item + .upd-item { border-top: 0.5px solid var(--line-1); }
+.upd-item { padding: 8px 2px; }
+.upd-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  cursor: pointer;
+}
+.upd-head:hover .upd-tag { color: var(--mint); }
+.upd-tag {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--fg-1);
+  font-variant-numeric: tabular-nums;
+}
+.upd-name {
+  font-size: 12px;
+  color: var(--fg-2);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upd-date { margin-left: auto; font-size: 10.5px; color: var(--fg-3); flex: 0 0 auto; }
+.upd-body { margin-top: 4px; display: flex; flex-direction: column; gap: 2px; }
+.upd-body p { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--fg-3); }
+.upd-ref { color: var(--mint); cursor: pointer; }
+.upd-ref:hover { text-decoration: underline; }
+/* top-dock form: a one-line latest-release ticker */
+.rm-panel[data-in="top"] .upd { flex-direction: row; align-items: center; overflow-x: auto; }
+.rm-panel[data-in="top"] .upd-item { padding: 0 14px 0 0; border: none; flex: 0 0 auto; }
+.rm-panel[data-in="top"] .upd-item:not(:first-child),
+.rm-panel[data-in="top"] .upd-body { display: none; }
+
+/* What's-new stream inside the settings sheet */
+.upd-sheet { margin-top: 6px; }
+.upd-sheet .upd-item { padding: 9px 2px; }
+
+/* Updates panel scrolls: the body is a proper flex scroll region. */
+.rm-panel-updates {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.rm-panel-updates .rm-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Scenes: names never wrap; in a narrow card the ornaments yield —
+   transition chip and shortcut go, gear comes back on hover. */
+.rm-scene-name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@container panel (max-width: 320px) {
+  .rm-scene-tr,
+  .rm-scene-key {
+    display: none;
+  }
+  .rm-scene-gear {
+    display: none;
+  }
+  .rm-scene-row:hover .rm-scene-gear,
+  .rm-scene-row.active .rm-scene-gear {
+    display: inline-flex;
+  }
+  .rm-scene-row {
+    gap: 8px;
+    padding: 0 8px;
+  }
+}
+
+/* Header channels chip: armed logos at a glance, popover to arm/disarm. */
+.hd-chans { gap: 5px; }
+.hd-chan-logo { display: grid; place-items: center; }
+.hd-chan-logo svg { display: block; width: 14px; height: 14px; }
+.rm-pop-dests .chn-row { height: 38px; }
+
+/* Chat platform chips: independent toggles — lit = shown. No "All". */
+.rm-chat-chip {
+  opacity: 0.45;
+}
+.rm-chat-chip.on {
+  opacity: 1;
+}
+
+/* GO LIVE, worthy of the name: warm depth off-air, composed heat on-air. */
+.hd-golive {
+  background: linear-gradient(180deg, #ff6a52 0%, #ef3b41 100%);
+  border-radius: 10px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 4px 14px rgba(239, 59, 65, 0.32);
+  transition: transform 0.1s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+.hd-golive:hover {
+  filter: brightness(1.05);
+  transform: translateY(-0.5px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 6px 18px rgba(239, 59, 65, 0.42);
+}
+.hd-golive:active { transform: translateY(0); }
+.hd-golive:disabled {
+  background: var(--surface-2);
+  color: var(--fg-3);
+  box-shadow: none;
+}
+.hd-golive.stop {
+  background: var(--surface-2);
+  color: #ff9c8f;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 110, 95, 0.45),
+    0 0 18px rgba(239, 59, 65, 0.18);
+}
+.hd-golive.stop:hover {
+  background: var(--surface-3);
+  transform: none;
+}
+
+/* THE live indicator: one pill, header far-right, beside collapse. */
+.hd-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: var(--h-ctl);
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  background: rgba(239, 68, 68, 0.14);
+  border: 0.5px solid rgba(239, 68, 68, 0.45);
+  color: #ffb4aa;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Settings sheet scrolls — WHAT'S NEW made it taller than the viewport. */
+.cr-sheet {
+  overflow-y: auto;
+  max-height: 100vh;
+}
+
+/* A guest ON SCREEN doesn't need a big preview — they're on the stage.
+   Their card collapses to a slim live strip; hiding them re-expands it. */
+.rm-panel-guests .rm-gcard.on {
+  aspect-ratio: auto;
+  height: 46px;
+}
+.rm-panel-guests .rm-gcard.on .rm-gcard-img {
+  object-position: center 30%;
+}
+.rm-panel-guests .rm-gcard.on .rm-gcard-id {
+  padding: 0 10px;
+  top: 0;
+  display: flex;
+  align-items: center;
 }

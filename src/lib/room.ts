@@ -84,10 +84,25 @@ export interface RoomConfig {
    * local id stays authoritative offline; this is only the seam for
    * server-side features (guests today, broadcasts later). */
   server_room_id?: string;
+  /** Network exposure, mirrored locally so the control renders offline.
+   * Producer is the only writer, so the local copy is authoritative;
+   * changing it forces registration and a server PATCH. */
+  visibility?: "private" | "connections" | "public";
   /** Dock sizing the user dragged (per room, like the layout itself). */
   sizes?: DockSizes;
+  /** Guest-slot occupancy: slot item id → guest item id. Slots are scene
+   * furniture (gslot-N extras); guests pop into them and pop out, the slot
+   * geometry never moves. */
+  slot_bindings?: Record<string, string>;
   /** Room-wide default transition; a scene may override it. */
   transition?: SceneTransition;
+  /** Dock-level surface ownership. true = the DOCK paints the card background
+   * and its components render flat inside one shared surface; absent/false =
+   * every panel owns its own card (the default look). Dock-level by decree —
+   * never per component. */
+  dock_bg?: Partial<Record<"top" | "left" | "right" | "bottom", boolean>>;
+  /** Where the stage's quick controls float: an edge of the canvas. */
+  stage_bar?: "bottom" | "top" | "left" | "right";
 }
 
 export const DEFAULT_SCENES: RoomScene[] = [
@@ -137,8 +152,28 @@ export function parseConfig(raw: string | null | undefined): RoomConfig {
   if (v.channels && typeof v.channels === "object") base.channels = v.channels as Record<string, boolean>;
   if (typeof v.active_scene === "string") base.active_scene = v.active_scene;
   if (typeof v.server_room_id === "string") base.server_room_id = v.server_room_id;
+  if (v.visibility === "connections" || v.visibility === "public" || v.visibility === "private") {
+    base.visibility = v.visibility;
+  }
   if (typeof v.guest_link === "string") base.guest_link = v.guest_link;
+  if (v.slot_bindings && typeof v.slot_bindings === "object") {
+    base.slot_bindings = Object.fromEntries(
+      Object.entries(v.slot_bindings as Record<string, unknown>).filter(
+        ([k, val]) => k.startsWith("gslot-") && typeof val === "string",
+      ),
+    ) as Record<string, string>;
+  }
   if (v.sizes && typeof v.sizes === "object") base.sizes = v.sizes as DockSizes;
+  if (v.stage_bar === "bottom" || v.stage_bar === "top" || v.stage_bar === "left" || v.stage_bar === "right") {
+    base.stage_bar = v.stage_bar;
+  }
+  if (v.dock_bg && typeof v.dock_bg === "object") {
+    base.dock_bg = Object.fromEntries(
+      Object.entries(v.dock_bg as Record<string, unknown>).filter(
+        ([k, val]) => ["top", "left", "right", "bottom"].includes(k) && typeof val === "boolean",
+      ),
+    ) as RoomConfig["dock_bg"];
+  }
   if (v.transition && typeof v.transition === "object") base.transition = v.transition as SceneTransition;
   return base;
 }

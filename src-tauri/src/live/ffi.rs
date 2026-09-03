@@ -121,6 +121,10 @@ extern "C" {
     pub fn obs_source_release(source: *mut obs_source_t);
     pub fn obs_set_output_source(channel: u32, source: *mut obs_source_t);
     pub fn obs_source_get_width(source: *mut obs_source_t) -> u32;
+    /// Probe bindings (room-open first-frame investigation).
+    pub fn obs_source_active(source: *mut obs_source_t) -> bool;
+    pub fn obs_source_showing(source: *mut obs_source_t) -> bool;
+    pub fn obs_get_total_frames() -> u32;
     pub fn obs_source_video_render(source: *mut obs_source_t);
     pub fn obs_enter_graphics();
     pub fn obs_leave_graphics();
@@ -133,7 +137,11 @@ extern "C" {
     pub fn gs_stagesurface_create(width: u32, height: u32, format: c_int) -> *mut c_void;
     pub fn gs_stagesurface_destroy(stagesurf: *mut c_void);
     pub fn gs_stage_texture(stagesurf: *mut c_void, texture: *mut c_void);
-    pub fn gs_stagesurface_map(stagesurf: *mut c_void, data: *mut *mut u8, linesize: *mut u32) -> bool;
+    pub fn gs_stagesurface_map(
+        stagesurf: *mut c_void,
+        data: *mut *mut u8,
+        linesize: *mut u32,
+    ) -> bool;
     pub fn gs_stagesurface_unmap(stagesurf: *mut c_void);
     pub fn gs_clear(clear_flags: u32, color: *const vec4, depth: f32, stencil: u8);
     pub fn obs_add_main_render_callback(

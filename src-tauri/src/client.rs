@@ -308,7 +308,9 @@ impl ProducerClient {
     pub async fn network_invitations(&self, direction: &str) -> EngineResult<Value> {
         let resp = self
             .http
-            .get(self.root_url(&format!("/v1/app/network/invitations?direction={direction}")))
+            .get(self.root_url(&format!(
+                "/v1/app/network/invitations?direction={direction}"
+            )))
             .bearer_auth(&self.token)
             .send()
             .await?;
@@ -323,7 +325,11 @@ impl ProducerClient {
     /// Invite by SLUG. Slugs are unique platform-wide, so they address a brand
     /// on their own — resolution happens server-side, which also avoids
     /// handing out a slug-existence oracle.
-    pub async fn network_invite(&self, to_slug: &str, message: Option<String>) -> EngineResult<Value> {
+    pub async fn network_invite(
+        &self,
+        to_slug: &str,
+        message: Option<String>,
+    ) -> EngineResult<Value> {
         let mut body = serde_json::Map::new();
         body.insert("to_slug".into(), Value::String(to_slug.to_string()));
         if let Some(m) = message {
@@ -388,6 +394,88 @@ impl ProducerClient {
             let status = resp.status().as_u16();
             let body: Value = resp.json().await.unwrap_or(Value::Null);
             return Err(EngineError::Other(error_message(&body, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// Exact-handle lookup — Producer's whole discovery surface. There is
+    /// deliberately no list call: the desktop can resolve a handle it was
+    /// handed, nothing more.
+    pub async fn network_lookup(&self, slug: &str) -> EngineResult<Value> {
+        // Handles are [a-z0-9._-]; strip anything else BEFORE it reaches the
+        // query string, so pasted junk ("@Name!", "a&b") can neither corrupt
+        // the URL nor smuggle a second query parameter past root_url.
+        let slug: String = slug
+            .trim()
+            .trim_start_matches('@')
+            .to_lowercase()
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+            .collect();
+        let resp = self
+            .http
+            .get(self.root_url(&format!("/v1/app/network/lookup?slug={slug}")))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// Open stages visible to this brand: connections' rooms + public rooms.
+    pub async fn network_live_rooms(&self) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .get(self.root_url("/v1/app/network/rooms/live"))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// Knock on a visible open stage; lands in the host's waiting room and
+    /// returns a guest join URL to open in the browser.
+    pub async fn network_enter_room(&self, room_id: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.root_url(&format!("/v1/app/network/rooms/{room_id}/enter")))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// Network exposure of a SERVER room: private | connections | public.
+    pub async fn room_set_visibility(
+        &self,
+        room_id: &str,
+        visibility: &str,
+    ) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .patch(self.root_url(&format!("/v1/app/live/rooms/{room_id}")))
+            .bearer_auth(&self.token)
+            .json(&serde_json::json!({ "visibility": visibility }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
         }
         Ok(resp.json().await?)
     }

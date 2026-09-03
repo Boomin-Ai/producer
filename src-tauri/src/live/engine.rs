@@ -37,6 +37,8 @@ const REQUIRED_SERVICES: &[&str] = &["rtmp_common", "rtmp_custom"];
 
 /// Whether the stage renders as a transparent hole (preview BELOW the
 /// webview) — the UI mirrors this so its CSS matches the native stacking.
+/// The warm CEF browser source (see the cef-warm thread in start()).
+pub static CEF_WARM: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 pub static STAGE_TRANSPARENT: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
@@ -53,6 +55,11 @@ pub struct EngineReport {
     pub outputs: Vec<String>,
     pub services: Vec<String>,
     pub errors: Vec<String>,
+    /// Boot phase timings (name, ms) in order: startup, reset_video,
+    /// reset_audio, load_modules (CEF initialises inside obs-browser's
+    /// module load — on this critical path by obs-browser's own design),
+    /// post_load. You cannot halve what you have not measured.
+    pub boot_phases_ms: Vec<(String, u64)>,
 }
 
 /// Marshal an OBS UI task onto the macOS main thread (GCD main queue).
@@ -124,11 +131,19 @@ fn enum_ids(f: unsafe extern "C" fn(usize, *mut *const c_char) -> bool) -> Vec<S
 /// chooses the backend; this maps its recorded name back to a module.
 #[cfg(target_os = "macos")]
 fn graphics_module(backend: Option<&str>) -> &'static str {
-    if backend == Some("metal") { "libobs-metal.dylib" } else { "libobs-opengl.dylib" }
+    if backend == Some("metal") {
+        "libobs-metal.dylib"
+    } else {
+        "libobs-opengl.dylib"
+    }
 }
 #[cfg(target_os = "windows")]
 fn graphics_module(backend: Option<&str>) -> &'static str {
-    if backend == Some("d3d11") { "libobs-d3d11.dll" } else { "libobs-opengl.dll" }
+    if backend == Some("d3d11") {
+        "libobs-d3d11.dll"
+    } else {
+        "libobs-opengl.dll"
+    }
 }
 
 fn reset_video(module: &str, height: u32, fps: u32) -> Result<(), i32> {
@@ -172,11 +187,19 @@ pub fn bootstrap() -> EngineReport {
 pub fn stored_video(dir: Option<&std::path::Path>) -> (u32, u32) {
     let fallback = (720u32, 30u32);
     let Some(dir) = dir else { return fallback };
-    let Ok(txt) = std::fs::read_to_string(dir.join("video.json")) else { return fallback };
-    let Ok(v) = serde_json::from_str::<serde_json::Value>(&txt) else { return fallback };
+    let Ok(txt) = std::fs::read_to_string(dir.join("video.json")) else {
+        return fallback;
+    };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&txt) else {
+        return fallback;
+    };
     let h = v.get("h").and_then(|x| x.as_u64()).unwrap_or(720) as u32;
     let f = v.get("f").and_then(|x| x.as_u64()).unwrap_or(30) as u32;
-    if (h == 720 || h == 1080) && (f == 30 || f == 60) { (h, f) } else { fallback }
+    if (h == 720 || h == 1080) && (f == 30 || f == 60) {
+        (h, f)
+    } else {
+        fallback
+    }
 }
 
 pub fn persist_video(dir: &std::path::Path, h: u32, f: u32) {
@@ -196,6 +219,14 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
         outputs: Vec::new(),
         services: Vec::new(),
         errors: Vec::new(),
+        boot_phases_ms: Vec::new(),
+    };
+    let mut phase_t = Instant::now();
+    let mut phase = |report: &mut EngineReport, name: &str| {
+        let ms = phase_t.elapsed().as_millis() as u64;
+        report.boot_phases_ms.push((name.to_string(), ms));
+        eprintln!("[live] boot phase {name}: {ms} ms");
+        phase_t = Instant::now();
     };
 
     let locale = CString::new("en-US").unwrap();
@@ -238,6 +269,7 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
     report.obs_version = unsafe { CStr::from_ptr(ffi::obs_get_version_string()) }
         .to_string_lossy()
         .into_owned();
+    phase(&mut report, "startup");
 
     // §5.1: OBS UI tasks are marshalled to the macOS main thread from the start.
     unsafe { ffi::obs_set_ui_task_handler(ui_task_handler) };
@@ -283,6 +315,7 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
         },
     }
 
+    phase(&mut report, "reset_video");
     let oai = ffi::obs_audio_info {
         samples_per_sec: 48000,
         speakers: ffi::SPEAKERS_STEREO,
@@ -291,6 +324,7 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
         report.errors.push("obs_reset_audio failed".into());
         return report;
     }
+    phase(&mut report, "reset_audio");
 
     let mut mfi = ffi::obs_module_failure_info {
         failed_modules: ptr::null_mut(),
@@ -304,11 +338,13 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
             .push(name.to_string_lossy().into_owned());
     }
     unsafe { ffi::obs_module_failure_info_free(&mut mfi) };
+    phase(&mut report, "load_modules");
 
     // F3 ★: validate required IDs, then obs_post_load_modules. VideoToolbox
     // registers its encoders during post-load, so VT is re-checked after it.
     unsafe { ffi::obs_post_load_modules() };
     unsafe { ffi::obs_log_loaded_modules() };
+    phase(&mut report, "post_load");
 
     report.sources = enum_ids(ffi::obs_enum_source_types);
     report.encoders = enum_ids(ffi::obs_enum_encoder_types);
@@ -384,7 +420,9 @@ pub enum FilterOp {
 }
 
 pub enum Command {
-    SetThumbRate { fps: u32 },
+    SetThumbRate {
+        fps: u32,
+    },
     GoLive(MultiConfig),
     StopLive,
     SetSources {
@@ -494,6 +532,39 @@ pub enum Command {
     Shutdown,
 }
 
+/// Variant name for the engine-loop stall log (no reflection in Rust).
+fn cmd_name(c: &Command) -> &'static str {
+    match c {
+        Command::SetThumbRate { .. } => "SetThumbRate",
+        Command::GoLive { .. } => "GoLive",
+        Command::StopLive { .. } => "StopLive",
+        Command::SetSources { .. } => "SetSources",
+        Command::SetMicAudio { .. } => "SetMicAudio",
+        Command::SetTransform { .. } => "SetTransform",
+        Command::ListDevices { .. } => "ListDevices",
+        Command::PlayStinger { .. } => "PlayStinger",
+        Command::StartRecording { .. } => "StartRecording",
+        Command::StopRecording { .. } => "StopRecording",
+        Command::SetSyncOffset { .. } => "SetSyncOffset",
+        Command::SetSourceAudio { .. } => "SetSourceAudio",
+        Command::SetItemOpacity { .. } => "SetItemOpacity",
+        Command::Filters { .. } => "Filters",
+        Command::PrepareStinger { .. } => "PrepareStinger",
+        Command::StopStinger { .. } => "StopStinger",
+        Command::SetVirtualCam { .. } => "SetVirtualCam",
+        Command::SetDevice { .. } => "SetDevice",
+        Command::AddExtra { .. } => "AddExtra",
+        Command::RemoveExtra { .. } => "RemoveExtra",
+        Command::SetVideo { .. } => "SetVideo",
+        Command::SetOverlay { .. } => "SetOverlay",
+        Command::AttachPreview { .. } => "AttachPreview",
+        Command::MovePreview { .. } => "MovePreview",
+        Command::SetPreviewHidden { .. } => "SetPreviewHidden",
+        Command::DetachPreview { .. } => "DetachPreview",
+        Command::Shutdown { .. } => "Shutdown",
+    }
+}
+
 /// CSS-point rect of the preview area, top-left origin, webview coordinates.
 #[derive(Debug, Clone, Copy, serde::Deserialize)]
 pub struct PreviewRect {
@@ -585,6 +656,9 @@ pub struct Snapshot {
     pub thumb_slow_maps: u64,
     pub bootstrap_ok: bool,
     pub graphics_backend: Option<String>,
+    /// Boot phase timings from the EngineReport, for the room's own readout.
+    #[serde(default)]
+    pub boot_phases_ms: Vec<(String, u64)>,
     pub session_state: SessionState,
     pub elapsed_secs: f64,
     pub destinations: Vec<DestStatus>,
@@ -851,6 +925,7 @@ impl Preview {
             // main thread) by live_attach_preview before this command was
             // queued; here we only honour it.
             let transparent = STAGE_TRANSPARENT.load(AtomicOrdering::SeqCst);
+            let t_shim = Instant::now();
             let view = ffi::producer_preview_attach(
                 ns_window,
                 rect.x,
@@ -861,6 +936,23 @@ impl Preview {
                 &mut px_w,
                 &mut px_h,
             );
+            {
+                let ms = t_shim.elapsed().as_millis();
+
+                if ms > 150 {
+                    if let Some(dir) = crate::live::report_dir() {
+                        use std::io::Write;
+
+                        if let Ok(mut f) = std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(dir.join("slow-cmds.log"))
+                        {
+                            let _ = f.write_all(format!("shim-attach {ms}ms\n").as_bytes());
+                        }
+                    }
+                }
+            }
             if view.is_null() {
                 return Err("NSView creation failed".into());
             }
@@ -995,7 +1087,8 @@ pub fn start(
                 let mut jpg: Vec<u8> = Vec::with_capacity(32 * 1024);
                 let mut scratch: Vec<u8> = Vec::new();
                 #[cfg(debug_assertions)]
-                let mut dumped: std::collections::HashSet<String> = std::collections::HashSet::new();
+                let mut dumped: std::collections::HashSet<String> =
+                    std::collections::HashSet::new();
                 loop {
                     {
                         let flag = hub.wake_flag.lock().unwrap();
@@ -1042,10 +1135,8 @@ pub fn start(
                             #[cfg(debug_assertions)]
                             if dumped.insert(id.clone()) {
                                 let _ = std::fs::create_dir_all("/tmp/producer-thumbs");
-                                let _ = std::fs::write(
-                                    format!("/tmp/producer-thumbs/{id}.jpg"),
-                                    &jpg,
-                                );
+                                let _ =
+                                    std::fs::write(format!("/tmp/producer-thumbs/{id}.jpg"), &jpg);
                             }
                             thumbs.push(GuestThumb {
                                 id: id.clone(),
@@ -1085,6 +1176,13 @@ pub fn start(
         .name("live-engine".into())
         .spawn(move || {
             let report = bootstrap_with_config(Some(&module_config_dir));
+            // The real boot leaves its report on disk (beside the legacy
+            // harness's), phases included — readable without a debugger.
+            if let Some(dir) = module_config_dir.parent() {
+                if let Ok(json) = serde_json::to_string_pretty(&report) {
+                    let _ = std::fs::write(dir.join("engine-report.json"), json);
+                }
+            }
             {
                 let mut s = snap.lock().unwrap();
                 s.engine_ready = true;
@@ -1093,8 +1191,36 @@ pub fn start(
                 s.video_height = h;
                 s.video_fps = f;
                 s.graphics_backend = report.graphics_backend.clone();
+                s.boot_phases_ms = report.boot_phases_ms.clone();
             }
             if report.ok {
+                // CEF WARM-UP, off every critical path. The first browser
+                // source a process creates pays Chromium's renderer/GPU
+                // spin-up — measured 4.6s inside SetOverlay, holding the
+                // engine loop (and with it every other source's ack) hostage.
+                // A hidden about:blank browser created on ITS OWN thread
+                // right after boot takes that hit while the user is still on
+                // the home screen; it stays alive so CEF stays hot, and later
+                // creates (overlay, guest pages) return in a few hundred ms.
+                std::thread::Builder::new()
+                    .name("cef-warm".into())
+                    .spawn(|| unsafe {
+                        let t0 = Instant::now();
+                        let settings = ffi::obs_data_create();
+                        let k_url = CString::new("url").unwrap();
+                        let v_url = CString::new("about:blank").unwrap();
+                        ffi::obs_data_set_string(settings, k_url.as_ptr(), v_url.as_ptr());
+                        ffi::obs_data_set_int(settings, CString::new("width").unwrap().as_ptr(), 16);
+                        ffi::obs_data_set_int(settings, CString::new("height").unwrap().as_ptr(), 16);
+                        let id = CString::new("browser_source").unwrap();
+                        let name = CString::new("cef-warm").unwrap();
+                        let src = ffi::obs_source_create(id.as_ptr(), name.as_ptr(), settings, ptr::null_mut());
+                        ffi::obs_data_release(settings);
+                        eprintln!("[live] cef warm-up: {} ms (src null: {})", t0.elapsed().as_millis(), src.is_null());
+                        // Kept alive on purpose (released with the process).
+                        CEF_WARM.store(src as usize, std::sync::atomic::Ordering::Relaxed);
+                    })
+                    .ok();
                 // Preview capture rides the compositor: registered once, for
                 // the life of the process. hub_engine's Arc keeps it alive.
                 unsafe {
@@ -1140,6 +1266,15 @@ pub fn start(
             // compare against, so the value only means anything over time.
             let cpu_info: *mut c_void = unsafe { ffi::os_cpu_usage_info_start() };
             let mut last_perf = Instant::now();
+            // The sources snapshot used to change only when a COMMAND ran, so
+            // a first-frame poll read stale width=0 until some unrelated
+            // command recomputed state (report #6: three unrelated capture
+            // stacks all "framed" at the same 5s mark). Refresh it on a
+            // 100ms cadence — a handful of FFI getters — without emitting an
+            // event, so the snapshot is live truth and the UI is not churned.
+            let mut last_src_refresh = Instant::now();
+            let probe_t0 = Instant::now();
+            let mut probe_last = Instant::now();
 
             let set_state = |state: &mut SessionState,
                              new: SessionState,
@@ -1152,10 +1287,66 @@ pub fn start(
                 }
             };
 
+            // Stall log: any loop iteration over 150ms is written with the
+            // command it was handling (or "idle"). The frame probe showed the
+            // loop asleep for ~4.6s during room open — this names the sleeper.
+            let mut iter_prev: Option<(Instant, &'static str)> = None;
             loop {
+                if let Some((t0, label)) = iter_prev.take() {
+                    let ms = t0.elapsed().as_millis();
+                    if ms > 150 {
+                        if let Some(dir) = module_config_dir.parent() {
+                            use std::io::Write;
+                            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("slow-cmds.log")) {
+                                let _ = f.write_all(format!("{} {} {}ms\n", probe_t0.elapsed().as_millis(), label, ms).as_bytes());
+                            }
+                        }
+                    }
+                }
+                let iter_t0 = Instant::now();
+                let mut iter_label: &'static str = "idle";
                 // Performance is sampled whether or not a session is running:
                 // FPS and CPU tell you the machine is struggling BEFORE you go
                 // live, which is when the information is still actionable.
+                if last_src_refresh.elapsed() > Duration::from_millis(100) {
+                    last_src_refresh = Instant::now();
+                    if let Some(g) = scene.as_ref() {
+                        snap.lock().unwrap().sources = g.state();
+                        // Frame probe: while any item has no frame, log every
+                        // item's width/active/showing + the engine's total
+                        // rendered frames each tick. Appends to
+                        // live/frames-probe.log; one line per tick; stops
+                        // once everything has framed.
+                        // Probe at 500ms, not every refresh: obs_source_get_width
+                        // takes the capture plugin's lock, and hammering it while
+                        // the camera starts serialized the loop behind it
+                        // (sub-second 'idle' iterations after the fix).
+                        let probe = if probe_last.elapsed() > Duration::from_millis(500) { probe_last = Instant::now(); g.frame_probe() } else { Vec::new() };
+                        if probe.iter().any(|(_, w, _, _)| *w == 0) {
+                            if let Some(dir) = module_config_dir.parent() {
+                                let total = unsafe { ffi::obs_get_total_frames() };
+                                let line = format!(
+                                    "{} total_frames={} {}\n",
+                                    probe_t0.elapsed().as_millis(),
+                                    total,
+                                    probe
+                                        .iter()
+                                        .map(|(id, w, a, sh)| format!("{id}:w={w},active={a},showing={sh}"))
+                                        .collect::<Vec<_>>()
+                                        .join(" ")
+                                );
+                                use std::io::Write;
+                                if let Ok(mut f) = std::fs::OpenOptions::new()
+                                    .create(true)
+                                    .append(true)
+                                    .open(dir.join("frames-probe.log"))
+                                {
+                                    let _ = f.write_all(line.as_bytes());
+                                }
+                            }
+                        }
+                    }
+                }
                 if last_perf.elapsed() > Duration::from_secs(1) {
                     last_perf = Instant::now();
                     unsafe {
@@ -1183,7 +1374,12 @@ pub fn start(
                 }
 
                 // 120ms tick: meters want ~8Hz; command latency stays low.
-                match cmd_rx.recv_timeout(Duration::from_millis(120)) {
+                let received = cmd_rx.recv_timeout(Duration::from_millis(120));
+                if let Ok(c) = &received {
+                    iter_label = cmd_name(c);
+                }
+                iter_prev = Some((iter_t0, iter_label));
+                match received {
                     Ok(Command::GoLive(config)) => {
                         if session.is_some() {
                             sink(&LiveEvent::EngineError {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { keyIs } from "../lib/keys";
 import { ipc, type LiveItem, type LiveTransformPatch } from "../lib/ipc";
 
 /** StageEditor (UI-P2) — direct manipulation on the canvas.
@@ -31,15 +32,34 @@ export function StageEditor({
   baseH,
   disabled,
   onOrder,
+  onSelect,
+  onDelete,
+  onCommit,
+  selectId,
 }: {
   items: LiveItem[];
   baseW: number;
   baseH: number;
   disabled?: boolean;
   onOrder?: (id: string, dir: 1 | -1) => void;
+  /** Selection is SHARED state: the rail highlights what the stage holds. */
+  onSelect?: (id: string | null) => void;
+  /** Delete/Backspace removes the selected source (part of the keymap). */
+  onDelete?: (id: string) => void;
+  /** Fires after every committed edit — the room mirrors it into the scene. */
+  onCommit?: () => void;
+  /** Selection driven from OUTSIDE (a rail row click): lights the item up. */
+  selectId?: string | null;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelectedRaw] = useState<string | null>(null);
+  const setSelected = (id: string | null) => {
+    setSelectedRaw(id);
+    onSelect?.(id);
+  };
+  useEffect(() => {
+    if (selectId !== undefined) setSelectedRaw(selectId);
+  }, [selectId]);
   const [drag, setDrag] = useState<LiveItem | null>(null); // optimistic geometry
   const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({ v: [], h: [] });
   const gesture = useRef<Gesture | null>(null);
@@ -96,7 +116,8 @@ export function StageEditor({
       pending.current = null;
     }
     ipc.liveSetTransform(id, patch, true).catch(() => {});
-  }, []);
+    onCommit?.();
+  }, [onCommit]);
 
   /** Where an item's picture ACTUALLY lands on the canvas. The box the
    * engine reports is the bounds; the cropped source is fitted inside it and
@@ -290,11 +311,17 @@ export function StageEditor({
         commit(it.id, { x: it.x + mx, y: it.y + my });
       } else if (e.key === "Escape") {
         setSelected(null);
-      } else if (e.key === "]" ) {
+      } else if (keyIs(e, "stage.delete")) {
+        const el = document.activeElement as HTMLElement | null;
+        if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+        e.preventDefault();
+        onDelete?.(it.id);
+        setSelected(null);
+      } else if (keyIs(e, "stage.layer_up")) {
         onOrder?.(it.id, 1);
-      } else if (e.key === "[") {
+      } else if (keyIs(e, "stage.layer_down")) {
         onOrder?.(it.id, -1);
-      } else if (e.key === "r" || e.key === "R") {
+      } else if (keyIs(e, "stage.straighten")) {
         // Straighten, or with ⌥ clear the crop — both are hard to undo by
         // hand once a drag has gone wrong.
         e.preventDefault();
@@ -307,7 +334,7 @@ export function StageEditor({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selected, items, commit, onOrder]);
+  }, [selected, items, commit, onOrder, onDelete]);
 
   if (disabled) return null;
   const s = scale();
