@@ -157,6 +157,9 @@ export const ipc = {
   liveSetTransform: (id: string, patch: LiveTransformPatch, commit: boolean) =>
     invoke("live_set_transform", { id, patch, commit }),
   livePreviewHidden: (hidden: boolean) => invoke("live_preview_hidden", { hidden }),
+  /** Rects (CSS px, window coords) the native preview must leave to the webview. */
+  livePreviewCutouts: (rects: { x: number; y: number; w: number; h: number }[]) =>
+    invoke("live_preview_cutouts", { rects }),
   /** Stage editor: which item is selected, so the native preview can outline it. */
   liveSetSelection: (id: string | null) => invoke("live_set_selection", { id }),
   liveOpenChat: (url: string) => invoke("live_open_chat", { url }),

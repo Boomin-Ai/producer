@@ -36,6 +36,7 @@
  * permission system that does not exist here.
  */
 
+#include <math.h>
 #include <windows.h>
 #include <shellapi.h>
 #include <stdio.h>
@@ -147,6 +148,8 @@ static void ensure_class(void)
  * by a webview), and libobs wants real pixels, so every geometry call reports
  * both. Per-monitor DPI: a window dragged to a second display with different
  * scaling must re-report, which is why this is read per call rather than cached. */
+static void apply_cutouts(HWND child); /* defined below set_frame, used by it */
+
 static double scale_for(HWND hwnd)
 {
     UINT dpi = GetDpiForWindow(hwnd);
@@ -212,11 +215,72 @@ void producer_preview_set_frame(void *view_ptr, double x, double y, double w, do
     const double s = scale_for(parent ? parent : child);
     SetWindowPos(child, NULL, (int)(x * s), (int)(y * s), (int)(w * s), (int)(h * s),
                  SWP_NOZORDER | SWP_NOACTIVATE);
+    apply_cutouts(child); /* region is in child coordinates: recompute on move */
 
     if (out_px_w)
         *out_px_w = w * s;
     if (out_px_h)
         *out_px_h = h * s;
+}
+
+/* Float-mode cutouts. The preview HWND sits ABOVE the webview, so anything the
+ * webview paints over the stage (a popover, a menu, a toast) is hidden by the
+ * video. The webview reports those elements' rects (CSS px, window client
+ * coordinates); we punch them out of the preview's window REGION, and the
+ * webview shows through -- and receives the mouse -- exactly there. The region
+ * is recomputed on every frame move because it is expressed in the child's own
+ * coordinates. Up to 16 rects; more than that is not a UI, it is a bug. */
+#define PRODUCER_MAX_CUTOUTS 16
+static double g_cutouts[PRODUCER_MAX_CUTOUTS][4];
+static int g_n_cutouts = 0;
+
+static void apply_cutouts(HWND child)
+{
+    if (!child || !IsWindow(child))
+        return;
+    if (g_n_cutouts == 0) {
+        SetWindowRgn(child, NULL, TRUE);
+        return;
+    }
+    HWND parent = GetParent(child);
+    const double s = scale_for(parent ? parent : child);
+    RECT wr;
+    GetWindowRect(child, &wr);
+    POINT origin = { wr.left, wr.top };
+    if (parent)
+        ScreenToClient(parent, &origin); /* child's top-left in parent client px */
+    const int cw = wr.right - wr.left, ch = wr.bottom - wr.top;
+    HRGN rgn = CreateRectRgn(0, 0, cw, ch);
+    int holes = 0;
+    for (int i = 0; i < g_n_cutouts; i++) {
+        const int l = (int)floor(g_cutouts[i][0] * s) - origin.x;
+        const int t = (int)floor(g_cutouts[i][1] * s) - origin.y;
+        const int r = (int)ceil((g_cutouts[i][0] + g_cutouts[i][2]) * s) - origin.x;
+        const int b = (int)ceil((g_cutouts[i][1] + g_cutouts[i][3]) * s) - origin.y;
+        if (r <= 0 || b <= 0 || l >= cw || t >= ch)
+            continue; /* does not touch the preview */
+        HRGN cut = CreateRectRgn(l, t, r, b);
+        CombineRgn(rgn, rgn, cut, RGN_DIFF);
+        DeleteObject(cut);
+        holes++;
+    }
+    /* the system owns rgn after SetWindowRgn */
+    SetWindowRgn(child, rgn, TRUE);
+    fprintf(stderr, "[preview] cutouts: %d reported, %d over the stage\n", g_n_cutouts, holes);
+}
+
+void producer_preview_set_cutouts(void *view_ptr, const double *xywh, int n)
+{
+    if (n < 0) n = 0;
+    if (n > PRODUCER_MAX_CUTOUTS) n = PRODUCER_MAX_CUTOUTS;
+    for (int i = 0; i < n; i++) {
+        g_cutouts[i][0] = xywh[i * 4 + 0];
+        g_cutouts[i][1] = xywh[i * 4 + 1];
+        g_cutouts[i][2] = xywh[i * 4 + 2];
+        g_cutouts[i][3] = xywh[i * 4 + 3];
+    }
+    g_n_cutouts = n;
+    apply_cutouts((HWND)view_ptr);
 }
 
 void producer_preview_set_hidden(void *view_ptr, int hidden)
