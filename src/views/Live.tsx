@@ -2672,11 +2672,19 @@ export function LiveView({
       // visible (a guest slot added in PiP showed up in Full cam and Screen).
       // The active scene gets it visible; every other scene with a look
       // records it hidden. Geometry fills in via the write-through capture.
+      // MEMBERSHIP: the new source joins the ACTIVE scene's look and no
+      // other. A scene without a look is materialized from the stage first
+      // so it has one to join. Absence from a look = not in that scene.
       const active = activeSceneRef.current;
+      const stage: Record<string, SceneItemLook> = Object.fromEntries(
+        (sourcesRef.current.items ?? [])
+          .filter((i) => i.kind !== "guest")
+          .map((i) => [i.id, { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z }]),
+      );
       const scenes = (c.scenes.length ? c.scenes : DEFAULT_SCENES).map((sc) => {
-        if (!sc.look && sc.id !== active) return sc;
-        const look = { ...(sc.look ?? {}) };
-        look[id] = { ...(look[id] ?? {}), visible: sc.id === active };
+        if (sc.id !== active) return sc;
+        const look = { ...(sc.look && Object.keys(sc.look).length ? sc.look : stage) };
+        look[id] = { ...(look[id] ?? {}), visible: true };
         return { ...sc, look };
       });
       writeCfg({ ...c, scenes, sources: { ...c.sources, extras: [...(c.sources.extras ?? []), entry] } });
@@ -2706,11 +2714,39 @@ export function LiveView({
     }
   };
 
+  /** MEMBERSHIP delete: a source leaves the scene it was deleted in. It
+   * leaves the GRAPH only when no scene references it anymore — scenes are
+   * looks over one graph, so "delete" used to be graph-wide by construction
+   * (a slot deleted in PiP vanished from Full cam and Screen too). */
   const removeExtraSource = (id: string) => {
-    extraSources.remove(id).catch(() => {});
     const c = cfgRef.current;
+    const active = activeSceneRef.current;
+    const all = c.scenes.length ? c.scenes : DEFAULT_SCENES;
+    const stillUsed = all.some((sc) => sc.id !== active && !!sc.look && id in sc.look);
+    if (active && stillUsed) {
+      // Leave THIS scene: drop the membership, hide the item, keep the source.
+      ipc.liveSetTransform(id, { visible: false }, true).catch(() => {});
+      writeCfg({
+        ...c,
+        scenes: all.map((sc) => {
+          if (sc.id !== active || !sc.look) return sc;
+          const look = { ...sc.look };
+          delete look[id];
+          return { ...sc, look };
+        }),
+      });
+      return;
+    }
+    // Last scene using it: the source leaves the graph, every look is scrubbed.
+    extraSources.remove(id).catch(() => {});
     writeCfg({
       ...c,
+      scenes: all.map((sc) => {
+        if (!sc.look || !(id in sc.look)) return sc;
+        const look = { ...sc.look };
+        delete look[id];
+        return { ...sc, look };
+      }),
       sources: { ...c.sources, extras: (c.sources.extras ?? []).filter((e) => e.id !== id) },
     });
   };
@@ -3265,6 +3301,19 @@ export function LiveView({
         ...(overlayActive ? ["overlay"] : []),
       ]);
       const entries = Object.entries(look).filter(([id]) => exists.has(id));
+      // MEMBERSHIP: a scene's look is the set of sources that belong to it.
+      // An extra the look does not mention is not in this scene — hide it.
+      // Core sources (screen/camera/overlay) and guests (slot-managed) are
+      // room-level and stay under their own rules.
+      const realLook = !!(p.look && Object.keys(p.look).length);
+      if (realLook) {
+        for (const it of sources.items ?? []) {
+          if (["screen", "camera", "overlay"].includes(it.id) || it.kind === "guest") continue;
+          if (!(it.id in look) && it.visible) {
+            ipc.liveSetTransform(it.id, { visible: false }, true).catch(() => {});
+          }
+        }
+      }
       // Hidden first (plain visibility flips), then visible bottom-to-top so
       // z-order lands exactly as the scene says.
       for (const [id, l] of entries.filter(([, l]) => !l.visible)) {
@@ -4037,6 +4086,11 @@ export function LiveView({
             // exactly what slots replaced.
             ...liveItems
               .filter((i) => !["screen", "camera", "overlay"].includes(i.id) && i.kind !== "guest")
+              // Membership: a scene with a look lists only its own sources.
+              .filter((i) => {
+                const sc = scenes.find((x) => x.id === activeScene);
+                return !sc?.look || Object.keys(sc.look).length === 0 || i.id in sc.look;
+              })
               .map((i) => ({
                 key: i.id,
                 label: i.label || i.kind,
