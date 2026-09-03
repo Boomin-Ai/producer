@@ -17,6 +17,7 @@ import { ipc,
   type NetworkLiveRoom,
 } from "../lib/ipc";
 import { demoOn, setDemo } from "../lib/demo";
+import { KEYMAP, getKey, setKey, resetKey, displayKey, type KeyBinding } from "../lib/keys";
 import { liveRoomId, parseConfig, serializeConfig } from "../lib/room";
 import { useUpdater } from "../lib/updater";
 import { DestinationEditor, LiveView } from "./Live";
@@ -589,6 +590,27 @@ function SettingsSheet({
               <span className="cr-sheet-row-sub">up to date — updates install themselves</span>
             )}
           </div>
+        </div>
+
+        <div className="cr-label" style={{ marginTop: 28 }}>
+          SHORTCUTS
+        </div>
+        <div className="ks">
+          {KEYMAP.map((b) => (
+            <KeyRow key={b.id} b={b} />
+          ))}
+          {/* The grammar — fixed on purpose, listed so it can be learned. */}
+          {([
+            ["⌘1–9", "Cut to a scene"],
+            ["Arrows", "Nudge selected (⇧ ×10)"],
+            ["⌥ drag edge", "Crop instead of scale"],
+            ["Esc", "Deselect"],
+          ] as const).map(([k, label]) => (
+            <div key={k} className="ks-row fixed">
+              <span className="ks-label">{label}</span>
+              <span className="ks-key">{k}</span>
+            </div>
+          ))}
         </div>
 
         <div className="cr-label" style={{ marginTop: 28 }}>
@@ -1734,6 +1756,54 @@ function RoomShareChip({ room, onChanged }: { room: LiveRoom; onChanged: () => v
   );
 }
 
+
+/** One rebindable shortcut row: click the chip, press the new key. */
+function KeyRow({ b }: { b: KeyBinding }) {
+  const [cur, setCur] = useState(() => getKey(b.id));
+  const [arming, setArming] = useState(false);
+  useEffect(() => {
+    if (!arming) return;
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape") {
+        setArming(false);
+        return;
+      }
+      // Bare keys only — modifiers stay grammar, not bindings.
+      if (["Shift", "Meta", "Alt", "Control"].includes(e.key)) return;
+      setKey(b.id, e.key);
+      setCur(e.key);
+      setArming(false);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [arming, b.id]);
+  return (
+    <div className="ks-row">
+      <span className="ks-label">{b.label}</span>
+      {cur !== b.def && (
+        <button
+          className="ks-reset"
+          title={`Reset to ${displayKey(b.def)}`}
+          onClick={() => {
+            resetKey(b.id);
+            setCur(b.def);
+          }}
+        >
+          reset
+        </button>
+      )}
+      <button
+        className={`ks-key${arming ? " arming" : ""}`}
+        title="Click, then press the new key"
+        onClick={() => setArming((a) => !a)}
+      >
+        {arming ? "Press a key…" : displayKey(cur)}
+      </button>
+    </div>
+  );
+}
 
 /** Icons-only side rail on the control room home — floating inset glass,
  * macOS-styling: translucent card, heavy backdrop blur, hairline border.

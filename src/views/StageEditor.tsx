@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { keyIs } from "../lib/keys";
 import { ipc, type LiveItem, type LiveTransformPatch } from "../lib/ipc";
 
 /** StageEditor (UI-P2) — direct manipulation on the canvas.
@@ -300,17 +301,17 @@ export function StageEditor({
         commit(it.id, { x: it.x + mx, y: it.y + my });
       } else if (e.key === "Escape") {
         setSelected(null);
-      } else if (e.key === "Delete" || e.key === "Backspace") {
+      } else if (keyIs(e, "stage.delete")) {
         const el = document.activeElement as HTMLElement | null;
         if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
         e.preventDefault();
         onDelete?.(it.id);
         setSelected(null);
-      } else if (e.key === "]" ) {
+      } else if (keyIs(e, "stage.layer_up")) {
         onOrder?.(it.id, 1);
-      } else if (e.key === "[") {
+      } else if (keyIs(e, "stage.layer_down")) {
         onOrder?.(it.id, -1);
-      } else if (e.key === "r" || e.key === "R") {
+      } else if (keyIs(e, "stage.straighten")) {
         // Straighten, or with ⌥ clear the crop — both are hard to undo by
         // hand once a drag has gone wrong.
         e.preventDefault();
