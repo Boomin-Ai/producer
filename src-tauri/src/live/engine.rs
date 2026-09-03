@@ -1059,9 +1059,18 @@ pub fn set_preview_selection(name: Option<String>) {
 /// rotation; handles are small quads centred on corners and edge midpoints.
 #[cfg(target_os = "windows")]
 unsafe fn draw_selection(bw: f32, bh: f32, cx: u32, cy: u32) {
-    let Some(name) = PREVIEW_SELECTION.lock().unwrap().clone() else { return };
+    static ENTRIES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let e = ENTRIES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let sel = PREVIEW_SELECTION.lock().unwrap().clone();
+    if e % 600 == 0 {
+        eprintln!("[selection] draw entry #{e}: selection = {sel:?}");
+    }
+    let Some(name) = sel else { return };
     let scene_src = ffi::obs_get_output_source(0);
     if scene_src.is_null() {
+        if e % 600 == 0 {
+            eprintln!("[selection] channel 0 is NULL");
+        }
         return;
     }
     let scene = ffi::obs_scene_from_source(scene_src);
@@ -1078,11 +1087,22 @@ unsafe fn draw_selection(bw: f32, bh: f32, cx: u32, cy: u32) {
         }
     }
     ffi::obs_source_release(scene_src);
+    static SEL_LOGS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let k = SEL_LOGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     if item.is_null() {
+        if k % 300 == 0 {
+            eprintln!("[selection] '{name}': no scene item by that name (scene={scene:?})");
+        }
         return;
     }
     let mut m: ffi::matrix4 = std::mem::zeroed();
     ffi::obs_sceneitem_get_box_transform(item, &mut m);
+    if k % 300 == 0 {
+        eprintln!(
+            "[selection] '{name}': box t=({:.0},{:.0}) x=({:.0},{:.0}) y=({:.0},{:.0}) display {cx}x{cy} base {bw}x{bh}",
+            m.t.x, m.t.y, m.x.x, m.x.y, m.y.x, m.y.y
+        );
+    }
     let xf = |px: f32, py: f32| -> (f32, f32) {
         (m.x.x * px + m.y.x * py + m.t.x, m.x.y * px + m.y.y * py + m.t.y)
     };
@@ -1099,8 +1119,22 @@ unsafe fn draw_selection(bw: f32, bh: f32, cx: u32, cy: u32) {
     if param.is_null() || tech.is_null() {
         return;
     }
-    // Producer green (#22c55e), opaque.
-    let green = ffi::vec4 { x: 0.133, y: 0.773, z: 0.369, w: 1.0 };
+    // Producer green (#22c55e), opaque. The solid effect writes the value as
+    // given: on an SDR (sRGB) display that is the encoded colour; on the scRGB
+    // (FP16) swapchain an HDR monitor gets, values are LINEAR and SDR white sits
+    // at sdr_white_level/80 --- the same multiplier obs_render_main_texture
+    // applies to the mix. Without it the outline reads dim and yellow-shifted.
+    let space = ffi::gs_get_color_space();
+    let green = if space == 3 {
+        // GS_CS_709_SCRGB: linear #22c55e, scaled to SDR white
+        let m = ffi::obs_get_video_sdr_white_level() / 80.0;
+        ffi::vec4 { x: 0.016 * m, y: 0.560 * m, z: 0.110 * m, w: 1.0 }
+    } else if space == 2 {
+        // GS_CS_SRGB_16F: linear, unscaled
+        ffi::vec4 { x: 0.016, y: 0.560, z: 0.110, w: 1.0 }
+    } else {
+        ffi::vec4 { x: 0.133, y: 0.773, z: 0.369, w: 1.0 }
+    };
     ffi::gs_effect_set_vec4(param, &green);
     // canvas px per display px, so handles keep a constant size on screen
     let sx = bw / cx.max(1) as f32;
@@ -1118,7 +1152,7 @@ unsafe fn draw_selection(bw: f32, bh: f32, cx: u32, cy: u32) {
                 let (x, y) = corners[k % 4];
                 ffi::gs_vertex2f(x + nudge * sx, y + nudge * sy);
             }
-            ffi::gs_render_stop(3); // GS_LINESTRIP
+            ffi::gs_render_stop(2); // GS_LINESTRIP
         }
         let mids = [
             ((corners[0].0 + corners[1].0) / 2.0, (corners[0].1 + corners[1].1) / 2.0),
@@ -1181,11 +1215,11 @@ extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, cx: u32, cy: u32) 
         ffi::gs_projection_push();
         ffi::gs_ortho(0.0, bw, 0.0, bh, -100.0, 100.0);
         ffi::obs_render_main_texture();
-        // DIAGNOSTIC (Windows port): the mix reads back black even with an opaque
-        // colour source in the scene. Render that source DIRECTLY here, bypassing
-        // the scene. Magenta on screen => sources draw fine and the SCENE skips
-        // its items; still black => source rendering itself is broken on this
-        // D3D11 context. Remove once resolved.
+        // Windows float mode: the selection outline lives HERE, in the display
+        // pass after the mix --- never in the mix itself, which feeds the
+        // encoder, the recording, the virtual camera and the guests.
+        #[cfg(target_os = "windows")]
+        draw_selection(bw, bh, cx, cy);
         ffi::gs_projection_pop();
         ffi::gs_viewport_pop();
     }

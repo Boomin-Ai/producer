@@ -127,6 +127,7 @@ extern "C" {
     pub fn obs_source_release(source: *mut obs_source_t);
     pub fn obs_get_output_source(channel: u32) -> *mut obs_source_t;
     pub fn obs_get_main_texture() -> *mut c_void;
+    pub fn obs_get_video_sdr_white_level() -> f32;
     pub fn obs_scene_from_source(source: *const obs_source_t) -> *mut c_void;
     pub fn obs_scene_find_source(scene: *mut c_void, name: *const c_char) -> *mut obs_sceneitem_t;
     pub fn obs_sceneitem_get_box_transform(item: *const obs_sceneitem_t, transform: *mut matrix4);
