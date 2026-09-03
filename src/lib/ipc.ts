@@ -509,6 +509,14 @@ export const network = {
   invitations: (endpointId: string, direction: "inbox" | "outbox") =>
     invoke<{ invitations?: NetworkInvitation[] }>("network_invitations", { endpointId, direction }),
   /** Slugs are unique platform-wide, so a slug addresses a brand on its own. */
+  /** Email-addressed invite: the recipient signs in, picks the brand, and the
+   *  network records that we brought them in. */
+  inviteEmail: (endpointId: string, toEmail: string, message?: string) =>
+    invoke<{ kind: "emailed"; invite_url: string }>("network_invite_email", {
+      endpointId,
+      toEmail,
+      message: message ?? null,
+    }),
   invite: (endpointId: string, toSlug: string, message?: string) =>
     invoke<{ kind: "invited" | "connected"; invitation?: NetworkInvitation }>("network_invite", {
       endpointId,
@@ -541,12 +549,19 @@ export const network = {
       minStageMinutes: number | null;
     },
   ) => invoke<{ deal: NetworkDeal }>("network_propose_deal", { endpointId, ...input }),
+  /** accept | decline (beneficiary) · cancel (either side, before funding). */
+  dealAction: (endpointId: string, id: string, action: "accept" | "decline" | "cancel") =>
+    invoke<{ deal: NetworkDeal }>("network_deal_action", { endpointId, id, action }),
 };
 
 export interface NetworkDeal {
   id: string;
   connection_id: string;
   role: "client" | "beneficiary";
+  client_brand_id?: string;
+  beneficiary_brand_id?: string;
+  client_brand_slug?: string | null;
+  beneficiary_brand_slug?: string | null;
   title: string;
   status: "proposed" | "accepted" | "funded" | "delivered" | "released" | "declined" | "cancelled" | "disputed" | "expired";
   amount_cents: number;
@@ -557,6 +572,14 @@ export interface NetworkDeal {
   delivered_by?: "presence" | "stage_minimum" | "host_ended" | "beneficiary" | null;
   min_stage_minutes?: number | null;
   stage_seconds?: number | null;
+  deliverable?: string | null;
+  platform_fee_bps?: number;
+  platform_fee_cents?: number;
+  fee_locked?: boolean;
+  review_days?: number;
+  propose_expires_at?: string | null;
+  funded_at?: string | null;
+  delivered_at?: string | null;
   created_at: string;
 }
 

@@ -632,6 +632,25 @@ pub fn request_permission(kind: &str) -> Result<(), String> {
     }
 }
 
+/// Put text on the system clipboard (native pasteboard — see shim.m).
+pub fn copy_text(text: &str) -> Result<(), String> {
+    #[cfg(have_engine)]
+    {
+        let c = std::ffi::CString::new(text).map_err(|_| "text contains a NUL".to_string())?;
+        let ok = unsafe { ffi::producer_copy_text(c.as_ptr()) } == 1;
+        return if ok {
+            Ok(())
+        } else {
+            Err("clipboard refused the text".into())
+        };
+    }
+    #[cfg(not(have_engine))]
+    {
+        let _ = text;
+        Err("clipboard is native-only in this build".into())
+    }
+}
+
 /// First Light onboarding: the floating drag chip that carries the app
 /// bundle into System Settings' Screen Recording list, plus a deep link to
 /// that pane. macOS never lets an app grant itself Screen Recording — the

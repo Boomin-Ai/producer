@@ -437,6 +437,20 @@ pub async fn network_invite(
 }
 
 #[tauri::command]
+pub async fn network_invite_email(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    to_email: String,
+    message: Option<String>,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .network_invite_email(&to_email, message)
+        .await
+}
+
+#[tauri::command]
 pub async fn network_invitation_action(
     state: State<'_, AppState>,
     endpoint_id: String,
@@ -519,6 +533,23 @@ pub async fn network_propose_deal(
             amount_cents,
             min_stage_minutes,
         )
+        .await
+}
+
+#[tauri::command]
+pub async fn network_deal_action(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    id: String,
+    action: String,
+) -> EngineResult<Value> {
+    if !matches!(action.as_str(), "accept" | "decline" | "cancel") {
+        return Err(EngineError::Other("unsupported deal action".into()));
+    }
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .network_deal_action(&id, &action)
         .await
 }
 

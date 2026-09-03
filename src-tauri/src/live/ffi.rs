@@ -442,6 +442,7 @@ extern "C" {
     pub fn producer_av_request_access(media_type: c_int);
     pub fn producer_screen_capture_preflight() -> c_int;
     pub fn producer_screen_capture_request();
+    pub fn producer_copy_text(utf8: *const c_char) -> c_int;
     pub fn producer_default_camera_id(buf: *mut c_char, buflen: c_int) -> c_int;
     pub fn producer_list_windows(buf: *mut c_char, buflen: c_int) -> c_int;
     pub fn producer_drag_chip_show();

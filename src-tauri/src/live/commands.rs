@@ -369,6 +369,11 @@ pub async fn live_request_permission(kind: String) -> EngineResult<()> {
 }
 
 #[tauri::command]
+pub async fn copy_text(text: String) -> EngineResult<()> {
+    crate::live::copy_text(&text).map_err(EngineError::Other)
+}
+
+#[tauri::command]
 pub async fn live_screen_coach(action: String) -> EngineResult<()> {
     crate::live::screen_grant_coach(&action).map_err(EngineError::Other)
 }

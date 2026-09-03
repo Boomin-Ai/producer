@@ -198,6 +198,22 @@ void producer_screen_capture_request(void) {
     CGRequestScreenCaptureAccess();
 }
 
+// Clipboard, natively. WKWebView refuses navigator.clipboard (and sometimes
+// execCommand) unless the page holds a fresh user activation; a click that
+// awaits an IPC round trip has already spent it. The pasteboard never asks.
+int producer_copy_text(const char *utf8) {
+    if (!utf8) return 0;
+    NSString *s = [NSString stringWithUTF8String:utf8];
+    if (!s) return 0;
+    __block BOOL ok = NO;
+    run_on_main(^{
+        NSPasteboard *pb = [NSPasteboard generalPasteboard];
+        [pb clearContents];
+        ok = [pb setString:s forType:NSPasteboardTypeString];
+    });
+    return ok ? 1 : 0;
+}
+
 // On-screen window list for the window-capture overlay (M-L7 escape hatch,
 // LIVE-REVIEW.md D1). JSON array of {id, owner, title} written into buf.
 // Window titles are only populated when Screen Recording is granted.

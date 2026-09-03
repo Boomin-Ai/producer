@@ -8048,29 +8048,195 @@ button.ks-key:hover { border-color: var(--line-2); }
    until you scroll; WebView2 on Windows paints the classic light-grey ones
    inside our dark UI. Style them thin and dark everywhere so both platforms
    read the same. */
-* {
+/* Windows ONLY: any ::-webkit-scrollbar rule turns macOS's invisible overlay
+   scrollbars into always-painted classic ones — the opposite of the intent. */
+html[data-platform="win"] * {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
-*::-webkit-scrollbar {
+html[data-platform="win"] *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
-*::-webkit-scrollbar-track {
+html[data-platform="win"] *::-webkit-scrollbar-track {
   background: transparent;
 }
-*::-webkit-scrollbar-thumb {
+html[data-platform="win"] *::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.18);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
-*::-webkit-scrollbar-thumb:hover {
+html[data-platform="win"] *::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.32);
   background-clip: padding-box;
 }
-*::-webkit-scrollbar-corner,
-*::-webkit-scrollbar-button {
+html[data-platform="win"] *::-webkit-scrollbar-corner,
+html[data-platform="win"] *::-webkit-scrollbar-button {
   background: transparent;
   display: none;
 }
+/* ── Network rail as an INSET card (the room's dock grammar), not a flush column. ── */
+.net-rail {
+  top: 48px;
+  right: 12px;
+  bottom: 12px;
+  width: 244px;
+  padding: 14px 12px;
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-card);
+  background: var(--surface-1);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+.cr-home.has-net-rail { margin-right: 272px; }
+
+/* Book form: labeled, stacked — the old three-column grid crushed the room select. */
+.net-book-form { display: flex; flex-direction: column; gap: 8px; grid-template-columns: none; }
+.net-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.net-field > span {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3);
+}
+.net-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.net-book-form select,
+.net-book-form .net-slug {
+  width: 100%; min-width: 0; height: 32px; padding: 0 10px; font-size: 13px;
+  border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line-1); color: var(--fg-1);
+}
+.net-book-form .net-accept { height: 32px; margin-top: 2px; }
+.net-book-form .cr-hint { padding: 2px 2px 0; }
+
+/* Deals on a connection row: a line, a sub-line, and — for an offer made to you — the answer. */
+.net-rail, .net-rail * { user-select: none; -webkit-user-select: none; }
+.net-rail input, .net-rail select { user-select: text; -webkit-user-select: text; }
+.net-deals { flex-direction: column; gap: 6px; }
+.net-deal {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 7px 9px; border-radius: 9px;
+  border: 1px solid var(--line-1); background: var(--surface-1);
+  color: var(--fg-1); text-transform: none; letter-spacing: 0; white-space: normal; font-size: 12px;
+}
+.net-deal-line { display: flex; align-items: center; gap: 7px; font-weight: 650; }
+.net-deal-dot { flex: none; width: 6px; height: 6px; border-radius: 999px; background: var(--fg-3); }
+.net-deal.proposed .net-deal-dot { background: #60a5fa; }
+.net-deal.accepted .net-deal-dot, .net-deal.funded .net-deal-dot { background: var(--amber); }
+.net-deal.delivered .net-deal-dot, .net-deal.released .net-deal-dot { background: var(--mint); }
+.net-deal.disputed .net-deal-dot { background: var(--red); }
+.net-deal.funded, .net-deal.delivered { color: var(--fg-1); border-color: var(--line-1); }
+.net-deal-sub { font-size: 11.5px; color: var(--fg-3); }
+.net-deal-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 2px; }
+.net-deal-acts .net-accept, .net-deal-acts .net-decline { height: 28px; font-size: 12px; }
+
+/* Room card: the guest link, one click. */
+.cr-room-link {
+  position: absolute; right: 78px; bottom: 12px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+  padding: 3px 9px; border-radius: 999px;
+  border: 1px solid var(--line-1); color: var(--fg-3); background: transparent; cursor: pointer;
+}
+.cr-room-link:hover { color: var(--fg-1); border-color: var(--line-2); }
+.cr-room-link.copied { color: var(--mint); border-color: color-mix(in srgb, var(--mint) 40%, transparent); }
+.cr-room-link.err { color: var(--red); }
+
+/* Deal cards open the sheet; no money answered from a chip. */
+.net-deal { cursor: pointer; text-align: left; width: 100%; }
+.net-deal:hover { border-color: var(--line-2); }
+.net-deal-more { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--fg-3); }
+.net-deal:hover .net-deal-more { color: var(--fg-1); }
+
+/* The deal sheet — full terms + the answer. */
+.deal-sheet {
+  position: fixed; right: 12px; top: 48px; bottom: 12px; z-index: 61;
+  width: 360px; overflow: auto;
+  padding: 14px 14px 12px; border-radius: var(--r-card);
+  background: var(--bg); border: 1px solid var(--line-2);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  display: flex; flex-direction: column; gap: 12px;
+  user-select: text; -webkit-user-select: text;
+}
+.deal-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.deal-sheet-title { font-size: 15px; font-weight: 700; color: var(--fg-1); }
+.deal-sheet-sub { font-size: 12px; color: var(--fg-2); margin-top: -8px; }
+.deal-status { text-transform: capitalize; color: var(--fg-3); }
+.deal-money { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 10px; background: var(--surface-1); border: 1px solid var(--line-1); font-size: 12.5px; }
+.deal-money > div { display: flex; justify-content: space-between; gap: 8px; color: var(--fg-2); }
+.deal-money b { color: var(--fg-1); font-variant-numeric: tabular-nums; }
+.deal-money .deal-net { padding-top: 6px; border-top: 1px solid var(--line-1); color: var(--fg-1); }
+.deal-money .deal-net b { color: var(--mint); }
+.deal-terms { display: flex; flex-direction: column; gap: 10px; }
+.deal-term > span { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 2px; }
+.deal-term > p { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--fg-1); }
+.deal-agree { font-size: 12px; line-height: 1.4; color: var(--fg-2); padding: 10px; border-radius: 10px; background: var(--surface-1); border: 1px dashed var(--line-2); }
+.deal-agree a { color: var(--mint); cursor: pointer; font-weight: 650; }
+.deal-sheet-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: auto; }
+.deal-sheet-acts .net-accept, .deal-sheet-acts .net-decline { height: 34px; font-size: 13px; }
+.deal-sheet-acts > .net-decline:only-child { grid-column: 1 / -1; }
+.hd-link { gap: 6px; }
+.net-decline.danger { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, transparent); }
+.deal-link { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 10px; background: var(--surface-1); border: 1px solid color-mix(in srgb, var(--mint) 28%, var(--line-1)); }
+.deal-link .net-accept { height: 32px; }
+.deal-foot { display: flex; flex-direction: column; gap: 8px; }
+.deal-foot-link { font-size: 12.5px; font-weight: 650; color: var(--mint); cursor: pointer; padding: 2px 2px 0; }
+.deal-foot-link:hover { text-decoration: underline; }
+.deal-agree { font-size: 11.5px; color: var(--fg-3); background: transparent; border: 0; padding: 0 2px; }
+.deal-agree a { color: var(--fg-2); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; font-weight: 600; }
+/* The sheet never scrolls sideways; long links wrap instead of widening it. */
+.deal-sheet { overflow-x: hidden; overflow-y: auto; }
+.deal-sheet .cr-hint, .deal-term > p, .deal-agree, .deal-link p { overflow-wrap: anywhere; word-break: break-word; }
+.deal-sheet .cr-hint { user-select: text; -webkit-user-select: text; }
+
+/* ── sign out (workspace popout foot) ─────────────────────────────────── */
+.ws-signout .ws-pop-name { color: var(--fg-2); }
+.ws-signout:hover .ws-pop-name { color: #fca5a5; }
+
+/* Sideways source rows own their scroll: width-constrained inside the panel
+   body (a row-flex body let them grow to content and get clipped), scroll
+   sideways, no bar (overlay on mac, hidden on win). */
+.rm-panel[data-in="top"] .rm-panel-body { min-width: 0; }
+.rm-panel[data-in="top"] .rm-rows {
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.rm-panel[data-in="top"] .rm-rows::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+/* ── Find tab: your open invite link ─────────────────────────────────────── */
+.net-link-btn {
+  all: unset; box-sizing: border-box; cursor: pointer;
+  display: grid; grid-template-columns: 16px 1fr; column-gap: 8px; align-items: center;
+  width: 100%; margin-top: 8px; padding: 8px 10px;
+  border-radius: 10px; border: 1px dashed var(--line-2); background: var(--surface-1); color: var(--fg-2);
+  font-size: 12.5px; font-weight: 600;
+}
+.net-link-btn:hover { background: var(--surface-2); color: var(--fg-1); border-style: solid; }
+.net-link-btn svg { width: 14px; height: 14px; grid-row: span 2; }
+.net-link-url { grid-column: 2; font-size: 11px; font-weight: 500; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Front door / sign-in backdrop: a quiet aurora, not a flat void ───────── */
+.shell { position: relative; isolation: isolate; }
+.shell::before {
+  content: ""; position: fixed; inset: -20%; z-index: -2; pointer-events: none;
+  background:
+    radial-gradient(42% 38% at 22% 18%, rgba(52, 211, 153, 0.16), transparent 70%),
+    radial-gradient(38% 42% at 80% 22%, rgba(96, 165, 250, 0.13), transparent 70%),
+    radial-gradient(50% 45% at 55% 95%, rgba(167, 139, 250, 0.10), transparent 70%);
+  filter: blur(40px);
+  animation: shell-drift 28s ease-in-out infinite alternate;
+}
+.shell::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(60% 60% at 50% 45%, #000 20%, transparent 100%);
+  -webkit-mask-image: radial-gradient(60% 60% at 50% 45%, #000 20%, transparent 100%);
+}
+@keyframes shell-drift {
+  from { transform: translate3d(-2%, -1%, 0) scale(1); }
+  to { transform: translate3d(2%, 2%, 0) scale(1.06); }
+}
+@media (prefers-reduced-motion: reduce) { .shell::before { animation: none; } }
