@@ -8172,3 +8172,8 @@ button.ks-key:hover { border-color: var(--line-2); }
 .net-decline.danger { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, transparent); }
 .deal-link { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 10px; background: var(--surface-1); border: 1px solid color-mix(in srgb, var(--mint) 28%, var(--line-1)); }
 .deal-link .net-accept { height: 32px; }
+.deal-foot { display: flex; flex-direction: column; gap: 8px; }
+.deal-foot-link { font-size: 12.5px; font-weight: 650; color: var(--mint); cursor: pointer; padding: 2px 2px 0; }
+.deal-foot-link:hover { text-decoration: underline; }
+.deal-agree { font-size: 11.5px; color: var(--fg-3); background: transparent; border: 0; padding: 0 2px; }
+.deal-agree a { color: var(--fg-2); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; font-weight: 600; }

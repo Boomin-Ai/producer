@@ -552,6 +552,8 @@ export interface NetworkDeal {
   role: "client" | "beneficiary";
   client_brand_id?: string;
   beneficiary_brand_id?: string;
+  client_brand_slug?: string | null;
+  beneficiary_brand_slug?: string | null;
   title: string;
   status: "proposed" | "accepted" | "funded" | "delivered" | "released" | "declined" | "cancelled" | "disputed" | "expired";
   amount_cents: number;
