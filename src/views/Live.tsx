@@ -1096,6 +1096,13 @@ function DevicePicker({ kind, onClose }: { kind: string; onClose: () => void }) 
 function PreviewPanel({ children }: { children?: ReactNode }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const attached = useRef(false);
+  /** Attach in flight: syncs that land meanwhile must not attach AGAIN
+   * (the engine ignores a second attach and their newer rect was lost —
+   * the "stale frame on first join" bug). They park their rect here and
+   * it is replayed as a move the moment the attach resolves. */
+  const attaching = useRef(false);
+  const pending = useRef<DOMRect | null>(null);
+  const lastSent = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
 
   useEffect(() => {
     // Coalesced on a MACROTASK, not an animation frame: once the native
@@ -1103,6 +1110,10 @@ function PreviewPanel({ children }: { children?: ReactNode }) {
     // halt rAF — a dock resize would then leave the stage misplaced until
     // frames resume. Timers keep running.
     let raf = 0;
+    const send = async (r: DOMRect) => {
+      lastSent.current = { x: r.x, y: r.y, w: r.width, h: r.height };
+      await ipc.liveMovePreview(r.x, r.y, r.width, r.height);
+    };
     const sync = () => {
       window.clearTimeout(raf);
       raf = window.setTimeout(async () => {
@@ -1111,16 +1122,29 @@ function PreviewPanel({ children }: { children?: ReactNode }) {
         const r = el.getBoundingClientRect();
         if (r.width < 10 || r.height < 10) return;
         try {
+          if (attaching.current) {
+            pending.current = r;
+            return;
+          }
           if (!attached.current) {
+            attaching.current = true;
             // The attach call itself reports whether the stage can be a
             // transparent hole (preview behind the webview) — no polling.
             const transparent = await ipc.liveAttachPreview(r.x, r.y, r.width, r.height);
+            lastSent.current = { x: r.x, y: r.y, w: r.width, h: r.height };
             attached.current = true;
+            attaching.current = false;
             document.documentElement.dataset.stage = transparent ? "transparent" : "opaque";
+            // Replay whatever the layout did while we were attaching — and
+            // re-measure regardless: the rect at attach time is rarely final.
+            const now = pending.current ?? el.getBoundingClientRect();
+            pending.current = null;
+            if (now.width >= 10 && now.height >= 10) await send(now);
           } else {
-            await ipc.liveMovePreview(r.x, r.y, r.width, r.height);
+            await send(r);
           }
         } catch {
+          attaching.current = false;
           // engine not ready yet; retry on next layout change
         }
       }, 0);
@@ -1130,7 +1154,21 @@ function PreviewPanel({ children }: { children?: ReactNode }) {
     if (ref.current) ro.observe(ref.current);
     window.addEventListener("resize", sync);
     window.addEventListener("scroll", sync, true);
+    // Reconcile: a lost move (engine busy, event coalesced away) must not
+    // leave the stage misplaced — every second, if the measured rect differs
+    // from the last one sent, send it again.
+    const tick = window.setInterval(() => {
+      const el = ref.current;
+      if (!el || !attached.current || attaching.current) return;
+      const r = el.getBoundingClientRect();
+      const l = lastSent.current;
+      if (r.width < 10 || r.height < 10) return;
+      if (!l || Math.abs(l.x - r.x) > 0.5 || Math.abs(l.y - r.y) > 0.5 || Math.abs(l.w - r.width) > 0.5 || Math.abs(l.h - r.height) > 0.5) {
+        void send(r).catch(() => {});
+      }
+    }, 1000);
     return () => {
+      window.clearInterval(tick);
       window.clearTimeout(raf);
       ro.disconnect();
       window.removeEventListener("resize", sync);
