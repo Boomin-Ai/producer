@@ -629,14 +629,15 @@ pub fn screen_grant_coach(action: &str) -> Result<(), String> {
 /// `live://event`, the snapshot backs `live_engine_status`, and when the app
 /// was launched with `--live-multistream` the M-L4/M-L5 harness rides the
 /// same engine path (config in, report/status files out).
-#[cfg(have_engine)]
 /// The live report dir (…/live), for diagnostics written outside the engine
-/// loop (e.g. main-thread hop timings from graph::on_main_thread).
+/// loop (e.g. main-thread hop timings from graph::on_main_thread). Ungated:
+/// both the engine build and the no-engine CI build see it.
 static REPORT_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
 pub fn report_dir() -> Option<PathBuf> {
     REPORT_DIR.get().cloned()
 }
 
+#[cfg(have_engine)]
 pub fn init(app: tauri::AppHandle, report_dir: PathBuf) -> Live {
     let _ = REPORT_DIR.set(report_dir.clone());
     use tauri::Emitter;
