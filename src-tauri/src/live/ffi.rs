@@ -125,6 +125,29 @@ extern "C" {
         hotkey_data: *mut obs_data_t,
     ) -> *mut obs_source_t;
     pub fn obs_source_release(source: *mut obs_source_t);
+    pub fn obs_get_output_source(channel: u32) -> *mut obs_source_t;
+    pub fn obs_get_main_texture() -> *mut c_void;
+    pub fn gs_get_color_space() -> c_int;
+    pub fn gs_effect_set_texture(param: *mut c_void, val: *mut c_void);
+    pub fn gs_enable_framebuffer_srgb(enable: bool);
+    pub fn gs_framebuffer_srgb_enabled() -> bool;
+    pub fn gs_matrix_push();
+    pub fn gs_matrix_pop();
+    pub fn gs_matrix_translate3f(x: f32, y: f32, z: f32);
+    pub fn gs_get_render_target() -> *mut c_void;
+    pub fn gs_texture_get_color_format(tex: *const c_void) -> c_int;
+    pub fn gs_effect_get_param_by_name(effect: *mut c_void, name: *const c_char) -> *mut c_void;
+    pub fn gs_effect_set_vec4(param: *mut c_void, val: *const vec4);
+    pub fn gs_effect_get_technique(effect: *mut c_void, name: *const c_char) -> *mut c_void;
+    pub fn gs_technique_begin(tech: *mut c_void) -> usize;
+    pub fn gs_technique_begin_pass(tech: *mut c_void, pass: usize) -> bool;
+    pub fn gs_technique_end_pass(tech: *mut c_void);
+    pub fn gs_technique_end(tech: *mut c_void);
+    pub fn gs_draw_sprite(tex: *mut c_void, flip: u32, width: u32, height: u32);
+    pub fn obs_get_source_by_name(name: *const c_char) -> *mut obs_source_t;
+    pub fn gs_texture_get_width(tex: *const c_void) -> u32;
+    pub fn gs_texture_get_height(tex: *const c_void) -> u32;
+    pub fn obs_get_base_effect(effect: c_int) -> *mut c_void;
     pub fn obs_set_output_source(channel: u32, source: *mut obs_source_t);
     pub fn obs_source_get_width(source: *mut obs_source_t) -> u32;
     /// Probe bindings (room-open first-frame investigation).
@@ -338,6 +361,7 @@ extern "C" {
     pub fn obs_get_video_info(ovi: *mut obs_video_info) -> bool;
 
     pub fn gs_viewport_push();
+    pub fn gs_set_viewport(x: c_int, y: c_int, width: c_int, height: c_int);
     pub fn gs_viewport_pop();
     pub fn gs_projection_push();
     pub fn gs_projection_pop();

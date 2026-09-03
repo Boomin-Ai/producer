@@ -1340,6 +1340,13 @@ impl SceneGraph {
                     let key = CString::new(ids::SCREEN_KEY).unwrap();
                     let val = CString::new(uuid).unwrap();
                     ffi::obs_data_set_string(settings, key.as_ptr(), val.as_ptr());
+                    // monitor_capture method: 1 = DXGI desktop duplication, proven to
+                    // deliver frames here (cursor and desktop visible in the mix).
+                    // "auto" prefers WGC on Win10 1903+, which is untested in this
+                    // host and needs the process to carry the capability; revisit
+                    // when WGC is verified rather than assumed.
+                    #[cfg(target_os = "windows")]
+                    ffi::obs_data_set_int(settings, CString::new("method").unwrap().as_ptr(), 1);
                     let id = CString::new(ids::SCREEN).unwrap();
                     let name = CString::new("Screen").unwrap();
                     let src = ffi::obs_source_create(
