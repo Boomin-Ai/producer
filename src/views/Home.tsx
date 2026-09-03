@@ -1966,6 +1966,13 @@ function DealSheet({
   }, [onClose]);
   const earn = d.role === "beneficiary";
   const [confirmWithdraw, setConfirmWithdraw] = useState(false);
+  const [ownSlug, setOwnSlug] = useState<string | null>(null);
+  useEffect(() => {
+    resolveActiveEndpoint().then((ep) => setOwnSlug(ep?.brand_slug ?? null)).catch(() => {});
+  }, []);
+  // The deal's own page lives on the CLIENT brand's lobby.
+  const clientSlug = d.client_brand_slug ?? (earn ? null : ownSlug);
+  const pageUrl = clientSlug ? `https://boomin.ai/${clientSlug}/deals/${d.id}` : null;
   const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
   const feeBps = d.platform_fee_bps ?? 1000;
   const feeCents = d.platform_fee_cents ?? Math.floor((d.amount_cents * feeBps) / 10_000);
@@ -2024,13 +2031,6 @@ function DealSheet({
           </div>
         )}
 
-        <div className="deal-agree">
-          {earn
-            ? "By accepting you agree to deliver as written, to the delivery rule above, and to the fee shown."
-            : "By funding you agree the escrow is released by delivery as written, by your release, or by the review window."}{" "}
-          <a onClick={() => openUrl(DEAL_TERMS_URL).catch(() => {})}>Full deal terms ›</a>
-        </div>
-
         <div className="deal-sheet-acts">
           {earn && d.status === "proposed" ? (
             <>
@@ -2057,6 +2057,19 @@ function DealSheet({
           ) : (
             <button className="net-decline" onClick={onClose}>Close</button>
           )}
+        </div>
+        <div className="deal-foot">
+          {pageUrl && (
+            <a className="deal-foot-link" onClick={() => openUrl(pageUrl).catch(() => {})}>
+              Open this deal on boomin.ai ›
+            </a>
+          )}
+          <div className="deal-agree">
+            {earn
+              ? "Accepting means you agree to deliver as written, to the delivery rule above, and to the fee shown, under Boomin's "
+              : "Funding means you agree the escrow is released by delivery as written, by your release, or by the review window, under Boomin's "}
+            <a onClick={() => openUrl(DEAL_TERMS_URL).catch(() => {})}>network deal terms</a>.
+          </div>
         </div>
       </div>
     </>
