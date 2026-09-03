@@ -2196,7 +2196,9 @@ export function LiveView({
     </div>
   );
   const scenes: RoomScene[] = cfg.scenes.length ? cfg.scenes : DEFAULT_SCENES;
-  const [overlayOpen, setOverlayOpen] = useState(false);
+  /** Overlay config drills IN like Filters — a menu inside the Sources
+   * panel, never a popout over the stage. */
+  const [overlayInline, setOverlayInline] = useState(false);
   const videoApplied = useRef(false);
   const channelsApplied = useRef(false);
   const demoVideoSet = useRef(false);
@@ -3425,7 +3427,7 @@ export function LiveView({
     setLayoutMenu(false);
     setAddMenu(null);
     setMicPopOpen(false);
-    setOverlayOpen(false);
+    setOverlayInline(false);
     setChatOpen(false);
     setSrcAddOpen(false);
     setDeviceMenu(null);
@@ -3433,7 +3435,7 @@ export function LiveView({
     setSceneSettings(null);
   };
   const anyPop =
-    destsOpen || qualityOpen || micPopOpen || overlayOpen || chatOpen || srcAddOpen || deviceMenu !== null || srcSubPop !== null ||
+    destsOpen || qualityOpen || micPopOpen || chatOpen || srcAddOpen || deviceMenu !== null || srcSubPop !== null ||
     (sceneSettings !== null && dockOf(layout, "scenes") !== "bottom") || panelMenu !== null || layoutMenu || addMenu !== null || adding || !!editing;
 
   const micStrip = (
@@ -3624,6 +3626,23 @@ export function LiveView({
           </>
         );
       case "sources": {
+        if (overlayInline) {
+          return (
+            <div className="rm-filters">
+              <div className="rm-filters-head">
+                <button className="rm-crumb" onClick={() => setOverlayInline(false)}>
+                  {ic.chevRight}
+                  Sources
+                </button>
+                <span className="rm-filters-title">Overlay</span>
+              </div>
+              <OverlayPicker
+                activeWindow={sources.overlay_window ?? null}
+                activeUrl={sources.overlay_url ?? null}
+              />
+            </div>
+          );
+        }
         if (filterFor) {
           return (
             <FilterEditor
@@ -3744,14 +3763,14 @@ export function LiveView({
                           className={`rm-row-edit${srcSettings === t.key ? " on" : ""}`}
                           title="Source settings"
                           onClick={(e) => {
-                            // Docked in the sheet → horizontal settings strip
-                            // above the panels. Docked on a sidebar → the
-                            // strip has nowhere to live, so pop vertically
-                            // right here.
-                            if (dockOf(layout, "sources") === "bottom") {
+                            // Docked on a ROW (sheet or top rail) → the
+                            // horizontal settings strip beside the dock.
+                            // Docked on a sidebar → the strip has nowhere to
+                            // live, so pop vertically right here.
+                            if (dockOf(layout, "sources") === "bottom" || dockOf(layout, "sources") === "top") {
                               setSrcSettings((k) => (k === t.key ? null : t.key));
                             } else if (t.key === "alerts") {
-                              setOverlayOpen(true);
+                              setOverlayInline(true);
                             } else if (t.device) {
                               setPopAnchor(e.currentTarget);
                               setDeviceMenu((d) => (d === t.device ? null : t.device!));
@@ -4109,7 +4128,7 @@ export function LiveView({
       const addable = [
         !sources.screen && { key: "screen", label: "Screen", icon: ic.screen, act: () => setSrc({ screen: true }) },
         !sources.camera && { key: "camera", label: "Camera", icon: ic.cam, act: () => setSrc({ camera: true }) },
-        !overlayActive && { key: "alerts", label: "Overlay", icon: ic.link, act: () => setOverlayOpen(true) },
+        !overlayActive && { key: "alerts", label: "Overlay", icon: ic.link, act: () => setOverlayInline(true) },
         !sources.mic && { key: "mic", label: "Microphone", icon: ic.mic, act: () => setSrc({ mic: true }) },
         {
           key: "media",
@@ -4704,6 +4723,31 @@ export function LiveView({
               {renderDock("top")}
             </div>
           )}
+          {(topOpen || layoutEdit) && sceneSettings && dockOf(layout, "scenes") === "top" && (
+            <SceneSettingsStrip
+              scene={sceneSettings === "__room__" ? null : scenes.find((x) => x.id === sceneSettings) ?? null}
+              effective={
+                sceneSettings === "__room__"
+                  ? cfg.transition ?? { kind: "cut" }
+                  : transitionFor(scenes.find((x) => x.id === sceneSettings) ?? null)
+              }
+              onSet={(t) => setTransition(sceneSettings === "__room__" ? null : sceneSettings, t)}
+              onUpdate={() => {
+                if (sceneSettings !== "__room__") updateScene(sceneSettings);
+              }}
+              onClose={() => setSceneSettings(null)}
+            />
+          )}
+          {(topOpen || layoutEdit) && srcSettings && dockOf(layout, "sources") === "top" && (
+            <SourceSettingsStrip
+              rowKey={srcSettings}
+              items={sources.items ?? []}
+              sources={sources}
+              onClose={() => setSrcSettings(null)}
+              openOverlay={() => { setSrcSettings(null); setOverlayInline(true); }}
+              onPickWindow={replaceWindowSource}
+            />
+          )}
           {!layoutEdit && (
             <div
               className={`rm-vtab rm-vtab-top${topOpen ? "" : " closed"}`}
@@ -4847,7 +4891,7 @@ export function LiveView({
         )}
       </div>
 
-      {sceneSettings && dockOf(layout, "scenes") !== "bottom" && (
+      {sceneSettings && dockOf(layout, "scenes") !== "bottom" && dockOf(layout, "scenes") !== "top" && (
         <Pop anchor={popAnchor} align="right" className="rm-pop-devices">
           <div className="rm-devices">
             <div className="rm-devices-head">Transition</div>
@@ -4956,24 +5000,6 @@ export function LiveView({
         </div>
       )}
 
-      {overlayOpen && (
-        <>
-          <div className="rm-pop-backdrop" onClick={() => setOverlayOpen(false)} />
-          <div className="rm-editor rm-editor-overlay">
-            <div className="rm-editor-head">
-              <span className="rm-group-label">OVERLAY</span>
-              <button className="rm-panel-plus" onClick={() => setOverlayOpen(false)} title="Close">
-                {ic.x}
-              </button>
-            </div>
-            <OverlayPicker
-              activeWindow={sources.overlay_window ?? null}
-              activeUrl={sources.overlay_url ?? null}
-            />
-          </div>
-        </>
-      )}
-
       {(adding || editing) && (
         <>
           <div className="rm-pop-backdrop" onClick={() => (setAdding(false), setEditing(null))} />
@@ -5036,7 +5062,7 @@ export function LiveView({
               items={sources.items ?? []}
               sources={sources}
               onClose={() => setSrcSettings(null)}
-              openOverlay={() => setOverlayOpen(true)}
+              openOverlay={() => { setSrcSettings(null); setOverlayInline(true); }}
               onPickWindow={replaceWindowSource}
             />
           )}
