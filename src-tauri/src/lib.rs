@@ -100,6 +100,7 @@ pub fn run() {
             ipc::network_live_rooms,
             ipc::network_enter_room,
             ipc::room_set_visibility,
+            ipc::live_room_open_report,
             ipc::room_register,
             ipc::room_guest_invite,
             ipc::room_guests,

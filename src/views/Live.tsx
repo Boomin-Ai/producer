@@ -16,6 +16,7 @@ import {
   extraSources,
   guests as guestsIpc,
   registerRoom,
+  roomOpenReport,
   setSourceAudio,
   setSyncOffset,
   type RoomGuest,
@@ -2952,7 +2953,9 @@ export function LiveView({
         mark("veil");
         const m = mountMarks.current;
         setMountMs(m.veil);
-        console.info("[room] mount timings ms", { ...m, boot_phases: snapRef.current?.boot_phases_ms });
+        const report = { ...m, boot_phases: snapRef.current?.boot_phases_ms ?? null, at: new Date().toISOString() };
+        console.info("[room] mount timings ms", report);
+        roomOpenReport(report).catch(() => {});
       });
     });
     return () => {

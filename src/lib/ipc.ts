@@ -504,6 +504,11 @@ export const network = {
     invoke<{ join_url: string; resumed: boolean }>("network_enter_room", { endpointId, roomId }),
 };
 
+/** Mount timings → <app data>/live/room-open-report.json, the ruler every
+ * room-open speedup is measured against. */
+export const roomOpenReport = (report: Record<string, unknown>) =>
+  invoke("live_room_open_report", { report });
+
 /** Network exposure of a registered room (server id, not the local one). */
 export const roomSetVisibility = (
   endpointId: string,

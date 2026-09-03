@@ -5,7 +5,7 @@
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 
 use crate::client::ProducerClient;
@@ -435,6 +435,22 @@ pub async fn network_enter_room(
         .with_brand(brand_slug)
         .network_enter_room(&room_id)
         .await
+}
+
+/// The room's mount timings, written beside the engine report so a room
+/// open can be read off disk (engine → applied → settled → veil, plus the
+/// boot phases) — the ruler every speedup is measured against.
+#[tauri::command]
+pub async fn live_room_open_report(app: AppHandle, report: Value) -> EngineResult<()> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| EngineError::Other(e.to_string()))?
+        .join("live");
+    let _ = std::fs::create_dir_all(&dir);
+    let json = serde_json::to_string_pretty(&report).unwrap_or_default();
+    std::fs::write(dir.join("room-open-report.json"), json)
+        .map_err(|e| EngineError::Other(e.to_string()))
 }
 
 #[tauri::command]

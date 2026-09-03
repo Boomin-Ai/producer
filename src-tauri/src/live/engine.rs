@@ -1106,6 +1106,13 @@ pub fn start(
         .name("live-engine".into())
         .spawn(move || {
             let report = bootstrap_with_config(Some(&module_config_dir));
+            // The real boot leaves its report on disk (beside the legacy
+            // harness's), phases included — readable without a debugger.
+            if let Some(dir) = module_config_dir.parent() {
+                if let Ok(json) = serde_json::to_string_pretty(&report) {
+                    let _ = std::fs::write(dir.join("engine-report.json"), json);
+                }
+            }
             {
                 let mut s = snap.lock().unwrap();
                 s.engine_ready = true;
