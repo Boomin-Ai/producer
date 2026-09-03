@@ -92,6 +92,19 @@ else
   fail=1
 fi
 
+# ── 2b. the DirectShow virtual camera filter ─────────────────────────────────
+# win-dshow builds it (ENABLE_VIRTUALCAM) into data/obs-plugins/win-dshow as the
+# 64- and 32-bit COM modules the installer registers with regsvr32. Without them
+# "Install cam" has nothing to install and the virtualcam_output has no reader.
+for m in obs-virtualcam-module64.dll obs-virtualcam-module32.dll; do
+  if [[ -f "$STAGE/data/obs-plugins/win-dshow/$m" ]]; then
+    echo "  ok   virtual camera $m"
+  else
+    echo "  FAIL virtual camera MISSING: data/obs-plugins/win-dshow/$m" >&2
+    fail=1
+  fi
+done
+
 # ── 3. zero-Qt scan + import closure ────────────────────────────────────────
 # resolve_python (engine-lib.sh) probes candidates by EXECUTING them, because
 # Windows ships a python3 App Execution Alias that exists on PATH and fails when
