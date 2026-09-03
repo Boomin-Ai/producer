@@ -556,6 +556,65 @@ beside the exe silently wins over the one you carefully put on the path.
 Second move, for the artifact rather than the process: run the closure gate. It
 answers "is this thing self-contained" without needing to run it at all.
 
+## Rung 2: the preview shows the screen
+
+Room opens, the preview HWND composites the live mix on D3D11, screen capture
+delivers, the overlay plays --- on an HDR monitor, through libobs's honest
+scRGB path. Confirmed on hardware (stage mean RGB 144,148,152).
+
+### The footgun: `sdr_white_level` is frontend-owned
+
+On an HDR monitor libobs-d3d11 creates the preview swapchain in scRGB
+(RGBA16F) and `obs_render_main_texture` draws the mix with the `DrawMultiply`
+technique scaled by `obs_get_video_sdr_white_level() / 80`. That field is
+written ONLY by `obs_set_video_levels`, whose sole caller in the OBS tree is
+the Studio frontend. A bare libobs host reads **0**: every pixel of a perfectly
+rendered mix multiplied by zero, and a solid-black preview with nothing in any
+log. macOS never takes the branch (Metal + SCK report sRGB).
+
+Fix: `obs_set_video_levels(300.0, 1000.0)` right after `obs_reset_video`
+succeeds. Both platforms; inert where the branch is not taken.
+
+### How it was found (the method is the point)
+
+Each step measured on screen, not reasoned: HWND topmost and black → `gs_clear`
+presents → draw callback fires at 30 fps at size → channel 0 is `main`, main
+texture non-null → mix reads back magenta with a colour item (after fixing a
+readback that used the wrong format --- check libobs's log for
+`device_copy_texture ... formats do not match` before trusting a readback) →
+a manual solid draw lands → an sRGB-framebuffer draw lands → the mix drawn by
+hand with plain `Draw` shows scene, cursor and video → only libobs's own
+scRGB draw is black → read the multiplier in `obs.c`. Sources, scene,
+capture, effects, swapchain, z-order and DirectComposition were each excluded
+by pixels before the cause was read in the source.
+
+Reusable probes from it: `obs_get_output_source(0)` name, `obs_get_main_texture()`
+readback in `gs_texture_get_color_format`, per-source
+`enabled/showing/active/size`, `gs_get_color_space()` for the display, a
+`color_source_v3` injected via `live_add_source` over CDP, and a
+`CopyFromScreen` pixel mean over the preview HWND's rect.
+
+### Also settled on the way
+
+- **Win32 windows belong to the thread that created them, and it must pump.**
+  The preview HWND created on the engine thread froze the UI. All preview
+  window ops marshal to the main thread; `DestroyWindow` fails from any other.
+- Source ids and device keys are per-platform in `graph::ids`; the main
+  display and default camera resolve from libobs's own enumeration.
+- `monitor_capture` pinned to DXGI duplication (proven); WGC untested here.
+- `has-size ≠ has-frames` on Windows: monitor_capture reports the display rect
+  before any frame arrives, so readiness must not key on width alone.
+
+### Still open from rung 2
+
+- **Float-mode occlusion.** The preview is an opaque child HWND above the
+  webview, so anything the UI paints over the stage (toasts, item handles,
+  pills) disappears behind it. macOS avoids this with the transparent-hole
+  mode (`producer_preview_prepare_window` → WebKit `drawsBackground = NO`,
+  preview placed BELOW the webview). The Windows equivalent is a transparent
+  WebView2 default background + `below_webview` placement --- the shim already
+  honours the z-order argument; the WebView2 half is unbuilt.
+
 ## Still open
 
 - `obs.lock` carries no Windows dependency pins. OBS 32.1.2 has no
