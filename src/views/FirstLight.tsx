@@ -336,7 +336,13 @@ function Permissions({ onDone }: { onDone: () => void }) {
           title="Virtual camera"
           optional
           detail={
-            vcam?.installed
+            // Windows reports state:"unsupported" — there is no camera
+            // extension to approve. The virtual camera there is win-dshow's
+            // DirectShow filter, registered by the installer, so there is
+            // nothing for a button to do at runtime.
+            vcam?.state === "unsupported"
+              ? "Not available on Windows yet. Producer will register a DirectShow camera at install time."
+              : vcam?.installed
               ? "Producer can appear as a webcam in Zoom, Meet and Discord."
               : vcam?.state === "needs_approval"
                 ? "Approve “Producer Virtual Camera” in System Settings › General › Login Items & Extensions › Camera Extensions."
@@ -344,9 +350,9 @@ function Permissions({ onDone }: { onDone: () => void }) {
                   ? vcam.error || "macOS refused the camera extension."
                   : "Optional. Lets Producer appear as a webcam in Zoom, Meet and Discord."
           }
-          status={vcam?.installed ? "granted" : vcam ? "pending" : "unknown"}
+          status={vcam?.installed ? "granted" : vcam?.state === "unsupported" ? "unknown" : vcam ? "pending" : "unknown"}
           action={
-            vcam?.installed ? null : vcam?.state === "needs_approval" ? (
+            vcam?.state === "unsupported" || vcam?.installed ? null : vcam?.state === "needs_approval" ? (
               <button
                 className="fl-primary"
                 onClick={() => ipc.liveScreenCoach("open_settings").catch(() => {})}

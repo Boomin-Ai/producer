@@ -326,17 +326,18 @@ void producer_open_mic_settings(void)
  * that silently does nothing, which is worse than an honestly absent feature. */
 void producer_vcam_activate(void) {}
 
+/* CONTRACT: the return value is the STATE CODE and buf receives an ERROR
+ * STRING — not, as a first pass here assumed, a JSON blob. Writing JSON into
+ * buf made vcam_status() read its length (22) as the state, fall through to
+ * "idle", and surface the JSON as an error; the UI then offered an Install
+ * button wired to a no-op. 5 is the Windows-only "unsupported" code, added to
+ * the match in live/mod.rs, and the buffer stays empty because there is no
+ * error to report — the feature simply does not exist here yet. */
 int producer_vcam_state(char *buf, int len)
 {
-    const char *state = "{\"state\":\"unsupported\"}";
-    if (!buf || len <= 0)
-        return 0;
-    int n = (int)strlen(state);
-    if (n >= len)
-        n = len - 1;
-    memcpy(buf, state, (size_t)n);
-    buf[n] = '\0';
-    return n;
+    if (buf && len > 0)
+        buf[0] = 0; /* NUL terminator: no error to report */
+    return 5;
 }
 
 int producer_vcam_installed(void)

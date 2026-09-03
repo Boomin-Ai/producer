@@ -549,6 +549,7 @@ pub fn vcam_status() -> serde_json::Value {
                 2 => "needs_approval",
                 3 => "active",
                 4 => "failed",
+                5 => "unsupported",
                 _ => "idle",
             },
             "installed": installed,
@@ -638,9 +639,24 @@ pub fn report_dir() -> Option<PathBuf> {
 }
 
 #[cfg(have_engine)]
+/// The main thread, remembered so the engine thread can marshal onto it.
+///
+/// macOS gets this for free from GCD's main queue. Windows has no equivalent,
+/// and it MATTERS here in a way it does not on macOS: a Win32 window belongs to
+/// the thread that created it, and that thread must pump messages. A preview
+/// HWND created on the engine thread hangs the UI the moment anything sends it
+/// a message --- which is what "Producer (Not Responding)" looked like.
+pub(crate) static MAIN_APP: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
+pub(crate) static MAIN_THREAD: std::sync::OnceLock<std::thread::ThreadId> =
+    std::sync::OnceLock::new();
+
 pub fn init(app: tauri::AppHandle, report_dir: PathBuf) -> Live {
     let _ = REPORT_DIR.set(report_dir.clone());
     use tauri::Emitter;
+
+    // init() runs in tauri's setup hook, i.e. on the main thread.
+    let _ = MAIN_APP.set(app.clone());
+    let _ = MAIN_THREAD.set(std::thread::current().id());
 
     let harness = std::env::args().any(|a| a == "--live-multistream");
     let harness_dir = report_dir.clone();

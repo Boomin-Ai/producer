@@ -1033,7 +1033,15 @@ struct Preview {
     display: *mut ffi::obs_display_t,
 }
 
-extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, _cx: u32, _cy: u32) {
+static PREVIEW_DRAWS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, cx: u32, cy: u32) {
+    // Diagnostic breadcrumb for the Windows port: proves the display's draw
+    // callback runs at all, and at what size. Throttled so it cannot flood.
+    let n = PREVIEW_DRAWS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+    if n == 1 || n == 30 || n % 600 == 0 {
+        eprintln!("[preview] draw #{n} target {cx}x{cy}");
+    }
     unsafe {
         let mut ovi: std::mem::MaybeUninit<ffi::obs_video_info> = std::mem::MaybeUninit::zeroed();
         let (bw, bh) = if ffi::obs_get_video_info(ovi.as_mut_ptr()) {
@@ -1051,6 +1059,24 @@ extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, _cx: u32, _cy: u32
     }
 }
 
+/// Run a preview-window op on the thread that OWNS that window.
+///
+/// macOS: shim.m already wraps its own body in run_on_main, so calling straight
+/// through is correct and double-marshalling would be the risk.
+/// Windows: nothing marshals inside the C, the caller is the engine thread, and
+/// the window belongs to main --- DestroyWindow in particular FAILS from any
+/// other thread, which would silently leak the preview.
+#[cfg(target_os = "macos")]
+#[inline]
+fn on_window_thread<T: Send + 'static, F: FnOnce() -> T + Send + 'static>(f: F) -> T {
+    f()
+}
+#[cfg(target_os = "windows")]
+#[inline]
+fn on_window_thread<T: Send + 'static, F: FnOnce() -> T + Send + 'static>(f: F) -> T {
+    graph::on_main_thread(f)
+}
+
 impl Preview {
     // A10 finding (crash 2026-08-28): libobs-metal's swapchain create/resize/
     // destroy are Swift and dispatch_assert the MAIN queue — OBS Studio's Qt
@@ -1059,22 +1085,33 @@ impl Preview {
     // draw callbacks still run on the OBS graphics thread.
     fn attach(ns_window: *mut std::os::raw::c_void, rect: PreviewRect) -> Result<Preview, String> {
         unsafe {
-            let (mut px_w, mut px_h) = (0f64, 0f64);
             // Whether the stage is a transparent hole was decided (on the
             // main thread) by live_attach_preview before this command was
             // queued; here we only honour it.
             let transparent = STAGE_TRANSPARENT.load(AtomicOrdering::SeqCst);
             let t_shim = Instant::now();
-            let view = ffi::producer_preview_attach(
-                ns_window,
-                rect.x,
-                rect.y,
-                rect.w,
-                rect.h,
-                transparent as i32,
-                &mut px_w,
-                &mut px_h,
-            );
+            // THE WINDOW MUST BE CREATED ON THE MAIN THREAD. shim.m does this
+            // internally with run_on_main; shim_win.c has no handle to tauri's event
+            // loop, so the marshal lives here. A Win32 window belongs to its creating
+            // thread, and that thread must pump messages -- an HWND made on the engine
+            // thread hangs the UI as soon as the loop touches it.
+            let (view, px) = {
+                let (x, y, w, h) = (rect.x, rect.y, rect.w, rect.h);
+                let parent = ns_window as usize;
+                let t = transparent as i32;
+                graph::on_main_thread(move || {
+                    let (mut pw, mut ph) = (0f64, 0f64);
+                    let v = {
+                        ffi::producer_preview_attach(
+                            parent as *mut std::os::raw::c_void,
+                            x, y, w, h, t, &mut pw, &mut ph,
+                        )
+                    };
+                    (v as usize, (pw, ph))
+                })
+            };
+            let view = view as *mut std::os::raw::c_void;
+            let (px_w, px_h) = px;
             {
                 let ms = t_shim.elapsed().as_millis();
 
@@ -1111,6 +1148,7 @@ impl Preview {
                 };
                 ffi::obs_display_create(&init, 0) as usize
             });
+            eprintln!("[preview] display created: 0x{display_addr:x} view=0x{view_addr:x} {cx}x{cy}");
             if display_addr == 0 {
                 ffi::producer_preview_detach(view);
                 return Err("obs_display_create failed".into());
@@ -1124,9 +1162,17 @@ impl Preview {
     fn set_rect(&mut self, rect: PreviewRect) {
         unsafe {
             let (mut px_w, mut px_h) = (0f64, 0f64);
-            ffi::producer_preview_set_frame(
-                self.view, rect.x, rect.y, rect.w, rect.h, &mut px_w, &mut px_h,
-            );
+            let v = self.view as usize;
+            let (x, y, w, h) = (rect.x, rect.y, rect.w, rect.h);
+            let (pw, ph) = on_window_thread(move || {
+                let (mut pw, mut ph) = (0f64, 0f64);
+                ffi::producer_preview_set_frame(
+                    v as *mut std::os::raw::c_void, x, y, w, h, &mut pw, &mut ph,
+                );
+                (pw, ph)
+            });
+            px_w = pw;
+            px_h = ph;
             let display_addr = self.display as usize;
             let (cx, cy) = (px_w.max(1.0) as u32, px_h.max(1.0) as u32);
             graph::on_main_thread(move || {
@@ -1142,7 +1188,8 @@ impl Preview {
             graph::on_main_thread(move || {
                 ffi::obs_display_destroy(display_addr as *mut ffi::obs_display_t);
             });
-            ffi::producer_preview_detach(self.view);
+            let v = self.view as usize;
+            on_window_thread(move || ffi::producer_preview_detach(v as *mut std::os::raw::c_void));
         }
     }
 }
@@ -1853,7 +1900,7 @@ pub fn start(
                     Ok(Command::SetPreviewHidden(hidden)) => {
                         if let Some(p) = preview.as_ref() {
                             unsafe {
-                                ffi::producer_preview_set_hidden(p.view, if hidden { 1 } else { 0 })
+                                { let v = p.view as usize; let h = if hidden { 1 } else { 0 }; on_window_thread(move || ffi::producer_preview_set_hidden(v as *mut std::os::raw::c_void, h)) }
                             };
                         }
                     }

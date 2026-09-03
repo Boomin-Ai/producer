@@ -183,13 +183,37 @@ extern "C" fn run_timed<F: FnOnce() -> T, T>(ctx: *mut c_void) {
     );
 }
 
-/// Windows has no main-thread affinity for these calls. The macOS version
-/// exists because AVFoundation/CoreMedia TCC prompts must be raised on the
-/// main thread; Windows prompts per-app at capture time and needs no
-/// marshalling, so this is a direct call.
+/// Windows: marshal onto the thread tauri runs its event loop on.
+///
+/// This started life as a direct call, on the reasoning that Windows has no
+/// main-thread affinity for TCC-style prompts. True, and irrelevant to the case
+/// that matters: a Win32 WINDOW belongs to the thread that created it, and that
+/// thread must pump messages. Creating the preview HWND on the engine thread
+/// hung the whole UI as soon as the message loop touched it.
+///
+/// Runs inline when already on the main thread, because run_on_main_thread
+/// QUEUES --- blocking on the result from the main thread would deadlock
+/// against ourselves.
 #[cfg(target_os = "windows")]
-pub(crate) fn on_main_thread<T: Send, F: FnOnce() -> T + Send>(f: F) -> T {
-    f()
+pub(crate) fn on_main_thread<T: Send + 'static, F: FnOnce() -> T + Send + 'static>(f: F) -> T {
+    if crate::live::MAIN_THREAD.get() == Some(&std::thread::current().id()) {
+        return f();
+    }
+    let Some(app) = crate::live::MAIN_APP.get() else {
+        // Harness paths (selftest, --live-props) never call init(), so there is
+        // no event loop to marshal onto. Direct call is correct there.
+        return f();
+    };
+    let (tx, rx) = std::sync::mpsc::channel();
+    let queued = {
+        app.run_on_main_thread(move || {
+            let _ = tx.send(f());
+        })
+    };
+    match queued {
+        Ok(()) => rx.recv().expect("main thread dropped a marshalled task"),
+        Err(e) => panic!("run_on_main_thread failed: {e}"),
+    }
 }
 
 /// UUID string of the main display, via the same CoreGraphics calls OBS's
@@ -225,13 +249,40 @@ fn main_display_uuid() -> Option<String> {
     }
 }
 
-/// Windows has no display-UUID concept: win-capture's monitor_capture picks a
-/// monitor by id, not by CoreGraphics UUID. Screen capture on Windows is its
-/// own piece of work; until it lands, returning None makes the callers surface
-/// their existing error rather than pretend a display was chosen.
+/// Default camera id. macOS asks AVFoundation through the shim; Windows asks
+/// dshow_input for its own device list, the same way the screen default is
+/// resolved, so the id is one libobs will actually accept.
+#[cfg(target_os = "macos")]
+fn default_camera_id() -> Option<String> {
+    unsafe {
+        let mut buf = [0i8; 256];
+        if ffi::producer_default_camera_id(buf.as_mut_ptr(), buf.len() as i32) == 0 {
+            return None;
+        }
+        Some(std::ffi::CStr::from_ptr(buf.as_ptr()).to_string_lossy().into_owned())
+    }
+}
+#[cfg(target_os = "windows")]
+fn default_camera_id() -> Option<String> {
+    list_property_options(ids::CAMERA, ids::CAMERA_KEYS[0])
+        .into_iter()
+        .next()
+        .map(|o| o.id)
+}
+
+/// Windows: the "main display" is monitor_capture's first listed monitor.
+///
+/// There is no CoreGraphics UUID here; monitor_capture is configured by
+/// `monitor_id`, and the ids come from libobs itself (the same enumeration
+/// --live-props prints), so this is a real identifier rather than a guess.
+/// Returning None made every screen path fail with "could not resolve main
+/// display UUID" and the room showed no screen source at all.
 #[cfg(target_os = "windows")]
 fn main_display_uuid() -> Option<String> {
-    None
+    list_property_options(ids::SCREEN, ids::SCREEN_KEY)
+        .into_iter()
+        .next()
+        .map(|o| o.id)
 }
 
 /// Live geometry of one scene item, in canvas coordinates (base size).
@@ -483,14 +534,49 @@ pub fn list_property_options(source_id: &str, prop: &str) -> Vec<DeviceOption> {
     }
 }
 
+/// Source type ids and their device-property names, per platform.
+///
+/// The FOURTH place this same split has been needed (plugin allowlist,
+/// required-id list, --live-props probe, now the scene graph). libobs names
+/// every capture source differently per OS, so the scene graph hardcoding the
+/// macOS ids meant obs_source_create returned NULL on Windows and the room
+/// showed "no item screen" -- an empty scene, not a render failure.
+///
+/// Windows property names are not guesses: they come from the --live-props dump
+/// against real hardware (docs/WINDOWS-ENGINE.md).
+#[cfg(target_os = "macos")]
+pub mod ids {
+    pub const CAMERA: &str = "macos-avcapture";
+    pub const MIC: &str = "coreaudio_input_capture";
+    pub const SCREEN: &str = "screen_capture";
+    pub const WINDOW: &str = "screen_capture";
+    pub const CAMERA_KEYS: &[&str] = &["device"];
+    pub const MIC_KEYS: &[&str] = &["device_id", "device"];
+    pub const SCREEN_KEYS: &[&str] = &["display_uuid", "display"];
+    /// The display property the screen source is configured with.
+    pub const SCREEN_KEY: &str = "display_uuid";
+}
+#[cfg(target_os = "windows")]
+pub mod ids {
+    pub const CAMERA: &str = "dshow_input";
+    pub const MIC: &str = "wasapi_input_capture";
+    pub const SCREEN: &str = "monitor_capture";
+    pub const WINDOW: &str = "window_capture";
+    pub const CAMERA_KEYS: &[&str] = &["video_device_id"];
+    pub const MIC_KEYS: &[&str] = &["device_id"];
+    pub const SCREEN_KEYS: &[&str] = &["monitor_id"];
+    /// monitor_capture selects by monitor id, not by a CoreGraphics UUID.
+    pub const SCREEN_KEY: &str = "monitor_id";
+}
+
 /// The source type + candidate property names behind each picker. libobs
 /// names these differently per platform and version, so we try in order and
 /// take the first that actually yields items rather than hardcoding one.
 pub fn device_picker_spec(kind: &str) -> Option<(&'static str, &'static [&'static str])> {
     match kind {
-        "camera" => Some(("macos-avcapture", &["device"])),
-        "mic" => Some(("coreaudio_input_capture", &["device_id", "device"])),
-        "screen" => Some(("screen_capture", &["display_uuid", "display"])),
+        "camera" => Some((ids::CAMERA, ids::CAMERA_KEYS)),
+        "mic" => Some((ids::MIC, ids::MIC_KEYS)),
+        "screen" => Some((ids::SCREEN, ids::SCREEN_KEYS)),
         _ => None,
     }
 }
@@ -811,7 +897,7 @@ impl SceneGraph {
                         CString::new("show_cursor").unwrap().as_ptr(),
                         false,
                     );
-                    let id = CString::new("screen_capture").unwrap();
+                    let id = CString::new(ids::SCREEN).unwrap();
                     let name = CString::new("Overlay").unwrap();
                     let src = ffi::obs_source_create(
                         id.as_ptr(),
@@ -1129,7 +1215,7 @@ impl SceneGraph {
                         *window as i64,
                     );
                     ffi::obs_data_set_bool(d, CString::new("show_cursor").unwrap().as_ptr(), false);
-                    ("screen_capture", "window", d)
+                    (ids::WINDOW, "window", d)
                 }
             };
             let tid = CString::new(type_id).unwrap();
@@ -1247,10 +1333,10 @@ impl SceneGraph {
                     };
                     self.screen_device = Some(uuid.clone());
                     let settings = ffi::obs_data_create();
-                    let key = CString::new("display_uuid").unwrap();
+                    let key = CString::new(ids::SCREEN_KEY).unwrap();
                     let val = CString::new(uuid).unwrap();
                     ffi::obs_data_set_string(settings, key.as_ptr(), val.as_ptr());
-                    let id = CString::new("screen_capture").unwrap();
+                    let id = CString::new(ids::SCREEN).unwrap();
                     let name = CString::new("Screen").unwrap();
                     let src = ffi::obs_source_create(
                         id.as_ptr(),
@@ -1299,20 +1385,14 @@ impl SceneGraph {
                     let device = match self.camera_device.clone() {
                         Some(d) => d,
                         None => {
-                            let mut buf = [0i8; 256];
-                            if ffi::producer_default_camera_id(buf.as_mut_ptr(), buf.len() as i32)
-                                == 0
-                            {
-                                return Err("no camera device found".into());
-                            }
-                            std::ffi::CStr::from_ptr(buf.as_ptr())
-                                .to_string_lossy()
-                                .into_owned()
+                            default_camera_id().ok_or("no camera device found")?
                         }
                     };
                     self.camera_device = Some(device.clone());
                     let settings = ffi::obs_data_create();
-                    let k_device = CString::new("device").unwrap();
+                    // The device property is per-platform too: `device` on
+                    // mac-avcapture, `video_device_id` on dshow_input.
+                    let k_device = CString::new(ids::CAMERA_KEYS[0]).unwrap();
                     let v_device = CString::new(device).unwrap();
                     ffi::obs_data_set_string(settings, k_device.as_ptr(), v_device.as_ptr());
                     // The webcam is a video PiP; its own audio stays out of
@@ -1322,7 +1402,7 @@ impl SceneGraph {
                         CString::new("enable_audio").unwrap().as_ptr(),
                         false,
                     );
-                    let id = CString::new("macos-avcapture").unwrap();
+                    let id = CString::new(ids::CAMERA).unwrap();
                     let name = CString::new("Camera").unwrap();
                     let src = ffi::obs_source_create(
                         id.as_ptr(),
@@ -1387,7 +1467,7 @@ impl SceneGraph {
                     ffi::obs_source_release(src);
                 }
                 (true, None) => {
-                    let id = CString::new("coreaudio_input_capture").unwrap();
+                    let id = CString::new(ids::MIC).unwrap();
                     let name = CString::new("Mic").unwrap();
                     // NULL settings = system default input; a chosen device
                     // (USB mic, interface) is remembered across toggles.
@@ -1624,10 +1704,10 @@ pub fn attach_capture_sources() -> Result<(), String> {
     let uuid = main_display_uuid().ok_or("could not resolve main display UUID")?;
     unsafe {
         let settings = ffi::obs_data_create();
-        let key = CString::new("display_uuid").unwrap();
+        let key = CString::new(ids::SCREEN_KEY).unwrap();
         let val = CString::new(uuid).unwrap();
         ffi::obs_data_set_string(settings, key.as_ptr(), val.as_ptr());
-        let screen_id = CString::new("screen_capture").unwrap();
+        let screen_id = CString::new(ids::SCREEN).unwrap();
         let screen_name = CString::new("Live Screen").unwrap();
         let screen = ffi::obs_source_create(
             screen_id.as_ptr(),
@@ -1639,7 +1719,7 @@ pub fn attach_capture_sources() -> Result<(), String> {
         if screen.is_null() {
             return Err("screen_capture source creation failed".into());
         }
-        let mic_id = CString::new("coreaudio_input_capture").unwrap();
+        let mic_id = CString::new(ids::MIC).unwrap();
         let mic_name = CString::new("Live Mic").unwrap();
         let mic = ffi::obs_source_create(
             mic_id.as_ptr(),
@@ -1704,9 +1784,9 @@ pub fn capture_probe(window: Duration) -> CaptureProbeReport {
     AUDIO_PEAK_MICRO.store(0, Ordering::Relaxed);
     VIDEO_FRAMES.store(0, Ordering::Relaxed);
 
-    let screen_id = CString::new("screen_capture").unwrap();
+    let screen_id = CString::new(ids::SCREEN).unwrap();
     let screen_name = CString::new("M-L2 Screen").unwrap();
-    let mic_id = CString::new("coreaudio_input_capture").unwrap();
+    let mic_id = CString::new(ids::MIC).unwrap();
     let mic_name = CString::new("M-L2 Mic").unwrap();
 
     // The SCK source requires an explicit display_uuid (no default-display
@@ -1714,7 +1794,7 @@ pub fn capture_probe(window: Duration) -> CaptureProbeReport {
     let screen_settings = unsafe { ffi::obs_data_create() };
     match main_display_uuid() {
         Some(uuid) => {
-            let key = CString::new("display_uuid").unwrap();
+            let key = CString::new(ids::SCREEN_KEY).unwrap();
             let val = CString::new(uuid.clone()).unwrap();
             unsafe { ffi::obs_data_set_string(screen_settings, key.as_ptr(), val.as_ptr()) };
             notes.push(format!("capturing display_uuid {uuid}"));
