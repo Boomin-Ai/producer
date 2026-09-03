@@ -6,7 +6,6 @@ import type { Channel, EndpointInfo, Job, LiveDestination, LiveRoom, LiveSnapsho
 import type { TargetResult } from "../lib/ipc";
 import { WORKSPACE_EVENT, activeEndpointId, resolveActiveEndpoint, setActiveEndpointId } from "../lib/workspace";
 import { copyText, ensureRoomJoinLink } from "../lib/roomLink";
-import { roomGuestInvite } from "../lib/ipc";
 import { ipc,
   network,
   networkConnections,
@@ -1516,20 +1515,18 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
 
   const bookCents = Math.round((Number(bookAmt) || 0) * 100);
 
-  /** The deal's own door: invite the BENEFICIARY BRAND to the deal's room and
-   * copy that link. Whoever opens it joins as that brand, so admitting them
-   * is what settles the deal — an anonymous room link never can. */
+  /** The deal's own page — boomin.ai/<our slug>/deals/<id>. That is the link
+   * that goes out: the guest signs in as their brand, reads the terms, and
+   * joins the room THROUGH the deal, so admitting them settles it. */
   const sendLink = async (d: NetworkDeal, name: string) => {
-    if (!endpointId || !d.room_id || !d.beneficiary_brand_id) return;
     setBusy(true);
     setNote(null);
     try {
-      const r = await roomGuestInvite(endpointId, d.room_id, name, d.beneficiary_brand_id);
-      const url = (r as { invite_url?: string; join_url?: string; url?: string }).invite_url
-        ?? (r as { join_url?: string }).join_url
-        ?? (r as { url?: string }).url;
-      if (!url) throw new Error("No link came back.");
-      setNote((await copyText(url)) ? `${name}'s link copied — send it to them. When they join with it, admitting them counts.` : url);
+      const ep = await resolveActiveEndpoint();
+      const slug = ep?.brand_slug;
+      if (!slug) throw new Error("This workspace has no brand handle.");
+      const url = `https://boomin.ai/${slug}/deals/${d.id}`;
+      setNote((await copyText(url)) ? `${name}'s deal link copied — send it to them. They sign in, accept, and join the room from it.` : url);
     } catch (e) {
       setNote(String(e).replace(/^Error:\s*/, ""));
     } finally {
@@ -2006,14 +2003,15 @@ function DealSheet({
           {expires && <div className="deal-term"><span>Expires</span><p>Unanswered, this proposal expires {expires}.</p></div>}
         </div>
 
-        {!earn && d.room_id && (d.status === "accepted" || d.status === "funded") && (
+        {!earn && (d.status === "proposed" || d.status === "accepted" || d.status === "funded") && (
           <div className="deal-link">
             <div className="deal-term">
               <span>Their link</span>
               <p>
-                Send {otherName} their own link to "{d.room_title ?? "the room"}". It is tied to their brand, so when they
-                join with it and you admit them, the deal knows it's them
-                {d.min_stage_minutes != null ? ` and the ${d.min_stage_minutes}-minute clock starts on stage.` : "."}
+                One link does it all: {otherName} signs in as their brand, reads these terms,
+                {d.status === "proposed" ? " accepts," : ""} and joins {d.room_id ? `"${d.room_title ?? "the room"}"` : "the show"} from it —
+                so when you admit them the deal knows it's them
+                {d.min_stage_minutes != null ? ` and the ${d.min_stage_minutes}-minute clock runs on stage.` : "."}
                 {d.status === "accepted" ? " Fund it in Boomin before the show so delivery can settle." : ""}
               </p>
             </div>
