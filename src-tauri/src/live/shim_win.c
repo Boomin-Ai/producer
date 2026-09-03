@@ -43,6 +43,7 @@
 #include <string.h>
 
 #define PRODUCER_PREVIEW_CLASS L"ProducerPreviewHost"
+#define PRODUCER_PREVIEW_INSET 3.0 /* CSS px; matches the stage outline width */
 
 static ATOM g_preview_class = 0;
 
@@ -166,6 +167,13 @@ void *producer_preview_attach(void *ns_window, double x, double y, double w, dou
         return NULL;
 
     const double s = scale_for(parent);
+    /* Inset by the room's selection outline. In float mode this window covers
+     * the stage; an item that fills the stage draws its outline on the stage's
+     * own edge, which would be hidden. 3 CSS px keeps the ring visible. */
+    x += PRODUCER_PREVIEW_INSET; y += PRODUCER_PREVIEW_INSET;
+    w -= 2 * PRODUCER_PREVIEW_INSET; h -= 2 * PRODUCER_PREVIEW_INSET;
+    if (w < 1) w = 1;
+    if (h < 1) h = 1;
     HWND child = CreateWindowExW(
         /* No WS_EX_LAYERED: a layered child cannot host a D3D swapchain. */
         0, PRODUCER_PREVIEW_CLASS, L"",
@@ -192,6 +200,10 @@ void *producer_preview_attach(void *ns_window, double x, double y, double w, dou
 void producer_preview_set_frame(void *view_ptr, double x, double y, double w, double h,
                                 double *out_px_w, double *out_px_h)
 {
+    x += PRODUCER_PREVIEW_INSET; y += PRODUCER_PREVIEW_INSET;
+    w -= 2 * PRODUCER_PREVIEW_INSET; h -= 2 * PRODUCER_PREVIEW_INSET;
+    if (w < 1) w = 1;
+    if (h < 1) h = 1;
     HWND child = (HWND)view_ptr;
     if (!child || !IsWindow(child))
         return;

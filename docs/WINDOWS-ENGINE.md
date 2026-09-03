@@ -605,6 +605,46 @@ readback in `gs_texture_get_color_format`, per-source
 - `has-size ≠ has-frames` on Windows: monitor_capture reports the display rect
   before any frame arrives, so readiness must not key on width alone.
 
+### The transparent-hole mode does NOT work on Windows (tried, measured)
+
+`tauri.windows.conf.json` transparent + the room's CSS hole + preview HWND
+placed below the webview: the DESKTOP behind the app showed through the whole
+window. DWM composes the transparent WebView2 visual over the top-level window;
+a sibling child HWND beneath it is not part of what shows through. So the hole
+cannot be done with sibling windows. A real one needs WebView2 composition
+hosting (the preview as a DirectComposition visual in the same tree), which is
+a wry/tauri-level change.
+
+Float mode is therefore the Windows design for now, with two mitigations:
+mouse input is forwarded from the preview to the webview's input window (so
+item drags start), and the preview is inset by the outline width so an item
+filling the stage keeps its selection ring visible. Toasts and controls drawn
+over the middle of the stage are still hidden behind the video.
+
+### Virtual camera
+
+win-dshow's DirectShow filter, `obs-virtualcam-module64/32.dll`, built by the
+engine job (`ENABLE_VIRTUALCAM` TRUE on Windows only) into
+`data/obs-plugins/win-dshow`, registered as a COM server with `regsvr32 /i /s`
+--- exactly OBS's own `virtualcam-install.bat`. The shim probes
+`HKCR\CLSID\{VIRTUALCAM_GUID}` for "installed" and runs an elevated regsvr32
+(UAC prompt) for "activate", reporting the macOS state codes so the UI has no
+platform branch.
+
+Two facts that matter:
+
+- **On a machine with OBS Studio installed the CLSID is already registered by
+  OBS**, from Program Files. We report installed/active, "Install cam" hides,
+  and our `virtualcam_output` feeds OBS's filter through the shared-memory
+  queue. It works, and it is a coupling.
+- **The camera's label is `"OBS Virtual Camera"`** --- a compiled string in the
+  module --- and the guest render page finds the return-video device BY LABEL.
+  `VCAM_DEVICE_NAME` is per platform and travels to the room as
+  `vcam_status.device_name`. Renaming to "Producer Virtual Camera" (and
+  coexisting with a user's OBS) needs our own `VIRTUALCAM_GUID` plus a small
+  win-dshow patch: a second patchset target and a lock re-key, so a deliberate
+  step.
+
 ### Still open from rung 2
 
 - **Float-mode occlusion.** The preview is an opaque child HWND above the
