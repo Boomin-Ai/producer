@@ -4197,7 +4197,17 @@ export function LiveView({
         });
         return (
           <>
-              <div className="rm-rows" ref={srcRowsRef}>
+              <div
+                className="rm-rows"
+                ref={srcRowsRef}
+                onWheel={(e) => {
+                  // Sideways rows (top dock): a plain wheel/two-finger vertical
+                  // scroll drives the strip, so it scrolls without a bar.
+                  const el = e.currentTarget;
+                  if (el.scrollWidth <= el.clientWidth) return;
+                  if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) el.scrollLeft += e.deltaY;
+                }}
+              >
                 {activeRows.length === 0 && (
                   <div className="rm-rows-empty">Nothing on the stage — add a source with +</div>
                 )}

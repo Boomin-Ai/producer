@@ -8187,3 +8187,18 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 /* ── sign out (workspace popout foot) ─────────────────────────────────── */
 .ws-signout .ws-pop-name { color: var(--fg-2); }
 .ws-signout:hover .ws-pop-name { color: #fca5a5; }
+
+/* Sideways source rows own their scroll: width-constrained inside the panel
+   body (a row-flex body let them grow to content and get clipped), scroll
+   sideways, no bar (overlay on mac, hidden on win). */
+.rm-panel[data-in="top"] .rm-panel-body { min-width: 0; }
+.rm-panel[data-in="top"] .rm-rows {
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.rm-panel[data-in="top"] .rm-rows::-webkit-scrollbar { display: none; width: 0; height: 0; }
