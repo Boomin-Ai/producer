@@ -473,9 +473,15 @@ pub async fn console_open(state: State<'_, AppState>, endpoint_id: String) -> En
     let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
     let client = ProducerClient::new(&base_url, &token).with_brand(brand_slug.clone());
     let session = client.get_session().await?;
-    let console = session.server.get("console").cloned().unwrap_or(Value::Null);
+    let console = session
+        .server
+        .get("console")
+        .cloned()
+        .unwrap_or(Value::Null);
     if console.is_null() {
-        return Ok(serde_json::json!({ "console": Value::Null, "handoff": Value::Null, "brand_slug": brand_slug }));
+        return Ok(
+            serde_json::json!({ "console": Value::Null, "handoff": Value::Null, "brand_slug": brand_slug }),
+        );
     }
     let handoff = client.auth_handoff(brand_slug.as_deref()).await?;
     Ok(serde_json::json!({ "console": console, "handoff": handoff, "brand_slug": brand_slug }))
