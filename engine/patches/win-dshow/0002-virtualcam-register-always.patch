@@ -1,0 +1,57 @@
+diff --git a/plugins/win-dshow/dshow-plugin.cpp b/plugins/win-dshow/dshow-plugin.cpp
+index 2f7aac9..03f65c7 100644
+--- a/plugins/win-dshow/dshow-plugin.cpp
++++ b/plugins/win-dshow/dshow-plugin.cpp
+@@ -38,6 +38,15 @@ static bool vcam_installed(bool b64)
+ 	RegCloseKey(key);
+ 	return true;
+ }
++
++/* Producer patch: the output is registered whether or not the filter is
++ * installed yet, so an install performed while the host runs (an elevated
++ * regsvr32 from the app) takes effect without restarting the process. The
++ * start path checks the filter instead. */
++extern "C" bool vcam_filter_installed(void)
++{
++	return vcam_installed(false) || vcam_installed(true);
++}
+ #endif
+ 
+ bool obs_module_load(void)
+@@ -45,8 +54,7 @@ bool obs_module_load(void)
+ 	RegisterDShowSource();
+ 	RegisterDShowEncoders();
+ #ifdef VIRTUALCAM_AVAILABLE
+-	if (vcam_installed(false))
+-		obs_register_output(&virtualcam_info);
++	obs_register_output(&virtualcam_info);
+ #endif
+ 
+ 	return true;
+diff --git a/plugins/win-dshow/virtualcam.c b/plugins/win-dshow/virtualcam.c
+index 0fbf04b..c6bb80e 100644
+--- a/plugins/win-dshow/virtualcam.c
++++ b/plugins/win-dshow/virtualcam.c
+@@ -3,6 +3,9 @@
+ #include "util/threading.h"
+ #include "shared-memory-queue.h"
+ 
++/* Producer patch: dshow-plugin.cpp; true when the filter CLSID is registered */
++extern bool vcam_filter_installed(void);
++
+ struct virtualcam_data {
+ 	obs_output_t *output;
+ 	video_queue_t *vq;
+@@ -38,6 +41,12 @@ static bool virtualcam_start(void *data)
+ 	uint32_t width = obs_output_get_width(vcam->output);
+ 	uint32_t height = obs_output_get_height(vcam->output);
+ 
++	if (!vcam_filter_installed()) {
++		obs_output_set_last_error(vcam->output, "the virtual camera is not installed");
++		blog(LOG_WARNING, "virtual camera filter is not registered; not starting");
++		return false;
++	}
++
+ 	struct obs_video_info ovi;
+ 	obs_get_video_info(&ovi);
+ 

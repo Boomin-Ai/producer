@@ -38,8 +38,8 @@
     {
       "dir": "engine/patches/win-dshow",
       "target": ".",
-      "sha256": "23e050ddc4b7b3d4521f1cb9b03b5fcb80b05d2e417a445c0fa540f6cbb97b13",
-      "note": "win-dshow virtual camera: the DirectShow filter's user-visible name is Producer Virtual Camera, not OBS Virtual Camera"
+      "sha256": "e8e444c32953d9a1cc9c2d887c57f5383d476939370b66df27673c817c29311c",
+      "note": "win-dshow virtual camera: the DirectShow filter's user-visible name is Producer Virtual Camera, not OBS Virtual Camera; output registered unconditionally, filter checked at start (install without restart)"
     }
   ]
 }

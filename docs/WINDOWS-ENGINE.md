@@ -724,3 +724,15 @@ hunks route `OUTPUT_NAME` and the spawn path in `obs-browser-plugin.cpp`
 through that one variable, and both Windows scripts read the name from the
 preset. Engine DLLs still carry OBS in their file-Properties version info
 (19 of them); that is not a surface a user is shown and is left alone.
+
+**Install without restart (verified 2026-09-03).** Upstream win-dshow registers
+`virtualcam_output` only if the filter CLSID is in the 32-bit registry view
+when the module loads (`dshow-plugin.cpp` `vcam_installed(false)`), so an
+"Install cam" performed while Producer runs left the process with no output:
+libobs logged "Output ID 'virtualcam_output' not found", still created a
+shell output, and start failed with no error text. Patch 0002 registers the
+output unconditionally and checks the filter in `virtualcam_start` (last error
+"the virtual camera is not installed"). Both filter DLLs register in one
+elevated cmd chain, so the user sees one UAC prompt, not two. Meet lists
+"Producer Virtual Camera" and renders the program; OBS Studio's own camera
+stays listed on machines that have OBS installed — it is not ours to remove.

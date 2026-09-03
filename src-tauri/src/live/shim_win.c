@@ -463,17 +463,23 @@ int producer_vcam_installed(void)
     return vcam_registered();
 }
 
-/* regsvr32 /s <dll>, elevated. Blocks until regsvr32 exits so the result is
- * known synchronously; the UI already treats activate as a long call. */
-static int regsvr32(const wchar_t *dll)
+/* Register both filter DLLs in ONE elevated cmd.exe so the user sees a single
+ * UAC prompt (two regsvr32 launches meant two prompts). Blocks until the chain
+ * exits; the 32-bit module is optional (32-bit apps only) so its result is not
+ * part of the exit code. */
+static int regsvr32_both(const wchar_t *dll64, const wchar_t *dll32)
 {
-    wchar_t args[MAX_PATH + 16];
-    _snwprintf_s(args, MAX_PATH + 16, _TRUNCATE, L"/i /s \"%s\"", dll);
+    wchar_t args[2 * MAX_PATH + 96];
+    if (dll32 && dll32[0])
+        _snwprintf_s(args, _countof(args), _TRUNCATE,
+                     L"/d /c regsvr32.exe /i /s \"%s\" && (regsvr32.exe /i /s \"%s\" & exit /b 0)", dll64, dll32);
+    else
+        _snwprintf_s(args, _countof(args), _TRUNCATE, L"/d /c regsvr32.exe /i /s \"%s\"", dll64);
     SHELLEXECUTEINFOW sei = {0};
     sei.cbSize = sizeof(sei);
     sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI;
     sei.lpVerb = L"runas";
-    sei.lpFile = L"regsvr32.exe";
+    sei.lpFile = L"cmd.exe";
     sei.lpParameters = args;
     sei.nShow = SW_HIDE;
     if (!ShellExecuteExW(&sei) || !sei.hProcess)
@@ -516,14 +522,13 @@ void producer_vcam_activate(void)
         snprintf(g_vcam_error, sizeof(g_vcam_error), "the virtual camera module is missing from the engine");
         return;
     }
-    if (!regsvr32(dll64)) {
+    if (GetFileAttributesW(dll32) == INVALID_FILE_ATTRIBUTES)
+        dll32[0] = 0; /* optional: serves 32-bit apps only */
+    if (!regsvr32_both(dll64, dll32)) {
         g_vcam_state = 4;
-        snprintf(g_vcam_error, sizeof(g_vcam_error), "registration was declined or failed (64-bit)");
+        snprintf(g_vcam_error, sizeof(g_vcam_error), "registration was declined or failed");
         return;
     }
-    /* the 32-bit module is optional: it serves 32-bit apps only */
-    if (GetFileAttributesW(dll32) != INVALID_FILE_ATTRIBUTES)
-        regsvr32(dll32);
     g_vcam_state = vcam_registered() ? 3 : 4;
     if (g_vcam_state == 4)
         snprintf(g_vcam_error, sizeof(g_vcam_error), "regsvr32 succeeded but the CLSID is not registered");

@@ -1944,7 +1944,10 @@ pub fn start(
                                     // the user as a command error, which never
                                     // passes through the event sink.
                                     let msg = if e.is_null() {
-                                        "the virtual camera refused to start — is the extension approved?".to_string()
+                                        #[cfg(target_os = "macos")]
+                                        { "the virtual camera refused to start — is the extension approved?".to_string() }
+                                        #[cfg(not(target_os = "macos"))]
+                                        { "the virtual camera refused to start — install the camera first".to_string() }
                                     } else {
                                         user_facing(&CStr::from_ptr(e).to_string_lossy())
                                     };
