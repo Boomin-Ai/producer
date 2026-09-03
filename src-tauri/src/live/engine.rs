@@ -315,6 +315,12 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
         },
     }
 
+    // libobs never initialises video->sdr_white_level; OBS Studio's frontend
+    // sets it from its settings. On an scRGB (HDR) display the preview draws
+    // the mix with technique DrawMultiply × (sdr_white / 80) — with 0 that is
+    // a black stage over a perfectly rendered mix. Found on the Windows port
+    // (HDR desk); SDR displays never take the branch. OBS's defaults.
+    unsafe { ffi::obs_set_video_levels(300.0, 1000.0) };
     phase(&mut report, "reset_video");
     let oai = ffi::obs_audio_info {
         samples_per_sec: 48000,

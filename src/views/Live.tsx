@@ -3283,6 +3283,10 @@ export function LiveView({
    * pipeline the stage editor uses. Missing well-known sources the scene
    * needs are created once; nothing is ever torn down. */
   const applyScene = async (p: RoomScene, opts?: { cut?: boolean }) => {
+    // A selection belongs to the scene it was made in: leaving the scene
+    // drops it, or the outline (and Delete) would follow you to items that
+    // aren't even on this look.
+    setStageSel(null);
     if (!engineOk) return;
     try {
       const bh = snapshot?.video_height || 720;

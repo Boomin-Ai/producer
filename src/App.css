@@ -7991,3 +7991,49 @@ button.ks-key:hover { border-color: var(--line-2); }
 .ws-dot { flex: none; width: 7px; height: 7px; border-radius: 999px; background: var(--mint); }
 .ws-pop-foot { border-top: 1px solid var(--line-1); margin-top: 6px; padding-top: 6px; }
 .ws-pop .cr-hint { padding: 6px 8px; }
+
+/* ── Network rail, restyled: quieter header, segmented tabs, request cards. ── */
+.net-rail { gap: 14px; padding: 52px 12px 14px; background: var(--bg); }
+.net-rail-head { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+.net-rail-title { color: var(--fg-3); }
+.net-count {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px; font-weight: 650; letter-spacing: 0; text-transform: none;
+  color: var(--fg-2); font-variant-numeric: tabular-nums;
+}
+.net-count .net-of { color: var(--fg-3); font-weight: 500; }
+.net-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--fg-3); }
+.net-dot.on { background: var(--mint); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mint) 22%, transparent); }
+
+.net-tabs { gap: 0; padding: 3px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line-1); }
+.net-tabs button { height: 26px; border-radius: 7px; border: 0; font-size: 12px; color: var(--fg-3); gap: 5px; }
+.net-tabs button.on { background: var(--surface-3); color: var(--fg-1); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25); }
+.net-tab-n { font-size: 10.5px; font-weight: 700; color: var(--fg-3); }
+.net-tabs button.on .net-tab-n { color: var(--fg-2); }
+.net-badge { min-width: 15px; height: 15px; font-size: 10px; }
+
+.net-section {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--fg-3); padding: 6px 8px 0;
+}
+.net-invite {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 10px; border-radius: var(--r-card);
+  background: var(--surface-1);
+  border: 1px solid color-mix(in srgb, var(--mint) 28%, var(--line-1));
+}
+.net-invite-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.net-invite-msg { font-size: 12px; color: var(--fg-2); line-height: 1.35; padding: 0 2px; }
+.net-invite-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.net-accept, .net-decline {
+  height: 30px; border-radius: 8px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.net-accept { background: var(--mint); color: #06251a; border: 0; }
+.net-accept:hover { filter: brightness(1.06); }
+.net-decline { background: transparent; color: var(--fg-2); border: 1px solid var(--line-2); }
+.net-decline:hover { color: var(--fg-1); background: var(--surface-2); }
+
+.net-conn { padding: 8px; border-radius: var(--r-ctl); }
+.net-ava, .net-ava-ph { width: 30px; height: 30px; border-radius: 9px; font-size: 13px; font-weight: 700; }
+.net-rail .cr-hint { padding: 8px; font-size: 12px; color: var(--fg-3); line-height: 1.4; }

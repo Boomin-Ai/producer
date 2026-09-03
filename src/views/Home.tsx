@@ -1608,38 +1608,52 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
   return (
     <aside className="net-rail">
       <div className="net-rail-head">
-        NETWORK
-        <span className="net-count">
-          <span className="net-dot" />
+        <span className="net-rail-title">Network</span>
+        <span className="net-count" title={`${liveNow} of ${members} network members are live right now`}>
+          <span className={`net-dot${liveNow > 0 ? " on" : ""}`} />
           {liveNow} live
-          <span className="net-of">of {members}</span>
+          <span className="net-of">· {members}</span>
         </span>
       </div>
 
-      <div className="net-tabs">
-        <button className={tab === "connected" ? "on" : ""} onClick={() => setTab("connected")}>
-          Connected{conns.length ? ` · ${conns.length}` : ""}
+      <div className="net-tabs" role="tablist">
+        <button role="tab" className={tab === "connected" ? "on" : ""} onClick={() => setTab("connected")}>
+          Connected
+          {conns.length > 0 && <span className="net-tab-n">{conns.length}</span>}
           {inbox.length > 0 && <span className="net-badge">{inbox.length}</span>}
         </button>
-        <button className={tab === "find" ? "on" : ""} onClick={() => setTab("find")}>
+        <button role="tab" className={tab === "find" ? "on" : ""} onClick={() => setTab("find")}>
           Find
         </button>
       </div>
 
       {tab === "connected" && (
         <div className="net-list">
-          {inbox.map((i) => (
-            <div key={i.id} className="net-invite">
-              <span className="net-invite-name">{i.brand?.name ?? i.brand?.slug}</span>
-              {i.message && <span className="net-invite-msg">{i.message}</span>}
-              <button className="cr-primary" onClick={() => act(i.id, "accept")}>
-                Accept
-              </button>
-              <button className="net-decline" onClick={() => act(i.id, "decline")}>
-                Decline
-              </button>
-            </div>
-          ))}
+          {inbox.length > 0 && <div className="net-section">Requests</div>}
+          {inbox.map((i) => {
+            const name = i.brand?.name ?? i.brand?.slug ?? "Someone";
+            return (
+              <div key={i.id} className="net-invite">
+                <div className="net-invite-row">
+                  <span className="net-ava net-ava-ph">{(name || "?").slice(0, 1)}</span>
+                  <span className="net-conn-txt">
+                    <span className="net-conn-name">{name}</span>
+                    <span className="net-conn-slug">wants to connect{i.brand?.slug ? ` · @${i.brand.slug}` : ""}</span>
+                  </span>
+                </div>
+                {i.message && <div className="net-invite-msg">“{i.message}”</div>}
+                <div className="net-invite-acts">
+                  <button className="net-accept" onClick={() => act(i.id, "accept")}>
+                    Accept
+                  </button>
+                  <button className="net-decline" onClick={() => act(i.id, "decline")}>
+                    Decline
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {inbox.length > 0 && conns.length > 0 && <div className="net-section">Connected</div>}
           {conns.map((c) => {
             const ds = dealsFor(c.connection.id);
             const open = booking === c.connection.id;
