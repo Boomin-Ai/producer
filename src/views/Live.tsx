@@ -68,6 +68,7 @@ import {
   type TransitionKind,
   type RoomExtra,
 } from "../lib/room";
+import { takeRoomClick } from "../lib/perf";
 
 // Transport-truthful copy (M-L4 finding: an RTMP session can look healthy
 // while the platform discards it — only the dashboard confirms LIVE).
@@ -1908,8 +1909,15 @@ export function LiveView({
   const [docApplied, setDocApplied] = useState(false);
   /** Mount instrumentation: wall-clock from mount to each gate. The footer
    * shows the total so every build proves (or disproves) a speedup. */
-  const mountT0 = useRef(performance.now());
-  const mountMarks = useRef<Record<string, number>>({});
+  // t0 is the CLICK on the home tile when we have it (what the user feels),
+  // else this mount. `mount` = click→mount gap; `since_launch` = how long
+  // the app had been up — a cold first open pays device warm-ups no later
+  // open does.
+  const mountT0 = useRef(takeRoomClick() ?? performance.now());
+  const mountMarks = useRef<Record<string, number>>({
+    mount: Math.round(performance.now() - mountT0.current),
+    since_launch: Math.round(performance.now()),
+  });
   const mark = (k: string) => {
     if (mountMarks.current[k] == null) mountMarks.current[k] = Math.round(performance.now() - mountT0.current);
   };
@@ -1949,6 +1957,25 @@ export function LiveView({
   const [adding, setAdding] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [sources, setSources] = useState<LiveSources>({ screen: false, camera: false, mic: false });
+  /** First PIXELS: every visible item reports a frame. The veil lifts on the
+   * engine's transform ack; this is the later, honest "on stage" moment —
+   * recorded so the gap between the two is a number, not a feeling. */
+  const firstFramesDone = useRef(false);
+  useEffect(() => {
+    if (firstFramesDone.current || !docApplied) return;
+    const items = (sources.items ?? []).filter((i) => i.visible);
+    if (!items.length || !items.every((i) => i.has_frame)) return;
+    firstFramesDone.current = true;
+    mark("first_frames");
+    const m = mountMarks.current;
+    roomOpenReport({
+      ...m,
+      stall_max_ms: Math.round(stallMax.current),
+      boot_phases: snapRef.current?.boot_phases_ms ?? null,
+      at: new Date().toISOString(),
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sources.items, docApplied]);
   const [micLevel, setMicLevel] = useState(0);
   const [appVersion, setAppVersion] = useState<string | null>(null);
   type RepoRelease = { tag_name: string; name: string | null; body: string | null; published_at: string; html_url: string };

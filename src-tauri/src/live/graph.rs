@@ -199,6 +199,10 @@ pub struct ItemState {
     pub z: i32,
     pub src_w: u32,
     pub src_h: u32,
+    /// A frame has arrived: async capture sources report width 0 until their
+    /// first frame lands. The honest "on stage" signal (browser sources
+    /// report their configured size, so they count from creation).
+    pub has_frame: bool,
     /// Audio facts, so the mixer can show a strip for anything that makes
     /// sound rather than only the microphone.
     pub has_audio: bool,
@@ -594,6 +598,7 @@ impl SceneGraph {
                 crop_bottom: crop.bottom,
                 z: ffi::obs_sceneitem_get_order_position(item),
                 src_w,
+                has_frame: src_w > 0,
                 src_h,
                 // OBS_SOURCE_AUDIO = 1 << 1
                 has_audio: !src.is_null() && (ffi::obs_source_get_output_flags(src) & 0x2) != 0,

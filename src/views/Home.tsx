@@ -17,6 +17,7 @@ import { ipc,
   type NetworkLiveRoom,
 } from "../lib/ipc";
 import { demoOn, setDemo } from "../lib/demo";
+import { markRoomClick } from "../lib/perf";
 import { KEYMAP, getKey, setKey, resetKey, displayKey, type KeyBinding } from "../lib/keys";
 import { liveRoomId, parseConfig, serializeConfig } from "../lib/room";
 import { useUpdater } from "../lib/updater";
@@ -369,7 +370,10 @@ export function Home({
           channels={channels}
           jobs={jobs}
           streaming={streaming}
-          onOpenRoom={(room) => setView({ kind: "room", room })}
+          onOpenRoom={(room) => {
+            markRoomClick();
+            setView({ kind: "room", room });
+          }}
           onRoomsChanged={loadLive}
           onCompose={() => setView({ kind: "compose" })}
           onHistory={() => setView({ kind: "history" })}

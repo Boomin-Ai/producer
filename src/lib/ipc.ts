@@ -176,6 +176,9 @@ export interface LiveItem {
   kind: string;
   label: string;
   visible: boolean;
+  /** The source has produced at least one frame (engine truth: reported
+   * width > 0). Absent on older engines. The honest "on stage" signal. */
+  has_frame?: boolean;
   x: number;
   y: number;
   w: number;
