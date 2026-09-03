@@ -4,6 +4,7 @@
 // server (idempotent by external_ref), ask for the join link, and mirror both
 // into the room config so the next click is instant.
 
+import { invoke } from "@tauri-apps/api/core";
 import { guests, ipc, registerRoom, type LiveRoom } from "./ipc";
 import { parseConfig, serializeConfig } from "./room";
 import { resolveActiveEndpoint } from "./workspace";
@@ -32,6 +33,12 @@ export async function ensureRoomJoinLink(room: LiveRoom): Promise<string> {
  * states (no page focus, no user-activation credit), so fall back to the
  * selection route, which the webview always honours from a click handler. */
 export async function copyText(text: string): Promise<boolean> {
+  try {
+    await invoke("copy_text", { text });
+    return true;
+  } catch {
+    /* engine-less build — try the web routes */
+  }
   try {
     await navigator.clipboard.writeText(text);
     return true;

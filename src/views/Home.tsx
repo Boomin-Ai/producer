@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -1985,7 +1986,10 @@ function DealSheet({
       : d.room_id
         ? `By presence: delivered the moment the host admits ${earn ? "you" : otherName} into "${d.room_title ?? "the room"}". The admission is the evidence.`
         : `By hand: ${earn ? "you mark" : `${otherName} marks`} it delivered when the work is done.`;
-  return (
+  // Portaled: the sheet is fixed-position and the rail it opens from is a
+  // scrolling fixed column — rendered inside it, the rail clips the sheet's
+  // left edge and scrolls it. The body is the only honest parent.
+  return createPortal(
     <>
       <div className="ws-pop-backdrop" onClick={onClose} />
       <div className="deal-sheet" role="dialog">
@@ -2072,7 +2076,8 @@ function DealSheet({
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
 
