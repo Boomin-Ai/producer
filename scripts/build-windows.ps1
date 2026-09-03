@@ -20,14 +20,20 @@ $env:PRODUCER_ENGINE_DIR = $eng
 
 Push-Location $RepoRoot
 try {
-  $args = @("run", "tauri", "build", "--bundles", "nsis")
+  # Build-only config, as a FILE (PowerShell 5.1 strips quotes from inline JSON on
+  # the way to a native exe). The engine staging dir is mapped here and not in
+  # tauri.windows.conf.json on purpose: tauri-build validates every resource
+  # path at cargo build time, and CI's engine-less cargo check has no staging
+  # dir. A DIRECTORY source is walked with its structure preserved; a glob
+  # source is flattened to bare file names (tauri-utils resources.rs).
+  $cfgObj = @{ bundle = @{ resources = @{ "windows-bundle" = "./" } } }
   if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
     Write-Host "TAURI_SIGNING_PRIVATE_KEY not set: building without updater artifacts"
-    # A file, not inline JSON: PowerShell 5.1 strips the quotes on the way to a native exe.
-    $cfg = Join-Path $env:TEMP "producer-local-build.json"
-    Set-Content -Path $cfg -Value '{"bundle":{"createUpdaterArtifacts":false}}' -Encoding Ascii
-    $args += @("--config", $cfg)
+    $cfgObj.bundle.createUpdaterArtifacts = $false
   }
+  $cfg = Join-Path $env:TEMP "producer-local-build.json"
+  Set-Content -Path $cfg -Value ($cfgObj | ConvertTo-Json -Depth 5 -Compress) -Encoding Ascii
+  $args = @("run", "tauri", "build", "--bundles", "nsis", "--config", $cfg)
   & bun @args
   if ($LASTEXITCODE -ne 0) { throw "tauri build failed" }
 

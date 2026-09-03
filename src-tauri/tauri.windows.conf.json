@@ -1,13 +1,10 @@
 {
-    "$schema":  "https://schema.tauri.app/config/2",
-    "bundle":  {
-                   "resources":  {
-                                     "windows-bundle":  "./"
-                                 },
-                   "windows":  {
-                                   "nsis":  {
-                                                "installMode":  "currentUser"
-                                            }
-                               }
-               }
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  }
 }

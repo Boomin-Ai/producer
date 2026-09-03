@@ -773,7 +773,10 @@ continue on a miss):
 - `scripts\build-windows.ps1` — the production NSIS installer WITH the engine.
   `engine/windows-bundle/` is staged flat (obs.dll beside producer.exe,
   obs-plugins/ and data/ as siblings — the only layout the loader can use) and
-  `src-tauri/tauri.windows.conf.json` bundles it into the install root.
+  mapped into the install root by a build-only Tauri config the script writes
+  (not tauri.windows.conf.json: tauri-build validates resource paths at cargo
+  build time and CI's engine-less check has no staging dir). A directory
+  source keeps its structure; a glob source is flattened to file names.
   Updater artifacts only when `TAURI_SIGNING_PRIVATE_KEY` is set. `-Smoke`
   silent-installs to `%TEMP%\ProducerSmoke`, checks the installed tree, and
   boots the engine once. The installer is unsigned (no Windows code-signing
