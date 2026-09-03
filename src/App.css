@@ -6619,6 +6619,56 @@ textarea::placeholder {
   .rm-chat-chips .rm-chip-name { display: none; }
 }
 
+/* Sources in a NARROW side rail: the title owns the row. No leading type
+ * icon, no controls — they float in over the right edge on hover, so the
+ * name keeps its full width until you reach for it. */
+@container panel (max-width: 320px) {
+  .rm-panel-sources .rm-row { position: relative; }
+  .rm-panel-sources .rm-row .rm-row-icon { display: none; }
+  .rm-panel-sources .rm-row .rm-row-name { flex: 1; min-width: 0; }
+  .rm-panel-sources .rm-row .rm-row-edit { display: none; }
+  .rm-panel-sources .rm-row:hover .rm-row-edit {
+    display: inline-flex;
+  }
+  .rm-panel-sources .rm-row:hover .rm-row-name {
+    /* leave room for the floating controls */
+    padding-right: 96px;
+  }
+  .rm-panel-sources .rm-row:hover > .rm-row-edit {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--surface-3);
+  }
+}
+
+/* Guests in a ROW dock (bottom, or an expanded top): people side by side,
+ * cards sized by the rail's height, never one stretched card. */
+.rm-panel-guests[data-in="bottom"] .rm-panel-body { height: 100%; min-height: 0; }
+.rm-panel-guests[data-in="bottom"] .rm-guest-list {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 8px;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.rm-panel-guests[data-in="bottom"] .rm-gcard {
+  flex: 0 0 auto;
+  height: 100%;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px !important;
+}
+.rm-panel-guests[data-in="bottom"] .rm-gcard.on {
+  height: 100%;
+}
+
 /* A fully collapsed bottom rail is JUST its handle, like every other dock. */
 .rm-sheet.collapsed {
   padding: 0 !important;
