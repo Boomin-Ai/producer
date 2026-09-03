@@ -53,6 +53,11 @@ export function StageEditor({
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [selected, setSelectedRaw] = useState<string | null>(null);
+  // Windows float mode: the native preview covers the stage, so the engine
+  // draws the selection outline itself. Harmless elsewhere.
+  useEffect(() => {
+    ipc.liveSetSelection(selected).catch(() => {});
+  }, [selected]);
   const setSelected = (id: string | null) => {
     setSelectedRaw(id);
     onSelect?.(id);

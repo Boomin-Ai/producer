@@ -66,26 +66,8 @@ for sub in plugins/obs-browser plugins/obs-websocket; do
   [[ $want == "$have" ]] || { echo "FATAL: $sub at $have, lock wants $want" >&2; exit 1; }
 done
 
-# ── patchset: same verification as macOS, idempotent ─────────────────────────
-patchset="$(lock_get "['patchset']")"
-if [[ $patchset != "None" ]]; then
-  patch_dir="$REPO_ROOT/$(lock_get "['patchset']['dir']")"
-  patch_target="$SRC_DIR/$(lock_get "['patchset']['target']")"
-  want_sha="$(lock_get "['patchset']['sha256']")"
-  have_sha="$(cat $(ls "$patch_dir"/*.patch | sort) > /tmp/patchcat && sha256_of /tmp/patchcat)"
-  [[ $want_sha == "$have_sha" ]] || { echo "FATAL: patchset sha256 mismatch (lock $want_sha, files $have_sha)" >&2; exit 1; }
-  for patch in $(ls "$patch_dir"/*.patch | sort); do
-    if git -C "$patch_target" apply --check "$patch" 2>/dev/null; then
-      git -C "$patch_target" apply "$patch"
-      echo "patch applied: $(basename "$patch")"
-    elif git -C "$patch_target" apply --reverse --check "$patch" 2>/dev/null; then
-      echo "patch already present: $(basename "$patch")"
-    else
-      echo "FATAL: patch neither applies nor is present: $(basename "$patch")" >&2
-      exit 1
-    fi
-  done
-fi
+# ── patchsets: same verification as macOS, same code (engine-lib.sh) ─────────
+apply_patchsets "$SRC_DIR"
 
 # ── configure + build ────────────────────────────────────────────────────────
 cp "$REPO_ROOT/engine/producer-presets.json" "$SRC_DIR/CMakeUserPresets.json"
@@ -114,7 +96,7 @@ set +x
 
 # obs-browser-helper is declared EXCLUDE_FROM_ALL in obs-browser's
 # cmake/os-windows.cmake, so the default target does NOT build it. It is the CEF
-# subprocess (OUTPUT_NAME obs-browser-page), and browser sources cannot render a
+# subprocess (OUTPUT_NAME from BROWSER_HELPER_OUTPUT_NAME), and browser sources cannot render a
 # single frame without it, so build it by name.
 if engine_plugins windows | grep -qx obs-browser; then
   (cd "$SRC_DIR" && cmake --build --preset producer-windows --target obs-browser-helper)
@@ -143,6 +125,28 @@ mkdir -p "$STAGE/bin" "$STAGE/obs-plugins/64bit" "$STAGE/data" "$STAGE/licenses"
 # obs-plugins/64bit; see the CEF section below for the three reasons why.)
 # obs64.exe rides along; it is inert and useful for debugging.
 cp -R "$OUT"/. "$STAGE/bin/"
+
+# THE obs-deps RUNTIME. rundir's bin holds what WE built; obs.dll's dependency
+# closure --- ffmpeg, zlib, x264, curl, rist, srt --- lives in the prebuilt
+# obs-deps bundle, and the no-frontend build never copies it into rundir. Same
+# shape as the CEF miss: the piece a full OBS build gets for free from a step we
+# do not run.
+#
+# This went unnoticed for a while because a dev box had those DLLs beside the
+# executable from an unrelated OBS extract, and the loader prefers the exe's own
+# directory --- so the app ran on the WRONG libobs while appearing to prove the
+# artifact worked. The import-closure check in engine-closure-windows.sh exists
+# because of that.
+#
+# Copy generously here and let the gate be exact: it walks every PE in the
+# artifact and fails on any import that is neither shipped nor a real system DLL.
+DEPS_ROOT=""
+for cand in "$SRC_DIR"/.deps/obs-deps-*-x64; do
+  [[ -d "$cand/bin" ]] && { DEPS_ROOT="$cand"; break; }
+done
+[[ -n $DEPS_ROOT ]] || { echo "FATAL: no obs-deps x64 bundle under $SRC_DIR/.deps" >&2; exit 1; }
+echo "obs-deps: $DEPS_ROOT"
+find "$DEPS_ROOT/bin" -maxdepth 1 -name "*.dll" -exec cp -n {} "$STAGE/bin/" \;
 # THE IMPORT LIBRARY. A source build produces obs.lib; an extracted release does
 # not. Staging it means Windows devs can link the normal way — raw-dylib in
 # ffi.rs is what makes the extract ALSO work, not a replacement for this.
@@ -177,13 +181,16 @@ if engine_plugins windows | grep -qx obs-browser; then
   # rundir first: set_target_properties_obs stages it there via a post-build copy.
   # The build-tree fallback covers a helper that built but was not copied, which
   # is a different failure from one that never built at all.
-  page="$PLUGIN_SRC/obs-browser-page.exe"
-  [[ -f $page ]] || page="$(find "$BUILD" -name obs-browser-page.exe -print -quit 2>/dev/null || true)"
+  # named by the preset (BROWSER_HELPER_OUTPUT_NAME -> "Producer Helper.exe"):
+  # the helper is what Task Manager shows, so it must not say obs-browser-page
+  helper_exe="$(lock_get_file engine/producer-presets.json "[c for c in d['configurePresets'] if c['name']=='producer-windows'][0]['cacheVariables']['BROWSER_HELPER_OUTPUT_NAME']['value']").exe"
+  page="$PLUGIN_SRC/$helper_exe"
+  [[ -f $page ]] || page="$(find "$BUILD" -name "$helper_exe" -print -quit 2>/dev/null || true)"
   if [[ -n $page && -f $page ]]; then
     cp "$page" "$STAGE/obs-plugins/64bit/"
-    echo "staged CEF subprocess: obs-browser-page.exe ($page)"
+    echo "staged CEF subprocess: $helper_exe ($page)"
   else
-    echo "FATAL: obs-browser-page.exe not built - browser sources cannot render" >&2
+    echo "FATAL: $helper_exe not built - browser sources cannot render" >&2
     exit 1
   fi
 fi

@@ -18,19 +18,46 @@ use super::ffi;
 use super::record;
 
 /// Registration IDs the product requires, per LIVE-REVIEW.md §2.1 / M-L1.
-/// VideoToolbox encoder IDs are hardware-dynamic, asserted by substring below.
-const REQUIRED_SOURCES: &[&str] = &[
+///
+/// Split shared/per-os for the same reason the plugin allowlist is: the overlap
+/// is stated ONCE, and the places where the platforms genuinely differ are
+/// visible instead of implied. Nearly every macOS id here has a Windows
+/// counterpart that is a different string for the same capability, which is
+/// exactly the kind of mapping that rots silently when it is left implicit.
+const REQUIRED_SOURCES_SHARED: &[&str] = &[
+    "window_capture", // mac-capture (SCK window) / win-capture
+    "image_source",   // image-source (image/GIF)
+    "color_source",
+    "browser_source", // obs-browser -- GUESTS ARE BROWSER SOURCES
+];
+#[cfg(target_os = "macos")]
+const REQUIRED_SOURCES_OS: &[&str] = &[
     "screen_capture",          // mac-capture (ScreenCaptureKit display)
-    "window_capture",          // mac-capture (SCK window)
     "sck_audio_capture",       // mac-capture (desktop audio)
     "coreaudio_input_capture", // mac-capture (mic)
     "coreaudio_output_capture",
     "macos-avcapture", // mac-avcapture (webcam)
-    "image_source",    // image-source (image/GIF)
     "text_ft2_source", // text-freetype2
-    "color_source",
 ];
-const REQUIRED_ENCODERS: &[&str] = &["obs_x264", "CoreAudio_AAC"];
+#[cfg(target_os = "windows")]
+const REQUIRED_SOURCES_OS: &[&str] = &[
+    "monitor_capture",       // win-capture (display)
+    "wasapi_output_capture", // win-wasapi (desktop audio)
+    "wasapi_input_capture",  // win-wasapi (mic)
+    "dshow_input",           // win-dshow (webcam)
+    "text_gdiplus",          // obs-text -- NOT text_ft2_source here
+];
+const REQUIRED_ENCODERS_SHARED: &[&str] = &["obs_x264"];
+#[cfg(target_os = "macos")]
+const REQUIRED_ENCODERS_OS: &[&str] = &["CoreAudio_AAC"];
+#[cfg(target_os = "windows")]
+/// ffmpeg_aac is obs-ffmpeg's AAC encoder; Windows has no CoreAudio encoder and
+/// obs-ffmpeg is in the allowlist on both platforms, so this is the counterpart.
+const REQUIRED_ENCODERS_OS: &[&str] = &["ffmpeg_aac"];
+/// VideoToolbox is macOS hardware encode; its ids are hardware-dynamic, so it is
+/// asserted by substring. Windows hardware encoders (nvenc/qsv/amf) are NOT in
+/// the §5.2 allowlist, so there is no Windows counterpart to require.
+#[cfg(target_os = "macos")]
 const VT_ENCODER_SUBSTRING: &str = "videotoolbox";
 const REQUIRED_OUTPUTS: &[&str] = &["rtmp_output", "flv_output"];
 const REQUIRED_SERVICES: &[&str] = &["rtmp_common", "rtmp_custom"];
@@ -65,6 +92,7 @@ pub struct EngineReport {
 /// Marshal an OBS UI task onto the macOS main thread (GCD main queue).
 /// `wait` tasks run synchronously; nested main-thread calls run inline to
 /// avoid deadlocking dispatch_sync on the main queue.
+#[cfg(target_os = "macos")]
 extern "C" fn ui_task_handler(task: ffi::obs_task_t, param: *mut c_void, wait: bool) {
     struct Ctx {
         task: ffi::obs_task_t,
@@ -105,6 +133,15 @@ extern "C" fn ui_task_handler(task: ffi::obs_task_t, param: *mut c_void, wait: b
             );
         }
     }
+}
+
+/// Windows has no UI thread to marshal to: OBS_TASK_UI exists for a Qt
+/// frontend and Producer has none. But a handler MUST be set --- obs.c drops
+/// the task and logs "there's no UI task handler!" when it is null --- so run
+/// it inline, which satisfies `wait` trivially and cannot deadlock.
+#[cfg(target_os = "windows")]
+extern "C" fn ui_task_handler(task: ffi::obs_task_t, param: *mut c_void, _wait: bool) {
+    task(param);
 }
 
 fn enum_ids(f: unsafe extern "C" fn(usize, *mut *const c_char) -> bool) -> Vec<String> {
@@ -172,10 +209,59 @@ fn reset_video(module: &str, height: u32, fps: u32) -> Result<(), i32> {
     }
 }
 
-/// Full F3 bootstrap. MUST be called on the live-engine thread, never the
-/// main thread and never more than once per process.
+/// The engine artifact root at RUNTIME, on Windows.
+///
+/// libobs finds its own data and its plugins through paths that are RELATIVE on
+/// Windows (obs-windows.c: `../../obs-plugins/64bit`,
+/// `../../data/obs-plugins/%module%`, and `../../data/libobs/` in
+/// find_libobs_data_file). Those resolve against the PROCESS CWD, which is
+/// correct for obs64.exe -- installed at bin/64bit and launched with that as its
+/// working directory -- and is never correct for us: producer.exe lives
+/// elsewhere and the CWD is wherever the user happened to launch from. So the
+/// paths have to be registered explicitly, absolute, at boot.
+///
+/// PRODUCER_ENGINE_DIR is the dev override and matches the name build.rs
+/// already uses at compile time. Otherwise the artifact sits beside the
+/// executable, which is what bundling produces.
+#[cfg(target_os = "windows")]
+fn windows_engine_root() -> Option<std::path::PathBuf> {
+    let looks_right = |p: &std::path::Path| p.join("obs-plugins/64bit").is_dir();
+    if let Ok(dir) = std::env::var("PRODUCER_ENGINE_DIR") {
+        let dir = std::path::PathBuf::from(dir);
+        if looks_right(&dir) {
+            return Some(dir);
+        }
+    }
+    // BESIDE THE EXECUTABLE, and nowhere else. There is exactly one valid
+    // shipped layout on Windows, and it is not a choice: producer.exe imports
+    // obs.dll statically, so the loader resolves it BEFORE any of our code runs,
+    // and it searches the executable's own directory --- not subdirectories of
+    // it. An engine at <exe_dir>/engine could never load at all, so probing for
+    // one there would be a candidate we can never reach. The bundle must
+    // flatten bin/ beside the exe, with obs-plugins/ and data/ as siblings.
+    let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    if looks_right(&exe_dir) {
+        return Some(exe_dir);
+    }
+    None
+}
+
+/// Full F3 bootstrap, HARNESS ENTRY ONLY. MUST be called on the live-engine
+/// thread, never the main thread and never more than once per process.
+///
+/// A null module_config_dir makes obs_module_config_path fall back to the
+/// PROCESS CWD, and plugins write there: win-capture drops
+/// `win-capture/compatibility.json` beside whatever the user launched from.
+/// Tolerable for a selftest, never for the shipped app --- so the app cannot
+/// reach it. bootstrap_with_config takes a &Path, not an Option, and this is
+/// the only route to None. The guard is the signature, not a runtime check.
 pub fn bootstrap() -> EngineReport {
-    bootstrap_with_config(None)
+    bootstrap_inner(None)
+}
+
+/// The engine as the app boots it: a real config directory, always.
+pub fn bootstrap_with_config(module_config_dir: &std::path::Path) -> EngineReport {
+    bootstrap_inner(Some(module_config_dir))
 }
 
 /// module_config_path feeds obs_module_config_path() — obs-browser derives
@@ -206,7 +292,7 @@ pub fn persist_video(dir: &std::path::Path, h: u32, f: u32) {
     let _ = std::fs::write(dir.join("video.json"), format!("{{\"h\":{h},\"f\":{f}}}"));
 }
 
-pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> EngineReport {
+fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport {
     let mut report = EngineReport {
         ok: false,
         obs_version: String::new(),
@@ -262,6 +348,39 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
     let cef_argv: [*const c_char; 2] = [argv0.as_ptr(), media_flag.as_ptr()];
     unsafe { ffi::obs_set_cmdline_args(cef_argv.len() as i32, cef_argv.as_ptr()) };
 
+    // Windows resolves libobs's own data and its plugin directory through paths
+    // that are RELATIVE (obs-windows.c) and therefore CWD-dependent. Register
+    // them absolutely instead -- see windows_engine_root(). The data path has to
+    // be in place before startup, because the graphics module compiles libobs's
+    // .effect files during obs_reset_video.
+    #[cfg(target_os = "windows")]
+    let _engine_root = windows_engine_root();
+    #[cfg(target_os = "windows")]
+    if let Some(root) = _engine_root.as_ref() {
+        // The DirectShow virtual camera modules ride in the engine's plugin data.
+        let dir = root.join("data").join("obs-plugins").join("win-dshow");
+        if let Ok(c) = CString::new(dir.to_string_lossy().into_owned()) {
+            unsafe { ffi::producer_vcam_set_module_dir(c.as_ptr()) };
+        }
+    }
+    #[cfg(target_os = "windows")]
+    match _engine_root.as_ref() {
+        Some(root) => {
+            // TRAILING SLASH IS LOAD-BEARING. libobs's check_path() does
+            //     dstr_copy(out, path); dstr_cat(out, file);
+            // with no separator inserted, so a path without one produces
+            //     ...\data\libobsformat_conversion.effect
+            // and every effect lookup fails. OBS's own defaults carry the slash.
+            let data = format!("{}/", root.join("data/libobs").to_string_lossy());
+            if let Ok(p) = CString::new(data) {
+                unsafe { ffi::obs_add_data_path(p.as_ptr()) };
+            }
+        }
+        None => report
+            .errors
+            .push("no engine artifact beside the executable; set PRODUCER_ENGINE_DIR".into()),
+    }
+
     if !unsafe { ffi::obs_startup(locale.as_ptr(), config_ptr, ptr::null_mut()) } {
         report.errors.push("obs_startup failed".into());
         return report;
@@ -274,6 +393,7 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
     // §5.1: OBS UI tasks are marshalled to the macOS main thread from the start.
     unsafe { ffi::obs_set_ui_task_handler(ui_task_handler) };
 
+    #[cfg(target_os = "macos")]
     // Dev-mode escape hatch: outside a .app bundle, NSBundle's builtInPlugInsURL
     // does not point at the engine artifact; allow an explicit override.
     if let Ok(plugins_dir) = std::env::var("PRODUCER_ENGINE_PLUGINS") {
@@ -281,6 +401,25 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
         let data =
             CString::new(format!("{plugins_dir}/%module%.plugin/Contents/Resources")).unwrap();
         unsafe { ffi::obs_add_module_path(bin.as_ptr(), data.as_ptr()) };
+    }
+
+    // Windows: absolute paths in the shipped app too, not just as a dev escape
+    // hatch -- see windows_engine_root(). The shapes are OBS's own Windows
+    // install layout, which is exactly what the artifact mirrors.
+    #[cfg(target_os = "windows")]
+    if let Some(root) = _engine_root.as_ref() {
+        let bin = CString::new(
+            root.join("obs-plugins/64bit")
+                .to_string_lossy()
+                .into_owned(),
+        );
+        let data = CString::new(format!(
+            "{}/%module%",
+            root.join("data/obs-plugins").to_string_lossy()
+        ));
+        if let (Ok(bin), Ok(data)) = (bin, data) {
+            unsafe { ffi::obs_add_module_path(bin.as_ptr(), data.as_ptr()) };
+        }
     }
 
     // Preferred backend, OpenGL fallback (A5 / F9); record the actual backend.
@@ -320,8 +459,24 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
     // the mix with technique DrawMultiply × (sdr_white / 80) — with 0 that is
     // a black stage over a perfectly rendered mix. Found on the Windows port
     // (HDR desk); SDR displays never take the branch. OBS's defaults.
-    unsafe { ffi::obs_set_video_levels(300.0, 1000.0) };
+    // 300/1000 are OBS Studio's defaults. On Windows, prefer the display's own
+    // SDR white level (Settings > Display > SDR content brightness): the preview
+    // and its outline then match the SDR desktop around them on an HDR monitor.
+    #[cfg(target_os = "windows")]
+    let sdr_white = {
+        let nits = unsafe { ffi::producer_sdr_white_nits() };
+        if nits > 0.0 {
+            nits
+        } else {
+            300.0
+        }
+    };
+    #[cfg(not(target_os = "windows"))]
+    let sdr_white = 300.0;
+    unsafe { ffi::obs_set_video_levels(sdr_white, 1000.0) };
+    eprintln!("[engine] sdr white level = {sdr_white} nits");
     phase(&mut report, "reset_video");
+
     let oai = ffi::obs_audio_info {
         samples_per_sec: 48000,
         speakers: ffi::SPEAKERS_STEREO,
@@ -356,16 +511,21 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
     report.encoders = enum_ids(ffi::obs_enum_encoder_types);
     report.outputs = enum_ids(ffi::obs_enum_output_types);
     report.services = enum_ids(ffi::obs_enum_service_types);
-    report.videotoolbox_encoders = report
-        .encoders
-        .iter()
-        .filter(|id| id.to_lowercase().contains(VT_ENCODER_SUBSTRING))
-        .cloned()
-        .collect();
+    #[cfg(target_os = "macos")]
+    {
+        report.videotoolbox_encoders = report
+            .encoders
+            .iter()
+            .filter(|id| id.to_lowercase().contains(VT_ENCODER_SUBSTRING))
+            .cloned()
+            .collect();
+    }
 
     for (required, present) in [
-        (REQUIRED_SOURCES, &report.sources),
-        (REQUIRED_ENCODERS, &report.encoders),
+        (REQUIRED_SOURCES_SHARED, &report.sources),
+        (REQUIRED_SOURCES_OS, &report.sources),
+        (REQUIRED_ENCODERS_SHARED, &report.encoders),
+        (REQUIRED_ENCODERS_OS, &report.encoders),
         (REQUIRED_OUTPUTS, &report.outputs),
         (REQUIRED_SERVICES, &report.services),
     ] {
@@ -375,6 +535,7 @@ pub fn bootstrap_with_config(module_config_dir: Option<&std::path::Path>) -> Eng
             }
         }
     }
+    #[cfg(target_os = "macos")]
     if report.videotoolbox_encoders.is_empty() {
         report.missing_ids.push("<any VideoToolbox encoder>".into());
     }
@@ -900,7 +1061,202 @@ struct Preview {
     display: *mut ffi::obs_display_t,
 }
 
-extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, _cx: u32, _cy: u32) {
+static PREVIEW_DRAWS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// The stage item the room has selected, by source name, drawn natively as an
+/// outline + handles inside the preview. In float mode the preview HWND covers
+/// the stage, so anything the webview paints over the video is hidden --- OBS
+/// Studio draws its selection inside the display for the same reason.
+pub static PREVIEW_SELECTION: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+pub fn set_preview_selection(name: Option<String>) {
+    *PREVIEW_SELECTION.lock().unwrap() = name;
+}
+
+/// Draw the selected item's outline and eight handles in the base (canvas)
+/// coordinate space preview_draw already set up. 1-px line loops follow
+/// rotation; handles are small quads centred on corners and edge midpoints.
+#[cfg(target_os = "windows")]
+unsafe fn draw_selection(bw: f32, bh: f32, cx: u32, cy: u32) {
+    static ENTRIES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let e = ENTRIES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let sel = PREVIEW_SELECTION.lock().unwrap().clone();
+    if e % 600 == 0 {
+        eprintln!("[selection] draw entry #{e}: selection = {sel:?}");
+    }
+    let Some(name) = sel else { return };
+    let scene_src = ffi::obs_get_output_source(0);
+    if scene_src.is_null() {
+        if e % 600 == 0 {
+            eprintln!("[selection] channel 0 is NULL");
+        }
+        return;
+    }
+    let scene = ffi::obs_scene_from_source(scene_src);
+    let mut item: *mut ffi::obs_sceneitem_t = std::ptr::null_mut();
+    if !scene.is_null() {
+        // extras are named by their id; the built-ins by their labels
+        for cand in [name.clone(), capitalize(&name)] {
+            if let Ok(c) = CString::new(cand) {
+                item = ffi::obs_scene_find_source(scene, c.as_ptr());
+                if !item.is_null() {
+                    break;
+                }
+            }
+        }
+    }
+    ffi::obs_source_release(scene_src);
+    static SEL_LOGS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let k = SEL_LOGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    if item.is_null() {
+        if k % 300 == 0 {
+            eprintln!("[selection] '{name}': no scene item by that name (scene={scene:?})");
+        }
+        return;
+    }
+    let mut m: ffi::matrix4 = std::mem::zeroed();
+    ffi::obs_sceneitem_get_box_transform(item, &mut m);
+    if k % 300 == 0 {
+        eprintln!(
+            "[selection] '{name}': box t=({:.0},{:.0}) x=({:.0},{:.0}) y=({:.0},{:.0}) display {cx}x{cy} base {bw}x{bh}",
+            m.t.x, m.t.y, m.x.x, m.x.y, m.y.x, m.y.y
+        );
+    }
+    let xf = |px: f32, py: f32| -> (f32, f32) {
+        (
+            m.x.x * px + m.y.x * py + m.t.x,
+            m.x.y * px + m.y.y * py + m.t.y,
+        )
+    };
+    let corners = [xf(0.0, 0.0), xf(1.0, 0.0), xf(1.0, 1.0), xf(0.0, 1.0)];
+
+    let solid = ffi::obs_get_base_effect(3); // OBS_EFFECT_SOLID
+    if solid.is_null() {
+        return;
+    }
+    let c_color = CString::new("color").unwrap();
+    let c_tech = CString::new("Solid").unwrap();
+    let param = ffi::gs_effect_get_param_by_name(solid, c_color.as_ptr());
+    let tech = ffi::gs_effect_get_technique(solid, c_tech.as_ptr());
+    if param.is_null() || tech.is_null() {
+        return;
+    }
+    // Producer green (#22c55e), opaque. The solid effect writes the value as
+    // given: on an SDR (sRGB) display that is the encoded colour; on the scRGB
+    // (FP16) swapchain an HDR monitor gets, values are LINEAR and SDR white sits
+    // at sdr_white_level/80 --- the same multiplier obs_render_main_texture
+    // applies to the mix. Without it the outline reads dim and yellow-shifted.
+    let space = ffi::gs_get_color_space();
+    let green = if space == 3 {
+        // GS_CS_709_SCRGB: linear #22c55e, scaled to SDR white
+        let m = ffi::obs_get_video_sdr_white_level() / 80.0;
+        ffi::vec4 {
+            x: 0.016 * m,
+            y: 0.560 * m,
+            z: 0.110 * m,
+            w: 1.0,
+        }
+    } else if space == 2 {
+        // GS_CS_SRGB_16F: linear, unscaled
+        ffi::vec4 {
+            x: 0.016,
+            y: 0.560,
+            z: 0.110,
+            w: 1.0,
+        }
+    } else {
+        ffi::vec4 {
+            x: 0.133,
+            y: 0.773,
+            z: 0.369,
+            w: 1.0,
+        }
+    };
+    ffi::gs_effect_set_vec4(param, &green);
+    // canvas px per display px, so handles keep a constant size on screen
+    let sx = bw / cx.max(1) as f32;
+    let sy = bh / cy.max(1) as f32;
+    let handle = 7.0f32;
+    let passes = ffi::gs_technique_begin(tech);
+    for i in 0..passes {
+        if !ffi::gs_technique_begin_pass(tech, i) {
+            continue;
+        }
+        // outline: two 1-px line loops, the second nudged, so it reads as 2 px
+        for nudge in [0.0f32, 1.0] {
+            ffi::gs_render_start(true);
+            for k in 0..=4 {
+                let (x, y) = corners[k % 4];
+                ffi::gs_vertex2f(x + nudge * sx, y + nudge * sy);
+            }
+            ffi::gs_render_stop(2); // GS_LINESTRIP
+        }
+        let mids = [
+            (
+                (corners[0].0 + corners[1].0) / 2.0,
+                (corners[0].1 + corners[1].1) / 2.0,
+            ),
+            (
+                (corners[1].0 + corners[2].0) / 2.0,
+                (corners[1].1 + corners[2].1) / 2.0,
+            ),
+            (
+                (corners[2].0 + corners[3].0) / 2.0,
+                (corners[2].1 + corners[3].1) / 2.0,
+            ),
+            (
+                (corners[3].0 + corners[0].0) / 2.0,
+                (corners[3].1 + corners[0].1) / 2.0,
+            ),
+        ];
+        for (x, y) in corners.iter().chain(mids.iter()) {
+            ffi::gs_matrix_push();
+            ffi::gs_matrix_translate3f(x - handle * sx / 2.0, y - handle * sy / 2.0, 0.0);
+            ffi::gs_matrix_scale3f(handle * sx, handle * sy, 1.0);
+            ffi::gs_draw_sprite(std::ptr::null_mut(), 0, 1, 1);
+            ffi::gs_matrix_pop();
+        }
+        ffi::gs_technique_end_pass(tech);
+    }
+    ffi::gs_technique_end(tech);
+}
+
+#[cfg(target_os = "windows")]
+fn capitalize(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+        None => String::new(),
+    }
+}
+
+extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, cx: u32, cy: u32) {
+    // Diagnostic breadcrumb for the Windows port: proves the display's draw
+    // callback runs at all, and at what size. Throttled so it cannot flood.
+    let n = PREVIEW_DRAWS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+    if n == 1 || n == 30 || n % 600 == 0 {
+        eprintln!("[preview] draw #{n} target {cx}x{cy}");
+    }
+    // Once: what does output channel 0 actually hold? Expected the "main" scene.
+    // "Live Screen" means attach_capture_sources rebound it; null means the
+    // probe path cleared it or SceneGraph::create failed silently.
+    if n == 30 {
+        unsafe {
+            let src = ffi::obs_get_output_source(0);
+            if src.is_null() {
+                eprintln!("[preview] channel 0 = NULL");
+            } else {
+                let name = CStr::from_ptr(ffi::obs_source_get_name(src))
+                    .to_string_lossy()
+                    .into_owned();
+                eprintln!(
+                    "[preview] channel 0 = '{name}'  color space = {}",
+                    ffi::gs_get_color_space()
+                );
+                ffi::obs_source_release(src);
+            }
+        }
+    }
     unsafe {
         let mut ovi: std::mem::MaybeUninit<ffi::obs_video_info> = std::mem::MaybeUninit::zeroed();
         let (bw, bh) = if ffi::obs_get_video_info(ovi.as_mut_ptr()) {
@@ -913,9 +1269,32 @@ extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, _cx: u32, _cy: u32
         ffi::gs_projection_push();
         ffi::gs_ortho(0.0, bw, 0.0, bh, -100.0, 100.0);
         ffi::obs_render_main_texture();
+        // Windows float mode: the selection outline lives HERE, in the display
+        // pass after the mix --- never in the mix itself, which feeds the
+        // encoder, the recording, the virtual camera and the guests.
+        #[cfg(target_os = "windows")]
+        draw_selection(bw, bh, cx, cy);
         ffi::gs_projection_pop();
         ffi::gs_viewport_pop();
     }
+}
+
+/// Run a preview-window op on the thread that OWNS that window.
+///
+/// macOS: shim.m already wraps its own body in run_on_main, so calling straight
+/// through is correct and double-marshalling would be the risk.
+/// Windows: nothing marshals inside the C, the caller is the engine thread, and
+/// the window belongs to main --- DestroyWindow in particular FAILS from any
+/// other thread, which would silently leak the preview.
+#[cfg(target_os = "macos")]
+#[inline]
+fn on_window_thread<T: Send + 'static, F: FnOnce() -> T + Send + 'static>(f: F) -> T {
+    f()
+}
+#[cfg(target_os = "windows")]
+#[inline]
+fn on_window_thread<T: Send + 'static, F: FnOnce() -> T + Send + 'static>(f: F) -> T {
+    graph::on_main_thread(f)
 }
 
 impl Preview {
@@ -926,22 +1305,39 @@ impl Preview {
     // draw callbacks still run on the OBS graphics thread.
     fn attach(ns_window: *mut std::os::raw::c_void, rect: PreviewRect) -> Result<Preview, String> {
         unsafe {
-            let (mut px_w, mut px_h) = (0f64, 0f64);
             // Whether the stage is a transparent hole was decided (on the
             // main thread) by live_attach_preview before this command was
             // queued; here we only honour it.
             let transparent = STAGE_TRANSPARENT.load(AtomicOrdering::SeqCst);
             let t_shim = Instant::now();
-            let view = ffi::producer_preview_attach(
-                ns_window,
-                rect.x,
-                rect.y,
-                rect.w,
-                rect.h,
-                transparent as i32,
-                &mut px_w,
-                &mut px_h,
-            );
+            // THE WINDOW MUST BE CREATED ON THE MAIN THREAD. shim.m does this
+            // internally with run_on_main; shim_win.c has no handle to tauri's event
+            // loop, so the marshal lives here. A Win32 window belongs to its creating
+            // thread, and that thread must pump messages -- an HWND made on the engine
+            // thread hangs the UI as soon as the loop touches it.
+            let (view, px) = {
+                let (x, y, w, h) = (rect.x, rect.y, rect.w, rect.h);
+                let parent = ns_window as usize;
+                let t = transparent as i32;
+                graph::on_main_thread(move || {
+                    let (mut pw, mut ph) = (0f64, 0f64);
+                    let v = {
+                        ffi::producer_preview_attach(
+                            parent as *mut std::os::raw::c_void,
+                            x,
+                            y,
+                            w,
+                            h,
+                            t,
+                            &mut pw,
+                            &mut ph,
+                        )
+                    };
+                    (v as usize, (pw, ph))
+                })
+            };
+            let view = view as *mut std::os::raw::c_void;
+            let (px_w, px_h) = px;
             {
                 let ms = t_shim.elapsed().as_millis();
 
@@ -978,6 +1374,9 @@ impl Preview {
                 };
                 ffi::obs_display_create(&init, 0) as usize
             });
+            eprintln!(
+                "[preview] display created: 0x{display_addr:x} view=0x{view_addr:x} {cx}x{cy}"
+            );
             if display_addr == 0 {
                 ffi::producer_preview_detach(view);
                 return Err("obs_display_create failed".into());
@@ -991,9 +1390,23 @@ impl Preview {
     fn set_rect(&mut self, rect: PreviewRect) {
         unsafe {
             let (mut px_w, mut px_h) = (0f64, 0f64);
-            ffi::producer_preview_set_frame(
-                self.view, rect.x, rect.y, rect.w, rect.h, &mut px_w, &mut px_h,
-            );
+            let v = self.view as usize;
+            let (x, y, w, h) = (rect.x, rect.y, rect.w, rect.h);
+            let (pw, ph) = on_window_thread(move || {
+                let (mut pw, mut ph) = (0f64, 0f64);
+                ffi::producer_preview_set_frame(
+                    v as *mut std::os::raw::c_void,
+                    x,
+                    y,
+                    w,
+                    h,
+                    &mut pw,
+                    &mut ph,
+                );
+                (pw, ph)
+            });
+            px_w = pw;
+            px_h = ph;
             let display_addr = self.display as usize;
             let (cx, cy) = (px_w.max(1.0) as u32, px_h.max(1.0) as u32);
             graph::on_main_thread(move || {
@@ -1009,7 +1422,8 @@ impl Preview {
             graph::on_main_thread(move || {
                 ffi::obs_display_destroy(display_addr as *mut ffi::obs_display_t);
             });
-            ffi::producer_preview_detach(self.view);
+            let v = self.view as usize;
+            on_window_thread(move || ffi::producer_preview_detach(v as *mut std::os::raw::c_void));
         }
     }
 }
@@ -1046,10 +1460,12 @@ pub fn user_facing(message: &str) -> String {
     let m = message.trim();
     let lower = m.to_ascii_lowercase();
     if lower.contains("virtual camera") && lower.contains("not installed") {
-        return "The virtual camera isn't installed yet. Approve Producer's \
-camera extension in System Settings › General › Login Items & Extensions › \
-Camera Extensions, then try again."
-            .replace('\n', "");
+        // Same condition, each platform's own remedy: a system extension to
+        // approve on macOS, a DirectShow filter to register on Windows.
+        #[cfg(target_os = "macos")]
+        return String::from("The virtual camera isn't installed yet. Approve Producer's camera extension in System Settings › General › Login Items & Extensions › Camera Extensions, then try again.");
+        #[cfg(not(target_os = "macos"))]
+        return String::from("The virtual camera isn't installed yet. Click Install cam, allow the prompt, then try again.");
     }
     m.replace("OBS Studio", "Producer")
         .replace("obs-studio", "Producer")
@@ -1181,7 +1597,7 @@ pub fn start(
     std::thread::Builder::new()
         .name("live-engine".into())
         .spawn(move || {
-            let report = bootstrap_with_config(Some(&module_config_dir));
+            let report = bootstrap_with_config(&module_config_dir);
             // The real boot leaves its report on disk (beside the legacy
             // harness's), phases included — readable without a debugger.
             if let Some(dir) = module_config_dir.parent() {
@@ -1571,7 +1987,7 @@ pub fn start(
                                     return Ok(true);
                                 }
                                 let id = CString::new("virtualcam_output").unwrap();
-                                let name = CString::new("Producer Virtual Camera").unwrap();
+                                let name = CString::new(graph::VCAM_DEVICE_NAME).unwrap();
                                 let out = ffi::obs_output_create(
                                     id.as_ptr(),
                                     name.as_ptr(),
@@ -1587,7 +2003,10 @@ pub fn start(
                                     // the user as a command error, which never
                                     // passes through the event sink.
                                     let msg = if e.is_null() {
-                                        "the virtual camera refused to start — is the extension approved?".to_string()
+                                        #[cfg(target_os = "macos")]
+                                        { "the virtual camera refused to start — is the extension approved?".to_string() }
+                                        #[cfg(not(target_os = "macos"))]
+                                        { "the virtual camera refused to start — install the camera first".to_string() }
                                     } else {
                                         user_facing(&CStr::from_ptr(e).to_string_lossy())
                                     };
@@ -1720,7 +2139,7 @@ pub fn start(
                     Ok(Command::SetPreviewHidden(hidden)) => {
                         if let Some(p) = preview.as_ref() {
                             unsafe {
-                                ffi::producer_preview_set_hidden(p.view, if hidden { 1 } else { 0 })
+                                { let v = p.view as usize; let h = if hidden { 1 } else { 0 }; on_window_thread(move || ffi::producer_preview_set_hidden(v as *mut std::os::raw::c_void, h)) }
                             };
                         }
                     }

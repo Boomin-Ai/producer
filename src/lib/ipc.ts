@@ -157,6 +157,8 @@ export const ipc = {
   liveSetTransform: (id: string, patch: LiveTransformPatch, commit: boolean) =>
     invoke("live_set_transform", { id, patch, commit }),
   livePreviewHidden: (hidden: boolean) => invoke("live_preview_hidden", { hidden }),
+  /** Stage editor: which item is selected, so the native preview can outline it. */
+  liveSetSelection: (id: string | null) => invoke("live_set_selection", { id }),
   liveOpenChat: (url: string) => invoke("live_open_chat", { url }),
 };
 
@@ -400,6 +402,8 @@ export const recording = {
 };
 
 export interface VcamStatus {
+  /** The camera's label as other apps see it; per platform (Windows: OBS's filter name). */
+  device_name?: string;
   state: "idle" | "requested" | "needs_approval" | "active" | "failed" | "unavailable";
   installed: boolean;
   error: string | null;

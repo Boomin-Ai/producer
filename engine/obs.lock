@@ -15,11 +15,6 @@
   },
   "arch": "arm64",
   "preset": "producer-macos",
-  "patchset": {
-    "dir": "engine/patches",
-    "target": "plugins/obs-browser",
-    "sha256": "34aa071161df4ce8e68ad7324b7410d528e3905cd8a4f30c33b25d7aac1b1d6a"
-  },
   "fallback": {
     "mode": "official-release-extract",
     "note": "R1 fallback per LIVE-REVIEW.md v1.1.1: local spike engine extracted from the official signed release; source build via producer-macos preset is validated in engine CI.",
@@ -32,5 +27,19 @@
     "obs-ffmpeg",
     "bin/obs-ffmpeg-mux",
     "mac-virtualcam + camera system extension"
+  ],
+  "patchsets": [
+    {
+      "dir": "engine/patches",
+      "target": "plugins/obs-browser",
+      "sha256": "1581c351ed25c2fbd83a8c1b394fd90a48374102095e10270a2375eb79008438",
+      "note": "obs-browser: libdispatch main-thread pump for hosts without a QApplication (macOS), Qt guarded on ENABLE_BROWSER_QT_LOOP (both); Windows: CEF helper exe named by BROWSER_HELPER_OUTPUT_NAME (plugin spawns it by the same name)"
+    },
+    {
+      "dir": "engine/patches/win-dshow",
+      "target": ".",
+      "sha256": "e8e444c32953d9a1cc9c2d887c57f5383d476939370b66df27673c817c29311c",
+      "note": "win-dshow virtual camera: the DirectShow filter's user-visible name is Producer Virtual Camera, not OBS Virtual Camera; output registered unconditionally, filter checked at start (install without restart)"
+    }
   ]
 }

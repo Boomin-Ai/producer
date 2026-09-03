@@ -66,10 +66,11 @@ if [[ -f "$PLUGDIR/obs-browser.dll" ]]; then
   # plugin loads, CefInitialize succeeds, and every browser source is black
   # because no render/GPU/network subprocess can spawn - a failure nothing else
   # here would catch.
-  if [[ -f "$PLUGDIR/obs-browser-page.exe" ]]; then
-    echo "  ok   CEF subprocess obs-browser-page.exe"
+  helper_exe="$(lock_get_file engine/producer-presets.json "[c for c in d['configurePresets'] if c['name']=='producer-windows'][0]['cacheVariables']['BROWSER_HELPER_OUTPUT_NAME']['value']").exe"
+  if [[ -f "$PLUGDIR/$helper_exe" ]]; then
+    echo "  ok   CEF subprocess $helper_exe"
   else
-    echo "  FAIL obs-browser-page.exe MISSING - browser sources render black" >&2
+    echo "  FAIL $helper_exe MISSING - browser sources render black" >&2
     fail=1
   fi
   # The .pak set is versioned by CEF build (resources.pak, chrome_100_percent.pak,
@@ -92,7 +93,20 @@ else
   fail=1
 fi
 
-# ── 3. zero-Qt scan ──────────────────────────────────────────────────────────
+# ── 2b. the DirectShow virtual camera filter ─────────────────────────────────
+# win-dshow builds it (ENABLE_VIRTUALCAM) into data/obs-plugins/win-dshow as the
+# 64- and 32-bit COM modules the installer registers with regsvr32. Without them
+# "Install cam" has nothing to install and the virtualcam_output has no reader.
+for m in obs-virtualcam-module64.dll obs-virtualcam-module32.dll; do
+  if [[ -f "$STAGE/data/obs-plugins/win-dshow/$m" ]]; then
+    echo "  ok   virtual camera $m"
+  else
+    echo "  FAIL virtual camera MISSING: data/obs-plugins/win-dshow/$m" >&2
+    fail=1
+  fi
+done
+
+# ── 3. zero-Qt scan + import closure ────────────────────────────────────────
 # resolve_python (engine-lib.sh) probes candidates by EXECUTING them, because
 # Windows ships a python3 App Execution Alias that exists on PATH and fails when
 # run - so presence is not proof, and a silent no-op here reads as a clean pass.
@@ -111,6 +125,56 @@ if not os.path.isdir(stage):
 # the DLL by name. Case-insensitive because import casing is not normalised.
 pattern = re.compile(rb"Qt[56][A-Za-z]*\.dll", re.IGNORECASE)
 
+have = set()      # every binary the artifact ships, lowercased
+imports = {}      # binary -> the DLL names it imports
+
+def pe_imports(blob):
+    """Import-table DLL names, or [] if the file is not a PE we can read."""
+    try:
+        pe = int.from_bytes(blob[0x3C:0x40], 'little')
+        if blob[pe:pe+4] != b'PE\0\0':
+            return []
+        nsec = int.from_bytes(blob[pe+6:pe+8], 'little')
+        optsz = int.from_bytes(blob[pe+20:pe+22], 'little')
+        opt = pe + 24
+        magic = int.from_bytes(blob[opt:opt+2], 'little')
+        dd = opt + (112 if magic == 0x20b else 96)
+        imp_rva = int.from_bytes(blob[dd+8:dd+12], 'little')
+        if not imp_rva:
+            return []
+        secs = []
+        so = opt + optsz
+        for s in range(nsec):
+            o = so + s*40
+            vsz = int.from_bytes(blob[o+8:o+12], 'little')
+            vaddr = int.from_bytes(blob[o+12:o+16], 'little')
+            rawptr = int.from_bytes(blob[o+20:o+24], 'little')
+            secs.append((vaddr, vsz, rawptr))
+        def r2o(rva):
+            for va, vs, rp in secs:
+                if va <= rva < va + max(vs, 1):
+                    return rp + (rva - va)
+            return None
+        out, o = [], r2o(imp_rva)
+        if o is None:
+            return []
+        while True:
+            ent = blob[o:o+20]
+            if len(ent) < 20 or ent == b'\0'*20:
+                break
+            namerva = int.from_bytes(ent[12:16], 'little')
+            if not namerva:
+                break
+            no = r2o(namerva)
+            if no is None:
+                break
+            out.append(blob[no:blob.index(b'\0', no)].decode('ascii', 'replace').lower())
+            o += 20
+        return out
+    except Exception:
+        return []
+
+offenders = []
 offenders = []
 scanned = 0
 for root, _, names in os.walk(stage):
@@ -125,6 +189,8 @@ for root, _, names in os.walk(stage):
         except OSError as exc:
             print(f"  WARN unreadable: {path} ({exc})")
             continue
+        have.add(n.lower())
+        imports[n.lower()] = pe_imports(blob)
         hits = sorted({m.group(0).decode("ascii", "replace") for m in pattern.finditer(blob)})
         if hits:
             offenders.append((os.path.relpath(path, stage), hits))
@@ -141,6 +207,38 @@ if offenders:
         print(f"    {rel}: {', '.join(hits)}", file=sys.stderr)
     sys.exit(1)
 print("  ok   zero-Qt closure")
+
+# ── IMPORT CLOSURE ───────────────────────────────────────────────────────────
+# The macOS gate walks @rpath and asserts every dependency EXISTS in the
+# artifact. The Windows gate did not, and that gap shipped: obs.dll imports
+# avcodec/avformat/avutil/swscale/swresample/zlib from obs-deps, the no-frontend
+# build never copies them into rundir, and nothing noticed --- because a dev box
+# happened to have them beside the executable from an unrelated extract.
+#
+# A DLL is satisfied if it is IN the artifact, or is a real Windows system DLL,
+# or is an API set. Testing System32 by existence rather than keeping a hand
+# list means the check cannot rot.
+sysroot = os.environ.get('SystemRoot', r'C:\Windows')
+def satisfied(dep):
+    if dep in have:
+        return True
+    if dep.startswith('api-ms-win-') or dep.startswith('ext-ms-'):
+        return True
+    return os.path.exists(os.path.join(sysroot, 'System32', dep))
+
+unmet = {}
+for owner, deps in imports.items():
+    for d in deps:
+        if not satisfied(d):
+            unmet.setdefault(d, []).append(owner)
+
+if unmet:
+    print(f"  FAIL {len(unmet)} unresolved imports --- the artifact is NOT self-contained:", file=sys.stderr)
+    for dep in sorted(unmet):
+        owners = ', '.join(sorted(unmet[dep])[:3])
+        print(f"    {dep}  <- {owners}", file=sys.stderr)
+    sys.exit(1)
+print(f"  ok   import closure ({len(have)} binaries, every dependency resolved)")
 PY
 
 if [[ $fail -ne 0 ]]; then

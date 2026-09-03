@@ -105,6 +105,11 @@ extern "C" {
     pub fn obs_module_failure_info_free(mfi: *mut obs_module_failure_info);
     pub fn obs_post_load_modules();
     pub fn obs_log_loaded_modules();
+    // Deprecated upstream at 32.1.2 but still exported and still the only way to
+    // tell libobs where its OWN data lives. Windows resolves that with the
+    // relative path "../../data/libobs/" against the process CWD, which is right
+    // for obs64.exe and never right for us.
+    pub fn obs_add_data_path(path: *const c_char);
     pub fn obs_add_module_path(bin: *const c_char, data: *const c_char);
     pub fn obs_enum_source_types(idx: usize, id: *mut *const c_char) -> bool;
     pub fn obs_enum_encoder_types(idx: usize, id: *mut *const c_char) -> bool;
@@ -120,6 +125,37 @@ extern "C" {
         hotkey_data: *mut obs_data_t,
     ) -> *mut obs_source_t;
     pub fn obs_source_release(source: *mut obs_source_t);
+    pub fn obs_get_output_source(channel: u32) -> *mut obs_source_t;
+    pub fn obs_get_main_texture() -> *mut c_void;
+    pub fn obs_get_video_sdr_white_level() -> f32;
+    pub fn obs_scene_from_source(source: *const obs_source_t) -> *mut c_void;
+    pub fn obs_scene_find_source(scene: *mut c_void, name: *const c_char) -> *mut obs_sceneitem_t;
+    pub fn obs_sceneitem_get_box_transform(item: *const obs_sceneitem_t, transform: *mut matrix4);
+    pub fn gs_render_start(b_new: bool);
+    pub fn gs_render_stop(mode: c_int);
+    pub fn gs_vertex2f(x: f32, y: f32);
+    pub fn gs_matrix_scale3f(x: f32, y: f32, z: f32);
+    pub fn gs_get_color_space() -> c_int;
+    pub fn gs_effect_set_texture(param: *mut c_void, val: *mut c_void);
+    pub fn gs_enable_framebuffer_srgb(enable: bool);
+    pub fn gs_framebuffer_srgb_enabled() -> bool;
+    pub fn gs_matrix_push();
+    pub fn gs_matrix_pop();
+    pub fn gs_matrix_translate3f(x: f32, y: f32, z: f32);
+    pub fn gs_get_render_target() -> *mut c_void;
+    pub fn gs_texture_get_color_format(tex: *const c_void) -> c_int;
+    pub fn gs_effect_get_param_by_name(effect: *mut c_void, name: *const c_char) -> *mut c_void;
+    pub fn gs_effect_set_vec4(param: *mut c_void, val: *const vec4);
+    pub fn gs_effect_get_technique(effect: *mut c_void, name: *const c_char) -> *mut c_void;
+    pub fn gs_technique_begin(tech: *mut c_void) -> usize;
+    pub fn gs_technique_begin_pass(tech: *mut c_void, pass: usize) -> bool;
+    pub fn gs_technique_end_pass(tech: *mut c_void);
+    pub fn gs_technique_end(tech: *mut c_void);
+    pub fn gs_draw_sprite(tex: *mut c_void, flip: u32, width: u32, height: u32);
+    pub fn obs_get_source_by_name(name: *const c_char) -> *mut obs_source_t;
+    pub fn gs_texture_get_width(tex: *const c_void) -> u32;
+    pub fn gs_texture_get_height(tex: *const c_void) -> u32;
+    pub fn obs_get_base_effect(effect: c_int) -> *mut c_void;
     pub fn obs_set_output_source(channel: u32, source: *mut obs_source_t);
     pub fn obs_source_get_width(source: *mut obs_source_t) -> u32;
     /// Probe bindings (room-open first-frame investigation).
@@ -197,17 +233,6 @@ extern "C" {
         param: *mut c_void,
     );
     pub fn obs_remove_raw_video_callback(callback: raw_video_cb_t, param: *mut c_void);
-}
-
-// CoreGraphics TCC preflight/request for Screen Recording.
-// raw-dylib: an EXTRACTED OBS release ships obs.dll with no obs.lib, and
-// MSVC cannot link a DLL without an import library. raw-dylib makes rustc
-// synthesise the import stubs from the DLL name, so a downloaded release
-// works as a dev engine. Harmless when a source build DID produce a .lib.
-#[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
-extern "C" {
-    pub fn CGPreflightScreenCaptureAccess() -> bool;
-    pub fn CGRequestScreenCaptureAccess() -> bool;
 }
 
 // obs-data settings (obs_source_create input)
@@ -311,6 +336,15 @@ pub struct vec4 {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct matrix4 {
+    pub x: vec4,
+    pub y: vec4,
+    pub z: vec4,
+    pub t: vec4,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct vec2 {
     pub x: f32,
     pub y: f32,
@@ -344,6 +378,7 @@ extern "C" {
     pub fn obs_get_video_info(ovi: *mut obs_video_info) -> bool;
 
     pub fn gs_viewport_push();
+    pub fn gs_set_viewport(x: c_int, y: c_int, width: c_int, height: c_int);
     pub fn gs_viewport_pop();
     pub fn gs_projection_push();
     pub fn gs_projection_pop();
@@ -413,6 +448,10 @@ extern "C" {
     pub fn producer_open_camera_settings();
     /// Virtual camera (R13): ask macOS to install the bundled CMIO extension.
     pub fn producer_vcam_activate();
+    #[cfg(target_os = "windows")]
+    pub fn producer_sdr_white_nits() -> f32;
+    #[cfg(target_os = "windows")]
+    pub fn producer_vcam_set_module_dir(dir: *const c_char);
     /// 0 idle, 1 requested, 2 needs approval, 3 active, 4 failed; fills `buf`
     /// with the last error.
     pub fn producer_vcam_state(buf: *mut c_char, len: c_int) -> c_int;
@@ -539,11 +578,12 @@ extern "C" {
 // picker uses (window-utils.m); the SCK source has no default-display
 // behavior, it requires an explicit display_uuid.
 pub const K_CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
-// raw-dylib: an EXTRACTED OBS release ships obs.dll with no obs.lib, and
-// MSVC cannot link a DLL without an import library. raw-dylib makes rustc
-// synthesise the import stubs from the DLL name, so a downloaded release
-// works as a dev engine. Harmless when a source build DID produce a .lib.
-#[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
+// macOS SYSTEM symbols, not libobs ones: this block must not EXIST on Windows.
+// It was annotated with the obs raw-dylib attribute in the first pass, which
+// made rustc synthesise imports for them FROM obs.dll -- and the process then
+// died at load with STATUS_ENTRYPOINT_NOT_FOUND, because obs.dll of course
+// exports no CoreFoundation.
+#[cfg(target_os = "macos")]
 extern "C" {
     pub fn CGMainDisplayID() -> u32;
     pub fn CGDisplayCreateUUIDFromDisplayID(display: u32) -> *const c_void;
@@ -559,11 +599,12 @@ extern "C" {
 
 // Grand Central Dispatch + pthread, for marshalling OBS UI tasks onto the
 // macOS main thread per the §5.1 invariant.
-// raw-dylib: an EXTRACTED OBS release ships obs.dll with no obs.lib, and
-// MSVC cannot link a DLL without an import library. raw-dylib makes rustc
-// synthesise the import stubs from the DLL name, so a downloaded release
-// works as a dev engine. Harmless when a source build DID produce a .lib.
-#[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
+// macOS SYSTEM symbols, not libobs ones: this block must not EXIST on Windows.
+// It was annotated with the obs raw-dylib attribute in the first pass, which
+// made rustc synthesise imports for them FROM obs.dll -- and the process then
+// died at load with STATUS_ENTRYPOINT_NOT_FOUND, because obs.dll of course
+// exports no CoreFoundation.
+#[cfg(target_os = "macos")]
 extern "C" {
     pub static _dispatch_main_q: c_void;
     pub fn dispatch_async_f(
@@ -581,11 +622,12 @@ extern "C" {
 
 // CoreFoundation run-loop pump for headless self-test mode (drains the GCD
 // main queue while the engine thread bootstraps).
-// raw-dylib: an EXTRACTED OBS release ships obs.dll with no obs.lib, and
-// MSVC cannot link a DLL without an import library. raw-dylib makes rustc
-// synthesise the import stubs from the DLL name, so a downloaded release
-// works as a dev engine. Harmless when a source build DID produce a .lib.
-#[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
+// macOS SYSTEM symbols, not libobs ones: this block must not EXIST on Windows.
+// It was annotated with the obs raw-dylib attribute in the first pass, which
+// made rustc synthesise imports for them FROM obs.dll -- and the process then
+// died at load with STATUS_ENTRYPOINT_NOT_FOUND, because obs.dll of course
+// exports no CoreFoundation.
+#[cfg(target_os = "macos")]
 extern "C" {
     pub static kCFRunLoopDefaultMode: *const c_void;
     pub fn CFRunLoopRunInMode(

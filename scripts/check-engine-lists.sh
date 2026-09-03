@@ -37,3 +37,14 @@ if [[ $canonical != "$effective" ]]; then
 fi
 
 echo "RESULT: PASS — one plugin list (${#ENGINE_PLUGINS[@]} plugins)"
+
+# The virtual camera CLSID lives in two places by necessity (a CMake cache var
+# for the engine build, a C literal for the shim's registry probe). They must
+# agree or "Install cam" registers one filter and probes for another.
+preset_guid="$(lock_get_file engine/producer-presets.json "[c for c in d['configurePresets'] if c['name']=='producer-windows'][0]['cacheVariables']['VIRTUALCAM_GUID']['value']")"
+shim_guid="$(grep -o 'PRODUCER_VCAM_CLSID L"{[0-9A-Fa-f-]*}"' src-tauri/src/live/shim_win.c | sed 's/.*{\(.*\)}.*/\1/')"
+if [[ "$preset_guid" != "$shim_guid" ]]; then
+  echo "FATAL: VIRTUALCAM_GUID differs: preset=$preset_guid shim=$shim_guid" >&2
+  exit 1
+fi
+echo "  ok   VIRTUALCAM_GUID agrees: $preset_guid"

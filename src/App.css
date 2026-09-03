@@ -5222,7 +5222,7 @@ textarea::placeholder {
 }
 .net-book:hover,
 .net-conn.booking .net-book { color: var(--fg-1); border-color: var(--line-2); }
-.net-deals { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px; }
+.net-deals { flex-basis: 100%; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px; }
 .net-deal {
   font-size: 10.5px;
   font-weight: 650;
@@ -5233,6 +5233,12 @@ textarea::placeholder {
   color: var(--fg-2);
   text-transform: capitalize;
   white-space: nowrap;
+  /* one line, never wider than the panel: the full text lives in the title */
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
 }
 .net-deal.funded,
 .net-deal.delivered { color: var(--mint); border-color: color-mix(in srgb, var(--mint) 35%, transparent); }
@@ -8037,3 +8043,34 @@ button.ks-key:hover { border-color: var(--line-2); }
 .net-conn { padding: 8px; border-radius: var(--r-ctl); }
 .net-ava, .net-ava-ph { width: 30px; height: 30px; border-radius: 9px; font-size: 13px; font-weight: 700; }
 .net-rail .cr-hint { padding: 8px; font-size: 12px; color: var(--fg-3); line-height: 1.4; }
+
+/* Scrollbars (windows-port). macOS uses overlay scrollbars that are invisible
+   until you scroll; WebView2 on Windows paints the classic light-grey ones
+   inside our dark UI. Style them thin and dark everywhere so both platforms
+   read the same. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner,
+*::-webkit-scrollbar-button {
+  background: transparent;
+  display: none;
+}

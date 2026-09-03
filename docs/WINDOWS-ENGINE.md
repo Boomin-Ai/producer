@@ -245,6 +245,22 @@ artifact on both platforms and buy nothing.
 
 Do not "fix" this in either direction without that argument changing.
 
+### The name identifies the INPUTS, not the build
+
+`lock_hash` is `sha256(engine/obs.lock)`, so the artifact name pins the SOURCE
+and the patchset --- not the build scripts. A fix to build-engine-windows.sh
+changes what the artifact CONTAINS while leaving its name identical. That is
+exactly what happened when obs-deps staging was added: two green runs, two
+artifacts both called `producer-libobs-windows-x64-b5a0b76dc157`, one of them
+missing eleven DLLs.
+
+`release.yml` survives this because it iterates `gh run list` newest-first and
+breaks at the first match, so the most recent build of a given lock wins. Worth
+knowing that it is run ORDERING doing that work, not the hash --- if the search
+ever became order-insensitive, it could resolve a stale artifact by a name that
+looks correct. The closure gate is the real defence: a broken artifact does not
+reach a green run at all.
+
 libdshowcapture also carries its own submodule
 (`external/capture-device-support`), so it is initialised `--recursive` —
 scoped to that one path, so obs-websocket does not drag in a dependency tree for
@@ -349,6 +365,327 @@ Two consequences that are easy to get wrong:
    only once Windows is green, or mark the Windows job `continue-on-error` so
    runs conclude green while it is still WIP. Do not merge a lock edit and hope.
 
+## The engine boots (rung 1.5)
+
+`PRODUCER_LIVE_SELFTEST=1` exits 0 on Windows against the CI-built engine:
+`ok=true`, `graphics_backend=d3d11` (no OpenGL fallback), zero failed modules,
+zero missing ids, 57 sources including `browser_source` with CEF
+127.0.6533.120. Five defects sat between a green `cargo check` and that line,
+and none of them were visible to the compiler --- see the commit for the full
+list. The two most transferable:
+
+- **`raw-dylib` is a statement about WHERE a symbol lives.** It was applied to
+  extern blocks declaring macOS SYSTEM symbols (CoreFoundation, GCD, CFRunLoop),
+  so rustc synthesised imports for `CFRelease` and friends FROM obs.dll and the
+  process died at load with `STATUS_ENTRYPOINT_NOT_FOUND`. System frameworks
+  must be `cfg`-gated to their OS, not linked differently on another one. The
+  fastest way to find it: parse obs.dll's export table and diff it against the
+  FFI declarations.
+- **libobs data paths REQUIRE a trailing slash.** `check_path()` does
+  `dstr_copy(out, path); dstr_cat(out, file)` with no separator inserted, so
+  `.../data/libobs` yields `.../data/libobsformat_conversion.effect` and every
+  effect lookup fails. It surfaces as `obs_reset_video failed: d3d11 rc=-1,
+  opengl rc=-1` --- a graphics error with a filesystem cause. OBS's own defaults
+  all carry the slash.
+
+Also worth knowing: with a null `module_config_dir`, `obs_module_config_path`
+falls back to the process CWD and win-capture writes `win-capture/*.json`
+there. Dev-selftest-only today (the app always passes a real dir), but a guard
+belongs on the full-engine path.
+
+## Windows device vocabulary, enumerated from a real machine
+
+`--live-props` dumps the property names libobs actually exposes, which is the
+only trustworthy source for picker code. The id list is per-platform for the
+same reason everything else here is. Names only --- run it yourself for values:
+
+| source | properties that matter |
+|---|---|
+| `dshow_input` (camera) | `video_device_id`, `audio_device_id`, `res_type`, `resolution`, `frame_interval`, `video_format`, `buffering`, `hw_decode`, `deactivate_when_not_showing`, `audio_output_mode` |
+| `wasapi_input_capture` (mic) | `device_id`, `use_device_timing` |
+| `wasapi_output_capture` (desktop audio) | `device_id`, `use_device_timing` |
+| `monitor_capture` (display) | `method`, `monitor_id`, `capture_cursor`, `force_sdr` |
+| `window_capture` | `window`, `method`, `priority`, `client_area`, `cursor` |
+| `browser_source` (guests) | `url`, `width`, `height`, `fps_custom`, `fps`, `css`, `reroute_audio`, `shutdown` |
+
+Three notes for picker work:
+
+- Audio devices are identified by GUID strings (`{0.0.1.00000000}.{...}`) with
+  `default` as a valid id --- not by index.
+- `window_capture`'s ids are `title:windowclass:executable`, with `:` in the
+  title escaped as `#3A`. Parse accordingly.
+- `browser_source`'s `shutdown` is shutdown-on-invisible. It DESTROYS the
+  browser when the source stops showing, which matters for anything that
+  renders a guest outside the composited scene.
+
+## There is exactly one valid shipped layout
+
+`producer.exe` imports `obs.dll` statically, so the loader resolves it BEFORE
+any of our code runs --- and it searches the executable's own directory, not
+subdirectories of it. So the bundle must FLATTEN the artifact's `bin/` beside
+the exe, with `obs-plugins/` and `data/` as siblings:
+
+    producer.exe
+    obs.dll, libobs-d3d11.dll, avcodec-61.dll, ...   (contents of bin/)
+    obs-plugins/64bit/...
+    data/...
+
+`windows_engine_root()` probes for exactly that and nothing else. An engine at
+`<exe_dir>/engine` is not an alternative layout --- obs.dll could never load
+from there, so that code would be unreachable.
+
+Verified end to end: that layout boots with NO `PATH` entry and NO
+`PRODUCER_ENGINE_DIR` --- `ok=true`, d3d11, 12/12 modules, browser_source
+present.
+
+### The dev-box trap this hid
+
+Because the loader prefers the executable's own directory, an OBS extract
+copied into `target/debug/` for early dev work meant the app was running on
+**that** `obs.dll`, not the artifact's --- with `PATH` pointing at the artifact
+and having no effect, since the exe directory wins. A selftest reported
+`ok=true` while libobs came from a completely different build.
+
+It hid a real defect: the artifact's `bin/` had obs.dll but NOT its dependency
+closure. `rundir/Release/bin/64bit` holds what WE build; ffmpeg, zlib, x264,
+curl, rist and srt live in the prebuilt obs-deps bundle, and the no-frontend
+build never copies them into rundir. Exactly the same shape as the CEF miss:
+the piece a full OBS build gets for free from a step we do not run.
+
+To check what a running process ACTUALLY loaded, rather than what you believe
+it loaded:
+
+```powershell
+(Get-Process -Id <pid>).Modules | Where-Object { $_.ModuleName -match 'obs' } |
+  Select-Object ModuleName, FileName
+```
+
+The gate now closes this permanently: it walks every PE in the artifact, reads
+its import table, and fails on any dependency that is neither shipped nor a
+real Windows system DLL. System-ness is tested by existence in System32 rather
+than a hand-kept list, so it cannot rot. This is the Windows analogue of the
+macOS gate's @rpath closure walk, which the first version of this gate simply
+did not have.
+
+## The standalone-render contract
+
+Rendering a source OUTSIDE the composited scene --- a thumbnail, a preview tile,
+any `gs_texrender` pass --- has three requirements, and missing any one of them
+produces a BLACK frame with no error anywhere. All three are cross-platform;
+they are recorded here because rung 3+ needs them and because two of the three
+cost the macOS session a day.
+
+Upstream already has the canonical sequence. From
+`frontend/utility/ScreenshotObj.cpp` at the pinned commit, verbatim:
+
+```c
+gs_blend_state_push();
+gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
+if (source) {
+        obs_source_inc_showing(source);
+        obs_source_video_render(source);
+        obs_source_dec_showing(source);
+} else {
+        obs_render_main_texture();
+}
+gs_blend_state_pop();
+```
+
+Copy it. Do not reinvent it.
+
+1. **Right thread.** Every render-target call goes through
+   `obs_queue_task(OBS_TASK_GRAPHICS, ...)`. This is the v0.4.3 hotfix rule and
+   it applies to any D3D11 readback the Windows port adds.
+2. **Clean blend state.** A standalone render inherits whatever blend function
+   the context last used, and a leftover `(ZERO, x)` multiplies every pixel to
+   nothing. The push/`GS_BLEND_ONE, GS_BLEND_ZERO`/pop above is why OBS's own
+   screenshots work. It presents as "readback is broken" when it is "blend
+   state is dirty" --- and it hits EVERY source type, so a camera that renders
+   black is this, not a visibility problem.
+3. **Showing refs.** libobs derives "showing" from scene/output references, not
+   from who calls `obs_source_video_render`. A source that is not showing gets
+   `WasHidden(true)` forwarded to CEF and STOPS PRODUCING FRAMES;
+   obs-browser's whole render body is `if (texture) { ... }`, so it then draws
+   nothing. `obs_source_inc_showing`/`dec_showing` is the contract for
+   "I am rendering this outside a scene".
+
+   Two follow-ons: the repaint after `WasHidden(false)` is ASYNC, so the first
+   capture after inc_showing still gets the stale or empty texture --- allow a
+   frame or two. And `browser_source`'s `shutdown` property
+   (shutdown-on-invisible) DESTROYS the browser on hide, so with it set,
+   recreation takes far longer than that.
+
+Diagnostic shortcut, learned the expensive way: **render a CAMERA source
+through the same path as a control.** Camera green + browser black isolates to
+the showing gate. BOTH black is blend state, because a camera has no
+visibility-gated frame production to lose.
+
+## The signature failure class
+
+> **When a subset build fails, ask what the FULL build does that we skipped.**
+
+Three of this port's hardest bugs are the same bug wearing different clothes,
+and all three are a step a complete OBS build performs that ours does not:
+
+| symptom | what the full build does for free |
+|---|---|
+| `C1083: Cannot open include file: 'QApplication'` | ships the frontend, so Qt headers are present |
+| browser sources would render black (`obs-browser-page.exe` absent) | builds the `EXCLUDE_FROM_ALL` helper as a dependency of a target we do not build |
+| artifact missing eleven DLLs (ffmpeg, zlib, x264, curl, rist, srt) | copies the obs-deps runtime into rundir during packaging |
+
+Ask it early. It is faster than reading the failure.
+
+## Debugging: check belief against the process
+
+The FIRST move whenever "it works" arrives before you understand why:
+
+```powershell
+(Get-Process -Id <pid>).Modules |
+  Where-Object { $_.ModuleName -match 'obs' } |
+  Select-Object ModuleName, FileName
+```
+
+(macOS: `vmmap <pid>` or `lsof -p <pid>`.)
+
+That one line turned "the engine boots against the CI artifact" into "the
+engine boots against an extract someone left in target/debug" --- and the
+correction exposed a defect the false belief was hiding. On Windows especially:
+**the loader prefers the executable's own directory over PATH**, so a stale DLL
+beside the exe silently wins over the one you carefully put on the path.
+
+Second move, for the artifact rather than the process: run the closure gate. It
+answers "is this thing self-contained" without needing to run it at all.
+
+## Rung 2: the preview shows the screen
+
+Room opens, the preview HWND composites the live mix on D3D11, screen capture
+delivers, the overlay plays --- on an HDR monitor, through libobs's honest
+scRGB path. Confirmed on hardware (stage mean RGB 144,148,152).
+
+### The footgun: `sdr_white_level` is frontend-owned
+
+On an HDR monitor libobs-d3d11 creates the preview swapchain in scRGB
+(RGBA16F) and `obs_render_main_texture` draws the mix with the `DrawMultiply`
+technique scaled by `obs_get_video_sdr_white_level() / 80`. That field is
+written ONLY by `obs_set_video_levels`, whose sole caller in the OBS tree is
+the Studio frontend. A bare libobs host reads **0**: every pixel of a perfectly
+rendered mix multiplied by zero, and a solid-black preview with nothing in any
+log. macOS never takes the branch (Metal + SCK report sRGB).
+
+Fix: `obs_set_video_levels(300.0, 1000.0)` right after `obs_reset_video`
+succeeds. Both platforms; inert where the branch is not taken.
+
+### How it was found (the method is the point)
+
+Each step measured on screen, not reasoned: HWND topmost and black → `gs_clear`
+presents → draw callback fires at 30 fps at size → channel 0 is `main`, main
+texture non-null → mix reads back magenta with a colour item (after fixing a
+readback that used the wrong format --- check libobs's log for
+`device_copy_texture ... formats do not match` before trusting a readback) →
+a manual solid draw lands → an sRGB-framebuffer draw lands → the mix drawn by
+hand with plain `Draw` shows scene, cursor and video → only libobs's own
+scRGB draw is black → read the multiplier in `obs.c`. Sources, scene,
+capture, effects, swapchain, z-order and DirectComposition were each excluded
+by pixels before the cause was read in the source.
+
+Reusable probes from it: `obs_get_output_source(0)` name, `obs_get_main_texture()`
+readback in `gs_texture_get_color_format`, per-source
+`enabled/showing/active/size`, `gs_get_color_space()` for the display, a
+`color_source_v3` injected via `live_add_source` over CDP, and a
+`CopyFromScreen` pixel mean over the preview HWND's rect.
+
+### Also settled on the way
+
+- **Win32 windows belong to the thread that created them, and it must pump.**
+  The preview HWND created on the engine thread froze the UI. All preview
+  window ops marshal to the main thread; `DestroyWindow` fails from any other.
+- Source ids and device keys are per-platform in `graph::ids`; the main
+  display and default camera resolve from libobs's own enumeration.
+- `monitor_capture` pinned to DXGI duplication (proven); WGC untested here.
+- `has-size ≠ has-frames` on Windows: monitor_capture reports the display rect
+  before any frame arrives, so readiness must not key on width alone.
+
+### The transparent-hole mode does NOT work on Windows (tried, measured)
+
+`tauri.windows.conf.json` transparent + the room's CSS hole + preview HWND
+placed below the webview: the DESKTOP behind the app showed through the whole
+window. DWM composes the transparent WebView2 visual over the top-level window;
+a sibling child HWND beneath it is not part of what shows through. So the hole
+cannot be done with sibling windows. A real one needs WebView2 composition
+hosting (the preview as a DirectComposition visual in the same tree), which is
+a wry/tauri-level change.
+
+Float mode is therefore the Windows design for now, with two mitigations:
+mouse input is forwarded from the preview to the webview's input window (so
+item drags start), and the preview is inset by the outline width so an item
+filling the stage keeps its selection ring visible. Toasts and controls drawn
+over the middle of the stage are still hidden behind the video.
+
+### Virtual camera
+
+win-dshow's DirectShow filter, `obs-virtualcam-module64/32.dll`, built by the
+engine job (`ENABLE_VIRTUALCAM` TRUE on Windows only) into
+`data/obs-plugins/win-dshow`, registered as a COM server with `regsvr32 /i /s`
+--- exactly OBS's own `virtualcam-install.bat`. The shim probes
+`HKCR\CLSID\{VIRTUALCAM_GUID}` for "installed" and runs an elevated regsvr32
+(UAC prompt) for "activate", reporting the macOS state codes so the UI has no
+platform branch.
+
+Two facts that matter:
+
+- **On a machine with OBS Studio installed the CLSID is already registered by
+  OBS**, from Program Files. We report installed/active, "Install cam" hides,
+  and our `virtualcam_output` feeds OBS's filter through the shared-memory
+  queue. It works, and it is a coupling.
+- **The camera's label is `"OBS Virtual Camera"`** --- a compiled string in the
+  module --- and the guest render page finds the return-video device BY LABEL.
+  `VCAM_DEVICE_NAME` is per platform and travels to the room as
+  `vcam_status.device_name`. Renaming to "Producer Virtual Camera" (and
+  coexisting with a user's OBS) needs our own `VIRTUALCAM_GUID` plus a small
+  win-dshow patch: a second patchset target and a lock re-key, so a deliberate
+  step.
+
+### Selection outline: drawn natively, in the display's colour space
+
+In float mode the webview's selection outline is hidden under the video, so the
+room mirrors its selected item id to `live_set_selection` and `preview_draw`
+draws the item's `obs_sceneitem_get_box_transform` as a 2-px line loop plus
+eight handles --- inside the DISPLAY pass only, never the mix (the mix feeds the
+encoder, the recording, the virtual camera and the guests). This is how OBS
+Studio draws its own selection.
+
+The colour has to be colour-space aware. On an HDR monitor the preview
+swapchain is scRGB (FP16): values are linear and SDR white sits at
+`sdr_white_level / 80`. A plain #22c55e written there reads dim and
+yellow-shifted. And the white level itself should be the DISPLAY's, not OBS's
+300-nit default: `producer_sdr_white_nits()` reads
+`DISPLAYCONFIG_SDR_WHITE_LEVEL` (240 on the MSI here) so the preview and its
+outline match the SDR desktop around them.
+
+### Still open from rung 2
+
+- **Float-mode occlusion.** The preview is an opaque child HWND above the
+  webview, so anything the UI paints over the stage (toasts, item handles,
+  pills) disappears behind it. macOS avoids this with the transparent-hole
+  mode (`producer_preview_prepare_window` → WebKit `drawsBackground = NO`,
+  preview placed BELOW the webview). The Windows equivalent is a transparent
+  WebView2 default background + `below_webview` placement --- the shim already
+  honours the z-order argument; the WebView2 half is unbuilt.
+
+## Rung 3 notes, from the macOS guest work
+
+- The guest page negotiates **VP8 first and H.264 last** on purpose: on macOS
+  hardware-decoded H.264 never reached CEF's offscreen readback (black tile
+  with `readyState 4`). The Windows decode path differs; keep the preference
+  until a tile has been seen with pixels.
+- Guest slots are plain `browser_source` items born hidden and muted
+  (graph.rs, `add_extra` for Guest), promoted by `setStage`. The room's stage
+  list is the host's truth and is published on every change; the join page
+  listens on the unconfirmed list and only speaks once host-confirmed.
+- `has-frame` semantics are per platform: on Windows a browser/monitor source
+  has size before it has frames, so readiness must observe something that only
+  moves with frames (the thumb ring, or a raw-frame counter).
+
 ## Still open
 
 - `obs.lock` carries no Windows dependency pins. OBS 32.1.2 has no
@@ -359,3 +696,43 @@ Two consequences that are easy to get wrong:
   renders -> RTMP out -> win-dshow virtual camera.
 - The local R1-fallback extract has 13 plugins and NO obs-browser, so guests
   cannot work against it. Rung 4 needs a CI-built engine.
+
+## Virtual camera identity (verified 2026-09-03)
+
+Nothing user-visible may say OBS. On Windows the whole camera surface is two
+compiled literals in `plugins/win-dshow/virtualcam-module/virtualcam-module.cpp`
+(the COM server description and the DirectShow FriendlyName) — patched to
+"Producer Virtual Camera" by `engine/patches/win-dshow/`, the second entry in
+`obs.lock`'s `patchsets` list (apply target `.`, the obs-studio root; the
+obs-browser entry applies inside the submodule). The filter's own CLSID is
+Producer's (`VIRTUALCAM_GUID` in the producer-windows preset, mirrored in
+`shim_win.c`; `check-engine-lists.sh` asserts they agree), so a machine with
+OBS Studio installed no longer serves our camera from OBS's DLL — "Install cam"
+registers ours (elevated `regsvr32 /i /s`). Label is the same constant as macOS
+(`graph::VCAM_DEVICE_NAME`), which the guest page matches on.
+
+Remaining OBS-visible surfaces on Windows (Mac session's inventory, to sweep):
+`obs-browser-page.exe` (CEF helper, Task Manager) and any runtime text not
+routed through `engine::user_facing`.
+
+### CEF helper name (verified 2026-09-03)
+
+The pinned helper carries no version resource, so Task Manager shows its bare
+exe name. It is `Producer Helper.exe` (preset `BROWSER_HELPER_OUTPUT_NAME`,
+mirroring "Producer Helper.app" on macOS): the obs-browser patch's Windows
+hunks route `OUTPUT_NAME` and the spawn path in `obs-browser-plugin.cpp`
+through that one variable, and both Windows scripts read the name from the
+preset. Engine DLLs still carry OBS in their file-Properties version info
+(19 of them); that is not a surface a user is shown and is left alone.
+
+**Install without restart (verified 2026-09-03).** Upstream win-dshow registers
+`virtualcam_output` only if the filter CLSID is in the 32-bit registry view
+when the module loads (`dshow-plugin.cpp` `vcam_installed(false)`), so an
+"Install cam" performed while Producer runs left the process with no output:
+libobs logged "Output ID 'virtualcam_output' not found", still created a
+shell output, and start failed with no error text. Patch 0002 registers the
+output unconditionally and checks the filter in `virtualcam_start` (last error
+"the virtual camera is not installed"). Both filter DLLs register in one
+elevated cmd chain, so the user sees one UAC prompt, not two. Meet lists
+"Producer Virtual Camera" and renders the program; OBS Studio's own camera
+stays listed on machines that have OBS installed — it is not ours to remove.

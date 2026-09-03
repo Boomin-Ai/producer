@@ -265,11 +265,34 @@ pub async fn live_attach_preview(
             .map_err(EngineError::Other)?;
         Ok(transparent)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
+    {
+        use tauri::Manager;
+        let window = app
+            .get_webview_window("main")
+            .ok_or_else(|| EngineError::Other("main window missing".into()))?;
+        // The Windows analogue of ns_window: shim_win.c parents a WS_CHILD HWND
+        // under this one and hands the engine that child, which becomes
+        // gs_init_data.window.hwnd. Same shape as macOS, different handle type.
+        let hwnd = window
+            .hwnd()
+            .map_err(|e| EngineError::Other(format!("hwnd: {e}")))?;
+        let parent = hwnd.0 as usize;
+        // prepare_stage is a no-op returning false on Windows (shim_win.c): there
+        // is no transparent-hole mode here, so the stage is always float mode and
+        // the UI paints accordingly.
+        let transparent = crate::live::prepare_stage(parent);
+        state
+            .live
+            .attach_preview(parent, x, y, w, h)
+            .map_err(EngineError::Other)?;
+        Ok(transparent)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         let _ = (app, state, x, y, w, h);
         Err(EngineError::Other(
-            "live preview is macOS-only in this build".into(),
+            "live preview is not implemented on this platform".into(),
         ))
     }
 }
@@ -823,4 +846,17 @@ pub fn firstlight_resume(app: tauri::AppHandle, action: String) -> EngineResult<
         }
         other => Err(EngineError::Other(format!("unknown resume action {other}"))),
     }
+}
+
+/// The stage item the room has selected (by item id), or null. Drawn natively
+/// inside the preview on Windows, where the float-mode preview window would
+/// otherwise hide the webview's outline. No engine hop: a shared value the
+/// graphics thread reads on its next frame.
+#[tauri::command]
+pub fn live_set_selection(id: Option<String>) -> EngineResult<()> {
+    #[cfg(have_engine)]
+    crate::live::engine::set_preview_selection(id.filter(|s| !s.is_empty()));
+    #[cfg(not(have_engine))]
+    let _ = id;
+    Ok(())
 }

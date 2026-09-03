@@ -4,6 +4,12 @@
 
 pub mod commands;
 pub mod creds;
+
+/// The virtual camera's label, identical on both platforms: macOS bakes it
+/// into the camera extension (build-camera-extension.sh), Windows patches it
+/// into the DirectShow filter (engine/patches/win-dshow). The guest page
+/// matches the device by this label. Ungated: the no-engine build reports it.
+pub const VCAM_DEVICE_NAME: &str = "Producer Virtual Camera";
 #[cfg(have_engine)]
 pub mod engine;
 #[cfg(have_engine)]
@@ -549,14 +555,17 @@ pub fn vcam_status() -> serde_json::Value {
                 2 => "needs_approval",
                 3 => "active",
                 4 => "failed",
+                5 => "unsupported",
                 _ => "idle",
             },
             "installed": installed,
-            "error": if err.is_empty() { serde_json::Value::Null } else { serde_json::Value::from(err) },
+            "device_name": VCAM_DEVICE_NAME,
+            // every string that can reach a user passes through user_facing
+            "error": if err.is_empty() { serde_json::Value::Null } else { serde_json::Value::from(engine::user_facing(&err)) },
         });
     }
     #[cfg(not(have_engine))]
-    serde_json::json!({ "state": "unavailable", "installed": false, "error": null })
+    serde_json::json!({ "state": "unavailable", "installed": false, "device_name": VCAM_DEVICE_NAME, "error": null })
 }
 
 pub fn vcam_activate() {
@@ -638,9 +647,26 @@ pub fn report_dir() -> Option<PathBuf> {
 }
 
 #[cfg(have_engine)]
+/// The main thread, remembered so the engine thread can marshal onto it.
+///
+/// macOS gets this for free from GCD's main queue. Windows has no equivalent,
+/// and it MATTERS here in a way it does not on macOS: a Win32 window belongs to
+/// the thread that created it, and that thread must pump messages. A preview
+/// HWND created on the engine thread hangs the UI the moment anything sends it
+/// a message --- which is what "Producer (Not Responding)" looked like.
+pub(crate) static MAIN_APP: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
+#[cfg(have_engine)]
+pub(crate) static MAIN_THREAD: std::sync::OnceLock<std::thread::ThreadId> =
+    std::sync::OnceLock::new();
+
+#[cfg(have_engine)]
 pub fn init(app: tauri::AppHandle, report_dir: PathBuf) -> Live {
     let _ = REPORT_DIR.set(report_dir.clone());
     use tauri::Emitter;
+
+    // init() runs in tauri's setup hook, i.e. on the main thread.
+    let _ = MAIN_APP.set(app.clone());
+    let _ = MAIN_THREAD.set(std::thread::current().id());
 
     let harness = std::env::args().any(|a| a == "--live-multistream");
     let harness_dir = report_dir.clone();
@@ -762,13 +788,26 @@ pub fn startup_probe(report_dir: &Path) {
                 return;
             }
             if run_props {
-                // Device pickers must be written against the property names
-                // libobs actually exposes, not remembered ones.
-                for id in [
+                // Device pickers must be written against the property names libobs
+                // actually exposes, not remembered ones -- and the ids differ per
+                // platform, so dumping the macOS set on Windows would just print
+                // nothing and teach us nothing.
+                #[cfg(target_os = "macos")]
+                let probe_ids = [
                     "macos-avcapture",
                     "coreaudio_input_capture",
                     "screen_capture",
-                ] {
+                ];
+                #[cfg(target_os = "windows")]
+                let probe_ids = [
+                    "dshow_input",
+                    "wasapi_input_capture",
+                    "wasapi_output_capture",
+                    "monitor_capture",
+                    "window_capture",
+                    "browser_source",
+                ];
+                for id in probe_ids {
                     println!("=== {id} ===");
                     for line in graph::list_property_names(id) {
                         println!("  prop: {line}");
@@ -815,6 +854,20 @@ pub fn legacy_harness_requested() -> bool {
         .any(|a| a == "--live-capture-probe" || a == "--live-first-light" || a == "--live-props")
 }
 
+/// One idle tick while the engine thread bootstraps.
+///
+/// macOS MUST keep its run loop turning here: bootstrap marshals UI tasks to the
+/// main thread, and this IS the main thread, so a plain block would deadlock
+/// against itself. Windows does no such marshalling, so it just waits.
+#[cfg(all(have_engine, target_os = "macos"))]
+fn idle_tick() {
+    unsafe { ffi::CFRunLoopRunInMode(ffi::kCFRunLoopDefaultMode, 0.05, false) };
+}
+#[cfg(all(have_engine, target_os = "windows"))]
+fn idle_tick() {
+    std::thread::sleep(std::time::Duration::from_millis(20));
+}
+
 /// PRODUCER_LIVE_SELFTEST=1 entry: bootstrap headless, print the JSON report
 /// on stdout, exit 0 iff every M-L1 required ID was discovered.
 #[cfg(have_engine)]
@@ -831,9 +884,7 @@ pub fn selftest_main() -> ! {
     let report = loop {
         match rx.try_recv() {
             Ok(r) => break r,
-            Err(std::sync::mpsc::TryRecvError::Empty) => unsafe {
-                ffi::CFRunLoopRunInMode(ffi::kCFRunLoopDefaultMode, 0.05, false);
-            },
+            Err(std::sync::mpsc::TryRecvError::Empty) => idle_tick(),
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                 eprintln!("[live] engine thread died during bootstrap");
                 std::process::exit(2);
