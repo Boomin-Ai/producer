@@ -1406,12 +1406,9 @@ pub fn user_facing(message: &str) -> String {
         // Same condition, each platform's own remedy: a system extension to
         // approve on macOS, a DirectShow filter to register on Windows.
         #[cfg(target_os = "macos")]
-        return "The virtual camera isn't installed yet. Approve Producer's camera extension in System Settings › General › Login Items & Extensions › Camera Extensions, then try again."
-            .replace('
-', "");
+        return String::from("The virtual camera isn't installed yet. Approve Producer's camera extension in System Settings › General › Login Items & Extensions › Camera Extensions, then try again.");
         #[cfg(not(target_os = "macos"))]
-        return "The virtual camera isn't installed yet. Click Install cam, allow the prompt, then try again."
-            .to_string();
+        return String::from("The virtual camera isn't installed yet. Click Install cam, allow the prompt, then try again.");
     }
     m.replace("OBS Studio", "Producer")
         .replace("obs-studio", "Producer")
