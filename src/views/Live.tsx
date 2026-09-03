@@ -3227,7 +3227,12 @@ export function LiveView({
             ipc.liveSetTransform(id, patch, false).catch(() => {});
           });
           const t0f = performance.now();
+          // If frames starve mid-dissolve (WebKit halts rAF when it deems the
+          // view occluded), a timer still lands the end state — a guest must
+          // never be left half-transparent by a paused animation loop.
+          let fadeDone = false;
           const stepFade = () => {
+            if (fadeDone) return;
             const k = Math.min(1, (performance.now() - t0f) / dur);
             for (const id of arriving) setOpacity(id, k).catch(() => {});
             for (const id of leaving) setOpacity(id, 1 - k).catch(() => {});
@@ -3235,6 +3240,7 @@ export function LiveView({
               requestAnimationFrame(stepFade);
               return;
             }
+            fadeDone = true;
             // Settle: hide what left and restore its opacity, so the next
             // scene that shows it doesn't inherit a transparent source.
             for (const id of leaving) {
@@ -3247,6 +3253,19 @@ export function LiveView({
             });
           };
           requestAnimationFrame(stepFade);
+          window.setTimeout(() => {
+            if (!fadeDone) {
+              fadeDone = true;
+              for (const id of leaving) {
+                ipc.liveSetTransform(id, { visible: false }, true).catch(() => {});
+                setOpacity(id, 1).catch(() => {});
+              }
+              visible.forEach(([id], i) => {
+                setOpacity(id, 1).catch(() => {});
+                ipc.liveSetTransform(id, { visible: true, z: i }, true).catch(() => {});
+              });
+            }
+          }, dur + 80);
           setActiveSceneId(p.id);
           writeCfg({ ...cfgRef.current, active_scene: p.id });
           return;
@@ -3257,11 +3276,16 @@ export function LiveView({
           ipc.liveSetTransform(id, { visible: true, z: i }, false).catch(() => {});
         });
         const t0 = performance.now();
+        // Same belt as fade: if frames starve mid-glide, a timer lands every
+        // item on its target geometry, committed.
+        let moveDone = false;
         const step = () => {
+          if (moveDone) return;
           const k = Math.min(1, (performance.now() - t0) / dur);
           // ease-out cubic: quick off the mark, settles gently
           const e = 1 - Math.pow(1 - k, 3);
           const done = k >= 1;
+          if (done) moveDone = true;
           visible.forEach(([id, l], i) => {
             const a = from.get(id);
             if (!a || l.x == null || l.y == null || l.w == null || l.h == null) {
@@ -3286,6 +3310,20 @@ export function LiveView({
           if (!done) requestAnimationFrame(step);
         };
         requestAnimationFrame(step);
+        window.setTimeout(() => {
+          if (moveDone) return;
+          moveDone = true;
+          visible.forEach(([id, l], i) => {
+            const patch: LiveTransformPatch = { visible: true, z: i };
+            if (l.x != null && l.y != null && l.w != null && l.h != null) {
+              patch.x = l.x;
+              patch.y = l.y;
+              patch.w = l.w;
+              patch.h = l.h;
+            }
+            ipc.liveSetTransform(id, patch, true).catch(() => {});
+          });
+        }, dur + 80);
       }
       setActiveSceneId(p.id);
       const c = cfgRef.current;
