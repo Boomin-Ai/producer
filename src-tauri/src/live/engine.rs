@@ -908,6 +908,7 @@ impl Preview {
             // main thread) by live_attach_preview before this command was
             // queued; here we only honour it.
             let transparent = STAGE_TRANSPARENT.load(AtomicOrdering::SeqCst);
+            let t_shim = Instant::now();
             let view = ffi::producer_preview_attach(
                 ns_window,
                 rect.x,
@@ -918,6 +919,27 @@ impl Preview {
                 &mut px_w,
                 &mut px_h,
             );
+            {
+
+                let ms = t_shim.elapsed().as_millis();
+
+                if ms > 150 {
+
+                    if let Some(dir) = crate::live::report_dir() {
+
+                        use std::io::Write;
+
+                        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("slow-cmds.log")) {
+
+                            let _ = f.write_all(format!("shim-attach {ms}ms\n").as_bytes());
+
+                        }
+
+                    }
+
+                }
+
+            }
             if view.is_null() {
                 return Err("NSView creation failed".into());
             }
