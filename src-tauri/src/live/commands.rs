@@ -49,7 +49,7 @@ fn row_from_db(r: &rusqlite::Row<'_>) -> rusqlite::Result<DestinationRow> {
 }
 
 #[tauri::command]
-pub fn live_list_destinations(state: State<'_, AppState>) -> EngineResult<Vec<DestinationRow>> {
+pub async fn live_list_destinations(state: State<'_, AppState>) -> EngineResult<Vec<DestinationRow>> {
     let conn = state.db.lock().expect("db mutex poisoned");
     let mut stmt = conn.prepare(
         "SELECT id, preset, label, server, enabled, created_at FROM live_destinations ORDER BY created_at",
@@ -61,7 +61,7 @@ pub fn live_list_destinations(state: State<'_, AppState>) -> EngineResult<Vec<De
 }
 
 #[tauri::command]
-pub fn live_upsert_destination(
+pub async fn live_upsert_destination(
     state: State<'_, AppState>,
     input: UpsertDestination,
 ) -> EngineResult<DestinationRow> {
@@ -152,7 +152,7 @@ pub fn live_upsert_destination(
 }
 
 #[tauri::command]
-pub fn live_delete_destination(state: State<'_, AppState>, id: String) -> EngineResult<()> {
+pub async fn live_delete_destination(state: State<'_, AppState>, id: String) -> EngineResult<()> {
     let conn = state.db.lock().expect("db mutex poisoned");
     let cred: Option<String> = conn
         .query_row(
@@ -171,7 +171,7 @@ pub fn live_delete_destination(state: State<'_, AppState>, id: String) -> Engine
 }
 
 #[tauri::command]
-pub fn live_go_live(state: State<'_, AppState>) -> EngineResult<()> {
+pub async fn live_go_live(state: State<'_, AppState>) -> EngineResult<()> {
     let specs: Vec<(String, String, Option<String>, String)> = {
         let conn = state.db.lock().expect("db mutex poisoned");
         let mut stmt = conn.prepare(
@@ -196,17 +196,23 @@ pub fn live_go_live(state: State<'_, AppState>) -> EngineResult<()> {
 }
 
 #[tauri::command]
-pub fn live_stop(state: State<'_, AppState>) -> EngineResult<()> {
+pub async fn live_stop(state: State<'_, AppState>) -> EngineResult<()> {
     state.live.stop_live().map_err(EngineError::Other)
 }
 
 #[tauri::command]
-pub fn live_engine_status(state: State<'_, AppState>) -> EngineResult<serde_json::Value> {
+// EVERY live command is async, by law: Tauri runs sync commands on the app's
+// MAIN thread, and several engine wrappers block on a reply with a 5s timeout.
+// Meanwhile the engine loop hops to the main thread (dispatch_sync in the
+// preview attach, CEF's UI-thread task in browser creation). Main waiting on
+// the engine while the engine waits on main = a room open frozen until the
+// timeout fires — measured 4.5s, on whichever command reached the hop first.
+pub async fn live_engine_status(state: State<'_, AppState>) -> EngineResult<serde_json::Value> {
     Ok(state.live.status())
 }
 
 #[tauri::command]
-pub fn live_set_sources(
+pub async fn live_set_sources(
     state: State<'_, AppState>,
     screen: bool,
     camera: bool,
@@ -219,7 +225,7 @@ pub fn live_set_sources(
 }
 
 #[tauri::command]
-pub fn live_attach_preview(
+pub async fn live_attach_preview(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     x: f64,
@@ -256,7 +262,7 @@ pub fn live_attach_preview(
 }
 
 #[tauri::command]
-pub fn live_move_preview(
+pub async fn live_move_preview(
     state: State<'_, AppState>,
     x: f64,
     y: f64,
@@ -270,12 +276,12 @@ pub fn live_move_preview(
 }
 
 #[tauri::command]
-pub fn live_detach_preview(state: State<'_, AppState>) -> EngineResult<()> {
+pub async fn live_detach_preview(state: State<'_, AppState>) -> EngineResult<()> {
     state.live.detach_preview().map_err(EngineError::Other)
 }
 
 #[tauri::command]
-pub fn live_set_overlay(
+pub async fn live_set_overlay(
     state: State<'_, AppState>,
     window_id: Option<u32>,
     color_key: bool,
@@ -288,23 +294,23 @@ pub fn live_set_overlay(
 }
 
 #[tauri::command]
-pub fn live_list_windows(state: State<'_, AppState>) -> EngineResult<serde_json::Value> {
+pub async fn live_list_windows(state: State<'_, AppState>) -> EngineResult<serde_json::Value> {
     state.live.list_windows().map_err(EngineError::Other)
 }
 
 #[tauri::command]
-pub fn live_permissions() -> EngineResult<serde_json::Value> {
+pub async fn live_permissions() -> EngineResult<serde_json::Value> {
     Ok(crate::live::permissions())
 }
 
 #[tauri::command]
-pub fn live_set_thumb_rate(state: State<'_, AppState>, fps: u32) -> EngineResult<()> {
+pub async fn live_set_thumb_rate(state: State<'_, AppState>, fps: u32) -> EngineResult<()> {
     state.live.set_thumb_rate(fps);
     Ok(())
 }
 
 #[tauri::command]
-pub fn live_home_glass(app: tauri::AppHandle) -> EngineResult<()> {
+pub async fn live_home_glass(app: tauri::AppHandle) -> EngineResult<()> {
     // Home wears the glass; rooms strip it on preview attach (shim.m). This
     // is the way back when the user leaves a room.
     #[cfg(all(target_os = "macos", have_engine))]
@@ -322,17 +328,17 @@ pub fn live_home_glass(app: tauri::AppHandle) -> EngineResult<()> {
 }
 
 #[tauri::command]
-pub fn live_request_permission(kind: String) -> EngineResult<()> {
+pub async fn live_request_permission(kind: String) -> EngineResult<()> {
     crate::live::request_permission(&kind).map_err(EngineError::Other)
 }
 
 #[tauri::command]
-pub fn live_screen_coach(action: String) -> EngineResult<()> {
+pub async fn live_screen_coach(action: String) -> EngineResult<()> {
     crate::live::screen_grant_coach(&action).map_err(EngineError::Other)
 }
 
 #[tauri::command]
-pub fn live_preview_hidden(state: State<'_, AppState>, hidden: bool) -> EngineResult<()> {
+pub async fn live_preview_hidden(state: State<'_, AppState>, hidden: bool) -> EngineResult<()> {
     state
         .live
         .set_preview_hidden(hidden)
@@ -340,7 +346,7 @@ pub fn live_preview_hidden(state: State<'_, AppState>, hidden: bool) -> EngineRe
 }
 
 #[tauri::command]
-pub fn live_set_transform(
+pub async fn live_set_transform(
     state: State<'_, AppState>,
     id: String,
     patch: serde_json::Value,
@@ -368,7 +374,7 @@ pub fn live_set_transform(
 /// and audio interfaces, displays. Straight from libobs, so anything the OS
 /// exposes shows up without Producer knowing the hardware.
 #[tauri::command]
-pub fn live_source_devices(
+pub async fn live_source_devices(
     state: State<'_, AppState>,
     kind: String,
 ) -> EngineResult<serde_json::Value> {
@@ -400,7 +406,7 @@ pub fn live_source_devices(
 }
 
 #[tauri::command]
-pub fn live_set_source_device(
+pub async fn live_set_source_device(
     state: State<'_, AppState>,
     kind: String,
     device: String,
@@ -415,7 +421,7 @@ pub fn live_set_source_device(
 /// arrives as tagged JSON and is validated by serde before it can touch the
 /// engine; the room document owns the id.
 #[tauri::command]
-pub fn live_add_source(
+pub async fn live_add_source(
     state: State<'_, AppState>,
     id: String,
     label: String,
@@ -440,7 +446,7 @@ pub fn live_add_source(
 }
 
 #[tauri::command]
-pub fn live_remove_source(state: State<'_, AppState>, id: String) -> EngineResult<()> {
+pub async fn live_remove_source(state: State<'_, AppState>, id: String) -> EngineResult<()> {
     state.live.remove_extra(id).map_err(EngineError::Other)
 }
 
@@ -476,14 +482,14 @@ pub async fn live_pick_file(app: tauri::AppHandle, kind: String) -> EngineResult
 
 /// Start the stinger over the stage; returns its duration in ms (0 = unknown).
 #[tauri::command]
-pub fn live_play_stinger(state: State<'_, AppState>, path: String) -> EngineResult<i64> {
+pub async fn live_play_stinger(state: State<'_, AppState>, path: String) -> EngineResult<i64> {
     state.live.play_stinger(path).map_err(EngineError::Other)
 }
 
 /// Start recording. The stamp comes from the UI so the engine owns no clock;
 /// returns the file path it's writing.
 #[tauri::command]
-pub fn live_start_recording(state: State<'_, AppState>, stamp: String) -> EngineResult<String> {
+pub async fn live_start_recording(state: State<'_, AppState>, stamp: String) -> EngineResult<String> {
     state
         .live
         .start_recording(stamp)
@@ -491,13 +497,13 @@ pub fn live_start_recording(state: State<'_, AppState>, stamp: String) -> Engine
 }
 
 #[tauri::command]
-pub fn live_stop_recording(state: State<'_, AppState>) -> EngineResult<Option<String>> {
+pub async fn live_stop_recording(state: State<'_, AppState>) -> EngineResult<Option<String>> {
     state.live.stop_recording().map_err(EngineError::Other)
 }
 
 /// Reveal a finished recording in Finder.
 #[tauri::command]
-pub fn live_reveal_file(path: String) -> EngineResult<()> {
+pub async fn live_reveal_file(path: String) -> EngineResult<()> {
     std::process::Command::new("open")
         .arg("-R")
         .arg(&path)
@@ -510,12 +516,12 @@ pub fn live_reveal_file(path: String) -> EngineResult<()> {
 /// update. Every call answers with the chain's new state so the UI never has
 /// to model it separately.
 #[tauri::command]
-pub fn live_set_sync_offset(state: State<'_, AppState>, id: String, ms: i64) -> EngineResult<()> {
+pub async fn live_set_sync_offset(state: State<'_, AppState>, id: String, ms: i64) -> EngineResult<()> {
     state.live.set_sync_offset(id, ms).map_err(EngineError::Other)
 }
 
 #[tauri::command]
-pub fn live_set_source_audio(
+pub async fn live_set_source_audio(
     state: State<'_, AppState>,
     id: String,
     volume: Option<f32>,
@@ -528,7 +534,7 @@ pub fn live_set_source_audio(
 }
 
 #[tauri::command]
-pub fn live_set_opacity(state: State<'_, AppState>, id: String, opacity: f64) -> EngineResult<()> {
+pub async fn live_set_opacity(state: State<'_, AppState>, id: String, opacity: f64) -> EngineResult<()> {
     state
         .live
         .set_item_opacity(id, opacity)
@@ -536,7 +542,7 @@ pub fn live_set_opacity(state: State<'_, AppState>, id: String, opacity: f64) ->
 }
 
 #[tauri::command]
-pub fn live_filters(
+pub async fn live_filters(
     state: State<'_, AppState>,
     source: String,
     op: serde_json::Value,
@@ -558,18 +564,18 @@ pub fn live_filters(
 /// Virtual camera: activation is a system-extension install (needs user
 /// approval, once), separate from starting the output.
 #[tauri::command]
-pub fn live_vcam_status() -> EngineResult<serde_json::Value> {
+pub async fn live_vcam_status() -> EngineResult<serde_json::Value> {
     Ok(crate::live::vcam_status())
 }
 
 #[tauri::command]
-pub fn live_vcam_activate() -> EngineResult<()> {
+pub async fn live_vcam_activate() -> EngineResult<()> {
     crate::live::vcam_activate();
     Ok(())
 }
 
 #[tauri::command]
-pub fn live_vcam_output(state: State<'_, AppState>, on: bool) -> EngineResult<bool> {
+pub async fn live_vcam_output(state: State<'_, AppState>, on: bool) -> EngineResult<bool> {
     // Upstream's own text says "OBS"; rewrite it on the way out. Only
     // meaningful with an engine — without one there is nothing to start.
     #[cfg(have_engine)]
@@ -580,17 +586,17 @@ pub fn live_vcam_output(state: State<'_, AppState>, on: bool) -> EngineResult<bo
 }
 
 #[tauri::command]
-pub fn live_prepare_stinger(state: State<'_, AppState>, path: String) -> EngineResult<()> {
+pub async fn live_prepare_stinger(state: State<'_, AppState>, path: String) -> EngineResult<()> {
     state.live.prepare_stinger(path).map_err(EngineError::Other)
 }
 
 #[tauri::command]
-pub fn live_stop_stinger(state: State<'_, AppState>) -> EngineResult<()> {
+pub async fn live_stop_stinger(state: State<'_, AppState>) -> EngineResult<()> {
     state.live.stop_stinger().map_err(EngineError::Other)
 }
 
 #[tauri::command]
-pub fn live_set_video(state: State<'_, AppState>, height: u32, fps: u32) -> EngineResult<()> {
+pub async fn live_set_video(state: State<'_, AppState>, height: u32, fps: u32) -> EngineResult<()> {
     state
         .live
         .set_video(height, fps)
@@ -598,7 +604,7 @@ pub fn live_set_video(state: State<'_, AppState>, height: u32, fps: u32) -> Engi
 }
 
 #[tauri::command]
-pub fn live_set_mic_audio(
+pub async fn live_set_mic_audio(
     state: State<'_, AppState>,
     volume: Option<f32>,
     muted: Option<bool>,
@@ -613,7 +619,7 @@ pub fn live_set_mic_audio(
 /// window (cookies persist in the webview data store, so one login lasts).
 /// Host-allowlisted — this must never become an arbitrary-URL opener.
 #[tauri::command]
-pub fn live_open_chat(app: tauri::AppHandle, url: String) -> EngineResult<()> {
+pub async fn live_open_chat(app: tauri::AppHandle, url: String) -> EngineResult<()> {
     use tauri::Manager;
     let parsed = tauri::Url::parse(&url).map_err(|e| EngineError::Other(e.to_string()))?;
     let host_ok = parsed.scheme() == "https"
@@ -664,7 +670,7 @@ fn room_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RoomRow> {
 }
 
 #[tauri::command]
-pub fn live_list_rooms(state: State<'_, AppState>) -> EngineResult<Vec<RoomRow>> {
+pub async fn live_list_rooms(state: State<'_, AppState>) -> EngineResult<Vec<RoomRow>> {
     let db = state.db.lock().unwrap();
     let mut stmt = db
         .prepare(
@@ -680,7 +686,7 @@ pub fn live_list_rooms(state: State<'_, AppState>) -> EngineResult<Vec<RoomRow>>
 }
 
 #[tauri::command]
-pub fn live_create_room(state: State<'_, AppState>, name: String) -> EngineResult<RoomRow> {
+pub async fn live_create_room(state: State<'_, AppState>, name: String) -> EngineResult<RoomRow> {
     let id = Uuid::new_v4().to_string();
     let name = name.trim().to_string();
     if name.is_empty() {
@@ -701,7 +707,7 @@ pub fn live_create_room(state: State<'_, AppState>, name: String) -> EngineResul
 }
 
 #[tauri::command]
-pub fn live_update_room(
+pub async fn live_update_room(
     state: State<'_, AppState>,
     id: String,
     name: Option<String>,
@@ -740,7 +746,7 @@ pub fn live_update_room(
 }
 
 #[tauri::command]
-pub fn live_delete_room(state: State<'_, AppState>, id: String) -> EngineResult<()> {
+pub async fn live_delete_room(state: State<'_, AppState>, id: String) -> EngineResult<()> {
     let db = state.db.lock().unwrap();
     db.execute("DELETE FROM live_rooms WHERE id = ?1", params![id])
         .map_err(|e| EngineError::Other(e.to_string()))?;

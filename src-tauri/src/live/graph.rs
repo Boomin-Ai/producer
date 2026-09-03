@@ -119,31 +119,53 @@ extern "C" fn video_cb(_param: *mut c_void, _frame: *mut ffi::video_data) {
 
 /// Run a closure on the macOS main thread (blocking) — used for the TCC
 /// preflight/request calls, which can present system UI.
+struct MainCtx<F, T> {
+    f: Option<F>,
+    out: Option<T>,
+}
+
 pub(crate) fn on_main_thread<T: Send, F: FnOnce() -> T + Send>(f: F) -> T {
     if unsafe { ffi::pthread_main_np() } == 1 {
         return f();
     }
-    struct Ctx<F, T> {
-        f: Option<F>,
-        out: Option<T>,
-    }
-    extern "C" fn run<F: FnOnce() -> T, T>(ctx: *mut c_void) {
-        let ctx = unsafe { &mut *(ctx as *mut Ctx<F, T>) };
-        let f = ctx.f.take().unwrap();
-        ctx.out = Some(f());
-    }
-    let mut ctx = Ctx {
+    let mut ctx = MainCtx {
         f: Some(f),
         out: None,
     };
+    // Queue wait vs. block time: the engine loop stalled ~4.5s in commands
+    // that hop to the main thread. If the WAIT is long, the main thread is
+    // busy with someone else's work; if the BLOCK is long, it is ours.
+    let t_wait = Instant::now();
+    MAIN_HOP_START.store(0, std::sync::atomic::Ordering::Relaxed);
     unsafe {
         ffi::dispatch_sync_f(
             &ffi::_dispatch_main_q as *const c_void,
-            &mut ctx as *mut Ctx<_, T> as *mut c_void,
-            run::<F, T>,
+            &mut ctx as *mut MainCtx<_, T> as *mut c_void,
+            run_timed::<F, T>,
         );
     }
+    let total = t_wait.elapsed().as_millis();
+    let block = MAIN_HOP_START.load(std::sync::atomic::Ordering::Relaxed) as u128;
+    if total > 150 {
+        if let Some(dir) = crate::live::report_dir() {
+            use std::io::Write;
+            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("slow-cmds.log")) {
+                let _ = f.write_all(format!("main-hop wait={}ms block={}ms\n", total.saturating_sub(block), block).as_bytes());
+            }
+        }
+    }
     ctx.out.unwrap()
+}
+
+/// Block duration of the last main-thread hop (ms), set by run_timed.
+static MAIN_HOP_START: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+extern "C" fn run_timed<F: FnOnce() -> T, T>(ctx: *mut c_void) {
+    let t0 = Instant::now();
+    let ctx = unsafe { &mut *(ctx as *mut MainCtx<F, T>) };
+    let f = ctx.f.take().unwrap();
+    ctx.out = Some(f());
+    MAIN_HOP_START.store(t0.elapsed().as_millis() as u64, std::sync::atomic::Ordering::Relaxed);
 }
 
 /// UUID string of the main display, via the same CoreGraphics calls OBS's
