@@ -6853,20 +6853,37 @@ button.ks-key:hover { border-color: var(--line-2); }
 .rm-slot.armed { border-radius: 12px; }
 .rm-add-panel { border-radius: 12px; }
 /* Edit mode is about WHICH panel, not what's in it: content hides, the
- * title sits dead-center of the card, grip and ✕ stay in the corners. */
-.layout-edit .rm-panel-body { display: none; }
+ * title sits dead-center of the card, grip and ✕ stay in the corners.
+ * !important is earned here — console forms re-display specific bodies
+ * with deeper selectors, and edit mode outranks every form. */
+.layout-edit .rm-panel .rm-panel-body { display: none !important; }
 .layout-edit .rm-panel-head .rm-group-label {
   position: absolute;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  padding: 3px 12px;
+  display: inline-flex;
+  padding: 4px 14px;
   border-radius: 999px;
-  background: var(--surface-2);
-  border: 1px solid var(--line-1);
+  background: var(--surface-3);
+  border: 1px solid var(--line-2);
+  color: var(--fg-1);
+  font-size: 12px;
+  letter-spacing: 0.1em;
   white-space: nowrap;
+  z-index: 2;
 }
 .layout-edit .rm-panel-actions > :not(.rm-panel-hide) { display: none; }
+/* Guests hide their chrome live — edit mode brings the full head back so
+ * the card is labeled like every other panel. */
+.layout-edit .rm-panel-guests .rm-panel-head {
+  position: static;
+  opacity: 1;
+  pointer-events: auto;
+  padding: 8px var(--pad-card) 0;
+}
+.layout-edit .rm-panel-guests .rm-group-label { display: inline-flex; }
+.layout-edit .rm-panel-guests .rm-cnt { display: none; }
 
 /* Console rows scroll by trackpad only — a visible scroll rail over one-line
  * content reads as a broken overlay, not an affordance. */
