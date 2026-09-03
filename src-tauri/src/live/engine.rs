@@ -455,7 +455,18 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
     // the mix with technique DrawMultiply × (sdr_white / 80) — with 0 that is
     // a black stage over a perfectly rendered mix. Found on the Windows port
     // (HDR desk); SDR displays never take the branch. OBS's defaults.
-    unsafe { ffi::obs_set_video_levels(300.0, 1000.0) };
+    // 300/1000 are OBS Studio's defaults. On Windows, prefer the display's own
+    // SDR white level (Settings > Display > SDR content brightness): the preview
+    // and its outline then match the SDR desktop around them on an HDR monitor.
+    #[cfg(target_os = "windows")]
+    let sdr_white = {
+        let nits = unsafe { ffi::producer_sdr_white_nits() };
+        if nits > 0.0 { nits } else { 300.0 }
+    };
+    #[cfg(not(target_os = "windows"))]
+    let sdr_white = 300.0;
+    unsafe { ffi::obs_set_video_levels(sdr_white, 1000.0) };
+    eprintln!("[engine] sdr white level = {sdr_white} nits");
     phase(&mut report, "reset_video");
 
     let oai = ffi::obs_audio_info {

@@ -541,3 +541,39 @@ int producer_vcam_state(char *buf, int len)
 /* macOS drag affordance; no Windows counterpart yet. */
 void producer_drag_chip_show(void) {}
 void producer_drag_chip_hide(void) {}
+
+/* ── SDR white level of the primary display, in nits ─────────────────────────
+ * On an HDR desktop Windows renders SDR content at a user-chosen brightness
+ * (Settings > Display > "SDR content brightness"). libobs draws the preview
+ * on a float (scRGB) swapchain scaled by obs_set_video_levels' sdr_white
+ * level; using the display's ACTUAL value makes the preview and the native
+ * selection outline match the SDR desktop around them instead of OBS's 300-nit
+ * default. Returns 0 if it cannot be read (SDR display, older Windows). */
+#include <wingdi.h>
+
+float producer_sdr_white_nits(void)
+{
+    UINT32 paths = 0, modes = 0;
+    if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &paths, &modes) != ERROR_SUCCESS || !paths)
+        return 0.0f;
+    DISPLAYCONFIG_PATH_INFO *path = (DISPLAYCONFIG_PATH_INFO *)calloc(paths, sizeof(*path));
+    DISPLAYCONFIG_MODE_INFO *mode = (DISPLAYCONFIG_MODE_INFO *)calloc(modes, sizeof(*mode));
+    float nits = 0.0f;
+    if (path && mode && QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &paths, path, &modes, mode, NULL) == ERROR_SUCCESS) {
+        for (UINT32 i = 0; i < paths; i++) {
+            DISPLAYCONFIG_SDR_WHITE_LEVEL w = {0};
+            w.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL;
+            w.header.size = sizeof(w);
+            w.header.adapterId = path[i].targetInfo.adapterId;
+            w.header.id = path[i].targetInfo.id;
+            if (DisplayConfigGetDeviceInfo(&w.header) == ERROR_SUCCESS) {
+                /* SDRWhiteLevel is in units of 1/1000 of 80 nits */
+                nits = (float)w.SDRWhiteLevel * 80.0f / 1000.0f;
+                break; /* first active path = primary */
+            }
+        }
+    }
+    free(path);
+    free(mode);
+    return nits;
+}
