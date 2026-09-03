@@ -199,6 +199,15 @@ fi
 DATA_SRC="$BUILD/rundir/Release/data"
 [[ -d "$DATA_SRC" ]] && cp -R "$DATA_SRC/." "$STAGE/data/"
 
+# The virtual camera's IDLE image. win-dshow's filter loads placeholder.png from
+# beside its DLL at runtime, and upstream's is the OBS logo -- the one OBS
+# mention a camera picker would show while Producer sends no frames. Producer's
+# image (the same file macOS bakes into its camera extension) replaces it;
+# engine-closure-windows.sh proves the staged bytes are ours.
+mkdir -p "$STAGE/data/obs-plugins/win-dshow"
+cp "$REPO_ROOT/engine/assets/vcam-placeholder.png" "$STAGE/data/obs-plugins/win-dshow/placeholder.png"
+echo "staged virtual camera placeholder: engine/assets/vcam-placeholder.png"
+
 # obs-browser is the whole reason rung 4 exists — fail loudly rather than
 # shipping an engine that silently cannot render a guest.
 [[ -f "$STAGE/obs-plugins/64bit/obs-browser.dll" ]] \

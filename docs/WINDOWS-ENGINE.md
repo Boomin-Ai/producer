@@ -750,3 +750,11 @@ the mouse — exactly there. Verified by pixel probe: a test popover over the
 stage reads 97% webview green through the hole; removing it restores the full
 region. macOS: the command is a no-op (the preview already sits below the
 webview).
+
+**Idle placeholder (2026-09-03).** win-dshow's filter loads `placeholder.png`
+from beside its DLL at runtime; upstream's is the OBS logo, which a camera
+picker shows whenever Producer sends no frames. `engine/assets/vcam-placeholder.png`
+(1920x1080, the Producer chair on the app's dark ground) is staged over it by
+`build-engine-windows.sh` and the closure gate asserts the staged sha; the lock's
+`artifact_rev` bumped so the artifact identity changed. macOS should bake the
+same file into its extension (build-camera-extension.sh).

@@ -106,6 +106,19 @@ for m in obs-virtualcam-module64.dll obs-virtualcam-module32.dll; do
   fi
 done
 
+# The camera's IDLE image: win-dshow's filter loads placeholder.png from beside
+# its DLL at runtime and upstream's is the OBS logo. The build stages Producer's
+# (engine/assets/vcam-placeholder.png, the same file macOS bakes into its
+# extension); the gate proves the staged bytes are ours, not upstream's.
+want="$(sha256_of "$REPO_ROOT/engine/assets/vcam-placeholder.png")"
+have="$(sha256_of "$STAGE/data/obs-plugins/win-dshow/placeholder.png" 2>/dev/null || echo missing)"
+if [[ "$want" == "$have" ]]; then
+  echo "  ok   virtual camera placeholder is Producer's"
+else
+  echo "  FAIL virtual camera placeholder is not Producer's (staged $have)" >&2
+  fail=1
+fi
+
 # ── 3. zero-Qt scan + import closure ────────────────────────────────────────
 # resolve_python (engine-lib.sh) probes candidates by EXECUTING them, because
 # Windows ships a python3 App Execution Alias that exists on PATH and fails when

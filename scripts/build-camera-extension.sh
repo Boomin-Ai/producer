@@ -51,7 +51,10 @@ swiftc -O -swift-version 5 \
 # system extension crashes before it logs, the only symptom is a camera that
 # never appears. This was previously copied with `|| true`, so a wrong path
 # failed silently and shipped a bundle that could never run. Never optional.
-PLACEHOLDER="$SRC/../common/data/placeholder.png"
+# Producer's own idle image, not upstream's OBS logo (which is what
+# $SRC/../common/data/placeholder.png is). Same file the Windows build stages
+# beside win-dshow's filter, so the idle camera looks identical on both.
+PLACEHOLDER="$REPO_ROOT/engine/assets/vcam-placeholder.png"
 [[ -f $PLACEHOLDER ]] || { echo "FATAL: placeholder.png not found at $PLACEHOLDER" >&2; exit 1; }
 cp "$PLACEHOLDER" "$BUNDLE/Contents/Resources/placeholder.png"
 
