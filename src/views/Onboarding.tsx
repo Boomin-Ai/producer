@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { hasTauri, ipc, networkJoin } from "../lib/ipc";
+import { setActiveEndpointId } from "../lib/workspace";
 
 export function Wordmark() {
   return (
@@ -86,6 +87,8 @@ function BoominLogin({ onBack, onConnected }: { onBack: () => void; onConnected:
     setError(null);
     try {
       const result = await ipc.boominConnect(email.trim(), code.trim(), apiRoot.trim() || undefined);
+      // The workspace just connected becomes the active one.
+      if ((result as { id?: string } | null)?.id) setActiveEndpointId(String((result as { id?: string }).id));
       if (result?.needs_brand && result.brands?.length) {
         setBrands(result.brands);
         setStep("brand");
@@ -103,7 +106,8 @@ function BoominLogin({ onBack, onConnected }: { onBack: () => void; onConnected:
     setBusy(true);
     setError(null);
     try {
-      await ipc.boominSelectBrand(slug);
+      const r = await ipc.boominSelectBrand(slug);
+      if (r?.id) setActiveEndpointId(r.id);
       setStep("network");
     } catch (e) {
       setError(String(e));

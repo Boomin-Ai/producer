@@ -90,6 +90,8 @@ pub fn run() {
             ipc::boomin_request_otp,
             ipc::boomin_connect,
             ipc::boomin_select_brand,
+            ipc::boomin_list_brands,
+            ipc::boomin_add_brand,
             ipc::connect_channel,
             ipc::network_join,
             ipc::network_status,

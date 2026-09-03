@@ -91,5 +91,27 @@ fn init(conn: &Connection) -> EngineResult<()> {
     if !has_brand_slug {
         conn.execute_batch("ALTER TABLE endpoints ADD COLUMN brand_slug TEXT;")?;
     }
+    // v3: rooms and destinations belong to a WORKSPACE (endpoint). A room
+    // registered under one brand must never be opened as another brand's —
+    // its server room, guests, knock and deals all hang off that brand.
+    // Legacy rows (NULL) are claimed by the first connected workspace once,
+    // which is the only one they could have belonged to.
+    for table in ["live_rooms", "live_destinations"] {
+        let has = conn
+            .prepare(&format!(
+                "SELECT 1 FROM pragma_table_info('{table}') WHERE name = 'endpoint_id'"
+            ))?
+            .exists([])?;
+        if !has {
+            conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN endpoint_id TEXT;"))?;
+        }
+        conn.execute(
+            &format!(
+                "UPDATE {table} SET endpoint_id = (SELECT id FROM endpoints WHERE kind = 'connected' ORDER BY created_at LIMIT 1)
+                 WHERE endpoint_id IS NULL AND EXISTS (SELECT 1 FROM endpoints WHERE kind = 'connected')"
+            ),
+            [],
+        )?;
+    }
     Ok(())
 }

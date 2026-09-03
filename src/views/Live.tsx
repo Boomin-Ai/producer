@@ -40,6 +40,7 @@ import {
   type FilterState,
 } from "../lib/filters";
 import { DEMO_CHAT, DEMO_VIDEO_URL, demoOn, type DemoPlatform } from "../lib/demo";
+import { activeEndpointId, resolveActiveEndpoint } from "../lib/workspace";
 import { StageEditor } from "./StageEditor";
 import {
   PANEL_META,
@@ -1859,6 +1860,7 @@ export function DestinationEditor({
     try {
       await ipc.liveUpsertDestination({
         id: existing?.id,
+        endpoint_id: existing ? undefined : activeEndpointId() ?? undefined,
         preset,
         label: label.trim() || PRESETS.find((p) => p.value === preset)!.label,
         server: needsServer ? server.trim() : undefined,
@@ -2622,8 +2624,7 @@ export function LiveView({
   const ensureGuestLink = async () => {
     if (guestLink) return guestLink;
     try {
-      const eps = await ipc.listEndpoints();
-      const ep = eps.find((e) => e.kind === "connected") ?? eps[0];
+      const ep = await resolveActiveEndpoint();
       if (!ep) throw new Error("Connect a Boomin workspace first.");
       let sid = cfg.server_room_id;
       if (!sid) {
@@ -2897,7 +2898,7 @@ export function LiveView({
   const roomId = room?.id ?? null;
 
   const refresh = useCallback(async () => {
-    setDestinations(await ipc.liveListDestinations());
+    setDestinations(await ipc.liveListDestinations(activeEndpointId() ?? undefined));
     const snap = await ipc.liveEngineStatus();
     setSnapshot(snap);
     if (snap.sources) setSources(snap.sources);
@@ -2960,7 +2961,7 @@ export function LiveView({
       channelsApplied.current = true;
       const want = parseConfig(room.config).channels;
       if (Object.keys(want).length) {
-        for (const d of await ipc.liveListDestinations()) {
+        for (const d of await ipc.liveListDestinations(activeEndpointId() ?? undefined)) {
           const target = want[d.id];
           if (typeof target === "boolean" && target !== d.enabled) {
             await ipc
@@ -2968,7 +2969,7 @@ export function LiveView({
               .catch(() => {});
           }
         }
-        setDestinations(await ipc.liveListDestinations());
+        setDestinations(await ipc.liveListDestinations(activeEndpointId() ?? undefined));
       }
     }
     // Demo mode: put real gameplay footage on the canvas via the CEF
@@ -3640,8 +3641,7 @@ export function LiveView({
     const tick = async () => {
       try {
         if (!endpointRef.current) {
-          const eps = await ipc.listEndpoints();
-          const ep = eps.find((e) => e.kind === "connected") ?? eps[0];
+          const ep = await resolveActiveEndpoint();
           if (!ep) return;
           endpointRef.current = ep.id;
         }
@@ -3787,7 +3787,7 @@ export function LiveView({
   const saveChannelKey = async (d: LiveDestination) => {
     try {
       await ipc.liveUpsertDestination({ id: d.id, preset: d.preset, label: d.label, server: d.server ?? undefined, key: keyVal, enabled: d.enabled });
-      setDestinations(await ipc.liveListDestinations());
+      setDestinations(await ipc.liveListDestinations(activeEndpointId() ?? undefined));
       setKeyFor(null);
       setKeyVal("");
     } catch (e) {

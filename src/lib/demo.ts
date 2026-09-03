@@ -7,7 +7,8 @@ export const DEMO_KEY = "producer.demo";
 
 export function demoOn(): boolean {
   try {
-    return localStorage.getItem(DEMO_KEY) !== "0";
+    // OFF unless switched on: a fresh install must never show a fixture.
+    return localStorage.getItem(DEMO_KEY) === "1";
   } catch {
     return false;
   }

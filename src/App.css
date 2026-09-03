@@ -7953,3 +7953,41 @@ button.ks-key:hover { border-color: var(--line-2); }
   display: flex;
   align-items: center;
 }
+
+/* ── Profile popout: who you act as + the brand switch (rail avatar). ── */
+.ws-pop-backdrop { position: fixed; inset: 0; z-index: 60; }
+.ws-pop {
+  position: fixed;
+  left: 60px;
+  top: 14px;
+  z-index: 61;
+  width: 264px;
+  padding: 8px;
+  border-radius: var(--r-card);
+  background: var(--bg);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+}
+.ws-pop-head { display: flex; align-items: center; gap: 10px; padding: 8px 8px 10px; border-bottom: 1px solid var(--line-1); }
+.ws-pop-label { font-size: 10.5px; letter-spacing: 0.08em; color: var(--fg-3); padding: 10px 8px 4px; }
+.ws-pop-list { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow: auto; }
+.ws-row {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 7px 8px; border: 0; border-radius: var(--r-ctl);
+  background: transparent; color: var(--fg-1); text-align: left; cursor: pointer;
+}
+.ws-row:hover { background: var(--surface-2); }
+.ws-row.on { background: var(--surface-2); }
+.ws-row:disabled { opacity: 0.6; cursor: default; }
+.ws-ava {
+  flex: none; width: 30px; height: 30px; border-radius: 9px;
+  display: grid; place-items: center; font-weight: 700; font-size: 13px;
+  background: var(--surface-3); color: var(--fg-1);
+}
+.ws-ava.sm { width: 26px; height: 26px; font-size: 12px; border-radius: 8px; }
+.ws-pop-txt { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.ws-pop-name { font-size: 13px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ws-pop-slug { font-size: 11.5px; color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ws-dot { flex: none; width: 7px; height: 7px; border-radius: 999px; background: var(--mint); }
+.ws-pop-foot { border-top: 1px solid var(--line-1); margin-top: 6px; padding-top: 6px; }
+.ws-pop .cr-hint { padding: 6px 8px; }

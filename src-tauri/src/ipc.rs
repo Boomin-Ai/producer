@@ -19,6 +19,8 @@ pub struct EndpointInfo {
     pub name: String,
     pub base_url: String,
     pub created_at: String,
+    /// Hosted workspace scope (connected endpoints); the brand switch keys on it.
+    pub brand_slug: Option<String>,
 }
 
 fn normalize_base_url(raw: &str) -> EngineResult<String> {
@@ -36,7 +38,7 @@ fn normalize_base_url(raw: &str) -> EngineResult<String> {
 pub fn list_endpoints(state: State<'_, AppState>) -> EngineResult<Vec<EndpointInfo>> {
     let conn = state.db.lock().expect("db mutex poisoned");
     let mut stmt = conn.prepare(
-        "SELECT id, kind, name, base_url, created_at FROM endpoints ORDER BY created_at",
+        "SELECT id, kind, name, base_url, created_at, brand_slug FROM endpoints ORDER BY created_at",
     )?;
     let rows = stmt
         .query_map([], |r| {
@@ -46,6 +48,7 @@ pub fn list_endpoints(state: State<'_, AppState>) -> EngineResult<Vec<EndpointIn
                 name: r.get(2)?,
                 base_url: r.get(3)?,
                 created_at: r.get(4)?,
+                brand_slug: r.get(5)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -211,6 +214,48 @@ async fn finalize_boomin_endpoint(
     }
     vault::set_token(&id, token)?;
     Ok(json!({ "id": id, "session": session }))
+}
+
+/// Every brand this account can act in, from the hosted API — the same list
+/// onboarding shows. Read live so a brand created on the web appears without
+/// re-onboarding. Returns [{slug, name}].
+#[tauri::command]
+pub async fn boomin_list_brands(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+) -> EngineResult<Value> {
+    let (base_url, _slug, token) = endpoint_access(&state, &endpoint_id)?;
+    let root = api_root_of(&base_url);
+    let brands = boomin::list_brands(&root, &token).await?;
+    Ok(json!({
+        "brands": brands
+            .into_iter()
+            .map(|(slug, name)| json!({ "slug": slug, "name": name }))
+            .collect::<Vec<_>>()
+    }))
+}
+
+/// Bind another brand of the SAME account as its own workspace: the token is
+/// user-scoped, so the new endpoint reuses it with a different brandSlug.
+/// Idempotent — re-binding an existing (base_url, brand_slug) refreshes it.
+#[tauri::command]
+pub async fn boomin_add_brand(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    brand_slug: String,
+) -> EngineResult<Value> {
+    let (base_url, _slug, token) = endpoint_access(&state, &endpoint_id)?;
+    let root = api_root_of(&base_url);
+    finalize_boomin_endpoint(&state, &root, &token, &brand_slug).await
+}
+
+/// The API origin an endpoint's producer base was derived from (see
+/// boomin::producer_base_for_root): everything before "/v1/".
+fn api_root_of(base_url: &str) -> String {
+    match base_url.find("/v1/") {
+        Some(i) => base_url[..i].to_string(),
+        None => base_url.trim_end_matches('/').to_string(),
+    }
 }
 
 /// Load an endpoint's connection details (base URL, hosted workspace scope,

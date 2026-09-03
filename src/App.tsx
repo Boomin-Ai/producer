@@ -66,6 +66,7 @@ function App() {
       endpoints={endpoints}
       onAddEndpoint={() => setView("onboarding")}
       onRemoveEndpoint={removeEndpoint}
+      onEndpointsChanged={() => void refresh()}
     />
   );
 }

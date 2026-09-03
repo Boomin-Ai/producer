@@ -6,6 +6,8 @@ export interface EndpointInfo {
   name: string;
   base_url: string;
   created_at: string;
+  /** Hosted workspace scope (connected endpoints); the brand switch keys on it. */
+  brand_slug?: string | null;
 }
 
 export interface Channel {
@@ -61,7 +63,13 @@ export const ipc = {
       "boomin_connect",
       { email, code, apiRoot: apiRoot || null },
     ),
-  boominSelectBrand: (brandSlug: string) => invoke("boomin_select_brand", { brandSlug }),
+  boominSelectBrand: (brandSlug: string) => invoke<{ id?: string }>("boomin_select_brand", { brandSlug }),
+  /** Every brand this account can act in — live from the API, for the switcher. */
+  boominListBrands: (endpointId: string) =>
+    invoke<{ brands: { slug: string; name: string }[] }>("boomin_list_brands", { endpointId }),
+  /** Bind another brand of the same account as its own workspace (token reused). */
+  boominAddBrand: (endpointId: string, brandSlug: string) =>
+    invoke<{ id: string; refreshed?: boolean }>("boomin_add_brand", { endpointId, brandSlug }),
   connectChannel: (endpointId: string, platform: string) =>
     invoke<{ browser_url: string; expires_at: string }>("connect_channel", { endpointId, platform }),
   endpointChannels: (endpointId: string) =>
@@ -88,8 +96,10 @@ export const ipc = {
   // --- Live (LIVE-REVIEW.md §5.4 / §8) ---
   // Stream keys cross this boundary exactly once, inside upsert; nothing
   // here ever returns one.
-  liveListDestinations: () => invoke<LiveDestination[]>("live_list_destinations"),
+  liveListDestinations: (endpointId?: string) => invoke<LiveDestination[]>("live_list_destinations", { endpointId: endpointId ?? null }),
   liveUpsertDestination: (input: {
+    /** Workspace on create; ignored on update. */
+    endpoint_id?: string;
     id?: string;
     preset: LivePreset;
     label: string;
@@ -122,8 +132,9 @@ export const ipc = {
     invoke("live_screen_coach", { action }),
   firstlightResume: (action: "set" | "take" | "clear") =>
     invoke<boolean>("firstlight_resume", { action }),
-  liveListRooms: () => invoke<LiveRoom[]>("live_list_rooms"),
-  liveCreateRoom: (name: string) => invoke<LiveRoom>("live_create_room", { name }),
+  liveListRooms: (endpointId?: string) => invoke<LiveRoom[]>("live_list_rooms", { endpointId: endpointId ?? null }),
+  liveCreateRoom: (name: string, endpointId?: string) =>
+    invoke<LiveRoom>("live_create_room", { name, endpointId: endpointId ?? null }),
   liveUpdateRoom: (id: string, patch: { name?: string; config?: string; touchLive?: boolean }) =>
     invoke("live_update_room", {
       id,
@@ -162,6 +173,8 @@ export interface LiveRoom {
   config: string;
   last_live_at: string | null;
   created_at: string;
+  /** Workspace (endpoint) the room belongs to; null = legacy/global. */
+  endpoint_id?: string | null;
 }
 
 export interface LivePermissions {
