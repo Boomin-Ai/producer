@@ -2825,9 +2825,6 @@ export function LiveView({
         if (saved.mic_volume != null || saved.mic_muted != null) {
           await ipc.liveSetMicAudio({ volume: saved.mic_volume, muted: saved.mic_muted });
         }
-        if (saved.overlay_window != null || saved.overlay_url) {
-          await ipc.liveSetOverlay(saved.overlay_window ?? null, true, saved.overlay_url ?? null);
-        }
         setSources((s) => ({ ...s, ...saved }));
       }
       // Item-list half of the document: clear whatever open-list items the
@@ -2840,6 +2837,13 @@ export function LiveView({
       }
       for (const e of saved.extras ?? []) {
         await extraSources.add(e.id, e.label, e.spec).catch(() => {});
+      }
+      // The overlay LAST: its CEF create is the slowest thing in the apply
+      // (measured 4.6s cold, holding the engine loop), so nothing else may
+      // queue behind it. Not awaited — the scene mounts around it and the
+      // first-frame gate holds the veil until it lands.
+      if (typeof saved.screen === "boolean" && (saved.overlay_window != null || saved.overlay_url)) {
+        ipc.liveSetOverlay(saved.overlay_window ?? null, true, saved.overlay_url ?? null).catch(() => {});
       }
       const mount = parseConfig(room.config).active_scene;
       if (mount) setPendingScene(mount);

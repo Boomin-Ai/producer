@@ -37,6 +37,8 @@ const REQUIRED_SERVICES: &[&str] = &["rtmp_common", "rtmp_custom"];
 
 /// Whether the stage renders as a transparent hole (preview BELOW the
 /// webview) — the UI mirrors this so its CSS matches the native stacking.
+/// The warm CEF browser source (see the cef-warm thread in start()).
+pub static CEF_WARM: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 pub static STAGE_TRANSPARENT: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
@@ -1158,6 +1160,33 @@ pub fn start(
                 s.boot_phases_ms = report.boot_phases_ms.clone();
             }
             if report.ok {
+                // CEF WARM-UP, off every critical path. The first browser
+                // source a process creates pays Chromium's renderer/GPU
+                // spin-up — measured 4.6s inside SetOverlay, holding the
+                // engine loop (and with it every other source's ack) hostage.
+                // A hidden about:blank browser created on ITS OWN thread
+                // right after boot takes that hit while the user is still on
+                // the home screen; it stays alive so CEF stays hot, and later
+                // creates (overlay, guest pages) return in a few hundred ms.
+                std::thread::Builder::new()
+                    .name("cef-warm".into())
+                    .spawn(|| unsafe {
+                        let t0 = Instant::now();
+                        let settings = ffi::obs_data_create();
+                        let k_url = CString::new("url").unwrap();
+                        let v_url = CString::new("about:blank").unwrap();
+                        ffi::obs_data_set_string(settings, k_url.as_ptr(), v_url.as_ptr());
+                        ffi::obs_data_set_int(settings, CString::new("width").unwrap().as_ptr(), 16);
+                        ffi::obs_data_set_int(settings, CString::new("height").unwrap().as_ptr(), 16);
+                        let id = CString::new("browser_source").unwrap();
+                        let name = CString::new("cef-warm").unwrap();
+                        let src = ffi::obs_source_create(id.as_ptr(), name.as_ptr(), settings, ptr::null_mut());
+                        ffi::obs_data_release(settings);
+                        eprintln!("[live] cef warm-up: {} ms (src null: {})", t0.elapsed().as_millis(), src.is_null());
+                        // Kept alive on purpose (released with the process).
+                        CEF_WARM.store(src as usize, std::sync::atomic::Ordering::Relaxed);
+                    })
+                    .ok();
                 // Preview capture rides the compositor: registered once, for
                 // the life of the process. hub_engine's Arc keeps it alive.
                 unsafe {
