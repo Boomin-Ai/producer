@@ -99,6 +99,7 @@ extern "C" {
     pub fn obs_initialized() -> bool;
     pub fn obs_get_version_string() -> *const c_char;
     pub fn obs_reset_video(ovi: *mut obs_video_info) -> c_int;
+    pub fn obs_set_video_levels(sdr_white_level: f32, hdr_nominal_peak_level: f32);
     pub fn obs_reset_audio(oai: *const obs_audio_info) -> bool;
     pub fn obs_load_all_modules2(mfi: *mut obs_module_failure_info);
     pub fn obs_module_failure_info_free(mfi: *mut obs_module_failure_info);

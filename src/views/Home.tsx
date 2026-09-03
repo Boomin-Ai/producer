@@ -4,6 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Channel, EndpointInfo, Job, LiveDestination, LiveRoom, LiveSnapshot } from "../lib/ipc";
 import type { TargetResult } from "../lib/ipc";
+import { WORKSPACE_EVENT, activeEndpointId, resolveActiveEndpoint, setActiveEndpointId } from "../lib/workspace";
 import { ipc,
   network,
   networkConnections,
@@ -201,10 +202,13 @@ export function Home({
   endpoints,
   onAddEndpoint,
   onRemoveEndpoint,
+  onEndpointsChanged,
 }: {
   endpoints: EndpointInfo[];
   onAddEndpoint: () => void;
   onRemoveEndpoint: (id: string) => void;
+  /** A brand was bound as a new workspace from the popout — reload the endpoint list. */
+  onEndpointsChanged?: () => void;
 }) {
   const [view, setView] = useState<MainView>({ kind: "home" });
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -221,6 +225,10 @@ export function Home({
   const [channels, setChannels] = useState<Channel[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [rooms, setRooms] = useState<LiveRoom[]>([]);
+  // The active workspace (brand). Rooms, destinations and the network rail
+  // all key on it; the profile popout switches it.
+  const [activeId, setActiveId] = useState<string | null>(() => activeEndpointId());
+  const [profileOpen, setProfileOpen] = useState(false);
   const [destinations, setDestinations] = useState<LiveDestination[]>([]);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -257,13 +265,20 @@ export function Home({
 
   const loadLive = useCallback(async () => {
     try {
-      setRooms(await ipc.liveListRooms());
-      setDestinations(await ipc.liveListDestinations());
+      const ep = await resolveActiveEndpoint();
+      setActiveId(ep?.id ?? null);
+      setRooms(await ipc.liveListRooms(ep?.id ?? undefined));
+      setDestinations(await ipc.liveListDestinations(ep?.id ?? undefined));
       setSnapshot(await ipc.liveEngineStatus());
     } catch {
       /* engine-less build — live sections render empty */
     }
   }, []);
+  useEffect(() => {
+    const h = () => void loadLive();
+    window.addEventListener(WORKSPACE_EVENT, h);
+    return () => window.removeEventListener(WORKSPACE_EVENT, h);
+  }, [loadLive]);
 
   useEffect(() => {
     loadChannels();
@@ -357,11 +372,28 @@ export function Home({
 
       {view.kind === "home" && (
         <HomeRail
-          brandName={endpoints[0]?.name ?? "Workspace"}
+          brandName={(endpoints.find((e) => e.id === activeId) ?? endpoints.find((e) => e.kind === "connected") ?? endpoints[0])?.name ?? "Workspace"}
           surface={surface}
           onSurface={setSurface}
           onCompose={() => setView({ kind: "compose" })}
-          onSettings={() => setSettingsOpen(true)}
+          onSettings={() => setProfileOpen((v) => !v)}
+        />
+      )}
+      {view.kind === "home" && profileOpen && (
+        <WorkspacePopout
+          endpoints={endpoints}
+          activeId={activeId}
+          onSwitch={(id) => {
+            setActiveEndpointId(id);
+            setActiveId(id);
+            setProfileOpen(false);
+            onEndpointsChanged?.();
+          }}
+          onSettings={() => {
+            setProfileOpen(false);
+            setSettingsOpen(true);
+          }}
+          onClose={() => setProfileOpen(false)}
         />
       )}
       {view.kind === "home" && (
@@ -710,7 +742,7 @@ function ControlRoomHome({
     if (!n) return;
     setName("");
     setNaming(false);
-    const room = await ipc.liveCreateRoom(n);
+    const room = await ipc.liveCreateRoom(n, activeEndpointId() ?? undefined);
     onRoomsChanged();
     onOpenRoom(room);
   }
@@ -1409,18 +1441,20 @@ function HistoryView({
  * addresses a brand exactly — no picker needed. */
 /** Resolve the connected Boomin endpoint once — every network surface needs it. */
 function useConnectedEndpoint(): string | null {
-  const [endpointId, setEndpointId] = useState<string | null>(null);
+  const [endpointId, setEndpointId] = useState<string | null>(() => activeEndpointId());
   useEffect(() => {
     let alive = true;
-    ipc
-      .listEndpoints()
-      .then((eps) => {
-        const ep = eps.find((e) => e.kind === "connected") ?? eps[0];
-        if (alive && ep) setEndpointId(ep.id);
-      })
-      .catch(() => {});
+    const load = () =>
+      resolveActiveEndpoint()
+        .then((ep) => {
+          if (alive) setEndpointId(ep?.id ?? null);
+        })
+        .catch(() => {});
+    load();
+    window.addEventListener(WORKSPACE_EVENT, load);
     return () => {
       alive = false;
+      window.removeEventListener(WORKSPACE_EVENT, load);
     };
   }, []);
   return endpointId;
@@ -1574,38 +1608,52 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
   return (
     <aside className="net-rail">
       <div className="net-rail-head">
-        NETWORK
-        <span className="net-count">
-          <span className="net-dot" />
+        <span className="net-rail-title">Network</span>
+        <span className="net-count" title={`${liveNow} of ${members} network members are live right now`}>
+          <span className={`net-dot${liveNow > 0 ? " on" : ""}`} />
           {liveNow} live
-          <span className="net-of">of {members}</span>
+          <span className="net-of">· {members}</span>
         </span>
       </div>
 
-      <div className="net-tabs">
-        <button className={tab === "connected" ? "on" : ""} onClick={() => setTab("connected")}>
-          Connected{conns.length ? ` · ${conns.length}` : ""}
+      <div className="net-tabs" role="tablist">
+        <button role="tab" className={tab === "connected" ? "on" : ""} onClick={() => setTab("connected")}>
+          Connected
+          {conns.length > 0 && <span className="net-tab-n">{conns.length}</span>}
           {inbox.length > 0 && <span className="net-badge">{inbox.length}</span>}
         </button>
-        <button className={tab === "find" ? "on" : ""} onClick={() => setTab("find")}>
+        <button role="tab" className={tab === "find" ? "on" : ""} onClick={() => setTab("find")}>
           Find
         </button>
       </div>
 
       {tab === "connected" && (
         <div className="net-list">
-          {inbox.map((i) => (
-            <div key={i.id} className="net-invite">
-              <span className="net-invite-name">{i.brand?.name ?? i.brand?.slug}</span>
-              {i.message && <span className="net-invite-msg">{i.message}</span>}
-              <button className="cr-primary" onClick={() => act(i.id, "accept")}>
-                Accept
-              </button>
-              <button className="net-decline" onClick={() => act(i.id, "decline")}>
-                Decline
-              </button>
-            </div>
-          ))}
+          {inbox.length > 0 && <div className="net-section">Requests</div>}
+          {inbox.map((i) => {
+            const name = i.brand?.name ?? i.brand?.slug ?? "Someone";
+            return (
+              <div key={i.id} className="net-invite">
+                <div className="net-invite-row">
+                  <span className="net-ava net-ava-ph">{(name || "?").slice(0, 1)}</span>
+                  <span className="net-conn-txt">
+                    <span className="net-conn-name">{name}</span>
+                    <span className="net-conn-slug">wants to connect{i.brand?.slug ? ` · @${i.brand.slug}` : ""}</span>
+                  </span>
+                </div>
+                {i.message && <div className="net-invite-msg">“{i.message}”</div>}
+                <div className="net-invite-acts">
+                  <button className="net-accept" onClick={() => act(i.id, "accept")}>
+                    Accept
+                  </button>
+                  <button className="net-decline" onClick={() => act(i.id, "decline")}>
+                    Decline
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {inbox.length > 0 && conns.length > 0 && <div className="net-section">Connected</div>}
           {conns.map((c) => {
             const ds = dealsFor(c.connection.id);
             const open = booking === c.connection.id;
@@ -1959,6 +2007,127 @@ const railIc = {
     </svg>
   ),
 };
+
+/** The profile popout: who you are acting as, and the brand switch.
+ *
+ * Mirrors the web's BrandSwitcherDropdown: every brand of the account (live
+ * from the API), the current one marked, unbound ones bound on first pick
+ * (same token, new endpoint row). Settings lives behind it. */
+function WorkspacePopout({
+  endpoints,
+  activeId,
+  onSwitch,
+  onSettings,
+  onClose,
+}: {
+  endpoints: EndpointInfo[];
+  activeId: string | null;
+  onSwitch: (endpointId: string) => void;
+  onSettings: () => void;
+  onClose: () => void;
+}) {
+  const active = endpoints.find((e) => e.id === activeId) ?? endpoints.find((e) => e.kind === "connected") ?? endpoints[0];
+  const [brands, setBrands] = useState<{ slug: string; name: string }[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    const ep = endpoints.find((e) => e.kind === "connected" && e.id === activeId) ?? endpoints.find((e) => e.kind === "connected");
+    if (!ep) {
+      setBrands([]);
+      return;
+    }
+    ipc
+      .boominListBrands(ep.id)
+      .then((r) => setBrands(r.brands ?? []))
+      .catch(() => setBrands(endpoints.filter((e) => e.brand_slug).map((e) => ({ slug: e.brand_slug!, name: e.name }))));
+  }, [endpoints, activeId]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const pick = async (slug: string) => {
+    const bound = endpoints.find((e) => e.brand_slug === slug);
+    if (bound) {
+      onSwitch(bound.id);
+      return;
+    }
+    const via = endpoints.find((e) => e.kind === "connected" && e.id === activeId) ?? endpoints.find((e) => e.kind === "connected");
+    if (!via) return;
+    setBusy(slug);
+    setNote(null);
+    try {
+      const r = await ipc.boominAddBrand(via.id, slug);
+      onSwitch(r.id);
+    } catch (e) {
+      setNote(String(e).replace(/^Error:\s*/, ""));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const rows = brands ?? [];
+  const independents = endpoints.filter((e) => e.kind !== "connected");
+  return (
+    <>
+      <div className="ws-pop-backdrop" onClick={onClose} />
+      <div className="ws-pop" role="menu">
+        <div className="ws-pop-head">
+          <span className="ws-ava">{(active?.name?.[0] ?? "?").toUpperCase()}</span>
+          <span className="ws-pop-txt">
+            <span className="ws-pop-name">{active?.name ?? "Workspace"}</span>
+            {active?.brand_slug && <span className="ws-pop-slug">@{active.brand_slug}</span>}
+          </span>
+        </div>
+        <div className="ws-pop-label">BRAND WORKSPACES</div>
+        <div className="ws-pop-list">
+          {brands === null && <div className="cr-hint">Loading…</div>}
+          {rows.map((b) => {
+            const bound = endpoints.find((e) => e.brand_slug === b.slug);
+            const isCurrent = !!bound && bound.id === active?.id;
+            return (
+              <button
+                key={b.slug}
+                className={`ws-row${isCurrent ? " on" : ""}`}
+                disabled={busy !== null}
+                onClick={() => void pick(b.slug)}
+              >
+                <span className="ws-ava sm">{(b.name?.[0] ?? "B").toUpperCase()}</span>
+                <span className="ws-pop-txt">
+                  <span className="ws-pop-name">{b.name}</span>
+                  <span className="ws-pop-slug">@{b.slug}{bound ? "" : " · not set up yet"}</span>
+                </span>
+                {isCurrent ? <i className="ws-dot" /> : busy === b.slug ? <span className="ws-pop-slug">…</span> : null}
+              </button>
+            );
+          })}
+          {independents.map((e) => (
+            <button key={e.id} className={`ws-row${e.id === active?.id ? " on" : ""}`} onClick={() => onSwitch(e.id)}>
+              <span className="ws-ava sm">{(e.name[0] ?? "S").toUpperCase()}</span>
+              <span className="ws-pop-txt">
+                <span className="ws-pop-name">{e.name}</span>
+                <span className="ws-pop-slug">self-hosted</span>
+              </span>
+              {e.id === active?.id && <i className="ws-dot" />}
+            </button>
+          ))}
+          {brands !== null && rows.length === 0 && independents.length === 0 && (
+            <div className="cr-hint">No workspaces yet. Add one in Settings.</div>
+          )}
+        </div>
+        {note && <div className="cr-hint">{note}</div>}
+        <div className="ws-pop-foot">
+          <button className="ws-row" onClick={onSettings}>
+            <span className="ws-pop-name">Settings</span>
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
 
 function HomeRail({
   brandName,

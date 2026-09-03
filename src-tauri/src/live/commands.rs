@@ -21,6 +21,8 @@ pub struct DestinationRow {
     pub server: Option<String>,
     pub enabled: bool,
     pub created_at: String,
+    /// Workspace (endpoint) this destination belongs to; NULL = legacy/global.
+    pub endpoint_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -33,6 +35,8 @@ pub struct UpsertDestination {
     /// here — stored in the keychain, never persisted or echoed back.
     pub key: Option<String>,
     pub enabled: Option<bool>,
+    /// Set on create; an update never moves a destination between workspaces.
+    pub endpoint_id: Option<String>,
 }
 
 const PRESETS: &[&str] = &["twitch", "kick", "youtube", "custom"];
@@ -45,19 +49,25 @@ fn row_from_db(r: &rusqlite::Row<'_>) -> rusqlite::Result<DestinationRow> {
         server: r.get(3)?,
         enabled: r.get::<_, i64>(4)? != 0,
         created_at: r.get(5)?,
+        endpoint_id: r.get(6)?,
     })
 }
 
 #[tauri::command]
 pub async fn live_list_destinations(
     state: State<'_, AppState>,
+    endpoint_id: Option<String>,
 ) -> EngineResult<Vec<DestinationRow>> {
     let conn = state.db.lock().expect("db mutex poisoned");
+    // Scoped to the active workspace when one is named; unclaimed legacy rows
+    // stay visible everywhere until the backfill claims them.
     let mut stmt = conn.prepare(
-        "SELECT id, preset, label, server, enabled, created_at FROM live_destinations ORDER BY created_at",
+        "SELECT id, preset, label, server, enabled, created_at, endpoint_id FROM live_destinations
+         WHERE ?1 IS NULL OR endpoint_id IS NULL OR endpoint_id = ?1
+         ORDER BY created_at",
     )?;
     let rows = stmt
-        .query_map([], row_from_db)?
+        .query_map(params![endpoint_id], row_from_db)?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
 }
@@ -132,8 +142,8 @@ pub async fn live_upsert_destination(
 
     let enabled = input.enabled.unwrap_or(true);
     conn.execute(
-        "INSERT INTO live_destinations (id, preset, label, server, credential_id, enabled)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        "INSERT INTO live_destinations (id, preset, label, server, credential_id, enabled, endpoint_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
          ON CONFLICT(id) DO UPDATE SET preset = ?2, label = ?3, server = ?4, enabled = ?6",
         params![
             id,
@@ -141,12 +151,13 @@ pub async fn live_upsert_destination(
             input.label,
             server,
             credential_id,
-            enabled as i64
+            enabled as i64,
+            input.endpoint_id
         ],
     )?;
 
     let row = conn.query_row(
-        "SELECT id, preset, label, server, enabled, created_at FROM live_destinations WHERE id = ?1",
+        "SELECT id, preset, label, server, enabled, created_at, endpoint_id FROM live_destinations WHERE id = ?1",
         params![id],
         row_from_db,
     )?;
@@ -673,6 +684,8 @@ pub struct RoomRow {
     pub config: String,
     pub last_live_at: Option<String>,
     pub created_at: String,
+    /// Workspace (endpoint) this room belongs to; NULL = legacy/global.
+    pub endpoint_id: Option<String>,
 }
 
 fn room_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RoomRow> {
@@ -682,27 +695,37 @@ fn room_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RoomRow> {
         config: row.get(2)?,
         last_live_at: row.get(3)?,
         created_at: row.get(4)?,
+        endpoint_id: row.get(5)?,
     })
 }
 
 #[tauri::command]
-pub async fn live_list_rooms(state: State<'_, AppState>) -> EngineResult<Vec<RoomRow>> {
+pub async fn live_list_rooms(
+    state: State<'_, AppState>,
+    endpoint_id: Option<String>,
+) -> EngineResult<Vec<RoomRow>> {
     let db = state.db.lock().unwrap();
+    // Scoped to the active workspace when one is named (see store.rs v3).
     let mut stmt = db
         .prepare(
-            "SELECT id, name, config, last_live_at, created_at FROM live_rooms
+            "SELECT id, name, config, last_live_at, created_at, endpoint_id FROM live_rooms
+             WHERE ?1 IS NULL OR endpoint_id IS NULL OR endpoint_id = ?1
              ORDER BY COALESCE(last_live_at, created_at) DESC",
         )
         .map_err(|e| EngineError::Other(e.to_string()))?;
     let rows = stmt
-        .query_map([], |r| room_from_row(r))
+        .query_map(params![endpoint_id], |r| room_from_row(r))
         .and_then(|it| it.collect::<rusqlite::Result<Vec<_>>>())
         .map_err(|e| EngineError::Other(e.to_string()))?;
     Ok(rows)
 }
 
 #[tauri::command]
-pub async fn live_create_room(state: State<'_, AppState>, name: String) -> EngineResult<RoomRow> {
+pub async fn live_create_room(
+    state: State<'_, AppState>,
+    name: String,
+    endpoint_id: Option<String>,
+) -> EngineResult<RoomRow> {
     let id = Uuid::new_v4().to_string();
     let name = name.trim().to_string();
     if name.is_empty() {
@@ -710,12 +733,12 @@ pub async fn live_create_room(state: State<'_, AppState>, name: String) -> Engin
     }
     let db = state.db.lock().unwrap();
     db.execute(
-        "INSERT INTO live_rooms (id, name) VALUES (?1, ?2)",
-        params![id, name],
+        "INSERT INTO live_rooms (id, name, endpoint_id) VALUES (?1, ?2, ?3)",
+        params![id, name, endpoint_id],
     )
     .map_err(|e| EngineError::Other(e.to_string()))?;
     db.query_row(
-        "SELECT id, name, config, last_live_at, created_at FROM live_rooms WHERE id = ?1",
+        "SELECT id, name, config, last_live_at, created_at, endpoint_id FROM live_rooms WHERE id = ?1",
         params![id],
         |r| room_from_row(r),
     )
