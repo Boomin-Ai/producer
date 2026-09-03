@@ -8177,3 +8177,7 @@ button.ks-key:hover { border-color: var(--line-2); }
 .deal-foot-link:hover { text-decoration: underline; }
 .deal-agree { font-size: 11.5px; color: var(--fg-3); background: transparent; border: 0; padding: 0 2px; }
 .deal-agree a { color: var(--fg-2); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; font-weight: 600; }
+/* The sheet never scrolls sideways; long links wrap instead of widening it. */
+.deal-sheet { overflow-x: hidden; overflow-y: auto; }
+.deal-sheet .cr-hint, .deal-term > p, .deal-agree, .deal-link p { overflow-wrap: anywhere; word-break: break-word; }
+.deal-sheet .cr-hint { user-select: text; -webkit-user-select: text; }

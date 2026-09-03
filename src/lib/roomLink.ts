@@ -28,10 +28,29 @@ export async function ensureRoomJoinLink(room: LiveRoom): Promise<string> {
   return url;
 }
 
+/** Copy to the clipboard. WKWebView refuses the async clipboard API in some
+ * states (no page focus, no user-activation credit), so fall back to the
+ * selection route, which the webview always honours from a click handler. */
 export async function copyText(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
     return true;
+  } catch {
+    /* fall through */
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    ta.style.pointerEvents = "none";
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
   } catch {
     return false;
   }
