@@ -443,6 +443,38 @@ pub async fn network_enter_room(
         .await
 }
 
+#[tauri::command]
+pub async fn network_deals(state: State<'_, AppState>, endpoint_id: String) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .network_deals()
+        .await
+}
+
+#[tauri::command]
+pub async fn network_propose_deal(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    connection_id: String,
+    beneficiary_brand_id: String,
+    room_id: String,
+    title: String,
+    amount_cents: u64,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .network_propose_deal(
+            &connection_id,
+            &beneficiary_brand_id,
+            &room_id,
+            &title,
+            amount_cents,
+        )
+        .await
+}
+
 /// The room's mount timings, written beside the engine report so a room
 /// open can be read off disk (engine → applied → settled → veil, plus the
 /// boot phases) — the ruler every speedup is measured against.

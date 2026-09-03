@@ -14,6 +14,7 @@ import { ipc,
   type NetworkInvitation,
   type NetworkBrandCard,
   type NetworkConnectionRow,
+  type NetworkDeal,
   type NetworkLiveRoom,
 } from "../lib/ipc";
 import { demoOn, setDemo } from "../lib/demo";
@@ -722,7 +723,7 @@ function ControlRoomHome({
         * here is harmless, whereas mid-broadcast it would be noise over a
         * running show. The rail is FIXED against the icon rail — attached,
         * full height, part of the furniture rather than a floating card. */}
-      <NetworkRail />
+      <NetworkRail rooms={rooms} />
       <LiveNowStrip />
       <section className="cr-section" id="sec-onair">
         <div className="cr-label">
@@ -1430,28 +1431,78 @@ function useConnectedEndpoint(): string | null {
  * Discovery is EXACT-HANDLE ONLY, by design: Producer is never handed the
  * directory list, so the Find tab resolves a handle you were given and
  * nothing more. Connected shows the brands who already said yes, with the
- * inbox of open handshakes above them. */
-function NetworkRail() {
+ * inbox of open handshakes above them.
+ *
+ * Deals ride the connection rows: every open deal with that brand is a chip,
+ * and "Book" proposes an APPEARANCE deal — we (the host) pay them to appear
+ * on one of our rooms. Presence is delivery: admitting them from the Guests
+ * panel settles the funded deal server-side; nothing here marks anything. */
+function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
   const endpointId = useConnectedEndpoint();
   const [status, setStatus] = useState<NetworkStatus | null>(null);
   const [inbox, setInbox] = useState<NetworkInvitation[]>([]);
   const [conns, setConns] = useState<NetworkConnectionRow[]>([]);
+  const [deals, setDeals] = useState<NetworkDeal[]>([]);
   const [tab, setTab] = useState<"connected" | "find">("connected");
   const [slug, setSlug] = useState("");
   const [card, setCard] = useState<NetworkBrandCard | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [booking, setBooking] = useState<string | null>(null);
+  const [bookRoom, setBookRoom] = useState("");
+  const [bookAmt, setBookAmt] = useState("");
 
   const load = useCallback(async (id: string) => {
-    const [st, inv, cn] = await Promise.all([
+    const [st, inv, cn, dl] = await Promise.all([
       network.status(id).catch(() => null),
       network.invitations(id, "inbox").catch(() => null),
       networkConnections(id).catch(() => null),
+      network.deals(id).catch(() => null),
     ]);
     if (st) setStatus(st);
     setInbox((inv?.invitations ?? []).filter((i) => i.status === "invited"));
     setConns(cn?.connections ?? []);
+    setDeals(dl?.deals ?? []);
   }, []);
+
+  const dealsFor = (connectionId: string) =>
+    deals.filter((d) => d.connection_id === connectionId && !["released", "declined", "cancelled", "expired"].includes(d.status));
+
+  const bookCents = Math.round((Number(bookAmt) || 0) * 100);
+
+  const book = async (c: NetworkConnectionRow) => {
+    const room = rooms.find((r) => r.id === bookRoom);
+    if (!endpointId || !room || bookCents < 500) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      // The deal names a SERVER room; register the local one lazily (idempotent
+      // by external_ref) and mirror the id the same way RoomShareChip does.
+      let sid = parseConfig(room.config).server_room_id;
+      if (!sid) {
+        const reg = await registerRoom(endpointId, room.name, room.id);
+        sid = reg.room.id;
+        const fresh = (await ipc.liveListRooms()).find((r) => r.id === room.id);
+        const cfg = parseConfig(fresh?.config ?? room.config);
+        await ipc.liveUpdateRoom(room.id, { config: serializeConfig({ ...cfg, server_room_id: sid }) });
+      }
+      await network.proposeDeal(endpointId, {
+        connectionId: c.connection.id,
+        beneficiaryBrandId: c.counterparty.id,
+        roomId: sid,
+        title: `Appearance on ${room.name}`,
+        amountCents: bookCents,
+      });
+      setNote(`Proposed $${(bookCents / 100).toFixed(2)} to ${c.counterparty.name}. They accept in Boomin; you fund it there.`);
+      setBooking(null);
+      setBookAmt("");
+      void load(endpointId);
+    } catch (e) {
+      setNote(String(e).replace(/^Error:\s*/, ""));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (endpointId) void load(endpointId);
@@ -1552,19 +1603,75 @@ function NetworkRail() {
               </button>
             </div>
           ))}
-          {conns.map((c) => (
-            <div key={c.connection.id} className="net-conn">
-              {c.counterparty.avatarUrl ? (
-                <img className="net-ava" src={c.counterparty.avatarUrl} alt="" />
-              ) : (
-                <span className="net-ava net-ava-ph">{(c.counterparty.name || "?").slice(0, 1)}</span>
-              )}
-              <span className="net-conn-txt">
-                <span className="net-conn-name">{c.counterparty.name}</span>
-                <span className="net-conn-slug">@{c.counterparty.slug}</span>
-              </span>
-            </div>
-          ))}
+          {conns.map((c) => {
+            const ds = dealsFor(c.connection.id);
+            const open = booking === c.connection.id;
+            return (
+              <div key={c.connection.id} className={`net-conn${open ? " booking" : ""}`}>
+                {c.counterparty.avatarUrl ? (
+                  <img className="net-ava" src={c.counterparty.avatarUrl} alt="" />
+                ) : (
+                  <span className="net-ava net-ava-ph">{(c.counterparty.name || "?").slice(0, 1)}</span>
+                )}
+                <span className="net-conn-txt">
+                  <span className="net-conn-name">{c.counterparty.name}</span>
+                  <span className="net-conn-slug">@{c.counterparty.slug}</span>
+                </span>
+                {rooms.length > 0 && (
+                  <button
+                    className="net-book"
+                    title="Book an appearance — you pay them to appear on one of your rooms"
+                    onClick={() => {
+                      setBooking(open ? null : c.connection.id);
+                      setBookRoom(rooms[0]?.id ?? "");
+                      setNote(null);
+                    }}
+                  >
+                    {open ? "Close" : "Book"}
+                  </button>
+                )}
+                {ds.length > 0 && (
+                  <div className="net-deals">
+                    {ds.map((d) => (
+                      <span key={d.id} className={`net-deal ${d.status}`} title={d.title}>
+                        {d.status} · ${(d.amount_cents / 100).toFixed(0)}
+                        {d.role === "beneficiary" ? " · you earn" : ""}
+                        {d.appearance ? " · admitted" : ""}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {open && (
+                  <div className="net-book-form">
+                    <select value={bookRoom} onChange={(e) => setBookRoom(e.target.value)}>
+                      {rooms.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      className="net-slug"
+                      inputMode="decimal"
+                      placeholder="USD"
+                      value={bookAmt}
+                      onChange={(e) => setBookAmt(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void book(c);
+                      }}
+                    />
+                    <button className="cr-primary" disabled={busy || bookCents < 500} onClick={() => void book(c)}>
+                      Propose
+                    </button>
+                    <div className="cr-hint">
+                      Presence is delivery: admitting @{c.counterparty.slug} to that room settles it. Minimum $5.
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {note && tab === "connected" && <div className="cr-hint">{note}</div>}
           {inbox.length === 0 && conns.length === 0 && (
             <div className="cr-hint">No connections yet. Find a producer by their handle.</div>
           )}

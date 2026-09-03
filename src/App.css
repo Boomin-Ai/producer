@@ -5206,6 +5206,57 @@ textarea::placeholder {
 }
 .net-state.on { color: var(--mint); }
 
+/* Deals on the connection rows — chips for open deals, Book = appearance deal. */
+.net-conn { flex-wrap: wrap; row-gap: 6px; }
+.net-book {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--fg-3);
+  background: transparent;
+  border: 1px solid var(--line-1);
+  border-radius: 999px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+.net-book:hover,
+.net-conn.booking .net-book { color: var(--fg-1); border-color: var(--line-2); }
+.net-deals { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px; }
+.net-deal {
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line-1);
+  color: var(--fg-2);
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+.net-deal.funded,
+.net-deal.delivered { color: var(--mint); border-color: color-mix(in srgb, var(--mint) 35%, transparent); }
+.net-deal.disputed { color: var(--red); }
+.net-book-form {
+  flex-basis: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px auto;
+  gap: 6px;
+  align-items: center;
+}
+.net-book-form select {
+  min-width: 0;
+  padding: 7px 8px;
+  font-size: 12px;
+  border-radius: var(--r-ctl);
+  background: var(--surface-2);
+  border: 1px solid var(--line-1);
+  color: var(--fg-1);
+}
+.net-book-form .net-slug { max-width: none; padding: 7px 8px; font-size: 12px; }
+.net-book-form .cr-primary { padding: 7px 12px; }
+.net-book-form .cr-hint { grid-column: 1 / -1; margin: 0; }
+
 /* The find row must LIVE INSIDE the rail — input yields, button never spills. */
 .net-rail .net-invite-row { gap: 8px; min-width: 0; }
 .net-rail .net-slug { flex: 1 1 auto; min-width: 0; max-width: none; padding: 8px 10px; font-size: 12.5px; }

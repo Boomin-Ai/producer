@@ -505,7 +505,30 @@ export const network = {
   /** Knock on a visible open stage; the join_url opens the guest page. */
   enterRoom: (endpointId: string, roomId: string) =>
     invoke<{ join_url: string; resumed: boolean }>("network_enter_room", { endpointId, roomId }),
+  /** Every deal this brand is party to. */
+  deals: (endpointId: string) => invoke<{ deals?: NetworkDeal[] }>("network_deals", { endpointId }),
+  /** Book an appearance: we (the host) pay them to appear on OUR server room.
+   * Presence is delivery — admitting them from the Guests panel settles it. */
+  proposeDeal: (
+    endpointId: string,
+    input: { connectionId: string; beneficiaryBrandId: string; roomId: string; title: string; amountCents: number },
+  ) => invoke<{ deal: NetworkDeal }>("network_propose_deal", { endpointId, ...input }),
 };
+
+export interface NetworkDeal {
+  id: string;
+  connection_id: string;
+  role: "client" | "beneficiary";
+  title: string;
+  status: "proposed" | "accepted" | "funded" | "delivered" | "released" | "declined" | "cancelled" | "disputed" | "expired";
+  amount_cents: number;
+  net_to_beneficiary_cents: number;
+  room_id?: string | null;
+  room_title?: string | null;
+  appearance?: { guest_id: string; admitted_at: string } | null;
+  delivered_by?: "presence" | "beneficiary" | null;
+  created_at: string;
+}
 
 /** Mount timings → <app data>/live/room-open-report.json, the ruler every
  * room-open speedup is measured against. */
