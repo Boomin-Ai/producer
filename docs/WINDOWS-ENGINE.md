@@ -615,6 +615,20 @@ readback in `gs_texture_get_color_format`, per-source
   WebView2 default background + `below_webview` placement --- the shim already
   honours the z-order argument; the WebView2 half is unbuilt.
 
+## Rung 3 notes, from the macOS guest work
+
+- The guest page negotiates **VP8 first and H.264 last** on purpose: on macOS
+  hardware-decoded H.264 never reached CEF's offscreen readback (black tile
+  with `readyState 4`). The Windows decode path differs; keep the preference
+  until a tile has been seen with pixels.
+- Guest slots are plain `browser_source` items born hidden and muted
+  (graph.rs, `add_extra` for Guest), promoted by `setStage`. The room's stage
+  list is the host's truth and is published on every change; the join page
+  listens on the unconfirmed list and only speaks once host-confirmed.
+- `has-frame` semantics are per platform: on Windows a browser/monitor source
+  has size before it has frames, so readiness must observe something that only
+  moves with frames (the thumb ring, or a raw-frame counter).
+
 ## Still open
 
 - `obs.lock` carries no Windows dependency pins. OBS 32.1.2 has no
