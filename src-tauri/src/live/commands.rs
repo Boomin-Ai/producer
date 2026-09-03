@@ -393,7 +393,12 @@ pub async fn live_preview_cutouts(
     #[cfg(have_engine)]
     let rects: Vec<crate::live::engine::PreviewRect> = rects
         .into_iter()
-        .map(|r| crate::live::engine::PreviewRect { x: r.x, y: r.y, w: r.w, h: r.h })
+        .map(|r| crate::live::engine::PreviewRect {
+            x: r.x,
+            y: r.y,
+            w: r.w,
+            h: r.h,
+        })
         .collect();
     state
         .live
