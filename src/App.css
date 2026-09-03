@@ -6606,9 +6606,26 @@ textarea::placeholder {
  * long empty pill. Name rides the thumb; on-stage keeps its mint ring. */
 .rm-dock-bottom.slim > .rm-panel-guests,
 .rm-dock-top:not(.expanded) > .rm-panel-guests {
+  /* Sized to content — but content must HAVE a size: a list at width:100%
+   * has no intrinsic width, and flex-basis auto + min-width 0 collapsed the
+   * panel to nothing ("guests doesn't mount in the top bar"). */
   flex: 0 1 auto;
-  min-width: 0;
+  min-width: 132px;
   max-width: 44%;
+}
+.rm-panel[data-in="top"] .rm-panel-body {
+  display: flex;
+  align-items: center;
+  min-height: 0;
+}
+.rm-panel[data-in="top"] .rm-guests {
+  width: max-content;
+  max-width: 100%;
+  margin: 0;
+}
+.rm-panel[data-in="top"] .rm-guest-list {
+  width: max-content;
+  max-width: 100%;
 }
 .rm-panel[data-in="top"] .rm-gcard {
   border: 1px solid var(--line-2) !important;
@@ -6662,28 +6679,47 @@ textarea::placeholder {
 
 /* Guests in a ROW dock (bottom, or an expanded top): people side by side,
  * cards sized by the rail's height, never one stretched card. */
-.rm-panel-guests[data-in="bottom"] .rm-panel-body { height: 100%; min-height: 0; }
+/* The whole chain is FLEX, never percentage heights: body → wrapper → list
+ * → cards, so a card's height is the rail's height even when no ancestor
+ * has a definite height (a 100% chain resolved to nothing — empty panel). */
+.rm-panel-guests[data-in="bottom"] .rm-panel-body {
+  display: flex !important;
+  flex-direction: column;
+  min-height: 0;
+  height: auto !important;
+}
+.rm-panel-guests[data-in="bottom"] .rm-guests {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
 .rm-panel-guests[data-in="bottom"] .rm-guest-list {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
   align-items: stretch;
   gap: 8px;
-  height: 100%;
+  padding: 6px;
   overflow-x: auto;
   overflow-y: hidden;
 }
 .rm-panel-guests[data-in="bottom"] .rm-gcard {
   flex: 0 0 auto;
-  height: 100%;
+  align-self: stretch;
+  height: auto;
+  min-height: 96px;
   width: auto;
-  min-width: 0;
+  min-width: 170px;
   max-width: none;
   aspect-ratio: 16 / 9;
   border-radius: 10px !important;
 }
 .rm-panel-guests[data-in="bottom"] .rm-gcard.on {
-  height: 100%;
+  height: auto;
 }
 
 /* A fully collapsed bottom rail is JUST its handle, like every other dock. */
