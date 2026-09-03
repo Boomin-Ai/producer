@@ -1696,33 +1696,44 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
                 )}
                 {open && (
                   <div className="net-book-form">
-                    <select value={bookRoom} onChange={(e) => setBookRoom(e.target.value)}>
-                      {rooms.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.name}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      className="net-slug"
-                      inputMode="decimal"
-                      placeholder="USD"
-                      value={bookAmt}
-                      onChange={(e) => setBookAmt(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") void book(c);
-                      }}
-                    />
-                    <input
-                      className="net-slug"
-                      inputMode="numeric"
-                      placeholder="min"
-                      title="Minimum minutes on stage before it counts as delivered (blank = presence only)"
-                      value={bookMin}
-                      onChange={(e) => setBookMin(e.target.value)}
-                    />
-                    <button className="cr-primary" disabled={busy || bookCents < 500} onClick={() => void book(c)}>
-                      Propose
+                    <label className="net-field">
+                      <span>Room</span>
+                      <select value={bookRoom} onChange={(e) => setBookRoom(e.target.value)}>
+                        {rooms.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="net-field-row">
+                      <label className="net-field">
+                        <span>Pay (USD)</span>
+                        <input
+                          className="net-slug"
+                          inputMode="decimal"
+                          placeholder="50"
+                          value={bookAmt}
+                          onChange={(e) => setBookAmt(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") void book(c);
+                          }}
+                        />
+                      </label>
+                      <label className="net-field">
+                        <span>Min on stage</span>
+                        <input
+                          className="net-slug"
+                          inputMode="numeric"
+                          placeholder="none"
+                          title="Minutes on your stage before it counts as delivered (blank = presence alone delivers)"
+                          value={bookMin}
+                          onChange={(e) => setBookMin(e.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <button className="net-accept" disabled={busy || bookCents < 500} onClick={() => void book(c)}>
+                      {bookCents >= 500 ? `Propose $${(bookCents / 100).toFixed(bookCents % 100 ? 2 : 0)}` : "Propose"}
                     </button>
                     <div className="cr-hint">
                       {Number(bookMin) >= 1

@@ -8074,3 +8074,31 @@ button.ks-key:hover { border-color: var(--line-2); }
   background: transparent;
   display: none;
 }
+/* ── Network rail as an INSET card (the room's dock grammar), not a flush column. ── */
+.net-rail {
+  top: 48px;
+  right: 12px;
+  bottom: 12px;
+  width: 244px;
+  padding: 14px 12px;
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-card);
+  background: var(--surface-1);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+.cr-home.has-net-rail { margin-right: 272px; }
+
+/* Book form: labeled, stacked — the old three-column grid crushed the room select. */
+.net-book-form { display: flex; flex-direction: column; gap: 8px; grid-template-columns: none; }
+.net-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.net-field > span {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3);
+}
+.net-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.net-book-form select,
+.net-book-form .net-slug {
+  width: 100%; min-width: 0; height: 32px; padding: 0 10px; font-size: 13px;
+  border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line-1); color: var(--fg-1);
+}
+.net-book-form .net-accept { height: 32px; margin-top: 2px; }
+.net-book-form .cr-hint { padding: 2px 2px 0; }
