@@ -6768,6 +6768,23 @@ textarea::placeholder {
 .room:not(.layout-edit) .rm-panel-guests .rm-guest-list { padding: 0 !important; gap: 4px; }
 .room:not(.layout-edit) .rm-panel-guests[data-in="bottom"] .rm-guest-list { padding: 0 !important; }
 
+/* Scenes in the console bar: the transition control is just its arrow (the
+ * name "MOVE 320MS" cannot live on one line beside the chips), and the chip
+ * row keeps clear space under the floating actions. */
+.rm-panel-scenes[data-in="top"] .rm-scene-default {
+  font-size: 0;
+  padding: 0 6px;
+  min-width: 0;
+  gap: 0;
+}
+.rm-panel-scenes[data-in="top"] .rm-scene-default svg {
+  width: 14px;
+  height: 14px;
+}
+.rm-panel-scenes[data-in="top"] .rm-scenes {
+  padding-right: 76px;
+}
+
 /* A fully collapsed bottom rail is JUST its handle, like every other dock. */
 .rm-sheet.collapsed {
   padding: 0 !important;
