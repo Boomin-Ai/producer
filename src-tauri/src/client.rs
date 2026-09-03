@@ -486,18 +486,24 @@ impl ProducerClient {
         room_id: &str,
         title: &str,
         amount_cents: u64,
+        min_stage_minutes: Option<u32>,
     ) -> EngineResult<Value> {
+        let mut body = serde_json::json!({
+            "connection_id": connection_id,
+            "beneficiary_brand_id": beneficiary_brand_id,
+            "room_id": room_id,
+            "title": title,
+            "amount_cents": amount_cents,
+        });
+        // Omitted, never null: the API's optional field rejects an explicit null.
+        if let Some(m) = min_stage_minutes {
+            body["min_stage_minutes"] = serde_json::json!(m);
+        }
         let resp = self
             .http
             .post(self.root_url("/v1/app/network/deals"))
             .bearer_auth(&self.token)
-            .json(&serde_json::json!({
-                "connection_id": connection_id,
-                "beneficiary_brand_id": beneficiary_brand_id,
-                "room_id": room_id,
-                "title": title,
-                "amount_cents": amount_cents,
-            }))
+            .json(&body)
             .send()
             .await?;
         if !resp.status().is_success() {

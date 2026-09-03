@@ -461,6 +461,7 @@ pub async fn network_propose_deal(
     room_id: String,
     title: String,
     amount_cents: u64,
+    min_stage_minutes: Option<u32>,
 ) -> EngineResult<Value> {
     let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
     ProducerClient::new(&base_url, &token)
@@ -471,6 +472,7 @@ pub async fn network_propose_deal(
             &room_id,
             &title,
             amount_cents,
+            min_stage_minutes,
         )
         .await
 }

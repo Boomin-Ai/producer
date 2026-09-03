@@ -5240,7 +5240,7 @@ textarea::placeholder {
 .net-book-form {
   flex-basis: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 72px auto;
+  grid-template-columns: minmax(0, 1fr) 64px 52px auto;
   gap: 6px;
   align-items: center;
 }

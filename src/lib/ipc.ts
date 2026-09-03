@@ -511,7 +511,15 @@ export const network = {
    * Presence is delivery — admitting them from the Guests panel settles it. */
   proposeDeal: (
     endpointId: string,
-    input: { connectionId: string; beneficiaryBrandId: string; roomId: string; title: string; amountCents: number },
+    input: {
+      connectionId: string;
+      beneficiaryBrandId: string;
+      roomId: string;
+      title: string;
+      amountCents: number;
+      /** Stage minimum in minutes; null = presence alone delivers. */
+      minStageMinutes: number | null;
+    },
   ) => invoke<{ deal: NetworkDeal }>("network_propose_deal", { endpointId, ...input }),
 };
 
@@ -526,7 +534,9 @@ export interface NetworkDeal {
   room_id?: string | null;
   room_title?: string | null;
   appearance?: { guest_id: string; admitted_at: string } | null;
-  delivered_by?: "presence" | "beneficiary" | null;
+  delivered_by?: "presence" | "stage_minimum" | "host_ended" | "beneficiary" | null;
+  min_stage_minutes?: number | null;
+  stage_seconds?: number | null;
   created_at: string;
 }
 
