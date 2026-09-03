@@ -31,15 +31,25 @@ export function StageEditor({
   baseH,
   disabled,
   onOrder,
+  onSelect,
+  onDelete,
 }: {
   items: LiveItem[];
   baseW: number;
   baseH: number;
   disabled?: boolean;
   onOrder?: (id: string, dir: 1 | -1) => void;
+  /** Selection is SHARED state: the rail highlights what the stage holds. */
+  onSelect?: (id: string | null) => void;
+  /** Delete/Backspace removes the selected source (part of the keymap). */
+  onDelete?: (id: string) => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelectedRaw] = useState<string | null>(null);
+  const setSelected = (id: string | null) => {
+    setSelectedRaw(id);
+    onSelect?.(id);
+  };
   const [drag, setDrag] = useState<LiveItem | null>(null); // optimistic geometry
   const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({ v: [], h: [] });
   const gesture = useRef<Gesture | null>(null);
@@ -290,6 +300,12 @@ export function StageEditor({
         commit(it.id, { x: it.x + mx, y: it.y + my });
       } else if (e.key === "Escape") {
         setSelected(null);
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        const el = document.activeElement as HTMLElement | null;
+        if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+        e.preventDefault();
+        onDelete?.(it.id);
+        setSelected(null);
       } else if (e.key === "]" ) {
         onOrder?.(it.id, 1);
       } else if (e.key === "[") {
@@ -307,7 +323,7 @@ export function StageEditor({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selected, items, commit, onOrder]);
+  }, [selected, items, commit, onOrder, onDelete]);
 
   if (disabled) return null;
   const s = scale();

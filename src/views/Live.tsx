@@ -2202,6 +2202,18 @@ export function LiveView({
   /** Overlay config drills IN like Filters — a menu inside the Sources
    * panel, never a popout over the stage. */
   const [overlayInline, setOverlayInline] = useState(false);
+  /** The stage's selected item — mirrored into the Sources rail highlight. */
+  const [stageSel, setStageSel] = useState<string | null>(null);
+  /** Delete on the stage keymap: same effect as the row's ✕, per kind. */
+  const deleteStageItem = (id: string) => {
+    if (id === "screen") return void setSrc({ screen: false });
+    if (id === "camera") return void setSrc({ camera: false });
+    if (id === "overlay") return void ipc.liveSetOverlay(null, false).catch(() => {});
+    const it = (sources.items ?? []).find((i) => i.id === id);
+    if (!it) return;
+    if (it.kind === "guest") return void hideGuestFromSlot(id);
+    void removeExtraSource(id);
+  };
   const videoApplied = useRef(false);
   const channelsApplied = useRef(false);
   const demoVideoSet = useRef(false);
@@ -3749,7 +3761,7 @@ export function LiveView({
                     <div
                       key={t.key}
                       data-srcrow={item ? t.key : undefined}
-                      className={`rm-row${hidden ? " off" : ""}${srcDrag?.key === t.key ? " dragging" : ""}${dropCls}`}
+                      className={`rm-row${hidden ? " off" : ""}${srcDrag?.key === t.key ? " dragging" : ""}${stageSel === itemIdFor(t.key) ? " sel" : ""}${dropCls}`}
                     >
                       {item && (
                         <span
@@ -4484,8 +4496,15 @@ export function LiveView({
             * something. */}
         </div>
 
-        {/* Edit layout lives at the FAR LEFT — it reshapes the whole room, so
-          * it sits apart from the transport cluster on the right. */}
+        {/* The way DOWN and the way AROUND both live at the FAR LEFT, apart
+          * from the transport cluster: collapse first, then edit. */}
+        <button
+          className="rm-leave"
+          onClick={() => onLeave?.()}
+          title={streaming ? "Collapse — the stream keeps running" : "Collapse room"}
+        >
+          {ic.collapseDown}
+        </button>
         <button
           className={`rm-icon-chip${layoutEdit ? " on" : ""}`}
           onClick={() => {
@@ -4682,13 +4701,6 @@ export function LiveView({
               LIVE {`${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}
             </span>
           )}
-          <button
-            className="rm-leave"
-            onClick={() => onLeave?.()}
-            title={streaming ? "Collapse — the stream keeps running" : "Collapse room"}
-          >
-            {ic.collapseDown}
-          </button>
         </div>
       </header>
 
@@ -4822,6 +4834,8 @@ export function LiveView({
                     const it = (sources.items ?? []).find((i) => i.id === id);
                     if (it) ipc.liveSetTransform(id, { z: it.z + dir }, true).catch(() => {});
                   }}
+                  onSelect={setStageSel}
+                  onDelete={deleteStageItem}
                 />
               </PreviewPanel>
             )}

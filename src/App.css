@@ -6794,6 +6794,12 @@ textarea::placeholder {
   opacity: 0.4;
   font-size: 11px;
 }
+/* Stage selection mirrored into the rail. */
+.rm-row.sel {
+  border: 1px solid oklch(0.75 0.14 165 / 0.55);
+  background: oklch(0.24 0.05 168 / 0.25);
+}
+
 .rm-chat-mini-empty {
   font-size: 12px;
   color: var(--fg-3);
@@ -6977,7 +6983,9 @@ textarea::placeholder {
   cursor: pointer;
 }
 .stg-btn:hover { background: var(--surface-3); }
-.stg-btn.off { color: var(--fg-3); background: transparent; }
+/* Uniform circles: an OFF control dims, it never loses its shape — mixed
+ * bare icons and circles read as misalignment. */
+.stg-btn.off { color: var(--fg-3); background: var(--surface-2); opacity: 0.55; }
 .stg-btn.rec { background: rgba(239, 68, 68, 0.2); }
 .stg-btn.rec .rm-rec-dot { background: var(--red); }
 
