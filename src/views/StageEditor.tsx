@@ -35,6 +35,7 @@ export function StageEditor({
   onSelect,
   onDelete,
   onCommit,
+  selectId,
 }: {
   items: LiveItem[];
   baseW: number;
