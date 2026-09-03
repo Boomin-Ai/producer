@@ -49,11 +49,82 @@ static ATOM g_preview_class = 0;
 /* The preview child paints nothing itself — libobs renders into it. Returning
  * 1 from WM_ERASEBKGND stops Windows painting white behind the swapchain, which
  * is what causes a flash on resize. */
+/* The window the room UI actually reads input from: the deepest visible
+ * sibling-or-descendant under a screen point, skipping the preview itself.
+ * In practice WRY_WEBVIEW -> Chrome_WidgetWin_1 -> Chrome_RenderWidgetHostHWND. */
+static HWND input_target_under(HWND self, POINT screen_pt)
+{
+    HWND parent = GetParent(self);
+    if (!parent)
+        return NULL;
+    HWND hit = NULL;
+    for (HWND w = GetWindow(parent, GW_CHILD); w; w = GetWindow(w, GW_HWNDNEXT)) {
+        if (w == self || !IsWindowVisible(w))
+            continue;
+        RECT r;
+        if (GetWindowRect(w, &r) && PtInRect(&r, screen_pt)) {
+            hit = w;
+            break;
+        }
+    }
+    if (!hit)
+        return NULL;
+    /* descend to the innermost child that contains the point */
+    for (;;) {
+        POINT cp = screen_pt;
+        ScreenToClient(hit, &cp);
+        HWND deeper = ChildWindowFromPointEx(hit, cp, CWP_SKIPINVISIBLE | CWP_SKIPDISABLED);
+        if (!deeper || deeper == hit)
+            return hit;
+        hit = deeper;
+    }
+}
+
 static LRESULT CALLBACK preview_wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     if (msg == WM_ERASEBKGND)
         return 1;
-    return DefWindowProcW(hwnd, msg, wp, lp);
+
+    /* INPUT FORWARDING. In float mode this child sits ABOVE the webview, so it
+     * receives every click inside the stage -- and the room's item drag lives
+     * in the webview. Returning HTTRANSPARENT was tried: the hit falls to the
+     * PARENT window, which takes focus from WebView2, and the webview goes deaf
+     * until something re-focuses it. So instead: keep the hit, find the
+     * webview's input window beneath the point, focus it, and re-post the
+     * message there with translated coordinates. The preview never wants input
+     * itself; every interaction with the stage belongs to the room UI. */
+    switch (msg) {
+    case WM_MOUSEMOVE:
+    case WM_LBUTTONDOWN: case WM_LBUTTONUP: case WM_LBUTTONDBLCLK:
+    case WM_RBUTTONDOWN: case WM_RBUTTONUP: case WM_RBUTTONDBLCLK:
+    case WM_MBUTTONDOWN: case WM_MBUTTONUP: {
+        POINT pt = { (short)LOWORD(lp), (short)HIWORD(lp) };
+        ClientToScreen(hwnd, &pt);
+        HWND target = input_target_under(hwnd, pt);
+        if (target) {
+            if (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN || msg == WM_MBUTTONDOWN)
+                SetFocus(target);
+            POINT cp = pt;
+            ScreenToClient(target, &cp);
+            PostMessageW(target, msg, wp, MAKELPARAM((short)cp.x, (short)cp.y));
+        }
+        return 0;
+    }
+    case WM_MOUSEWHEEL:
+    case WM_MOUSEHWHEEL: {
+        /* wheel messages carry SCREEN coordinates already */
+        POINT pt = { (short)LOWORD(lp), (short)HIWORD(lp) };
+        HWND target = input_target_under(hwnd, pt);
+        if (target)
+            PostMessageW(target, msg, wp, lp);
+        return 0;
+    }
+    case WM_SETCURSOR:
+        /* let the window beneath decide the cursor; ours is never the answer */
+        return DefWindowProcW(hwnd, msg, wp, lp);
+    default:
+        return DefWindowProcW(hwnd, msg, wp, lp);
+    }
 }
 
 static void ensure_class(void)
