@@ -758,3 +758,24 @@ picker shows whenever Producer sends no frames. `engine/assets/vcam-placeholder.
 `build-engine-windows.sh` and the closure gate asserts the staged sha; the lock's
 `artifact_rev` bumped so the artifact identity changed. macOS should bake the
 same file into its extension (build-camera-extension.sh).
+
+## Building on Windows (2026-09-03)
+
+Two scripts, both PowerShell, both self-sufficient about the engine (they
+fetch the artifact for the current `obs.lock` from the newest green
+engine.yml run if it is not on disk, run the closure gate, and refuse to
+continue on a miss):
+
+- `scripts\dev-windows.ps1` — `tauri dev` with the engine: Vite HMR, the
+  debug exe resolving obs.dll from PATH, `PRODUCER_ENGINE_DIR` pointing at the
+  artifact. `-Build` only builds the debug exe. Unlike macOS, no bundle is
+  needed for CEF on Windows, so browser sources render in dev.
+- `scripts\build-windows.ps1` — the production NSIS installer WITH the engine.
+  `engine/windows-bundle/` is staged flat (obs.dll beside producer.exe,
+  obs-plugins/ and data/ as siblings — the only layout the loader can use) and
+  `src-tauri/tauri.windows.conf.json` bundles it into the install root.
+  Updater artifacts only when `TAURI_SIGNING_PRIVATE_KEY` is set. `-Smoke`
+  silent-installs to `%TEMP%\ProducerSmoke`, checks the installed tree, and
+  boots the engine once. The installer is unsigned (no Windows code-signing
+  certificate is wired); release.yml's Windows job is still the engine-less
+  path and does not use these yet.

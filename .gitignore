@@ -40,3 +40,4 @@ scripts/embedded.provisionprofile
 # win-capture drops its game-compatibility data beside the exe at runtime.
 # Engine output, not source.
 src-tauri/win-capture/
+src-tauri/windows-bundle/
