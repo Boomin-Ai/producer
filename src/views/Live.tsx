@@ -3594,6 +3594,29 @@ export function LiveView({
                 </div>
               );
             })()}
+            {formDockOf("chat") === "top" ? (
+              /* MINI: the latest message, the previous poking through above
+               * it. Rendered explicitly — no scroll/mask tricks that can
+               * quietly swallow the content in a 40px window. */
+              (() => {
+                const visible = chatMsgs.filter((m) => chatOn[m.platform] !== false).slice(-2);
+                return (
+                  <div className="rm-chat-mini">
+                    {visible.map((m, i) => (
+                      <div key={i} className={`rm-chat-msg${i === visible.length - 1 ? "" : " prev"}`}>
+                        <span className="rm-chat-user">{m.user}</span>
+                        <ChatText text={m.text} emotes={m.emotes} channelEmotes={channelEmotes} />
+                      </div>
+                    ))}
+                    {visible.length === 0 && (
+                      <div className="rm-chat-mini-empty">
+                        {chatLive ? "Connected — waiting for the first message." : "Connect chat to read it here."}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
+            ) : (
             <div className="rm-chat-list" ref={chatList} onScroll={onChatScroll} onWheel={onChatWheel}>
               {chatMsgs
                 .filter((m) => chatOn[m.platform] !== false)
@@ -3617,6 +3640,7 @@ export function LiveView({
               )}
               <div ref={chatEnd} />
             </div>
+            )}
             {!chatPinned && (
               <button className="rm-chat-jump" onClick={jumpToLatest}>
                 {ic.chev}
