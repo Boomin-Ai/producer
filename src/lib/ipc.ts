@@ -550,6 +550,8 @@ export interface NetworkDeal {
   id: string;
   connection_id: string;
   role: "client" | "beneficiary";
+  client_brand_id?: string;
+  beneficiary_brand_id?: string;
   title: string;
   status: "proposed" | "accepted" | "funded" | "delivered" | "released" | "declined" | "cancelled" | "disputed" | "expired";
   amount_cents: number;

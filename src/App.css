@@ -8170,3 +8170,5 @@ button.ks-key:hover { border-color: var(--line-2); }
 .deal-sheet-acts > .net-decline:only-child { grid-column: 1 / -1; }
 .hd-link { gap: 6px; }
 .net-decline.danger { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, transparent); }
+.deal-link { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 10px; background: var(--surface-1); border: 1px solid color-mix(in srgb, var(--mint) 28%, var(--line-1)); }
+.deal-link .net-accept { height: 32px; }

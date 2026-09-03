@@ -6,6 +6,7 @@ import type { Channel, EndpointInfo, Job, LiveDestination, LiveRoom, LiveSnapsho
 import type { TargetResult } from "../lib/ipc";
 import { WORKSPACE_EVENT, activeEndpointId, resolveActiveEndpoint, setActiveEndpointId } from "../lib/workspace";
 import { copyText, ensureRoomJoinLink } from "../lib/roomLink";
+import { roomGuestInvite } from "../lib/ipc";
 import { ipc,
   network,
   networkConnections,
@@ -1515,6 +1516,27 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
 
   const bookCents = Math.round((Number(bookAmt) || 0) * 100);
 
+  /** The deal's own door: invite the BENEFICIARY BRAND to the deal's room and
+   * copy that link. Whoever opens it joins as that brand, so admitting them
+   * is what settles the deal — an anonymous room link never can. */
+  const sendLink = async (d: NetworkDeal, name: string) => {
+    if (!endpointId || !d.room_id || !d.beneficiary_brand_id) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      const r = await roomGuestInvite(endpointId, d.room_id, name, d.beneficiary_brand_id);
+      const url = (r as { invite_url?: string; join_url?: string; url?: string }).invite_url
+        ?? (r as { join_url?: string }).join_url
+        ?? (r as { url?: string }).url;
+      if (!url) throw new Error("No link came back.");
+      setNote((await copyText(url)) ? `${name}'s link copied — send it to them. When they join with it, admitting them counts.` : url);
+    } catch (e) {
+      setNote(String(e).replace(/^Error:\s*/, ""));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const dealAct = async (id: string, action: "accept" | "decline" | "cancel") => {
     if (!endpointId) return;
     setBusy(true);
@@ -1883,7 +1905,9 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
             deal={d}
             otherName={other?.name ?? "the other brand"}
             busy={busy}
+            note={note}
             onAct={(a) => void dealAct(d.id, a).then(() => setDealOpen(null))}
+            onSendLink={() => void sendLink(d, other?.name ?? "Guest")}
             onClose={() => setDealOpen(null)}
           />
         );
@@ -1929,7 +1953,9 @@ function DealSheet({
   deal: NetworkDeal;
   otherName: string;
   busy: boolean;
+  note?: string | null;
   onAct: (a: "accept" | "decline" | "cancel") => void;
+  onSendLink?: () => void;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -1979,6 +2005,24 @@ function DealSheet({
           <div className="deal-term"><span>Cancel</span><p>Either side before funding. After funding only {earn ? "you" : otherName} can cancel, which refunds in full. Delivered deals are released or disputed, never cancelled.</p></div>
           {expires && <div className="deal-term"><span>Expires</span><p>Unanswered, this proposal expires {expires}.</p></div>}
         </div>
+
+        {!earn && d.room_id && (d.status === "accepted" || d.status === "funded") && (
+          <div className="deal-link">
+            <div className="deal-term">
+              <span>Their link</span>
+              <p>
+                Send {otherName} their own link to "{d.room_title ?? "the room"}". It is tied to their brand, so when they
+                join with it and you admit them, the deal knows it's them
+                {d.min_stage_minutes != null ? ` and the ${d.min_stage_minutes}-minute clock starts on stage.` : "."}
+                {d.status === "accepted" ? " Fund it in Boomin before the show so delivery can settle." : ""}
+              </p>
+            </div>
+            <button className="net-accept" disabled={busy} onClick={onSendLink}>
+              Send their link
+            </button>
+            {note && <div className="cr-hint">{note}</div>}
+          </div>
+        )}
 
         <div className="deal-agree">
           {earn
