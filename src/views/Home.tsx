@@ -1944,7 +1944,9 @@ function DealSheet({
   deal: d,
   otherName,
   busy,
+  note,
   onAct,
+  onSendLink,
   onClose,
 }: {
   deal: NetworkDeal;
