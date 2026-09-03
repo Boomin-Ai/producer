@@ -1403,10 +1403,15 @@ pub fn user_facing(message: &str) -> String {
     let m = message.trim();
     let lower = m.to_ascii_lowercase();
     if lower.contains("virtual camera") && lower.contains("not installed") {
-        return "The virtual camera isn't installed yet. Approve Producer's \
-camera extension in System Settings › General › Login Items & Extensions › \
-Camera Extensions, then try again."
-            .replace('\n', "");
+        // Same condition, each platform's own remedy: a system extension to
+        // approve on macOS, a DirectShow filter to register on Windows.
+        #[cfg(target_os = "macos")]
+        return "The virtual camera isn't installed yet. Approve Producer's camera extension in System Settings › General › Login Items & Extensions › Camera Extensions, then try again."
+            .replace('
+', "");
+        #[cfg(not(target_os = "macos"))]
+        return "The virtual camera isn't installed yet. Click Install cam, allow the prompt, then try again."
+            .to_string();
     }
     m.replace("OBS Studio", "Producer")
         .replace("obs-studio", "Producer")
