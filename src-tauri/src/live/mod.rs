@@ -793,7 +793,11 @@ pub fn startup_probe(report_dir: &Path) {
                 // platform, so dumping the macOS set on Windows would just print
                 // nothing and teach us nothing.
                 #[cfg(target_os = "macos")]
-                let probe_ids = ["macos-avcapture", "coreaudio_input_capture", "screen_capture"];
+                let probe_ids = [
+                    "macos-avcapture",
+                    "coreaudio_input_capture",
+                    "screen_capture",
+                ];
                 #[cfg(target_os = "windows")]
                 let probe_ids = [
                     "dshow_input",

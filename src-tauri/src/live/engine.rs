@@ -41,11 +41,11 @@ const REQUIRED_SOURCES_OS: &[&str] = &[
 ];
 #[cfg(target_os = "windows")]
 const REQUIRED_SOURCES_OS: &[&str] = &[
-    "monitor_capture",             // win-capture (display)
-    "wasapi_output_capture",       // win-wasapi (desktop audio)
-    "wasapi_input_capture",        // win-wasapi (mic)
-    "dshow_input",                 // win-dshow (webcam)
-    "text_gdiplus",                // obs-text -- NOT text_ft2_source here
+    "monitor_capture",       // win-capture (display)
+    "wasapi_output_capture", // win-wasapi (desktop audio)
+    "wasapi_input_capture",  // win-wasapi (mic)
+    "dshow_input",           // win-dshow (webcam)
+    "text_gdiplus",          // obs-text -- NOT text_ft2_source here
 ];
 const REQUIRED_ENCODERS_SHARED: &[&str] = &["obs_x264"];
 #[cfg(target_os = "macos")]
@@ -376,9 +376,9 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
                 unsafe { ffi::obs_add_data_path(p.as_ptr()) };
             }
         }
-        None => report.errors.push(
-            "no engine artifact beside the executable; set PRODUCER_ENGINE_DIR".into(),
-        ),
+        None => report
+            .errors
+            .push("no engine artifact beside the executable; set PRODUCER_ENGINE_DIR".into()),
     }
 
     if !unsafe { ffi::obs_startup(locale.as_ptr(), config_ptr, ptr::null_mut()) } {
@@ -408,7 +408,11 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
     // install layout, which is exactly what the artifact mirrors.
     #[cfg(target_os = "windows")]
     if let Some(root) = _engine_root.as_ref() {
-        let bin = CString::new(root.join("obs-plugins/64bit").to_string_lossy().into_owned());
+        let bin = CString::new(
+            root.join("obs-plugins/64bit")
+                .to_string_lossy()
+                .into_owned(),
+        );
         let data = CString::new(format!(
             "{}/%module%",
             root.join("data/obs-plugins").to_string_lossy()
@@ -461,7 +465,11 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
     #[cfg(target_os = "windows")]
     let sdr_white = {
         let nits = unsafe { ffi::producer_sdr_white_nits() };
-        if nits > 0.0 { nits } else { 300.0 }
+        if nits > 0.0 {
+            nits
+        } else {
+            300.0
+        }
     };
     #[cfg(not(target_os = "windows"))]
     let sdr_white = 300.0;
@@ -1115,7 +1123,10 @@ unsafe fn draw_selection(bw: f32, bh: f32, cx: u32, cy: u32) {
         );
     }
     let xf = |px: f32, py: f32| -> (f32, f32) {
-        (m.x.x * px + m.y.x * py + m.t.x, m.x.y * px + m.y.y * py + m.t.y)
+        (
+            m.x.x * px + m.y.x * py + m.t.x,
+            m.x.y * px + m.y.y * py + m.t.y,
+        )
     };
     let corners = [xf(0.0, 0.0), xf(1.0, 0.0), xf(1.0, 1.0), xf(0.0, 1.0)];
 
@@ -1139,12 +1150,27 @@ unsafe fn draw_selection(bw: f32, bh: f32, cx: u32, cy: u32) {
     let green = if space == 3 {
         // GS_CS_709_SCRGB: linear #22c55e, scaled to SDR white
         let m = ffi::obs_get_video_sdr_white_level() / 80.0;
-        ffi::vec4 { x: 0.016 * m, y: 0.560 * m, z: 0.110 * m, w: 1.0 }
+        ffi::vec4 {
+            x: 0.016 * m,
+            y: 0.560 * m,
+            z: 0.110 * m,
+            w: 1.0,
+        }
     } else if space == 2 {
         // GS_CS_SRGB_16F: linear, unscaled
-        ffi::vec4 { x: 0.016, y: 0.560, z: 0.110, w: 1.0 }
+        ffi::vec4 {
+            x: 0.016,
+            y: 0.560,
+            z: 0.110,
+            w: 1.0,
+        }
     } else {
-        ffi::vec4 { x: 0.133, y: 0.773, z: 0.369, w: 1.0 }
+        ffi::vec4 {
+            x: 0.133,
+            y: 0.773,
+            z: 0.369,
+            w: 1.0,
+        }
     };
     ffi::gs_effect_set_vec4(param, &green);
     // canvas px per display px, so handles keep a constant size on screen
@@ -1166,10 +1192,22 @@ unsafe fn draw_selection(bw: f32, bh: f32, cx: u32, cy: u32) {
             ffi::gs_render_stop(2); // GS_LINESTRIP
         }
         let mids = [
-            ((corners[0].0 + corners[1].0) / 2.0, (corners[0].1 + corners[1].1) / 2.0),
-            ((corners[1].0 + corners[2].0) / 2.0, (corners[1].1 + corners[2].1) / 2.0),
-            ((corners[2].0 + corners[3].0) / 2.0, (corners[2].1 + corners[3].1) / 2.0),
-            ((corners[3].0 + corners[0].0) / 2.0, (corners[3].1 + corners[0].1) / 2.0),
+            (
+                (corners[0].0 + corners[1].0) / 2.0,
+                (corners[0].1 + corners[1].1) / 2.0,
+            ),
+            (
+                (corners[1].0 + corners[2].0) / 2.0,
+                (corners[1].1 + corners[2].1) / 2.0,
+            ),
+            (
+                (corners[2].0 + corners[3].0) / 2.0,
+                (corners[2].1 + corners[3].1) / 2.0,
+            ),
+            (
+                (corners[3].0 + corners[0].0) / 2.0,
+                (corners[3].1 + corners[0].1) / 2.0,
+            ),
         ];
         for (x, y) in corners.iter().chain(mids.iter()) {
             ffi::gs_matrix_push();
@@ -1208,8 +1246,13 @@ extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, cx: u32, cy: u32) 
             if src.is_null() {
                 eprintln!("[preview] channel 0 = NULL");
             } else {
-                let name = CStr::from_ptr(ffi::obs_source_get_name(src)).to_string_lossy().into_owned();
-                eprintln!("[preview] channel 0 = '{name}'  color space = {}", ffi::gs_get_color_space());
+                let name = CStr::from_ptr(ffi::obs_source_get_name(src))
+                    .to_string_lossy()
+                    .into_owned();
+                eprintln!(
+                    "[preview] channel 0 = '{name}'  color space = {}",
+                    ffi::gs_get_color_space()
+                );
                 ffi::obs_source_release(src);
             }
         }
@@ -1281,7 +1324,13 @@ impl Preview {
                     let v = {
                         ffi::producer_preview_attach(
                             parent as *mut std::os::raw::c_void,
-                            x, y, w, h, t, &mut pw, &mut ph,
+                            x,
+                            y,
+                            w,
+                            h,
+                            t,
+                            &mut pw,
+                            &mut ph,
                         )
                     };
                     (v as usize, (pw, ph))
@@ -1325,7 +1374,9 @@ impl Preview {
                 };
                 ffi::obs_display_create(&init, 0) as usize
             });
-            eprintln!("[preview] display created: 0x{display_addr:x} view=0x{view_addr:x} {cx}x{cy}");
+            eprintln!(
+                "[preview] display created: 0x{display_addr:x} view=0x{view_addr:x} {cx}x{cy}"
+            );
             if display_addr == 0 {
                 ffi::producer_preview_detach(view);
                 return Err("obs_display_create failed".into());
@@ -1344,7 +1395,13 @@ impl Preview {
             let (pw, ph) = on_window_thread(move || {
                 let (mut pw, mut ph) = (0f64, 0f64);
                 ffi::producer_preview_set_frame(
-                    v as *mut std::os::raw::c_void, x, y, w, h, &mut pw, &mut ph,
+                    v as *mut std::os::raw::c_void,
+                    x,
+                    y,
+                    w,
+                    h,
+                    &mut pw,
+                    &mut ph,
                 );
                 (pw, ph)
             });

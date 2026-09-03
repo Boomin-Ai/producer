@@ -263,7 +263,11 @@ fn default_camera_id() -> Option<String> {
         if ffi::producer_default_camera_id(buf.as_mut_ptr(), buf.len() as i32) == 0 {
             return None;
         }
-        Some(std::ffi::CStr::from_ptr(buf.as_ptr()).to_string_lossy().into_owned())
+        Some(
+            std::ffi::CStr::from_ptr(buf.as_ptr())
+                .to_string_lossy()
+                .into_owned(),
+        )
     }
 }
 #[cfg(target_os = "windows")]
@@ -1403,9 +1407,7 @@ impl SceneGraph {
                     // as SCK's display_uuid).
                     let device = match self.camera_device.clone() {
                         Some(d) => d,
-                        None => {
-                            default_camera_id().ok_or("no camera device found")?
-                        }
+                        None => default_camera_id().ok_or("no camera device found")?,
                     };
                     self.camera_device = Some(device.clone());
                     let settings = ffi::obs_data_create();
