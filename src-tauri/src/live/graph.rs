@@ -534,6 +534,24 @@ impl SceneGraph {
         }
     }
 
+    /// Probe: per item (id, width, active, showing). Answers WHY a source
+    /// reports no frame — not active, not showing, or simply no width yet.
+    pub fn frame_probe(&self) -> Vec<(String, u32, bool, bool)> {
+        self.items()
+            .into_iter()
+            .map(|it| {
+                let src = self.source_by_id(&it.id).unwrap_or(std::ptr::null_mut());
+                unsafe {
+                    if src.is_null() {
+                        (it.id, 0, false, false)
+                    } else {
+                        (it.id, ffi::obs_source_get_width(src), ffi::obs_source_active(src), ffi::obs_source_showing(src))
+                    }
+                }
+            })
+            .collect()
+    }
+
     pub fn state(&self) -> SourcesState {
         SourcesState {
             screen: self.screen.is_some(),

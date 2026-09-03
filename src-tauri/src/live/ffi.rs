@@ -121,6 +121,10 @@ extern "C" {
     pub fn obs_source_release(source: *mut obs_source_t);
     pub fn obs_set_output_source(channel: u32, source: *mut obs_source_t);
     pub fn obs_source_get_width(source: *mut obs_source_t) -> u32;
+    /// Probe bindings (room-open first-frame investigation).
+    pub fn obs_source_active(source: *mut obs_source_t) -> bool;
+    pub fn obs_source_showing(source: *mut obs_source_t) -> bool;
+    pub fn obs_get_total_frames() -> u32;
     pub fn obs_source_video_render(source: *mut obs_source_t);
     pub fn obs_enter_graphics();
     pub fn obs_leave_graphics();

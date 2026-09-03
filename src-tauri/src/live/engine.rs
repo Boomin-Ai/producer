@@ -1176,6 +1176,7 @@ pub fn start(
             // 100ms cadence — a handful of FFI getters — without emitting an
             // event, so the snapshot is live truth and the UI is not churned.
             let mut last_src_refresh = Instant::now();
+            let probe_t0 = Instant::now();
 
             let set_state = |state: &mut SessionState,
                              new: SessionState,
@@ -1196,6 +1197,35 @@ pub fn start(
                     last_src_refresh = Instant::now();
                     if let Some(g) = scene.as_ref() {
                         snap.lock().unwrap().sources = g.state();
+                        // Frame probe: while any item has no frame, log every
+                        // item's width/active/showing + the engine's total
+                        // rendered frames each tick. Appends to
+                        // live/frames-probe.log; one line per tick; stops
+                        // once everything has framed.
+                        let probe = g.frame_probe();
+                        if probe.iter().any(|(_, w, _, _)| *w == 0) {
+                            if let Some(dir) = module_config_dir.parent() {
+                                let total = unsafe { ffi::obs_get_total_frames() };
+                                let line = format!(
+                                    "{} total_frames={} {}\n",
+                                    probe_t0.elapsed().as_millis(),
+                                    total,
+                                    probe
+                                        .iter()
+                                        .map(|(id, w, a, sh)| format!("{id}:w={w},active={a},showing={sh}"))
+                                        .collect::<Vec<_>>()
+                                        .join(" ")
+                                );
+                                use std::io::Write;
+                                if let Ok(mut f) = std::fs::OpenOptions::new()
+                                    .create(true)
+                                    .append(true)
+                                    .open(dir.join("frames-probe.log"))
+                                {
+                                    let _ = f.write_all(line.as_bytes());
+                                }
+                            }
+                        }
                     }
                 }
                 if last_perf.elapsed() > Duration::from_secs(1) {
