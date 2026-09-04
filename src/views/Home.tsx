@@ -628,6 +628,22 @@ function ChannelsBlock({
               </button>
             ))}
           </div>
+        {(addingDest || editingDest) && (
+          <div className="cr-dest-editor">
+            <DestinationEditor
+              existing={editingDest}
+              onSaved={() => {
+                setAddingDest(false);
+                setEditingDest(null);
+                onChanged();
+              }}
+              onCancel={() => {
+                setAddingDest(false);
+                setEditingDest(null);
+              }}
+            />
+          </div>
+        )}
         </div>
 
         {endpoints.map((ep) => {
@@ -676,22 +692,6 @@ function ChannelsBlock({
           );
         })}
 
-        {(addingDest || editingDest) && (
-          <div className="cr-dest-editor">
-            <DestinationEditor
-              existing={editingDest}
-              onSaved={() => {
-                setAddingDest(false);
-                setEditingDest(null);
-                onChanged();
-              }}
-              onCancel={() => {
-                setAddingDest(false);
-                setEditingDest(null);
-              }}
-            />
-          </div>
-        )}
       </section>
   );
 }
