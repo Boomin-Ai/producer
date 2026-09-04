@@ -88,11 +88,11 @@
   .navbar .pill { padding: 9px 18px; font-size: 13.5px; }
 
   /* ═══════ full-bleed pinned scene ═══════ */
-  .scene-wrap { position: relative; z-index: 1; height: 380vh; }
+  .scene-wrap { position: relative; z-index: 1; height: 440vh; }
   /* Scroll-driven: JS writes eased 0→1 progress vars per beat; every element
    * below is a pure function of them, so the scene scrubs with the wheel
    * instead of snapping between four states. */
-  .scene { --hero: 0; --a1: 0; --a2: 0; --s1: 0; --s1o: 0; --b2: 0; --b3: 0; --s2: 0; --s2o: 0; --c3: 0; --s3: 0; }
+  .scene { --hero: 0; --a1: 0; --a2: 0; --s1: 0; --s1o: 0; --b2: 0; --b3: 0; --s2: 0; --s2o: 0; --d4: 0; --d5: 0; --s4: 0; --s4o: 0; --c3: 0; --s3: 0; }
   .scene { position: sticky; top: 0; height: 100vh; overflow: hidden; }
 
   /* ── beat 0: hero, centered, full width ── */
@@ -330,6 +330,13 @@
   }
 
   /* top lane (panel rises from the bottom) */
+  /* left lane again (chat panel sits right of center) */
+  #say4 {
+    left: 5vw; width: 36vw;
+    opacity: calc(var(--s4) - 0.86 * var(--s4o));
+    transform: translateY(-50%) translateX(calc(-40px + 40px * var(--s4) + 30px * var(--s4o)));
+    filter: blur(calc(7px * var(--s4o)));
+  }
   #say3 {
     top: 16vh; left: 50%; width: min(620px, 88vw); margin-left: 0; text-align: center;
     opacity: var(--s3);
@@ -371,6 +378,15 @@
   }
 
   /* C — composer: rises from the bottom, centered, zoomed in */
+  /* D — chat: enters from the right, parks right of center, leaves left */
+  #panelD {
+    width: min(560px, 92vw);
+    opacity: calc(var(--d4) - var(--d5));
+    transform: translateX(calc(-50% + 22vw + 90vw * (1 - var(--d4)) - 60vw * var(--d5)))
+               translateY(14vh)
+               scale(calc(1.05 + 0.05 * var(--d4)));
+    filter: blur(calc(7px * var(--d5)));
+  }
   #panelC {
     width: min(900px, 92vw);
     opacity: var(--c3);
@@ -394,6 +410,8 @@
                  translateY(40vh)
                  scale(calc(0.9 + 0.02 * var(--b2) - 0.02 * var(--b3)));
     }
+    #say4 { transform: translateY(calc(-24px * var(--s4o))); }
+    #panelD { width: 94vw; transform: translateX(calc(-50% + 100vw * (1 - var(--d4)) - 100vw * var(--d5))) translateY(40vh) scale(0.92); }
     #panelC { width: 94vw; transform: translateX(-50%) translateY(calc(90vh - 46vh * var(--c3))) scale(0.95); }
   }
 
@@ -571,6 +589,21 @@
   .sc .onair-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--live); box-shadow: 0 0 8px var(--live); margin-left: 6px; vertical-align: middle; animation: pulse 1.6s ease-in-out infinite; }
   @media (max-width: 900px) { .tb-btn:not(.cam):not(.golive) { display: none; } }
 
+  /* ═══════ chat mock (its own beat) ═══════ */
+  .chat-mock { display: flex; flex-direction: column; height: 100%; min-height: 520px; font-size: 13px; color: var(--dim); }
+  .cm-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .cm-title { color: #fff; font-weight: 700; letter-spacing: -0.01em; }
+  .cm-srcs { display: flex; gap: 6px; }
+  .cm-srcs .src { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--line); font-size: 11px; color: #e8ebf0; }
+  .cm-srcs .src img { width: 12px; height: 12px; }
+  .cm-srcs .src.tw { border-color: rgba(145,70,255,0.5); } .cm-srcs .src.kk { border-color: rgba(83,252,24,0.4); } .cm-srcs .src.yt { border-color: rgba(255,0,0,0.45); }
+  .chat.big { height: 380px; padding: 12px 14px; gap: 9px; }
+  .chat.big .m { font-size: 13px; gap: 8px; align-items: baseline; }
+  .chat.big .m .badge { width: 14px; height: 14px; flex: none; }
+  .cm-compose { display: flex; align-items: center; gap: 8px; margin: auto 12px 12px; padding: 8px 8px 8px 14px; border-radius: 12px; border: 1px solid var(--line-strong); background: rgba(255,255,255,0.03); }
+  .cm-ph { flex: 1; color: var(--dim); }
+  .cm-send { color: #06110b; background: var(--mint); border-radius: 999px; padding: 6px 12px; font-weight: 700; font-size: 11.5px; white-space: nowrap; }
+
   /* ═══════ room mock (beat 1: inside a room, live) ═══════ */
   .room-mock { display: flex; flex-direction: column; height: 100%; min-height: 560px; font-size: 12px; color: var(--dim); }
   .rm-top { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--line); }
@@ -724,11 +757,15 @@
     <!-- statements -->
     <div class="say" id="say1">
       <div class="eyebrow">Inside a room</div>
-      <h2>Every show gets <span class="soft">a stage of its own.</span></h2>
+      <h2>One room. <span class="soft">Live on every channel at once.</span></h2>
     </div>
     <div class="say" id="say2">
       <div class="eyebrow">Guests</div>
       <h2>Bring anyone on. <span class="soft">A link, a browser, or their own Producer.</span></h2>
+    </div>
+    <div class="say" id="say4">
+      <div class="eyebrow">Multi chat</div>
+      <h2>Every chat, one stream. <span class="soft">Twitch, Kick, and YouTube talk in one place.</span></h2>
     </div>
     <div class="say" id="say3">
       <div class="eyebrow">New post</div>
@@ -772,9 +809,7 @@
             <div class="gobar"><span>CAMERA</span><span>·</span><span>MIC</span><span>·</span><span>VIRTUAL CAM</span><span class="golive">LIVE</span></div>
           </div>
           <div class="rm-rail">
-            <div class="rm-label">MULTI CHAT <span class="chat-marks"><img src="twitch.svg" alt="" /><img src="kick.svg" alt="" /><img src="youtube.svg" alt="" /></span></div>
-            <div class="chat" id="chat"></div>
-            <div class="rm-label mt">CHANNELS</div>
+            <div class="rm-label">CHANNELS <em>3 live</em></div>
             <div class="dest" data-kbps="6000">
               <div class="row1"><img src="twitch.svg" alt="" /><span class="name">Twitch</span><span class="live-pill on">LIVE</span></div>
               <div class="meter"><i></i></div>
@@ -830,6 +865,18 @@
           <div class="tile g3" id="gm-land"><video class="gv" src="shots/guest-3.mp4" autoplay muted loop playsinline></video><span class="tag">Jordan</span></div>
           <div class="gobar"><span>CAMERA</span><span>·</span><span>MIC</span><span>·</span><span>VIRTUAL CAM</span><span class="golive">LIVE</span></div>
         </div>
+      </div>
+    </div>
+
+    <!-- D — multi chat -->
+    <div class="panel" id="panelD">
+      <div class="mock chat-mock" aria-hidden="true">
+        <div class="cm-head">
+          <span class="cm-title">Chat</span>
+          <span class="cm-srcs"><span class="src tw"><img src="twitch.svg" alt="" />Twitch</span><span class="src kk"><img src="kick.svg" alt="" />Kick</span><span class="src yt"><img src="youtube.svg" alt="" />YouTube</span></span>
+        </div>
+        <div class="chat big" id="chat2"></div>
+        <div class="cm-compose"><span class="cm-ph">Say something to everyone…</span><span class="cm-send">Send to all 3</span></div>
       </div>
     </div>
 
@@ -1052,18 +1099,20 @@
     // Each beat is a window of scroll progress; windows overlap a little so
     // one thing is always arriving while another leaves.
     var BEATS = {
-      hero: [0.04, 0.20],
-      a1: [0.06, 0.26], a2: [0.40, 0.56],
-      s1: [0.16, 0.28], s1o: [0.42, 0.54],
-      b2: [0.42, 0.58], b3: [0.72, 0.86],
-      s2: [0.48, 0.60], s2o: [0.74, 0.84],
-      c3: [0.76, 0.92], s3: [0.80, 0.92]
+      hero: [0.04, 0.18],
+      a1: [0.05, 0.22], a2: [0.32, 0.44],
+      s1: [0.13, 0.23], s1o: [0.33, 0.43],
+      b2: [0.34, 0.48], b3: [0.56, 0.66],
+      s2: [0.39, 0.49], s2o: [0.57, 0.65],
+      d4: [0.58, 0.70], d5: [0.78, 0.86],
+      s4: [0.61, 0.71], s4o: [0.79, 0.85],
+      c3: [0.80, 0.92], s3: [0.83, 0.93]
     };
     function ease(t) { return t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t); }
     function seg(p, w) { return ease((p - w[0]) / (w[1] - w[0])); }
     function apply(p) {
       for (var k in BEATS) scene.style.setProperty("--" + k, seg(p, BEATS[k]).toFixed(4));
-      var stage = p < 0.22 ? 0 : p < 0.48 ? 1 : p < 0.74 ? 2 : 3;
+      var stage = p < 0.2 ? 0 : p < 0.46 ? 1 : p < 0.7 ? 2 : 3;
       if (String(stage) !== scene.getAttribute("data-stage")) scene.setAttribute("data-stage", String(stage));
     }
     function measure() {
@@ -1105,10 +1154,10 @@
     }, 1000);
   })();
 
-  // ── Chat feed in the room mock. ──
+  // ── Chat feeds: one line of messages, every container that wants them. ──
   (function () {
-    var chat = document.getElementById("chat");
-    if (!chat || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    var boxes = Array.prototype.slice.call(document.querySelectorAll(".chat"));
+    if (!boxes.length || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     var lines = [
       ["tw", "mofo_matt", "producer.dev in the title btw"],
       ["kk", "kayla.live", "wait is this all one encode??"],
@@ -1117,17 +1166,25 @@
       ["kk", "ttv_jo", "self hosted?? on cloudflare?? ok"],
       ["yt", "Priya", "1080p60 on three at once, no relay?"],
       ["tw", "beats_by_ro", "W stage"],
+      ["kk", "marcus.k", "how many guests can you bring on"],
+      ["yt", "Lena", "8 per room I think"],
+      ["tw", "sfx_sam", "the roster admit is so clean"],
     ];
+    var marks = { tw: "twitch.svg", kk: "kick.svg", yt: "youtube.svg" };
     var i = 0;
     function push() {
       var l = lines[i++ % lines.length];
-      var m = document.createElement("div"); m.className = "m";
-      m.innerHTML = '<span class="who ' + l[0] + '">' + l[1] + '</span><span class="txt">' + l[2] + '</span>';
-      chat.appendChild(m);
-      while (chat.children.length > 6) chat.removeChild(chat.firstChild);
+      boxes.forEach(function (chat) {
+        var m = document.createElement("div"); m.className = "m";
+        var badge = chat.classList.contains("big") ? '<img class="badge" src="' + marks[l[0]] + '" alt="" />' : "";
+        m.innerHTML = badge + '<span class="who ' + l[0] + '">' + l[1] + '</span><span class="txt">' + l[2] + '</span>';
+        chat.appendChild(m);
+        var max = chat.classList.contains("big") ? 11 : 6;
+        while (chat.children.length > max) chat.removeChild(chat.firstChild);
+      });
     }
-    for (var k = 0; k < 4; k++) push();
-    setInterval(push, 2300);
+    for (var k = 0; k < 6; k++) push();
+    setInterval(push, 2100);
   })();
 
   // ── Guest rail: hover the third card, press Show, it lands on the program. Loops. ──
