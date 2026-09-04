@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { hasTauri, ipc, networkJoin } from "../lib/ipc";
+import { hasTauri, ipc, networkJoin, network } from "../lib/ipc";
 import { setActiveEndpointId } from "../lib/workspace";
 
 /** The self-hosting walkthrough — deploy the open producer-server, then
@@ -121,6 +121,31 @@ function BoominLogin({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  /** The opt-in is for brands that have never answered the question. A brand
+   *  that is already in (active), was invited, or deliberately left must not be
+   *  asked again — re-listing a brand is never a side effect of signing in.
+   *  If the status call fails we still ask: the box is off by default, so the
+   *  worst case is one extra screen, never a silent join. */
+  async function needsNetworkStep(endpointId?: string | null): Promise<boolean> {
+    try {
+      let id = endpointId ?? null;
+      if (!id) {
+        const eps = await ipc.listEndpoints();
+        id = (eps.find((e) => e.kind === "connected") ?? eps[0])?.id ?? null;
+      }
+      if (!id) return true;
+      const st = await network.status(id);
+      return !st?.membership?.status;
+    } catch {
+      return true;
+    }
+  }
+
+  async function goAfterConnect(endpointId?: string | null) {
+    if (direct || !(await needsNetworkStep(endpointId))) onConnected();
+    else setStep("network");
+  }
+
   async function requestCode() {
     setBusy(true);
     setError(null);
@@ -145,10 +170,8 @@ function BoominLogin({
       if (result?.needs_brand && result.brands?.length) {
         setBrands(result.brands);
         setStep("brand");
-      } else if (direct) {
-        onConnected();
       } else {
-        setStep("network");
+        await goAfterConnect((result as { id?: string } | null)?.id ?? null);
       }
     } catch (e) {
       setError(String(e));
@@ -163,8 +186,7 @@ function BoominLogin({
     try {
       const r = await ipc.boominSelectBrand(slug);
       if (r?.id) setActiveEndpointId(r.id);
-      if (direct) onConnected();
-      else setStep("network");
+      await goAfterConnect(r?.id ?? null);
     } catch (e) {
       setError(String(e));
     } finally {
