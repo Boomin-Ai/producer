@@ -38,6 +38,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      # ffi.rs <-> shim parity. The Windows leg is an engine-less `cargo check`
+      # that never compiles shim_win.c, so a producer_* extern missing from it
+      # only fails at the real release link (#27). This needs no engine and
+      # no compiler, so it runs first and fails fast.
+      - name: Check ffi.rs extern parity with shim.m / shim_win.c
+        if: runner.os == 'Linux'
+        run: bash scripts/check-extern-parity.sh
       - name: Install Linux system deps
         if: runner.os == 'Linux'
         run: |
