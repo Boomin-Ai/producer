@@ -5700,7 +5700,7 @@ textarea::placeholder {
    surfaces shift right as one piece, nothing is overlaid. */
 .cr.cr--vibrant {
   --rail-w: 88px;
-  --settings-w: 340px;
+  --settings-w: 440px;
 }
 .cr.cr--vibrant.settings-open {
   --rail-w: calc(88px + var(--settings-w));
@@ -8549,3 +8549,6 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .set .set-add { align-self: flex-start; margin-top: 10px; }
 .set .set-gap { margin-top: 28px; }
 .set .upd-sheet .upd-item { background: none; border: 0; padding: 12px 0; border-bottom: 1px solid oklch(1 0 0 / 0.07); border-radius: 0; }
+/* What's new is a window, not the whole panel: fixed height, scrolls inside. */
+.set .upd-sheet { max-height: 220px; overflow-y: auto; padding-right: 6px; border: 1px solid oklch(1 0 0 / 0.07); border-radius: 10px; padding: 2px 10px; }
+.set .upd-sheet .upd-item:last-child { border-bottom: 0; }
