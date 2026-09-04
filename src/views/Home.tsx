@@ -741,6 +741,13 @@ function SettingsPanel({
   const [appVersion, setAppVersion] = useState<string | null>(null);
   type RepoRelease = { tag_name: string; name: string | null; body: string | null; published_at: string; html_url: string };
   const [keysOpen, setKeysOpen] = useState(false);
+  const [wsId, setWsId] = useState<string | null>(() => activeEndpointId() ?? endpoints[0]?.id ?? null);
+  useEffect(() => {
+    const sync = () => setWsId(activeEndpointId() ?? endpoints[0]?.id ?? null);
+    window.addEventListener(WORKSPACE_EVENT, sync);
+    return () => window.removeEventListener(WORKSPACE_EVENT, sync);
+  }, [endpoints]);
+  const current = endpoints.find((e) => e.id === wsId) ?? endpoints[0] ?? null;
   const [newsOpen, setNewsOpen] = useState(false);
   const [releases, setReleases] = useState<RepoRelease[] | null | "err">(null);
   useEffect(() => {
@@ -859,27 +866,42 @@ function SettingsPanel({
           </div>
         </div>
 
-        <div className="cr-label">WORKSPACES</div>
-        <div className="set-list">
-          {endpoints.map((ep) => (
-            <div key={ep.id} className="cr-sheet-row" title={ep.base_url}>
-              <span className={`dot ${ep.kind}`} />
-              <span className="cr-sheet-row-name">{ep.name}</span>
-              <span className="cr-sheet-row-sub">
-                {ep.kind === "connected" ? "Boomin" : "self-hosted"}
-              </span>
-              <button onClick={() => onRemoveEndpoint(ep.id)} title="Disconnect workspace">
-                ✕
+        {/* One workspace at a time — like Boomin web. Everything below belongs
+            to the selected one; switching here switches the whole app. */}
+        <div className="cr-label">WORKSPACE</div>
+        <div className="set-ws">
+          <div className="set-ws-pills">
+            {endpoints.map((ep) => (
+              <button
+                key={ep.id}
+                className={`set-ws-pill${ep.id === wsId ? " on" : ""}`}
+                title={ep.base_url}
+                onClick={() => { setActiveEndpointId(ep.id); setWsId(ep.id); }}
+              >
+                <span className={`dot ${ep.kind}`} />
+                {ep.name}
               </button>
+            ))}
+            <button className="set-ws-pill add" onClick={onAddEndpoint} title="Connect another workspace">+</button>
+          </div>
+          {current && (
+            <div className="set-ws-meta">
+              <span className="set-ws-kind">{current.kind === "connected" ? "Boomin workspace" : "Self-hosted"}</span>
+              <span className="set-ws-url" title={current.base_url}>{current.base_url.replace(/^https?:\/\//, "")}</span>
+              <button className="set-ws-drop" onClick={() => onRemoveEndpoint(current.id)} title="Disconnect this workspace from this Mac">Disconnect</button>
             </div>
-          ))}
-          <button className="cr-ghost set-add" onClick={onAddEndpoint}>
-            + Add workspace
-          </button>
-          <NetworkInviteReset endpoints={endpoints} />
+          )}
+          <NetworkInviteReset endpoints={current ? [current] : []} />
         </div>
 
-        <ChannelsBlock destinations={destinations} channels={channels} endpoints={endpoints} onChanged={onChannelsChanged} />
+        {current && (
+          <ChannelsBlock
+            destinations={destinations}
+            channels={channels.filter((c) => c.endpoint_id === current.id)}
+            endpoints={[current]}
+            onChanged={onChannelsChanged}
+          />
+        )}
 
         <div className="cr-label set-gap">DEV</div>
         <div className="set-list">
