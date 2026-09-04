@@ -518,10 +518,6 @@ export function Home({
           destinations={destinations}
           channels={channels}
           onChannelsChanged={loadLive}
-          onOpenConsole={(section) => {
-            closeSettings();
-            setView({ kind: "console", section });
-          }}
           updater={updater}
           onClose={closeSettings}
         />
@@ -635,14 +631,11 @@ function ChannelsBlock({
   destinations,
   channels,
   endpoints,
-  onOpenConsole,
   onChanged,
 }: {
   destinations: LiveDestination[];
   channels: Channel[];
   endpoints: EndpointInfo[];
-  /** Boomin workspaces connect through Boomin's own OAuth, in the console. */
-  onOpenConsole?: (section: string) => void;
   onChanged: () => void;
 }) {
   const [addingDest, setAddingDest] = useState(false);
@@ -719,33 +712,21 @@ function ChannelsBlock({
                 {mine.map((c) => (
                   <ChannelChip key={c.id} channel={c} endpointId={ep.id} onChanged={onChanged} />
                 ))}
-                {boomin ? (
-                  (["instagram", "facebook", "threads"] as const)
-                    .filter((pl) => !mine.some((c) => c.platform === pl))
-                    .map((pl) => (
-                      <button
-                        key={pl}
-                        className="set-plat"
-                        onClick={() => onOpenConsole?.("channels")}
-                        title={`Connect ${pl} through Boomin's sign-in`}
-                      >
-                        + {pl === "instagram" ? "Instagram" : pl === "facebook" ? "Facebook" : "Threads"}
-                      </button>
-                    ))
-                ) : (
-                  (["instagram", "facebook", "threads"] as const)
-                    .filter((pl) => !mine.some((c) => c.platform === pl))
-                    .map((pl) => (
-                      <button
-                        key={pl}
-                        className={`set-plat${connecting?.ep === ep.id && connecting.platform === pl ? " busy" : ""}`}
-                        onClick={() => startConnect(ep.id, pl)}
-                        title={`Connect ${pl} (OAuth in your browser)`}
-                      >
-                        + {pl === "instagram" ? "Instagram" : pl === "facebook" ? "Facebook" : "Threads"}
-                      </button>
-                    ))
-                )}
+                {/* One native path for both backends: ask the workspace for an
+                    OAuth url, open the user's browser, the token lands server
+                    side. No embedded console, no second sign-in. */}
+                {(["instagram", "facebook", "threads"] as const)
+                  .filter((pl) => !mine.some((c) => c.platform === pl))
+                  .map((pl) => (
+                    <button
+                      key={pl}
+                      className={`set-plat${connecting?.ep === ep.id && connecting.platform === pl ? " busy" : ""}`}
+                      onClick={() => startConnect(ep.id, pl)}
+                      title={`Connect ${pl} — approves in your browser`}
+                    >
+                      + {pl === "instagram" ? "Instagram" : pl === "facebook" ? "Facebook" : "Threads"}
+                    </button>
+                  ))}
               </div>
               {connecting?.ep === ep.id && (
                 <div className="set-connect-pending">
@@ -753,7 +734,7 @@ function ChannelsBlock({
                   <button className="linkish" onClick={() => { onChanged(); setConnecting(null); }}>refresh channels</button>
                 </div>
               )}
-              {connectError && connecting?.ep !== ep.id && !boomin && <div className="set-connect-error">{connectError}</div>}
+              {connectError && connecting?.ep !== ep.id && <div className="set-connect-error">{connectError}</div>}
             </div>
           );
         })}
@@ -799,7 +780,6 @@ function SettingsPanel({
   destinations,
   channels,
   onChannelsChanged,
-  onOpenConsole,
   updater,
   onClose,
 }: {
@@ -811,7 +791,6 @@ function SettingsPanel({
   destinations: LiveDestination[];
   channels: Channel[];
   onChannelsChanged: () => void;
-  onOpenConsole?: (section: string) => void;
   updater: { state: string; version: string | null; restart: () => void };
   onClose: () => void;
 }) {
@@ -1011,7 +990,6 @@ function SettingsPanel({
             destinations={destinations}
             channels={channels.filter((c) => c.endpoint_id === current.id)}
             endpoints={[current]}
-            onOpenConsole={onOpenConsole}
             onChanged={onChannelsChanged}
           />
         )}
