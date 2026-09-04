@@ -1,0 +1,19 @@
+{
+  "name": "producer-guest",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Origin-relative guest pages served by the self-hosted Producer server. Built output is committed to ../public/guest so `wrangler deploy` needs no build step.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "build": "../../node_modules/.bin/vite build",
+    "typecheck": "../../node_modules/.bin/tsc --noEmit -p ."
+  },
+  "//": "No node_modules here on purpose. react, react-dom, vite and @vitejs/plugin-react resolve from the repository root's node_modules (Node walks up parent directories). Run `npm install` at the REPO ROOT, never here.",
+  "peerDependencies": {
+    "@vitejs/plugin-react": "*",
+    "react": "*",
+    "react-dom": "*",
+    "vite": "*"
+  }
+}
