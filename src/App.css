@@ -2412,6 +2412,23 @@ textarea::placeholder {
   opacity: 0.55;
 }
 
+.rm-q-tag {
+  margin-left: 5px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: oklch(0.32 0.03 250);
+  color: oklch(0.85 0.01 250);
+  vertical-align: 1px;
+}
+
+.rm-q.on .rm-q-tag {
+  background: rgba(8, 17, 13, 0.18);
+  color: inherit;
+}
+
 .rm-strips {
   flex: 1;
   min-height: 0;

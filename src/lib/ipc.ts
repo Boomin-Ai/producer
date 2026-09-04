@@ -325,6 +325,8 @@ export interface LiveSnapshot {
   video_encoder?: string | null;
   /** True when `video_encoder` is a GPU encoder. Gates the 2160p option. */
   hw_encoder?: boolean;
+  /** 2160p at 60 allowed (Apple silicon yes; Intel Macs 2160p30 only). */
+  hw_4k60?: boolean;
 }
 
 export type LiveEvent =

@@ -3006,14 +3006,17 @@ export function LiveView({
         cfgNow.transition?.stinger ?? cfgNow.scenes.find((x) => x.transition?.stinger)?.transition?.stinger;
       if (firstStinger) stingerIpc.prepare(firstStinger).catch(() => {});
     }
-    // Stored video settings (global, OBS-style) re-apply when idle.
+    // Video settings re-apply when idle: the room's own `video` first (a 4K
+    // room stays 4K), else the global OBS-style localStorage value.
     if (!videoApplied.current && snap.engine_ready && snap.session_state === "idle") {
       videoApplied.current = true;
       try {
-        const stored = JSON.parse(localStorage.getItem("producer.video") ?? "null") as {
-          h: number;
-          f: number;
-        } | null;
+        const stored =
+          (room ? parseConfig(room.config).video : undefined) ??
+          (JSON.parse(localStorage.getItem("producer.video") ?? "null") as {
+            h: number;
+            f: number;
+          } | null);
         if (stored && (stored.h !== (snap.video_height || 720) || stored.f !== (snap.video_fps || 30))) {
           await ipc.liveSetVideo(stored.h, stored.f);
         }
@@ -3891,10 +3894,17 @@ export function LiveView({
 
   const vh = snapshot?.video_height || 720;
   const vf = snapshot?.video_fps || 30;
+  // 4K is a hardware-encoder feature: the engine reports whether one
+  // registered (VideoToolbox, NVENC, QSV, or AMF).
+  const hwEncoder = !!snapshot?.hw_encoder;
+  // Intel Macs: the encoder is there, the headroom for 4K60 isn't.
+  const hw4k60 = !!snapshot?.hw_4k60;
   async function setVideoCfg(h: number, f: number) {
     try {
       await ipc.liveSetVideo(h, f);
       localStorage.setItem("producer.video", JSON.stringify({ h, f }));
+      // The room remembers its own canvas so reopening it lands where it was.
+      writeCfg({ ...cfgRef.current, video: { h, f } });
     } catch (e) {
       setBanner(String(e));
     }
@@ -5157,21 +5167,39 @@ export function LiveView({
               <div className="rm-ctrl-row">
                 <span className="rm-ctrl-label">Resolution</span>
                 <span className="rm-quality-set">
-                  {[720, 1080].map((h) => (
-                    <button key={h} className={`rm-q${vh === h ? " on" : ""}`} disabled={streaming || !engineOk} onClick={() => setVideoCfg(h, vf)}>
-                      {h}p
-                    </button>
-                  ))}
+                  {[720, 1080, 2160].map((h) => {
+                    const gated = h === 2160 && !hwEncoder;
+                    return (
+                      <button
+                        key={h}
+                        className={`rm-q${vh === h ? " on" : ""}`}
+                        disabled={streaming || !engineOk || gated}
+                        title={gated ? "4K needs a hardware encoder (VideoToolbox, NVENC, QSV, or AMF)" : undefined}
+                        onClick={() => setVideoCfg(h, h === 2160 && !hw4k60 ? 30 : vf)}
+                      >
+                        {h}p{h === 2160 && <span className="rm-q-tag">4K</span>}
+                      </button>
+                    );
+                  })}
                 </span>
               </div>
               <div className="rm-ctrl-row">
                 <span className="rm-ctrl-label">Frame rate</span>
                 <span className="rm-quality-set">
-                  {[30, 60].map((f) => (
-                    <button key={f} className={`rm-q${vf === f ? " on" : ""}`} disabled={streaming || !engineOk} onClick={() => setVideoCfg(vh, f)}>
-                      {f}
-                    </button>
-                  ))}
+                  {[30, 60].map((f) => {
+                    const gated = f === 60 && vh === 2160 && !hw4k60;
+                    return (
+                      <button
+                        key={f}
+                        className={`rm-q${vf === f ? " on" : ""}`}
+                        disabled={streaming || !engineOk || gated}
+                        title={gated ? "4K on an Intel Mac runs at 30 fps" : undefined}
+                        onClick={() => setVideoCfg(vh, f)}
+                      >
+                        {f}
+                      </button>
+                    );
+                  })}
                 </span>
               </div>
               <div className="rm-ctrl-row">

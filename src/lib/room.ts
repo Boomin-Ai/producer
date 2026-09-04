@@ -107,6 +107,15 @@ export interface RoomConfig {
   dock_bg?: Partial<Record<"top" | "left" | "right" | "bottom", boolean>>;
   /** Where the stage's quick controls float: an edge of the canvas. */
   stage_bar?: "bottom" | "top" | "left" | "right";
+  /** Output canvas the room was last set to: height (720/1080/2160) and
+   * frame rate (30/60). Stored verbatim — the ENGINE is the authority on
+   * what a machine can run (4K needs a hardware encoder), never this parser. */
+  video?: RoomVideo;
+}
+
+export interface RoomVideo {
+  h: number;
+  f: number;
 }
 
 export const DEFAULT_SCENES: RoomScene[] = [
@@ -171,6 +180,14 @@ export function parseConfig(raw: string | null | undefined): RoomConfig {
   if (v.sizes && typeof v.sizes === "object") base.sizes = v.sizes as DockSizes;
   if (v.stage_bar === "bottom" || v.stage_bar === "top" || v.stage_bar === "left" || v.stage_bar === "right") {
     base.stage_bar = v.stage_bar;
+  }
+  if (v.video && typeof v.video === "object") {
+    const { h, f } = v.video as Partial<RoomVideo>;
+    // Positive integers pass through unclamped; the engine rejects modes it
+    // cannot run and says why.
+    if (Number.isInteger(h) && (h as number) > 0 && Number.isInteger(f) && (f as number) > 0) {
+      base.video = { h: h as number, f: f as number };
+    }
   }
   if (v.dock_bg && typeof v.dock_bg === "object") {
     base.dock_bg = Object.fromEntries(
