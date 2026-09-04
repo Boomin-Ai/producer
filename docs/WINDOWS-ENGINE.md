@@ -801,3 +801,96 @@ install. The in-app banner (`firewall_status` → "missing" → "Allow Producer"
 elevated via `Start-Process -Verb RunAs`) is therefore the path every
 per-user install takes; it shows and works on this box. A per-machine
 installer would make the hook real.
+
+## Hardware encoders (artifact rev 6, 2026-09-04)
+
+The Windows allowlist now carries the GPU encoders; before rev 6 every Windows
+session ran `obs_x264`, and 1080p60 / 4K were CPU-bound by construction.
+
+### What ships, and where the third one hides
+
+| vendor | plugin            | H.264 ids at 32.1.2                                | probe helper (bin/)   |
+|--------|-------------------|----------------------------------------------------|-----------------------|
+| NVIDIA | `obs-nvenc`       | `obs_nvenc_h264_tex`, `obs_nvenc_h264_soft`        | `obs-nvenc-test.exe`  |
+| Intel  | `obs-qsv11`       | `obs_qsv11_v2`, `obs_qsv11_soft_v2`, `obs_qsv11`†  | `obs-qsv-test.exe`    |
+| AMD    | **`obs-ffmpeg`**  | `h264_texture_amf`, `h264_fallback_amf`            | `obs-amf-test.exe`    |
+
+† deprecated upstream, kept as the last QSV resort.
+
+AMF is not a plugin: `plugins/obs-ffmpeg/texture-amf.cpp` is compiled into
+obs-ffmpeg on x64 Windows (its CMakeLists, `if(OS_WINDOWS)` /
+`CMAKE_VS_PLATFORM_NAME STREQUAL x64`), so the shared allowlist already
+carried it — unregistered, because of the helpers below. `engine-lib.sh` has
+only `obs-nvenc obs-qsv11` to add. Both are ON by default in the pinned tree
+(`ENABLE_NVENC`, `ENABLE_QSV11`); NVENC needs `FFnvcodec` headers and QSV
+`VPL 2.9`, both in the obs-deps bundle the build already stages.
+
+**Every one of the three decides whether to register anything by spawning a
+helper exe and parsing its stdout** (`nvenc-helpers.c nvenc_check`,
+`obs-qsv11-plugin-main.c`, `texture-amf.cpp amf_load`). The helper path is
+`os_get_executable_path_ptr("obs-…-test.exe")` — relative to the RUNNING
+EXECUTABLE, i.e. beside `producer.exe`, which is where the artifact's `bin/`
+is flattened. `set_target_properties_obs` installs every executable except
+`obs-browser-helper` to `OBS_EXECUTABLE_DESTINATION` (= `bin/64bit`), so the
+wholesale `bin/` copy carries them; `build-engine-windows.sh` and
+`engine-closure-windows.sh` assert all three anyway, because the failure
+shape is the signature one again: the plugin loads, logs one warning, and
+Producer streams x264 on a box with a perfectly good GPU.
+
+The vendor runtimes — `nvEncodeAPI64.dll` / `nvcuda.dll`, Intel's
+`libmfx-gen`/VPL dispatch, `amfrt64.dll` — come from the GPU DRIVER and are
+`LoadLibrary`'d, never imported, so the import-closure gate does not (and
+must not) demand them, and a box without that vendor's GPU simply
+enumerates no such encoder. This is also why none of them can be in
+`REQUIRED_ENCODERS_OS`.
+
+### Selection: enumerate, then prefer
+
+`engine.rs::bootstrap_inner`, after `obs_post_load_modules`: the registered
+ids go through `encoders::choose_video` — the first hit in
+`HW_H264_PREFERENCE` (NVENC → QSV → AMF; the `_tex`/`_v2`/`texture_` ids
+first, libobs reroutes them to the `_soft`/`fallback` sibling itself when the
+D3D11 zero-copy path is unavailable), else `obs_x264`. macOS takes the same
+path and lands on the fixed VideoToolbox id. The choice is published
+(`encoders::set_chosen`) and consumed by `multi.rs` (the shared stream
+encoder), `record.rs` and `stream.rs`; each still falls back to x264 if the
+GPU refuses at `obs_video_encoder_create` (driver gone, session limit).
+
+Surfaced as `EngineReport.video_encoder` / `hardware_encoder`, the
+`Snapshot` (`live_status`) fields `video_encoder` / `hw_encoder`, the
+`engine_ready` event, and the room footer next to the graphics backend.
+`hw_encoder` is what the 2160p canvas option gates on.
+
+Settings per family (CBR at the session bitrate, `keyint_sec` 2, everything
+else pinned to OBS's own 32.1.2 defaults so a Producer stream looks like an
+OBS stream on the same GPU): NVENC `preset` p5 / `tune` hq / `multipass`
+qres / `profile` high / 2 B-frames / no lookahead / AQ on; QSV
+`target_usage` balanced (TU4) / `profile` high; AMF `preset` quality /
+`profile` high. x264 and VideoToolbox are untouched — the A7 Kick-CBR finding
+was made against their defaults.
+
+Also fixed on the way: every session created its AAC encoder as
+`CoreAudio_AAC`, which does not exist on Windows, so streaming AND recording
+failed at encoder creation on every Windows box (`encoders::audio_id` →
+`ffmpeg_aac`, which `REQUIRED_ENCODERS_OS` already asserted). Recordings now
+land in `%USERPROFILE%\Videos\Producer` rather than `\tmp\Movies`.
+
+### What needs a real GPU box
+
+CI proves the artifact carries the plugins and their probes (closure gate);
+it cannot prove an encoder registers, because the runners have no encode
+hardware. On the founder's box, per GPU present:
+
+1. Boot a room; the footer should read `d3d11 · NVENC` (or QSV / AMF), and
+   `engine-report.json` next to the module config should show
+   `"video_encoder": "obs_nvenc_h264_tex"` (or the vendor's id) with
+   `"hardware_encoder": true`. The stderr line `[live] video encoder: …`
+   says the same thing.
+2. Go live at 1080p60 and record at the same time; Task Manager should show
+   the encode on the GPU's Video Encode engine and CPU well under the x264
+   figure. Check the platform dashboard for CBR at the intersection bitrate.
+3. If the footer says `x264` on a box with a GPU: the plugin's own log line
+   (`[NVENC] Test process failed`, `[obs-qsv11]`, `[AMF]`) names the reason;
+   the first suspects are a missing `obs-*-test.exe` beside `producer.exe`
+   (closure gate would have caught it) and a driver too old for the NVENC
+   SDK the pinned tree compiles against (12.x).
