@@ -22,3 +22,8 @@ declare module "node:sqlite" {
     };
   }
 }
+// ESM `import.meta.url` — typed by lib.dom / @types/node, neither of which
+// the worker build carries.
+interface ImportMeta {
+  url: string;
+}
