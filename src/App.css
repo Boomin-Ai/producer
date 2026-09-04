@@ -8667,3 +8667,4 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .cr-room-menu-row.danger { color: #ffb4b4; }
 .cr-room-menu-k { color: var(--fg-2); font-size: 12px; }
 .cr-room-menu .cr-room-link, .cr-room-menu .cr-room-share { position: static; }
+.cr-room.menu-open { z-index: 22; }

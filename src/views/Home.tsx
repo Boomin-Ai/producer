@@ -2948,11 +2948,13 @@ function RoomCard({
       </span>
     </>
   );
-  const cls = `cr-room${live ? " onair" : ""}${del === "confirm" || del === "busy" ? " confirming" : ""}`;
-  // A div while renaming or confirming: a button cannot contain the input or
-  // the confirm's own buttons (nested interactive content is invalid).
-  return editing || del === "confirm" || del === "busy" ? (
-    <div className={cls} ref={cardRef}>
+  const cls = `cr-room${live ? " onair" : ""}${del === "confirm" || del === "busy" ? " confirming" : ""}${menuOpen ? " menu-open" : ""}`;
+  // A div while renaming, confirming, or showing the ⋯ menu: a button cannot
+  // contain the input or the menu's own controls (nested interactive content
+  // is invalid), and WebKit clips anything that overflows a <button> box —
+  // which silently cut the menu in half.
+  return editing || menuOpen || del === "confirm" || del === "busy" ? (
+    <div className={cls} ref={cardRef} onClick={menuOpen ? undefined : onOpen}>
       {body}
     </div>
   ) : (
