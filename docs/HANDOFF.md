@@ -37,7 +37,7 @@ the cause — first suspects: `obs-*-test.exe` missing beside `producer.exe`, or
   `[live] video encoder: obs_nvenc_h264_tex (hardware: true)`; NVENC SDK 12.2 compiled / 13.0 driver
   (GeForce GTX 1660, driver 32.0.15.9174).
 - **Bug found on main, fixed in PR #40 (do not merge without you):** `scripts/dev-windows.ps1` carried a
-  literal TAB in `src-tauri	arget\debug` (heredoc mangling in the #35 commit), so the probe helpers
+  literal TAB in `src-tauri\target\debug` (heredoc mangling in the #35 commit), so the probe helpers
   were copied to a junk dir and every dev build streamed x264 on a GPU box. Installer builds unaffected.
 - Also open: PR #32 (cropped edges red in the native outline; follows the fitted picture rect, not
   the bounds) — rebases clean onto v0.4.17, no textual conflicts.
