@@ -12,7 +12,7 @@ Time: ~20 minutes for the server, plus ~10 minutes per platform app.
 
 - A free [Cloudflare account](https://dash.cloudflare.com/sign-up)
 - [Node.js](https://nodejs.org) ≥ 20 (for `npm`/`npx`)
-- This repo: `git clone https://github.com/Boomin-Ai/producer-server && cd producer-server && npm install`
+- This repo: `git clone https://github.com/Boomin-Ai/producer && cd producer/server && npm install` (the server lives in the `server/` directory of the Producer repo; the old `producer-server` repo is archived)
 
 ## 2. Create the database and bucket
 
