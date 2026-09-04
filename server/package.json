@@ -11,6 +11,8 @@
     "db:migrate:local": "wrangler d1 execute producer --local --file=./schema.sql",
     "db:migrate": "wrangler d1 execute producer --remote --file=./schema.sql",
     "typecheck": "tsc --noEmit",
+    "guest:build": "npm --prefix guest run build",
+    "guest:typecheck": "npm --prefix guest run typecheck",
     "test": "vitest run"
   },
   "dependencies": {
