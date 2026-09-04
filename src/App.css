@@ -1537,6 +1537,8 @@ textarea::placeholder {
   min-height: 108px;
   transition: border-color 0.15s ease, transform 0.15s ease;
 }
+/* room for the chip row (not the New-room card, which has none) */
+.cr-room:not(.cr-room-new) { padding-bottom: 42px; }
 
 .cr-room:hover {
   border-color: oklch(0.55 0.12 165 / 0.55);
@@ -5296,11 +5298,20 @@ textarea::placeholder {
   border-color: transparent;
 }
 
-/* Room card share chip — bottom-right, out of the delete button's corner. */
-.cr-room-share {
+/* Room card chips (Link · visibility) — one flex row, bottom-right, out of
+   the delete button's corner. Flow layout, not two absolute chips: their
+   widths differ per label/platform font, so fixed offsets overlapped. */
+.cr-room-chips {
   position: absolute;
   bottom: 10px;
   right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+}
+.cr-room-share {
+  white-space: nowrap;
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -8097,6 +8108,10 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3);
 }
 .net-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.net-field-row > .net-field:only-child { grid-column: 1 / -1; }
+.net-check { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--fg-1); cursor: pointer; }
+.net-check input { accent-color: var(--mint); margin: 0; }
+.net-check em { font-style: normal; font-size: 11px; color: var(--fg-3); }
 .net-book-form select,
 .net-book-form .net-slug {
   width: 100%; min-width: 0; height: 32px; padding: 0 10px; font-size: 13px;
@@ -8115,6 +8130,9 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   border: 1px solid var(--line-1); background: var(--surface-1);
   color: var(--fg-1); text-transform: none; letter-spacing: 0; white-space: normal; font-size: 12px;
 }
+.net-deal-wrap { display: flex; flex-direction: column; gap: 4px; }
+.net-deal-wrap .net-deal { width: 100%; }
+.net-deal-enter { height: 28px; font-size: 12px; }
 .net-deal-line { display: flex; align-items: center; gap: 7px; font-weight: 650; }
 .net-deal-dot { flex: none; width: 6px; height: 6px; border-radius: 999px; background: var(--fg-3); }
 .net-deal.proposed .net-deal-dot { background: #60a5fa; }
@@ -8128,7 +8146,7 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 
 /* Room card: the guest link, one click. */
 .cr-room-link {
-  position: absolute; right: 78px; bottom: 12px;
+  white-space: nowrap;
   font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
   padding: 3px 9px; border-radius: 999px;
   border: 1px solid var(--line-1); color: var(--fg-3); background: transparent; cursor: pointer;

@@ -527,6 +527,36 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
+    /// Enter a deal's show as the BENEFICIARY: knocks on the host's room
+    /// through the deal, so the admit settles it. Returns `{join_url, resumed}`.
+    /// A 409 `network_room_closed` (host's Producer isn't polling its roster)
+    /// is surfaced with the code intact so the UI can say "not open yet".
+    pub async fn network_deal_enter(&self, id: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.root_url(&format!("/v1/app/network/deals/{id}/enter")))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            let code = b
+                .pointer("/error/code")
+                .or_else(|| b.get("code"))
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            if status == 409 && code == "network_room_closed" {
+                return Err(EngineError::Other(format!(
+                    "network_room_closed: {}",
+                    error_message(&b, status)
+                )));
+            }
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     /// Every deal this brand is party to (client or beneficiary), newest first.
     pub async fn network_deals(&self) -> EngineResult<Value> {
         let resp = self
