@@ -686,6 +686,8 @@
   .tile.host .chairline { width: 46%; opacity: 0.9; filter: drop-shadow(0 18px 30px rgba(0,0,0,0.6)); }
   .tile.g1 { background: radial-gradient(80% 70% at 50% 40%, rgba(240,171,252,0.35), transparent 70%), #0b0d12; }
   .tile.g2 { background: radial-gradient(80% 70% at 50% 40%, rgba(251,191,36,0.3), transparent 70%), #0b0d12; }
+  .tile.empty { border-style: dashed; background: rgba(255,255,255,0.02); }
+  .tile .tag.dim { color: var(--dim); background: transparent; }
   .tile .tag { position: absolute; left: 8px; bottom: 8px; font-size: 10.5px; font-weight: 600; color: #fff; background: rgba(0,0,0,0.55); padding: 3px 7px; border-radius: 6px; }
   .rm-program .gobar { position: absolute; left: 12px; right: 12px; bottom: 12px; display: flex; gap: 8px; align-items: center; justify-content: center; font-size: 10px; letter-spacing: 0.14em; color: var(--dim); background: rgba(8,10,14,0.7); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; backdrop-filter: blur(8px); }
   .rm-program .gobar .clock { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; color: #fff; }
@@ -844,8 +846,8 @@
             <div class="rm-label">ROOMS</div>
             <div class="sc on">Tuesday Show <i class="onair-dot"></i></div><div class="sc">Late Night Run</div>
             <div class="rm-label mt">GUESTS <em>2/8</em></div>
-            <div class="rg on"><span class="av av1"></span><span class="nm">Maya</span><span class="st">on stage</span></div>
-            <div class="rg on"><span class="av av2"></span><span class="nm">Dev</span><span class="st">on stage</span></div>
+            <div class="rg on"><span class="av av2"></span><span class="nm">Nia</span><span class="st">on stage</span></div>
+            <div class="rg on"><span class="av av1"></span><span class="nm">Marcus</span><span class="st">on stage</span></div>
             <div class="rg wait"><span class="av av3"></span><span class="nm">Jordan</span><span class="st admit">Admit</span></div>
             <div class="rm-label mt">SCENES</div>
             <div class="sc on">Full cam</div><div class="sc">PiP</div><div class="sc">Screen</div>
@@ -853,8 +855,8 @@
           <div class="rm-program">
             <div class="beam"></div>
             <div class="tile host"><video class="gv" src="shots/host.mp4" autoplay muted loop playsinline></video><img class="chairline" src="chair.png" alt="" /><span class="tag">You</span></div>
-            <div class="tile g1"><video class="gv" src="shots/guest-1.mp4" autoplay muted loop playsinline></video><span class="tag">Maya</span></div>
-            <div class="tile g2"><video class="gv" src="shots/guest-2.mp4" autoplay muted loop playsinline></video><span class="tag">Dev</span></div>
+            <div class="tile g1"><video class="gv" src="shots/guest-2.mp4" autoplay muted loop playsinline></video><span class="tag">Nia</span></div>
+            <div class="tile g2"><video class="gv" src="shots/guest-1.mp4" autoplay muted loop playsinline></video><span class="tag">Marcus</span></div>
             <div class="gobar"><span>CAMERA</span><span>·</span><span>MIC</span><span>·</span><span>VIRTUAL CAM</span><span class="golive">LIVE</span></div>
           </div>
           <div class="rm-rail">
@@ -900,8 +902,8 @@
         </div>
         <div class="gm-rail">
           <div class="rm-label">GUESTS <em id="gm-count">2/8</em><span class="linkbtn">⛓ Link</span></div>
-          <div class="gcard on" data-g="1"><video class="gv" src="shots/guest-1.mp4" autoplay muted loop playsinline></video><span class="ph1"></span><span class="who"><i></i>Maya</span></div>
-          <div class="gcard on" data-g="2"><video class="gv" src="shots/guest-2.mp4" autoplay muted loop playsinline></video><span class="ph2"></span><span class="who"><i></i>Dev</span></div>
+          <div class="gcard on" data-g="2"><video class="gv" src="shots/guest-2.mp4" autoplay muted loop playsinline></video><span class="ph2"></span><span class="who"><i></i>Nia</span></div>
+          <div class="gcard on" data-g="1"><video class="gv" src="shots/guest-1.mp4" autoplay muted loop playsinline></video><span class="ph1"></span><span class="who"><i></i>Marcus</span></div>
           <div class="gcard" id="gm-pick" data-g="3"><video class="gv" src="shots/guest-3.mp4" autoplay muted loop playsinline></video><span class="ph3"></span><span class="who"><i></i>Jordan</span><span class="ctl"><b id="gm-show">Show</b><span>🎙</span><span>✕</span></span></div>
           <div class="gcard" data-g="4"><video class="gv" src="shots/guest-4.mp4" autoplay muted loop playsinline></video><span class="ph4"></span><span class="who"><i></i>Sam</span></div>
           <div class="gcard wait" data-g="5"><video class="gv" src="shots/guest-5.mp4" autoplay muted loop playsinline></video><span class="ph5"></span><span class="who"><i class="w"></i>Ari <small>asked to join</small></span><span class="ctl"><b>Admit</b></span></div>
@@ -909,8 +911,8 @@
         <div class="gm-program">
           <div class="beam"></div>
           <div class="tile host"><video class="gv" src="shots/host.mp4" autoplay muted loop playsinline></video><img class="chairline" src="chair.png" alt="" /><span class="tag">You</span></div>
-          <div class="tile g1"><video class="gv" src="shots/guest-1.mp4" autoplay muted loop playsinline></video><span class="tag">Maya</span></div>
-          <div class="tile g2"><video class="gv" src="shots/guest-2.mp4" autoplay muted loop playsinline></video><span class="tag">Dev</span></div>
+          <div class="tile empty"><span class="tag dim">Slot 2</span></div>
+          <div class="tile empty"><span class="tag dim">Slot 3</span></div>
           <div class="tile g3" id="gm-land"><video class="gv" src="shots/guest-3.mp4" autoplay muted loop playsinline></video><span class="tag">Jordan</span></div>
           <div class="gobar"><span>CAMERA</span><span>·</span><span>MIC</span><span>·</span><span>VIRTUAL CAM</span><span class="golive">LIVE</span></div>
         </div>
