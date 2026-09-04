@@ -2,7 +2,10 @@
 // real SQL — including the stage clock and the CHECK constraints — runs in
 // tests against the real schema.sql rather than a hand-rolled mock.
 import { readFileSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync as DatabaseSyncType } from "node:sqlite";
+// Vite/vitest strips the "node:" prefix and tries to resolve "sqlite" from
+// disk; ask the runtime for the builtin directly instead.
+const { DatabaseSync } = process.getBuiltinModule("node:sqlite") as { DatabaseSync: typeof DatabaseSyncType };
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 

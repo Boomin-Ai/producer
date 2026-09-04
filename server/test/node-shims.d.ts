@@ -27,3 +27,5 @@ declare module "node:sqlite" {
 interface ImportMeta {
   url: string;
 }
+
+declare const process: { getBuiltinModule(id: string): unknown };
