@@ -1505,6 +1505,18 @@ function HistoryView({
 /** Brand Network at a glance: how many are live, who's waiting on you, and a
  * slug field to invite someone. Slugs are unique platform-wide, so typing one
  * addresses a brand exactly — no picker needed. */
+/** The brand behind a connected endpoint, by its slug; null when unknown. */
+async function brandNameFor(endpointId: string): Promise<string | null> {
+  try {
+    const ep = (await ipc.listEndpoints()).find((e) => e.id === endpointId);
+    if (!ep?.brand_slug) return null;
+    const { brands } = await ipc.boominListBrands(endpointId);
+    return brands.find((b) => b.slug === ep.brand_slug)?.name ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Resolve the connected Boomin endpoint once — every network surface needs it. */
 function useConnectedEndpoint(): string | null {
   const [endpointId, setEndpointId] = useState<string | null>(() => activeEndpointId());
@@ -1641,8 +1653,15 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
     setEntering(d.id);
     setNote(null);
     try {
-      await network.enterDeal(endpointId, d.id, `${hostName} · ${d.title}`);
-      setNote(`Knocked on ${hostName}'s room through the deal — your guest seat opened in its own window.`);
+      // Our brand name for the guest seat (the endpoint's name is the
+      // account, not the brand). Best-effort: no name → the page asks.
+      const brandName = await brandNameFor(endpointId);
+      const res = await network.enterDeal(endpointId, d.id, `${hostName} · ${d.title}`, brandName);
+      setNote(
+        res.producer_cam
+          ? `Knocked on ${hostName}'s room through the deal — your guest seat opened in its own window. Your Producer scene is the camera.`
+          : `Knocked on ${hostName}'s room through the deal — your guest seat opened in its own window.`,
+      );
     } catch (e) {
       setNote(isRoomClosedError(e) ? "The host hasn't opened the room yet." : String(e).replace(/^Error:\s*/, ""));
     } finally {
@@ -1925,7 +1944,7 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
                             <button
                               className="net-accept net-deal-enter"
                               disabled={busy || entering === d.id}
-                              title="Knock on the host's room through this deal — opens your guest seat in its own window"
+                              title="Knock on the host's room through this deal — opens your guest seat in its own window. Your Producer scene is the camera."
                               onClick={() => void enterDeal(d, c.counterparty.name)}
                             >
                               {entering === d.id ? "Knocking…" : "Enter the show"}
@@ -2250,7 +2269,7 @@ function DealSheet({
             <div className="deal-term">
               <span>Enter</span>
               <p>
-                Knock on {otherName}'s {d.room_title ? `"${d.room_title}"` : "room"} through this deal, from here — your guest seat opens in its own window with your camera and mic.
+                Knock on {otherName}'s {d.room_title ? `"${d.room_title}"` : "room"} through this deal, from here — your guest seat opens in its own window. Your Producer scene is the camera.
                 No link, no browser. When {otherName} admits you, the deal knows it's you.
               </p>
             </div>

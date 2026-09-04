@@ -615,6 +615,7 @@ pub async fn network_deal_enter(
     endpoint_id: String,
     deal_id: String,
     window_title: Option<String>,
+    guest_name: Option<String>,
 ) -> EngineResult<Value> {
     let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
     let res = ProducerClient::new(&base_url, &token)
@@ -625,7 +626,24 @@ pub async fn network_deal_enter(
         .get("join_url")
         .and_then(Value::as_str)
         .ok_or_else(|| EngineError::Other("enter returned no join_url".into()))?;
-    let parsed = tauri::Url::parse(join_url).map_err(|e| EngineError::Other(e.to_string()))?;
+    let mut parsed = tauri::Url::parse(join_url).map_err(|e| EngineError::Other(e.to_string()))?;
+    // Producer IS the guest's camera: the scene goes out through the virtual
+    // camera and the guest page pre-selects it (`?cam=producer`). No driver
+    // or no engine → plain join, the page falls back to a real webcam.
+    let producer_cam = state.live.set_virtual_cam(true).is_ok();
+    {
+        let mut q = parsed.query_pairs_mut();
+        if producer_cam {
+            q.append_pair("cam", "producer");
+        }
+        if let Some(name) = guest_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+        {
+            q.append_pair("name", name);
+        }
+    }
     // Window labels allow [a-zA-Z0-9-/:_]; deal ids are uuids, but scrub anyway.
     let label = format!(
         "guest-{}",
@@ -644,7 +662,11 @@ pub async fn network_deal_enter(
         .min_inner_size(640.0, 480.0)
         .build()
         .map_err(|e| EngineError::Other(e.to_string()))?;
-    Ok(res)
+    let mut out = res;
+    if let Some(o) = out.as_object_mut() {
+        o.insert("producer_cam".into(), Value::Bool(producer_cam));
+    }
+    Ok(out)
 }
 
 /// The room's mount timings, written beside the engine report so a room
