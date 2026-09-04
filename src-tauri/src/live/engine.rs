@@ -270,6 +270,26 @@ pub fn bootstrap_with_config(module_config_dir: &std::path::Path) -> EngineRepor
 /// BOOT can start there directly — booting 720p30 and resetting to the stored
 /// mode afterwards tears the Metal pipeline down on the main thread at every
 /// room open (the beach ball).
+/// The video modes the engine accepts: 720p/1080p/2160p at 30 or 60.
+/// 2160p ("4K") is additionally gated at SetVideo on a hardware encoder —
+/// a 3840×2160 canvas through x264 is not a product, it is a space heater.
+pub fn video_mode_ok(height: u32, fps: u32) -> bool {
+    matches!(height, 720 | 1080 | 2160) && matches!(fps, 30 | 60)
+}
+
+/// Local-recording bitrate for a canvas: quality-first, 2s keyframes.
+/// 720p 8 Mbps, 1080p 12 Mbps, 2160p 20 Mbps at 30 / 30 Mbps at 60 (the
+/// same ~1.7× step-up per resolution tier as 720→1080, doubled for the
+/// pixel count, plus a frame-rate step that 1080p never needed).
+pub fn record_kbps(height: u32, fps: u32) -> i64 {
+    match (height, fps) {
+        (2160, f) if f >= 60 => 30000,
+        (2160, _) => 20000,
+        (h, _) if h >= 1080 => 12000,
+        _ => 8000,
+    }
+}
+
 pub fn stored_video(dir: Option<&std::path::Path>) -> (u32, u32) {
     let fallback = (720u32, 30u32);
     let Some(dir) = dir else { return fallback };
@@ -281,7 +301,7 @@ pub fn stored_video(dir: Option<&std::path::Path>) -> (u32, u32) {
     };
     let h = v.get("h").and_then(|x| x.as_u64()).unwrap_or(720) as u32;
     let f = v.get("f").and_then(|x| x.as_u64()).unwrap_or(30) as u32;
-    if (h == 720 || h == 1080) && (f == 30 || f == 60) {
+    if video_mode_ok(h, f) {
         (h, f)
     } else {
         fallback
@@ -853,6 +873,11 @@ pub struct Snapshot {
     pub cpu: f64,
     pub video_height: u32,
     pub video_fps: u32,
+    /// A hardware H.264 encoder is present (macOS: any VideoToolbox
+    /// encoder). Gates the 4K picker: Windows/Linux hardware encoders
+    /// (NVENC/AMF/QSV) are not wired yet, so this is false there.
+    #[serde(default)]
+    pub hw_encoder: bool,
 }
 
 pub struct LiveHandle {
@@ -1629,6 +1654,7 @@ pub fn start(
                 let (h, f) = stored_video(Some(&module_config_dir));
                 s.video_height = h;
                 s.video_fps = f;
+                s.hw_encoder = !report.videotoolbox_encoders.is_empty();
                 s.graphics_backend = report.graphics_backend.clone();
                 s.boot_phases_ms = report.boot_phases_ms.clone();
             }
@@ -1914,8 +1940,11 @@ pub fn start(
                             let _ = reply.send(Err("already recording".into()));
                         } else {
                             // Recording rides the same canvas as the stream at
-                            // a quality bitrate; 1080p gets more headroom.
-                            let br = if snap.lock().unwrap().video_height >= 1080 { 12000 } else { 8000 };
+                            // a quality bitrate keyed by canvas + frame rate.
+                            let br = {
+                                let s = snap.lock().unwrap();
+                                record_kbps(s.video_height, s.video_fps)
+                            };
                             match record::Recorder::start(&stamp, br) {
                                 Ok(r) => {
                                     let p = r.path();
@@ -2098,9 +2127,13 @@ pub fn start(
                             sink(&LiveEvent::EngineError {
                                 message: "stop the stream to change video settings".into(),
                             });
-                        } else if !(height == 720 || height == 1080) || !(fps == 30 || fps == 60) {
+                        } else if !video_mode_ok(height, fps) {
                             sink(&LiveEvent::EngineError {
-                                message: "video settings must be 720p/1080p at 30/60fps".into(),
+                                message: "video settings must be 720p/1080p/2160p at 30/60fps".into(),
+                            });
+                        } else if height == 2160 && report.videotoolbox_encoders.is_empty() {
+                            sink(&LiveEvent::EngineError {
+                                message: "4K needs a hardware encoder — coming with NVENC/AMF/QSV".into(),
                             });
                         } else {
                             let module = graphics_module(report.graphics_backend.as_deref());
