@@ -119,6 +119,26 @@ else
   fail=1
 fi
 
+# ── 2c. the hardware-encoder probes ──────────────────────────────────────────
+# obs-nvenc / obs-qsv11 / obs-ffmpeg(AMF) register encoders only after a helper
+# exe, spawned from the RUNNING EXECUTABLE's directory, reports the GPU can
+# encode. bin/ is flattened beside producer.exe, so bin/ is where they must be.
+# A missing helper is not an error anywhere at runtime: the plugin logs one
+# warning and Producer silently streams x264 on a box with a perfectly good
+# NVENC. Same severity as a missing plugin, for the same reason.
+for pair in obs-nvenc:obs-nvenc-test.exe obs-qsv11:obs-qsv-test.exe obs-ffmpeg:obs-amf-test.exe; do
+  plugin="${pair%%:*}"; helper="${pair##*:}"
+  engine_plugins windows | grep -qx "$plugin" || continue
+  if [[ -f "$STAGE/bin/$helper" ]]; then
+    echo "  ok   encoder probe $helper"
+  else
+    echo "  FAIL encoder probe MISSING: bin/$helper - $plugin will register no hardware encoder" >&2
+    found="$(find "$STAGE" -name "$helper" -print -quit 2>/dev/null || true)"
+    [[ -n $found ]] && echo "       (it exists at $found - staging put it in the wrong place)" >&2
+    fail=1
+  fi
+done
+
 # ── 3. zero-Qt scan + import closure ────────────────────────────────────────
 # resolve_python (engine-lib.sh) probes candidates by EXECUTING them, because
 # Windows ships a python3 App Execution Alias that exists on PATH and fails when

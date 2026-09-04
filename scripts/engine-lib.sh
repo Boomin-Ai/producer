@@ -28,7 +28,26 @@ ENGINE_PLUGINS_MACOS=(mac-capture mac-avcapture mac-videotoolbox
 # coreaudio-encoder's capture role (ffmpeg still does aac encode). obs-browser
 # is the one that matters most: guests are browser sources, so without it the
 # guest feature cannot exist on Windows at all.
-ENGINE_PLUGINS_WINDOWS=(win-capture win-dshow win-wasapi obs-browser obs-text)
+#
+# HARDWARE ENCODERS (the Windows counterpart of mac-videotoolbox). At OBS
+# 32.1.2 they live in THREE places, and only two of them are plugins of their
+# own:
+#   obs-nvenc   NVIDIA  ids obs_nvenc_h264_tex / obs_nvenc_h264_soft (+hevc/av1)
+#   obs-qsv11   Intel   ids obs_qsv11_v2 / obs_qsv11_soft_v2 (obs_qsv11 = deprecated)
+#   obs-ffmpeg  AMD     ids h264_texture_amf / h264_fallback_amf -- texture-amf.cpp
+#                       is compiled INTO obs-ffmpeg on x64 Windows, so AMF ships
+#                       with the shared list and needs no entry here.
+# Each one probes the GPU at module load by spawning a helper EXE from the
+# running executable's own directory (os_get_executable_path_ptr):
+# obs-nvenc-test.exe, obs-qsv-test.exe, obs-amf-test.exe. Those land in bin/
+# and are asserted by build-engine-windows.sh and the closure gate; without the
+# helper the plugin loads and registers NOTHING, silently. The vendor runtimes
+# (nvEncodeAPI64.dll / nvcuda.dll, libmfx-gen / VPL dispatch, amfrt64.dll) come
+# from the GPU driver and are loaded dynamically, never imported -- so a box
+# without that GPU simply enumerates no such encoder and the host falls back to
+# obs_x264 (src-tauri/src/live/encoders.rs).
+ENGINE_PLUGINS_WINDOWS=(win-capture win-dshow win-wasapi obs-browser obs-text
+  obs-nvenc obs-qsv11)
 
 # engine_plugins [os] — the full allowlist for a platform.
 engine_plugins() {

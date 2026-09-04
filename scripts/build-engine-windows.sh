@@ -126,6 +126,37 @@ mkdir -p "$STAGE/bin" "$STAGE/obs-plugins/64bit" "$STAGE/data" "$STAGE/licenses"
 # obs64.exe rides along; it is inert and useful for debugging.
 cp -R "$OUT"/. "$STAGE/bin/"
 
+# THE HARDWARE-ENCODER PROBES. obs-nvenc, obs-qsv11 and obs-ffmpeg's AMF path
+# each decide whether to register any encoder by spawning a helper exe and
+# reading its stdout (nvenc-helpers.c nvenc_check, obs-qsv11-plugin-main.c,
+# texture-amf.cpp amf_load). The helper is resolved with
+# os_get_executable_path_ptr(), i.e. RELATIVE TO THE RUNNING EXECUTABLE, which
+# for Producer is producer.exe with bin/ flattened beside it -- so the helpers
+# must be in bin/, and they are: set_target_properties_obs installs every
+# executable except obs-browser-helper to OBS_EXECUTABLE_DESTINATION
+# (bin/64bit), which the wholesale copy above carries. Assert it anyway: a
+# missing helper is the worst failure shape again -- the plugin loads, logs one
+# warning, registers nothing, and every session quietly runs x264.
+for helper in obs-nvenc-test.exe obs-qsv-test.exe obs-amf-test.exe; do
+  case "$helper" in
+    obs-nvenc-test.exe) engine_plugins windows | grep -qx obs-nvenc || continue ;;
+    obs-qsv-test.exe)   engine_plugins windows | grep -qx obs-qsv11 || continue ;;
+    obs-amf-test.exe)   engine_plugins windows | grep -qx obs-ffmpeg || continue ;;
+  esac
+  if [[ -f "$STAGE/bin/$helper" ]]; then
+    echo "staged encoder probe: $helper"
+  else
+    found="$(find "$BUILD" -name "$helper" -print -quit 2>/dev/null || true)"
+    if [[ -n $found ]]; then
+      cp "$found" "$STAGE/bin/"
+      echo "staged encoder probe: $helper (from $found)"
+    else
+      echo "FATAL: $helper not built - its hardware encoder can never register" >&2
+      exit 1
+    fi
+  fi
+done
+
 # THE obs-deps RUNTIME. rundir's bin holds what WE built; obs.dll's dependency
 # closure --- ffmpeg, zlib, x264, curl, rist, srt --- lives in the prebuilt
 # obs-deps bundle, and the no-frontend build never copies it into rundir. Same
