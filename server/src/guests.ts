@@ -186,8 +186,27 @@ export async function updateRoom(
   return loadRoom(env, roomId);
 }
 
+/** Delete is refused while anyone is IN the room — waiting at the door or
+ *  admitted (connected or within the reconnect grace). A room with people in
+ *  it is a session, and a delete would drop them mid-show with no word; the
+ *  host removes or revokes them first. Same verdict the roster shows, so the
+ *  app can explain the refusal with the names it already has. */
 export async function deleteRoom(env: Env, roomId: string): Promise<void> {
   const room = await loadRoom(env, roomId);
+  const rows = await env.DB.prepare(
+    "SELECT status, last_seen_at FROM live_room_guests WHERE room_id = ?1 AND status IN ('waiting', 'accepted')",
+  )
+    .bind(room.id)
+    .all<Pick<GuestRow, "status" | "last_seen_at">>();
+  const present = (rows.results ?? []).filter((g) => rosterState(g) !== "left").length;
+  if (present > 0) {
+    throw new ApiError(
+      409,
+      "room_occupied",
+      present === 1 ? "Someone is in this room — remove them first." : `${present} people are in this room — remove them first.`,
+      { present },
+    );
+  }
   await env.DB.batch([
     env.DB.prepare("DELETE FROM live_room_guests WHERE room_id = ?1").bind(room.id),
     env.DB.prepare("DELETE FROM live_rooms WHERE id = ?1").bind(room.id),

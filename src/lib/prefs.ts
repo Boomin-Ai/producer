@@ -30,3 +30,9 @@ export async function prefSet(key: string, value: string | null): Promise<void> 
   }
   window.dispatchEvent(new Event(PREFS_EVENT));
 }
+
+/** Server rooms the user deleted HERE, so room sync never pulls them back
+ * down when the server still lists them (offline at delete time, a hosted
+ * API without the route, a slow replica). JSON array of
+ * `{ endpoint_id, server_room_id?, external_ref? }`; see src/lib/roomSync.ts. */
+export const PREF_ROOM_TOMBSTONES = "room_tombstones";

@@ -2685,6 +2685,9 @@ export function LiveView({
   const [sceneSettings, setSceneSettings] = useState<string | null>(null);
   /** Which source's filter chain the Sources panel is drilled into. */
   const [filterFor, setFilterFor] = useState<{ id: string; label: string; media: "video" | "audio" } | null>(null);
+  /** Device picking drills into the Sources panel exactly like Filters does —
+   *  same crumb, same place — instead of popping a floating menu. */
+  const [deviceFor, setDeviceFor] = useState<{ key: string; label: string } | null>(null);
   /** Mini-editor popover for adding an open-list source. */
   const [srcSubPop, setSrcSubPop] = useState<"text" | "color" | "window" | null>(null);
 
@@ -4171,6 +4174,30 @@ export function LiveView({
             />
           );
         }
+        if (deviceFor) {
+          return (
+            <div className="rm-filters">
+              <div className="rm-filters-head">
+                <button className="rm-crumb" onClick={() => setDeviceFor(null)}>
+                  {ic.chevRight}
+                  Sources
+                </button>
+                <span className="rm-filters-title">{deviceFor.label} · Device</span>
+              </div>
+              {deviceFor.key.startsWith("window:") ? (
+                <div className="rm-devices">
+                  <WindowPickerList
+                    itemId={deviceFor.key.slice(7)}
+                    onPick={replaceWindowSource}
+                    onPicked={() => setDeviceFor(null)}
+                  />
+                </div>
+              ) : (
+                <DevicePicker kind={deviceFor.key} onClose={() => setDeviceFor(null)} />
+              )}
+            </div>
+          );
+        }
         const liveItems = sources.items ?? [];
         const itemIdFor = (key: string) => (key === "alerts" ? "overlay" : key);
         const itemFor = (key: string) => liveItems.find((i) => i.id === itemIdFor(key));
@@ -4301,7 +4328,7 @@ export function LiveView({
                         <button
                           className={`rm-row-edit${srcSettings === t.key ? " on" : ""}`}
                           title="Source settings"
-                          onClick={(e) => {
+                          onClick={() => {
                             // Docked on a ROW (sheet or top rail) → the
                             // horizontal settings strip beside the dock.
                             // Docked on a sidebar → the strip has nowhere to
@@ -4311,8 +4338,7 @@ export function LiveView({
                             } else if (t.key === "alerts") {
                               setOverlayInline(true);
                             } else if (t.device) {
-                              setPopAnchor(e.currentTarget);
-                              setDeviceMenu((d) => (d === t.device ? null : t.device!));
+                              setDeviceFor({ key: t.device, label: t.label });
                             }
                           }}
                         >

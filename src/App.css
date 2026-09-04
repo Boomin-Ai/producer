@@ -3410,7 +3410,45 @@ textarea::placeholder {
 }
 
 .cr-room.onair .cr-room-del {
-  display: none;
+  /* Still visible on air: the click explains itself instead of vanishing. */
+  opacity: 0.55;
+}
+
+/* Two-step delete: the question replaces the ✕, inside the card. */
+.cr-room.confirming {
+  border-color: color-mix(in srgb, var(--red) 45%, transparent);
+  cursor: default;
+}
+.cr-room-confirm {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 20px);
+}
+.cr-room-confirm-q {
+  font-size: 11.5px;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cr-room-confirm .cr-ghost {
+  padding: 3px 9px;
+  font-size: 11.5px;
+  border-radius: 7px;
+}
+.cr-room-confirm .cr-ghost.danger {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 40%, transparent);
+}
+/* Why the delete was refused — inline, amber, self-clearing. */
+.cr-room-note {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--amber);
 }
 
 /* remove-scene affordance (custom scenes only) */
@@ -5656,32 +5694,103 @@ textarea::placeholder {
 }
 /* The opaque ground, viewport-pinned: an element-height gradient can leave
    the window bottom bare; a fixed sheet cannot. */
+/* The glass column's width: the rail alone, or rail + Settings. Everything
+   that clears it (the opaque ground, the curve, the home body) reads this
+   one number and transitions with it, so Settings PUSHES content — the
+   surfaces shift right as one piece, nothing is overlaid. */
+.cr.cr--vibrant {
+  --rail-w: 88px;
+  --settings-w: 300px;
+}
+.cr.cr--vibrant.settings-open {
+  --rail-w: calc(88px + var(--settings-w));
+}
 #root > .cr.cr--vibrant::after {
   content: "";
   position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
-  left: 88px;
+  left: var(--rail-w);
   z-index: -1;
   background: var(--rail-bg);
+  transition: left 0.26s ease;
 }
 #root > .cr.cr--vibrant::before {
   content: "";
   position: fixed;
-  left: 72px;
+  left: calc(var(--rail-w) - 16px);
   top: 0;
   bottom: 0;
   width: 16px;
   z-index: -1;
   background: var(--rail-bg);
   border-radius: 16px 0 0 16px;
+  transition: left 0.26s ease;
 }
 
 /* ── Home rail — full-height frosted column, inset + rounded ───────────── */
 .cr.cr--vibrant .cr-home {
-  margin-left: 88px;
+  margin-left: var(--rail-w);
   padding-left: 6px;
+  transition: margin-left 0.26s ease;
+}
+
+/* ── Settings — a surface that expands OUT of the rail ────────────────────
+   Same material as the rail (bare over the native glass, no card chrome),
+   sitting between the rail and the curved edge of the content ground. Width
+   animates 0 → --settings-w; the content mounts only while shown. */
+.home-settings {
+  position: fixed;
+  left: 72px;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  z-index: 39;
+  overflow: hidden;
+  background: transparent;
+  transition: width 0.26s ease;
+}
+.home-settings.open {
+  width: var(--settings-w, 340px);
+}
+.home-settings-in {
+  width: var(--settings-w, 340px);
+  height: 100%;
+  overflow-y: auto;
+  padding: 48px 22px 24px 8px; /* clear the traffic lights, like the rail */
+  display: flex;
+  flex-direction: column;
+  color: var(--rail-fg);
+}
+.home-settings-in .cr-sheet-head {
+  padding-left: 4px;
+}
+.home-rail-back {
+  background: rgba(255, 255, 255, 0.1);
+  color: #eef1f6;
+}
+.home-rail-back:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* Narrow: no room to push — Settings takes the window over, right of the
+   rail, on an opaque ground. */
+@media (max-width: 860px) {
+  .cr.cr--vibrant.settings-open {
+    --rail-w: 88px;
+  }
+  .home-settings {
+    z-index: 45;
+    background: var(--rail-bg);
+    border-radius: 16px 0 0 16px;
+  }
+  .home-settings.open {
+    width: calc(100vw - 72px);
+  }
+  .home-settings-in {
+    width: calc(100vw - 72px);
+  }
 }
 .home-rail {
   position: fixed;
@@ -8406,3 +8515,164 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .cr-firewall-text { flex: 1; min-width: 0; }
 .cr-firewall-sub { color: var(--muted-fg); font-size: 12px; }
 .cr-firewall-btn { flex-shrink: 0; }
+
+
+/* ═══ Settings panel (beside the rail): flat, one top bar, no card fills ═══ */
+.set .set-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 0 14px; margin-bottom: 18px; border-bottom: 1px solid oklch(1 0 0 / 0.08); }
+.set .set-top .cr-sheet-title { margin: 0; }
+.set .set-top-r { display: flex; align-items: center; gap: 6px; position: relative; }
+.set .set-ver { font-size: 11.5px; color: var(--fg-2); padding: 4px 9px; border-radius: 999px; border: 1px solid oklch(1 0 0 / 0.1); background: none; font-variant-numeric: tabular-nums; }
+.set .set-ver.update { color: #06110b; background: var(--mint); border-color: transparent; cursor: pointer; font-weight: 700; }
+.set .set-ver.busy { color: var(--mint); border-color: oklch(0.75 0.14 165 / 0.4); }
+.set .set-keys { position: relative; }
+.set .set-keys-btn { font-size: 11.5px; color: var(--fg-1); padding: 4px 9px; border-radius: 999px; border: 1px solid oklch(1 0 0 / 0.1); background: none; cursor: pointer; }
+.set .set-keys-btn.on, .set .set-keys-btn:hover { background: oklch(1 0 0 / 0.06); }
+.set .set-keys-backdrop { position: fixed; inset: 0; z-index: 5; }
+.set .set-keys-pop { position: absolute; right: 0; top: calc(100% + 8px); z-index: 6; width: 300px; padding: 8px 12px; border-radius: 12px; border: 1px solid oklch(1 0 0 / 0.1); background: oklch(0.16 0.01 260 / 0.92); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); box-shadow: 0 18px 44px oklch(0 0 0 / 0.5); }
+.set .ks.compact { gap: 0; }
+.set .ks.compact .ks-row { padding: 6px 0; min-height: 0; font-size: 12.5px; gap: 10px; border-bottom: 1px solid oklch(1 0 0 / 0.06); }
+.set .ks.compact .ks-row:last-child { border-bottom: 0; }
+.set .ks.compact .ks-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.set .ks.compact .ks-key, .set .ks.compact .ks-row button { padding: 2px 8px; font-size: 11.5px; min-width: 0; }
+.set .set-list { display: flex; flex-direction: column; }
+.set .set-list .cr-sheet-row { background: none; border: 0; border-radius: 0; padding: 10px 2px; border-bottom: 1px solid oklch(1 0 0 / 0.07); }
+.set .set-list .cr-sheet-row:last-of-type { border-bottom: 0; }
+.set .set-add { align-self: flex-start; margin-top: 10px; }
+.set .set-gap { margin-top: 28px; }
+.set .upd-sheet .upd-item { background: none; border: 0; padding: 12px 0; border-bottom: 1px solid oklch(1 0 0 / 0.07); border-radius: 0; }
+/* What's new is a window, not the whole panel: fixed height, scrolls inside. */
+.set .upd-sheet { max-height: 220px; overflow-y: auto; padding-right: 6px; border: 1px solid oklch(1 0 0 / 0.07); border-radius: 10px; padding: 2px 10px; }
+.set .upd-sheet .upd-item:last-child { border-bottom: 0; }
+
+/* Settings › channels + dev: same flat grammar as the rest of the panel */
+.set .set-channels { margin: 0; padding: 0; background: none; border: 0; }
+.set .set-channels .cr-channels { gap: 6px; }
+.set .set-channels .cr-chip { background: none; border: 1px solid oklch(1 0 0 / 0.1); box-shadow: none; }
+.set .set-channels .cr-chip.static { background: none; }
+.set .set-channels .cr-chip.add { border-style: dashed; }
+.set .set-channels .cr-dest-editor { background: none; border: 1px solid oklch(1 0 0 / 0.08); border-radius: 10px; margin-top: 10px; }
+
+/* version pill opens What's new as a popover; the panel body stays short */
+.set .set-ver { cursor: pointer; }
+.set .set-ver.on, .set button.set-ver:hover { background: oklch(1 0 0 / 0.06); color: var(--fg-1); }
+.set .set-news-pop { position: absolute; right: 0; top: calc(100% + 8px); z-index: 6; width: 380px; padding: 10px 12px 6px; border-radius: 12px; border: 1px solid oklch(1 0 0 / 0.1); background: oklch(0.16 0.01 260 / 0.94); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); box-shadow: 0 18px 44px oklch(0 0 0 / 0.5); }
+.set .set-pop-head { font-weight: 600; color: var(--fg-1); font-size: 13px; display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.set .set-pop-sub { font-weight: 400; color: var(--fg-2); font-size: 11.5px; }
+.set .set-news-pop .upd-sheet { border: 0; padding: 0 4px 0 0; max-height: 320px; }
+
+/* Settings › channels: connect rows + a flat destination editor */
+.set .set-connect { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.set .set-connect-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 30px; }
+.set .set-connect-k { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-2); min-width: 64px; }
+.set .set-connect-sub { font-size: 12px; color: var(--fg-2); }
+.set .set-plat { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; border: 1px solid oklch(1 0 0 / 0.12); background: none; color: var(--fg-1); font-size: 12px; cursor: pointer; }
+.set .set-plat:hover { background: oklch(1 0 0 / 0.06); }
+.set .set-plat.busy { border-color: oklch(0.75 0.14 165 / 0.5); color: var(--mint); }
+.set .set-connect-pending { font-size: 12.5px; color: var(--fg-2); display: flex; gap: 6px; align-items: center; }
+.set .set-connect-error { font-size: 12px; color: #ffb4b4; border: 1px solid oklch(0.7 0.18 25 / 0.35); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; }
+.set .cr-dest-editor { margin-top: 12px; max-width: none; }
+.set .live-editor { background: none; border: 1px solid oklch(1 0 0 / 0.08); border-radius: 10px; padding: 12px; }
+.set .live-editor select, .set .live-editor input { appearance: none; -webkit-appearance: none; background: oklch(1 0 0 / 0.04); border: 1px solid oklch(1 0 0 / 0.1); border-radius: 8px; color: var(--fg-1); padding: 8px 10px; font-size: 13px; box-shadow: none; }
+.set .live-editor select { background-image: linear-gradient(45deg, transparent 50%, var(--fg-2) 50%), linear-gradient(135deg, var(--fg-2) 50%, transparent 50%); background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 28px; }
+.set .live-editor button { background: none; border: 1px solid oklch(1 0 0 / 0.12); border-radius: 999px; padding: 7px 14px; color: var(--fg-1); }
+.set .live-editor button.primary { background: var(--mint); color: #06110b; border-color: transparent; font-weight: 700; }
+
+/* Settings › channels: one block per source of channels */
+.set .set-sub { margin-top: 12px; padding: 12px 0; border-top: 1px solid oklch(1 0 0 / 0.07); }
+.set .set-sub:first-of-type { border-top: 0; }
+.set .set-sub-h { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.set .set-sub-h .dot { width: 7px; height: 7px; border-radius: 50%; }
+.set .set-sub-t { font-weight: 600; color: var(--fg-1); font-size: 13.5px; }
+.set .set-sub-k { font-size: 11.5px; color: var(--fg-2); }
+.set .set-sub-h .set-plat.add { margin-left: auto; }
+.set .set-sub-empty { font-size: 12.5px; color: var(--fg-2); }
+.set .set-sub .cr-channels { gap: 6px; align-items: center; }
+.set .set-sub .set-connect-pending, .set .set-sub .set-connect-error { margin-top: 8px; }
+.set .cr-label-sub { font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--fg-2); }
+.ws-gear.ws-drop:hover { color: #ffb4b4; }
+
+/* ═══ Settings: a list on the glass, a page on the surface ═══ */
+.set-nav { padding-right: 12px; }
+.set-nav-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 16px; }
+.set-nav-ws { font-size: 12px; color: var(--fg-2); }
+.set-nav-list { display: flex; flex-direction: column; gap: 2px; }
+.set-nav-item { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 9px 12px; border-radius: 10px; border: 1px solid transparent; background: none; color: var(--fg-1); text-align: left; cursor: pointer; }
+.set-nav-item:hover { background: oklch(1 0 0 / 0.05); }
+.set-nav-item.on { background: oklch(1 0 0 / 0.08); border-color: oklch(1 0 0 / 0.12); }
+.set-nav-item.soon .set-nav-label::after { content: "soon"; margin-left: 8px; font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); }
+.set-nav-label { font-weight: 600; font-size: 13.5px; }
+.set-nav-sub { font-size: 11.5px; color: var(--fg-2); }
+.set-page { margin-left: var(--rail-w); transition: margin-left 0.26s ease; }
+.set-page-in { max-width: 760px; padding: 40px 32px 64px; }
+.set-page-head { display: flex; flex-direction: column; gap: 4px; margin-bottom: 22px; padding-bottom: 14px; border-bottom: 1px solid oklch(1 0 0 / 0.08); }
+.set-page-title { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg-1); }
+.set-page-sub { font-size: 13px; color: var(--fg-2); }
+.set-page .set-top { border-bottom: 0; margin-bottom: 8px; padding: 0; }
+.set-page .set-top .cr-sheet-title { display: none; }
+.set-page .set-top-r { margin-left: 0; }
+.set-page .cr-label.set-gap:first-of-type { margin-top: 0; }
+.set-soon { font-size: 13.5px; color: var(--fg-2); line-height: 1.55; max-width: 560px; }
+/* A hairline between the rail and the settings list, and the list sits in its own soft section. */
+.home-settings.open::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 1px; background: oklch(1 0 0 / 0.1); }
+.set-nav { padding-left: 18px; }
+.set-nav-list { padding: 6px; border-radius: 14px; border: 1px solid oklch(1 0 0 / 0.08); background: oklch(1 0 0 / 0.025); }
+
+/* Settings open: the window wordmark would sit on top of the glass column — hide it; one-line header. */
+.cr.cr--vibrant.settings-open .cr-brand { opacity: 0; }
+.set-nav-head { flex-direction: row; align-items: baseline; gap: 10px; margin: 6px 0 14px; }
+.set-nav-head .cr-sheet-title { font-size: 20px; }
+.set-nav-ws { font-size: 11.5px; color: var(--fg-2); padding: 2px 8px; border-radius: 999px; border: 1px solid oklch(1 0 0 / 0.1); }
+
+/* App › updates: status line, the latest release featured, earlier ones in a short list */
+.set .set-ver { cursor: default; }
+.set-upd { display: flex; flex-direction: column; gap: 12px; }
+.set-upd-status { font-size: 13px; color: var(--fg-1); }
+.set-upd-latest { border: 1px solid oklch(1 0 0 / 0.1); border-radius: 12px; padding: 14px 16px; background: oklch(1 0 0 / 0.03); cursor: pointer; }
+.set-upd-latest:hover { background: oklch(1 0 0 / 0.05); }
+.set-upd-latest-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.set-upd-latest-name { font-weight: 600; color: var(--fg-1); flex: 1; }
+.set-upd-latest-body p { margin: 0 0 4px; font-size: 13px; color: var(--fg-2); line-height: 1.5; }
+.set-upd-older { font-size: 11px; font-weight: 700; letter-spacing: 0.16em; color: var(--fg-3); margin-top: 4px; }
+.set-upd .upd-sheet { max-height: 200px; }
+
+/* Settings glass: drill-in header like Sources → Filters */
+.set-nav-head.rm-filters-head { margin: 4px 0 14px; }
+.set-nav-head .rm-filters-title { font-size: 15px; }
+/* App page: a top nav, CapCut/OBS style */
+.set-tabs { display: flex; align-items: center; gap: 4px; margin-bottom: 18px; padding-bottom: 10px; border-bottom: 1px solid oklch(1 0 0 / 0.08); }
+.set-tabs > button { background: none; border: 0; padding: 6px 12px; border-radius: 8px; color: var(--fg-2); font-size: 13px; font-weight: 600; cursor: pointer; }
+.set-tabs > button.on { color: var(--fg-1); background: oklch(1 0 0 / 0.08); }
+.set-tabs-spacer { flex: 1; }
+.set-keys-intro { font-size: 13px; color: var(--fg-2); line-height: 1.5; max-width: 560px; }
+.set-keys-list { max-width: 560px; }
+.set-keys-list .ks-row { padding: 9px 0; font-size: 13px; }
+
+/* Room cards: the brand's main stage */
+.cr-room-main { position: absolute; top: 14px; right: 16px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.14em; color: #06110b; background: var(--mint); padding: 3px 7px; border-radius: 999px; }
+.cr-room-makemain { position: absolute; top: 12px; right: 40px; font-size: 11px; color: var(--fg-3); opacity: 0; transition: opacity 120ms ease; cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+.cr-room:hover .cr-room-makemain { opacity: 1; }
+.cr-room-makemain:hover { color: var(--mint); background: oklch(1 0 0 / 0.06); }
+
+/* Room card: one ⋯ menu instead of a row of chips */
+.cr-room-more { position: absolute; top: 12px; right: 12px; z-index: 3; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 8px; color: var(--fg-3); font-size: 16px; line-height: 0; opacity: 0; transition: opacity 120ms ease, background 120ms ease; cursor: pointer; }
+.cr-room:hover .cr-room-more, .cr-room-more.on { opacity: 1; }
+.cr-room-more:hover, .cr-room-more.on { background: oklch(1 0 0 / 0.08); color: var(--fg-1); }
+/* the main-stage mark yields to the ⋯ */
+.cr-room-main { position: absolute; top: 14px; right: 46px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.14em; color: #06110b; background: var(--mint); padding: 3px 7px; border-radius: 999px; }
+.cr-room-menu-backdrop { position: fixed; inset: 0; z-index: 40; cursor: default; }
+.cr-room-menu { position: absolute; top: 44px; right: 12px; z-index: 41; min-width: 220px; display: flex; flex-direction: column; padding: 6px; border-radius: 12px; border: 1px solid oklch(1 0 0 / 0.12); background: oklch(0.15 0.012 260); box-shadow: 0 22px 52px oklch(0 0 0 / 0.65); text-align: left; font-size: 13px; }
+.cr-room-menu-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: 8px; color: var(--fg-1); }
+.cr-room-menu-row.act { cursor: pointer; }
+.cr-room-menu-row.act:hover { background: oklch(1 0 0 / 0.06); }
+.cr-room-menu-row.danger { color: #ffb4b4; }
+.cr-room-menu-k { color: var(--fg-2); font-size: 12px; }
+.cr-room-menu .cr-room-link, .cr-room-menu .cr-room-share { position: static; }
+.cr-room.menu-open { z-index: 22; }
+
+/* Connected channel chips: unhook in place */
+.set .cr-chip.chan { gap: 7px; }
+.set .cr-chip.chan .chan-x { background: none; border: 0; color: var(--fg-3); font-size: 11px; cursor: pointer; padding: 0 2px; border-radius: 5px; opacity: 0; transition: opacity 120ms ease; }
+.set .cr-chip.chan:hover .chan-x, .set .cr-chip.chan.confirming .chan-x { opacity: 1; }
+.set .cr-chip.chan .chan-x:hover { color: #ffb4b4; }
+.set .cr-chip.chan .chan-x.go { color: #ffb4b4; font-weight: 700; }
+.set .set-connect-error.inline { display: block; margin-top: 6px; }

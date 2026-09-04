@@ -202,6 +202,40 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
+    /// Delete a SERVER room. The server refuses (409 `room_occupied` here,
+    /// 409 `room_on_air` on Boomin) while the room is a live session — that
+    /// verdict comes back as `Ok({ ok: false, code, message })`, a decision
+    /// rather than a transport failure, so the app can keep the room and say
+    /// why. Anything else non-2xx is an error (offline, missing route, 404).
+    pub async fn delete_room(&self, room_id: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .delete(self.root_url(&format!("/v1/app/live/rooms/{room_id}")))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        let status = resp.status().as_u16();
+        if status == 409 || status == 422 {
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            let code = b
+                .pointer("/error/code")
+                .or_else(|| b.get("code"))
+                .and_then(Value::as_str)
+                .unwrap_or("refused")
+                .to_string();
+            return Ok(serde_json::json!({
+                "ok": false,
+                "code": code,
+                "message": error_message(&b, status),
+            }));
+        }
+        if !(200..300).contains(&status) {
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(serde_json::json!({ "ok": true }))
+    }
+
     /// Who is in this room right now. Producer polls this and reconciles its
     /// browser sources against it — guests arrive via the room link on their
     /// own, so the roster is the only way to learn about them.
@@ -669,6 +703,24 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
+    /// Make this room the brand's main stage (the one Network bookings and
+    /// deals land in). The API moves the flag; a brand always has exactly one.
+    pub async fn room_set_default(&self, room_id: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .patch(self.root_url(&format!("/v1/app/live/rooms/{room_id}")))
+            .bearer_auth(&self.token)
+            .json(&serde_json::json!({ "is_default": true }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     pub async fn create_connect_session(&self, platform: &str) -> EngineResult<Value> {
         let resp = self
             .http
@@ -682,6 +734,24 @@ impl ProducerClient {
             return Err(EngineError::Other(error_message(&body, status)));
         }
         Ok(resp.json().await?)
+    }
+
+    /// Disconnect a posting channel (contract: DELETE /v1/channels/:id). The
+    /// same path on both backends; Boomin may answer 501 until its own route
+    /// lands, and the message says where to do it instead.
+    pub async fn disconnect_channel(&self, channel_id: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .delete(self.url(&format!("/v1/channels/{channel_id}")))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let body: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&body, status)));
+        }
+        Ok(resp.json().await.unwrap_or(Value::Null))
     }
 
     /// Request an upload slot (contract: POST /v1/media/uploads).

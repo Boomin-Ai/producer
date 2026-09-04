@@ -90,6 +90,10 @@ export const ipc = {
   /** Bind another brand of the same account as its own workspace (token reused). */
   boominAddBrand: (endpointId: string, brandSlug: string) =>
     invoke<{ id: string; refreshed?: boolean }>("boomin_add_brand", { endpointId, brandSlug }),
+  /** Disconnect a posting channel. Boomin answers 501 until its own route
+   *  lands; the message names where to do it. */
+  disconnectChannel: (endpointId: string, channelId: string) =>
+    invoke("disconnect_channel", { endpointId, channelId }),
   connectChannel: (endpointId: string, platform: string) =>
     invoke<{ browser_url: string; expires_at: string }>("connect_channel", { endpointId, platform }),
   endpointChannels: (endpointId: string) =>
@@ -530,6 +534,8 @@ export interface ServerRoom {
   status?: string | null;
   archived_at?: string | null;
   deleted_at?: string | null;
+  /** Boomin: the brand's main stage — where Network bookings and deals land. */
+  is_default?: boolean;
 }
 
 /** Every server room the brand owns — the reconcile input for room sync. */
@@ -539,6 +545,13 @@ export const listServerRooms = (endpointId: string) =>
 /** Rename the SERVER room (server id). Local rename happens separately. */
 export const setServerRoomTitle = (endpointId: string, roomId: string, title: string) =>
   invoke("room_set_title", { endpointId, roomId, title });
+
+/** Delete the SERVER room (server id). `{ ok: false, code, message }` is
+ * the server REFUSING (someone is in the room / it is on air) — a decision
+ * the caller must respect. A rejected promise is a transport failure or a
+ * missing route: the caller may proceed locally and tombstone the id. */
+export const deleteServerRoom = (endpointId: string, roomId: string) =>
+  invoke<{ ok: boolean; code?: string; message?: string }>("room_delete", { endpointId, roomId });
 
 export interface NetworkStatus {
   membership?: { status?: string } | null;
@@ -667,6 +680,10 @@ export const roomSetVisibility = (
   roomId: string,
   visibility: "private" | "connections" | "public",
 ) => invoke("room_set_visibility", { endpointId, roomId, visibility });
+
+/** Make a registered room the brand's main stage (server id). Boomin only. */
+export const roomSetDefault = (endpointId: string, roomId: string) =>
+  invoke("room_set_default", { endpointId, roomId });
 
 export interface RoomGuest {
   id: string;

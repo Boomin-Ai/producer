@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ConsoleHost } from "./Console";
-import type { Channel, EndpointInfo, Job, LiveDestination, LiveRoom, LiveSnapshot } from "../lib/ipc";
+import type { Channel, EndpointInfo, Job, LiveDestination, LiveRoom, LiveSnapshot, ServerRoom } from "../lib/ipc";
 import type { TargetResult } from "../lib/ipc";
 import { WORKSPACE_EVENT, activeEndpointId, isBoomin, resolveActiveEndpoint, setActiveEndpointId } from "../lib/workspace";
 import { PREFS_EVENT, PREF_NETWORK_INVITE_DISMISSED, prefGet, prefSet } from "../lib/prefs";
@@ -24,12 +24,14 @@ import { ipc,
   type NetworkConnectionRow,
   type NetworkDeal,
   type NetworkLiveRoom,
+  listServerRooms,
+  roomSetDefault,
 } from "../lib/ipc";
 import { demoOn, setDemo } from "../lib/demo";
 import { markHomePainted, markRoomClick } from "../lib/perf";
 import { KEYMAP, getKey, setKey, resetKey, displayKey, type KeyBinding } from "../lib/keys";
 import { liveRoomId, parseConfig, serializeConfig } from "../lib/room";
-import { renameRoom, syncRooms } from "../lib/roomSync";
+import { deleteRoomEverywhere, renameRoom, roomOccupancy, syncRooms } from "../lib/roomSync";
 import { useUpdater } from "../lib/updater";
 import { DestinationEditor, LiveView } from "./Live";
 
@@ -223,7 +225,27 @@ export function Home({
   onEndpointsChanged?: () => void;
 }) {
   const [view, setView] = useState<MainView>({ kind: "home" });
+  // Settings is a rail-side surface: it expands out of the left rail and
+  // pushes the home surfaces right (never a panel over them). It only exists
+  // at home, so opening it from another view returns home first.
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("app");
+  const openSettings = useCallback(() => {
+    setView({ kind: "home" });
+    setSettingsOpen(true);
+  }, []);
+  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  // Content stays mounted through the collapse so the width animates closed
+  // over real content rather than snapping.
+  const [settingsShown, setSettingsShown] = useState(false);
+  useEffect(() => {
+    if (settingsOpen) {
+      setSettingsShown(true);
+      return;
+    }
+    const t = setTimeout(() => setSettingsShown(false), 280);
+    return () => clearTimeout(t);
+  }, [settingsOpen]);
   // Home is SURFACES, not one long page: Rooms (the stage list) and Manager
   // (channels, network, rundown — productions soon). The rail switches them.
   const [surface, setSurface] = useState<"rooms" | "manager">("rooms");
@@ -375,7 +397,7 @@ export function Home({
   }
 
   return (
-    <div className={view.kind === "home" ? "cr cr--vibrant" : "cr"}>
+    <div className={view.kind === "home" ? `cr cr--vibrant${settingsOpen ? " settings-open" : ""}` : "cr"}>
       <header className="cr-top" data-tauri-drag-region>
         <div className="cr-top-left" data-tauri-drag-region>
           {view.kind !== "home" && (
@@ -411,7 +433,6 @@ export function Home({
               <div className="cr-menu-backdrop" onClick={() => setAccountOpen(false)} />
               <div className="cr-menu">
                 <button onClick={() => { setAccountOpen(false); setView({ kind: "console", section: "general" }); }}>Brand settings</button>
-                <button onClick={() => { setAccountOpen(false); setSettingsOpen(true); }}>App &amp; workspaces</button>
                 {onSignOut && endpoints.some((e) => e.kind === "connected") && (
                   <button className="danger" onClick={() => { setAccountOpen(false); onSignOut(); }}>Sign out</button>
                 )}
@@ -425,29 +446,37 @@ export function Home({
         <SystemBanner message={loadError} onDismiss={() => setErrorDismissed(true)} />
       )}
 
-      {settingsOpen && (
-        <SettingsSheet
-          endpoints={endpoints}
-          destinations={destinations}
-          channels={channels}
-          onChannelsChanged={loadLive}
-          onAddEndpoint={() => {
-            setSettingsOpen(false);
-            onAddEndpoint();
-          }}
-          onRemoveEndpoint={onRemoveEndpoint}
-          updater={updater}
-          onClose={() => setSettingsOpen(false)}
-        />
+      {view.kind === "home" && (
+        <aside className={`home-settings${settingsOpen ? " open" : ""}`} aria-hidden={!settingsOpen}>
+          {settingsShown && (
+            <SettingsPanel
+              mode="nav"
+              section={settingsSection}
+              onSection={setSettingsSection}
+              endpoints={endpoints}
+              destinations={destinations}
+              channels={channels}
+              onChannelsChanged={loadLive}
+              updater={updater}
+              onClose={closeSettings}
+            />
+          )}
+        </aside>
       )}
 
       {view.kind === "home" && (
         <HomeRail
           brandName={(endpoints.find((e) => e.id === activeId) ?? endpoints.find((e) => e.kind === "connected") ?? endpoints[0])?.name ?? "Workspace"}
           surface={surface}
-          onSurface={setSurface}
+          onSurface={(s) => {
+            closeSettings();
+            setSurface(s);
+          }}
           onCompose={() => setView({ kind: "compose" })}
-          onSettings={() => setProfileOpen((v) => !v)}
+          onProfile={() => setProfileOpen((v) => !v)}
+          settingsOpen={settingsOpen}
+          onSettings={() => (settingsOpen ? closeSettings() : openSettings())}
+          onBack={closeSettings}
         />
       )}
       {view.kind === "home" && profileOpen && (
@@ -461,10 +490,7 @@ export function Home({
             setProfileOpen(false);
             onEndpointsChanged?.();
           }}
-          onSettings={() => {
-            setProfileOpen(false);
-            setSettingsOpen(true);
-          }}
+          onRemoveEndpoint={onRemoveEndpoint}
           onOpenConsole={(section, endpointId) => {
             if (endpointId && endpointId !== activeId) {
               setActiveEndpointId(endpointId);
@@ -483,7 +509,20 @@ export function Home({
           section={view.section}
         />
       )}
-      {view.kind === "home" && (
+      {view.kind === "home" && settingsOpen && (
+        <SettingsPanel
+          mode="page"
+          section={settingsSection}
+          onSection={setSettingsSection}
+          endpoints={endpoints}
+          destinations={destinations}
+          channels={channels}
+          onChannelsChanged={loadLive}
+          updater={updater}
+          onClose={closeSettings}
+        />
+      )}
+      {view.kind === "home" && !settingsOpen && (
         <ControlRoomHome
           surface={surface}
           rooms={rooms}
@@ -552,44 +591,103 @@ function SystemBanner({ message, onDismiss }: { message: string; onDismiss: () =
 /** Channels — live destinations + social channels. Lives in SETTINGS (the
  * profile popout): channels are workspace facts you configure, not a surface
  * you work in. */
+/** A connected posting channel. Unhooking is two steps and says why it failed
+ *  — Boomin answers 501 on this route until its own lands. */
+function ChannelChip({
+  channel,
+  endpointId,
+  onError,
+  onChanged,
+}: {
+  channel: Channel;
+  endpointId: string;
+  onError: (message: string | null) => void;
+  onChanged: () => void;
+}) {
+  const [state, setState] = useState<"idle" | "confirm" | "busy">("idle");
+  const drop = async () => {
+    setState("busy");
+    onError(null);
+    try {
+      await ipc.disconnectChannel(endpointId, channel.id);
+      onChanged();
+    } catch (e) {
+      onError(String(e).replace(/^Error:\s*/, ""));
+      setState("idle");
+    }
+  };
+  return (
+    <span className={`cr-chip static chan${state === "confirm" ? " confirming" : ""}`} title={channel.platform}>
+      <span className="cr-chip-dot" style={{ background: PRESET_TONE[channel.platform] ?? "#8b93a7" }} />
+      {channel.display_name}
+      <span className="cr-chip-kind">{channel.platform}</span>
+      {state === "idle" && (
+        <button className="chan-x" title={`Disconnect ${channel.display_name}`} onClick={() => setState("confirm")}>✕</button>
+      )}
+      {state === "confirm" && (
+        <>
+          <button className="chan-x go" onClick={() => void drop()}>Disconnect</button>
+          <button className="chan-x" onClick={() => setState("idle")}>Cancel</button>
+        </>
+      )}
+      {state === "busy" && <span className="cr-chip-kind">…</span>}
+    </span>
+  );
+}
+
 function ChannelsBlock({
   destinations,
   channels,
+  endpoints,
   onChanged,
 }: {
   destinations: LiveDestination[];
   channels: Channel[];
+  endpoints: EndpointInfo[];
   onChanged: () => void;
 }) {
   const [addingDest, setAddingDest] = useState(false);
   const [editingDest, setEditingDest] = useState<LiveDestination | null>(null);
+  // Posting channels connect by OAuth: the server mints a browser session, the
+  // platform calls the server back, the token lands there. Self-hosted
+  // workspaces drive it from here; Boomin workspaces connect in Boomin.
+  const [connecting, setConnecting] = useState<{ ep: string; platform: string } | null>(null);
+  const [connectError, setConnectError] = useState<string | null>(null);
+  async function startConnect(endpointId: string, platform: string) {
+    setConnectError(null);
+    try {
+      const { browser_url } = await ipc.connectChannel(endpointId, platform);
+      await openUrl(browser_url);
+      setConnecting({ ep: endpointId, platform });
+    } catch (e) {
+      setConnectError(String(e).replace(/^Error:\s*/, ""));
+    }
+  }
   return (
-      <section className="cr-section" id="sec-channels">
-        <div className="cr-label">CHANNELS</div>
-        <div className="cr-channels">
-          {destinations.map((d) => (
-            <button
-              key={d.id}
-              className={`cr-chip${d.enabled ? "" : " off"}`}
-              title={`${d.preset} · key in Keychain — click to edit`}
-              onClick={() => setEditingDest(d)}
-            >
-              <span className="cr-chip-dot" style={{ background: PRESET_TONE[d.preset] ?? "#8b93a7" }} />
-              {d.label}
-              <span className="cr-chip-kind">live</span>
-            </button>
-          ))}
-          {channels.map((c) => (
-            <span key={c.id} className="cr-chip static" title={`${c.platform} via ${c.endpoint_kind === "connected" ? "Boomin" : "self-hosted"}`}>
-              <span className="cr-chip-dot" style={{ background: PRESET_TONE[c.platform] ?? "#8b93a7" }} />
-              {c.display_name}
-              <span className="cr-chip-kind">{c.platform}</span>
-            </span>
-          ))}
-          <button className="cr-chip add" onClick={() => setAddingDest(true)}>
-            + Add
-          </button>
-        </div>
+      <section className="cr-section set-channels" id="sec-channels">
+        <div className="cr-label set-gap">CHANNELS <span className="cr-label-sub">· {endpoints[0]?.name}</span></div>
+
+        <div className="set-sub">
+          <div className="set-sub-h">
+            <span className="set-sub-t">Live destinations</span>
+            <span className="set-sub-k">streams from rooms</span>
+            <button className="set-plat add" onClick={() => { setEditingDest(null); setAddingDest(true); }}>+ Add</button>
+          </div>
+          <div className="cr-channels">
+            {destinations.length === 0 && <span className="set-sub-empty">None yet. Twitch, Kick, YouTube, or any RTMP.</span>}
+            {destinations.map((d) => (
+              <button
+                key={d.id}
+                className={`cr-chip${d.enabled ? "" : " off"}`}
+                title={`${d.preset} · key in Keychain — click to edit`}
+                onClick={() => setEditingDest(d)}
+              >
+                <span className="cr-chip-dot" style={{ background: PRESET_TONE[d.preset] ?? "#8b93a7" }} />
+                {d.label}
+                <span className="cr-chip-kind">live</span>
+              </button>
+            ))}
+          </div>
         {(addingDest || editingDest) && (
           <div className="cr-dest-editor">
             <DestinationEditor
@@ -604,12 +702,51 @@ function ChannelsBlock({
                 setEditingDest(null);
               }}
             />
-            <div className="cr-hint">
-              Live channels stream from rooms. Social channels join through your Boomin workspace and
-              receive posts.
-            </div>
           </div>
         )}
+        </div>
+
+        {endpoints.map((ep) => {
+          const mine = channels.filter((c) => c.endpoint_id === ep.id);
+          const boomin = isBoomin(ep);
+          return (
+            <div key={ep.id} className="set-sub">
+              <div className="set-sub-h">
+                <span className={`dot ${ep.kind}`} />
+                <span className="set-sub-t">{ep.name}</span>
+                <span className="set-sub-k">{boomin ? "Boomin · posting" : "self-hosted · posting"}</span>
+              </div>
+              <div className="cr-channels">
+                {mine.map((c) => (
+                  <ChannelChip key={c.id} channel={c} endpointId={ep.id} onError={setConnectError} onChanged={onChanged} />
+                ))}
+                {/* One native path for both backends: ask the workspace for an
+                    OAuth url, open the user's browser, the token lands server
+                    side. No embedded console, no second sign-in. */}
+                {(["instagram", "facebook", "threads"] as const)
+                  .filter((pl) => !mine.some((c) => c.platform === pl))
+                  .map((pl) => (
+                    <button
+                      key={pl}
+                      className={`set-plat${connecting?.ep === ep.id && connecting.platform === pl ? " busy" : ""}`}
+                      onClick={() => startConnect(ep.id, pl)}
+                      title={`Connect ${pl} — approves in your browser`}
+                    >
+                      + {pl === "instagram" ? "Instagram" : pl === "facebook" ? "Facebook" : "Threads"}
+                    </button>
+                  ))}
+              </div>
+              {connecting?.ep === ep.id && (
+                <div className="set-connect-pending">
+                  Finish approving in your browser, then
+                  <button className="linkish" onClick={() => { onChanged(); setConnecting(null); }}>refresh channels</button>
+                </div>
+              )}
+              {connectError && connecting?.ep !== ep.id && <div className="set-connect-error">{connectError}</div>}
+            </div>
+          );
+        })}
+
       </section>
   );
 }
@@ -630,27 +767,51 @@ function NetworkInviteReset({ endpoints }: { endpoints: EndpointInfo[] }) {
   );
 }
 
-function SettingsSheet({
+/** The body of Settings. Lives inside the rail-side `.home-settings`
+ * surface (see Home): no backdrop, no sheet chrome — the rail's Back button
+ * and Esc close it. */
+type SettingsSection = "app" | "output" | "audio" | "guests" | "integrations" | "vcam";
+const SETTINGS_SECTIONS: { id: SettingsSection; label: string; sub: string; built: boolean }[] = [
+  { id: "app", label: "App", sub: "Version, updates, shortcuts", built: true },
+  { id: "integrations", label: "Integrations", sub: "Live destinations, posting channels", built: true },
+  { id: "output", label: "Output", sub: "Encoder, bitrate, recording", built: false },
+  { id: "audio", label: "Audio", sub: "Devices, monitoring, filters", built: false },
+  { id: "guests", label: "Guests", sub: "Admit rules, TURN relay", built: false },
+  { id: "vcam", label: "Virtual camera", sub: "Auto-start, output", built: false },
+];
+
+function SettingsPanel({
+  mode,
+  section,
+  onSection,
   endpoints,
   destinations,
   channels,
   onChannelsChanged,
-  onAddEndpoint,
-  onRemoveEndpoint,
   updater,
   onClose,
 }: {
+  /** "nav" lives on the glass beside the rail; "page" is the surface. */
+  mode: "nav" | "page";
+  section: SettingsSection;
+  onSection: (s: SettingsSection) => void;
   endpoints: EndpointInfo[];
   destinations: LiveDestination[];
   channels: Channel[];
   onChannelsChanged: () => void;
-  onAddEndpoint: () => void;
-  onRemoveEndpoint: (id: string) => void;
   updater: { state: string; version: string | null; restart: () => void };
   onClose: () => void;
 }) {
   const [appVersion, setAppVersion] = useState<string | null>(null);
   type RepoRelease = { tag_name: string; name: string | null; body: string | null; published_at: string; html_url: string };
+  const [appTab, setAppTab] = useState<"general" | "shortcuts">("general");
+  const [wsId, setWsId] = useState<string | null>(() => activeEndpointId() ?? endpoints[0]?.id ?? null);
+  useEffect(() => {
+    const sync = () => setWsId(activeEndpointId() ?? endpoints[0]?.id ?? null);
+    window.addEventListener(WORKSPACE_EVENT, sync);
+    return () => window.removeEventListener(WORKSPACE_EVENT, sync);
+  }, [endpoints]);
+  const current = endpoints.find((e) => e.id === wsId) ?? endpoints[0] ?? null;
   const [releases, setReleases] = useState<RepoRelease[] | null | "err">(null);
   useEffect(() => {
     fetch("https://api.github.com/repos/Boomin-Ai/producer/releases?per_page=8")
@@ -684,113 +845,109 @@ function SettingsSheet({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-  return (
-    <>
-      <div className="cr-sheet-backdrop" onClick={onClose} />
-      <aside className="cr-sheet">
-        <div className="cr-sheet-head">
-          <span className="cr-sheet-title">Settings</span>
-          <button className="cr-back" onClick={onClose} title="Close">
-            ✕
+  if (mode === "nav") {
+    return (
+      <div className="home-settings-in set set-nav">
+        <div className="rm-filters-head set-nav-head">
+          <button className="rm-crumb" onClick={onClose} title="Back to your rooms">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
+            Rooms
           </button>
+          <span className="rm-filters-title">Settings{current ? ` · ${current.name}` : ""}</span>
         </div>
-
-        <div className="cr-label">WORKSPACES</div>
-        <div className="cr-sheet-rows">
-          {endpoints.map((ep) => (
-            <div key={ep.id} className="cr-sheet-row" title={ep.base_url}>
-              <span className={`dot ${ep.kind}`} />
-              <span className="cr-sheet-row-name">{ep.name}</span>
-              <span className="cr-sheet-row-sub">
-                {ep.kind === "connected" ? "Boomin" : "self-hosted"}
-              </span>
-              <button onClick={() => onRemoveEndpoint(ep.id)} title="Disconnect workspace">
-                ✕
-              </button>
-            </div>
+        <div className="set-nav-list">
+          {SETTINGS_SECTIONS.map((it) => (
+            <button
+              key={it.id}
+              className={`set-nav-item${section === it.id ? " on" : ""}${it.built ? "" : " soon"}`}
+              onClick={() => onSection(it.id)}
+            >
+              <span className="set-nav-label">{it.label}</span>
+              <span className="set-nav-sub">{it.sub}</span>
+            </button>
           ))}
-          <button className="cr-ghost" onClick={onAddEndpoint}>
-            + Add workspace
-          </button>
         </div>
-
-        <div className="cr-label" style={{ marginTop: 28 }}>
-          APP
+      </div>
+    );
+  }
+  const meta = SETTINGS_SECTIONS.find((it) => it.id === section)!;
+  return (
+    <main className="cr-page set-page">
+      <div className="set-page-in set">
+        <div className="set-page-head">
+          <span className="set-page-title">{meta.label}</span>
+          <span className="set-page-sub">{meta.sub}{current ? ` · ${current.name}` : ""}</span>
         </div>
-        <div className="cr-sheet-rows">
-          <NetworkInviteReset endpoints={endpoints} />
-          <div className="cr-sheet-row">
-            <span className="cr-sheet-row-name">Producer {appVersion ?? ""}</span>
+        {section === "app" && (
+          <>
+            <div className="set-tabs">
+              <button className={appTab === "general" ? "on" : ""} onClick={() => setAppTab("general")}>General</button>
+              <button className={appTab === "shortcuts" ? "on" : ""} onClick={() => setAppTab("shortcuts")}>Shortcuts</button>
+              <span className="set-tabs-spacer" />
+              {updater.state === "ready" ? (
+                <button className="set-ver update" onClick={updater.restart} title="Restart to install the update">
+                  ↻ Update{updater.version ? ` to ${updater.version}` : ""}
+                </button>
+              ) : updater.state === "downloading" ? (
+                <span className="set-ver busy">Updating…</span>
+              ) : (
+                <span className="set-ver">v{appVersion ?? ""}</span>
+              )}
+            </div>
+            {appTab === "general" && (
+              <>
+        <div className="cr-label set-gap">UPDATES</div>
+        <div className="set-upd">
+          <div className="set-upd-status">
             {updater.state === "ready" ? (
-              <button className="cr-primary" onClick={updater.restart}>
-                Restart to update{updater.version ? ` to ${updater.version}` : ""}
-              </button>
+              <>An update is ready. <button className="linkish" onClick={updater.restart}>Restart to install{updater.version ? ` ${updater.version}` : ""}</button></>
             ) : updater.state === "downloading" ? (
-              <span className="cr-sheet-row-sub">downloading update…</span>
+              "Downloading an update…"
             ) : (
-              <span className="cr-sheet-row-sub">up to date — updates install themselves</span>
+              "Up to date. Updates install themselves."
             )}
           </div>
-        </div>
-
-        <div className="cr-label" style={{ marginTop: 28 }}>
-          SHORTCUTS
-        </div>
-        <div className="ks">
-          {KEYMAP.map((b) => (
-            <KeyRow key={b.id} b={b} />
-          ))}
-          {/* The grammar — fixed on purpose, listed so it can be learned. */}
-          {([
-            ["⌘1–9", "Cut to a scene"],
-            ["Arrows", "Nudge selected (⇧ ×10)"],
-            ["⌥ drag edge", "Crop instead of scale"],
-            ["Esc", "Deselect"],
-          ] as const).map(([k, label]) => (
-            <div key={k} className="ks-row fixed">
-              <span className="ks-label">{label}</span>
-              <span className="ks-key">{k}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="cr-label" style={{ marginTop: 28 }}>
-          WHAT'S NEW
-        </div>
-        <div className="upd upd-sheet">
-          {releases === null && <div className="cr-sheet-row-sub">Checking…</div>}
-          {releases === "err" && (
-            <div className="cr-sheet-row-sub">The update stream goes live when the repo does.</div>
-          )}
-          {Array.isArray(releases) &&
-            releases.map((r) => (
-              <div key={r.tag_name} className="upd-item">
-                <div className="upd-head" onClick={() => openUrl(r.html_url).catch(() => {})}>
+          {Array.isArray(releases) && releases[0] && (() => {
+            const r = releases[0];
+            return (
+              <div className="set-upd-latest" onClick={() => openUrl(r.html_url).catch(() => {})}>
+                <div className="set-upd-latest-h">
                   <span className="upd-tag">{r.tag_name}</span>
-                  <span className="upd-name">{r.name || ""}</span>
-                  <span className="upd-date">
-                    {new Date(r.published_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                  </span>
+                  <span className="set-upd-latest-name">{r.name || "Latest release"}</span>
+                  <span className="upd-date">{new Date(r.published_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
                 </div>
-                {r.body && (
-                  <div className="upd-body">
-                    {r.body
-                      .split("\n")
-                      .filter((l) => l.trim())
-                      .slice(0, 4)
-                      .map((l, k) => (
-                        <p key={k}>{linkifyRel(l.replace(/^[-*#\s]+/, ""))}</p>
-                      ))}
-                  </div>
-                )}
+                <div className="set-upd-latest-body">
+                  {(r.body || "").split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 8).map((l, k) => (
+                    <p key={k}>{linkifyRel(l.replace(/^[-*#\s]+/, ""))}</p>
+                  ))}
+                </div>
               </div>
-            ))}
+            );
+          })()}
+          {Array.isArray(releases) && releases.length > 1 && (
+            <>
+              <div className="set-upd-older">Earlier</div>
+              <div className="upd upd-sheet">
+                {releases.slice(1).map((r) => (
+                  <div key={r.tag_name} className="upd-item">
+                    <div className="upd-head" onClick={() => openUrl(r.html_url).catch(() => {})}>
+                      <span className="upd-tag">{r.tag_name}</span>
+                      <span className="upd-name">{r.name || ""}</span>
+                      <span className="upd-date">
+                        {new Date(r.published_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {releases === null && <div className="cr-sheet-row-sub">Checking…</div>}
+          {releases === "err" && <div className="cr-sheet-row-sub">The update stream goes live when the repo does.</div>}
         </div>
 
-        <div className="cr-label" style={{ marginTop: 28 }}>
-          DEV
-        </div>
-        <div className="cr-sheet-rows">
+        <div className="cr-label set-gap">DEV</div>
+        <div className="set-list">
           <div className="cr-sheet-row">
             <span className="cr-sheet-row-name">Demo data</span>
             <span className="cr-sheet-row-sub">fake chat, alerts &amp; canvas footage</span>
@@ -804,9 +961,61 @@ function SettingsSheet({
           </div>
         </div>
 
-              <ChannelsBlock destinations={destinations} channels={channels} onChanged={onChannelsChanged} />
-      </aside>
-    </>
+
+              </>
+            )}
+            {appTab === "shortcuts" && (
+              <>
+                <div className="set-keys-intro">Click a key to change it, then press the new key. Esc cancels. The greyed ones are fixed — they're the grammar every room shares.</div>
+                <div className="cr-label set-gap">STAGE</div>
+                <div className="ks compact set-keys-list">
+                  {KEYMAP.map((b) => (
+                    <KeyRow key={b.id} b={b} />
+                  ))}
+                </div>
+                <div className="cr-label set-gap">FIXED</div>
+                <div className="ks compact set-keys-list">
+                  {([
+                    ["⌘1–9", "Cut to a scene"],
+                    ["Arrows", "Nudge selected (⇧ ×10)"],
+                    ["⌥ drag edge", "Crop instead of scale"],
+                    ["Esc", "Deselect"],
+                  ] as const).map(([k, label]) => (
+                    <div key={k} className="ks-row fixed">
+                      <span className="ks-label">{label}</span>
+                      <span className="ks-key">{k}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        )}
+        {section === "integrations" && (
+          <>
+        {current && (
+          <ChannelsBlock
+            destinations={destinations}
+            channels={channels.filter((c) => c.endpoint_id === current.id)}
+            endpoints={[current]}
+            onChanged={onChannelsChanged}
+          />
+        )}
+        {current && <div className="set-list"><NetworkInviteReset endpoints={[current]} /></div>}
+
+
+          </>
+        )}
+        {!meta.built && (
+          <div className="set-soon">
+            {section === "output" && "Encoder override, rate control, keyframe interval, bitrate policy, recording format and folder, audio bitrate. Today these are fixed constants in the engine."}
+            {section === "audio" && "Default mic and desktop audio, monitoring device, sample rate, and the audio filter library. Today: 48 kHz fixed, four filters."}
+            {section === "guests" && "Auto-admit, guest cap, and a TURN relay for guests behind strict networks. Today the relay is a server variable."}
+            {section === "vcam" && "Start the virtual camera with the room, choose what it outputs. Today: on or off."}
+          </div>
+        )}
+      </div>
+    </main>
   );
 }
 
@@ -837,6 +1046,8 @@ function ControlRoomHome({
   /** The in-app "add a Boomin workspace" door — the self-hoster's Network card leads here. */
   onAddEndpoint: () => void;
 }) {
+  const { mainId, endpointId: mainEndpointId } = useMainRoom(rooms);
+  const [openMenuRoom, setOpenMenuRoom] = useState<string | null>(null);
   const [naming, setNaming] = useState(false);
   useEffect(() => {
     // Post-commit ≈ first paint of the home. One-shot, module-level.
@@ -880,12 +1091,22 @@ function ControlRoomHome({
           {streaming && <span className="cr-live-pill">LIVE</span>}
         </div>
         <div className="cr-rooms">
-          {rooms.map((room) => (
+          {[...rooms].sort((a, b) => (a.id === mainId ? -1 : b.id === mainId ? 1 : 0)).map((room) => (
             <RoomCard
               key={room.id}
               room={room}
               live={liveRoom === room.id}
               offNetwork={offNetwork.has(room.id)}
+              menuOpen={openMenuRoom === room.id}
+              onMenuToggle={(open) => setOpenMenuRoom(open ? room.id : null)}
+              isMain={room.id === mainId}
+              canMakeMain={!!mainEndpointId && !!parseConfig(room.config).server_room_id}
+              onMakeMain={async () => {
+                const sid = parseConfig(room.config).server_room_id;
+                if (!mainEndpointId || !sid) return;
+                await roomSetDefault(mainEndpointId, sid).catch(() => {});
+                onRoomsChanged();
+              }}
               onOpen={() => onOpenRoom(room)}
               onRoomsChanged={onRoomsChanged}
             />
@@ -2558,16 +2779,50 @@ function FirewallBanner() {
  * updates; a registered room's server title is PATCHed too (roomSync). A
  * card mid-rename is a div, not a button: an input inside a button is
  * invalid and eats keystrokes on some engines. */
+/** The brand's main stage, as a LOCAL room id. Boomin gives every brand
+ *  exactly one default room (Network bookings and deals land there); we find
+ *  the local row registered against it. Self-hosted workspaces have none. */
+function useMainRoom(rooms: LiveRoom[]): { mainId: string | null; endpointId: string | null } {
+  const [state, setState] = useState<{ mainId: string | null; endpointId: string | null }>({ mainId: null, endpointId: null });
+  useEffect(() => {
+    let dead = false;
+    (async () => {
+      const ep = await resolveActiveEndpoint().catch(() => null);
+      if (!ep || !isBoomin(ep)) { if (!dead) setState({ mainId: null, endpointId: null }); return; }
+      const { rooms: srv = [] } = await listServerRooms(ep.id).catch(() => ({ rooms: [] as ServerRoom[] }));
+      const main = srv.find((r) => r.is_default);
+      const local = main ? rooms.find((r) => parseConfig(r.config).server_room_id === main.id) : undefined;
+      if (!dead) setState({ mainId: local?.id ?? null, endpointId: ep.id });
+    })();
+    const on = () => void 0;
+    window.addEventListener(WORKSPACE_EVENT, on);
+    return () => { dead = true; window.removeEventListener(WORKSPACE_EVENT, on); };
+  }, [rooms]);
+  return state;
+}
+
 function RoomCard({
   room,
   live,
   offNetwork,
+  isMain,
+  canMakeMain,
+  onMakeMain,
+  menuOpen,
+  onMenuToggle,
   onOpen,
   onRoomsChanged,
 }: {
   room: LiveRoom;
   live: boolean;
   offNetwork: boolean;
+  /** Owned by the grid so two cards can never be open at once. */
+  menuOpen: boolean;
+  onMenuToggle: (open: boolean) => void;
+  /** Boomin's default room for the brand: pinned, marked, never deleted. */
+  isMain?: boolean;
+  canMakeMain?: boolean;
+  onMakeMain?: () => void;
   onOpen: () => void;
   onRoomsChanged: () => void;
 }) {
@@ -2579,6 +2834,68 @@ function RoomCard({
     if (!next || next === room.name) return;
     const ep = await resolveActiveEndpoint().catch(() => null);
     await renameRoom(ep?.id ?? null, room, next).catch(() => {});
+    onRoomsChanged();
+  };
+
+  // Delete is two steps, and refused with a reason while the room is live or
+  // anyone is in it (waiting or admitted). The reason is inline on the card —
+  // never a disabled ✕ that explains nothing.
+  const [del, setDel] = useState<"idle" | "checking" | "confirm" | "busy">("idle");
+  const setMenuOpen = (v: boolean | ((prev: boolean) => boolean)) =>
+    onMenuToggle(typeof v === "function" ? v(menuOpen) : v);
+  const [note, setNote] = useState<string | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!note) return;
+    const t = setTimeout(() => setNote(null), 6000);
+    return () => clearTimeout(t);
+  }, [note]);
+  useEffect(() => {
+    if (del !== "confirm") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDel("idle");
+    };
+    const onDown = (e: MouseEvent) => {
+      if (cardRef.current && !cardRef.current.contains(e.target as Node)) setDel("idle");
+    };
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [del]);
+  const askDelete = async () => {
+    if (del !== "idle") return;
+    if (live) {
+      setNote("This room is on air — stop the stream first.");
+      return;
+    }
+    setDel("checking");
+    const ep = await resolveActiveEndpoint().catch(() => null);
+    const occ = await roomOccupancy(ep?.id ?? room.endpoint_id ?? null, room);
+    if (occ && occ.present > 0) {
+      const who = occ.names.slice(0, 3).join(", ");
+      setNote(
+        `${occ.present === 1 ? "Someone is" : `${occ.present} people are`} in this room${who ? ` (${who})` : ""} — remove them first.`,
+      );
+      setDel("idle");
+      return;
+    }
+    setDel("confirm");
+  };
+  const confirmDelete = async () => {
+    if (del !== "confirm") return;
+    setDel("busy");
+    const ep = await resolveActiveEndpoint().catch(() => null);
+    const refused = await deleteRoomEverywhere(ep?.id ?? room.endpoint_id ?? null, room).catch((e) => ({
+      reason: String(e).replace(/^Error:\s*/, ""),
+    }));
+    if (refused) {
+      setNote(refused.reason);
+      setDel("idle");
+      return;
+    }
     onRoomsChanged();
   };
   const body = (
@@ -2621,17 +2938,52 @@ function RoomCard({
           LIVE
         </span>
       )}
-      <span
-        className="cr-room-del"
-        title={live ? "Stop the stream first" : "Delete room"}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (live) return;
-          ipc.liveDeleteRoom(room.id).then(onRoomsChanged);
-        }}
-      >
-        ✕
-      </span>
+      {del === "idle" || del === "checking" ? (
+        <>
+          <span
+            className={`cr-room-more${menuOpen ? " on" : ""}`}
+            title="Room actions"
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenuOpen((v) => !v);
+            }}
+          >
+            ⋯
+          </span>
+          {menuOpen && (
+            <>
+              <span className="cr-room-menu-backdrop" onClick={(e) => { e.stopPropagation(); setMenuOpen(false); }} />
+              <span className="cr-room-menu" onClick={(e) => e.stopPropagation()}>
+                <span className="cr-room-menu-row"><span className="cr-room-menu-k">Guest link</span><RoomLinkChip room={room} onChanged={onRoomsChanged} /></span>
+                <span className="cr-room-menu-row"><span className="cr-room-menu-k">Visibility</span><RoomShareChip room={room} onChanged={onRoomsChanged} /></span>
+                {!isMain && canMakeMain && (
+                  <span className="cr-room-menu-row act" onClick={() => { setMenuOpen(false); onMakeMain?.(); }}>Make main stage</span>
+                )}
+                <span className="cr-room-menu-row act" onClick={() => { setMenuOpen(false); setDraft(room.name); setEditing(true); }}>Rename</span>
+                {!isMain && (
+                  <span className="cr-room-menu-row act danger" onClick={() => { setMenuOpen(false); void askDelete(); }}>Delete…</span>
+                )}
+              </span>
+            </>
+          )}
+          {isMain && (
+            <span className="cr-room-main" title="Your brand's main stage — Network bookings and deals land here. Rename it, but it stays.">
+              MAIN STAGE
+            </span>
+          )}
+        </>
+      ) : (
+        <span className="cr-room-confirm" onClick={(e) => e.stopPropagation()}>
+          <span className="cr-room-confirm-q">Delete ‘{room.name}’?</span>
+          <button className="cr-ghost danger" disabled={del === "busy"} onClick={() => void confirmDelete()}>
+            {del === "busy" ? "Deleting…" : "Delete"}
+          </button>
+          <button className="cr-ghost" disabled={del === "busy"} onClick={() => setDel("idle")}>
+            Cancel
+          </button>
+        </span>
+      )}
+      {note && <span className="cr-room-note">{note}</span>}
       <span className="cr-room-chips">
         {offNetwork && (
           <span
@@ -2641,14 +2993,18 @@ function RoomCard({
             not on the network
           </span>
         )}
-        <RoomLinkChip room={room} onChanged={onRoomsChanged} />
-        <RoomShareChip room={room} onChanged={onRoomsChanged} />
       </span>
     </>
   );
-  const cls = `cr-room${live ? " onair" : ""}`;
-  return editing ? (
-    <div className={cls}>{body}</div>
+  const cls = `cr-room${live ? " onair" : ""}${del === "confirm" || del === "busy" ? " confirming" : ""}${menuOpen ? " menu-open" : ""}`;
+  // A div while renaming, confirming, or showing the ⋯ menu: a button cannot
+  // contain the input or the menu's own controls (nested interactive content
+  // is invalid), and WebKit clips anything that overflows a <button> box —
+  // which silently cut the menu in half.
+  return editing || menuOpen || del === "confirm" || del === "busy" ? (
+    <div className={cls} ref={cardRef} onClick={menuOpen ? undefined : onOpen}>
+      {body}
+    </div>
   ) : (
     <button className={cls} onClick={onOpen}>
       {body}
@@ -2802,6 +3158,11 @@ const railIc = {
       <path d="M12 5v14M5 12h14" />
     </svg>
   ),
+  back: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 12H5M12 19l-7-7 7-7" />
+    </svg>
+  ),
 };
 
 /** The profile popout: who you are acting as, and the brand switch.
@@ -2813,17 +3174,18 @@ function WorkspacePopout({
   endpoints,
   activeId,
   onSwitch,
-  onSettings,
   onOpenConsole,
+  onRemoveEndpoint,
   onSignOut,
   onClose,
 }: {
   endpoints: EndpointInfo[];
   activeId: string | null;
   onSwitch: (endpointId: string) => void;
-  onSettings: () => void;
   /** The gear on a brand: that brand's settings console (switching first when needed). */
   onOpenConsole?: (section: string, endpointId?: string) => void;
+  /** Self-hosted rows: forget this server on this Mac. */
+  onRemoveEndpoint?: (endpointId: string) => void;
   onSignOut?: () => void;
   onClose: () => void;
 }) {
@@ -2925,6 +3287,18 @@ function WorkspacePopout({
                 <span className="ws-pop-slug">self-hosted</span>
               </span>
               {e.id === active?.id && <i className="ws-dot" />}
+              {onRemoveEndpoint && (
+                <span
+                  className="ws-gear ws-drop"
+                  role="button"
+                  tabIndex={0}
+                  title={`Disconnect ${e.name} from ${THIS_DEVICE}`}
+                  onClick={(ev) => { ev.stopPropagation(); onRemoveEndpoint(e.id); }}
+                  onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); ev.stopPropagation(); onRemoveEndpoint(e.id); } }}
+                >
+                  ✕
+                </span>
+              )}
             </button>
           ))}
           {brands !== null && rows.length === 0 && independents.length === 0 && (
@@ -2933,9 +3307,6 @@ function WorkspacePopout({
         </div>
         {note && <div className="cr-hint">{note}</div>}
         <div className="ws-pop-foot">
-          <button className="ws-row" onClick={onSettings}>
-            <span className="ws-pop-name">Settings</span>
-          </button>
           {onSignOut && endpoints.some((e) => e.kind === "connected") && (
             <button
               className="ws-row ws-signout"
@@ -2960,7 +3331,10 @@ function HomeRail({
   surface,
   onSurface,
   onCompose,
+  onProfile,
+  settingsOpen,
   onSettings,
+  onBack,
 }: {
   brandName: string;
   /** The brand's avatar once the session serves it; initial until then. */
@@ -2968,24 +3342,37 @@ function HomeRail({
   surface: "rooms" | "manager";
   onSurface: (s: "rooms" | "manager") => void;
   onCompose: () => void;
+  /** The avatar: workspace identity and switch (the popout). */
+  onProfile: () => void;
+  /** Settings is a surface beside the rail; while it is open the avatar
+   * becomes Back, and the gear at the bottom reads as selected. */
+  settingsOpen: boolean;
   onSettings: () => void;
+  onBack: () => void;
 }) {
   return (
     <nav className="home-rail">
-      {/* The profile IS the settings entry — workspace identity and its
-        * controls live behind one button. */}
-      <button className="home-rail-avatar" title={`${brandName} — settings`} onClick={onSettings}>
-        {avatarUrl ? <img src={avatarUrl} alt="" /> : <span>{(brandName[0] ?? "?").toUpperCase()}</span>}
-        <i className="home-rail-presence" />
-      </button>
-      <button className={surface === "rooms" ? "on" : ""} title="Rooms" onClick={() => onSurface("rooms")}>
+      {settingsOpen ? (
+        <button className="home-rail-avatar home-rail-back" title="Back" onClick={onBack}>
+          {railIc.back}
+        </button>
+      ) : (
+        <button className="home-rail-avatar" title={`${brandName} — workspaces`} onClick={onProfile}>
+          {avatarUrl ? <img src={avatarUrl} alt="" /> : <span>{(brandName[0] ?? "?").toUpperCase()}</span>}
+          <i className="home-rail-presence" />
+        </button>
+      )}
+      <button className={surface === "rooms" && !settingsOpen ? "on" : ""} title="Rooms" onClick={() => onSurface("rooms")}>
         {railIc.onair}
       </button>
-      <button className={surface === "manager" ? "on" : ""} title="Manager" onClick={() => onSurface("manager")}>
+      <button className={surface === "manager" && !settingsOpen ? "on" : ""} title="Manager" onClick={() => onSurface("manager")}>
         {railIc.manager}
       </button>
       <div className="home-rail-spring" />
       <button title="New post" onClick={onCompose}>{railIc.plus}</button>
+      <button className={settingsOpen ? "on" : ""} title="Settings" onClick={onSettings}>
+        {railIc.gear}
+      </button>
     </nav>
   );
 }

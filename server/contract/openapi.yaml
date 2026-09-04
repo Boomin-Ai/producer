@@ -376,9 +376,15 @@ paths:
     delete:
       operationId: deleteLiveRoom
       x-token-class: primary
+      summary: Delete a room (refused while anyone is in it)
       parameters: [{ $ref: "#/components/parameters/roomId" }]
       responses:
         "200": { description: "`{ ok: true }`" }
+        "409":
+          description: "`room_occupied` — a guest is waiting or admitted; remove them first (`details.present` = how many)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
   /v1/app/live/rooms/{roomId}/guests:
     get:
       operationId: liveRoomRoster

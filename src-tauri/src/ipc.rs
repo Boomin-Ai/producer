@@ -375,6 +375,21 @@ pub async fn room_set_title(
         .await
 }
 
+/// Delete the server room (server id). See `ProducerClient::delete_room`
+/// for the refused-vs-failed split the app relies on.
+#[tauri::command]
+pub async fn room_delete(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .delete_room(&room_id)
+        .await
+}
+
 #[tauri::command]
 pub async fn room_guest_admit(
     state: State<'_, AppState>,
@@ -753,6 +768,19 @@ pub async fn room_set_visibility(
         .await
 }
 
+#[tauri::command]
+pub async fn room_set_default(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .room_set_default(&room_id)
+        .await
+}
+
 /// Join the Brand Network for a connected endpoint's brand.
 #[tauri::command]
 pub async fn network_join(
@@ -777,6 +805,19 @@ pub async fn connect_channel(
     ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)
         .create_connect_session(&platform)
+        .await
+}
+
+#[tauri::command]
+pub async fn disconnect_channel(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    channel_id: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .disconnect_channel(&channel_id)
         .await
 }
 
