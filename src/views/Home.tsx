@@ -2890,11 +2890,6 @@ function RoomCard({
           LIVE
         </span>
       )}
-      {isMain && (
-        <span className="cr-room-main" title="Your brand's main stage — Network bookings and deals land here. Rename it, but it stays.">
-          MAIN STAGE
-        </span>
-      )}
       {del === "idle" || del === "checking" ? (
         <>
           <span
@@ -2922,6 +2917,11 @@ function RoomCard({
                 )}
               </span>
             </>
+          )}
+          {isMain && (
+            <span className="cr-room-main" title="Your brand's main stage — Network bookings and deals land here. Rename it, but it stays.">
+              MAIN STAGE
+            </span>
           )}
         </>
       ) : (
