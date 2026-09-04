@@ -33,6 +33,7 @@ machine can push. Producer collapses both into one app you own:
              Worker (D1 + R2 + cron) you deploy with one command, so
              posting and scheduling run on YOUR account for $0.
              → server/SELF_HOSTING.md is the ~20-minute walkthrough
+             → docs/SELF-HOSTING.md: what is open vs. Boomin Network
 /server/contract   the Producer API contract (OpenAPI) — the spine the
              desktop, the hosted backend, and your server all share
 ```
