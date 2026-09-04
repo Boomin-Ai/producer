@@ -1537,6 +1537,8 @@ textarea::placeholder {
   min-height: 108px;
   transition: border-color 0.15s ease, transform 0.15s ease;
 }
+/* room for the chip row (not the New-room card, which has none) */
+.cr-room:not(.cr-room-new) { padding-bottom: 42px; }
 
 .cr-room:hover {
   border-color: oklch(0.55 0.12 165 / 0.55);
@@ -5296,11 +5298,20 @@ textarea::placeholder {
   border-color: transparent;
 }
 
-/* Room card share chip — bottom-right, out of the delete button's corner. */
-.cr-room-share {
+/* Room card chips (Link · visibility) — one flex row, bottom-right, out of
+   the delete button's corner. Flow layout, not two absolute chips: their
+   widths differ per label/platform font, so fixed offsets overlapped. */
+.cr-room-chips {
   position: absolute;
   bottom: 10px;
   right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+}
+.cr-room-share {
+  white-space: nowrap;
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -8135,7 +8146,7 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 
 /* Room card: the guest link, one click. */
 .cr-room-link {
-  position: absolute; right: 78px; bottom: 12px;
+  white-space: nowrap;
   font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
   padding: 3px 9px; border-radius: 999px;
   border: 1px solid var(--line-1); color: var(--fg-3); background: transparent; cursor: pointer;
