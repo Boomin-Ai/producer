@@ -25,6 +25,22 @@ closed. **[SELF_HOSTING.md](./SELF_HOSTING.md) is the ~20-minute
 walkthrough.** Live Meta publishing awaits your own dev-mode apps; the
 engine and acceptance paths are covered by tests and a local smoke.
 
+**Live guests** are open too: rooms, shareable join links, a waiting
+room, admit/kick, the stage list, and WebRTC signaling through a
+SQLite-backed Durable Object (free plan). Media flows peer-to-peer
+between the host's Producer and the guest's browser; the worker only
+introduces them. Two self-hosted Producers can do host ↔ guest with zero
+Boomin.
+
+## Where the line is
+
+Everything about **making a show** is open and runs here: publishing,
+scheduling, media, rooms, guests, the stage. What needs a second party's
+identity or money — **verified brand guests, knocking on another brand's
+stage, and paid appearances** (deals, escrow, stage minimums, payouts) —
+is the Boomin Network, and requires the room to live on Boomin. The
+desktop app speaks the same routes to both; only the base URL differs.
+
 ## Design commitments
 
 - **Single-user, permanently.** No accounts, orgs, teams, billing,
