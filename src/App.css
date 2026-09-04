@@ -5731,18 +5731,16 @@ textarea::placeholder {
 
 /* ── Home rail — full-height frosted column, inset + rounded ───────────── */
 .cr.cr--vibrant .cr-home {
-  margin-left: var(--rail-w);
+  margin-left: 88px; /* the bare rail; settings never reflows the surface */
   padding-left: 6px;
-  transition: margin-left 0.26s ease;
+  transition: transform 0.26s ease;
 }
 
-/* While pushed, the body must still fit beside the glass column (its width
-   is otherwise min(1140px, 100vw − 72px), sized for the bare rail). */
+/* While Settings is open the surface keeps its size and layout exactly as
+   it was and slides right by the settings width — off the window's edge if
+   that's where it lands. It is inert behind the scrim; it never re-fits. */
 .cr.cr--vibrant.settings-open .cr-home {
-  max-width: calc(100vw - var(--rail-w) - 28px);
-}
-.cr.cr--vibrant.settings-open .cr-home.has-net-rail {
-  max-width: min(980px, calc(100vw - var(--rail-w) - 300px));
+  transform: translateX(var(--settings-w));
 }
 
 /* ── Settings — a surface that expands OUT of the rail ────────────────────
