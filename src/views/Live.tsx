@@ -3894,6 +3894,9 @@ export function LiveView({
   async function setVideoCfg(h: number, f: number) {
     try {
       await ipc.liveSetVideo(h, f);
+  // 4K is a hardware-encoder feature: the engine reports whether one exists
+  // (macOS VideoToolbox); Windows/Linux stay disabled until NVENC/AMF/QSV.
+  const hwEncoder = !!snapshot?.hw_encoder;
       localStorage.setItem("producer.video", JSON.stringify({ h, f }));
     } catch (e) {
       setBanner(String(e));
@@ -5157,11 +5160,20 @@ export function LiveView({
               <div className="rm-ctrl-row">
                 <span className="rm-ctrl-label">Resolution</span>
                 <span className="rm-quality-set">
-                  {[720, 1080].map((h) => (
-                    <button key={h} className={`rm-q${vh === h ? " on" : ""}`} disabled={streaming || !engineOk} onClick={() => setVideoCfg(h, vf)}>
-                      {h}p
-                    </button>
-                  ))}
+                  {[720, 1080, 2160].map((h) => {
+                    const gated = h === 2160 && !hwEncoder;
+                    return (
+                      <button
+                        key={h}
+                        className={`rm-q${vh === h ? " on" : ""}`}
+                        disabled={streaming || !engineOk || gated}
+                        title={gated ? "4K needs a hardware encoder — coming with NVENC/AMF/QSV" : undefined}
+                        onClick={() => setVideoCfg(h, vf)}
+                      >
+                        {h}p{h === 2160 && <span className="rm-q-tag">4K</span>}
+                      </button>
+                    );
+                  })}
                 </span>
               </div>
               <div className="rm-ctrl-row">
