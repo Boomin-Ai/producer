@@ -724,6 +724,7 @@
   .gcard.wait .ctl { background: transparent; justify-content: flex-end; align-items: flex-start; padding: 7px; }
   .gcard.wait .ctl b { background: var(--mint); color: #06110b; border-color: transparent; }
   .gcard.press .ctl b { background: #fff; color: #06110b; border-color: #fff; }
+  .gcard.off .who i { background: #6b7280; box-shadow: none; }
   .gcard.shown { border-color: rgba(52, 211, 153, 0.55); box-shadow: 0 0 0 1px rgba(52,211,153,0.25), 0 10px 30px rgba(52,211,153,0.14); }
   /* placeholders until real loops land in site/shots/ */
   .gcard [class^="ph"], .tile .gv + .ph { position: absolute; inset: 0; }
@@ -738,8 +739,21 @@
   .gm-program { position: relative; display: grid; grid-template-columns: 1.6fr 1fr; grid-template-rows: 1fr 1fr 1fr; gap: 8px; padding: 12px; background: radial-gradient(120% 90% at 50% 100%, rgba(52, 211, 153, 0.10), transparent 60%), #05070b; overflow: hidden; }
   .gm-program .beam { position: absolute; inset: -20% -10%; background: linear-gradient(100deg, transparent 40%, rgba(255,255,255,0.05) 50%, transparent 60%); animation: sway 9s ease-in-out infinite; pointer-events: none; }
   .gm-program .tile.host { grid-row: 1 / span 3; margin-bottom: 34px; }
-  .gm-program .tile.g3 { opacity: 0; transform: translateX(-60px) scale(0.7); transition: opacity 600ms ease, transform 700ms var(--ease); }
-  .gm-program .tile.g3.in { opacity: 1; transform: none; }
+  .gm-program .tile.slot { opacity: 0.35; transform: scale(0.97); transition: opacity 600ms ease, transform 700ms var(--ease), box-shadow 500ms ease; }
+  .gm-program .tile.slot .gv { opacity: 0; transition: opacity 500ms ease; }
+  .gm-program .tile.slot.in { opacity: 1; transform: none; }
+  .gm-program .tile.slot.in .gv.ok { opacity: 1; }
+  .gm-program .tile.slot.in .gv.alt.ok, .gm-program .tile.slot .gv.alt { opacity: 0; }
+  .gm-program .tile.slot.swap .gv.alt.ok { opacity: 1; }
+  .gm-program .tile.slot.swap .gv:not(.alt) { opacity: 0; }
+  .gm-program .tile.slot.land { box-shadow: 0 0 0 1px rgba(52,211,153,0.5), 0 12px 34px rgba(52,211,153,0.18); }
+  .gm-program .tile.slot .empty-tag { position: absolute; left: 8px; bottom: 8px; font-size: 10.5px; color: var(--dim); }
+  .gm-program .tile.slot.in .empty-tag, .gm-program .tile.slot.in .tag { display: block; }
+  .gm-program .tile.slot:not(.in) .tag { display: none; }
+  .gm-program .tile.slot.in .empty-tag { display: none; }
+  .gm-program .tile.slot .state { position: absolute; right: 8px; top: 8px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: #06110b; background: var(--mint); padding: 3px 7px; border-radius: 999px; opacity: 0; transform: translateY(-4px); transition: opacity 300ms ease, transform 300ms ease; }
+  .gm-program .tile.slot .state.show { opacity: 1; transform: none; }
+  .gm-program .tile.slot .state.off { background: #ff5c5c; color: #fff; }
   .gm-program .gobar { position: absolute; left: 12px; right: 12px; bottom: 12px; display: flex; gap: 8px; align-items: center; justify-content: center; font-size: 10px; letter-spacing: 0.14em; color: var(--dim); background: rgba(8,10,14,0.7); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; backdrop-filter: blur(8px); }
   .gm-program .gobar .golive { color: #fff; background: var(--live); padding: 2px 8px; border-radius: 999px; font-weight: 700; }
   .tile .gv { z-index: 0; }
@@ -903,17 +917,17 @@
         <div class="gm-rail">
           <div class="rm-label">GUESTS <em id="gm-count">2/8</em><span class="linkbtn">⛓ Link</span></div>
           <div class="gcard on" data-g="2"><video class="gv" src="shots/guest-2.mp4" autoplay muted loop playsinline></video><span class="ph2"></span><span class="who"><i></i>Nia</span></div>
-          <div class="gcard on" data-g="1"><video class="gv" src="shots/guest-1.mp4" autoplay muted loop playsinline></video><span class="ph1"></span><span class="who"><i></i>Marcus</span></div>
+          <div class="gcard on" id="gm-marcus" data-g="1"><video class="gv" src="shots/guest-1.mp4" autoplay muted loop playsinline></video><span class="ph1"></span><span class="who"><i></i>Marcus</span><span class="ctl"><b>Hide</b><span>🎙</span><span>✕</span></span></div>
           <div class="gcard" id="gm-pick" data-g="3"><video class="gv" src="shots/guest-3.mp4" autoplay muted loop playsinline></video><span class="ph3"></span><span class="who"><i></i>Jordan</span><span class="ctl"><b id="gm-show">Show</b><span>🎙</span><span>✕</span></span></div>
           <div class="gcard" data-g="4"><video class="gv" src="shots/guest-4.mp4" autoplay muted loop playsinline></video><span class="ph4"></span><span class="who"><i></i>Sam</span></div>
-          <div class="gcard wait" data-g="5"><video class="gv" src="shots/guest-5.mp4" autoplay muted loop playsinline></video><span class="ph5"></span><span class="who"><i class="w"></i>Ari <small>asked to join</small></span><span class="ctl"><b>Admit</b></span></div>
+          <div class="gcard wait" id="gm-ari" data-g="5"><video class="gv" src="shots/guest-5.mp4" autoplay muted loop playsinline></video><span class="ph5"></span><span class="who"><i class="w"></i>Ari <small>asked to join</small></span><span class="ctl"><b>Admit</b></span></div>
         </div>
         <div class="gm-program">
           <div class="beam"></div>
           <div class="tile host"><video class="gv" src="shots/host.mp4" autoplay muted loop playsinline></video><span class="tag">You</span></div>
-          <div class="tile empty"><span class="tag dim">Slot 2</span></div>
-          <div class="tile empty"><span class="tag dim">Slot 3</span></div>
-          <div class="tile g3" id="gm-land"><video class="gv" src="shots/guest-3.mp4" autoplay muted loop playsinline></video><span class="tag">Jordan</span></div>
+          <div class="tile slot in" id="gm-s1"><video class="gv" src="shots/guest-2.mp4" autoplay muted loop playsinline></video><span class="tag">Nia</span><span class="state"></span></div>
+          <div class="tile slot in" id="gm-s2"><video class="gv" src="shots/guest-1.mp4" autoplay muted loop playsinline></video><video class="gv alt" src="shots/guest-5.mp4" autoplay muted loop playsinline></video><span class="tag">Marcus</span><span class="state"></span></div>
+          <div class="tile slot" id="gm-s3"><video class="gv" src="shots/guest-3.mp4" autoplay muted loop playsinline></video><span class="tag">Jordan</span><span class="state"></span><span class="empty-tag">Slot 3</span></div>
           <div class="gobar"><span>CAMERA</span><span>·</span><span>MIC</span><span>·</span><span>VIRTUAL CAM</span><span class="golive">LIVE</span></div>
         </div>
       </div>
@@ -1278,17 +1292,38 @@
     }, 1100);
   })();
 
-  // ── Guest rail: hover the third card, press Show, it lands on the program. Loops. ──
+  // ── Guests beat sequence (13 s loop): Jordan is shown onto slot 3, Marcus is
+  //    taken off stage, Ari is admitted and takes his slot. Rail and program
+  //    move together on desktop; on mobile the program alone tells it. ──
   (function () {
-    var card = document.getElementById("gm-pick"), land = document.getElementById("gm-land"), count = document.getElementById("gm-count");
-    if (!card || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    function cycle() {
-      card.className = "gcard"; land.classList.remove("in"); count.textContent = "2/8";
-      setTimeout(function () { card.classList.add("hover"); }, 1200);
-      setTimeout(function () { card.classList.add("press"); }, 2100);
-      setTimeout(function () { card.classList.remove("hover", "press"); card.classList.add("on", "shown"); land.classList.add("in"); count.textContent = "3/8"; }, 2500);
+    var $ = function (id) { return document.getElementById(id); };
+    var jordan = $("gm-pick"), marcus = $("gm-marcus"), ari = $("gm-ari"),
+        s1 = $("gm-s1"), s2 = $("gm-s2"), s3 = $("gm-s3"), count = $("gm-count");
+    if (!jordan || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    function state(tile, text, off) {
+      var el = tile.querySelector(".state"); el.textContent = text; el.className = "state show" + (off ? " off" : "");
+      setTimeout(function () { el.classList.remove("show"); }, 1600);
     }
-    cycle(); setInterval(cycle, 7000);
+    var steps = [
+      [0, function () {
+        jordan.className = "gcard"; marcus.className = "gcard on"; ari.className = "gcard wait";
+        s1.className = "tile slot in"; s2.className = "tile slot in"; s3.className = "tile slot";
+        s2.querySelector(".tag").textContent = "Marcus"; count.textContent = "2/8";
+      }],
+      [1200, function () { jordan.classList.add("hover"); }],
+      [2000, function () { jordan.classList.add("press"); }],
+      [2400, function () { jordan.classList.remove("hover", "press"); jordan.classList.add("on", "shown"); s3.classList.add("in", "land"); state(s3, "ON STAGE"); count.textContent = "3/8"; }],
+      [5200, function () { marcus.classList.add("hover"); s3.classList.remove("land"); }],
+      [6000, function () { marcus.classList.add("press"); }],
+      [6400, function () { marcus.classList.remove("hover", "press", "on"); marcus.classList.add("off"); state(s2, "OFF STAGE", true); }],
+      [7200, function () { s2.classList.remove("in"); count.textContent = "2/8"; }],
+      [8600, function () { ari.classList.add("press"); }],
+      [9000, function () { ari.className = "gcard on shown"; ari.querySelector(".who small").textContent = "admitted"; }],
+      [9800, function () { s2.querySelector(".tag").textContent = "Ari"; s2.classList.add("swap", "in", "land"); state(s2, "ON STAGE"); count.textContent = "3/8"; }],
+      [12200, function () { s2.classList.remove("land"); ari.querySelector(".who small").textContent = "asked to join"; s2.classList.remove("swap"); }],
+    ];
+    function cycle() { steps.forEach(function (st) { setTimeout(st[1], st[0]); }); }
+    cycle(); setInterval(cycle, 13000);
   })();
 
   // ── Real loops (site/shots/*.mp4) replace the placeholders when they exist. ──
