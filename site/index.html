@@ -613,6 +613,15 @@
   .perf-mock .stats i { font-style: normal; color: #fff; font-weight: 600; font-variant-numeric: tabular-nums; }
   .perf-mock .stats i.ok { color: var(--mint); }
   .perf-mock .stats i.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 500; }
+  .fourk { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; margin: 14px 14px 0; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(52, 211, 153, 0.35); background: linear-gradient(90deg, rgba(52,211,153,0.10), rgba(52,211,153,0.02)); }
+  .fk-mark { font-size: 30px; font-weight: 800; letter-spacing: -0.04em; color: #fff; line-height: 1; text-shadow: 0 0 24px rgba(52,211,153,0.45); }
+  .fk-body { color: var(--dim); line-height: 1.45; font-size: 12px; }
+  .fk-body b { color: #fff; }
+  .fk-pick { display: inline-flex; gap: 4px; padding: 3px; border-radius: 10px; border: 1px solid var(--line); background: #090b10; }
+  .fk-pick span { padding: 5px 9px; border-radius: 8px; font-size: 11px; color: var(--dim); font-weight: 600; white-space: nowrap; }
+  .fk-pick span.on { color: #fff; background: rgba(255,255,255,0.08); }
+  .fk-pick span em { font-style: normal; font-size: 9px; color: var(--mint); margin-left: 3px; vertical-align: top; }
+  @media (max-width: 900px) { .fourk { grid-template-columns: auto 1fr; } .fk-pick { display: none; } }
   .perf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px; }
   .pc { display: flex; flex-direction: column; gap: 4px; padding: 12px 13px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255,255,255,0.025); }
   .pc .k { font-size: 10px; letter-spacing: 0.18em; color: var(--dim); font-weight: 700; }
@@ -919,16 +928,22 @@
     <div class="panel" id="panelE">
       <div class="mock perf-mock" aria-hidden="true">
         <div class="stats">
+          <span><b>OUTPUT</b><i>2160p · 60</i></span>
           <span><b>FPS</b><i id="pf-fps">60</i></span>
           <span><b>CPU</b><i id="pf-cpu">3.1%</i></span>
           <span><b>GPU</b><i>Metal</i></span>
-          <span><b>BITRATE</b><i id="pf-br">19.2 Mbps</i></span>
+          <span><b>BITRATE</b><i id="pf-br">31.2 Mbps</i></span>
           <span><b>DROPPED</b><i class="ok">0</i></span>
           <span><b>LIVE TIME</b><i class="mono">00:12:34</i></span>
         </div>
+        <div class="fourk">
+          <span class="fk-mark">4K</span>
+          <span class="fk-body"><b>Up to 2160p at 60.</b> One hardware encode on Apple silicon, out to every channel. The picker unlocks it when the machine can carry it.</span>
+          <span class="fk-pick"><span>720p</span><span>1080p</span><span class="on">2160p <em>4K</em></span></span>
+        </div>
         <div class="perf-grid">
           <div class="pc"><span class="k">Renderer</span><span class="v">libobs on Metal</span><span class="d">Compositing, filters, and transitions run on the GPU. The CPU stays free for the show.</span></div>
-          <div class="pc"><span class="k">Encode</span><span class="v">VideoToolbox H.264</span><span class="d">Apple's hardware encoder. One 1080p60 encode fans out to Twitch, Kick, and YouTube.</span></div>
+          <div class="pc"><span class="k">Encode</span><span class="v">VideoToolbox H.264</span><span class="d">Apple's hardware encoder. One encode, 1080p or 4K, fans out to Twitch, Kick, and YouTube.</span></div>
           <div class="pc"><span class="k">Core</span><span class="v">Rust + Tauri 2</span><span class="d">Native engine, native window. The UI is React; the parts that matter are compiled.</span></div>
           <div class="pc"><span class="k">Windows</span><span class="v">x264 today</span><span class="d">NVENC, AMF, and QSV are next. Same engine, same rooms.</span></div>
         </div>
@@ -1252,7 +1267,7 @@
     setInterval(function () {
       fps.textContent = Math.random() < 0.9 ? "60" : "59";
       cpu.textContent = (2.4 + Math.random() * 1.6).toFixed(1) + "%";
-      br.textContent = (18.6 + Math.random() * 1.4).toFixed(1) + " Mbps";
+      br.textContent = (30.4 + Math.random() * 1.6).toFixed(1) + " Mbps";
     }, 1100);
   })();
 
