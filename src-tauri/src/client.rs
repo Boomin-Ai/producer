@@ -736,6 +736,24 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
+    /// Disconnect a posting channel (contract: DELETE /v1/channels/:id). The
+    /// same path on both backends; Boomin may answer 501 until its own route
+    /// lands, and the message says where to do it instead.
+    pub async fn disconnect_channel(&self, channel_id: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .delete(self.url(&format!("/v1/channels/{channel_id}")))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let body: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&body, status)));
+        }
+        Ok(resp.json().await.unwrap_or(Value::Null))
+    }
+
     /// Request an upload slot (contract: POST /v1/media/uploads).
     pub async fn create_upload(
         &self,

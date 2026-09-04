@@ -518,6 +518,10 @@ export function Home({
           destinations={destinations}
           channels={channels}
           onChannelsChanged={loadLive}
+          onOpenConsole={(section) => {
+            closeSettings();
+            setView({ kind: "console", section });
+          }}
           updater={updater}
           onClose={closeSettings}
         />
@@ -591,15 +595,54 @@ function SystemBanner({ message, onDismiss }: { message: string; onDismiss: () =
 /** Channels — live destinations + social channels. Lives in SETTINGS (the
  * profile popout): channels are workspace facts you configure, not a surface
  * you work in. */
+/** A connected posting channel. Unhooking is two steps and says why it failed
+ *  — Boomin answers 501 on this route until its own lands. */
+function ChannelChip({ channel, endpointId, onChanged }: { channel: Channel; endpointId: string; onChanged: () => void }) {
+  const [state, setState] = useState<"idle" | "confirm" | "busy">("idle");
+  const [err, setErr] = useState<string | null>(null);
+  const drop = async () => {
+    setState("busy");
+    setErr(null);
+    try {
+      await ipc.disconnectChannel(endpointId, channel.id);
+      onChanged();
+    } catch (e) {
+      setErr(String(e).replace(/^Error:\s*/, ""));
+      setState("idle");
+    }
+  };
+  return (
+    <span className={`cr-chip static chan${state === "confirm" ? " confirming" : ""}`} title={channel.platform}>
+      <span className="cr-chip-dot" style={{ background: PRESET_TONE[channel.platform] ?? "#8b93a7" }} />
+      {channel.display_name}
+      <span className="cr-chip-kind">{channel.platform}</span>
+      {state === "idle" && (
+        <button className="chan-x" title={`Disconnect ${channel.display_name}`} onClick={() => setState("confirm")}>✕</button>
+      )}
+      {state === "confirm" && (
+        <>
+          <button className="chan-x go" onClick={() => void drop()}>Disconnect</button>
+          <button className="chan-x" onClick={() => setState("idle")}>Cancel</button>
+        </>
+      )}
+      {state === "busy" && <span className="cr-chip-kind">…</span>}
+      {err && <span className="set-connect-error inline">{err}</span>}
+    </span>
+  );
+}
+
 function ChannelsBlock({
   destinations,
   channels,
   endpoints,
+  onOpenConsole,
   onChanged,
 }: {
   destinations: LiveDestination[];
   channels: Channel[];
   endpoints: EndpointInfo[];
+  /** Boomin workspaces connect through Boomin's own OAuth, in the console. */
+  onOpenConsole?: (section: string) => void;
   onChanged: () => void;
 }) {
   const [addingDest, setAddingDest] = useState(false);
@@ -674,14 +717,21 @@ function ChannelsBlock({
               </div>
               <div className="cr-channels">
                 {mine.map((c) => (
-                  <span key={c.id} className="cr-chip static" title={c.platform}>
-                    <span className="cr-chip-dot" style={{ background: PRESET_TONE[c.platform] ?? "#8b93a7" }} />
-                    {c.display_name}
-                    <span className="cr-chip-kind">{c.platform}</span>
-                  </span>
+                  <ChannelChip key={c.id} channel={c} endpointId={ep.id} onChanged={onChanged} />
                 ))}
                 {boomin ? (
-                  mine.length === 0 && <span className="set-sub-empty">Connect posting channels in your Boomin workspace; they show up here.</span>
+                  (["instagram", "facebook", "threads"] as const)
+                    .filter((pl) => !mine.some((c) => c.platform === pl))
+                    .map((pl) => (
+                      <button
+                        key={pl}
+                        className="set-plat"
+                        onClick={() => onOpenConsole?.("channels")}
+                        title={`Connect ${pl} through Boomin's sign-in`}
+                      >
+                        + {pl === "instagram" ? "Instagram" : pl === "facebook" ? "Facebook" : "Threads"}
+                      </button>
+                    ))
                 ) : (
                   (["instagram", "facebook", "threads"] as const)
                     .filter((pl) => !mine.some((c) => c.platform === pl))
@@ -749,6 +799,7 @@ function SettingsPanel({
   destinations,
   channels,
   onChannelsChanged,
+  onOpenConsole,
   updater,
   onClose,
 }: {
@@ -760,6 +811,7 @@ function SettingsPanel({
   destinations: LiveDestination[];
   channels: Channel[];
   onChannelsChanged: () => void;
+  onOpenConsole?: (section: string) => void;
   updater: { state: string; version: string | null; restart: () => void };
   onClose: () => void;
 }) {
@@ -959,6 +1011,7 @@ function SettingsPanel({
             destinations={destinations}
             channels={channels.filter((c) => c.endpoint_id === current.id)}
             endpoints={[current]}
+            onOpenConsole={onOpenConsole}
             onChanged={onChannelsChanged}
           />
         )}

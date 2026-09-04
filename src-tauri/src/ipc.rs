@@ -808,6 +808,19 @@ pub async fn connect_channel(
         .await
 }
 
+#[tauri::command]
+pub async fn disconnect_channel(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    channel_id: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .disconnect_channel(&channel_id)
+        .await
+}
+
 fn mime_for_path(path: &str) -> Option<(&'static str, &'static str)> {
     let ext = path.rsplit('.').next()?.to_ascii_lowercase();
     match ext.as_str() {

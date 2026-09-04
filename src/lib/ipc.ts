@@ -90,6 +90,10 @@ export const ipc = {
   /** Bind another brand of the same account as its own workspace (token reused). */
   boominAddBrand: (endpointId: string, brandSlug: string) =>
     invoke<{ id: string; refreshed?: boolean }>("boomin_add_brand", { endpointId, brandSlug }),
+  /** Disconnect a posting channel. Boomin answers 501 until its own route
+   *  lands; the message names where to do it. */
+  disconnectChannel: (endpointId: string, channelId: string) =>
+    invoke("disconnect_channel", { endpointId, channelId }),
   connectChannel: (endpointId: string, platform: string) =>
     invoke<{ browser_url: string; expires_at: string }>("connect_channel", { endpointId, platform }),
   endpointChannels: (endpointId: string) =>
