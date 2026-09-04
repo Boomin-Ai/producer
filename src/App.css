@@ -8097,6 +8097,10 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3);
 }
 .net-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.net-field-row > .net-field:only-child { grid-column: 1 / -1; }
+.net-check { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--fg-1); cursor: pointer; }
+.net-check input { accent-color: var(--mint); margin: 0; }
+.net-check em { font-style: normal; font-size: 11px; color: var(--fg-3); }
 .net-book-form select,
 .net-book-form .net-slug {
   width: 100%; min-width: 0; height: 32px; padding: 0 10px; font-size: 13px;
