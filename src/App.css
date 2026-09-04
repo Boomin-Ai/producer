@@ -8115,6 +8115,9 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   border: 1px solid var(--line-1); background: var(--surface-1);
   color: var(--fg-1); text-transform: none; letter-spacing: 0; white-space: normal; font-size: 12px;
 }
+.net-deal-wrap { display: flex; flex-direction: column; gap: 4px; }
+.net-deal-wrap .net-deal { width: 100%; }
+.net-deal-enter { height: 28px; font-size: 12px; }
 .net-deal-line { display: flex; align-items: center; gap: 7px; font-weight: 650; }
 .net-deal-dot { flex: none; width: 6px; height: 6px; border-radius: 999px; background: var(--fg-3); }
 .net-deal.proposed .net-deal-dot { background: #60a5fa; }

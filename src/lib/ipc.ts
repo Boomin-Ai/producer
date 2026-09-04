@@ -560,7 +560,16 @@ export const network = {
   /** accept | decline (beneficiary) · cancel (either side, before funding). */
   dealAction: (endpointId: string, id: string, action: "accept" | "decline" | "cancel") =>
     invoke<{ deal: NetworkDeal }>("network_deal_action", { endpointId, id, action }),
+  /** Beneficiary enters the show THROUGH the deal — no browser: Rust knocks
+   * via the API and opens the guest page in its own window (`guest-<id>`).
+   * Rejects with a message starting `network_room_closed:` while the host's
+   * room isn't open. */
+  enterDeal: (endpointId: string, dealId: string, windowTitle?: string) =>
+    invoke<{ join_url: string; resumed: boolean }>("network_deal_enter", { endpointId, dealId, windowTitle }),
 };
+
+/** True when an `enterDeal` rejection means the host hasn't opened the room. */
+export const isRoomClosedError = (e: unknown) => String(e).includes("network_room_closed");
 
 export interface NetworkDeal {
   id: string;
@@ -574,6 +583,8 @@ export interface NetworkDeal {
   status: "proposed" | "accepted" | "funded" | "delivered" | "released" | "declined" | "cancelled" | "disputed" | "expired";
   amount_cents: number;
   net_to_beneficiary_cents: number;
+  /** $0 appearance: no escrow — accepted counts as funded, release posts nothing. */
+  is_free?: boolean;
   room_id?: string | null;
   room_title?: string | null;
   appearance?: { guest_id: string; admitted_at: string } | null;

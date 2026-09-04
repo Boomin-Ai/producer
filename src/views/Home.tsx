@@ -9,6 +9,7 @@ import type { TargetResult } from "../lib/ipc";
 import { WORKSPACE_EVENT, activeEndpointId, resolveActiveEndpoint, setActiveEndpointId } from "../lib/workspace";
 import { copyText, ensureRoomJoinLink } from "../lib/roomLink";
 import { ipc,
+  isRoomClosedError,
   network,
   networkConnections,
   networkJoin,
@@ -1612,6 +1613,25 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
     }
   };
 
+  /** Enter the show through the deal — Producer knocks and opens the guest
+   * page in its own window; no browser, no link. Only the BENEFICIARY of a
+   * funded (or free, accepted) deal can. */
+  const [entering, setEntering] = useState<string | null>(null);
+  const enterDeal = async (d: NetworkDeal, hostName: string) => {
+    if (!endpointId) return;
+    setEntering(d.id);
+    setNote(null);
+    try {
+      await network.enterDeal(endpointId, d.id, `${hostName} · ${d.title}`);
+      setNote(`Knocked on ${hostName}'s room through the deal — your guest seat opened in its own window.`);
+    } catch (e) {
+      setNote(isRoomClosedError(e) ? "The host hasn't opened the room yet." : String(e).replace(/^Error:\s*/, ""));
+    } finally {
+      setEntering(null);
+      void load(endpointId);
+    }
+  };
+
   const book = async (c: NetworkConnectionRow) => {
     const room = rooms.find((r) => r.id === bookRoom);
     if (!endpointId || !room || bookCents < 500) return;
@@ -1844,19 +1864,30 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
                                 ? earn ? `${amt} delivered — awaiting release` : `${amt} delivered — release in Boomin`
                                 : `${amt} · ${d.status}`;
                       return (
-                        <button
-                          key={d.id}
-                          className={`net-deal ${d.status}`}
-                          title="Terms and details"
-                          onClick={() => setDealOpen(d.id)}
-                        >
-                          <span className="net-deal-line">
-                            <i className="net-deal-dot" />
-                            {line}
-                            <span className="net-deal-more">{earn && d.status === "proposed" ? "Review ›" : "Details ›"}</span>
-                          </span>
-                          {detail && <span className="net-deal-sub">{detail}</span>}
-                        </button>
+                        <div key={d.id} className="net-deal-wrap">
+                          <button
+                            className={`net-deal ${d.status}`}
+                            title="Terms and details"
+                            onClick={() => setDealOpen(d.id)}
+                          >
+                            <span className="net-deal-line">
+                              <i className="net-deal-dot" />
+                              {line}
+                              <span className="net-deal-more">{earn && d.status === "proposed" ? "Review ›" : "Details ›"}</span>
+                            </span>
+                            {detail && <span className="net-deal-sub">{detail}</span>}
+                          </button>
+                          {canEnterDeal(d) && (
+                            <button
+                              className="net-accept net-deal-enter"
+                              disabled={busy || entering === d.id}
+                              title="Knock on the host's room through this deal — opens your guest seat in its own window"
+                              onClick={() => void enterDeal(d, c.counterparty.name)}
+                            >
+                              {entering === d.id ? "Knocking…" : "Enter the show"}
+                            </button>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
@@ -2004,6 +2035,8 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
             note={note}
             onAct={(a) => void dealAct(d.id, a).then(() => setDealOpen(null))}
             onSendLink={() => void sendLink(d, other?.name ?? "Guest")}
+            onEnter={canEnterDeal(d) ? () => void enterDeal(d, other?.name ?? "The host") : undefined}
+            entering={entering === d.id}
             onClose={() => setDealOpen(null)}
           />
         );
@@ -2037,6 +2070,15 @@ function RoomLinkChip({ room, onChanged }: { room: LiveRoom; onChanged: () => vo
 
 const DEAL_TERMS_URL = "https://boomin.ai/terms/deals";
 
+/** The beneficiary may enter once the money is in escrow — or, for a free
+ * appearance, as soon as it's accepted (the server treats that as funded). */
+function canEnterDeal(d: NetworkDeal): boolean {
+  if (d.role !== "beneficiary") return false;
+  if (d.status === "funded") return true;
+  return isFreeDeal(d) && d.status === "accepted";
+}
+const isFreeDeal = (d: NetworkDeal) => d.is_free === true || d.amount_cents === 0;
+
 /** The deal, in full, and the answer — a protective layer: nobody accepts
  * money terms from a chip. What is shown here is what the terms page says. */
 function DealSheet({
@@ -2046,6 +2088,8 @@ function DealSheet({
   note,
   onAct,
   onSendLink,
+  onEnter,
+  entering,
   onClose,
 }: {
   deal: NetworkDeal;
@@ -2054,6 +2098,9 @@ function DealSheet({
   note?: string | null;
   onAct: (a: "accept" | "decline" | "cancel") => void;
   onSendLink?: () => void;
+  /** Present only when this brand may enter the show through the deal. */
+  onEnter?: () => void;
+  entering?: boolean;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -2128,6 +2175,22 @@ function DealSheet({
             </div>
             <button className="net-accept" disabled={busy} onClick={onSendLink}>
               Send their link
+            </button>
+            {note && <div className="cr-hint">{note}</div>}
+          </div>
+        )}
+
+        {onEnter && (
+          <div className="deal-link">
+            <div className="deal-term">
+              <span>Enter</span>
+              <p>
+                Knock on {otherName}'s {d.room_title ? `"${d.room_title}"` : "room"} through this deal, from here — your guest seat opens in its own window with your camera and mic.
+                No link, no browser. When {otherName} admits you, the deal knows it's you.
+              </p>
+            </div>
+            <button className="net-accept" disabled={busy || entering} onClick={onEnter}>
+              {entering ? "Knocking…" : "Enter the show"}
             </button>
             {note && <div className="cr-hint">{note}</div>}
           </div>

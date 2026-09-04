@@ -576,6 +576,49 @@ pub async fn network_deal_action(
         .await
 }
 
+/// Enter a funded (or free) deal's show from Producer — no browser. Knocks
+/// through the deal via the API, then opens the returned guest page in its
+/// own webview window (`guest-<deal id>`). The join_url origin is whatever
+/// the endpoint hands back (prod, or a LAN/dev origin) — not restricted.
+#[tauri::command]
+pub async fn network_deal_enter(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    deal_id: String,
+    window_title: Option<String>,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    let res = ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .network_deal_enter(&deal_id)
+        .await?;
+    let join_url = res
+        .get("join_url")
+        .and_then(Value::as_str)
+        .ok_or_else(|| EngineError::Other("enter returned no join_url".into()))?;
+    let parsed = tauri::Url::parse(join_url).map_err(|e| EngineError::Other(e.to_string()))?;
+    // Window labels allow [a-zA-Z0-9-/:_]; deal ids are uuids, but scrub anyway.
+    let label = format!(
+        "guest-{}",
+        deal_id
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+            .collect::<String>()
+    );
+    if let Some(existing) = app.get_webview_window(&label) {
+        // Re-entering: replace the stale page (its guest code may be spent).
+        let _ = existing.close();
+    }
+    tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::External(parsed))
+        .title(window_title.unwrap_or_else(|| "Guest".into()))
+        .inner_size(1100.0, 760.0)
+        .min_inner_size(640.0, 480.0)
+        .build()
+        .map_err(|e| EngineError::Other(e.to_string()))?;
+    Ok(res)
+}
+
 /// The room's mount timings, written beside the engine report so a room
 /// open can be read off disk (engine → applied → settled → veil, plus the
 /// boot phases) — the ruler every speedup is measured against.
