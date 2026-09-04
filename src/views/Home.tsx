@@ -430,7 +430,6 @@ export function Home({
               <div className="cr-menu-backdrop" onClick={() => setAccountOpen(false)} />
               <div className="cr-menu">
                 <button onClick={() => { setAccountOpen(false); setView({ kind: "console", section: "general" }); }}>Brand settings</button>
-                <button onClick={() => { setAccountOpen(false); openSettings(); }}>App &amp; workspaces</button>
                 {onSignOut && endpoints.some((e) => e.kind === "connected") && (
                   <button className="danger" onClick={() => { setAccountOpen(false); onSignOut(); }}>Sign out</button>
                 )}
@@ -683,6 +682,7 @@ function SettingsPanel({
 }) {
   const [appVersion, setAppVersion] = useState<string | null>(null);
   type RepoRelease = { tag_name: string; name: string | null; body: string | null; published_at: string; html_url: string };
+  const [keysOpen, setKeysOpen] = useState(false);
   const [releases, setReleases] = useState<RepoRelease[] | null | "err">(null);
   useEffect(() => {
     fetch("https://api.github.com/repos/Boomin-Ai/producer/releases?per_page=8")
@@ -760,10 +760,12 @@ function SettingsPanel({
           </div>
         </div>
 
-        <div className="cr-label" style={{ marginTop: 28 }}>
-          SHORTCUTS
-        </div>
-        <div className="ks">
+        <button className="cr-label ks-toggle" style={{ marginTop: 28 }} onClick={() => setKeysOpen((v) => !v)} aria-expanded={keysOpen}>
+          SHORTCUTS <span className="ks-count">{KEYMAP.length + 4}</span>
+          <span className={`ks-chev${keysOpen ? " open" : ""}`}>⌄</span>
+        </button>
+        {keysOpen && (
+        <div className="ks compact">
           {KEYMAP.map((b) => (
             <KeyRow key={b.id} b={b} />
           ))}
@@ -780,6 +782,7 @@ function SettingsPanel({
             </div>
           ))}
         </div>
+        )}
 
         <div className="cr-label" style={{ marginTop: 28 }}>
           WHAT'S NEW
@@ -3040,9 +3043,6 @@ function WorkspacePopout({
         </div>
         {note && <div className="cr-hint">{note}</div>}
         <div className="ws-pop-foot">
-          <button className="ws-row" onClick={onSettings}>
-            <span className="ws-pop-name">Settings</span>
-          </button>
           {onSignOut && endpoints.some((e) => e.kind === "connected") && (
             <button
               className="ws-row ws-signout"

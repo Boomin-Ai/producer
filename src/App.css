@@ -8524,3 +8524,13 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .cr-firewall-text { flex: 1; min-width: 0; }
 .cr-firewall-sub { color: var(--muted-fg); font-size: 12px; }
 .cr-firewall-btn { flex-shrink: 0; }
+
+/* Settings › shortcuts: a disclosure, collapsed by default; rows stay one line each. */
+.ks-toggle { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: 0; padding: 0; cursor: pointer; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; }
+.ks-toggle .ks-count { font-weight: 500; letter-spacing: 0; opacity: 0.6; }
+.ks-toggle .ks-chev { margin-left: auto; opacity: 0.6; transition: transform 200ms ease; display: inline-block; line-height: 0; }
+.ks-toggle .ks-chev.open { transform: rotate(180deg); }
+.ks.compact { margin-top: 8px; }
+.ks.compact .ks-row { padding: 5px 0; min-height: 0; font-size: 12.5px; gap: 10px; }
+.ks.compact .ks-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ks.compact .ks-key, .ks.compact .ks-row button { padding: 2px 8px; font-size: 11.5px; min-width: 0; }
