@@ -771,7 +771,6 @@ function SettingsPanel({
     return () => window.removeEventListener(WORKSPACE_EVENT, sync);
   }, [endpoints]);
   const current = endpoints.find((e) => e.id === wsId) ?? endpoints[0] ?? null;
-  const [newsOpen, setNewsOpen] = useState(false);
   const [releases, setReleases] = useState<RepoRelease[] | null | "err">(null);
   useEffect(() => {
     fetch("https://api.github.com/repos/Boomin-Ai/producer/releases?per_page=8")
@@ -847,47 +846,7 @@ function SettingsPanel({
             ) : updater.state === "downloading" ? (
               <span className="set-ver busy">Updating…</span>
             ) : (
-              <button className={`set-ver${newsOpen ? " on" : ""}`} title="Up to date — updates install themselves. Click for what's new." onClick={() => setNewsOpen((v) => !v)}>
-                v{appVersion ?? ""}
-              </button>
-            )}
-            {newsOpen && (
-              <>
-                <div className="set-keys-backdrop" onClick={() => setNewsOpen(false)} />
-                <div className="set-news-pop">
-                  <div className="set-pop-head">What's new <span className="set-pop-sub">up to date — updates install themselves</span></div>
-        <div className="upd upd-sheet">
-          {releases === null && <div className="cr-sheet-row-sub">Checking…</div>}
-          {releases === "err" && (
-            <div className="cr-sheet-row-sub">The update stream goes live when the repo does.</div>
-          )}
-          {Array.isArray(releases) &&
-            releases.map((r) => (
-              <div key={r.tag_name} className="upd-item">
-                <div className="upd-head" onClick={() => openUrl(r.html_url).catch(() => {})}>
-                  <span className="upd-tag">{r.tag_name}</span>
-                  <span className="upd-name">{r.name || ""}</span>
-                  <span className="upd-date">
-                    {new Date(r.published_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                  </span>
-                </div>
-                {r.body && (
-                  <div className="upd-body">
-                    {r.body
-                      .split("\n")
-                      .filter((l) => l.trim())
-                      .slice(0, 4)
-                      .map((l, k) => (
-                        <p key={k}>{linkifyRel(l.replace(/^[-*#\s]+/, ""))}</p>
-                      ))}
-                  </div>
-                )}
-              </div>
-            ))}
-        </div>
-
-                </div>
-              </>
+              <span className="set-ver">v{appVersion ?? ""}</span>
             )}
             <div className="set-keys">
               <button className={`set-keys-btn${keysOpen ? " on" : ""}`} onClick={() => setKeysOpen((v) => !v)} aria-expanded={keysOpen}>
@@ -917,6 +876,56 @@ function SettingsPanel({
               )}
             </div>
           </div>
+        </div>
+
+        <div className="cr-label set-gap">UPDATES</div>
+        <div className="set-upd">
+          <div className="set-upd-status">
+            {updater.state === "ready" ? (
+              <>An update is ready. <button className="linkish" onClick={updater.restart}>Restart to install{updater.version ? ` ${updater.version}` : ""}</button></>
+            ) : updater.state === "downloading" ? (
+              "Downloading an update…"
+            ) : (
+              "Up to date. Updates install themselves."
+            )}
+          </div>
+          {Array.isArray(releases) && releases[0] && (() => {
+            const r = releases[0];
+            return (
+              <div className="set-upd-latest" onClick={() => openUrl(r.html_url).catch(() => {})}>
+                <div className="set-upd-latest-h">
+                  <span className="upd-tag">{r.tag_name}</span>
+                  <span className="set-upd-latest-name">{r.name || "Latest release"}</span>
+                  <span className="upd-date">{new Date(r.published_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+                </div>
+                <div className="set-upd-latest-body">
+                  {(r.body || "").split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 8).map((l, k) => (
+                    <p key={k}>{linkifyRel(l.replace(/^[-*#\s]+/, ""))}</p>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+          {Array.isArray(releases) && releases.length > 1 && (
+            <>
+              <div className="set-upd-older">Earlier</div>
+              <div className="upd upd-sheet">
+                {releases.slice(1).map((r) => (
+                  <div key={r.tag_name} className="upd-item">
+                    <div className="upd-head" onClick={() => openUrl(r.html_url).catch(() => {})}>
+                      <span className="upd-tag">{r.tag_name}</span>
+                      <span className="upd-name">{r.name || ""}</span>
+                      <span className="upd-date">
+                        {new Date(r.published_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {releases === null && <div className="cr-sheet-row-sub">Checking…</div>}
+          {releases === "err" && <div className="cr-sheet-row-sub">The update stream goes live when the repo does.</div>}
         </div>
 
         <div className="cr-label set-gap">DEV</div>
