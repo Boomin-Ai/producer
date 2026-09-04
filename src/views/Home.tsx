@@ -223,7 +223,26 @@ export function Home({
   onEndpointsChanged?: () => void;
 }) {
   const [view, setView] = useState<MainView>({ kind: "home" });
+  // Settings is a rail-side surface: it expands out of the left rail and
+  // pushes the home surfaces right (never a panel over them). It only exists
+  // at home, so opening it from another view returns home first.
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const openSettings = useCallback(() => {
+    setView({ kind: "home" });
+    setSettingsOpen(true);
+  }, []);
+  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  // Content stays mounted through the collapse so the width animates closed
+  // over real content rather than snapping.
+  const [settingsShown, setSettingsShown] = useState(false);
+  useEffect(() => {
+    if (settingsOpen) {
+      setSettingsShown(true);
+      return;
+    }
+    const t = setTimeout(() => setSettingsShown(false), 280);
+    return () => clearTimeout(t);
+  }, [settingsOpen]);
   // Home is SURFACES, not one long page: Rooms (the stage list) and Manager
   // (channels, network, rundown — productions soon). The rail switches them.
   const [surface, setSurface] = useState<"rooms" | "manager">("rooms");
@@ -375,7 +394,7 @@ export function Home({
   }
 
   return (
-    <div className={view.kind === "home" ? "cr cr--vibrant" : "cr"}>
+    <div className={view.kind === "home" ? `cr cr--vibrant${settingsOpen ? " settings-open" : ""}` : "cr"}>
       <header className="cr-top" data-tauri-drag-region>
         <div className="cr-top-left" data-tauri-drag-region>
           {view.kind !== "home" && (
@@ -411,7 +430,7 @@ export function Home({
               <div className="cr-menu-backdrop" onClick={() => setAccountOpen(false)} />
               <div className="cr-menu">
                 <button onClick={() => { setAccountOpen(false); setView({ kind: "console", section: "general" }); }}>Brand settings</button>
-                <button onClick={() => { setAccountOpen(false); setSettingsOpen(true); }}>App &amp; workspaces</button>
+                <button onClick={() => { setAccountOpen(false); openSettings(); }}>App &amp; workspaces</button>
                 {onSignOut && endpoints.some((e) => e.kind === "connected") && (
                   <button className="danger" onClick={() => { setAccountOpen(false); onSignOut(); }}>Sign out</button>
                 )}
@@ -425,29 +444,39 @@ export function Home({
         <SystemBanner message={loadError} onDismiss={() => setErrorDismissed(true)} />
       )}
 
-      {settingsOpen && (
-        <SettingsSheet
-          endpoints={endpoints}
-          destinations={destinations}
-          channels={channels}
-          onChannelsChanged={loadLive}
-          onAddEndpoint={() => {
-            setSettingsOpen(false);
-            onAddEndpoint();
-          }}
-          onRemoveEndpoint={onRemoveEndpoint}
-          updater={updater}
-          onClose={() => setSettingsOpen(false)}
-        />
+      {view.kind === "home" && (
+        <aside className={`home-settings${settingsOpen ? " open" : ""}`} aria-hidden={!settingsOpen}>
+          {settingsShown && (
+            <SettingsPanel
+              endpoints={endpoints}
+              destinations={destinations}
+              channels={channels}
+              onChannelsChanged={loadLive}
+              onAddEndpoint={() => {
+                closeSettings();
+                onAddEndpoint();
+              }}
+              onRemoveEndpoint={onRemoveEndpoint}
+              updater={updater}
+              onClose={closeSettings}
+            />
+          )}
+        </aside>
       )}
 
       {view.kind === "home" && (
         <HomeRail
           brandName={(endpoints.find((e) => e.id === activeId) ?? endpoints.find((e) => e.kind === "connected") ?? endpoints[0])?.name ?? "Workspace"}
           surface={surface}
-          onSurface={setSurface}
+          onSurface={(s) => {
+            closeSettings();
+            setSurface(s);
+          }}
           onCompose={() => setView({ kind: "compose" })}
-          onSettings={() => setProfileOpen((v) => !v)}
+          onProfile={() => setProfileOpen((v) => !v)}
+          settingsOpen={settingsOpen}
+          onSettings={() => (settingsOpen ? closeSettings() : openSettings())}
+          onBack={closeSettings}
         />
       )}
       {view.kind === "home" && profileOpen && (
@@ -463,7 +492,7 @@ export function Home({
           }}
           onSettings={() => {
             setProfileOpen(false);
-            setSettingsOpen(true);
+            openSettings();
           }}
           onOpenConsole={(section, endpointId) => {
             if (endpointId && endpointId !== activeId) {
@@ -630,7 +659,10 @@ function NetworkInviteReset({ endpoints }: { endpoints: EndpointInfo[] }) {
   );
 }
 
-function SettingsSheet({
+/** The body of Settings. Lives inside the rail-side `.home-settings`
+ * surface (see Home): no backdrop, no sheet chrome — the rail's Back button
+ * and Esc close it. */
+function SettingsPanel({
   endpoints,
   destinations,
   channels,
@@ -685,14 +717,9 @@ function SettingsSheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   return (
-    <>
-      <div className="cr-sheet-backdrop" onClick={onClose} />
-      <aside className="cr-sheet">
+      <div className="home-settings-in">
         <div className="cr-sheet-head">
           <span className="cr-sheet-title">Settings</span>
-          <button className="cr-back" onClick={onClose} title="Close">
-            ✕
-          </button>
         </div>
 
         <div className="cr-label">WORKSPACES</div>
@@ -805,8 +832,7 @@ function SettingsSheet({
         </div>
 
               <ChannelsBlock destinations={destinations} channels={channels} onChanged={onChannelsChanged} />
-      </aside>
-    </>
+      </div>
   );
 }
 
@@ -2878,6 +2904,11 @@ const railIc = {
       <path d="M12 5v14M5 12h14" />
     </svg>
   ),
+  back: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 12H5M12 19l-7-7 7-7" />
+    </svg>
+  ),
 };
 
 /** The profile popout: who you are acting as, and the brand switch.
@@ -3036,7 +3067,10 @@ function HomeRail({
   surface,
   onSurface,
   onCompose,
+  onProfile,
+  settingsOpen,
   onSettings,
+  onBack,
 }: {
   brandName: string;
   /** The brand's avatar once the session serves it; initial until then. */
@@ -3044,24 +3078,37 @@ function HomeRail({
   surface: "rooms" | "manager";
   onSurface: (s: "rooms" | "manager") => void;
   onCompose: () => void;
+  /** The avatar: workspace identity and switch (the popout). */
+  onProfile: () => void;
+  /** Settings is a surface beside the rail; while it is open the avatar
+   * becomes Back, and the gear at the bottom reads as selected. */
+  settingsOpen: boolean;
   onSettings: () => void;
+  onBack: () => void;
 }) {
   return (
     <nav className="home-rail">
-      {/* The profile IS the settings entry — workspace identity and its
-        * controls live behind one button. */}
-      <button className="home-rail-avatar" title={`${brandName} — settings`} onClick={onSettings}>
-        {avatarUrl ? <img src={avatarUrl} alt="" /> : <span>{(brandName[0] ?? "?").toUpperCase()}</span>}
-        <i className="home-rail-presence" />
-      </button>
-      <button className={surface === "rooms" ? "on" : ""} title="Rooms" onClick={() => onSurface("rooms")}>
+      {settingsOpen ? (
+        <button className="home-rail-avatar home-rail-back" title="Back" onClick={onBack}>
+          {railIc.back}
+        </button>
+      ) : (
+        <button className="home-rail-avatar" title={`${brandName} — workspaces`} onClick={onProfile}>
+          {avatarUrl ? <img src={avatarUrl} alt="" /> : <span>{(brandName[0] ?? "?").toUpperCase()}</span>}
+          <i className="home-rail-presence" />
+        </button>
+      )}
+      <button className={surface === "rooms" && !settingsOpen ? "on" : ""} title="Rooms" onClick={() => onSurface("rooms")}>
         {railIc.onair}
       </button>
-      <button className={surface === "manager" ? "on" : ""} title="Manager" onClick={() => onSurface("manager")}>
+      <button className={surface === "manager" && !settingsOpen ? "on" : ""} title="Manager" onClick={() => onSurface("manager")}>
         {railIc.manager}
       </button>
       <div className="home-rail-spring" />
       <button title="New post" onClick={onCompose}>{railIc.plus}</button>
+      <button className={settingsOpen ? "on" : ""} title="Settings" onClick={onSettings}>
+        {railIc.gear}
+      </button>
     </nav>
   );
 }

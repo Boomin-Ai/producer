@@ -5694,32 +5694,112 @@ textarea::placeholder {
 }
 /* The opaque ground, viewport-pinned: an element-height gradient can leave
    the window bottom bare; a fixed sheet cannot. */
+/* The glass column's width: the rail alone, or rail + Settings. Everything
+   that clears it (the opaque ground, the curve, the home body) reads this
+   one number and transitions with it, so Settings PUSHES content — the
+   surfaces shift right as one piece, nothing is overlaid. */
+.cr.cr--vibrant {
+  --rail-w: 88px;
+  --settings-w: 340px;
+}
+.cr.cr--vibrant.settings-open {
+  --rail-w: calc(88px + var(--settings-w));
+}
 #root > .cr.cr--vibrant::after {
   content: "";
   position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
-  left: 88px;
+  left: var(--rail-w);
   z-index: -1;
   background: var(--rail-bg);
+  transition: left 0.26s ease;
 }
 #root > .cr.cr--vibrant::before {
   content: "";
   position: fixed;
-  left: 72px;
+  left: calc(var(--rail-w) - 16px);
   top: 0;
   bottom: 0;
   width: 16px;
   z-index: -1;
   background: var(--rail-bg);
   border-radius: 16px 0 0 16px;
+  transition: left 0.26s ease;
 }
 
 /* ── Home rail — full-height frosted column, inset + rounded ───────────── */
 .cr.cr--vibrant .cr-home {
-  margin-left: 88px;
+  margin-left: var(--rail-w);
   padding-left: 6px;
+  transition: margin-left 0.26s ease;
+}
+
+/* While pushed, the body must still fit beside the glass column (its width
+   is otherwise min(1140px, 100vw − 72px), sized for the bare rail). */
+.cr.cr--vibrant.settings-open .cr-home {
+  max-width: calc(100vw - var(--rail-w) - 28px);
+}
+.cr.cr--vibrant.settings-open .cr-home.has-net-rail {
+  max-width: min(980px, calc(100vw - var(--rail-w) - 300px));
+}
+
+/* ── Settings — a surface that expands OUT of the rail ────────────────────
+   Same material as the rail (bare over the native glass, no card chrome),
+   sitting between the rail and the curved edge of the content ground. Width
+   animates 0 → --settings-w; the content mounts only while shown. */
+.home-settings {
+  position: fixed;
+  left: 72px;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  z-index: 39;
+  overflow: hidden;
+  background: transparent;
+  transition: width 0.26s ease;
+}
+.home-settings.open {
+  width: var(--settings-w, 340px);
+}
+.home-settings-in {
+  width: var(--settings-w, 340px);
+  height: 100%;
+  overflow-y: auto;
+  padding: 48px 22px 24px 8px; /* clear the traffic lights, like the rail */
+  display: flex;
+  flex-direction: column;
+  color: var(--rail-fg);
+}
+.home-settings-in .cr-sheet-head {
+  padding-left: 4px;
+}
+.home-rail-back {
+  background: rgba(255, 255, 255, 0.1);
+  color: #eef1f6;
+}
+.home-rail-back:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* Narrow: no room to push — Settings takes the window over, right of the
+   rail, on an opaque ground. */
+@media (max-width: 860px) {
+  .cr.cr--vibrant.settings-open {
+    --rail-w: 88px;
+  }
+  .home-settings {
+    z-index: 45;
+    background: var(--rail-bg);
+    border-radius: 16px 0 0 16px;
+  }
+  .home-settings.open {
+    width: calc(100vw - 72px);
+  }
+  .home-settings-in {
+    width: calc(100vw - 72px);
+  }
 }
 .home-rail {
   position: fixed;
