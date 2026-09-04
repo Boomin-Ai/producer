@@ -8568,3 +8568,20 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .set .set-pop-head { font-weight: 600; color: var(--fg-1); font-size: 13px; display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
 .set .set-pop-sub { font-weight: 400; color: var(--fg-2); font-size: 11.5px; }
 .set .set-news-pop .upd-sheet { border: 0; padding: 0 4px 0 0; max-height: 320px; }
+
+/* Settings › channels: connect rows + a flat destination editor */
+.set .set-connect { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.set .set-connect-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 30px; }
+.set .set-connect-k { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-2); min-width: 64px; }
+.set .set-connect-sub { font-size: 12px; color: var(--fg-2); }
+.set .set-plat { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; border: 1px solid oklch(1 0 0 / 0.12); background: none; color: var(--fg-1); font-size: 12px; cursor: pointer; }
+.set .set-plat:hover { background: oklch(1 0 0 / 0.06); }
+.set .set-plat.busy { border-color: oklch(0.75 0.14 165 / 0.5); color: var(--mint); }
+.set .set-connect-pending { font-size: 12.5px; color: var(--fg-2); display: flex; gap: 6px; align-items: center; }
+.set .set-connect-error { font-size: 12px; color: #ffb4b4; border: 1px solid oklch(0.7 0.18 25 / 0.35); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; }
+.set .cr-dest-editor { margin-top: 12px; max-width: none; }
+.set .live-editor { background: none; border: 1px solid oklch(1 0 0 / 0.08); border-radius: 10px; padding: 12px; }
+.set .live-editor select, .set .live-editor input { appearance: none; -webkit-appearance: none; background: oklch(1 0 0 / 0.04); border: 1px solid oklch(1 0 0 / 0.1); border-radius: 8px; color: var(--fg-1); padding: 8px 10px; font-size: 13px; box-shadow: none; }
+.set .live-editor select { background-image: linear-gradient(45deg, transparent 50%, var(--fg-2) 50%), linear-gradient(135deg, var(--fg-2) 50%, transparent 50%); background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 28px; }
+.set .live-editor button { background: none; border: 1px solid oklch(1 0 0 / 0.12); border-radius: 999px; padding: 7px 14px; color: var(--fg-1); }
+.set .live-editor button.primary { background: var(--mint); color: #06110b; border-color: transparent; font-weight: 700; }

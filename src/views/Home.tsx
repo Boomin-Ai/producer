@@ -579,14 +579,33 @@ function SystemBanner({ message, onDismiss }: { message: string; onDismiss: () =
 function ChannelsBlock({
   destinations,
   channels,
+  endpoints,
   onChanged,
 }: {
   destinations: LiveDestination[];
   channels: Channel[];
+  endpoints: EndpointInfo[];
   onChanged: () => void;
 }) {
   const [addingDest, setAddingDest] = useState(false);
   const [editingDest, setEditingDest] = useState<LiveDestination | null>(null);
+  // Posting channels connect by OAuth: the server mints a browser session, the
+  // platform calls the server back, the token lands there. Self-hosted
+  // workspaces drive it from here; Boomin workspaces connect in Boomin.
+  const [connecting, setConnecting] = useState<{ ep: string; platform: string } | null>(null);
+  const [connectError, setConnectError] = useState<string | null>(null);
+  const independents = endpoints.filter((e) => !isBoomin(e));
+  const boomins = endpoints.filter((e) => isBoomin(e));
+  async function startConnect(endpointId: string, platform: string) {
+    setConnectError(null);
+    try {
+      const { browser_url } = await ipc.connectChannel(endpointId, platform);
+      await openUrl(browser_url);
+      setConnecting({ ep: endpointId, platform });
+    } catch (e) {
+      setConnectError(String(e).replace(/^Error:\s*/, ""));
+    }
+  }
   return (
       <section className="cr-section set-channels" id="sec-channels">
         <div className="cr-label set-gap">CHANNELS</div>
@@ -610,10 +629,45 @@ function ChannelsBlock({
               <span className="cr-chip-kind">{c.platform}</span>
             </span>
           ))}
-          <button className="cr-chip add" onClick={() => setAddingDest(true)}>
-            + Add
-          </button>
         </div>
+
+        <div className="set-connect">
+          <div className="set-connect-row">
+            <span className="set-connect-k">Live</span>
+            <button className="set-plat" onClick={() => { setEditingDest(null); setAddingDest(true); }}>+ Destination</button>
+            <span className="set-connect-sub">Twitch, Kick, YouTube, or any RTMP — streams from rooms.</span>
+          </div>
+          {independents.map((ep) => (
+            <div key={ep.id} className="set-connect-row">
+              <span className="set-connect-k">{ep.name}</span>
+              {(["instagram", "facebook", "threads"] as const).map((pl) => (
+                <button
+                  key={pl}
+                  className={`set-plat${connecting?.ep === ep.id && connecting.platform === pl ? " busy" : ""}`}
+                  onClick={() => startConnect(ep.id, pl)}
+                  title={`Connect ${pl} to ${ep.name} (OAuth in your browser)`}
+                >
+                  <span className="cr-chip-dot" style={{ background: PRESET_TONE[pl] ?? "#8b93a7" }} />
+                  {pl === "instagram" ? "Instagram" : pl === "facebook" ? "Facebook" : "Threads"}
+                </button>
+              ))}
+            </div>
+          ))}
+          {boomins.length > 0 && (
+            <div className="set-connect-row">
+              <span className="set-connect-k">{boomins.map((e) => e.name).join(", ")}</span>
+              <span className="set-connect-sub">Posting channels connect in your Boomin workspace and show up here.</span>
+            </div>
+          )}
+          {connecting && (
+            <div className="set-connect-pending">
+              Finish approving in your browser, then
+              <button className="linkish" onClick={() => { onChanged(); setConnecting(null); }}>refresh channels</button>
+            </div>
+          )}
+          {connectError && <div className="set-connect-error">{connectError}</div>}
+        </div>
+
         {(addingDest || editingDest) && (
           <div className="cr-dest-editor">
             <DestinationEditor
@@ -628,10 +682,6 @@ function ChannelsBlock({
                 setEditingDest(null);
               }}
             />
-            <div className="cr-hint">
-              Live channels stream from rooms. Social channels join through your Boomin workspace and
-              receive posts.
-            </div>
           </div>
         )}
       </section>
@@ -817,7 +867,7 @@ function SettingsPanel({
           <NetworkInviteReset endpoints={endpoints} />
         </div>
 
-        <ChannelsBlock destinations={destinations} channels={channels} onChanged={onChannelsChanged} />
+        <ChannelsBlock destinations={destinations} channels={channels} endpoints={endpoints} onChanged={onChannelsChanged} />
 
         <div className="cr-label set-gap">DEV</div>
         <div className="set-list">
