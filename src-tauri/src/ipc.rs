@@ -375,6 +375,21 @@ pub async fn room_set_title(
         .await
 }
 
+/// Delete the server room (server id). See `ProducerClient::delete_room`
+/// for the refused-vs-failed split the app relies on.
+#[tauri::command]
+pub async fn room_delete(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .delete_room(&room_id)
+        .await
+}
+
 #[tauri::command]
 pub async fn room_guest_admit(
     state: State<'_, AppState>,

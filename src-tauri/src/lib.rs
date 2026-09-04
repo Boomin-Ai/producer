@@ -118,6 +118,7 @@ pub fn run() {
             firewall::firewall_allow,
             ipc::room_list_server,
             ipc::room_set_title,
+            ipc::room_delete,
             ipc::room_guest_invite,
             ipc::room_guests,
             ipc::room_guest_admit,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -29,7 +29,7 @@ import { demoOn, setDemo } from "../lib/demo";
 import { markHomePainted, markRoomClick } from "../lib/perf";
 import { KEYMAP, getKey, setKey, resetKey, displayKey, type KeyBinding } from "../lib/keys";
 import { liveRoomId, parseConfig, serializeConfig } from "../lib/room";
-import { renameRoom, syncRooms } from "../lib/roomSync";
+import { deleteRoomEverywhere, renameRoom, roomOccupancy, syncRooms } from "../lib/roomSync";
 import { useUpdater } from "../lib/updater";
 import { DestinationEditor, LiveView } from "./Live";
 
@@ -2581,6 +2581,66 @@ function RoomCard({
     await renameRoom(ep?.id ?? null, room, next).catch(() => {});
     onRoomsChanged();
   };
+
+  // Delete is two steps, and refused with a reason while the room is live or
+  // anyone is in it (waiting or admitted). The reason is inline on the card —
+  // never a disabled ✕ that explains nothing.
+  const [del, setDel] = useState<"idle" | "checking" | "confirm" | "busy">("idle");
+  const [note, setNote] = useState<string | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!note) return;
+    const t = setTimeout(() => setNote(null), 6000);
+    return () => clearTimeout(t);
+  }, [note]);
+  useEffect(() => {
+    if (del !== "confirm") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDel("idle");
+    };
+    const onDown = (e: MouseEvent) => {
+      if (cardRef.current && !cardRef.current.contains(e.target as Node)) setDel("idle");
+    };
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [del]);
+  const askDelete = async () => {
+    if (del !== "idle") return;
+    if (live) {
+      setNote("This room is on air — stop the stream first.");
+      return;
+    }
+    setDel("checking");
+    const ep = await resolveActiveEndpoint().catch(() => null);
+    const occ = await roomOccupancy(ep?.id ?? room.endpoint_id ?? null, room);
+    if (occ && occ.present > 0) {
+      const who = occ.names.slice(0, 3).join(", ");
+      setNote(
+        `${occ.present === 1 ? "Someone is" : `${occ.present} people are`} in this room${who ? ` (${who})` : ""} — remove them first.`,
+      );
+      setDel("idle");
+      return;
+    }
+    setDel("confirm");
+  };
+  const confirmDelete = async () => {
+    if (del !== "confirm") return;
+    setDel("busy");
+    const ep = await resolveActiveEndpoint().catch(() => null);
+    const refused = await deleteRoomEverywhere(ep?.id ?? room.endpoint_id ?? null, room).catch((e) => ({
+      reason: String(e).replace(/^Error:\s*/, ""),
+    }));
+    if (refused) {
+      setNote(refused.reason);
+      setDel("idle");
+      return;
+    }
+    onRoomsChanged();
+  };
   const body = (
     <>
       {editing ? (
@@ -2621,17 +2681,29 @@ function RoomCard({
           LIVE
         </span>
       )}
-      <span
-        className="cr-room-del"
-        title={live ? "Stop the stream first" : "Delete room"}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (live) return;
-          ipc.liveDeleteRoom(room.id).then(onRoomsChanged);
-        }}
-      >
-        ✕
-      </span>
+      {del === "idle" || del === "checking" ? (
+        <span
+          className="cr-room-del"
+          title="Delete room"
+          onClick={(e) => {
+            e.stopPropagation();
+            void askDelete();
+          }}
+        >
+          ✕
+        </span>
+      ) : (
+        <span className="cr-room-confirm" onClick={(e) => e.stopPropagation()}>
+          <span className="cr-room-confirm-q">Delete ‘{room.name}’?</span>
+          <button className="cr-ghost danger" disabled={del === "busy"} onClick={() => void confirmDelete()}>
+            {del === "busy" ? "Deleting…" : "Delete"}
+          </button>
+          <button className="cr-ghost" disabled={del === "busy"} onClick={() => setDel("idle")}>
+            Cancel
+          </button>
+        </span>
+      )}
+      {note && <span className="cr-room-note">{note}</span>}
       <span className="cr-room-chips">
         {offNetwork && (
           <span
@@ -2646,9 +2718,13 @@ function RoomCard({
       </span>
     </>
   );
-  const cls = `cr-room${live ? " onair" : ""}`;
-  return editing ? (
-    <div className={cls}>{body}</div>
+  const cls = `cr-room${live ? " onair" : ""}${del === "confirm" || del === "busy" ? " confirming" : ""}`;
+  // A div while renaming or confirming: a button cannot contain the input or
+  // the confirm's own buttons (nested interactive content is invalid).
+  return editing || del === "confirm" || del === "busy" ? (
+    <div className={cls} ref={cardRef}>
+      {body}
+    </div>
   ) : (
     <button className={cls} onClick={onOpen}>
       {body}

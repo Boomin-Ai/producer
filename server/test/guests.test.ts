@@ -8,6 +8,7 @@ import {
   admitGuest,
   createRoom,
   currentStage,
+  deleteRoom,
   deriveRenderKey,
   freshQuality,
   guestByInviteCode,
@@ -16,6 +17,7 @@ import {
   iceServers,
   inviteGuest,
   joinRoomByCode,
+  listRooms,
   loadRoom,
   mintGuestSignaling,
   reportQuality,
@@ -102,6 +104,23 @@ describe("rooms", () => {
     expect(b.room.id).toBe(a.room.id);
     const c = await createRoom(e, { title: "Other" });
     expect(c.room.id).not.toBe(a.room.id);
+  });
+
+  it("delete is refused while a guest is waiting or admitted, and stays gone after", async () => {
+    const e = env();
+    const { room, code } = await openRoom(e);
+    const j = await joinRoomByCode(e, { roomCode: code, displayName: "Ana" });
+    await expectApi(deleteRoom(e, room.id), "room_occupied", 409);
+    await admitGuest(e, j.guest.id);
+    await expectApi(deleteRoom(e, room.id), "room_occupied", 409);
+    await revokeGuest(e, j.guest.id);
+    await deleteRoom(e, room.id);
+    expect((await listRooms(e)).map((r) => r.id)).not.toContain(room.id);
+    // Registering again under the same external_ref mints a NEW room —
+    // the deleted one does not come back.
+    const again = await createRoom(e, { title: "Show", externalRef: "local-1" });
+    expect(again.created).toBe(true);
+    expect(again.room.id).not.toBe(room.id);
   });
 });
 

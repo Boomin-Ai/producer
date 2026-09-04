@@ -202,6 +202,40 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
+    /// Delete a SERVER room. The server refuses (409 `room_occupied` here,
+    /// 409 `room_on_air` on Boomin) while the room is a live session — that
+    /// verdict comes back as `Ok({ ok: false, code, message })`, a decision
+    /// rather than a transport failure, so the app can keep the room and say
+    /// why. Anything else non-2xx is an error (offline, missing route, 404).
+    pub async fn delete_room(&self, room_id: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .delete(self.root_url(&format!("/v1/app/live/rooms/{room_id}")))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        let status = resp.status().as_u16();
+        if status == 409 || status == 422 {
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            let code = b
+                .pointer("/error/code")
+                .or_else(|| b.get("code"))
+                .and_then(Value::as_str)
+                .unwrap_or("refused")
+                .to_string();
+            return Ok(serde_json::json!({
+                "ok": false,
+                "code": code,
+                "message": error_message(&b, status),
+            }));
+        }
+        if !(200..300).contains(&status) {
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(serde_json::json!({ "ok": true }))
+    }
+
     /// Who is in this room right now. Producer polls this and reconciles its
     /// browser sources against it — guests arrive via the room link on their
     /// own, so the roster is the only way to learn about them.

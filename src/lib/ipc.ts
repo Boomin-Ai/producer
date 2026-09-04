@@ -540,6 +540,13 @@ export const listServerRooms = (endpointId: string) =>
 export const setServerRoomTitle = (endpointId: string, roomId: string, title: string) =>
   invoke("room_set_title", { endpointId, roomId, title });
 
+/** Delete the SERVER room (server id). `{ ok: false, code, message }` is
+ * the server REFUSING (someone is in the room / it is on air) — a decision
+ * the caller must respect. A rejected promise is a transport failure or a
+ * missing route: the caller may proceed locally and tombstone the id. */
+export const deleteServerRoom = (endpointId: string, roomId: string) =>
+  invoke<{ ok: boolean; code?: string; message?: string }>("room_delete", { endpointId, roomId });
+
 export interface NetworkStatus {
   membership?: { status?: string } | null;
   /** live_now is DERIVED from open broadcasts, not a heartbeat — it can
