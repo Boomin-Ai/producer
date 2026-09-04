@@ -283,6 +283,48 @@ void producer_preview_set_cutouts(void *view_ptr, const double *xywh, int n)
     apply_cutouts((HWND)view_ptr);
 }
 
+/* Clipboard. The macOS half writes to NSPasteboard; Win32's clipboard is
+ * owned by a window on the calling thread, so the text is copied into a
+ * GlobalAlloc/GMEM_MOVEABLE block that the clipboard TAKES OWNERSHIP of --
+ * freeing it after a successful SetClipboardData is a use-after-free. UTF-16
+ * (CF_UNICODETEXT) so anything non-ASCII survives. */
+int producer_copy_text(const char *utf8)
+{
+    if (!utf8)
+        return 0;
+    const int wlen = MultiByteToWideChar(CP_UTF8, 0, utf8, -1, NULL, 0);
+    if (wlen <= 0)
+        return 0;
+    HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE, (SIZE_T)wlen * sizeof(wchar_t));
+    if (!mem)
+        return 0;
+    wchar_t *dst = (wchar_t *)GlobalLock(mem);
+    if (!dst) {
+        GlobalFree(mem);
+        return 0;
+    }
+    MultiByteToWideChar(CP_UTF8, 0, utf8, -1, dst, wlen);
+    GlobalUnlock(mem);
+    /* Another process can hold the clipboard open for a moment; a couple of
+     * retries turns a transient failure into a copy that just works. */
+    int opened = 0;
+    for (int i = 0; i < 5 && !opened; i++) {
+        opened = OpenClipboard(NULL) ? 1 : 0;
+        if (!opened)
+            Sleep(20);
+    }
+    if (!opened) {
+        GlobalFree(mem);
+        return 0;
+    }
+    EmptyClipboard();
+    const int ok = SetClipboardData(CF_UNICODETEXT, mem) != NULL;
+    CloseClipboard();
+    if (!ok)
+        GlobalFree(mem); /* only ours to free when the clipboard refused it */
+    return ok;
+}
+
 void producer_preview_set_hidden(void *view_ptr, int hidden)
 {
     HWND child = (HWND)view_ptr;
