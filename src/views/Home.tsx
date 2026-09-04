@@ -763,7 +763,7 @@ function SettingsPanel({
 }) {
   const [appVersion, setAppVersion] = useState<string | null>(null);
   type RepoRelease = { tag_name: string; name: string | null; body: string | null; published_at: string; html_url: string };
-  const [keysOpen, setKeysOpen] = useState(false);
+  const [appTab, setAppTab] = useState<"general" | "shortcuts">("general");
   const [wsId, setWsId] = useState<string | null>(() => activeEndpointId() ?? endpoints[0]?.id ?? null);
   useEffect(() => {
     const sync = () => setWsId(activeEndpointId() ?? endpoints[0]?.id ?? null);
@@ -807,9 +807,12 @@ function SettingsPanel({
   if (mode === "nav") {
     return (
       <div className="home-settings-in set set-nav">
-        <div className="set-nav-head">
-          <span className="cr-sheet-title">Settings</span>
-          {current && <span className="set-nav-ws">{current.name}</span>}
+        <div className="rm-filters-head set-nav-head">
+          <button className="rm-crumb" onClick={onClose} title="Back to your rooms">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
+            Rooms
+          </button>
+          <span className="rm-filters-title">Settings{current ? ` · ${current.name}` : ""}</span>
         </div>
         <div className="set-nav-list">
           {SETTINGS_SECTIONS.map((it) => (
@@ -836,48 +839,22 @@ function SettingsPanel({
         </div>
         {section === "app" && (
           <>
-        <div className="set-top">
-          <span className="cr-sheet-title">Settings</span>
-          <div className="set-top-r">
-            {updater.state === "ready" ? (
-              <button className="set-ver update" onClick={updater.restart} title="Restart to install the update">
-                ↻ Update{updater.version ? ` to ${updater.version}` : ""}
-              </button>
-            ) : updater.state === "downloading" ? (
-              <span className="set-ver busy">Updating…</span>
-            ) : (
-              <span className="set-ver">v{appVersion ?? ""}</span>
-            )}
-            <div className="set-keys">
-              <button className={`set-keys-btn${keysOpen ? " on" : ""}`} onClick={() => setKeysOpen((v) => !v)} aria-expanded={keysOpen}>
-                ⌘ Shortcuts
-              </button>
-              {keysOpen && (
-                <>
-                  <div className="set-keys-backdrop" onClick={() => setKeysOpen(false)} />
-                  <div className="set-keys-pop ks compact">
-                    {KEYMAP.map((b) => (
-                      <KeyRow key={b.id} b={b} />
-                    ))}
-                    {/* The grammar — fixed on purpose, listed so it can be learned. */}
-                    {([
-                      ["⌘1–9", "Cut to a scene"],
-                      ["Arrows", "Nudge selected (⇧ ×10)"],
-                      ["⌥ drag edge", "Crop instead of scale"],
-                      ["Esc", "Deselect"],
-                    ] as const).map(([k, label]) => (
-                      <div key={k} className="ks-row fixed">
-                        <span className="ks-label">{label}</span>
-                        <span className="ks-key">{k}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
+            <div className="set-tabs">
+              <button className={appTab === "general" ? "on" : ""} onClick={() => setAppTab("general")}>General</button>
+              <button className={appTab === "shortcuts" ? "on" : ""} onClick={() => setAppTab("shortcuts")}>Shortcuts</button>
+              <span className="set-tabs-spacer" />
+              {updater.state === "ready" ? (
+                <button className="set-ver update" onClick={updater.restart} title="Restart to install the update">
+                  ↻ Update{updater.version ? ` to ${updater.version}` : ""}
+                </button>
+              ) : updater.state === "downloading" ? (
+                <span className="set-ver busy">Updating…</span>
+              ) : (
+                <span className="set-ver">v{appVersion ?? ""}</span>
               )}
             </div>
-          </div>
-        </div>
-
+            {appTab === "general" && (
+              <>
         <div className="cr-label set-gap">UPDATES</div>
         <div className="set-upd">
           <div className="set-upd-status">
@@ -943,6 +920,34 @@ function SettingsPanel({
           </div>
         </div>
 
+
+              </>
+            )}
+            {appTab === "shortcuts" && (
+              <>
+                <div className="set-keys-intro">Click a key to change it, then press the new key. Esc cancels. The greyed ones are fixed — they're the grammar every room shares.</div>
+                <div className="cr-label set-gap">STAGE</div>
+                <div className="ks compact set-keys-list">
+                  {KEYMAP.map((b) => (
+                    <KeyRow key={b.id} b={b} />
+                  ))}
+                </div>
+                <div className="cr-label set-gap">FIXED</div>
+                <div className="ks compact set-keys-list">
+                  {([
+                    ["⌘1–9", "Cut to a scene"],
+                    ["Arrows", "Nudge selected (⇧ ×10)"],
+                    ["⌥ drag edge", "Crop instead of scale"],
+                    ["Esc", "Deselect"],
+                  ] as const).map(([k, label]) => (
+                    <div key={k} className="ks-row fixed">
+                      <span className="ks-label">{label}</span>
+                      <span className="ks-key">{k}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </>
         )}
         {section === "integrations" && (

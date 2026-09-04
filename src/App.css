@@ -8634,3 +8634,15 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .set-upd-latest-body p { margin: 0 0 4px; font-size: 13px; color: var(--fg-2); line-height: 1.5; }
 .set-upd-older { font-size: 11px; font-weight: 700; letter-spacing: 0.16em; color: var(--fg-3); margin-top: 4px; }
 .set-upd .upd-sheet { max-height: 200px; }
+
+/* Settings glass: drill-in header like Sources → Filters */
+.set-nav-head.rm-filters-head { margin: 4px 0 14px; }
+.set-nav-head .rm-filters-title { font-size: 15px; }
+/* App page: a top nav, CapCut/OBS style */
+.set-tabs { display: flex; align-items: center; gap: 4px; margin-bottom: 18px; padding-bottom: 10px; border-bottom: 1px solid oklch(1 0 0 / 0.08); }
+.set-tabs > button { background: none; border: 0; padding: 6px 12px; border-radius: 8px; color: var(--fg-2); font-size: 13px; font-weight: 600; cursor: pointer; }
+.set-tabs > button.on { color: var(--fg-1); background: oklch(1 0 0 / 0.08); }
+.set-tabs-spacer { flex: 1; }
+.set-keys-intro { font-size: 13px; color: var(--fg-2); line-height: 1.5; max-width: 560px; }
+.set-keys-list { max-width: 560px; }
+.set-keys-list .ks-row { padding: 9px 0; font-size: 13px; }
