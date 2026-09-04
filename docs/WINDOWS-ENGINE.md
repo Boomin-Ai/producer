@@ -317,6 +317,22 @@ learned the hard way:
    a reason nobody had guessed. A gate justified by consequence outlives the
    mechanisms you happen to know about.
 
+### The extern-parity gate
+
+The Windows CI leg is an engine-less `cargo check`, which never compiles
+`shim_win.c`; a `producer_*` extern declared in `ffi.rs` but not defined in
+`shim_win.c` therefore fails only at the real release link, and v0.4.10–14
+shipped without `producer_copy_text` that way (#21, #27). The gate is
+`scripts/check-extern-parity.sh`: it walks the `extern "C"` blocks of
+`ffi.rs` (skipping the `link(name = "obs")` libobs imports and the
+macOS-only system-framework blocks), and requires a column-0 C definition of
+every shim function in `shim.m` and `shim_win.c` — unconditional externs need
+both, `#[cfg(target_os = "macos")]` needs only `shim.m`, `#[cfg(target_os =
+"windows")]` only `shim_win.c`. It needs no engine and no compiler, so it runs
+first on the Linux CI leg. When it trips, add the definition (a
+`// TODO(win): no-op` stub returning the happy-path default is fine) or gate
+the extern.
+
 ## Two kinds of fact, checked separately
 
 The one lesson worth carrying out of this port:
