@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "producer-site",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5310",
+        "--directory",
+        "site"
+      ],
+      "port": 5310
+    }
+  ]
+}
