@@ -88,16 +88,23 @@
   .navbar .pill { padding: 9px 18px; font-size: 13.5px; }
 
   /* ═══════ full-bleed pinned scene ═══════ */
-  .scene-wrap { position: relative; z-index: 1; height: 460vh; }
+  .scene-wrap { position: relative; z-index: 1; height: 380vh; }
+  /* Scroll-driven: JS writes eased 0→1 progress vars per beat; every element
+   * below is a pure function of them, so the scene scrubs with the wheel
+   * instead of snapping between four states. */
+  .scene { --hero: 0; --a1: 0; --a2: 0; --s1: 0; --s1o: 0; --b2: 0; --b3: 0; --s2: 0; --s2o: 0; --c3: 0; --s3: 0; }
   .scene { position: sticky; top: 0; height: 100vh; overflow: hidden; }
 
   /* ── beat 0: hero, centered, full width ── */
   .hero {
     position: absolute; z-index: 4; left: 0; right: 0; top: 15vh;
     text-align: center; padding: 0 24px;
-    transition: opacity 700ms var(--ease), transform 700ms var(--ease), filter 700ms ease;
+    opacity: calc(1 - var(--hero));
+    transform: translateY(calc(-40px * var(--hero)));
+    filter: blur(calc(8px * var(--hero)));
+    will-change: transform, opacity, filter;
   }
-  .scene:not([data-stage="0"]) .hero { opacity: 0; transform: translateY(-40px); filter: blur(8px); pointer-events: none; }
+  .scene:not([data-stage="0"]) .hero { pointer-events: none; }
   /* Meta Verified badge — same treatment as boomin.ai/producer */
   .verified {
     display: inline-flex; align-items: center; gap: 8px;
@@ -297,7 +304,7 @@
   .say {
     position: absolute; z-index: 3; top: 50%;
     opacity: 0; pointer-events: none;
-    transition: opacity 650ms var(--ease), transform 650ms var(--ease), filter 650ms ease;
+    will-change: transform, opacity, filter;
   }
   .say .eyebrow {
     font-size: 11.5px; font-weight: 600; letter-spacing: 0.22em;
@@ -307,18 +314,27 @@
   .say h2 .soft { color: var(--dim); }
 
   /* right lane (panel is on the left) */
-  #say1 { right: 5vw; width: 36vw; transform: translateY(-50%) translateX(40px); }
-  .scene[data-stage="1"] #say1 { opacity: 1; transform: translateY(-50%) translateX(0); }
-  .scene[data-stage="2"] #say1, .scene[data-stage="3"] #say1 { opacity: 0.14; transform: translateY(-50%) translateX(-30px); filter: blur(7px); }
+  #say1 {
+    right: 5vw; width: 36vw;
+    opacity: calc(var(--s1) - 0.86 * var(--s1o));
+    transform: translateY(-50%) translateX(calc(40px - 40px * var(--s1) - 30px * var(--s1o)));
+    filter: blur(calc(7px * var(--s1o)));
+  }
 
   /* left lane (panel is on the right) */
-  #say2 { left: 5vw; width: 36vw; transform: translateY(-50%) translateX(-40px); }
-  .scene[data-stage="2"] #say2 { opacity: 1; transform: translateY(-50%) translateX(0); }
-  .scene[data-stage="3"] #say2 { opacity: 0.14; transform: translateY(-50%) translateX(30px); filter: blur(7px); }
+  #say2 {
+    left: 5vw; width: 36vw;
+    opacity: calc(var(--s2) - 0.86 * var(--s2o));
+    transform: translateY(-50%) translateX(calc(-40px + 40px * var(--s2) + 30px * var(--s2o)));
+    filter: blur(calc(7px * var(--s2o)));
+  }
 
   /* top lane (panel rises from the bottom) */
-  #say3 { top: 16vh; left: 50%; width: min(620px, 88vw); margin-left: 0; text-align: center; transform: translateX(-50%) translateY(30px); }
-  .scene[data-stage="3"] #say3 { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #say3 {
+    top: 16vh; left: 50%; width: min(620px, 88vw); margin-left: 0; text-align: center;
+    opacity: var(--s3);
+    transform: translateX(-50%) translateY(calc(30px - 30px * var(--s3)));
+  }
 
   /* ── panels ── */
   .panel {
@@ -328,46 +344,57 @@
     background: linear-gradient(180deg, #12151c, #0a0c11);
     box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6), 0 2px 0 rgba(255, 255, 255, 0.05) inset;
     overflow: hidden; opacity: 0;
-    transition: transform 900ms var(--ease), opacity 800ms ease, filter 800ms ease;
+    will-change: transform, opacity, filter;
   }
   .panel .real { display: none; width: 100%; vertical-align: top; }
   .panel.has-real .real { display: block; }
   .panel.has-real .mock { display: none; }
 
   /* A — control room: whole app under the hero → ZOOM IN and slide left */
-  #panelA { width: min(1120px, 92vw); }
-  .scene[data-stage="0"] #panelA { opacity: 1; transform: translateX(-50%) translateY(var(--panel0, 60vh)) scale(1); }
-  .scene[data-stage="1"] #panelA { opacity: 1; transform: translateX(calc(-50% - 74vw)) translateY(9vh) scale(1.75); }
-  .scene[data-stage="2"] #panelA,
-  .scene[data-stage="3"] #panelA { opacity: 0; transform: translateX(calc(-50% - 130vw)) translateY(9vh) scale(1.9); filter: blur(7px); }
+  #panelA {
+    width: min(1120px, 92vw);
+    opacity: calc(1 - var(--a2));
+    transform: translateX(calc(-50% - 74vw * var(--a1) - 56vw * var(--a2)))
+               translateY(calc(var(--panel0, 60vh) + (9vh - var(--panel0, 60vh)) * var(--a1)))
+               scale(calc(1 + 0.75 * var(--a1) + 0.15 * var(--a2)));
+    filter: blur(calc(7px * var(--a2)));
+  }
 
   /* B — live stage: zoomed in, enters from the right, bleeds off that edge */
-  #panelB { width: min(1120px, 92vw); opacity: 0; transform: translateX(calc(-50% + 130vw)) translateY(9vh) scale(1.9); }
-  .scene[data-stage="2"] #panelB { opacity: 1; transform: translateX(calc(-50% + 74vw)) translateY(9vh) scale(1.75); }
-  .scene[data-stage="3"] #panelB { opacity: 0; transform: translateX(calc(-50% + 130vw)) translateY(9vh) scale(1.9); filter: blur(7px); }
+  #panelB {
+    width: min(1120px, 92vw);
+    opacity: calc(var(--b2) - var(--b3));
+    transform: translateX(calc(-50% + 130vw - 56vw * var(--b2) + 56vw * var(--b3)))
+               translateY(9vh)
+               scale(calc(1.9 - 0.15 * var(--b2) + 0.15 * var(--b3)));
+    filter: blur(calc(7px * var(--b3)));
+  }
 
   /* C — composer: rises from the bottom, centered, zoomed in */
-  #panelC { width: min(900px, 92vw); transform: translateX(-50%) translateY(96vh) scale(1.1); }
-  .scene[data-stage="3"] #panelC { opacity: 1; transform: translateX(-50%) translateY(44vh) scale(1.15); }
+  #panelC {
+    width: min(900px, 92vw);
+    opacity: var(--c3);
+    transform: translateX(-50%) translateY(calc(96vh - 52vh * var(--c3))) scale(calc(1.1 + 0.05 * var(--c3)));
+  }
 
   /* ── mobile: one column, text on top, panel cropped below ── */
   @media (max-width: 900px) {
     .say { top: 12vh; left: 24px !important; right: 24px !important; width: auto !important; text-align: center; }
-    #say1, #say2 { transform: translateY(0) translateX(0); }
-    .scene[data-stage="1"] #say1, .scene[data-stage="2"] #say2 { transform: translateY(0); }
-    .scene[data-stage="2"] #say1, .scene[data-stage="3"] #say1,
-    .scene[data-stage="3"] #say2 { transform: translateY(-24px); }
+    #say1 { transform: translateY(calc(-24px * var(--s1o))); }
+    #say2 { transform: translateY(calc(-24px * var(--s2o))); }
     #say3 { top: 12vh; left: 24px; width: auto; transform: none; }
-    .scene[data-stage="3"] #say3 { transform: none; }
     #panelA, #panelB { width: 94vw; }
-    .scene[data-stage="0"] #panelA { transform: translateX(-50%) translateY(var(--panel0, 64vh)) scale(1); }
-    .scene[data-stage="1"] #panelA { transform: translateX(-50%) translateY(40vh) scale(0.92); }
-    .scene[data-stage="2"] #panelA, .scene[data-stage="3"] #panelA { transform: translateX(calc(-50% - 100vw)) translateY(40vh) scale(0.9); }
-    #panelB { transform: translateX(calc(-50% + 100vw)) translateY(40vh) scale(0.9); }
-    .scene[data-stage="2"] #panelB { transform: translateX(-50%) translateY(40vh) scale(0.92); }
-    .scene[data-stage="3"] #panelB { transform: translateX(calc(-50% + 100vw)) translateY(40vh) scale(0.9); }
-    #panelC { width: 94vw; transform: translateX(-50%) translateY(90vh) scale(0.95); }
-    .scene[data-stage="3"] #panelC { transform: translateX(-50%) translateY(44vh) scale(0.95); }
+    #panelA {
+      transform: translateX(calc(-50% - 100vw * var(--a2)))
+                 translateY(calc(var(--panel0, 64vh) + (40vh - var(--panel0, 64vh)) * var(--a1)))
+                 scale(calc(1 - 0.08 * var(--a1) - 0.02 * var(--a2)));
+    }
+    #panelB {
+      transform: translateX(calc(-50% + 100vw - 100vw * var(--b2) + 100vw * var(--b3)))
+                 translateY(40vh)
+                 scale(calc(0.9 + 0.02 * var(--b2) - 0.02 * var(--b3)));
+    }
+    #panelC { width: 94vw; transform: translateX(-50%) translateY(calc(90vh - 46vh * var(--c3))) scale(0.95); }
   }
 
   /* ── mock guts (styled after the app's control room) ── */
@@ -868,18 +895,42 @@
   (function () {
     var wrap = document.getElementById("scene-wrap");
     var scene = document.getElementById("scene");
-    var raf = 0;
-    function update() {
-      var span = wrap.offsetHeight - window.innerHeight;
-      var p = span > 0 ? Math.min(1, Math.max(0, -wrap.getBoundingClientRect().top / span)) : 1;
+    var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var target = 0, cur = 0, raf = 0;
+    // Each beat is a window of scroll progress; windows overlap a little so
+    // one thing is always arriving while another leaves.
+    var BEATS = {
+      hero: [0.04, 0.20],
+      a1: [0.06, 0.26], a2: [0.40, 0.56],
+      s1: [0.16, 0.28], s1o: [0.42, 0.54],
+      b2: [0.42, 0.58], b3: [0.72, 0.86],
+      s2: [0.48, 0.60], s2o: [0.74, 0.84],
+      c3: [0.76, 0.92], s3: [0.80, 0.92]
+    };
+    function ease(t) { return t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t); }
+    function seg(p, w) { return ease((p - w[0]) / (w[1] - w[0])); }
+    function apply(p) {
+      for (var k in BEATS) scene.style.setProperty("--" + k, seg(p, BEATS[k]).toFixed(4));
       var stage = p < 0.22 ? 0 : p < 0.48 ? 1 : p < 0.74 ? 2 : 3;
       if (String(stage) !== scene.getAttribute("data-stage")) scene.setAttribute("data-stage", String(stage));
-      raf = 0;
     }
-    function onScroll() { if (!raf) raf = requestAnimationFrame(update); }
+    function measure() {
+      var span = wrap.offsetHeight - window.innerHeight;
+      target = span > 0 ? Math.min(1, Math.max(0, -wrap.getBoundingClientRect().top / span)) : 1;
+    }
+    function tick() {
+      raf = 0;
+      // Critically-damped chase: the scene settles ~150ms behind the wheel,
+      // which reads as weight rather than lag. Reduced motion = no chase.
+      var d = target - cur;
+      if (reduced || Math.abs(d) < 0.0006) cur = target; else cur += d * 0.16;
+      apply(cur);
+      if (cur !== target) raf = requestAnimationFrame(tick);
+    }
+    function onScroll() { measure(); if (!raf) raf = requestAnimationFrame(tick); }
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
-    update();
+    measure(); cur = target; apply(cur);
   })();
 
   // ── Living numbers in the stage mock. ──
