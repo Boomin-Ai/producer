@@ -15,6 +15,18 @@ const OVERLAY_SELECTOR = [
   ".rm-pop",          // every Pop() portal (channels, devices, layout, quality, add…)
   ".rm-banner",       // engine error / status banner over the stage
   ".rm-float",        // its float container
+  // Room chrome that is absolutely/fixed positioned and can sit over the stage
+  // (App.css). The bottom sheet's head (mic / camera / more pill + handle) was
+  // the visible casualty; the rest are the same shape of element.
+  ".rm-sheet-head",
+  ".rm-sheet:not(.collapsed)",
+  ".rm-dock.armed",
+  ".rm-add-panel",
+  ".rm-panel-guests",
+  ".rm-editor",
+  ".rm-ghost",
+  ".rm-veil",
+  ".rm-chat-jump",
   "[role='menu']",
   "[role='dialog']",
   "[role='listbox']",
