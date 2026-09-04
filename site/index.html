@@ -593,6 +593,7 @@
   .tb-ic svg, .tb-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   .tb-btn { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,0.03); color: #e8ebf0; font-size: 12px; font-weight: 600; white-space: nowrap; }
   .tb-btn b { font-weight: 400; color: var(--dim); font-size: 12px; line-height: 0; }
+  .tb-btn.q4k em { font-style: normal; font-size: 9px; font-weight: 800; color: #06110b; background: var(--mint); border-radius: 5px; padding: 1px 5px; letter-spacing: 0.04em; }
   .tb-btn.cam { border-color: rgba(52, 211, 153, 0.45); box-shadow: inset 0 0 0 1px rgba(52,211,153,0.15); }
   .tb-btn .rec { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; }
   .tb-btn.golive { color: #5b6270; border-color: transparent; background: rgba(255,255,255,0.02); letter-spacing: 0.02em; }
@@ -797,7 +798,7 @@
     <!-- statements -->
     <div class="say" id="say1">
       <div class="eyebrow">Inside a room</div>
-      <h2>One room. <span class="soft">Live on every channel at once.</span></h2>
+      <h2>One room, in 4K. <span class="soft">Live on every channel at once.</span></h2>
     </div>
     <div class="say" id="say2">
       <div class="eyebrow">Guests</div>
@@ -828,7 +829,7 @@
           <span class="tb-right">
             <span class="tb-btn"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>Link</span>
             <span class="tb-btn">Channels <b>⌄</b></span>
-            <span class="tb-btn">1080p · 60 <b>⌄</b></span>
+            <span class="tb-btn q4k">2160p · 60 <em>4K</em> <b>⌄</b></span>
             <span class="tb-btn cam"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>Cam on</span>
             <span class="tb-btn"><i class="rec"></i>Record</span>
             <span class="tb-btn golive on"><i></i>LIVE<span class="clock" id="uptime">00:12:34</span></span>
@@ -854,20 +855,20 @@
           </div>
           <div class="rm-rail">
             <div class="rm-label">CHANNELS <em>3 live</em></div>
-            <div class="dest" data-kbps="6000">
+            <div class="dest" data-kbps="30000">
               <div class="row1"><img src="twitch.svg" alt="" /><span class="name">Twitch</span><span class="live-pill on">LIVE</span></div>
               <div class="meter"><i></i></div>
-              <div class="stats"><span>1080p60</span><span class="kbps">6000 kbps</span></div>
+              <div class="stats"><span>2160p60</span><span class="kbps">30.0 Mbps</span></div>
             </div>
-            <div class="dest" data-kbps="6800">
+            <div class="dest" data-kbps="31500">
               <div class="row1"><img src="youtube.svg" alt="" /><span class="name">YouTube</span><span class="live-pill on">LIVE</span></div>
               <div class="meter"><i></i></div>
-              <div class="stats"><span>1080p60</span><span class="kbps">6800 kbps</span></div>
+              <div class="stats"><span>2160p60</span><span class="kbps">31.5 Mbps</span></div>
             </div>
-            <div class="dest" data-kbps="6400">
+            <div class="dest" data-kbps="30800">
               <div class="row1"><img class="kick-mark" src="kick.svg" alt="Kick" /><span class="live-pill on">LIVE</span></div>
               <div class="meter"><i></i></div>
-              <div class="stats"><span>1080p60</span><span class="kbps">6400 kbps</span></div>
+              <div class="stats"><span>2160p60</span><span class="kbps">30.8 Mbps</span></div>
             </div>
 
           </div>
@@ -887,7 +888,7 @@
           <span class="tb-right">
             <span class="tb-btn"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>Link</span>
             <span class="tb-btn">Channels <b>⌄</b></span>
-            <span class="tb-btn">1080p · 60 <b>⌄</b></span>
+            <span class="tb-btn q4k">2160p · 60 <em>4K</em> <b>⌄</b></span>
             <span class="tb-btn cam"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>Cam on</span>
             <span class="tb-btn"><i class="rec"></i>Record</span>
             <span class="tb-btn golive on"><i></i>LIVE<span class="clock">00:12:34</span></span>
@@ -1214,9 +1215,9 @@
     setInterval(function () {
       dests.forEach(function (d) {
         var base = parseInt(d.getAttribute("data-kbps"), 10);
-        var kbps = base + Math.round((Math.random() - 0.5) * 900);
-        d.querySelector(".kbps").textContent = kbps + " kbps";
-        d.querySelector(".meter i").style.width = (52 + (kbps - 5200) / 40) + "%";
+        var kbps = base + Math.round((Math.random() - 0.5) * 2400);
+        d.querySelector(".kbps").textContent = (kbps / 1000).toFixed(1) + " Mbps";
+        d.querySelector(".meter i").style.width = (58 + (kbps - 30000) / 120) + "%";
       });
     }, 900);
     var t0 = Date.now(), up = document.getElementById("uptime");
@@ -1237,7 +1238,7 @@
       ["yt", "DevRel Dan", "guests straight from the browser is wild"],
       ["tw", "night_owl", "chair is a vibe"],
       ["kk", "ttv_jo", "self hosted?? on cloudflare?? ok"],
-      ["yt", "Priya", "1080p60 on three at once, no relay?"],
+      ["yt", "Priya", "4K60 on three at once, no relay??"],
       ["tw", "beats_by_ro", "W stage"],
       ["kk", "marcus.k", "how many guests can you bring on"],
       ["yt", "Lena", "8 per room I think"],
