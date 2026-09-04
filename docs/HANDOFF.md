@@ -25,6 +25,67 @@ the cause — first suspects: `obs-*-test.exe` missing beside `producer.exe`, or
 
 ## From Windows
 
+### 2026-09-04 17:00 — Windows status on main v0.4.17 (3514f0c), GTX 1660 — Windows session
+
+**Where Windows is.** Dev build of main + PR #40 (one-char script fix), engine artifact
+`producer-libobs-windows-x64-f85b8f889ab3`, closure gate PASS. First real `cfg(have_engine)`
+compile of main on Windows: clean. Encoder: `obs_nvenc_h264_tex (hardware: true)`; footer
+`d3d11 · NVENC`; `engine-report.json` `"hardware_encoder": true`; NVENC SDK 12.2 / driver 13.0.
+
+**Measured on this build (room open, local RTMP server, real destinations disabled for the run).**
+- 1080p60 NVENC: 60.0 fps, CPU 5.4–7.1%, 0 skipped, 0 dropped over a 105 s window (a stale test
+  driver stopped it early; clean 3-min rerun and the 2160p60 runs are in progress, numbers appended
+  next). On the identical code earlier today (win/parity before #35): 1080p60 3 min 60 fps / CPU
+  3.4–5.7% / 0 dropped; 2160p60 stream-only 3 min 60 fps / CPU 3–6% / 0 skipped; x264 baseline
+  1080p60 CPU 11–13%.
+- 2160p60 + 1-min recording: file is 3840x2160@60 H264/AAC and plays, but holds 34 s of a 60 s
+  window and the stream skips frames while recording — the recorder opens a second NVENC session
+  (by design, `record.rs`) and a GTX 1660 has one encode engine. Decision for you: share the
+  stream encoder when recording at 4K, cap recording at 4K30, or accept it.
+
+**What Windows has that macOS does not.** Boot-time hardware-encoder probe/selection (NVENC → QSV →
+AMF → x264) with `PRODUCER_VIDEO_ENCODER` override; the firewall "Allow Producer" banner; the native
+selection outline (green, handles) with red cropped edges following the fitted picture rect (PR #32).
+
+**What Windows is missing vs macOS.**
+1. Live guest video in the room. The guest browser source is created and the render URL is right,
+   but the last time it was tried the guest page stayed at "Connecting…"; not re-verified since your
+   room-sync / firewall work (#23). Needs a session with the Mac as the guest to close.
+2. `producer_drag_chip_*` — stubbed no-op (macOS drag affordance).
+3. Transparent-hole preview — float mode by design (documented), so anything painted over the stage
+   goes through the cutout mechanism (#17) instead.
+4. Recording at 4K60 while streaming 4K60 (above).
+
+**Parity rule from Kleveland: each side gets everything the other has unless the OS makes it moot.**
+Applied to what Windows built today — what macOS should take, and what it should not:
+- TAKE: `PRODUCER_VIDEO_ENCODER=<id>` override (encoders.rs, already cross-platform — forces x264 on a
+  Mac for the 4K-gate/x264 checks); the fps-gate wording fix (Live.tsx, cross-platform, in #35);
+  `engine::user_facing` per-platform remedies (in main); the 4K60 recording policy decision (Apple
+  silicon has one encode engine per die too — measure before assuming it is Windows-only).
+- MOOT ON macOS: the firewall banner (no equivalent gate; TCC prompts cover capture), the native
+  selection outline + crop red (the web outline is visible there because the preview sits below the
+  webview), the probe-helper copy (no NVENC/QSV/AMF), float-mode cutouts.
+- WINDOWS STILL OWES (from your side): guest video (item 1 below), drag chip.
+
+**Open PRs, both rebase clean onto v0.4.17, please merge or say no:**
+- #32 — cropped edges red in the native outline; outline follows the picture, not the bounds.
+- #40 — dev-windows.ps1: probe helpers were copied to a junk dir (literal TAB from heredoc
+  mangling in the #35 commit); dev builds silently streamed x264.
+
+**Known gap in CI worth a step:** the Windows CI job is an engine-less `cargo check`, so shim_win.c
+never compiles there; any macOS-only `producer_*` extern in ffi.rs breaks the real Windows link
+silently (that is how v0.4.10–14 shipped without `producer_copy_text`). Issue #27 has the details.
+
+## For Mac — from Windows, 2026-09-04
+
+1. Merge (or reject) #32 and #40.
+2. Guest video: when you next have both machines, host on Windows, join from the Mac's browser via
+   the room link, and tell me what the guest page and the Windows guests panel show. That is the one
+   parity item I cannot verify alone.
+3. Decide the 4K60 recording policy (share encoder / 4K30 cap / accept).
+4. Anything you change in `src/live/ffi.rs`: add the Windows half in `shim_win.c` in the same commit.
+5. Reply here; this session reads this file on every pull.
+
 ### 2026-09-04 (interim, numbers follow) — main v0.4.17 on a GTX 1660
 
 - `git pull` main (16b4bc4), `windows-engine.ps1` found `producer-libobs-windows-x64-f85b8f889ab3`
