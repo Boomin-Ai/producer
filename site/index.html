@@ -88,16 +88,23 @@
   .navbar .pill { padding: 9px 18px; font-size: 13.5px; }
 
   /* ═══════ full-bleed pinned scene ═══════ */
-  .scene-wrap { position: relative; z-index: 1; height: 460vh; }
+  .scene-wrap { position: relative; z-index: 1; height: 500vh; }
+  /* Scroll-driven: JS writes eased 0→1 progress vars per beat; every element
+   * below is a pure function of them, so the scene scrubs with the wheel
+   * instead of snapping between four states. */
+  .scene { --hero: 0; --a1: 0; --a2: 0; --s1: 0; --s1o: 0; --b2: 0; --b3: 0; --s2: 0; --s2o: 0; --d4: 0; --d5: 0; --s4: 0; --s4o: 0; --e6: 0; --e7: 0; --s5: 0; --s5o: 0; --c3: 0; --s3: 0; }
   .scene { position: sticky; top: 0; height: 100vh; overflow: hidden; }
 
   /* ── beat 0: hero, centered, full width ── */
   .hero {
-    position: absolute; z-index: 4; left: 0; right: 0; top: 15vh;
+    position: absolute; z-index: 4; left: 0; right: 0; top: 26vh;
     text-align: center; padding: 0 24px;
-    transition: opacity 700ms var(--ease), transform 700ms var(--ease), filter 700ms ease;
+    opacity: calc(1 - var(--hero));
+    transform: translateY(calc(-40px * var(--hero)));
+    filter: blur(calc(8px * var(--hero)));
+    will-change: transform, opacity, filter;
   }
-  .scene:not([data-stage="0"]) .hero { opacity: 0; transform: translateY(-40px); filter: blur(8px); pointer-events: none; }
+  .scene:not([data-stage="0"]) .hero { pointer-events: none; }
   /* Meta Verified badge — same treatment as boomin.ai/producer */
   .verified {
     display: inline-flex; align-items: center; gap: 8px;
@@ -110,6 +117,10 @@
     margin-bottom: 18px;
   }
   .verified img { width: 16px; height: 16px; }
+  .verified.small { margin: 18px 0 0; font-size: 12.5px; padding: 6px 12px; }
+  .verified.small img { width: 14px; height: 14px; }
+  .foot-meta { width: 13px; height: 13px; vertical-align: -2px; margin-left: 2px; opacity: 0.8; }
+
   /* React Bits "shiny text": dim base, bright band sweeping across the label */
   .verified .shiny {
     background-image: linear-gradient(110deg,
@@ -297,7 +308,7 @@
   .say {
     position: absolute; z-index: 3; top: 50%;
     opacity: 0; pointer-events: none;
-    transition: opacity 650ms var(--ease), transform 650ms var(--ease), filter 650ms ease;
+    will-change: transform, opacity, filter;
   }
   .say .eyebrow {
     font-size: 11.5px; font-weight: 600; letter-spacing: 0.22em;
@@ -307,18 +318,41 @@
   .say h2 .soft { color: var(--dim); }
 
   /* right lane (panel is on the left) */
-  #say1 { right: 5vw; width: 36vw; transform: translateY(-50%) translateX(40px); }
-  .scene[data-stage="1"] #say1 { opacity: 1; transform: translateY(-50%) translateX(0); }
-  .scene[data-stage="2"] #say1, .scene[data-stage="3"] #say1 { opacity: 0.14; transform: translateY(-50%) translateX(-30px); filter: blur(7px); }
+  #say1 {
+    right: 5vw; width: 36vw;
+    opacity: calc(var(--s1) - 0.86 * var(--s1o));
+    transform: translateY(-50%) translateX(calc(40px - 40px * var(--s1) - 30px * var(--s1o)));
+    filter: blur(calc(7px * var(--s1o)));
+  }
 
   /* left lane (panel is on the right) */
-  #say2 { left: 5vw; width: 36vw; transform: translateY(-50%) translateX(-40px); }
-  .scene[data-stage="2"] #say2 { opacity: 1; transform: translateY(-50%) translateX(0); }
-  .scene[data-stage="3"] #say2 { opacity: 0.14; transform: translateY(-50%) translateX(30px); filter: blur(7px); }
+  #say2 {
+    left: 5vw; width: 36vw;
+    opacity: calc(var(--s2) - 0.86 * var(--s2o));
+    transform: translateY(-50%) translateX(calc(-40px + 40px * var(--s2) + 30px * var(--s2o)));
+    filter: blur(calc(7px * var(--s2o)));
+  }
 
   /* top lane (panel rises from the bottom) */
-  #say3 { top: 16vh; left: 50%; width: min(620px, 88vw); margin-left: 0; text-align: center; transform: translateX(-50%) translateY(30px); }
-  .scene[data-stage="3"] #say3 { opacity: 1; transform: translateX(-50%) translateY(0); }
+  /* left lane again (chat panel sits right of center) */
+  #say4 {
+    left: 5vw; width: 36vw;
+    opacity: calc(var(--s4) - 0.86 * var(--s4o));
+    transform: translateY(-50%) translateX(calc(-40px + 40px * var(--s4) + 30px * var(--s4o)));
+    filter: blur(calc(7px * var(--s4o)));
+  }
+  /* right lane (perf panel sits left of center) */
+  #say5 {
+    right: 5vw; width: 36vw;
+    opacity: calc(var(--s5) - 0.86 * var(--s5o));
+    transform: translateY(-50%) translateX(calc(40px - 40px * var(--s5) - 30px * var(--s5o)));
+    filter: blur(calc(7px * var(--s5o)));
+  }
+  #say3 {
+    top: 16vh; left: 50%; width: min(620px, 88vw); margin-left: 0; text-align: center;
+    opacity: var(--s3);
+    transform: translateX(-50%) translateY(calc(30px - 30px * var(--s3)));
+  }
 
   /* ── panels ── */
   .panel {
@@ -328,46 +362,77 @@
     background: linear-gradient(180deg, #12151c, #0a0c11);
     box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6), 0 2px 0 rgba(255, 255, 255, 0.05) inset;
     overflow: hidden; opacity: 0;
-    transition: transform 900ms var(--ease), opacity 800ms ease, filter 800ms ease;
+    will-change: transform, opacity, filter;
   }
   .panel .real { display: none; width: 100%; vertical-align: top; }
   .panel.has-real .real { display: block; }
   .panel.has-real .mock { display: none; }
 
   /* A — control room: whole app under the hero → ZOOM IN and slide left */
-  #panelA { width: min(1120px, 92vw); }
-  .scene[data-stage="0"] #panelA { opacity: 1; transform: translateX(-50%) translateY(var(--panel0, 60vh)) scale(1); }
-  .scene[data-stage="1"] #panelA { opacity: 1; transform: translateX(calc(-50% - 74vw)) translateY(9vh) scale(1.75); }
-  .scene[data-stage="2"] #panelA,
-  .scene[data-stage="3"] #panelA { opacity: 0; transform: translateX(calc(-50% - 130vw)) translateY(9vh) scale(1.9); filter: blur(7px); }
+  #panelA {
+    width: min(1120px, 92vw);
+    opacity: calc(1 - var(--a2));
+    transform: translateX(calc(-50% - 74vw * var(--a1) - 56vw * var(--a2)))
+               translateY(calc(var(--panel0, 60vh) + (9vh - var(--panel0, 60vh)) * var(--a1)))
+               scale(calc(1 + 0.75 * var(--a1) + 0.15 * var(--a2)));
+    filter: blur(calc(7px * var(--a2)));
+  }
 
   /* B — live stage: zoomed in, enters from the right, bleeds off that edge */
-  #panelB { width: min(1120px, 92vw); opacity: 0; transform: translateX(calc(-50% + 130vw)) translateY(9vh) scale(1.9); }
-  .scene[data-stage="2"] #panelB { opacity: 1; transform: translateX(calc(-50% + 74vw)) translateY(9vh) scale(1.75); }
-  .scene[data-stage="3"] #panelB { opacity: 0; transform: translateX(calc(-50% + 130vw)) translateY(9vh) scale(1.9); filter: blur(7px); }
+  #panelB {
+    width: min(1120px, 92vw);
+    opacity: calc(var(--b2) - var(--b3));
+    transform: translateX(calc(-50% + 130vw - 56vw * var(--b2) + 56vw * var(--b3)))
+               translateY(9vh)
+               scale(calc(1.9 - 0.15 * var(--b2) + 0.15 * var(--b3)));
+    filter: blur(calc(7px * var(--b3)));
+  }
 
   /* C — composer: rises from the bottom, centered, zoomed in */
-  #panelC { width: min(900px, 92vw); transform: translateX(-50%) translateY(96vh) scale(1.1); }
-  .scene[data-stage="3"] #panelC { opacity: 1; transform: translateX(-50%) translateY(44vh) scale(1.15); }
+  /* D — chat: enters from the right, parks right of center, leaves left */
+  #panelD {
+    width: min(560px, 92vw);
+    opacity: calc(var(--d4) - var(--d5));
+    transform: translateX(calc(-50% + 22vw + 90vw * (1 - var(--d4)) - 60vw * var(--d5)))
+               translateY(14vh)
+               scale(calc(1.05 + 0.05 * var(--d4)));
+    filter: blur(calc(7px * var(--d5)));
+  }
+  /* E — performance: rises on the left, leaves upward */
+  #panelE {
+    width: min(620px, 92vw);
+    opacity: calc(var(--e6) - var(--e7));
+    transform: translateX(calc(-50% - 22vw)) translateY(calc(18vh + 60vh * (1 - var(--e6)) - 30vh * var(--e7))) scale(calc(1 + 0.05 * var(--e6)));
+    filter: blur(calc(7px * var(--e7)));
+  }
+  #panelC {
+    width: min(900px, 92vw);
+    opacity: var(--c3);
+    transform: translateX(-50%) translateY(calc(96vh - 52vh * var(--c3))) scale(calc(1.1 + 0.05 * var(--c3)));
+  }
 
   /* ── mobile: one column, text on top, panel cropped below ── */
   @media (max-width: 900px) {
     .say { top: 12vh; left: 24px !important; right: 24px !important; width: auto !important; text-align: center; }
-    #say1, #say2 { transform: translateY(0) translateX(0); }
-    .scene[data-stage="1"] #say1, .scene[data-stage="2"] #say2 { transform: translateY(0); }
-    .scene[data-stage="2"] #say1, .scene[data-stage="3"] #say1,
-    .scene[data-stage="3"] #say2 { transform: translateY(-24px); }
+    #say1 { transform: translateY(calc(-24px * var(--s1o))); }
+    #say2 { transform: translateY(calc(-24px * var(--s2o))); }
     #say3 { top: 12vh; left: 24px; width: auto; transform: none; }
-    .scene[data-stage="3"] #say3 { transform: none; }
     #panelA, #panelB { width: 94vw; }
-    .scene[data-stage="0"] #panelA { transform: translateX(-50%) translateY(var(--panel0, 64vh)) scale(1); }
-    .scene[data-stage="1"] #panelA { transform: translateX(-50%) translateY(40vh) scale(0.92); }
-    .scene[data-stage="2"] #panelA, .scene[data-stage="3"] #panelA { transform: translateX(calc(-50% - 100vw)) translateY(40vh) scale(0.9); }
-    #panelB { transform: translateX(calc(-50% + 100vw)) translateY(40vh) scale(0.9); }
-    .scene[data-stage="2"] #panelB { transform: translateX(-50%) translateY(40vh) scale(0.92); }
-    .scene[data-stage="3"] #panelB { transform: translateX(calc(-50% + 100vw)) translateY(40vh) scale(0.9); }
-    #panelC { width: 94vw; transform: translateX(-50%) translateY(90vh) scale(0.95); }
-    .scene[data-stage="3"] #panelC { transform: translateX(-50%) translateY(44vh) scale(0.95); }
+    #panelA {
+      transform: translateX(calc(-50% - 100vw * var(--a2)))
+                 translateY(calc(var(--panel0, 64vh) + (40vh - var(--panel0, 64vh)) * var(--a1)))
+                 scale(calc(1 - 0.08 * var(--a1) - 0.02 * var(--a2)));
+    }
+    #panelB {
+      transform: translateX(calc(-50% + 100vw - 100vw * var(--b2) + 100vw * var(--b3)))
+                 translateY(40vh)
+                 scale(calc(0.9 + 0.02 * var(--b2) - 0.02 * var(--b3)));
+    }
+    #say4 { transform: translateY(calc(-24px * var(--s4o))); }
+    #panelD { width: 94vw; transform: translateX(calc(-50% + 100vw * (1 - var(--d4)) - 100vw * var(--d5))) translateY(40vh) scale(0.92); }
+    #say5 { transform: translateY(calc(-24px * var(--s5o))); }
+    #panelE { width: 94vw; transform: translateX(-50%) translateY(calc(40vh + 60vh * (1 - var(--e6)) - 30vh * var(--e7))) scale(0.92); }
+    #panelC { width: 94vw; transform: translateX(-50%) translateY(calc(90vh - 46vh * var(--c3))) scale(0.95); }
   }
 
   /* ── mock guts (styled after the app's control room) ── */
@@ -523,6 +588,184 @@
   footer a:hover { color: var(--text); }
   footer .spacer { flex: 1; }
 
+
+  /* ═══════ the app's top bar, shared by both room mocks ═══════ */
+  .tb { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--line); background: #090b10; }
+  .tb-left, .tb-right { display: flex; align-items: center; gap: 8px; }
+  .tb-ic { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; color: var(--dim); }
+  .tb-ic.box { border: 1px solid var(--line-strong); color: #fff; }
+  .tb-ic svg, .tb-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .tb-btn { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,0.03); color: #e8ebf0; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .tb-btn b { font-weight: 400; color: var(--dim); font-size: 12px; line-height: 0; }
+  .tb-btn.q4k em { font-style: normal; font-size: 9px; font-weight: 800; color: #06110b; background: var(--mint); border-radius: 5px; padding: 1px 5px; letter-spacing: 0.04em; }
+  .tb-btn.cam { border-color: rgba(52, 211, 153, 0.45); box-shadow: inset 0 0 0 1px rgba(52,211,153,0.15); }
+  .tb-btn .rec { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; }
+  .tb-btn.golive { color: #5b6270; border-color: transparent; background: rgba(255,255,255,0.02); letter-spacing: 0.02em; }
+  /* while any channel is live the button IS the live state: red, pulsing dot, uptime */
+  .tb-btn.golive.on { color: #fff; background: var(--live); border-color: transparent; box-shadow: 0 0 22px rgba(255, 77, 77, 0.35); letter-spacing: 0.06em; }
+  .tb-btn.golive.on i { width: 7px; height: 7px; border-radius: 50%; background: #fff; box-shadow: 0 0 8px #fff; animation: pulse 1.6s ease-in-out infinite; }
+  .tb-btn.golive.on .clock { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 500; letter-spacing: 0; opacity: 0.9; }
+  .room-mock .tb { flex: none; }
+  .guests-mock { grid-template-rows: auto 1fr; }
+  .sc .onair-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--live); box-shadow: 0 0 8px var(--live); margin-left: 6px; vertical-align: middle; animation: pulse 1.6s ease-in-out infinite; }
+  @media (max-width: 900px) { .tb-btn:not(.cam):not(.golive) { display: none; } }
+
+  /* ═══════ performance mock ═══════ */
+  .perf-mock { display: flex; flex-direction: column; min-height: 420px; font-size: 12.5px; color: var(--dim); }
+  .perf-mock .stats { display: flex; gap: 22px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: #090b10; flex-wrap: wrap; }
+  .perf-mock .stats span { display: inline-flex; gap: 8px; align-items: baseline; }
+  .perf-mock .stats b { font-size: 10px; letter-spacing: 0.18em; color: var(--dim); font-weight: 700; }
+  .perf-mock .stats i { font-style: normal; color: #fff; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .perf-mock .stats i.ok { color: var(--mint); }
+  .perf-mock .stats i.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 500; }
+  .fourk { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; margin: 14px 14px 0; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(52, 211, 153, 0.35); background: linear-gradient(90deg, rgba(52,211,153,0.10), rgba(52,211,153,0.02)); }
+  .fk-mark { font-size: 30px; font-weight: 800; letter-spacing: -0.04em; color: #fff; line-height: 1; text-shadow: 0 0 24px rgba(52,211,153,0.45); }
+  .fk-body { color: var(--dim); line-height: 1.45; font-size: 12px; }
+  .fk-body b { color: #fff; }
+  .fk-pick { display: inline-flex; gap: 4px; padding: 3px; border-radius: 10px; border: 1px solid var(--line); background: #090b10; }
+  .fk-pick span { padding: 5px 9px; border-radius: 8px; font-size: 11px; color: var(--dim); font-weight: 600; white-space: nowrap; }
+  .fk-pick span.on { color: #fff; background: rgba(255,255,255,0.08); }
+  .fk-pick span em { font-style: normal; font-size: 9px; color: var(--mint); margin-left: 3px; vertical-align: top; }
+  @media (max-width: 900px) { .fourk { grid-template-columns: auto 1fr; } .fk-pick { display: none; } }
+  .perf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px; }
+  .pc { display: flex; flex-direction: column; gap: 4px; padding: 12px 13px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255,255,255,0.025); }
+  .pc .k { font-size: 10px; letter-spacing: 0.18em; color: var(--dim); font-weight: 700; }
+  .pc .v { color: #fff; font-weight: 700; font-size: 14px; letter-spacing: -0.01em; }
+  .pc .d { color: var(--dim); line-height: 1.45; font-size: 11.5px; }
+  @media (max-width: 900px) { .perf-grid { grid-template-columns: 1fr; } .perf-mock .stats { gap: 14px; } }
+
+  /* ═══════ chat mock (its own beat) ═══════ */
+  .chat-mock { display: flex; flex-direction: column; height: 100%; min-height: 520px; font-size: 13px; color: var(--dim); }
+  .cm-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .cm-title { color: #fff; font-weight: 700; letter-spacing: -0.01em; }
+  .cm-srcs { display: flex; gap: 6px; }
+  .cm-srcs .src { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--line); font-size: 11px; color: #e8ebf0; }
+  .cm-srcs .src img { width: 12px; height: 12px; }
+  .cm-srcs .src.tw { border-color: rgba(145,70,255,0.5); } .cm-srcs .src.kk { border-color: rgba(83,252,24,0.4); } .cm-srcs .src.yt { border-color: rgba(255,0,0,0.45); }
+  .chat.big { height: 380px; padding: 12px 14px; gap: 9px; }
+  .chat.big .m { font-size: 13px; gap: 8px; align-items: baseline; }
+  .chat.big .m .badge { width: 14px; height: 14px; flex: none; }
+  .cm-compose { display: flex; align-items: center; gap: 8px; margin: auto 12px 12px; padding: 8px 8px 8px 14px; border-radius: 12px; border: 1px solid var(--line-strong); background: rgba(255,255,255,0.03); }
+  .cm-ph { flex: 1; color: var(--dim); }
+  .cm-send { color: #06110b; background: var(--mint); border-radius: 999px; padding: 6px 12px; font-weight: 700; font-size: 11.5px; white-space: nowrap; }
+
+  /* ═══════ room mock (beat 1: inside a room, live) ═══════ */
+  .room-mock { display: flex; flex-direction: column; height: 100%; min-height: 560px; font-size: 12px; color: var(--dim); }
+  .rm-top { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .rm-rooms { display: flex; gap: 6px; }
+  .rm-rooms > * { padding: 5px 10px; border-radius: 8px; border: 1px solid var(--line); color: var(--dim); font-weight: 500; }
+  .rm-rooms .on { color: #fff; border-color: rgba(255,255,255,0.18); background: rgba(255,255,255,0.05); }
+  .rm-rooms .new { color: var(--mint); border-style: dashed; }
+  .rm-right { display: flex; align-items: center; gap: 10px; }
+  .rm-right .onair { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; letter-spacing: 0.12em; color: #fff; font-size: 11px; }
+  .rm-right .onair i { width: 7px; height: 7px; border-radius: 50%; background: var(--live); box-shadow: 0 0 10px var(--live); animation: pulse 1.6s ease-in-out infinite; }
+  .rm-right .clock { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--dim); }
+  .rm-body { display: grid; grid-template-columns: 168px 1fr 190px; flex: 1; min-height: 0; }
+  .rm-roster { border-right: 1px solid var(--line); padding: 12px; }
+  .rm-rail { border-left: 1px solid var(--line); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .rm-label { font-size: 10px; font-weight: 700; letter-spacing: 0.2em; color: var(--dim); display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .rm-label em { font-style: normal; color: #fff; font-weight: 600; letter-spacing: 0; }
+  .rm-label.mt { margin-top: 14px; }
+  .rg { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 9px; margin-bottom: 4px; border: 1px solid transparent; }
+  .rg.on { background: rgba(255,255,255,0.04); border-color: var(--line); }
+  .rg.wait, .rg.knock { border-color: rgba(52, 211, 153, 0.35); background: rgba(52, 211, 153, 0.06); }
+  .rg .nm { color: #fff; font-weight: 600; flex: 1; }
+  .rg .nm small { display: block; font-size: 10px; color: var(--dim); font-weight: 400; }
+  .rg .st { font-size: 10.5px; color: var(--dim); }
+  .rg .st.admit { color: #06110b; background: var(--mint); padding: 3px 8px; border-radius: 999px; font-weight: 700; }
+  .av { width: 22px; height: 22px; border-radius: 50%; flex: none; background: linear-gradient(135deg, #f0abfc, #818cf8); }
+  .av.av2 { background: linear-gradient(135deg, #fbbf24, #f472b6); }
+  .av.av3 { background: linear-gradient(135deg, #34d399, #38bdf8); }
+  .av.big { width: 64px; height: 64px; }
+  .sc { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); margin-bottom: 4px; color: var(--dim); }
+  .sc.on { color: var(--mint); border-color: rgba(52, 211, 153, 0.4); }
+  .rm-program { position: relative; display: grid; grid-template-columns: 1.6fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; padding: 12px; background: radial-gradient(120% 90% at 50% 100%, rgba(52, 211, 153, 0.10), transparent 60%), #05070b; overflow: hidden; }
+  .rm-program .beam { position: absolute; inset: -20% -10%; background: linear-gradient(100deg, transparent 40%, rgba(255,255,255,0.05) 50%, transparent 60%); animation: sway 9s ease-in-out infinite; pointer-events: none; }
+  .tile { position: relative; border-radius: 10px; border: 1px solid var(--line-strong); background: linear-gradient(180deg, #161a22, #0b0d12); overflow: hidden; }
+  .tile.host { grid-row: 1 / span 2; display: flex; align-items: flex-end; justify-content: center; }
+  .tile.host .chairline { width: 46%; opacity: 0.9; filter: drop-shadow(0 18px 30px rgba(0,0,0,0.6)); }
+  .tile.g1 { background: radial-gradient(80% 70% at 50% 40%, rgba(240,171,252,0.35), transparent 70%), #0b0d12; }
+  .tile.g2 { background: radial-gradient(80% 70% at 50% 40%, rgba(251,191,36,0.3), transparent 70%), #0b0d12; }
+  .tile.empty { border-style: dashed; background: rgba(255,255,255,0.02); }
+  .tile .tag.dim { color: var(--dim); background: transparent; }
+  .tile .tag { position: absolute; left: 8px; bottom: 8px; font-size: 10.5px; font-weight: 600; color: #fff; background: rgba(0,0,0,0.55); padding: 3px 7px; border-radius: 6px; }
+  .rm-program .gobar { position: absolute; left: 12px; right: 12px; bottom: 12px; display: flex; gap: 8px; align-items: center; justify-content: center; font-size: 10px; letter-spacing: 0.14em; color: var(--dim); background: rgba(8,10,14,0.7); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; backdrop-filter: blur(8px); }
+  .rm-program .gobar .clock { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; color: #fff; }
+  .rm-program .gobar .golive { color: #fff; background: var(--live); padding: 2px 8px; border-radius: 999px; font-weight: 700; }
+  .rm-program .tile.host { margin-bottom: 34px; }
+  /* Fixed height: the rail is auto-height, so flex:1 would collapse this to nothing. */
+  .chat { height: 150px; flex: none; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 5px; }
+  .chat .m { display: flex; gap: 6px; font-size: 11px; line-height: 1.3; animation: chat-in 380ms var(--ease); }
+  .chat .m .who { font-weight: 700; flex: none; }
+  .chat .m .who.tw { color: #a970ff; } .chat .m .who.kk { color: #53fc18; } .chat .m .who.yt { color: #ff4e45; }
+  .chat .m .txt { color: #d5d9e0; }
+  .chat-marks { display: inline-flex; gap: 4px; margin-left: 2px; }
+  .chat-marks img { width: 12px; height: 12px; opacity: 0.9; }
+  .upd { display: flex; align-items: center; gap: 7px; margin-top: 8px; padding: 7px 9px; border-radius: 9px; border: 1px solid var(--line); background: rgba(255,255,255,0.03); font-size: 10.5px; color: var(--dim); }
+  .upd b { color: #fff; font-weight: 600; }
+  .upd-tag { color: #06110b; background: var(--mint); border-radius: 999px; padding: 2px 7px; font-weight: 700; font-size: 9.5px; letter-spacing: 0.04em; }
+  .upd-when { margin-left: auto; white-space: nowrap; }
+  @keyframes chat-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* ═══════ guests mock (beat 2): the app's guest rail, one shown onto the program ═══════ */
+  .guests-mock { display: grid; grid-template-columns: 236px 1fr; height: 100%; min-height: 560px; font-size: 12px; color: var(--dim); }
+  .gm-rail { padding: 12px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+  .gm-rail .linkbtn { margin-left: auto; color: #fff; border: 1px solid var(--line-strong); border-radius: 999px; padding: 3px 9px; letter-spacing: 0; font-weight: 600; font-size: 10.5px; }
+  /* A guest card = the thumbnail with the name and a green dot, exactly like the studio rail. */
+  .gcard { position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: #0b0d12; flex: none; transition: opacity 500ms ease, transform 600ms var(--ease), box-shadow 400ms ease, border-color 400ms ease; }
+  .gcard .who { position: absolute; left: 8px; bottom: 7px; display: inline-flex; align-items: center; gap: 6px; color: #fff; font-weight: 600; font-size: 11px; text-shadow: 0 1px 8px rgba(0,0,0,0.8); }
+  .gcard .who i { width: 6px; height: 6px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 8px var(--mint); }
+  .gcard .who i.w { background: #fbbf24; box-shadow: 0 0 8px #fbbf24; }
+  .gcard .who small { color: var(--dim); font-weight: 400; margin-left: 2px; }
+  .gcard .ctl { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; background: rgba(0,0,0,0.35); opacity: 0; transition: opacity 300ms ease; font-size: 11px; color: #fff; }
+  .gcard .ctl b { border: 1px solid rgba(255,255,255,0.5); border-radius: 999px; padding: 4px 11px; font-weight: 600; transition: background 250ms ease, color 250ms ease, border-color 250ms ease; }
+  .gcard .ctl span { color: #ff5c5c; }
+  .gcard.hover .ctl, .gcard.wait .ctl { opacity: 1; }
+  .gcard.wait .ctl { background: transparent; justify-content: flex-end; align-items: flex-start; padding: 7px; }
+  .gcard.wait .ctl b { background: var(--mint); color: #06110b; border-color: transparent; }
+  .gcard.press .ctl b { background: #fff; color: #06110b; border-color: #fff; }
+  .gcard.off .who i { background: #6b7280; box-shadow: none; }
+  .gcard.shown { border-color: rgba(52, 211, 153, 0.55); box-shadow: 0 0 0 1px rgba(52,211,153,0.25), 0 10px 30px rgba(52,211,153,0.14); }
+  /* placeholders until real loops land in site/shots/ */
+  .gcard [class^="ph"], .tile .gv + .ph { position: absolute; inset: 0; }
+  .ph1 { background: radial-gradient(70% 60% at 50% 45%, rgba(240,171,252,0.35), transparent 70%), #0b0d12; }
+  .ph2 { background: radial-gradient(70% 60% at 50% 45%, rgba(251,191,36,0.3), transparent 70%), #0b0d12; }
+  .ph3 { background: radial-gradient(70% 60% at 50% 45%, rgba(52,211,153,0.32), transparent 70%), #0b0d12; }
+  .ph4 { background: radial-gradient(70% 60% at 50% 45%, rgba(56,189,248,0.3), transparent 70%), #0b0d12; }
+  .ph5 { background: radial-gradient(70% 60% at 50% 45%, rgba(248,113,113,0.28), transparent 70%), #0b0d12; }
+  .gcard .who, .gcard .ctl { z-index: 2; }
+  .gv { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; display: none; }
+  .gv.ok { display: block; }
+  .gm-program { position: relative; display: grid; grid-template-columns: 1.6fr 1fr; grid-template-rows: 1fr 1fr 1fr; gap: 8px; padding: 12px; background: radial-gradient(120% 90% at 50% 100%, rgba(52, 211, 153, 0.10), transparent 60%), #05070b; overflow: hidden; }
+  .gm-program .beam { position: absolute; inset: -20% -10%; background: linear-gradient(100deg, transparent 40%, rgba(255,255,255,0.05) 50%, transparent 60%); animation: sway 9s ease-in-out infinite; pointer-events: none; }
+  .gm-program .tile.host { grid-row: 1 / span 3; margin-bottom: 34px; }
+  .gm-program .tile.slot { opacity: 0.35; transform: scale(0.97); transition: opacity 600ms ease, transform 700ms var(--ease), box-shadow 500ms ease; }
+  .gm-program .tile.slot .gv { opacity: 0; transition: opacity 500ms ease; }
+  .gm-program .tile.slot.in { opacity: 1; transform: none; }
+  .gm-program .tile.slot.in .gv.ok { opacity: 1; }
+  .gm-program .tile.slot.in .gv.alt.ok, .gm-program .tile.slot .gv.alt { opacity: 0; }
+  .gm-program .tile.slot.swap .gv.alt.ok { opacity: 1; }
+  .gm-program .tile.slot.swap .gv:not(.alt) { opacity: 0; }
+  .gm-program .tile.slot.land { box-shadow: 0 0 0 1px rgba(52,211,153,0.5), 0 12px 34px rgba(52,211,153,0.18); }
+  .gm-program .tile.slot .empty-tag { position: absolute; left: 8px; bottom: 8px; font-size: 10.5px; color: var(--dim); }
+  .gm-program .tile.slot.in .empty-tag, .gm-program .tile.slot.in .tag { display: block; }
+  .gm-program .tile.slot:not(.in) .tag { display: none; }
+  .gm-program .tile.slot.in .empty-tag { display: none; }
+  .gm-program .tile.slot .state { position: absolute; right: 8px; top: 8px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: #06110b; background: var(--mint); padding: 3px 7px; border-radius: 999px; opacity: 0; transform: translateY(-4px); transition: opacity 300ms ease, transform 300ms ease; }
+  .gm-program .tile.slot .state.show { opacity: 1; transform: none; }
+  .gm-program .tile.slot .state.off { background: #ff5c5c; color: #fff; }
+  .gm-program .gobar { position: absolute; left: 12px; right: 12px; bottom: 12px; display: flex; gap: 8px; align-items: center; justify-content: center; font-size: 10px; letter-spacing: 0.14em; color: var(--dim); background: rgba(8,10,14,0.7); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; backdrop-filter: blur(8px); }
+  .gm-program .gobar .golive { color: #fff; background: var(--live); padding: 2px 8px; border-radius: 999px; font-weight: 700; }
+  .tile .gv { z-index: 0; }
+  .tile.host .chairline { position: relative; z-index: 1; }
+
+  @media (max-width: 900px) {
+    .rm-body { grid-template-columns: 1fr; }
+    .rm-roster, .rm-rail { display: none; }
+    .guests-mock { grid-template-columns: 1fr; }
+    .gm-rail { display: none; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     h1 .l2::before, .verified .shiny, .verified::after, .cta-glow::before, .cta-glow::after, .compose .caption, .live-pill.on, .stage-mock .beam, .stage-mock .onair i, .closing .chair, .compose .caret { animation: none; }
     .say, .panel, .hero { transition: none; }
@@ -552,7 +795,6 @@
 
     <!-- beat 0 — hero -->
     <div class="hero">
-      <span class="verified"><img src="meta.svg" alt="" /><span class="shiny">Meta Verified Technology Partner</span></span>
       <h1>
         <span class="l1">Stop posting.</span>
         <span class="l2" data-text="Start producing.">Start producing.</span>
@@ -574,49 +816,81 @@
 
     <!-- statements -->
     <div class="say" id="say1">
-      <div class="eyebrow">Back to the control room</div>
-      <h2>Every show gets <span class="soft">a stage of its own.</span></h2>
+      <div class="eyebrow">Inside a room</div>
+      <h2>One room, in 4K. <span class="soft">Live on every channel at once.</span></h2>
     </div>
     <div class="say" id="say2">
-      <div class="eyebrow">Name your show…</div>
-      <h2>One room. <span class="soft">Every live channel at once.</span></h2>
+      <div class="eyebrow">Guests</div>
+      <h2>Bring anyone on. <span class="soft">A link, a browser, or their own Producer.</span></h2>
+    </div>
+    <div class="say" id="say4">
+      <div class="eyebrow">Multi chat</div>
+      <h2>Every chat, one stream. <span class="soft">Twitch, Kick, and YouTube talk in one place.</span></h2>
+    </div>
+    <div class="say" id="say5">
+      <div class="eyebrow">Under the hood</div>
+      <h2>Metal on the GPU. Rust at the core. <span class="soft">Hardware encode, one pass, every channel.</span></h2>
     </div>
     <div class="say" id="say3">
       <div class="eyebrow">New post</div>
       <h2>Write the caption once. <span class="soft">Post it everywhere.</span></h2>
+      <span class="verified small"><img src="meta.svg" alt="" /><span class="shiny">Meta Verified Technology Partner</span></span>
     </div>
 
     <!-- A — control room -->
     <div class="panel" id="panelA">
-      <img class="real" src="shots/hero.png" alt="Producer's control room — ON AIR rooms, channels, and the rundown" />
-      <div class="mock" aria-hidden="true">
-        <div class="cr">
-          <div>
-            <div class="cr-label">ON AIR <span class="live-pill on">LIVE</span></div>
-            <div class="cr-rooms">
-              <div class="cr-room on"><span class="name">Tuesday Show</span><span class="meta">live now</span></div>
-              <div class="cr-room"><span class="name">Late Night Run</span><span class="meta">2 days ago</span></div>
-              <div class="cr-room new"><span class="name"><span class="plus">+</span>New room</span><span class="meta">a stage of its own</span></div>
-            </div>
+      <img class="real" src="shots/room.png" alt="A Producer room mid-broadcast: guests on stage, live to Twitch, YouTube, and Kick" />
+      <div class="mock room-mock" aria-hidden="true">
+        <div class="tb">
+          <span class="tb-left">
+            <span class="tb-ic"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/><path d="M4 4h16"/></svg></span>
+            <span class="tb-ic box"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg></span>
+          </span>
+          <span class="tb-right">
+            <span class="tb-btn"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>Link</span>
+            <span class="tb-btn">Channels <b>⌄</b></span>
+            <span class="tb-btn q4k">2160p · 60 <em>4K</em> <b>⌄</b></span>
+            <span class="tb-btn cam"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>Cam on</span>
+            <span class="tb-btn"><i class="rec"></i>Record</span>
+            <span class="tb-btn golive on"><i></i>LIVE<span class="clock" id="uptime">00:12:34</span></span>
+          </span>
+        </div>
+        <div class="rm-body">
+          <div class="rm-roster">
+            <div class="rm-label">ROOMS</div>
+            <div class="sc on">Tuesday Show <i class="onair-dot"></i></div><div class="sc">Late Night Run</div>
+            <div class="rm-label mt">GUESTS <em>2/8</em></div>
+            <div class="rg on"><span class="av av2"></span><span class="nm">Nia</span><span class="st">on stage</span></div>
+            <div class="rg on"><span class="av av1"></span><span class="nm">Marcus</span><span class="st">on stage</span></div>
+            <div class="rg wait"><span class="av av3"></span><span class="nm">Jordan</span><span class="st admit">Admit</span></div>
+            <div class="rm-label mt">SCENES</div>
+            <div class="sc on">Full cam</div><div class="sc">PiP</div><div class="sc">Screen</div>
           </div>
-          <div>
-            <div class="cr-label">CHANNELS</div>
-            <div class="cr-chips">
-              <span class="chip"><span class="dot" style="background:#9146ff"></span>Twitch <span class="kind">live</span></span>
-              <span class="chip"><span class="dot" style="background:#ff0000"></span>YouTube <span class="kind">live</span></span>
-              <span class="chip"><span class="dot" style="background:#53fc18"></span>Kick <span class="kind">live</span></span>
-              <span class="chip"><span class="dot" style="background:#e1306c"></span>Instagram <span class="kind">social</span></span>
-              <span class="chip"><span class="dot" style="background:#1877f2"></span>Facebook <span class="kind">social</span></span>
-              <span class="chip add">+ Add</span>
-            </div>
+          <div class="rm-program">
+            <div class="beam"></div>
+            <div class="tile host"><video class="gv" src="shots/host.mp4" autoplay muted loop playsinline></video><span class="tag">You</span></div>
+            <div class="tile g1"><video class="gv" src="shots/guest-2.mp4" autoplay muted loop playsinline></video><span class="tag">Nia</span></div>
+            <div class="tile g2"><video class="gv" src="shots/guest-1.mp4" autoplay muted loop playsinline></video><span class="tag">Marcus</span></div>
+            <div class="gobar"><span>CAMERA</span><span>·</span><span>MIC</span><span>·</span><span>VIRTUAL CAM</span><span class="golive">LIVE</span></div>
           </div>
-          <div>
-            <div class="cr-label">RUNDOWN <span class="actions"><span class="cr-btn primary">New post</span><span class="cr-btn">Everything ▸</span></span></div>
-            <div class="run-rows">
-              <div class="run-row"><span class="state">SCHEDULED</span><span>Instagram</span><span class="when">tomorrow 9:00</span></div>
-              <div class="run-row"><span class="state go">PUBLISHING</span><span>Threads</span><span class="when">now</span></div>
-              <div class="run-row"><span class="state ok">PUBLISHED</span><span>Facebook</span><span class="when">today 14:05</span></div>
+          <div class="rm-rail">
+            <div class="rm-label">CHANNELS <em>3 live</em></div>
+            <div class="dest" data-kbps="30000">
+              <div class="row1"><img src="twitch.svg" alt="" /><span class="name">Twitch</span><span class="live-pill on">LIVE</span></div>
+              <div class="meter"><i></i></div>
+              <div class="stats"><span>2160p60</span><span class="kbps">30.0 Mbps</span></div>
             </div>
+            <div class="dest" data-kbps="31500">
+              <div class="row1"><img src="youtube.svg" alt="" /><span class="name">YouTube</span><span class="live-pill on">LIVE</span></div>
+              <div class="meter"><i></i></div>
+              <div class="stats"><span>2160p60</span><span class="kbps">31.5 Mbps</span></div>
+            </div>
+            <div class="dest" data-kbps="30800">
+              <div class="row1"><img class="kick-mark" src="kick.svg" alt="Kick" /><span class="live-pill on">LIVE</span></div>
+              <div class="meter"><i></i></div>
+              <div class="stats"><span>2160p60</span><span class="kbps">30.8 Mbps</span></div>
+            </div>
+
           </div>
         </div>
       </div>
@@ -624,32 +898,75 @@
 
     <!-- B — live stage -->
     <div class="panel" id="panelB">
-      <img class="real" src="shots/live.png" alt="A Producer room mid-broadcast, streaming to Twitch, YouTube, and Kick" />
-      <div class="mock stage-mock" aria-hidden="true">
-        <div class="rail">
-          <div class="dest" data-kbps="6000">
-            <div class="row1"><img src="twitch.svg" alt="" /><span class="name">Twitch</span><span class="live-pill on">LIVE</span></div>
-            <div class="meter"><i></i></div>
-            <div class="stats"><span>1080p60</span><span class="kbps">6000 kbps</span></div>
-          </div>
-          <div class="dest" data-kbps="6800">
-            <div class="row1"><img src="youtube.svg" alt="" /><span class="name">YouTube</span><span class="live-pill on">LIVE</span></div>
-            <div class="meter"><i></i></div>
-            <div class="stats"><span>1080p60</span><span class="kbps">6800 kbps</span></div>
-          </div>
-          <div class="dest" data-kbps="6400">
-            <div class="row1"><img class="kick-mark" src="kick.svg" alt="Kick" /><span class="live-pill on">LIVE</span></div>
-            <div class="meter"><i></i></div>
-            <div class="stats"><span>1080p60</span><span class="kbps">6400 kbps</span></div>
-          </div>
-          <div class="dest add">+ Add destination — Custom RTMP</div>
+      <img class="real" src="shots/guests.png" alt="Five guests in the rail; one is shown onto the program" />
+      <div class="mock guests-mock" aria-hidden="true">
+        <div class="tb">
+          <span class="tb-left">
+            <span class="tb-ic"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/><path d="M4 4h16"/></svg></span>
+            <span class="tb-ic box"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg></span>
+          </span>
+          <span class="tb-right">
+            <span class="tb-btn"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>Link</span>
+            <span class="tb-btn">Channels <b>⌄</b></span>
+            <span class="tb-btn q4k">2160p · 60 <em>4K</em> <b>⌄</b></span>
+            <span class="tb-btn cam"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>Cam on</span>
+            <span class="tb-btn"><i class="rec"></i>Record</span>
+            <span class="tb-btn golive on"><i></i>LIVE<span class="clock">00:12:34</span></span>
+          </span>
         </div>
-        <div class="preview">
+        <div class="gm-rail">
+          <div class="rm-label">GUESTS <em id="gm-count">2/8</em><span class="linkbtn">⛓ Link</span></div>
+          <div class="gcard on" data-g="2"><video class="gv" src="shots/guest-2.mp4" autoplay muted loop playsinline></video><span class="ph2"></span><span class="who"><i></i>Nia</span></div>
+          <div class="gcard on" id="gm-marcus" data-g="1"><video class="gv" src="shots/guest-1.mp4" autoplay muted loop playsinline></video><span class="ph1"></span><span class="who"><i></i>Marcus</span><span class="ctl"><b>Hide</b><span>🎙</span><span>✕</span></span></div>
+          <div class="gcard" id="gm-pick" data-g="3"><video class="gv" src="shots/guest-3.mp4" autoplay muted loop playsinline></video><span class="ph3"></span><span class="who"><i></i>Jordan</span><span class="ctl"><b id="gm-show">Show</b><span>🎙</span><span>✕</span></span></div>
+          <div class="gcard" data-g="4"><video class="gv" src="shots/guest-4.mp4" autoplay muted loop playsinline></video><span class="ph4"></span><span class="who"><i></i>Sam</span></div>
+          <div class="gcard wait" id="gm-ari" data-g="5"><video class="gv" src="shots/guest-5.mp4" autoplay muted loop playsinline></video><span class="ph5"></span><span class="who"><i class="w"></i>Ari <small>asked to join</small></span><span class="ctl"><b>Admit</b></span></div>
+        </div>
+        <div class="gm-program">
           <div class="beam"></div>
-          <img class="chairline" src="chair.png" alt="" />
-          <span class="onair"><i></i>ON AIR</span>
-          <span class="clock" id="uptime">00:12:34</span>
-          <div class="gobar"><span>DESKTOP</span><span>·</span><span>CAMERA</span><span>·</span><span>MIC</span><span class="golive">LIVE</span></div>
+          <div class="tile host"><video class="gv" src="shots/host.mp4" autoplay muted loop playsinline></video><span class="tag">You</span></div>
+          <div class="tile slot in" id="gm-s1"><video class="gv" src="shots/guest-2.mp4" autoplay muted loop playsinline></video><span class="tag">Nia</span><span class="state"></span></div>
+          <div class="tile slot in" id="gm-s2"><video class="gv" src="shots/guest-1.mp4" autoplay muted loop playsinline></video><video class="gv alt" src="shots/guest-5.mp4" autoplay muted loop playsinline></video><span class="tag">Marcus</span><span class="state"></span></div>
+          <div class="tile slot" id="gm-s3"><video class="gv" src="shots/guest-3.mp4" autoplay muted loop playsinline></video><span class="tag">Jordan</span><span class="state"></span><span class="empty-tag">Slot 3</span></div>
+          <div class="gobar"><span>CAMERA</span><span>·</span><span>MIC</span><span>·</span><span>VIRTUAL CAM</span><span class="golive">LIVE</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- D — multi chat -->
+    <div class="panel" id="panelD">
+      <div class="mock chat-mock" aria-hidden="true">
+        <div class="cm-head">
+          <span class="cm-title">Chat</span>
+          <span class="cm-srcs"><span class="src tw"><img src="twitch.svg" alt="" />Twitch</span><span class="src kk"><img src="kick.svg" alt="" />Kick</span><span class="src yt"><img src="youtube.svg" alt="" />YouTube</span></span>
+        </div>
+        <div class="chat big" id="chat2"></div>
+        <div class="cm-compose"><span class="cm-ph">Say something to everyone…</span><span class="cm-send">Send to all 3</span></div>
+      </div>
+    </div>
+
+    <!-- E — performance -->
+    <div class="panel" id="panelE">
+      <div class="mock perf-mock" aria-hidden="true">
+        <div class="stats">
+          <span><b>OUTPUT</b><i>2160p · 60</i></span>
+          <span><b>FPS</b><i id="pf-fps">60</i></span>
+          <span><b>CPU</b><i id="pf-cpu">3.1%</i></span>
+          <span><b>GPU</b><i>Metal</i></span>
+          <span><b>BITRATE</b><i id="pf-br">31.2 Mbps</i></span>
+          <span><b>DROPPED</b><i class="ok">0</i></span>
+          <span><b>LIVE TIME</b><i class="mono">00:12:34</i></span>
+        </div>
+        <div class="fourk">
+          <span class="fk-mark">4K</span>
+          <span class="fk-body"><b>Up to 2160p at 60.</b> One hardware encode on Apple silicon, out to every channel. The picker unlocks it when the machine can carry it.</span>
+          <span class="fk-pick"><span>720p</span><span>1080p</span><span class="on">2160p <em>4K</em></span></span>
+        </div>
+        <div class="perf-grid">
+          <div class="pc"><span class="k">Renderer</span><span class="v">libobs on Metal</span><span class="d">Compositing, filters, and transitions run on the GPU. The CPU stays free for the show.</span></div>
+          <div class="pc"><span class="k">Encode</span><span class="v">VideoToolbox H.264</span><span class="d">Apple's hardware encoder. One encode, 1080p or 4K, fans out to Twitch, Kick, and YouTube.</span></div>
+          <div class="pc"><span class="k">Core</span><span class="v">Rust + Tauri 2</span><span class="d">Native engine, native window. The UI is React; the parts that matter are compiled.</span></div>
+          <div class="pc"><span class="k">Windows</span><span class="v">x264 today</span><span class="d">NVENC, AMF, and QSV are next. Same engine, same rooms.</span></div>
         </div>
       </div>
     </div>
@@ -693,7 +1010,7 @@
   </div>
 
   <footer>
-    <span>© 2026 Boomin · AGPL-3.0</span>
+    <span>© 2026 Boomin · AGPL-3.0 · <img class="foot-meta" src="meta.svg" alt="" /> Meta Verified Technology Partner</span>
     <span class="spacer"></span>
     <a href="https://github.com/Boomin-Ai/producer/issues">Roadmap</a>
     <a href="https://github.com/sponsors/ikleveland">Sponsor</a>
@@ -845,6 +1162,7 @@
   // ── Real screenshots swap in when the files exist. ──
   document.querySelectorAll(".panel").forEach(function (box) {
     var img = box.querySelector(".real");
+    if (!img) return; // pure-HTML panels (chat) have no screenshot to swap in
     img.addEventListener("load", function () { box.classList.add("has-real"); });
     if (img.complete && img.naturalWidth > 0) box.classList.add("has-real");
   });
@@ -868,18 +1186,46 @@
   (function () {
     var wrap = document.getElementById("scene-wrap");
     var scene = document.getElementById("scene");
-    var raf = 0;
-    function update() {
-      var span = wrap.offsetHeight - window.innerHeight;
-      var p = span > 0 ? Math.min(1, Math.max(0, -wrap.getBoundingClientRect().top / span)) : 1;
-      var stage = p < 0.22 ? 0 : p < 0.48 ? 1 : p < 0.74 ? 2 : 3;
+    var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var target = 0, cur = 0, raf = 0;
+    // Each beat is a window of scroll progress; windows overlap a little so
+    // one thing is always arriving while another leaves.
+    var BEATS = {
+      hero: [0.03, 0.15],
+      a1: [0.04, 0.19], a2: [0.27, 0.37],
+      s1: [0.11, 0.20], s1o: [0.28, 0.36],
+      b2: [0.29, 0.41], b3: [0.47, 0.56],
+      s2: [0.33, 0.42], s2o: [0.48, 0.55],
+      d4: [0.49, 0.59], d5: [0.65, 0.73],
+      s4: [0.52, 0.60], s4o: [0.66, 0.72],
+      e6: [0.67, 0.77], e7: [0.82, 0.89],
+      s5: [0.70, 0.78], s5o: [0.83, 0.88],
+      c3: [0.84, 0.94], s3: [0.87, 0.95]
+    };
+    function ease(t) { return t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t); }
+    function seg(p, w) { return ease((p - w[0]) / (w[1] - w[0])); }
+    function apply(p) {
+      for (var k in BEATS) scene.style.setProperty("--" + k, seg(p, BEATS[k]).toFixed(4));
+      var stage = p < 0.17 ? 0 : p < 0.4 ? 1 : p < 0.6 ? 2 : 3;
       if (String(stage) !== scene.getAttribute("data-stage")) scene.setAttribute("data-stage", String(stage));
-      raf = 0;
     }
-    function onScroll() { if (!raf) raf = requestAnimationFrame(update); }
+    function measure() {
+      var span = wrap.offsetHeight - window.innerHeight;
+      target = span > 0 ? Math.min(1, Math.max(0, -wrap.getBoundingClientRect().top / span)) : 1;
+    }
+    function tick() {
+      raf = 0;
+      // Critically-damped chase: the scene settles ~150ms behind the wheel,
+      // which reads as weight rather than lag. Reduced motion = no chase.
+      var d = target - cur;
+      if (reduced || document.hidden || Math.abs(d) < 0.0006) cur = target; else cur += d * 0.16;
+      apply(cur);
+      if (cur !== target) raf = requestAnimationFrame(tick);
+    }
+    function onScroll() { measure(); if (!raf) raf = requestAnimationFrame(tick); }
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
-    update();
+    measure(); cur = target; apply(cur);
   })();
 
   // ── Living numbers in the stage mock. ──
@@ -889,9 +1235,9 @@
     setInterval(function () {
       dests.forEach(function (d) {
         var base = parseInt(d.getAttribute("data-kbps"), 10);
-        var kbps = base + Math.round((Math.random() - 0.5) * 900);
-        d.querySelector(".kbps").textContent = kbps + " kbps";
-        d.querySelector(".meter i").style.width = (52 + (kbps - 5200) / 40) + "%";
+        var kbps = base + Math.round((Math.random() - 0.5) * 2400);
+        d.querySelector(".kbps").textContent = (kbps / 1000).toFixed(1) + " Mbps";
+        d.querySelector(".meter i").style.width = (58 + (kbps - 30000) / 120) + "%";
       });
     }, 900);
     var t0 = Date.now(), up = document.getElementById("uptime");
@@ -900,6 +1246,92 @@
       var p = function (n) { return String(n).padStart(2, "0"); };
       up.textContent = p(Math.floor(s / 3600)) + ":" + p(Math.floor(s / 60) % 60) + ":" + p(s % 60);
     }, 1000);
+  })();
+
+  // ── Chat feeds: one line of messages, every container that wants them. ──
+  (function () {
+    var boxes = Array.prototype.slice.call(document.querySelectorAll(".chat"));
+    if (!boxes.length || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    var lines = [
+      ["tw", "mofo_matt", "producer.dev in the title btw"],
+      ["kk", "kayla.live", "wait is this all one encode??"],
+      ["yt", "DevRel Dan", "guests straight from the browser is wild"],
+      ["tw", "night_owl", "chair is a vibe"],
+      ["kk", "ttv_jo", "self hosted?? on cloudflare?? ok"],
+      ["yt", "Priya", "4K60 on three at once, no relay??"],
+      ["tw", "beats_by_ro", "W stage"],
+      ["kk", "marcus.k", "how many guests can you bring on"],
+      ["yt", "Lena", "8 per room I think"],
+      ["tw", "sfx_sam", "the roster admit is so clean"],
+    ];
+    var marks = { tw: "twitch.svg", kk: "kick.svg", yt: "youtube.svg" };
+    var i = 0;
+    function push() {
+      var l = lines[i++ % lines.length];
+      boxes.forEach(function (chat) {
+        var m = document.createElement("div"); m.className = "m";
+        var badge = chat.classList.contains("big") ? '<img class="badge" src="' + marks[l[0]] + '" alt="" />' : "";
+        m.innerHTML = badge + '<span class="who ' + l[0] + '">' + l[1] + '</span><span class="txt">' + l[2] + '</span>';
+        chat.appendChild(m);
+        var max = chat.classList.contains("big") ? 11 : 6;
+        while (chat.children.length > max) chat.removeChild(chat.firstChild);
+      });
+    }
+    for (var k = 0; k < 6; k++) push();
+    setInterval(push, 2100);
+  })();
+
+  // ── Living numbers on the performance strip. ──
+  (function () {
+    var fps = document.getElementById("pf-fps"), cpu = document.getElementById("pf-cpu"), br = document.getElementById("pf-br");
+    if (!fps || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    setInterval(function () {
+      fps.textContent = Math.random() < 0.9 ? "60" : "59";
+      cpu.textContent = (2.4 + Math.random() * 1.6).toFixed(1) + "%";
+      br.textContent = (30.4 + Math.random() * 1.6).toFixed(1) + " Mbps";
+    }, 1100);
+  })();
+
+  // ── Guests beat sequence (13 s loop): Jordan is shown onto slot 3, Marcus is
+  //    taken off stage, Ari is admitted and takes his slot. Rail and program
+  //    move together on desktop; on mobile the program alone tells it. ──
+  (function () {
+    var $ = function (id) { return document.getElementById(id); };
+    var jordan = $("gm-pick"), marcus = $("gm-marcus"), ari = $("gm-ari"),
+        s1 = $("gm-s1"), s2 = $("gm-s2"), s3 = $("gm-s3"), count = $("gm-count");
+    if (!jordan || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    function state(tile, text, off) {
+      var el = tile.querySelector(".state"); el.textContent = text; el.className = "state show" + (off ? " off" : "");
+      setTimeout(function () { el.classList.remove("show"); }, 1600);
+    }
+    var steps = [
+      [0, function () {
+        jordan.className = "gcard"; marcus.className = "gcard on"; ari.className = "gcard wait";
+        s1.className = "tile slot in"; s2.className = "tile slot in"; s3.className = "tile slot";
+        s2.querySelector(".tag").textContent = "Marcus"; count.textContent = "2/8";
+      }],
+      [1200, function () { jordan.classList.add("hover"); }],
+      [2000, function () { jordan.classList.add("press"); }],
+      [2400, function () { jordan.classList.remove("hover", "press"); jordan.classList.add("on", "shown"); s3.classList.add("in", "land"); state(s3, "ON STAGE"); count.textContent = "3/8"; }],
+      [5200, function () { marcus.classList.add("hover"); s3.classList.remove("land"); }],
+      [6000, function () { marcus.classList.add("press"); }],
+      [6400, function () { marcus.classList.remove("hover", "press", "on"); marcus.classList.add("off"); state(s2, "OFF STAGE", true); }],
+      [7200, function () { s2.classList.remove("in"); count.textContent = "2/8"; }],
+      [8600, function () { ari.classList.add("press"); }],
+      [9000, function () { ari.className = "gcard on shown"; ari.querySelector(".who small").textContent = "admitted"; }],
+      [9800, function () { s2.querySelector(".tag").textContent = "Ari"; s2.classList.add("swap", "in", "land"); state(s2, "ON STAGE"); count.textContent = "3/8"; }],
+      [12200, function () { s2.classList.remove("land"); ari.querySelector(".who small").textContent = "asked to join"; s2.classList.remove("swap"); }],
+    ];
+    function cycle() { steps.forEach(function (st) { setTimeout(st[1], st[0]); }); }
+    cycle(); setInterval(cycle, 13000);
+  })();
+
+  // ── Real loops (site/shots/*.mp4) replace the placeholders when they exist. ──
+  (function () {
+    document.querySelectorAll("video.gv").forEach(function (v) {
+      v.addEventListener("loadeddata", function () { v.classList.add("ok"); });
+      v.addEventListener("error", function () { v.remove(); });
+    });
   })();
 </script>
 </body>
