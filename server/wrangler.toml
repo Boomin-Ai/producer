@@ -20,15 +20,40 @@ database_id = "REPLACE_WITH_YOUR_D1_ID"
 binding = "MEDIA"
 bucket_name = "producer-media"
 
+# Live guests: the signaling Durable Object (one per guest session, one per
+# room). SQLite-backed, which is the flavour the Workers FREE plan includes —
+# see SELF_HOSTING.md "Guests". It carries introductions only, never media.
+[[durable_objects.bindings]]
+name = "REALTIME"
+class_name = "RealtimeHub"
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["RealtimeHub"]
+
+# The guest join / render pages (public/guest/index.html). The worker serves
+# them at /connect/guest/*; anything under /guest/* (the bundle's own assets)
+# is served straight from the asset store.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
 [vars]
 # Your own Meta developer app ids (Development Mode is fine — you post to
 # your own accounts). Secrets are set with `wrangler secret put`:
 #   PRIMARY_TOKEN            — the endpoint token you paste into Producer
 #   AUTOMATION_TOKEN         — optional publish/read-only token for agents/CLI
 #   TOKEN_ENCRYPTION_KEY     — 32+ chars; encrypts platform tokens at rest
+#   SIGNALING_SECRET         — 32+ chars; signs guest signaling tickets and
+#                              derives render keys (rotating it changes every
+#                              guest render URL)
 #   INSTAGRAM_APP_SECRET
 #   FACEBOOK_APP_SECRET
 #   THREADS_APP_SECRET
+# Optional: JSON array of RTCIceServer objects for guest media. Unset = public
+# STUN only (free, no media through this worker). Add TURN if guests behind
+# strict NATs can't connect — see SELF_HOSTING.md "Guests".
+# ICE_SERVERS = '[{"urls":["stun:stun.cloudflare.com:3478"]},{"urls":"turn:turn.example.com:3478","username":"u","credential":"p"}]'
 INSTAGRAM_APP_ID = ""
 FACEBOOK_APP_ID = ""
 THREADS_APP_ID = ""
