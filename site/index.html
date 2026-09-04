@@ -117,6 +117,10 @@
     margin-bottom: 18px;
   }
   .verified img { width: 16px; height: 16px; }
+  .verified.small { margin: 18px 0 0; font-size: 12.5px; padding: 6px 12px; }
+  .verified.small img { width: 14px; height: 14px; }
+  .foot-meta { width: 13px; height: 13px; vertical-align: -2px; margin-left: 2px; opacity: 0.8; }
+
   /* React Bits "shiny text": dim base, bright band sweeping across the label */
   .verified .shiny {
     background-image: linear-gradient(110deg,
@@ -775,7 +779,6 @@
 
     <!-- beat 0 — hero -->
     <div class="hero">
-      <span class="verified"><img src="meta.svg" alt="" /><span class="shiny">Meta Verified Technology Partner</span></span>
       <h1>
         <span class="l1">Stop posting.</span>
         <span class="l2" data-text="Start producing.">Start producing.</span>
@@ -815,6 +818,7 @@
     <div class="say" id="say3">
       <div class="eyebrow">New post</div>
       <h2>Write the caption once. <span class="soft">Post it everywhere.</span></h2>
+      <span class="verified small"><img src="meta.svg" alt="" /><span class="shiny">Meta Verified Technology Partner</span></span>
     </div>
 
     <!-- A — control room -->
@@ -990,7 +994,7 @@
   </div>
 
   <footer>
-    <span>© 2026 Boomin · AGPL-3.0</span>
+    <span>© 2026 Boomin · AGPL-3.0 · <img class="foot-meta" src="meta.svg" alt="" /> Meta Verified Technology Partner</span>
     <span class="spacer"></span>
     <a href="https://github.com/Boomin-Ai/producer/issues">Roadmap</a>
     <a href="https://github.com/sponsors/ikleveland">Sponsor</a>
