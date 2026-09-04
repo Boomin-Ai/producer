@@ -428,6 +428,20 @@ export const vcam = {
   output: (on: boolean) => invoke<boolean>("live_vcam_output", { on }),
 };
 
+export interface FirewallStatus {
+  /** `ok` everywhere but Windows; there, whether the inbound rule exists. */
+  status: "ok" | "missing" | "unknown";
+  detail?: string | null;
+}
+
+/** Windows Firewall inbound rule for guest media (windows/hooks.nsh adds it
+ * at install; this is the runtime check + elevated repair). */
+export const firewall = {
+  status: () => invoke<FirewallStatus>("firewall_status"),
+  /** UAC prompt; resolves with the re-checked status. */
+  allow: () => invoke<FirewallStatus>("firewall_allow"),
+};
+
 /** Per-item opacity 0–1, for scene fades. Fire-and-forget at frame rate. */
 export const setOpacity = (id: string, opacity: number) =>
   invoke("live_set_opacity", { id, opacity });
@@ -493,6 +507,26 @@ export const registerRoom = (endpointId: string, title: string, externalRef: str
     title,
     externalRef,
   });
+
+/** A room as the server knows it: Producer-registered (external_ref = the
+ * local id that minted it) or created on the web / by a deal. */
+export interface ServerRoom {
+  id: string;
+  title?: string | null;
+  visibility?: "private" | "connections" | "public" | string | null;
+  external_ref?: string | null;
+  status?: string | null;
+  archived_at?: string | null;
+  deleted_at?: string | null;
+}
+
+/** Every server room the brand owns — the reconcile input for room sync. */
+export const listServerRooms = (endpointId: string) =>
+  invoke<{ rooms?: ServerRoom[] }>("room_list_server", { endpointId });
+
+/** Rename the SERVER room (server id). Local rename happens separately. */
+export const setServerRoomTitle = (endpointId: string, roomId: string, title: string) =>
+  invoke("room_set_title", { endpointId, roomId, title });
 
 export interface NetworkStatus {
   membership?: { status?: string } | null;
@@ -564,8 +598,16 @@ export const network = {
    * via the API and opens the guest page in its own window (`guest-<id>`).
    * Rejects with a message starting `network_room_closed:` while the host's
    * room isn't open. */
-  enterDeal: (endpointId: string, dealId: string, windowTitle?: string) =>
-    invoke<{ join_url: string; resumed: boolean }>("network_deal_enter", { endpointId, dealId, windowTitle }),
+  /** `guestName` prefills the guest page's display name (`?name=`). Rust
+   * starts the virtual camera and adds `?cam=producer` when it can —
+   * `producer_cam` reports whether the scene is the camera this time. */
+  enterDeal: (endpointId: string, dealId: string, windowTitle?: string, guestName?: string | null) =>
+    invoke<{ join_url: string; resumed: boolean; producer_cam?: boolean }>("network_deal_enter", {
+      endpointId,
+      dealId,
+      windowTitle,
+      guestName: guestName ?? null,
+    }),
 };
 
 /** True when an `enterDeal` rejection means the host hasn't opened the room. */

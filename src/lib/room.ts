@@ -84,6 +84,10 @@ export interface RoomConfig {
    * local id stays authoritative offline; this is only the seam for
    * server-side features (guests today, broadcasts later). */
   server_room_id?: string;
+  /** Where the row was born. `server` = created elsewhere (web, a deal,
+   * another machine) and pulled down by room sync; its title follows the
+   * server. Absent = minted here, title is ours to push. */
+  origin?: "server";
   /** Network exposure, mirrored locally so the control renders offline.
    * Producer is the only writer, so the local copy is authoritative;
    * changing it forces registration and a server PATCH. */
@@ -152,6 +156,7 @@ export function parseConfig(raw: string | null | undefined): RoomConfig {
   if (v.channels && typeof v.channels === "object") base.channels = v.channels as Record<string, boolean>;
   if (typeof v.active_scene === "string") base.active_scene = v.active_scene;
   if (typeof v.server_room_id === "string") base.server_room_id = v.server_room_id;
+  if (v.origin === "server") base.origin = "server";
   if (v.visibility === "connections" || v.visibility === "public" || v.visibility === "private") {
     base.visibility = v.visibility;
   }

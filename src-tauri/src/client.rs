@@ -166,6 +166,42 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
+    /// Every server room this brand owns — Producer-registered ones (by
+    /// `external_ref`) and rooms minted on the web or by a deal. Home
+    /// reconciles its local rows against this so a room created anywhere is
+    /// hostable from any machine.
+    pub async fn list_rooms(&self) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .get(self.root_url("/v1/app/live/rooms"))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// Rename a SERVER room (the title the web, deals and the network show).
+    pub async fn room_set_title(&self, room_id: &str, title: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .patch(self.root_url(&format!("/v1/app/live/rooms/{room_id}")))
+            .bearer_auth(&self.token)
+            .json(&serde_json::json!({ "title": title }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     /// Who is in this room right now. Producer polls this and reconciles its
     /// browser sources against it — guests arrive via the room link on their
     /// own, so the roster is the only way to learn about them.
