@@ -23,8 +23,7 @@ import { ipc,
   type NetworkBrandCard,
   type NetworkConnectionRow,
   type NetworkDeal,
-  type NetworkLiveRoom,
-} from "../lib/ipc";
+  type NetworkLiveRoom,, listServerRooms, roomSetDefault } from "../lib/ipc";
 import { demoOn, setDemo } from "../lib/demo";
 import { markHomePainted, markRoomClick } from "../lib/perf";
 import { KEYMAP, getKey, setKey, resetKey, displayKey, type KeyBinding } from "../lib/keys";
@@ -1060,7 +1059,7 @@ function ControlRoomHome({
               onMakeMain={async () => {
                 const sid = parseConfig(room.config).server_room_id;
                 if (!mainEndpointId || !sid) return;
-                await ipc.roomSetDefault(mainEndpointId, sid).catch(() => {});
+                await roomSetDefault(mainEndpointId, sid).catch(() => {});
                 onRoomsChanged();
               }}
               onOpen={() => onOpenRoom(room)}
@@ -2745,7 +2744,7 @@ function useMainRoom(rooms: LiveRoom[]): { mainId: string | null; endpointId: st
     (async () => {
       const ep = await resolveActiveEndpoint().catch(() => null);
       if (!ep || !isBoomin(ep)) { if (!dead) setState({ mainId: null, endpointId: null }); return; }
-      const { rooms: srv = [] } = await ipc.listServerRooms(ep.id).catch(() => ({ rooms: [] as ServerRoom[] }));
+      const { rooms: srv = [] } = await listServerRooms(ep.id).catch(() => ({ rooms: [] as ServerRoom[] }));
       const main = srv.find((r) => r.is_default);
       const local = main ? rooms.find((r) => parseConfig(r.config).server_room_id === main.id) : undefined;
       if (!dead) setState({ mainId: local?.id ?? null, endpointId: ep.id });
