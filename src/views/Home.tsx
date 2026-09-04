@@ -487,6 +487,7 @@ export function Home({
             setProfileOpen(false);
             onEndpointsChanged?.();
           }}
+          onRemoveEndpoint={onRemoveEndpoint}
           onOpenConsole={(section, endpointId) => {
             if (endpointId && endpointId !== activeId) {
               setActiveEndpointId(endpointId);
@@ -2972,6 +2973,7 @@ function WorkspacePopout({
   activeId,
   onSwitch,
   onOpenConsole,
+  onRemoveEndpoint,
   onSignOut,
   onClose,
 }: {
@@ -2980,6 +2982,8 @@ function WorkspacePopout({
   onSwitch: (endpointId: string) => void;
   /** The gear on a brand: that brand's settings console (switching first when needed). */
   onOpenConsole?: (section: string, endpointId?: string) => void;
+  /** Self-hosted rows: forget this server on this Mac. */
+  onRemoveEndpoint?: (endpointId: string) => void;
   onSignOut?: () => void;
   onClose: () => void;
 }) {
@@ -3081,6 +3085,18 @@ function WorkspacePopout({
                 <span className="ws-pop-slug">self-hosted</span>
               </span>
               {e.id === active?.id && <i className="ws-dot" />}
+              {onRemoveEndpoint && (
+                <span
+                  className="ws-gear ws-drop"
+                  role="button"
+                  tabIndex={0}
+                  title={`Disconnect ${e.name} from ${THIS_DEVICE}`}
+                  onClick={(ev) => { ev.stopPropagation(); onRemoveEndpoint(e.id); }}
+                  onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); ev.stopPropagation(); onRemoveEndpoint(e.id); } }}
+                >
+                  ✕
+                </span>
+              )}
             </button>
           ))}
           {brands !== null && rows.length === 0 && independents.length === 0 && (

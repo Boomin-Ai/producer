@@ -8604,3 +8604,4 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .cr.cr--vibrant.settings-open .net-rail { transform: translateX(var(--settings-w)); pointer-events: none; user-select: none; }
 
 .set .cr-label-sub { font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--fg-2); }
+.ws-gear.ws-drop:hover { color: #ffb4b4; }
