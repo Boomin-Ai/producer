@@ -444,6 +444,7 @@ export function Home({
       )}
 
       {view.kind === "home" && (
+        {settingsOpen && <div className="home-settings-scrim" onClick={closeSettings} aria-hidden />}
         <aside className={`home-settings${settingsOpen ? " open" : ""}`} aria-hidden={!settingsOpen}>
           {settingsShown && (
             <SettingsPanel
@@ -594,8 +595,6 @@ function ChannelsBlock({
   // workspaces drive it from here; Boomin workspaces connect in Boomin.
   const [connecting, setConnecting] = useState<{ ep: string; platform: string } | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
-  const independents = endpoints.filter((e) => !isBoomin(e));
-  const boomins = endpoints.filter((e) => isBoomin(e));
   async function startConnect(endpointId: string, platform: string) {
     setConnectError(null);
     try {
@@ -609,64 +608,75 @@ function ChannelsBlock({
   return (
       <section className="cr-section set-channels" id="sec-channels">
         <div className="cr-label set-gap">CHANNELS</div>
-        <div className="cr-channels">
-          {destinations.map((d) => (
-            <button
-              key={d.id}
-              className={`cr-chip${d.enabled ? "" : " off"}`}
-              title={`${d.preset} · key in Keychain — click to edit`}
-              onClick={() => setEditingDest(d)}
-            >
-              <span className="cr-chip-dot" style={{ background: PRESET_TONE[d.preset] ?? "#8b93a7" }} />
-              {d.label}
-              <span className="cr-chip-kind">live</span>
-            </button>
-          ))}
-          {channels.map((c) => (
-            <span key={c.id} className="cr-chip static" title={`${c.platform} via ${c.endpoint_kind === "connected" ? "Boomin" : "self-hosted"}`}>
-              <span className="cr-chip-dot" style={{ background: PRESET_TONE[c.platform] ?? "#8b93a7" }} />
-              {c.display_name}
-              <span className="cr-chip-kind">{c.platform}</span>
-            </span>
-          ))}
+
+        <div className="set-sub">
+          <div className="set-sub-h">
+            <span className="set-sub-t">Live destinations</span>
+            <span className="set-sub-k">streams from rooms</span>
+            <button className="set-plat add" onClick={() => { setEditingDest(null); setAddingDest(true); }}>+ Add</button>
+          </div>
+          <div className="cr-channels">
+            {destinations.length === 0 && <span className="set-sub-empty">None yet. Twitch, Kick, YouTube, or any RTMP.</span>}
+            {destinations.map((d) => (
+              <button
+                key={d.id}
+                className={`cr-chip${d.enabled ? "" : " off"}`}
+                title={`${d.preset} · key in Keychain — click to edit`}
+                onClick={() => setEditingDest(d)}
+              >
+                <span className="cr-chip-dot" style={{ background: PRESET_TONE[d.preset] ?? "#8b93a7" }} />
+                {d.label}
+                <span className="cr-chip-kind">live</span>
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="set-connect">
-          <div className="set-connect-row">
-            <span className="set-connect-k">Live</span>
-            <button className="set-plat" onClick={() => { setEditingDest(null); setAddingDest(true); }}>+ Destination</button>
-            <span className="set-connect-sub">Twitch, Kick, YouTube, or any RTMP — streams from rooms.</span>
-          </div>
-          {independents.map((ep) => (
-            <div key={ep.id} className="set-connect-row">
-              <span className="set-connect-k">{ep.name}</span>
-              {(["instagram", "facebook", "threads"] as const).map((pl) => (
-                <button
-                  key={pl}
-                  className={`set-plat${connecting?.ep === ep.id && connecting.platform === pl ? " busy" : ""}`}
-                  onClick={() => startConnect(ep.id, pl)}
-                  title={`Connect ${pl} to ${ep.name} (OAuth in your browser)`}
-                >
-                  <span className="cr-chip-dot" style={{ background: PRESET_TONE[pl] ?? "#8b93a7" }} />
-                  {pl === "instagram" ? "Instagram" : pl === "facebook" ? "Facebook" : "Threads"}
-                </button>
-              ))}
+        {endpoints.map((ep) => {
+          const mine = channels.filter((c) => c.endpoint_id === ep.id);
+          const boomin = isBoomin(ep);
+          return (
+            <div key={ep.id} className="set-sub">
+              <div className="set-sub-h">
+                <span className={`dot ${ep.kind}`} />
+                <span className="set-sub-t">{ep.name}</span>
+                <span className="set-sub-k">{boomin ? "Boomin · posting" : "self-hosted · posting"}</span>
+              </div>
+              <div className="cr-channels">
+                {mine.map((c) => (
+                  <span key={c.id} className="cr-chip static" title={c.platform}>
+                    <span className="cr-chip-dot" style={{ background: PRESET_TONE[c.platform] ?? "#8b93a7" }} />
+                    {c.display_name}
+                    <span className="cr-chip-kind">{c.platform}</span>
+                  </span>
+                ))}
+                {boomin ? (
+                  mine.length === 0 && <span className="set-sub-empty">Connect posting channels in your Boomin workspace; they show up here.</span>
+                ) : (
+                  (["instagram", "facebook", "threads"] as const)
+                    .filter((pl) => !mine.some((c) => c.platform === pl))
+                    .map((pl) => (
+                      <button
+                        key={pl}
+                        className={`set-plat${connecting?.ep === ep.id && connecting.platform === pl ? " busy" : ""}`}
+                        onClick={() => startConnect(ep.id, pl)}
+                        title={`Connect ${pl} (OAuth in your browser)`}
+                      >
+                        + {pl === "instagram" ? "Instagram" : pl === "facebook" ? "Facebook" : "Threads"}
+                      </button>
+                    ))
+                )}
+              </div>
+              {connecting?.ep === ep.id && (
+                <div className="set-connect-pending">
+                  Finish approving in your browser, then
+                  <button className="linkish" onClick={() => { onChanged(); setConnecting(null); }}>refresh channels</button>
+                </div>
+              )}
+              {connectError && connecting?.ep !== ep.id && !boomin && <div className="set-connect-error">{connectError}</div>}
             </div>
-          ))}
-          {boomins.length > 0 && (
-            <div className="set-connect-row">
-              <span className="set-connect-k">{boomins.map((e) => e.name).join(", ")}</span>
-              <span className="set-connect-sub">Posting channels connect in your Boomin workspace and show up here.</span>
-            </div>
-          )}
-          {connecting && (
-            <div className="set-connect-pending">
-              Finish approving in your browser, then
-              <button className="linkish" onClick={() => { onChanged(); setConnecting(null); }}>refresh channels</button>
-            </div>
-          )}
-          {connectError && <div className="set-connect-error">{connectError}</div>}
-        </div>
+          );
+        })}
 
         {(addingDest || editingDest) && (
           <div className="cr-dest-editor">
