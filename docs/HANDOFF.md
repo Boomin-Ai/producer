@@ -71,7 +71,8 @@ restored after; sampled every 15 s from `live_engine_status`.
 - x264 (forced via `PRODUCER_VIDEO_ENCODER=obs_x264`): footer `d3d11 · x264`, 2160p greyed with the
   "needs a hardware encoder" note, engine refuses a 2160 canvas with the same error; 1080p60 x264
   CPU 11–13% (≈2× NVENC).
-- **Installer:** `src-tauri	argeteleaseundle
+- **Installer:** `src-tauri\target
+eleaseundle
 sis\Producer_0.4.17_x64-setup.exe` (built from
   main 6df4657 with the engine, 1335 files staged, exe imports obs.dll). Installed per-user on this
   box for the Mac⇄Windows guest test.
