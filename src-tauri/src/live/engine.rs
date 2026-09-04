@@ -878,6 +878,15 @@ pub struct Snapshot {
     /// (NVENC/AMF/QSV) are not wired yet, so this is false there.
     #[serde(default)]
     pub hw_encoder: bool,
+    /// 2160p at 60 is allowed. Intel Macs have VideoToolbox but not the
+    /// throughput for 4K60; they get 2160p30 only. Apple silicon: both.
+    #[serde(default)]
+    pub hw_4k60: bool,
+}
+
+/// Intel Macs get 2160p30 only — the encoder exists, the headroom doesn't.
+fn four_k_60_ok() -> bool {
+    !(cfg!(target_os = "macos") && cfg!(target_arch = "x86_64"))
 }
 
 pub struct LiveHandle {
@@ -1655,6 +1664,7 @@ pub fn start(
                 s.video_height = h;
                 s.video_fps = f;
                 s.hw_encoder = !report.videotoolbox_encoders.is_empty();
+                s.hw_4k60 = s.hw_encoder && four_k_60_ok();
                 s.graphics_backend = report.graphics_backend.clone();
                 s.boot_phases_ms = report.boot_phases_ms.clone();
             }
@@ -2134,6 +2144,10 @@ pub fn start(
                         } else if height == 2160 && report.videotoolbox_encoders.is_empty() {
                             sink(&LiveEvent::EngineError {
                                 message: "4K needs a hardware encoder — coming with NVENC/AMF/QSV".into(),
+                            });
+                        } else if height == 2160 && fps == 60 && !four_k_60_ok() {
+                            sink(&LiveEvent::EngineError {
+                                message: "4K on an Intel Mac runs at 30 fps".into(),
                             });
                         } else {
                             let module = graphics_module(report.graphics_backend.as_deref());

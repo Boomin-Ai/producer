@@ -321,6 +321,8 @@ export interface LiveSnapshot {
   /** A hardware H.264 encoder is present (macOS: VideoToolbox). Gates the
    * 2160p ("4K") option; Windows/Linux stay false until NVENC/AMF/QSV land. */
   hw_encoder?: boolean;
+  /** 2160p at 60 allowed (Apple silicon yes; Intel Macs 2160p30 only). */
+  hw_4k60?: boolean;
   stage_transparent?: boolean;
 }
 

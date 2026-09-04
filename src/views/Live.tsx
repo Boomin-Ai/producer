@@ -3897,6 +3897,8 @@ export function LiveView({
   // 4K is a hardware-encoder feature: the engine reports whether one exists
   // (macOS VideoToolbox); Windows/Linux stay disabled until NVENC/AMF/QSV.
   const hwEncoder = !!snapshot?.hw_encoder;
+  // Intel Macs: the encoder is there, the headroom for 4K60 isn't.
+  const hw4k60 = !!snapshot?.hw_4k60;
   async function setVideoCfg(h: number, f: number) {
     try {
       await ipc.liveSetVideo(h, f);
@@ -5173,7 +5175,7 @@ export function LiveView({
                         className={`rm-q${vh === h ? " on" : ""}`}
                         disabled={streaming || !engineOk || gated}
                         title={gated ? "4K needs a hardware encoder — coming with NVENC/AMF/QSV" : undefined}
-                        onClick={() => setVideoCfg(h, vf)}
+                        onClick={() => setVideoCfg(h, h === 2160 && !hw4k60 ? 30 : vf)}
                       >
                         {h}p{h === 2160 && <span className="rm-q-tag">4K</span>}
                       </button>
@@ -5184,11 +5186,20 @@ export function LiveView({
               <div className="rm-ctrl-row">
                 <span className="rm-ctrl-label">Frame rate</span>
                 <span className="rm-quality-set">
-                  {[30, 60].map((f) => (
-                    <button key={f} className={`rm-q${vf === f ? " on" : ""}`} disabled={streaming || !engineOk} onClick={() => setVideoCfg(vh, f)}>
-                      {f}
-                    </button>
-                  ))}
+                  {[30, 60].map((f) => {
+                    const gated = f === 60 && vh === 2160 && !hw4k60;
+                    return (
+                      <button
+                        key={f}
+                        className={`rm-q${vf === f ? " on" : ""}`}
+                        disabled={streaming || !engineOk || gated}
+                        title={gated ? "4K on an Intel Mac runs at 30 fps" : undefined}
+                        onClick={() => setVideoCfg(vh, f)}
+                      >
+                        {f}
+                      </button>
+                    );
+                  })}
                 </span>
               </div>
               <div className="rm-ctrl-row">
