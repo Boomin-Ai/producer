@@ -782,3 +782,22 @@ continue on a miss):
   boots the engine once. The installer is unsigned (no Windows code-signing
   certificate is wired); release.yml's Windows job is still the engine-less
   path and does not use these yet.
+
+## Parity with v0.4.14 (verified 2026-09-03)
+
+Main 8871091 = v0.4.14 + PR #21 (Win32 clipboard shim, `THIS_DEVICE` wording)
++ PR #19 (build scripts). The Windows engine build links again; v0.4.10–14 had
+shipped with `producer_copy_text` macOS-only, which CI cannot see (its Windows
+job is an engine-less `cargo check`, so `shim_win.c` never compiles there —
+diff `ffi.rs` externs against `shim_win.c` after every macOS-side change).
+
+`Producer_0.4.14_x64-setup.exe` (129 MB) built here from main: silent
+per-user install → 1335 files, engine boots with every plugin → uninstall
+clean. **The NSIS firewall hook (`src-tauri/windows/hooks.nsh`, "Boomin
+Producer") does nothing under the default `installMode: currentUser`:** the
+installer is unelevated, `netsh advfirewall firewall add rule` needs admin,
+`nsExec` swallows the failure, and `netsh … show rule` reports no rule after
+install. The in-app banner (`firewall_status` → "missing" → "Allow Producer",
+elevated via `Start-Process -Verb RunAs`) is therefore the path every
+per-user install takes; it shows and works on this box. A per-machine
+installer would make the hook real.
