@@ -2,6 +2,7 @@ mod boomin;
 mod chat;
 mod client;
 mod error;
+mod firewall;
 mod ipc;
 mod live;
 mod outbox;
@@ -111,6 +112,8 @@ pub fn run() {
             ipc::room_set_visibility,
             ipc::live_room_open_report,
             ipc::room_register,
+            firewall::firewall_status,
+            firewall::firewall_allow,
             ipc::room_list_server,
             ipc::room_set_title,
             ipc::room_guest_invite,

@@ -428,6 +428,20 @@ export const vcam = {
   output: (on: boolean) => invoke<boolean>("live_vcam_output", { on }),
 };
 
+export interface FirewallStatus {
+  /** `ok` everywhere but Windows; there, whether the inbound rule exists. */
+  status: "ok" | "missing" | "unknown";
+  detail?: string | null;
+}
+
+/** Windows Firewall inbound rule for guest media (windows/hooks.nsh adds it
+ * at install; this is the runtime check + elevated repair). */
+export const firewall = {
+  status: () => invoke<FirewallStatus>("firewall_status"),
+  /** UAC prompt; resolves with the re-checked status. */
+  allow: () => invoke<FirewallStatus>("firewall_allow"),
+};
+
 /** Per-item opacity 0–1, for scene fades. Fire-and-forget at frame rate. */
 export const setOpacity = (id: string, opacity: number) =>
   invoke("live_set_opacity", { id, opacity });

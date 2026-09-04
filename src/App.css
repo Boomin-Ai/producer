@@ -8335,3 +8335,21 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   width: 100%;
   outline: none;
 }
+
+/* Windows Firewall one-liner (Home, above ON AIR). Amber, inline, no card
+   chrome — it should read as a notice, not a panel. */
+.cr-firewall {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid oklch(0.85 0.12 85 / 0.35);
+  background: oklch(0.85 0.12 85 / 0.08);
+  color: var(--fg);
+  font-size: 13px;
+}
+.cr-firewall-text { flex: 1; min-width: 0; }
+.cr-firewall-sub { color: var(--muted-fg); font-size: 12px; }
+.cr-firewall-btn { flex-shrink: 0; }

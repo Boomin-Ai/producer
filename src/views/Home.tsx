@@ -9,6 +9,7 @@ import type { TargetResult } from "../lib/ipc";
 import { WORKSPACE_EVENT, activeEndpointId, resolveActiveEndpoint, setActiveEndpointId } from "../lib/workspace";
 import { copyText, ensureRoomJoinLink } from "../lib/roomLink";
 import { ipc,
+  firewall,
   isRoomClosedError,
   network,
   networkConnections,
@@ -842,6 +843,7 @@ function ControlRoomHome({
         * running show. The rail is FIXED against the icon rail — attached,
         * full height, part of the furniture rather than a floating card. */}
       <NetworkRail rooms={rooms} />
+      <FirewallBanner />
       <LiveNowStrip />
       <section className="cr-section" id="sec-onair">
         <div className="cr-label">
@@ -2404,6 +2406,57 @@ function LiveNowStrip() {
       </div>
       {note && <div className="cr-hint">{note}</div>}
     </section>
+  );
+}
+
+/** Windows only: the inbound firewall rule guest media needs. The installer
+ * adds it; this catches a per-user install that couldn't elevate, a deleted
+ * rule, or a moved binary. One line, gone once the rule exists. */
+function FirewallBanner() {
+  const [state, setState] = useState<"ok" | "missing" | "busy" | "failed">("ok");
+  const [detail, setDetail] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    firewall
+      .status()
+      .then((st) => {
+        if (alive) setState(st.status === "missing" ? "missing" : "ok");
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  if (state === "ok") return null;
+  const allow = async () => {
+    setState("busy");
+    setDetail(null);
+    try {
+      const st = await firewall.allow();
+      if (st.status === "ok") setState("ok");
+      else {
+        setState("failed");
+        setDetail(st.detail ?? null);
+      }
+    } catch (e) {
+      setState("failed");
+      setDetail(String(e).replace(/^Error:\s*/, ""));
+    }
+  };
+  return (
+    <div className="cr-firewall" role="status">
+      <span className="cr-firewall-text">
+        Windows Firewall may block guests — Allow Producer
+        {state === "failed" && (
+          <span className="cr-firewall-sub">
+            {detail ? ` · ${detail}` : " · the prompt was declined; guests may not connect"}
+          </span>
+        )}
+      </span>
+      <button className="cr-primary cr-firewall-btn" disabled={state === "busy"} onClick={() => void allow()}>
+        {state === "busy" ? "Waiting for Windows…" : state === "failed" ? "Try again" : "Allow Producer"}
+      </button>
+    </div>
   );
 }
 
