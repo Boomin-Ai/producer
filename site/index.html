@@ -550,6 +550,100 @@
   footer a:hover { color: var(--text); }
   footer .spacer { flex: 1; }
 
+
+  /* ═══════ room mock (beat 1: inside a room, live) ═══════ */
+  .room-mock { display: flex; flex-direction: column; height: 100%; min-height: 560px; font-size: 12px; color: var(--dim); }
+  .rm-top { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .rm-rooms { display: flex; gap: 6px; }
+  .rm-rooms > * { padding: 5px 10px; border-radius: 8px; border: 1px solid var(--line); color: var(--dim); font-weight: 500; }
+  .rm-rooms .on { color: #fff; border-color: rgba(255,255,255,0.18); background: rgba(255,255,255,0.05); }
+  .rm-rooms .new { color: var(--mint); border-style: dashed; }
+  .rm-right { display: flex; align-items: center; gap: 10px; }
+  .rm-right .onair { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; letter-spacing: 0.12em; color: #fff; font-size: 11px; }
+  .rm-right .onair i { width: 7px; height: 7px; border-radius: 50%; background: var(--live); box-shadow: 0 0 10px var(--live); animation: pulse 1.6s ease-in-out infinite; }
+  .rm-right .clock { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--dim); }
+  .rm-body { display: grid; grid-template-columns: 168px 1fr 190px; flex: 1; min-height: 0; }
+  .rm-roster { border-right: 1px solid var(--line); padding: 12px; }
+  .rm-rail { border-left: 1px solid var(--line); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .rm-label { font-size: 10px; font-weight: 700; letter-spacing: 0.2em; color: var(--dim); display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .rm-label em { font-style: normal; color: #fff; font-weight: 600; letter-spacing: 0; }
+  .rm-label.mt { margin-top: 14px; }
+  .rg { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 9px; margin-bottom: 4px; border: 1px solid transparent; }
+  .rg.on { background: rgba(255,255,255,0.04); border-color: var(--line); }
+  .rg.wait, .rg.knock { border-color: rgba(52, 211, 153, 0.35); background: rgba(52, 211, 153, 0.06); }
+  .rg .nm { color: #fff; font-weight: 600; flex: 1; }
+  .rg .nm small { display: block; font-size: 10px; color: var(--dim); font-weight: 400; }
+  .rg .st { font-size: 10.5px; color: var(--dim); }
+  .rg .st.admit { color: #06110b; background: var(--mint); padding: 3px 8px; border-radius: 999px; font-weight: 700; }
+  .av { width: 22px; height: 22px; border-radius: 50%; flex: none; background: linear-gradient(135deg, #f0abfc, #818cf8); }
+  .av.av2 { background: linear-gradient(135deg, #fbbf24, #f472b6); }
+  .av.av3 { background: linear-gradient(135deg, #34d399, #38bdf8); }
+  .av.big { width: 64px; height: 64px; }
+  .sc { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); margin-bottom: 4px; color: var(--dim); }
+  .sc.on { color: var(--mint); border-color: rgba(52, 211, 153, 0.4); }
+  .rm-program { position: relative; display: grid; grid-template-columns: 1.6fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; padding: 12px; background: radial-gradient(120% 90% at 50% 100%, rgba(52, 211, 153, 0.10), transparent 60%), #05070b; overflow: hidden; }
+  .rm-program .beam { position: absolute; inset: -20% -10%; background: linear-gradient(100deg, transparent 40%, rgba(255,255,255,0.05) 50%, transparent 60%); animation: sway 9s ease-in-out infinite; pointer-events: none; }
+  .tile { position: relative; border-radius: 10px; border: 1px solid var(--line-strong); background: linear-gradient(180deg, #161a22, #0b0d12); overflow: hidden; }
+  .tile.host { grid-row: 1 / span 2; display: flex; align-items: flex-end; justify-content: center; }
+  .tile.host .chairline { width: 46%; opacity: 0.9; filter: drop-shadow(0 18px 30px rgba(0,0,0,0.6)); }
+  .tile.g1 { background: radial-gradient(80% 70% at 50% 40%, rgba(240,171,252,0.35), transparent 70%), #0b0d12; }
+  .tile.g2 { background: radial-gradient(80% 70% at 50% 40%, rgba(251,191,36,0.3), transparent 70%), #0b0d12; }
+  .tile .tag { position: absolute; left: 8px; bottom: 8px; font-size: 10.5px; font-weight: 600; color: #fff; background: rgba(0,0,0,0.55); padding: 3px 7px; border-radius: 6px; }
+  .rm-program .gobar { position: absolute; left: 12px; right: 12px; bottom: 12px; display: flex; gap: 8px; align-items: center; justify-content: center; font-size: 10px; letter-spacing: 0.14em; color: var(--dim); background: rgba(8,10,14,0.7); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; backdrop-filter: blur(8px); }
+  .rm-program .gobar .golive { color: #fff; background: var(--live); padding: 2px 8px; border-radius: 999px; font-weight: 700; }
+  .rm-program .tile.host { margin-bottom: 34px; }
+  .chat { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 5px; }
+  .chat .m { display: flex; gap: 6px; font-size: 11px; line-height: 1.3; animation: chat-in 380ms var(--ease); }
+  .chat .m .who { font-weight: 700; flex: none; }
+  .chat .m .who.tw { color: #a970ff; } .chat .m .who.kk { color: #53fc18; } .chat .m .who.yt { color: #ff4e45; }
+  .chat .m .txt { color: #d5d9e0; }
+  @keyframes chat-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* ═══════ guests mock (beat 2): the app's guest rail, one shown onto the program ═══════ */
+  .guests-mock { display: grid; grid-template-columns: 236px 1fr; height: 100%; min-height: 560px; font-size: 12px; color: var(--dim); }
+  .gm-rail { padding: 12px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+  .gm-rail .linkbtn { margin-left: auto; color: #fff; border: 1px solid var(--line-strong); border-radius: 999px; padding: 3px 9px; letter-spacing: 0; font-weight: 600; font-size: 10.5px; }
+  /* A guest card = the thumbnail with the name and a green dot, exactly like the studio rail. */
+  .gcard { position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: #0b0d12; flex: none; transition: opacity 500ms ease, transform 600ms var(--ease), box-shadow 400ms ease, border-color 400ms ease; }
+  .gcard .who { position: absolute; left: 8px; bottom: 7px; display: inline-flex; align-items: center; gap: 6px; color: #fff; font-weight: 600; font-size: 11px; text-shadow: 0 1px 8px rgba(0,0,0,0.8); }
+  .gcard .who i { width: 6px; height: 6px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 8px var(--mint); }
+  .gcard .who i.w { background: #fbbf24; box-shadow: 0 0 8px #fbbf24; }
+  .gcard .who small { color: var(--dim); font-weight: 400; margin-left: 2px; }
+  .gcard .ctl { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; background: rgba(0,0,0,0.35); opacity: 0; transition: opacity 300ms ease; font-size: 11px; color: #fff; }
+  .gcard .ctl b { border: 1px solid rgba(255,255,255,0.5); border-radius: 999px; padding: 4px 11px; font-weight: 600; transition: background 250ms ease, color 250ms ease, border-color 250ms ease; }
+  .gcard .ctl span { color: #ff5c5c; }
+  .gcard.hover .ctl, .gcard.wait .ctl { opacity: 1; }
+  .gcard.wait .ctl { background: transparent; justify-content: flex-end; align-items: flex-start; padding: 7px; }
+  .gcard.wait .ctl b { background: var(--mint); color: #06110b; border-color: transparent; }
+  .gcard.press .ctl b { background: #fff; color: #06110b; border-color: #fff; }
+  .gcard.shown { border-color: rgba(52, 211, 153, 0.55); box-shadow: 0 0 0 1px rgba(52,211,153,0.25), 0 10px 30px rgba(52,211,153,0.14); }
+  /* placeholders until real loops land in site/shots/ */
+  .gcard [class^="ph"], .tile .gv + .ph { position: absolute; inset: 0; }
+  .ph1 { background: radial-gradient(70% 60% at 50% 45%, rgba(240,171,252,0.35), transparent 70%), #0b0d12; }
+  .ph2 { background: radial-gradient(70% 60% at 50% 45%, rgba(251,191,36,0.3), transparent 70%), #0b0d12; }
+  .ph3 { background: radial-gradient(70% 60% at 50% 45%, rgba(52,211,153,0.32), transparent 70%), #0b0d12; }
+  .ph4 { background: radial-gradient(70% 60% at 50% 45%, rgba(56,189,248,0.3), transparent 70%), #0b0d12; }
+  .ph5 { background: radial-gradient(70% 60% at 50% 45%, rgba(248,113,113,0.28), transparent 70%), #0b0d12; }
+  .gcard .who, .gcard .ctl { z-index: 2; }
+  .gv { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; display: none; }
+  .gv.ok { display: block; }
+  .gm-program { position: relative; display: grid; grid-template-columns: 1.6fr 1fr; grid-template-rows: 1fr 1fr 1fr; gap: 8px; padding: 12px; background: radial-gradient(120% 90% at 50% 100%, rgba(52, 211, 153, 0.10), transparent 60%), #05070b; overflow: hidden; }
+  .gm-program .beam { position: absolute; inset: -20% -10%; background: linear-gradient(100deg, transparent 40%, rgba(255,255,255,0.05) 50%, transparent 60%); animation: sway 9s ease-in-out infinite; pointer-events: none; }
+  .gm-program .tile.host { grid-row: 1 / span 3; margin-bottom: 34px; }
+  .gm-program .tile.g3 { opacity: 0; transform: translateX(-60px) scale(0.7); transition: opacity 600ms ease, transform 700ms var(--ease); }
+  .gm-program .tile.g3.in { opacity: 1; transform: none; }
+  .gm-program .gobar { position: absolute; left: 12px; right: 12px; bottom: 12px; display: flex; gap: 8px; align-items: center; justify-content: center; font-size: 10px; letter-spacing: 0.14em; color: var(--dim); background: rgba(8,10,14,0.7); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; backdrop-filter: blur(8px); }
+  .gm-program .gobar .golive { color: #fff; background: var(--live); padding: 2px 8px; border-radius: 999px; font-weight: 700; }
+  .tile .gv { z-index: 0; }
+  .tile.host .chairline { position: relative; z-index: 1; }
+
+  @media (max-width: 900px) {
+    .rm-body { grid-template-columns: 1fr; }
+    .rm-roster, .rm-rail { display: none; }
+    .guests-mock { grid-template-columns: 1fr; }
+    .gm-rail { display: none; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     h1 .l2::before, .verified .shiny, .verified::after, .cta-glow::before, .cta-glow::after, .compose .caption, .live-pill.on, .stage-mock .beam, .stage-mock .onair i, .closing .chair, .compose .caret { animation: none; }
     .say, .panel, .hero { transition: none; }
@@ -601,12 +695,12 @@
 
     <!-- statements -->
     <div class="say" id="say1">
-      <div class="eyebrow">Back to the control room</div>
+      <div class="eyebrow">Inside a room</div>
       <h2>Every show gets <span class="soft">a stage of its own.</span></h2>
     </div>
     <div class="say" id="say2">
-      <div class="eyebrow">Name your show…</div>
-      <h2>One room. <span class="soft">Every live channel at once.</span></h2>
+      <div class="eyebrow">Guests</div>
+      <h2>Bring anyone on. <span class="soft">A link, a browser, or their own Producer.</span></h2>
     </div>
     <div class="say" id="say3">
       <div class="eyebrow">New post</div>
@@ -615,35 +709,46 @@
 
     <!-- A — control room -->
     <div class="panel" id="panelA">
-      <img class="real" src="shots/hero.png" alt="Producer's control room — ON AIR rooms, channels, and the rundown" />
-      <div class="mock" aria-hidden="true">
-        <div class="cr">
-          <div>
-            <div class="cr-label">ON AIR <span class="live-pill on">LIVE</span></div>
-            <div class="cr-rooms">
-              <div class="cr-room on"><span class="name">Tuesday Show</span><span class="meta">live now</span></div>
-              <div class="cr-room"><span class="name">Late Night Run</span><span class="meta">2 days ago</span></div>
-              <div class="cr-room new"><span class="name"><span class="plus">+</span>New room</span><span class="meta">a stage of its own</span></div>
-            </div>
+      <img class="real" src="shots/room.png" alt="A Producer room mid-broadcast: guests on stage, live to Twitch, YouTube, and Kick" />
+      <div class="mock room-mock" aria-hidden="true">
+        <div class="rm-top">
+          <span class="rm-rooms"><b class="on">Tuesday Show</b><span>Late Night Run</span><span class="new">+ New room</span></span>
+          <span class="rm-right"><span class="onair"><i></i>ON AIR</span><span class="clock" id="uptime">00:12:34</span></span>
+        </div>
+        <div class="rm-body">
+          <div class="rm-roster">
+            <div class="rm-label">GUESTS <em>2/8</em></div>
+            <div class="rg on"><span class="av av1"></span><span class="nm">Maya</span><span class="st">on stage</span></div>
+            <div class="rg on"><span class="av av2"></span><span class="nm">Dev</span><span class="st">on stage</span></div>
+            <div class="rg wait"><span class="av av3"></span><span class="nm">Jordan</span><span class="st admit">Admit</span></div>
+            <div class="rm-label mt">SCENES</div>
+            <div class="sc on">Full cam</div><div class="sc">PiP</div><div class="sc">Screen</div>
           </div>
-          <div>
-            <div class="cr-label">CHANNELS</div>
-            <div class="cr-chips">
-              <span class="chip"><span class="dot" style="background:#9146ff"></span>Twitch <span class="kind">live</span></span>
-              <span class="chip"><span class="dot" style="background:#ff0000"></span>YouTube <span class="kind">live</span></span>
-              <span class="chip"><span class="dot" style="background:#53fc18"></span>Kick <span class="kind">live</span></span>
-              <span class="chip"><span class="dot" style="background:#e1306c"></span>Instagram <span class="kind">social</span></span>
-              <span class="chip"><span class="dot" style="background:#1877f2"></span>Facebook <span class="kind">social</span></span>
-              <span class="chip add">+ Add</span>
-            </div>
+          <div class="rm-program">
+            <div class="beam"></div>
+            <div class="tile host"><video class="gv" src="shots/host.mp4" autoplay muted loop playsinline></video><img class="chairline" src="chair.png" alt="" /><span class="tag">You</span></div>
+            <div class="tile g1"><video class="gv" src="shots/guest-1.mp4" autoplay muted loop playsinline></video><span class="tag">Maya</span></div>
+            <div class="tile g2"><video class="gv" src="shots/guest-2.mp4" autoplay muted loop playsinline></video><span class="tag">Dev</span></div>
+            <div class="gobar"><span>CAMERA</span><span>·</span><span>MIC</span><span>·</span><span>VIRTUAL CAM</span><span class="golive">LIVE</span></div>
           </div>
-          <div>
-            <div class="cr-label">RUNDOWN <span class="actions"><span class="cr-btn primary">New post</span><span class="cr-btn">Everything ▸</span></span></div>
-            <div class="run-rows">
-              <div class="run-row"><span class="state">SCHEDULED</span><span>Instagram</span><span class="when">tomorrow 9:00</span></div>
-              <div class="run-row"><span class="state go">PUBLISHING</span><span>Threads</span><span class="when">now</span></div>
-              <div class="run-row"><span class="state ok">PUBLISHED</span><span>Facebook</span><span class="when">today 14:05</span></div>
+          <div class="rm-rail">
+            <div class="dest" data-kbps="6000">
+              <div class="row1"><img src="twitch.svg" alt="" /><span class="name">Twitch</span><span class="live-pill on">LIVE</span></div>
+              <div class="meter"><i></i></div>
+              <div class="stats"><span>1080p60</span><span class="kbps">6000 kbps</span></div>
             </div>
+            <div class="dest" data-kbps="6800">
+              <div class="row1"><img src="youtube.svg" alt="" /><span class="name">YouTube</span><span class="live-pill on">LIVE</span></div>
+              <div class="meter"><i></i></div>
+              <div class="stats"><span>1080p60</span><span class="kbps">6800 kbps</span></div>
+            </div>
+            <div class="dest" data-kbps="6400">
+              <div class="row1"><img class="kick-mark" src="kick.svg" alt="Kick" /><span class="live-pill on">LIVE</span></div>
+              <div class="meter"><i></i></div>
+              <div class="stats"><span>1080p60</span><span class="kbps">6400 kbps</span></div>
+            </div>
+            <div class="rm-label mt">CHAT</div>
+            <div class="chat" id="chat"></div>
           </div>
         </div>
       </div>
@@ -651,32 +756,23 @@
 
     <!-- B — live stage -->
     <div class="panel" id="panelB">
-      <img class="real" src="shots/live.png" alt="A Producer room mid-broadcast, streaming to Twitch, YouTube, and Kick" />
-      <div class="mock stage-mock" aria-hidden="true">
-        <div class="rail">
-          <div class="dest" data-kbps="6000">
-            <div class="row1"><img src="twitch.svg" alt="" /><span class="name">Twitch</span><span class="live-pill on">LIVE</span></div>
-            <div class="meter"><i></i></div>
-            <div class="stats"><span>1080p60</span><span class="kbps">6000 kbps</span></div>
-          </div>
-          <div class="dest" data-kbps="6800">
-            <div class="row1"><img src="youtube.svg" alt="" /><span class="name">YouTube</span><span class="live-pill on">LIVE</span></div>
-            <div class="meter"><i></i></div>
-            <div class="stats"><span>1080p60</span><span class="kbps">6800 kbps</span></div>
-          </div>
-          <div class="dest" data-kbps="6400">
-            <div class="row1"><img class="kick-mark" src="kick.svg" alt="Kick" /><span class="live-pill on">LIVE</span></div>
-            <div class="meter"><i></i></div>
-            <div class="stats"><span>1080p60</span><span class="kbps">6400 kbps</span></div>
-          </div>
-          <div class="dest add">+ Add destination — Custom RTMP</div>
+      <img class="real" src="shots/guests.png" alt="Five guests in the rail; one is shown onto the program" />
+      <div class="mock guests-mock" aria-hidden="true">
+        <div class="gm-rail">
+          <div class="rm-label">GUESTS <em id="gm-count">2/8</em><span class="linkbtn">⛓ Link</span></div>
+          <div class="gcard on" data-g="1"><video class="gv" src="shots/guest-1.mp4" autoplay muted loop playsinline></video><span class="ph1"></span><span class="who"><i></i>Maya</span></div>
+          <div class="gcard on" data-g="2"><video class="gv" src="shots/guest-2.mp4" autoplay muted loop playsinline></video><span class="ph2"></span><span class="who"><i></i>Dev</span></div>
+          <div class="gcard" id="gm-pick" data-g="3"><video class="gv" src="shots/guest-3.mp4" autoplay muted loop playsinline></video><span class="ph3"></span><span class="who"><i></i>Jordan</span><span class="ctl"><b id="gm-show">Show</b><span>🎙</span><span>✕</span></span></div>
+          <div class="gcard" data-g="4"><video class="gv" src="shots/guest-4.mp4" autoplay muted loop playsinline></video><span class="ph4"></span><span class="who"><i></i>Sam</span></div>
+          <div class="gcard wait" data-g="5"><video class="gv" src="shots/guest-5.mp4" autoplay muted loop playsinline></video><span class="ph5"></span><span class="who"><i class="w"></i>Ari <small>asked to join</small></span><span class="ctl"><b>Admit</b></span></div>
         </div>
-        <div class="preview">
+        <div class="gm-program">
           <div class="beam"></div>
-          <img class="chairline" src="chair.png" alt="" />
-          <span class="onair"><i></i>ON AIR</span>
-          <span class="clock" id="uptime">00:12:34</span>
-          <div class="gobar"><span>DESKTOP</span><span>·</span><span>CAMERA</span><span>·</span><span>MIC</span><span class="golive">LIVE</span></div>
+          <div class="tile host"><video class="gv" src="shots/host.mp4" autoplay muted loop playsinline></video><img class="chairline" src="chair.png" alt="" /><span class="tag">You</span></div>
+          <div class="tile g1"><video class="gv" src="shots/guest-1.mp4" autoplay muted loop playsinline></video><span class="tag">Maya</span></div>
+          <div class="tile g2"><video class="gv" src="shots/guest-2.mp4" autoplay muted loop playsinline></video><span class="tag">Dev</span></div>
+          <div class="tile g3" id="gm-land"><video class="gv" src="shots/guest-3.mp4" autoplay muted loop playsinline></video><span class="tag">Jordan</span></div>
+          <div class="gobar"><span>CAMERA</span><span>·</span><span>MIC</span><span>·</span><span>VIRTUAL CAM</span><span class="golive">LIVE</span></div>
         </div>
       </div>
     </div>
@@ -923,7 +1019,7 @@
       // Critically-damped chase: the scene settles ~150ms behind the wheel,
       // which reads as weight rather than lag. Reduced motion = no chase.
       var d = target - cur;
-      if (reduced || Math.abs(d) < 0.0006) cur = target; else cur += d * 0.16;
+      if (reduced || document.hidden || Math.abs(d) < 0.0006) cur = target; else cur += d * 0.16;
       apply(cur);
       if (cur !== target) raf = requestAnimationFrame(tick);
     }
@@ -951,6 +1047,52 @@
       var p = function (n) { return String(n).padStart(2, "0"); };
       up.textContent = p(Math.floor(s / 3600)) + ":" + p(Math.floor(s / 60) % 60) + ":" + p(s % 60);
     }, 1000);
+  })();
+
+  // ── Chat feed in the room mock. ──
+  (function () {
+    var chat = document.getElementById("chat");
+    if (!chat || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    var lines = [
+      ["tw", "mofo_matt", "producer.dev in the title btw"],
+      ["kk", "kayla.live", "wait is this all one encode??"],
+      ["yt", "DevRel Dan", "guests straight from the browser is wild"],
+      ["tw", "night_owl", "chair is a vibe"],
+      ["kk", "ttv_jo", "self hosted?? on cloudflare?? ok"],
+      ["yt", "Priya", "1080p60 on three at once, no relay?"],
+      ["tw", "beats_by_ro", "W stage"],
+    ];
+    var i = 0;
+    function push() {
+      var l = lines[i++ % lines.length];
+      var m = document.createElement("div"); m.className = "m";
+      m.innerHTML = '<span class="who ' + l[0] + '">' + l[1] + '</span><span class="txt">' + l[2] + '</span>';
+      chat.appendChild(m);
+      while (chat.children.length > 6) chat.removeChild(chat.firstChild);
+    }
+    for (var k = 0; k < 4; k++) push();
+    setInterval(push, 2300);
+  })();
+
+  // ── Guest rail: hover the third card, press Show, it lands on the program. Loops. ──
+  (function () {
+    var card = document.getElementById("gm-pick"), land = document.getElementById("gm-land"), count = document.getElementById("gm-count");
+    if (!card || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    function cycle() {
+      card.className = "gcard"; land.classList.remove("in"); count.textContent = "2/8";
+      setTimeout(function () { card.classList.add("hover"); }, 1200);
+      setTimeout(function () { card.classList.add("press"); }, 2100);
+      setTimeout(function () { card.classList.remove("hover", "press"); card.classList.add("on", "shown"); land.classList.add("in"); count.textContent = "3/8"; }, 2500);
+    }
+    cycle(); setInterval(cycle, 7000);
+  })();
+
+  // ── Real loops (site/shots/*.mp4) replace the placeholders when they exist. ──
+  (function () {
+    document.querySelectorAll("video.gv").forEach(function (v) {
+      v.addEventListener("loadeddata", function () { v.classList.add("ok"); });
+      v.addEventListener("error", function () { v.remove(); });
+    });
   })();
 </script>
 </body>
