@@ -3,28 +3,30 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Producer — Post everywhere. Own everything.</title>
-<meta name="description" content="Producer is the open-source studio that publishes to every channel from your desktop — your keys, your clouds, zero subscriptions." />
-<meta property="og:title" content="Producer — Post everywhere. Own everything." />
-<meta property="og:description" content="The open-source cross-posting studio. Your keys, your clouds, zero subscriptions." />
+<title>Producer — Stop posting. Start producing.</title>
+<meta name="description" content="The open-source media distribution platform — go live to every channel, post to every feed, from your desktop. Zero cost, forever." />
+<meta property="og:title" content="Producer — Stop posting. Start producing." />
+<meta property="og:description" content="The open-source media distribution platform — go live to every channel, post to every feed, from your desktop. Zero cost, forever." />
 <meta property="og:image" content="https://producer.dev/chair.png" />
 <link rel="icon" type="image/png" href="favicon.png" />
 <link rel="apple-touch-icon" href="favicon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --ink: #07080c;
-    --panel: #0e1015;
-    --line: #1b1e25;
-    --text: #f0f1f3;
-    --dim: #979da6;
-    --faint: #545b64;
+    --ink: #050609;
+    --line: rgba(255, 255, 255, 0.075);
+    --line-strong: rgba(255, 255, 255, 0.14);
+    --text: #f2f3f5;
+    --dim: #9aa1ab;
+    --faint: #59616b;
     --mint: #3ddca6;
     --glow: #ffeccb;
-    --sans: "Instrument Sans", "Helvetica Neue", Arial, sans-serif;
-    --mono: "IBM Plex Mono", Consolas, monospace;
+    --gold: #ffc46b;
+    --live: #ff5252;
+    --font: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   * { box-sizing: border-box; margin: 0; }
@@ -32,243 +34,663 @@
   body {
     background: var(--ink);
     color: var(--text);
-    font-family: var(--sans);
+    font-family: var(--font);
     font-size: 16px;
     line-height: 1.65;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
   }
 
-  /* ambient glow, boomin.ai family */
+  #bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
   body::before {
     content: "";
-    position: fixed; inset: 0; pointer-events: none; z-index: 0;
-    background:
-      radial-gradient(46% 34% at 50% 6%, rgba(120, 110, 255, 0.07), transparent 70%),
-      radial-gradient(38% 30% at 12% 92%, rgba(90, 70, 220, 0.06), transparent 70%),
-      radial-gradient(38% 30% at 88% 90%, rgba(61, 220, 166, 0.05), transparent 70%);
+    position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0.4;
+    background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 3px);
   }
-
-  .wrap { position: relative; z-index: 1; max-width: 1000px; margin: 0 auto; padding: 0 24px; }
 
   a { color: var(--text); text-decoration: none; }
+  img { max-width: 100%; }
+  .wrap { position: relative; z-index: 1; max-width: 1020px; margin: 0 auto; padding: 0 24px; }
 
-  /* ── nav ── */
-  nav { display: flex; align-items: center; gap: 24px; padding: 24px 0; }
-  .wordmark { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16.5px; letter-spacing: -0.01em; }
-  .wordmark img { width: 28px; height: 28px; }
-  .wordmark span { color: var(--faint); font-weight: 400; font-size: 13.5px; }
-  nav .spacer { flex: 1; }
-  .nav-link { font-size: 14px; color: var(--dim); }
+  /* ── fixed nav ── */
+  .navbar { position: fixed; top: 16px; left: 0; right: 0; z-index: 55; padding: 0 24px; }
+  .navbar .bar {
+    max-width: 1180px; margin: 0 auto;
+    display: flex; align-items: center; gap: 16px;
+    padding: 10px 12px 10px 20px;
+    border: 1px solid var(--line); border-radius: 999px;
+    background: rgba(9, 10, 14, 0.72);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  }
+  .wordmark { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; letter-spacing: -0.01em; }
+  .wordmark img { width: 26px; height: 26px; }
+  .wordmark span { color: var(--faint); font-weight: 400; font-size: 13px; }
+  .navbar .spacer { flex: 1; }
+  .nav-link { font-size: 14px; color: var(--dim); white-space: nowrap; }
   .nav-link:hover { color: var(--text); }
+  @media (max-width: 560px) { .wordmark span { display: none; } }
 
   .pill {
-    display: inline-flex; align-items: center; gap: 8px;
+    display: inline-flex; align-items: center; gap: 9px;
     font-size: 14.5px; font-weight: 600;
     padding: 11px 22px; border-radius: 999px;
-    border: 1px solid var(--line); color: var(--text);
-    transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+    border: 1px solid var(--line-strong); color: var(--text);
+    transition: border-color 140ms ease, background 140ms ease, transform 140ms ease, box-shadow 140ms ease;
   }
-  .pill:hover { border-color: #2d323a; transform: translateY(-1px); }
-  .pill.solid { background: var(--text); border-color: var(--text); color: var(--ink); }
-  .pill.solid:hover { background: #fff; }
+  .pill:hover { border-color: rgba(255, 255, 255, 0.3); transform: translateY(-1px); }
+  .pill.solid { background: var(--text); border-color: var(--text); color: #0a0b0e; }
+  .pill.solid:hover { background: #fff; box-shadow: 0 6px 30px rgba(255, 236, 203, 0.18); }
+  .pill svg { width: 15px; height: 15px; flex: none; }
+  .pill .ico-win { display: none; }
+  .pill.is-win .ico-mac { display: none; }
+  .pill.is-win .ico-win { display: block; }
+  .navbar .pill { padding: 9px 18px; font-size: 13.5px; }
 
-  /* ── hero ── */
-  header { padding: 76px 0 64px; }
-  .hero-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 44px; align-items: center; }
-  .hero-chair {
-    width: 100%; max-width: 330px; height: auto; justify-self: center;
-    filter: drop-shadow(0 26px 52px rgba(0, 0, 0, 0.55));
-    animation: float 7s 1s ease-in-out infinite;
-  }
-  @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-  @media (max-width: 820px) {
-    .hero-grid { grid-template-columns: 1fr; }
-    .hero-chair { display: none; }
-    header { padding: 48px 0 56px; }
-  }
+  /* ═══════ full-bleed pinned scene ═══════ */
+  .scene-wrap { position: relative; z-index: 1; height: 460vh; }
+  .scene { position: sticky; top: 0; height: 100vh; overflow: hidden; }
 
-  .badge {
-    display: inline-flex; align-items: center; gap: 9px;
-    font-size: 13px; font-weight: 500; color: var(--dim);
-    border: 1px solid var(--line); border-radius: 999px;
-    padding: 8px 18px;
-    background: rgba(255, 255, 255, 0.02);
+  /* ── beat 0: hero, centered, full width ── */
+  .hero {
+    position: absolute; z-index: 4; left: 0; right: 0; top: 15vh;
+    text-align: center; padding: 0 24px;
+    transition: opacity 700ms var(--ease), transform 700ms var(--ease), filter 700ms ease;
   }
-  .badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 10px var(--mint); }
-  .badge b { color: var(--text); font-weight: 600; }
+  .scene:not([data-stage="0"]) .hero { opacity: 0; transform: translateY(-40px); filter: blur(8px); pointer-events: none; }
+  /* Meta Verified badge — same treatment as boomin.ai/producer */
+  .verified {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    background: rgba(255, 255, 255, 0.035);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-radius: 999px; padding: 7px 14px;
+    font-size: 13.5px; font-weight: 500; color: #eef0f3;
+    margin-bottom: 18px;
+  }
+  .verified img { width: 16px; height: 16px; }
+  /* React Bits "shiny text": dim base, bright band sweeping across the label */
+  .verified .shiny {
+    background-image: linear-gradient(110deg,
+      rgba(226, 232, 240, 0.35) 35%,
+      #ffffff 47%,
+      #ffffff 53%,
+      rgba(226, 232, 240, 0.35) 65%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    animation: shiny-sweep 3s linear infinite;
+  }
+  @keyframes shiny-sweep { from { background-position: 150% 0; } to { background-position: -150% 0; } }
+  /* and a specular streak travelling across the pill itself */
+  .verified { position: relative; overflow: hidden; }
+  .verified::after {
+    content: ""; position: absolute; top: 0; bottom: 0; width: 45%;
+    background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+    animation: pill-sheen 3s linear infinite;
+    pointer-events: none;
+  }
+  @keyframes pill-sheen { from { left: -60%; } to { left: 120%; } }
 
+  /* headline — Syne, uppercase, boomin.ai/producer scale */
   h1 {
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-    line-height: 1.12;
+    font-family: "Syne", var(--font); font-weight: 700;
+    text-transform: uppercase; letter-spacing: -0.02em; line-height: 1.08;
+    text-wrap: balance;
   }
-  h1 .l1 {
-    display: block;
-    font-size: clamp(22px, 3.4vw, 34px);
-    color: var(--dim);
-    letter-spacing: 0.06em;
-  }
+  h1 .l1 { display: block; font-size: clamp(19px, 2.9vw, 35px); color: rgba(242, 243, 245, 0.85); }
   h1 .l2 {
-    display: block;
-    font-size: clamp(38px, 6.6vw, 68px);
-    color: var(--glow);
-    text-shadow:
-      0 0 16px rgba(255, 236, 203, 0.45),
-      0 0 56px rgba(255, 205, 130, 0.28),
-      0 0 110px rgba(255, 185, 100, 0.18);
+    display: block; font-size: clamp(30px, 5.25vw, 70px); white-space: nowrap;
+    position: relative; color: #fff;
+    filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.85)) drop-shadow(0 14px 38px rgba(0, 0, 0, 0.7));
   }
+  /* shine: a blurred spectrum copy panning behind the white type */
+  h1 .l2::before {
+    content: attr(data-text);
+    position: absolute; inset: 0; z-index: -1;
+    color: transparent; opacity: 0.55;
+    background-image: linear-gradient(100deg, #22d3ee, #60a5fa, #8b5cf6, #f472b6, #fbbf24, #22d3ee);
+    background-size: 250% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    filter: blur(0.12em) saturate(1.5);
+    animation: shine-pan 8s linear infinite;
+  }
+  @keyframes shine-pan { to { background-position: 250% 0; } }
 
-  .sub {
-    margin: 22px 0 0; font-size: 17px; color: var(--dim); max-width: 48ch;
-  }
+  .sub { margin: 18px auto 0; font-size: 17px; color: var(--dim); max-width: 52ch; text-wrap: pretty; }
   .sub b { color: var(--text); font-weight: 500; }
-
-  .cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 34px; }
-  .dl-note { margin-top: 16px; font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
-  .dl-note a { color: var(--dim); }
-  .dl-note a:hover { color: var(--text); }
-
-  /* ── badges & platform row ── */
-  .badges { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 40px; }
-  .badge img { width: 16px; height: 16px; }
-
-  .works { display: flex; align-items: center; gap: 18px; margin-top: 38px; }
-  .works .lbl { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em; color: var(--faint); text-transform: uppercase; }
-  .works img { width: 22px; height: 22px; opacity: 0.9; }
-  .works .soon { font-family: var(--mono); font-size: 11px; color: var(--faint); }
-
-  /* ── sections ── */
-  section { padding: 60px 0; border-top: 1px solid var(--line); }
-  header + section { border-top: none; padding-top: 84px; }
-  .kicker {
-    font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
-    color: var(--faint); margin-bottom: 24px; text-transform: uppercase;
-    text-align: center;
+  .cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; justify-content: center; }
+  .cta-row .pill { padding: 13px 26px; font-size: 15px; }
+  /* inside a BorderGlow the pill goes dark charcoal like the app's
+     ProducerGlowButton — a white fill drowns the coloured glow */
+  .border-glow-card .pill.solid {
+    color: #fff; font-weight: 700;
+    border: 1px solid transparent;
+    /* the composer's resting gradient border — BorderGlow's travelling
+       light rides on top of this, it doesn't replace it */
+    background:
+      linear-gradient(#1c1c1f, #1c1c1f) padding-box,
+      linear-gradient(110deg,
+        rgba(34, 211, 238, 0.55), rgba(168, 85, 247, 0.5),
+        rgba(244, 114, 182, 0.42), rgba(251, 191, 36, 0.34)) border-box;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 18px 48px rgba(0, 0, 0, 0.45);
   }
-  .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; }
-  @media (max-width: 820px) { .cols { grid-template-columns: 1fr; gap: 28px; } }
-  .col h3 { font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em; }
-  .col p { margin-top: 8px; font-size: 14.5px; color: var(--dim); }
-  .col a { color: var(--mint); }
-  .col a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .border-glow-card .pill.solid:hover {
+    background:
+      linear-gradient(#232327, #232327) padding-box,
+      linear-gradient(110deg,
+        rgba(34, 211, 238, 0.8), rgba(168, 85, 247, 0.72),
+        rgba(244, 114, 182, 0.6), rgba(251, 191, 36, 0.5)) border-box;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 22px 56px rgba(0, 0, 0, 0.55);
+  }
 
-  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 820px) { .modes { grid-template-columns: 1fr; } }
-  .mode { border: 1px solid var(--line); border-radius: 16px; padding: 26px; background: var(--panel); }
-  .mode h3 { font-size: 16px; font-weight: 600; margin-top: 6px; }
-  .mode .tag { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em; color: var(--mint); }
-  .mode p { margin-top: 10px; font-size: 14.5px; color: var(--dim); }
+  /* ── React Bits BorderGlow, ported to vanilla ──────────────────────────
+     Same component the Boomin app wraps its Producer CTA in
+     (web/src/components/ui/BorderGlow.css + ProducerGlowButton.tsx): a
+     mesh-gradient border and an outer edge light, both masked to a cone
+     that follows the cursor — and swept once around on load. */
+  .border-glow-card {
+    --edge-proximity: 0;
+    --cursor-angle: 45deg;
+    --edge-sensitivity: 30;
+    --color-sensitivity: calc(var(--edge-sensitivity) + 20);
+    --border-radius: 999px;
+    --glow-padding: 18px;
+    --cone-spread: 25;
+    --fill-opacity: 0.5;
+    --card-bg: #1c1c1f;
+    /* glowColor 248 100 78 at intensity 1.35, as ProducerGlowButton sets it */
+    --glow-color: hsl(248deg 100% 78% / 100%);
+    --glow-color-60: hsl(248deg 100% 78% / 81%);
+    --glow-color-50: hsl(248deg 100% 78% / 67.5%);
+    --glow-color-40: hsl(248deg 100% 78% / 54%);
+    --glow-color-30: hsl(248deg 100% 78% / 40.5%);
+    --glow-color-20: hsl(248deg 100% 78% / 27%);
+    --glow-color-10: hsl(248deg 100% 78% / 13.5%);
+    --gradient-one: radial-gradient(at 80% 55%, #c084fc 0px, transparent 50%);
+    --gradient-two: radial-gradient(at 69% 34%, #f472b6 0px, transparent 50%);
+    --gradient-three: radial-gradient(at 8% 6%, #38bdf8 0px, transparent 50%);
+    --gradient-four: radial-gradient(at 41% 38%, #c084fc 0px, transparent 50%);
+    --gradient-five: radial-gradient(at 86% 85%, #f472b6 0px, transparent 50%);
+    --gradient-six: radial-gradient(at 82% 18%, #38bdf8 0px, transparent 50%);
+    --gradient-seven: radial-gradient(at 51% 4%, #f472b6 0px, transparent 50%);
+    --gradient-base: linear-gradient(#c084fc 0 100%);
 
-  .term { border: 1px solid var(--line); border-radius: 16px; background: var(--panel); overflow: hidden; max-width: 640px; margin: 0 auto; }
-  .term pre { padding: 20px 22px; font-family: var(--mono); font-size: 13px; line-height: 2; overflow-x: auto; color: var(--dim); }
-  .term .m { color: var(--mint); }
-  .term .c { color: var(--faint); }
+    position: relative; display: inline-grid;
+    border-radius: var(--border-radius);
+    isolation: isolate;
+    transform: translate3d(0, 0, 0.01px);
+    overflow: visible;
+  }
+  .border-glow-card::before,
+  .border-glow-card::after,
+  .border-glow-card > .edge-light {
+    content: ""; position: absolute; inset: 0;
+    border-radius: inherit;
+    transition: opacity 0.25s ease-out;
+    z-index: -1;
+  }
+  .border-glow-card:not(:hover):not(.sweep-active)::before,
+  .border-glow-card:not(:hover):not(.sweep-active)::after,
+  .border-glow-card:not(:hover):not(.sweep-active) > .edge-light {
+    opacity: 0; transition: opacity 0.75s ease-in-out;
+  }
+  /* mesh-gradient border, masked to the cursor cone */
+  .border-glow-card::before {
+    border: 1px solid transparent;
+    background:
+      linear-gradient(var(--card-bg) 0 100%) padding-box,
+      linear-gradient(rgb(255 255 255 / 0%) 0% 100%) border-box,
+      var(--gradient-one) border-box, var(--gradient-two) border-box,
+      var(--gradient-three) border-box, var(--gradient-four) border-box,
+      var(--gradient-five) border-box, var(--gradient-six) border-box,
+      var(--gradient-seven) border-box, var(--gradient-base) border-box;
+    opacity: calc((var(--edge-proximity) - var(--color-sensitivity)) / (100 - var(--color-sensitivity)));
+    -webkit-mask-image: conic-gradient(from var(--cursor-angle) at center,
+      black calc(var(--cone-spread) * 1%),
+      transparent calc((var(--cone-spread) + 15) * 1%),
+      transparent calc((100 - var(--cone-spread) - 15) * 1%),
+      black calc((100 - var(--cone-spread)) * 1%));
+    mask-image: conic-gradient(from var(--cursor-angle) at center,
+      black calc(var(--cone-spread) * 1%),
+      transparent calc((var(--cone-spread) + 15) * 1%),
+      transparent calc((100 - var(--cone-spread) - 15) * 1%),
+      black calc((100 - var(--cone-spread)) * 1%));
+  }
+  /* outer glow layer */
+  .border-glow-card > .edge-light {
+    inset: calc(var(--glow-padding) * -1);
+    pointer-events: none; z-index: 1;
+    -webkit-mask-image: conic-gradient(from var(--cursor-angle) at center,
+      black 2.5%, transparent 10%, transparent 90%, black 97.5%);
+    mask-image: conic-gradient(from var(--cursor-angle) at center,
+      black 2.5%, transparent 10%, transparent 90%, black 97.5%);
+    opacity: calc((var(--edge-proximity) - var(--edge-sensitivity)) / (100 - var(--edge-sensitivity)));
+    mix-blend-mode: plus-lighter;
+  }
+  .border-glow-card > .edge-light::before {
+    content: ""; position: absolute; inset: var(--glow-padding);
+    border-radius: inherit;
+    box-shadow:
+      inset 0 0 0 1px var(--glow-color),
+      inset 0 0 1px 0 var(--glow-color-60),
+      inset 0 0 3px 0 var(--glow-color-50),
+      inset 0 0 6px 0 var(--glow-color-40),
+      inset 0 0 15px 0 var(--glow-color-30),
+      inset 0 0 25px 2px var(--glow-color-20),
+      inset 0 0 50px 2px var(--glow-color-10),
+      0 0 1px 0 var(--glow-color-60),
+      0 0 3px 0 var(--glow-color-50),
+      0 0 6px 0 var(--glow-color-40),
+      0 0 15px 0 var(--glow-color-30),
+      0 0 25px 2px var(--glow-color-20),
+      0 0 50px 2px var(--glow-color-10);
+  }
+  .border-glow-inner { display: flex; position: relative; z-index: 1; border-radius: inherit; }
+  .trust { margin-top: 14px; font-size: 12.5px; font-weight: 500; letter-spacing: 0.03em; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .trust a { color: var(--dim); }
+  .trust a:hover { color: var(--text); }
+  .trust .sep { margin: 0 8px; opacity: 0.5; }
 
-  /* ── footer ── */
+  /* ── statement lanes: never overlap a panel ── */
+  .say {
+    position: absolute; z-index: 3; top: 50%;
+    opacity: 0; pointer-events: none;
+    transition: opacity 650ms var(--ease), transform 650ms var(--ease), filter 650ms ease;
+  }
+  .say .eyebrow {
+    font-size: 11.5px; font-weight: 600; letter-spacing: 0.22em;
+    color: var(--mint); text-transform: uppercase;
+  }
+  .say h2 { font-weight: 700; letter-spacing: -0.025em; font-size: clamp(28px, 3.4vw, 46px); line-height: 1.08; margin-top: 12px; text-wrap: balance; }
+  .say h2 .soft { color: var(--dim); }
+
+  /* right lane (panel is on the left) */
+  #say1 { right: 5vw; width: 36vw; transform: translateY(-50%) translateX(40px); }
+  .scene[data-stage="1"] #say1 { opacity: 1; transform: translateY(-50%) translateX(0); }
+  .scene[data-stage="2"] #say1, .scene[data-stage="3"] #say1 { opacity: 0.14; transform: translateY(-50%) translateX(-30px); filter: blur(7px); }
+
+  /* left lane (panel is on the right) */
+  #say2 { left: 5vw; width: 36vw; transform: translateY(-50%) translateX(-40px); }
+  .scene[data-stage="2"] #say2 { opacity: 1; transform: translateY(-50%) translateX(0); }
+  .scene[data-stage="3"] #say2 { opacity: 0.14; transform: translateY(-50%) translateX(30px); filter: blur(7px); }
+
+  /* top lane (panel rises from the bottom) */
+  #say3 { top: 16vh; left: 50%; width: min(620px, 88vw); margin-left: 0; text-align: center; transform: translateX(-50%) translateY(30px); }
+  .scene[data-stage="3"] #say3 { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── panels ── */
+  .panel {
+    position: absolute; z-index: 2; left: 50%; top: 0;
+    transform-origin: 50% 0;
+    border: 1px solid var(--line-strong); border-radius: 16px;
+    background: linear-gradient(180deg, #12151c, #0a0c11);
+    box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6), 0 2px 0 rgba(255, 255, 255, 0.05) inset;
+    overflow: hidden; opacity: 0;
+    transition: transform 900ms var(--ease), opacity 800ms ease, filter 800ms ease;
+  }
+  .panel .real { display: none; width: 100%; vertical-align: top; }
+  .panel.has-real .real { display: block; }
+  .panel.has-real .mock { display: none; }
+
+  /* A — control room: whole app under the hero → ZOOM IN and slide left */
+  #panelA { width: min(1120px, 92vw); }
+  .scene[data-stage="0"] #panelA { opacity: 1; transform: translateX(-50%) translateY(var(--panel0, 60vh)) scale(1); }
+  .scene[data-stage="1"] #panelA { opacity: 1; transform: translateX(calc(-50% - 74vw)) translateY(9vh) scale(1.75); }
+  .scene[data-stage="2"] #panelA,
+  .scene[data-stage="3"] #panelA { opacity: 0; transform: translateX(calc(-50% - 130vw)) translateY(9vh) scale(1.9); filter: blur(7px); }
+
+  /* B — live stage: zoomed in, enters from the right, bleeds off that edge */
+  #panelB { width: min(1120px, 92vw); opacity: 0; transform: translateX(calc(-50% + 130vw)) translateY(9vh) scale(1.9); }
+  .scene[data-stage="2"] #panelB { opacity: 1; transform: translateX(calc(-50% + 74vw)) translateY(9vh) scale(1.75); }
+  .scene[data-stage="3"] #panelB { opacity: 0; transform: translateX(calc(-50% + 130vw)) translateY(9vh) scale(1.9); filter: blur(7px); }
+
+  /* C — composer: rises from the bottom, centered, zoomed in */
+  #panelC { width: min(900px, 92vw); transform: translateX(-50%) translateY(96vh) scale(1.1); }
+  .scene[data-stage="3"] #panelC { opacity: 1; transform: translateX(-50%) translateY(44vh) scale(1.15); }
+
+  /* ── mobile: one column, text on top, panel cropped below ── */
+  @media (max-width: 900px) {
+    .say { top: 12vh; left: 24px !important; right: 24px !important; width: auto !important; text-align: center; }
+    #say1, #say2 { transform: translateY(0) translateX(0); }
+    .scene[data-stage="1"] #say1, .scene[data-stage="2"] #say2 { transform: translateY(0); }
+    .scene[data-stage="2"] #say1, .scene[data-stage="3"] #say1,
+    .scene[data-stage="3"] #say2 { transform: translateY(-24px); }
+    #say3 { top: 12vh; left: 24px; width: auto; transform: none; }
+    .scene[data-stage="3"] #say3 { transform: none; }
+    #panelA, #panelB { width: 94vw; }
+    .scene[data-stage="0"] #panelA { transform: translateX(-50%) translateY(var(--panel0, 64vh)) scale(1); }
+    .scene[data-stage="1"] #panelA { transform: translateX(-50%) translateY(40vh) scale(0.92); }
+    .scene[data-stage="2"] #panelA, .scene[data-stage="3"] #panelA { transform: translateX(calc(-50% - 100vw)) translateY(40vh) scale(0.9); }
+    #panelB { transform: translateX(calc(-50% + 100vw)) translateY(40vh) scale(0.9); }
+    .scene[data-stage="2"] #panelB { transform: translateX(-50%) translateY(40vh) scale(0.92); }
+    .scene[data-stage="3"] #panelB { transform: translateX(calc(-50% + 100vw)) translateY(40vh) scale(0.9); }
+    #panelC { width: 94vw; transform: translateX(-50%) translateY(90vh) scale(0.95); }
+    .scene[data-stage="3"] #panelC { transform: translateX(-50%) translateY(44vh) scale(0.95); }
+  }
+
+  /* ── mock guts (styled after the app's control room) ── */
+  .cr { padding: 26px; display: flex; flex-direction: column; gap: 24px; }
+  .cr-label {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: var(--faint);
+  }
+  .cr-label .actions { margin-left: auto; display: flex; gap: 8px; }
+  .cr-btn { font-size: 13px; font-weight: 600; border-radius: 8px; padding: 7px 15px; border: 1px solid var(--line-strong); color: var(--dim); }
+  .cr-btn.primary { background: var(--text); color: #0a0b0e; border-color: var(--text); }
+  .live-pill {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.14em;
+    color: var(--live); border: 1px solid rgba(255, 82, 82, 0.4); border-radius: 999px; padding: 2px 9px;
+  }
+  .live-pill.on { animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+  .cr-rooms { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+  .cr-room { border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: rgba(255, 255, 255, 0.018); }
+  .cr-room .name { display: block; font-weight: 700; font-size: 16.5px; }
+  .cr-room .meta { display: block; margin-top: 3px; font-size: 12px; color: var(--faint); }
+  .cr-room.on { border-color: rgba(255, 82, 82, 0.35); }
+  .cr-room.new { border-style: dashed; color: var(--dim); }
+  .cr-room.new .plus { color: var(--mint); margin-right: 6px; }
+
+  .cr-chips { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 14px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 500; color: var(--dim);
+    border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px;
+  }
+  .chip .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .chip .kind { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; color: var(--faint); }
+  .chip.add { border-style: dashed; color: var(--faint); }
+  .chip img { width: 16px; height: 16px; }
+
+  .run-rows { display: flex; flex-direction: column; gap: 7px; margin-top: 14px; }
+  .run-row {
+    display: flex; align-items: center; gap: 12px;
+    border: 1px solid var(--line); border-radius: 10px; padding: 11px 15px;
+    font-size: 13.5px; color: var(--dim);
+  }
+  .run-row .state {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.12em;
+    border-radius: 999px; padding: 2px 9px; border: 1px solid var(--line-strong); color: var(--dim);
+  }
+  .run-row .state.ok { color: var(--mint); border-color: rgba(61, 220, 166, 0.4); }
+  .run-row .state.go { color: var(--gold); border-color: rgba(255, 196, 107, 0.4); }
+  .run-row .when { margin-left: auto; font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+
+  /* live stage mock */
+  /* rail first: the zoom bleeds off the right edge, so the destinations
+     must sit on the left to stay in frame */
+  .stage-mock { display: grid; grid-template-columns: 300px 1fr; }
+  .stage-mock .preview {
+    position: relative; margin: 20px 20px 20px 0; border-radius: 12px; overflow: hidden;
+    background:
+      radial-gradient(70% 90% at 50% 10%, rgba(255, 196, 107, 0.16), transparent 60%),
+      radial-gradient(60% 80% at 85% 90%, rgba(61, 220, 166, 0.10), transparent 60%),
+      linear-gradient(180deg, #0b0d12, #07080c);
+    border: 1px solid var(--line); min-height: 330px;
+  }
+  .stage-mock .beam {
+    position: absolute; top: -30%; left: 32%; width: 36%; height: 160%;
+    background: linear-gradient(180deg, rgba(255, 226, 178, 0.14), transparent 75%);
+    transform: skewX(-9deg); filter: blur(6px);
+    animation: sway 9s ease-in-out infinite;
+  }
+  @keyframes sway { 0%, 100% { transform: skewX(-9deg) translateX(0); } 50% { transform: skewX(-6deg) translateX(26px); } }
+  .stage-mock .chairline {
+    position: absolute; left: 50%; bottom: 20%; transform: translateX(-50%);
+    width: 130px; filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.6));
+  }
+  .stage-mock .onair {
+    position: absolute; top: 12px; left: 12px;
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.16em; color: #ffb3b3;
+    background: rgba(20, 8, 8, 0.72); border: 1px solid rgba(255, 82, 82, 0.35);
+    padding: 5px 12px; border-radius: 999px;
+  }
+  .stage-mock .onair i { width: 7px; height: 7px; border-radius: 50%; background: var(--live); box-shadow: 0 0 10px var(--live); animation: pulse 1.6s ease-in-out infinite; }
+  .stage-mock .clock { position: absolute; top: 14px; right: 14px; font-size: 12.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .stage-mock .gobar {
+    position: absolute; left: 12px; right: 12px; bottom: 12px;
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(8, 9, 12, 0.8); border: 1px solid var(--line); border-radius: 10px; padding: 9px 13px;
+    font-size: 10.5px; font-weight: 600; color: var(--faint); letter-spacing: 0.08em;
+  }
+  .stage-mock .gobar .golive { margin-left: auto; color: #0a0b0e; background: var(--live); border-radius: 8px; padding: 5px 14px; font-weight: 700; font-size: 12.5px; letter-spacing: 0.02em; }
+  .stage-mock .rail { padding: 20px 0 20px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .dest { border: 1px solid var(--line); border-radius: 11px; padding: 12px 14px; background: rgba(255, 255, 255, 0.018); }
+  .dest .row1 { display: flex; align-items: center; gap: 9px; }
+  .dest .row1 img { width: 17px; height: 17px; }
+  .dest .row1 .kick-mark { height: 11px; width: auto; }
+  .dest .name { font-size: 13.5px; font-weight: 600; }
+  .dest .live-pill { margin-left: auto; }
+  .dest .meter { margin-top: 9px; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.06); overflow: hidden; }
+  .dest .meter i { display: block; height: 100%; width: 70%; border-radius: 4px; background: linear-gradient(90deg, var(--mint), #7deadfcc); transition: width 700ms ease; }
+  .dest .stats { display: flex; justify-content: space-between; margin-top: 7px; font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .dest .stats .kbps { color: var(--dim); }
+  .dest.add { border-style: dashed; font-size: 12.5px; color: var(--faint); text-align: center; padding: 10px; }
+  @media (max-width: 620px) {
+    .stage-mock { grid-template-columns: 1fr; }
+    .stage-mock .rail { padding: 0 16px 16px; }
+    .stage-mock .preview { min-height: 190px; margin: 16px; }
+  }
+
+  /* composer mock */
+  .compose { padding: 24px; }
+  /* composer field — boomin.ai/producer's gradient border: a solid fill on
+     padding-box over a spectrum on border-box, panning so the outline moves */
+  .compose .caption {
+    border: 1px solid transparent; border-radius: 20px; padding: 18px;
+    color: var(--faint); font-size: 15.5px; min-height: 92px;
+    background:
+      linear-gradient(rgba(5, 10, 22, 0.78), rgba(5, 10, 22, 0.78)) padding-box,
+      linear-gradient(110deg,
+        rgba(34, 211, 238, 0.45), rgba(168, 85, 247, 0.42),
+        rgba(244, 114, 182, 0.36), rgba(251, 191, 36, 0.3),
+        rgba(34, 211, 238, 0.45)) border-box;
+    background-size: auto, 300% 100%;
+    background-position: 0 0, 0 0;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 48px rgba(0, 0, 0, 0.45);
+    animation: composer-pan 7s linear infinite;
+  }
+  @keyframes composer-pan { to { background-position: 0 0, 300% 0; } }
+  .compose .caret { display: inline-block; width: 1px; height: 1.1em; background: var(--mint); vertical-align: text-bottom; margin-right: 2px; animation: blink 1.1s step-end infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .compose .row { display: flex; align-items: center; gap: 8px; margin-top: 15px; flex-wrap: wrap; }
+  .compose .row .push { margin-left: auto; display: flex; gap: 8px; }
+  .compose .hint { margin-top: 13px; font-size: 12px; color: var(--faint); }
+
+  /* ── closing ── */
+  .closing { position: relative; z-index: 1; padding: 90px 0 100px; text-align: center; }
+  .closing .chair { width: 140px; margin: 0 auto 4px; filter: drop-shadow(0 26px 52px rgba(0, 0, 0, 0.6)); animation: float 7s ease-in-out infinite; }
+  @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+  .closing::before {
+    content: ""; position: absolute; left: 50%; top: 30px; transform: translateX(-50%);
+    width: 620px; max-width: 90vw; height: 420px; pointer-events: none;
+    background: radial-gradient(50% 50% at 50% 30%, rgba(255, 196, 107, 0.14), transparent 70%);
+  }
+  .closing h2 { font-weight: 700; letter-spacing: -0.025em; font-size: clamp(32px, 5.4vw, 56px); line-height: 1.08; text-wrap: balance; }
+  .closing h2 .soft { color: var(--dim); }
+
   footer {
-    border-top: 1px solid var(--line); padding: 34px 0 56px;
+    position: relative; z-index: 1;
+    border-top: 1px solid var(--line); padding: 30px 0 50px;
     display: flex; align-items: center; gap: 22px; flex-wrap: wrap;
     font-size: 13.5px; color: var(--faint);
   }
   footer a { color: var(--dim); }
   footer a:hover { color: var(--text); }
   footer .spacer { flex: 1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    h1 .l2::before, .verified .shiny, .verified::after, .cta-glow::before, .cta-glow::after, .compose .caption, .live-pill.on, .stage-mock .beam, .stage-mock .onair i, .closing .chair, .compose .caret { animation: none; }
+    .say, .panel, .hero { transition: none; }
+  }
 </style>
 </head>
 <body>
 
-<div class="wrap">
+<canvas id="bg" aria-hidden="true"></canvas>
 
-  <nav>
+<div class="navbar">
+  <div class="bar">
     <a class="wordmark" href="/"><img src="favicon.png" alt="" />Producer <span>by Boomin</span></a>
     <span class="spacer"></span>
     <a class="nav-link" href="https://github.com/Boomin-Ai/producer">GitHub <span id="stars"></span></a>
-    <a class="nav-link" href="https://github.com/Boomin-Ai/producer/blob/main/server/SELF_HOSTING.md">Self-host</a>
-    <a class="pill solid" id="nav-download" href="/download/macos">Download</a>
-  </nav>
+    <a class="pill solid dl" href="/download/macos">
+      <svg class="ico-mac" viewBox="0 0 814 1000" fill="currentColor" aria-hidden="true"><path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105.6-57-155.5-127C46.7 790.7 0 663 0 541.8c0-194.4 126.4-297.5 250.8-297.5 66.1 0 121.2 43.4 162.7 43.4 39.5 0 101.1-46 176.3-46 28.5 0 130.9 2.6 198.3 99.2zm-234-181.5c31.1-36.9 53.1-88.1 53.1-139.3 0-7.1-.6-14.3-1.9-20.1-50.6 1.9-110.8 33.7-147.1 75.8-28.5 32.4-55.1 83.6-55.1 135.5 0 7.8 1.3 15.6 1.9 18.1 3.2.6 8.4 1.3 13.6 1.3 45.4 0 102.5-30.4 135.5-71.3z"/></svg>
+      <svg class="ico-win" viewBox="0 0 88 88" fill="currentColor" aria-hidden="true"><path d="m0 12.402 35.687-4.86.016 34.423-35.67.203zm35.67 33.529.028 34.453L.028 75.48.026 45.7zm4.326-39.025L87.314 0v41.527l-47.318.376zm47.329 39.349-.011 41.34-47.318-6.678-.066-34.739z"/></svg>
+      <span class="dl-label">Download</span>
+    </a>
+  </div>
+</div>
 
-  <header>
-    <div class="hero-grid">
-      <div>
-        <div class="badges">
-          <span class="badge"><span class="dot"></span> Open source · <b>AGPL-3.0</b></span>
-          <span class="badge"><img src="meta.svg" alt="" /> <b>Meta Verified</b> Technology Partner</span>
+<!-- ═══════ full-bleed pinned scene ═══════ -->
+<div class="scene-wrap" id="scene-wrap">
+  <div class="scene" id="scene" data-stage="0">
+
+    <!-- beat 0 — hero -->
+    <div class="hero">
+      <span class="verified"><img src="meta.svg" alt="" /><span class="shiny">Meta Verified Technology Partner</span></span>
+      <h1>
+        <span class="l1">Stop posting.</span>
+        <span class="l2" data-text="Start producing.">Start producing.</span>
+      </h1>
+      <p class="sub">
+        The <b>open-source</b> media distribution platform — go live to
+        <b>every channel</b>, post to <b>every feed</b>, from your desktop.
+        <b>Zero cost, forever.</b>
+      </p>
+      <div class="cta-row">
+        <span class="border-glow-card"><span class="edge-light"></span><span class="border-glow-inner"><a class="pill solid dl" href="/download/macos">
+          <svg class="ico-mac" viewBox="0 0 814 1000" fill="currentColor" aria-hidden="true"><path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105.6-57-155.5-127C46.7 790.7 0 663 0 541.8c0-194.4 126.4-297.5 250.8-297.5 66.1 0 121.2 43.4 162.7 43.4 39.5 0 101.1-46 176.3-46 28.5 0 130.9 2.6 198.3 99.2zm-234-181.5c31.1-36.9 53.1-88.1 53.1-139.3 0-7.1-.6-14.3-1.9-20.1-50.6 1.9-110.8 33.7-147.1 75.8-28.5 32.4-55.1 83.6-55.1 135.5 0 7.8 1.3 15.6 1.9 18.1 3.2.6 8.4 1.3 13.6 1.3 45.4 0 102.5-30.4 135.5-71.3z"/></svg>
+          <svg class="ico-win" viewBox="0 0 88 88" fill="currentColor" aria-hidden="true"><path d="m0 12.402 35.687-4.86.016 34.423-35.67.203zm35.67 33.529.028 34.453L.028 75.48.026 45.7zm4.326-39.025L87.314 0v41.527l-47.318.376zm47.329 39.349-.011 41.34-47.318-6.678-.066-34.739z"/></svg>
+          <span class="dl-label">Download</span>
+        </a></span></span>
+      </div>
+      <p class="trust"><span id="dl-note"></span></p>
+    </div>
+
+    <!-- statements -->
+    <div class="say" id="say1">
+      <div class="eyebrow">Back to the control room</div>
+      <h2>Every show gets <span class="soft">a stage of its own.</span></h2>
+    </div>
+    <div class="say" id="say2">
+      <div class="eyebrow">Name your show…</div>
+      <h2>One room. <span class="soft">Every live channel at once.</span></h2>
+    </div>
+    <div class="say" id="say3">
+      <div class="eyebrow">New post</div>
+      <h2>Write the caption once. <span class="soft">Post it everywhere.</span></h2>
+    </div>
+
+    <!-- A — control room -->
+    <div class="panel" id="panelA">
+      <img class="real" src="shots/hero.png" alt="Producer's control room — ON AIR rooms, channels, and the rundown" />
+      <div class="mock" aria-hidden="true">
+        <div class="cr">
+          <div>
+            <div class="cr-label">ON AIR <span class="live-pill on">LIVE</span></div>
+            <div class="cr-rooms">
+              <div class="cr-room on"><span class="name">Tuesday Show</span><span class="meta">live now</span></div>
+              <div class="cr-room"><span class="name">Late Night Run</span><span class="meta">2 days ago</span></div>
+              <div class="cr-room new"><span class="name"><span class="plus">+</span>New room</span><span class="meta">a stage of its own</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="cr-label">CHANNELS</div>
+            <div class="cr-chips">
+              <span class="chip"><span class="dot" style="background:#9146ff"></span>Twitch <span class="kind">live</span></span>
+              <span class="chip"><span class="dot" style="background:#ff0000"></span>YouTube <span class="kind">live</span></span>
+              <span class="chip"><span class="dot" style="background:#53fc18"></span>Kick <span class="kind">live</span></span>
+              <span class="chip"><span class="dot" style="background:#e1306c"></span>Instagram <span class="kind">social</span></span>
+              <span class="chip"><span class="dot" style="background:#1877f2"></span>Facebook <span class="kind">social</span></span>
+              <span class="chip add">+ Add</span>
+            </div>
+          </div>
+          <div>
+            <div class="cr-label">RUNDOWN <span class="actions"><span class="cr-btn primary">New post</span><span class="cr-btn">Everything ▸</span></span></div>
+            <div class="run-rows">
+              <div class="run-row"><span class="state">SCHEDULED</span><span>Instagram</span><span class="when">tomorrow 9:00</span></div>
+              <div class="run-row"><span class="state go">PUBLISHING</span><span>Threads</span><span class="when">now</span></div>
+              <div class="run-row"><span class="state ok">PUBLISHED</span><span>Facebook</span><span class="when">today 14:05</span></div>
+            </div>
+          </div>
         </div>
-        <h1>
-          <span class="l1">Post everywhere.</span>
-          <span class="l2">Own everything.</span>
-        </h1>
-        <p class="sub">
-          The open-source studio that publishes to every channel from your
-          desktop — <b>your keys</b>, <b>your clouds</b>, zero subscriptions.
-          Schedule it and close the laptop.
-        </p>
-        <div class="cta-row">
-          <a class="pill solid" id="download" href="/download/macos">Download</a>
-          <a class="pill" href="https://github.com/Boomin-Ai/producer">View source</a>
+      </div>
+    </div>
+
+    <!-- B — live stage -->
+    <div class="panel" id="panelB">
+      <img class="real" src="shots/live.png" alt="A Producer room mid-broadcast, streaming to Twitch, YouTube, and Kick" />
+      <div class="mock stage-mock" aria-hidden="true">
+        <div class="rail">
+          <div class="dest" data-kbps="6000">
+            <div class="row1"><img src="twitch.svg" alt="" /><span class="name">Twitch</span><span class="live-pill on">LIVE</span></div>
+            <div class="meter"><i></i></div>
+            <div class="stats"><span>1080p60</span><span class="kbps">6000 kbps</span></div>
+          </div>
+          <div class="dest" data-kbps="6800">
+            <div class="row1"><img src="youtube.svg" alt="" /><span class="name">YouTube</span><span class="live-pill on">LIVE</span></div>
+            <div class="meter"><i></i></div>
+            <div class="stats"><span>1080p60</span><span class="kbps">6800 kbps</span></div>
+          </div>
+          <div class="dest" data-kbps="6400">
+            <div class="row1"><img class="kick-mark" src="kick.svg" alt="Kick" /><span class="live-pill on">LIVE</span></div>
+            <div class="meter"><i></i></div>
+            <div class="stats"><span>1080p60</span><span class="kbps">6400 kbps</span></div>
+          </div>
+          <div class="dest add">+ Add destination — Custom RTMP</div>
         </div>
-        <p class="dl-note" id="dl-note"></p>
-        <div class="works">
-          <span class="lbl">Works with</span>
-          <img src="instagram.svg" alt="Instagram" title="Instagram" />
-          <img src="threads.svg" alt="Threads" title="Threads" />
-          <img src="facebook.svg" alt="Facebook" title="Facebook" />
-          <span class="soon">youtube · x · tiktok — next</span>
+        <div class="preview">
+          <div class="beam"></div>
+          <img class="chairline" src="chair.png" alt="" />
+          <span class="onair"><i></i>ON AIR</span>
+          <span class="clock" id="uptime">00:12:34</span>
+          <div class="gobar"><span>DESKTOP</span><span>·</span><span>CAMERA</span><span>·</span><span>MIC</span><span class="golive">LIVE</span></div>
         </div>
       </div>
-      <img class="hero-chair" src="chair.png" alt="" />
     </div>
 
-  </header>
-
-  <section>
-    <div class="cols">
-      <div class="col">
-        <h3>Your keys</h3>
-        <p>Connect Instagram, Threads, and Facebook with your own Meta app.
-           No middleman, no review queue, no per-channel pricing.</p>
-      </div>
-      <div class="col">
-        <h3>Your clouds</h3>
-        <p>Use Boomin's hosted platform, or deploy your own backend to
-           Cloudflare in ~20 minutes for $0. One post can fan out across both.</p>
-      </div>
-      <div class="col">
-        <h3>Yours, period</h3>
-        <p>AGPL-3.0 — nobody can ever take it closed. Want it inside a
-           commercial product? That's the <a href="https://boomin.ai">Boomin SDK</a>.</p>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <div class="kicker">Two ways to run it</div>
-    <div class="modes">
-      <div class="mode">
-        <span class="tag">CONNECTED</span>
-        <h3>Boomin hosted</h3>
-        <p>Sign in and publish in two minutes. Managed channels, storage, and
-           scheduling — free to start.</p>
-      </div>
-      <div class="mode">
-        <span class="tag">INDEPENDENT</span>
-        <h3>Your own server</h3>
-        <p>A Cloudflare Worker you deploy with one command. Your database,
-           your storage, your tokens. Boomin never sees a byte.</p>
+    <!-- C — composer -->
+    <div class="panel" id="panelC">
+      <img class="real" src="shots/post.png" alt="Producer's composer fanning one caption out to Instagram, Threads, and Facebook" />
+      <div class="mock" aria-hidden="true">
+        <div class="compose">
+          <div class="caption"><span class="caret"></span>Write the caption once. Post it everywhere.</div>
+          <div class="row">
+            <span class="chip"><img src="instagram.svg" alt="" />Instagram</span>
+            <span class="chip"><img src="threads.svg" alt="" />Threads</span>
+            <span class="chip"><img src="facebook.svg" alt="" />Facebook</span>
+            <span class="push">
+              <span class="cr-btn">Schedule</span>
+              <span class="cr-btn primary">Post now</span>
+            </span>
+          </div>
+          <div class="hint">Leave empty to post immediately. Your own Meta app — no middleman, no review queue.</div>
+        </div>
       </div>
     </div>
-  </section>
 
-  <section>
-    <div class="kicker">Build from source</div>
-    <div class="term">
-      <pre><span class="m">git</span> clone https://github.com/Boomin-Ai/producer && cd producer
-<span class="m">bun</span> install && <span class="m">bun</span> run tauri dev
-<span class="c"># self-host the backend → server/SELF_HOSTING.md</span></pre>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="closing">
+    <img class="chair" src="chair.png" alt="" />
+    <h2>Go live, post, schedule.<br /><span class="soft">All from Producer.</span></h2>
+    <div class="cta-row">
+      <span class="border-glow-card"><span class="edge-light"></span><span class="border-glow-inner"><a class="pill solid dl" href="/download/macos">
+        <svg class="ico-mac" viewBox="0 0 814 1000" fill="currentColor" aria-hidden="true"><path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105.6-57-155.5-127C46.7 790.7 0 663 0 541.8c0-194.4 126.4-297.5 250.8-297.5 66.1 0 121.2 43.4 162.7 43.4 39.5 0 101.1-46 176.3-46 28.5 0 130.9 2.6 198.3 99.2zm-234-181.5c31.1-36.9 53.1-88.1 53.1-139.3 0-7.1-.6-14.3-1.9-20.1-50.6 1.9-110.8 33.7-147.1 75.8-28.5 32.4-55.1 83.6-55.1 135.5 0 7.8 1.3 15.6 1.9 18.1 3.2.6 8.4 1.3 13.6 1.3 45.4 0 102.5-30.4 135.5-71.3z"/></svg>
+        <svg class="ico-win" viewBox="0 0 88 88" fill="currentColor" aria-hidden="true"><path d="m0 12.402 35.687-4.86.016 34.423-35.67.203zm35.67 33.529.028 34.453L.028 75.48.026 45.7zm4.326-39.025L87.314 0v41.527l-47.318.376zm47.329 39.349-.011 41.34-47.318-6.678-.066-34.739z"/></svg>
+        <span class="dl-label">Download</span>
+      </a></span></span>
+      <a class="pill" href="https://github.com/Boomin-Ai/producer">Star on GitHub</a>
     </div>
-  </section>
+    <p class="trust">free forever <span class="sep">·</span> open source — AGPL-3.0 <span class="sep">·</span> <a href="https://github.com/Boomin-Ai/producer/blob/main/server/SELF_HOSTING.md">self-host the backend</a></p>
+  </div>
 
   <footer>
     <span>© 2026 Boomin · AGPL-3.0</span>
@@ -277,24 +699,118 @@
     <a href="https://github.com/sponsors/ikleveland">Sponsor</a>
     <a href="https://boomin.ai">boomin.ai</a>
   </footer>
-
 </div>
 
 <script>
-  // Star count — silent on failure.
+  // ── Aurora background (canvas, no deps). ──
+  (function () {
+    var cv = document.getElementById("bg");
+    var ctx = cv.getContext("2d");
+    var still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var W, H;
+    function size() {
+      var dpr = Math.min(2, window.devicePixelRatio || 1);
+      W = cv.width = Math.floor(innerWidth * dpr / 2);
+      H = cv.height = Math.floor(innerHeight * dpr / 2);
+      cv.style.width = innerWidth + "px";
+      cv.style.height = innerHeight + "px";
+    }
+    size();
+    window.addEventListener("resize", function () { size(); draw(now()); });
+
+    var blobs = [
+      { c: "255,196,107", a: 0.16, x: 0.50, y: 0.02, r: 0.62, ax: 0.05, ay: 0.03, p: 0.0, s: 0.045 },
+      { c: "61,220,166",  a: 0.10, x: 0.12, y: 0.88, r: 0.45, ax: 0.07, ay: 0.05, p: 2.1, s: 0.060 },
+      { c: "120,110,255", a: 0.09, x: 0.88, y: 0.80, r: 0.48, ax: 0.06, ay: 0.05, p: 4.2, s: 0.050 },
+      { c: "255,140,90",  a: 0.07, x: 0.72, y: 0.18, r: 0.38, ax: 0.09, ay: 0.06, p: 1.3, s: 0.070 }
+    ];
+    function now() { return (window.performance ? performance.now() : 0) / 1000; }
+    function draw(t) {
+      ctx.clearRect(0, 0, W, H);
+      ctx.globalCompositeOperation = "lighter";
+      for (var i = 0; i < blobs.length; i++) {
+        var b = blobs[i];
+        var x = (b.x + Math.sin(t * b.s + b.p) * b.ax) * W;
+        var y = (b.y + Math.cos(t * b.s * 1.3 + b.p) * b.ay) * H;
+        var r = b.r * Math.max(W, H) * (1 + 0.06 * Math.sin(t * b.s * 0.7 + b.p * 2));
+        var g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, "rgba(" + b.c + "," + b.a + ")");
+        g.addColorStop(1, "rgba(" + b.c + ",0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, 6.2832);
+        ctx.fill();
+      }
+    }
+    if (still) { draw(0); return; }
+    (function loop() { draw(now()); requestAnimationFrame(loop); })();
+  })();
+
+  // ── BorderGlow driver: cursor tracking + the mount sweep (React Bits). ──
+  (function () {
+    var cards = document.querySelectorAll(".border-glow-card");
+    if (!cards.length) return;
+    var still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+    function easeInCubic(x) { return x * x * x; }
+    function animateValue(o) {
+      var t0 = performance.now() + (o.delay || 0);
+      var start = o.start || 0, end = o.end === undefined ? 100 : o.end;
+      var dur = o.duration || 1000, ease = o.ease || easeOutCubic;
+      function tick() {
+        var t = Math.min((performance.now() - t0) / dur, 1);
+        o.onUpdate(start + (end - start) * ease(t));
+        if (t < 1) requestAnimationFrame(tick);
+        else if (o.onEnd) o.onEnd();
+      }
+      setTimeout(function () { requestAnimationFrame(tick); }, o.delay || 0);
+    }
+
+    cards.forEach(function (card) {
+      card.addEventListener("pointermove", function (e) {
+        var r = card.getBoundingClientRect();
+        var cx = r.width / 2, cy = r.height / 2;
+        var dx = e.clientX - r.left - cx, dy = e.clientY - r.top - cy;
+        var kx = dx !== 0 ? cx / Math.abs(dx) : Infinity;
+        var ky = dy !== 0 ? cy / Math.abs(dy) : Infinity;
+        var edge = Math.min(Math.max(1 / Math.min(kx, ky), 0), 1);
+        var deg = (dx === 0 && dy === 0) ? 0 : Math.atan2(dy, dx) * (180 / Math.PI) + 90;
+        if (deg < 0) deg += 360;
+        card.style.setProperty("--edge-proximity", (edge * 100).toFixed(3));
+        card.style.setProperty("--cursor-angle", deg.toFixed(3) + "deg");
+      });
+
+      if (still) return;
+      // intro sweep — the `animated` prop, so the flare travels on load
+      var a0 = 110, a1 = 465;
+      card.classList.add("sweep-active");
+      card.style.setProperty("--cursor-angle", a0 + "deg");
+      var setAngle = function (v) {
+        card.style.setProperty("--cursor-angle", ((a1 - a0) * (v / 100) + a0) + "deg");
+      };
+      animateValue({ duration: 500, onUpdate: function (v) { card.style.setProperty("--edge-proximity", v); } });
+      animateValue({ ease: easeInCubic, duration: 1500, end: 50, onUpdate: setAngle });
+      animateValue({ ease: easeOutCubic, delay: 1500, duration: 2250, start: 50, end: 100, onUpdate: setAngle });
+      animateValue({ ease: easeInCubic, delay: 2500, duration: 1500, start: 100, end: 0,
+        onUpdate: function (v) { card.style.setProperty("--edge-proximity", v); },
+        onEnd: function () { card.classList.remove("sweep-active"); } });
+    });
+  })();
+
+  // ── GitHub stars — silent on failure. ──
   fetch("https://api.github.com/repos/Boomin-Ai/producer")
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (d) {
       if (d && typeof d.stargazers_count === "number") {
+        var n = d.stargazers_count;
         document.getElementById("stars").textContent =
-          "★ " + (d.stargazers_count >= 1000
-            ? (d.stargazers_count / 1000).toFixed(1) + "k"
-            : d.stargazers_count);
+          "★ " + (n >= 1000 ? (n / 1000).toFixed(1) + "k" : n);
       }
     })
     .catch(function () {});
 
-  // Platform-aware downloads, served from this domain.
+  // ── Platform-aware downloads. ──
   (function () {
     var ua = navigator.userAgent;
     var isWin = /Windows/.test(ua);
@@ -304,9 +820,12 @@
     var href = isWin ? "/download/windows" : isLinux ? "/download/linux" : "/download/macos";
     var label = "Download for " + (isWin ? "Windows" : isLinux ? "Linux" : "macOS");
 
-    var btn = document.getElementById("download");
-    btn.href = href; btn.textContent = label;
-    document.getElementById("nav-download").href = href;
+    document.querySelectorAll(".pill.dl").forEach(function (btn) {
+      btn.href = href;
+      if (isWin) btn.classList.add("is-win");
+      var l = btn.querySelector(".dl-label");
+      if (l && !btn.closest(".navbar")) l.textContent = label;
+    });
 
     var links =
       isMac ? '<a href="/download/macos-intel">Intel Mac</a> · <a href="/download/windows">Windows</a> · <a href="/download/linux">Linux</a>' :
@@ -317,11 +836,70 @@
     fetch("/download/meta.json")
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (meta) {
-        note.innerHTML =
-          (meta && meta.version ? meta.version + " · " : "") +
-          "updates itself · " + links;
+        var v = meta && meta.version ? meta.version : null;
+        note.innerHTML = (v ? v + " · " : "") + links;
       })
       .catch(function () { note.innerHTML = links; });
+  })();
+
+  // ── Real screenshots swap in when the files exist. ──
+  document.querySelectorAll(".panel").forEach(function (box) {
+    var img = box.querySelector(".real");
+    img.addEventListener("load", function () { box.classList.add("has-real"); });
+    if (img.complete && img.naturalWidth > 0) box.classList.add("has-real");
+  });
+
+  // ── Park the hero panel just below the hero, whatever the screen height.
+  //    A fixed vh guess collides with the CTA on short laptop displays. ──
+  (function () {
+    var scene = document.getElementById("scene");
+    var hero = document.querySelector(".hero");
+    if (!scene || !hero) return;
+    function place() {
+      var top = hero.getBoundingClientRect().top - scene.getBoundingClientRect().top;
+      scene.style.setProperty("--panel0", Math.round(top + hero.offsetHeight + 48) + "px");
+    }
+    place();
+    window.addEventListener("resize", place);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);
+  })();
+
+  // ── Pinned scene: stage follows scroll. ──
+  (function () {
+    var wrap = document.getElementById("scene-wrap");
+    var scene = document.getElementById("scene");
+    var raf = 0;
+    function update() {
+      var span = wrap.offsetHeight - window.innerHeight;
+      var p = span > 0 ? Math.min(1, Math.max(0, -wrap.getBoundingClientRect().top / span)) : 1;
+      var stage = p < 0.22 ? 0 : p < 0.48 ? 1 : p < 0.74 ? 2 : 3;
+      if (String(stage) !== scene.getAttribute("data-stage")) scene.setAttribute("data-stage", String(stage));
+      raf = 0;
+    }
+    function onScroll() { if (!raf) raf = requestAnimationFrame(update); }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    update();
+  })();
+
+  // ── Living numbers in the stage mock. ──
+  (function () {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    var dests = document.querySelectorAll(".dest[data-kbps]");
+    setInterval(function () {
+      dests.forEach(function (d) {
+        var base = parseInt(d.getAttribute("data-kbps"), 10);
+        var kbps = base + Math.round((Math.random() - 0.5) * 900);
+        d.querySelector(".kbps").textContent = kbps + " kbps";
+        d.querySelector(".meter i").style.width = (52 + (kbps - 5200) / 40) + "%";
+      });
+    }, 900);
+    var t0 = Date.now(), up = document.getElementById("uptime");
+    setInterval(function () {
+      var s = Math.floor((Date.now() - t0) / 1000) + 754;
+      var p = function (n) { return String(n).padStart(2, "0"); };
+      up.textContent = p(Math.floor(s / 3600)) + ":" + p(Math.floor(s / 60) % 60) + ":" + p(s % 60);
+    }, 1000);
   })();
 </script>
 </body>

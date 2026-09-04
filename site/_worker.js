@@ -1,4 +1,4 @@
-// producer.dev edge worker (producer.boomin.ai redirects here).
+// producer.boomin.ai edge worker.
 // /download/<platform> streams the newest installer through this domain,
 // so users never leave the site. Everything else falls through to static assets.
 
@@ -39,15 +39,6 @@ async function latestRelease() {
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
-
-    // Canonical host is producer.dev; the old boomin.ai subdomain (and www)
-    // permanently redirect so every existing link and installer page keeps
-    // working while the brand moves to its own domain.
-    if (url.hostname !== "producer.dev" && !url.hostname.endsWith(".pages.dev")) {
-      url.hostname = "producer.dev";
-      url.protocol = "https:";
-      return Response.redirect(url.toString(), 301);
-    }
 
     if (url.pathname === "/download/meta.json") {
       const rel = await latestRelease();
