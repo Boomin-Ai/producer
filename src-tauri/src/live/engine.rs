@@ -1145,7 +1145,38 @@ unsafe fn draw_selection(bw: f32, bh: f32, cx: u32, cy: u32) {
             m.x.y * px + m.y.y * py + m.t.y,
         )
     };
-    let corners = [xf(0.0, 0.0), xf(1.0, 0.0), xf(1.0, 1.0), xf(0.0, 1.0)];
+    // The box transform is the item's BOUNDS. With OBS_BOUNDS_SCALE_INNER the
+    // (cropped) source is fitted inside those bounds and centred, so with a
+    // crop -- or any aspect mismatch -- the picture occupies a smaller rect
+    // than the box. Outline the picture, exactly as the macOS stage editor's
+    // visRect() does; outlining the bounds draws a box around letterbox bars
+    // and the red crop edge lands away from where the crop actually is.
+    let mut crop: ffi::obs_sceneitem_crop = std::mem::zeroed();
+    ffi::obs_sceneitem_get_crop(item, &mut crop);
+    let (mut ox, mut oy, mut nw, mut nh) = (0.0f32, 0.0f32, 1.0f32, 1.0f32);
+    let src = ffi::obs_sceneitem_get_source(item);
+    if !src.is_null() {
+        let sw = ffi::obs_source_get_width(src) as f32;
+        let sh = ffi::obs_source_get_height(src) as f32;
+        let bw_box = (m.x.x * m.x.x + m.x.y * m.x.y).sqrt();
+        let bh_box = (m.y.x * m.y.x + m.y.y * m.y.y).sqrt();
+        let cw = (sw - crop.left as f32 - crop.right as f32).max(1.0);
+        let ch = (sh - crop.top as f32 - crop.bottom as f32).max(1.0);
+        if sw > 0.0 && sh > 0.0 && bw_box > 0.0 && bh_box > 0.0 {
+            let k = (bw_box / cw).min(bh_box / ch);
+            let (vw, vh) = (cw * k, ch * k);
+            ox = (bw_box - vw) / 2.0 / bw_box;
+            oy = (bh_box - vh) / 2.0 / bh_box;
+            nw = vw / bw_box;
+            nh = vh / bh_box;
+        }
+    }
+    let corners = [
+        xf(ox, oy),
+        xf(ox + nw, oy),
+        xf(ox + nw, oy + nh),
+        xf(ox, oy + nh),
+    ];
 
     let solid = ffi::obs_get_base_effect(3); // OBS_EFFECT_SOLID
     if solid.is_null() {
@@ -1192,8 +1223,6 @@ unsafe fn draw_selection(bw: f32, bh: f32, cx: u32, cy: u32) {
     // with its webview outline (hidden here under the float-mode preview).
     let green = col([0.133, 0.773, 0.369], [0.016, 0.560, 0.110]);
     let red = col([1.0, 0.353, 0.353], [1.0, 0.102, 0.102]);
-    let mut crop: ffi::obs_sceneitem_crop = std::mem::zeroed();
-    ffi::obs_sceneitem_get_crop(item, &mut crop);
     // edges in corner order: top (0->1), right (1->2), bottom (2->3), left (3->0)
     let edge_cut = [crop.top > 0, crop.right > 0, crop.bottom > 0, crop.left > 0];
     ffi::gs_effect_set_vec4(param, &green);
