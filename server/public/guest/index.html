@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Producer guest</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #111; color: #eee; margin: 0; display: grid; place-items: center; min-height: 100vh; }
+    main { max-width: 32rem; padding: 2rem; text-align: center; }
+    code { background: #222; padding: 0.1rem 0.4rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h2>Guest bundle not built</h2>
+    <p>This server is serving the placeholder guest page. Build the guest bundle into
+      <code>server/public/guest/</code> and redeploy (<code>npx wrangler deploy</code>).</p>
+    <p>The API routes under <code>/v1/connect/guest…</code> are live; only the page is missing.</p>
+  </main>
+</body>
+</html>
