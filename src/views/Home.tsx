@@ -588,8 +588,8 @@ function ChannelsBlock({
   const [addingDest, setAddingDest] = useState(false);
   const [editingDest, setEditingDest] = useState<LiveDestination | null>(null);
   return (
-      <section className="cr-section" id="sec-channels">
-        <div className="cr-label">CHANNELS</div>
+      <section className="cr-section set-channels" id="sec-channels">
+        <div className="cr-label set-gap">CHANNELS</div>
         <div className="cr-channels">
           {destinations.map((d) => (
             <button
@@ -776,6 +776,8 @@ function SettingsPanel({
           <NetworkInviteReset endpoints={endpoints} />
         </div>
 
+        <ChannelsBlock destinations={destinations} channels={channels} onChanged={onChannelsChanged} />
+
         <div className="cr-label set-gap">WHAT'S NEW</div>
         <div className="upd upd-sheet">
           {releases === null && <div className="cr-sheet-row-sub">Checking…</div>}
@@ -807,10 +809,8 @@ function SettingsPanel({
             ))}
         </div>
 
-        <div className="cr-label" style={{ marginTop: 28 }}>
-          DEV
-        </div>
-        <div className="cr-sheet-rows">
+        <div className="cr-label set-gap">DEV</div>
+        <div className="set-list">
           <div className="cr-sheet-row">
             <span className="cr-sheet-row-name">Demo data</span>
             <span className="cr-sheet-row-sub">fake chat, alerts &amp; canvas footage</span>
@@ -823,8 +823,6 @@ function SettingsPanel({
             />
           </div>
         </div>
-
-              <ChannelsBlock destinations={destinations} channels={channels} onChanged={onChannelsChanged} />
       </div>
   );
 }

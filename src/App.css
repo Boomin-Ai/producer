@@ -8552,3 +8552,11 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 /* What's new is a window, not the whole panel: fixed height, scrolls inside. */
 .set .upd-sheet { max-height: 220px; overflow-y: auto; padding-right: 6px; border: 1px solid oklch(1 0 0 / 0.07); border-radius: 10px; padding: 2px 10px; }
 .set .upd-sheet .upd-item:last-child { border-bottom: 0; }
+
+/* Settings › channels + dev: same flat grammar as the rest of the panel */
+.set .set-channels { margin: 0; padding: 0; background: none; border: 0; }
+.set .set-channels .cr-channels { gap: 6px; }
+.set .set-channels .cr-chip { background: none; border: 1px solid oklch(1 0 0 / 0.1); box-shadow: none; }
+.set .set-channels .cr-chip.static { background: none; }
+.set .set-channels .cr-chip.add { border-style: dashed; }
+.set .set-channels .cr-dest-editor { background: none; border: 1px solid oklch(1 0 0 / 0.08); border-radius: 10px; margin-top: 10px; }
