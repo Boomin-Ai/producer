@@ -2649,6 +2649,26 @@ export function LiveView({
     }
   };
 
+  /** Copy the room link and SAY so. Both the header chip and the guest
+   * panel's link button go through here — the panel button used to copy
+   * silently (and swallow clipboard failures), which read as "doesn't work". */
+  const copyRoomLink = async () => {
+    const url = guestLink ?? (await ensureGuestLink());
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      // Deals are a Boomin thing; a self-hosted room has none.
+      const boomin = isBoomin(await resolveActiveEndpoint().catch(() => null));
+      setBanner(
+        boomin
+          ? "Room link copied — send it to your guests. Deal guests must enter through the deal."
+          : "Room link copied — send it to your guests.",
+      );
+    } catch {
+      setBanner(url);
+    }
+  };
+
   const [srcSettings, setSrcSettings] = useState<string | null>(null);
   /** Which scene's settings strip is open — same grammar as sources. */
   const [sceneSettings, setSceneSettings] = useState<string | null>(null);
@@ -4569,10 +4589,7 @@ export function LiveView({
           <button
             className="rm-panel-plus"
             title="Copy the room's guest link"
-            onClick={async () => {
-              const url = guestLink ?? (await ensureGuestLink());
-              if (url) await navigator.clipboard.writeText(url).catch(() => {});
-            }}
+            onClick={copyRoomLink}
           >
             {ic.link}
           </button>
@@ -5007,22 +5024,7 @@ export function LiveView({
           <button
             className="hd-chip hd-link"
             title="Copy this room's guest link"
-            onClick={async () => {
-              const url = guestLink ?? (await ensureGuestLink());
-              if (!url) return;
-              try {
-                await navigator.clipboard.writeText(url);
-                // Deals are a Boomin thing; a self-hosted room has none.
-                const boomin = isBoomin(await resolveActiveEndpoint().catch(() => null));
-                setBanner(
-                  boomin
-                    ? "Room link copied — send it to your guests. Deal guests must enter through the deal."
-                    : "Room link copied — send it to your guests.",
-                );
-              } catch {
-                setBanner(url);
-              }
-            }}
+            onClick={copyRoomLink}
           >
             {ic.link ?? "🔗"} Link
           </button>
