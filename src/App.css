@@ -8612,3 +8612,7 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .set-page .set-top-r { margin-left: 0; }
 .set-page .cr-label.set-gap:first-of-type { margin-top: 0; }
 .set-soon { font-size: 13.5px; color: var(--fg-2); line-height: 1.55; max-width: 560px; }
+/* A hairline between the rail and the settings list, and the list sits in its own soft section. */
+.home-settings.open::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 1px; background: oklch(1 0 0 / 0.1); }
+.set-nav { padding-left: 18px; }
+.set-nav-list { padding: 6px; border-radius: 14px; border: 1px solid oklch(1 0 0 / 0.08); background: oklch(1 0 0 / 0.025); }
