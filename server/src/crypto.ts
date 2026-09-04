@@ -59,3 +59,46 @@ export async function decryptSecret(encoded: string, secret: string): Promise<st
   );
   return decoder.decode(plain);
 }
+
+// ── Guest-layer primitives ───────────────────────────────────────────────────
+// Base64url + HMAC-SHA256 back the 120-second signaling tickets, and
+// randomToken mints the prefixed guest capability codes (gi_/gr_) that are
+// stored hashed and shown exactly once.
+
+export function base64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+export function base64UrlToBytes(value: string): Uint8Array {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/** Prefixed so a code that leaks into a log or a screenshare is identifiable
+ *  at a glance as to which secret it is and what to revoke. */
+export function randomToken(prefix = "", bytes = 24): string {
+  const random = crypto.getRandomValues(new Uint8Array(bytes));
+  return `${prefix}${base64Url(random)}`;
+}
+
+async function hmacKey(secret: string): Promise<CryptoKey> {
+  return crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [
+    "sign",
+    "verify",
+  ]);
+}
+
+export async function hmacSign(input: string, secret: string): Promise<string> {
+  const signature = await crypto.subtle.sign("HMAC", await hmacKey(secret), encoder.encode(input));
+  return base64Url(new Uint8Array(signature));
+}
+
+export async function hmacVerify(input: string, signature: string, secret: string): Promise<boolean> {
+  return crypto.subtle.verify("HMAC", await hmacKey(secret), base64UrlToBytes(signature), encoder.encode(input));
+}

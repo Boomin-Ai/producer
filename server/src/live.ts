@@ -1,0 +1,380 @@
+// Live rooms + guests — the routes. Same paths as Boomin's hosted API so the
+// Producer desktop app and the guest pages need no fork. TWO route families
+// with deliberately different auth:
+//
+//   /v1/app/live/…      — the HOST. Primary endpoint token ONLY. An
+//                          automation token (agents, CLI, CI) must never be
+//                          able to open a room to strangers, admit someone
+//                          onto a live broadcast, or read render URLs.
+//   /v1/connect/guest…  — the GUEST and the RENDERER. No bearer at all; the
+//                          invite code / room code / render key IS the
+//                          credential (high-entropy, stored hashed, revocable,
+//                          scoped to exactly one guest slot).
+//
+// The public family is the point of the whole feature: guests on a self-hosted
+// show have no account anywhere, and need none.
+
+import { Hono } from "hono";
+import type { Env } from "./env";
+import { ApiError } from "./errors";
+import { requirePrimary, type TokenClass } from "./auth";
+import { verifyTicket } from "./ticket";
+import {
+  acceptGuest,
+  admitGuest,
+  createRoom,
+  currentStage,
+  declineGuest,
+  deleteRoom,
+  guestByInviteCode,
+  guestByRenderKey,
+  guestChannelName,
+  inviteGuest,
+  joinRoomByCode,
+  listRooms,
+  mintGuestSignaling,
+  mintRoomTicket,
+  publicGuest,
+  publicRoom,
+  reportQuality,
+  revokeGuest,
+  roomChannelName,
+  roomRoster,
+  setGuestPositions,
+  setRoomJoinLink,
+  setStage,
+  updateRoom,
+  type GuestRow,
+  type Quality,
+} from "./guests";
+
+type Vars = { tokenClass: TokenClass };
+type App = Hono<{ Bindings: Env; Variables: Vars }>;
+
+const origin = (url: string) => new URL(url).origin;
+
+async function jsonBody<T extends Record<string, unknown>>(c: { req: { json(): Promise<unknown> } }): Promise<T> {
+  const body = (await c.req.json().catch(() => null)) as T | null;
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new ApiError(400, "invalid_request", "The request body must be a JSON object.");
+  }
+  return body;
+}
+
+function stringList(value: unknown, max: number, field: string): string[] {
+  if (!Array.isArray(value) || value.length > max || !value.every((v) => typeof v === "string" && v.length <= 80)) {
+    throw new ApiError(400, "invalid_request", `${field} must be an array of at most ${max} ids.`);
+  }
+  return value as string[];
+}
+
+// ── Host routes: /v1/app/live/* (primary token only) ─────────────────────────
+
+export const liveHostRoutes: App = new Hono<{ Bindings: Env; Variables: Vars }>();
+
+liveHostRoutes.use("*", async (c, next) => {
+  requirePrimary(c.get("tokenClass"));
+  return next();
+});
+
+liveHostRoutes.get("/rooms", async (c) => {
+  const rooms = await listRooms(c.env);
+  return c.json({ rooms: rooms.map(publicRoom) });
+});
+
+/** Idempotent by external_ref. Registration is lazy by contract: Producer
+ *  creates rooms offline and only calls this the first time a room needs
+ *  something server-side. */
+liveHostRoutes.post("/rooms", async (c) => {
+  const body = await jsonBody<{ title?: unknown; external_ref?: unknown }>(c);
+  const title = typeof body.title === "string" ? body.title.trim().slice(0, 80) : "";
+  if (!title) throw new ApiError(400, "invalid_request", "title is required.");
+  const externalRef = typeof body.external_ref === "string" ? body.external_ref.trim().slice(0, 200) || null : null;
+  const { room, created } = await createRoom(c.env, { title, externalRef });
+  return c.json({ room: publicRoom(room), created });
+});
+
+liveHostRoutes.patch("/rooms/:id", async (c) => {
+  const body = await jsonBody<{ title?: unknown; config?: unknown }>(c);
+  const patch: { title?: string; config?: Record<string, unknown> | null } = {};
+  if (body.title !== undefined) {
+    if (typeof body.title !== "string" || !body.title.trim()) throw new ApiError(400, "invalid_request", "title must be a non-empty string.");
+    patch.title = body.title.trim().slice(0, 80);
+  }
+  if (body.config !== undefined) {
+    if (body.config !== null && (typeof body.config !== "object" || Array.isArray(body.config))) {
+      throw new ApiError(400, "invalid_request", "config must be an object or null.");
+    }
+    if (body.config && JSON.stringify(body.config).length > 64 * 1024) {
+      throw new ApiError(413, "invalid_request", "config is limited to 64 KB.");
+    }
+    patch.config = body.config as Record<string, unknown> | null;
+  }
+  const room = await updateRoom(c.env, c.req.param("id"), patch);
+  return c.json({ room: publicRoom(room) });
+});
+
+liveHostRoutes.delete("/rooms/:id", async (c) => {
+  await deleteRoom(c.env, c.req.param("id"));
+  return c.json({ ok: true });
+});
+
+/** The roster Producer polls (~3s). Stamps host_seen_at. */
+liveHostRoutes.get("/rooms/:id/guests", async (c) => {
+  return c.json({ guests: await roomRoster(c.env, origin(c.req.url), c.req.param("id")) });
+});
+
+/** Producer publishes who is on stage. Authoritative, versioned, pushed. The
+ *  server does NOT police the media path — it cannot, once peers hold a direct
+ *  connection. It is authoritative about WHO IS ON STAGE; receivers enforce
+ *  that by refusing to receive from anyone not on the list. */
+liveHostRoutes.post("/rooms/:id/stage", async (c) => {
+  const body = await jsonBody<{ on_stage?: unknown }>(c);
+  const onStage = stringList(body.on_stage, 16, "on_stage");
+  return c.json(await setStage(c.env, { roomId: c.req.param("id"), onStage }));
+});
+
+liveHostRoutes.post("/rooms/:id/guest-order", async (c) => {
+  const body = await jsonBody<{ order?: unknown }>(c);
+  await setGuestPositions(c.env, { roomId: c.req.param("id"), order: stringList(body.order, 32, "order") });
+  return c.json({ ok: true });
+});
+
+/** Enable, rotate or disable the room's public join link. join_url is
+ *  readable only at rotation — the stored form is a hash. */
+liveHostRoutes.post("/rooms/:id/guest-link", async (c) => {
+  const body = await jsonBody<{ enabled?: unknown; rotate?: unknown; auto_admit?: unknown; remove_admitted?: unknown }>(c);
+  if (typeof body.enabled !== "boolean") throw new ApiError(400, "invalid_request", "enabled (boolean) is required.");
+  const flag = (v: unknown, name: string): boolean | undefined => {
+    if (v === undefined) return undefined;
+    if (typeof v !== "boolean") throw new ApiError(400, "invalid_request", `${name} must be a boolean.`);
+    return v;
+  };
+  const result = await setRoomJoinLink(c.env, origin(c.req.url), {
+    roomId: c.req.param("id"),
+    enabled: body.enabled,
+    rotate: flag(body.rotate, "rotate"),
+    autoAdmit: flag(body.auto_admit, "auto_admit"),
+    removeAdmitted: flag(body.remove_admitted, "remove_admitted"),
+  });
+  return c.json(result);
+});
+
+/** Invite by link. `guest_brand_id` (Boomin's brand-guest path) is refused
+ *  here rather than ignored: silently turning a verified-brand invite into an
+ *  anonymous link would misrepresent who the host thinks is coming. */
+liveHostRoutes.post("/rooms/:id/guests", async (c) => {
+  const body = await jsonBody<{ guest_brand_id?: unknown; display_name?: unknown }>(c);
+  if (body.guest_brand_id) {
+    throw new ApiError(
+      422,
+      "network_unavailable",
+      "Brand guests live on the Boomin Network. A self-hosted room invites guests by link — send display_name only.",
+    );
+  }
+  const result = await inviteGuest(c.env, origin(c.req.url), {
+    roomId: c.req.param("id"),
+    displayName: typeof body.display_name === "string" ? body.display_name : null,
+  });
+  // invite_url is returned EXACTLY ONCE (only its hash is stored); render_url
+  // is derived and can be re-read from the roster.
+  return c.json({ guest: publicGuest(result.guest), invite_url: result.invite_url, render_url: result.render_url }, 201);
+});
+
+liveHostRoutes.post("/guests/:id/admit", async (c) => {
+  return c.json({ guest: publicGuest(await admitGuest(c.env, c.req.param("id"))) });
+});
+
+liveHostRoutes.post("/guests/:id/revoke", async (c) => {
+  return c.json({ guest: publicGuest(await revokeGuest(c.env, c.req.param("id"))) });
+});
+
+// ── Public guest routes: /v1/connect/guest* (no bearer; the code is the credential)
+
+export const connectGuestRoutes: App = new Hono<{ Bindings: Env; Variables: Vars }>();
+
+/** A stranger opens the room link and types a name. They land in `waiting`
+ *  unless the host turned on auto-admit, so nothing reaches the broadcast
+ *  until a human says so. (Snapshot upload is not accepted in v1: the field
+ *  is ignored rather than rejected so a Boomin-shaped page still joins.) */
+connectGuestRoutes.post("/guest/room/:code/join", async (c) => {
+  const body = await jsonBody<{ display_name?: unknown; resume_code?: unknown }>(c);
+  if (typeof body.display_name !== "string") throw new ApiError(400, "invalid_request", "display_name is required.");
+  const resumeCode = typeof body.resume_code === "string" ? body.resume_code.trim().slice(0, 120) : null;
+  const { guest, invite_code, resumed } = await joinRoomByCode(c.env, {
+    roomCode: c.req.param("code"),
+    displayName: body.display_name,
+    resumeCode,
+  });
+  // The guest keeps its own invite code so it can reconnect and poll its own
+  // admission status without any session.
+  return c.json({ guest: publicGuest(guest), invite_code, resumed }, resumed ? 200 : 201);
+});
+
+/** What the guest's join page renders before they agree to go on. */
+connectGuestRoutes.get("/guest/:code", async (c) => {
+  return c.json({ guest: publicGuest(await guestByInviteCode(c.env, c.req.param("code"))) });
+});
+
+connectGuestRoutes.post("/guest/:code/accept", async (c) => {
+  const guest = await guestByInviteCode(c.env, c.req.param("code"));
+  return c.json({ guest: publicGuest(await acceptGuest(c.env, guest.id)) });
+});
+
+connectGuestRoutes.post("/guest/:code/decline", async (c) => {
+  const guest = await guestByInviteCode(c.env, c.req.param("code"));
+  await declineGuest(c.env, guest.id);
+  return c.json({ ok: true });
+});
+
+function signalingResponse(s: Awaited<ReturnType<typeof mintGuestSignaling>>) {
+  return {
+    signaling_ticket: s.ticket,
+    signaling_url: `/v1/connect/guest-signal?ticket=${encodeURIComponent(s.ticket)}`,
+    channel: s.channel,
+    peer_id: s.peerId,
+    role: s.role,
+    ice_servers: s.iceServers,
+    expires_in: s.expiresIn,
+  };
+}
+
+/** The GUEST side's signaling ticket. Minted fresh on every call so the page
+ *  can reconnect indefinitely. */
+connectGuestRoutes.post("/guest/:code/session", async (c) => {
+  const guest = await guestByInviteCode(c.env, c.req.param("code"));
+  if (guest.status !== "accepted") throw new ApiError(409, "guest_not_accepted", "Accept the invitation before joining.");
+  return c.json(signalingResponse(await mintGuestSignaling(c.env, guest, "guest")));
+});
+
+/** The RENDER side's ticket — what Producer's browser source uses. NOT gated
+ *  on acceptance: the host adds the source while building the show, long
+ *  before the guest arrives; the page renders nothing until the guest
+ *  publishes. This is why the ticket is not in the URL: a browser source's URL
+ *  is fixed at creation, so an expiring token in it would kill the guest
+ *  mid-show. The page calls this on load and on every reconnect instead. */
+connectGuestRoutes.post("/guest/render/:id/session", async (c) => {
+  const guest = await guestByRenderKey(c.env, c.req.param("id"), c.req.query("k") ?? "");
+  const s = await mintGuestSignaling(c.env, guest, "host");
+  return c.json({
+    ...signalingResponse(s),
+    display_name: guest.display_name,
+    // The render page renders ONLY this one peer's media, and must never play
+    // the host's own return audio locally, or it lands in the broadcast as echo.
+    guest_status: guest.status,
+  });
+});
+
+/** A guest's ticket to the ROOM channel: stage pushes, and guest↔guest
+ *  introductions. Returns the CURRENT stage list so a joining client starts
+ *  correct instead of waiting for the next push. */
+connectGuestRoutes.post("/guest/:code/room-session", async (c) => {
+  const guest = await guestByInviteCode(c.env, c.req.param("code"));
+  if (guest.status !== "accepted") throw new ApiError(409, "guest_not_accepted", "Wait to be let in first.");
+  const ticket = await mintRoomTicket(c.env, guest);
+  return c.json({
+    signaling_ticket: ticket,
+    signaling_url: `/v1/connect/guest-room-signal?ticket=${encodeURIComponent(ticket)}`,
+    peer_id: guest.id,
+    stage: await currentStage(c.env, guest.room_id),
+  });
+});
+
+/** The render page reports what it is actually receiving. Authorised by the
+ *  render key, which only the host's own Producer holds — a guest cannot make
+ *  a failing connection look healthy. */
+connectGuestRoutes.post("/guest/render/:id/quality", async (c) => {
+  const guest = await guestByRenderKey(c.env, c.req.param("id"), c.req.query("k") ?? "");
+  const body = await jsonBody<{ quality?: unknown; stats?: unknown }>(c);
+  if (body.quality !== "good" && body.quality !== "degraded" && body.quality !== "failing") {
+    throw new ApiError(400, "invalid_request", "quality must be good, degraded, or failing.");
+  }
+  const stats = body.stats && typeof body.stats === "object" && !Array.isArray(body.stats) ? (body.stats as Record<string, unknown>) : undefined;
+  await reportQuality(c.env, guest.id, { quality: body.quality as Quality, stats });
+  return c.json({ ok: true });
+});
+
+async function loadGuestForUpgrade(env: Env, guestId: string): Promise<GuestRow | null> {
+  return env.DB.prepare("SELECT * FROM live_room_guests WHERE id = ?1").bind(guestId).first<GuestRow>();
+}
+
+function requireUpgrade(c: { req: { header(name: string): string | undefined } }, env: Env): { realtime: DurableObjectNamespace; secret: string } {
+  if (c.req.header("Upgrade") !== "websocket") throw new ApiError(426, "upgrade_required", "WebSocket upgrade required.");
+  if (!env.REALTIME) throw new ApiError(503, "realtime_unavailable", "Signaling is not configured (REALTIME binding missing).");
+  if (!env.SIGNALING_SECRET) throw new ApiError(503, "realtime_unavailable", "SIGNALING_SECRET is not configured.");
+  return { realtime: env.REALTIME, secret: env.SIGNALING_SECRET };
+}
+
+/** The per-guest signaling channel — THE ONLY server infrastructure a guest
+ *  connection touches, and it carries no media. Both peers present a ticket
+ *  and land in the SAME Durable Object (one per guest session), so the hub's
+ *  relay forwards each frame to exactly the counterpart.
+ *
+ *  Mounted at /guest-signal rather than /guest/signal on purpose: the latter
+ *  sits inside the /guest/:code namespace. */
+connectGuestRoutes.get("/guest-signal", async (c) => {
+  const { realtime, secret } = requireUpgrade(c, c.env);
+  const claims = await verifyTicket(secret, c.req.query("ticket") ?? "", "guest-signal");
+  if (!claims) throw new ApiError(401, "invalid_ticket", "Signaling ticket is invalid or expired.");
+  // sub is "<role>:<guestId>" — a peer can only ever reach its own session's channel.
+  const [role, guestId] = claims.sub.split(":");
+  if (!guestId || (role !== "host" && role !== "guest")) throw new ApiError(401, "invalid_ticket", "Signaling ticket is malformed.");
+
+  // Re-check the guest is still live at CONNECT time, not just at mint time —
+  // this is what makes a revoke actually kick someone.
+  const row = await loadGuestForUpgrade(c.env, guestId);
+  if (!row || row.status === "revoked" || row.status === "ended" || row.status === "declined") {
+    throw new ApiError(410, "guest_unavailable", "This guest session is no longer active.");
+  }
+
+  const forwarded = new Request(c.req.url, c.req.raw);
+  forwarded.headers.set("X-Producer-User", `${role}:${guestId}`);
+  forwarded.headers.set("X-Producer-Room", row.room_id);
+  return realtime.get(realtime.idFromName(guestChannelName(guestId))).fetch(forwarded);
+});
+
+/** The room channel upgrade. Same discipline: the ticket is pinned to one
+ *  room and one guest, and status is re-checked at CONNECT. */
+connectGuestRoutes.get("/guest-room-signal", async (c) => {
+  const { realtime, secret } = requireUpgrade(c, c.env);
+  const claims = await verifyTicket(secret, c.req.query("ticket") ?? "", "guest-room");
+  if (!claims) throw new ApiError(401, "invalid_ticket", "Signaling ticket is invalid or expired.");
+  const [roomId, guestId] = claims.sub.split(":");
+  if (!roomId || !guestId) throw new ApiError(401, "invalid_ticket", "Signaling ticket is malformed.");
+
+  const row = await loadGuestForUpgrade(c.env, guestId);
+  if (!row || row.room_id !== roomId || row.status !== "accepted") {
+    throw new ApiError(410, "guest_unavailable", "This guest session is no longer active.");
+  }
+
+  const forwarded = new Request(c.req.url, c.req.raw);
+  // Identity is the GUEST id, which is what `to` targets when one guest offers to another.
+  forwarded.headers.set("X-Producer-User", guestId);
+  forwarded.headers.set("X-Producer-Room", roomId);
+  return realtime.get(realtime.idFromName(roomChannelName(roomId))).fetch(forwarded);
+});
+
+// ── Static guest pages ───────────────────────────────────────────────────────
+// /connect/guest/:code, /connect/guest/room/:code, /connect/guest/render/:id all
+// serve the same single-page bundle from public/guest/index.html; the page
+// reads its role and code from location.pathname.
+
+export const guestPageRoutes: App = new Hono<{ Bindings: Env; Variables: Vars }>();
+
+async function guestPage(c: { env: Env; req: { url: string } }): Promise<Response> {
+  if (!c.env.ASSETS) {
+    return new Response("<h3>Guest pages are not deployed on this server.</h3>", {
+      status: 503,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  }
+  const res = await c.env.ASSETS.fetch(new Request(`${origin(c.req.url)}/guest/index.html`));
+  // Never cache: the page's code lives in the path, and a redeploy must land.
+  const headers = new Headers(res.headers);
+  headers.set("Cache-Control", "no-store");
+  return new Response(res.body, { status: res.status, headers });
+}
+
+guestPageRoutes.get("/guest/room/:code", guestPage);
+guestPageRoutes.get("/guest/render/:id", guestPage);
+guestPageRoutes.get("/guest/:code", guestPage);
