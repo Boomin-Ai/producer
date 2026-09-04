@@ -23,7 +23,10 @@ import { ipc,
   type NetworkBrandCard,
   type NetworkConnectionRow,
   type NetworkDeal,
-  type NetworkLiveRoom,, listServerRooms, roomSetDefault } from "../lib/ipc";
+  type NetworkLiveRoom,
+  listServerRooms,
+  roomSetDefault,
+} from "../lib/ipc";
 import { demoOn, setDemo } from "../lib/demo";
 import { markHomePainted, markRoomClick } from "../lib/perf";
 import { KEYMAP, getKey, setKey, resetKey, displayKey, type KeyBinding } from "../lib/keys";
