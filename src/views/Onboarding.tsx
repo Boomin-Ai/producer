@@ -1,6 +1,11 @@
 import { useState } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { hasTauri, ipc, networkJoin } from "../lib/ipc";
 import { setActiveEndpointId } from "../lib/workspace";
+
+/** The self-hosting walkthrough — deploy the open producer-server, then
+ * connect it here with its URL + PRIMARY_TOKEN. */
+export const SELF_HOSTING_GUIDE_URL = "https://github.com/Boomin-Ai/producer/blob/main/server/SELF_HOSTING.md";
 
 export function Wordmark() {
   return (
@@ -32,7 +37,8 @@ function rememberSignedIn() {
 
 /** The sign-in screen: straight to email + code, no pitch, no network
  * opt-in — for someone who already knows the product (signed out, or a
- * returning machine). "Use your own server" stays reachable as a footnote. */
+ * returning machine). "Use my own server" is a first-class door beside it,
+ * not a footnote: a self-hoster never needs a Boomin account to get in. */
 export function SignIn({ onConnected }: { onConnected: () => void }) {
   const [door, setDoor] = useState<"boomin" | "server">("boomin");
   if (door === "server") return <ServerForm onBack={() => setDoor("boomin")} onConnected={onConnected} />;
@@ -40,7 +46,7 @@ export function SignIn({ onConnected }: { onConnected: () => void }) {
     <BoominLogin
       direct
       onBack={() => setDoor("server")}
-      backLabel="Use your own server"
+      backLabel="Use my own server"
       onConnected={onConnected}
     />
   );
@@ -316,6 +322,18 @@ function BoominLogin({
           </button>
         </div>
       </form>
+      {direct && (
+        <div className="signin-doors">
+          <span>Running your own producer-server?</span>
+          <button type="button" className="linkish" onClick={onBack}>
+            Use my own server
+          </button>
+          <span className="sep">·</span>
+          <button type="button" className="linkish" onClick={() => openUrl(SELF_HOSTING_GUIDE_URL).catch(() => {})}>
+            Self-hosting guide
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -348,6 +366,9 @@ function ServerForm({ onBack, onConnected }: { onBack: () => void; onConnected: 
       <h1>
         <strong>Your server.</strong>
       </h1>
+      <p className="muted">
+        Shows, rooms and guests all run on your own producer-server. Nothing touches Boomin.
+      </p>
       <form
         className="server-form"
         onSubmit={(e) => {
@@ -360,12 +381,13 @@ function ServerForm({ onBack, onConnected }: { onBack: () => void; onConnected: 
           <input name="name" placeholder="My producer-server" />
         </label>
         <label>
-          Endpoint URL
-          <input name="base_url" placeholder="https://producer.yourname.workers.dev" required />
+          Server URL
+          <input name="base_url" placeholder="https://producer-server.yourname.workers.dev" required />
         </label>
+        <p className="hint">The worker URL wrangler printed when you deployed.</p>
         <label>
-          Access token
-          <input name="token" type="password" placeholder="paste your endpoint token" required />
+          Primary token
+          <input name="token" type="password" placeholder="the PRIMARY_TOKEN you set on the server" required />
         </label>
         {error && <p className="error">{error}</p>}
         <div className="form-actions">
@@ -377,6 +399,12 @@ function ServerForm({ onBack, onConnected }: { onBack: () => void; onConnected: 
           </button>
         </div>
       </form>
+      <div className="signin-doors">
+        <span>Haven&rsquo;t deployed one yet?</span>
+        <button type="button" className="linkish" onClick={() => openUrl(SELF_HOSTING_GUIDE_URL).catch(() => {})}>
+          Self-hosting guide
+        </button>
+      </div>
     </div>
   );
 }

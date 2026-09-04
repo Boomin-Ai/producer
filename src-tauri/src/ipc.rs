@@ -21,6 +21,19 @@ pub struct EndpointInfo {
     pub created_at: String,
     /// Hosted workspace scope (connected endpoints); the brand switch keys on it.
     pub brand_slug: Option<String>,
+    /// Derived, never stored: "boomin" when the endpoint carries a brand
+    /// scope, "selfhost" otherwise. The ONE switch the UI keys Boomin-only
+    /// surfaces (network rail, deals, room visibility) on — everything about
+    /// making a show, guests included, is endpoint-agnostic.
+    pub endpoint_kind: &'static str,
+}
+
+/// See `EndpointInfo::endpoint_kind`.
+pub fn endpoint_kind_of(brand_slug: Option<&str>) -> &'static str {
+    match brand_slug {
+        Some(s) if !s.is_empty() => "boomin",
+        _ => "selfhost",
+    }
 }
 
 fn normalize_base_url(raw: &str) -> EngineResult<String> {
@@ -42,13 +55,15 @@ pub fn list_endpoints(state: State<'_, AppState>) -> EngineResult<Vec<EndpointIn
     )?;
     let rows = stmt
         .query_map([], |r| {
+            let brand_slug: Option<String> = r.get(5)?;
             Ok(EndpointInfo {
                 id: r.get(0)?,
                 kind: r.get(1)?,
                 name: r.get(2)?,
                 base_url: r.get(3)?,
                 created_at: r.get(4)?,
-                brand_slug: r.get(5)?,
+                endpoint_kind: endpoint_kind_of(brand_slug.as_deref()),
+                brand_slug,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -92,6 +107,45 @@ pub fn remove_endpoint(state: State<'_, AppState>, endpoint_id: String) -> Engin
         conn.execute("DELETE FROM endpoints WHERE id = ?1", params![endpoint_id])?;
     }
     vault::delete_token(&endpoint_id)
+}
+
+/// Small durable app preferences (store.rs `prefs`): one string per key,
+/// surviving reinstalls of the webview state — the "never show this again"
+/// kind of fact must not live in localStorage, which a cache clear empties.
+#[tauri::command]
+pub fn pref_get(state: State<'_, AppState>, key: String) -> EngineResult<Option<String>> {
+    let conn = state.db.lock().expect("db mutex poisoned");
+    let v = conn
+        .query_row(
+            "SELECT value FROM prefs WHERE key = ?1",
+            params![key],
+            |r| r.get::<_, String>(0),
+        )
+        .ok();
+    Ok(v)
+}
+
+/// `value: null` deletes the key.
+#[tauri::command]
+pub fn pref_set(
+    state: State<'_, AppState>,
+    key: String,
+    value: Option<String>,
+) -> EngineResult<()> {
+    let conn = state.db.lock().expect("db mutex poisoned");
+    match value {
+        Some(v) => {
+            conn.execute(
+                "INSERT INTO prefs (key, value) VALUES (?1, ?2)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                params![key, v],
+            )?;
+        }
+        None => {
+            conn.execute("DELETE FROM prefs WHERE key = ?1", params![key])?;
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]

@@ -6,7 +6,8 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { ConsoleHost } from "./Console";
 import type { Channel, EndpointInfo, Job, LiveDestination, LiveRoom, LiveSnapshot } from "../lib/ipc";
 import type { TargetResult } from "../lib/ipc";
-import { WORKSPACE_EVENT, activeEndpointId, resolveActiveEndpoint, setActiveEndpointId } from "../lib/workspace";
+import { WORKSPACE_EVENT, activeEndpointId, isBoomin, resolveActiveEndpoint, setActiveEndpointId } from "../lib/workspace";
+import { PREFS_EVENT, PREF_NETWORK_INVITE_DISMISSED, prefGet, prefSet } from "../lib/prefs";
 import { copyText, ensureRoomJoinLink } from "../lib/roomLink";
 import { ipc,
   firewall,
@@ -302,10 +303,11 @@ export function Home({
   // hostable here. Reconcile on mount, on every focus/visibility return
   // (the founder made a room over there and came back), and on workspace
   // switch. Rooms the server no longer lists get a chip, never deleted.
+  // Endpoint-agnostic: a self-hosted server lists rooms at the same paths.
   const [offNetwork, setOffNetwork] = useState<Set<string>>(() => new Set());
   const sync = useCallback(async () => {
     const ep = await resolveActiveEndpoint().catch(() => null);
-    if (!ep || ep.kind !== "connected") return;
+    if (!ep) return;
     const res = await syncRooms(ep.id).catch(() => null);
     if (!res) return;
     setOffNetwork(new Set(res.offNetwork));
@@ -495,6 +497,7 @@ export function Home({
           offNetwork={offNetwork}
           onCompose={() => setView({ kind: "compose" })}
           onHistory={() => setView({ kind: "history" })}
+          onAddEndpoint={onAddEndpoint}
         />
       )}
 
@@ -610,6 +613,22 @@ function ChannelsBlock({
   );
 }
 
+/** Settings row: bring the self-hoster's Network invitation back. Only shown
+ * when there is a self-hosted workspace AND the card was dismissed — the
+ * one place it can be un-dismissed. */
+function NetworkInviteReset({ endpoints }: { endpoints: EndpointInfo[] }) {
+  const dismissed = useNetworkInviteDismissed();
+  if (dismissed !== true || !endpoints.some((e) => !isBoomin(e))) return null;
+  return (
+    <div className="cr-sheet-row">
+      <span className="cr-sheet-row-name">Boomin Network invitation</span>
+      <button className="cr-ghost" onClick={() => void prefSet(PREF_NETWORK_INVITE_DISMISSED, null)}>
+        Show Network invitation again
+      </button>
+    </div>
+  );
+}
+
 function SettingsSheet({
   endpoints,
   destinations,
@@ -698,6 +717,7 @@ function SettingsSheet({
           APP
         </div>
         <div className="cr-sheet-rows">
+          <NetworkInviteReset endpoints={endpoints} />
           <div className="cr-sheet-row">
             <span className="cr-sheet-row-name">Producer {appVersion ?? ""}</span>
             {updater.state === "ready" ? (
@@ -800,6 +820,7 @@ function ControlRoomHome({
   offNetwork,
   onCompose,
   onHistory,
+  onAddEndpoint,
 }: {
   surface: "rooms" | "manager";
   rooms: LiveRoom[];
@@ -812,12 +833,19 @@ function ControlRoomHome({
   offNetwork: Set<string>;
   onCompose: () => void;
   onHistory: () => void;
+  /** The in-app "add a Boomin workspace" door — the self-hoster's Network card leads here. */
+  onAddEndpoint: () => void;
 }) {
   const [naming, setNaming] = useState(false);
   useEffect(() => {
     // Post-commit ≈ first paint of the home. One-shot, module-level.
     markHomePainted();
   }, []);
+  // The right gutter exists only while a rail does: always on Boomin, and on
+  // a self-hosted workspace only until the invitation card is dismissed.
+  const activeEp = useActiveEndpoint();
+  const inviteDismissed = useNetworkInviteDismissed();
+  const hasRail = !activeEp || isBoomin(activeEp) || inviteDismissed === false;
   const liveRoom = streaming ? liveRoomId() : null;
   const [name, setName] = useState("");
 
@@ -835,14 +863,14 @@ function ControlRoomHome({
   }
 
   return (
-    <main className={`cr-home${surface === "rooms" ? " has-net-rail" : ""}`}>
+    <main className={`cr-home${surface === "rooms" && hasRail ? " has-net-rail" : ""}`}>
       {surface === "rooms" && (
       <>
       {/* Network lives at HOME, never inside a room: a failed network call
         * here is harmless, whereas mid-broadcast it would be noise over a
         * running show. The rail is FIXED against the icon rail — attached,
         * full height, part of the furniture rather than a floating card. */}
-      <NetworkRail rooms={rooms} />
+      <NetworkRail rooms={rooms} onAddEndpoint={onAddEndpoint} />
       <FirewallBanner />
       <LiveNowStrip />
       <section className="cr-section" id="sec-onair">
@@ -1520,14 +1548,36 @@ async function brandNameFor(endpointId: string): Promise<string | null> {
 }
 
 /** Resolve the connected Boomin endpoint once — every network surface needs it. */
-function useConnectedEndpoint(): string | null {
-  const [endpointId, setEndpointId] = useState<string | null>(() => activeEndpointId());
+/** Whether the self-hoster's Network invitation was dismissed (prefs store);
+ * `null` until read. One hook, so the card, the home layout and the Settings
+ * reset row all agree the moment it changes. */
+function useNetworkInviteDismissed(): boolean | null {
+  const [dismissed, setDismissed] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      prefGet(PREF_NETWORK_INVITE_DISMISSED).then((v) => {
+        if (alive) setDismissed(v === "1");
+      });
+    void load();
+    window.addEventListener(PREFS_EVENT, load);
+    return () => {
+      alive = false;
+      window.removeEventListener(PREFS_EVENT, load);
+    };
+  }, []);
+  return dismissed;
+}
+
+/** The active workspace row, live across switches. `null` until resolved. */
+function useActiveEndpoint(): EndpointInfo | null {
+  const [ep, setEp] = useState<EndpointInfo | null>(null);
   useEffect(() => {
     let alive = true;
     const load = () =>
       resolveActiveEndpoint()
-        .then((ep) => {
-          if (alive) setEndpointId(ep?.id ?? null);
+        .then((next) => {
+          if (alive) setEp(next);
         })
         .catch(() => {});
     load();
@@ -1537,7 +1587,7 @@ function useConnectedEndpoint(): string | null {
       window.removeEventListener(WORKSPACE_EVENT, load);
     };
   }, []);
-  return endpointId;
+  return ep;
 }
 
 /** The network rail — a left column on the control room home.
@@ -1551,8 +1601,14 @@ function useConnectedEndpoint(): string | null {
  * and "Book" proposes an APPEARANCE deal — we (the host) pay them to appear
  * on one of our rooms. Presence is delivery: admitting them from the Guests
  * panel settles the funded deal server-side; nothing here marks anything. */
-function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
-  const endpointId = useConnectedEndpoint();
+function NetworkRail({ rooms, onAddEndpoint }: { rooms: LiveRoom[]; onAddEndpoint: () => void }) {
+  const activeEp = useActiveEndpoint();
+  // Boomin-only surface. On a self-hosted endpoint NOTHING here is called —
+  // the server has no /v1/app/network/* — so `endpointId` stays null and
+  // every effect below is a no-op; the rail renders the quiet invitation
+  // card instead (NetworkInviteCard). Gating the CALLS, not just the UI.
+  const boomin = isBoomin(activeEp);
+  const endpointId = boomin ? activeEp?.id ?? null : null;
   const [status, setStatus] = useState<NetworkStatus | null>(null);
   const [inbox, setInbox] = useState<NetworkInvitation[]>([]);
   const [conns, setConns] = useState<NetworkConnectionRow[]>([]);
@@ -1747,6 +1803,7 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
     };
   }, [endpointId, load]);
 
+  if (activeEp && !boomin) return <NetworkInviteCard onJoin={onAddEndpoint} />;
   if (!endpointId) return null;
 
   const liveNow = status?.network?.live_now ?? 0;
@@ -2333,8 +2390,44 @@ function DealSheet({
 /** Open stages this brand may see — connections' rooms and public ones.
  * Entering KNOCKS: the API seats us in the host's waiting room with our
  * verified brand identity, and the guest page opens to wait for the admit. */
+/** The self-hoster's Network rail: ONE quiet card, the opposite of a nag.
+ * "Join" walks the in-app door for adding a Boomin workspace (their shows
+ * stay on their server; a Boomin workspace sits beside it in the switcher).
+ * "Not now" is remembered in the Rust-side prefs store — forever, until the
+ * user asks for it back in Settings. No badge, no counter, no re-prompt. */
+function NetworkInviteCard({ onJoin }: { onJoin: () => void }) {
+  const dismissed = useNetworkInviteDismissed();
+  // Unknown yet, or dismissed: the rail is simply absent — no placeholder.
+  if (dismissed !== false) return null;
+  return (
+    <aside className="net-rail net-rail-invite">
+      <div className="net-rail-head">
+        <span className="net-rail-title">Network</span>
+      </div>
+      <div className="net-invite-card">
+        <div className="net-invite-title">Get booked and paid for appearances</div>
+        <p className="net-invite-body">
+          Join the Boomin Network to appear on other brands&rsquo; shows as a verified guest and get paid through
+          escrow. Your shows stay on your server.
+        </p>
+        <div className="net-invite-actions">
+          <button className="cr-primary" onClick={onJoin}>
+            Join the Network
+          </button>
+          <button className="cr-ghost" onClick={() => void prefSet(PREF_NETWORK_INVITE_DISMISSED, "1")}>
+            Not now
+          </button>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 function LiveNowStrip() {
-  const endpointId = useConnectedEndpoint();
+  // Boomin-only (/v1/app/network/rooms/live): never polled on a self-hosted
+  // endpoint — the id is null there, so the effect below never fires.
+  const activeEp = useActiveEndpoint();
+  const endpointId = isBoomin(activeEp) ? activeEp?.id ?? null : null;
   const [rooms, setRooms] = useState<NetworkLiveRoom[]>([]);
   const [entering, setEntering] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -2484,7 +2577,7 @@ function RoomCard({
     const next = draft.trim();
     if (!next || next === room.name) return;
     const ep = await resolveActiveEndpoint().catch(() => null);
-    await renameRoom(ep?.kind === "connected" ? ep.id : null, room, next).catch(() => {});
+    await renameRoom(ep?.id ?? null, room, next).catch(() => {});
     onRoomsChanged();
   };
   const body = (
@@ -2566,6 +2659,10 @@ function RoomCard({
  * → public; the first non-private setting lazily registers the room. Local
  * config mirrors the server so the chip renders offline. */
 function RoomShareChip({ room, onChanged }: { room: LiveRoom; onChanged: () => void }) {
+  // Visibility is network exposure — a Boomin concept. A self-hosted room has
+  // no network to be seen on, so the chip does not exist there (and never
+  // PATCHes a `visibility` the open server doesn't know).
+  const activeEp = useActiveEndpoint();
   const [busy, setBusy] = useState(false);
   const [vis, setVis] = useState<"private" | "connections" | "public">(
     () => parseConfig(room.config).visibility ?? "private",
@@ -2586,9 +2683,8 @@ function RoomShareChip({ room, onChanged }: { room: LiveRoom; onChanged: () => v
     // point, or the UI would read Private while the stage is publicly open.
     let patched = false;
     try {
-      const eps = await ipc.listEndpoints();
-      const ep = eps.find((x) => x.kind === "connected") ?? eps[0];
-      if (!ep) throw new Error("no endpoint");
+      const ep = await resolveActiveEndpoint();
+      if (!ep || !isBoomin(ep)) throw new Error("no Boomin endpoint");
       let sid = parseConfig(room.config).server_room_id;
       if (!sid) {
         const reg = await registerRoom(ep.id, room.name, room.id);
@@ -2615,6 +2711,7 @@ function RoomShareChip({ room, onChanged }: { room: LiveRoom; onChanged: () => v
   };
 
   const label = vis === "private" ? "Private" : vis === "connections" ? "Connections" : "Public";
+  if (!isBoomin(activeEp)) return null;
   return (
     <span
       className={`cr-room-share ${vis}${busy ? " busy" : ""}`}

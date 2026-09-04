@@ -81,6 +81,14 @@ fn init(conn: &Connection) -> EngineResult<()> {
 
         CREATE INDEX IF NOT EXISTS idx_targets_pending
             ON submission_targets(status) WHERE status = 'pending';
+
+        -- Durable app preferences (ipc::pref_get / pref_set). Facts that must
+        -- outlive the webview's storage: "don't show the Network invitation
+        -- again" lives here, never in localStorage.
+        CREATE TABLE IF NOT EXISTS prefs (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
         "#,
     )?;
     // v2: connected endpoints carry the hosted workspace scope. A backend-

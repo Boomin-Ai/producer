@@ -8,7 +8,19 @@
 // One source of truth (localStorage) + one event, so the network rail, the
 // room list and a room's own lookups all move together on a switch.
 
-import { ipc, type EndpointInfo } from "./ipc";
+import { ipc, type EndpointInfo, type EndpointKind } from "./ipc";
+
+/** The one derivation of what an endpoint is (mirrors ipc.rs
+ * `endpoint_kind_of`): a brand scope ⇒ Boomin, otherwise self-hosted. Every
+ * Boomin-only surface — network rail, deals, room visibility, "Enter the
+ * show" — keys on this; guesting does NOT, it works on either. */
+export function endpointKind(ep: EndpointInfo | null | undefined): EndpointKind | null {
+  if (!ep) return null;
+  if (ep.endpoint_kind) return ep.endpoint_kind;
+  return ep.brand_slug ? "boomin" : "selfhost";
+}
+
+export const isBoomin = (ep: EndpointInfo | null | undefined) => endpointKind(ep) === "boomin";
 
 const KEY = "producer.workspace.v1";
 export const WORKSPACE_EVENT = "producer:workspace";

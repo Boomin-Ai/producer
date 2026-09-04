@@ -1,6 +1,8 @@
-/** Room sync — the brand's rooms live on the SERVER (web, deals, other
+/** Room sync — the workspace's rooms live on the SERVER (web, deals, other
  * machines all mint them); the local live_rooms rows are this machine's
- * look/scene state attached to them. Reconcile on Home mount and on focus:
+ * look/scene state attached to them. Endpoint-agnostic: a self-hosted
+ * producer-server lists rooms at the same paths Boomin does (no brandSlug),
+ * so sync runs for every endpoint kind. Reconcile on Home mount and on focus:
  *
  *  a. server room with no local row      → create a local row, origin=server
  *  b. local row with no server_room_id   → register (idempotent by external_ref)

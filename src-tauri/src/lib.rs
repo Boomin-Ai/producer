@@ -87,6 +87,8 @@ pub fn run() {
             ipc::list_endpoints,
             ipc::add_endpoint,
             ipc::remove_endpoint,
+            ipc::pref_get,
+            ipc::pref_set,
             ipc::endpoint_channels,
             ipc::boomin_request_otp,
             ipc::boomin_connect,
