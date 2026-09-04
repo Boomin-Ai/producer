@@ -1158,37 +1158,44 @@ unsafe fn draw_selection(bw: f32, bh: f32, cx: u32, cy: u32) {
     if param.is_null() || tech.is_null() {
         return;
     }
-    // Producer green (#22c55e), opaque. The solid effect writes the value as
+    // Colours, colour-space aware. The solid effect writes the value as
     // given: on an SDR (sRGB) display that is the encoded colour; on the scRGB
     // (FP16) swapchain an HDR monitor gets, values are LINEAR and SDR white sits
     // at sdr_white_level/80 --- the same multiplier obs_render_main_texture
     // applies to the mix. Without it the outline reads dim and yellow-shifted.
     let space = ffi::gs_get_color_space();
-    let green = if space == 3 {
-        // GS_CS_709_SCRGB: linear #22c55e, scaled to SDR white
-        let m = ffi::obs_get_video_sdr_white_level() / 80.0;
-        ffi::vec4 {
-            x: 0.016 * m,
-            y: 0.560 * m,
-            z: 0.110 * m,
-            w: 1.0,
-        }
-    } else if space == 2 {
-        // GS_CS_SRGB_16F: linear, unscaled
-        ffi::vec4 {
-            x: 0.016,
-            y: 0.560,
-            z: 0.110,
-            w: 1.0,
-        }
+    let scale = if space == 3 {
+        ffi::obs_get_video_sdr_white_level() / 80.0
     } else {
-        ffi::vec4 {
-            x: 0.133,
-            y: 0.773,
-            z: 0.369,
-            w: 1.0,
+        1.0
+    };
+    let col = |srgb: [f32; 3], lin: [f32; 3]| -> ffi::vec4 {
+        if space == 3 || space == 2 {
+            ffi::vec4 {
+                x: lin[0] * scale,
+                y: lin[1] * scale,
+                z: lin[2] * scale,
+                w: 1.0,
+            }
+        } else {
+            ffi::vec4 {
+                x: srgb[0],
+                y: srgb[1],
+                z: srgb[2],
+                w: 1.0,
+            }
         }
     };
+    // Producer green (#22c55e) for the selection; the stage editor's crop red
+    // (#ff5a5a, App.css .se-edge.cut) for any edge that has been cropped, so a
+    // Windows room shows the same "which edges you took off" as macOS does
+    // with its webview outline (hidden here under the float-mode preview).
+    let green = col([0.133, 0.773, 0.369], [0.016, 0.560, 0.110]);
+    let red = col([1.0, 0.353, 0.353], [1.0, 0.102, 0.102]);
+    let mut crop: ffi::obs_sceneitem_crop = std::mem::zeroed();
+    ffi::obs_sceneitem_get_crop(item, &mut crop);
+    // edges in corner order: top (0->1), right (1->2), bottom (2->3), left (3->0)
+    let edge_cut = [crop.top > 0, crop.right > 0, crop.bottom > 0, crop.left > 0];
     ffi::gs_effect_set_vec4(param, &green);
     // canvas px per display px, so handles keep a constant size on screen
     let sx = bw / cx.max(1) as f32;
@@ -1199,15 +1206,20 @@ unsafe fn draw_selection(bw: f32, bh: f32, cx: u32, cy: u32) {
         if !ffi::gs_technique_begin_pass(tech, i) {
             continue;
         }
-        // outline: two 1-px line loops, the second nudged, so it reads as 2 px
-        for nudge in [0.0f32, 1.0] {
-            ffi::gs_render_start(true);
-            for k in 0..=4 {
-                let (x, y) = corners[k % 4];
-                ffi::gs_vertex2f(x + nudge * sx, y + nudge * sy);
+        // outline: each edge its own 2-px line (two 1-px lines, one nudged),
+        // coloured per edge so a cropped side reads red like the macOS editor.
+        for e in 0..4 {
+            ffi::gs_effect_set_vec4(param, if edge_cut[e] { &red } else { &green });
+            let (ax, ay) = corners[e];
+            let (bx, by) = corners[(e + 1) % 4];
+            for nudge in [0.0f32, 1.0] {
+                ffi::gs_render_start(true);
+                ffi::gs_vertex2f(ax + nudge * sx, ay + nudge * sy);
+                ffi::gs_vertex2f(bx + nudge * sx, by + nudge * sy);
+                ffi::gs_render_stop(2); // GS_LINESTRIP
             }
-            ffi::gs_render_stop(2); // GS_LINESTRIP
         }
+        ffi::gs_effect_set_vec4(param, &green);
         let mids = [
             (
                 (corners[0].0 + corners[1].0) / 2.0,
