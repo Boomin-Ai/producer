@@ -673,7 +673,7 @@ function ChannelsBlock({
   }
   return (
       <section className="cr-section set-channels" id="sec-channels">
-        <div className="cr-label set-gap">CHANNELS <span className="cr-label-sub">· {endpoints[0]?.name}</span></div>
+        <div className="cr-label set-gap">CHANNELS</div>
 
         <div className="set-sub">
           <div className="set-sub-h">
@@ -720,9 +720,8 @@ function ChannelsBlock({
           return (
             <div key={ep.id} className="set-sub">
               <div className="set-sub-h">
-                <span className={`dot ${ep.kind}`} />
-                <span className="set-sub-t">{ep.name}</span>
-                <span className="set-sub-k">{boomin ? "Boomin · posting" : "self-hosted · posting"}</span>
+                <span className="set-sub-t">Posting channels</span>
+                <span className="set-sub-k">{boomin ? "Instagram, through Boomin" : "your server — Instagram, Facebook, Threads"}</span>
               </div>
               <div className="cr-channels">
                 {mine.map((c) => (
