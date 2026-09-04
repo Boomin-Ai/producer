@@ -1071,6 +1071,7 @@
   // ── Real screenshots swap in when the files exist. ──
   document.querySelectorAll(".panel").forEach(function (box) {
     var img = box.querySelector(".real");
+    if (!img) return; // pure-HTML panels (chat) have no screenshot to swap in
     img.addEventListener("load", function () { box.classList.add("has-real"); });
     if (img.complete && img.naturalWidth > 0) box.classList.add("has-real");
   });
