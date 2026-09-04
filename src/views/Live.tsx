@@ -3006,14 +3006,17 @@ export function LiveView({
         cfgNow.transition?.stinger ?? cfgNow.scenes.find((x) => x.transition?.stinger)?.transition?.stinger;
       if (firstStinger) stingerIpc.prepare(firstStinger).catch(() => {});
     }
-    // Stored video settings (global, OBS-style) re-apply when idle.
+    // Video settings re-apply when idle: the room's own `video` first (a 4K
+    // room stays 4K), else the global OBS-style localStorage value.
     if (!videoApplied.current && snap.engine_ready && snap.session_state === "idle") {
       videoApplied.current = true;
       try {
-        const stored = JSON.parse(localStorage.getItem("producer.video") ?? "null") as {
-          h: number;
-          f: number;
-        } | null;
+        const stored =
+          (room ? parseConfig(room.config).video : undefined) ??
+          (JSON.parse(localStorage.getItem("producer.video") ?? "null") as {
+            h: number;
+            f: number;
+          } | null);
         if (stored && (stored.h !== (snap.video_height || 720) || stored.f !== (snap.video_fps || 30))) {
           await ipc.liveSetVideo(stored.h, stored.f);
         }
@@ -3891,13 +3894,15 @@ export function LiveView({
 
   const vh = snapshot?.video_height || 720;
   const vf = snapshot?.video_fps || 30;
-  async function setVideoCfg(h: number, f: number) {
-    try {
-      await ipc.liveSetVideo(h, f);
   // 4K is a hardware-encoder feature: the engine reports whether one exists
   // (macOS VideoToolbox); Windows/Linux stay disabled until NVENC/AMF/QSV.
   const hwEncoder = !!snapshot?.hw_encoder;
+  async function setVideoCfg(h: number, f: number) {
+    try {
+      await ipc.liveSetVideo(h, f);
       localStorage.setItem("producer.video", JSON.stringify({ h, f }));
+      // The room remembers its own canvas so reopening it lands where it was.
+      writeCfg({ ...cfgRef.current, video: { h, f } });
     } catch (e) {
       setBanner(String(e));
     }
