@@ -1008,6 +1008,7 @@ function ControlRoomHome({
   onAddEndpoint: () => void;
 }) {
   const { mainId, endpointId: mainEndpointId } = useMainRoom(rooms);
+  const [openMenuRoom, setOpenMenuRoom] = useState<string | null>(null);
   const [naming, setNaming] = useState(false);
   useEffect(() => {
     // Post-commit ≈ first paint of the home. One-shot, module-level.
@@ -1057,6 +1058,8 @@ function ControlRoomHome({
               room={room}
               live={liveRoom === room.id}
               offNetwork={offNetwork.has(room.id)}
+              menuOpen={openMenuRoom === room.id}
+              onMenuToggle={(open) => setOpenMenuRoom(open ? room.id : null)}
               isMain={room.id === mainId}
               canMakeMain={!!mainEndpointId && !!parseConfig(room.config).server_room_id}
               onMakeMain={async () => {
@@ -2766,12 +2769,17 @@ function RoomCard({
   isMain,
   canMakeMain,
   onMakeMain,
+  menuOpen,
+  onMenuToggle,
   onOpen,
   onRoomsChanged,
 }: {
   room: LiveRoom;
   live: boolean;
   offNetwork: boolean;
+  /** Owned by the grid so two cards can never be open at once. */
+  menuOpen: boolean;
+  onMenuToggle: (open: boolean) => void;
   /** Boomin's default room for the brand: pinned, marked, never deleted. */
   isMain?: boolean;
   canMakeMain?: boolean;
@@ -2794,7 +2802,8 @@ function RoomCard({
   // anyone is in it (waiting or admitted). The reason is inline on the card —
   // never a disabled ✕ that explains nothing.
   const [del, setDel] = useState<"idle" | "checking" | "confirm" | "busy">("idle");
-  const [menuOpen, setMenuOpen] = useState(false);
+  const setMenuOpen = (v: boolean | ((prev: boolean) => boolean)) =>
+    onMenuToggle(typeof v === "function" ? v(menuOpen) : v);
   const [note, setNote] = useState<string | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
