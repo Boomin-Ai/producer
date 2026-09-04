@@ -489,10 +489,6 @@ export function Home({
             setProfileOpen(false);
             onEndpointsChanged?.();
           }}
-          onSettings={() => {
-            setProfileOpen(false);
-            openSettings();
-          }}
           onOpenConsole={(section, endpointId) => {
             if (endpointId && endpointId !== activeId) {
               setActiveEndpointId(endpointId);
@@ -2923,7 +2919,6 @@ function WorkspacePopout({
   endpoints,
   activeId,
   onSwitch,
-  onSettings,
   onOpenConsole,
   onSignOut,
   onClose,
@@ -2931,7 +2926,6 @@ function WorkspacePopout({
   endpoints: EndpointInfo[];
   activeId: string | null;
   onSwitch: (endpointId: string) => void;
-  onSettings: () => void;
   /** The gear on a brand: that brand's settings console (switching first when needed). */
   onOpenConsole?: (section: string, endpointId?: string) => void;
   onSignOut?: () => void;
