@@ -17,9 +17,8 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
-use super::{creds, ffi};
+use super::{creds, encoders, ffi};
 
-const VT_H264_HW: &str = "com.apple.videotoolbox.videoencoder.ave.avc";
 const MAX_STREAM_SECS: u64 = 12 * 60 * 60; // backstop only; UI/harness stop explicitly
 const BASE_VIDEO_KBPS: i64 = 4500;
 const BASE_AUDIO_KBPS: i64 = 160;
@@ -405,37 +404,25 @@ impl Session {
             report.shared_video_kbps = video_kbps;
             report.shared_audio_kbps = audio_kbps;
 
+            // The shared encoder is the one the boot probe chose (VideoToolbox
+            // / NVENC / QSV / AMF), CBR at the D2 intersection bitrate, 2s
+            // keyframes, each family's OBS-default quality preset; x264 if
+            // the hardware refuses at create time (A7 fallback).
             let venc_settings = ffi::obs_data_create();
-            ffi::obs_data_set_string(
-                venc_settings,
-                cstr("rate_control").as_ptr(),
-                cstr("CBR").as_ptr(),
-            );
-            ffi::obs_data_set_int(venc_settings, cstr("bitrate").as_ptr(), video_kbps);
-            ffi::obs_data_set_int(venc_settings, cstr("keyint_sec").as_ptr(), 2);
-            let mut venc = ffi::obs_video_encoder_create(
-                cstr(VT_H264_HW).as_ptr(),
-                cstr("shared-vt-h264").as_ptr(),
-                venc_settings,
-                ptr::null_mut(),
-            );
-            report.encoder_used = VT_H264_HW.into();
-            if venc.is_null() {
-                report
-                    .notes
-                    .push("VT unavailable; shared encoder = obs_x264 (A7 fallback)".into());
-                venc = ffi::obs_video_encoder_create(
-                    cstr("obs_x264").as_ptr(),
-                    cstr("shared-x264").as_ptr(),
-                    venc_settings,
-                    ptr::null_mut(),
-                );
-                report.encoder_used = "obs_x264".into();
+            let chosen = encoders::chosen();
+            encoders::apply_video_defaults(venc_settings, &chosen.id, video_kbps);
+            let (venc, used) = encoders::create_video("shared-h264", venc_settings);
+            if used != chosen.id {
+                report.notes.push(format!(
+                    "{} unavailable; shared encoder = {used} (A7 fallback)",
+                    chosen.id
+                ));
             }
+            report.encoder_used = used;
             let aenc_settings = ffi::obs_data_create();
             ffi::obs_data_set_int(aenc_settings, cstr("bitrate").as_ptr(), audio_kbps);
             let aenc = ffi::obs_audio_encoder_create(
-                cstr("CoreAudio_AAC").as_ptr(),
+                cstr(encoders::audio_id()).as_ptr(),
                 cstr("shared-aac").as_ptr(),
                 aenc_settings,
                 0,

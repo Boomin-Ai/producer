@@ -55,8 +55,11 @@ const REQUIRED_ENCODERS_OS: &[&str] = &["CoreAudio_AAC"];
 /// obs-ffmpeg is in the allowlist on both platforms, so this is the counterpart.
 const REQUIRED_ENCODERS_OS: &[&str] = &["ffmpeg_aac"];
 /// VideoToolbox is macOS hardware encode; its ids are hardware-dynamic, so it is
-/// asserted by substring. Windows hardware encoders (nvenc/qsv/amf) are NOT in
-/// the §5.2 allowlist, so there is no Windows counterpart to require.
+/// asserted by substring. Windows hardware encoders (obs-nvenc, obs-qsv11,
+/// obs-ffmpeg's AMF) ARE in the Windows allowlist since artifact rev 6, but
+/// each registers only when its vendor's GPU is present, so none can be
+/// REQUIRED — the boot probe picks from what registered (encoders.rs
+/// `choose_video`, NVENC → QSV → AMF → x264) and reports the choice.
 #[cfg(target_os = "macos")]
 const VT_ENCODER_SUBSTRING: &str = "videotoolbox";
 const REQUIRED_OUTPUTS: &[&str] = &["rtmp_output", "flv_output"];
@@ -77,6 +80,10 @@ pub struct EngineReport {
     pub failed_modules: Vec<String>,
     pub missing_ids: Vec<String>,
     pub videotoolbox_encoders: Vec<String>,
+    /// The H.264 encoder every session will use (encoders.rs), and whether
+    /// it is a GPU encoder. Decided here, once, from what registered.
+    pub video_encoder: String,
+    pub hardware_encoder: bool,
     pub sources: Vec<String>,
     pub encoders: Vec<String>,
     pub outputs: Vec<String>,
@@ -300,6 +307,8 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
         failed_modules: Vec::new(),
         missing_ids: Vec::new(),
         videotoolbox_encoders: Vec::new(),
+        video_encoder: super::encoders::X264.into(),
+        hardware_encoder: false,
         sources: Vec::new(),
         encoders: Vec::new(),
         outputs: Vec::new(),
@@ -549,6 +558,18 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
         report.missing_ids.push("<any VideoToolbox encoder>".into());
     }
 
+    // The encoder decision, from the ids that ACTUALLY registered (a Windows
+    // hardware encoder plugin loads fine and registers nothing on the wrong
+    // GPU). Published for multi/record/stream; surfaced to the UI below.
+    let choice = super::encoders::choose_video(&report.encoders);
+    eprintln!(
+        "[live] video encoder: {} (hardware: {})",
+        choice.id, choice.hardware
+    );
+    report.video_encoder = choice.id.clone();
+    report.hardware_encoder = choice.hardware;
+    super::encoders::set_chosen(choice);
+
     report.ok = report.missing_ids.is_empty() && report.failed_modules.is_empty();
     report
 }
@@ -785,6 +806,8 @@ pub enum LiveEvent {
         ok: bool,
         graphics_backend: Option<String>,
         obs_version: String,
+        video_encoder: String,
+        hw_encoder: bool,
     },
     SessionState {
         state: SessionState,
@@ -853,6 +876,13 @@ pub struct Snapshot {
     pub cpu: f64,
     pub video_height: u32,
     pub video_fps: u32,
+    /// The H.264 encoder id every session uses (encoders.rs), and whether it
+    /// is a GPU encoder — macOS VideoToolbox, Windows NVENC/QSV/AMF. The 4K
+    /// canvas is gated on `hw_encoder`.
+    #[serde(default)]
+    pub video_encoder: Option<String>,
+    #[serde(default)]
+    pub hw_encoder: bool,
 }
 
 pub struct LiveHandle {
@@ -1631,6 +1661,8 @@ pub fn start(
                 s.video_fps = f;
                 s.graphics_backend = report.graphics_backend.clone();
                 s.boot_phases_ms = report.boot_phases_ms.clone();
+                s.video_encoder = Some(report.video_encoder.clone());
+                s.hw_encoder = report.hardware_encoder;
             }
             if report.ok {
                 // CEF WARM-UP, off every critical path. The first browser
@@ -1673,6 +1705,8 @@ pub fn start(
                 ok: report.ok,
                 graphics_backend: report.graphics_backend.clone(),
                 obs_version: report.obs_version.clone(),
+                video_encoder: report.video_encoder.clone(),
+                hw_encoder: report.hardware_encoder,
             });
 
             // The implicit scene (§2.2) exists from engine start; sources are

@@ -5663,8 +5663,21 @@ export function LiveView({
             <span className="rm-rec-dot" /> Recording {`${Math.floor(recElapsed / 60)}:${String(recElapsed % 60).padStart(2, "0")}`}
           </span>
         )}
-        <span className="rm-foot-item dim">{snapshot?.graphics_backend ?? ""}</span>
+        <span className="rm-foot-item dim">
+          {[snapshot?.graphics_backend, encoderLabel(snapshot?.video_encoder)].filter(Boolean).join(" · ")}
+        </span>
       </footer>
     </div>
   );
+}
+
+/** Short, human name for the engine's H.264 encoder id (footer readout). */
+function encoderLabel(id?: string | null): string {
+  if (!id) return "";
+  if (id.includes("videotoolbox")) return "VideoToolbox";
+  if (id.includes("nvenc")) return "NVENC";
+  if (id.includes("qsv")) return "QSV";
+  if (id.includes("amf")) return "AMF";
+  if (id === "obs_x264") return "x264";
+  return id;
 }

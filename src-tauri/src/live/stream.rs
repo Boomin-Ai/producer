@@ -13,9 +13,7 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
-use super::{creds, ffi, graph};
-
-const VT_H264_HW: &str = "com.apple.videotoolbox.videoencoder.ave.avc";
+use super::{creds, encoders, ffi, graph};
 const MAX_STREAM_SECS: u64 = 600;
 
 #[derive(Debug, Clone, Serialize)]
@@ -146,40 +144,25 @@ pub fn first_light(credential_id: &str, report_dir: &Path) -> FirstLightReport {
             return report;
         }
 
+        // Producer's defaults first (CBR 4500, 2s keyint, the chosen
+        // encoder's quality preset), then the service's policy on top so a
+        // per-service cap is the last word.
+        let chosen = encoders::chosen();
         let venc_settings = ffi::obs_data_create();
-        ffi::obs_data_set_string(
-            venc_settings,
-            cstr("rate_control").as_ptr(),
-            cstr("CBR").as_ptr(),
-        );
-        ffi::obs_data_set_int(venc_settings, cstr("bitrate").as_ptr(), 4500);
-        ffi::obs_data_set_int(venc_settings, cstr("keyint_sec").as_ptr(), 2);
+        encoders::apply_video_defaults(venc_settings, &chosen.id, 4500);
         let aenc_settings = ffi::obs_data_create();
         ffi::obs_data_set_int(aenc_settings, cstr("bitrate").as_ptr(), 160);
         ffi::obs_service_apply_encoder_settings(service, venc_settings, aenc_settings);
 
-        let mut venc = ffi::obs_video_encoder_create(
-            cstr(VT_H264_HW).as_ptr(),
-            cstr("ML3 VT H264").as_ptr(),
-            venc_settings,
-            ptr::null_mut(),
-        );
-        if venc.is_null() {
+        let (venc, used) = encoders::create_video("ML3 H264", venc_settings);
+        if used != chosen.id {
             report
                 .notes
-                .push("VideoToolbox encoder unavailable, using obs_x264".into());
-            venc = ffi::obs_video_encoder_create(
-                cstr("obs_x264").as_ptr(),
-                cstr("ML3 x264").as_ptr(),
-                venc_settings,
-                ptr::null_mut(),
-            );
-            report.encoder_used = "obs_x264".into();
-        } else {
-            report.encoder_used = VT_H264_HW.into();
+                .push(format!("{} unavailable, using {used}", chosen.id));
         }
+        report.encoder_used = used;
         let aenc = ffi::obs_audio_encoder_create(
-            cstr("CoreAudio_AAC").as_ptr(),
+            cstr(encoders::audio_id()).as_ptr(),
             cstr("ML3 AAC").as_ptr(),
             aenc_settings,
             0,

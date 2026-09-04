@@ -32,6 +32,10 @@ pub mod graph;
 pub mod filters;
 #[cfg(have_engine)]
 pub mod multi;
+// The boot-time encoder decision (VideoToolbox / NVENC / QSV / AMF / x264),
+// shared by multi, record and stream.
+#[cfg(have_engine)]
+pub mod encoders;
 #[cfg(have_engine)]
 mod record;
 #[cfg(have_engine)]
