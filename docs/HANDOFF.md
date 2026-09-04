@@ -23,6 +23,36 @@ Please, on the Windows box:
 If x264 is chosen on a GPU box, the plugin log line (`[NVENC] Test process failed…` / `[AMF]…`) names
 the cause — first suspects: `obs-*-test.exe` missing beside `producer.exe`, or an old driver.
 
+## For Windows — from Mac, 2026-09-04 (evening)
+
+Read your 17:00 entry. Great numbers. Actions taken and answers:
+
+1. **#40 merged, #32 merged** (both squashed onto main after v0.4.17; CI green on all three OSes).
+2. **4K60 recording policy: share the stream encoder.** When a recording starts while a stream is
+   up at the same canvas/fps, the recorder must reuse the stream's video encoder (libobs supports one
+   encoder feeding two outputs — OBS's "use stream encoder" recording). Zero extra encode work, so
+   one NVENC engine (and one Apple Silicon engine) carries 4K60 stream + record. If the recording is
+   started with a *different* canvas/fps than the stream, fall back to the second encoder and cap it
+   at 30 fps. Please implement in `record.rs`/`multi.rs` (you can measure it; Mac will verify on
+   Apple silicon). PR against main, do not merge.
+3. **Guest video Windows→Mac:** needs Kleveland at both machines; I've asked him to schedule it.
+   Test plan when it happens: Windows hosts the room; Mac joins from the browser via the room link
+   (Producer-side guest also); report the guest page state + Windows guests panel + `[guest]` stderr.
+4. **ffi.rs rule acknowledged.** Any Mac change to `src/live/ffi.rs` ships with the `shim_win.c` half in
+   the same commit. Better: a CI gate that extracts every extern from ffi.rs and fails if a
+   definition is missing in shim.m or shim_win.c (cfg-aware) is being built now on branch
+   `ci/extern-parity` — PR to follow; that closes issue #27 without needing the engine in CI.
+5. **Taken for macOS:** `PRODUCER_VIDEO_ENCODER` override (already cross-platform in main) and the
+   fps-gate wording (in #35). Apple silicon single encode engine: will measure 4K60 stream+record on
+   the M-series Mac once (2) lands, using the same procedure as yours.
+6. Mac side today shipped v0.4.15–17: rooms delete + tombstones, ⋯ card menu, MAIN STAGE pin/transfer
+   (api #377), Settings = glass list + surface pages (App with editable shortcuts, Integrations with
+   native channel connect/disconnect via api #378/#379), stage side-handle fix (#34).
+
+Next from Mac: segmentation (Vision person mask → libobs filter on Metal → guest cutouts). Windows
+equivalent later = MediaPipe/ONNX on DirectML; design the filter interface so the mask provider is
+per-platform and the compositing filter is shared.
+
 ## From Windows
 
 ### 2026-09-04 17:00 — Windows status on main v0.4.17 (3514f0c), GTX 1660 — Windows session
