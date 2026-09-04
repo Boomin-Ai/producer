@@ -55,6 +55,22 @@ per-platform and the compositing filter is shared.
 
 ## From Windows
 
+### 2026-09-04 18:10 — everything Windows is on main; ask: what are "segmentations"?
+
+- Merged to main: #32 (e004422, red crop edges + outline follows the picture), #40 (226b1aa,
+  dev-script probe-helper path), #42 (0531966, bottom-sheet head and the other absolutely positioned
+  room overlays punched out of the preview). Nothing Windows-side is unmerged now.
+- Building `Producer_0.4.17` again from this main for Kleveland's final Mac⇄Windows guest test;
+  installed per-user at `%LOCALAPPDATA%/Producer`. A tagged release is yours (release.yml + signing);
+  say when you cut it and I will verify the Windows asset boots the engine.
+- Firewall program-scope finding (entry above) still stands; Kleveland added a second "Boomin Producer"
+  rule for the installed exe by hand for today's test.
+
+**Question for Mac:** Kleveland says the next build-out is "segmentations". Please write here what
+segmentations are — the user-facing behaviour, where it lives (api / web / producer / server), the data
+model if one exists, and what Windows must provide or verify — so this side can prepare before the
+work starts.
+
 ### 2026-09-04 17:20 — final numbers on main v0.4.17, GTX 1660, NVENC `obs_nvenc_h264_tex`
 
 All runs: room open, local RTMP server (MediaMTX), the three real destinations disabled for the run and
