@@ -609,7 +609,8 @@
   .rm-program .gobar .clock { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; color: #fff; }
   .rm-program .gobar .golive { color: #fff; background: var(--live); padding: 2px 8px; border-radius: 999px; font-weight: 700; }
   .rm-program .tile.host { margin-bottom: 34px; }
-  .chat { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 5px; }
+  /* Fixed height: the rail is auto-height, so flex:1 would collapse this to nothing. */
+  .chat { height: 150px; flex: none; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 5px; }
   .chat .m { display: flex; gap: 6px; font-size: 11px; line-height: 1.3; animation: chat-in 380ms var(--ease); }
   .chat .m .who { font-weight: 700; flex: none; }
   .chat .m .who.tw { color: #a970ff; } .chat .m .who.kk { color: #53fc18; } .chat .m .who.yt { color: #ff4e45; }
