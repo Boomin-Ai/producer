@@ -111,6 +111,8 @@ pub fn run() {
             ipc::room_set_visibility,
             ipc::live_room_open_report,
             ipc::room_register,
+            ipc::room_list_server,
+            ipc::room_set_title,
             ipc::room_guest_invite,
             ipc::room_guests,
             ipc::room_guest_admit,

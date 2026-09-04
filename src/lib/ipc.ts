@@ -494,6 +494,26 @@ export const registerRoom = (endpointId: string, title: string, externalRef: str
     externalRef,
   });
 
+/** A room as the server knows it: Producer-registered (external_ref = the
+ * local id that minted it) or created on the web / by a deal. */
+export interface ServerRoom {
+  id: string;
+  title?: string | null;
+  visibility?: "private" | "connections" | "public" | string | null;
+  external_ref?: string | null;
+  status?: string | null;
+  archived_at?: string | null;
+  deleted_at?: string | null;
+}
+
+/** Every server room the brand owns — the reconcile input for room sync. */
+export const listServerRooms = (endpointId: string) =>
+  invoke<{ rooms?: ServerRoom[] }>("room_list_server", { endpointId });
+
+/** Rename the SERVER room (server id). Local rename happens separately. */
+export const setServerRoomTitle = (endpointId: string, roomId: string, title: string) =>
+  invoke("room_set_title", { endpointId, roomId, title });
+
 export interface NetworkStatus {
   membership?: { status?: string } | null;
   /** live_now is DERIVED from open broadcasts, not a heartbeat — it can

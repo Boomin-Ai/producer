@@ -293,6 +293,34 @@ pub async fn room_register(
         .await
 }
 
+/// The brand's server rooms, for Home's reconcile (see src/lib/roomSync.ts).
+#[tauri::command]
+pub async fn room_list_server(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .list_rooms()
+        .await
+}
+
+/// Push a local rename to the server room (server id, not the local one).
+#[tauri::command]
+pub async fn room_set_title(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+    title: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .room_set_title(&room_id, &title)
+        .await
+}
+
 #[tauri::command]
 pub async fn room_guest_admit(
     state: State<'_, AppState>,

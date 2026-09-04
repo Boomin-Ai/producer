@@ -26,6 +26,7 @@ import { demoOn, setDemo } from "../lib/demo";
 import { markHomePainted, markRoomClick } from "../lib/perf";
 import { KEYMAP, getKey, setKey, resetKey, displayKey, type KeyBinding } from "../lib/keys";
 import { liveRoomId, parseConfig, serializeConfig } from "../lib/room";
+import { renameRoom, syncRooms } from "../lib/roomSync";
 import { useUpdater } from "../lib/updater";
 import { DestinationEditor, LiveView } from "./Live";
 
@@ -295,6 +296,36 @@ export function Home({
     return () => window.removeEventListener(WORKSPACE_EVENT, h);
   }, [loadLive]);
 
+  // Room sync (src/lib/roomSync.ts): the brand's rooms are SERVER rows — a
+  // room created on the web, by a deal, or on another machine must be
+  // hostable here. Reconcile on mount, on every focus/visibility return
+  // (the founder made a room over there and came back), and on workspace
+  // switch. Rooms the server no longer lists get a chip, never deleted.
+  const [offNetwork, setOffNetwork] = useState<Set<string>>(() => new Set());
+  const sync = useCallback(async () => {
+    const ep = await resolveActiveEndpoint().catch(() => null);
+    if (!ep || ep.kind !== "connected") return;
+    const res = await syncRooms(ep.id).catch(() => null);
+    if (!res) return;
+    setOffNetwork(new Set(res.offNetwork));
+    if (res.changed) void loadLive();
+  }, [loadLive]);
+  useEffect(() => {
+    void sync();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void sync();
+    };
+    const onFocus = () => void sync();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener(WORKSPACE_EVENT, onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener(WORKSPACE_EVENT, onFocus);
+    };
+  }, [sync]);
+
   useEffect(() => {
     loadChannels();
     loadJobs();
@@ -460,6 +491,7 @@ export function Home({
             setView({ kind: "room", room });
           }}
           onRoomsChanged={loadLive}
+          offNetwork={offNetwork}
           onCompose={() => setView({ kind: "compose" })}
           onHistory={() => setView({ kind: "history" })}
         />
@@ -764,6 +796,7 @@ function ControlRoomHome({
   streaming,
   onOpenRoom,
   onRoomsChanged,
+  offNetwork,
   onCompose,
   onHistory,
 }: {
@@ -774,6 +807,8 @@ function ControlRoomHome({
   streaming: boolean;
   onOpenRoom: (room: LiveRoom) => void;
   onRoomsChanged: () => void;
+  /** Local rooms whose server row is gone (room sync); shown as a chip. */
+  offNetwork: Set<string>;
   onCompose: () => void;
   onHistory: () => void;
 }) {
@@ -815,37 +850,14 @@ function ControlRoomHome({
         </div>
         <div className="cr-rooms">
           {rooms.map((room) => (
-            <button
+            <RoomCard
               key={room.id}
-              className={`cr-room${liveRoom === room.id ? " onair" : ""}`}
-              onClick={() => onOpenRoom(room)}
-            >
-              <span className="cr-room-name">{room.name}</span>
-              <span className="cr-room-meta">
-                {liveRoom === room.id ? "streaming now — click to return" : fmtAgo(room.last_live_at)}
-              </span>
-              {liveRoom === room.id && (
-                <span className="cr-room-live">
-                  <span className="rm-live-dot" />
-                  LIVE
-                </span>
-              )}
-              <span
-                className="cr-room-del"
-                title={liveRoom === room.id ? "Stop the stream first" : "Delete room"}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (liveRoom === room.id) return;
-                  ipc.liveDeleteRoom(room.id).then(onRoomsChanged);
-                }}
-              >
-                ✕
-              </span>
-              <span className="cr-room-chips">
-                <RoomLinkChip room={room} onChanged={onRoomsChanged} />
-                <RoomShareChip room={room} onChanged={onRoomsChanged} />
-              </span>
-            </button>
+              room={room}
+              live={liveRoom === room.id}
+              offNetwork={offNetwork.has(room.id)}
+              onOpen={() => onOpenRoom(room)}
+              onRoomsChanged={onRoomsChanged}
+            />
           ))}
           {naming ? (
             <form
@@ -2373,6 +2385,108 @@ function LiveNowStrip() {
       </div>
       {note && <div className="cr-hint">{note}</div>}
     </section>
+  );
+}
+
+/** One ON AIR card. Double-click the name to rename — the local row always
+ * updates; a registered room's server title is PATCHed too (roomSync). A
+ * card mid-rename is a div, not a button: an input inside a button is
+ * invalid and eats keystrokes on some engines. */
+function RoomCard({
+  room,
+  live,
+  offNetwork,
+  onOpen,
+  onRoomsChanged,
+}: {
+  room: LiveRoom;
+  live: boolean;
+  offNetwork: boolean;
+  onOpen: () => void;
+  onRoomsChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(room.name);
+  const commit = async () => {
+    setEditing(false);
+    const next = draft.trim();
+    if (!next || next === room.name) return;
+    const ep = await resolveActiveEndpoint().catch(() => null);
+    await renameRoom(ep?.kind === "connected" ? ep.id : null, room, next).catch(() => {});
+    onRoomsChanged();
+  };
+  const body = (
+    <>
+      {editing ? (
+        <input
+          className="cr-room-rename"
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => void commit()}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void commit();
+            if (e.key === "Escape") {
+              setDraft(room.name);
+              setEditing(false);
+            }
+          }}
+        />
+      ) : (
+        <span
+          className="cr-room-name"
+          title="Double-click to rename"
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            setDraft(room.name);
+            setEditing(true);
+          }}
+        >
+          {room.name}
+        </span>
+      )}
+      <span className="cr-room-meta">
+        {live ? "streaming now — click to return" : fmtAgo(room.last_live_at)}
+      </span>
+      {live && (
+        <span className="cr-room-live">
+          <span className="rm-live-dot" />
+          LIVE
+        </span>
+      )}
+      <span
+        className="cr-room-del"
+        title={live ? "Stop the stream first" : "Delete room"}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (live) return;
+          ipc.liveDeleteRoom(room.id).then(onRoomsChanged);
+        }}
+      >
+        ✕
+      </span>
+      <span className="cr-room-chips">
+        {offNetwork && (
+          <span
+            className="cr-room-off"
+            title="The network no longer lists this room — guests, links and deals need a room that is on it. Streaming still works."
+          >
+            not on the network
+          </span>
+        )}
+        <RoomLinkChip room={room} onChanged={onRoomsChanged} />
+        <RoomShareChip room={room} onChanged={onRoomsChanged} />
+      </span>
+    </>
+  );
+  const cls = `cr-room${live ? " onair" : ""}`;
+  return editing ? (
+    <div className={cls}>{body}</div>
+  ) : (
+    <button className={cls} onClick={onOpen}>
+      {body}
+    </button>
   );
 }
 
