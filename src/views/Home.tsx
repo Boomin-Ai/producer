@@ -613,6 +613,9 @@ function ChannelChip({
       onChanged();
     } catch (e) {
       onError(String(e).replace(/^Error:\s*/, ""));
+    } finally {
+      // The chip usually unmounts on refresh; if the list still carries the
+      // channel (a backend that keeps disconnected rows), never stay on "…".
       setState("idle");
     }
   };
