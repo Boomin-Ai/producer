@@ -273,11 +273,20 @@ function WindowPickerList({
           <span className="rm-device-name">
             {w.owner}
             {w.title ? ` — ${w.title}` : ""}
+            {selfCaptureNote(w)}
           </span>
         </button>
       ))}
     </>
   );
+}
+
+/** Producer's own window in a capture list. Capturing it puts the preview
+ * inside the preview: every frame contains the last one, so dragging any
+ * source looks like an explosion of copies. That is the mirror, not a
+ * transform bug — the chip says so before the click. */
+function selfCaptureNote(w: { owner: string }) {
+  return w.owner === "Producer" ? " (this app — captures itself)" : "";
 }
 
 /** Window chips for a window source's settings strip: pick a different
@@ -326,6 +335,7 @@ function WindowStripList({
         >
           {w.owner}
           {w.title ? ` — ${w.title}` : ""}
+          {selfCaptureNote(w)}
         </button>
       ))}
     </>
@@ -991,6 +1001,7 @@ function WindowSourceForm({ onAdd }: { onAdd: (id: number, title: string) => voi
           <span className="rm-device-name">
             {w.owner}
             {w.title ? ` — ${w.title}` : ""}
+            {selfCaptureNote(w)}
           </span>
         </button>
       ))}

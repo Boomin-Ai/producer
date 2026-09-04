@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { keyIs } from "../lib/keys";
 import { ipc, type LiveItem, type LiveTransformPatch } from "../lib/ipc";
+import { resizeBox } from "../lib/stageMath";
 
 /** StageEditor (UI-P2) — direct manipulation on the canvas.
  *
@@ -250,24 +251,9 @@ export function StageEditor({
         }
       }
     } else {
-      const k = g.kind;
-      if (k.includes("e")) w = Math.max(32, o.w + dx);
-      if (k.includes("s")) h = Math.max(32, o.h + dy);
-      if (k.includes("w")) {
-        w = Math.max(32, o.w - dx);
-        x = o.x + (o.w - w);
-      }
-      if (k.includes("n")) {
-        h = Math.max(32, o.h - dy);
-        y = o.y + (o.h - h);
-      }
-      // corner drags keep source aspect (the box IS the content box for
-      // bounds SCALE_INNER, but matching aspect avoids surprise letterbox)
-      if (k.length === 2 && o.src_w > 0 && o.src_h > 0) {
-        const ar = o.src_w / o.src_h;
-        h = w / ar;
-        if (k.includes("n")) y = o.y + (o.h - h);
-      }
+      // Uniform scale on every handle — see stageMath.ts for why a side
+      // handle must not change one dimension alone under SCALE_INNER.
+      ({ x, y, w, h } = resizeBox(o, g.kind, dx, dy));
     }
     // convert edge guides to css-space lines for rendering
     setGuides({ v, h: hz });
