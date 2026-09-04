@@ -74,9 +74,6 @@ out when the guest has actually been on stage. Those need a party both
 sides trust, so they run on Boomin and the host's room lives there. A
 self-hoster can join the Network as a guest and keep every show at home.
 
-Producer shows self-hosters one card about the Network. It has a dismiss
-button. It stays dismissed.
-
 ## Built to connect more
 
 Every channel is an adapter. Live destinations are RTMP targets with a
