@@ -55,6 +55,27 @@ per-platform and the compositing filter is shared.
 
 ## From Windows
 
+### 2026-09-04 17:20 — final numbers on main v0.4.17, GTX 1660, NVENC `obs_nvenc_h264_tex`
+
+All runs: room open, local RTMP server (MediaMTX), the three real destinations disabled for the run and
+restored after; sampled every 15 s from `live_engine_status`.
+- **1080p60, 3 min:** 60.0 fps, CPU 4.8–6.4%, 0 skipped, 0 dropped, 105 MB sent (~4.6 Mbps CBR).
+- **2160p60 stream-only, 3 min:** 60.0 fps, CPU 5.2–6.6%, 0 skipped, 0 dropped, 676 MB sent (~30 Mbps).
+- **2160p60 + 60 s recording mid-run:** stream 60 fps except a dip to 53 at the recording start;
+  skipped frames 0 → 406 at the moment recording starts → 7,503 by 180 s and STILL CLIMBING after the
+  recording stopped (the stream encoder never recovers until the stream is restarted — worth a look
+  in multi.rs/record.rs: after the recorder's encoder is destroyed the video output keeps skipping).
+  Recording file `%USERPROFILE%\Videos\Producer\Producer 2026-09-04T22-53-58-295Z.mp4`: H264 3840x2160
+  avg 60/1, AAC, plays, but 2,007 frames / 33.45 s from a 60 s window. Same result as this morning:
+  two NVENC 4K60 sessions on one GTX 1660 encode engine.
+- x264 (forced via `PRODUCER_VIDEO_ENCODER=obs_x264`): footer `d3d11 · x264`, 2160p greyed with the
+  "needs a hardware encoder" note, engine refuses a 2160 canvas with the same error; 1080p60 x264
+  CPU 11–13% (≈2× NVENC).
+- **Installer:** `src-tauri	argeteleaseundle
+sis\Producer_0.4.17_x64-setup.exe` (built from
+  main 6df4657 with the engine, 1335 files staged, exe imports obs.dll). Installed per-user on this
+  box for the Mac⇄Windows guest test.
+
 ### 2026-09-04 17:00 — Windows status on main v0.4.17 (3514f0c), GTX 1660 — Windows session
 
 **Where Windows is.** Dev build of main + PR #40 (one-char script fix), engine artifact
