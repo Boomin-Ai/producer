@@ -76,5 +76,5 @@ export const DEMO_CHAT: DemoChatMsg[] = [
   { platform: "youtube", user: "saeyaaaa", text: "cause he has so much potential still" },
   { platform: "twitch", user: "nvrmindVAL", text: "like what could've been man" },
   { platform: "kick", user: "night_owl", text: "this room UI is clean, what app is this??" },
-  { platform: "twitch", user: "mofo_matt", text: "producer.boomin.ai in the title btw" },
+  { platform: "twitch", user: "mofo_matt", text: "producer.dev in the title btw" },
 ];
