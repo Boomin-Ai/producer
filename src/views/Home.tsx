@@ -810,7 +810,7 @@ function SettingsPanel({
       <div className="home-settings-in set set-nav">
         <div className="set-nav-head">
           <span className="cr-sheet-title">Settings</span>
-          <span className="set-nav-ws">{current?.name ?? ""}</span>
+          {current && <span className="set-nav-ws">{current.name}</span>}
         </div>
         <div className="set-nav-list">
           {SETTINGS_SECTIONS.map((it) => (
