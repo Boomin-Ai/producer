@@ -41,7 +41,7 @@ import {
   type FilterState,
 } from "../lib/filters";
 import { DEMO_CHAT, DEMO_VIDEO_URL, demoOn, type DemoPlatform } from "../lib/demo";
-import { activeEndpointId, resolveActiveEndpoint } from "../lib/workspace";
+import { activeEndpointId, isBoomin, resolveActiveEndpoint } from "../lib/workspace";
 import { StageEditor } from "./StageEditor";
 import {
   PANEL_META,
@@ -2629,7 +2629,7 @@ export function LiveView({
     if (guestLink) return guestLink;
     try {
       const ep = await resolveActiveEndpoint();
-      if (!ep) throw new Error("Connect a Boomin workspace first.");
+      if (!ep) throw new Error("Connect a workspace first.");
       let sid = cfg.server_room_id;
       if (!sid) {
         const reg = await registerRoom(ep.id, room?.name ?? "Room", room?.id ?? "");
@@ -5012,13 +5012,32 @@ export function LiveView({
               if (!url) return;
               try {
                 await navigator.clipboard.writeText(url);
-                setBanner("Room link copied — send it to your guests. Deal guests must enter through the deal.");
+                // Deals are a Boomin thing; a self-hosted room has none.
+                const boomin = isBoomin(await resolveActiveEndpoint().catch(() => null));
+                setBanner(
+                  boomin
+                    ? "Room link copied — send it to your guests. Deal guests must enter through the deal."
+                    : "Room link copied — send it to your guests.",
+                );
               } catch {
                 setBanner(url);
               }
             }}
           >
             {ic.link ?? "🔗"} Link
+          </button>
+          <button
+            className="hd-chip hd-link"
+            title="Open the guest page in your browser — the link exactly as your server minted it"
+            onClick={async () => {
+              // VERBATIM: the join link is whatever the endpoint returned
+              // (a self-hosted server's own origin, or Boomin's). Producer
+              // never rewrites the host.
+              const url = guestLink ?? (await ensureGuestLink());
+              if (url) await openUrl(url).catch(() => setBanner(url));
+            }}
+          >
+            Open
           </button>
           <button
             className="hd-chip hd-chans"

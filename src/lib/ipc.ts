@@ -1,5 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 
+/** What an endpoint IS, derived (Rust-side) from whether it carries a brand
+ * scope: "boomin" = a Boomin workspace (network, deals, room visibility);
+ * "selfhost" = the user's own producer-server (everything about making a
+ * show, guests included — nothing Network). See `endpointKind()` in
+ * workspace.ts for the one place the UI should read it from. */
+export type EndpointKind = "boomin" | "selfhost";
+
 export interface EndpointInfo {
   id: string;
   kind: "connected" | "independent";
@@ -8,6 +15,8 @@ export interface EndpointInfo {
   created_at: string;
   /** Hosted workspace scope (connected endpoints); the brand switch keys on it. */
   brand_slug?: string | null;
+  /** Derived server-side; optional so an older engine still type-checks. */
+  endpoint_kind?: EndpointKind;
 }
 
 export interface Channel {
@@ -54,6 +63,9 @@ export const hasTauri = () => "__TAURI_INTERNALS__" in window;
 export const ipc = {
   listEndpoints: () => invoke<EndpointInfo[]>("list_endpoints"),
   removeEndpoint: (endpointId: string) => invoke("remove_endpoint", { endpointId }),
+  /** Durable app preferences (SQLite `prefs`), see src/lib/prefs.ts. */
+  prefGet: (key: string) => invoke<string | null>("pref_get", { key }),
+  prefSet: (key: string, value: string | null) => invoke("pref_set", { key, value }),
   addEndpoint: (kind: string, name: string, baseUrl: string, token: string) =>
     invoke("add_endpoint", { kind, name, baseUrl, token }),
   boominRequestOtp: (email: string, apiRoot?: string) =>

@@ -13,7 +13,7 @@ export async function ensureRoomJoinLink(room: LiveRoom): Promise<string> {
   const cfg = parseConfig(room.config);
   if (cfg.guest_link) return cfg.guest_link;
   const ep = await resolveActiveEndpoint();
-  if (!ep) throw new Error("Connect a Boomin workspace first.");
+  if (!ep) throw new Error("Connect a workspace first.");
   let sid = cfg.server_room_id;
   if (!sid) {
     const reg = await registerRoom(ep.id, room.name, room.id);
