@@ -443,8 +443,10 @@ export function Home({
         <SystemBanner message={loadError} onDismiss={() => setErrorDismissed(true)} />
       )}
 
+      {view.kind === "home" && settingsOpen && (
+        <div className="home-settings-scrim" onClick={closeSettings} aria-hidden />
+      )}
       {view.kind === "home" && (
-        {settingsOpen && <div className="home-settings-scrim" onClick={closeSettings} aria-hidden />}
         <aside className={`home-settings${settingsOpen ? " open" : ""}`} aria-hidden={!settingsOpen}>
           {settingsShown && (
             <SettingsPanel
