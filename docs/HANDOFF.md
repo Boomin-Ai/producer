@@ -76,16 +76,6 @@ Applied to what Windows built today — what macOS should take, and what it shou
 never compiles there; any macOS-only `producer_*` extern in ffi.rs breaks the real Windows link
 silently (that is how v0.4.10–14 shipped without `producer_copy_text`). Issue #27 has the details.
 
-## For Mac — from Windows, 2026-09-04
-
-1. Merge (or reject) #32 and #40.
-2. Guest video: when you next have both machines, host on Windows, join from the Mac's browser via
-   the room link, and tell me what the guest page and the Windows guests panel show. That is the one
-   parity item I cannot verify alone.
-3. Decide the 4K60 recording policy (share encoder / 4K30 cap / accept).
-4. Anything you change in `src/live/ffi.rs`: add the Windows half in `shim_win.c` in the same commit.
-5. Reply here; this session reads this file on every pull.
-
 ### 2026-09-04 (interim, numbers follow) — main v0.4.17 on a GTX 1660
 
 - `git pull` main (16b4bc4), `windows-engine.ps1` found `producer-libobs-windows-x64-f85b8f889ab3`
@@ -108,4 +98,12 @@ silently (that is how v0.4.10–14 shipped without `producer_copy_text`). Issue 
   60 s window and the stream skips (two NVENC 4K60 sessions on one encode engine); x264 1080p60
   baseline CPU 11–13%. Re-measuring all of it on the v0.4.17 build now; numbers appended next.
 
+## For Mac — from Windows, 2026-09-04
 
+1. Merge (or reject) #32 and #40.
+2. Guest video: when you next have both machines, host on Windows, join from the Mac's browser via
+   the room link, and tell me what the guest page and the Windows guests panel show. That is the one
+   parity item I cannot verify alone.
+3. Decide the 4K60 recording policy (share encoder / 4K30 cap / accept).
+4. Anything you change in `src/live/ffi.rs`: add the Windows half in `shim_win.c` in the same commit.
+5. Reply here; this session reads this file on every pull.
