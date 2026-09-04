@@ -4,102 +4,137 @@
 
 # Producer
 
-> **Stop posting. Start producing.**
+> **Distribution for everyone.**
 
-Producer is the open-source studio for creators and brands: **post everywhere,
-stream everywhere** — from one desktop app, with your own keys, on your own
-channels. Free and open source (AGPL-3.0). Built by [Boomin](https://boomin.ai).
+Producer is the open-source studio for creators and brands. One desktop app
+that goes live, records, brings on guests, and posts — to your own channels,
+with your own keys. Free and open source (AGPL-3.0). Runs on Boomin's hosted
+platform or on a server you deploy yourself for $0.
 
-## Why
+Download at [producer.dev](https://producer.dev) · macOS (signed and
+notarized), Windows, Linux · updates itself.
 
-Every cross-posting tool charges you monthly for what the platforms give you
-for free. Every multistreaming service charges you for bandwidth your own
-machine can push. Producer collapses both into one app you own:
+## What it does today
 
-- **Cross-post** to Instagram, Facebook, and Threads with your own Meta app —
-  no review process, no middleman, no subscription. YouTube, X, and TikTok
-  next.
-- **Multistream** (coming after cross-posting): one encode, many RTMP
-  destinations, straight from your desktop.
-- **Optional Boomin network**: one click connects you to a collaborative
-  brand network — programs, partners, budgets. Skip it entirely and Producer
-  still works, forever, for free.
+**Live**
+- Scenes, sources, filters, transitions. Camera, screen, windows, text,
+  browser sources.
+- Go live to **Twitch, Kick, and YouTube at the same time** from one encode
+  on your machine. No relay, no per-destination fee.
+- Record locally. Output a **virtual camera** to any app that takes one.
+- Read Twitch and Kick chat inside the studio.
 
-## One repo, both halves
+**Guests**
+- Share a link. Guests join from any browser, camera and mic go straight to
+  your computer. Admit from the roster, drag onto a stage slot.
+- Guests who have Producer join from Producer — their scene is their camera.
+- Works on Boomin or on your own server. Signaling only ever passes through
+  the server; media is peer to peer.
 
+**Posting**
+- Cross-post to Instagram, Facebook, and Threads with your own Meta app.
+- Schedule posts server-side; they fire with your laptop closed.
+
+## Where it runs
+
+Producer speaks one contract to either backend, and you can use both at once.
+
+| | Boomin hosted | Your own server |
+| --- | --- | --- |
+| Setup | sign in with email | ~20 minutes, one `wrangler deploy` |
+| Cost | free tier, paid extras | $0 on Cloudflare's free tier |
+| Who can see your data | Boomin | nobody |
+| Live, guests, recording, posting, scheduling | yes | yes |
+| Verified brands, booked and paid appearances | yes | no |
+
+The `server/` directory is the whole self-hosted backend: a Cloudflare Worker
+with D1, R2, a cron, and one Durable Object for guest signaling.
+[server/SELF_HOSTING.md](server/SELF_HOSTING.md) is the walkthrough.
+
+## Producer to Producer
+
+Two people with Producer, each on their own server, can do a show together
+with nothing in the middle:
+
+1. You open a room. Your server knows it's open.
+2. You send your friend the room link.
+3. Their Producer opens it. Their video goes directly to your machine.
+4. You admit them and put them on stage.
+
+Their server is never involved. Yours only brokered the handshake.
+
+## Where the line is
+
+Everything about making a show is open: the app, the engine, guests, the
+self-hosted server. That never gets worse to push you anywhere.
+
+The **Boomin Network** is a different product: verified brand identity,
+booked appearances with money held in escrow, and a stage clock that pays
+out when the guest has actually been on stage. Those need a party both
+sides trust, so they run on Boomin and the host's room lives there. A
+self-hoster can join the Network as a guest and keep every show at home.
+
+Producer shows self-hosters one card about the Network. It has a dismiss
+button. It stays dismissed.
+
+## Built to connect more
+
+Every channel is an adapter. Live destinations are RTMP targets with a
+platform-specific handshake; posting channels are senders in
+`server/src/senders/`. Adding one is a contained change, which is how the
+core is meant to grow to hundreds of channels without touching the studio.
+Wanted next, all good first issues: X, TikTok, YouTube posting, custom RTMP
+destinations.
+
+## Honest status
+
+- Guest media is STUN-only. A minority of guests behind strict NAT won't
+  connect until you configure a TURN server (`ICE_SERVERS`). Documented.
+- On Windows, guests need Producer allowed through the firewall. The installer
+  adds the rule; if it's missing, Producer shows a fix button.
+- Producer-hosted guests run inside a Producer window today. A native guest
+  pipeline, no webview, is the next step.
+- Instagram and Facebook senders on a self-hosted server have had fewer real
+  runs than Threads. Report what breaks.
+
+## Self-host quickstart
+
+```sh
+git clone https://github.com/Boomin-Ai/producer && cd producer/server && npm install
+npx wrangler login
+npx wrangler d1 create producer && npx wrangler r2 bucket create producer-media
+# paste the database_id into wrangler.toml, set PRIMARY_TOKEN and SIGNALING_SECRET
+npx wrangler deploy
 ```
-/            the desktop app — Tauri 2 + Rust + React (this page)
-/server      producer-server — the self-hosted backend: a Cloudflare
-             Worker (D1 + R2 + cron) you deploy with one command, so
-             posting and scheduling run on YOUR account for $0.
-             → server/SELF_HOSTING.md is the ~20-minute walkthrough
-             → docs/SELF-HOSTING.md: what is open vs. Boomin Network
-/server/contract   the Producer API contract (OpenAPI) — the spine the
-             desktop, the hosted backend, and your server all share
-```
 
-The app speaks one contract to either backend: **Connected** (Boomin's
-hosted platform, posting in ~2 minutes) or **Independent** (your own
-producer-server — nothing ever touches Boomin). Both can run side by
-side, and one post can fan out across them.
+Then in Producer: **Use my own server**, paste the URL and your primary token.
 
-## Status
-
-**Working, and freshly public.** On launch night, one caption composed
-in this app published to Instagram through Boomin's hosted platform
-*and* to Threads through a self-hosted producer-server on a personal
-Cloudflare account — one submission, two clouds, both live. That
-mixed-workspace fan-out is the architecture working as designed.
-
-| Milestone | Status |
-| --- | --- |
-| Tauri 2 + React shell, dark-rail / light-surface UI | shipped |
-| Connected mode: Boomin sign-in, workspace picker, Instagram publish + server-side scheduling | shipped |
-| Self-hosted backend (`server/`): full contract, D1 queue + cron, private-R2 media gateway | shipped |
-| Independent Threads sender (BYO app, reply control, topic tags) | shipped — proven live |
-| Independent Instagram + Facebook senders | written — awaiting first real BYO-app runs |
-| Per-channel params (captions, collaborators, tags), crash-safe outbox, idempotent publishing | shipped |
-| Signed installers + in-app auto-update | this week |
-| YouTube sender (with API-audit walkthrough) | planned — good first issue |
-| X sender | planned — good first issue |
-| TikTok sender | planned — good first issue |
-| Multistream: local multi-RTMP fan-out | later phase |
-| Media generation (BYO fal / ElevenLabs keys) | later phase |
-
-## Quickstart (development)
+## Develop
 
 Requires [Bun](https://bun.sh) ≥ 1.3 and [Rust](https://rustup.rs) (stable).
 On Windows: Visual Studio Build Tools (MSVC) + WebView2. On macOS: Xcode
-Command Line Tools.
+Command Line Tools. Full setup in [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ```sh
 bun install
 bun run tauri dev
 ```
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full setup.
-
 ## How it stays free
 
-The desktop app is AGPL-3.0 and runs on your keys — free forever, and it
-*stays* free: the license guarantees nobody can take this code closed, and
-anyone running a modified version as a service must share their changes
-with their users. Boomin makes money on the hosted platform (managed keys,
-credits for media generation, the paid multistream relay, and the brand
-network) and on commercial licenses for companies that want Producer inside
-proprietary products. Want this functionality embedded in your own product
-without AGPL obligations? That's what the MIT-licensed Boomin SDK is for.
-Think ComfyUI and Comfy Cloud: same team, open core, honest split.
+The app is AGPL-3.0 and runs on your keys. The license guarantees nobody can
+take this code closed, and anyone running a modified version as a service
+must share their changes. Boomin makes money on the hosted platform and the
+Network, and on commercial licenses for companies that want Producer inside
+proprietary products. The Boomin SDK packages are separately MIT-licensed
+for that.
 
 ## Support the project
 
-Producer is free and always will be. If it saves you a subscription, consider
-[sponsoring development](https://github.com/sponsors/ikleveland) — every bit
-funds more platform senders and faster releases. The other great ways to help:
-star the repo, ship a PR, or use [Boomin hosted](https://boomin.ai) when you
-want the managed experience.
+Star it, ship a channel, or [sponsor development](https://github.com/sponsors/ikleveland).
+Using [Boomin hosted](https://boomin.ai) when you want the managed experience
+funds the open one.
 
 ## License
 
-AGPL-3.0-only © 2026 Boomin. The Boomin SDK packages (`@boomin/sdk`,
-`@boomin/connect`) are separately MIT-licensed.
+AGPL-3.0-only © 2026 Boomin. `@boomin/sdk` and `@boomin/connect` are MIT.
