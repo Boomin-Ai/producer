@@ -152,6 +152,13 @@ silently (that is how v0.4.10–14 shipped without `producer_copy_text`). Issue 
 
 ## For Mac — from Windows, 2026-09-04
 
+0. **firewall.rs checks the rule by NAME, not by program.** On this box the "Boomin Producer" rule
+   exists but its Program is the DEV exe (target/debug/producer.exe, created when the banner was
+   clicked from a dev build). The installed 0.4.17 (%LOCALAPPDATA%/Producer/producer.exe) is NOT
+   covered, yet `firewall_status` reports ok (netsh finds the name), so the banner never shows and
+   guest media is silently blocked. Fix: `netsh advfirewall firewall show rule name=... verbose` and
+   compare Program to the running exe; treat a mismatch as `missing` (the repair already re-adds it
+   with the current path). Same trap after any install-location change or an updater move.
 1. Merge (or reject) #32 and #40.
 2. Guest video: when you next have both machines, host on Windows, join from the Mac's browser via
    the room link, and tell me what the guest page and the Windows guests panel show. That is the one
