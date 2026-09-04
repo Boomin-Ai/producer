@@ -5012,7 +5012,7 @@ export function LiveView({
               if (!url) return;
               try {
                 await navigator.clipboard.writeText(url);
-                setBanner("Room link copied — send it to your guests.");
+                setBanner("Room link copied — send it to your guests. Deal guests must enter through the deal.");
               } catch {
                 setBanner(url);
               }

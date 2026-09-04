@@ -841,8 +841,10 @@ function ControlRoomHome({
               >
                 ✕
               </span>
-              <RoomLinkChip room={room} onChanged={onRoomsChanged} />
-              <RoomShareChip room={room} onChanged={onRoomsChanged} />
+              <span className="cr-room-chips">
+                <RoomLinkChip room={room} onChanged={onRoomsChanged} />
+                <RoomShareChip room={room} onChanged={onRoomsChanged} />
+              </span>
             </button>
           ))}
           {naming ? (
@@ -2100,7 +2102,7 @@ function RoomLinkChip({ room, onChanged }: { room: LiveRoom; onChanged: () => vo
     window.setTimeout(() => setState("idle"), 1800);
   };
   return (
-    <span className={`cr-room-link ${state}`} title="Copy this room's guest link" onClick={go}>
+    <span className={`cr-room-link ${state}`} title="Copy this room's guest link — deal guests must enter through the deal" onClick={go}>
       {state === "copied" ? "Copied" : state === "busy" ? "…" : state === "err" ? "No link" : "Link"}
     </span>
   );
