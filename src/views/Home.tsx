@@ -723,7 +723,8 @@ function ChannelsBlock({
                 {/* One native path for both backends: ask the workspace for an
                     OAuth url, open the user's browser, the token lands server
                     side. No embedded console, no second sign-in. */}
-                {(["instagram", "facebook", "threads"] as const)
+                {/* Boomin's brand OAuth is Instagram; the open server takes all three (BYO app). */}
+                {((boomin ? ["instagram"] : ["instagram", "facebook", "threads"]) as ("instagram" | "facebook" | "threads")[])
                   .filter((pl) => !mine.some((c) => c.platform === pl))
                   .map((pl) => (
                     <button
