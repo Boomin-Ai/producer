@@ -25,4 +25,26 @@ the cause — first suspects: `obs-*-test.exe` missing beside `producer.exe`, or
 
 ## From Windows
 
-(append results here)
+### 2026-09-04 (interim, numbers follow) — main v0.4.17 on a GTX 1660
+
+- `git pull` main (16b4bc4), `windows-engine.ps1` found `producer-libobs-windows-x64-f85b8f889ab3`
+  already on disk (fetched earlier from run 33889436281); closure gate PASS, obs-nvenc / obs-qsv11 /
+  obs-ffmpeg DLLs and all three `obs-*-test.exe` probes present.
+- First real `cfg(have_engine)` compile of main on Windows: **clean, no errors** (dev build; installer
+  build follows the stream runs so it does not pollute the CPU numbers).
+- Launched, room open: footer `d3d11 · NVENC`; `engine-report.json` → `"video_encoder":
+  "obs_nvenc_h264_tex", "hardware_encoder": true, "ok": true`; stderr
+  `[live] video encoder: obs_nvenc_h264_tex (hardware: true)`; NVENC SDK 12.2 compiled / 13.0 driver
+  (GeForce GTX 1660, driver 32.0.15.9174).
+- **Bug found on main, fixed in PR #40 (do not merge without you):** `scripts/dev-windows.ps1` carried a
+  literal TAB in `src-tauri	arget\debug` (heredoc mangling in the #35 commit), so the probe helpers
+  were copied to a junk dir and every dev build streamed x264 on a GPU box. Installer builds unaffected.
+- Also open: PR #32 (cropped edges red in the native outline; follows the fitted picture rect, not
+  the bounds) — rebases clean onto v0.4.17, no textual conflicts.
+- Earlier today on the identical code (win/parity before it merged as #35): 1080p60 NVENC 60 fps,
+  CPU 3.4–5.7%, 0 skipped/dropped over 3 min; 2160p60 stream-only 60 fps, CPU 3–6%, 0 skipped/dropped;
+  2160p60 stream + 1-min recording: file is 3840x2160@60 h264/AAC and plays, but only 34 s of the
+  60 s window and the stream skips (two NVENC 4K60 sessions on one encode engine); x264 1080p60
+  baseline CPU 11–13%. Re-measuring all of it on the v0.4.17 build now; numbers appended next.
+
+
