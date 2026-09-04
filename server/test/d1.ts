@@ -13,14 +13,14 @@ const schemaPath = join(dirname(fileURLToPath(import.meta.url)), "..", "schema.s
 
 class FakeStatement {
   private values: unknown[] = [];
-  constructor(private readonly db: DatabaseSync, private readonly sql: string) {}
+  constructor(private readonly db: DatabaseSyncType, private readonly sql: string) {}
   bind(...values: unknown[]) {
     this.values = values.map((v) => (v === undefined ? null : v));
     return this;
   }
   /** D1 binds `?N` by number (and a number may repeat); node:sqlite's
    *  positional API does not, so rewrite to anonymous `?` and expand. */
-  private compile(): { stmt: ReturnType<DatabaseSync["prepare"]>; params: unknown[] } {
+  private compile(): { stmt: ReturnType<DatabaseSyncType["prepare"]>; params: unknown[] } {
     const params: unknown[] = [];
     const sql = this.sql.replace(/\?(\d+)/g, (_, n: string) => {
       params.push(this.values[Number(n) - 1] ?? null);
