@@ -55,8 +55,11 @@ const REQUIRED_ENCODERS_OS: &[&str] = &["CoreAudio_AAC"];
 /// obs-ffmpeg is in the allowlist on both platforms, so this is the counterpart.
 const REQUIRED_ENCODERS_OS: &[&str] = &["ffmpeg_aac"];
 /// VideoToolbox is macOS hardware encode; its ids are hardware-dynamic, so it is
-/// asserted by substring. Windows hardware encoders (nvenc/qsv/amf) are NOT in
-/// the §5.2 allowlist, so there is no Windows counterpart to require.
+/// asserted by substring. Windows hardware encoders (obs-nvenc, obs-qsv11,
+/// obs-ffmpeg's AMF) ARE in the Windows allowlist since artifact rev 6, but
+/// each registers only when its vendor's GPU is present, so none can be
+/// REQUIRED — the boot probe picks from what registered (encoders.rs
+/// `choose_video`, NVENC → QSV → AMF → x264) and reports the choice.
 #[cfg(target_os = "macos")]
 const VT_ENCODER_SUBSTRING: &str = "videotoolbox";
 const REQUIRED_OUTPUTS: &[&str] = &["rtmp_output", "flv_output"];
@@ -77,6 +80,10 @@ pub struct EngineReport {
     pub failed_modules: Vec<String>,
     pub missing_ids: Vec<String>,
     pub videotoolbox_encoders: Vec<String>,
+    /// The H.264 encoder every session will use (encoders.rs), and whether
+    /// it is a GPU encoder. Decided here, once, from what registered.
+    pub video_encoder: String,
+    pub hardware_encoder: bool,
     pub sources: Vec<String>,
     pub encoders: Vec<String>,
     pub outputs: Vec<String>,
@@ -270,6 +277,26 @@ pub fn bootstrap_with_config(module_config_dir: &std::path::Path) -> EngineRepor
 /// BOOT can start there directly — booting 720p30 and resetting to the stored
 /// mode afterwards tears the Metal pipeline down on the main thread at every
 /// room open (the beach ball).
+/// The video modes the engine accepts: 720p/1080p/2160p at 30 or 60.
+/// 2160p ("4K") is additionally gated at SetVideo on a hardware encoder —
+/// a 3840×2160 canvas through x264 is not a product, it is a space heater.
+pub fn video_mode_ok(height: u32, fps: u32) -> bool {
+    matches!(height, 720 | 1080 | 2160) && matches!(fps, 30 | 60)
+}
+
+/// Local-recording bitrate for a canvas: quality-first, 2s keyframes.
+/// 720p 8 Mbps, 1080p 12 Mbps, 2160p 20 Mbps at 30 / 30 Mbps at 60 (the
+/// same ~1.7× step-up per resolution tier as 720→1080, doubled for the
+/// pixel count, plus a frame-rate step that 1080p never needed).
+pub fn record_kbps(height: u32, fps: u32) -> i64 {
+    match (height, fps) {
+        (2160, f) if f >= 60 => 30000,
+        (2160, _) => 20000,
+        (h, _) if h >= 1080 => 12000,
+        _ => 8000,
+    }
+}
+
 pub fn stored_video(dir: Option<&std::path::Path>) -> (u32, u32) {
     let fallback = (720u32, 30u32);
     let Some(dir) = dir else { return fallback };
@@ -281,7 +308,7 @@ pub fn stored_video(dir: Option<&std::path::Path>) -> (u32, u32) {
     };
     let h = v.get("h").and_then(|x| x.as_u64()).unwrap_or(720) as u32;
     let f = v.get("f").and_then(|x| x.as_u64()).unwrap_or(30) as u32;
-    if (h == 720 || h == 1080) && (f == 30 || f == 60) {
+    if video_mode_ok(h, f) {
         (h, f)
     } else {
         fallback
@@ -300,6 +327,8 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
         failed_modules: Vec::new(),
         missing_ids: Vec::new(),
         videotoolbox_encoders: Vec::new(),
+        video_encoder: super::encoders::X264.into(),
+        hardware_encoder: false,
         sources: Vec::new(),
         encoders: Vec::new(),
         outputs: Vec::new(),
@@ -549,6 +578,18 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
         report.missing_ids.push("<any VideoToolbox encoder>".into());
     }
 
+    // The encoder decision, from the ids that ACTUALLY registered (a Windows
+    // hardware encoder plugin loads fine and registers nothing on the wrong
+    // GPU). Published for multi/record/stream; surfaced to the UI below.
+    let choice = super::encoders::choose_video(&report.encoders);
+    eprintln!(
+        "[live] video encoder: {} (hardware: {})",
+        choice.id, choice.hardware
+    );
+    report.video_encoder = choice.id.clone();
+    report.hardware_encoder = choice.hardware;
+    super::encoders::set_chosen(choice);
+
     report.ok = report.missing_ids.is_empty() && report.failed_modules.is_empty();
     report
 }
@@ -785,6 +826,8 @@ pub enum LiveEvent {
         ok: bool,
         graphics_backend: Option<String>,
         obs_version: String,
+        video_encoder: String,
+        hw_encoder: bool,
     },
     SessionState {
         state: SessionState,
@@ -853,6 +896,22 @@ pub struct Snapshot {
     pub cpu: f64,
     pub video_height: u32,
     pub video_fps: u32,
+    /// The H.264 encoder id every session uses (encoders.rs), and whether it
+    /// is a GPU encoder — macOS VideoToolbox, Windows NVENC/QSV/AMF. The 4K
+    /// canvas is gated on `hw_encoder`.
+    #[serde(default)]
+    pub video_encoder: Option<String>,
+    #[serde(default)]
+    pub hw_encoder: bool,
+    /// 2160p at 60 is allowed. Intel Macs have VideoToolbox but not the
+    /// throughput for 4K60; they get 2160p30 only. Apple silicon: both.
+    #[serde(default)]
+    pub hw_4k60: bool,
+}
+
+/// Intel Macs get 2160p30 only — the encoder exists, the headroom doesn't.
+fn four_k_60_ok() -> bool {
+    !(cfg!(target_os = "macos") && cfg!(target_arch = "x86_64"))
 }
 
 pub struct LiveHandle {
@@ -1631,6 +1690,11 @@ pub fn start(
                 s.video_fps = f;
                 s.graphics_backend = report.graphics_backend.clone();
                 s.boot_phases_ms = report.boot_phases_ms.clone();
+                s.video_encoder = Some(report.video_encoder.clone());
+                // One gate for 4K on every platform: whatever GPU encoder
+                // registered (VideoToolbox, NVENC, QSV, AMF).
+                s.hw_encoder = report.hardware_encoder;
+                s.hw_4k60 = s.hw_encoder && four_k_60_ok();
             }
             if report.ok {
                 // CEF WARM-UP, off every critical path. The first browser
@@ -1673,6 +1737,8 @@ pub fn start(
                 ok: report.ok,
                 graphics_backend: report.graphics_backend.clone(),
                 obs_version: report.obs_version.clone(),
+                video_encoder: report.video_encoder.clone(),
+                hw_encoder: report.hardware_encoder,
             });
 
             // The implicit scene (§2.2) exists from engine start; sources are
@@ -1914,8 +1980,11 @@ pub fn start(
                             let _ = reply.send(Err("already recording".into()));
                         } else {
                             // Recording rides the same canvas as the stream at
-                            // a quality bitrate; 1080p gets more headroom.
-                            let br = if snap.lock().unwrap().video_height >= 1080 { 12000 } else { 8000 };
+                            // a quality bitrate keyed by canvas + frame rate.
+                            let br = {
+                                let s = snap.lock().unwrap();
+                                record_kbps(s.video_height, s.video_fps)
+                            };
                             match record::Recorder::start(&stamp, br) {
                                 Ok(r) => {
                                     let p = r.path();
@@ -2098,9 +2167,17 @@ pub fn start(
                             sink(&LiveEvent::EngineError {
                                 message: "stop the stream to change video settings".into(),
                             });
-                        } else if !(height == 720 || height == 1080) || !(fps == 30 || fps == 60) {
+                        } else if !video_mode_ok(height, fps) {
                             sink(&LiveEvent::EngineError {
-                                message: "video settings must be 720p/1080p at 30/60fps".into(),
+                                message: "video settings must be 720p/1080p/2160p at 30/60fps".into(),
+                            });
+                        } else if height == 2160 && !report.hardware_encoder {
+                            sink(&LiveEvent::EngineError {
+                                message: "4K needs a hardware encoder (VideoToolbox, NVENC, QSV, or AMF)".into(),
+                            });
+                        } else if height == 2160 && fps == 60 && !four_k_60_ok() {
+                            sink(&LiveEvent::EngineError {
+                                message: "4K on an Intel Mac runs at 30 fps".into(),
                             });
                         } else {
                             let module = graphics_module(report.graphics_backend.as_deref());

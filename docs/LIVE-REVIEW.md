@@ -126,6 +126,12 @@ under-used OBS (service policy, §4-D2), the fix was *more* OBS, not less.
 - Encoding: VideoToolbox preferred, x264 fallback (★ Kick's current policy —
   H.264 CBR ≤8Mbps ≤1080p60, with Mac users pointed at x264 for CBR — makes the
   fallback a first-class path, not an afterthought). AAC via coreaudio-encoder.
+  Windows (artifact rev 6): NVENC → QSV → AMF → x264, chosen at boot from
+  `obs_enum_encoder_types` (`src-tauri/src/live/encoders.rs`); AAC via
+  obs-ffmpeg's `ffmpeg_aac`. See docs/WINDOWS-ENGINE.md "Hardware encoders".
+  Canvas: 720p/1080p/2160p at 30/60. **2160p ("4K") is gated on a hardware
+  encoder** — offered only when the engine probed a VideoToolbox encoder
+  (macOS); Windows/Linux keep it disabled until NVENC/AMF/QSV are wired.
 - ★ **Shared encode by default, computed via OBS service policy** (see D2) —
   never a hardcoded common bitrate. Per-destination dedicated encoders exposed
   as a power-user option in v1.

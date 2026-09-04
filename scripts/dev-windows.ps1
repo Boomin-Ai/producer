@@ -19,6 +19,14 @@ Write-Host "engine: $eng"
 
 Push-Location $RepoRoot
 try {
+  # The hardware-encoder plugins run obs-nvenc-test.exe / obs-qsv-test.exe /
+  # obs-amf-test.exe from the EXECUTABLE's directory (the installer flattens
+  # bin/ beside producer.exe). The dev exe lives in target\debug, so without
+  # this copy every probe fails and a GPU box silently streams x264.
+  $dbg = Join-Path $RepoRoot "src-tauri	arget\debug"
+  New-Item -ItemType Directory -Force $dbg | Out-Null
+  Get-ChildItem (Join-Path $eng "bin") -Filter "obs-*-test.exe" | ForEach-Object { Copy-Item $_.FullName $dbg -Force }
+  Write-Host "encoder probe helpers beside the dev exe: $((Get-ChildItem $dbg -Filter 'obs-*-test.exe').Name -join ', ')"
   if ($Build) {
     cargo build --manifest-path src-tauri\Cargo.toml
     if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }

@@ -17,12 +17,41 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
-use super::{creds, ffi};
+use super::{creds, encoders, ffi};
 
-const VT_H264_HW: &str = "com.apple.videotoolbox.videoencoder.ave.avc";
 const MAX_STREAM_SECS: u64 = 12 * 60 * 60; // backstop only; UI/harness stop explicitly
 const BASE_VIDEO_KBPS: i64 = 4500;
 const BASE_AUDIO_KBPS: i64 = 160;
+
+/// The base video bitrate the policy intersection starts from, keyed by the
+/// canvas libobs is actually running. 720p/1080p keep the 4500 kbps every
+/// service accepts; 2160p starts at 20000 (30fps) / 30000 (60fps) and lets
+/// each destination's service policy cap it down (D2) — never a hardcoded
+/// common bitrate, still.
+fn base_video_kbps(height: u32, fps: i32) -> i64 {
+    match height {
+        2160 if fps >= 60 => 30000,
+        2160 => 20000,
+        _ => BASE_VIDEO_KBPS,
+    }
+}
+
+/// The canvas libobs is running right now: (output height, fps). Falls back
+/// to 720p30 if video was never reset — the engine's own boot default.
+unsafe fn current_canvas() -> (u32, i32) {
+    let mut ovi: std::mem::MaybeUninit<ffi::obs_video_info> = std::mem::MaybeUninit::zeroed();
+    if ffi::obs_get_video_info(ovi.as_mut_ptr()) {
+        let ovi = ovi.assume_init();
+        let fps = if ovi.fps_den > 0 {
+            (ovi.fps_num / ovi.fps_den) as i32
+        } else {
+            30
+        };
+        (ovi.output_height, fps.max(1))
+    } else {
+        (720, 30)
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DestinationSpec {
@@ -230,17 +259,18 @@ unsafe fn create_service(
 /// encoder settings, read the caps (F12), fold into the shared intersection.
 unsafe fn policy_intersection(
     dests: &[DestRuntime],
+    base_video_kbps: i64,
     fps: i32,
     notes: &mut Vec<String>,
 ) -> Result<(i64, i64, Vec<PolicyReadout>), String> {
-    let mut video_kbps = BASE_VIDEO_KBPS;
+    let mut video_kbps = base_video_kbps;
     let mut audio_kbps = BASE_AUDIO_KBPS;
     let mut readouts = Vec::new();
 
     for d in dests {
         let v = ffi::obs_data_create();
         ffi::obs_data_set_string(v, cstr("rate_control").as_ptr(), cstr("CBR").as_ptr());
-        ffi::obs_data_set_int(v, cstr("bitrate").as_ptr(), BASE_VIDEO_KBPS);
+        ffi::obs_data_set_int(v, cstr("bitrate").as_ptr(), base_video_kbps);
         ffi::obs_data_set_int(v, cstr("keyint_sec").as_ptr(), 2);
         let a = ffi::obs_data_create();
         ffi::obs_data_set_int(a, cstr("bitrate").as_ptr(), BASE_AUDIO_KBPS);
@@ -389,8 +419,13 @@ impl Session {
                 return Err(report);
             }
 
+            let (canvas_h, canvas_fps) = current_canvas();
+            let base_kbps = base_video_kbps(canvas_h, canvas_fps);
+            report.notes.push(format!(
+                "canvas {canvas_h}p{canvas_fps}, base {base_kbps} kbps"
+            ));
             let (video_kbps, audio_kbps, readouts) =
-                match policy_intersection(&dests, 30, &mut report.notes) {
+                match policy_intersection(&dests, base_kbps, canvas_fps, &mut report.notes) {
                     Ok(r) => r,
                     Err(e) => {
                         report.notes.push(e);
@@ -405,37 +440,25 @@ impl Session {
             report.shared_video_kbps = video_kbps;
             report.shared_audio_kbps = audio_kbps;
 
+            // The shared encoder is the one the boot probe chose (VideoToolbox
+            // / NVENC / QSV / AMF), CBR at the D2 intersection bitrate, 2s
+            // keyframes, each family's OBS-default quality preset; x264 if
+            // the hardware refuses at create time (A7 fallback).
             let venc_settings = ffi::obs_data_create();
-            ffi::obs_data_set_string(
-                venc_settings,
-                cstr("rate_control").as_ptr(),
-                cstr("CBR").as_ptr(),
-            );
-            ffi::obs_data_set_int(venc_settings, cstr("bitrate").as_ptr(), video_kbps);
-            ffi::obs_data_set_int(venc_settings, cstr("keyint_sec").as_ptr(), 2);
-            let mut venc = ffi::obs_video_encoder_create(
-                cstr(VT_H264_HW).as_ptr(),
-                cstr("shared-vt-h264").as_ptr(),
-                venc_settings,
-                ptr::null_mut(),
-            );
-            report.encoder_used = VT_H264_HW.into();
-            if venc.is_null() {
-                report
-                    .notes
-                    .push("VT unavailable; shared encoder = obs_x264 (A7 fallback)".into());
-                venc = ffi::obs_video_encoder_create(
-                    cstr("obs_x264").as_ptr(),
-                    cstr("shared-x264").as_ptr(),
-                    venc_settings,
-                    ptr::null_mut(),
-                );
-                report.encoder_used = "obs_x264".into();
+            let chosen = encoders::chosen();
+            encoders::apply_video_defaults(venc_settings, &chosen.id, video_kbps);
+            let (venc, used) = encoders::create_video("shared-h264", venc_settings);
+            if used != chosen.id {
+                report.notes.push(format!(
+                    "{} unavailable; shared encoder = {used} (A7 fallback)",
+                    chosen.id
+                ));
             }
+            report.encoder_used = used;
             let aenc_settings = ffi::obs_data_create();
             ffi::obs_data_set_int(aenc_settings, cstr("bitrate").as_ptr(), audio_kbps);
             let aenc = ffi::obs_audio_encoder_create(
-                cstr("CoreAudio_AAC").as_ptr(),
+                cstr(encoders::audio_id()).as_ptr(),
                 cstr("shared-aac").as_ptr(),
                 aenc_settings,
                 0,

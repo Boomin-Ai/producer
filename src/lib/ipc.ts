@@ -323,10 +323,25 @@ export interface LiveSnapshot {
   video_height?: number;
   video_fps?: number;
   stage_transparent?: boolean;
+  /** The H.264 encoder id every session uses, decided at engine boot from
+   * what libobs registered: VideoToolbox on macOS; NVENC → QSV → AMF on
+   * Windows; obs_x264 when no GPU encoder is present. */
+  video_encoder?: string | null;
+  /** True when `video_encoder` is a GPU encoder. Gates the 2160p option. */
+  hw_encoder?: boolean;
+  /** 2160p at 60 allowed (Apple silicon yes; Intel Macs 2160p30 only). */
+  hw_4k60?: boolean;
 }
 
 export type LiveEvent =
-  | { type: "engine_ready"; ok: boolean; graphics_backend?: string | null; obs_version: string }
+  | {
+      type: "engine_ready";
+      ok: boolean;
+      graphics_backend?: string | null;
+      obs_version: string;
+      video_encoder?: string;
+      hw_encoder?: boolean;
+    }
   | { type: "session_state"; state: LiveSessionState }
   | { type: "status"; elapsed_secs: number; destinations: LiveDestStatus[] }
   | { type: "session_ended"; report: { ok: boolean; destinations: LiveDestStatus[]; notes: string[] } }

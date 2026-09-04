@@ -11,7 +11,7 @@ use std::ffi::CString;
 use std::path::PathBuf;
 use std::ptr;
 
-use super::ffi;
+use super::{encoders, ffi};
 
 fn cstr(s: &str) -> CString {
     CString::new(s).unwrap_or_else(|_| CString::new("").unwrap())
@@ -25,11 +25,19 @@ pub struct Recorder {
     started: std::time::Instant,
 }
 
-/// Where recordings land. ~/Movies/Producer, created on demand — the same
-/// place a Mac user looks for anything they recorded.
+/// Where recordings land. ~/Movies/Producer on a Mac, %USERPROFILE%\Videos\
+/// Producer on Windows — created on demand, the place each OS's user looks
+/// for anything they recorded.
 pub fn recordings_dir() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-    let dir = PathBuf::from(home).join("Movies").join("Producer");
+    let dir = if cfg!(target_os = "windows") {
+        let home = std::env::var("USERPROFILE")
+            .or_else(|_| std::env::var("HOME"))
+            .unwrap_or_else(|_| ".".into());
+        PathBuf::from(home).join("Videos").join("Producer")
+    } else {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+        PathBuf::from(home).join("Movies").join("Producer")
+    };
     let _ = std::fs::create_dir_all(&dir);
     dir
 }
@@ -44,30 +52,17 @@ impl Recorder {
     pub fn start(stamp: &str, bitrate: i64) -> Result<Recorder, String> {
         let path = recordings_dir().join(filename(stamp));
         unsafe {
-            // Quality-first: CRF-like high CBR, 2s keyframes for scrubbing.
+            // Quality-first: high CBR, 2s keyframes for scrubbing, on the
+            // encoder the boot probe chose (hardware where the box has it,
+            // x264 otherwise — encoders.rs).
             let vs = ffi::obs_data_create();
-            ffi::obs_data_set_string(vs, cstr("rate_control").as_ptr(), cstr("CBR").as_ptr());
-            ffi::obs_data_set_int(vs, cstr("bitrate").as_ptr(), bitrate);
-            ffi::obs_data_set_int(vs, cstr("keyint_sec").as_ptr(), 2);
+            encoders::apply_video_defaults(vs, &encoders::chosen().id, bitrate);
             let as_ = ffi::obs_data_create();
             ffi::obs_data_set_int(as_, cstr("bitrate").as_ptr(), 192);
 
-            let mut venc = ffi::obs_video_encoder_create(
-                cstr("com.apple.videotoolbox.videoencoder.ave.avc").as_ptr(),
-                cstr("Producer REC H264").as_ptr(),
-                vs,
-                ptr::null_mut(),
-            );
-            if venc.is_null() {
-                venc = ffi::obs_video_encoder_create(
-                    cstr("obs_x264").as_ptr(),
-                    cstr("Producer REC x264").as_ptr(),
-                    vs,
-                    ptr::null_mut(),
-                );
-            }
+            let (venc, _used) = encoders::create_video("Producer REC H264", vs);
             let aenc = ffi::obs_audio_encoder_create(
-                cstr("CoreAudio_AAC").as_ptr(),
+                cstr(encoders::audio_id()).as_ptr(),
                 cstr("Producer REC AAC").as_ptr(),
                 as_,
                 0,
