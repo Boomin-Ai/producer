@@ -5700,7 +5700,7 @@ textarea::placeholder {
    surfaces shift right as one piece, nothing is overlaid. */
 .cr.cr--vibrant {
   --rail-w: 88px;
-  --settings-w: 440px;
+  --settings-w: 300px;
 }
 .cr.cr--vibrant.settings-open {
   --rail-w: calc(88px + var(--settings-w));
@@ -5731,16 +5731,9 @@ textarea::placeholder {
 
 /* ── Home rail — full-height frosted column, inset + rounded ───────────── */
 .cr.cr--vibrant .cr-home {
-  margin-left: 88px; /* the bare rail; settings never reflows the surface */
+  margin-left: var(--rail-w);
   padding-left: 6px;
-  transition: transform 0.26s ease;
-}
-
-/* While Settings is open the surface keeps its size and layout exactly as
-   it was and slides right by the settings width — off the window's edge if
-   that's where it lands. It is inert behind the scrim; it never re-fits. */
-.cr.cr--vibrant.settings-open .cr-home {
-  transform: translateX(var(--settings-w));
+  transition: margin-left 0.26s ease;
 }
 
 /* ── Settings — a surface that expands OUT of the rail ────────────────────
@@ -8584,10 +8577,6 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .set .live-editor button { background: none; border: 1px solid oklch(1 0 0 / 0.12); border-radius: 999px; padding: 7px 14px; color: var(--fg-1); }
 .set .live-editor button.primary { background: var(--mint); color: #06110b; border-color: transparent; font-weight: 700; }
 
-/* Settings open: the surface is pushed right and inert — a scrim covers it and a click closes. */
-.home-settings-scrim { position: fixed; top: 0; bottom: 0; right: 0; left: var(--rail-w); z-index: 38; background: oklch(0 0 0 / 0.28); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); cursor: default; }
-.cr.settings-open .cr-home { pointer-events: none; user-select: none; }
-
 /* Settings › channels: one block per source of channels */
 .set .set-sub { margin-top: 12px; padding: 12px 0; border-top: 1px solid oklch(1 0 0 / 0.07); }
 .set .set-sub:first-of-type { border-top: 0; }
@@ -8599,9 +8588,27 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .set .set-sub-empty { font-size: 12.5px; color: var(--fg-2); }
 .set .set-sub .cr-channels { gap: 6px; align-items: center; }
 .set .set-sub .set-connect-pending, .set .set-sub .set-connect-error { margin-top: 8px; }
-/* The Network rail is fixed to the window's right edge, so it must slide with the surface. */
-.cr.cr--vibrant .net-rail { transition: transform 0.26s ease; }
-.cr.cr--vibrant.settings-open .net-rail { transform: translateX(var(--settings-w)); pointer-events: none; user-select: none; }
-
 .set .cr-label-sub { font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--fg-2); }
 .ws-gear.ws-drop:hover { color: #ffb4b4; }
+
+/* ═══ Settings: a list on the glass, a page on the surface ═══ */
+.set-nav { padding-right: 12px; }
+.set-nav-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 16px; }
+.set-nav-ws { font-size: 12px; color: var(--fg-2); }
+.set-nav-list { display: flex; flex-direction: column; gap: 2px; }
+.set-nav-item { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 9px 12px; border-radius: 10px; border: 1px solid transparent; background: none; color: var(--fg-1); text-align: left; cursor: pointer; }
+.set-nav-item:hover { background: oklch(1 0 0 / 0.05); }
+.set-nav-item.on { background: oklch(1 0 0 / 0.08); border-color: oklch(1 0 0 / 0.12); }
+.set-nav-item.soon .set-nav-label::after { content: "soon"; margin-left: 8px; font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); }
+.set-nav-label { font-weight: 600; font-size: 13.5px; }
+.set-nav-sub { font-size: 11.5px; color: var(--fg-2); }
+.set-page { margin-left: var(--rail-w); transition: margin-left 0.26s ease; }
+.set-page-in { max-width: 760px; padding: 40px 32px 64px; }
+.set-page-head { display: flex; flex-direction: column; gap: 4px; margin-bottom: 22px; padding-bottom: 14px; border-bottom: 1px solid oklch(1 0 0 / 0.08); }
+.set-page-title { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg-1); }
+.set-page-sub { font-size: 13px; color: var(--fg-2); }
+.set-page .set-top { border-bottom: 0; margin-bottom: 8px; padding: 0; }
+.set-page .set-top .cr-sheet-title { display: none; }
+.set-page .set-top-r { margin-left: 0; }
+.set-page .cr-label.set-gap:first-of-type { margin-top: 0; }
+.set-soon { font-size: 13.5px; color: var(--fg-2); line-height: 1.55; max-width: 560px; }

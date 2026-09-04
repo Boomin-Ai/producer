@@ -227,6 +227,7 @@ export function Home({
   // pushes the home surfaces right (never a panel over them). It only exists
   // at home, so opening it from another view returns home first.
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("app");
   const openSettings = useCallback(() => {
     setView({ kind: "home" });
     setSettingsOpen(true);
@@ -443,13 +444,13 @@ export function Home({
         <SystemBanner message={loadError} onDismiss={() => setErrorDismissed(true)} />
       )}
 
-      {view.kind === "home" && settingsOpen && (
-        <div className="home-settings-scrim" onClick={closeSettings} aria-hidden />
-      )}
       {view.kind === "home" && (
         <aside className={`home-settings${settingsOpen ? " open" : ""}`} aria-hidden={!settingsOpen}>
           {settingsShown && (
             <SettingsPanel
+              mode="nav"
+              section={settingsSection}
+              onSection={setSettingsSection}
               endpoints={endpoints}
               destinations={destinations}
               channels={channels}
@@ -506,7 +507,20 @@ export function Home({
           section={view.section}
         />
       )}
-      {view.kind === "home" && (
+      {view.kind === "home" && settingsOpen && (
+        <SettingsPanel
+          mode="page"
+          section={settingsSection}
+          onSection={setSettingsSection}
+          endpoints={endpoints}
+          destinations={destinations}
+          channels={channels}
+          onChannelsChanged={loadLive}
+          updater={updater}
+          onClose={closeSettings}
+        />
+      )}
+      {view.kind === "home" && !settingsOpen && (
         <ControlRoomHome
           surface={surface}
           rooms={rooms}
@@ -715,7 +729,20 @@ function NetworkInviteReset({ endpoints }: { endpoints: EndpointInfo[] }) {
 /** The body of Settings. Lives inside the rail-side `.home-settings`
  * surface (see Home): no backdrop, no sheet chrome — the rail's Back button
  * and Esc close it. */
+type SettingsSection = "app" | "output" | "audio" | "guests" | "integrations" | "vcam";
+const SETTINGS_SECTIONS: { id: SettingsSection; label: string; sub: string; built: boolean }[] = [
+  { id: "app", label: "App", sub: "Version, updates, shortcuts", built: true },
+  { id: "integrations", label: "Integrations", sub: "Live destinations, posting channels", built: true },
+  { id: "output", label: "Output", sub: "Encoder, bitrate, recording", built: false },
+  { id: "audio", label: "Audio", sub: "Devices, monitoring, filters", built: false },
+  { id: "guests", label: "Guests", sub: "Admit rules, TURN relay", built: false },
+  { id: "vcam", label: "Virtual camera", sub: "Auto-start, output", built: false },
+];
+
 function SettingsPanel({
+  mode,
+  section,
+  onSection,
   endpoints,
   destinations,
   channels,
@@ -723,6 +750,10 @@ function SettingsPanel({
   updater,
   onClose,
 }: {
+  /** "nav" lives on the glass beside the rail; "page" is the surface. */
+  mode: "nav" | "page";
+  section: SettingsSection;
+  onSection: (s: SettingsSection) => void;
   endpoints: EndpointInfo[];
   destinations: LiveDestination[];
   channels: Channel[];
@@ -774,8 +805,38 @@ function SettingsPanel({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+  if (mode === "nav") {
+    return (
+      <div className="home-settings-in set set-nav">
+        <div className="set-nav-head">
+          <span className="cr-sheet-title">Settings</span>
+          <span className="set-nav-ws">{current?.name ?? ""}</span>
+        </div>
+        <div className="set-nav-list">
+          {SETTINGS_SECTIONS.map((it) => (
+            <button
+              key={it.id}
+              className={`set-nav-item${section === it.id ? " on" : ""}${it.built ? "" : " soon"}`}
+              onClick={() => onSection(it.id)}
+            >
+              <span className="set-nav-label">{it.label}</span>
+              <span className="set-nav-sub">{it.sub}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  const meta = SETTINGS_SECTIONS.find((it) => it.id === section)!;
   return (
-      <div className="home-settings-in set">
+    <main className="cr-page set-page">
+      <div className="set-page-in set">
+        <div className="set-page-head">
+          <span className="set-page-title">{meta.label}</span>
+          <span className="set-page-sub">{meta.sub}{current ? ` · ${current.name}` : ""}</span>
+        </div>
+        {section === "app" && (
+          <>
         <div className="set-top">
           <span className="cr-sheet-title">Settings</span>
           <div className="set-top-r">
@@ -858,18 +919,6 @@ function SettingsPanel({
           </div>
         </div>
 
-        {/* The workspace popout (K) is the one switcher; Settings just follows
-            the active workspace. */}
-        {current && (
-          <ChannelsBlock
-            destinations={destinations}
-            channels={channels.filter((c) => c.endpoint_id === current.id)}
-            endpoints={[current]}
-            onChanged={onChannelsChanged}
-          />
-        )}
-        {current && <div className="set-list"><NetworkInviteReset endpoints={[current]} /></div>}
-
         <div className="cr-label set-gap">DEV</div>
         <div className="set-list">
           <div className="cr-sheet-row">
@@ -884,7 +933,34 @@ function SettingsPanel({
             />
           </div>
         </div>
+
+          </>
+        )}
+        {section === "integrations" && (
+          <>
+        {current && (
+          <ChannelsBlock
+            destinations={destinations}
+            channels={channels.filter((c) => c.endpoint_id === current.id)}
+            endpoints={[current]}
+            onChanged={onChannelsChanged}
+          />
+        )}
+        {current && <div className="set-list"><NetworkInviteReset endpoints={[current]} /></div>}
+
+
+          </>
+        )}
+        {!meta.built && (
+          <div className="set-soon">
+            {section === "output" && "Encoder override, rate control, keyframe interval, bitrate policy, recording format and folder, audio bitrate. Today these are fixed constants in the engine."}
+            {section === "audio" && "Default mic and desktop audio, monitoring device, sample rate, and the audio filter library. Today: 48 kHz fixed, four filters."}
+            {section === "guests" && "Auto-admit, guest cap, and a TURN relay for guests behind strict networks. Today the relay is a server variable."}
+            {section === "vcam" && "Start the virtual camera with the room, choose what it outputs. Today: on or off."}
+          </div>
+        )}
       </div>
+    </main>
   );
 }
 
