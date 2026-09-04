@@ -321,6 +321,216 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorResponse" }
 
+  # ── Live guests (host ↔ guest over WebRTC; the server only introduces) ──────
+  # Same paths on both backends. Host family: x-token-class primary. Guest
+  # family (/v1/connect/guest…): NO bearer — the invite code, room code,
+  # render key or 120 s signaling ticket in the request is the credential.
+  # Full DTOs: see server/src/guests.ts (publicRoom, publicGuest, roomRoster).
+
+  /v1/app/live/rooms:
+    get:
+      operationId: listLiveRooms
+      x-token-class: primary
+      summary: Every room on this server
+      responses:
+        "200":
+          description: Rooms.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rooms: { type: array, items: { $ref: "#/components/schemas/LiveRoom" } }
+    post:
+      operationId: createLiveRoom
+      x-token-class: primary
+      summary: Register a room (idempotent by external_ref)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string, maxLength: 80 }
+                external_ref: { type: string, maxLength: 200, description: The client's own room id. Same ref → same room. }
+      responses:
+        "200":
+          description: The room, and whether this call created it.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  room: { $ref: "#/components/schemas/LiveRoom" }
+                  created: { type: boolean }
+  /v1/app/live/rooms/{roomId}:
+    patch:
+      operationId: updateLiveRoom
+      x-token-class: primary
+      summary: Rename / set config
+      parameters: [{ $ref: "#/components/parameters/roomId" }]
+      responses:
+        "200": { description: Updated room (`{ room }`). }
+    delete:
+      operationId: deleteLiveRoom
+      x-token-class: primary
+      parameters: [{ $ref: "#/components/parameters/roomId" }]
+      responses:
+        "200": { description: "`{ ok: true }`" }
+  /v1/app/live/rooms/{roomId}/guests:
+    get:
+      operationId: liveRoomRoster
+      x-token-class: primary
+      summary: The roster Producer polls (~3 s); stamps host presence
+      parameters: [{ $ref: "#/components/parameters/roomId" }]
+      responses:
+        "200":
+          description: "`{ guests: RosterGuest[] }` — render_url only for admitted guests."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  guests: { type: array, items: { $ref: "#/components/schemas/RosterGuest" } }
+    post:
+      operationId: inviteLiveGuest
+      x-token-class: primary
+      summary: Invite a named guest by link (invite_url returned once)
+      parameters: [{ $ref: "#/components/parameters/roomId" }]
+      responses:
+        "201": { description: "`{ guest, invite_url, render_url }`" }
+        "422": { description: "`network_unavailable` if guest_brand_id is sent — brand guests need Boomin." }
+  /v1/app/live/rooms/{roomId}/stage:
+    post:
+      operationId: setLiveStage
+      x-token-class: primary
+      summary: Publish the FULL on-stage list (filtered to admitted guests; versioned; pushed to the room channel)
+      parameters: [{ $ref: "#/components/parameters/roomId" }]
+      responses:
+        "200": { description: "`{ on_stage: string[], version: number }`" }
+        "409": { description: "`stage_full`" }
+  /v1/app/live/rooms/{roomId}/guest-order:
+    post:
+      operationId: setLiveGuestOrder
+      x-token-class: primary
+      summary: Host-controlled slot order (`{ order: string[] }`)
+      parameters: [{ $ref: "#/components/parameters/roomId" }]
+      responses:
+        "200": { description: "`{ ok: true }`" }
+  /v1/app/live/rooms/{roomId}/guest-link:
+    post:
+      operationId: setLiveGuestLink
+      x-token-class: primary
+      summary: Enable / rotate / disable the room's public join link
+      parameters: [{ $ref: "#/components/parameters/roomId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+                rotate: { type: boolean, description: New code; revokes WAITING link guests. }
+                auto_admit: { type: boolean }
+                remove_admitted: { type: boolean, description: With rotate — also eject admitted link guests. }
+      responses:
+        "200": { description: "`{ join_url: string|null (only at rotation), enabled, auto_admit }`" }
+  /v1/app/live/guests/{guestId}/admit:
+    post:
+      operationId: admitLiveGuest
+      x-token-class: primary
+      parameters: [{ $ref: "#/components/parameters/guestId" }]
+      responses:
+        "200": { description: "`{ guest }`" }
+  /v1/app/live/guests/{guestId}/revoke:
+    post:
+      operationId: revokeLiveGuest
+      x-token-class: primary
+      summary: Kick (server-side flip; the render source keeps its framing)
+      parameters: [{ $ref: "#/components/parameters/guestId" }]
+      responses:
+        "200": { description: "`{ guest }`" }
+
+  /v1/connect/guest/room/{code}/join:
+    post:
+      operationId: joinLiveRoomByLink
+      security: []
+      summary: A stranger joins by room link → `waiting` (or `accepted` with auto_admit)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [display_name]
+              properties:
+                display_name: { type: string, maxLength: 80 }
+                resume_code: { type: string, description: Previous invite_code — resumes the SAME slot on reload. }
+      responses:
+        "201": { description: "`{ guest, invite_code, resumed: false }`" }
+        "200": { description: "`{ guest, invite_code, resumed: true }`" }
+        "409": { description: "`guest_room_full`" }
+        "410": { description: "`guest_link_disabled`" }
+  /v1/connect/guest/{code}:
+    get:
+      operationId: getLiveGuest
+      security: []
+      responses:
+        "200": { description: "`{ guest }`" }
+        "410": { description: "`guest_revoked` | `guest_declined` | `guest_ended`" }
+  /v1/connect/guest/{code}/accept:
+    post: { operationId: acceptLiveGuest, security: [], responses: { "200": { description: "`{ guest }` (idempotent)" } } }
+  /v1/connect/guest/{code}/decline:
+    post: { operationId: declineLiveGuest, security: [], responses: { "200": { description: "`{ ok: true }`" } } }
+  /v1/connect/guest/{code}/session:
+    post:
+      operationId: liveGuestSession
+      security: []
+      summary: Guest-side signaling ticket (accepted guests only)
+      responses:
+        "200": { description: "`{ signaling_ticket, signaling_url, channel, peer_id, role, ice_servers, expires_in }`" }
+        "409": { description: "`guest_not_accepted`" }
+  /v1/connect/guest/{code}/room-session:
+    post:
+      operationId: liveGuestRoomSession
+      security: []
+      summary: Ticket to the ROOM channel + the current stage list
+      responses:
+        "200": { description: "`{ signaling_ticket, signaling_url, peer_id, stage: { on_stage, version } }`" }
+  /v1/connect/guest/render/{guestId}/session:
+    post:
+      operationId: liveRenderSession
+      security: []
+      summary: Render-side ticket (Producer's browser source; `?k=` render key)
+      responses:
+        "200": { description: "Signaling fields + `display_name`, `guest_status`." }
+  /v1/connect/guest/render/{guestId}/quality:
+    post:
+      operationId: liveRenderQuality
+      security: []
+      summary: Render page reports inbound quality (`good|degraded|failing`)
+      responses:
+        "200": { description: "`{ ok: true }`" }
+  /v1/connect/guest-signal:
+    get:
+      operationId: liveGuestSignal
+      security: []
+      summary: WebSocket upgrade (`?ticket=`) → the per-guest signaling Durable Object. Status re-checked at CONNECT.
+      responses:
+        "101": { description: Switching protocols. }
+        "401": { description: "`invalid_ticket`" }
+        "410": { description: "`guest_unavailable`" }
+  /v1/connect/guest-room-signal:
+    get:
+      operationId: liveRoomSignal
+      security: []
+      summary: WebSocket upgrade (`?ticket=`) → the room's signaling Durable Object (stage pushes, guest↔guest).
+      responses:
+        "101": { description: Switching protocols. }
+
 components:
   securitySchemes:
     bearer:
@@ -341,6 +551,16 @@ components:
       schema: { type: string, minLength: 16, maxLength: 128 }
     channelId:
       name: channelId
+      in: path
+      required: true
+      schema: { type: string }
+    roomId:
+      name: roomId
+      in: path
+      required: true
+      schema: { type: string }
+    guestId:
+      name: guestId
       in: path
       required: true
       schema: { type: string }
@@ -375,6 +595,33 @@ components:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
 
   schemas:
+    LiveRoom:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string, nullable: true }
+        kind: { type: string, enum: [camera] }
+        config: { type: object }
+        external_ref: { type: string, nullable: true }
+        visibility: { type: string, enum: [private] }
+        is_default: { type: boolean }
+        session: { nullable: true }
+        created_at: { type: string, format: date-time }
+    RosterGuest:
+      type: object
+      properties:
+        id: { type: string }
+        display_name: { type: string }
+        state: { type: string, enum: [waiting, invited, connected, admitted, left] }
+        joined_via: { type: string, enum: [invite, room_link] }
+        render_url: { type: string, nullable: true, description: Only for admitted guests. Stable for the guest's life. }
+        guest_brand: { nullable: true, description: Always null on a self-hosted server. }
+        avatar_url: { type: string, nullable: true }
+        position: { type: integer, nullable: true }
+        snapshot: { type: string, nullable: true }
+        quality: { type: string, enum: [good, degraded, failing, unknown] }
+        joined_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time, nullable: true }
     ServerInfo:
       type: object
       required: [ok, implementation, contract_version]

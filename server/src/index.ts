@@ -17,6 +17,7 @@ import { authorizeUrl, exchangeCode } from "./oauth";
 import { senderFor, SENDERS } from "./senders";
 import type { JobInput } from "./senders/types";
 import { captionFromOverrides, rememberOrigin, tick, type JobRow } from "./queue";
+import { connectGuestRoutes, guestPageRoutes, liveHostRoutes } from "./live";
 
 type Vars = { tokenClass: TokenClass };
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
@@ -46,6 +47,9 @@ app.use("/v1/*", async (c, next) => {
   // The one-time PUT of upload bytes authenticates by its signed URL token,
   // exactly like a presigned URL — an uploader tool needs no bearer header.
   if (c.req.method === "PUT" && /^\/v1\/media\/uploads\/[^/]+\/content$/.test(c.req.path)) return next();
+  // Guest pages and the signaling upgrades carry no bearer: the invite code,
+  // room code, render key or 120-second ticket in the request IS the credential.
+  if (c.req.path.startsWith("/v1/connect/guest")) return next();
   const tokenClass = classifyToken(c.env, c);
   c.set("tokenClass", tokenClass);
   // Self-configure the public origin so cron ticks can mint media URLs.
@@ -436,6 +440,14 @@ app.post("/v1/jobs/:jobId/retry", async (c) => {
   return c.json(contractJob({ ...row, state: "queued", attempt: 0, error_class: null, error_message: null }));
 });
 
+// ── Live rooms + guests (see live.ts) ────────────────────────────────────────
+// Host family (primary token only) at the same paths Boomin serves, so the
+// Producer desktop app speaks to either backend unchanged.
+
+app.route("/v1/app/live", liveHostRoutes);
+app.route("/v1/connect", connectGuestRoutes);
+app.route("/connect", guestPageRoutes);
+
 // ── Public: OAuth connect flow (human browser consent) ───────────────────────
 
 app.get("/connect/:platform", async (c) => {
@@ -541,6 +553,8 @@ function parseRange(header: string): R2Range | undefined {
 }
 
 // ── Worker entry ─────────────────────────────────────────────────────────────
+
+export { RealtimeHub } from "./realtime";
 
 export default {
   fetch: (request: Request, env: Env, ctx: ExecutionContext) => app.fetch(request, env, ctx),

@@ -91,3 +91,79 @@ CREATE TABLE IF NOT EXISTS connect_sessions (
   created_at INTEGER NOT NULL,
   expires_at INTEGER NOT NULL
 );
+
+-- ── Live guests ─────────────────────────────────────────────────────────────
+-- Host↔guest over WebRTC. This server only INTRODUCES peers (a signaling
+-- Durable Object per guest and per room) and keeps the roster + stage list;
+-- media flows device to device and never touches the worker. Same tables
+-- and DTOs as Boomin's hosted API minus every brand/org/deal column, so the
+-- Producer desktop app speaks to either without a fork.
+
+CREATE TABLE IF NOT EXISTS live_rooms (
+  id TEXT PRIMARY KEY,
+  title TEXT,
+  -- Producer's OWN room id (its local SQLite row). Never the PK — a client
+  -- must not choose identity here — just a lookup key that makes
+  -- registration idempotent across retries, reinstalls, second machines.
+  external_ref TEXT UNIQUE,
+  config TEXT NOT NULL DEFAULT '{}',
+  -- Room-level guest join link: hashed; rotating revokes everyone who joined
+  -- through the old code.
+  guest_join_code_hash TEXT,
+  guest_join_enabled INTEGER NOT NULL DEFAULT 0,
+  -- Escape hatch for a trusted panel. OFF by default: a public link plus
+  -- auto-admit puts an unknown person on air under a name they typed.
+  guest_auto_admit INTEGER NOT NULL DEFAULT 0,
+  -- Concurrent ADMITTED guests, enforced server-side.
+  guest_capacity INTEGER NOT NULL DEFAULT 8,
+  -- Who is ON STAGE right now (JSON array of guest ids) — authoritative and
+  -- persisted, so the ephemeral fan-out layer owns no durable truth.
+  stage_guest_ids TEXT NOT NULL DEFAULT '[]',
+  -- Monotonic, single-writer: clients apply an update only if newer.
+  stage_version INTEGER NOT NULL DEFAULT 0,
+  stage_capacity INTEGER NOT NULL DEFAULT 4,
+  -- Last time the host's Producer touched this room (roster poll / stage
+  -- publish). A heartbeat, not a flag: a crashed host stops stamping.
+  host_seen_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS live_room_guests (
+  id TEXT PRIMARY KEY,
+  room_id TEXT NOT NULL REFERENCES live_rooms(id) ON DELETE CASCADE,
+  display_name TEXT NOT NULL,
+  avatar_url TEXT,
+  -- Hashed, shown once. The invite code IS the guest's credential.
+  invite_code_hash TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'invited'
+    CHECK (status IN ('invited', 'waiting', 'accepted', 'declined', 'revoked', 'ended')),
+  -- 'room_link' guests land in `waiting` and are not renderable until
+  -- admitted; 'invite' guests were sent to a specific named person.
+  joined_via TEXT NOT NULL DEFAULT 'invite' CHECK (joined_via IN ('invite', 'room_link')),
+  -- Host-controlled slot order; never derived from a timestamp a reload changes.
+  position INTEGER,
+  -- Reserved (v1 does not accept snapshot uploads on the public join route).
+  snapshot TEXT,
+  -- Stable peer id across reconnects, so a reconnect is the same participant.
+  peer_id TEXT NOT NULL,
+  -- Coarse inbound quality reported by the RENDER page + when.
+  quality TEXT CHECK (quality IS NULL OR quality IN ('good', 'degraded', 'failing')),
+  quality_at INTEGER,
+  quality_stats TEXT,
+  -- Touched by ticket mints and quality reports: evidence, not self-report.
+  last_seen_at INTEGER,
+  accepted_at INTEGER,
+  admitted_at INTEGER,
+  declined_at INTEGER,
+  revoked_at INTEGER,
+  ended_at INTEGER,
+  -- The on-stage clock: stage publishes open (stage_since) and close (fold
+  -- into stage_seconds) one segment per guest. Roster bookkeeping only here.
+  stage_seconds INTEGER NOT NULL DEFAULT 0,
+  stage_since INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS live_room_guests_room_idx ON live_room_guests (room_id, created_at);
