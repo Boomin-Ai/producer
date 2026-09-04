@@ -5193,7 +5193,13 @@ export function LiveView({
                         key={f}
                         className={`rm-q${vf === f ? " on" : ""}`}
                         disabled={streaming || !engineOk || gated}
-                        title={gated ? "4K on an Intel Mac runs at 30 fps" : undefined}
+                        title={
+                          gated
+                            ? hwEncoder
+                              ? "4K on an Intel Mac runs at 30 fps"
+                              : "4K needs a hardware encoder (VideoToolbox, NVENC, QSV, or AMF)"
+                            : undefined
+                        }
                         onClick={() => setVideoCfg(vh, f)}
                       >
                         {f}

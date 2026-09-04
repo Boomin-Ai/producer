@@ -105,6 +105,26 @@ impl Choice {
 /// else, or nothing: x264.
 pub fn choose_video(registered: &[String]) -> Choice {
     let has = |id: &str| registered.iter().any(|r| r == id);
+    // QA / support override: PRODUCER_VIDEO_ENCODER=<registered id>. The only
+    // way to exercise the x264 path and the 4K gate on a box that has a GPU
+    // without deleting a probe helper from the bundle. Ignored when the id did
+    // not register, so a typo cannot pick an encoder that does not exist.
+    if let Ok(forced) = std::env::var("PRODUCER_VIDEO_ENCODER") {
+        let forced = forced.trim().to_string();
+        if !forced.is_empty() {
+            if has(&forced) {
+                let hardware = forced != X264 && family(&forced) != Family::Other;
+                eprintln!("[live] video encoder forced by PRODUCER_VIDEO_ENCODER: {forced}");
+                return Choice {
+                    id: forced,
+                    hardware,
+                };
+            }
+            eprintln!(
+                "[live] PRODUCER_VIDEO_ENCODER={forced} is not a registered encoder; ignoring"
+            );
+        }
+    }
     #[cfg(target_os = "macos")]
     {
         if has(VT_H264_HW) {
