@@ -456,7 +456,7 @@ export function Home({
               endpoints={endpoints}
               destinations={destinations}
               channels={channels}
-              onChannelsChanged={loadLive}
+              onChannelsChanged={() => { void loadChannels(); void loadLive(); }}
               updater={updater}
               onClose={closeSettings}
             />
@@ -517,7 +517,12 @@ export function Home({
           endpoints={endpoints}
           destinations={destinations}
           channels={channels}
-          onChannelsChanged={loadLive}
+          onChannelsChanged={() => {
+            // Integrations edits touch both lists: posting channels (connect /
+            // disconnect) and live destinations. Refresh both.
+            void loadChannels();
+            void loadLive();
+          }}
           updater={updater}
           onClose={closeSettings}
         />
