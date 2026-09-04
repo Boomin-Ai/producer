@@ -1692,6 +1692,26 @@ function NetworkRail({ rooms }: { rooms: LiveRoom[] }) {
     if (endpointId) void load(endpointId);
   }, [endpointId, load]);
 
+  // The counterparty moves the deal (accepts, funds, enters) on THEIR
+  // machine — nothing pushes it here. Re-poll on an interval and the moment
+  // this window regains focus (the founder tab-toggled to see a funding
+  // land); every local action above re-loads on its own.
+  useEffect(() => {
+    if (!endpointId) return;
+    const refresh = () => void load(endpointId);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", onVisible);
+    const t = window.setInterval(refresh, 20_000);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.clearInterval(t);
+    };
+  }, [endpointId, load]);
+
   if (!endpointId) return null;
 
   const liveNow = status?.network?.live_now ?? 0;
