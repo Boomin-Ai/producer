@@ -593,17 +593,26 @@ function SystemBanner({ message, onDismiss }: { message: string; onDismiss: () =
  * you work in. */
 /** A connected posting channel. Unhooking is two steps and says why it failed
  *  — Boomin answers 501 on this route until its own lands. */
-function ChannelChip({ channel, endpointId, onChanged }: { channel: Channel; endpointId: string; onChanged: () => void }) {
+function ChannelChip({
+  channel,
+  endpointId,
+  onError,
+  onChanged,
+}: {
+  channel: Channel;
+  endpointId: string;
+  onError: (message: string | null) => void;
+  onChanged: () => void;
+}) {
   const [state, setState] = useState<"idle" | "confirm" | "busy">("idle");
-  const [err, setErr] = useState<string | null>(null);
   const drop = async () => {
     setState("busy");
-    setErr(null);
+    onError(null);
     try {
       await ipc.disconnectChannel(endpointId, channel.id);
       onChanged();
     } catch (e) {
-      setErr(String(e).replace(/^Error:\s*/, ""));
+      onError(String(e).replace(/^Error:\s*/, ""));
       setState("idle");
     }
   };
@@ -622,7 +631,6 @@ function ChannelChip({ channel, endpointId, onChanged }: { channel: Channel; end
         </>
       )}
       {state === "busy" && <span className="cr-chip-kind">…</span>}
-      {err && <span className="set-connect-error inline">{err}</span>}
     </span>
   );
 }
@@ -710,7 +718,7 @@ function ChannelsBlock({
               </div>
               <div className="cr-channels">
                 {mine.map((c) => (
-                  <ChannelChip key={c.id} channel={c} endpointId={ep.id} onChanged={onChanged} />
+                  <ChannelChip key={c.id} channel={c} endpointId={ep.id} onError={setConnectError} onChanged={onChanged} />
                 ))}
                 {/* One native path for both backends: ask the workspace for an
                     OAuth url, open the user's browser, the token lands server
