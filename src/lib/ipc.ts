@@ -530,6 +530,8 @@ export interface ServerRoom {
   status?: string | null;
   archived_at?: string | null;
   deleted_at?: string | null;
+  /** Boomin: the brand's main stage — where Network bookings and deals land. */
+  is_default?: boolean;
 }
 
 /** Every server room the brand owns — the reconcile input for room sync. */
@@ -674,6 +676,10 @@ export const roomSetVisibility = (
   roomId: string,
   visibility: "private" | "connections" | "public",
 ) => invoke("room_set_visibility", { endpointId, roomId, visibility });
+
+/** Make a registered room the brand's main stage (server id). Boomin only. */
+export const roomSetDefault = (endpointId: string, roomId: string) =>
+  invoke("room_set_default", { endpointId, roomId });
 
 export interface RoomGuest {
   id: string;

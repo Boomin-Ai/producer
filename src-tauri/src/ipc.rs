@@ -768,6 +768,19 @@ pub async fn room_set_visibility(
         .await
 }
 
+#[tauri::command]
+pub async fn room_set_default(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .room_set_default(&room_id)
+        .await
+}
+
 /// Join the Brand Network for a connected endpoint's brand.
 #[tauri::command]
 pub async fn network_join(

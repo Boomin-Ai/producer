@@ -112,6 +112,7 @@ pub fn run() {
             ipc::network_deal_enter,
             live::commands::copy_text,
             ipc::room_set_visibility,
+            ipc::room_set_default,
             ipc::live_room_open_report,
             ipc::room_register,
             firewall::firewall_status,

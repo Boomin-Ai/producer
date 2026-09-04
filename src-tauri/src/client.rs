@@ -703,6 +703,24 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
+    /// Make this room the brand's main stage (the one Network bookings and
+    /// deals land in). The API moves the flag; a brand always has exactly one.
+    pub async fn room_set_default(&self, room_id: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .patch(self.root_url(&format!("/v1/app/live/rooms/{room_id}")))
+            .bearer_auth(&self.token)
+            .json(&serde_json::json!({ "is_default": true }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     pub async fn create_connect_session(&self, platform: &str) -> EngineResult<Value> {
         let resp = self
             .http

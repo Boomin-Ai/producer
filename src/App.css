@@ -8646,3 +8646,9 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .set-keys-intro { font-size: 13px; color: var(--fg-2); line-height: 1.5; max-width: 560px; }
 .set-keys-list { max-width: 560px; }
 .set-keys-list .ks-row { padding: 9px 0; font-size: 13px; }
+
+/* Room cards: the brand's main stage */
+.cr-room-main { position: absolute; top: 14px; right: 16px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.14em; color: #06110b; background: var(--mint); padding: 3px 7px; border-radius: 999px; }
+.cr-room-makemain { position: absolute; top: 12px; right: 40px; font-size: 11px; color: var(--fg-3); opacity: 0; transition: opacity 120ms ease; cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+.cr-room:hover .cr-room-makemain { opacity: 1; }
+.cr-room-makemain:hover { color: var(--mint); background: oklch(1 0 0 / 0.06); }

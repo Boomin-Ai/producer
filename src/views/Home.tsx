@@ -4,7 +4,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ConsoleHost } from "./Console";
-import type { Channel, EndpointInfo, Job, LiveDestination, LiveRoom, LiveSnapshot } from "../lib/ipc";
+import type { Channel, EndpointInfo, Job, LiveDestination, LiveRoom, LiveSnapshot, ServerRoom } from "../lib/ipc";
 import type { TargetResult } from "../lib/ipc";
 import { WORKSPACE_EVENT, activeEndpointId, isBoomin, resolveActiveEndpoint, setActiveEndpointId } from "../lib/workspace";
 import { PREFS_EVENT, PREF_NETWORK_INVITE_DISMISSED, prefGet, prefSet } from "../lib/prefs";
@@ -1005,6 +1005,7 @@ function ControlRoomHome({
   /** The in-app "add a Boomin workspace" door — the self-hoster's Network card leads here. */
   onAddEndpoint: () => void;
 }) {
+  const { mainId, endpointId: mainEndpointId } = useMainRoom(rooms);
   const [naming, setNaming] = useState(false);
   useEffect(() => {
     // Post-commit ≈ first paint of the home. One-shot, module-level.
@@ -1048,12 +1049,20 @@ function ControlRoomHome({
           {streaming && <span className="cr-live-pill">LIVE</span>}
         </div>
         <div className="cr-rooms">
-          {rooms.map((room) => (
+          {[...rooms].sort((a, b) => (a.id === mainId ? -1 : b.id === mainId ? 1 : 0)).map((room) => (
             <RoomCard
               key={room.id}
               room={room}
               live={liveRoom === room.id}
               offNetwork={offNetwork.has(room.id)}
+              isMain={room.id === mainId}
+              canMakeMain={!!mainEndpointId && !!parseConfig(room.config).server_room_id}
+              onMakeMain={async () => {
+                const sid = parseConfig(room.config).server_room_id;
+                if (!mainEndpointId || !sid) return;
+                await ipc.roomSetDefault(mainEndpointId, sid).catch(() => {});
+                onRoomsChanged();
+              }}
               onOpen={() => onOpenRoom(room)}
               onRoomsChanged={onRoomsChanged}
             />
@@ -2726,16 +2735,45 @@ function FirewallBanner() {
  * updates; a registered room's server title is PATCHed too (roomSync). A
  * card mid-rename is a div, not a button: an input inside a button is
  * invalid and eats keystrokes on some engines. */
+/** The brand's main stage, as a LOCAL room id. Boomin gives every brand
+ *  exactly one default room (Network bookings and deals land there); we find
+ *  the local row registered against it. Self-hosted workspaces have none. */
+function useMainRoom(rooms: LiveRoom[]): { mainId: string | null; endpointId: string | null } {
+  const [state, setState] = useState<{ mainId: string | null; endpointId: string | null }>({ mainId: null, endpointId: null });
+  useEffect(() => {
+    let dead = false;
+    (async () => {
+      const ep = await resolveActiveEndpoint().catch(() => null);
+      if (!ep || !isBoomin(ep)) { if (!dead) setState({ mainId: null, endpointId: null }); return; }
+      const { rooms: srv = [] } = await ipc.listServerRooms(ep.id).catch(() => ({ rooms: [] as ServerRoom[] }));
+      const main = srv.find((r) => r.is_default);
+      const local = main ? rooms.find((r) => parseConfig(r.config).server_room_id === main.id) : undefined;
+      if (!dead) setState({ mainId: local?.id ?? null, endpointId: ep.id });
+    })();
+    const on = () => void 0;
+    window.addEventListener(WORKSPACE_EVENT, on);
+    return () => { dead = true; window.removeEventListener(WORKSPACE_EVENT, on); };
+  }, [rooms]);
+  return state;
+}
+
 function RoomCard({
   room,
   live,
   offNetwork,
+  isMain,
+  canMakeMain,
+  onMakeMain,
   onOpen,
   onRoomsChanged,
 }: {
   room: LiveRoom;
   live: boolean;
   offNetwork: boolean;
+  /** Boomin's default room for the brand: pinned, marked, never deleted. */
+  isMain?: boolean;
+  canMakeMain?: boolean;
+  onMakeMain?: () => void;
   onOpen: () => void;
   onRoomsChanged: () => void;
 }) {
@@ -2849,7 +2887,24 @@ function RoomCard({
           LIVE
         </span>
       )}
-      {del === "idle" || del === "checking" ? (
+      {isMain && (
+        <span className="cr-room-main" title="Your brand's main stage — Network bookings and deals land here. Rename it, but it stays.">
+          MAIN STAGE
+        </span>
+      )}
+      {!isMain && canMakeMain && del === "idle" && (
+        <span
+          className="cr-room-makemain"
+          title="Make this the main stage — bookings and deals will land here instead"
+          onClick={(e) => {
+            e.stopPropagation();
+            onMakeMain?.();
+          }}
+        >
+          Make main
+        </span>
+      )}
+      {isMain ? null : del === "idle" || del === "checking" ? (
         <span
           className="cr-room-del"
           title="Delete room"
