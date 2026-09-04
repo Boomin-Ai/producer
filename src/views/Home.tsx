@@ -454,11 +454,6 @@ export function Home({
               destinations={destinations}
               channels={channels}
               onChannelsChanged={loadLive}
-              onAddEndpoint={() => {
-                closeSettings();
-                onAddEndpoint();
-              }}
-              onRemoveEndpoint={onRemoveEndpoint}
               updater={updater}
               onClose={closeSettings}
             />
@@ -609,7 +604,7 @@ function ChannelsBlock({
   }
   return (
       <section className="cr-section set-channels" id="sec-channels">
-        <div className="cr-label set-gap">CHANNELS</div>
+        <div className="cr-label set-gap">CHANNELS <span className="cr-label-sub">· {endpoints[0]?.name}</span></div>
 
         <div className="set-sub">
           <div className="set-sub-h">
@@ -724,8 +719,6 @@ function SettingsPanel({
   destinations,
   channels,
   onChannelsChanged,
-  onAddEndpoint,
-  onRemoveEndpoint,
   updater,
   onClose,
 }: {
@@ -733,8 +726,6 @@ function SettingsPanel({
   destinations: LiveDestination[];
   channels: Channel[];
   onChannelsChanged: () => void;
-  onAddEndpoint: () => void;
-  onRemoveEndpoint: (id: string) => void;
   updater: { state: string; version: string | null; restart: () => void };
   onClose: () => void;
 }) {
@@ -866,34 +857,8 @@ function SettingsPanel({
           </div>
         </div>
 
-        {/* One workspace at a time — like Boomin web. Everything below belongs
-            to the selected one; switching here switches the whole app. */}
-        <div className="cr-label">WORKSPACE</div>
-        <div className="set-ws">
-          <div className="set-ws-pills">
-            {endpoints.map((ep) => (
-              <button
-                key={ep.id}
-                className={`set-ws-pill${ep.id === wsId ? " on" : ""}`}
-                title={ep.base_url}
-                onClick={() => { setActiveEndpointId(ep.id); setWsId(ep.id); }}
-              >
-                <span className={`dot ${ep.kind}`} />
-                {ep.name}
-              </button>
-            ))}
-            <button className="set-ws-pill add" onClick={onAddEndpoint} title="Connect another workspace">+</button>
-          </div>
-          {current && (
-            <div className="set-ws-meta">
-              <span className="set-ws-kind">{current.kind === "connected" ? "Boomin workspace" : "Self-hosted"}</span>
-              <span className="set-ws-url" title={current.base_url}>{current.base_url.replace(/^https?:\/\//, "")}</span>
-              <button className="set-ws-drop" onClick={() => onRemoveEndpoint(current.id)} title="Disconnect this workspace from this Mac">Disconnect</button>
-            </div>
-          )}
-          <NetworkInviteReset endpoints={current ? [current] : []} />
-        </div>
-
+        {/* The workspace popout (K) is the one switcher; Settings just follows
+            the active workspace. */}
         {current && (
           <ChannelsBlock
             destinations={destinations}
@@ -902,6 +867,7 @@ function SettingsPanel({
             onChanged={onChannelsChanged}
           />
         )}
+        {current && <div className="set-list"><NetworkInviteReset endpoints={[current]} /></div>}
 
         <div className="cr-label set-gap">DEV</div>
         <div className="set-list">
