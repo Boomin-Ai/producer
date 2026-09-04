@@ -336,6 +336,15 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
     // the user added, but the correct long-term fix is an origin-scoped
     // CefPermissionHandler in our own obs-browser build, allowing only our
     // guest-render origin.
+    //
+    // Which origin that is depends on the ENDPOINT, not on Boomin: a
+    // self-hosted producer-server (server/SELF_HOSTING.md) serves its own
+    // guest render pages from its own worker origin, and Boomin serves
+    // them from its web origin. So the allow-list must be derived per
+    // endpoint (ipc::endpoint_access → origin of the room's render_url at
+    // source creation, see graph.rs ExtraSpec::Guest), never hard-coded.
+    // TODO(selfhost): once the permission handler exists, pass the guest
+    // render origin(s) of every connected endpoint into it here.
     let argv0 = CString::new("producer").unwrap();
     let media_flag = CString::new("--use-fake-ui-for-media-stream").unwrap();
     // Dev builds expose the render pages' devtools — guest issues are

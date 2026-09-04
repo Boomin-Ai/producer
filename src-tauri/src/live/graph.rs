@@ -1196,6 +1196,14 @@ impl SceneGraph {
                     ("color_source_v3", "color", d)
                 }
                 ExtraSpec::Guest { url } => {
+                    // The URL is the server's render_url, used VERBATIM: for
+                    // a Boomin room it lives on Boomin's web origin, for a
+                    // self-hosted room on that server's own origin. Nothing
+                    // here rewrites hosts. Media capture is granted CEF-wide
+                    // (engine.rs, --use-fake-ui-for-media-stream); when an
+                    // origin-scoped permission handler lands, THIS origin —
+                    // url's scheme+host — is the one to allow for the source.
+                    // TODO(selfhost): allow-list `url`'s origin per source.
                     let (bw, bh) = Self::base_size();
                     let d = ffi::obs_data_create();
                     let k_url = CString::new("url").unwrap();
