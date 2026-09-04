@@ -713,13 +713,51 @@ function SettingsPanel({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   return (
-      <div className="home-settings-in">
-        <div className="cr-sheet-head">
+      <div className="home-settings-in set">
+        <div className="set-top">
           <span className="cr-sheet-title">Settings</span>
+          <div className="set-top-r">
+            {updater.state === "ready" ? (
+              <button className="set-ver update" onClick={updater.restart} title="Restart to install the update">
+                ↻ Update{updater.version ? ` to ${updater.version}` : ""}
+              </button>
+            ) : updater.state === "downloading" ? (
+              <span className="set-ver busy">Updating…</span>
+            ) : (
+              <span className="set-ver" title="Up to date — updates install themselves">v{appVersion ?? ""}</span>
+            )}
+            <div className="set-keys">
+              <button className={`set-keys-btn${keysOpen ? " on" : ""}`} onClick={() => setKeysOpen((v) => !v)} aria-expanded={keysOpen}>
+                ⌘ Shortcuts
+              </button>
+              {keysOpen && (
+                <>
+                  <div className="set-keys-backdrop" onClick={() => setKeysOpen(false)} />
+                  <div className="set-keys-pop ks compact">
+                    {KEYMAP.map((b) => (
+                      <KeyRow key={b.id} b={b} />
+                    ))}
+                    {/* The grammar — fixed on purpose, listed so it can be learned. */}
+                    {([
+                      ["⌘1–9", "Cut to a scene"],
+                      ["Arrows", "Nudge selected (⇧ ×10)"],
+                      ["⌥ drag edge", "Crop instead of scale"],
+                      ["Esc", "Deselect"],
+                    ] as const).map(([k, label]) => (
+                      <div key={k} className="ks-row fixed">
+                        <span className="ks-label">{label}</span>
+                        <span className="ks-key">{k}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="cr-label">WORKSPACES</div>
-        <div className="cr-sheet-rows">
+        <div className="set-list">
           {endpoints.map((ep) => (
             <div key={ep.id} className="cr-sheet-row" title={ep.base_url}>
               <span className={`dot ${ep.kind}`} />
@@ -732,57 +770,13 @@ function SettingsPanel({
               </button>
             </div>
           ))}
-          <button className="cr-ghost" onClick={onAddEndpoint}>
+          <button className="cr-ghost set-add" onClick={onAddEndpoint}>
             + Add workspace
           </button>
-        </div>
-
-        <div className="cr-label" style={{ marginTop: 28 }}>
-          APP
-        </div>
-        <div className="cr-sheet-rows">
           <NetworkInviteReset endpoints={endpoints} />
-          <div className="cr-sheet-row">
-            <span className="cr-sheet-row-name">Producer {appVersion ?? ""}</span>
-            {updater.state === "ready" ? (
-              <button className="cr-primary" onClick={updater.restart}>
-                Restart to update{updater.version ? ` to ${updater.version}` : ""}
-              </button>
-            ) : updater.state === "downloading" ? (
-              <span className="cr-sheet-row-sub">downloading update…</span>
-            ) : (
-              <span className="cr-sheet-row-sub">up to date — updates install themselves</span>
-            )}
-          </div>
         </div>
 
-        <button className="cr-label ks-toggle" style={{ marginTop: 28 }} onClick={() => setKeysOpen((v) => !v)} aria-expanded={keysOpen}>
-          SHORTCUTS <span className="ks-count">{KEYMAP.length + 4}</span>
-          <span className={`ks-chev${keysOpen ? " open" : ""}`}>⌄</span>
-        </button>
-        {keysOpen && (
-        <div className="ks compact">
-          {KEYMAP.map((b) => (
-            <KeyRow key={b.id} b={b} />
-          ))}
-          {/* The grammar — fixed on purpose, listed so it can be learned. */}
-          {([
-            ["⌘1–9", "Cut to a scene"],
-            ["Arrows", "Nudge selected (⇧ ×10)"],
-            ["⌥ drag edge", "Crop instead of scale"],
-            ["Esc", "Deselect"],
-          ] as const).map(([k, label]) => (
-            <div key={k} className="ks-row fixed">
-              <span className="ks-label">{label}</span>
-              <span className="ks-key">{k}</span>
-            </div>
-          ))}
-        </div>
-        )}
-
-        <div className="cr-label" style={{ marginTop: 28 }}>
-          WHAT'S NEW
-        </div>
+        <div className="cr-label set-gap">WHAT'S NEW</div>
         <div className="upd upd-sheet">
           {releases === null && <div className="cr-sheet-row-sub">Checking…</div>}
           {releases === "err" && (
