@@ -8599,3 +8599,6 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .set .set-sub-empty { font-size: 12.5px; color: var(--fg-2); }
 .set .set-sub .cr-channels { gap: 6px; align-items: center; }
 .set .set-sub .set-connect-pending, .set .set-sub .set-connect-error { margin-top: 8px; }
+/* The Network rail is fixed to the window's right edge, so it must slide with the surface. */
+.cr.cr--vibrant .net-rail { transition: transform 0.26s ease; }
+.cr.cr--vibrant.settings-open .net-rail { transform: translateX(var(--settings-w)); pointer-events: none; user-select: none; }
