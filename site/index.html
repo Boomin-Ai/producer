@@ -614,6 +614,12 @@
   .chat .m .who { font-weight: 700; flex: none; }
   .chat .m .who.tw { color: #a970ff; } .chat .m .who.kk { color: #53fc18; } .chat .m .who.yt { color: #ff4e45; }
   .chat .m .txt { color: #d5d9e0; }
+  .chat-marks { display: inline-flex; gap: 4px; margin-left: 2px; }
+  .chat-marks img { width: 12px; height: 12px; opacity: 0.9; }
+  .upd { display: flex; align-items: center; gap: 7px; margin-top: 8px; padding: 7px 9px; border-radius: 9px; border: 1px solid var(--line); background: rgba(255,255,255,0.03); font-size: 10.5px; color: var(--dim); }
+  .upd b { color: #fff; font-weight: 600; }
+  .upd-tag { color: #06110b; background: var(--mint); border-radius: 999px; padding: 2px 7px; font-weight: 700; font-size: 9.5px; letter-spacing: 0.04em; }
+  .upd-when { margin-left: auto; white-space: nowrap; }
   @keyframes chat-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
   /* ═══════ guests mock (beat 2): the app's guest rail, one shown onto the program ═══════ */
@@ -776,8 +782,9 @@
               <div class="meter"><i></i></div>
               <div class="stats"><span>1080p60</span><span class="kbps">6400 kbps</span></div>
             </div>
-            <div class="rm-label mt">CHAT</div>
+            <div class="rm-label mt">MULTI CHAT <span class="chat-marks"><img src="twitch.svg" alt="" /><img src="kick.svg" alt="" /><img src="youtube.svg" alt="" /></span></div>
             <div class="chat" id="chat"></div>
+            <div class="upd"><span class="upd-tag">Updated</span><b>v0.4.14</b><span class="upd-when">installed itself · Sep 4</span></div>
           </div>
         </div>
       </div>
