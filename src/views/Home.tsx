@@ -2794,6 +2794,7 @@ function RoomCard({
   // anyone is in it (waiting or admitted). The reason is inline on the card —
   // never a disabled ✕ that explains nothing.
   const [del, setDel] = useState<"idle" | "checking" | "confirm" | "busy">("idle");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -2894,29 +2895,35 @@ function RoomCard({
           MAIN STAGE
         </span>
       )}
-      {!isMain && canMakeMain && del === "idle" && (
-        <span
-          className="cr-room-makemain"
-          title="Make this the main stage — bookings and deals will land here instead"
-          onClick={(e) => {
-            e.stopPropagation();
-            onMakeMain?.();
-          }}
-        >
-          Make main
-        </span>
-      )}
-      {isMain ? null : del === "idle" || del === "checking" ? (
-        <span
-          className="cr-room-del"
-          title="Delete room"
-          onClick={(e) => {
-            e.stopPropagation();
-            void askDelete();
-          }}
-        >
-          ✕
-        </span>
+      {del === "idle" || del === "checking" ? (
+        <>
+          <span
+            className={`cr-room-more${menuOpen ? " on" : ""}`}
+            title="Room actions"
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenuOpen((v) => !v);
+            }}
+          >
+            ⋯
+          </span>
+          {menuOpen && (
+            <>
+              <span className="cr-room-menu-backdrop" onClick={(e) => { e.stopPropagation(); setMenuOpen(false); }} />
+              <span className="cr-room-menu" onClick={(e) => e.stopPropagation()}>
+                <span className="cr-room-menu-row"><span className="cr-room-menu-k">Guest link</span><RoomLinkChip room={room} onChanged={onRoomsChanged} /></span>
+                <span className="cr-room-menu-row"><span className="cr-room-menu-k">Visibility</span><RoomShareChip room={room} onChanged={onRoomsChanged} /></span>
+                {!isMain && canMakeMain && (
+                  <span className="cr-room-menu-row act" onClick={() => { setMenuOpen(false); onMakeMain?.(); }}>Make main stage</span>
+                )}
+                <span className="cr-room-menu-row act" onClick={() => { setMenuOpen(false); setDraft(room.name); setEditing(true); }}>Rename</span>
+                {!isMain && (
+                  <span className="cr-room-menu-row act danger" onClick={() => { setMenuOpen(false); void askDelete(); }}>Delete…</span>
+                )}
+              </span>
+            </>
+          )}
+        </>
       ) : (
         <span className="cr-room-confirm" onClick={(e) => e.stopPropagation()}>
           <span className="cr-room-confirm-q">Delete ‘{room.name}’?</span>
@@ -2938,8 +2945,6 @@ function RoomCard({
             not on the network
           </span>
         )}
-        <RoomLinkChip room={room} onChanged={onRoomsChanged} />
-        <RoomShareChip room={room} onChanged={onRoomsChanged} />
       </span>
     </>
   );
