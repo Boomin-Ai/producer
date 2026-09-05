@@ -318,6 +318,70 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
+    /// The run's contribution ledger (#50). `run_id` None = the open run,
+    /// else the latest with rows.
+    pub async fn room_contributions(
+        &self,
+        room_id: &str,
+        run_id: Option<&str>,
+    ) -> EngineResult<Value> {
+        let mut req = self
+            .http
+            .get(self.root_url(&format!("/v1/app/live/rooms/{room_id}/contributions")))
+            .bearer_auth(&self.token);
+        if let Some(r) = run_id {
+            req = req.query(&[("run_id", r)]);
+        }
+        let resp = req.send().await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// Start / stop a run — the span the ledger reports on.
+    pub async fn room_run(&self, room_id: &str, action: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/runs")))
+            .bearer_auth(&self.token)
+            .json(&serde_json::json!({ "action": action }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// An overlay source with a binding was shown or hidden.
+    pub async fn room_overlay(
+        &self,
+        room_id: &str,
+        source_id: &str,
+        binding: &Value,
+        shown: bool,
+        label: Option<&str>,
+    ) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/overlays")))
+            .bearer_auth(&self.token)
+            .json(&serde_json::json!({ "source_id": source_id, "binding": binding, "shown": shown, "label": label }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     /// Host-controlled slot order — the FULL list of guest ids, first on top.
     pub async fn room_guest_order(&self, room_id: &str, order: &[String]) -> EngineResult<Value> {
         let resp = self

@@ -22,6 +22,7 @@ import { randomToken, sha256Hex, timingSafeEqual } from "./crypto";
 import { ApiError } from "./errors";
 import { SIGNAL_TICKET_TTL_SECONDS, signTicket } from "./ticket";
 import { DEFAULT_GRANTS, MOD_GRANTS, hasAnyMedia, isGrant, resolveGrants, type Grant } from "../guest/src/participants";
+import { closeAllFor, syncPresence } from "./contributions";
 
 export type ParticipantKind = "visitor" | "producer" | "audience";
 export type Seat = "guest" | "control";
@@ -32,6 +33,9 @@ export type Quality = "good" | "degraded" | "failing";
 export interface RoomRow {
   id: string;
   title: string | null;
+  run_id: string | null;
+  run_started_at: number | null;
+  audience_code: string | null;
   external_ref: string | null;
   config: string;
   guest_join_code_hash: string | null;
@@ -491,7 +495,10 @@ export async function revokeGuest(env: Env, guestId: string): Promise<GuestRow> 
     .bind(guestId, now)
     .run();
   if (!res.meta.changes) throw new ApiError(404, "guest_not_found", "No such active guest.");
-  return (await loadGuest(env, guestId))!;
+  const row = (await loadGuest(env, guestId))!;
+  // Every interval they held ends here: presence, a share, an input aggregate.
+  await closeAllFor(env, row.room_id, row.id, Date.now());
+  return row;
 }
 
 // ── Room join link ───────────────────────────────────────────────────────────
@@ -513,6 +520,14 @@ export async function setRoomJoinLink(
 
   if (rotating) {
     const statuses = input.removeAdmitted ? "('waiting', 'accepted', 'invited')" : "('waiting', 'invited')";
+    if (input.removeAdmitted) {
+      const leaving = await env.DB.prepare(
+        "SELECT id FROM live_room_guests WHERE room_id = ?1 AND joined_via = 'room_link' AND status = 'accepted'",
+      )
+        .bind(room.id)
+        .all<{ id: string }>();
+      for (const g of leaving.results ?? []) await closeAllFor(env, room.id, g.id, Date.now());
+    }
     await env.DB.prepare(
       `UPDATE live_room_guests SET status = 'revoked', revoked_at = ?2, snapshot = NULL, updated_at = ?2,
          stage_seconds = stage_seconds + COALESCE(MAX(0, ?2 - stage_since), 0), stage_since = NULL
@@ -835,7 +850,8 @@ export async function setStage(
     throw new ApiError(409, "stage_full", `A scene holds ${room.stage_capacity} guests.`);
   }
 
-  const now = nowSec();
+  const nowMs = Date.now();
+  const now = Math.floor(nowMs / 1000);
   const version = room.stage_version + 1;
   const placeholders = onStage.map((_, i) => `?${i + 3}`).join(", ");
   const statements: D1PreparedStatement[] = [
@@ -857,6 +873,10 @@ export async function setStage(
     );
   }
   await env.DB.batch(statements);
+  // The ledger's first row kind: presence follows the stage list. Same
+  // server time as the stage clock, so stage_seconds equals the summed
+  // closed presence intervals.
+  await syncPresence(env, room.id, onStage, nowMs);
 
   await publishStage(env, room.id, onStage, version);
   return { on_stage: onStage, version };

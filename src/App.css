@@ -8760,3 +8760,31 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   color: var(--fg-2);
 }
 .rm-guest-modlink:hover { color: var(--fg-1); }
+
+/* ── Run report (#50) ──────────────────────────────────────────────────── */
+.rm-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.45);
+  display: grid;
+  place-items: center;
+}
+.rm-runreport {
+  width: min(760px, 92vw);
+  max-height: 80vh;
+  overflow: auto;
+  background: var(--surface-1, #151517);
+  border: 0.5px solid var(--line-1);
+  border-radius: 12px;
+  padding: 14px 16px;
+  color: var(--fg-1);
+  font-size: 13px;
+}
+.rm-runreport-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.rm-runreport-head .rm-row-edit { margin-left: auto; }
+.rm-runreport-sub { color: var(--fg-3); font-size: 12px; }
+.rm-runreport-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.rm-runreport-table th { text-align: left; font-weight: 500; color: var(--fg-3); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 6px; border-bottom: 0.5px solid var(--line-1); }
+.rm-runreport-table td { padding: 6px; border-bottom: 0.5px solid var(--line-1); }
+.rm-row-credit.on { color: oklch(0.8 0.15 80); }

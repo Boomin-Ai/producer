@@ -93,6 +93,19 @@ export default function GuestRoomPage({ code }: { code: string }) {
   const [sharing, setSharing] = useState(false);
   const inviteRef = useRef<string | null>(null);
   const guestIdRef = useRef<string | null>(null);
+  /** Tell the ledger a share started or stopped (#50). Best effort: the
+   *  share itself is between this page and the host; the ledger is the
+   *  record of it. */
+  const reportShare = useCallback((active: boolean) => {
+    const code = inviteRef.current;
+    if (!code) return;
+    void fetch(`${CONNECT_API_BASE_URL}/guest/${encodeURIComponent(code)}/share`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active }),
+    }).catch(() => {});
+  }, []);
+
 
   // Remember the name too, so a reload does not make them retype it.
   useEffect(() => {
@@ -249,7 +262,7 @@ export default function GuestRoomPage({ code }: { code: string }) {
           setHostListening(!!msg.listening);
         }
       },
-      onShareEnded: () => setSharing(false),
+      onShareEnded: () => { setSharing(false); reportShare(false); },
       onMainState: (state) => {
         if (state === "connected") {
           setPhase("live");
@@ -435,9 +448,10 @@ export default function GuestRoomPage({ code }: { code: string }) {
   const toggleShare = async () => {
     const link = linkRef.current;
     if (!link) return;
-    if (link.sharing) { link.stopShare(); setSharing(false); return; }
+    if (link.sharing) { link.stopShare(); setSharing(false); reportShare(false); return; }
     const ok = await link.startShare();
     setSharing(ok);
+    if (ok) reportShare(true);
     if (!ok) setMessage("Couldn't start screen sharing here. Try a desktop browser.");
   };
 

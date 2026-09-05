@@ -125,6 +125,14 @@ CREATE TABLE IF NOT EXISTS live_rooms (
   -- Last time the host's Producer touched this room (roster poll / stage
   -- publish). A heartbeat, not a flag: a crashed host stops stamping.
   host_seen_at INTEGER,
+  -- The OPEN run (a go-live → end span). Contributions opened while a run is
+  -- open carry its id; NULL between runs. Producer starts one when it goes
+  -- live and stops it at End, then reads the run report.
+  run_id TEXT,
+  run_started_at INTEGER,
+  -- The audience door's short code (#51): resolvable only while the host is
+  -- present. Rotated per run.
+  audience_code TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -185,3 +193,36 @@ CREATE TABLE IF NOT EXISTS live_room_guests (
 );
 
 CREATE INDEX IF NOT EXISTS live_room_guests_room_idx ON live_room_guests (room_id, created_at);
+
+-- ── Contributions ───────────────────────────────────────────────────────────
+-- WHO supplied WHAT to the program, FROM WHEN TO WHEN, WHERE on the set. One
+-- shape for presence on stage, a screen, a logo, a vote. Same shape as the
+-- hosted API's, kept here for the open server's own reasons: the roster, the
+-- run report, the recording's chapters, later the auto-clips. Intervals are
+-- append-only: close by writing ended_at once, never edit. The server stamps
+-- time; a client never asserts a duration. An open interval self-expires
+-- against the host heartbeat (queue tick). No price, no deal, no wallet —
+-- this table never learns those words.
+CREATE TABLE IF NOT EXISTS contributions (
+  id TEXT PRIMARY KEY,
+  room_id TEXT NOT NULL REFERENCES live_rooms(id) ON DELETE CASCADE,
+  run_id TEXT,
+  -- A roster guest id; NULL for host-supplied contributions (an overlay the
+  -- host shows) and for audience aggregates (never a row per phone).
+  participant_id TEXT,
+  kind TEXT NOT NULL CHECK (kind IN ('presence', 'media.screen', 'overlay', 'input', 'credit')),
+  -- Where on the set — a STABLE stage id: {slot}, {lane}, {corner}, {interaction_id}.
+  binding TEXT NOT NULL DEFAULT '{}',
+  -- MILLISECONDS (the one place this schema is not second-grained): a guest
+  -- who leaves and returns within a second must not collide on the UNIQUE.
+  started_at INTEGER NOT NULL,
+  ended_at INTEGER,
+  source TEXT NOT NULL CHECK (source IN ('host_stage', 'participant', 'interaction', 'host_credit')),
+  metadata TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL,
+  -- Retries never fork an interval.
+  UNIQUE (participant_id, kind, started_at)
+);
+
+CREATE INDEX IF NOT EXISTS contributions_room_idx ON contributions (room_id, run_id, started_at);
+CREATE INDEX IF NOT EXISTS contributions_open_idx ON contributions (room_id, ended_at);

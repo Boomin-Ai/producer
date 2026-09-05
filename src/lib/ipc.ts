@@ -735,6 +735,20 @@ export interface RoomGuest {
   last_seen_at?: string | null;
 }
 
+/** One row of the contribution ledger (#50): an interval, never a price. */
+export interface Contribution {
+  id: string;
+  room_id: string;
+  run_id: string | null;
+  participant_id: string | null;
+  kind: "presence" | "media.screen" | "overlay" | "input" | "credit" | string;
+  binding: Record<string, unknown>;
+  started_at: string;
+  ended_at: string | null;
+  source: string;
+  metadata: Record<string, unknown>;
+}
+
 /** Guests arrive through the room link on their own, so the roster — not our
  * own bookkeeping — is the source of truth for who is present. */
 export const guests = {
@@ -761,6 +775,16 @@ export const guests = {
    * comes back exactly once. */
   modLink: (endpointId: string, roomId: string, displayName?: string | null) =>
     invoke<{ guest: RoomGuest; mod_url: string }>("room_mod_link", { endpointId, roomId, displayName: displayName ?? null }),
+  /** The run's contribution ledger (#50): who supplied what, from when to
+   * when, where on the set. */
+  contributions: (endpointId: string, roomId: string, runId?: string | null) =>
+    invoke<{ contributions: Contribution[]; run_id: string | null }>("room_contributions", { endpointId, roomId, runId: runId ?? null }),
+  /** Runs bracket a show: start at go-live, stop at End. */
+  run: (endpointId: string, roomId: string, action: "start" | "stop") =>
+    invoke<{ run_id: string | null; started_at?: string; closed?: number }>("room_run", { endpointId, roomId, action }),
+  /** An overlay source with a binding (e.g. a sponsor's logo) was shown or hidden. */
+  overlay: (endpointId: string, roomId: string, sourceId: string, binding: Record<string, unknown>, shown: boolean, label?: string | null) =>
+    invoke("room_overlay", { endpointId, roomId, sourceId, binding, shown, label: label ?? null }),
   /** A ticket to the room channel's CONTROL side for the host's Producer:
    * scene list out, mods' cuts in. */
   controlSession: (endpointId: string, roomId: string) =>

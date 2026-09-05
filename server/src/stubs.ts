@@ -59,8 +59,7 @@ contributionHostStubs.use("*", async (c, next) => {
 
 // Item 1 (#46) — `POST /guests/:id/grants` is IMPLEMENTED in live.ts.
 
-/** Item 5 — the run's interval ledger: `{ contributions: Contribution[] }`. */
-contributionHostStubs.get("/rooms/:id/contributions", (c) => notImplemented(c, CONTRIBUTIONS_ISSUES.contributions));
+// Item 5 (#50) — `GET /rooms/:id/contributions` is IMPLEMENTED in live.ts.
 
 /** Item 7 — interactions: list, open, transition (open | reveal | close). */
 contributionHostStubs.get("/rooms/:id/interactions", (c) => notImplemented(c, CONTRIBUTIONS_ISSUES.interactions));

@@ -19,6 +19,7 @@ import type { Env } from "./env";
 import { ApiError } from "./errors";
 import { requirePrimary, type TokenClass } from "./auth";
 import { verifyTicket } from "./ticket";
+import { closeInterval, listRun, openInterval, publicContribution, startRun, stopRun } from "./contributions";
 import {
   acceptGuest,
   admitGuest,
@@ -35,6 +36,9 @@ import {
   joinRoomByCode,
   listRooms,
   loadRoom,
+  parseStage,
+  touchHostPresence,
+  grantsOf,
   mintGuestSignaling,
   mintRoomTicket,
   publicGuest,
@@ -248,6 +252,56 @@ liveHostRoutes.post("/rooms/:id/control-session", async (c) => {
   });
 });
 
+// ── The contribution ledger (#50) ────────────────────────────────────────────
+
+/** The run's interval ledger. `run_id` (or `run`) limits to one run; absent =
+ *  the open run, else the latest. Newest first; an open interval has
+ *  ended_at null. */
+liveHostRoutes.get("/rooms/:id/contributions", async (c) => {
+  const room = await loadRoom(c.env, c.req.param("id"));
+  const runId = c.req.query("run_id") ?? c.req.query("run") ?? null;
+  const { run_id, rows } = await listRun(c.env, room.id, runId);
+  return c.json({ contributions: rows.map(publicContribution), run_id });
+});
+
+/** Runs bracket a show: start when Producer goes live, stop at End. The
+ *  stop closes every open interval; the client then reads the report. */
+liveHostRoutes.post("/rooms/:id/runs", async (c) => {
+  const body = await jsonBody<{ action?: unknown }>(c);
+  const room = await loadRoom(c.env, c.req.param("id"));
+  if (body.action === "start") {
+    const stage = parseStage(room);
+    return c.json(await startRun(c.env, room.id, stage.on_stage), 201);
+  }
+  if (body.action === "stop") return c.json(await stopRun(c.env, room.id));
+  throw new ApiError(400, "invalid_request", "action must be start or stop.");
+});
+
+/** A host source with a binding (a sponsor's logo, a ticker) publishes show
+ *  and hide; one overlay interval per (source, binding). */
+liveHostRoutes.post("/rooms/:id/overlays", async (c) => {
+  const body = await jsonBody<{ source_id?: unknown; binding?: unknown; shown?: unknown; label?: unknown }>(c);
+  const room = await loadRoom(c.env, c.req.param("id"));
+  if (typeof body.source_id !== "string" || !body.source_id || typeof body.shown !== "boolean") {
+    throw new ApiError(400, "invalid_request", "source_id (string) and shown (boolean) are required.");
+  }
+  const rawBinding = body.binding && typeof body.binding === "object" && !Array.isArray(body.binding) ? (body.binding as Record<string, unknown>) : {};
+  if (JSON.stringify(rawBinding).length > 2048) throw new ApiError(413, "invalid_request", "binding is limited to 2 KB.");
+  const binding = { ...rawBinding, source_id: body.source_id };
+  await touchHostPresence(c.env, room.id);
+  const row = body.shown
+    ? await openInterval(c.env, {
+        roomId: room.id,
+        participantId: null,
+        kind: "overlay",
+        binding,
+        source: "host_stage",
+        metadata: typeof body.label === "string" ? { label: body.label.slice(0, 80) } : {},
+      })
+    : await closeInterval(c.env, { roomId: room.id, participantId: null, kind: "overlay", binding });
+  return c.json({ contribution: row ? publicContribution(row) : null });
+});
+
 /** What THIS token may do in the room (#47). One deployment = one host, and
  *  the primary token IS the host, so the answer is the host stub: everything
  *  but billing, which does not exist here. Mods on this server are not
@@ -320,6 +374,24 @@ connectGuestRoutes.post("/guest/:code/session", async (c) => {
   const guest = await guestByInviteCode(c.env, c.req.param("code"));
   if (guest.status !== "accepted") throw new ApiError(409, "guest_not_accepted", "Accept the invitation before joining.");
   return c.json(signalingResponse(await mintGuestSignaling(c.env, guest, "guest")));
+});
+
+/** The guest page reports its screen share starting and stopping (#50):
+ *  one media.screen interval per share. Opening needs the grant; the DO
+ *  enforces the track itself, this is the ledger's view of it. */
+connectGuestRoutes.post("/guest/:code/share", async (c) => {
+  const guest = await guestByInviteCode(c.env, c.req.param("code"));
+  const body = await jsonBody<{ active?: unknown }>(c);
+  if (typeof body.active !== "boolean") throw new ApiError(400, "invalid_request", "active (boolean) is required.");
+  if (guest.status !== "accepted") throw new ApiError(409, "guest_not_accepted", "Not in the room.");
+  const binding = { track: "screen" };
+  if (body.active) {
+    if (!grantsOf(guest).has("media.screen")) throw new ApiError(403, "grant_required", "This guest may not share a screen.", { grant: "media.screen" });
+    const row = await openInterval(c.env, { roomId: guest.room_id, participantId: guest.id, kind: "media.screen", binding, source: "participant" });
+    return c.json({ contribution: publicContribution(row) });
+  }
+  const row = await closeInterval(c.env, { roomId: guest.room_id, participantId: guest.id, kind: "media.screen", binding });
+  return c.json({ contribution: row ? publicContribution(row) : null });
 });
 
 /** The RENDER side's ticket — what Producer's browser source uses. NOT gated

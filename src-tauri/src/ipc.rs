@@ -485,6 +485,51 @@ pub async fn room_control_session(
 }
 
 #[tauri::command]
+pub async fn room_contributions(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+    run_id: Option<String>,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .room_contributions(&room_id, run_id.as_deref())
+        .await
+}
+
+#[tauri::command]
+pub async fn room_run(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+    action: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .room_run(&room_id, &action)
+        .await
+}
+
+#[tauri::command]
+pub async fn room_overlay(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+    source_id: String,
+    binding: Value,
+    shown: bool,
+    label: Option<String>,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .room_overlay(&room_id, &source_id, &binding, shown, label.as_deref())
+        .await
+}
+
+#[tauri::command]
 pub async fn room_guest_order(
     state: State<'_, AppState>,
     endpoint_id: String,

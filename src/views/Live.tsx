@@ -72,6 +72,7 @@ import {
 } from "../lib/room";
 import { homePaintedMs, takeRoomClick } from "../lib/perf";
 import { RoomControlLink, type ControlFrame, type SceneCutFrame } from "../lib/roomControl";
+import type { Contribution } from "../lib/ipc";
 import {
   moveInOrder,
   participantKind,
@@ -828,6 +829,77 @@ export function GuestPanel({
         </div>
       )}
     </div>
+  );
+}
+
+/** The run report (#50): every contribution of the run that just ended, with
+ * its interval. Presence, screens, overlays, inputs — never a price. */
+function RunReportSheet({
+  report,
+  roster,
+  extras,
+  onClose,
+}: {
+  report: { run_id: string | null; rows: Contribution[] };
+  roster: RoomGuest[];
+  extras: RoomExtra[];
+  onClose: () => void;
+}) {
+  const who = (c: Contribution) => {
+    if (c.participant_id) return roster.find((g) => g.id === c.participant_id)?.display_name ?? c.participant_id.slice(0, 8);
+    if (c.kind === "overlay") {
+      const sid = typeof c.binding.source_id === "string" ? c.binding.source_id : "";
+      const ex = extras.find((e) => e.id === sid);
+      const sponsor = typeof c.binding.sponsor === "string" ? c.binding.sponsor : null;
+      return sponsor ? `${ex?.label ?? sid} · ${sponsor}` : ex?.label ?? sid;
+    }
+    if (c.kind === "input") return `${String(c.binding.participant_kind ?? "audience")} · ${String(c.metadata.count ?? "")} inputs`;
+    return "Host";
+  };
+  const where = (c: Contribution) => {
+    if (c.kind === "presence") return `slot ${Number(c.binding.slot ?? 0) + 1}`;
+    if (c.kind === "media.screen") return "screen";
+    if (c.kind === "input") return `vote ${String(c.binding.interaction_id ?? "").slice(0, 8)}`;
+    return typeof c.binding.corner === "string" ? c.binding.corner : "overlay";
+  };
+  const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—");
+  const secs = (c: Contribution) => (c.ended_at ? Math.max(0, Math.round((Date.parse(c.ended_at) - Date.parse(c.started_at)) / 1000)) : 0);
+  const rows = [...report.rows].sort((a, b) => Date.parse(a.started_at) - Date.parse(b.started_at));
+  const total = rows.filter((c) => c.kind === "presence").reduce((n, c) => n + secs(c), 0);
+  return createPortal(
+    <div className="rm-modal-backdrop" onClick={onClose}>
+      <div className="rm-runreport" onClick={(e) => e.stopPropagation()}>
+        <div className="rm-runreport-head">
+          <strong>Run report</strong>
+          <span className="rm-runreport-sub">
+            {rows.length} contribution{rows.length === 1 ? "" : "s"} · {Math.floor(total / 60)}:{String(total % 60).padStart(2, "0")} on stage
+          </span>
+          <button className="rm-row-edit" onClick={onClose} title="Close">{ic.x}</button>
+        </div>
+        {rows.length === 0 ? (
+          <div className="rm-rows-empty">Nothing was contributed this run — no guest on stage, no credited overlay, no vote.</div>
+        ) : (
+          <table className="rm-runreport-table">
+            <thead>
+              <tr><th>Who</th><th>What</th><th>Where</th><th>From</th><th>To</th><th>Length</th></tr>
+            </thead>
+            <tbody>
+              {rows.map((c) => (
+                <tr key={c.id}>
+                  <td>{who(c)}</td>
+                  <td>{c.kind}</td>
+                  <td>{where(c)}</td>
+                  <td>{fmt(c.started_at)}</td>
+                  <td>{fmt(c.ended_at)}</td>
+                  <td>{c.ended_at ? `${secs(c)} s` : "open"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -3925,6 +3997,73 @@ export function LiveView({
     }
   };
 
+  // ── The contribution ledger (#50) ──────────────────────────────────────
+  // Presence is the server's (it follows the stage list we publish). Two
+  // things only this Producer knows are published from here: an OVERLAY
+  // source with a binding (a sponsor's logo) being shown or hidden, and the
+  // RUN — started when we go live, stopped at End, then read back as the
+  // run report.
+  const overlayShownRef = useRef<Map<string, boolean>>(new Map());
+  useEffect(() => {
+    if (roomRole !== "host" || !cfg.server_room_id || !endpointRef.current) return;
+    const ep = endpointRef.current;
+    const sid = cfg.server_room_id;
+    const bound = (cfgRef.current.sources.extras ?? []).filter((e) => e.binding && Object.keys(e.binding).length);
+    if (!bound.length) return;
+    const items = sources.items ?? [];
+    for (const ex of bound) {
+      const item = items.find((i) => i.id === ex.id);
+      const shown = !!item && item.visible !== false;
+      const was = overlayShownRef.current.get(ex.id) ?? false;
+      if (shown === was) continue;
+      overlayShownRef.current.set(ex.id, shown);
+      guestsIpc.overlay(ep, sid, ex.id, ex.binding!, shown, ex.label).catch(() => {});
+    }
+  }, [sources.items, roomRole, cfg.server_room_id]);
+
+  const [runReport, setRunReport] = useState<{ run_id: string | null; rows: Contribution[] } | null>(null);
+  const prevStateRef = useRef<string>("idle");
+  useEffect(() => {
+    const prev = prevStateRef.current;
+    prevStateRef.current = state;
+    if (roomRole !== "host" || !cfg.server_room_id) return;
+    const sid = cfg.server_room_id;
+    const wasLive = prev === "streaming" || prev === "starting" || prev === "stopping";
+    if (state === "streaming" && !wasLive) {
+      void (async () => {
+        const ep = endpointRef.current ?? (await resolveActiveEndpoint().catch(() => null))?.id;
+        if (ep) guestsIpc.run(ep, sid, "start").catch(() => {});
+      })();
+    } else if (state === "idle" && wasLive && prev !== "starting") {
+      void (async () => {
+        const ep = endpointRef.current ?? (await resolveActiveEndpoint().catch(() => null))?.id;
+        if (!ep) return;
+        const stopped = await guestsIpc.run(ep, sid, "stop").catch(() => null);
+        if (!stopped?.run_id) return;
+        const res = await guestsIpc.contributions(ep, sid, stopped.run_id).catch(() => null);
+        if (res) setRunReport({ run_id: stopped.run_id, rows: res.contributions ?? [] });
+      })();
+    }
+  }, [state, roomRole, cfg.server_room_id]);
+
+  /** Give an extra source a ledger binding: a sponsor credit. Show / hide
+   * of that source then lands as an overlay contribution. */
+  const setSourceCredit = (itemId: string) => {
+    const c = cfgRef.current;
+    const ex = (c.sources.extras ?? []).find((e) => e.id === itemId);
+    if (!ex) return;
+    const cur = typeof ex.binding?.sponsor === "string" ? ex.binding.sponsor : "";
+    const raw = window.prompt("Sponsor credit for this source (blank to clear):", cur);
+    if (raw === null) return;
+    const sponsor = raw.trim().slice(0, 80);
+    const extras = (c.sources.extras ?? []).map((e) =>
+      e.id !== itemId ? e : sponsor ? { ...e, binding: { ...(e.binding ?? {}), sponsor } } : { ...e, binding: undefined },
+    );
+    writeCfg({ ...c, sources: { ...c.sources, extras } });
+    // A newly bound source that is already showing opens its interval now.
+    overlayShownRef.current.delete(itemId);
+  };
+
   /** Where a guest sits on stage, given how many are on. One fills the frame,
    * two split it, three or four make a grid — recomputed whenever the roster
    * changes so joining or leaving re-flows the panel. */
@@ -4470,6 +4609,10 @@ export function LiveView({
                 // Window items are re-selectable: same strip, list of windows.
                 device: i.kind === "window" ? `window:${i.id}` : undefined,
                 inviteUrl: (cfg.sources.extras ?? []).find((e) => e.id === i.id)?.invite_url,
+                // Visual extras can carry a sponsor credit (#50).
+                credit: ["image", "text", "media", "color"].includes(i.kind)
+                  ? (cfg.sources.extras ?? []).find((e) => e.id === i.id)?.binding?.sponsor ?? ""
+                  : undefined,
                 remove: () => removeExtraSource(i.id),
               })),
           ].filter(Boolean) as {
@@ -4478,6 +4621,7 @@ export function LiveView({
             icon: ReactNode;
             device?: string;
             audio?: boolean;
+            credit?: unknown;
             remove: () => void;
           }[]
         ).sort((a, b) => {
@@ -4582,6 +4726,15 @@ export function LiveView({
                           }}
                         >
                           {ic.gear}
+                        </button>
+                      )}
+                      {t.credit !== undefined && (
+                        <button
+                          className={`rm-row-edit rm-row-credit${t.credit ? " on" : ""}`}
+                          title={t.credit ? `Credited to ${String(t.credit)} — show/hide is recorded in the run report` : "Add a sponsor credit (recorded in the run report)"}
+                          onClick={() => setSourceCredit(t.key)}
+                        >
+                          ©
                         </button>
                       )}
                       {item && (
@@ -5711,6 +5864,14 @@ export function LiveView({
             </div>
           )}
           <div className="rm-float">{banner && <div className="rm-banner">{banner}</div>}</div>
+          {runReport && (
+            <RunReportSheet
+              report={runReport}
+              roster={roster}
+              extras={cfg.sources.extras ?? []}
+              onClose={() => setRunReport(null)}
+            />
+          )}
 
           <PermBanner
             sources={sources}
