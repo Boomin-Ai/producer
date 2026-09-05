@@ -610,6 +610,15 @@ impl Session {
         false
     }
 
+    /// The stream's H.264 encoder, for a recording that starts while the
+    /// stream is up: one encoder can feed two outputs, so the recording
+    /// costs no second encode session (one NVENC / Apple encode engine
+    /// carries 4K60 stream + record). Take a ref (obs_encoder_get_ref)
+    /// before using it: `finish` releases this one.
+    pub fn video_encoder(&self) -> *mut ffi::obs_encoder_t {
+        self.venc
+    }
+
     pub fn request_stop(&mut self) {
         if self.stop_requested_at.is_some() {
             return;

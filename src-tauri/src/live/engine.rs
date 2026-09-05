@@ -2031,7 +2031,9 @@ pub fn start(
                                 let s = snap.lock().unwrap();
                                 record_kbps(s.video_height, s.video_fps)
                             };
-                            match record::Recorder::start(&stamp, br) {
+                            // A live stream lends its encoder (see record.rs).
+                            let shared = session.as_ref().map(|s| s.video_encoder());
+                            match record::Recorder::start(&stamp, br, shared) {
                                 Ok(r) => {
                                     let p = r.path();
                                     recorder = Some(r);
