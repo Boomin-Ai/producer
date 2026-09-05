@@ -23,11 +23,25 @@
 // contains their own delayed voice, which is what makes headphones mandatory
 // everywhere else and is simply not sent here.
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { CONNECT_API_BASE_URL } from "./apiConfig";
 import { GuestMesh, type StageUpdate } from "./guestMesh";
+import { controlsFor, resolveGrants, type GuestControls, type ParticipantLike } from "./participants";
 
-type Guest = { id: string; display_name: string; status: string };
+/** `grants` / `kind` arrive with the participant row (absent on servers that
+ *  predate them → the default guest bundle, see participants.ts). */
+type Guest = ParticipantLike & { id: string; display_name: string; status: string };
+
+/** Stop and drop every local track the grants do not cover. A guest who lost
+ *  media.mic between preview and join must not publish a microphone just
+ *  because the preview already opened one. */
+function applyMediaGrants(stream: MediaStream | null, can: GuestControls): void {
+  if (!stream) return;
+  for (const t of stream.getTracks()) {
+    const allowed = t.kind === "video" ? can.camera : can.mic;
+    if (!allowed) { t.stop(); stream.removeTrack(t); }
+  }
+}
 type Session = { signaling_ticket: string; signaling_url: string; ice_servers: RTCIceServer[] };
 type Phase = "name" | "waiting" | "live" | "gone" | "error";
 
@@ -57,6 +71,14 @@ export default function GuestRoomPage({ code }: { code: string }) {
   const meshRef = useRef<GuestMesh | null>(null);
   const roomWsRef = useRef<WebSocket | null>(null);
 
+  // What this participant may do. Unknown before the join answers (the room
+  // link carries no identity), so the preview opens on the default bundle and
+  // is trimmed the moment the server says otherwise.
+  const grants = useMemo(() => resolveGrants(guest), [guest]);
+  const can = useMemo(() => controlsFor(grants), [grants]);
+  const canRef = useRef(can);
+  canRef.current = can;
+
   const selfRef = useRef<HTMLVideoElement | null>(null);
   const showRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -76,6 +98,10 @@ export default function GuestRoomPage({ code }: { code: string }) {
   }, [code]);
 
   const startPreview = useCallback(async () => {
+    const c = canRef.current;
+    // Nothing to capture: a participant here to watch and take part, not to
+    // appear. Never ask the browser for a permission we will not use.
+    if (!c.camera && !c.mic) { streamRef.current = null; return; }
     try {
       // Explicit rather than `video: true`. Left to itself a phone will often
       // pick a conservative capture rate, and a guest arriving at 15fps on a
@@ -85,8 +111,8 @@ export default function GuestRoomPage({ code }: { code: string }) {
       // `ideal`, not `exact`: a device that genuinely cannot do 30 should still
       // join at whatever it can, rather than failing to get a camera at all.
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { frameRate: { ideal: 30 }, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: c.camera ? { frameRate: { ideal: 30 }, width: { ideal: 1280 }, height: { ideal: 720 } } : false,
+        audio: c.mic ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } : false,
       });
       streamRef.current = stream;
       // Tell the encoder this is MOTION, not a slideshow. Without the hint,
@@ -98,11 +124,19 @@ export default function GuestRoomPage({ code }: { code: string }) {
       if (vt) vt.contentHint = "motion";
       if (selfRef.current) selfRef.current.srcObject = stream;
     } catch {
-      setMessage("We need camera and microphone access to put you on the show.");
+      setMessage(c.camera && c.mic
+        ? "We need camera and microphone access to put you on the show."
+        : c.camera ? "We need camera access to put you on the show." : "We need microphone access to put you on the show.");
     }
   }, []);
 
   useEffect(() => { void startPreview(); }, [startPreview]);
+
+  // Grants can only NARROW what the preview already holds (the join answer
+  // arrives after the preview opened on the default bundle). Widening would
+  // need a fresh capture, which the guest triggers by reloading — and the
+  // server never widens mid-show today.
+  useEffect(() => { applyMediaGrants(streamRef.current, can); }, [can]);
 
   // Phase flips (waiting -> live, show arriving) remount the video elements;
   // a remounted node has NO srcObject. Re-attach whatever we hold so the
@@ -168,14 +202,18 @@ export default function GuestRoomPage({ code }: { code: string }) {
     if (!streamRef.current || streamRef.current.getTracks().some((t) => t.readyState !== "live")) {
       await startPreview();
     }
-    if (!streamRef.current) return;
+    // Trim to the grants BEFORE anything is added to the call — the only
+    // place a disallowed track could otherwise slip onto the wire.
+    applyMediaGrants(streamRef.current, canRef.current);
     const res = await fetch(`${CONNECT_API_BASE_URL}/guest/${encodeURIComponent(inviteCode)}/session`, { method: "POST" });
     if (!res.ok) return;
     const session = (await res.json()) as Session;
 
     const pc = new RTCPeerConnection({ iceServers: session.ice_servers });
     pcRef.current = pc;
-    streamRef.current.getTracks().forEach((t) => pc.addTrack(t, streamRef.current!));
+    // A participant with no media grants still connects — to receive the
+    // return feed and, later, to take part — they simply publish nothing.
+    streamRef.current?.getTracks().forEach((t) => pc.addTrack(t, streamRef.current!));
 
     // Same reasoning as contentHint, applied at the sender: under constraint,
     // drop resolution before framerate. Best-effort — not every browser accepts
@@ -518,7 +556,8 @@ export default function GuestRoomPage({ code }: { code: string }) {
             <h1 style={S.title}>{phase === "waiting" ? "You're in the queue" : "What should we call you?"}</h1>
             <div style={S.stage}>
               <video ref={selfRef} autoPlay playsInline muted style={{ ...S.video, transform: "scaleX(-1)", ...(selfHidden ? { visibility: "hidden" } : null) }} />
-              {cameraOff && <div style={S.placeholder}>Camera off</div>}
+              {can.camera && cameraOff && <div style={S.placeholder}>Camera off</div>}
+              {!can.camera && <div style={S.placeholder}>{can.mic ? "Audio only" : "You're here to watch and take part"}</div>}
             </div>
             {phase === "waiting" ? (
               <p style={S.sub}>The host has to let you in. Keep this tab open — you'll go live automatically.</p>
@@ -535,10 +574,15 @@ export default function GuestRoomPage({ code }: { code: string }) {
           </>
         )}
 
+        {/* Controls exist only for grants held. A control the participant
+            cannot use is not disabled — it is absent, so the page reads as
+            what THEY are here to do. */}
         <div style={S.controls}>
-          <button onClick={toggleMute} style={S.ghost}>{muted ? "Unmute" : "Mute"}</button>
-          <button onClick={toggleCamera} style={S.ghost}>{cameraOff ? "Start camera" : "Stop camera"}</button>
-          <button onClick={() => setSelfHidden((h) => !h)} style={S.ghost}>{selfHidden ? "Show my preview" : "Hide my preview"}</button>
+          {can.mic && <button onClick={toggleMute} style={S.ghost}>{muted ? "Unmute" : "Mute"}</button>}
+          {can.camera && <button onClick={toggleCamera} style={S.ghost}>{cameraOff ? "Start camera" : "Stop camera"}</button>}
+          {can.camera && (
+            <button onClick={() => setSelfHidden((h) => !h)} style={S.ghost}>{selfHidden ? "Show my preview" : "Hide my preview"}</button>
+          )}
           {phase === "name" && (
             <button onClick={() => void join()} disabled={!name.trim()} style={S.primary}>Join the show</button>
           )}

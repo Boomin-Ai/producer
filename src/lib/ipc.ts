@@ -708,6 +708,13 @@ export interface RoomGuest {
   state: "waiting" | "invited" | "connected" | "admitted" | "left" | string;
   render_url?: string | null;
   joined_via?: string | null;
+  /** Participant kind (identity strength) — api #380 and later. Absent →
+   * derived from `joined_via`; see lib/participants.ts. */
+  kind?: string | null;
+  /** What this participant may do. Absent → the default guest bundle
+   * (camera, mic, return feed, inputs; never screen). Present → verbatim. */
+  grants?: string[] | null;
+  guest_brand?: { id?: string; name?: string; slug?: string } | null;
   /** Connection health, measured on the RENDER page — what actually reaches
    * the show, not the guest's view of their own uplink. A stale reading
    * reports `unknown` rather than the last value: a confident "good" from

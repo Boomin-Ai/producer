@@ -71,6 +71,7 @@ import {
   type RoomExtra,
 } from "../lib/room";
 import { homePaintedMs, takeRoomClick } from "../lib/perf";
+import { KIND_LABEL, participantKind } from "../lib/participants";
 
 // Transport-truthful copy (M-L4 finding: an RTMP session can look healthy
 // while the platform discards it — only the dashboard confirms LIVE).
@@ -670,6 +671,8 @@ function GuestPanel({
             <div key={g.id} className="rm-guest waiting">
               <span className="rm-wait-dot" />
               <span className="rm-guest-name">{g.display_name || "Guest"}</span>
+              {/* Kind = identity strength, never what they may do. */}
+              <span className={`rm-kind ${participantKind(g)}`}>{KIND_LABEL[participantKind(g)]}</span>
               <button
                 className="rm-guest-admit"
                 disabled={live.length >= ROOM_CAP}
@@ -704,6 +707,7 @@ function GuestPanel({
                       : "No recent reading"
                   } />
                   <span className="rm-gcard-name">{g.display_name || "Guest"}</span>
+                  <span className={`rm-kind ${participantKind(g)}`}>{KIND_LABEL[participantKind(g)]}</span>
                   {item?.visible && <span className="rm-gcard-live">ON</span>}
                 </div>
                 {/* Controls: the card is the feed; hands appear on hover. */}

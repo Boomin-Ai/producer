@@ -10,11 +10,13 @@
 // They see themselves, pick a camera and mic, and press one button. Media then
 // flows PEER-TO-PEER to the host's machine — it never touches the server.
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useSearchParams } from "./router";
 import { CONNECT_API_BASE_URL } from "./apiConfig";
+import { controlsFor, resolveGrants, type ParticipantLike } from "./participants";
 
-type Guest = { id: string; display_name: string; status: string };
+/** `grants` / `kind` ride on the invite row; absent → the default bundle. */
+type Guest = ParticipantLike & { id: string; display_name: string; status: string };
 type Session = { signaling_ticket: string; signaling_url: string; ice_servers: RTCIceServer[] };
 type Phase = "loading" | "ready" | "waiting" | "connecting" | "live" | "gone" | "error";
 
@@ -50,6 +52,12 @@ export default function GuestJoinPage({ code }: { code: string }) {
   const preferProducerCam = search.get("cam") === "producer";
   const nameHint = sanitizeName(search.get("name"));
   const [guest, setGuest] = useState<Guest | null>(null);
+  // The invite row is read BEFORE the preview opens, so here the grants gate
+  // the capture itself: a participant without media.camera is never asked
+  // for a camera at all.
+  const can = useMemo(() => controlsFor(resolveGrants(guest)), [guest]);
+  const canRef = useRef(can);
+  canRef.current = can;
   const [phase, setPhase] = useState<Phase>("loading");
   const [message, setMessage] = useState("");
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
@@ -94,6 +102,8 @@ export default function GuestJoinPage({ code }: { code: string }) {
   // Preview. Labels are empty until permission is granted, so enumerate AFTER
   // getUserMedia or the pickers render as "Microphone 1", "Microphone 2".
   const startPreview = useCallback(async (camera?: string, mic?: string) => {
+    const c = canRef.current;
+    if (!c.camera && !c.mic) { streamRef.current = null; return; }
     try {
       streamRef.current?.getTracks().forEach((t) => t.stop());
       // 720p30 cap: guests publish into a show that composites at most four of
@@ -102,8 +112,8 @@ export default function GuestJoinPage({ code }: { code: string }) {
       // lets browsers downscale rather than throw on cameras with odd modes.
       const cap = { width: { ideal: 1280, max: 1280 }, height: { ideal: 720, max: 720 }, frameRate: { ideal: 30, max: 30 } };
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: camera ? { deviceId: { exact: camera }, ...cap } : cap,
-        audio: mic ? { deviceId: { exact: mic }, echoCancellation: true } : { echoCancellation: true },
+        video: !c.camera ? false : camera ? { deviceId: { exact: camera }, ...cap } : cap,
+        audio: !c.mic ? false : mic ? { deviceId: { exact: mic }, echoCancellation: true } : { echoCancellation: true },
       });
       streamRef.current = stream;
       if (previewRef.current) previewRef.current.srcObject = stream;
@@ -127,7 +137,9 @@ export default function GuestJoinPage({ code }: { code: string }) {
       }
       if (!mic) setMicId(stream.getAudioTracks()[0]?.getSettings().deviceId ?? "");
     } catch {
-      setMessage("We need camera and microphone access to put you on the show.");
+      setMessage(c.camera && c.mic
+        ? "We need camera and microphone access to put you on the show."
+        : c.camera ? "We need camera access to put you on the show." : "We need microphone access to put you on the show.");
     }
   }, [preferProducerCam]);
 
@@ -143,7 +155,8 @@ export default function GuestJoinPage({ code }: { code: string }) {
   }, []);
 
   const goLive = useCallback(async () => {
-    if (!code || !streamRef.current) return;
+    // No stream is fine when no media grant exists: they join to receive.
+    if (!code || (!streamRef.current && (can.camera || can.mic))) return;
     setPhase("connecting");
     try {
       // Only an `invited` row has anything to accept. Knock and deal guests
@@ -190,7 +203,7 @@ export default function GuestJoinPage({ code }: { code: string }) {
 
       const pc = new RTCPeerConnection({ iceServers: session.ice_servers });
       pcRef.current = pc;
-      streamRef.current.getTracks().forEach((t) => pc.addTrack(t, streamRef.current!));
+      streamRef.current?.getTracks().forEach((t) => pc.addTrack(t, streamRef.current!));
 
       // The host's return audio — so the guest can actually hold a conversation
       // instead of hearing the broadcast on delay.
@@ -256,7 +269,7 @@ export default function GuestJoinPage({ code }: { code: string }) {
       setPhase("error");
       setMessage("Could not join the show.");
     }
-  }, [code, guest]);
+  }, [code, guest, can]);
 
   const toggleMute = () => {
     const track = streamRef.current?.getAudioTracks()[0];
@@ -300,35 +313,44 @@ export default function GuestJoinPage({ code }: { code: string }) {
           />
           <video ref={previewRef} autoPlay playsInline muted style={hasProgram ? S.pip : S.video} />
           {phase === "live" && <div style={S.liveDot}><span style={S.dot} /> LIVE</div>}
-          {cameraOff && <div style={S.camOff}>Camera off</div>}
+          {can.camera && cameraOff && <div style={S.camOff}>Camera off</div>}
+          {!can.camera && !hasProgram && (
+            <div style={S.camOff}>{can.mic ? "Audio only" : "You're here to watch and take part"}</div>
+          )}
         </div>
 
-        {phase !== "live" && (
-          <div style={S.pickers}>
-            <select
-              value={camId}
-              onChange={(e) => { setCamId(e.target.value); void startPreview(e.target.value, micId); }}
-              style={S.select}
-            >
-              {devices.filter((d) => d.kind === "videoinput").map((d) => (
-                <option key={d.deviceId} value={d.deviceId}>{d.label || "Camera"}</option>
-              ))}
-            </select>
-            <select
-              value={micId}
-              onChange={(e) => { setMicId(e.target.value); void startPreview(camId, e.target.value); }}
-              style={S.select}
-            >
-              {devices.filter((d) => d.kind === "audioinput").map((d) => (
-                <option key={d.deviceId} value={d.deviceId}>{d.label || "Microphone"}</option>
-              ))}
-            </select>
+        {/* Pickers and controls exist only for the grants held — a control
+            this participant cannot use is absent, not disabled. */}
+        {phase !== "live" && (can.camera || can.mic) && (
+          <div style={{ ...S.pickers, gridTemplateColumns: can.camera && can.mic ? "1fr 1fr" : "1fr" }}>
+            {can.camera && (
+              <select
+                value={camId}
+                onChange={(e) => { setCamId(e.target.value); void startPreview(e.target.value, micId); }}
+                style={S.select}
+              >
+                {devices.filter((d) => d.kind === "videoinput").map((d) => (
+                  <option key={d.deviceId} value={d.deviceId}>{d.label || "Camera"}</option>
+                ))}
+              </select>
+            )}
+            {can.mic && (
+              <select
+                value={micId}
+                onChange={(e) => { setMicId(e.target.value); void startPreview(camId, e.target.value); }}
+                style={S.select}
+              >
+                {devices.filter((d) => d.kind === "audioinput").map((d) => (
+                  <option key={d.deviceId} value={d.deviceId}>{d.label || "Microphone"}</option>
+                ))}
+              </select>
+            )}
           </div>
         )}
 
         <div style={S.controls}>
-          <button onClick={toggleMute} style={S.ghost}>{muted ? "Unmute" : "Mute"}</button>
-          <button onClick={toggleCamera} style={S.ghost}>{cameraOff ? "Start camera" : "Stop camera"}</button>
+          {can.mic && <button onClick={toggleMute} style={S.ghost}>{muted ? "Unmute" : "Mute"}</button>}
+          {can.camera && <button onClick={toggleCamera} style={S.ghost}>{cameraOff ? "Start camera" : "Stop camera"}</button>}
           {phase !== "live" && (
             <button onClick={() => void goLive()} disabled={phase === "connecting" || phase === "waiting"} style={S.primary}>
               {phase === "connecting" ? "Connecting…" : phase === "waiting" ? "Waiting for the host…" : "Join the show"}
