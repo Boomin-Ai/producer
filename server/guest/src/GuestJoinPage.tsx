@@ -71,6 +71,12 @@ export default function GuestJoinPage({ code }: { code: string }) {
   const [cameraOff, setCameraOff] = useState(false);
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
+  /** Hide my own corner tile once the program is up (tap to hide). */
+  const [selfHidden, setSelfHidden] = useState(false);
+  // iOS keeps the return leg light: it asks for the program only once the
+  // connection has settled (see HostLink.delayReturnFeedMs).
+  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   /** False after unmount — the waiting poll must stop, not zombie on. */
   const aliveRef = useRef(true);
   const streamRef = useRef<MediaStream | null>(null);
@@ -206,19 +212,22 @@ export default function GuestJoinPage({ code }: { code: string }) {
         session,
         wsUrl: signalingWsUrl(CONNECT_API_BASE_URL, session),
         localStream: () => streamRef.current,
-        // The return leg is the next commit's job on this page: it never
-        // asked for the program before, and keeps not asking here.
-        returnFeed: false,
-        delayReturnFeedMs: 0,
+        // The return leg is a grant (media.return_feed). This page never
+        // asked for the program before — deal guests saw only the host's
+        // mic — so this is the first time an invited guest sees the show.
+        returnFeed: can.returnFeed,
+        delayReturnFeedMs: isIOS ? 5000 : 0,
         onProgram: (stream) => {
           // The program return — show the guest what is actually on air.
+          if (!canRef.current.returnFeed) return;
           const v = programRef.current;
           if (v) { v.srcObject = stream; void v.play().catch(() => {}); }
           setHasProgram(!!stream);
         },
         onHostAudio: (stream) => {
           // The host's voice, so the guest can hold a conversation instead of
-          // hearing the broadcast on delay.
+          // hearing the broadcast on delay. Gated like the picture.
+          if (!canRef.current.returnFeed) return;
           const el = document.getElementById("host-return") as HTMLAudioElement | null;
           if (el) { el.srcObject = stream; void el.play().catch(() => {}); }
         },
@@ -229,7 +238,7 @@ export default function GuestJoinPage({ code }: { code: string }) {
       setPhase("error");
       setMessage("Could not join the show.");
     }
-  }, [code, guest, can]);
+  }, [code, guest, can, isIOS]);
 
   const toggleMute = () => {
     const track = streamRef.current?.getAudioTracks()[0];
@@ -281,7 +290,18 @@ export default function GuestJoinPage({ code }: { code: string }) {
             muted
             style={{ ...S.program, display: hasProgram ? undefined : "none" }}
           />
-          <video ref={previewRef} autoPlay playsInline muted style={hasProgram ? S.pip : S.video} />
+          {/* Once the program is up it is the whole picture and you are a
+              corner tile (tap to hide) — never both at full size. */}
+          <video
+            ref={previewRef}
+            autoPlay playsInline muted
+            title={hasProgram ? "Tap to hide" : undefined}
+            onClick={() => { if (hasProgram) setSelfHidden(true); }}
+            style={hasProgram ? { ...S.pip, ...(selfHidden || !can.camera ? { display: "none" } : null) } : S.video}
+          />
+          {hasProgram && selfHidden && can.camera && (
+            <button onClick={() => setSelfHidden(false)} style={S.tileChip}>Show me</button>
+          )}
           {phase === "live" && <div style={S.liveDot}><span style={S.dot} /> LIVE</div>}
           {can.camera && cameraOff && <div style={S.camOff}>Camera off</div>}
           {!can.camera && !hasProgram && (
@@ -358,7 +378,8 @@ const S: Record<string, CSSProperties> = {
   stage: { position: "relative", aspectRatio: "16 / 9", background: "#141416", borderRadius: 14, overflow: "hidden", border: "1px solid #232327" },
   video: { width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" },
   program: { width: "100%", height: "100%", objectFit: "cover" },
-  pip: { position: "absolute", right: 10, bottom: 10, width: "28%", aspectRatio: "16 / 9", objectFit: "cover", transform: "scaleX(-1)", borderRadius: 10, border: "1px solid rgba(255,255,255,.25)", boxShadow: "0 4px 14px rgba(0,0,0,.5)" },
+  pip: { position: "absolute", right: 10, bottom: 10, width: "clamp(120px, 26%, 220px)", aspectRatio: "16 / 9", objectFit: "cover", transform: "scaleX(-1)", borderRadius: 10, border: "1px solid rgba(255,255,255,.25)", boxShadow: "0 4px 14px rgba(0,0,0,.5)", cursor: "pointer" },
+  tileChip: { position: "absolute", right: 12, bottom: 12, background: "rgba(0,0,0,.65)", color: "#e7e7ea", border: "1px solid #2c2c31", borderRadius: 999, padding: "6px 10px", fontSize: 12, cursor: "pointer" },
   liveDot: { position: "absolute", top: 12, left: 12, display: "flex", alignItems: "center", gap: 6, background: "rgba(0,0,0,.6)", padding: "5px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, letterSpacing: "0.06em" },
   dot: { width: 7, height: 7, borderRadius: 999, background: "#ff3b30", display: "inline-block" },
   camOff: { position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#6b6b73", fontSize: 14, background: "#141416" },

@@ -3800,6 +3800,8 @@ export function LiveView({
               // deviceIds are salted per origin and can never match ours.
               if (micDeviceLabel) u.searchParams.set("mic", micDeviceLabel);
               u.searchParams.set("program", vcamState?.device_name ?? "Producer Virtual Camera");
+              // No media.return_feed → the page never opens the return leg.
+              if (!resolveGrants(g).has("media.return_feed")) u.searchParams.set("feed", "0");
             }
             const name = g.display_name || "Guest";
             await extraSources

@@ -51,6 +51,11 @@ export default function GuestRenderPage({ id }: { id: string }) {
   // would clobber the camera page's reading for the same guest.
   const peer: HostPeer = params.get("track") === "screen" ? "screen" : "main";
   const isScreen = peer === "screen";
+  // `?feed=0`: Producer's statement that this participant does not hold
+  // media.return_feed. Nothing goes back — no host mic, no program — so a
+  // capture CEF may deny or hang is never even attempted for them. The
+  // guest page gates the same thing on its side; this saves the work.
+  const sendReturn = !isScreen && params.get("feed") !== "0";
   const attachProgramRef = useRef<(() => Promise<void>) | null>(null);
   const attachedProgram = useRef(false);
 
@@ -125,8 +130,9 @@ export default function GuestRenderPage({ id }: { id: string }) {
         // attach the mic later if it ever arrives — perfect negotiation handles
         // the renegotiation when addTrack fires onnegotiationneeded.
         void (async () => {
-          // The screen page sends nothing back; the camera page owns the leg.
-          if (isScreen) return;
+          // The screen page sends nothing back; the camera page owns the
+          // leg — and only for a participant granted the return feed.
+          if (!sendReturn) return;
           try {
             // Hard timeout: a hung getUserMedia must never leave a dangling
             // promise holding a live MediaStream we can no longer reach.
@@ -484,7 +490,7 @@ export default function GuestRenderPage({ id }: { id: string }) {
       cancelled = true;
       teardownRef.current?.();
     };
-  }, [id, renderKey, micLabel, programLabel, peer, isScreen]);
+  }, [id, renderKey, micLabel, programLabel, peer, isScreen, sendReturn]);
 
   // The host paints the ground; this page must composite over it. CEF honours
   // alpha, so a background here would become an opaque rectangle on the stage.

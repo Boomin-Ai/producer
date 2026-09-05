@@ -56,6 +56,8 @@ export default function GuestRoomPage({ code }: { code: string }) {
   /** Hide MY OWN preview only — the camera keeps publishing; presenters who
    * find their own face distracting can turn the mirror off. */
   const [selfHidden, setSelfHidden] = useState(false);
+  /** Hide the program's corner tile while off stage. */
+  const [showHidden, setShowHidden] = useState(false);
   const showStreamRef = useRef<MediaStream | null>(null);
   // iOS WebKit crashes when a guest captures its camera AND decodes the
   // program return AND runs the mesh at once (memory pressure at admit).
@@ -65,6 +67,9 @@ export default function GuestRoomPage({ code }: { code: string }) {
   const [cameraOff, setCameraOff] = useState(false);
   const [hasShow, setHasShow] = useState(false);
   const [onStage, setOnStage] = useState(false);
+  /** The program fills the picture only ON STAGE and only once it arrived;
+   *  otherwise the self view stays large, never doubled. */
+  const programMain = onStage && hasShow;
   const [hostListening, setHostListening] = useState(false);
   const [hostDown, setHostDown] = useState(false);
   const hostDownTimer = useRef<number | null>(null);
@@ -218,6 +223,7 @@ export default function GuestRoomPage({ code }: { code: string }) {
       delayReturnFeedMs: isIOS ? 5000 : 0,
       onProgram: (stream) => {
         // The SHOW. This is what they should be looking at.
+        if (!canRef.current.returnFeed) return;
         showStreamRef.current = stream;
         if (showRef.current) { showRef.current.srcObject = stream; void showRef.current.play().catch(() => {}); }
         setHasShow(!!stream);
@@ -225,6 +231,8 @@ export default function GuestRoomPage({ code }: { code: string }) {
       onHostAudio: (stream) => {
         // Host mic. Deliberately NOT the program mix — that would carry their
         // own delayed voice straight back into their ears and their microphone.
+        // The return leg is a grant; without it nothing the host sends plays.
+        if (!canRef.current.returnFeed) return;
         const el = document.getElementById("host-audio") as HTMLAudioElement | null;
         if (el) { el.srcObject = stream; void el.play().catch(() => {}); }
       },
@@ -455,10 +463,21 @@ export default function GuestRoomPage({ code }: { code: string }) {
                   : <><span style={S.dotIdle} /> In the green room</>}
             </p>
             <h1 style={S.title}>{guest?.display_name}</h1>
+            {/* ON STAGE: the program is the whole picture and you are a corner
+                tile — the mental model of every remote-guest tool, and the
+                only layout in which you are never doubled. GREEN ROOM: your
+                own preview stays large (as while waiting), and the program,
+                once it arrives, becomes the corner tile so you can follow the
+                show until you are brought on. Tap either tile to hide it. */}
             <div style={S.stage}>
-              {/* The SHOW is the main view — what they should be watching. */}
-              <video ref={showRef} autoPlay playsInline muted style={S.video} />
-              {!hasShow && <div style={S.placeholder}>Waiting for the show…</div>}
+              {programMain ? (
+                <video ref={showRef} autoPlay playsInline muted style={S.video} />
+              ) : (
+                <video ref={selfRef} autoPlay playsInline muted style={{ ...S.video, transform: "scaleX(-1)", ...(selfHidden ? { visibility: "hidden" } : null) }} />
+              )}
+              {!programMain && !can.camera && <div style={S.placeholder}>{can.mic ? "Audio only" : "You're here to watch and take part"}</div>}
+              {!programMain && can.camera && cameraOff && <div style={S.placeholder}>Camera off</div>}
+              {programMain && cameraOff && !selfHidden && <div style={S.tileNote}>Camera off</div>}
               {hostDown && (
                 // Over the last frame rather than replacing it, so the guest can
                 // see the connection is the problem and not their camera.
@@ -469,8 +488,34 @@ export default function GuestRoomPage({ code }: { code: string }) {
                 // being listened to, is a trust problem rather than a feature.
                 <div style={S.listening}>The host is listening</div>
               )}
-              {/* Their own camera, small. Muted: nobody should hear themselves. */}
-              <video ref={selfRef} autoPlay playsInline muted style={{ ...S.selfView, ...(selfHidden ? { display: "none" } : null) }} />
+              {/* The corner tile: self while on stage, the show while off it. */}
+              {programMain && can.camera && (
+                <video
+                  ref={selfRef}
+                  autoPlay playsInline muted
+                  title="Tap to hide"
+                  onClick={() => setSelfHidden(true)}
+                  style={{ ...S.tile, transform: "scaleX(-1)", ...(selfHidden ? { display: "none" } : null) }}
+                />
+              )}
+              {!programMain && can.returnFeed && (
+                <video
+                  ref={showRef}
+                  autoPlay playsInline muted
+                  title="Tap to hide"
+                  onClick={() => setShowHidden(true)}
+                  style={{ ...S.tile, ...(hasShow && !showHidden ? null : { display: "none" }) }}
+                />
+              )}
+              {!programMain && can.returnFeed && !hasShow && !onStage && !hostDown && (
+                <div style={S.tileWait}>Waiting for the show…</div>
+              )}
+              {programMain && selfHidden && can.camera && (
+                <button onClick={() => setSelfHidden(false)} style={S.tileChip}>Show me</button>
+              )}
+              {!programMain && showHidden && hasShow && (
+                <button onClick={() => setShowHidden(false)} style={S.tileChip}>Show the program</button>
+              )}
             </div>
           </>
         ) : (
@@ -546,7 +591,12 @@ const S: Record<string, CSSProperties> = {
   sub: { color: "#8b8b93", fontSize: 14, marginTop: 14, lineHeight: 1.5 },
   stage: { position: "relative", aspectRatio: "16 / 9", background: "#141416", borderRadius: 14, overflow: "hidden", border: "1px solid #232327" },
   video: { width: "100%", height: "100%", objectFit: "cover", display: "block" },
-  selfView: { position: "absolute", right: 12, bottom: 12, width: "26%", aspectRatio: "16 / 9", objectFit: "cover", borderRadius: 8, border: "1px solid #2c2c31", transform: "scaleX(-1)", background: "#0a0a0b" },
+  /** The corner tile — 160px on a phone, a quarter of the picture on a
+   *  desktop, never both images at full size. */
+  tile: { position: "absolute", right: 12, bottom: 12, width: "clamp(120px, 26%, 220px)", aspectRatio: "16 / 9", objectFit: "cover", borderRadius: 8, border: "1px solid #2c2c31", background: "#0a0a0b", cursor: "pointer", boxShadow: "0 4px 14px rgba(0,0,0,.5)" },
+  tileWait: { position: "absolute", right: 12, bottom: 12, width: "clamp(120px, 26%, 220px)", aspectRatio: "16 / 9", display: "grid", placeItems: "center", borderRadius: 8, border: "1px dashed #2c2c31", color: "#6b6b73", fontSize: 11, background: "rgba(10,10,11,.6)" },
+  tileNote: { position: "absolute", right: 12, bottom: 12, width: "clamp(120px, 26%, 220px)", aspectRatio: "16 / 9", display: "grid", placeItems: "center", borderRadius: 8, color: "#6b6b73", fontSize: 11, pointerEvents: "none" },
+  tileChip: { position: "absolute", right: 12, bottom: 12, background: "rgba(0,0,0,.65)", color: "#e7e7ea", border: "1px solid #2c2c31", borderRadius: 999, padding: "6px 10px", fontSize: 12, cursor: "pointer" },
   placeholder: { position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#6b6b73", fontSize: 14 },
   input: { marginTop: 14, width: "100%", background: "#141416", color: "#e7e7ea", border: "1px solid #232327", borderRadius: 10, padding: "12px 14px", fontSize: 15 },
   controls: { display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" },
