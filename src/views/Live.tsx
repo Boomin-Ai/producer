@@ -82,6 +82,7 @@ import {
   boominAudienceUrl,
   boominStageConfig,
   boominVoteBody,
+  contributionsInWindow,
   normalizeBoominInteraction,
   parseBoominFrame,
   scenesFromBoominConfig,
@@ -4424,6 +4425,10 @@ export function LiveView({
 
   const [runReport, setRunReport] = useState<{ run_id: string | null; rows: Contribution[] } | null>(null);
   const prevStateRef = useRef<string>("idle");
+  /** When this Producer went live — the run's bracket on Boomin, which has
+   * no run route for Producer rooms (the roster poll is the heartbeat and a
+   * lapse ends the run server-side; `run_id` stays null on its rows). */
+  const runStartedAtRef = useRef<number | null>(null);
   useEffect(() => {
     const prev = prevStateRef.current;
     prevStateRef.current = state;
@@ -4431,6 +4436,7 @@ export function LiveView({
     const sid = cfg.server_room_id;
     const wasLive = prev === "streaming" || prev === "starting" || prev === "stopping";
     if (state === "streaming" && !wasLive) {
+      runStartedAtRef.current = Date.now();
       void (async () => {
         const ep = endpointRef.current ?? (await resolveActiveEndpoint().catch(() => null))?.id;
         if (ep) guestsIpc.run(ep, sid, "start").catch(() => {});
@@ -4439,6 +4445,26 @@ export function LiveView({
       void (async () => {
         const ep = endpointRef.current ?? (await resolveActiveEndpoint().catch(() => null))?.id;
         if (!ep) return;
+        const startedAt = runStartedAtRef.current;
+        const endedAt = Date.now();
+        if (boominRoomRef.current) {
+          // End closes what THIS Producer opened: every bound overlay still
+          // showing gets its interval closed now (the picture stays; a
+          // later show opens a fresh interval), so the report is whole and
+          // a metered deal settles on End rather than on the heartbeat lapse.
+          const shown = [...overlayShownRef.current.entries()].filter(([, v]) => v).map(([id]) => id);
+          for (const id of shown) {
+            const ex = (cfgRef.current.sources.extras ?? []).find((e) => e.id === id);
+            if (!ex?.binding) continue;
+            overlayShownRef.current.set(id, false);
+            await guestsIpc.overlay(ep, sid, id, ex.binding, false, ex.label).catch(() => {});
+          }
+          const res = await guestsIpc.contributions(ep, sid, null).catch(() => null);
+          if (!res) return;
+          const rows = startedAt ? contributionsInWindow(res.contributions ?? [], startedAt, endedAt) : res.contributions ?? [];
+          setRunReport({ run_id: null, rows });
+          return;
+        }
         const stopped = await guestsIpc.run(ep, sid, "stop").catch(() => null);
         if (!stopped?.run_id) return;
         const res = await guestsIpc.contributions(ep, sid, stopped.run_id).catch(() => null);
