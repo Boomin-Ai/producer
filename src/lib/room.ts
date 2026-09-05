@@ -115,6 +115,9 @@ export interface RoomConfig {
    * frame rate (30/60). Stored verbatim — the ENGINE is the authority on
    * what a machine can run (4K needs a hardware encoder), never this parser. */
   video?: RoomVideo;
+  /** Chat channels the ROOM reads — public handles, set by the host and
+   * published to every seat over the monitor leg (lib/monitorFeed.ts). */
+  chat_channels?: { twitch?: string; kick?: string; youtube?: string };
 }
 
 export interface RoomVideo {
@@ -201,6 +204,13 @@ export function parseConfig(raw: string | null | undefined): RoomConfig {
     ) as RoomConfig["dock_bg"];
   }
   if (v.transition && typeof v.transition === "object") base.transition = v.transition as SceneTransition;
+  if (v.chat_channels && typeof v.chat_channels === "object") {
+    base.chat_channels = Object.fromEntries(
+      Object.entries(v.chat_channels as Record<string, unknown>).filter(
+        ([k, val]) => ["twitch", "kick", "youtube"].includes(k) && typeof val === "string" && val.trim(),
+      ),
+    ) as RoomConfig["chat_channels"];
+  }
   return base;
 }
 

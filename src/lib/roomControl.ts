@@ -81,6 +81,13 @@ export function parseControlFrame(raw: unknown): ControlFrame | null {
   if (typeof a.type !== "string" && a.action === "interaction") {
     return { type: "interaction", channels: Array.isArray(a.channels) ? (a.channels as string[]) : [], payload: a.payload };
   }
+  if (typeof a.type !== "string" && a.action === "stage") {
+    // The server's versioned stage list (lib/stageTruth.ts): the host acts
+    // on a mod's request and posts what its set actually shows.
+    const p = (a.payload && typeof a.payload === "object" ? a.payload : {}) as { on_stage?: unknown; version?: unknown };
+    if (!Array.isArray(p.on_stage) || typeof p.version !== "number") return null;
+    return { type: "stage", on_stage: p.on_stage.filter((x): x is string => typeof x === "string"), version: p.version };
+  }
   if (typeof a.type !== "string") return null;
   const f = v as ControlFrame;
   if (f.type === "scene.cut" && typeof (f as SceneCutFrame).scene_id !== "string") return null;

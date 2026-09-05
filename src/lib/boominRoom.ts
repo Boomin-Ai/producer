@@ -10,7 +10,7 @@
 //
 //   Boomin action            → Producer frame
 //   scene.cut   (stage)      → { type: "scene.cut", scene_id, from, server_now }
-//   stage       (stage)      → dropped — the roster poll carries the stage
+//   stage       (stage)      → { type: "stage", on_stage, version } (lib/stageTruth.ts)
 //   contribution.opened      → { type: "contribution.opened", contribution }
 //   contribution.closed      → { type: "contribution.closed", contribution }
 //   interaction.*            → { type: "interaction", channels, payload }
@@ -120,8 +120,14 @@ export function parseBoominFrame(raw: unknown): BoominFrame | null {
       if (!ix) return null;
       return { type: "interaction", channels, payload: ix };
     }
+    case "stage": {
+      // The server's versioned stage list: a mod's request echo or the
+      // host's confirmed truth — lib/stageTruth.ts tells them apart.
+      if (!Array.isArray(p.on_stage) || typeof p.version !== "number") return null;
+      return { type: "stage", on_stage: p.on_stage.filter((x): x is string => typeof x === "string"), version: p.version };
+    }
     default:
-      // `stage` and anything newer: the roster poll / a later build.
+      // Anything newer: a later build.
       return null;
   }
 }

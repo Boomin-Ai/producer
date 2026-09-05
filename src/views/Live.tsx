@@ -105,7 +105,17 @@ import {
   localSetDecision,
   isMonitor,
 } from "../lib/participants";
-import { MonitorSender, ProgramMonitor, type MonitorState } from "../lib/monitorFeed";
+import { MonitorSender, ProgramMonitor, monitorLog, monitorPlaceholder, type MonitorRoomInfo, type MonitorState } from "../lib/monitorFeed";
+import {
+  EMPTY_MOD_STAGE,
+  hostStagePlan,
+  isOwnEcho,
+  modRowStage,
+  modStageReduce,
+  modStageWish,
+  type ModStageEvent,
+  type ModStageState,
+} from "../lib/stageTruth";
 import { RoleCard } from "./RoleCard";
 import { areaPath, pushSample, renderPressure, renderScale, renderTone } from "../lib/renderLoad";
 
@@ -682,6 +692,7 @@ export function GuestPanel({
   onModLink,
   vote,
   control,
+  stageState,
 }: {
   thumbs: Record<string, string>;
   roster: RoomGuest[];
@@ -691,8 +702,11 @@ export function GuestPanel({
    * holding room control on someone else's room: admit / remove / stage /
    * order through the server, nothing local. viewer = read-only. */
   role: RoomRole;
-  /** The stage list as THIS client last posted it (mods only). */
+  /** The stage list (mods only). ModSeat passes the server's list; Live
+   * passes `stageState` too, and that wins: the HOST's confirmed truth
+   * with one pending ask overlaid (lib/stageTruth.ts). */
   stage: string[];
+  stageState?: ModStageState;
   onAdmit: (id: string) => void;
   onRemove: (id: string) => void;
   onMute: (sourceId: string, muted: boolean) => void;
@@ -767,11 +781,15 @@ export function GuestPanel({
           ))}
           {role !== "host" && live.map((g) => {
             // Not our engine: no thumbs, no sources, no mute. The stage is
-            // the SERVER's list, and a mod edits it directly.
-            const onStage = stage.includes(g.id);
+            // the HOST's confirmed list; a mod's click is a request that
+            // stays PENDING until the host answers (lib/stageTruth.ts).
+            const row = stageState ? modRowStage(stageState, g.id) : stage.includes(g.id) ? "on" : "off";
+            const onStage = row === "on";
+            const pendingRow = row === "pending-on" || row === "pending-off";
+            const notice = stageState?.notice?.guestId === g.id ? stageState.notice.text : null;
             const q = (g.quality ?? g.connection_quality ?? "unknown") as string;
             return (
-              <div key={g.id} className={`rm-gcard${onStage ? " on" : ""}`}>
+              <div key={g.id} className={`rm-gcard${onStage ? " on" : ""}${pendingRow ? " pending" : ""}`}>
                 {g.snapshot ? <img className="rm-gcard-img" src={g.snapshot} alt="" /> : <span className="rm-gcard-img empty" />}
                 <div className="rm-gcard-id">
                   <span className={`rm-qual ${q}`} />
@@ -783,11 +801,18 @@ export function GuestPanel({
                   <div className="rm-gcard-ctl">
                     <button className="rm-row-edit" title="Move up the order" onClick={() => onOrder(g.id, -1)}>↑</button>
                     <button
-                      className={`rm-guest-stage${onStage ? " on" : ""}`}
-                      title={onStage ? "Take off the stage" : "Put on the stage"}
+                      className={`rm-guest-stage${onStage ? " on" : ""}${pendingRow ? " pending" : ""}`}
+                      disabled={pendingRow}
+                      title={
+                        pendingRow
+                          ? "Asked the host — waiting for its set to answer"
+                          : onStage
+                            ? "Ask the host to take them off the stage"
+                            : "Ask the host to put them on the stage"
+                      }
                       onClick={() => onStageToggle(g.id)}
                     >
-                      {onStage ? "On stage" : "Stage"}
+                      {row === "pending-on" ? "Staging…" : row === "pending-off" ? "Leaving…" : onStage ? "On stage" : "Stage"}
                     </button>
                     <button className="rm-row-edit" title="Move down the order" onClick={() => onOrder(g.id, 1)}>↓</button>
                     <button className="rm-row-edit" title="Remove" onClick={() => onRemove(g.id)}>
@@ -795,6 +820,7 @@ export function GuestPanel({
                     </button>
                   </div>
                 )}
+                {notice && <div className="rm-gcard-notice">{notice}</div>}
               </div>
             );
           })}
@@ -2259,35 +2285,70 @@ function useMonitorState(seat: ProgramMonitor | null): MonitorState | null {
   );
 }
 
-/** The off-host stage: the host's program, full-bleed, once it arrives;
+/** The off-host stage: the host's output, full-bleed, once it arrives;
  * one quiet line until then. Same 16:9 footprint as the native preview so
- * the docks never jump. */
+ * the docks never jump.
+ *
+ * Two pictures (lib/monitorFeed.ts): the video leg when it decodes frames
+ * — counted HERE with requestVideoFrameCallback, the one signal that
+ * cannot lie about a black or muted track — and the host's 8 fps preview
+ * over the data channel when it does not. The placeholder names the real
+ * cause once the host has said what its capture is doing. */
 function ProgramMonitorStage({ seat, pending, boomin }: { seat: ProgramMonitor | null; pending: boolean; boomin: boolean }) {
   const st = useMonitorState(seat);
   const ref = useRef<HTMLVideoElement>(null);
   const stream = st?.hasProgram ? seat?.programStream() ?? null : null;
   useEffect(() => {
     const v = ref.current;
-    if (!v) return;
+    if (!v || !seat) return;
     if (v.srcObject !== stream) v.srcObject = stream;
-    if (stream) void v.play().catch(() => {});
-  }, [stream]);
+    if (!stream) return;
+    void v.play().catch(() => {});
+    // Decoded-frame accounting: rVFC fires per presented frame; a track
+    // that is "live" but delivers nothing never fires it.
+    let alive = true;
+    let handle = 0;
+    const vv = v as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number; cancelVideoFrameCallback?: (h: number) => void };
+    const onFrame = () => {
+      if (!alive) return;
+      seat.noteFrame();
+      if (vv.requestVideoFrameCallback) handle = vv.requestVideoFrameCallback(onFrame);
+    };
+    if (vv.requestVideoFrameCallback) {
+      handle = vv.requestVideoFrameCallback(onFrame);
+    } else {
+      // No rVFC (older WebView2): count timeupdate as frames — coarse, honest enough.
+      v.addEventListener("timeupdate", onFrame);
+    }
+    return () => {
+      alive = false;
+      if (vv.cancelVideoFrameCallback && handle) vv.cancelVideoFrameCallback(handle);
+      v.removeEventListener("timeupdate", onFrame);
+    };
+  }, [stream, seat]);
+  const showVideo = !!stream && !!st?.hasFrames;
+  const showThumb = !showVideo && !!st?.onThumbs && !!st?.thumbUrl;
   const line = pending
     ? "Checking your seat…"
     : !boomin
-      ? "Host's program — a mod link on an open server carries no return feed"
-      : !seat
-        ? "Host's program — connecting…"
-        : st?.phase === "gone"
-          ? st.message || "The host's room closed this monitor."
-          : st?.phase === "error"
-            ? st.message
-            : st?.message || "Host's program — waiting for the first frame…";
+      ? "Host's output — a mod link on an open server carries no return feed"
+      : !seat || !st
+        ? "Host's output — connecting…"
+        : monitorPlaceholder({
+            phase: st.phase,
+            message: st.message,
+            connected: st.phase === "live",
+            programState: st.programState,
+            stalled: st.stalled,
+          });
+  const has = showVideo || showThumb;
   return (
-    <div className={`rm-canvas-msg rm-program-monitor${stream ? " has-program" : ""}`}>
-      <video ref={ref} className="rm-program-video" autoPlay playsInline muted hidden={!stream} />
-      {!stream && <span>{line}</span>}
-      {stream && <span className="rm-program-tag">PROGRAM</span>}
+    <div className={`rm-canvas-msg rm-program-monitor${has ? " has-program" : ""}`}>
+      <video ref={ref} className="rm-program-video" autoPlay playsInline muted hidden={!showVideo} />
+      {showThumb && <img className="rm-program-video" src={st!.thumbUrl!} alt="" />}
+      {!has && <span>{line}</span>}
+      {has && <span className="rm-program-tag">HOST OUTPUT</span>}
+      {showThumb && <span className="rm-program-tag rm-program-tag-fallback">Live · 8 fps preview</span>}
     </div>
   );
 }
@@ -2464,6 +2525,7 @@ export function LiveView({
   const [rightOpen, setRightOpen] = useState(true);
   const [topOpen, setTopOpen] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
+  const [linkMenuOpen, setLinkMenuOpen] = useState(false);
   const [micPopOpen, setMicPopOpen] = useState(false);
   const [destsOpen, setDestsOpen] = useState(false);
   const [qualityOpen, setQualityOpen] = useState(false);
@@ -2799,6 +2861,15 @@ export function LiveView({
   const [vcamState, setVcamState] = useState<VcamStatus | null>(null);
   const guestSeat = useGuestSeat(seat, vcamState?.device_name);
   const [vcamOn, setVcamOn] = useState(false);
+  const vcamOnRef = useRef(false);
+  vcamOnRef.current = vcamOn;
+  const vcamStateRef = useRef<VcamStatus | null>(null);
+  vcamStateRef.current = vcamState;
+  /** The virtual camera was started FOR a monitor seat (lib/monitorFeed.ts),
+   * not by the host: it stops when the last monitor leaves. A manual toggle
+   * takes ownership back. */
+  const vcamAutoRef = useRef(false);
+  const vcamAutoNextTry = useRef(0);
 
   useEffect(() => {
     let alive = true;
@@ -2816,6 +2887,9 @@ export function LiveView({
   }, []);
 
   const toggleVcam = async () => {
+    // The host's own hand on the switch: whatever a monitor started, the
+    // host owns it from here.
+    vcamAutoRef.current = false;
     // Not installed yet → the first click is the install request, not a
     // toggle. macOS then asks the user to approve it in Settings.
     if (!vcamState?.installed && vcamState?.state !== "active") {
@@ -2922,6 +2996,17 @@ export function LiveView({
   const monitorStartedFor = useRef<string | null>(null);
   const [monitorSeat, setMonitorSeat] = useState<ProgramMonitor | null>(null);
   const monitorSenders = useRef<Map<string, MonitorSender>>(new Map());
+  /** The engine's program thumb runs while ANY monitor seat asked for it. */
+  const programThumbOn = useRef(false);
+  const monitorThumbDemand = () => {
+    const want = [...monitorSenders.current.values()].some((s) => s.wantsThumbs());
+    if (want === programThumbOn.current) return;
+    programThumbOn.current = want;
+    monitorLog(`host: program thumb ${want ? "on" : "off"}`);
+    ipc.liveSetProgramThumb(want).catch((e) => monitorLog(`host: program thumb toggle failed: ${String(e)}`));
+  };
+  /** Room-owned facts every monitor seat reads (chat handles). */
+  const roomInfoRef = useRef<MonitorRoomInfo>({});
   // Who WE are in this room. "host" until the access route says otherwise
   // (and forever, on a server without the route). A mod's Producer must not
   // load guest render pages — those would be a second host peer on every
@@ -2953,11 +3038,29 @@ export function LiveView({
    * Boomin's routes (lib/boominRoom.ts). Resolved with the endpoint. */
   const [boominRoom, setBoominRoom] = useState(false);
   const boominRoomRef = useRef(false);
-  /** The stage list as this mod last posted it. The roster does not read
-   * the stage back yet (contract note in the PR), so this is a local view. */
-  const [modStage, setModStage] = useState<string[]>([]);
-  const modStageRef = useRef<string[]>([]);
-  modStageRef.current = modStage;
+  /** Honest staging (lib/stageTruth.ts): the HOST's confirmed stage list
+   * with this seat's one pending ask overlaid. Driven by `stage` frames off
+   * the room channel; the ref composes events synchronously. */
+  const [modStage, setModStage] = useState<ModStageState>(EMPTY_MOD_STAGE);
+  const modStageRef = useRef<ModStageState>(EMPTY_MOD_STAGE);
+  const dispatchStage = (ev: ModStageEvent) => {
+    const next = modStageReduce(modStageRef.current, ev);
+    if (next === modStageRef.current) return;
+    modStageRef.current = next;
+    setModStage(next);
+  };
+  // The host's-silence clock: a pending ask expires into a message.
+  useEffect(() => {
+    const t = window.setInterval(() => dispatchStage({ type: "tick", now: Date.now() }), 1000);
+    return () => window.clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  /** The last stage version THIS host posted — a frame no newer is our echo. */
+  const hostPostedVersionRef = useRef(0);
+  const noteHostPosted = (res: unknown) => {
+    const v = (res as { version?: unknown } | null)?.version;
+    if (typeof v === "number" && v > hostPostedVersionRef.current) hostPostedVersionRef.current = v;
+  };
   // Which guests the auto-layout last arranged. The tick may not re-flow an
   // unchanged set: the host dragging a guest smaller must WIN — auto-layout
   // exists for joins/leaves, not as a 3-second undo of manual placement.
@@ -2977,12 +3080,13 @@ export function LiveView({
     const liveIds = new Set((sources.items ?? []).map((i) => i.id));
     return slotItems().find((sl) => !b[sl.id] || !liveIds.has(b[sl.id]));
   };
-  /** Show = pop the guest INTO a designed slot. No slot, no show. */
-  const showGuestInSlot = async (guestItemId: string) => {
+  /** Show = pop the guest INTO a designed slot. No slot, no show — and the
+   * caller learns which (a mod's request is answered with the truth). */
+  const showGuestInSlot = async (guestItemId: string): Promise<boolean> => {
     const sl = freeSlot();
     if (!sl) {
       setBanner("Scene is full — add a Guest slot (Sources → + → Guest slot)");
-      return;
+      return false;
     }
     const b = cfgRef.current.slot_bindings ?? {};
     writeCfg({ ...cfgRef.current, slot_bindings: { ...b, [sl.id]: guestItemId } });
@@ -2991,6 +3095,7 @@ export function LiveView({
       .liveSetTransform(guestItemId, { x: sl.x, y: sl.y, w: sl.w, h: sl.h, z: sl.z, visible: false }, true)
       .catch(() => {});
     fadeGuest(guestItemId, true);
+    return true;
   };
   /** Hide = pop out; the slot placeholder returns exactly where it was. */
   const hideGuestFromSlot = (guestItemId: string) => {
@@ -3049,21 +3154,103 @@ export function LiveView({
 
   const removeGuest = async (id: string) => {
     if (!endpointRef.current || !cfg.server_room_id) return;
-    await guestsIpc.revoke(endpointRef.current, id).catch(() => {});
+    try {
+      await guestsIpc.revoke(endpointRef.current, id);
+      rosterTickRef.current?.();
+    } catch (e) {
+      setGuestErr(String(e).replace(/^Error:\s*/, ""));
+    }
   };
 
-  /** Mod: put a guest on or off the SERVER's stage list. Always the full
-   * list, so a dropped call is corrected by the next one. */
+  /** The set's truth as guest ids: guest sources SHOWN by the engine, plus
+   * guests already BOUND to a slot (placed a moment ago; the engine's
+   * visibility echo lands a frame later) — mapped back through the roster. */
+  const shownGuestIds = (): string[] => {
+    const live = rosterRef.current.filter((g) => !!g.render_url);
+    const visible = new Set((sourcesRef.current.items ?? []).filter((i) => i.kind === "guest" && i.visible).map((i) => i.id));
+    const bound = new Set(Object.values(cfgRef.current.slot_bindings ?? {}));
+    return live.filter((g) => visible.has(sourceIdsFor(g.id).camera) || bound.has(sourceIdsFor(g.id).camera)).map((g) => g.id);
+  };
+  const sameIds = (a: readonly string[], b: readonly string[]) => a.length === b.length && [...a].sort().every((x, i) => x === [...b].sort()[i]);
+  /** Host: post the stage list UNCONDITIONALLY — after acting on a mod's
+   * request the version must bump even when nothing changed, or the mod's
+   * row never learns the answer (lib/stageTruth.ts). */
+  const postStageTruth = async (ids: string[], why: string) => {
+    if (!endpointRef.current || !cfg.server_room_id) return;
+    const sorted = [...ids].sort();
+    stagePostedRef.current = sorted.join(",");
+    try {
+      const res = await guestsIpc.setStage(endpointRef.current, cfg.server_room_id, sorted);
+      noteHostPosted(res);
+      monitorLog(`host: stage posted (${why}) → [${sorted.map((x) => x.slice(0, 8)).join(", ")}] v${hostPostedVersionRef.current}`);
+    } catch (e) {
+      stagePostedRef.current = null; // the tick retries
+      monitorLog(`host: stage post failed (${why}): ${String(e)}`);
+    }
+  };
+  /** A `stage` frame off the room channel. Host: a mod's request (unless it
+   * is our own echo) — act on the set, then post what the set actually
+   * shows. Mod: the reducer decides whether it is an echo or the answer. */
+  const onStageFrameRef = useRef<((onStage: string[], version: number) => void) | null>(null);
+  onStageFrameRef.current = (onStage, version) => {
+    if (roomRoleRef.current !== "host") {
+      dispatchStage({ type: "frame", on_stage: onStage, version, now: Date.now() });
+      return;
+    }
+    if (isOwnEcho(version, hostPostedVersionRef.current)) return;
+    if (!roomApplied.current) return; // the set is not mounted; the tick posts the truth when it is
+    const live = rosterRef.current.filter((g) => !!g.render_url);
+    const shown = shownGuestIds();
+    // The server pushes the frame BEFORE our own POST resolves, so the
+    // version alone cannot tell our echo from a request: a list equal to
+    // the set's truth is nothing to act on — and answering it would post
+    // again, echo again, forever.
+    if (sameIds(onStage, shown)) return;
+    const plan = hostStagePlan({ requested: onStage, shown, admitted: live.map((g) => g.id) });
+    monitorLog(`host: stage request v${version} — show [${plan.toShow.map((x) => x.slice(0, 8)).join(", ")}] hide [${plan.toHide.map((x) => x.slice(0, 8)).join(", ")}]`);
+    void (async () => {
+      const placed: string[] = [];
+      const refused: string[] = [];
+      for (const gid of plan.toShow) {
+        const ok = await showGuestInSlot(sourceIdsFor(gid).camera);
+        (ok ? placed : refused).push(gid);
+      }
+      for (const gid of plan.toHide) hideGuestFromSlot(sourceIdsFor(gid).camera);
+      if (refused.length) {
+        const names = refused.map((gid) => live.find((g) => g.id === gid)?.display_name || "a guest").join(", ");
+        setBanner(`A mod asked to stage ${names} — no free guest slot. Add one: Sources → + → Guest slot`);
+        window.setTimeout(() => setBanner(null), 8000);
+      }
+      // The truth the set is about to show: what stayed, plus what was
+      // placed (the engine's visibility echo lands a frame later).
+      const hide = new Set(plan.toHide);
+      const truth = [...shown.filter((id) => !hide.has(id)), ...placed];
+      await postStageTruth(truth, refused.length ? "mod request, partly refused" : "mod request");
+    })();
+  };
+
+  /** Mod: ASK the host to put a guest on or off the stage. The server takes
+   * the full list (a dropped call is corrected by the next one) and echoes
+   * it; the row stays pending until the HOST posts what its set did
+   * (lib/stageTruth.ts) — nothing here is optimistic. */
   const modStageToggle = async (guestId: string) => {
     if (!endpointRef.current || !cfg.server_room_id) return;
-    const cur = modStageRef.current;
-    const next = cur.includes(guestId) ? cur.filter((x) => x !== guestId) : [...cur, guestId];
-    setModStage(next);
-    await guestsIpc.setStage(endpointRef.current, cfg.server_room_id, next).catch((e) => {
-      setModStage(cur);
-      setGuestErr(String(e).replace(/^Error:\s*/, ""));
-    });
+    const st = modStageRef.current;
+    if (st.pending) return; // one ask at a time; the host answers in order
+    const { on_stage, want } = modStageWish(st, guestId);
+    dispatchStage({ type: "dismiss", guestId });
+    try {
+      const res = (await guestsIpc.setStage(endpointRef.current, cfg.server_room_id, on_stage)) as { version?: unknown } | null;
+      const version = typeof res?.version === "number" ? res.version : st.version + 1;
+      dispatchStage({ type: "request", guestId, want, version, now: Date.now() });
+    } catch (e) {
+      const msg = String(e).replace(/^Error:\s*/, "");
+      dispatchStage({ type: "request-failed", guestId, error: /stage_full|holds/i.test(msg) ? "The server's stage is full — ask the host" : msg });
+    }
   };
+  /** The roster tick, callable from an action: order/remove are server
+   * truth, so the panel re-reads instead of guessing. */
+  const rosterTickRef = useRef<(() => void) | null>(null);
 
   /** Mod: nudge a guest one step in the slot order and post the full list. */
   const modOrder = async (guestId: string, dir: -1 | 1) => {
@@ -3073,11 +3260,14 @@ export function LiveView({
       .sort((a, b) => (a.position ?? 1e9) - (b.position ?? 1e9))
       .map((g) => g.id);
     const next = moveInOrder(admitted, guestId, dir);
-    // Optimistic: reflect the order now; the next roster poll confirms it.
-    setRoster((rs) => rs.map((g) => ({ ...g, position: next.indexOf(g.id) })));
-    await guestsIpc.order(endpointRef.current, cfg.server_room_id, next).catch((e) =>
-      setGuestErr(String(e).replace(/^Error:\s*/, "")),
-    );
+    // Server truth, not optimistic: post, then re-read the roster now
+    // rather than showing an order the server may not have taken.
+    try {
+      await guestsIpc.order(endpointRef.current, cfg.server_room_id, next);
+      rosterTickRef.current?.();
+    } catch (e) {
+      setGuestErr(String(e).replace(/^Error:\s*/, ""));
+    }
   };
 
   /** Mint (or reuse) the room's shareable link. */
@@ -3327,9 +3517,11 @@ export function LiveView({
     return () => stop?.();
   }, [refreshChat]);
 
-  const connectChat = useCallback(async (names: ChatNames) => {
+  /** `persist` = these are THIS machine's channels (the host's). A seat
+   * reading the host's room channels never overwrites its own saved ones. */
+  const connectChat = useCallback(async (names: ChatNames, persist = true) => {
     setChatError(null);
-    saveChatNames(names);
+    if (persist) saveChatNames(names);
     setChatNames(names);
     for (const platform of ["twitch", "kick", "youtube"] as const) {
       const name = names[platform].trim();
@@ -3363,6 +3555,36 @@ export function LiveView({
     chatAutoConnected.current = true;
     if (chatNames.twitch || chatNames.kick) connectChat(chatNames);
   }, [chatNames, connectChat]);
+
+  // Chat channels belong to the ROOM. The host publishes its handles to
+  // every monitor seat over the monitor leg (Boomin's room config schema
+  // is strict, so the leg is the room-scoped transport that works on
+  // every server) and keeps them on the room document; a seat reads them
+  // — the read-only ingest needs only a handle — and never edits them.
+  const monitorState = useMonitorState(monitorSeat);
+  useEffect(() => {
+    if (!isHost) return;
+    const cc: MonitorRoomInfo["chat_channels"] = {};
+    if (chatNames.twitch.trim()) cc.twitch = chatNames.twitch.trim();
+    if (chatNames.kick.trim()) cc.kick = chatNames.kick.trim();
+    if (chatNames.youtube.trim()) cc.youtube = chatNames.youtube.trim();
+    roomInfoRef.current = { ...roomInfoRef.current, chat_channels: cc };
+    for (const snd of monitorSenders.current.values()) snd.setRoomInfo(roomInfoRef.current);
+    const prev = JSON.stringify(cfgRef.current.chat_channels ?? {});
+    if (prev !== JSON.stringify(cc)) writeCfg({ ...cfgRef.current, chat_channels: cc });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, chatNames.twitch, chatNames.kick, chatNames.youtube]);
+  const hostChatKey = JSON.stringify(monitorState?.roomInfo?.chat_channels ?? null);
+  const hostChatAppliedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (isHost || accessPending) return;
+    if (hostChatAppliedRef.current === hostChatKey) return;
+    hostChatAppliedRef.current = hostChatKey;
+    const cc = monitorState?.roomInfo?.chat_channels;
+    // The host's room, not this machine's saved channels: swap to the
+    // room's handles (or to none, until the host publishes them).
+    void connectChat({ twitch: cc?.twitch ?? "", kick: cc?.kick ?? "", youtube: cc?.youtube ?? "" }, false);
+  }, [isHost, accessPending, hostChatKey, monitorState, connectChat]);
 
   // Demo liveness: the chat keeps talking.
   useEffect(() => {
@@ -3650,8 +3872,22 @@ export function LiveView({
       } else if (ev.type === "guest_thumbs") {
         // Already JPEG from the engine — a data URL is all the UI needs.
         const next: Record<string, string> = {};
-        for (const t of ev.thumbs) next[t.id] = `data:image/jpeg;base64,${t.jpeg}`;
-        setGuestThumbs((prev) => ({ ...prev, ...next }));
+        for (const t of ev.thumbs) {
+          if (t.id === "program") {
+            // The PROGRAM thumb exists only for monitor seats that asked
+            // (lib/monitorFeed.ts): bytes down every data channel, never a
+            // guests-panel tile.
+            if (monitorSenders.current.size) {
+              const bin = atob(t.jpeg);
+              const bytes = new Uint8Array(bin.length);
+              for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+              for (const snd of monitorSenders.current.values()) snd.pushThumb(bytes.buffer);
+            }
+            continue;
+          }
+          next[t.id] = `data:image/jpeg;base64,${t.jpeg}`;
+        }
+        if (Object.keys(next).length) setGuestThumbs((prev) => ({ ...prev, ...next }));
       } else if (ev.type === "engine_error") {
         setBanner(ev.message);
       } else if (ev.type === "engine_ready") {
@@ -4280,7 +4516,9 @@ export function LiveView({
         // On Boomin `controlSession` mints the room-channel ticket (api #392)
         // and returns the same {signaling_ticket, signaling_url} shape.
         session: () => guestsIpc.controlSession(ep.id, sid),
-        subscribe: boomin ? [...BOOMIN_ROOM_CHANNELS] : ["interaction:host"],
+        // `stage` on both: a mod's stage request reaches the host as a frame
+        // and the host answers with its set's truth (lib/stageTruth.ts).
+        subscribe: boomin ? [...BOOMIN_ROOM_CHANNELS] : ["interaction:host", "stage"],
         parse: boomin ? parseBoominFrame : undefined,
         onFrame: (frame: ControlFrame) => {
           if (frame.type === "interaction") {
@@ -4293,6 +4531,13 @@ export function LiveView({
             // it, a deal capped): a bound source still showing on the set
             // comes down, so the ledger and the picture agree.
             onContributionClosed((frame as ContributionFrame).contribution as unknown as Contribution);
+            return;
+          }
+          if (frame.type === "stage") {
+            const f = frame as { on_stage?: unknown; version?: unknown };
+            if (Array.isArray(f.on_stage) && typeof f.version === "number") {
+              onStageFrameRef.current?.(f.on_stage.filter((x): x is string => typeof x === "string"), f.version);
+            }
             return;
           }
           if (frame.type !== "scene.cut") return;
@@ -4743,6 +4988,14 @@ export function LiveView({
     return () => {
       for (const s of monitorSenders.current.values()) s.stop();
       monitorSenders.current.clear();
+      if (programThumbOn.current) {
+        programThumbOn.current = false;
+        ipc.liveSetProgramThumb(false).catch(() => {});
+      }
+      if (vcamAutoRef.current) {
+        vcamAutoRef.current = false;
+        vcamIpc.output(false).catch(() => {});
+      }
       const m = monitorRef.current;
       monitorRef.current = null;
       monitorStartedFor.current = null;
@@ -4807,7 +5060,8 @@ export function LiveView({
         // never on stage — the host only opens the return leg to them.
         const full = res.guests ?? [];
         const list = full.filter((g) => !isMonitor(g));
-        setRoster(list);
+        // Reconcile, never replace-on-equal: an identical roster is not news.
+        setRoster((prev) => (JSON.stringify(prev) === JSON.stringify(list) ? prev : list));
         setGuestErr(null);
         if (roomRoleRef.current !== "host") {
           // Not the host: the roster is all we do. No render pages (they would
@@ -4829,13 +5083,62 @@ export function LiveView({
             if (!wantedMonitors.has(id)) {
               sender.stop();
               monitorSenders.current.delete(id);
+              monitorThumbDemand();
             }
           }
           for (const [id, g] of wantedMonitors) {
             if (monitorSenders.current.has(id)) continue;
-            const sender = new MonitorSender({ renderUrl: g.render_url!, apiBase: endpointBaseRef.current, programLabel: vcamState?.device_name });
+            monitorLog(`host: monitor row ${id.slice(0, 8)} (${g.display_name ?? "seat"}) — opening the send leg`);
+            const sender = new MonitorSender({
+              renderUrl: g.render_url!,
+              apiBase: endpointBaseRef.current,
+              programLabel: vcamStateRef.current?.device_name,
+              tag: g.display_name ?? id.slice(0, 8),
+              onThumbDemand: () => monitorThumbDemand(),
+            });
+            sender.setRoomInfo(roomInfoRef.current);
             monitorSenders.current.set(id, sender);
             sender.start();
+            // A seat just arrived: give it the stage baseline (the tick's
+            // post is deduped; forcing it costs one request).
+            stagePostedRef.current = null;
+          }
+          // The video leg captures the VIRTUAL CAMERA — a device that exists
+          // only while the output runs. A host idling in a room never
+          // started it, so the monitor got a black frame, then nothing.
+          // Start it for the seat; stop it when the last seat leaves, but
+          // only if the host did not switch it on themselves.
+          const wantVcam = wantedMonitors.size > 0;
+          const vs = vcamStateRef.current;
+          if (wantVcam && !vcamOnRef.current && Date.now() > vcamAutoNextTry.current) {
+            vcamAutoNextTry.current = Date.now() + 10_000;
+            if (vs?.installed || vs?.state === "active") {
+              monitorLog("host: a monitor seat is present — starting the virtual camera for it");
+              vcamIpc
+                .output(true)
+                .then((on) => {
+                  vcamOnRef.current = on;
+                  setVcamOn(on);
+                  if (on) vcamAutoRef.current = true;
+                  monitorLog(`host: virtual camera ${on ? "started" : "did not start"}`);
+                })
+                .catch((e) => monitorLog(`host: virtual camera start failed: ${String(e)}`));
+            } else {
+              monitorLog(`host: virtual camera not installed (state=${vs?.state ?? "unknown"}) — the seat falls back to the 8 fps preview`);
+            }
+          }
+          if (!wantVcam && vcamAutoRef.current) {
+            vcamAutoRef.current = false;
+            if (vcamOnRef.current) {
+              monitorLog("host: last monitor left — stopping the virtual camera we started for it");
+              vcamIpc
+                .output(false)
+                .then((on) => {
+                  vcamOnRef.current = on;
+                  setVcamOn(on);
+                })
+                .catch(() => {});
+            }
           }
         }
         // The roster is news either way; reconciling sources against it is
@@ -4929,6 +5232,7 @@ export function LiveView({
           stagePostedRef.current = stageKey;
           guestsIpc
             .setStage(endpointRef.current, cfg.server_room_id, stageIds)
+            .then(noteHostPosted)
             .catch(() => {
               // Retry on the next tick rather than losing the change.
               stagePostedRef.current = null;
@@ -4938,10 +5242,12 @@ export function LiveView({
         if (alive) setGuestErr(String(e).replace(/^Error:\s*/, ""));
       }
     };
+    rosterTickRef.current = () => void tick();
     tick();
     const t = setInterval(tick, 3000);
     return () => {
       alive = false;
+      rosterTickRef.current = null;
       clearInterval(t);
     };
   }, [room?.id, cfg.server_room_id, sources.items, snapshot?.video_height, guestSlot, seat]);
@@ -5032,13 +5338,14 @@ export function LiveView({
     setMicPopOpen(false);
     setOverlayInline(false);
     setChatOpen(false);
+    setLinkMenuOpen(false);
     setSrcAddOpen(false);
     setDeviceMenu(null);
     setSrcSubPop(null);
     setSceneSettings(null);
   };
   const anyPop =
-    destsOpen || qualityOpen || micPopOpen || chatOpen || srcAddOpen || deviceMenu !== null || srcSubPop !== null ||
+    destsOpen || qualityOpen || micPopOpen || chatOpen || linkMenuOpen || srcAddOpen || deviceMenu !== null || srcSubPop !== null ||
     // Scene settings are a POPOVER only on a side rail; in the bottom sheet
     // and the top rail they are a strip in the flow — a popover backdrop
     // there would sit over the strip and eat every click.
@@ -5548,7 +5855,8 @@ export function LiveView({
             items={(sources.items ?? []).filter((i) => i.kind === "guest")}
             role={roomRole}
             control={roomAccess.can.control}
-            stage={modStage}
+            stage={modStage.confirmed}
+            stageState={modStage}
             onAdmit={admitGuest}
             onRemove={removeGuest}
             onMute={(id, muted) => setSourceAudio(id, undefined, muted).catch(() => {})}
@@ -5874,7 +6182,7 @@ export function LiveView({
         <>
           <button
             className={`rm-panel-plus rm-chat-plug${chatLive ? " live" : ""}`}
-            title={chatLive ? "Chat channels" : "Connect your chat"}
+            title={!isHost ? "Chat channels — set by the host" : chatLive ? "Chat channels" : "Connect your chat"}
             onClick={(e) => {
               setPopAnchor(e.currentTarget);
               setChatSetupOpen((o) => !o);
@@ -5882,7 +6190,7 @@ export function LiveView({
           >
             {ic.link}
           </button>
-          {chatSetupOpen && (
+          {chatSetupOpen && isHost && (
             <Pop anchor={popAnchor} align="right" className="rm-pop-chat">
               <ChatSetup
                 names={chatNames}
@@ -5893,6 +6201,28 @@ export function LiveView({
                   connectChat(n);
                 }}
               />
+            </Pop>
+          )}
+          {chatSetupOpen && !isHost && (
+            <Pop anchor={popAnchor} align="right" className="rm-pop-chat">
+              <div className="rm-chatsetup">
+                <div className="rm-pop-title">CHAT CHANNELS</div>
+                {(["twitch", "kick", "youtube"] as const).map((p) => (
+                  <div key={p} className="rm-chatsetup-row">
+                    <span className="rm-chatsetup-label">
+                      {p === "youtube" ? "YouTube" : p[0].toUpperCase() + p.slice(1)}
+                      {chatConns.find((c) => c.platform === p)?.connected && <span className="rm-chatsetup-on">reading</span>}
+                    </span>
+                    <span className="rm-chatsetup-ro">{chatNames[p] || "—"}</span>
+                  </div>
+                ))}
+                {chatError && <div className="rm-chatsetup-err">{chatError}</div>}
+                <div className="rm-chatsetup-foot">
+                  <span className="rm-chatsetup-note">
+                    {monitorState?.roomInfo ? "These are the host's room channels — only the host changes them." : "Waiting for the host to publish the room's channels…"}
+                  </span>
+                </div>
+              </div>
             </Pop>
           )}
           <button
@@ -6280,26 +6610,43 @@ export function LiveView({
             * Scenes, guests, votes and chat stay, gated by `can`. */}
           {isHost ? (
             <>
-          <button
-            className="hd-chip hd-link"
-            title="Copy this room's guest link"
-            onClick={copyRoomLink}
-          >
-            {ic.link ?? "🔗"} Link
-          </button>
-          <button
-            className="hd-chip hd-link"
-            title="Open the guest page in your browser — the link exactly as your server minted it"
-            onClick={async () => {
-              // VERBATIM: the join link is whatever the endpoint returned
-              // (a self-hosted server's own origin, or Boomin's). Producer
-              // never rewrites the host.
-              const url = guestLink ?? (await ensureGuestLink());
-              if (url) await openUrl(url).catch(() => setBanner(url));
-            }}
-          >
-            Open
-          </button>
+          <span className="hd-link-group">
+            <button
+              className="hd-chip hd-link"
+              title="Copy this room's guest link"
+              onClick={copyRoomLink}
+            >
+              {ic.link ?? "🔗"} Link
+            </button>
+            <button
+              className={`hd-chip hd-link-more${linkMenuOpen ? " on" : ""}`}
+              title="More"
+              aria-label="Link options"
+              onClick={(e) => {
+                setPopAnchor(e.currentTarget);
+                setLinkMenuOpen((o) => !o);
+              }}
+            >
+              ▾
+            </button>
+          </span>
+          {linkMenuOpen && (
+            <Pop anchor={popAnchor} align="left" className="rm-pop-link">
+              <button
+                className="rm-pop-row"
+                onClick={async () => {
+                  setLinkMenuOpen(false);
+                  // VERBATIM: the join link is whatever the endpoint returned
+                  // (a self-hosted server's own origin, or Boomin's). Producer
+                  // never rewrites the host.
+                  const url = guestLink ?? (await ensureGuestLink());
+                  if (url) await openUrl(url).catch(() => setBanner(url));
+                }}
+              >
+                Open guest page in browser
+              </button>
+            </Pop>
+          )}
           <button
             className="hd-chip hd-chans"
             title="Channels this room goes out to"
