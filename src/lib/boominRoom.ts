@@ -20,8 +20,39 @@
 // `scene.publish` on Boomin): `boominStageConfig` shapes it for
 // `PATCH /live/rooms/:id`, whose strict schema wants a stage kind per scene.
 
-import type { Contribution, Interaction } from "./ipc";
-import type { ControlFrame } from "./roomControl";
+// No imports from ipc.ts / roomControl.ts, even type-only: server/test
+// type-checks this file under the open server's tsconfig (no DOM, no Tauri),
+// so the shapes below are structural twins of ipc.ts `Interaction` /
+// `Contribution` and roomControl.ts `ControlFrame`, which is what makes the
+// translation assignable where Live.tsx hands it over.
+
+/** = ipc.ts `Interaction`, structurally. */
+export interface BoominInteraction {
+  id: string;
+  room_id: string;
+  type: string;
+  state: string;
+  version: number;
+  spec: { prompt: string; options: { id: string; label: string }[] };
+  input: { roles: string[]; per_identity: string; cooldown_ms: number };
+  timing: { opened_at?: string; reveal_at?: string; revealed_at?: string; closed_at?: string; collect_ms: number; reveal_hold_ms: number };
+  render: { surface: string; kind: string; style?: string }[];
+  tally?: { total: number; options: Record<string, number>; by_kind: Record<string, number>; winner: string | null };
+  server_now: number;
+}
+
+/** The ledger row as the wire carries it (a subset of ipc.ts `Contribution`). */
+export interface BoominContribution {
+  id: string;
+  kind: string;
+  binding: Record<string, unknown>;
+  started_at: string;
+  ended_at: string | null;
+  [k: string]: unknown;
+}
+
+/** = roomControl.ts `ControlFrame`'s open member. */
+export type BoominFrame = { type: string; [k: string]: unknown };
 
 /** Where the audience phone page lives (Boomin web, `/a/:interactionId`). */
 export const BOOMIN_APP_URL = "https://boomin.ai";
@@ -39,14 +70,14 @@ export const BOOMIN_ROOM_CHANNELS = ["stage", "contributions", "interactions", "
 
 export interface ContributionFrame {
   type: "contribution.opened" | "contribution.closed";
-  contribution: Contribution;
+  contribution: BoominContribution;
   server_now?: number;
   [k: string]: unknown;
 }
 
 /** One published frame off Boomin's room channel → the frame Live.tsx
  *  already handles. Tolerant: junk never throws in the control loop. */
-export function parseBoominFrame(raw: unknown): ControlFrame | null {
+export function parseBoominFrame(raw: unknown): BoominFrame | null {
   if (typeof raw !== "string") return null;
   let v: unknown;
   try {
@@ -57,7 +88,7 @@ export function parseBoominFrame(raw: unknown): ControlFrame | null {
   if (!v || typeof v !== "object") return null;
   const f = v as { type?: unknown; action?: unknown; channels?: unknown; payload?: unknown };
   // Direct frames (subscribed / error / pong) keep their type.
-  if (typeof f.type === "string") return v as ControlFrame;
+  if (typeof f.type === "string") return v as BoominFrame;
   if (typeof f.action !== "string") return null;
   const channels = Array.isArray(f.channels) ? (f.channels as string[]) : [];
   const p = (f.payload && typeof f.payload === "object" ? f.payload : {}) as Record<string, unknown>;
@@ -78,7 +109,7 @@ export function parseBoominFrame(raw: unknown): ControlFrame | null {
     case "contribution.closed": {
       const c = p.contribution;
       if (!c || typeof c !== "object" || typeof (c as { id?: unknown }).id !== "string") return null;
-      return { type: f.action, contribution: c as Contribution, server_now: p.server_now } as ContributionFrame;
+      return { type: f.action, contribution: c as BoominContribution, server_now: p.server_now } as ContributionFrame;
     }
     case "interaction.open":
     case "interaction.tally":
@@ -98,7 +129,7 @@ export function parseBoominFrame(raw: unknown): ControlFrame | null {
 /** Boomin's projection (api realtime/interaction-state.ts) is the same
  *  document Producer renders, minus a few defaults the open server always
  *  fills. Returns null unless it is recognisably an interaction. */
-export function normalizeBoominInteraction(raw: unknown, serverNow?: number): Interaction | null {
+export function normalizeBoominInteraction(raw: unknown, serverNow?: number): BoominInteraction | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
   if (typeof r.id !== "string" || typeof r.state !== "string") return null;
@@ -140,7 +171,7 @@ export function normalizeBoominInteraction(raw: unknown, serverNow?: number): In
       collect_ms: typeof timing.collect_ms === "number" ? timing.collect_ms : 0,
       reveal_hold_ms: typeof timing.reveal_hold_ms === "number" ? timing.reveal_hold_ms : 0,
     },
-    render: Array.isArray(r.render) ? (r.render as Interaction["render"]) : [],
+    render: Array.isArray(r.render) ? (r.render as BoominInteraction["render"]) : [],
     ...(tally ? { tally } : {}),
     server_now: serverNow ?? (typeof r.server_now === "number" ? r.server_now : Date.now()),
   };

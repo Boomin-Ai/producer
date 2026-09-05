@@ -4125,7 +4125,7 @@ export function LiveView({
             // The server closed an overlay interval (a run ended, a mod hid
             // it, a deal capped): a bound source still showing on the set
             // comes down, so the ledger and the picture agree.
-            onContributionClosed((frame as ContributionFrame).contribution);
+            onContributionClosed((frame as ContributionFrame).contribution as unknown as Contribution);
             return;
           }
           if (frame.type !== "scene.cut") return;
