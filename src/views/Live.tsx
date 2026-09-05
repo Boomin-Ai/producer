@@ -2,6 +2,9 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, ty
 import { createPortal } from "react-dom";
 import { installStageCutouts } from "../lib/stageCutouts";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { expandSlotBindings, guestSlotPatch, lookPatch, slotOfGuest } from "../lib/slotMath";
+import { GreenRoomBar, useGuestSeat } from "./GuestSeat";
+import type { GuestSeatSpec } from "../lib/guestSeat";
 import {
   ipc,
   listenLiveEvents,
@@ -2013,12 +2016,26 @@ export interface RoomInfo {
   config: string;
 }
 
+/** The room whose document the ENGINE currently holds. The engine session
+ * outlives this view — leaving for Home unmounts the React tree, not the
+ * graph — so reopening the same room must reconcile against what is already
+ * there rather than destroy and respawn it. Tearing every item down cost a
+ * black stage, every CEF guest page re-created (renegotiation, "Connecting…",
+ * a flash per guest) and every slot popping in at full frame before its look
+ * landed. Module-scoped on purpose: it is a fact about the engine. */
+let engineHeldRoom: string | null = null;
+
 export function LiveView({
   room,
   onLeave,
+  seat,
 }: {
   room?: RoomInfo;
   onLeave?: () => void;
+  /** GUEST MODE: this Producer holds a seat in someone else's room. The
+   * stage is the guest's own scene (their camera); the green-room strip
+   * above it is the seat. Leaving the view leaves the seat. */
+  seat?: GuestSeatSpec;
 }) {
   // Windows float mode: popovers/toasts over the stage are punched out of
   // the native preview so they stay visible. No-op elsewhere.
@@ -2510,6 +2527,7 @@ export function LiveView({
    * the extension being installed (once, with the user's approval) and the
    * output actually running. */
   const [vcamState, setVcamState] = useState<VcamStatus | null>(null);
+  const guestSeat = useGuestSeat(seat, vcamState?.device_name);
   const [vcamOn, setVcamOn] = useState(false);
 
   useEffect(() => {
@@ -2664,7 +2682,7 @@ export function LiveView({
     writeCfg({ ...cfgRef.current, slot_bindings: { ...b, [sl.id]: guestItemId } });
     await ipc.liveSetTransform(sl.id, { visible: false }, true).catch(() => {});
     await ipc
-      .liveSetTransform(guestItemId, { x: sl.x, y: sl.y, w: sl.w, h: sl.h, visible: false }, true)
+      .liveSetTransform(guestItemId, { x: sl.x, y: sl.y, w: sl.w, h: sl.h, z: sl.z, visible: false }, true)
       .catch(() => {});
     fadeGuest(guestItemId, true);
   };
@@ -3114,22 +3132,47 @@ export function LiveView({
         }
         setSources((s) => ({ ...s, ...saved }));
       }
-      // Item-list half of the document: clear whatever open-list items the
-      // engine is holding from the previous room, then respawn this room's.
+      // Item-list half of the document. A DIFFERENT room: clear whatever
+      // open-list items the engine is holding from the previous one, then
+      // respawn this room's. The SAME room reopened: the engine already holds
+      // it — keep every item the document still lists (same id, same kind;
+      // spec edits go through their own remove+add paths), keep every guest
+      // (the roster tick owns their lifetime, and a kept CEF page keeps its
+      // call), add only what is missing. Nothing flashes, nothing
+      // reconnects that did not have to.
+      const hot = engineHeldRoom === room.id;
       const held = (snap.sources?.items ?? []).filter(
         (i) => !["screen", "camera", "overlay"].includes(i.id),
       );
+      const listed = new Map((saved.extras ?? []).map((e) => [e.id, e]));
+      const kept = new Set<string>();
       for (const i of held) {
+        const doc = listed.get(i.id);
+        if (hot && (i.kind === "guest" || (doc && doc.spec.kind === i.kind))) {
+          kept.add(i.id);
+          continue;
+        }
         await extraSources.remove(i.id).catch(() => {});
       }
       for (const e of saved.extras ?? []) {
+        if (kept.has(e.id)) continue;
         await extraSources.add(e.id, e.label, e.spec).catch(() => {});
       }
+      engineHeldRoom = room.id;
       // The overlay LAST: its CEF create is the slowest thing in the apply
       // (measured 4.6s cold, holding the engine loop), so nothing else may
       // queue behind it. Not awaited — the scene mounts around it and the
-      // first-frame gate holds the veil until it lands.
-      if (typeof saved.screen === "boolean" && (saved.overlay_window != null || saved.overlay_url)) {
+      // first-frame gate holds the veil until it lands. Setting it re-creates
+      // the CEF page, so a hot reopen with the same overlay leaves it alone.
+      const overlaySame =
+        hot &&
+        (snap.sources?.overlay_window ?? null) === (saved.overlay_window ?? null) &&
+        (snap.sources?.overlay_url ?? null) === (saved.overlay_url ?? null);
+      if (
+        typeof saved.screen === "boolean" &&
+        (saved.overlay_window != null || saved.overlay_url) &&
+        !overlaySame
+      ) {
         ipc.liveSetOverlay(saved.overlay_window ?? null, true, saved.overlay_url ?? null).catch(() => {});
       }
       const mount = parseConfig(room.config).active_scene;
@@ -3529,7 +3572,22 @@ export function LiveView({
         ...(sources.camera || needCamera ? ["camera"] : []),
         ...(overlayActive ? ["overlay"] : []),
       ]);
-      const entries = Object.entries(look).filter(([id]) => exists.has(id));
+      // SLOT MODEL: a slot bound to a guest applies AS the guest — same rect,
+      // same layer, same visibility — with the slot hidden underneath at its
+      // own rect. A guest is never at the top of the stack merely because it
+      // was created last.
+      const bindings = cfgRef.current.slot_bindings ?? {};
+      const entries = expandSlotBindings(
+        Object.entries(look).filter(([id]) => exists.has(id)),
+        bindings,
+        exists,
+      );
+      // Seen, not heard: a guest a scene hides is muted; one it shows speaks.
+      for (const [id, l] of entries) {
+        if (id.startsWith("guest-") && bindings[slotOfGuest(bindings, id) ?? ""] === id) {
+          setSourceAudio(id, undefined, !l.visible).catch(() => {});
+        }
+      }
       // MEMBERSHIP: a scene's look is the set of sources that belong to it.
       // Anything the look does not mention is not in this scene — hide it.
       // Screen/camera/overlay follow the same rule as every other source
@@ -3547,8 +3605,7 @@ export function LiveView({
       // Hidden first (plain visibility flips), then visible bottom-to-top so
       // z-order lands exactly as the scene says.
       for (const [id, l] of entries.filter(([, l]) => !l.visible)) {
-        void l;
-        ipc.liveSetTransform(id, { visible: false }, true).catch(() => {});
+        ipc.liveSetTransform(id, lookPatch(l, false), true).catch(() => {});
       }
       const visible = entries
         .filter(([, l]) => l.visible)
@@ -3567,18 +3624,10 @@ export function LiveView({
             .filter(([, l]) => l.visible)
             .sort((a, b) => (a[1].z ?? 0) - (b[1].z ?? 0));
           for (const [id, l] of entries.filter(([, l]) => !l.visible)) {
-            void l;
-            ipc.liveSetTransform(id, { visible: false }, true).catch(() => {});
+            ipc.liveSetTransform(id, lookPatch(l, false), true).catch(() => {});
           }
           vis.forEach(([id, l], i) => {
-            const patch: LiveTransformPatch = { visible: true, z: i };
-            if (l.x != null && l.y != null && l.w != null && l.h != null) {
-              patch.x = l.x;
-              patch.y = l.y;
-              patch.w = l.w;
-              patch.h = l.h;
-            }
-            ipc.liveSetTransform(id, patch, true).catch(() => {});
+            ipc.liveSetTransform(id, lookPatch(l, true, i), true).catch(() => {});
           });
         };
         setActiveSceneId(p.id);
@@ -3586,6 +3635,7 @@ export function LiveView({
         try {
           const reported = await stingerIpc.play(tr.stinger);
           const total = reported > 0 ? reported : (tr.ms ?? 1200);
+          transitionUntil.current = performance.now() + total + 400;
           window.setTimeout(applyLook, Math.round(total / 2));
           window.setTimeout(() => stingerIpc.stop().catch(() => {}), total + 120);
         } catch (e) {
@@ -3604,17 +3654,11 @@ export function LiveView({
       // possible because scenes are looks over one graph.
       const animate = (tr.kind === "move" || tr.kind === "fade") && !!sources.items?.length;
       const dur = Math.max(80, Math.min(2000, tr.ms ?? 320));
+      if (animate) transitionUntil.current = performance.now() + dur + 400;
 
       if (!animate) {
         visible.forEach(([id, l], i) => {
-          const patch: LiveTransformPatch = { visible: true, z: i };
-          if (l.x != null && l.y != null && l.w != null && l.h != null) {
-            patch.x = l.x;
-            patch.y = l.y;
-            patch.w = l.w;
-            patch.h = l.h;
-          }
-          ipc.liveSetTransform(id, patch, true).catch(() => {});
+          ipc.liveSetTransform(id, lookPatch(l, true, i), true).catch(() => {});
         });
       } else {
         const from = new Map((sources.items ?? []).map((it) => [it.id, it]));
@@ -3623,7 +3667,7 @@ export function LiveView({
           // Items that stay simply stay — only what enters or leaves
           // dissolves. Anything that MOVES is `move`'s job, and the two can
           // be combined by picking one per scene.
-          const leaving = entries.filter(([, l]) => !l.visible).map(([id]) => id);
+          const leaving = entries.filter(([, l]) => !l.visible);
           const arriving = visible
             .map(([id]) => id)
             .filter((id) => !(from.get(id)?.visible ?? false));
@@ -3634,14 +3678,7 @@ export function LiveView({
             ipc.liveSetTransform(id, { visible: true }, false).catch(() => {});
           }
           visible.forEach(([id, l], i) => {
-            const patch: LiveTransformPatch = { visible: true, z: i };
-            if (l.x != null && l.y != null && l.w != null && l.h != null) {
-              patch.x = l.x;
-              patch.y = l.y;
-              patch.w = l.w;
-              patch.h = l.h;
-            }
-            ipc.liveSetTransform(id, patch, false).catch(() => {});
+            ipc.liveSetTransform(id, lookPatch(l, true, i), false).catch(() => {});
           });
           const t0f = performance.now();
           // If frames starve mid-dissolve (WebKit halts rAF when it deems the
@@ -3652,7 +3689,7 @@ export function LiveView({
             if (fadeDone) return;
             const k = Math.min(1, (performance.now() - t0f) / dur);
             for (const id of arriving) setOpacity(id, k).catch(() => {});
-            for (const id of leaving) setOpacity(id, 1 - k).catch(() => {});
+            for (const [id] of leaving) setOpacity(id, 1 - k).catch(() => {});
             if (k < 1) {
               requestAnimationFrame(stepFade);
               return;
@@ -3660,8 +3697,8 @@ export function LiveView({
             fadeDone = true;
             // Settle: hide what left and restore its opacity, so the next
             // scene that shows it doesn't inherit a transparent source.
-            for (const id of leaving) {
-              ipc.liveSetTransform(id, { visible: false }, true).catch(() => {});
+            for (const [id, l] of leaving) {
+              ipc.liveSetTransform(id, lookPatch(l, false), true).catch(() => {});
               setOpacity(id, 1).catch(() => {});
             }
             visible.forEach(([id], i) => {
@@ -3673,8 +3710,8 @@ export function LiveView({
           window.setTimeout(() => {
             if (!fadeDone) {
               fadeDone = true;
-              for (const id of leaving) {
-                ipc.liveSetTransform(id, { visible: false }, true).catch(() => {});
+              for (const [id, l] of leaving) {
+                ipc.liveSetTransform(id, lookPatch(l, false), true).catch(() => {});
                 setOpacity(id, 1).catch(() => {});
               }
               visible.forEach(([id], i) => {
@@ -3731,14 +3768,7 @@ export function LiveView({
           if (moveDone) return;
           moveDone = true;
           visible.forEach(([id, l], i) => {
-            const patch: LiveTransformPatch = { visible: true, z: i };
-            if (l.x != null && l.y != null && l.w != null && l.h != null) {
-              patch.x = l.x;
-              patch.y = l.y;
-              patch.w = l.w;
-              patch.h = l.h;
-            }
-            ipc.liveSetTransform(id, patch, true).catch(() => {});
+            ipc.liveSetTransform(id, lookPatch(l, true, i), true).catch(() => {});
           });
         }, dur + 80);
       }
@@ -3861,9 +3891,47 @@ export function LiveView({
     [],
   );
 
-  // Poll the roster and reconcile browser sources against it.
+  /** Until when a scene transition is still gliding items — the slot
+   * reconcile below must not snap a guest mid-move. */
+  const transitionUntil = useRef(0);
+
+  // SLOT INVARIANT, held against engine truth on every poll: a shown guest
+  // sits at its slot's rect and layer. Anything that moved it away — its own
+  // creation (top of the stack), a source-list reorder that only knew the
+  // slot, a look applied before the guest existed — is corrected here, from
+  // the slot, never the other way round. The slot is authored; the guest
+  // follows.
   useEffect(() => {
-    if (!room?.id || !cfg.server_room_id) return;
+    if (performance.now() < transitionUntil.current) return;
+    const items = sources.items ?? [];
+    const b = cfgRef.current.slot_bindings ?? {};
+    for (const [slotId, gid] of Object.entries(b)) {
+      const slot = items.find((i) => i.id === slotId);
+      const guest = items.find((i) => i.id === gid);
+      if (!slot || !guest || !guest.visible) continue;
+      const patch = guestSlotPatch(slot, guest);
+      if (patch) ipc.liveSetTransform(gid, patch, true).catch(() => {});
+    }
+  }, [sources.items]);
+
+  /** A guest dragged, resized or re-layered on the stage is the SLOT being
+   * edited through its occupant: the slot (hidden underneath) takes the same
+   * transform, so the authored rect is what moved and the reconcile above
+   * has nothing to undo. */
+  const mirrorToSlot = (id: string, patch: LiveTransformPatch, commit: boolean) => {
+    if (!id.startsWith("guest-")) return;
+    const slotId = slotOfGuest(cfgRef.current.slot_bindings ?? {}, id);
+    if (!slotId) return;
+    const { visible: _v, ...geometry } = patch;
+    void _v;
+    if (Object.keys(geometry).length) ipc.liveSetTransform(slotId, geometry, commit).catch(() => {});
+  };
+
+  // Poll the roster and reconcile browser sources against it. Not while we
+  // hold a SEAT elsewhere: the poll is also the room-open heartbeat, and a
+  // guest's own stage must not read as open on the network.
+  useEffect(() => {
+    if (!room?.id || !cfg.server_room_id || seat) return;
     let alive = true;
     const tick = async () => {
       try {
@@ -3891,6 +3959,12 @@ export function LiveView({
         // be a second host peer on every guest's channel), no stage post
         // from our engine (we have none for this room).
         if (roomRoleRef.current !== "host") return;
+        // The roster is news either way; reconciling sources against it is
+        // not, until the document has been applied and the engine's item
+        // list read — before that `sources.items` is empty, and an empty list
+        // reads as "every binding is stale": slots freed, guests re-added,
+        // the stage blinking on every reopen.
+        if (!roomApplied.current) return;
 
         // Only guests the host has admitted get a source. A waiting guest is
         // deliberately NOT on the broadcast: the room link is public, so
@@ -3991,7 +4065,7 @@ export function LiveView({
       alive = false;
       clearInterval(t);
     };
-  }, [room?.id, cfg.server_room_id, sources.items, snapshot?.video_height, guestSlot]);
+  }, [room?.id, cfg.server_room_id, sources.items, snapshot?.video_height, guestSlot, seat]);
 
   // Mount the room into its saved scene once the engine can take it.
   useEffect(() => {
@@ -5410,6 +5484,7 @@ export function LiveView({
           )}
         </div>
       </header>
+      {seat && <GreenRoomBar seat={guestSeat} spec={seat} onLeave={() => onLeave?.()} />}
 
       {layoutEdit && (
         <div className="rm-editbar">
@@ -5557,8 +5632,22 @@ export function LiveView({
                   baseH={vh}
                   disabled={!engineOk}
                   onOrder={(id, dir) => {
-                    const it = (sources.items ?? []).find((i) => i.id === id);
-                    if (it) ipc.liveSetTransform(id, { z: it.z + dir }, true).catch(() => {});
+                    const items = sources.items ?? [];
+                    const it = items.find((i) => i.id === id);
+                    if (!it) return;
+                    // A bound guest re-layers as its slot: the slot moves,
+                    // the guest is placed at the slot's new layer.
+                    const slotId = it.kind === "guest" ? slotOfGuest(cfgRef.current.slot_bindings ?? {}, id) : null;
+                    const slot = slotId ? items.find((i) => i.id === slotId) : undefined;
+                    if (slot) {
+                      const z = Math.max(0, slot.z + dir);
+                      ipc
+                        .liveSetTransform(slot.id, { z }, true)
+                        .then(() => ipc.liveSetTransform(id, { z }, true))
+                        .catch(() => {});
+                    } else {
+                      ipc.liveSetTransform(id, { z: it.z + dir }, true).catch(() => {});
+                    }
                     captureActiveLook();
                   }}
                   onSelect={setStageSel}
@@ -5567,7 +5656,11 @@ export function LiveView({
                     deleteStageItem(id);
                     captureActiveLook();
                   }}
-                  onCommit={captureActiveLook}
+                  onLive={(id, patch) => mirrorToSlot(id, patch, false)}
+                  onCommit={(id, patch) => {
+                    mirrorToSlot(id, patch, true);
+                    captureActiveLook();
+                  }}
                 />
               </PreviewPanel>
             )}
