@@ -38,6 +38,8 @@
 
 #include <math.h>
 #include <windows.h>
+
+#include "obs_min.h"
 #include <shellapi.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -689,4 +691,68 @@ float producer_sdr_white_nits(void)
     free(path);
     free(mode);
     return nits;
+}
+
+/* ── Cutout (producer_person_mask): pass-through ────────────────────────────
+ * The macOS filter runs Apple's Vision person segmentation (person_mask.m).
+ * Windows has no mask provider yet — MediaPipe/ONNX on DirectML is the plan
+ * (WINDOWS-ENGINE.md) — so the same filter id is registered here as a
+ * pass-through: scene configs that carry a Cutout round-trip between the two
+ * platforms instead of failing to load, and the settings survive untouched.
+ * The libobs symbols come through the raw-dylib import stubs ffi.rs
+ * synthesises for obs.dll, so each one used here must also be declared there.
+ */
+struct pm_win {
+    obs_source_t *ctx;
+};
+
+static const char *pm_win_name(void *unused)
+{
+    (void)unused;
+    return "Cutout";
+}
+
+static void *pm_win_create(obs_data_t *settings, obs_source_t *ctx)
+{
+    (void)settings;
+    struct pm_win *f = calloc(1, sizeof(*f));
+    if (f)
+        f->ctx = ctx;
+    return f;
+}
+
+static void pm_win_destroy(void *data)
+{
+    free(data);
+}
+
+static void pm_win_defaults(obs_data_t *settings)
+{
+    obs_data_set_default_string(settings, "mode", "soft");
+    obs_data_set_default_double(settings, "feather", 0.35);
+    obs_data_set_default_double(settings, "erode", 0.25);
+    obs_data_set_default_double(settings, "blur", 0.6);
+}
+
+static void pm_win_render(void *data, gs_effect_t *effect)
+{
+    (void)effect;
+    struct pm_win *f = data;
+    /* TODO(win): mask provider (MediaPipe/ONNX on DirectML); mode ignored. */
+    obs_source_skip_video_filter(f->ctx);
+}
+
+void producer_person_mask_register(void)
+{
+    struct obs_source_info info;
+    memset(&info, 0, sizeof(info));
+    info.id = PRODUCER_PERSON_MASK_ID;
+    info.type = OBS_SOURCE_TYPE_FILTER;
+    info.output_flags = OBS_SOURCE_VIDEO;
+    info.get_name = pm_win_name;
+    info.create = pm_win_create;
+    info.destroy = pm_win_destroy;
+    info.get_defaults = pm_win_defaults;
+    info.video_render = pm_win_render;
+    obs_register_source_s(&info, sizeof(info));
 }

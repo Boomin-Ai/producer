@@ -48,12 +48,21 @@ fn link_live_engine_macos() {
 
     // AppKit/AVFoundation shim (M-L6 preview + TCC + device lookup).
     println!("cargo:rerun-if-changed=src/live/shim.m");
+    // Cutout: the Vision person-mask filter (registered through shim.m).
+    println!("cargo:rerun-if-changed=src/live/person_mask.m");
+    println!("cargo:rerun-if-changed=src/live/person_mask.effect.h");
+    println!("cargo:rerun-if-changed=src/live/obs_min.h");
     cc::Build::new()
         .file("src/live/shim.m")
+        .file("src/live/person_mask.m")
         .flag("-fobjc-arc")
         .flag("-fmodules")
         .compile("producer_live_shim");
     println!("cargo:rustc-link-lib=framework=AppKit");
+    println!("cargo:rustc-link-lib=framework=Vision");
+    println!("cargo:rustc-link-lib=framework=CoreVideo");
+    println!("cargo:rustc-link-lib=framework=IOSurface");
+    println!("cargo:rustc-link-lib=framework=Metal");
     println!("cargo:rustc-link-lib=framework=CoreMediaIO");
     println!("cargo:rustc-link-lib=framework=AVFoundation");
     // Virtual camera (R13): OSSystemExtensionManager activation.
@@ -169,6 +178,7 @@ fn link_live_engine_windows() {
     // The Win32 half of shim.m. Same exported symbols, so ffi.rs is unchanged;
     // see src/live/shim_win.c for what is real and what is a deliberate no-op.
     println!("cargo:rerun-if-changed=src/live/shim_win.c");
+    println!("cargo:rerun-if-changed=src/live/obs_min.h");
     cc::Build::new()
         .file("src/live/shim_win.c")
         .compile("producer_live_shim");

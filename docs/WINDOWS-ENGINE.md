@@ -712,6 +712,19 @@ outline match the SDR desktop around them.
   renders -> RTMP out -> win-dshow virtual camera.
 - The local R1-fallback extract has 13 plugins and NO obs-browser, so guests
   cannot work against it. Rung 4 needs a CI-built engine.
+- **Cutout mask provider TODO (MediaPipe/ONNX on DirectML).** The
+  `producer_person_mask` video filter (macOS: Apple Vision person
+  segmentation, `src-tauri/src/live/person_mask.m`) is registered on Windows
+  too, from `shim_win.c`, as a PASS-THROUGH: same id, same settings
+  (`mode` off|soft|cut, `feather`, `erode`, `blur`), `video_render` just
+  skips. That keeps scene configs round-tripping between platforms; the mode
+  is ignored until Windows has a mask provider. The compositing effect
+  (`person_mask.effect.h`) is backend-neutral libobs HLSL and needs no port —
+  only the provider does. libobs is reached from the C shim through
+  `obs_min.h` (a hand-declared subset pinned to obs.lock, like ffi.rs) and,
+  on Windows, through the raw-dylib import stubs ffi.rs synthesises for
+  obs.dll: every obs symbol shim_win.c calls must also be declared in ffi.rs
+  or the release link fails at `__imp_*`.
 
 ## Virtual camera identity (verified 2026-09-03)
 
