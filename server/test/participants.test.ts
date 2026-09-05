@@ -18,6 +18,7 @@ import {
   localSetDecision,
   sourceIdsFor,
   wantedSourceIds,
+  isMonitor,
 } from "../guest/src/participants";
 
 describe("resolveGrants", () => {
@@ -116,6 +117,19 @@ describe("source ids", () => {
     expect([...w.keys()].sort()).toEqual(["guest-aaaaaaaa", "guest-aaaaaaaa-screen", "guest-bbbbbbbb", "guest-cccccccc"]);
     expect(w.get("guest-aaaaaaaa-screen")).toEqual({ guest: a, track: "screen" });
     expect(w.get("guest-bbbbbbbb")?.track).toBe("camera");
+  });
+  it("never wants a source for a program monitor (a seat's return-feed row)", () => {
+    const guest = { id: "aaaaaaaa-1" };
+    const monitor = { id: "mmmmmmmm-1", kind: "producer", monitor: true, grants: ["media.return_feed"] };
+    // A monitor that somehow carried media grants is STILL not a source.
+    const monitorWithMedia = { id: "nnnnnnnn-1", monitor: true, grants: ["media.camera", "media.screen"] };
+    // Anything but `true` is a guest: an older server sends nothing at all.
+    const notMonitor = { id: "oooooooo-1", monitor: "true" };
+    const w = wantedSourceIds([guest, monitor, monitorWithMedia, notMonitor]);
+    expect([...w.keys()].sort()).toEqual(["guest-aaaaaaaa", "guest-oooooooo"]);
+    expect(isMonitor(monitor)).toBe(true);
+    expect(isMonitor(notMonitor)).toBe(false);
+    expect(isMonitor(undefined)).toBe(false);
   });
 });
 

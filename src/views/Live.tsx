@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { installStageCutouts } from "../lib/stageCutouts";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -103,7 +103,9 @@ import {
   SET_IS_HOSTS,
   setEditingAllowed,
   localSetDecision,
+  isMonitor,
 } from "../lib/participants";
+import { MonitorSender, ProgramMonitor, type MonitorState } from "../lib/monitorFeed";
 import { RoleCard } from "./RoleCard";
 import { areaPath, pushSample, renderPressure, renderScale, renderTone } from "../lib/renderLoad";
 
@@ -2249,6 +2251,47 @@ export interface RoomInfo {
  * landed. Module-scoped on purpose: it is a fact about the engine. */
 let engineHeldRoom: string | null = null;
 
+function useMonitorState(seat: ProgramMonitor | null): MonitorState | null {
+  return useSyncExternalStore(
+    (fn) => (seat ? seat.subscribe(fn) : () => {}),
+    () => (seat ? seat.snapshot() : null),
+    () => null,
+  );
+}
+
+/** The off-host stage: the host's program, full-bleed, once it arrives;
+ * one quiet line until then. Same 16:9 footprint as the native preview so
+ * the docks never jump. */
+function ProgramMonitorStage({ seat, pending, boomin }: { seat: ProgramMonitor | null; pending: boolean; boomin: boolean }) {
+  const st = useMonitorState(seat);
+  const ref = useRef<HTMLVideoElement>(null);
+  const stream = st?.hasProgram ? seat?.programStream() ?? null : null;
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    if (v.srcObject !== stream) v.srcObject = stream;
+    if (stream) void v.play().catch(() => {});
+  }, [stream]);
+  const line = pending
+    ? "Checking your seat…"
+    : !boomin
+      ? "Host's program — a mod link on an open server carries no return feed"
+      : !seat
+        ? "Host's program — connecting…"
+        : st?.phase === "gone"
+          ? st.message || "The host's room closed this monitor."
+          : st?.phase === "error"
+            ? st.message
+            : st?.message || "Host's program — waiting for the first frame…";
+  return (
+    <div className={`rm-canvas-msg rm-program-monitor${stream ? " has-program" : ""}`}>
+      <video ref={ref} className="rm-program-video" autoPlay playsInline muted hidden={!stream} />
+      {!stream && <span>{line}</span>}
+      {stream && <span className="rm-program-tag">PROGRAM</span>}
+    </div>
+  );
+}
+
 export function LiveView({
   room,
   onLeave,
@@ -2867,6 +2910,18 @@ export function LiveView({
   const rosterRef = useRef<RoomGuest[]>([]);
   rosterRef.current = roster;
   const endpointRef = useRef<string | null>(null);
+  /** The endpoint's base URL — the API the program-monitor leg talks to
+   * directly from this webview (lib/monitorFeed.ts). */
+  const endpointBaseRef = useRef<string | null>(null);
+  // ── The program monitor (lib/monitorFeed.ts) ─────────────────────────
+  // Off-host on a Boomin room the stage shows the HOST's program: a
+  // return-feed-only participant row is minted for this seat and received
+  // here, in the webview. On the host, one sender per monitor row on the
+  // roster pushes the virtual camera to it. Neither touches the engine.
+  const monitorRef = useRef<ProgramMonitor | null>(null);
+  const monitorStartedFor = useRef<string | null>(null);
+  const [monitorSeat, setMonitorSeat] = useState<ProgramMonitor | null>(null);
+  const monitorSenders = useRef<Map<string, MonitorSender>>(new Map());
   // Who WE are in this room. "host" until the access route says otherwise
   // (and forever, on a server without the route). A mod's Producer must not
   // load guest render pages — those would be a second host peer on every
@@ -3377,6 +3432,7 @@ export function LiveView({
     const ep = await resolveActiveEndpoint().catch(() => null);
     if (!ep) return null;
     endpointRef.current = ep.id;
+    endpointBaseRef.current = ep.base_url;
     boominRoomRef.current = isBoomin(ep);
     setBoominRoom(boominRoomRef.current);
     return ep.id;
@@ -4661,6 +4717,46 @@ export function LiveView({
     if (Object.keys(geometry).length) ipc.liveSetTransform(slotId, geometry, commit).catch(() => {});
   };
 
+  /** Mint (or reuse) this seat's monitor row and open the receive leg. A
+   * server without the route (404 → `available: false`) leaves the
+   * placeholder: the seat can still cut scenes and run the roster. */
+  const startProgramMonitor = async (epId: string, serverRoomId: string) => {
+    try {
+      const res = await guestsIpc.request(epId, "POST", `/v1/app/live/rooms/${serverRoomId}/monitor`, {});
+      if (!res.available || !endpointBaseRef.current) return;
+      const body = (res.body ?? {}) as { join_url?: string };
+      if (!body.join_url) return;
+      monitorRef.current?.leave();
+      const m = new ProgramMonitor({ joinUrl: body.join_url, apiBase: endpointBaseRef.current, hostName: room?.name ?? null });
+      monitorRef.current = m;
+      setMonitorSeat(m);
+      m.start();
+    } catch (e) {
+      setGuestErr(String(e).replace(/^Error:\s*/, ""));
+    }
+  };
+  // The monitor legs live exactly as long as the room is open in this view:
+  // leaving drops every sender, closes the receive leg and ends the server
+  // row (DELETE …/monitor), so the host's roster stops carrying us.
+  useEffect(() => {
+    if (!room?.id) return;
+    return () => {
+      for (const s of monitorSenders.current.values()) s.stop();
+      monitorSenders.current.clear();
+      const m = monitorRef.current;
+      monitorRef.current = null;
+      monitorStartedFor.current = null;
+      setMonitorSeat(null);
+      if (m) {
+        m.leave();
+        const epId = endpointRef.current;
+        const sid = parseConfig(room.config).server_room_id;
+        if (epId && sid) guestsIpc.request(epId, "DELETE", `/v1/app/live/rooms/${sid}/monitor`).catch(() => {});
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.id]);
+
   // Poll the roster and reconcile browser sources against it. Not while we
   // hold a SEAT elsewhere: the poll is also the room-open heartbeat, and a
   // guest's own stage must not read as open on the network.
@@ -4705,13 +4801,43 @@ export function LiveView({
         }
         const res = await guestsIpc.roster(epId, cfg.server_room_id!);
         if (!alive) return;
-        const list = res.guests ?? [];
+        // Program monitors (seats receiving the host's program) ride the
+        // roster flagged `monitor: true` and are kept OUT of it here, at the
+        // one place it enters: never a guests-panel row, never a source,
+        // never on stage — the host only opens the return leg to them.
+        const full = res.guests ?? [];
+        const list = full.filter((g) => !isMonitor(g));
         setRoster(list);
         setGuestErr(null);
-        // Not the host: the roster is all we do. No render pages (they would
-        // be a second host peer on every guest's channel), no stage post
-        // from our engine (we have none for this room).
-        if (roomRoleRef.current !== "host") return;
+        if (roomRoleRef.current !== "host") {
+          // Not the host: the roster is all we do. No render pages (they would
+          // be a second host peer on every guest's channel), no stage post
+          // from our engine (we have none for this room). What we DO want is
+          // the host's program: mint our monitor once per room open.
+          if (boominRoomRef.current && monitorStartedFor.current !== room.id) {
+            monitorStartedFor.current = room.id;
+            void startProgramMonitor(epId, cfg.server_room_id!);
+          }
+          return;
+        }
+        // The host's half of every monitor leg: one sender per monitor row,
+        // dropped when the row leaves the roster (seat left, grant revoked,
+        // run ended). The engine never sees these.
+        if (endpointBaseRef.current) {
+          const wantedMonitors = new Map(full.filter((g) => isMonitor(g) && !!g.render_url).map((g) => [g.id, g] as const));
+          for (const [id, sender] of monitorSenders.current) {
+            if (!wantedMonitors.has(id)) {
+              sender.stop();
+              monitorSenders.current.delete(id);
+            }
+          }
+          for (const [id, g] of wantedMonitors) {
+            if (monitorSenders.current.has(id)) continue;
+            const sender = new MonitorSender({ renderUrl: g.render_url!, apiBase: endpointBaseRef.current, programLabel: vcamState?.device_name });
+            monitorSenders.current.set(id, sender);
+            sender.start();
+          }
+        }
         // The roster is news either way; reconciling sources against it is
         // not, until the document has been applied and the engine's item
         // list read — before that `sources.items` is empty, and an empty list
@@ -6494,14 +6620,12 @@ export function LiveView({
           <div className="rm-canvas">
             {/* Off-host the stage is a PROGRAM MONITOR, not an editor: the
               * native preview is never attached (there is no local set to
-              * show — see localSetDecision) and the picture is the host's.
-              * Producer has no return-feed seat for a mod yet (docs/HANDOFF.md:
-              * "mod program monitor = return-feed grant, not built"), so this
-              * is a quiet placeholder rather than the mod's own desktop. */}
+              * show — see localSetDecision) and the picture is the host's,
+              * received on this seat's return-feed row (lib/monitorFeed.ts).
+              * The note stays only while the leg connects — or on an open
+              * server, where a mod link carries no media leg at all. */}
             {engineOk && !isHost && (
-              <div className="rm-canvas-msg rm-program-monitor">
-                {accessPending ? "Checking your seat…" : "Host's program — ask the host to share a return feed"}
-              </div>
+              <ProgramMonitorStage seat={monitorSeat} pending={accessPending} boomin={boominRoom} />
             )}
             {engineOk && isHost && (
               <PreviewPanel>

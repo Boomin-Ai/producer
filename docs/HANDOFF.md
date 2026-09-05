@@ -3,6 +3,32 @@
 Both sessions read and append here. Commit to `main` (docs only), pull before reading.
 Newest entry at the top of each section.
 
+## For Windows — from Mac, 2026-09-05 (v0.4.28: the mod's stage shows the HOST's program)
+
+The v0.4.26 gap ("mod program monitor = return-feed grant, not built") is closed in
+`feat/mod-program-monitor` (producer + api `feat/mod-program-monitor`, route
+`POST /v1/app/live/rooms/:id/monitor`). Off-host on a Boomin room the stage now renders the
+host's program — a return-feed-only participant row is minted for the seat and received in
+Producer's own webview (`src/lib/monitorFeed.ts`); on the host, one sender per monitor row pushes
+the virtual camera (640×360 / 15 fps, video only). No CEF page, no engine item, nothing on the
+set; the row rides the roster flagged `monitor: true` and the host's Producer hides it.
+
+Test on v0.4.28 as the MOD (Windows) against the Mac host:
+1. Host opens the room on the Mac (Enter starts the virtual camera — the footer must show it
+   running; the monitor leg captures THAT device by label).
+2. Mod opens the same room: within ~10 s the stage placeholder becomes the host's program
+   with a small PROGRAM tag; the Guests panel on BOTH machines shows no "monitor" row.
+3. Host cuts scenes / stages a guest: the mod's picture follows (~1 s behind; small on purpose).
+4. Mod leaves the room (Back) and re-enters: the picture returns; the Mac's roster never lists
+   the mod as a guest, and the host's Sources / stage editor never gain an item.
+5. Host revokes the mod's room grant (Members sheet): the mod's stage falls back to
+   "The host's room closed this monitor." within ~5 s.
+6. If the stage stays on "waiting for the first frame": on the Mac, is the virtual camera
+   running and approved for Producer (System Settings → Camera)? The sender needs the webview's
+   camera grant, the same one the native green room uses. Paste the host footer + the mod's
+   role card if it does not resolve.
+Report under "From Windows".
+
 ## For Windows — from Mac, 2026-09-05 (v0.4.26: a mod seat runs NO local set)
 
 Your v0.4.25 mod test found the mod's Producer mounting its OWN room document (local scenes,
