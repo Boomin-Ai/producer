@@ -167,3 +167,29 @@ export function peerOf(payload: unknown): HostPeer {
   const p = payload && typeof payload === "object" ? (payload as { peer?: unknown }).peer : undefined;
   return p === "screen" ? "screen" : "main";
 }
+
+// ── Producer source ids ──────────────────────────────────────────────────────
+//
+// Producer names a guest's browser sources from the guest id: the camera
+// source is `guest-<8 chars>` (unchanged since guests existed — slot bindings
+// and scene looks reference it), and the screen source hangs a suffix off it.
+// Pure so the roster and the reconcile loop can never disagree.
+
+export function sourceIdsFor(guestId: string): { camera: string; screen: string } {
+  const camera = `guest-${guestId.slice(0, 8)}`;
+  return { camera, screen: `${camera}-screen` };
+}
+
+/** Which guest source ids the roster wants alive: the camera for every
+ *  admitted guest, plus a screen source for those who hold media.screen. */
+export function wantedSourceIds<T extends ParticipantLike & { id: string }>(
+  admitted: readonly T[],
+): Map<string, { guest: T; track: TrackLabel }> {
+  const out = new Map<string, { guest: T; track: TrackLabel }>();
+  for (const guest of admitted) {
+    const ids = sourceIdsFor(guest.id);
+    out.set(ids.camera, { guest, track: "camera" });
+    if (resolveGrants(guest).has("media.screen")) out.set(ids.screen, { guest, track: "screen" });
+  }
+  return out;
+}

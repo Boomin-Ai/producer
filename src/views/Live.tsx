@@ -71,7 +71,7 @@ import {
   type RoomExtra,
 } from "../lib/room";
 import { homePaintedMs, takeRoomClick } from "../lib/perf";
-import { KIND_LABEL, participantKind } from "../lib/participants";
+import { KIND_LABEL, participantKind, resolveGrants, sourceIdsFor, wantedSourceIds } from "../lib/participants";
 
 // Transport-truthful copy (M-L4 finding: an RTMP session can look healthy
 // while the platform discards it — only the dashboard confirms LIVE).
@@ -687,13 +687,17 @@ function GuestPanel({
             </div>
           ))}
           {live.map((g) => {
-            const item = items.find((i) => i.id === `guest-${g.id.slice(0, 8)}`);
+            const ids = sourceIdsFor(g.id);
+            const item = items.find((i) => i.id === ids.camera);
+            // The share is its own source; the button exists only for a guest
+            // who may share (media.screen) — grants decide, never the kind.
+            const screenItem = resolveGrants(g).has("media.screen") ? items.find((i) => i.id === ids.screen) : undefined;
             const muted = item?.muted ?? false;
             const q = (g.quality ?? g.connection_quality ?? "unknown") as string;
             return (
               <div key={g.id} className={`rm-gcard${item?.visible ? " on" : ""}`}>
-                {thumbs[`guest-${g.id.slice(0, 8)}`] ? (
-                  <img className="rm-gcard-img" src={thumbs[`guest-${g.id.slice(0, 8)}`]} alt="" />
+                {thumbs[ids.camera] ? (
+                  <img className="rm-gcard-img" src={thumbs[ids.camera]} alt="" />
                 ) : (
                   <span className="rm-gcard-img empty" />
                 )}
@@ -721,6 +725,15 @@ function GuestPanel({
                   >
                     {item?.visible ? "On screen" : "Show"}
                   </button>
+                  {screenItem && (
+                    <button
+                      className={`rm-guest-stage${screenItem.visible ? " on" : ""}`}
+                      title={screenItem.visible ? "Take their screen off (they keep sharing)" : "Pop their screen share into the next free guest slot"}
+                      onClick={() => onShow(screenItem.id, !screenItem.visible)}
+                    >
+                      {screenItem.visible ? "Screen on" : "Screen"}
+                    </button>
+                  )}
                   <button
                     className={`rm-row-edit${muted ? " muted" : ""}`}
                     title={muted ? "Unmute" : "Mute"}
@@ -3769,19 +3782,28 @@ export function LiveView({
         const present = new Set(
           (sources.items ?? []).filter((i) => i.kind === "guest").map((i) => i.id),
         );
-        const wanted = new Map(live.map((g) => [`guest-${g.id.slice(0, 8)}`, g]));
+        // One source per TRACK: the camera for everyone, and a second
+        // "<name> · screen" source for a guest who holds media.screen. The
+        // screen page shares the guest's signaling channel and receives only
+        // the share, so the host frames it independently of the person.
+        const wanted = wantedSourceIds(live);
 
-        for (const [id, g] of wanted) {
+        for (const [id, { guest: g, track }] of wanted) {
           if (!present.has(id)) {
-            // &program= names the virtual camera so the page captures the
-            // SHOW rather than guessing at a device; &mic= does the same for
-            // the host's microphone. Both are labels, because a browser's
-            // deviceIds are salted per origin and can never match ours.
             const u = new URL(g.render_url!);
-            if (micDeviceLabel) u.searchParams.set("mic", micDeviceLabel);
-            u.searchParams.set("program", vcamState?.device_name ?? "Producer Virtual Camera");
+            if (track === "screen") {
+              u.searchParams.set("track", "screen");
+            } else {
+              // &program= names the virtual camera so the page captures the
+              // SHOW rather than guessing at a device; &mic= does the same for
+              // the host's microphone. Both are labels, because a browser's
+              // deviceIds are salted per origin and can never match ours.
+              if (micDeviceLabel) u.searchParams.set("mic", micDeviceLabel);
+              u.searchParams.set("program", vcamState?.device_name ?? "Producer Virtual Camera");
+            }
+            const name = g.display_name || "Guest";
             await extraSources
-              .add(id, g.display_name || "Guest", { kind: "guest", url: u.toString() })
+              .add(id, track === "screen" ? `${name} · screen` : name, { kind: "guest", url: u.toString() })
               .catch(() => {});
             // Hidden-at-birth is the engine's job (see add_extra): sending a
             // follow-up hide raced the creation and errored with "no item".
@@ -3826,7 +3848,7 @@ export function LiveView({
         // list is a cache for reconnecting guests, never read back here —
         // scene-item visibility in the engine stays the only truth.
         const stageIds = shown
-          .map((it) => live.find((g) => `guest-${g.id.slice(0, 8)}` === it.id)?.id)
+          .map((it) => live.find((g) => sourceIdsFor(g.id).camera === it.id)?.id)
           .filter((id): id is string => !!id)
           .sort();
         const stageKey = stageIds.join(",");

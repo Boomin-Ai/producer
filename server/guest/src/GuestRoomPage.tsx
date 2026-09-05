@@ -27,6 +27,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { CONNECT_API_BASE_URL } from "./apiConfig";
 import { GuestMesh, type StageUpdate } from "./guestMesh";
 import { controlsFor, resolveGrants, type GuestControls, type ParticipantLike } from "./participants";
+import { HostLink, signalingWsUrl, type Session } from "./hostLink";
 
 /** `grants` / `kind` arrive with the participant row (absent on servers that
  *  predate them → the default guest bundle, see participants.ts). */
@@ -42,7 +43,6 @@ function applyMediaGrants(stream: MediaStream | null, can: GuestControls): void 
     if (!allowed) { t.stop(); stream.removeTrack(t); }
   }
 }
-type Session = { signaling_ticket: string; signaling_url: string; ice_servers: RTCIceServer[] };
 type Phase = "name" | "waiting" | "live" | "gone" | "error";
 
 const storageKey = (code: string) => `producer.guest.${code}`;
@@ -82,8 +82,10 @@ export default function GuestRoomPage({ code }: { code: string }) {
   const selfRef = useRef<HTMLVideoElement | null>(null);
   const showRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const pcRef = useRef<RTCPeerConnection | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+  /** Every connection that ends in Producer: camera peer, and the screen
+   * peer while sharing. */
+  const linkRef = useRef<HostLink | null>(null);
+  const [sharing, setSharing] = useState(false);
   const inviteRef = useRef<string | null>(null);
   const guestIdRef = useRef<string | null>(null);
 
@@ -164,13 +166,8 @@ export default function GuestRoomPage({ code }: { code: string }) {
       if (s && s.getTracks().every((t) => t.readyState === "live")) return;
       void (async () => {
         await startPreview();
-        const pc = pcRef.current;
         const fresh = streamRef.current;
-        if (!pc || !fresh) return;
-        for (const sn of pc.getSenders()) {
-          const t = fresh.getTracks().find((tr) => tr.kind === sn.track?.kind);
-          if (t && sn.track !== t) void sn.replaceTrack(t).catch(() => {});
-        }
+        if (fresh) linkRef.current?.replaceLocalTracks(fresh);
       })();
     };
     document.addEventListener("visibilitychange", onVis);
@@ -178,8 +175,7 @@ export default function GuestRoomPage({ code }: { code: string }) {
   }, [startPreview]);
   useEffect(() => () => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
-    try { wsRef.current?.close(); } catch { /* already closed */ }
-    try { pcRef.current?.close(); } catch { /* already closed */ }
+    linkRef.current?.close();
   }, []);
 
   /** Poll our own admission state. The host may admit at any time, and there is
@@ -209,34 +205,31 @@ export default function GuestRoomPage({ code }: { code: string }) {
     if (!res.ok) return;
     const session = (await res.json()) as Session;
 
-    const pc = new RTCPeerConnection({ iceServers: session.ice_servers });
-    pcRef.current = pc;
-    // A participant with no media grants still connects — to receive the
-    // return feed and, later, to take part — they simply publish nothing.
-    streamRef.current?.getTracks().forEach((t) => pc.addTrack(t, streamRef.current!));
-
-    // Same reasoning as contentHint, applied at the sender: under constraint,
-    // drop resolution before framerate. Best-effort — not every browser accepts
-    // degradationPreference, and a rejection must not stop the guest joining.
-    try {
-      const sender = pc.getSenders().find((sn) => sn.track?.kind === "video");
-      if (sender) {
-        const params = sender.getParameters();
-        (params as RTCRtpSendParameters & { degradationPreference?: string }).degradationPreference = "maintain-framerate";
-        await sender.setParameters(params);
-      }
-    } catch {
-      /* unsupported here; contentHint still biases the encoder */
-    }
-
-    // Producer pushes stage changes and cue state to the render page natively,
-    // and the render page forwards them down this channel. That is why stage
-    // state does not need a server hop — the host IS the authority and now
-    // reaches us directly.
-    pc.ondatachannel = (ev) => {
-      ev.channel.onmessage = (m) => {
-        let msg: { kind?: string; on_stage?: string[]; version?: number; listening?: boolean };
-        try { msg = JSON.parse(String(m.data)); } catch { return; }
+    linkRef.current?.close();
+    const link = new HostLink({
+      session,
+      wsUrl: signalingWsUrl(CONNECT_API_BASE_URL, session),
+      // A participant with no media grants still connects — to receive the
+      // return feed and, later, to take part — they simply publish nothing.
+      localStream: () => streamRef.current,
+      returnFeed: canRef.current.returnFeed,
+      // Desktop asks for the program the moment the connection is up. iOS
+      // waits until it has been stable for 5s AND the page is visible.
+      delayReturnFeedMs: isIOS ? 5000 : 0,
+      onProgram: (stream) => {
+        // The SHOW. This is what they should be looking at.
+        showStreamRef.current = stream;
+        if (showRef.current) { showRef.current.srcObject = stream; void showRef.current.play().catch(() => {}); }
+        setHasShow(!!stream);
+      },
+      onHostAudio: (stream) => {
+        // Host mic. Deliberately NOT the program mix — that would carry their
+        // own delayed voice straight back into their ears and their microphone.
+        const el = document.getElementById("host-audio") as HTMLAudioElement | null;
+        if (el) { el.srcObject = stream; void el.play().catch(() => {}); }
+      },
+      onData: (raw) => {
+        const msg = raw as { kind?: string; on_stage?: string[]; version?: number; listening?: boolean };
         if (msg.kind === "stage" && Array.isArray(msg.on_stage) && typeof msg.version === "number") {
           const update: StageUpdate = { on_stage: msg.on_stage, version: msg.version };
           // "host": live truth from Producer, which is what unlocks publishing.
@@ -247,123 +240,43 @@ export default function GuestRoomPage({ code }: { code: string }) {
           // room someone believes is private, that isn't, is a trust problem.
           setHostListening(!!msg.listening);
         }
-      };
-    };
-
-    pc.ontrack = (event) => {
-      const [stream] = event.streams;
-      if (!stream) return;
-      if (event.track.kind === "video") {
-        // The SHOW. This is what they should be looking at. It only arrives
-        // after WE sent program-ready — a phone asks once its connection has
-        // settled, so the admit-time decode storm that crashed iOS is gone.
-        showStreamRef.current = stream;
-        if (showRef.current) { showRef.current.srcObject = stream; void showRef.current.play().catch(() => {}); }
-        setHasShow(true);
-      } else {
-        // Host mic. Deliberately NOT the program mix — that would carry their
-        // own delayed voice straight back into their ears and their microphone.
-        const el = document.getElementById("host-audio") as HTMLAudioElement | null;
-        if (el) { el.srcObject = stream; void el.play().catch(() => {}); }
-      }
-    };
-
-    const api = new URL(CONNECT_API_BASE_URL, window.location.origin);
-    const wsUrl = new URL(session.signaling_url, api.origin);
-    wsUrl.protocol = api.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(wsUrl.toString());
-    wsRef.current = ws;
-    const send = (payload: unknown) => {
-      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "signal", payload }));
-    };
-
-    let makingOffer = false;
-    pc.onicecandidate = (e) => { if (e.candidate) send({ kind: "ice", candidate: e.candidate.toJSON() }); };
-    // Ask for the program return leg when this end can afford to decode it.
-    // Desktop: immediately on connect. iOS: after the connection has been
-    // stable for 5s AND the page is visible — decoding the program while
-    // acquiring the camera and joining the mesh is what crashed WebKit.
-    let programAsked = false;
-    const askProgram = () => {
-      if (programAsked) return;
-      programAsked = true;
-      send({ kind: "program-ready" });
-    };
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState !== "connected") return;
-      if (!isIOS) {
-        askProgram();
-        return;
-      }
-      window.setTimeout(() => {
-        if (pc.connectionState === "connected" && document.visibilityState === "visible") askProgram();
-      }, 5000);
-    };
-    pc.onnegotiationneeded = async () => {
-      try { makingOffer = true; await pc.setLocalDescription(); send({ kind: "sdp", description: pc.localDescription }); }
-      catch { /* the reconnect path retries */ } finally { makingOffer = false; }
-    };
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState === "connected") {
-        setPhase("live");
-        setHostDown(false);
-        if (hostDownTimer.current) { window.clearTimeout(hostDownTimer.current); hostDownTimer.current = null; }
-        return;
-      }
-      if (pc.connectionState === "failed") pc.restartIce();
-
-      if (pc.connectionState === "disconnected" || pc.connectionState === "failed" || pc.connectionState === "closed") {
-        // FAIL CLOSED when the host goes away.
-        //
-        // The guest↔guest mesh is a SEPARATE connection and survives the host
-        // dropping. Without this, guests keep talking to each other with "You're
-        // on air" still lit, believing they are broadcasting to an audience that
-        // is receiving nothing — and people say things off air they would never
-        // say on it.
-        //
-        // A few seconds of grace first, because a brief ICE blip is not the host
-        // leaving and flashing the indicator would be its own problem.
-        if (hostDownTimer.current) return;
-        hostDownTimer.current = window.setTimeout(() => {
-          hostDownTimer.current = null;
-          if (pcRef.current?.connectionState === "connected") return;
-          setHostDown(true);
-          setOnStage(false);
-          setHostListening(false);
-          // suspend(), not a synthetic stage update: faking a version would mean
-          // no genuine push could ever exceed it and the mesh would stay empty
-          // forever once the host came back.
-          meshRef.current?.suspend();
-        }, 4000);
-      }
-    };
-    ws.onopen = () => {
-      send({ kind: "hello" });
-      // Flush an offer created before the socket opened — send() drops while
-      // CONNECTING, and losing it leaves both peers waiting on each other.
-      if (pc.localDescription) send({ kind: "sdp", description: pc.localDescription });
-    };
-    ws.onmessage = async (event) => {
-      let frame: { type?: string; payload?: { kind?: string; description?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit } };
-      try { frame = JSON.parse(String(event.data)); } catch { return; }
-      if (frame.type !== "signal" || !frame.payload) return;
-      const msg = frame.payload;
-      try {
-        if (msg.kind === "sdp" && msg.description) {
-          const collision = msg.description.type === "offer" && (makingOffer || pc.signalingState !== "stable");
-          // POLITE peer: on a collision we roll back and take theirs.
-          if (collision) await pc.setLocalDescription({ type: "rollback" } as RTCLocalSessionDescriptionInit);
-          await pc.setRemoteDescription(msg.description);
-          if (msg.description.type === "offer") {
-            await pc.setLocalDescription();
-            send({ kind: "sdp", description: pc.localDescription });
-          }
-        } else if (msg.kind === "ice" && msg.candidate) {
-          await pc.addIceCandidate(msg.candidate).catch(() => {});
+      },
+      onShareEnded: () => setSharing(false),
+      onMainState: (state) => {
+        if (state === "connected") {
+          setPhase("live");
+          setHostDown(false);
+          if (hostDownTimer.current) { window.clearTimeout(hostDownTimer.current); hostDownTimer.current = null; }
+          return;
         }
-      } catch { /* one bad frame must never kill the call */ }
-    };
-  }, [startPreview]);
+        if (state === "disconnected" || state === "failed" || state === "closed") {
+          // FAIL CLOSED when the host goes away.
+          //
+          // The guest↔guest mesh is a SEPARATE connection and survives the host
+          // dropping. Without this, guests keep talking to each other with "You're
+          // on air" still lit, believing they are broadcasting to an audience that
+          // is receiving nothing — and people say things off air they would never
+          // say on it.
+          //
+          // A few seconds of grace first, because a brief ICE blip is not the host
+          // leaving and flashing the indicator would be its own problem.
+          if (hostDownTimer.current) return;
+          hostDownTimer.current = window.setTimeout(() => {
+            hostDownTimer.current = null;
+            if (linkRef.current?.mainConnectionState() === "connected") return;
+            setHostDown(true);
+            setOnStage(false);
+            setHostListening(false);
+            // suspend(), not a synthetic stage update: faking a version would mean
+            // no genuine push could ever exceed it and the mesh would stay empty
+            // forever once the host came back.
+            meshRef.current?.suspend();
+          }, 4000);
+        }
+      },
+    });
+    linkRef.current = link;
+  }, [startPreview, isIOS]);
 
   /** The ROOM channel: guest↔guest introduction only.
    *
@@ -509,6 +422,16 @@ export default function GuestRoomPage({ code }: { code: string }) {
     const t = streamRef.current?.getVideoTracks()[0];
     if (!t) return; t.enabled = !t.enabled; setCameraOff(!t.enabled);
   };
+  /** Screen share is the HIGHER grant (media.screen): a second video track
+   *  to the host, framed by them as its own source. */
+  const toggleShare = async () => {
+    const link = linkRef.current;
+    if (!link) return;
+    if (link.sharing) { link.stopShare(); setSharing(false); return; }
+    const ok = await link.startShare();
+    setSharing(ok);
+    if (!ok) setMessage("Couldn't start screen sharing here. Try a desktop browser.");
+  };
 
   if (phase === "gone" || phase === "error") {
     return (
@@ -583,6 +506,11 @@ export default function GuestRoomPage({ code }: { code: string }) {
           {can.camera && (
             <button onClick={() => setSelfHidden((h) => !h)} style={S.ghost}>{selfHidden ? "Show my preview" : "Hide my preview"}</button>
           )}
+          {can.screen && phase === "live" && (
+            <button onClick={() => void toggleShare()} style={sharing ? S.ghostOn : S.ghost}>
+              {sharing ? "Stop sharing" : "Share screen"}
+            </button>
+          )}
           {phase === "name" && (
             <button onClick={() => void join()} disabled={!name.trim()} style={S.primary}>Join the show</button>
           )}
@@ -623,6 +551,7 @@ const S: Record<string, CSSProperties> = {
   input: { marginTop: 14, width: "100%", background: "#141416", color: "#e7e7ea", border: "1px solid #232327", borderRadius: 10, padding: "12px 14px", fontSize: 15 },
   controls: { display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" },
   ghost: { background: "transparent", color: "#e7e7ea", border: "1px solid #2c2c31", borderRadius: 10, padding: "10px 14px", fontSize: 14, cursor: "pointer" },
+  ghostOn: { background: "#1d3a2f", color: "#a7f3d0", border: "1px solid #2f6b55", borderRadius: 10, padding: "10px 14px", fontSize: 14, cursor: "pointer" },
   primary: { marginLeft: "auto", background: "#fff", color: "#0a0a0b", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer" },
   note: { marginTop: 12, fontSize: 13, color: "#ffb4a8" },
   fine: { marginTop: 18, fontSize: 12, color: "#6b6b73", lineHeight: 1.5 },

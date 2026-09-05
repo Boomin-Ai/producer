@@ -24,6 +24,7 @@
 import { useEffect, useRef } from "react";
 import { useSearchParams } from "./router";
 import { CONNECT_API_BASE_URL } from "./apiConfig";
+import { labelForStream, parseTrackAnnouncement, peerOf, type HostPeer, type TrackLabel } from "./participants";
 
 type Session = {
   signaling_ticket: string;
@@ -41,6 +42,15 @@ export default function GuestRenderPage({ id }: { id: string }) {
   const renderKey = params.get("k") ?? "";
   const micLabel = params.get("mic");
   const programLabel = params.get("program");
+  // `?track=screen` makes this the SCREEN page: the second browser source
+  // Producer loads for a guest who holds media.screen. It shares the guest's
+  // signaling channel with the camera page, so every frame is tagged with the
+  // peer it belongs to and each page answers only its own. The screen page
+  // receives the share and nothing else: no mic capture, no program return
+  // (the camera page already carries both), and no quality report — that
+  // would clobber the camera page's reading for the same guest.
+  const peer: HostPeer = params.get("track") === "screen" ? "screen" : "main";
+  const isScreen = peer === "screen";
   const attachProgramRef = useRef<(() => Promise<void>) | null>(null);
   const attachedProgram = useRef(false);
 
@@ -115,6 +125,8 @@ export default function GuestRenderPage({ id }: { id: string }) {
         // attach the mic later if it ever arrives — perfect negotiation handles
         // the renegotiation when addTrack fires onnegotiationneeded.
         void (async () => {
+          // The screen page sends nothing back; the camera page owns the leg.
+          if (isScreen) return;
           try {
             // Hard timeout: a hung getUserMedia must never leave a dangling
             // promise holding a live MediaStream we can no longer reach.
@@ -217,9 +229,30 @@ export default function GuestRenderPage({ id }: { id: string }) {
         })();
 
         // ── the guest's media IN ──────────────────────────────────────────────
+        // Which stream is which: the guest announces a label per MediaStream
+        // ({kind:"track"}) before the offer that carries it. Unlabeled → camera,
+        // so a page from before labels existed still renders a face here and
+        // can never be mistaken for a screen.
+        const labels = new Map<string, TrackLabel>();
         const remote = new MediaStream();
+        const dropStream = (_streamId: string) => {
+          for (const t of remote.getTracks()) {
+            if (t.readyState === "ended") remote.removeTrack(t);
+          }
+          // Nothing left → paint nothing. A stopped share must not freeze on
+          // its last frame in the broadcast.
+          if (videoRef.current && remote.getTracks().every((t) => t.readyState === "ended")) {
+            videoRef.current.srcObject = null;
+          }
+        };
         pc.ontrack = (event) => {
-          event.streams[0]?.getTracks().forEach((t) => {
+          const stream = event.streams[0];
+          const wanted: TrackLabel = isScreen ? "screen" : "camera";
+          if (stream && labelForStream(labels, stream.id) !== wanted) return;
+          // A share the guest ends (or the browser's own stop button) ends
+          // the remote track; clear the element rather than freeze on it.
+          event.track.onended = () => dropStream(stream?.id ?? "");
+          stream?.getTracks().forEach((t) => {
             if (!remote.getTracks().includes(t)) remote.addTrack(t);
           });
           // ONE element carrying BOTH tracks, unmuted.
@@ -245,8 +278,8 @@ export default function GuestRenderPage({ id }: { id: string }) {
         };
 
         ws = new WebSocket(signalingWsUrl(session));
-        const send = (payload: unknown) => {
-          if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "signal", payload }));
+        const send = (payload: object) => {
+          if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "signal", payload: { ...payload, peer } }));
         };
 
         let makingOffer = false;
@@ -285,8 +318,20 @@ export default function GuestRenderPage({ id }: { id: string }) {
           try { frame = JSON.parse(String(event.data)); } catch { return; }
           if (frame.type !== "signal" || !frame.payload || !pc) return;
           const msg = frame.payload;
+          // Not ours: the guest talking to the other host page.
+          if (peerOf(msg) !== peer) return;
 
           try {
+            const announced = parseTrackAnnouncement(msg);
+            if (announced) {
+              if (announced.ended) {
+                labels.delete(announced.stream_id);
+                dropStream(announced.stream_id);
+              } else {
+                labels.set(announced.stream_id, announced.label);
+              }
+              return;
+            }
             if (msg.kind === "hello") {
               // The guest just arrived. Kick negotiation by touching the
               // transceiver set — onnegotiationneeded does the rest.
@@ -347,7 +392,7 @@ export default function GuestRenderPage({ id }: { id: string }) {
         // sending pixels" from "connected and sending nothing". See below.
         let lastFramesDecoded = -1;
         qualityTimer = window.setInterval(async () => {
-          if (!pc || pc.connectionState !== "connected") return;
+          if (isScreen || !pc || pc.connectionState !== "connected") return;
           try {
             const stats = await pc.getStats();
             let lost = 0, received = 0, jitter = 0, frames = 0, kind = "";
@@ -427,7 +472,8 @@ export default function GuestRenderPage({ id }: { id: string }) {
         // renegotiates and upgrades this to sendrecv. Getting the guest on
         // screen must never wait on a capture that CEF may deny or hang.
         pc.addTransceiver("video", { direction: "recvonly" });
-        pc.addTransceiver("audio", { direction: "recvonly" });
+        // The share is video only; the guest's voice rides the camera page.
+        if (!isScreen) pc.addTransceiver("audio", { direction: "recvonly" });
       } catch {
         retry();
       }
@@ -438,7 +484,7 @@ export default function GuestRenderPage({ id }: { id: string }) {
       cancelled = true;
       teardownRef.current?.();
     };
-  }, [id, renderKey, micLabel, programLabel]);
+  }, [id, renderKey, micLabel, programLabel, peer, isScreen]);
 
   // The host paints the ground; this page must composite over it. CEF honours
   // alpha, so a background here would become an opaque rectangle on the stage.

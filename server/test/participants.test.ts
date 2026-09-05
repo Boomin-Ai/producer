@@ -8,6 +8,8 @@ import {
   participantKind,
   peerOf,
   resolveGrants,
+  sourceIdsFor,
+  wantedSourceIds,
 } from "../guest/src/participants";
 
 describe("resolveGrants", () => {
@@ -91,5 +93,20 @@ describe("peerOf", () => {
     expect(peerOf({ kind: "hello", peer: "screen" })).toBe("screen");
     expect(peerOf({ kind: "hello", peer: "other" })).toBe("main");
     expect(peerOf(null)).toBe("main");
+  });
+});
+
+describe("source ids", () => {
+  it("the camera id is the historical guest-<8> and the screen id hangs off it", () => {
+    expect(sourceIdsFor("0123456789abcdef")).toEqual({ camera: "guest-01234567", screen: "guest-01234567-screen" });
+  });
+  it("wants a screen source only for guests holding media.screen", () => {
+    const a = { id: "aaaaaaaa-1", grants: ["media.camera", "media.screen"] };
+    const b = { id: "bbbbbbbb-1" };
+    const c = { id: "cccccccc-1", grants: [] as string[] };
+    const w = wantedSourceIds([a, b, c]);
+    expect([...w.keys()].sort()).toEqual(["guest-aaaaaaaa", "guest-aaaaaaaa-screen", "guest-bbbbbbbb", "guest-cccccccc"]);
+    expect(w.get("guest-aaaaaaaa-screen")).toEqual({ guest: a, track: "screen" });
+    expect(w.get("guest-bbbbbbbb")?.track).toBe("camera");
   });
 });
