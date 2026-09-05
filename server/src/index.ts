@@ -18,6 +18,7 @@ import { senderFor, SENDERS } from "./senders";
 import type { JobInput } from "./senders/types";
 import { captionFromOverrides, rememberOrigin, tick, type JobRow } from "./queue";
 import { connectGuestRoutes, guestPageRoutes, liveHostRoutes } from "./live";
+import { contributionConnectStubs, contributionHostStubs } from "./stubs";
 
 type Vars = { tokenClass: TokenClass };
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
@@ -50,6 +51,9 @@ app.use("/v1/*", async (c, next) => {
   // Guest pages and the signaling upgrades carry no bearer: the invite code,
   // room code, render key or 120-second ticket in the request IS the credential.
   if (c.req.path.startsWith("/v1/connect/guest")) return next();
+  // The audience door (docs/CONTRIBUTIONS.md): a room code mints a per-device
+  // capability token; the token, not a bearer, is the credential afterwards.
+  if (c.req.path.startsWith("/v1/connect/audience")) return next();
   const tokenClass = classifyToken(c.env, c);
   c.set("tokenClass", tokenClass);
   // Self-configure the public origin so cron ticks can mint media URLs.
@@ -446,6 +450,13 @@ app.post("/v1/jobs/:jobId/retry", async (c) => {
 
 app.route("/v1/app/live", liveHostRoutes);
 app.route("/v1/connect", connectGuestRoutes);
+
+// ── Contract-first stubs (docs/CONTRIBUTIONS.md) ─────────────────────────────
+// Documented in the contract, not built: 501 + the issue that builds each one.
+// Same mounts, same gates as the families above (see stubs.ts).
+
+app.route("/v1/app/live", contributionHostStubs);
+app.route("/v1/connect", contributionConnectStubs);
 app.route("/connect", guestPageRoutes);
 
 // ── Public: OAuth connect flow (human browser consent) ───────────────────────
