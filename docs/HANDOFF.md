@@ -121,6 +121,61 @@ gate (#41 merged): any ffi.rs extern must have both shim.m and shim_win.c defini
 
 ## From Windows
 
+### 2026-09-05 — v0.4.24 release build verified on Windows; the mod test is BLOCKED by a server role bug
+
+**v0.4.24 from the release page: the engine ships and works.** Downloaded the release asset itself (not
+a local build), installed per-user, launched:
+- `Producer_0.4.24_x64-setup.exe` 129 MB, 1,337 files installed, `obs.dll` / `obs-nvenc.dll` /
+  `obs-nvenc-test.exe` all present beside the exe.
+- Footer reads **`d3d11 · NVENC`**; `[live] video encoder: obs_nvenc_h264_tex (hardware: true)`;
+  all 14 plugins load; came up at 2160p60, FPS 60, CPU 2.5%.
+- First time an engine has shipped inside a released Windows installer. That check is done.
+
+**The mod test cannot pass as written, and it is a server bug, not a Windows one.** Opening Daily Show
+on the Boomin workspace as `kleveland.bishop@gmail.com` shows **`Host · via brand`** with the full host
+chip set (runs the show / cuts scenes / admits guests / runs votes / grants roles / room settings),
+not `Mod`.
+
+I asked the server directly (`room_access`, endpoint = Boomin, room = Daily Show). Raw answer:
+
+```
+access.role            = "host"        <-- the ROUTE resolves host
+access.via             = "surface"
+access.implicit        = false
+access.can             = { control, interactions, manage, roster, scene, settings: true, billing: false }
+access.grants[0]       = { room_role: "mod",          <-- the explicit room grant is MOD
+                           grant_role: "editor",
+                           member: { role: "admin", type: "collaborator" },
+                           user:   { email: "kleveland.bishop@gmail.com" } }
+```
+
+So the identity holds an explicit **mod** grant on that room, and the route still answers **host**,
+attributing it to `via: "surface"` — surface-level access on the brand is outranking the room grant.
+This looks like the same class as the `mod-gets-host-room` fix in #61, reaching the same result through
+the surface path. **api-side, your call.** Until it changes, no Boomin room can produce a Mod seat for
+this identity, whichever room is opened.
+
+**Second, smaller, and it is ours (producer, client-side).** `roomAccessFrom`
+(`server/guest/src/participants.ts:358-360`) accepts only `org | brand | grant` for `via` and otherwise
+falls back to `out === "host" ? "brand" : "unknown"`. The server said `via: "surface"`, which is not in
+that set, so the card printed **"Host · via brand"** — a provenance the server never claimed. The
+`RoomAccessInfo["via"]` union (line 285) has no `surface` member either. Cosmetic, but it hides exactly
+the signal that would have named this bug on sight. **Deliberately NOT fixed** — Kleveland asked that
+this go to you as a report first, so the branch is clean and nothing is in flight from my side.
+
+**Two ways to unblock the mod test without waiting on the api fix:**
+1. Demote this identity's surface access on the Boomin brand, then re-open Daily Show.
+2. Use a **mod link** instead — that path returns `via: "seat"` and resolves through different code
+   (`roleTitle` → "Mod seat on …"). The Mod link control is already in the room's bottom bar, so
+   Windows can hold the seat from a second Producer while the Mac hosts.
+
+**Still open from Windows:** PR #57 (4K record shares the stream encoder) awaiting your Apple silicon
+check. And `scripts/windows-engine.ps1` still has the latent zstandard probe bug that killed v0.4.22/23
+— `python -c "import zstandard" 2>$null` under `ErrorActionPreference = Stop` makes a native command's
+stderr a terminating error, so the probe kills the script instead of installing the module. Your
+workflow-side install unblocks CI; the script is still broken for a fresh Windows box. Say the word and
+I will fix it, along with the `via: "surface"` mislabel above, in one PR.
+
 ### 2026-09-05 — v0.4.20 verify list + the 4K record fix (PR #57)
 
 Pulled main to v0.4.20 (e731b64), built with the engine (lock unchanged, `f85b8f889ab3`); the
