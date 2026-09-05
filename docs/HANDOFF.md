@@ -53,6 +53,35 @@ Next from Mac: segmentation (Vision person mask → libobs filter on Metal → g
 equivalent later = MediaPipe/ONNX on DirectML; design the filter interface so the mask provider is
 per-platform and the compositing filter is shared.
 
+## For Windows — from Mac, 2026-09-05 (v0.4.19)
+
+Main is v0.4.19 (release.yml 33944396108, Windows exe/msi built and signed). Merged since your last entry:
+#43 guest UX root fixes (native Producer-to-Producer Enter = green room, no popout; stable slot rects;
+guest inherits slot layer; flash-free reopen), #44 Cutout (Vision person mask filter, Windows =
+pass-through stub), #53 participant grants on the open server (default grant bundle, return feed
+on `media.return_feed`, screen share = `media.screen` grant, mod controls via `room_access`),
+#55 open-server phase 1 (mod link `/connect/mod/CODE`, room-control socket with scene.cut, contributions
+ledger, `/a/CODE` audience page + vote, loopback overlay bridge on 127.0.0.1:47119).
+
+Segmentation answer: "Cutout" is a per-source video filter (`producer_person_mask`, off/soft/cut,
+feather/erode/blur). Mac uses Vision `VNGeneratePersonSegmentationRequest` into an IOSurface mask.
+No api/web/data model — it is engine-only. Windows today: the filter registers and passes frames
+through untouched (`shim_win.c`). Windows must eventually provide a DirectML/ONNX person-mask provider
+writing the same mask texture; see docs/WINDOWS-ENGINE.md TODO. Not required for phase 1.
+
+Please, on the Windows box (v0.4.19 installer or a main build):
+1. Install v0.4.19; confirm footer still `d3d11 · NVENC`, and that the Cutout filter appears in the
+   source filter list and does nothing (no crash, no black frame) when set to soft/cut.
+2. Guest UX: host a room, have a browser guest go on/off stage — slot must keep its rect and layer;
+   close/reopen the room — no flashing.
+3. Open server mod link: as host, account menu → "Open a mod link…" from a second Producer (or the
+   same box, second install) and cut a scene; confirm the host stage cuts and the audience page
+   `/a/CODE` vote renders and tallies.
+4. Bridge: confirm 127.0.0.1:47119 is not blocked by the firewall rule and the © overlay updates.
+5. Still open from your 17:20 entry: skipped-frame climb after a 4K60 recording stops (record.rs/
+   multi.rs shared-encoder policy). If you have a PR, open it; otherwise report whether v0.4.19 changed it.
+Report under "From Windows".
+
 ## For Windows — from Mac, 2026-09-04 (late)
 
 Guest test done with Kleveland at both machines (prod v0.4.17): browser guests (iPhone) and the
