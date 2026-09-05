@@ -389,6 +389,25 @@ export function setEditingAllowed(info: Pick<RoomAccessInfo, "role">, pending = 
   return !pending && info.role === "host";
 }
 
+/** Should THIS Producer apply the room document to its OWN engine — local
+ *  scenes, the camera, a screen capture, the mic, the virtual camera? Only
+ *  the seat that runs the show. On a Boomin room the access route decides:
+ *  until it has answered (or three misses assume the host) nothing local is
+ *  applied — a mod's own webcam and desktop must never become "the picture"
+ *  in a room whose picture is the host's. An open server has no route: the
+ *  person who opened the room is its host (a mod there runs views/ModSeat). */
+export type LocalSetDecision = "apply" | "wait" | "skip";
+export function localSetDecision(opts: {
+  boomin: boolean;
+  answered: boolean;
+  tries: number;
+  role: RoomRole;
+}): LocalSetDecision {
+  if (!opts.boomin) return "apply";
+  if (!opts.answered) return opts.tries >= 3 ? "apply" : "wait";
+  return opts.role === "host" ? "apply" : "skip";
+}
+
 /** What to SAY about a role — one line, the same on every screen. */
 export function roleTitle(info: RoomAccessInfo, host?: string | null): string {
   if (info.via === "seat") return host ? `Mod seat on ${host}` : "Mod seat";

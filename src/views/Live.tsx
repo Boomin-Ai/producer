@@ -102,6 +102,7 @@ import {
   type RoomRole,
   SET_IS_HOSTS,
   setEditingAllowed,
+  localSetDecision,
 } from "../lib/participants";
 import { RoleCard } from "./RoleCard";
 
@@ -677,6 +678,7 @@ export function GuestPanel({
   onOrder,
   onModLink,
   vote,
+  control,
 }: {
   thumbs: Record<string, string>;
   roster: RoomGuest[];
@@ -699,6 +701,10 @@ export function GuestPanel({
   /** The vote control (#51) — the caller passes it only when the seat
    * holds `room.interactions`. */
   vote?: ReactNode;
+  /** Room control (`can.control` from the access answer): admit / remove /
+   * stage / order. Host, manager and mod hold it; a viewer does not.
+   * Defaults from the role for callers without the DTO. */
+  control?: boolean;
 }) {
   // render_url is the server's own statement of "this one may go on the
   // host". Waiting guests have none, so the gate is enforced there rather
@@ -711,7 +717,7 @@ export function GuestPanel({
     ? admitted
     : [...admitted].sort((a, b) => (a.position ?? 1e9) - (b.position ?? 1e9));
   const ROOM_CAP = 8;
-  const canControl = role !== "viewer";
+  const canControl = control ?? role !== "viewer";
 
 
   return (
@@ -738,6 +744,7 @@ export function GuestPanel({
               <span className="rm-guest-name">{g.display_name || "Guest"}</span>
               {/* Kind = identity strength, never what they may do. */}
               <span className={`rm-kind ${participantKind(g)}`}>{kindBadge(g)}</span>
+              {!canControl && <span className="rm-guest-wait-note" title="Your seat is read-only — ask the host for room control">waiting</span>}
               {canControl && (
                 <>
                   <button
@@ -3355,7 +3362,22 @@ export function LiveView({
   };
   const unlisten = useRef<(() => void) | null>(null);
   const roomApplied = useRef(false);
+  /** A non-host seat on a Boomin room: the local document was deliberately
+   * NOT applied and the engine cleared, once per room open. */
+  const localSetSkipped = useRef(false);
   const roomId = room?.id ?? null;
+  /** The room's endpoint, resolved once and shared by the room-apply path
+   * and the roster tick — both need to know whether the server is Boomin
+   * before they can know whose set this is. */
+  const ensureEndpoint = async (): Promise<string | null> => {
+    if (endpointRef.current) return endpointRef.current;
+    const ep = await resolveActiveEndpoint().catch(() => null);
+    if (!ep) return null;
+    endpointRef.current = ep.id;
+    boominRoomRef.current = isBoomin(ep);
+    setBoominRoom(boominRoomRef.current);
+    return ep.id;
+  };
 
   const refresh = useCallback(async () => {
     setDestinations(await ipc.liveListDestinations(activeEndpointId() ?? undefined));
@@ -3365,6 +3387,42 @@ export function LiveView({
     // Opening a room applies its saved scene — but never over a live
     // session (switching rooms mid-stream adopts the running scene).
     if (room && !roomApplied.current && snap.engine_ready && snap.session_state === "idle") {
+      // WHOSE set is this? A Boomin room may be someone else's: a mod's or a
+      // viewer's Producer must not mount its own camera, screen, mic and
+      // scenes as if it ran the show (the founder's Windows mod saw
+      // its own desktop where the host's program belonged). The answer is
+      // the access route's; until it lands nothing local is applied, and
+      // the roster tick calls refresh again the moment it does.
+      const sid = parseConfig(room.config).server_room_id;
+      if (sid) await ensureEndpoint();
+      const decision = localSetDecision({
+        boomin: !!sid && boominRoomRef.current,
+        answered: accessAsked.current,
+        tries: accessTries.current,
+        role: roomRoleRef.current,
+      });
+      if (decision === "wait") return;
+      if (decision === "skip") {
+        // Not our set. Nothing of this room is applied; anything the engine
+        // still holds from a previous room comes DOWN so the stage cannot
+        // show it — devices off, no items, no overlay, no mic capture.
+        if (!localSetSkipped.current) {
+          localSetSkipped.current = true;
+          await ipc.liveSetSources(false, false, false).catch(() => {});
+          for (const i of (snap.sources?.items ?? []).filter((x) => !["screen", "camera", "overlay"].includes(x.id))) {
+            await extraSources.remove(i.id).catch(() => {});
+          }
+          if (snap.sources?.overlay_window != null || snap.sources?.overlay_url) {
+            ipc.liveSetOverlay(null, false, null).catch(() => {});
+          }
+          engineHeldRoom = null;
+          // The veil waits on pixels; there are none to wait for.
+          firstFramesDone.current = true;
+          setFramesReady(true);
+          setDocApplied(true);
+        }
+        return;
+      }
       roomApplied.current = true;
       const saved = parseConfig(room.config).sources;
       if (typeof saved.screen === "boolean") {
@@ -3445,7 +3503,7 @@ export function LiveView({
       }
     }
     // Channel selection from the room document → engine flags.
-    if (!channelsApplied.current && room) {
+    if (!channelsApplied.current && room && roomApplied.current) {
       channelsApplied.current = true;
       const want = parseConfig(room.config).channels;
       if (Object.keys(want).length) {
@@ -4596,13 +4654,8 @@ export function LiveView({
     let alive = true;
     const tick = async () => {
       try {
-        if (!endpointRef.current) {
-          const ep = await resolveActiveEndpoint();
-          if (!ep) return;
-          endpointRef.current = ep.id;
-          boominRoomRef.current = isBoomin(ep);
-          setBoominRoom(boominRoomRef.current);
-        }
+        const epId = await ensureEndpoint();
+        if (!epId) return;
         if (!accessAsked.current) {
           // Once per room open — once it has ANSWERED. A transport failure
           // (offline blip, a 5xx) is not an answer: on a Boomin room the tick
@@ -4611,14 +4664,17 @@ export function LiveView({
           // 404 (no route: self-hosted, or Boomin before #380) and 401/403
           // (refused) are answers; the shell maps them (client.rs).
           if (boominRoomRef.current && accessTries.current === 0) setAccessPending(true);
-          const acc = await guestsIpc.access(endpointRef.current, cfg.server_room_id!).catch(() => null);
+          const acc = await guestsIpc.access(epId, cfg.server_room_id!).catch(() => null);
           if (!alive) return;
           if (acc === null && boominRoomRef.current) {
             // Three misses (~9 s) and the person who opened their own room
             // with the API down gets their room back — as the ASSUMED host
             // (the card says so), while the tick keeps asking.
             accessTries.current += 1;
-            if (accessTries.current >= 3) setAccessPending(false);
+            if (accessTries.current >= 3) {
+              setAccessPending(false);
+              void refresh(); // the room-apply path was waiting on this answer
+            }
             return;
           }
           accessAsked.current = true;
@@ -4627,8 +4683,12 @@ export function LiveView({
           setRoomRole(info.role);
           setRoomAccess(info);
           setAccessPending(false);
+          // The room-apply path (refresh) held the local document back
+          // until this answer: a host mounts its set now, anyone else
+          // never does.
+          void refresh();
         }
-        const res = await guestsIpc.roster(endpointRef.current, cfg.server_room_id!);
+        const res = await guestsIpc.roster(epId, cfg.server_room_id!);
         if (!alive) return;
         const list = res.guests ?? [];
         setRoster(list);
@@ -4874,7 +4934,18 @@ export function LiveView({
         // A mod's Producer on Boomin: the HOST's scenes, read from the room's
         // directory, the active one lit by the server's `scene.cut` frames.
         // A click is `POST …/scene`; nothing here touches our own engine.
-        if (hostScenes) {
+        // The LOCAL list never renders off-host: this Producer holds no set
+        // for the room, so its own scenes would be a lie about the picture.
+        if (!isHost) {
+          if (!hostScenes) {
+            return (
+              <div className="rm-scenes">
+                <div className="rm-rows-empty">
+                  {accessPending ? "Checking your seat…" : "The host's scenes appear here once their Producer opens the room."}
+                </div>
+              </div>
+            );
+          }
           return (
             <div className="rm-scenes">
               {hostScenes.scenes.length === 0 && (
@@ -5335,6 +5406,7 @@ export function LiveView({
             error={guestErr}
             items={(sources.items ?? []).filter((i) => i.kind === "guest")}
             role={roomRole}
+            control={roomAccess.can.control}
             stage={modStage}
             onAdmit={admitGuest}
             onRemove={removeGuest}
@@ -5607,7 +5679,10 @@ export function LiveView({
         </>
       );
     }
-    if (id === "scenes")
+    if (id === "scenes") {
+      // Off-host the list is the host's directory: no transition to set, no
+      // scene to save from a set this Producer does not hold.
+      if (!isHost) return null;
       return (
         <>
           {/* A bare gear says nothing. Show the room's transition by name so
@@ -5634,6 +5709,7 @@ export function LiveView({
           </button>
         </>
       );
+    }
     if (id === "chat")
       return (
         <>
@@ -6008,16 +6084,20 @@ export function LiveView({
         >
           {ic.collapseDown}
         </button>
-        <button
-          className={`rm-icon-chip${layoutEdit ? " on" : ""}`}
-          onClick={() => {
-            setLayoutEdit((e) => !e);
-            setLayoutMenu(false);
-          }}
-          title={layoutEdit ? "Done editing layout" : "Edit layout"}
-        >
-          {ic.layout}
-        </button>
+        {/* Layout editing is stage furniture for the person running the set;
+          * a control seat gets the panels as they are. */}
+        {isHost && (
+          <button
+            className={`rm-icon-chip${layoutEdit ? " on" : ""}`}
+            onClick={() => {
+              setLayoutEdit((e) => !e);
+              setLayoutMenu(false);
+            }}
+            title={layoutEdit ? "Done editing layout" : "Edit layout"}
+          >
+            {ic.layout}
+          </button>
+        )}
 
         {/* The header's health chip was the footer's stream-health meter said
           * twice; the footer keeps it (with fps), the LIVE pill keeps time. */}
@@ -6379,7 +6459,18 @@ export function LiveView({
 
         <div className="rm-center">
           <div className="rm-canvas">
-            {engineOk && (
+            {/* Off-host the stage is a PROGRAM MONITOR, not an editor: the
+              * native preview is never attached (there is no local set to
+              * show — see localSetDecision) and the picture is the host's.
+              * Producer has no return-feed seat for a mod yet (docs/HANDOFF.md:
+              * "mod program monitor = return-feed grant, not built"), so this
+              * is a quiet placeholder rather than the mod's own desktop. */}
+            {engineOk && !isHost && (
+              <div className="rm-canvas-msg rm-program-monitor">
+                {accessPending ? "Checking your seat…" : "Host's program — ask the host to share a return feed"}
+              </div>
+            )}
+            {engineOk && isHost && (
               <PreviewPanel>
                 <StageEditor
                   items={sources.items ?? []}
@@ -6426,7 +6517,8 @@ export function LiveView({
             )}
           </div>
 
-          {engineOk && (
+          {/* Mic / camera / screen / record act on OUR engine — host only. */}
+          {engineOk && isHost && (
             <div className={`stg-bar pos-${cfg.stage_bar ?? "bottom"}`}>
               <button
                 className={`stg-btn${sources.mic_muted ? " off" : ""}`}

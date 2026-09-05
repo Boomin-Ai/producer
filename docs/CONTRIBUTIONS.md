@@ -170,3 +170,18 @@ Milestone: [Rooms, Participants, Contributions — Phase 1](https://github.com/B
 
 Item 6 (metered deals) and item 9 (four small columns) are Boomin-only —
 money and persistent identity — and have no issue here by design.
+
+**Mod seat on a Boomin room (v0.4.26, `fix/mod-seat-no-local-set`).** A non-host
+seat (mod / manager / viewer, per `GET /rooms/:id/access`) no longer applies the
+local room document to its own engine: no local scenes, no camera / screen /
+mic, no virtual camera, no overlay — the stage is a program monitor with a
+placeholder, the Scenes panel is the host's directory only, sources / mixer show
+the one-line note, and the stage toolbar + layout-edit toggle are hidden. Admit /
+Decline on waiting guests follow `can.control` (host, manager, mod).
+**Gap — mod program monitor = return-feed grant, not built:** the host's program
+reaches guests as the return feed (`media.return_feed`, HostLink `peer:"main"`),
+but a mod's Producer holds no participant row on the room, so it has nothing to
+receive that feed on. Building it means a `kind: producer` participant row with
+`media.return_feed` (and only that) that the host's roster does NOT reconcile
+into a guest source, plus the guest render page in a webview on the stage. Until
+then the placeholder says so.
