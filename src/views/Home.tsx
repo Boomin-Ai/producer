@@ -4,12 +4,13 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ConsoleHost } from "./Console";
+import { AccountSheet } from "./AccountSheet";
+import { AccessPanel } from "./Access";
 import type { Channel, EndpointInfo, Job, LiveDestination, LiveRoom, LiveSnapshot, ServerRoom } from "../lib/ipc";
 import type { TargetResult } from "../lib/ipc";
 import { WORKSPACE_EVENT, activeEndpointId, isBoomin, resolveActiveEndpoint, setActiveEndpointId } from "../lib/workspace";
 import { PREFS_EVENT, PREF_NETWORK_INVITE_DISMISSED, prefGet, prefSet } from "../lib/prefs";
 import { copyText, ensureRoomJoinLink } from "../lib/roomLink";
-import { THIS_DEVICE } from "../lib/platform";
 import { ipc,
   firewall,
   isRoomClosedError,
@@ -235,7 +236,6 @@ export function Home({
   onEndpointsChanged?: () => void;
 }) {
   const [view, setView] = useState<MainView>({ kind: "home" });
-  const activeEp = useActiveEndpoint();
   // Settings is a rail-side surface: it expands out of the left rail and
   // pushes the home surfaces right (never a panel over them). It only exists
   // at home, so opening it from another view returns home first.
@@ -273,7 +273,8 @@ export function Home({
   // The active workspace (brand). Rooms, destinations and the network rail
   // all key on it; the profile popout switches it.
   const [activeId, setActiveId] = useState<string | null>(() => activeEndpointId());
-  const [profileOpen, setProfileOpen] = useState(false);
+  // One popout: the account sheet pulls down from the top-right avatar; the
+  // rail's avatar opens the same sheet (never two surfaces at once).
   const [accountOpen, setAccountOpen] = useState(false);
   const [destinations, setDestinations] = useState<LiveDestination[]>([]);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
@@ -453,32 +454,46 @@ export function Home({
               <span className="update-dot" /> Restart to update
             </button>
           )}
-          {/* You, not the brand: app + workspaces, and sign out. The brand's
-            * own settings live behind the gear on the brand (rail popout). */}
+          {/* You, not the brand: who is signed in, workspaces, the door to
+            * add one, sign out. Pulls DOWN from the avatar the way Settings
+            * pulls OUT of the rail (views/AccountSheet.tsx). */}
           <button
-            className="cr-profile"
+            className={`cr-profile${accountOpen ? " on" : ""}`}
             title="Account"
-            onClick={() => { setAccountOpen((v) => !v); setProfileOpen(false); }}
+            onClick={() => setAccountOpen((v) => !v)}
           >
             {((endpoints.find((e) => e.id === activeId) ?? endpoints[0])?.name?.[0] ?? "?").toUpperCase()}
           </button>
-          {accountOpen && (
-            <>
-              <div className="cr-menu-backdrop" onClick={() => setAccountOpen(false)} />
-              <div className="cr-menu">
-                {/* Brand settings are a Boomin thing — a self-hosted server's
-                  * settings live on that server, not behind this avatar. */}
-                {activeEp && isBoomin(activeEp) && (
-                  <button onClick={() => { setAccountOpen(false); setView({ kind: "console", section: "general" }); }}>Brand settings</button>
-                )}
-                {onSignOut && endpoints.some((e) => e.kind === "connected") && (
-                  <button className="danger" onClick={() => { setAccountOpen(false); onSignOut(); }}>Sign out</button>
-                )}
-              </div>
-            </>
-          )}
         </div>
       </header>
+
+      <AccountSheet
+        open={accountOpen}
+        endpoints={endpoints}
+        activeId={activeId}
+        onSwitch={(id) => {
+          setActiveEndpointId(id);
+          setActiveId(id);
+          setAccountOpen(false);
+          onEndpointsChanged?.();
+        }}
+        onOpenConsole={(section, endpointId) => {
+          if (endpointId !== activeId) {
+            setActiveEndpointId(endpointId);
+            setActiveId(endpointId);
+            onEndpointsChanged?.();
+          }
+          setAccountOpen(false);
+          setView({ kind: "console", section });
+        }}
+        onRemoveEndpoint={(id) => {
+          setAccountOpen(false);
+          onRemoveEndpoint(id);
+        }}
+        onAddWorkspace={onAddEndpoint}
+        onSignOut={onSignOut}
+        onClose={() => setAccountOpen(false)}
+      />
 
       {loadError && !errorDismissed && (
         <SystemBanner message={loadError} onDismiss={() => setErrorDismissed(true)} />
@@ -494,6 +509,7 @@ export function Home({
               endpoints={endpoints}
               destinations={destinations}
               channels={channels}
+              rooms={rooms}
               onChannelsChanged={() => { void loadChannels(); void loadLive(); }}
               updater={updater}
               onClose={closeSettings}
@@ -511,34 +527,10 @@ export function Home({
             setSurface(s);
           }}
           onCompose={() => setView({ kind: "compose" })}
-          onProfile={() => setProfileOpen((v) => !v)}
+          onProfile={() => setAccountOpen((v) => !v)}
           settingsOpen={settingsOpen}
           onSettings={() => (settingsOpen ? closeSettings() : openSettings())}
           onBack={closeSettings}
-        />
-      )}
-      {view.kind === "home" && profileOpen && (
-        <WorkspacePopout
-          onSignOut={onSignOut}
-          endpoints={endpoints}
-          activeId={activeId}
-          onSwitch={(id) => {
-            setActiveEndpointId(id);
-            setActiveId(id);
-            setProfileOpen(false);
-            onEndpointsChanged?.();
-          }}
-          onRemoveEndpoint={onRemoveEndpoint}
-          onOpenConsole={(section, endpointId) => {
-            if (endpointId && endpointId !== activeId) {
-              setActiveEndpointId(endpointId);
-              setActiveId(endpointId);
-              onEndpointsChanged?.();
-            }
-            setProfileOpen(false);
-            setView({ kind: "console", section });
-          }}
-          onClose={() => setProfileOpen(false)}
         />
       )}
       {view.kind === "console" && (
@@ -555,6 +547,7 @@ export function Home({
           endpoints={endpoints}
           destinations={destinations}
           channels={channels}
+          rooms={rooms}
           onChannelsChanged={() => {
             // Integrations edits touch both lists: posting channels (connect /
             // disconnect) and live destinations. Refresh both.
@@ -818,10 +811,12 @@ function NetworkInviteReset({ endpoints }: { endpoints: EndpointInfo[] }) {
 /** The body of Settings. Lives inside the rail-side `.home-settings`
  * surface (see Home): no backdrop, no sheet chrome — the rail's Back button
  * and Esc close it. */
-type SettingsSection = "app" | "output" | "audio" | "guests" | "integrations" | "vcam";
+type SettingsSection = "app" | "output" | "audio" | "guests" | "integrations" | "access" | "vcam";
 const SETTINGS_SECTIONS: { id: SettingsSection; label: string; sub: string; built: boolean }[] = [
   { id: "app", label: "App", sub: "Version, updates, shortcuts", built: true },
   { id: "integrations", label: "Integrations", sub: "Live destinations, posting channels", built: true },
+  // The sub reads in the server's own nouns (see the nav below).
+  { id: "access", label: "Access", sub: "Team, room roles, invites", built: true },
   { id: "output", label: "Output", sub: "Encoder, bitrate, recording", built: false },
   { id: "audio", label: "Audio", sub: "Devices, monitoring, filters", built: false },
   { id: "guests", label: "Guests", sub: "Admit rules, TURN relay", built: false },
@@ -835,6 +830,7 @@ function SettingsPanel({
   endpoints,
   destinations,
   channels,
+  rooms,
   onChannelsChanged,
   updater,
   onClose,
@@ -846,6 +842,8 @@ function SettingsPanel({
   endpoints: EndpointInfo[];
   destinations: LiveDestination[];
   channels: Channel[];
+  /** The workspace's rooms — Access grants roles per room. */
+  rooms?: LiveRoom[];
   onChannelsChanged: () => void;
   updater: { state: string; version: string | null; restart: () => void };
   onClose: () => void;
@@ -860,6 +858,8 @@ function SettingsPanel({
     return () => window.removeEventListener(WORKSPACE_EVENT, sync);
   }, [endpoints]);
   const current = endpoints.find((e) => e.id === wsId) ?? endpoints[0] ?? null;
+  const subOf = (it: (typeof SETTINGS_SECTIONS)[number]) =>
+    it.id === "access" && current && !isBoomin(current) ? "Mod links, guest door" : it.sub;
   const [releases, setReleases] = useState<RepoRelease[] | null | "err">(null);
   useEffect(() => {
     fetch("https://api.github.com/repos/Boomin-Ai/producer/releases?per_page=8")
@@ -911,7 +911,7 @@ function SettingsPanel({
               onClick={() => onSection(it.id)}
             >
               <span className="set-nav-label">{it.label}</span>
-              <span className="set-nav-sub">{it.sub}</span>
+              <span className="set-nav-sub">{subOf(it)}</span>
             </button>
           ))}
         </div>
@@ -924,7 +924,7 @@ function SettingsPanel({
       <div className="set-page-in set">
         <div className="set-page-head">
           <span className="set-page-title">{meta.label}</span>
-          <span className="set-page-sub">{meta.sub}{current ? ` · ${current.name}` : ""}</span>
+          <span className="set-page-sub">{subOf(meta)}{current ? ` · ${current.name}` : ""}</span>
         </div>
         {section === "app" && (
           <>
@@ -1054,6 +1054,7 @@ function SettingsPanel({
 
           </>
         )}
+        {section === "access" && <AccessPanel endpoint={current} rooms={rooms ?? []} />}
         {!meta.built && (
           <div className="set-soon">
             {section === "output" && "Encoder override, rate control, keyframe interval, bitrate policy, recording format and folder, audio bitrate. Today these are fixed constants in the engine."}
@@ -3361,161 +3362,6 @@ const railIc = {
  * Mirrors the web's BrandSwitcherDropdown: every brand of the account (live
  * from the API), the current one marked, unbound ones bound on first pick
  * (same token, new endpoint row). Settings lives behind it. */
-function WorkspacePopout({
-  endpoints,
-  activeId,
-  onSwitch,
-  onOpenConsole,
-  onRemoveEndpoint,
-  onSignOut,
-  onClose,
-}: {
-  endpoints: EndpointInfo[];
-  activeId: string | null;
-  onSwitch: (endpointId: string) => void;
-  /** The gear on a brand: that brand's settings console (switching first when needed). */
-  onOpenConsole?: (section: string, endpointId?: string) => void;
-  /** Self-hosted rows: forget this server on this Mac. */
-  onRemoveEndpoint?: (endpointId: string) => void;
-  onSignOut?: () => void;
-  onClose: () => void;
-}) {
-  const active = endpoints.find((e) => e.id === activeId) ?? endpoints.find((e) => e.kind === "connected") ?? endpoints[0];
-  const [brands, setBrands] = useState<{ slug: string; name: string }[] | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [note, setNote] = useState<string | null>(null);
-  useEffect(() => {
-    const ep = endpoints.find((e) => e.kind === "connected" && e.id === activeId) ?? endpoints.find((e) => e.kind === "connected");
-    if (!ep) {
-      setBrands([]);
-      return;
-    }
-    ipc
-      .boominListBrands(ep.id)
-      .then((r) => setBrands(r.brands ?? []))
-      .catch(() => setBrands(endpoints.filter((e) => e.brand_slug).map((e) => ({ slug: e.brand_slug!, name: e.name }))));
-  }, [endpoints, activeId]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  const pick = async (slug: string) => {
-    const bound = endpoints.find((e) => e.brand_slug === slug);
-    if (bound) {
-      onSwitch(bound.id);
-      return;
-    }
-    const via = endpoints.find((e) => e.kind === "connected" && e.id === activeId) ?? endpoints.find((e) => e.kind === "connected");
-    if (!via) return;
-    setBusy(slug);
-    setNote(null);
-    try {
-      const r = await ipc.boominAddBrand(via.id, slug);
-      onSwitch(r.id);
-    } catch (e) {
-      setNote(String(e).replace(/^Error:\s*/, ""));
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const rows = brands ?? [];
-  const independents = endpoints.filter((e) => e.kind !== "connected");
-  return (
-    <>
-      <div className="ws-pop-backdrop" onClick={onClose} />
-      <div className="ws-pop" role="menu">
-        <div className="ws-pop-head">
-          <span className="ws-ava">{(active?.name?.[0] ?? "?").toUpperCase()}</span>
-          <span className="ws-pop-txt">
-            <span className="ws-pop-name">{active?.name ?? "Workspace"}</span>
-            {active?.brand_slug && <span className="ws-pop-slug">@{active.brand_slug}</span>}
-          </span>
-        </div>
-        <div className="ws-pop-label">BRAND WORKSPACES</div>
-        <div className="ws-pop-list">
-          {brands === null && <div className="cr-hint">Loading…</div>}
-          {rows.map((b) => {
-            const bound = endpoints.find((e) => e.brand_slug === b.slug);
-            const isCurrent = !!bound && bound.id === active?.id;
-            return (
-              <button
-                key={b.slug}
-                className={`ws-row${isCurrent ? " on" : ""}`}
-                disabled={busy !== null}
-                onClick={() => void pick(b.slug)}
-              >
-                <span className="ws-ava sm">{(b.name?.[0] ?? "B").toUpperCase()}</span>
-                <span className="ws-pop-txt">
-                  <span className="ws-pop-name">{b.name}</span>
-                  <span className="ws-pop-slug">@{b.slug}{bound ? "" : ` · not on ${THIS_DEVICE}`}</span>
-                </span>
-                {isCurrent ? <i className="ws-dot" /> : busy === b.slug ? <span className="ws-pop-slug">…</span> : null}
-                {bound && onOpenConsole && (
-                  <span
-                    className="ws-gear"
-                    role="button"
-                    tabIndex={0}
-                    title={`${b.name} settings`}
-                    onClick={(e) => { e.stopPropagation(); onOpenConsole("general", bound.id); }}
-                    onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); onOpenConsole("general", bound.id); } }}
-                  >
-                    {railIc.gear}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-          {independents.map((e) => (
-            <button key={e.id} className={`ws-row${e.id === active?.id ? " on" : ""}`} onClick={() => onSwitch(e.id)}>
-              <span className="ws-ava sm">{(e.name[0] ?? "S").toUpperCase()}</span>
-              <span className="ws-pop-txt">
-                <span className="ws-pop-name">{e.name}</span>
-                <span className="ws-pop-slug">self-hosted</span>
-              </span>
-              {e.id === active?.id && <i className="ws-dot" />}
-              {onRemoveEndpoint && (
-                <span
-                  className="ws-gear ws-drop"
-                  role="button"
-                  tabIndex={0}
-                  title={`Disconnect ${e.name} from ${THIS_DEVICE}`}
-                  onClick={(ev) => { ev.stopPropagation(); onRemoveEndpoint(e.id); }}
-                  onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); ev.stopPropagation(); onRemoveEndpoint(e.id); } }}
-                >
-                  ✕
-                </span>
-              )}
-            </button>
-          ))}
-          {brands !== null && rows.length === 0 && independents.length === 0 && (
-            <div className="cr-hint">No workspaces yet. Add one in Settings.</div>
-          )}
-        </div>
-        {note && <div className="cr-hint">{note}</div>}
-        <div className="ws-pop-foot">
-          {onSignOut && endpoints.some((e) => e.kind === "connected") && (
-            <button
-              className="ws-row ws-signout"
-              onClick={() => {
-                onClose();
-                onSignOut();
-              }}
-            >
-              <span className="ws-pop-name">Sign out</span>
-              <span className="ws-pop-slug">{active?.kind === "connected" ? `of Boomin on ${THIS_DEVICE}` : ""}</span>
-            </button>
-          )}
-        </div>
-      </div>
-    </>
-  );
-}
-
 function HomeRail({
   brandName,
   avatarUrl,
