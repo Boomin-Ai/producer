@@ -196,8 +196,14 @@ function ConfirmSheet({
 
 // ── Boomin: Team ──────────────────────────────────────────────────────────────
 
-const isTeam = (m: Member) => m.type === "team" || m.role === "owner" || m.role === "admin";
-const hostsEverywhere = (m: Member) => m.role === "owner" || m.role === "admin" || m.role === "editor";
+// For a COLLABORATOR the member row's role means nothing (api #397: standing
+// lives on the grant rows), so "team" is the row TYPE alone — a collaborator
+// whose row says admin is still edited chip by chip.
+const isTeam = (m: Member) => m.type === "team";
+const hostsEverywhere = (m: Member) =>
+  m.type === "team"
+    ? m.role === "owner" || m.role === "admin" || m.role === "editor"
+    : m.grants.some((g) => g.scope_type === "brand" && (g.role === "owner" || g.role === "admin" || g.role === "editor"));
 
 function TeamAccess({ endpoint }: { endpoint: EndpointInfo }) {
   const [brandId, setBrandId] = useState<string | null>(null);
