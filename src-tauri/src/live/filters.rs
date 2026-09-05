@@ -138,6 +138,14 @@ fn known_keys(kind: &str) -> &'static [(&'static str, KeyType)] {
             ("luma_min_smooth", KeyType::Double),
         ],
         "sharpness_filter_v2" => &[("sharpness", KeyType::Double)],
+        // Producer's own (shim-registered) Cutout: mode off|soft|cut, the
+        // rest 0–1. See person_mask.m.
+        "producer_person_mask" => &[
+            ("mode", KeyType::Text),
+            ("feather", KeyType::Double),
+            ("erode", KeyType::Double),
+            ("blur", KeyType::Double),
+        ],
         "noise_suppress_filter_v2" => &[
             ("method", KeyType::Text),
             ("suppress_level", KeyType::Int),

@@ -542,3 +542,13 @@ int producer_default_camera_id(char *buf, int buflen) {
     strncpy(buf, uid, buflen);
     return 1;
 }
+
+// ── Cutout: person-mask filter registration ────────────────────────────────
+// The filter and its Vision mask provider live in person_mask.m; this is the
+// one exported name ffi.rs declares (and the extern-parity gate checks), so
+// the Windows shim can carry a pass-through under the same symbol.
+void producer_person_mask_register_native(void);
+
+void producer_person_mask_register(void) {
+    producer_person_mask_register_native();
+}
