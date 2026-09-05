@@ -9007,6 +9007,20 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 }
 .rm-top-seat-note { font-size: 12px; color: var(--fg-3); padding: 0 6px; white-space: nowrap; }
 .rm-top-left .role-card.compact { margin-left: 6px; }
+/* The header is one 48px bar and the transport must never fall off its right
+ * edge. In the bar the card is the role in words; the capability chips are
+ * hover-revealed (the title attribute carries them too) unless the window is
+ * wide enough to spend the room on them. */
+.rm-top-left .role-card.compact .role-card-chips { display: none; }
+@media (min-width: 1700px) {
+  .rm-top-left .role-card.compact .role-card-chips { display: flex; }
+}
+.rm-top-left .role-card.compact:hover .role-card-chips {
+  display: flex; position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
+  padding: 8px 10px; border-radius: var(--r-card); border: 1px solid var(--line-1);
+  background: var(--bg); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); flex-wrap: wrap; max-width: 420px;
+}
+.rm-top-left .role-card.compact { position: relative; }
 
 /* ── Account sheet: the pull-down under the top-right avatar ───────────── */
 .acct-backdrop { position: fixed; inset: 0; z-index: 60; }
