@@ -19,8 +19,8 @@ describe("parseBoominFrame", () => {
     const f = parseBoominFrame(pub(["stage"], "scene.cut", { room_id: "r", scene_id: "cam", version: 4, by: { user_id: "u1", role: "mod" }, server_now: 5 }));
     expect(f).toMatchObject({ type: "scene.cut", scene_id: "cam", from: "u1", server_now: 5, version: 4 });
   });
-  it("drops stage pushes (the roster poll carries them) and junk", () => {
-    expect(parseBoominFrame(pub(["stage"], "stage", { on_stage: [], version: 1 }))).toBeNull();
+  it("maps stage pushes (lib/stageTruth.ts reads them) and drops junk", () => {
+    expect(parseBoominFrame(pub(["stage"], "stage", { on_stage: [], version: 1 }))).toEqual({ type: "stage", on_stage: [], version: 1 });
     expect(parseBoominFrame("{not json")).toBeNull();
     expect(parseBoominFrame(pub(["stage"], "scene.cut", {}))).toBeNull();
     expect(parseBoominFrame(42)).toBeNull();

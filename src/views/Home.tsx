@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { cached, reconcile, remember, swr } from "../lib/fetchCache";
+import { sortRooms } from "../lib/roomOrder";
 import { createPortal } from "react-dom";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -271,10 +273,14 @@ export function Home({
   const updater = useUpdater();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [rooms, setRooms] = useState<LiveRoom[]>([]);
   // The active workspace (brand). Rooms, destinations and the network rail
   // all key on it; the profile popout switches it.
   const [activeId, setActiveId] = useState<string | null>(() => activeEndpointId());
+  // Last-known first (lib/fetchCache.ts): coming back from a room must not
+  // flash an empty stage list while the IPC round-trips.
+  const [rooms, setRooms] = useState<LiveRoom[]>(() => cached<LiveRoom[]>(`rooms:${activeEndpointId() ?? ""}`) ?? []);
+  const roomsRef = useRef(rooms);
+  roomsRef.current = rooms;
   // One popout: the account sheet pulls down from the top-right avatar; the
   // rail's avatar opens the same sheet (never two surfaces at once).
   const [accountOpen, setAccountOpen] = useState(false);
@@ -329,18 +335,27 @@ export function Home({
     setJobs(all);
   }, [endpoints]);
 
+  const activeIdRef = useRef(activeId);
+  activeIdRef.current = activeId;
   const loadLive = useCallback(async () => {
     try {
       const ep = await resolveActiveEndpoint();
-      if (ep?.id !== activeId) {
-        // Workspace changed: nothing from the previous one may linger, not
-        // even for a frame — it belongs to another brand.
-        setRooms([]);
+      const key = `rooms:${ep?.id ?? ""}`;
+      if (ep?.id !== activeIdRef.current) {
+        // Workspace changed: nothing from the previous brand may linger, not
+        // even for a frame. The NEW brand's last-known list (if any) shows
+        // at once; otherwise empty until it answers.
+        setRooms(cached<LiveRoom[]>(key) ?? []);
         setDestinations([]);
       }
       setActiveId(ep?.id ?? null);
-      setRooms(await ipc.liveListRooms(ep?.id ?? undefined));
-      setDestinations(await ipc.liveListDestinations(ep?.id ?? undefined));
+      // Local rows are cheap and change under us (a rename, a delete, a
+      // sync): always re-read, but reconcile so an unchanged list keeps
+      // its identity and nothing downstream re-renders or re-sorts.
+      const list = remember(key, await ipc.liveListRooms(ep?.id ?? undefined));
+      setRooms((prev) => reconcile(prev, list));
+      const dests = await ipc.liveListDestinations(ep?.id ?? undefined);
+      setDestinations((prev) => reconcile(prev, dests));
       setSnapshot(await ipc.liveEngineStatus());
     } catch {
       /* engine-less build — live sections render empty */
@@ -418,10 +433,10 @@ export function Home({
    * scene that is our camera — the one most recently on air, else the
    * first) in guest mode with the seat's green room over it. No browser,
    * no popout window. Room-less when this workspace has no rooms yet. */
-  const enterSeat = (seat: GuestSeatSpec) => {
-    const own = [...rooms].sort((a, b) => (b.last_live_at ?? "").localeCompare(a.last_live_at ?? ""))[0];
+  const enterSeat = useCallback((seat: GuestSeatSpec) => {
+    const own = [...roomsRef.current].sort((a, b) => (b.last_live_at ?? "").localeCompare(a.last_live_at ?? ""))[0];
     setView({ kind: "seat", room: own, seat });
-  };
+  }, []);
 
   const title = view.kind === "compose" ? "New post" : view.kind === "history" ? "Rundown" : view.kind === "console" ? "Settings" : null;
 
@@ -1125,6 +1140,10 @@ function ControlRoomHome({
 }) {
   const { mainId, endpointId: mainEndpointId } = useMainRoom(rooms);
   const seats = useRoomSeats(rooms, useActiveEndpoint());
+  // ONE order, sorted once per list: the main stage first, then by
+  // creation. Never by last_live_at — that changes the moment you leave a
+  // room, and the cards would trade places under the pointer.
+  const orderedRooms = useMemo(() => sortRooms(rooms, mainId), [rooms, mainId]);
   const [openMenuRoom, setOpenMenuRoom] = useState<string | null>(null);
   const [naming, setNaming] = useState(false);
   useEffect(() => {
@@ -1175,7 +1194,7 @@ function ControlRoomHome({
           {streaming && <span className="cr-live-pill">LIVE</span>}
         </div>
         <div className="cr-rooms">
-          {[...rooms].sort((a, b) => (a.id === mainId ? -1 : b.id === mainId ? 1 : 0)).map((room) => (
+          {orderedRooms.map((room) => (
             <RoomCard
               key={room.id}
               room={room}
@@ -1896,7 +1915,7 @@ function useActiveEndpoint(): EndpointInfo | null {
  * and "Book" proposes an APPEARANCE deal — we (the host) pay them to appear
  * on one of our rooms. Presence is delivery: admitting them from the Guests
  * panel settles the funded deal server-side; nothing here marks anything. */
-function NetworkRail({
+const NetworkRail = memo(function NetworkRail({
   rooms,
   onAddEndpoint,
   onEnterSeat,
@@ -1912,10 +1931,12 @@ function NetworkRail({
   // card instead (NetworkInviteCard). Gating the CALLS, not just the UI.
   const boomin = isBoomin(activeEp);
   const endpointId = boomin ? activeEp?.id ?? null : null;
-  const [status, setStatus] = useState<NetworkStatus | null>(null);
-  const [inbox, setInbox] = useState<NetworkInvitation[]>([]);
-  const [conns, setConns] = useState<NetworkConnectionRow[]>([]);
-  const [deals, setDeals] = useState<NetworkDeal[]>([]);
+  // Last-known first (lib/fetchCache.ts): the rail remounts every time you
+  // come back from a room; it must not pop in empty and fill up.
+  const [status, setStatus] = useState<NetworkStatus | null>(() => cached<NetworkStatus>(`net:status:${endpointId ?? ""}`) ?? null);
+  const [inbox, setInbox] = useState<NetworkInvitation[]>(() => cached<NetworkInvitation[]>(`net:inbox:${endpointId ?? ""}`) ?? []);
+  const [conns, setConns] = useState<NetworkConnectionRow[]>(() => cached<NetworkConnectionRow[]>(`net:conns:${endpointId ?? ""}`) ?? []);
+  const [deals, setDeals] = useState<NetworkDeal[]>(() => cached<NetworkDeal[]>(`net:deals:${endpointId ?? ""}`) ?? []);
   const [tab, setTab] = useState<"connected" | "find">("connected");
   const [slug, setSlug] = useState("");
   const [email, setEmail] = useState("");
@@ -1950,23 +1971,29 @@ function NetworkRail({
   const [bookCap, setBookCap] = useState("");
   const [bookHostRoom, setBookHostRoom] = useState("");
   /** The network's visible rooms — a sponsor picks the host's room among them. */
-  const [netRooms, setNetRooms] = useState<NetworkLiveRoom[]>([]);
+  const [netRooms, setNetRooms] = useState<NetworkLiveRoom[]>(() => cached<NetworkLiveRoom[]>(`net:live:${endpointId ?? ""}`) ?? []);
   /** The deal whose sheet (terms + answer) is open. */
   const [dealOpen, setDealOpen] = useState<string | null>(null);
 
-  const load = useCallback(async (id: string) => {
+  /** Runs on mount, focus/visibility, the 20 s poll and after an action —
+   * never on a scene change (nothing here depends on the room). `force`
+   * re-reads even a fresh cache (polls, actions); a plain call within the
+   * 30 s window answers from it. Every setter reconciles: an unchanged
+   * answer keeps its identity, so nothing pops. */
+  const load = useCallback(async (id: string, opts: { force?: boolean } = {}) => {
+    const get = <T,>(key: string, fetcher: () => Promise<T>) => swr(`net:${key}:${id}`, fetcher, opts).catch(() => cached<T>(`net:${key}:${id}`) ?? null);
     const [st, inv, cn, dl, lr] = await Promise.all([
-      network.status(id).catch(() => null),
-      network.invitations(id, "inbox").catch(() => null),
-      networkConnections(id).catch(() => null),
-      network.deals(id).catch(() => null),
-      network.liveRooms(id).catch(() => null),
+      get("status", () => network.status(id)),
+      get("inbox", () => network.invitations(id, "inbox").then((r) => (r?.invitations ?? []).filter((i) => i.status === "invited"))),
+      get("conns", () => networkConnections(id).then((r) => r?.connections ?? [])),
+      get("deals", () => network.deals(id).then((r) => r?.deals ?? [])),
+      get("live", () => network.liveRooms(id).then((r) => r?.rooms ?? [])),
     ]);
-    if (st) setStatus(st);
-    setNetRooms(lr?.rooms ?? []);
-    setInbox((inv?.invitations ?? []).filter((i) => i.status === "invited"));
-    setConns(cn?.connections ?? []);
-    setDeals(dl?.deals ?? []);
+    if (st) setStatus((p) => reconcile(p, st));
+    if (lr) setNetRooms((p) => reconcile(p, lr));
+    if (inv) setInbox((p) => reconcile(p, inv));
+    if (cn) setConns((p) => reconcile(p, cn));
+    if (dl) setDeals((p) => reconcile(p, dl));
   }, []);
 
   const dealsFor = (connectionId: string) =>
@@ -2005,7 +2032,7 @@ function NetworkRail({
       setBookRate("");
       setBookCap("");
       setBookHostRoom("");
-      void load(endpointId);
+      void load(endpointId, { force: true });
     } catch (e) {
       setNote(String(e).replace(/^Error:\s*/, ""));
     } finally {
@@ -2049,7 +2076,7 @@ function NetworkRail({
               ? action === "cancel" && !r.deal.funded_at ? "Withdrawn." : "Cancelled."
               : `Deal ${r.deal.status}.`,
       );
-      void load(endpointId);
+      void load(endpointId, { force: true });
     } catch (e) {
       setNote(String(e).replace(/^Error:\s*/, ""));
     } finally {
@@ -2080,7 +2107,7 @@ function NetworkRail({
       setNote(isRoomClosedError(e) ? "The host hasn't opened the room yet." : String(e).replace(/^Error:\s*/, ""));
     } finally {
       setEntering(null);
-      void load(endpointId);
+      void load(endpointId, { force: true });
     }
   };
 
@@ -2114,7 +2141,7 @@ function NetworkRail({
       setBookAmt("");
       setBookMin("");
       setBookFree(false);
-      void load(endpointId);
+      void load(endpointId, { force: true });
     } catch (e) {
       setNote(String(e).replace(/^Error:\s*/, ""));
     } finally {
@@ -2122,14 +2149,21 @@ function NetworkRail({
     }
   };
 
+  const mountedFor = useRef<string | null | undefined>(undefined);
   useEffect(() => {
-    // SWEEP first: this component outlives a workspace switch, and every
-    // piece of it — inbox, connections, deals, the Find card, the note, an
-    // open booking — belongs to the brand that just left.
-    setStatus(null);
-    setInbox([]);
-    setConns([]);
-    setDeals([]);
+    // A workspace switch: every piece of the rail belongs to the brand that
+    // just left. Swap to the NEW brand's last-known answers (lib/fetchCache
+    // keys carry the endpoint) — never the old brand's, never a flash of
+    // empty when the new one was seen before. The first run is the mount
+    // itself, already seeded from the cache.
+    if (mountedFor.current !== undefined && mountedFor.current !== endpointId) {
+      setStatus(cached<NetworkStatus>(`net:status:${endpointId ?? ""}`) ?? null);
+      setInbox(cached<NetworkInvitation[]>(`net:inbox:${endpointId ?? ""}`) ?? []);
+      setConns(cached<NetworkConnectionRow[]>(`net:conns:${endpointId ?? ""}`) ?? []);
+      setDeals(cached<NetworkDeal[]>(`net:deals:${endpointId ?? ""}`) ?? []);
+      setNetRooms(cached<NetworkLiveRoom[]>(`net:live:${endpointId ?? ""}`) ?? []);
+    }
+    mountedFor.current = endpointId;
     setCard(null);
     setNote(null);
     setSlug("");
@@ -2137,7 +2171,7 @@ function NetworkRail({
     setBookFree(false);
     setDealOpen(null);
     setTab("connected");
-    if (endpointId) void load(endpointId);
+    if (endpointId) void load(endpointId, { force: true });
   }, [endpointId, load]);
 
   // The counterparty moves the deal (accepts, funds, enters) on THEIR
@@ -2146,13 +2180,16 @@ function NetworkRail({
   // land); every local action above re-loads on its own.
   useEffect(() => {
     if (!endpointId) return;
-    const refresh = () => void load(endpointId);
+    // Focus returns answer from the cache inside the stale window; the
+    // poll always re-reads.
+    const refresh = () => void load(endpointId, { force: true });
+    const poll = () => void load(endpointId, { force: true });
     const onVisible = () => {
       if (document.visibilityState === "visible") refresh();
     };
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", onVisible);
-    const t = window.setInterval(refresh, 20_000);
+    const t = window.setInterval(poll, 20_000);
     return () => {
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", onVisible);
@@ -2208,7 +2245,7 @@ function NetworkRail({
       // A counter-invite IS acceptance server-side.
       setNote(res.kind === "connected" ? `Connected with ${card.brand.name}.` : `Invited ${card.brand.name}.`);
       setCard(await network.lookup(endpointId, card.brand.slug).catch(() => null) ?? null);
-      void load(endpointId);
+      void load(endpointId, { force: true });
     } catch (e) {
       setNote(String(e).replace(/^Error:\s*/, ""));
     } finally {
@@ -2219,7 +2256,7 @@ function NetworkRail({
   const act = async (id: string, action: "accept" | "decline") => {
     if (!endpointId) return;
     await network.act(endpointId, id, action).catch(() => {});
-    void load(endpointId);
+    void load(endpointId, { force: true });
     if (card) setCard(await network.lookup(endpointId, card.brand.slug).catch(() => null) ?? null);
   };
 
@@ -2592,7 +2629,7 @@ function NetworkRail({
       })()}
     </aside>
   );
-}
+});
 
 /** A room's guest link, one click from the card. Mints it on first use. */
 function RoomLinkChip({ room, onChanged }: { room: LiveRoom; onChanged: () => void }) {
@@ -2861,22 +2898,25 @@ function LiveNowStrip({ onEnterSeat }: { onEnterSeat: (seat: GuestSeatSpec) => v
   // endpoint — the id is null there, so the effect below never fires.
   const activeEp = useActiveEndpoint();
   const endpointId = isBoomin(activeEp) ? activeEp?.id ?? null : null;
-  const [rooms, setRooms] = useState<NetworkLiveRoom[]>([]);
+  const [rooms, setRooms] = useState<NetworkLiveRoom[]>(() => cached<NetworkLiveRoom[]>(`net:live:${endpointId ?? ""}`) ?? []);
   const [entering, setEntering] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
-    setRooms([]);
+    // Last-known for THIS endpoint first (shared key with the rail), then
+    // the poll — never an empty flash on the way back from a room.
+    setRooms(cached<NetworkLiveRoom[]>(`net:live:${endpointId ?? ""}`) ?? []);
     setNote(null);
     if (!endpointId) return;
     let alive = true;
+    let first = true;
     const poll = () => {
-      network
-        .liveRooms(endpointId)
-        .then((r) => {
-          if (alive) setRooms(r.rooms ?? []);
+      swr(`net:live:${endpointId}`, () => network.liveRooms(endpointId).then((r) => r.rooms ?? []), { force: !first })
+        .then((list) => {
+          if (alive) setRooms((p) => reconcile(p, list));
         })
         .catch(() => {});
+      first = false;
     };
     poll();
     const t = window.setInterval(poll, 30_000);
@@ -3002,22 +3042,42 @@ function FirewallBanner() {
  *  the local row registered against it. Self-hosted workspaces have none. */
 function useMainRoom(rooms: LiveRoom[]): { mainId: string | null; endpointId: string | null } {
   const [state, setState] = useState<{ mainId: string | null; endpointId: string | null }>({ mainId: null, endpointId: null });
+  // Re-run when the MAPPING inputs change (which rooms exist, which server
+  // rows they point at), not on every list identity — and read the server
+  // list through the cache, so a re-run inside the stale window costs
+  // nothing and the pin cannot blink off while a request is in flight.
+  const key = rooms.map((r) => `${r.id}:${parseConfig(r.config).server_room_id ?? ""}`).join("|");
+  const roomsRef = useRef(rooms);
+  roomsRef.current = rooms;
   useEffect(() => {
     let dead = false;
-    (async () => {
+    const run = async (force: boolean) => {
       const ep = await resolveActiveEndpoint().catch(() => null);
-      if (!ep || !isBoomin(ep)) { if (!dead) setState({ mainId: null, endpointId: null }); return; }
-      const { rooms: srv = [] } = await listServerRooms(ep.id).catch(() => ({ rooms: [] as ServerRoom[] }));
+      if (!ep || !isBoomin(ep)) {
+        if (!dead) setState((p) => reconcile(p, { mainId: null, endpointId: null }));
+        return;
+      }
+      const srv = await swr(`srvrooms:${ep.id}`, () => listServerRooms(ep.id).then((r) => r.rooms ?? []), { force }).catch(
+        () => cached<ServerRoom[]>(`srvrooms:${ep.id}`) ?? [],
+      );
       const main = srv.find((r) => r.is_default);
-      const local = main ? rooms.find((r) => parseConfig(r.config).server_room_id === main.id) : undefined;
-      if (!dead) setState({ mainId: local?.id ?? null, endpointId: ep.id });
-    })();
-    const on = () => void 0;
+      const local = main ? roomsRef.current.find((r) => parseConfig(r.config).server_room_id === main.id) : undefined;
+      if (!dead) setState((p) => reconcile(p, { mainId: local?.id ?? null, endpointId: ep.id }));
+    };
+    void run(false);
+    // A workspace switch or a room change elsewhere (make-main, sync): re-read.
+    const on = () => void run(true);
     window.addEventListener(WORKSPACE_EVENT, on);
-    return () => { dead = true; window.removeEventListener(WORKSPACE_EVENT, on); };
-  }, [rooms]);
+    window.addEventListener(ROOMS_EVENT, on);
+    return () => {
+      dead = true;
+      window.removeEventListener(WORKSPACE_EVENT, on);
+      window.removeEventListener(ROOMS_EVENT, on);
+    };
+  }, [key]);
   return state;
 }
+
 
 /** My seat in each registered room, before I enter it. Asked once per room
  *  list load on a Boomin workspace (a self-hosted token IS the host, so no

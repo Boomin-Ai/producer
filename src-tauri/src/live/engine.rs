@@ -645,6 +645,11 @@ pub enum Command {
     SetThumbRate {
         fps: u32,
     },
+    /// A seat's monitor wants the PROGRAM thumb (host side of
+    /// lib/monitorFeed.ts): the `program` target joins the thumb hub.
+    SetProgramThumb {
+        on: bool,
+    },
     GoLive(MultiConfig),
     StopLive,
     SetSources {
@@ -760,6 +765,7 @@ pub enum Command {
 fn cmd_name(c: &Command) -> &'static str {
     match c {
         Command::SetThumbRate { .. } => "SetThumbRate",
+        Command::SetProgramThumb { .. } => "SetProgramThumb",
         Command::GoLive { .. } => "GoLive",
         Command::StopLive { .. } => "StopLive",
         Command::SetSources { .. } => "SetSources",
@@ -987,6 +993,12 @@ impl LiveHandle {
     /// Demand control (docs/THUMB-PIPELINE-V2.md): 0 = previews off.
     pub fn set_thumb_rate(&self, fps: u32) {
         let _ = self.cmd.send(Command::SetThumbRate { fps });
+    }
+
+    /// The program thumb for a seat's monitor fallback (docs/THUMB-PIPELINE-V2.md
+    /// target `program`, PROGRAM_THUMB_FPS while on).
+    pub fn set_program_thumb(&self, on: bool) {
+        let _ = self.cmd.send(Command::SetProgramThumb { on });
     }
 
     pub fn start_recording(&self, stamp: String) -> Result<String, String> {
@@ -1667,18 +1679,14 @@ pub fn start(
                     }
                     let mut thumbs = Vec::with_capacity(work.len());
                     for (id, rgba) in &work {
-                        if rgba.len() != (graph::THUMB_W * graph::THUMB_H * 4) as usize {
+                        let (tw, th) = graph::thumb_dims(id);
+                        if rgba.len() != (tw * th * 4) as usize {
                             continue;
                         }
                         jpg.clear();
                         let enc = jpeg_encoder::Encoder::new(&mut jpg, 62);
                         if enc
-                            .encode(
-                                rgba,
-                                graph::THUMB_W as u16,
-                                graph::THUMB_H as u16,
-                                jpeg_encoder::ColorType::Rgba,
-                            )
+                            .encode(rgba, tw as u16, th as u16, jpeg_encoder::ColorType::Rgba)
                             .is_ok()
                         {
                             #[cfg(debug_assertions)]
@@ -2214,6 +2222,14 @@ pub fn start(
                         hub_engine
                             .fps
                             .store(fps.min(30), std::sync::atomic::Ordering::Relaxed);
+                    }
+                    Ok(Command::SetProgramThumb { on }) => {
+                        hub_engine
+                            .program_wanted
+                            .store(on, std::sync::atomic::Ordering::Relaxed);
+                        if let Some(g) = scene.as_ref() {
+                            hub_engine.publish_targets(g);
+                        }
                     }
                     Ok(Command::SetVideo { height, fps }) => {
                         if session.is_some() {

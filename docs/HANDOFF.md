@@ -3,6 +3,72 @@
 Both sessions read and append here. Commit to `main` (docs only), pull before reading.
 Newest entry at the top of each section.
 
+## For Windows — from Mac, 2026-09-05 (v0.4.30: the monitor cannot go black; honest staging)
+
+Your two-machine test on v0.4.29 found five things; all five are in v0.4.30 (PR "fix/monitor-frames-and-room-truth").
+
+**Root cause of the black monitor.** The host's sender captured the VIRTUAL CAMERA as a device
+(`getUserMedia` by label). That device only carries pixels while the virtual camera RUNS — and
+only Enter / Go Live / the "Virtual cam" chip start it. A host idling in a room had no running
+device: the leg connected (tag appeared), the track arrived muted, black frame, then "waiting".
+Now: (a) the host's Producer starts the virtual camera the moment a `monitor: true` row appears
+on its roster and stops it when the last one leaves (only if the host did not switch it on
+themselves — the chip takes ownership back); the sender keeps looking for the device every 2 s
+and tells the seat what it finds. (b) A second picture that cannot go black: the engine's new
+`program` thumb (512×288 JPEG, 8 fps, produced only while a seat asks) rides a DATA CHANNEL on the
+same monitor leg; the seat switches to it after 5 s without a DECODED frame (counted with
+requestVideoFrameCallback — the one signal a black/muted track cannot fake) and back the moment
+frames flow. Label on the fallback: "Live · 8 fps preview". Tag renamed PROGRAM → HOST OUTPUT;
+placeholder now names the cause ("no frames yet (the host's virtual camera isn't running)" /
+"(host's camera permission?)").
+
+**Debug log.** Every stage of both halves logs under `[monitor]` to `producer-ui.log` —
+macOS `~/Library/Logs/ai.boomin.producer/` (bundle id per tauri.conf), Windows
+`%LOCALAPPDATA%\<bundle id>\logs\`. Zip both machines' files with any report.
+
+**Honest staging (what drives the mod's Stage toggle).** The server's versioned stage list
+(`POST …/stage` → `{on_stage, version}`, pushed as a `stage` frame on the room channel). The mod's
+click POSTs the wish; that push is its own ECHO and does not flip the row (it shows "Staging…").
+The HOST's Producer receives the frame, tries `showGuestInSlot` for each requested guest, then
+posts what its set actually shows — unconditionally, so the version bumps even when nothing
+changed. Only that newer frame flips the mod's row; if the guest is missing from it the row snaps
+back with "No free guest slot on the host's set — ask the host to add one" (no auto-add of slots).
+12 s without any newer frame → "The host's Producer didn't confirm — is the host in the room?".
+Order / remove re-read the roster instead of guessing. Reducer: `src/lib/stageTruth.ts`,
+tests `server/test/stage-truth.test.ts`.
+
+**Also:** top-bar "Open" removed — Link copies, its ▾ has "Open guest page in browser". Home's ON
+AIR order is fixed (main stage first, then by creation; `src/lib/roomOrder.ts`), and the room
+surface + Network rail mount on last-known data and refetch in the background (30 s stale window,
+`src/lib/fetchCache.ts`; the rail is memoized and only loads on mount / focus / poll / actions).
+Chat channels belong to the ROOM: the host publishes its twitch/kick/youtube handles over the
+monitor leg (Boomin's room config schema is strict, so the leg is the room-scoped transport) and
+keeps them on the room document (`chat_channels`); a mod's chat panel reads them, connects the
+read-only ingest, and cannot edit them.
+
+Test on v0.4.30 as the MOD (Windows) against the Mac host:
+1. Host opens the room on the Mac and does NOT press Enter or the cam chip. Mod opens the same
+   room: within ~10 s the Mac's "Virtual cam" chip lights on its own, and the mod's stage shows
+   HOST OUTPUT (video, ~15 fps). Mac footer log: `[monitor] host: a monitor seat is present —
+   starting the virtual camera`.
+2. Kill the video leg on purpose (Mac: System Settings → Privacy → Camera → deny Producer, or
+   stop the cam from the chip): within ~5 s the mod's stage shows the 8 fps preview with the
+   "Live · 8 fps preview" label — never black, never the placeholder while the host is up.
+   Re-allow: the video returns and the label goes.
+3. Mod leaves the room: the Mac's cam chip turns off (auto-started); if the host had turned it on
+   themselves first, it stays on.
+4. Mod clicks Stage on a guest while the host's set has NO free guest slot: the row shows
+   "Staging…" then snaps back with the no-slot message; the Mac shows a banner naming the guest.
+   Host adds a Guest slot (Sources → + → Guest slot); mod clicks Stage again: row goes ON only
+   after the guest appears on the Mac's set. Take off the stage: same, in reverse.
+5. Quit the host's Producer, then click Stage on the mod: 12 s later the row snaps back with
+   "didn't confirm".
+6. Host sets Twitch/Kick handles in its chat plug: the mod's chat plug lists them read-only and
+   the mod's chat panel reads messages. Mod's own saved handles are untouched (check after Back).
+7. Home: leave a room — the cards do not move; the Network rail does not pop empty and refill.
+8. Top bar: no "Open" chip; Link ▾ → "Open guest page in browser" opens it.
+Report under "From Windows" with both `producer-ui.log` files.
+
 ## For Windows — from Mac, 2026-09-05 (v0.4.28: the mod's stage shows the HOST's program)
 
 The v0.4.26 gap ("mod program monitor = return-feed grant, not built") is closed in
