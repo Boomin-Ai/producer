@@ -71,7 +71,15 @@ export interface ParticipantLike {
   kind?: unknown;
   joined_via?: unknown;
   guest_brand?: unknown;
+  /** A PROGRAM MONITOR (Boomin `POST /live/rooms/:id/monitor`): a seat's
+   *  return-feed participant. True → never a guest source, never a slot,
+   *  never a guests-panel row; the host only opens the return leg to it. */
+  monitor?: unknown;
 }
+
+/** Is this roster row a seat's program monitor? Strictly `true`: an older
+ *  server sends nothing, and nothing must read as "hide this guest". */
+export const isMonitor = (p: ParticipantLike | null | undefined): boolean => p?.monitor === true;
 
 /** Grants as a Set. ABSENT → the default bundle. PRESENT (even empty) → exactly
  *  what the server said: an empty array is a participant who may do nothing,
@@ -233,12 +241,16 @@ export function sourceIdsFor(guestId: string): { camera: string; screen: string 
 }
 
 /** Which guest source ids the roster wants alive: the camera for every
- *  admitted guest, plus a screen source for those who hold media.screen. */
+ *  admitted guest, plus a screen source for those who hold media.screen.
+ *  A program monitor is never a source: it supplies nothing to the set, it
+ *  only receives the program, so the reconcile must not spawn a render page
+ *  (a hidden CEF item, a stage slot, a "guest" in the panel) for it. */
 export function wantedSourceIds<T extends ParticipantLike & { id: string }>(
   admitted: readonly T[],
 ): Map<string, { guest: T; track: TrackLabel }> {
   const out = new Map<string, { guest: T; track: TrackLabel }>();
   for (const guest of admitted) {
+    if (isMonitor(guest)) continue;
     const ids = sourceIdsFor(guest.id);
     out.set(ids.camera, { guest, track: "camera" });
     if (resolveGrants(guest).has("media.screen")) out.set(ids.screen, { guest, track: "screen" });

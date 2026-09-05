@@ -178,10 +178,22 @@ mic, no virtual camera, no overlay — the stage is a program monitor with a
 placeholder, the Scenes panel is the host's directory only, sources / mixer show
 the one-line note, and the stage toolbar + layout-edit toggle are hidden. Admit /
 Decline on waiting guests follow `can.control` (host, manager, mod).
-**Gap — mod program monitor = return-feed grant, not built:** the host's program
-reaches guests as the return feed (`media.return_feed`, HostLink `peer:"main"`),
-but a mod's Producer holds no participant row on the room, so it has nothing to
-receive that feed on. Building it means a `kind: producer` participant row with
-`media.return_feed` (and only that) that the host's roster does NOT reconcile
-into a guest source, plus the guest render page in a webview on the stage. Until
-then the placeholder says so.
+**Program monitor (v0.4.28, `feat/mod-program-monitor`) — gap closed.** The
+host's program reaches guests as the return feed (`media.return_feed`, HostLink
+`peer:"main"`); a seat now holds a participant row to receive it on. On a Boomin
+room a non-host seat calls `POST /v1/app/live/rooms/:id/monitor` (any
+roster-capable seat: host / manager / mod / viewer; a guest-link visitor has no
+session), which mints-or-reuses ONE row per (room, user): `kind: producer`,
+`producer_ref "monitor:<userId>"`, admitted at birth, grants = exactly
+`media.return_feed`, flagged `monitor: true` on the roster. Both halves of the
+leg run in Producer's own webview (`src/lib/monitorFeed.ts`): the seat's
+`ProgramMonitor` is the guest half receive-only (status poll by invite code,
+guest-side session, `program-ready`, the program on the stage full-bleed); the
+host's `MonitorSender` is the render page's return leg without the page — one
+per monitor row, virtual camera at 640×360 / 15 fps, video only, no host mic.
+The host's roster tick drops `monitor: true` rows at the one place the roster
+enters (`wantedSourceIds` skips them too, unit-tested), so a monitor is never a
+guest source, a stage slot or a guests-panel row. Leaving the room ends the row
+(`DELETE …/monitor`); a revoked room grant or the run end ends it server-side.
+**Open server:** a mod link carries no media leg, so the placeholder stays there
+and says so.

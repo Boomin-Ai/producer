@@ -751,6 +751,10 @@ export interface RoomGuest {
   producer_ref?: string | null;
   /** `control` = a mod seat behind the host's mod link; never on the set. */
   seat?: "guest" | "control" | string | null;
+  /** A seat's PROGRAM MONITOR (Boomin `POST /live/rooms/:id/monitor`): a
+   * return-feed-only participant. Hidden from the guest set — the host only
+   * sends the program to it (lib/monitorFeed.ts). */
+  monitor?: boolean | null;
   guest_brand?: { id?: string; name?: string; slug?: string } | null;
   /** Host-set slot order (0 = first) and the join-time still — both on the
    * roster already; read by the mod view, which has no engine thumbs. */
