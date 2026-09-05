@@ -445,6 +445,33 @@ pub async fn room_guests(
 }
 
 #[tauri::command]
+pub async fn room_access(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .room_access(&room_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn room_guest_order(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+    order: Vec<String>,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .room_guest_order(&room_id, &order)
+        .await
+}
+
+#[tauri::command]
 pub async fn room_join_link(
     state: State<'_, AppState>,
     endpoint_id: String,

@@ -71,6 +71,16 @@ import {
   type RoomExtra,
 } from "../lib/room";
 import { homePaintedMs, takeRoomClick } from "../lib/perf";
+import {
+  KIND_LABEL,
+  moveInOrder,
+  participantKind,
+  resolveGrants,
+  roomRoleFrom,
+  sourceIdsFor,
+  wantedSourceIds,
+  type RoomRole,
+} from "../lib/participants";
 
 // Transport-truthful copy (M-L4 finding: an RTMP session can look healthy
 // while the platform discards it — only the dashboard confirms LIVE).
@@ -634,26 +644,44 @@ function GuestPanel({
   roster,
   error,
   items,
+  role,
+  stage,
   onAdmit,
   onRemove,
   onMute,
   onShow,
+  onStageToggle,
+  onOrder,
 }: {
   thumbs: Record<string, string>;
   roster: RoomGuest[];
   error: string | null;
   items: LiveItem[];
+  /** host = this Producer runs the show (unchanged path). mod = a member
+   * holding room control on someone else's room: admit / remove / stage /
+   * order through the server, nothing local. viewer = read-only. */
+  role: RoomRole;
+  /** The stage list as THIS client last posted it (mods only). */
+  stage: string[];
   onAdmit: (id: string) => void;
   onRemove: (id: string) => void;
   onMute: (sourceId: string, muted: boolean) => void;
   onShow: (sourceId: string, show: boolean) => void;
+  onStageToggle: (guestId: string) => void;
+  onOrder: (guestId: string, dir: -1 | 1) => void;
 }) {
   // render_url is the server's own statement of "this one may go on the
   // host". Waiting guests have none, so the gate is enforced there rather
   // than by us choosing not to draw someone.
   const waiting = roster.filter((g) => !g.render_url);
-  const live = roster.filter((g) => !!g.render_url);
+  const admitted = roster.filter((g) => !!g.render_url);
+  // A mod sees the host's slot order (position), so the arrows mean
+  // something. The host's own list is left exactly as it was.
+  const live = role === "host"
+    ? admitted
+    : [...admitted].sort((a, b) => (a.position ?? 1e9) - (b.position ?? 1e9));
   const ROOM_CAP = 8;
+  const canControl = role !== "viewer";
 
 
   return (
@@ -670,27 +698,70 @@ function GuestPanel({
             <div key={g.id} className="rm-guest waiting">
               <span className="rm-wait-dot" />
               <span className="rm-guest-name">{g.display_name || "Guest"}</span>
-              <button
-                className="rm-guest-admit"
-                disabled={live.length >= ROOM_CAP}
-                title={live.length >= ROOM_CAP ? `Room is full (${ROOM_CAP})` : "Bring them into the room"}
-                onClick={() => onAdmit(g.id)}
-              >
-                Admit
-              </button>
-              <button className="rm-row-edit" title="Remove" onClick={() => onRemove(g.id)}>
-                {ic.x}
-              </button>
+              {/* Kind = identity strength, never what they may do. */}
+              <span className={`rm-kind ${participantKind(g)}`}>{KIND_LABEL[participantKind(g)]}</span>
+              {canControl && (
+                <>
+                  <button
+                    className="rm-guest-admit"
+                    disabled={live.length >= ROOM_CAP}
+                    title={live.length >= ROOM_CAP ? `Room is full (${ROOM_CAP})` : "Bring them into the room"}
+                    onClick={() => onAdmit(g.id)}
+                  >
+                    Admit
+                  </button>
+                  <button className="rm-row-edit" title="Remove" onClick={() => onRemove(g.id)}>
+                    {ic.x}
+                  </button>
+                </>
+              )}
             </div>
           ))}
-          {live.map((g) => {
-            const item = items.find((i) => i.id === `guest-${g.id.slice(0, 8)}`);
+          {role !== "host" && live.map((g) => {
+            // Not our engine: no thumbs, no sources, no mute. The stage is
+            // the SERVER's list, and a mod edits it directly.
+            const onStage = stage.includes(g.id);
+            const q = (g.quality ?? g.connection_quality ?? "unknown") as string;
+            return (
+              <div key={g.id} className={`rm-gcard${onStage ? " on" : ""}`}>
+                {g.snapshot ? <img className="rm-gcard-img" src={g.snapshot} alt="" /> : <span className="rm-gcard-img empty" />}
+                <div className="rm-gcard-id">
+                  <span className={`rm-qual ${q}`} />
+                  <span className="rm-gcard-name">{g.display_name || "Guest"}</span>
+                  <span className={`rm-kind ${participantKind(g)}`}>{KIND_LABEL[participantKind(g)]}</span>
+                  {onStage && <span className="rm-gcard-live">ON</span>}
+                </div>
+                {canControl && (
+                  <div className="rm-gcard-ctl">
+                    <button className="rm-row-edit" title="Move up the order" onClick={() => onOrder(g.id, -1)}>↑</button>
+                    <button
+                      className={`rm-guest-stage${onStage ? " on" : ""}`}
+                      title={onStage ? "Take off the stage" : "Put on the stage"}
+                      onClick={() => onStageToggle(g.id)}
+                    >
+                      {onStage ? "On stage" : "Stage"}
+                    </button>
+                    <button className="rm-row-edit" title="Move down the order" onClick={() => onOrder(g.id, 1)}>↓</button>
+                    <button className="rm-row-edit" title="Remove" onClick={() => onRemove(g.id)}>
+                      {ic.x}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {role === "host" && live.map((g) => {
+            const ids = sourceIdsFor(g.id);
+            const item = items.find((i) => i.id === ids.camera);
+            // The share is its own source; the button exists only for a guest
+            // who may share (media.screen) — grants decide, never the kind.
+            const screenItem = resolveGrants(g).has("media.screen") ? items.find((i) => i.id === ids.screen) : undefined;
             const muted = item?.muted ?? false;
             const q = (g.quality ?? g.connection_quality ?? "unknown") as string;
             return (
               <div key={g.id} className={`rm-gcard${item?.visible ? " on" : ""}`}>
-                {thumbs[`guest-${g.id.slice(0, 8)}`] ? (
-                  <img className="rm-gcard-img" src={thumbs[`guest-${g.id.slice(0, 8)}`]} alt="" />
+                {thumbs[ids.camera] ? (
+                  <img className="rm-gcard-img" src={thumbs[ids.camera]} alt="" />
                 ) : (
                   <span className="rm-gcard-img empty" />
                 )}
@@ -704,6 +775,7 @@ function GuestPanel({
                       : "No recent reading"
                   } />
                   <span className="rm-gcard-name">{g.display_name || "Guest"}</span>
+                  <span className={`rm-kind ${participantKind(g)}`}>{KIND_LABEL[participantKind(g)]}</span>
                   {item?.visible && <span className="rm-gcard-live">ON</span>}
                 </div>
                 {/* Controls: the card is the feed; hands appear on hover. */}
@@ -717,6 +789,15 @@ function GuestPanel({
                   >
                     {item?.visible ? "On screen" : "Show"}
                   </button>
+                  {screenItem && (
+                    <button
+                      className={`rm-guest-stage${screenItem.visible ? " on" : ""}`}
+                      title={screenItem.visible ? "Take their screen off (they keep sharing)" : "Pop their screen share into the next free guest slot"}
+                      onClick={() => onShow(screenItem.id, !screenItem.visible)}
+                    >
+                      {screenItem.visible ? "Screen on" : "Screen"}
+                    </button>
+                  )}
                   <button
                     className={`rm-row-edit${muted ? " muted" : ""}`}
                     title={muted ? "Unmute" : "Mute"}
@@ -2541,6 +2622,18 @@ export function LiveView({
   const rosterRef = useRef<RoomGuest[]>([]);
   rosterRef.current = roster;
   const endpointRef = useRef<string | null>(null);
+  // Who WE are in this room. "host" until the access route says otherwise
+  // (and forever, on a server without the route). A mod's Producer must not
+  // load guest render pages — those would be a second host peer on every
+  // guest's channel — nor post a stage list derived from its own engine.
+  const [roomRole, setRoomRole] = useState<RoomRole>("host");
+  const roomRoleRef = useRef<RoomRole>("host");
+  const accessAsked = useRef(false);
+  /** The stage list as this mod last posted it. The roster does not read
+   * the stage back yet (contract note in the PR), so this is a local view. */
+  const [modStage, setModStage] = useState<string[]>([]);
+  const modStageRef = useRef<string[]>([]);
+  modStageRef.current = modStage;
   // Which guests the auto-layout last arranged. The tick may not re-flow an
   // unchanged set: the host dragging a guest smaller must WIN — auto-layout
   // exists for joins/leaves, not as a 3-second undo of manual placement.
@@ -2622,7 +2715,7 @@ export function LiveView({
     // it as a capture device and sends it down the peer connection it already
     // holds. Start it on admit so nobody discovers it was off after someone
     // is already talking into oblivion.
-    if (!vcamOn && vcamState?.installed) {
+    if (roomRoleRef.current === "host" && !vcamOn && vcamState?.installed) {
       await vcamIpc.output(true).catch(() => {});
     }
     await guestsIpc.admit(endpointRef.current, cfg.server_room_id, id).catch((e) =>
@@ -2633,6 +2726,34 @@ export function LiveView({
   const removeGuest = async (id: string) => {
     if (!endpointRef.current || !cfg.server_room_id) return;
     await guestsIpc.revoke(endpointRef.current, id).catch(() => {});
+  };
+
+  /** Mod: put a guest on or off the SERVER's stage list. Always the full
+   * list, so a dropped call is corrected by the next one. */
+  const modStageToggle = async (guestId: string) => {
+    if (!endpointRef.current || !cfg.server_room_id) return;
+    const cur = modStageRef.current;
+    const next = cur.includes(guestId) ? cur.filter((x) => x !== guestId) : [...cur, guestId];
+    setModStage(next);
+    await guestsIpc.setStage(endpointRef.current, cfg.server_room_id, next).catch((e) => {
+      setModStage(cur);
+      setGuestErr(String(e).replace(/^Error:\s*/, ""));
+    });
+  };
+
+  /** Mod: nudge a guest one step in the slot order and post the full list. */
+  const modOrder = async (guestId: string, dir: -1 | 1) => {
+    if (!endpointRef.current || !cfg.server_room_id) return;
+    const admitted = rosterRef.current
+      .filter((g) => !!g.render_url)
+      .sort((a, b) => (a.position ?? 1e9) - (b.position ?? 1e9))
+      .map((g) => g.id);
+    const next = moveInOrder(admitted, guestId, dir);
+    // Optimistic: reflect the order now; the next roster poll confirms it.
+    setRoster((rs) => rs.map((g) => ({ ...g, position: next.indexOf(g.id) })));
+    await guestsIpc.order(endpointRef.current, cfg.server_room_id, next).catch((e) =>
+      setGuestErr(String(e).replace(/^Error:\s*/, "")),
+    );
   };
 
   /** Mint (or reuse) the room's shareable link. */
@@ -3751,11 +3872,25 @@ export function LiveView({
           if (!ep) return;
           endpointRef.current = ep.id;
         }
+        if (!accessAsked.current) {
+          accessAsked.current = true;
+          // Once per room open. A failure (offline blip) reads as "host",
+          // which is the pre-route behaviour and the safe default for the
+          // person who opened the room on their own machine.
+          const acc = await guestsIpc.access(endpointRef.current, cfg.server_room_id!).catch(() => null);
+          const role = roomRoleFrom(acc);
+          roomRoleRef.current = role;
+          setRoomRole(role);
+        }
         const res = await guestsIpc.roster(endpointRef.current, cfg.server_room_id!);
         if (!alive) return;
         const list = res.guests ?? [];
         setRoster(list);
         setGuestErr(null);
+        // Not the host: the roster is all we do. No render pages (they would
+        // be a second host peer on every guest's channel), no stage post
+        // from our engine (we have none for this room).
+        if (roomRoleRef.current !== "host") return;
 
         // Only guests the host has admitted get a source. A waiting guest is
         // deliberately NOT on the broadcast: the room link is public, so
@@ -3765,19 +3900,30 @@ export function LiveView({
         const present = new Set(
           (sources.items ?? []).filter((i) => i.kind === "guest").map((i) => i.id),
         );
-        const wanted = new Map(live.map((g) => [`guest-${g.id.slice(0, 8)}`, g]));
+        // One source per TRACK: the camera for everyone, and a second
+        // "<name> · screen" source for a guest who holds media.screen. The
+        // screen page shares the guest's signaling channel and receives only
+        // the share, so the host frames it independently of the person.
+        const wanted = wantedSourceIds(live);
 
-        for (const [id, g] of wanted) {
+        for (const [id, { guest: g, track }] of wanted) {
           if (!present.has(id)) {
-            // &program= names the virtual camera so the page captures the
-            // SHOW rather than guessing at a device; &mic= does the same for
-            // the host's microphone. Both are labels, because a browser's
-            // deviceIds are salted per origin and can never match ours.
             const u = new URL(g.render_url!);
-            if (micDeviceLabel) u.searchParams.set("mic", micDeviceLabel);
-            u.searchParams.set("program", vcamState?.device_name ?? "Producer Virtual Camera");
+            if (track === "screen") {
+              u.searchParams.set("track", "screen");
+            } else {
+              // &program= names the virtual camera so the page captures the
+              // SHOW rather than guessing at a device; &mic= does the same for
+              // the host's microphone. Both are labels, because a browser's
+              // deviceIds are salted per origin and can never match ours.
+              if (micDeviceLabel) u.searchParams.set("mic", micDeviceLabel);
+              u.searchParams.set("program", vcamState?.device_name ?? "Producer Virtual Camera");
+              // No media.return_feed → the page never opens the return leg.
+              if (!resolveGrants(g).has("media.return_feed")) u.searchParams.set("feed", "0");
+            }
+            const name = g.display_name || "Guest";
             await extraSources
-              .add(id, g.display_name || "Guest", { kind: "guest", url: u.toString() })
+              .add(id, track === "screen" ? `${name} · screen` : name, { kind: "guest", url: u.toString() })
               .catch(() => {});
             // Hidden-at-birth is the engine's job (see add_extra): sending a
             // follow-up hide raced the creation and errored with "no item".
@@ -3822,7 +3968,7 @@ export function LiveView({
         // list is a cache for reconnecting guests, never read back here —
         // scene-item visibility in the engine stays the only truth.
         const stageIds = shown
-          .map((it) => live.find((g) => `guest-${g.id.slice(0, 8)}` === it.id)?.id)
+          .map((it) => live.find((g) => sourceIdsFor(g.id).camera === it.id)?.id)
           .filter((id): id is string => !!id)
           .sort();
         const stageKey = stageIds.join(",");
@@ -4387,10 +4533,14 @@ export function LiveView({
             roster={roster}
             error={guestErr}
             items={(sources.items ?? []).filter((i) => i.kind === "guest")}
+            role={roomRole}
+            stage={modStage}
             onAdmit={admitGuest}
             onRemove={removeGuest}
             onMute={(id, muted) => setSourceAudio(id, undefined, muted).catch(() => {})}
             onShow={(id, show) => (show ? void showGuestInSlot(id) : hideGuestFromSlot(id))}
+            onStageToggle={(id) => void modStageToggle(id)}
+            onOrder={(id, dir) => void modOrder(id, dir)}
           />
         );
       case "mixer":

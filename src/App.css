@@ -6349,6 +6349,35 @@ textarea::placeholder {
   border-radius: 5px;
   padding: 2px 5px;
 }
+/* Kind badge: who they ARE (visitor / connection / member / producer), never
+   what they may do — that is the grants, and shows up as controls. Muted on
+   purpose: it is a label, not a status. */
+.rm-kind {
+  flex: 0 0 auto;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(238, 241, 246, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+.rm-kind.member,
+.rm-kind.host {
+  color: #06251b;
+  background: rgba(52, 211, 153, 0.85);
+  border-color: transparent;
+}
+.rm-kind.connection,
+.rm-kind.producer {
+  color: #0a1a2e;
+  background: rgba(125, 180, 255, 0.85);
+  border-color: transparent;
+}
+.rm-guest.waiting .rm-kind {
+  margin-left: 2px;
+}
 .rm-gcard-ctl {
   position: absolute;
   inset: 0;

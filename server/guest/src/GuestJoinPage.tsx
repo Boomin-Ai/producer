@@ -10,12 +10,14 @@
 // They see themselves, pick a camera and mic, and press one button. Media then
 // flows PEER-TO-PEER to the host's machine — it never touches the server.
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useSearchParams } from "./router";
 import { CONNECT_API_BASE_URL } from "./apiConfig";
+import { controlsFor, resolveGrants, type ParticipantLike } from "./participants";
+import { HostLink, signalingWsUrl, type Session } from "./hostLink";
 
-type Guest = { id: string; display_name: string; status: string };
-type Session = { signaling_ticket: string; signaling_url: string; ice_servers: RTCIceServer[] };
+/** `grants` / `kind` ride on the invite row; absent → the default bundle. */
+type Guest = ParticipantLike & { id: string; display_name: string; status: string };
 type Phase = "loading" | "ready" | "waiting" | "connecting" | "live" | "gone" | "error";
 
 /** Display-name prefill from `?name=` — plain text only, capped so a crafted
@@ -50,6 +52,12 @@ export default function GuestJoinPage({ code }: { code: string }) {
   const preferProducerCam = search.get("cam") === "producer";
   const nameHint = sanitizeName(search.get("name"));
   const [guest, setGuest] = useState<Guest | null>(null);
+  // The invite row is read BEFORE the preview opens, so here the grants gate
+  // the capture itself: a participant without media.camera is never asked
+  // for a camera at all.
+  const can = useMemo(() => controlsFor(resolveGrants(guest)), [guest]);
+  const canRef = useRef(can);
+  canRef.current = can;
   const [phase, setPhase] = useState<Phase>("loading");
   const [message, setMessage] = useState("");
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
@@ -63,11 +71,18 @@ export default function GuestJoinPage({ code }: { code: string }) {
   const [cameraOff, setCameraOff] = useState(false);
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
+  /** Hide my own corner tile once the program is up (tap to hide). */
+  const [selfHidden, setSelfHidden] = useState(false);
+  // iOS keeps the return leg light: it asks for the program only once the
+  // connection has settled (see HostLink.delayReturnFeedMs).
+  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   /** False after unmount — the waiting poll must stop, not zombie on. */
   const aliveRef = useRef(true);
   const streamRef = useRef<MediaStream | null>(null);
-  const pcRef = useRef<RTCPeerConnection | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+  /** Camera peer, plus the screen peer while sharing. */
+  const linkRef = useRef<HostLink | null>(null);
+  const [sharing, setSharing] = useState(false);
 
   // Look up the invite. A dead link says so plainly rather than 404ing into the
   // app shell — this person did nothing wrong and needs to know to ask for a new one.
@@ -94,6 +109,8 @@ export default function GuestJoinPage({ code }: { code: string }) {
   // Preview. Labels are empty until permission is granted, so enumerate AFTER
   // getUserMedia or the pickers render as "Microphone 1", "Microphone 2".
   const startPreview = useCallback(async (camera?: string, mic?: string) => {
+    const c = canRef.current;
+    if (!c.camera && !c.mic) { streamRef.current = null; return; }
     try {
       streamRef.current?.getTracks().forEach((t) => t.stop());
       // 720p30 cap: guests publish into a show that composites at most four of
@@ -102,8 +119,8 @@ export default function GuestJoinPage({ code }: { code: string }) {
       // lets browsers downscale rather than throw on cameras with odd modes.
       const cap = { width: { ideal: 1280, max: 1280 }, height: { ideal: 720, max: 720 }, frameRate: { ideal: 30, max: 30 } };
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: camera ? { deviceId: { exact: camera }, ...cap } : cap,
-        audio: mic ? { deviceId: { exact: mic }, echoCancellation: true } : { echoCancellation: true },
+        video: !c.camera ? false : camera ? { deviceId: { exact: camera }, ...cap } : cap,
+        audio: !c.mic ? false : mic ? { deviceId: { exact: mic }, echoCancellation: true } : { echoCancellation: true },
       });
       streamRef.current = stream;
       if (previewRef.current) previewRef.current.srcObject = stream;
@@ -127,7 +144,9 @@ export default function GuestJoinPage({ code }: { code: string }) {
       }
       if (!mic) setMicId(stream.getAudioTracks()[0]?.getSettings().deviceId ?? "");
     } catch {
-      setMessage("We need camera and microphone access to put you on the show.");
+      setMessage(c.camera && c.mic
+        ? "We need camera and microphone access to put you on the show."
+        : c.camera ? "We need camera access to put you on the show." : "We need microphone access to put you on the show.");
     }
   }, [preferProducerCam]);
 
@@ -138,12 +157,12 @@ export default function GuestJoinPage({ code }: { code: string }) {
   useEffect(() => () => {
     aliveRef.current = false;
     streamRef.current?.getTracks().forEach((t) => t.stop());
-    try { wsRef.current?.close(); } catch { /* already closed */ }
-    try { pcRef.current?.close(); } catch { /* already closed */ }
+    linkRef.current?.close();
   }, []);
 
   const goLive = useCallback(async () => {
-    if (!code || !streamRef.current) return;
+    // No stream is fine when no media grant exists: they join to receive.
+    if (!code || (!streamRef.current && (can.camera || can.mic))) return;
     setPhase("connecting");
     try {
       // Only an `invited` row has anything to accept. Knock and deal guests
@@ -188,75 +207,38 @@ export default function GuestJoinPage({ code }: { code: string }) {
       if (!res.ok) { setPhase("error"); setMessage("Could not join the show."); return; }
       const session = (await res.json()) as Session;
 
-      const pc = new RTCPeerConnection({ iceServers: session.ice_servers });
-      pcRef.current = pc;
-      streamRef.current.getTracks().forEach((t) => pc.addTrack(t, streamRef.current!));
-
-      // The host's return audio — so the guest can actually hold a conversation
-      // instead of hearing the broadcast on delay.
-      pc.ontrack = (event) => {
-        const stream = event.streams[0];
-        if (!stream) return;
-        if (event.track.kind === "video") {
+      linkRef.current?.close();
+      linkRef.current = new HostLink({
+        session,
+        wsUrl: signalingWsUrl(CONNECT_API_BASE_URL, session),
+        localStream: () => streamRef.current,
+        // The return leg is a grant (media.return_feed). This page never
+        // asked for the program before — deal guests saw only the host's
+        // mic — so this is the first time an invited guest sees the show.
+        returnFeed: can.returnFeed,
+        delayReturnFeedMs: isIOS ? 5000 : 0,
+        onProgram: (stream) => {
           // The program return — show the guest what is actually on air.
+          if (!canRef.current.returnFeed) return;
           const v = programRef.current;
           if (v) { v.srcObject = stream; void v.play().catch(() => {}); }
-          setHasProgram(true);
-        } else {
+          setHasProgram(!!stream);
+        },
+        onHostAudio: (stream) => {
+          // The host's voice, so the guest can hold a conversation instead of
+          // hearing the broadcast on delay. Gated like the picture.
+          if (!canRef.current.returnFeed) return;
           const el = document.getElementById("host-return") as HTMLAudioElement | null;
           if (el) { el.srcObject = stream; void el.play().catch(() => {}); }
-        }
-      };
-
-      const api = new URL(CONNECT_API_BASE_URL, window.location.origin);
-      const wsUrl = new URL(session.signaling_url, api.origin);
-      wsUrl.protocol = api.protocol === "https:" ? "wss:" : "ws:";
-      const ws = new WebSocket(wsUrl.toString());
-      wsRef.current = ws;
-      const send = (payload: unknown) => {
-        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "signal", payload }));
-      };
-
-      let makingOffer = false;
-      pc.onicecandidate = (e) => { if (e.candidate) send({ kind: "ice", candidate: e.candidate.toJSON() }); };
-      pc.onnegotiationneeded = async () => {
-        try {
-          makingOffer = true;
-          await pc.setLocalDescription();
-          send({ kind: "sdp", description: pc.localDescription });
-        } catch { /* retried on reconnect */ } finally { makingOffer = false; }
-      };
-      pc.onconnectionstatechange = () => {
-        if (pc.connectionState === "connected") setPhase("live");
-        if (pc.connectionState === "failed") pc.restartIce();
-      };
-
-      ws.onopen = () => send({ kind: "hello" });
-      ws.onmessage = async (event) => {
-        let frame: { type?: string; payload?: { kind?: string; description?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit } };
-        try { frame = JSON.parse(String(event.data)); } catch { return; }
-        if (frame.type !== "signal" || !frame.payload) return;
-        const msg = frame.payload;
-        try {
-          if (msg.kind === "sdp" && msg.description) {
-            const collision = msg.description.type === "offer" && (makingOffer || pc.signalingState !== "stable");
-            // POLITE peer: on a collision we roll back and accept theirs.
-            if (collision) await pc.setLocalDescription({ type: "rollback" } as RTCLocalSessionDescriptionInit);
-            await pc.setRemoteDescription(msg.description);
-            if (msg.description.type === "offer") {
-              await pc.setLocalDescription();
-              send({ kind: "sdp", description: pc.localDescription });
-            }
-          } else if (msg.kind === "ice" && msg.candidate) {
-            await pc.addIceCandidate(msg.candidate).catch(() => {});
-          }
-        } catch { /* never let one frame kill the call */ }
-      };
+        },
+        onShareEnded: () => setSharing(false),
+        onMainState: (state) => { if (state === "connected") setPhase("live"); },
+      });
     } catch {
       setPhase("error");
       setMessage("Could not join the show.");
     }
-  }, [code, guest]);
+  }, [code, guest, can, isIOS]);
 
   const toggleMute = () => {
     const track = streamRef.current?.getAudioTracks()[0];
@@ -269,6 +251,16 @@ export default function GuestJoinPage({ code }: { code: string }) {
     if (!track) return;
     track.enabled = !track.enabled;
     setCameraOff(!track.enabled);
+  };
+  /** Screen share is the HIGHER grant (media.screen): a second video track
+   *  to the host, framed by them as its own source. */
+  const toggleShare = async () => {
+    const link = linkRef.current;
+    if (!link) return;
+    if (link.sharing) { link.stopShare(); setSharing(false); return; }
+    const ok = await link.startShare();
+    setSharing(ok);
+    if (!ok) setMessage("Couldn't start screen sharing here. Try a desktop browser.");
   };
 
   if (phase === "gone" || phase === "error") {
@@ -298,37 +290,62 @@ export default function GuestJoinPage({ code }: { code: string }) {
             muted
             style={{ ...S.program, display: hasProgram ? undefined : "none" }}
           />
-          <video ref={previewRef} autoPlay playsInline muted style={hasProgram ? S.pip : S.video} />
+          {/* Once the program is up it is the whole picture and you are a
+              corner tile (tap to hide) — never both at full size. */}
+          <video
+            ref={previewRef}
+            autoPlay playsInline muted
+            title={hasProgram ? "Tap to hide" : undefined}
+            onClick={() => { if (hasProgram) setSelfHidden(true); }}
+            style={hasProgram ? { ...S.pip, ...(selfHidden || !can.camera ? { display: "none" } : null) } : S.video}
+          />
+          {hasProgram && selfHidden && can.camera && (
+            <button onClick={() => setSelfHidden(false)} style={S.tileChip}>Show me</button>
+          )}
           {phase === "live" && <div style={S.liveDot}><span style={S.dot} /> LIVE</div>}
-          {cameraOff && <div style={S.camOff}>Camera off</div>}
+          {can.camera && cameraOff && <div style={S.camOff}>Camera off</div>}
+          {!can.camera && !hasProgram && (
+            <div style={S.camOff}>{can.mic ? "Audio only" : "You're here to watch and take part"}</div>
+          )}
         </div>
 
-        {phase !== "live" && (
-          <div style={S.pickers}>
-            <select
-              value={camId}
-              onChange={(e) => { setCamId(e.target.value); void startPreview(e.target.value, micId); }}
-              style={S.select}
-            >
-              {devices.filter((d) => d.kind === "videoinput").map((d) => (
-                <option key={d.deviceId} value={d.deviceId}>{d.label || "Camera"}</option>
-              ))}
-            </select>
-            <select
-              value={micId}
-              onChange={(e) => { setMicId(e.target.value); void startPreview(camId, e.target.value); }}
-              style={S.select}
-            >
-              {devices.filter((d) => d.kind === "audioinput").map((d) => (
-                <option key={d.deviceId} value={d.deviceId}>{d.label || "Microphone"}</option>
-              ))}
-            </select>
+        {/* Pickers and controls exist only for the grants held — a control
+            this participant cannot use is absent, not disabled. */}
+        {phase !== "live" && (can.camera || can.mic) && (
+          <div style={{ ...S.pickers, gridTemplateColumns: can.camera && can.mic ? "1fr 1fr" : "1fr" }}>
+            {can.camera && (
+              <select
+                value={camId}
+                onChange={(e) => { setCamId(e.target.value); void startPreview(e.target.value, micId); }}
+                style={S.select}
+              >
+                {devices.filter((d) => d.kind === "videoinput").map((d) => (
+                  <option key={d.deviceId} value={d.deviceId}>{d.label || "Camera"}</option>
+                ))}
+              </select>
+            )}
+            {can.mic && (
+              <select
+                value={micId}
+                onChange={(e) => { setMicId(e.target.value); void startPreview(camId, e.target.value); }}
+                style={S.select}
+              >
+                {devices.filter((d) => d.kind === "audioinput").map((d) => (
+                  <option key={d.deviceId} value={d.deviceId}>{d.label || "Microphone"}</option>
+                ))}
+              </select>
+            )}
           </div>
         )}
 
         <div style={S.controls}>
-          <button onClick={toggleMute} style={S.ghost}>{muted ? "Unmute" : "Mute"}</button>
-          <button onClick={toggleCamera} style={S.ghost}>{cameraOff ? "Start camera" : "Stop camera"}</button>
+          {can.mic && <button onClick={toggleMute} style={S.ghost}>{muted ? "Unmute" : "Mute"}</button>}
+          {can.camera && <button onClick={toggleCamera} style={S.ghost}>{cameraOff ? "Start camera" : "Stop camera"}</button>}
+          {can.screen && phase === "live" && (
+            <button onClick={() => void toggleShare()} style={sharing ? S.ghostOn : S.ghost}>
+              {sharing ? "Stop sharing" : "Share screen"}
+            </button>
+          )}
           {phase !== "live" && (
             <button onClick={() => void goLive()} disabled={phase === "connecting" || phase === "waiting"} style={S.primary}>
               {phase === "connecting" ? "Connecting…" : phase === "waiting" ? "Waiting for the host…" : "Join the show"}
@@ -336,7 +353,7 @@ export default function GuestJoinPage({ code }: { code: string }) {
           )}
         </div>
 
-        {message && phase !== "live" && <p style={S.note}>{message}</p>}
+        {message && <p style={S.note}>{message}</p>}
         <p style={S.fine}>
           Your camera and audio go straight to the host's computer. This server
           doesn't record or store this video.
@@ -361,7 +378,8 @@ const S: Record<string, CSSProperties> = {
   stage: { position: "relative", aspectRatio: "16 / 9", background: "#141416", borderRadius: 14, overflow: "hidden", border: "1px solid #232327" },
   video: { width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" },
   program: { width: "100%", height: "100%", objectFit: "cover" },
-  pip: { position: "absolute", right: 10, bottom: 10, width: "28%", aspectRatio: "16 / 9", objectFit: "cover", transform: "scaleX(-1)", borderRadius: 10, border: "1px solid rgba(255,255,255,.25)", boxShadow: "0 4px 14px rgba(0,0,0,.5)" },
+  pip: { position: "absolute", right: 10, bottom: 10, width: "clamp(120px, 26%, 220px)", aspectRatio: "16 / 9", objectFit: "cover", transform: "scaleX(-1)", borderRadius: 10, border: "1px solid rgba(255,255,255,.25)", boxShadow: "0 4px 14px rgba(0,0,0,.5)", cursor: "pointer" },
+  tileChip: { position: "absolute", right: 12, bottom: 12, background: "rgba(0,0,0,.65)", color: "#e7e7ea", border: "1px solid #2c2c31", borderRadius: 999, padding: "6px 10px", fontSize: 12, cursor: "pointer" },
   liveDot: { position: "absolute", top: 12, left: 12, display: "flex", alignItems: "center", gap: 6, background: "rgba(0,0,0,.6)", padding: "5px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, letterSpacing: "0.06em" },
   dot: { width: 7, height: 7, borderRadius: 999, background: "#ff3b30", display: "inline-block" },
   camOff: { position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#6b6b73", fontSize: 14, background: "#141416" },
@@ -369,6 +387,7 @@ const S: Record<string, CSSProperties> = {
   select: { background: "#141416", color: "#e7e7ea", border: "1px solid #232327", borderRadius: 10, padding: "9px 10px", fontSize: 13, width: "100%" },
   controls: { display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" },
   ghost: { background: "transparent", color: "#e7e7ea", border: "1px solid #2c2c31", borderRadius: 10, padding: "10px 14px", fontSize: 14, cursor: "pointer" },
+  ghostOn: { background: "#1d3a2f", color: "#a7f3d0", border: "1px solid #2f6b55", borderRadius: 10, padding: "10px 14px", fontSize: 14, cursor: "pointer" },
   primary: { marginLeft: "auto", background: "#fff", color: "#0a0a0b", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer" },
   note: { marginTop: 12, fontSize: 13, color: "#ffb4a8" },
   fine: { marginTop: 18, fontSize: 12, color: "#6b6b73", lineHeight: 1.5 },

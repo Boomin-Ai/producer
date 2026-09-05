@@ -254,6 +254,47 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
+    /// What THIS token may do in a room: host, or a member holding room
+    /// control (api #380: `GET /rooms/:id/access`). Feature-detected — a
+    /// server without the route (self-hosted, or Boomin before #380) answers
+    /// 404, which comes back as `{available: false}` so the caller behaves
+    /// exactly as it did before the route existed: as the host.
+    pub async fn room_access(&self, room_id: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .get(self.root_url(&format!("/v1/app/live/rooms/{room_id}/access")))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if resp.status().as_u16() == 404 {
+            return Ok(serde_json::json!({ "available": false }));
+        }
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        let body: Value = resp.json().await?;
+        Ok(serde_json::json!({ "available": true, "access": body }))
+    }
+
+    /// Host-controlled slot order — the FULL list of guest ids, first on top.
+    pub async fn room_guest_order(&self, room_id: &str, order: &[String]) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/guest-order")))
+            .bearer_auth(&self.token)
+            .json(&serde_json::json!({ "order": order }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     /// The room's shareable join link. `join_url` is readable ONLY at
     /// rotation, so the caller must persist what comes back — there is no
     /// way to ask for it again without invalidating everyone using it.
