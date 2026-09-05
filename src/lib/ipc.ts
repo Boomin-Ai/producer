@@ -320,6 +320,9 @@ export interface LiveSnapshot {
   skipped_frames?: number;
   total_frames?: number;
   cpu?: number;
+  /** Mean render time per frame, µs (libobs average frame time). Against
+   * the frame budget (1e6/video_fps) it is the stats panel's render load. */
+  render_time_us?: number;
   video_height?: number;
   video_fps?: number;
   stage_transparent?: boolean;

@@ -7449,11 +7449,23 @@ button.ks-key:hover { border-color: var(--line-2); }
 }
 
 /* ── Stats card ── */
-.stx { display: flex; flex-direction: column; gap: 10px; }
+/* The panel is a container (`panel`, inline-size): tiles wrap to the dock's
+ * width, type scales with it, and the chart takes whatever height the panel
+ * has left between a 64px floor and a 160px ceiling — a bottom dock at any
+ * width, a narrow side dock, the same card. */
+.stx {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
 .stx-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   gap: 8px;
+  flex: 0 0 auto;
 }
 .stx-tile {
   background: var(--surface-2);
@@ -7463,24 +7475,98 @@ button.ks-key:hover { border-color: var(--line-2); }
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 .stx-lbl {
-  font-size: 10px;
+  font-size: clamp(9px, 2.2cqi, 10px);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--fg-3);
+  white-space: nowrap;
 }
 .stx-num {
-  font-size: 15px;
+  font-size: clamp(13px, 3.6cqi, 17px);
   font-weight: 700;
   color: var(--fg-1);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .stx-num.warn { color: var(--amber); }
-.stx-warns { display: flex; gap: 14px; font-size: 11px; color: var(--amber); }
-.stx-chart { display: flex; flex-direction: column; gap: 4px; color: var(--mint); }
-.stx-chart svg { width: 100%; height: 28px; opacity: 0.9; }
+.stx-warns { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11px; color: var(--amber); flex: 0 0 auto; }
+
+/* Render load: an area chart, mint by default; the tone class re-tints
+ * stroke, fill and label together past 70% (amber) and 90% (red). */
+.stx-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--mint);
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.stx-chart.tone-amber { color: var(--amber); }
+.stx-chart.tone-red { color: var(--red); }
+.stx-chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.stx-chart-now {
+  font-size: clamp(10px, 2.6cqi, 12px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: currentColor;
+  white-space: nowrap;
+}
+.stx-chart-plot {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 64px;
+  max-height: 160px;
+  background: var(--surface-2);
+  border: 0.5px solid var(--line-1);
+  border-radius: var(--r-ctl);
+  overflow: hidden;
+}
+.stx-chart-plot svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 64px;
+  max-height: 160px;
+}
+.stx-chart-scale {
+  position: absolute;
+  top: 3px;
+  right: 6px;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-3);
+  pointer-events: none;
+}
+.stx-chart-base {
+  stroke: var(--line-1);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.stx-chart-area {
+  fill: currentColor;
+  fill-opacity: 0.18;
+  stroke: none;
+}
+.stx-chart-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
 
 /* ── Stage overlays + floating toolbar (P5) ── */
 .stg-live {
