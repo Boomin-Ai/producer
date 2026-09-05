@@ -9,7 +9,11 @@ import {
   participantKind,
   peerOf,
   resolveGrants,
+  roleChips,
+  roleTitle,
+  roomAccessFrom,
   roomRoleFrom,
+  seatAccessFrom,
   sourceIdsFor,
   wantedSourceIds,
 } from "../guest/src/participants";
@@ -124,7 +128,8 @@ describe("roomRoleFrom", () => {
     expect(roomRoleFrom({ available: true, access: { role: "Owner" } })).toBe("host");
     expect(roomRoleFrom({ available: true, access: { role: "mod" } })).toBe("mod");
     expect(roomRoleFrom({ available: true, access: { role: "editor" } })).toBe("mod");
-    expect(roomRoleFrom({ available: true, access: { role: "manager" } })).toBe("mod");
+    expect(roomRoleFrom({ available: true, access: { role: "manager" } })).toBe("manager");
+    expect(roomRoleFrom({ available: true, access: { role: "admin" } })).toBe("manager");
     expect(roomRoleFrom({ available: true, access: { role: "viewer" } })).toBe("viewer");
     expect(roomRoleFrom({ available: true, access: { roles: ["viewer", "editor"] } })).toBe("mod");
   });
@@ -137,6 +142,69 @@ describe("roomRoleFrom", () => {
   });
   it("host flags win over anything else", () => {
     expect(roomRoleFrom({ available: true, access: { is_host: true, role: "viewer" } })).toBe("host");
+  });
+  it("a refusal (401/403) is never the host — the route exists and said no", () => {
+    expect(roomRoleFrom({ available: true, denied: true })).toBe("viewer");
+    expect(roomRoleFrom({ available: true, denied: true, access: null })).toBe("viewer");
+  });
+});
+
+describe("roomAccessFrom (the Boomin DTO, verbatim)", () => {
+  // routes/app/live-access.ts: role + via + can (+ grants roster for a
+  // manager, participant_grants for anyone with control, implicit flag).
+  const modDto = {
+    available: true,
+    access: {
+      room_id: "r1",
+      role: "mod",
+      via: "grant",
+      can: { roster: true, control: true, manage: false, settings: false, interactions: true, scene: true, billing: false },
+      grants: null,
+      participant_grants: [{ id: "g1", participant_id: "p1", role: "viewer" }],
+      implicit: false,
+    },
+  };
+  it("a room MOD is a mod, via the grant, with the server's capability set", () => {
+    const a = roomAccessFrom(modDto);
+    expect(a.role).toBe("mod");
+    expect(a.via).toBe("grant");
+    expect(a.known).toBe(true);
+    expect(a.can).toEqual({ roster: true, control: true, manage: false, settings: false, interactions: true, scene: true, billing: false });
+    expect(roleTitle(a)).toBe("Mod");
+    expect(roleChips(a)).toEqual(["cuts scenes", "admits guests", "runs votes"]);
+  });
+  it("the grants roster (objects, not strings) never reads as a capability", () => {
+    const a = roomAccessFrom({
+      available: true,
+      access: { role: "viewer", via: "grant", can: { roster: true, control: false }, grants: [{ id: "x", room_role: "manager" }] },
+    });
+    expect(a.role).toBe("viewer");
+    expect(a.can.control).toBe(false);
+    expect(roleChips(a)).toEqual(["watches the roster"]);
+  });
+  it("host via brand / org, and the assumed host when the route is missing", () => {
+    expect(roleTitle(roomAccessFrom({ available: true, access: { role: "host", via: "brand", can: {} } }))).toBe("Host · via brand");
+    expect(roleTitle(roomAccessFrom({ available: true, access: { role: "host", via: "org", can: {} } }))).toBe("Host · via org");
+    const assumed = roomAccessFrom({ available: false });
+    expect(assumed.role).toBe("host");
+    expect(assumed.known).toBe(false);
+    expect(assumed.via).toBe("server");
+    expect(roleTitle(assumed)).toBe("Host");
+  });
+  it("a manager keeps manage but not settings", () => {
+    const a = roomAccessFrom({ available: true, access: { role: "manager", via: "grant", can: { manage: true, settings: false } } });
+    expect(a.role).toBe("manager");
+    expect(a.can.manage).toBe(true);
+    expect(a.can.settings).toBe(false);
+    expect(roleChips(a)).toContain("grants roles");
+  });
+  it("an open-server mod seat maps its grants onto the same DTO", () => {
+    const a = seatAccessFrom(["room.admit", "room.stage", "room.scene", "room.interactions"]);
+    expect(a.role).toBe("mod");
+    expect(a.via).toBe("seat");
+    expect(a.can.scene).toBe(true);
+    expect(roleTitle(a, "studio.example")).toBe("Mod seat on studio.example");
+    expect(seatAccessFrom(["room.scene"]).can.control).toBe(false);
   });
 });
 
