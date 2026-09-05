@@ -2014,6 +2014,15 @@ export interface RoomInfo {
   config: string;
 }
 
+/** The room whose document the ENGINE currently holds. The engine session
+ * outlives this view — leaving for Home unmounts the React tree, not the
+ * graph — so reopening the same room must reconcile against what is already
+ * there rather than destroy and respawn it. Tearing every item down cost a
+ * black stage, every CEF guest page re-created (renegotiation, "Connecting…",
+ * a flash per guest) and every slot popping in at full frame before its look
+ * landed. Module-scoped on purpose: it is a fact about the engine. */
+let engineHeldRoom: string | null = null;
+
 export function LiveView({
   room,
   onLeave,
@@ -3115,22 +3124,47 @@ export function LiveView({
         }
         setSources((s) => ({ ...s, ...saved }));
       }
-      // Item-list half of the document: clear whatever open-list items the
-      // engine is holding from the previous room, then respawn this room's.
+      // Item-list half of the document. A DIFFERENT room: clear whatever
+      // open-list items the engine is holding from the previous one, then
+      // respawn this room's. The SAME room reopened: the engine already holds
+      // it — keep every item the document still lists (same id, same kind;
+      // spec edits go through their own remove+add paths), keep every guest
+      // (the roster tick owns their lifetime, and a kept CEF page keeps its
+      // call), add only what is missing. Nothing flashes, nothing
+      // reconnects that did not have to.
+      const hot = engineHeldRoom === room.id;
       const held = (snap.sources?.items ?? []).filter(
         (i) => !["screen", "camera", "overlay"].includes(i.id),
       );
+      const listed = new Map((saved.extras ?? []).map((e) => [e.id, e]));
+      const kept = new Set<string>();
       for (const i of held) {
+        const doc = listed.get(i.id);
+        if (hot && (i.kind === "guest" || (doc && doc.spec.kind === i.kind))) {
+          kept.add(i.id);
+          continue;
+        }
         await extraSources.remove(i.id).catch(() => {});
       }
       for (const e of saved.extras ?? []) {
+        if (kept.has(e.id)) continue;
         await extraSources.add(e.id, e.label, e.spec).catch(() => {});
       }
+      engineHeldRoom = room.id;
       // The overlay LAST: its CEF create is the slowest thing in the apply
       // (measured 4.6s cold, holding the engine loop), so nothing else may
       // queue behind it. Not awaited — the scene mounts around it and the
-      // first-frame gate holds the veil until it lands.
-      if (typeof saved.screen === "boolean" && (saved.overlay_window != null || saved.overlay_url)) {
+      // first-frame gate holds the veil until it lands. Setting it re-creates
+      // the CEF page, so a hot reopen with the same overlay leaves it alone.
+      const overlaySame =
+        hot &&
+        (snap.sources?.overlay_window ?? null) === (saved.overlay_window ?? null) &&
+        (snap.sources?.overlay_url ?? null) === (saved.overlay_url ?? null);
+      if (
+        typeof saved.screen === "boolean" &&
+        (saved.overlay_window != null || saved.overlay_url) &&
+        !overlaySame
+      ) {
         ipc.liveSetOverlay(saved.overlay_window ?? null, true, saved.overlay_url ?? null).catch(() => {});
       }
       const mount = parseConfig(room.config).active_scene;
@@ -3915,6 +3949,12 @@ export function LiveView({
         // be a second host peer on every guest's channel), no stage post
         // from our engine (we have none for this room).
         if (roomRoleRef.current !== "host") return;
+        // The roster is news either way; reconciling sources against it is
+        // not, until the document has been applied and the engine's item
+        // list read — before that `sources.items` is empty, and an empty list
+        // reads as "every binding is stale": slots freed, guests re-added,
+        // the stage blinking on every reopen.
+        if (!roomApplied.current) return;
 
         // Only guests the host has admitted get a source. A waiting guest is
         // deliberately NOT on the broadcast: the room link is public, so
