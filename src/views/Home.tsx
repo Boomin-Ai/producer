@@ -1913,17 +1913,31 @@ function NetworkRail({
   const [bookMin, setBookMin] = useState("");
   /** Free appearance: amount_cents 0 — no escrow, accepted counts as funded. */
   const [bookFree, setBookFree] = useState(false);
+  /** What is proposed: an APPEARANCE (they come on my stage; I pay them) or
+   * a METERED OVERLAY (my credit runs on THEIR stage; I pay them per minute
+   * it shows, up to a cap — api #385). Overlay = sponsor pays host, so the
+   * room is the counterparty's and the binding is my handle: the host's ©
+   * button binds `{sponsor: <handle>}` on the source, which is what the
+   * meter matches on. */
+  const [bookKind, setBookKind] = useState<"appearance" | "overlay">("appearance");
+  const [bookRate, setBookRate] = useState("");
+  const [bookCap, setBookCap] = useState("");
+  const [bookHostRoom, setBookHostRoom] = useState("");
+  /** The network's visible rooms — a sponsor picks the host's room among them. */
+  const [netRooms, setNetRooms] = useState<NetworkLiveRoom[]>([]);
   /** The deal whose sheet (terms + answer) is open. */
   const [dealOpen, setDealOpen] = useState<string | null>(null);
 
   const load = useCallback(async (id: string) => {
-    const [st, inv, cn, dl] = await Promise.all([
+    const [st, inv, cn, dl, lr] = await Promise.all([
       network.status(id).catch(() => null),
       network.invitations(id, "inbox").catch(() => null),
       networkConnections(id).catch(() => null),
       network.deals(id).catch(() => null),
+      network.liveRooms(id).catch(() => null),
     ]);
     if (st) setStatus(st);
+    setNetRooms(lr?.rooms ?? []);
     setInbox((inv?.invitations ?? []).filter((i) => i.status === "invited"));
     setConns(cn?.connections ?? []);
     setDeals(dl?.deals ?? []);
@@ -1933,7 +1947,45 @@ function NetworkRail({
     deals.filter((d) => d.connection_id === connectionId && !["released", "declined", "cancelled", "expired"].includes(d.status));
 
   const bookCents = bookFree ? 0 : Math.round((Number(bookAmt) || 0) * 100);
-  const bookOk = bookFree || bookCents >= 500;
+  const rateCents = Math.round((Number(bookRate) || 0) * 100);
+  const capCents = Math.round((Number(bookCap) || 0) * 100);
+  const bookOk = bookKind === "overlay" ? rateCents >= 1 && capCents >= 500 && !!bookHostRoom && !!ownSlug : bookFree || bookCents >= 500;
+
+  /** A metered overlay on the HOST's room: rate per minute shown, the cap as
+   * the amount held. The intervals it prices are the host's © source with
+   * `{sponsor: <our handle>}` bound, shown and hidden on their set. */
+  const bookOverlay = async (c: NetworkConnectionRow) => {
+    const room = netRooms.find((r) => r.room_id === bookHostRoom && r.brand.id === c.counterparty.id);
+    if (!endpointId || !room || !bookOk || !ownSlug) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      await network.proposeDeal(endpointId, {
+        connectionId: c.connection.id,
+        beneficiaryBrandId: c.counterparty.id,
+        roomId: room.room_id,
+        title: `Sponsor overlay on ${room.title ?? "their room"}`,
+        amountCents: capCents,
+        minStageMinutes: null,
+        metered: {
+          pricing: "metered",
+          rate_card: { kind: "overlay", basis: "minute", cents: rateCents },
+          contribution_kind: "overlay",
+          contribution_binding: { sponsor: ownSlug },
+        },
+      });
+      setNote(`Proposal sent to ${c.counterparty.name}. Once accepted and funded, every minute their © source credited "${ownSlug}" shows on that room meters at $${(rateCents / 100).toFixed(2)}, up to $${(capCents / 100).toFixed(2)}.`);
+      setBooking(null);
+      setBookRate("");
+      setBookCap("");
+      setBookHostRoom("");
+      void load(endpointId);
+    } catch (e) {
+      setNote(String(e).replace(/^Error:\s*/, ""));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   /** The deal's own page — boomin.ai/<our slug>/deals/<id>. That is the link
    * that goes out: the guest signs in as their brand, reads the terms, and
@@ -2007,6 +2059,7 @@ function NetworkRail({
   };
 
   const book = async (c: NetworkConnectionRow) => {
+    if (bookKind === "overlay") return bookOverlay(c);
     const room = rooms.find((r) => r.id === bookRoom);
     if (!endpointId || !room || !bookOk) return;
     setBusy(true);
@@ -2244,7 +2297,11 @@ function NetworkRail({
                       const amt = free ? "Free" : `$${(d.amount_cents / 100).toFixed(d.amount_cents % 100 ? 2 : 0)}`;
                       const earn = d.role === "beneficiary";
                       const detail =
-                        d.min_stage_minutes != null
+                        d.pricing === "metered"
+                          ? `${Math.round((d.metered_seconds ?? 0) / 60)} min shown · $${((d.metered_cents ?? 0) / 100).toFixed(2)} of ${amt} cap${
+                              d.metered_delivered_by === "cap" ? " · capped" : d.metered_delivered_by === "run_ended" ? " · run ended" : ""
+                            }`
+                          : d.min_stage_minutes != null
                           ? `${Math.floor((d.stage_seconds ?? 0) / 60)} of ${d.min_stage_minutes} min on stage`
                           : d.appearance
                             ? "admitted — delivered"
@@ -2292,8 +2349,66 @@ function NetworkRail({
                     })}
                   </div>
                 )}
-                {open && (
+                {open && bookKind === "overlay" && (
                   <div className="net-book-form">
+                    <div className="net-field-row">
+                      <button className="net-decline" onClick={() => setBookKind("appearance")}>Appearance</button>
+                      <button className="net-accept" disabled>Metered overlay</button>
+                    </div>
+                    <label className="net-field">
+                      <span>Their room</span>
+                      <select value={bookHostRoom} onChange={(e) => setBookHostRoom(e.target.value)}>
+                        <option value="">Choose…</option>
+                        {netRooms
+                          .filter((r) => r.brand.id === c.counterparty.id)
+                          .map((r) => (
+                            <option key={r.room_id} value={r.room_id}>
+                              {r.title ?? "Room"}{r.status === "live" ? " · live" : ""}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                    <div className="net-field-row">
+                      <label className="net-field">
+                        <span>Rate (USD / min shown)</span>
+                        <input
+                          className="net-slug"
+                          inputMode="decimal"
+                          placeholder="0.50"
+                          value={bookRate}
+                          onChange={(e) => setBookRate(e.target.value)}
+                        />
+                      </label>
+                      <label className="net-field">
+                        <span>Cap (USD)</span>
+                        <input
+                          className="net-slug"
+                          inputMode="decimal"
+                          placeholder="50"
+                          value={bookCap}
+                          onChange={(e) => setBookCap(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") void book(c);
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <button className="net-accept" disabled={busy || !bookOk} onClick={() => void book(c)}>
+                      {bookOk ? `Propose $${(rateCents / 100).toFixed(2)}/min, up to $${(capCents / 100).toFixed(capCents % 100 ? 2 : 0)}` : "Propose"}
+                    </button>
+                    <div className="cr-hint">
+                      {netRooms.some((r) => r.brand.id === c.counterparty.id)
+                        ? `Your credit on @${c.counterparty.slug}'s set: they bind a source to "${ownSlug ?? "your handle"}" with the © button; every minute it shows meters at the rate, the cap is what's held. Delivered at the cap or when their run ends. Minimum cap $5.`
+                        : `@${c.counterparty.slug} has no room visible to the network yet — ask them to open one to connections.`}
+                    </div>
+                  </div>
+                )}
+                {open && bookKind === "appearance" && (
+                  <div className="net-book-form">
+                    <div className="net-field-row">
+                      <button className="net-accept" disabled>Appearance</button>
+                      <button className="net-decline" onClick={() => setBookKind("overlay")}>Metered overlay</button>
+                    </div>
                     <label className="net-field">
                       <span>Room</span>
                       <select value={bookRoom} onChange={(e) => setBookRoom(e.target.value)}>
@@ -2534,8 +2649,13 @@ function DealSheet({
   const net = d.net_to_beneficiary_cents ?? d.amount_cents - feeCents;
   const review = d.review_days ?? 7;
   const expires = d.propose_expires_at ? new Date(d.propose_expires_at).toLocaleDateString() : null;
-  const delivery =
-    d.min_stage_minutes != null
+  const metered = d.pricing === "metered" && d.rate_card ? d.rate_card : null;
+  const bindingText = d.contribution_binding
+    ? Object.entries(d.contribution_binding).map(([k, v]) => `${k}: ${String(v)}`).join(", ")
+    : null;
+  const delivery = metered
+    ? `By the meter: every minute ${earn ? `your © source bound to ${bindingText ?? "the sponsor"} shows on "${d.room_title ?? "your room"}"` : `${otherName}'s © source bound to ${bindingText ?? "your handle"} shows on "${d.room_title ?? "their room"}"`} accrues $${(metered.cents / 100).toFixed(2)}. Delivered at the cap (${usd(d.amount_cents)}) or when the run ends${d.rate_card_locked ? "; the rate is locked" : ""}.`
+    : d.min_stage_minutes != null
       ? `By the clock: delivered once ${earn ? "you have" : `${otherName} has`} been on ${earn ? `${otherName}'s` : "your"} stage ${d.min_stage_minutes} min, as published by the host's Producer. If the host removes ${earn ? "you" : "them"} early after ${earn ? "you were" : "they were"} on stage, it is delivered anyway.`
       : d.room_id
         ? `By presence: delivered the moment the host admits ${earn ? "you" : otherName} into "${d.room_title ?? "the room"}". The admission is the evidence.`
@@ -2568,7 +2688,16 @@ function DealSheet({
         </div>
 
         <div className="deal-terms">
-          <div className="deal-term"><span>Deliverable</span><p>{d.deliverable || (d.room_id ? `Appearance on "${d.room_title ?? "the room"}"` : "As titled")}</p></div>
+          {metered && (
+            <div className="deal-term">
+              <span>Metered</span>
+              <p>
+                ${(metered.cents / 100).toFixed(2)} per minute shown · {Math.round((d.metered_seconds ?? 0) / 60)} min so far · {usd(d.metered_cents ?? 0)} accrued of the {usd(d.amount_cents)} cap
+                {d.metered_delivered_by ? ` · delivered by ${d.metered_delivered_by === "cap" ? "reaching the cap" : "the run ending"}` : ""}
+              </p>
+            </div>
+          )}
+          <div className="deal-term"><span>Deliverable</span><p>{d.deliverable || (metered ? `Sponsor overlay on "${d.room_title ?? "the room"}"` : d.room_id ? `Appearance on "${d.room_title ?? "the room"}"` : "As titled")}</p></div>
           <div className="deal-term"><span>Delivered</span><p>{delivery}</p></div>
           {free ? (
             <div className="deal-term"><span>Escrow</span><p>None — a free appearance holds no money. Accepting makes it ready for the show; delivery closes it with nothing to release.</p></div>
