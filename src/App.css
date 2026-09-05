@@ -8922,3 +8922,52 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .hd-chip.rm-seat-leave {
   color: var(--red);
 }
+
+/* ── Mod link drop: a placeholder you drop someone else's link into ───── */
+.modlink-drop {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-card);
+  background: var(--surface-1);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.modlink-drop.over { border-color: var(--mint); background: var(--surface-2); }
+.modlink-drop.bad { border-color: var(--red); }
+.modlink-drop-k { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--fg-3); }
+.modlink-drop input {
+  width: 100%; min-width: 0; height: 30px; padding: 0 8px; font-size: 12.5px;
+  border-radius: var(--r-ctl); border: 1px solid transparent; background: var(--surface-2); color: var(--fg-1);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.modlink-drop input::placeholder { color: var(--fg-3); font-family: inherit; }
+.modlink-drop.bad input::placeholder { color: var(--red); }
+.modlink-drop input:focus { outline: none; border-color: var(--line-2); }
+.modlink-drop.compact { padding: 6px 8px; border-style: solid; }
+.modlink-drop.compact input { height: 28px; }
+
+/* Home: fixed above the Network rail, same column, same width. */
+.modlink-rail {
+  position: fixed;
+  top: 48px;
+  right: 12px;
+  width: 244px;
+  z-index: 31;
+}
+.modlink-rail:not(.alone) ~ .net-rail { top: 124px; }
+/* No Network rail (self-hosted, invitation dismissed): sit inline at the top. */
+.modlink-rail.alone { position: static; width: auto; margin: 0 0 14px; }
+
+/* Welcome screens: the third door, under the two big ones. */
+.onboarding-modlink {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 22px;
+  font-size: 12.5px;
+  color: var(--muted-fg);
+}
+.onboarding-modlink .modlink-drop { width: min(440px, 100%); }

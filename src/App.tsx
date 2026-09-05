@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import "./App.css";
 import { hasTauri, ipc, type EndpointInfo } from "./lib/ipc";
 import { Onboarding, SignIn, Wordmark, hasSignedInBefore } from "./views/Onboarding";
+import { ModSeat } from "./views/ModSeat";
+import type { ModLink } from "./lib/modSeat";
 import { setActiveEndpointId } from "./lib/workspace";
 import { FirstLight, firstLightDone } from "./views/FirstLight";
 import { Home } from "./views/Home";
 
-type View = "loading" | "onboarding" | "signin" | "home";
+type View = "loading" | "onboarding" | "signin" | "home" | { kind: "modseat"; link: ModLink; from: "onboarding" | "signin" };
 
 function App() {
   const [view, setView] = useState<View>("loading");
@@ -63,10 +65,16 @@ function App() {
     );
   }
 
+  // A mod seat opened from the welcome screen: no workspace yet, the link is
+  // the credential. Leaving returns to the door it came from.
+  if (typeof view === "object" && view.kind === "modseat") {
+    return <ModSeat link={view.link} onLeave={() => setView(view.from)} />;
+  }
+
   if (view === "signin") {
     return (
       <main className="shell">
-        <SignIn onConnected={refresh} />
+        <SignIn onConnected={refresh} onModLink={(link) => setView({ kind: "modseat", link, from: "signin" })} />
       </main>
     );
   }
@@ -76,6 +84,7 @@ function App() {
       <main className="shell">
         <Onboarding
           onConnected={refresh}
+          onModLink={(link) => setView({ kind: "modseat", link, from: "onboarding" })}
           onCancel={endpoints.length > 0 ? () => setView("home") : undefined}
         />
       </main>
