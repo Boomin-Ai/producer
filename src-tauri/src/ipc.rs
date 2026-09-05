@@ -484,6 +484,54 @@ pub async fn room_control_session(
         .await
 }
 
+/// Boomin (api #392): a ticket into the room channel for the host's or a
+/// mod's Producer. The webview opens the socket itself.
+#[tauri::command]
+pub async fn room_channel_ticket(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .room_channel_ticket(&room_id)
+        .await
+}
+
+/// Boomin: publish the host's scene list into the room's config (see
+/// client.rs). No-op on a self-hosted endpoint, which takes it over the socket.
+#[tauri::command]
+pub async fn room_publish_scenes(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+    config: Value,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    let client = ProducerClient::new(&base_url, &token).with_brand(brand_slug);
+    if !client.is_boomin() {
+        return Ok(json!({ "ok": true, "published": false }));
+    }
+    client.room_publish_scenes(&room_id, &config).await
+}
+
+/// Boomin: a mod's cut, `POST …/scene`. The host's Producer applies the
+/// resulting `scene.cut` frame as its own keypress.
+#[tauri::command]
+pub async fn room_scene_cut(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+    scene_id: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .room_scene_cut(&room_id, &scene_id)
+        .await
+}
+
 #[tauri::command]
 pub async fn room_contributions(
     state: State<'_, AppState>,
@@ -815,6 +863,7 @@ pub async fn network_propose_deal(
     title: String,
     amount_cents: u64,
     min_stage_minutes: Option<u32>,
+    metered: Option<Value>,
 ) -> EngineResult<Value> {
     let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
     ProducerClient::new(&base_url, &token)
@@ -826,6 +875,7 @@ pub async fn network_propose_deal(
             &title,
             amount_cents,
             min_stage_minutes,
+            metered.as_ref(),
         )
         .await
 }

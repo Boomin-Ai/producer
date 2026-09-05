@@ -553,6 +553,9 @@ export interface ServerRoom {
   deleted_at?: string | null;
   /** Boomin: the brand's main stage — where Network bookings and deals land. */
   is_default?: boolean;
+  /** Boomin: the room's stage config; for a Producer room, the host's scene
+   * directory (lib/boominRoom.ts `scenesFromBoominConfig`). */
+  config?: unknown;
 }
 
 /** Every server room the brand owns — the reconcile input for room sync. */
@@ -634,8 +637,16 @@ export const network = {
       amountCents: number;
       /** Stage minimum in minutes; null = presence alone delivers. */
       minStageMinutes: number | null;
+      /** Metered terms (api #385): `pricing: "metered"`, a rate card, what it
+       * meters and the binding the intervals must carry. Absent = fixed. */
+      metered?: {
+        pricing: "metered";
+        rate_card: { kind: "overlay" | "presence"; basis: "minute"; cents: number; floor_cents?: number };
+        contribution_kind: "overlay" | "presence";
+        contribution_binding?: Record<string, unknown> | null;
+      } | null;
     },
-  ) => invoke<{ deal: NetworkDeal }>("network_propose_deal", { endpointId, ...input }),
+  ) => invoke<{ deal: NetworkDeal }>("network_propose_deal", { endpointId, ...input, metered: input.metered ?? null }),
   /** accept | decline (beneficiary) · cancel (either side, before funding). */
   dealAction: (endpointId: string, id: string, action: "accept" | "decline" | "cancel") =>
     invoke<{ deal: NetworkDeal }>("network_deal_action", { endpointId, id, action }),
@@ -691,6 +702,16 @@ export interface NetworkDeal {
   funded_at?: string | null;
   delivered_at?: string | null;
   created_at: string;
+  /** Metered deals (api #385): the rate, what is metered, and what has
+   * accrued so far — `amount_cents` is the cap. */
+  pricing?: "fixed" | "metered";
+  rate_card?: { kind: string; basis: string; cents: number; floor_cents?: number; cap_viewers?: number } | null;
+  rate_card_locked?: boolean;
+  metered_cents?: number;
+  metered_seconds?: number;
+  metered_delivered_by?: "cap" | "run_ended" | null;
+  contribution_kind?: "presence" | "overlay" | null;
+  contribution_binding?: Record<string, unknown> | null;
 }
 
 /** Mount timings → <app data>/live/room-open-report.json, the ruler every
@@ -835,6 +856,21 @@ export const guests = {
   /** Slot order — the FULL list of guest ids, first on top. */
   order: (endpointId: string, roomId: string, order: string[]) =>
     invoke("room_guest_order", { endpointId, roomId, order }),
+  /** Boomin (api #392): a ticket into the room's channel for the host's or a
+   * mod's Producer. `controlSession` already returns this shape on Boomin;
+   * exposed for callers that want the role + capabilities alongside. */
+  channelTicket: (endpointId: string, roomId: string) =>
+    invoke<{ ticket: string; expires_in: number; role?: string; can?: Record<string, boolean>; signaling_url: string }>(
+      "room_channel_ticket",
+      { endpointId, roomId },
+    ),
+  /** Boomin: the host's scene DIRECTORY into the room config (see
+   * lib/boominRoom.ts `boominStageConfig`); no-op on a self-hosted endpoint. */
+  publishScenes: (endpointId: string, roomId: string, config: Record<string, unknown>) =>
+    invoke<{ ok?: boolean; published?: boolean; room?: unknown }>("room_publish_scenes", { endpointId, roomId, config }),
+  /** Boomin: a mod's cut — `POST /live/rooms/:id/scene`. */
+  sceneCut: (endpointId: string, roomId: string, sceneId: string) =>
+    invoke<{ room_id: string; scene_id: string; version: number; at: string }>("room_scene_cut", { endpointId, roomId, sceneId }),
 };
 
 /** Volume/mute for any audio-bearing source, guests included. */
