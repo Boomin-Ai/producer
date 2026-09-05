@@ -60,55 +60,14 @@ export async function fetchMe(endpointId: string): Promise<Me> {
 
 // ── Boomin: the team ──────────────────────────────────────────────────────────
 
-export interface MemberGrant {
-  id: string;
-  scope_type: "surface" | "folder" | "room" | string;
-  surface_key: string | null;
-  folder_id: string | null;
-  room_id: string | null;
-  role: string;
-}
-
-export interface Member {
-  id: string;
-  user_id: string;
-  email: string;
-  name: string | null;
-  role: "owner" | "admin" | "editor" | "viewer" | string;
-  type: "team" | "collaborator" | string;
-  created_at: string;
-  grants: MemberGrant[];
-}
-
-/** The surfaces a collaborator can be scoped to. Mirrors the api's surface
- * registry as the console lists it; the key is what the grant row carries. */
-export const SURFACES: { key: string; label: string }[] = [
-  { key: "live", label: "Live" },
-  { key: "channels", label: "Channels" },
-  { key: "content", label: "Content" },
-  { key: "canvas", label: "Canvas" },
-  { key: "connect", label: "Connect" },
-  { key: "connect.inbox", label: "Inbox" },
-  { key: "connect.contacts", label: "Contacts" },
-  { key: "connect.entities", label: "Connect entities" },
-  { key: "connect.network", label: "Network" },
-  { key: "entities", label: "Entities" },
-  { key: "flows", label: "Flows" },
-  { key: "agents", label: "Agents" },
-  { key: "commerce", label: "Commerce" },
-];
-
-/** The grant that lets a member connect / disconnect channels: the
- * `channels` surface. The API has no finer control today, so the surface
- * grant IS the channel control (Settings → Access → Channel controls). */
-export const CHANNEL_CONTROL_SURFACE = "channels";
-
-export const ROOM_ROLES: { role: RoomRole; grant: "admin" | "editor" | "viewer" | null; label: string }[] = [
-  { role: "host", grant: null, label: "Host" },
-  { role: "manager", grant: "admin", label: "Manager" },
-  { role: "mod", grant: "editor", label: "Mod" },
-  { role: "viewer", grant: "viewer", label: "Viewer" },
-];
+export {
+  CHANNEL_CONTROL_SURFACE,
+  ROOM_ROLES,
+  SURFACES,
+  type Member,
+  type MemberGrant,
+} from "./accessDiff";
+import { type Member, type MemberGrant } from "./accessDiff";
 
 /** A member's standing in a room, from their brand role and room grants —
  * the client-side mirror of the api's resolveRoomRole. */
