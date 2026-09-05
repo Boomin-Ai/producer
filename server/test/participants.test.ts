@@ -185,6 +185,8 @@ describe("roomAccessFrom (the Boomin DTO, verbatim)", () => {
   it("host via brand / org, and the assumed host when the route is missing", () => {
     expect(roleTitle(roomAccessFrom({ available: true, access: { role: "host", via: "brand", can: {} } }))).toBe("Host · via brand");
     expect(roleTitle(roomAccessFrom({ available: true, access: { role: "host", via: "org", can: {} } }))).toBe("Host · via org");
+    // A collaborator hosting through the `live` surface grant says so — printing "via brand" hid the very signal that named the surface-vs-room-grant bug.
+    expect(roleTitle(roomAccessFrom({ available: true, access: { role: "host", via: "surface", can: {} } }))).toBe("Host · via Live surface");
     const assumed = roomAccessFrom({ available: false });
     expect(assumed.role).toBe("host");
     expect(assumed.known).toBe(false);

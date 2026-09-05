@@ -282,7 +282,7 @@ export interface RoomAccessInfo {
   /** org · brand · grant on Boomin; "server" when the primary token is the
    *  host (self-hosted, or a server without the route); "seat" for an open
    *  server mod link. */
-  via: "org" | "brand" | "grant" | "server" | "seat" | "unknown";
+  via: "org" | "brand" | "surface" | "grant" | "server" | "seat" | "unknown";
   can: RoomCan;
   /** The route answered — false means "we assumed" (404, offline). */
   known: boolean;
@@ -357,7 +357,7 @@ export function roomAccessFrom(result: RoomAccessResult | null | undefined): Roo
   }
   const viaRaw = typeof a.via === "string" ? a.via.toLowerCase() : "";
   const via: RoomAccessInfo["via"] =
-    viaRaw === "org" || viaRaw === "brand" || viaRaw === "grant" ? viaRaw : out === "host" ? "brand" : "unknown";
+    viaRaw === "org" || viaRaw === "brand" || viaRaw === "surface" || viaRaw === "grant" ? viaRaw : out === "host" ? "brand" : "unknown";
   return { role: out, via, can: readCan(a.can, out), known: true };
 }
 
@@ -382,7 +382,7 @@ export function roleTitle(info: RoomAccessInfo, host?: string | null): string {
   if (info.via === "seat") return host ? `Mod seat on ${host}` : "Mod seat";
   switch (info.role) {
     case "host":
-      return info.via === "org" ? "Host · via org" : info.via === "brand" ? "Host · via brand" : "Host";
+      return info.via === "org" ? "Host · via org" : info.via === "brand" ? "Host · via brand" : info.via === "surface" ? "Host · via Live surface" : "Host";
     case "manager":
       return "Manager";
     case "mod":
