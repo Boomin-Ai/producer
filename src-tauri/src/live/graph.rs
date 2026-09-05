@@ -1975,6 +1975,23 @@ impl SceneGraph {
 
 pub const THUMB_W: u32 = 256;
 pub const THUMB_H: u32 = 144;
+/// The PROGRAM thumb (the whole output, for a seat's monitor fallback —
+/// lib/monitorFeed.ts): larger than a guest tile, it stands in for the
+/// stage when the video leg carries no frames.
+pub const PROGRAM_THUMB_ID: &str = "program";
+pub const PROGRAM_THUMB_W: u32 = 512;
+pub const PROGRAM_THUMB_H: u32 = 288;
+/// The rate the program thumb is produced at while a monitor wants it,
+/// whatever the guests panel asked for.
+pub const PROGRAM_THUMB_FPS: u32 = 8;
+
+pub fn thumb_dims(id: &str) -> (u32, u32) {
+    if id == PROGRAM_THUMB_ID {
+        (PROGRAM_THUMB_W, PROGRAM_THUMB_H)
+    } else {
+        (THUMB_W, THUMB_H)
+    }
+}
 
 // ═══ ThumbHub — the preview distribution primitive (docs/THUMB-PIPELINE-V2) ═
 // Graphics thread produces (on the compositor's own cadence, deferred-map
@@ -2005,6 +2022,10 @@ struct ThumbRing {
 pub struct ThumbHub {
     pub targets: std::sync::Mutex<Vec<ThumbTarget>>,
     pub fps: std::sync::atomic::AtomicU32,
+    /// A seat's program monitor asked for the program thumb (host side of
+    /// lib/monitorFeed.ts). Adds the `program` target — the output source
+    /// itself — at PROGRAM_THUMB_FPS even with the guests panel hidden.
+    pub program_wanted: std::sync::atomic::AtomicBool,
     frame_no: std::sync::atomic::AtomicU32,
     rings: std::sync::Mutex<std::collections::HashMap<String, ThumbRing>>,
     pub slots: std::sync::Mutex<std::collections::HashMap<String, ThumbSlot>>,
@@ -2022,6 +2043,7 @@ impl ThumbHub {
         ThumbHub {
             targets: std::sync::Mutex::new(Vec::new()),
             fps: std::sync::atomic::AtomicU32::new(0),
+            program_wanted: std::sync::atomic::AtomicBool::new(false),
             frame_no: std::sync::atomic::AtomicU32::new(0),
             rings: std::sync::Mutex::new(std::collections::HashMap::new()),
             slots: std::sync::Mutex::new(std::collections::HashMap::new()),
@@ -2053,6 +2075,25 @@ impl ThumbHub {
                 wanted.push(("camera", cam));
             }
         }
+        // The program: whatever sits on output channel 0 (the transition
+        // wrapping the scene). obs_get_output_source hands back its OWN ref;
+        // the loop below takes another, so this one is released at the end.
+        let program = if self
+            .program_wanted
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            unsafe { ffi::obs_get_output_source(0) }
+        } else {
+            std::ptr::null_mut()
+        };
+        if !program.is_null() {
+            wanted.push((PROGRAM_THUMB_ID, program));
+        }
+        let release_program = || {
+            if !program.is_null() {
+                unsafe { ffi::obs_source_release(program) };
+            }
+        };
         {
             let cur = self.targets.lock().unwrap();
             if cur.len() == wanted.len()
@@ -2061,6 +2102,7 @@ impl ThumbHub {
                     .zip(wanted.iter())
                     .all(|(a, (id, src))| a.id == *id && a.src == *src)
             {
+                release_program();
                 return;
             }
         }
@@ -2088,6 +2130,7 @@ impl ThumbHub {
                 ffi::obs_source_release(t.src);
             }
         }
+        release_program();
     }
 }
 
@@ -2098,7 +2141,13 @@ impl ThumbHub {
 /// if the encoder holds the slot (latest-frame-wins, review amendment 2).
 pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _cy: u32) {
     let hub = unsafe { &*(param as *const ThumbHub) };
-    let fps = hub.fps.load(std::sync::atomic::Ordering::Relaxed);
+    let mut fps = hub.fps.load(std::sync::atomic::Ordering::Relaxed);
+    if hub
+        .program_wanted
+        .load(std::sync::atomic::Ordering::Relaxed)
+    {
+        fps = fps.max(PROGRAM_THUMB_FPS);
+    }
     if fps == 0 {
         return;
     }
@@ -2126,11 +2175,12 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
             }
         });
         for t in targets.iter() {
+            let (tw, th) = thumb_dims(&t.id);
             let ring = rings.entry(t.id.clone()).or_insert_with(|| ThumbRing {
                 rt: ffi::gs_texrender_create(ffi::GS_RGBA, ffi::GS_ZS_NONE),
                 surfs: [
-                    ffi::gs_stagesurface_create(THUMB_W, THUMB_H, ffi::GS_RGBA),
-                    ffi::gs_stagesurface_create(THUMB_W, THUMB_H, ffi::GS_RGBA),
+                    ffi::gs_stagesurface_create(tw, th, ffi::GS_RGBA),
+                    ffi::gs_stagesurface_create(tw, th, ffi::GS_RGBA),
                 ],
                 pending: [false, false],
                 idx: 0,
@@ -2142,7 +2192,7 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
             let sw = ffi::obs_source_get_width(t.src).max(1);
             let sh = ffi::obs_source_get_height(t.src).max(1);
             ffi::gs_texrender_reset(ring.rt);
-            if ffi::gs_texrender_begin(ring.rt, THUMB_W, THUMB_H) {
+            if ffi::gs_texrender_begin(ring.rt, tw, th) {
                 let clear = ffi::vec4 {
                     x: 0.0,
                     y: 0.0,
@@ -2188,14 +2238,14 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
                         let slot = slots.entry(t.id.clone()).or_insert_with(|| ThumbSlot {
                             seq: 0,
                             ready: false,
-                            rgba: Vec::with_capacity((THUMB_W * THUMB_H * 4) as usize),
+                            rgba: Vec::with_capacity((tw * th * 4) as usize),
                         });
                         slot.rgba.clear();
-                        for row in 0..THUMB_H {
+                        for row in 0..th {
                             let src_row = data.add((row * linesize) as usize);
                             slot.rgba.extend_from_slice(std::slice::from_raw_parts(
                                 src_row,
-                                (THUMB_W * 4) as usize,
+                                (tw * 4) as usize,
                             ));
                         }
                         slot.seq += 1;

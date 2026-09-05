@@ -340,6 +340,46 @@ pub async fn live_permissions() -> EngineResult<serde_json::Value> {
 }
 
 #[tauri::command]
+pub async fn live_set_program_thumb(state: State<'_, AppState>, on: bool) -> EngineResult<()> {
+    state.live.set_program_thumb(on);
+    Ok(())
+}
+
+/// The webview's debug log: `<app log dir>/producer-ui.log` (macOS
+/// ~/Library/Logs/<bundle id>/, Windows %LOCALAPPDATA%/<bundle id>/logs/).
+/// One line per call, stamped; the monitor leg (`[monitor]`) writes here so
+/// a two-machine test is diagnosable after the fact. Best effort, capped.
+#[tauri::command]
+pub async fn ui_log(app: tauri::AppHandle, line: String) -> EngineResult<()> {
+    use std::io::Write as _;
+    use tauri::Manager as _;
+    let dir = app
+        .path()
+        .app_log_dir()
+        .map_err(|e| EngineError::Other(e.to_string()))?;
+    let _ = std::fs::create_dir_all(&dir);
+    let path = dir.join("producer-ui.log");
+    // Roll at 4 MB: a monitor leg that reconnects all night must not fill a disk.
+    if std::fs::metadata(&path)
+        .map(|m| m.len() > 4 * 1024 * 1024)
+        .unwrap_or(false)
+    {
+        let _ = std::fs::rename(&path, dir.join("producer-ui.log.1"));
+    }
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .map_err(|e| EngineError::Other(e.to_string()))?;
+    let _ = writeln!(f, "{stamp} {}", line.chars().take(2000).collect::<String>());
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn live_set_thumb_rate(state: State<'_, AppState>, fps: u32) -> EngineResult<()> {
     state.live.set_thumb_rate(fps);
     Ok(())

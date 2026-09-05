@@ -177,6 +177,9 @@ export const ipc = {
   /** Preview demand control: fps the engine should spend on guest thumbs
    * (0 = off). The UI asks for what it can actually display. */
   liveSetThumbRate: (fps: number) => invoke("live_set_thumb_rate", { fps }),
+  /** The PROGRAM thumb (id `program` on `guest_thumbs`, 512×288 at 8 fps):
+   * produced only while a seat's monitor asked for it (lib/monitorFeed.ts). */
+  liveSetProgramThumb: (on: boolean) => invoke("live_set_program_thumb", { on }),
   /** Stage editor: commit=false at gesture rate, commit=true on release. */
   liveSetTransform: (id: string, patch: LiveTransformPatch, commit: boolean) =>
     invoke("live_set_transform", { id, patch, commit }),
@@ -716,6 +719,13 @@ export interface NetworkDeal {
   contribution_kind?: "presence" | "overlay" | null;
   contribution_binding?: Record<string, unknown> | null;
 }
+
+/** One line into the webview's debug log — `<app log dir>/producer-ui.log`
+ * (macOS ~/Library/Logs/<bundle id>/, Windows %LOCALAPPDATA%/<bundle id>/logs/).
+ * Fire-and-forget; a build without the command loses the line, never the call. */
+export const uiLog = (line: string): void => {
+  invoke("ui_log", { line }).catch(() => {});
+};
 
 /** Mount timings → <app data>/live/room-open-report.json, the ruler every
  * room-open speedup is measured against. */
