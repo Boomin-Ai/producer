@@ -254,18 +254,46 @@ export function wantedSourceIds<T extends ParticipantLike & { id: string }>(
 // behaves exactly as it did before — as the host. The DTO is read tolerantly
 // because the contract owner is still settling it; every field is optional.
 
-export type RoomRole = "host" | "mod" | "viewer";
+export type RoomRole = "host" | "manager" | "mod" | "viewer";
 
 export interface RoomAccessResult {
   available?: unknown;
+  /** Set by the desktop shell when the server answered 401/403: the route
+   *  exists and REFUSED us — never the host, whatever else is missing. */
+  denied?: unknown;
   access?: unknown;
 }
 
+/** The capability set Producer renders — the api's `can` object, verbatim
+ *  (services/live/room-access.ts `roomCapabilities`). A badge and a guard
+ *  read the same flags, so they can never disagree. */
+export interface RoomCan {
+  roster: boolean;
+  control: boolean;
+  manage: boolean;
+  settings: boolean;
+  interactions: boolean;
+  scene: boolean;
+  billing: boolean;
+}
+
+export interface RoomAccessInfo {
+  role: RoomRole;
+  /** org · brand · grant on Boomin; "server" when the primary token is the
+   *  host (self-hosted, or a server without the route); "seat" for an open
+   *  server mod link. */
+  via: "org" | "brand" | "grant" | "server" | "seat" | "unknown";
+  can: RoomCan;
+  /** The route answered — false means "we assumed" (404, offline). */
+  known: boolean;
+}
+
 const HOST_ROLES: ReadonlySet<string> = new Set(["host", "owner"]);
-const MOD_ROLES: ReadonlySet<string> = new Set(["mod", "moderator", "manager", "editor", "admin"]);
+const MANAGER_ROLES: ReadonlySet<string> = new Set(["manager", "admin"]);
+const MOD_ROLES: ReadonlySet<string> = new Set(["mod", "moderator", "editor"]);
 /** Any of these (as a capability string, a `can.*` flag, or a grant) makes a
  *  non-host a mod: they can change who is on the broadcast. */
-const CONTROL_KEYS: readonly string[] = ["admit", "stage", "remove", "room.admit", "room.stage", "room.remove"];
+const CONTROL_KEYS: readonly string[] = ["admit", "stage", "remove", "control", "room.admit", "room.stage", "room.remove"];
 
 function truthyKeys(v: unknown): string[] {
   if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string");
@@ -275,18 +303,108 @@ function truthyKeys(v: unknown): string[] {
   return [];
 }
 
-export function roomRoleFrom(result: RoomAccessResult | null | undefined): RoomRole {
+/** The capability bundle of a role, when the server sent none (mirrors the
+ *  api's `roomCapabilities`, and the open server's MOD_GRANTS for a seat). */
+export function capabilitiesOf(role: RoomRole): RoomCan {
+  switch (role) {
+    case "host":
+      return { roster: true, control: true, manage: true, settings: true, interactions: true, scene: true, billing: false };
+    case "manager":
+      return { roster: true, control: true, manage: true, settings: false, interactions: true, scene: true, billing: false };
+    case "mod":
+      return { roster: true, control: true, manage: false, settings: false, interactions: true, scene: true, billing: false };
+    default:
+      return { roster: true, control: false, manage: false, settings: false, interactions: false, scene: false, billing: false };
+  }
+}
+
+function readCan(v: unknown, role: RoomRole): RoomCan {
+  const base = capabilitiesOf(role);
+  if (!v || typeof v !== "object" || Array.isArray(v)) return base;
+  const o = v as Record<string, unknown>;
+  const flag = (k: keyof RoomCan) => (typeof o[k] === "boolean" ? (o[k] as boolean) : base[k]);
+  return {
+    roster: flag("roster"),
+    control: flag("control"),
+    manage: flag("manage"),
+    settings: flag("settings"),
+    interactions: flag("interactions"),
+    scene: flag("scene"),
+    billing: false,
+  };
+}
+
+/** The whole answer: role, how it was earned, and what it may do. */
+export function roomAccessFrom(result: RoomAccessResult | null | undefined): RoomAccessInfo {
   // Unknown or unavailable → the host, i.e. the behaviour before the route.
-  if (!result || result.available !== true) return "host";
+  if (!result || result.available !== true) {
+    return { role: "host", via: "server", can: capabilitiesOf("host"), known: false };
+  }
+  if (result.denied === true) {
+    return { role: "viewer", via: "unknown", can: capabilitiesOf("viewer"), known: true };
+  }
   const a = (result.access && typeof result.access === "object" ? result.access : {}) as Record<string, unknown>;
   const role = typeof a.role === "string" ? a.role.toLowerCase() : "";
-  if (a.is_host === true || a.host === true || HOST_ROLES.has(role)) return "host";
   const roles = truthyKeys(a.roles).map((r) => r.toLowerCase());
-  if (roles.some((r) => HOST_ROLES.has(r))) return "host";
-  if (MOD_ROLES.has(role) || roles.some((r) => MOD_ROLES.has(r))) return "mod";
-  const keys = new Set([...truthyKeys(a.can), ...truthyKeys(a.capabilities), ...truthyKeys(a.grants)]);
-  if (CONTROL_KEYS.some((k) => keys.has(k))) return "mod";
-  return "viewer";
+  const has = (set: ReadonlySet<string>) => set.has(role) || roles.some((r) => set.has(r));
+  let out: RoomRole;
+  if (a.is_host === true || a.host === true || has(HOST_ROLES)) out = "host";
+  else if (has(MANAGER_ROLES)) out = "manager";
+  else if (has(MOD_ROLES)) out = "mod";
+  else {
+    const keys = new Set([...truthyKeys(a.can), ...truthyKeys(a.capabilities), ...truthyKeys(a.grants)]);
+    out = CONTROL_KEYS.some((k) => keys.has(k)) ? "mod" : "viewer";
+  }
+  const viaRaw = typeof a.via === "string" ? a.via.toLowerCase() : "";
+  const via: RoomAccessInfo["via"] =
+    viaRaw === "org" || viaRaw === "brand" || viaRaw === "grant" ? viaRaw : out === "host" ? "brand" : "unknown";
+  return { role: out, via, can: readCan(a.can, out), known: true };
+}
+
+export function roomRoleFrom(result: RoomAccessResult | null | undefined): RoomRole {
+  return roomAccessFrom(result).role;
+}
+
+/** An open-server mod seat (#47): the grants the seat holds, as the same DTO. */
+export function seatAccessFrom(grants: Iterable<string>): RoomAccessInfo {
+  const g = new Set(grants);
+  const control = g.has("room.admit") || g.has("room.stage") || g.has("room.remove");
+  return {
+    role: control ? "mod" : "viewer",
+    via: "seat",
+    can: { roster: true, control, manage: false, settings: false, interactions: g.has("room.interactions"), scene: g.has("room.scene"), billing: false },
+    known: true,
+  };
+}
+
+/** What to SAY about a role — one line, the same on every screen. */
+export function roleTitle(info: RoomAccessInfo, host?: string | null): string {
+  if (info.via === "seat") return host ? `Mod seat on ${host}` : "Mod seat";
+  switch (info.role) {
+    case "host":
+      return info.via === "org" ? "Host · via org" : info.via === "brand" ? "Host · via brand" : "Host";
+    case "manager":
+      return "Manager";
+    case "mod":
+      return "Mod";
+    default:
+      return "Viewer";
+  }
+}
+
+/** The quiet chips under the title: what the role may do, in the words the
+ *  doctrine uses (CONTRIBUTIONS.md grants). */
+export function roleChips(info: RoomAccessInfo): string[] {
+  const c = info.can;
+  const out: string[] = [];
+  if (info.role === "host") out.push("runs the show");
+  if (c.scene) out.push("cuts scenes");
+  if (c.control) out.push("admits guests");
+  if (c.interactions) out.push("runs votes");
+  if (c.manage) out.push("grants roles");
+  if (c.settings) out.push("room settings");
+  if (!c.control && !c.scene && c.roster) out.push("watches the roster");
+  return out;
 }
 
 /** Move `id` one step up or down in an ordered list; unchanged if it can't. */

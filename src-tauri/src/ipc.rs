@@ -457,6 +457,27 @@ pub async fn room_access(
         .await
 }
 
+/// The access surface's one door (see `ProducerClient::root_request`).
+#[tauri::command]
+pub async fn endpoint_request(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    method: String,
+    path: String,
+    body: Option<Value>,
+) -> EngineResult<Value> {
+    if !path.starts_with("/v1/") || path.contains("..") {
+        return Err(EngineError::Other(
+            "endpoint_request: path must be an API route".into(),
+        ));
+    }
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .access_request(&method, &path, body)
+        .await
+}
+
 #[tauri::command]
 pub async fn room_mod_link(
     state: State<'_, AppState>,

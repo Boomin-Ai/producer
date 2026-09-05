@@ -7,7 +7,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { modSeat, type ModLink } from "../lib/modSeat";
 import { RoomControlLink, type ControlFrame, type SceneStateFrame } from "../lib/roomControl";
-import { moveInOrder } from "../lib/participants";
+import { moveInOrder, seatAccessFrom } from "../lib/participants";
+import { RoleCard } from "./RoleCard";
 import type { RoomGuest } from "../lib/ipc";
 import { GuestPanel } from "./Live";
 
@@ -91,6 +92,8 @@ export function ModSeat({ link, onLeave }: { link: ModLink; onLeave: () => void 
   }, [link]);
 
   const can = (g: string) => grants.has(g);
+  // The same card a Boomin room shows — the seat's grants as one DTO.
+  const access = seatAccessFrom(grants);
   const cut = useCallback((sceneId: string) => {
     if (!controlRef.current?.cut(sceneId)) setErr("Not connected to the room yet.");
   }, []);
@@ -151,9 +154,8 @@ export function ModSeat({ link, onLeave }: { link: ModLink; onLeave: () => void 
       <header className="rm-top" data-tauri-drag-region>
         <button className="rm-leave" onClick={onLeave} title="Leave the seat">←</button>
         <span className="modseat-title">{title}</span>
-        <span className="modseat-role">Mod</span>
+        <RoleCard access={access} host={new URL(link.origin).host} compact />
         <span className={`modseat-dot${online ? " on" : ""}`} title={online ? "Connected to the room" : "Reconnecting…"} />
-        <span className="modseat-host">{new URL(link.origin).host}</span>
       </header>
       <div className="modseat-body">
         <section className="modseat-col">

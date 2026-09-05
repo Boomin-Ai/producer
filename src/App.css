@@ -8495,13 +8495,25 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .ws-row:hover .ws-gear, .ws-gear:focus-visible { opacity: 1; }
 .ws-gear:hover { background: var(--surface-3); color: var(--fg-1); }
 
-/* header account button + menu (you, not the brand) */
+/* header account button + menu (you, not the brand).
+   The avatar sits in a PUNCH-HOLE: the opaque content ground (the vibrant
+   home's fixed `::after`, which is the surface behind both the room list
+   and Settings) has a circle masked out of its top-right corner, and the
+   avatar is centred in it, so the glass shows through a ring around it —
+   one element, no extra chrome. Geometry: header 52px high → centre y 26;
+   header right padding 20 + half of 26 → centre x = right 33px. */
 .cr-profile {
   width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line-2);
   background: var(--surface-2); color: var(--fg-1); font-size: 11px; font-weight: 700;
   display: grid; place-items: center; cursor: pointer; -webkit-app-region: no-drag;
+  padding: 0; overflow: hidden;
 }
+.cr-profile img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
 .cr-profile:hover { background: var(--surface-3); }
+#root > .cr.cr--vibrant::after {
+  -webkit-mask-image: radial-gradient(circle at calc(100% - 33px) 26px, transparent 17px, #000 18px);
+  mask-image: radial-gradient(circle at calc(100% - 33px) 26px, transparent 17px, #000 18px);
+}
 .cr-menu-backdrop { position: fixed; inset: 0; z-index: 60; }
 .cr-menu {
   position: fixed; right: 12px; top: 44px; z-index: 61; min-width: 180px; padding: 6px;
@@ -8971,3 +8983,173 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   color: var(--muted-fg);
 }
 .onboarding-modlink .modlink-drop { width: min(440px, 100%); }
+
+/* ── Role card: what you are in this room (views/RoleCard.tsx) ─────────── */
+.role-card {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 11px;
+  border-radius: 12px;
+  border: 0.5px solid oklch(1 0 0 / 0.12);
+  background: oklch(1 0 0 / 0.05);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  color: var(--fg-1);
+  -webkit-app-region: no-drag;
+  max-width: 100%;
+}
+.role-card.compact { flex-direction: row; align-items: center; gap: 8px; padding: 0 10px; height: var(--h-ctl, 28px); border-radius: 999px; }
+.role-card.pending { opacity: 0.6; }
+.role-card-title { font-size: 12.5px; font-weight: 650; letter-spacing: -0.01em; white-space: nowrap; }
+.role-card.role-host .role-card-title { color: var(--fg-1); }
+.role-card.role-manager .role-card-title,
+.role-card.role-mod .role-card-title { color: oklch(0.85 0.09 165); }
+.role-card.role-viewer .role-card-title { color: var(--fg-2); }
+.role-card-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.role-card.compact .role-card-chips { flex-wrap: nowrap; }
+.role-chip {
+  font-size: 10.5px;
+  line-height: 1;
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 0.5px solid oklch(1 0 0 / 0.1);
+  color: var(--fg-3);
+  white-space: nowrap;
+}
+.rm-top-seat-note { font-size: 12px; color: var(--fg-3); padding: 0 6px; white-space: nowrap; }
+.rm-top-left .role-card.compact { margin-left: 6px; }
+/* The header is one 48px bar and the transport must never fall off its right
+ * edge. In the bar the card is the role in words; the capability chips are
+ * hover-revealed (the title attribute carries them too) unless the window is
+ * wide enough to spend the room on them. */
+.rm-top-left .role-card.compact .role-card-chips { display: none; }
+@media (min-width: 1700px) {
+  .rm-top-left .role-card.compact .role-card-chips { display: flex; }
+}
+.rm-top-left .role-card.compact:hover .role-card-chips {
+  display: flex; position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
+  padding: 8px 10px; border-radius: var(--r-card); border: 1px solid var(--line-1);
+  background: var(--bg); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); flex-wrap: wrap; max-width: 420px;
+}
+.rm-top-left .role-card.compact { position: relative; }
+
+/* ── Account sheet: the pull-down under the top-right avatar ───────────── */
+.acct-backdrop { position: fixed; inset: 0; z-index: 60; }
+.acct-sheet {
+  position: fixed;
+  right: 12px;
+  top: 44px;
+  z-index: 61;
+  width: 320px;
+  max-height: 0;
+  overflow: hidden;
+  border-radius: var(--r-card);
+  border: 1px solid transparent;
+  background: oklch(0.16 0.01 260 / 0.72);
+  backdrop-filter: blur(28px) saturate(1.3);
+  -webkit-backdrop-filter: blur(28px) saturate(1.3);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  transform: translateY(-6px);
+  opacity: 0;
+  transition: max-height 0.26s ease, transform 0.26s ease, opacity 0.2s ease, border-color 0.2s ease;
+  pointer-events: none;
+}
+.acct-sheet.open {
+  max-height: min(78vh, 720px);
+  transform: translateY(0);
+  opacity: 1;
+  border-color: var(--line-2);
+  pointer-events: auto;
+}
+.acct-sheet-in { padding: 8px; max-height: min(78vh, 720px); overflow-y: auto; display: flex; flex-direction: column; }
+.acct-you { display: flex; flex-direction: column; gap: 2px; padding: 0 0 6px; }
+.acct-you-head { display: flex; align-items: center; gap: 10px; padding: 6px 8px 8px; }
+.acct-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px; font-size: 12.5px; }
+.acct-row-k { color: var(--fg-3); }
+.acct-row-v { color: var(--fg-1); }
+.acct-link { border: 0; background: none; color: var(--fg-2); font-size: 12.5px; cursor: pointer; padding: 0; }
+.acct-link:hover { color: var(--fg-1); }
+.acct-plus { font-size: 16px; font-weight: 500; background: oklch(1 0 0 / 0.08); }
+.acct-add .ws-pop-name { color: var(--fg-1); }
+.acct-sheet .ws-drop { width: auto; padding: 0 8px; font-size: 11px; }
+.cr-profile.on { background: var(--surface-3); border-color: oklch(1 0 0 / 0.25); }
+
+/* ── Settings → Access (views/Access.tsx): the same glass list as App ──── */
+.acc-list { display: flex; flex-direction: column; gap: 2px; }
+.acc-note { padding: 6px 12px 10px; line-height: 1.5; max-width: 560px; }
+.acc-err { color: #f5a3a3; padding: 6px 12px; }
+.acc-member { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 10px; }
+.acc-member:hover { background: oklch(1 0 0 / 0.03); }
+.acc-member-head { display: flex; align-items: center; gap: 10px; }
+.acc-member-sub { font-size: 11.5px; color: var(--fg-3); padding-left: 36px; }
+.acc-surfaces { display: flex; flex-wrap: wrap; gap: 5px; padding-left: 36px; }
+.acc-invite .acc-surfaces { padding-left: 0; }
+.acc-chip {
+  font-size: 10.5px; line-height: 1; padding: 4px 8px; border-radius: 999px;
+  border: 0.5px solid oklch(1 0 0 / 0.12); color: var(--fg-3); background: none; white-space: nowrap;
+}
+.acc-type { text-transform: capitalize; }
+.acc-role { text-transform: capitalize; color: var(--fg-2); }
+.acc-toggle { cursor: pointer; transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease; }
+.acc-toggle:hover { color: var(--fg-1); border-color: oklch(1 0 0 / 0.25); }
+.acc-toggle.on { color: var(--fg-1); background: oklch(1 0 0 / 0.1); border-color: oklch(1 0 0 / 0.2); }
+.acc-toggle.busy { opacity: 0.5; }
+.acc-toggle:disabled { cursor: default; }
+.acc-room { display: flex; flex-direction: column; gap: 2px; padding: 6px 0 8px; }
+.acc-room-name { font-size: 12.5px; font-weight: 650; padding: 4px 12px 6px; color: var(--fg-1); }
+.acc-room-row { padding-left: 24px; }
+.acc-select {
+  height: 26px; padding: 0 8px; border-radius: 8px; font-size: 12px;
+  border: 0.5px solid oklch(1 0 0 / 0.14); background: oklch(1 0 0 / 0.06); color: var(--fg-1);
+}
+.acc-invite { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; }
+.acc-invite-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.acc-invite input {
+  flex: 1; min-width: 200px; height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12.5px;
+  border: 0.5px solid oklch(1 0 0 / 0.14); background: oklch(1 0 0 / 0.06); color: var(--fg-1);
+}
+.acc-minted { display: flex; align-items: center; gap: 8px; padding: 6px 12px 8px; }
+.acc-minted code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--fg-2); }
+.acc-seats { display: flex; flex-direction: column; gap: 2px; }
+.acc-danger { color: #f5a3a3; }
+/* Team rows collapse behind the pills; Manage / the pills expand one at a time. */
+.acc-pills { display: inline-flex; gap: 5px; border: 0; background: none; padding: 0; cursor: pointer; margin-left: auto; }
+.acc-pills .acc-chip { transition: border-color 0.12s ease, color 0.12s ease; }
+.acc-pills:hover .acc-chip { border-color: oklch(1 0 0 / 0.25); color: var(--fg-1); }
+.acc-pending { color: #b8f0d4; border-color: oklch(0.85 0.12 160 / 0.5); }
+.acc-manage { border: 0; background: none; color: var(--fg-3); font-size: 11.5px; cursor: pointer; padding: 2px 4px; }
+.acc-manage:hover { color: var(--fg-1); }
+.acc-member.open { background: oklch(1 0 0 / 0.045); border: 0.5px solid oklch(1 0 0 / 0.1); }
+.acc-member.dirty .acc-member-head .ws-pop-name { color: var(--fg-1); }
+.acc-member-body { display: flex; flex-direction: column; gap: 6px; padding: 2px 0 4px 36px; }
+.acc-member-body .acc-surfaces { padding-left: 0; }
+.acc-member-body .acc-room-row { padding-left: 0; }
+.acc-member-body .acc-member-sub { padding-left: 0; }
+.acc-body-label { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-3); padding-top: 6px; }
+/* Staged diff: added = mint outline, removed = red strike. */
+.acc-toggle.added { color: #b8f0d4; border-color: oklch(0.85 0.12 160 / 0.7); background: oklch(0.85 0.12 160 / 0.08); }
+.acc-toggle.removed { color: #f5a3a3; border-color: oklch(0.7 0.15 25 / 0.6); text-decoration: line-through; background: none; }
+.cr-sheet-row.dirty .acc-select { border-color: oklch(0.85 0.12 160 / 0.7); }
+.acc-was s { color: #f5a3a3; }
+.acc-review-bar {
+  position: sticky; bottom: 8px; z-index: 5; display: flex; align-items: center; gap: 8px; margin-top: 10px;
+  padding: 8px 12px; border-radius: var(--r-card); border: 1px solid var(--line-2);
+  background: oklch(0.16 0.01 260 / 0.72); backdrop-filter: blur(28px) saturate(1.3); -webkit-backdrop-filter: blur(28px) saturate(1.3);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+}
+.acc-review-bar .cr-sheet-row-sub { flex: 1; }
+.acc-primary { color: var(--fg-1); border-color: oklch(1 0 0 / 0.3); }
+/* The confirm sheet: the account sheet's glass and pull-down motion, centred. */
+.acct-sheet.acc-confirm { right: auto; left: 50%; top: 56px; width: min(460px, 92vw); transform: translate(-50%, -6px); }
+.acct-sheet.acc-confirm.open { transform: translate(-50%, 0); }
+.acc-confirm-title { font-size: 13px; font-weight: 650; color: var(--fg-1); padding: 6px 8px 8px; }
+.acc-confirm-summary { display: flex; flex-direction: column; gap: 4px; padding: 0 8px 10px; font-size: 12.5px; line-height: 1.5; color: var(--fg-1); }
+.acc-confirm-list { display: flex; flex-direction: column; gap: 2px; padding: 0 4px; border-top: 0.5px solid oklch(1 0 0 / 0.08); }
+.acc-confirm-item { display: flex; gap: 8px; align-items: flex-start; padding: 5px 4px; font-size: 12px; color: var(--fg-2); }
+.acc-confirm-item.ok { color: #b8f0d4; }
+.acc-confirm-item.fail { color: #f5a3a3; }
+.acc-confirm-dot { width: 14px; text-align: center; flex: none; }
+.acc-confirm-text { display: flex; flex-direction: column; gap: 2px; }
+.acc-confirm-err { font-size: 11px; color: #f5a3a3; }
+.acc-confirm-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 10px 8px 4px; }

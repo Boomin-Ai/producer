@@ -300,16 +300,65 @@ impl ProducerClient {
             .bearer_auth(&self.token)
             .send()
             .await?;
-        if resp.status().as_u16() == 404 {
+        let status = resp.status().as_u16();
+        if status == 404 {
             return Ok(serde_json::json!({ "available": false }));
         }
+        // The route exists and REFUSED this token: that is an answer ("not
+        // the host"), never a reason to fall back to the host view. Only a
+        // missing route or a transport failure keeps the pre-route default.
+        if status == 401 || status == 403 {
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Ok(serde_json::json!({
+                "available": true,
+                "denied": true,
+                "status": status,
+                "message": error_message(&b, status),
+            }));
+        }
         if !resp.status().is_success() {
-            let status = resp.status().as_u16();
             let b: Value = resp.json().await.unwrap_or(Value::Null);
             return Err(EngineError::Other(error_message(&b, status)));
         }
         let body: Value = resp.json().await?;
         Ok(serde_json::json!({ "available": true, "access": body }))
+    }
+
+    /// One authenticated call against the API ROOT (bearer + brand scope) —
+    /// distinct from `root_request` above, which keeps the engine's own
+    /// error shape. This one is
+    /// for the access surface: members, grants, invites, mod seats, `/auth/me`.
+    /// The webview names the route; this only carries the credential. A 404
+    /// answers `{available:false}` so a server without the route reads as
+    /// "not here" rather than as a failure.
+    pub async fn access_request(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<Value>,
+    ) -> EngineResult<Value> {
+        let url = self.root_url(path);
+        let mut req = match method {
+            "POST" => self.http.post(&url),
+            "PATCH" => self.http.patch(&url),
+            "DELETE" => self.http.delete(&url),
+            _ => self.http.get(&url),
+        }
+        .bearer_auth(&self.token);
+        if let Some(b) = body {
+            req = req.json(&b);
+        }
+        let resp = req.send().await?;
+        let status = resp.status().as_u16();
+        if status == 404 {
+            return Ok(serde_json::json!({ "available": false, "status": 404 }));
+        }
+        if !resp.status().is_success() {
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        let b: Value = resp.json().await.unwrap_or(serde_json::json!({}));
+        Ok(serde_json::json!({ "available": true, "status": status, "body": b }))
     }
 
     /// Mint a mod link (#47): a control seat (kind producer, control grants,

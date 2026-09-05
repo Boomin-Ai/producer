@@ -825,6 +825,11 @@ export const guests = {
    * Producer behaves as the host, exactly as before. */
   access: (endpointId: string, roomId: string) =>
     invoke<{ available?: boolean; access?: unknown }>("room_access", { endpointId, roomId }),
+  /** One authenticated call against the API root for the ACCESS surface
+   * (lib/access.ts): members, grants, invites, mod seats, `/auth/me`. A 404
+   * answers `available: false` — "this server has no such route". */
+  request: (endpointId: string, method: "GET" | "POST" | "PATCH" | "DELETE", path: string, body?: unknown) =>
+    invoke<{ available: boolean; status: number; body?: unknown }>("endpoint_request", { endpointId, method, path, body: body ?? null }),
   /** Mint a MOD LINK (#47): a control seat another Producer opens. The URL
    * comes back exactly once. */
   modLink: (endpointId: string, roomId: string, displayName?: string | null) =>
