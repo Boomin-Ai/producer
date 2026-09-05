@@ -447,6 +447,11 @@ extern "C" {
     pub fn producer_list_windows(buf: *mut c_char, buflen: c_int) -> c_int;
     pub fn producer_drag_chip_show();
     pub fn producer_drag_chip_hide();
+    /// Cutout: register the `producer_person_mask` video filter with libobs.
+    /// macOS = Vision person segmentation (person_mask.m); Windows = a
+    /// pass-through under the same id so scene configs round-trip. Call once,
+    /// after obs_startup and before any source is created.
+    pub fn producer_person_mask_register();
     pub fn producer_open_screen_settings();
     pub fn producer_open_camera_settings();
     /// Virtual camera (R13): ask macOS to install the bundled CMIO extension.
@@ -687,6 +692,19 @@ extern "C" {
     pub fn os_cpu_usage_info_query(info: *mut c_void) -> f64;
     /// Media playback (stingers). Duration is 0 until the file is opened.
     pub fn obs_source_media_get_duration(source: *mut obs_source_t) -> i64;
+
+    // --- Used by shim_win.c's pass-through Cutout filter, NOT by Rust ---
+    // On Windows the C shim reaches obs.dll through the raw-dylib import
+    // stubs this block synthesises, so every obs symbol shim_win.c calls
+    // must be declared here or the release link fails at `__imp_*`.
+    pub fn obs_register_source_s(info: *const c_void, size: usize);
+    pub fn obs_source_skip_video_filter(filter: *mut obs_source_t);
+    pub fn obs_data_set_default_string(
+        data: *mut obs_data_t,
+        name: *const c_char,
+        val: *const c_char,
+    );
+    pub fn obs_data_set_default_double(data: *mut obs_data_t, name: *const c_char, val: f64);
     pub fn obs_source_media_restart(source: *mut obs_source_t);
     pub fn obs_source_media_stop(source: *mut obs_source_t);
 }

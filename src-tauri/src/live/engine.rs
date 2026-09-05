@@ -431,6 +431,11 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
     // §5.1: OBS UI tasks are marshalled to the macOS main thread from the start.
     unsafe { ffi::obs_set_ui_task_handler(ui_task_handler) };
 
+    // Producer's own filters, registered like a plugin would but from the
+    // shim: Cutout (person mask). Before modules load so it is present
+    // whenever a scene config that names it is read.
+    unsafe { ffi::producer_person_mask_register() };
+
     #[cfg(target_os = "macos")]
     // Dev-mode escape hatch: outside a .app bundle, NSBundle's builtInPlugInsURL
     // does not point at the engine artifact; allow an explicit override.

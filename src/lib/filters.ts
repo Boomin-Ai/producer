@@ -31,6 +31,9 @@ export interface FilterProp {
   /** Shown after the number ("%", "dB", "ms"). */
   unit?: string;
   choices?: { value: string; label: string }[];
+  /** Only render while another setting holds this value (a slider that
+   * means nothing in the other modes). */
+  showWhen?: { key: string; value: string };
 }
 
 export interface FilterSpec {
@@ -43,8 +46,40 @@ export interface FilterSpec {
 }
 
 /** The launch set: the filters people actually reach for. The engine ships
- * ~20; these nine cover the standard webcam and microphone chains. */
+ * ~20; these ten cover the standard webcam and microphone chains. */
 export const FILTER_CATALOG: FilterSpec[] = [
+  {
+    // Producer's own filter (person_mask.m): Apple Vision person
+    // segmentation on macOS; a pass-through on Windows until it has a mask
+    // provider. Opt-in — nothing attaches it to a new source.
+    kind: "producer_person_mask",
+    label: "Cutout",
+    hint: "Removes your background. Soft blurs it; Cut removes it so you can sit on a set.",
+    media: "video",
+    props: [
+      {
+        key: "mode",
+        label: "Mode",
+        kind: "choice",
+        choices: [
+          { value: "off", label: "Off" },
+          { value: "soft", label: "Soft" },
+          { value: "cut", label: "Cut" },
+        ],
+      },
+      { key: "feather", label: "Feather", kind: "slider", min: 0, max: 1, step: 0.01 },
+      { key: "erode", label: "Erode", kind: "slider", min: 0, max: 1, step: 0.01 },
+      {
+        key: "blur",
+        label: "Blur radius",
+        kind: "slider",
+        min: 0,
+        max: 1,
+        step: 0.01,
+        showWhen: { key: "mode", value: "soft" },
+      },
+    ],
+  },
   {
     kind: "chroma_key_filter_v2",
     label: "Chroma Key",

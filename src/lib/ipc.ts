@@ -614,9 +614,12 @@ export const network = {
     invoke<NetworkBrandCard>("network_lookup", { endpointId, slug }),
   liveRooms: (endpointId: string) =>
     invoke<{ rooms?: NetworkLiveRoom[] }>("network_live_rooms", { endpointId }),
-  /** Knock on a visible open stage; the join_url opens the guest page. */
+  /** Knock on a visible open stage. The join_url is the seat's credential
+   * (its invite code) — Producer takes the seat natively (lib/guestSeat),
+   * never a browser. `api_base` is the endpoint the code is good for. Rust
+   * starts the virtual camera when it can; `producer_cam` says so. */
   enterRoom: (endpointId: string, roomId: string) =>
-    invoke<{ join_url: string; resumed: boolean }>("network_enter_room", { endpointId, roomId }),
+    invoke<NetworkSeat>("network_enter_room", { endpointId, roomId }),
   /** Every deal this brand is party to. */
   deals: (endpointId: string) => invoke<{ deals?: NetworkDeal[] }>("network_deals", { endpointId }),
   /** Book an appearance: we (the host) pay them to appear on OUR server room.
@@ -636,21 +639,25 @@ export const network = {
   /** accept | decline (beneficiary) · cancel (either side, before funding). */
   dealAction: (endpointId: string, id: string, action: "accept" | "decline" | "cancel") =>
     invoke<{ deal: NetworkDeal }>("network_deal_action", { endpointId, id, action }),
-  /** Beneficiary enters the show THROUGH the deal — no browser: Rust knocks
-   * via the API and opens the guest page in its own window (`guest-<id>`).
+  /** Beneficiary enters the show THROUGH the deal: Rust knocks via the API
+   * (so admitting them settles it) and starts the virtual camera; the UI
+   * opens a room in guest mode on the returned seat. No browser, no window.
    * Rejects with a message starting `network_room_closed:` while the host's
    * room isn't open. */
-  /** `guestName` prefills the guest page's display name (`?name=`). Rust
-   * starts the virtual camera and adds `?cam=producer` when it can —
-   * `producer_cam` reports whether the scene is the camera this time. */
-  enterDeal: (endpointId: string, dealId: string, windowTitle?: string, guestName?: string | null) =>
-    invoke<{ join_url: string; resumed: boolean; producer_cam?: boolean }>("network_deal_enter", {
-      endpointId,
-      dealId,
-      windowTitle,
-      guestName: guestName ?? null,
-    }),
+  enterDeal: (endpointId: string, dealId: string) =>
+    invoke<NetworkSeat>("network_deal_enter", { endpointId, dealId }),
 };
+
+/** What a knock returns: the seat this Producer now holds in someone
+ * else's room. */
+export interface NetworkSeat {
+  join_url: string;
+  resumed: boolean;
+  /** The virtual camera is running — the seat prefers it as its camera. */
+  producer_cam?: boolean;
+  /** The endpoint's base URL; the invite code is a credential for THIS API. */
+  api_base: string;
+}
 
 /** True when an `enterDeal` rejection means the host hasn't opened the room. */
 export const isRoomClosedError = (e: unknown) => String(e).includes("network_room_closed");

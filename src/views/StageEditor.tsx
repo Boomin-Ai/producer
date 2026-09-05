@@ -35,6 +35,7 @@ export function StageEditor({
   onOrder,
   onSelect,
   onDelete,
+  onLive,
   onCommit,
   selectId,
 }: {
@@ -48,7 +49,9 @@ export function StageEditor({
   /** Delete/Backspace removes the selected source (part of the keymap). */
   onDelete?: (id: string) => void;
   /** Fires after every committed edit — the room mirrors it into the scene. */
-  onCommit?: () => void;
+  /** Every uncommitted transform as it streams (drag in flight). */
+  onLive?: (id: string, patch: LiveTransformPatch) => void;
+  onCommit?: (id: string, patch: LiveTransformPatch) => void;
   /** Selection driven from OUTSIDE (a rail row click): lights the item up. */
   selectId?: string | null;
 }) {
@@ -111,9 +114,12 @@ export function StageEditor({
       raf.current = 0;
       const p = pending.current;
       pending.current = null;
-      if (p) ipc.liveSetTransform(id, p, false).catch(() => {});
+      if (p) {
+        ipc.liveSetTransform(id, p, false).catch(() => {});
+        onLive?.(id, p);
+      }
     });
-  }, []);
+  }, [onLive]);
 
   const commit = useCallback((id: string, patch: LiveTransformPatch) => {
     if (raf.current) {
@@ -122,7 +128,7 @@ export function StageEditor({
       pending.current = null;
     }
     ipc.liveSetTransform(id, patch, true).catch(() => {});
-    onCommit?.();
+    onCommit?.(id, patch);
   }, [onCommit]);
 
   /** Where an item's picture ACTUALLY lands on the canvas. The box the

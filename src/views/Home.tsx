@@ -36,6 +36,7 @@ import { useUpdater } from "../lib/updater";
 import { DestinationEditor, LiveView } from "./Live";
 import { ModSeat } from "./ModSeat";
 import { parseModLink, type ModLink } from "../lib/modSeat";
+import type { GuestSeatSpec } from "../lib/guestSeat";
 
 const STATE_LABEL: Record<string, string> = {
   scheduled: "Scheduled",
@@ -49,6 +50,10 @@ const STATE_LABEL: Record<string, string> = {
 type MainView =
   | { kind: "home" }
   | { kind: "room"; room: LiveRoom }
+  /** GUEST MODE: a room opened on a seat in someone else's show (a deal
+   * entered, a live stage knocked on). `room` is this Producer's own stage
+   * — the scene that is their camera — when they have one. */
+  | { kind: "seat"; room?: LiveRoom; seat: GuestSeatSpec }
   | { kind: "compose" }
   | { kind: "history" }
   /** The server's settings console (Brand settings, Payments, members…), delivered at runtime. */
@@ -382,6 +387,15 @@ export function Home({
     loadJobs();
   };
 
+  /** Take a seat in someone else's room, natively: open OUR room (the
+   * scene that is our camera — the one most recently on air, else the
+   * first) in guest mode with the seat's green room over it. No browser,
+   * no popout window. Room-less when this workspace has no rooms yet. */
+  const enterSeat = (seat: GuestSeatSpec) => {
+    const own = [...rooms].sort((a, b) => (b.last_live_at ?? "").localeCompare(a.last_live_at ?? ""))[0];
+    setView({ kind: "seat", room: own, seat });
+  };
+
   const title = view.kind === "compose" ? "New post" : view.kind === "history" ? "Rundown" : view.kind === "console" ? "Settings" : null;
 
   if (view.kind === "modseat") {
@@ -401,6 +415,16 @@ export function Home({
           onLeave={back}
         />
       </>
+    );
+  }
+  if (view.kind === "seat") {
+    return (
+      <LiveView
+        key={`seat:${view.seat.joinUrl}`}
+        room={view.room}
+        seat={view.seat}
+        onLeave={back}
+      />
     );
   }
 
@@ -562,6 +586,7 @@ export function Home({
             setView({ kind: "room", room });
           }}
           onRoomsChanged={loadLive}
+          onEnterSeat={enterSeat}
           offNetwork={offNetwork}
           onCompose={() => setView({ kind: "compose" })}
           onHistory={() => setView({ kind: "history" })}
@@ -1058,6 +1083,7 @@ function ControlRoomHome({
   streaming,
   onOpenRoom,
   onRoomsChanged,
+  onEnterSeat,
   offNetwork,
   onCompose,
   onHistory,
@@ -1070,6 +1096,8 @@ function ControlRoomHome({
   streaming: boolean;
   onOpenRoom: (room: LiveRoom) => void;
   onRoomsChanged: () => void;
+  /** Open our room in guest mode on a seat we just took (deal / knock). */
+  onEnterSeat: (seat: GuestSeatSpec) => void;
   /** Local rooms whose server row is gone (room sync); shown as a chip. */
   offNetwork: Set<string>;
   onCompose: () => void;
@@ -1113,9 +1141,9 @@ function ControlRoomHome({
         * here is harmless, whereas mid-broadcast it would be noise over a
         * running show. The rail is FIXED against the icon rail — attached,
         * full height, part of the furniture rather than a floating card. */}
-      <NetworkRail rooms={rooms} onAddEndpoint={onAddEndpoint} />
+      <NetworkRail rooms={rooms} onAddEndpoint={onAddEndpoint} onEnterSeat={onEnterSeat} />
       <FirewallBanner />
-      <LiveNowStrip />
+      <LiveNowStrip onEnterSeat={onEnterSeat} />
       <section className="cr-section" id="sec-onair">
         <div className="cr-label">
           ON AIR
@@ -1788,18 +1816,6 @@ function HistoryView({
 /** Brand Network at a glance: how many are live, who's waiting on you, and a
  * slug field to invite someone. Slugs are unique platform-wide, so typing one
  * addresses a brand exactly — no picker needed. */
-/** The brand behind a connected endpoint, by its slug; null when unknown. */
-async function brandNameFor(endpointId: string): Promise<string | null> {
-  try {
-    const ep = (await ipc.listEndpoints()).find((e) => e.id === endpointId);
-    if (!ep?.brand_slug) return null;
-    const { brands } = await ipc.boominListBrands(endpointId);
-    return brands.find((b) => b.slug === ep.brand_slug)?.name ?? null;
-  } catch {
-    return null;
-  }
-}
-
 /** Resolve the connected Boomin endpoint once — every network surface needs it. */
 /** Whether the self-hoster's Network invitation was dismissed (prefs store);
  * `null` until read. One hook, so the card, the home layout and the Settings
@@ -1854,7 +1870,15 @@ function useActiveEndpoint(): EndpointInfo | null {
  * and "Book" proposes an APPEARANCE deal — we (the host) pay them to appear
  * on one of our rooms. Presence is delivery: admitting them from the Guests
  * panel settles the funded deal server-side; nothing here marks anything. */
-function NetworkRail({ rooms, onAddEndpoint }: { rooms: LiveRoom[]; onAddEndpoint: () => void }) {
+function NetworkRail({
+  rooms,
+  onAddEndpoint,
+  onEnterSeat,
+}: {
+  rooms: LiveRoom[];
+  onAddEndpoint: () => void;
+  onEnterSeat: (seat: GuestSeatSpec) => void;
+}) {
   const activeEp = useActiveEndpoint();
   // Boomin-only surface. On a self-hosted endpoint NOTHING here is called —
   // the server has no /v1/app/network/* — so `endpointId` stays null and
@@ -1955,24 +1979,25 @@ function NetworkRail({ rooms, onAddEndpoint }: { rooms: LiveRoom[]; onAddEndpoin
     }
   };
 
-  /** Enter the show through the deal — Producer knocks and opens the guest
-   * page in its own window; no browser, no link. Only the BENEFICIARY of a
-   * funded (or free, accepted) deal can. */
+  /** Enter the show through the deal — Producer knocks and opens OUR room in
+   * guest mode on the seat: the green room, natively. No browser, no window,
+   * no link. Only the BENEFICIARY of a funded (or free, accepted) deal can. */
   const [entering, setEntering] = useState<string | null>(null);
   const enterDeal = async (d: NetworkDeal, hostName: string) => {
     if (!endpointId) return;
     setEntering(d.id);
     setNote(null);
     try {
-      // Our brand name for the guest seat (the endpoint's name is the
-      // account, not the brand). Best-effort: no name → the page asks.
-      const brandName = await brandNameFor(endpointId);
-      const res = await network.enterDeal(endpointId, d.id, `${hostName} · ${d.title}`, brandName);
-      setNote(
-        res.producer_cam
-          ? `Knocked on ${hostName}'s room through the deal — your guest seat opened in its own window. Your Producer scene is the camera.`
-          : `Knocked on ${hostName}'s room through the deal — your guest seat opened in its own window.`,
-      );
+      const res = await network.enterDeal(endpointId, d.id);
+      onEnterSeat({
+        joinUrl: res.join_url,
+        apiBase: res.api_base,
+        hostName,
+        title: d.title,
+        producerCam: !!res.producer_cam,
+        endpointId,
+        dealId: d.id,
+      });
     } catch (e) {
       setNote(isRoomClosedError(e) ? "The host hasn't opened the room yet." : String(e).replace(/^Error:\s*/, ""));
     } finally {
@@ -2676,7 +2701,7 @@ function NetworkInviteCard({ onJoin }: { onJoin: () => void }) {
   );
 }
 
-function LiveNowStrip() {
+function LiveNowStrip({ onEnterSeat }: { onEnterSeat: (seat: GuestSeatSpec) => void }) {
   // Boomin-only (/v1/app/network/rooms/live): never polled on a self-hosted
   // endpoint — the id is null there, so the effect below never fires.
   const activeEp = useActiveEndpoint();
@@ -2713,8 +2738,15 @@ function LiveNowStrip() {
     setNote(null);
     try {
       const res = await network.enterRoom(endpointId, r.room_id);
-      await openUrl(res.join_url);
-      setNote(`Knocked on ${r.brand.name}'s stage — your guest seat opened in the browser.`);
+      onEnterSeat({
+        joinUrl: res.join_url,
+        apiBase: res.api_base,
+        hostName: r.brand.name,
+        title: r.title ?? `${r.brand.name}'s stage`,
+        producerCam: !!res.producer_cam,
+        endpointId,
+        networkRoomId: r.room_id,
+      });
     } catch (e) {
       setNote(String(e).replace(/^Error:\s*/, ""));
     } finally {
