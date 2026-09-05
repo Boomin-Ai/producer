@@ -105,6 +105,7 @@ import {
   localSetDecision,
 } from "../lib/participants";
 import { RoleCard } from "./RoleCard";
+import { areaPath, pushSample, renderPressure, renderScale, renderTone } from "../lib/renderLoad";
 
 // Transport-truthful copy (M-L4 finding: an RTMP session can look healthy
 // while the platform discards it — only the dashboard confirms LIVE).
@@ -2267,9 +2268,11 @@ export function LiveView({
   }, []);
   const [destinations, setDestinations] = useState<LiveDestination[]>([]);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
-  /** 60s render-load history for the stats sparkline (1Hz, CPU share). */
-  const loadHist = useRef<number[]>([]);
+  /** 60-sample render-PRESSURE history for the stats chart (1 Hz): mean
+   * render time over the frame budget, from the engine snapshot. */
+  const [loadHist, setLoadHist] = useState<number[]>([]);
   const snapRef = useRef<LiveSnapshot | null>(null);
+  const loadPrevRef = useRef<LiveSnapshot | null>(null);
   /** Live guest previews, source-id → data URL (15fps demand-driven). */
   const [guestThumbs, setGuestThumbs] = useState<Record<string, string>>({});
 
@@ -3664,8 +3667,13 @@ export function LiveView({
   const engineOk = snapshot?.engine_ready && snapshot?.bootstrap_ok;
   useEffect(() => {
     const t = window.setInterval(() => {
-      loadHist.current.push(snapRef.current?.cpu ?? 0);
-      if (loadHist.current.length > 60) loadHist.current.shift();
+      const now = snapRef.current;
+      // A stopped engine has no renderer: no sample, the chart holds still
+      // (the one honest flat line). Idle-but-running jitters, as it should.
+      if (!now?.engine_ready) return;
+      const v = renderPressure(now, loadPrevRef.current);
+      loadPrevRef.current = now;
+      setLoadHist((h) => pushSample(h, v));
     }, 1000);
     return () => window.clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -4082,6 +4090,7 @@ export function LiveView({
   };
 
   const addScene = () => {
+    if (refuseSetEdit()) return;
     const n = scenes.length + 1;
     // Save the CURRENT look, extras included — the scene is a snapshot of
     // the whole stage, not just which slots are on.
@@ -4101,12 +4110,16 @@ export function LiveView({
     setActiveSceneId(next.id);
   };
 
-  const removeScene = (id: string) => writeCfg({ ...cfg, scenes: scenes.filter((s) => s.id !== id) });
+  const removeScene = (id: string) => {
+    if (refuseSetEdit()) return;
+    writeCfg({ ...cfg, scenes: scenes.filter((s) => s.id !== id) });
+  };
 
   /** Re-record a scene from what's on the stage right now. Without this, a
    * built-in look can never be corrected — you'd fix the stage, switch away,
    * and the old recipe would undo you every time. */
   const updateScene = (id: string) => {
+    if (refuseSetEdit()) return;
     const look: Record<string, SceneItemLook> = Object.fromEntries(
       (sources.items ?? [])
         .filter((i) => i.kind !== "guest") // slots carry guest geometry; ids are transient
@@ -4151,6 +4164,7 @@ export function LiveView({
     setRenamingScene(null);
     const name = renameDraft.trim();
     if (!id || !name) return;
+    if (refuseSetEdit()) return;
     writeCfg({ ...cfg, scenes: scenes.map((x) => (x.id === id ? { ...x, name } : x)) });
   };
 
@@ -4171,6 +4185,7 @@ export function LiveView({
         void cutHostScene(hs.id);
         return;
       }
+      if (!isHostRef.current) return; // no host directory yet: nothing to cut
       const sc = scenes[n - 1];
       if (!sc) return;
       e.preventDefault();
@@ -5628,6 +5643,21 @@ export function LiveView({
         // The numbers behind the health dot. Real data only.
         const fmtT = (secs: number) =>
           `${String(Math.floor(secs / 60)).padStart(2, "0")}:${String(Math.floor(secs % 60)).padStart(2, "0")}`;
+        // Render load: mean render time / frame budget, 0–100%. The area is
+        // a 60 s window at the 1 Hz status tick; the axis ceiling follows the
+        // window's peak so an idle engine's jitter is still a curve.
+        const loadNow = loadHist.length ? loadHist[loadHist.length - 1] : 0;
+        const loadTone = renderTone(loadNow);
+        const loadScale = renderScale(loadHist);
+        const CW = 240;
+        const CH = 80;
+        const { line, area } = areaPath(loadHist, CW, CH, loadScale);
+        const budgetUs = snapshot?.video_fps ? 1e6 / snapshot.video_fps : 0;
+        const loadTitle = engineOk
+          ? `Render load: mean render time over the frame budget${
+              snapshot?.render_time_us ? ` (${(snapshot.render_time_us / 1000).toFixed(2)} ms of ${(budgetUs / 1000).toFixed(1)} ms)` : ""
+            }, last 60 s`
+          : "Render load — engine stopped";
         return (
           <div className="stx">
             <div className="stx-grid">
@@ -5643,18 +5673,21 @@ export function LiveView({
                 {reconnectTotal > 0 && <span>{reconnectTotal} reconnect{reconnectTotal === 1 ? "" : "s"}</span>}
               </div>
             ) : null}
-            <div className="stx-chart" title="Render load (CPU share), last 60s">
-              <span className="stx-lbl">Render load</span>
-              <svg viewBox="0 0 120 28" preserveAspectRatio="none">
-                <polyline
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  points={loadHist.current.map((v, k) => `${(k / 59) * 120},${28 - Math.min(1, v / 100) * 26 - 1}`).join(" ")}
-                />
-              </svg>
-            </div>
+            <div className={`stx-chart tone-${loadTone}`} title={loadTitle}>
+              <div className="stx-chart-head">
+                <span className="stx-lbl">Render load</span>
+                <span className="stx-chart-now">{engineOk ? `Render ${loadNow < 10 ? loadNow.toFixed(1) : loadNow.toFixed(0)}%` : "Stopped"}</span>
               </div>
+              <div className="stx-chart-plot">
+                <span className="stx-chart-scale">{loadScale}%</span>
+                <svg viewBox={`0 0 ${CW} ${CH}`} preserveAspectRatio="none" aria-hidden="true">
+                  <line className="stx-chart-base" x1="0" y1={CH - 0.5} x2={CW} y2={CH - 0.5} />
+                  {area && <path className="stx-chart-area" d={area} />}
+                  {line && <path className="stx-chart-line" d={line} />}
+                </svg>
+              </div>
+            </div>
+          </div>
         );
       }
     }

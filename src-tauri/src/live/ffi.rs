@@ -684,6 +684,11 @@ extern "C" {
     /// without patching or rebuilding the engine.
     pub fn obs_set_cmdline_args(argc: c_int, argv: *const *const c_char);
     pub fn obs_get_active_fps() -> f64;
+    /// Mean graphics-thread render time per frame (ns), libobs's own rolling
+    /// average. Against the frame budget (1e6/fps µs) it is RENDER PRESSURE:
+    /// the honest "how close is the renderer to missing frames" number, and
+    /// it jitters on an idle engine, which is real signal, not noise.
+    pub fn obs_get_average_frame_time_ns() -> u64;
     pub fn video_output_get_total_frames(video: *const video_t) -> u32;
     pub fn video_output_get_skipped_frames(video: *const video_t) -> u32;
     /// Opaque CPU sampler; must be started once and queried over time, since

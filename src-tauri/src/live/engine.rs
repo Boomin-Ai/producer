@@ -899,6 +899,11 @@ pub struct Snapshot {
     pub skipped_frames: u32,
     pub total_frames: u32,
     pub cpu: f64,
+    /// Mean render time per frame in µs (`obs_get_average_frame_time_ns`),
+    /// 0 until the graphics thread has rendered. The UI divides it by the
+    /// frame budget (1e6 / video_fps) for the "Render load" chart.
+    #[serde(default)]
+    pub render_time_us: f64,
     pub video_height: u32,
     pub video_fps: u32,
     /// The H.264 encoder id every session uses (encoders.rs), and whether it
@@ -1911,6 +1916,7 @@ pub fn start(
                             )
                         };
                         let fps = ffi::obs_get_active_fps();
+                        let render_time_us = ffi::obs_get_average_frame_time_ns() as f64 / 1000.0;
                         let cpu = if cpu_info.is_null() {
                             0.0
                         } else {
@@ -1921,6 +1927,7 @@ pub fn start(
                         sn.total_frames = total;
                         sn.skipped_frames = skipped;
                         sn.cpu = cpu;
+                        sn.render_time_us = render_time_us;
                     }
                 }
 
