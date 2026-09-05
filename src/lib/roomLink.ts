@@ -9,6 +9,21 @@ import { guests, ipc, registerRoom, type LiveRoom } from "./ipc";
 import { parseConfig, serializeConfig } from "./room";
 import { resolveActiveEndpoint } from "./workspace";
 
+/** The server stores only a hash of the join code, so a link is readable
+ * exactly once — at mint. When the room already has a code but this machine
+ * has no copy (fresh install, re-synced room), the enable call answers with
+ * `join_url: null`; rotate to get a readable one. Waiting link guests are
+ * revoked by the rotation, admitted ones stay. */
+export async function mintJoinLink(endpointId: string, serverRoomId: string): Promise<string> {
+  const first = await guests.joinLink(endpointId, serverRoomId);
+  const url = first.join_url ?? first.url ?? null;
+  if (url) return url;
+  const rotated = await guests.joinLink(endpointId, serverRoomId, true);
+  const url2 = rotated.join_url ?? rotated.url ?? null;
+  if (!url2) throw new Error("The server did not return a link.");
+  return url2;
+}
+
 export async function ensureRoomJoinLink(room: LiveRoom): Promise<string> {
   const cfg = parseConfig(room.config);
   if (cfg.guest_link) return cfg.guest_link;
@@ -19,9 +34,7 @@ export async function ensureRoomJoinLink(room: LiveRoom): Promise<string> {
     const reg = await registerRoom(ep.id, room.name, room.id);
     sid = reg.room.id;
   }
-  const res = await guests.joinLink(ep.id, sid);
-  const url = res.join_url ?? res.url ?? null;
-  if (!url) throw new Error("The server did not return a link.");
+  const url = await mintJoinLink(ep.id, sid);
   // Read-modify-write against FRESH config (a slot binding saved meanwhile must survive).
   const fresh = (await ipc.liveListRooms()).find((r) => r.id === room.id);
   const now = parseConfig(fresh?.config ?? room.config);

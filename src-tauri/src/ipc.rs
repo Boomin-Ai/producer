@@ -653,11 +653,12 @@ pub async fn room_join_link(
     state: State<'_, AppState>,
     endpoint_id: String,
     room_id: String,
+    rotate: Option<bool>,
 ) -> EngineResult<Value> {
     let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
     ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)
-        .room_join_link(&room_id)
+        .room_join_link(&room_id, rotate.unwrap_or(false))
         .await
 }
 
