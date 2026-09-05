@@ -107,6 +107,9 @@ export interface RoomControlOptions {
   onClose?: () => void;
   /** Channels to subscribe on every (re)connect, e.g. `interaction:host`. */
   subscribe?: string[];
+  /** Wire → frame. Default: the open server's `{type}` frames; Boomin's
+   *  `{channels, action, payload}` publishes pass lib/boominRoom.ts here. */
+  parse?: (raw: unknown) => ControlFrame | null;
 }
 
 /** A self-healing control socket. `send` queues while offline; the newest
@@ -190,7 +193,7 @@ export class RoomControlLink {
       this.opts.onOpen?.();
     };
     ws.onmessage = (ev) => {
-      const frame = parseControlFrame(ev.data);
+      const frame = (this.opts.parse ?? parseControlFrame)(ev.data);
       if (frame && frame.type !== "pong") this.opts.onFrame(frame);
     };
     ws.onclose = () => {

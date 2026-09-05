@@ -93,6 +93,40 @@ impl ProducerClient {
         url
     }
 
+    /// A brand scope means the hosted backend (Boomin): the room routes there
+    /// differ in a few places from the open server's (producer-server
+    /// contract) — POST verbs for interaction transitions, `contributions`
+    /// for overlays, no runs, no audience code, a ticket + upgrade instead of
+    /// `control-session`. Every branch below keys on this one derivation,
+    /// the same one ipc.rs `endpoint_kind_of` and workspace.ts `isBoomin` use.
+    pub fn is_boomin(&self) -> bool {
+        self.brand_slug.is_some()
+    }
+
+    /// One platform-root request (see `root_url`) with the contract's error
+    /// envelope read on failure. `body` None = no JSON body.
+    async fn root_request(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<&Value>,
+    ) -> EngineResult<Value> {
+        let mut req = self
+            .http
+            .request(method, self.root_url(path))
+            .bearer_auth(&self.token);
+        if let Some(b) = body {
+            req = req.json(b);
+        }
+        let resp = req.send().await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     /// Validate the token and learn its class + the server identity.
     pub async fn get_session(&self) -> EngineResult<Session> {
         let resp = self
@@ -303,6 +337,17 @@ impl ProducerClient {
     /// A 120 s ticket to the room channel's control side (host role). The
     /// webview opens the socket itself; this only mints the ticket.
     pub async fn room_control_session(&self, room_id: &str) -> EngineResult<Value> {
+        if self.is_boomin() {
+            // Same shape the webview's RoomControlLink consumes; the ticket
+            // route already returns `signaling_url` (api #392).
+            let t = self.room_channel_ticket(room_id).await?;
+            return Ok(serde_json::json!({
+                "signaling_ticket": t.get("ticket").cloned().unwrap_or(Value::Null),
+                "signaling_url": t.get("signaling_url").cloned().unwrap_or(Value::Null),
+                "role": t.get("role").cloned().unwrap_or(Value::Null),
+                "can": t.get("can").cloned().unwrap_or(Value::Null),
+            }));
+        }
         let resp = self
             .http
             .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/control-session")))
@@ -316,6 +361,45 @@ impl ProducerClient {
             return Err(EngineError::Other(error_message(&b, status)));
         }
         Ok(resp.json().await?)
+    }
+
+    /// Boomin (api #392): a 120 s ticket into the room's Durable Object for a
+    /// host or a mod — `scene.cut`, `contribution.*` and the interaction
+    /// frames ride it. `{ ticket, expires_in, role, can, signaling_url }`.
+    pub async fn room_channel_ticket(&self, room_id: &str) -> EngineResult<Value> {
+        self.root_request(
+            reqwest::Method::POST,
+            &format!("/v1/app/live/rooms/{room_id}/channel-ticket"),
+            Some(&serde_json::json!({})),
+        )
+        .await
+    }
+
+    /// Boomin: the host publishes its scene list into the room's config so a
+    /// mod's `POST …/scene` can name one (the server 422s an unknown id).
+    /// `config` is built by the webview (lib/boominRoom.ts `boominStageConfig`)
+    /// and passed through: `{ stage_enabled, scenes: [{id, kind, label}],
+    /// active_scene_id }`. The open server takes the list over the socket
+    /// (`scene.publish`) instead, so this is Boomin-only by construction.
+    pub async fn room_publish_scenes(&self, room_id: &str, config: &Value) -> EngineResult<Value> {
+        self.root_request(
+            reqwest::Method::PATCH,
+            &format!("/v1/app/live/rooms/{room_id}"),
+            Some(&serde_json::json!({ "config": config })),
+        )
+        .await
+    }
+
+    /// Boomin: cut the room to a scene from a mod's Producer (`room.scene`).
+    /// The host hears it as a `scene.cut` frame on the room channel. 403
+    /// room_scene_required / 422 scene_unknown come back as messages.
+    pub async fn room_scene_cut(&self, room_id: &str, scene_id: &str) -> EngineResult<Value> {
+        self.root_request(
+            reqwest::Method::POST,
+            &format!("/v1/app/live/rooms/{room_id}/scene"),
+            Some(&serde_json::json!({ "scene_id": scene_id })),
+        )
+        .await
     }
 
     /// The run's contribution ledger (#50). `run_id` None = the open run,
@@ -343,6 +427,17 @@ impl ProducerClient {
 
     /// Start / stop a run — the span the ledger reports on.
     pub async fn room_run(&self, room_id: &str, action: &str) -> EngineResult<Value> {
+        if self.is_boomin() {
+            // No Producer-facing run route on Boomin: the roster poll is the
+            // heartbeat and a lapse ends the run server-side. The webview
+            // brackets the report by its own clock (run_id stays null).
+            return Ok(serde_json::json!({
+                "run_id": Value::Null,
+                "started_at": chrono_now_iso(),
+                "action": action,
+                "native": false,
+            }));
+        }
         let resp = self
             .http
             .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/runs")))
@@ -367,6 +462,33 @@ impl ProducerClient {
         shown: bool,
         label: Option<&str>,
     ) -> EngineResult<Value> {
+        if self.is_boomin() {
+            // `POST …/contributions {kind:"overlay", action, binding}` (api
+            // #384): the binding names the source so the interval is
+            // addressable; whatever the © button bound (a sponsor handle)
+            // rides along so a metered deal's `contribution_binding` can
+            // match on it.
+            let mut b = match binding {
+                Value::Object(m) => m.clone(),
+                _ => serde_json::Map::new(),
+            };
+            b.insert("source_id".into(), Value::String(source_id.to_string()));
+            let mut body = serde_json::json!({
+                "kind": "overlay",
+                "action": if shown { "show" } else { "hide" },
+                "binding": Value::Object(b),
+            });
+            if let Some(l) = label {
+                body["metadata"] = serde_json::json!({ "label": l });
+            }
+            return self
+                .root_request(
+                    reqwest::Method::POST,
+                    &format!("/v1/app/live/rooms/{room_id}/contributions"),
+                    Some(&body),
+                )
+                .await;
+        }
         let resp = self
             .http
             .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/overlays")))
@@ -429,6 +551,24 @@ impl ProducerClient {
         transition: &str,
         reveal_hold_ms: Option<u64>,
     ) -> EngineResult<Value> {
+        if self.is_boomin() {
+            // Verbs are POSTs (api #386) and a vote is COLLECTING from the
+            // moment it opens, so "open" is a read-back; a reveal hold is
+            // timed by the webview (no reveal_hold_ms on the wire).
+            let base = format!("/v1/app/live/rooms/{room_id}/interactions/{interaction_id}");
+            return match transition {
+                "open" => self.root_request(reqwest::Method::GET, &base, None).await,
+                "reveal" | "close" | "cancel" => {
+                    self.root_request(
+                        reqwest::Method::POST,
+                        &format!("{base}/{transition}"),
+                        Some(&serde_json::json!({})),
+                    )
+                    .await
+                }
+                other => Err(EngineError::Other(format!("unknown transition {other}"))),
+            };
+        }
         let resp = self
             .http
             .patch(self.root_url(&format!(
@@ -450,6 +590,13 @@ impl ProducerClient {
 
     /// The room's audience code + share URL (/a/CODE); `rotate` mints a new one.
     pub async fn room_audience_link(&self, room_id: &str, rotate: bool) -> EngineResult<Value> {
+        if self.is_boomin() {
+            // Boomin has no room-level audience code: the share link is PER
+            // VOTE (boomin.ai/a/<interaction id>), built by the webview.
+            return Err(EngineError::Other(
+                "On Boomin the audience link is per vote — open a vote first.".into(),
+            ));
+        }
         let resp = self
             .http
             .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/audience-link")))
@@ -883,6 +1030,7 @@ impl ProducerClient {
         title: &str,
         amount_cents: u64,
         min_stage_minutes: Option<u32>,
+        metered: Option<&Value>,
     ) -> EngineResult<Value> {
         let mut body = serde_json::json!({
             "connection_id": connection_id,
@@ -894,6 +1042,13 @@ impl ProducerClient {
         // Omitted, never null: the API's optional field rejects an explicit null.
         if let Some(m) = min_stage_minutes {
             body["min_stage_minutes"] = serde_json::json!(m);
+        }
+        // Metered terms (api #385): pricing, rate_card, contribution_kind,
+        // contribution_binding — merged verbatim; the server validates them.
+        if let Some(Value::Object(extra)) = metered {
+            for (k, v) in extra {
+                body[k.as_str()] = v.clone();
+            }
         }
         let resp = self
             .http
@@ -1067,4 +1222,32 @@ impl ProducerClient {
             }),
         }
     }
+}
+
+/// ISO-8601 UTC now, without pulling a date crate in for one field: the
+/// webview only parses it back with Date.parse.
+fn chrono_now_iso() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    // Civil-from-days (Howard Hinnant), enough for a timestamp.
+    let days = (secs / 86_400) as i64;
+    let sod = secs % 86_400;
+    let z = days + 719_468;
+    let era = z / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!(
+        "{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z",
+        sod / 3600,
+        (sod % 3600) / 60,
+        sod % 60
+    )
 }

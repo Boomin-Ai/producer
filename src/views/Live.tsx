@@ -19,6 +19,7 @@ import {
   devices as deviceIpc,
   extraSources,
   guests as guestsIpc,
+  listServerRooms,
   registerRoom,
   roomOpenReport,
   setSourceAudio,
@@ -76,6 +77,7 @@ import {
 import { homePaintedMs, takeRoomClick } from "../lib/perf";
 import { RoomControlLink, type ControlFrame, type SceneCutFrame } from "../lib/roomControl";
 import { overlayBridge, type Contribution, type Interaction } from "../lib/ipc";
+import { BOOMIN_ROOM_CHANNELS, parseBoominFrame, boominStageConfig, scenesFromBoominConfig, type ContributionFrame } from "../lib/boominRoom";
 import {
   moveInOrder,
   participantKind,
@@ -2835,6 +2837,11 @@ export function LiveView({
   const [roomRole, setRoomRole] = useState<RoomRole>("host");
   const roomRoleRef = useRef<RoomRole>("host");
   const accessAsked = useRef(false);
+  /** The room's server is Boomin (a brand-scoped endpoint) rather than an
+   * open server: the room channel, votes, overlays and the run then use
+   * Boomin's routes (lib/boominRoom.ts). Resolved with the endpoint. */
+  const [boominRoom, setBoominRoom] = useState(false);
+  const boominRoomRef = useRef(false);
   /** The stage list as this mod last posted it. The roster does not read
    * the stage back yet (contract note in the PR), so this is a local view. */
   const [modStage, setModStage] = useState<string[]>([]);
@@ -4051,6 +4058,13 @@ export function LiveView({
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
       const n = Number(e.key);
       if (!Number.isInteger(n) || n < 1 || n > 9) return;
+      if (hostScenesRef.current) {
+        const hs = hostScenesRef.current.scenes[n - 1];
+        if (!hs) return;
+        e.preventDefault();
+        void cutHostScene(hs.id);
+        return;
+      }
       const sc = scenes[n - 1];
       if (!sc) return;
       e.preventDefault();
@@ -4072,32 +4086,55 @@ export function LiveView({
   const scenesRef = useRef(scenes);
   scenesRef.current = scenes;
   useEffect(() => {
-    if (!room?.id || !cfg.server_room_id || roomRole !== "host") return;
+    if (!room?.id || !cfg.server_room_id) return;
+    // Open server: the host only (a mod runs views/ModSeat.tsx). Boomin: any
+    // role — a mod's Producer lights the host's list off `scene.cut` frames
+    // and takes the tally on `interactions:control` (the hub gates it).
+    if (roomRole !== "host" && !boominRoom) return;
     const sid = cfg.server_room_id;
     let link: RoomControlLink | null = null;
     let alive = true;
     void (async () => {
       const ep = await resolveActiveEndpoint().catch(() => null);
       if (!ep || !alive) return;
+      const boomin = isBoomin(ep);
       link = new RoomControlLink({
         origin: new URL(ep.base_url).origin,
+        // On Boomin `controlSession` mints the room-channel ticket (api #392)
+        // and returns the same {signaling_ticket, signaling_url} shape.
         session: () => guestsIpc.controlSession(ep.id, sid),
-        subscribe: ["interaction:host"],
+        subscribe: boomin ? [...BOOMIN_ROOM_CHANNELS] : ["interaction:host"],
+        parse: boomin ? parseBoominFrame : undefined,
         onFrame: (frame: ControlFrame) => {
           if (frame.type === "interaction") {
             const ix = (frame as { payload?: unknown }).payload as Interaction | undefined;
             if (ix && typeof ix === "object" && typeof ix.id === "string") onInteractionFrame(ix);
             return;
           }
+          if (frame.type === "contribution.closed") {
+            // The server closed an overlay interval (a run ended, a mod hid
+            // it, a deal capped): a bound source still showing on the set
+            // comes down, so the ledger and the picture agree.
+            onContributionClosed((frame as ContributionFrame).contribution);
+            return;
+          }
           if (frame.type !== "scene.cut") return;
           const cut = frame as SceneCutFrame;
+          if (roomRoleRef.current !== "host") {
+            // A mod's Producer on Boomin: the host cut (or another mod did) —
+            // light it, never apply it to our own engine.
+            setHostScenes((h) => (h ? { ...h, active_scene_id: cut.scene_id } : h));
+            return;
+          }
           // The engine ignores cuts for scenes not in the room's list —
           // the DO already refused them, this is the second lock.
           const sc = scenesRef.current.find((x) => x.id === cut.scene_id);
           if (!sc) return;
           void applySceneRef.current(sc, cut.transition === "cut" ? { cut: true } : undefined);
         },
-        onOpen: () => link?.publishScenes(scenesRef.current, activeSceneRef.current),
+        onOpen: () => {
+          if (!boomin) link?.publishScenes(scenesRef.current, activeSceneRef.current);
+        },
       });
       controlRef.current = link;
       link.start();
@@ -4107,11 +4144,74 @@ export function LiveView({
       link?.stop();
       if (controlRef.current === link) controlRef.current = null;
     };
-  }, [room?.id, cfg.server_room_id, roomRole]);
-  // Every change to the list or the active scene reaches the mods.
+  }, [room?.id, cfg.server_room_id, roomRole, boominRoom]);
+  // Every change to the list or the active scene reaches the mods. Open
+  // server: a `scene.publish` frame. Boomin: the room config carries a scene
+  // DIRECTORY (ids + labels, `stage_enabled: false`) that `POST …/scene`
+  // validates against — debounced, and only when it actually changed.
+  const publishedCfgRef = useRef<string | null>(null);
   useEffect(() => {
     controlRef.current?.publishScenes(scenes, activeScene ?? null);
-  }, [scenes, activeScene]);
+    if (!boominRoom || roomRole !== "host" || !cfg.server_room_id) return;
+    const sid = cfg.server_room_id;
+    const config = boominStageConfig(scenes, activeScene ?? null);
+    const key = JSON.stringify(config);
+    if (publishedCfgRef.current === key) return;
+    const t = window.setTimeout(() => {
+      const ep = endpointRef.current;
+      if (!ep) return;
+      guestsIpc
+        .publishScenes(ep, sid, config)
+        .then(() => {
+          publishedCfgRef.current = key;
+        })
+        .catch(() => {});
+    }, 600);
+    return () => window.clearTimeout(t);
+  }, [scenes, activeScene, boominRoom, roomRole, cfg.server_room_id]);
+
+  /** Boomin, a mod's Producer: the host's scene directory as the room config
+   * carries it, the active one lit by `scene.cut` frames. Null on the host
+   * (its own list is the truth) and on an open server (ModSeat). */
+  const [hostScenes, setHostScenes] = useState<{ scenes: { id: string; name: string }[]; active_scene_id: string | null } | null>(null);
+  useEffect(() => {
+    if (!boominRoom || roomRole === "host" || !cfg.server_room_id) {
+      setHostScenes(null);
+      return;
+    }
+    const sid = cfg.server_room_id;
+    let alive = true;
+    const read = async () => {
+      const ep = endpointRef.current;
+      if (!ep) return;
+      const res = await listServerRooms(ep).catch(() => null);
+      const r = res?.rooms?.find((x) => x.id === sid);
+      if (!alive || !r) return;
+      const dir = scenesFromBoominConfig(r.config);
+      setHostScenes((h) => ({ scenes: dir.scenes, active_scene_id: dir.active_scene_id ?? h?.active_scene_id ?? null }));
+    };
+    void read();
+    // The directory changes rarely (the host adds a scene); the active one
+    // arrives as a frame. A slow re-read covers a missed frame.
+    const t = window.setInterval(() => void read(), 20_000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, [boominRoom, roomRole, cfg.server_room_id]);
+  /** Boomin mod: cut the host's room to one of its scenes. */
+  const cutHostScene = async (sceneId: string) => {
+    const ep = endpointRef.current;
+    if (!ep || !cfg.server_room_id) return;
+    try {
+      await guestsIpc.sceneCut(ep, cfg.server_room_id, sceneId);
+      setHostScenes((h) => (h ? { ...h, active_scene_id: sceneId } : h));
+    } catch (e) {
+      setGuestErr(String(e).replace(/^Error:\s*/, ""));
+    }
+  };
+  const hostScenesRef = useRef(hostScenes);
+  hostScenesRef.current = hostScenes;
 
   /** Mint a mod link and put it on the clipboard. The server keeps only a
    * hash, so this is the one time the URL is readable. */
@@ -4248,6 +4348,20 @@ export function LiveView({
   // RUN — started when we go live, stopped at End, then read back as the
   // run report.
   const overlayShownRef = useRef<Map<string, boolean>>(new Map());
+  /** A `contribution.closed` frame for an overlay we hold: take the source
+   * down if it is still showing, and forget the interval so the next show
+   * opens a fresh one. Our own hide produces the same frame — a no-op then. */
+  const onContributionClosed = (c: Contribution) => {
+    if (c.kind !== "overlay") return;
+    const sid = typeof c.binding?.source_id === "string" ? c.binding.source_id : null;
+    if (!sid) return;
+    const bound = (cfgRef.current.sources.extras ?? []).find((e) => e.id === sid && e.binding && Object.keys(e.binding).length);
+    if (!bound) return;
+    if (overlayShownRef.current.get(sid)) {
+      overlayShownRef.current.set(sid, false);
+      ipc.liveSetTransform(sid, { visible: false }, true).catch(() => {});
+    }
+  };
   useEffect(() => {
     if (roomRole !== "host" || !cfg.server_room_id || !endpointRef.current) return;
     const ep = endpointRef.current;
@@ -4375,6 +4489,8 @@ export function LiveView({
           const ep = await resolveActiveEndpoint();
           if (!ep) return;
           endpointRef.current = ep.id;
+          boominRoomRef.current = isBoomin(ep);
+          setBoominRoom(boominRoomRef.current);
         }
         if (!accessAsked.current) {
           accessAsked.current = true;
