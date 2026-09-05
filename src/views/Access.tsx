@@ -15,9 +15,10 @@
 //
 // Same glass list pattern as App / Integrations. Native, never a web console.
 import { useCallback, useEffect, useState } from "react";
-import type { EndpointInfo, LiveRoom } from "../lib/ipc";
-import { isBoomin } from "../lib/workspace";
+import { ipc, listServerRooms, type EndpointInfo, type LiveRoom } from "../lib/ipc";
+import { WORKSPACE_EVENT, isBoomin } from "../lib/workspace";
 import { parseConfig } from "../lib/room";
+import { ROOMS_EVENT, isRetired, syncRooms } from "../lib/roomSync";
 import { copyText } from "../lib/roomLink";
 import { CHANNEL_CONTROL_SURFACE, ROOM_ROLES, SURFACES, guestDoor, mods, team, type Member, type ModSeatRow } from "../lib/access";
 import { changeSentence, heldSeat, heldSurfaces, planChanges, seatLabel, type AccessOp, type Desired, type SeatRole } from "../lib/accessDiff";
@@ -32,18 +33,66 @@ function Switch({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean
 
 const errText = (e: unknown) => String(e).replace(/^Error:\s*/, "");
 
+type AccessRoom = { id: string | null; sid: string; name: string };
+
 /** Rooms this workspace has on its server — the only ones a role can be
- * granted on. */
-function serverRooms(rooms: LiveRoom[], endpointId: string): { id: string; sid: string; name: string }[] {
-  return rooms
-    .filter((r) => !r.endpoint_id || r.endpoint_id === endpointId)
-    .map((r) => ({ id: r.id, sid: parseConfig(r.config).server_room_id ?? "", name: r.name }))
-    .filter((r) => !!r.sid);
+ * granted on. The SERVER list is the truth (web, deals and other machines
+ * mint rooms too); the local rows lend their names to rooms the server
+ * lists without a title (Producer-registered ones) and their config to the
+ * guest-door controls. Reconciles through the same `syncRooms` Home uses
+ * — so a room just created at Home registers and appears here at once —
+ * then re-reads on focus, on ROOMS_EVENT and on a workspace switch. */
+function useServerRooms(endpoint: EndpointInfo): { rooms: AccessRoom[]; local: LiveRoom[] } {
+  const [rooms, setRooms] = useState<AccessRoom[]>([]);
+  const [local, setLocal] = useState<LiveRoom[]>([]);
+  const epId = endpoint.id;
+  const refresh = useCallback(async () => {
+    await syncRooms(epId).catch(() => null);
+    let mine: LiveRoom[] = [];
+    try {
+      mine = (await ipc.liveListRooms(epId)).filter((r) => !r.endpoint_id || r.endpoint_id === epId);
+    } catch {
+      /* engine-less build */
+    }
+    setLocal(mine);
+    const bySid = new Map<string, LiveRoom>();
+    for (const r of mine) {
+      const sid = parseConfig(r.config).server_room_id;
+      if (sid) bySid.set(sid, r);
+    }
+    try {
+      const server = (await listServerRooms(epId)).rooms ?? [];
+      setRooms(
+        server
+          .filter((r) => !isRetired(r))
+          .map((r) => {
+            const loc = bySid.get(r.id);
+            return { id: loc?.id ?? null, sid: r.id, name: (r.title ?? "").trim() || loc?.name || "Room" };
+          }),
+      );
+    } catch {
+      // Offline: the local rows that carry a server id are the best we know.
+      setRooms([...bySid.entries()].map(([sid, r]) => ({ id: r.id, sid, name: r.name })));
+    }
+  }, [epId]);
+  useEffect(() => {
+    void refresh();
+    const h = () => void refresh();
+    window.addEventListener("focus", h);
+    window.addEventListener(ROOMS_EVENT, h);
+    window.addEventListener(WORKSPACE_EVENT, h);
+    return () => {
+      window.removeEventListener("focus", h);
+      window.removeEventListener(ROOMS_EVENT, h);
+      window.removeEventListener(WORKSPACE_EVENT, h);
+    };
+  }, [refresh]);
+  return { rooms, local };
 }
 
-export function AccessPanel({ endpoint, rooms }: { endpoint: EndpointInfo | null; rooms: LiveRoom[] }) {
+export function AccessPanel({ endpoint }: { endpoint: EndpointInfo | null }) {
   if (!endpoint) return <div className="set-soon">Pick a workspace first.</div>;
-  return isBoomin(endpoint) ? <TeamAccess endpoint={endpoint} rooms={rooms} /> : <ModsAccess endpoint={endpoint} rooms={rooms} />;
+  return isBoomin(endpoint) ? <TeamAccess endpoint={endpoint} /> : <ModsAccess endpoint={endpoint} />;
 }
 
 // ── Confirm panel: every change here is staged, then confirmed ───────────────
@@ -150,7 +199,7 @@ function ConfirmSheet({
 const isTeam = (m: Member) => m.type === "team" || m.role === "owner" || m.role === "admin";
 const hostsEverywhere = (m: Member) => m.role === "owner" || m.role === "admin" || m.role === "editor";
 
-function TeamAccess({ endpoint, rooms }: { endpoint: EndpointInfo; rooms: LiveRoom[] }) {
+function TeamAccess({ endpoint }: { endpoint: EndpointInfo }) {
   const [brandId, setBrandId] = useState<string | null>(null);
   const [members, setMembers] = useState<Member[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -158,7 +207,7 @@ function TeamAccess({ endpoint, rooms }: { endpoint: EndpointInfo; rooms: LiveRo
   /** Staged state per member — only members that were touched have an entry. */
   const [staged, setStaged] = useState<Record<string, Desired>>({});
   const [review, setReview] = useState(false);
-  const srvRooms = serverRooms(rooms, endpoint.id);
+  const { rooms: srvRooms } = useServerRooms(endpoint);
 
   const load = useCallback(async () => {
     try {
@@ -447,8 +496,8 @@ function InviteForm({
 
 // ── Self-hosted: Mods ─────────────────────────────────────────────────────────
 
-function ModsAccess({ endpoint, rooms }: { endpoint: EndpointInfo; rooms: LiveRoom[] }) {
-  const srvRooms = serverRooms(rooms, endpoint.id);
+function ModsAccess({ endpoint }: { endpoint: EndpointInfo }) {
+  const { rooms: srvRooms, local } = useServerRooms(endpoint);
   return (
     <>
       <div className="cr-sheet-row-sub acc-note">
@@ -460,7 +509,7 @@ function ModsAccess({ endpoint, rooms }: { endpoint: EndpointInfo; rooms: LiveRo
         </div>
       )}
       {srvRooms.map((r) => (
-        <RoomMods key={r.sid} endpoint={endpoint} room={r} local={rooms.find((x) => x.id === r.id) ?? null} />
+        <RoomMods key={r.sid} endpoint={endpoint} room={r} local={local.find((x) => x.id === r.id) ?? null} />
       ))}
     </>
   );

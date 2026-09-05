@@ -38,6 +38,8 @@ export interface Me {
   brandName: string | null;
   brandSlug: string | null;
   brandRole: string | null;
+  /** The account's profile picture, when the API serves one. */
+  avatarUrl: string | null;
 }
 
 export async function fetchMe(endpointId: string): Promise<Me> {
@@ -55,6 +57,7 @@ export async function fetchMe(endpointId: string): Promise<Me> {
     brandName: str(brand.name),
     brandSlug: str(brand.slug),
     brandRole: str(bu.role),
+    avatarUrl: str(user.avatar_url) ?? str(user.avatarUrl) ?? str(user.image) ?? str(user.picture) ?? null,
   };
 }
 

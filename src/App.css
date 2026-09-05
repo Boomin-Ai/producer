@@ -8495,13 +8495,25 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .ws-row:hover .ws-gear, .ws-gear:focus-visible { opacity: 1; }
 .ws-gear:hover { background: var(--surface-3); color: var(--fg-1); }
 
-/* header account button + menu (you, not the brand) */
+/* header account button + menu (you, not the brand).
+   The avatar sits in a PUNCH-HOLE: the opaque content ground (the vibrant
+   home's fixed `::after`, which is the surface behind both the room list
+   and Settings) has a circle masked out of its top-right corner, and the
+   avatar is centred in it, so the glass shows through a ring around it —
+   one element, no extra chrome. Geometry: header 52px high → centre y 26;
+   header right padding 20 + half of 26 → centre x = right 33px. */
 .cr-profile {
   width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line-2);
   background: var(--surface-2); color: var(--fg-1); font-size: 11px; font-weight: 700;
   display: grid; place-items: center; cursor: pointer; -webkit-app-region: no-drag;
+  padding: 0; overflow: hidden;
 }
+.cr-profile img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
 .cr-profile:hover { background: var(--surface-3); }
+#root > .cr.cr--vibrant::after {
+  -webkit-mask-image: radial-gradient(circle at calc(100% - 33px) 26px, transparent 17px, #000 18px);
+  mask-image: radial-gradient(circle at calc(100% - 33px) 26px, transparent 17px, #000 18px);
+}
 .cr-menu-backdrop { position: fixed; inset: 0; z-index: 60; }
 .cr-menu {
   position: fixed; right: 12px; top: 44px; z-index: 61; min-width: 180px; padding: 6px;

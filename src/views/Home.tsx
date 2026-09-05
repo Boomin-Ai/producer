@@ -6,6 +6,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { ConsoleHost } from "./Console";
 import { AccountSheet } from "./AccountSheet";
 import { AccessPanel } from "./Access";
+import { fetchMe } from "../lib/access";
 import type { Channel, EndpointInfo, Job, LiveDestination, LiveRoom, LiveSnapshot, ServerRoom } from "../lib/ipc";
 import type { TargetResult } from "../lib/ipc";
 import { WORKSPACE_EVENT, activeEndpointId, isBoomin, resolveActiveEndpoint, setActiveEndpointId } from "../lib/workspace";
@@ -32,7 +33,7 @@ import { demoOn, setDemo } from "../lib/demo";
 import { markHomePainted, markRoomClick } from "../lib/perf";
 import { KEYMAP, getKey, setKey, resetKey, displayKey, type KeyBinding } from "../lib/keys";
 import { liveRoomId, parseConfig, serializeConfig } from "../lib/room";
-import { deleteRoomEverywhere, renameRoom, roomOccupancy, syncRooms } from "../lib/roomSync";
+import { ROOMS_EVENT, deleteRoomEverywhere, notifyRoomsChanged, renameRoom, roomOccupancy, syncRooms } from "../lib/roomSync";
 import { useUpdater } from "../lib/updater";
 import { DestinationEditor, LiveView } from "./Live";
 import { ModSeat } from "./ModSeat";
@@ -276,6 +277,23 @@ export function Home({
   // One popout: the account sheet pulls down from the top-right avatar; the
   // rail's avatar opens the same sheet (never two surfaces at once).
   const [accountOpen, setAccountOpen] = useState(false);
+  // The account's profile picture (Boomin `/auth/me`), shown in the punch-hole
+  // avatar; the workspace initial until the session serves one.
+  const [meAvatar, setMeAvatar] = useState<string | null>(null);
+  useEffect(() => {
+    const ep = endpoints.find((e) => e.id === activeId) ?? endpoints.find((e) => isBoomin(e)) ?? null;
+    if (!ep || !isBoomin(ep)) {
+      setMeAvatar(null);
+      return;
+    }
+    let alive = true;
+    fetchMe(ep.id)
+      .then((m) => alive && setMeAvatar(m.avatarUrl))
+      .catch(() => alive && setMeAvatar(null));
+    return () => {
+      alive = false;
+    };
+  }, [endpoints, activeId]);
   const [destinations, setDestinations] = useState<LiveDestination[]>([]);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -330,7 +348,12 @@ export function Home({
   useEffect(() => {
     const h = () => void loadLive();
     window.addEventListener(WORKSPACE_EVENT, h);
-    return () => window.removeEventListener(WORKSPACE_EVENT, h);
+    // Rooms changed somewhere else (Access ran a sync, a rename, a delete).
+    window.addEventListener(ROOMS_EVENT, h);
+    return () => {
+      window.removeEventListener(WORKSPACE_EVENT, h);
+      window.removeEventListener(ROOMS_EVENT, h);
+    };
   }, [loadLive]);
 
   // Room sync (src/lib/roomSync.ts): the brand's rooms are SERVER rows — a
@@ -462,7 +485,11 @@ export function Home({
             title="Account"
             onClick={() => setAccountOpen((v) => !v)}
           >
-            {((endpoints.find((e) => e.id === activeId) ?? endpoints[0])?.name?.[0] ?? "?").toUpperCase()}
+            {meAvatar ? (
+              <img src={meAvatar} alt="" />
+            ) : (
+              ((endpoints.find((e) => e.id === activeId) ?? endpoints[0])?.name?.[0] ?? "?").toUpperCase()
+            )}
           </button>
         </div>
       </header>
@@ -509,7 +536,6 @@ export function Home({
               endpoints={endpoints}
               destinations={destinations}
               channels={channels}
-              rooms={rooms}
               onChannelsChanged={() => { void loadChannels(); void loadLive(); }}
               updater={updater}
               onClose={closeSettings}
@@ -547,7 +573,6 @@ export function Home({
           endpoints={endpoints}
           destinations={destinations}
           channels={channels}
-          rooms={rooms}
           onChannelsChanged={() => {
             // Integrations edits touch both lists: posting channels (connect /
             // disconnect) and live destinations. Refresh both.
@@ -830,7 +855,6 @@ function SettingsPanel({
   endpoints,
   destinations,
   channels,
-  rooms,
   onChannelsChanged,
   updater,
   onClose,
@@ -842,8 +866,6 @@ function SettingsPanel({
   endpoints: EndpointInfo[];
   destinations: LiveDestination[];
   channels: Channel[];
-  /** The workspace's rooms — Access grants roles per room. */
-  rooms?: LiveRoom[];
   onChannelsChanged: () => void;
   updater: { state: string; version: string | null; restart: () => void };
   onClose: () => void;
@@ -1054,7 +1076,7 @@ function SettingsPanel({
 
           </>
         )}
-        {section === "access" && <AccessPanel endpoint={current} rooms={rooms ?? []} />}
+        {section === "access" && <AccessPanel endpoint={current} />}
         {!meta.built && (
           <div className="set-soon">
             {section === "output" && "Encoder override, rate control, keyframe interval, bitrate policy, recording format and folder, audio bitrate. Today these are fixed constants in the engine."}
@@ -1125,6 +1147,7 @@ function ControlRoomHome({
     setNaming(false);
     const room = await ipc.liveCreateRoom(n, activeEndpointId() ?? undefined);
     onRoomsChanged();
+    notifyRoomsChanged();
     onOpenRoom(room);
   }
 

@@ -82,6 +82,15 @@ async function removeTombstone(t: RoomTombstone): Promise<void> {
   );
 }
 
+/** Fired on `window` after anything changes the room set — a sync that
+ * registered or pulled rooms, a rename, a delete, a room created at Home.
+ * Any view that lists rooms (Home, Settings → Access) re-reads on it, so
+ * a room minted in one place shows up in the other without a relaunch. */
+export const ROOMS_EVENT = "producer:rooms";
+export function notifyRoomsChanged(): void {
+  window.dispatchEvent(new Event(ROOMS_EVENT));
+}
+
 export interface RoomSyncResult {
   /** Local room ids whose server row no longer exists (or never registered). */
   offNetwork: string[];
@@ -90,7 +99,7 @@ export interface RoomSyncResult {
 }
 
 /** Rooms the server considers gone; tolerant of whichever field it uses. */
-function isRetired(r: ServerRoom): boolean {
+export function isRetired(r: ServerRoom): boolean {
   if (r.deleted_at || r.archived_at) return true;
   const st = (r.status ?? "").toLowerCase();
   return st === "archived" || st === "deleted" || st === "closed";
@@ -111,9 +120,14 @@ let inflight: Promise<RoomSyncResult | null> | null = null;
 export function syncRooms(endpointId: string | null | undefined): Promise<RoomSyncResult | null> {
   if (!endpointId) return Promise.resolve(null);
   if (inflight) return inflight;
-  inflight = runSync(endpointId).finally(() => {
-    inflight = null;
-  });
+  inflight = runSync(endpointId)
+    .then((res) => {
+      if (res?.changed) notifyRoomsChanged();
+      return res;
+    })
+    .finally(() => {
+      inflight = null;
+    });
   return inflight;
 }
 
@@ -234,6 +248,7 @@ export async function renameRoom(endpointId: string | null | undefined, room: Li
   await ipc.liveUpdateRoom(room.id, { name });
   const sid = parseConfig(room.config).server_room_id;
   if (endpointId && sid) await setServerRoomTitle(endpointId, sid, name).catch(() => {});
+  notifyRoomsChanged();
 }
 
 // ── Delete ───────────────────────────────────────────────────────────────────
@@ -292,5 +307,6 @@ export async function deleteRoomEverywhere(
     }
   }
   await ipc.liveDeleteRoom(room.id);
+  notifyRoomsChanged();
   return null;
 }
