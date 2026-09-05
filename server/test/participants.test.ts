@@ -4,10 +4,12 @@ import {
   announceTrack,
   controlsFor,
   labelForStream,
+  moveInOrder,
   parseTrackAnnouncement,
   participantKind,
   peerOf,
   resolveGrants,
+  roomRoleFrom,
   sourceIdsFor,
   wantedSourceIds,
 } from "../guest/src/participants";
@@ -108,5 +110,42 @@ describe("source ids", () => {
     expect([...w.keys()].sort()).toEqual(["guest-aaaaaaaa", "guest-aaaaaaaa-screen", "guest-bbbbbbbb", "guest-cccccccc"]);
     expect(w.get("guest-aaaaaaaa-screen")).toEqual({ guest: a, track: "screen" });
     expect(w.get("guest-bbbbbbbb")?.track).toBe("camera");
+  });
+});
+
+describe("roomRoleFrom", () => {
+  it("no route (404) or nothing known → host, the behaviour before the route existed", () => {
+    expect(roomRoleFrom(null)).toBe("host");
+    expect(roomRoleFrom({ available: false })).toBe("host");
+    expect(roomRoleFrom({})).toBe("host");
+  });
+  it("reads the role field, any spelling the contract may settle on", () => {
+    expect(roomRoleFrom({ available: true, access: { role: "host" } })).toBe("host");
+    expect(roomRoleFrom({ available: true, access: { role: "Owner" } })).toBe("host");
+    expect(roomRoleFrom({ available: true, access: { role: "mod" } })).toBe("mod");
+    expect(roomRoleFrom({ available: true, access: { role: "editor" } })).toBe("mod");
+    expect(roomRoleFrom({ available: true, access: { role: "manager" } })).toBe("mod");
+    expect(roomRoleFrom({ available: true, access: { role: "viewer" } })).toBe("viewer");
+    expect(roomRoleFrom({ available: true, access: { roles: ["viewer", "editor"] } })).toBe("mod");
+  });
+  it("control capabilities make a mod; their absence makes a viewer", () => {
+    expect(roomRoleFrom({ available: true, access: { can: { admit: true, stage: false } } })).toBe("mod");
+    expect(roomRoleFrom({ available: true, access: { capabilities: ["room.stage"] } })).toBe("mod");
+    expect(roomRoleFrom({ available: true, access: { can: { admit: false }, capabilities: [] } })).toBe("viewer");
+    expect(roomRoleFrom({ available: true, access: {} })).toBe("viewer");
+    expect(roomRoleFrom({ available: true, access: "junk" })).toBe("viewer");
+  });
+  it("host flags win over anything else", () => {
+    expect(roomRoleFrom({ available: true, access: { is_host: true, role: "viewer" } })).toBe("host");
+  });
+});
+
+describe("moveInOrder", () => {
+  it("swaps with the neighbour and clamps at the ends", () => {
+    expect(moveInOrder(["a", "b", "c"], "b", -1)).toEqual(["b", "a", "c"]);
+    expect(moveInOrder(["a", "b", "c"], "b", 1)).toEqual(["a", "c", "b"]);
+    expect(moveInOrder(["a", "b", "c"], "a", -1)).toEqual(["a", "b", "c"]);
+    expect(moveInOrder(["a", "b", "c"], "c", 1)).toEqual(["a", "b", "c"]);
+    expect(moveInOrder(["a", "b"], "zz", 1)).toEqual(["a", "b"]);
   });
 });

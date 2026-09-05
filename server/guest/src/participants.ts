@@ -193,3 +193,56 @@ export function wantedSourceIds<T extends ParticipantLike & { id: string }>(
   }
   return out;
 }
+
+// ── Room role, from the access route ─────────────────────────────────────────
+//
+// `GET /v1/app/live/rooms/:id/access` (api #380) says what THIS token may do
+// in a room. Producer feature-detects it: a 404 means the server predates the
+// route (or is self-hosted, where the primary token IS the host), and Producer
+// behaves exactly as it did before — as the host. The DTO is read tolerantly
+// because the contract owner is still settling it; every field is optional.
+
+export type RoomRole = "host" | "mod" | "viewer";
+
+export interface RoomAccessResult {
+  available?: unknown;
+  access?: unknown;
+}
+
+const HOST_ROLES: ReadonlySet<string> = new Set(["host", "owner"]);
+const MOD_ROLES: ReadonlySet<string> = new Set(["mod", "moderator", "manager", "editor", "admin"]);
+/** Any of these (as a capability string, a `can.*` flag, or a grant) makes a
+ *  non-host a mod: they can change who is on the broadcast. */
+const CONTROL_KEYS: readonly string[] = ["admit", "stage", "remove", "room.admit", "room.stage", "room.remove"];
+
+function truthyKeys(v: unknown): string[] {
+  if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string");
+  if (v && typeof v === "object") {
+    return Object.entries(v as Record<string, unknown>).filter(([, on]) => on === true).map(([k]) => k);
+  }
+  return [];
+}
+
+export function roomRoleFrom(result: RoomAccessResult | null | undefined): RoomRole {
+  // Unknown or unavailable → the host, i.e. the behaviour before the route.
+  if (!result || result.available !== true) return "host";
+  const a = (result.access && typeof result.access === "object" ? result.access : {}) as Record<string, unknown>;
+  const role = typeof a.role === "string" ? a.role.toLowerCase() : "";
+  if (a.is_host === true || a.host === true || HOST_ROLES.has(role)) return "host";
+  const roles = truthyKeys(a.roles).map((r) => r.toLowerCase());
+  if (roles.some((r) => HOST_ROLES.has(r))) return "host";
+  if (MOD_ROLES.has(role) || roles.some((r) => MOD_ROLES.has(r))) return "mod";
+  const keys = new Set([...truthyKeys(a.can), ...truthyKeys(a.capabilities), ...truthyKeys(a.grants)]);
+  if (CONTROL_KEYS.some((k) => keys.has(k))) return "mod";
+  return "viewer";
+}
+
+/** Move `id` one step up or down in an ordered list; unchanged if it can't. */
+export function moveInOrder(order: readonly string[], id: string, dir: -1 | 1): string[] {
+  const i = order.indexOf(id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= order.length) return [...order];
+  const out = [...order];
+  [out[i], out[j]] = [out[j], out[i]];
+  return out;
+}

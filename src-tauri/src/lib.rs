@@ -127,6 +127,8 @@ pub fn run() {
             ipc::room_set_stage,
             ipc::room_guest_revoke,
             ipc::room_join_link,
+            ipc::room_access,
+            ipc::room_guest_order,
             ipc::network_connections,
             ipc::upload_media,
             ipc::list_jobs,
