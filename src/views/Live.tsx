@@ -100,6 +100,8 @@ import {
   wantedSourceIds,
   type RoomAccessInfo,
   type RoomRole,
+  SET_IS_HOSTS,
+  setEditingAllowed,
 } from "../lib/participants";
 import { RoleCard } from "./RoleCard";
 
@@ -1033,11 +1035,14 @@ function FilterEditor({
   sourceLabel,
   media,
   onBack,
+  locked = false,
 }: {
   sourceId: string;
   sourceLabel: string;
   media: "video" | "audio";
   onBack: () => void;
+  /** A non-host seat may look but not touch: every op but `list` refuses. */
+  locked?: boolean;
 }) {
   const [chain, setChain] = useState<FilterState[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
@@ -1046,6 +1051,10 @@ function FilterEditor({
 
   const run = useCallback(
     async (op: FilterOp) => {
+      if (locked && op.op !== "list") {
+        setErr(SET_IS_HOSTS);
+        return;
+      }
       try {
         setChain(await filtersIpc(sourceId, op));
         setErr(null);
@@ -1053,7 +1062,7 @@ function FilterEditor({
         setErr(String(e));
       }
     },
-    [sourceId],
+    [sourceId, locked],
   );
 
   useEffect(() => {
@@ -1148,9 +1157,11 @@ function FilterEditor({
           Sources
         </button>
         <span className="rm-filters-title">{sourceLabel} · Filters</span>
-        <button className="rm-panel-plus" title="Add a filter" onClick={() => setAdding((a) => !a)}>
-          {ic.plus}
-        </button>
+        {!locked && (
+          <button className="rm-panel-plus" title="Add a filter" onClick={() => setAdding((a) => !a)}>
+            {ic.plus}
+          </button>
+        )}
       </div>
 
       {adding && (
@@ -2673,6 +2684,7 @@ export function LiveView({
   const [stageSel, setStageSel] = useState<string | null>(null);
   /** Delete on the stage keymap: same effect as the row's ✕, per kind. */
   const deleteStageItem = (id: string) => {
+    if (refuseSetEdit()) return;
     if (id === "screen" || id === "camera" || id === "overlay") return removeCoreSource(id);
     const it = (sources.items ?? []).find((i) => i.id === id);
     if (!it) return;
@@ -2860,7 +2872,17 @@ export function LiveView({
   /** A Boomin room whose access route hasn't answered yet: the host chrome
    * stays hidden rather than flashing GO LIVE at a mod. */
   const [accessPending, setAccessPending] = useState(false);
-  const isHost = roomRole === "host" && !accessPending;
+  const isHost = setEditingAllowed({ role: roomRole }, accessPending);
+  const isHostRef = useRef(isHost);
+  isHostRef.current = isHost;
+  /** Belt and braces under the hidden chrome: every set-editing IPC path
+   * refuses on a non-host seat, with the banner, so a stray handler (a
+   * keyboard shortcut, a stale popover) cannot edit the host's set. */
+  const refuseSetEdit = (): boolean => {
+    if (isHostRef.current) return false;
+    setBanner(SET_IS_HOSTS);
+    return true;
+  };
   /** The room's server is Boomin (a brand-scoped endpoint) rather than an
    * open server: the room channel, votes, overlays and the run then use
    * Boomin's routes (lib/boominRoom.ts). Resolved with the endpoint. */
@@ -3049,6 +3071,7 @@ export function LiveView({
   /** Add an open-list item and record it in the room document so it
    * respawns when the room reopens. */
   const addExtraSource = async (label: string, spec: ExtraSpec, inviteUrl?: string) => {
+    if (refuseSetEdit()) return;
     const id = `${spec.kind}-${Math.random().toString(36).slice(2, 8)}`;
     try {
       await extraSources.add(id, label, spec);
@@ -3090,6 +3113,7 @@ export function LiveView({
   /** Re-point a window item at a different window: replaced in place under
    * the same id, and the room document follows so it respawns correctly. */
   const replaceWindowSource = async (itemId: string, windowId: number, label: string) => {
+    if (refuseSetEdit()) return;
     try {
       await extraSources.remove(itemId);
       await extraSources.add(itemId, label, { kind: "window", window: windowId });
@@ -3113,6 +3137,7 @@ export function LiveView({
    * looks over one graph, so "delete" used to be graph-wide by construction
    * (a slot deleted in PiP vanished from Full cam and Screen too). */
   const removeExtraSource = (id: string) => {
+    if (refuseSetEdit()) return;
     const c = cfgRef.current;
     const active = activeSceneRef.current;
     const all = c.scenes.length ? c.scenes : DEFAULT_SCENES;
@@ -3152,6 +3177,7 @@ export function LiveView({
    * was still running on its built-in recipe); tear the source down only when
    * no other scene needs it. */
   const removeCoreSource = (id: "screen" | "camera" | "overlay") => {
+    if (refuseSetEdit()) return;
     const c = cfgRef.current;
     const active = activeSceneRef.current;
     const all = c.scenes.length ? c.scenes : DEFAULT_SCENES;
@@ -3736,6 +3762,7 @@ export function LiveView({
   };
 
   async function setSrc(patch: Partial<Pick<LiveSources, "screen" | "camera" | "mic">>) {
+    if (refuseSetEdit()) return;
     const next = { ...sources, ...patch };
     setSources(next);
     try {
@@ -4284,6 +4311,9 @@ export function LiveView({
   /** The vote bar lives in an `overlay` extra pointed at the local bridge.
    * Created once per room; re-pointed if the bridge moved (port). */
   const ensureVoteOverlay = async () => {
+    // The vote bar is a source on the HOST's stage; a mod opens the vote on
+    // the server and the host's Producer places the overlay. No banner.
+    if (!isHostRef.current) return;
     const url = await overlayBridge.start();
     const c = cfgRef.current;
     const existing = (c.sources.extras ?? []).find((e) => e.spec.kind === "overlay");
@@ -4549,6 +4579,7 @@ export function LiveView({
    * transform, so the authored rect is what moved and the reconcile above
    * has nothing to undo. */
   const mirrorToSlot = (id: string, patch: LiveTransformPatch, commit: boolean) => {
+    if (!isHostRef.current) return; // the stage editor is disabled off-host; quiet here
     if (!id.startsWith("guest-")) return;
     const slotId = slotOfGuest(cfgRef.current.slot_bindings ?? {}, id);
     if (!slotId) return;
@@ -5081,6 +5112,7 @@ export function LiveView({
               sourceId={filterFor.id}
               sourceLabel={filterFor.label}
               media={filterFor.media}
+              locked={!isHost}
               onBack={() => setFilterFor(null)}
             />
           );
@@ -5646,6 +5678,8 @@ export function LiveView({
         </>
       );
     if (id === "sources") {
+      // A non-host seat has no "+": the set is the host's (the body says so).
+      if (!isHost) return null;
       const addable = [
         !sources.screen && { key: "screen", label: "Screen", icon: ic.screen, act: () => setSrc({ screen: true }) },
         !sources.camera && { key: "camera", label: "Camera", icon: ic.cam, act: () => setSrc({ camera: true }) },
@@ -6403,7 +6437,7 @@ export function LiveView({
               </button>
               {(() => {
                 const cam = (sources.items ?? []).find((i) => i.id === "camera");
-                return cam ? (
+                return cam && isHost ? (
                   <button
                     className={`stg-btn${cam.visible ? "" : " off"}`}
                     title={cam.visible ? "Hide camera" : "Show camera"}
@@ -6418,7 +6452,7 @@ export function LiveView({
               })()}
               {(() => {
                 const scr = (sources.items ?? []).find((i) => i.id === "screen");
-                return scr ? (
+                return scr && isHost ? (
                   <button
                     className={`stg-btn${scr.visible ? "" : " off"}`}
                     title={scr.visible ? "Hide screen" : "Show screen"}
@@ -6551,7 +6585,7 @@ export function LiveView({
         </Pop>
       )}
 
-      {srcSubPop && (
+      {srcSubPop && isHost && (
         <Pop anchor={popAnchor} align="right" className="rm-pop-devices">
           {srcSubPop === "text" && (
             <TextSourceForm

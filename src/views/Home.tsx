@@ -6,7 +6,8 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { ConsoleHost } from "./Console";
 import { AccountSheet } from "./AccountSheet";
 import { AccessPanel } from "./Access";
-import { fetchMe } from "../lib/access";
+import { fetchMe, myRoomAccess } from "../lib/access";
+import { roleTitle, type RoomAccessInfo } from "../lib/participants";
 import type { Channel, EndpointInfo, Job, LiveDestination, LiveRoom, LiveSnapshot, ServerRoom } from "../lib/ipc";
 import type { TargetResult } from "../lib/ipc";
 import { WORKSPACE_EVENT, activeEndpointId, isBoomin, resolveActiveEndpoint, setActiveEndpointId } from "../lib/workspace";
@@ -1123,6 +1124,7 @@ function ControlRoomHome({
   onAddEndpoint: () => void;
 }) {
   const { mainId, endpointId: mainEndpointId } = useMainRoom(rooms);
+  const seats = useRoomSeats(rooms, useActiveEndpoint());
   const [openMenuRoom, setOpenMenuRoom] = useState<string | null>(null);
   const [naming, setNaming] = useState(false);
   useEffect(() => {
@@ -1182,6 +1184,7 @@ function ControlRoomHome({
               menuOpen={openMenuRoom === room.id}
               onMenuToggle={(open) => setOpenMenuRoom(open ? room.id : null)}
               isMain={room.id === mainId}
+              seat={seats[room.id]}
               canMakeMain={!!mainEndpointId && !!parseConfig(room.config).server_room_id}
               onMakeMain={async () => {
                 const sid = parseConfig(room.config).server_room_id;
@@ -3016,11 +3019,49 @@ function useMainRoom(rooms: LiveRoom[]): { mainId: string | null; endpointId: st
   return state;
 }
 
+/** My seat in each registered room, before I enter it. Asked once per room
+ *  list load on a Boomin workspace (a self-hosted token IS the host, so no
+ *  question to ask); failures are tolerated — a card with no pill is a card
+ *  we could not ask about, never a claim of hosting. */
+function useRoomSeats(rooms: LiveRoom[], activeEp: EndpointInfo | null): Record<string, RoomAccessInfo> {
+  const [seats, setSeats] = useState<Record<string, RoomAccessInfo>>({});
+  const epId = activeEp && isBoomin(activeEp) ? activeEp.id : null;
+  const key = rooms.map((r) => `${r.id}:${parseConfig(r.config).server_room_id ?? ""}`).join(",");
+  useEffect(() => {
+    let dead = false;
+    if (!epId) { setSeats({}); return; }
+    (async () => {
+      const pairs = rooms
+        .map((r) => [r.id, parseConfig(r.config).server_room_id] as const)
+        .filter((p): p is readonly [string, string] => !!p[1]);
+      const out: Record<string, RoomAccessInfo> = {};
+      await Promise.all(
+        pairs.map(async ([id, sid]) => {
+          const info = await myRoomAccess(epId, sid).catch(() => null);
+          if (info) out[id] = info;
+        }),
+      );
+      if (!dead) setSeats(out);
+    })();
+    return () => { dead = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [epId, key]);
+  return seats;
+}
+
+/** The pill text for a seat that is not the host's; null for hosts and for
+ *  rooms we could not ask about. */
+export function seatPill(info: RoomAccessInfo | undefined): string | null {
+  if (!info || !info.known || info.role === "host") return null;
+  return roleTitle(info);
+}
+
 function RoomCard({
   room,
   live,
   offNetwork,
   isMain,
+  seat,
   canMakeMain,
   onMakeMain,
   menuOpen,
@@ -3031,6 +3072,8 @@ function RoomCard({
   room: LiveRoom;
   live: boolean;
   offNetwork: boolean;
+  /** My standing in the room's server row, when it is not the host's chair. */
+  seat?: RoomAccessInfo;
   /** Owned by the grid so two cards can never be open at once. */
   menuOpen: boolean;
   onMenuToggle: (open: boolean) => void;
@@ -3181,9 +3224,21 @@ function RoomCard({
               </span>
             </>
           )}
-          {isMain && (
-            <span className="cr-room-main" title="Your brand's main stage — Network bookings and deals land here. Rename it, but it stays.">
-              MAIN STAGE
+          {(isMain || seatPill(seat)) && (
+            <span className="cr-room-pills">
+              {seatPill(seat) && (
+                <span
+                  className={`cr-room-main cr-room-seat role-${seat!.role}`}
+                  title={seat!.role === "viewer" ? "Read-only seat — the host runs the show." : "Control seat — the set is the host's; you run the roster and cut scenes."}
+                >
+                  {seatPill(seat)!.toUpperCase()}
+                </span>
+              )}
+              {isMain && (
+                <span className="cr-room-main" title="Your brand's main stage — Network bookings and deals land here. Rename it, but it stays.">
+                  MAIN STAGE
+                </span>
+              )}
             </span>
           )}
         </>

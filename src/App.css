@@ -8715,8 +8715,12 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .cr-room-more { position: absolute; top: 12px; right: 12px; z-index: 3; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 8px; color: var(--fg-3); font-size: 16px; line-height: 0; opacity: 0; transition: opacity 120ms ease, background 120ms ease; cursor: pointer; }
 .cr-room:hover .cr-room-more, .cr-room-more.on { opacity: 1; }
 .cr-room-more:hover, .cr-room-more.on { background: oklch(1 0 0 / 0.08); color: var(--fg-1); }
-/* the main-stage mark yields to the ⋯ */
+/* the main-stage mark yields to the ⋯; the seat pill (Mod / Manager / Viewer,
+ * known before entry) sits beside it in the same row */
 .cr-room-main { position: absolute; top: 14px; right: 46px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.14em; color: #06110b; background: var(--mint); padding: 3px 7px; border-radius: 999px; }
+.cr-room-pills { position: absolute; top: 14px; right: 46px; display: flex; gap: 6px; align-items: center; }
+.cr-room-pills .cr-room-main { position: static; }
+.cr-room-seat.role-viewer { color: var(--fg-2); background: oklch(1 0 0 / 0.1); }
 .cr-room-menu-backdrop { position: fixed; inset: 0; z-index: 40; cursor: default; }
 .cr-room-menu { position: absolute; top: 44px; right: 12px; z-index: 41; min-width: 220px; display: flex; flex-direction: column; padding: 6px; border-radius: 12px; border: 1px solid oklch(1 0 0 / 0.12); background: oklch(0.15 0.012 260); box-shadow: 0 22px 52px oklch(0 0 0 / 0.65); text-align: left; font-size: 13px; }
 .cr-room-menu-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: 8px; color: var(--fg-1); }
@@ -9021,12 +9025,8 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .rm-top-left .role-card.compact { margin-left: 6px; }
 /* The header is one 48px bar and the transport must never fall off its right
  * edge. In the bar the card is the role in words; the capability chips are
- * hover-revealed (the title attribute carries them too) unless the window is
- * wide enough to spend the room on them. */
+ * hover-revealed (the title attribute carries them too) at every width. */
 .rm-top-left .role-card.compact .role-card-chips { display: none; }
-@media (min-width: 1700px) {
-  .rm-top-left .role-card.compact .role-card-chips { display: flex; }
-}
 .rm-top-left .role-card.compact:hover .role-card-chips {
   display: flex; position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
   padding: 8px 10px; border-radius: var(--r-card); border: 1px solid var(--line-1);
