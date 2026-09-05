@@ -89,3 +89,29 @@ if (!(globalThis as { WebSocketPair?: unknown }).WebSocketPair) {
     }
   };
 }
+
+/** A DurableObjectNamespace stand-in: one instance per name, built with a
+ *  FakeState, reached through a stub whose fetch() calls the instance. */
+export function fakeNamespace<T extends { fetch(r: Request): Promise<Response> }>(
+  make: (state: FakeState, name: string) => T,
+): DurableObjectNamespace & { instances: Map<string, { state: FakeState; object: T }> } {
+  const instances = new Map<string, { state: FakeState; object: T }>();
+  const ns = {
+    instances,
+    idFromName: (name: string) => ({ name, toString: () => name }) as unknown as DurableObjectId,
+    get: (id: DurableObjectId) => {
+      const name = String(id);
+      let inst = instances.get(name);
+      if (!inst) {
+        const state = new FakeState();
+        inst = { state, object: make(state, name) };
+        instances.set(name, inst);
+      }
+      const object = inst.object;
+      return {
+        fetch: (input: RequestInfo | URL, init?: RequestInit) => object.fetch(new Request(input as string, init)),
+      } as unknown as DurableObjectStub;
+    },
+  };
+  return ns as unknown as DurableObjectNamespace & { instances: typeof instances };
+}

@@ -226,3 +226,36 @@ CREATE TABLE IF NOT EXISTS contributions (
 
 CREATE INDEX IF NOT EXISTS contributions_room_idx ON contributions (room_id, run_id, started_at);
 CREATE INDEX IF NOT EXISTS contributions_open_idx ON contributions (room_id, ended_at);
+
+-- ── Interactions ────────────────────────────────────────────────────────────
+-- A typed prompt with a lifecycle (open → collecting → revealed → closed;
+-- cancelled from anywhere). v1 = a two-choice vote; every later game is a
+-- payload on this one row (docs/INTERACTIVE.md §2). The room's RoomState
+-- Durable Object is AUTHORITATIVE while the interaction is live (tallies,
+-- identity hashes, the reveal alarm); this row is what persists: the
+-- envelope at open, the final tally in `result` at reveal/close. Inputs
+-- never become rows here — aggregates land in `contributions` (kind input).
+CREATE TABLE IF NOT EXISTS interactions (
+  id TEXT PRIMARY KEY,
+  room_id TEXT NOT NULL REFERENCES live_rooms(id) ON DELETE CASCADE,
+  run_id TEXT,
+  type TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'open'
+    CHECK (state IN ('draft', 'open', 'collecting', 'revealed', 'closed', 'cancelled')),
+  -- The producer.interaction/v1 envelope, minus server-owned fields.
+  spec TEXT NOT NULL DEFAULT '{}',
+  input TEXT NOT NULL DEFAULT '{}',
+  visibility TEXT NOT NULL DEFAULT '{}',
+  timing TEXT NOT NULL DEFAULT '{}',
+  render TEXT NOT NULL DEFAULT '[]',
+  -- The final tally, written once at reveal / close. NULL while live.
+  result TEXT,
+  version INTEGER NOT NULL DEFAULT 0,
+  opened_at INTEGER,
+  revealed_at INTEGER,
+  closed_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS interactions_room_idx ON interactions (room_id, created_at);

@@ -9,10 +9,14 @@ export type Route =
   | { page: "render"; id: string }
   /** A mod link opened in a browser: it belongs in Producer (#47). */
   | { page: "mod"; code: string }
+  /** The audience door: /a/CODE (#51). */
+  | { page: "audience"; code: string }
   | { page: "none" };
 
 export function matchRoute(pathname: string): Route {
   const parts = pathname.replace(/\/+$/, "").split("/").filter(Boolean).map(decodeURIComponent);
+  // ["a", CODE] — the audience phone
+  if (parts[0] === "a" && parts.length === 2) return { page: "audience", code: parts[1] };
   // ["connect", "guest", ...] — or ["connect", "mod", code]
   if (parts[0] === "connect" && parts[1] === "mod" && parts.length === 3) return { page: "mod", code: parts[2] };
   if (parts[0] !== "connect" || parts[1] !== "guest") return { page: "none" };

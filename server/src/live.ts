@@ -540,7 +540,7 @@ connectGuestRoutes.get("/room-control", async (c) => {
 
 export const guestPageRoutes: App = new Hono<{ Bindings: Env; Variables: Vars }>();
 
-async function guestPage(c: { env: Env; req: { url: string } }): Promise<Response> {
+export async function guestPage(c: { env: Env; req: { url: string } }): Promise<Response> {
   if (!c.env.ASSETS) {
     return new Response("<h3>Guest pages are not deployed on this server.</h3>", {
       status: 503,

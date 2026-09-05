@@ -48,7 +48,15 @@ export interface ControlErrorFrame {
   scene_id?: string;
 }
 
-export type ControlFrame = SceneStateFrame | SceneCutFrame | ControlErrorFrame | { type: string; [k: string]: unknown };
+/** A published channel frame (RealtimeHub `broadcast`): `interaction:host`
+ *  carries the host's projection of an interaction. */
+export interface InteractionFrame {
+  type: "interaction";
+  channels: string[];
+  payload: unknown;
+}
+
+export type ControlFrame = SceneStateFrame | SceneCutFrame | ControlErrorFrame | InteractionFrame | { type: string; [k: string]: unknown };
 
 /** Turn the server's relative `signaling_url` into an absolute ws(s) URL. */
 export function controlWsUrl(origin: string, session: ControlSession): string {
@@ -67,7 +75,13 @@ export function parseControlFrame(raw: unknown): ControlFrame | null {
   } catch {
     return null;
   }
-  if (!v || typeof v !== "object" || typeof (v as { type?: unknown }).type !== "string") return null;
+  if (!v || typeof v !== "object") return null;
+  // A channel publish has `action` instead of `type`; normalise it.
+  const a = v as { type?: unknown; action?: unknown; channels?: unknown; payload?: unknown };
+  if (typeof a.type !== "string" && a.action === "interaction") {
+    return { type: "interaction", channels: Array.isArray(a.channels) ? (a.channels as string[]) : [], payload: a.payload };
+  }
+  if (typeof a.type !== "string") return null;
   const f = v as ControlFrame;
   if (f.type === "scene.cut" && typeof (f as SceneCutFrame).scene_id !== "string") return null;
   if (f.type === "scene.state" && !Array.isArray((f as SceneStateFrame).scenes)) return null;
@@ -91,6 +105,8 @@ export interface RoomControlOptions {
   onFrame: (frame: ControlFrame) => void;
   onOpen?: () => void;
   onClose?: () => void;
+  /** Channels to subscribe on every (re)connect, e.g. `interaction:host`. */
+  subscribe?: string[];
 }
 
 /** A self-healing control socket. `send` queues while offline; the newest
@@ -162,6 +178,7 @@ export class RoomControlLink {
     this.ws = ws;
     ws.onopen = () => {
       this.retryMs = 1000;
+      for (const channel of this.opts.subscribe ?? []) ws.send(JSON.stringify({ type: "subscribe", channel }));
       if (this.pendingPublish) {
         ws.send(this.pendingPublish);
         this.pendingPublish = null;

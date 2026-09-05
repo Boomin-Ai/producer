@@ -8788,3 +8788,20 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .rm-runreport-table th { text-align: left; font-weight: 500; color: var(--fg-3); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 6px; border-bottom: 0.5px solid var(--line-1); }
 .rm-runreport-table td { padding: 6px; border-bottom: 0.5px solid var(--line-1); }
 .rm-row-credit.on { color: oklch(0.8 0.15 80); }
+
+/* ── Vote control (#51) ────────────────────────────────────────────────── */
+.rm-vote { border: 0.5px solid var(--line-1); border-radius: 10px; padding: 10px; margin-bottom: 10px; display: grid; gap: 8px; font-size: 12px; }
+.rm-vote-head { display: flex; align-items: center; justify-content: space-between; }
+.rm-vote-title { font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; font-size: 11px; color: var(--fg-3); }
+.rm-vote-form, .rm-vote-live { display: grid; gap: 6px; }
+.rm-vote-row { display: flex; gap: 6px; align-items: center; }
+.rm-vote-row > * { flex: 1; min-width: 0; }
+.rm-vote-in { height: 28px; padding: 0 8px; border-radius: 6px; border: 0.5px solid var(--line-1); background: var(--surface-1); color: var(--fg-1); font-size: 12px; }
+.rm-vote-prompt { font-weight: 600; }
+.rm-vote-bar { display: grid; grid-template-columns: 80px 1fr 32px; align-items: center; gap: 6px; }
+.rm-vote-bar.win .rm-vote-label { font-weight: 700; }
+.rm-vote-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rm-vote-track { height: 8px; border-radius: 999px; background: var(--surface-1); overflow: hidden; display: block; }
+.rm-vote-fill { display: block; height: 100%; background: oklch(0.65 0.18 260); transition: width 200ms ease; }
+.rm-vote-n { text-align: right; font-variant-numeric: tabular-nums; color: var(--fg-2); }
+.rm-vote-fine { color: var(--fg-3); font-size: 11px; }

@@ -3,6 +3,7 @@ import { matchRoute } from "./router";
 import GuestJoinPage from "./GuestJoinPage";
 import GuestRoomPage from "./GuestRoomPage";
 import GuestRenderPage from "./GuestRenderPage";
+import AudiencePage from "./AudiencePage";
 
 function App() {
   const route = matchRoute(window.location.pathname);
@@ -10,6 +11,7 @@ function App() {
     case "join": return <GuestJoinPage code={route.code} />;
     case "room": return <GuestRoomPage code={route.code} />;
     case "render": return <GuestRenderPage id={route.id} />;
+    case "audience": return <AudiencePage code={route.code} />;
     case "mod":
       // A control seat lives in Producer, not in a tab: the app reads the
       // code off this URL and talks to /v1/connect/mod/:code itself.

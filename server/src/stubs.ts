@@ -34,7 +34,7 @@ export const CONTRIBUTIONS_ISSUES = {
 
 export const NOT_IMPLEMENTED = "not_implemented" as const;
 
-function notImplemented(c: Context<{ Bindings: Env; Variables: Vars }>, issue: string) {
+export function notImplemented(c: Context<{ Bindings: Env; Variables: Vars }>, issue: string) {
   const message = "Documented in docs/CONTRIBUTIONS.md; not built yet. Follow the issue.";
   return c.json(
     {
@@ -61,21 +61,14 @@ contributionHostStubs.use("*", async (c, next) => {
 
 // Item 5 (#50) — `GET /rooms/:id/contributions` is IMPLEMENTED in live.ts.
 
-/** Item 7 — interactions: list, open, transition (open | reveal | close). */
-contributionHostStubs.get("/rooms/:id/interactions", (c) => notImplemented(c, CONTRIBUTIONS_ISSUES.interactions));
-contributionHostStubs.post("/rooms/:id/interactions", (c) => notImplemented(c, CONTRIBUTIONS_ISSUES.interactions));
-contributionHostStubs.patch("/rooms/:id/interactions/:ix", (c) => notImplemented(c, CONTRIBUTIONS_ISSUES.interactions));
+// Item 7 (#51) — interactions: list, open, transition are IMPLEMENTED in
+// interactionRoutes.ts.
 
 // ── Guest + audience family: /v1/connect/* (no bearer — the code IS the credential)
 
 export const contributionConnectStubs: App = new Hono<{ Bindings: Env; Variables: Vars }>();
 
-/** Item 7 — mint a per-device audience capability token at the room-code door.
- *  No account, no email; `aud: "audience"`, expires with the show. */
-contributionConnectStubs.post("/audience/:code/token", (c) => notImplemented(c, CONTRIBUTIONS_ISSUES.interactions));
-
-/** Item 7 — an input from an audience device (`Authorization: Bearer <audience token>`). */
-contributionConnectStubs.post("/audience/interactions/:ix/inputs", (c) => notImplemented(c, CONTRIBUTIONS_ISSUES.interactions));
-
-/** Item 7 — an input from a guest (the invite code is the credential). */
-contributionConnectStubs.post("/guest/:code/interactions/:ix/inputs", (c) => notImplemented(c, CONTRIBUTIONS_ISSUES.interactions));
+// Item 7 (#51) — the audience door, audience inputs and guest inputs are
+// IMPLEMENTED in interactionRoutes.ts. Nothing left to stub: every Phase 1
+// route the contract documents is built. The gate + this module stay so a
+// future documented-unimplemented route has a home.

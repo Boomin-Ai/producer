@@ -279,3 +279,24 @@ export async function stopRun(env: Env, roomId: string): Promise<{ run_id: strin
   await env.DB.prepare("UPDATE live_rooms SET run_id = NULL, run_started_at = NULL, updated_at = ?2 WHERE id = ?1").bind(roomId, Math.floor(now / 1000)).run();
   return { run_id: room.run_id, closed };
 }
+
+/** An interaction's inputs, as the ledger keeps them: ONE aggregate row per
+ *  participant kind (never a row per phone), spanning the collect window,
+ *  bound to the interaction. Written once, at close. */
+export async function recordInputAggregates(
+  env: Env,
+  input: { roomId: string; runId: string | null; interactionId: string; openedAt: number; closedAt: number; byKind: Record<string, number> },
+): Promise<void> {
+  for (const [kind, count] of Object.entries(input.byKind)) {
+    if (!count) continue;
+    const binding = canonicalBinding({ interaction_id: input.interactionId, participant_kind: kind });
+    const id = `ct_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`;
+    await env.DB.prepare(
+      `INSERT INTO contributions (id, room_id, run_id, participant_id, kind, binding, started_at, ended_at, source, metadata, created_at)
+       VALUES (?1, ?2, ?3, NULL, 'input', ?4, ?5, ?6, 'interaction', ?7, ?5)
+       ON CONFLICT (participant_id, kind, started_at) DO NOTHING`,
+    )
+      .bind(id, input.roomId, input.runId, binding, input.openedAt, Math.max(input.openedAt, input.closedAt), JSON.stringify({ count }))
+      .run();
+  }
+}

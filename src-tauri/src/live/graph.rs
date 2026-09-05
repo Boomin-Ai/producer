@@ -424,6 +424,12 @@ pub enum ExtraSpec {
     /// independent fader in the mixer. A single room page would fuse every
     /// guest into one track that can never be separated again.
     Guest { url: String },
+    /// A browser page rendered ON the set, fed by this Producer over a local
+    /// path (live/bridge.rs): the vote bar (#51). Full-canvas, transparent,
+    /// no audio, never suspended when hidden (its state is a poll away, and a
+    /// reload mid-reveal would flash). Distinct from `Guest` so the roster's
+    /// reconcile never mistakes it for a person.
+    Overlay { url: String },
 }
 
 struct ExtraItem {
@@ -1228,6 +1234,22 @@ impl SceneGraph {
                         false,
                     );
                     ("browser_source", "guest", d)
+                }
+                ExtraSpec::Overlay { url } => {
+                    let (bw, bh) = Self::base_size();
+                    let d = ffi::obs_data_create();
+                    let k_url = CString::new("url").unwrap();
+                    let v_url = CString::new(url.clone()).map_err(|_| "bad overlay url")?;
+                    ffi::obs_data_set_string(d, k_url.as_ptr(), v_url.as_ptr());
+                    ffi::obs_data_set_int(d, CString::new("width").unwrap().as_ptr(), bw as i64);
+                    ffi::obs_data_set_int(d, CString::new("height").unwrap().as_ptr(), bh as i64);
+                    ffi::obs_data_set_bool(d, CString::new("shutdown").unwrap().as_ptr(), false);
+                    ffi::obs_data_set_bool(
+                        d,
+                        CString::new("restart_when_active").unwrap().as_ptr(),
+                        false,
+                    );
+                    ("browser_source", "overlay", d)
                 }
                 ExtraSpec::Window { window } => {
                     let d = ffi::obs_data_create();

@@ -17,8 +17,9 @@ import { authorizeUrl, exchangeCode } from "./oauth";
 import { senderFor, SENDERS } from "./senders";
 import type { JobInput } from "./senders/types";
 import { captionFromOverrides, rememberOrigin, tick, type JobRow } from "./queue";
-import { connectGuestRoutes, guestPageRoutes, liveHostRoutes } from "./live";
+import { connectGuestRoutes, guestPage, guestPageRoutes, liveHostRoutes } from "./live";
 import { modRoutes } from "./mod";
+import { interactionConnectRoutes, interactionHostRoutes } from "./interactionRoutes";
 import { contributionConnectStubs, contributionHostStubs } from "./stubs";
 
 type Vars = { tokenClass: TokenClass };
@@ -85,6 +86,7 @@ app.use("/v1/*", async (c, next) => {
   // A mod seat's code is its credential (#47) — same family as the guests'.
   if (c.req.path.startsWith("/v1/connect/mod")) return next();
   if (c.req.path.startsWith("/v1/connect/room-control")) return next();
+  if (c.req.path.startsWith("/v1/connect/audience-signal")) return next();
   // The audience door (docs/CONTRIBUTIONS.md): a room code mints a per-device
   // capability token; the token, not a bearer, is the credential afterwards.
   if (c.req.path.startsWith("/v1/connect/audience")) return next();
@@ -485,6 +487,8 @@ app.post("/v1/jobs/:jobId/retry", async (c) => {
 app.route("/v1/app/live", liveHostRoutes);
 app.route("/v1/connect", connectGuestRoutes);
 app.route("/v1/connect", modRoutes);
+app.route("/v1/app/live", interactionHostRoutes);
+app.route("/v1/connect", interactionConnectRoutes);
 
 // ── Contract-first stubs (docs/CONTRIBUTIONS.md) ─────────────────────────────
 // Documented in the contract, not built: 501 + the issue that builds each one.
@@ -493,6 +497,8 @@ app.route("/v1/connect", modRoutes);
 app.route("/v1/app/live", contributionHostStubs);
 app.route("/v1/connect", contributionConnectStubs);
 app.route("/connect", guestPageRoutes);
+// The audience door (#51): /a/CODE — the phone page, same bundle.
+app.get("/a/:code", guestPage);
 
 // ── Public: OAuth connect flow (human browser consent) ───────────────────────
 
@@ -601,6 +607,7 @@ function parseRange(header: string): R2Range | undefined {
 // ── Worker entry ─────────────────────────────────────────────────────────────
 
 export { RealtimeHub } from "./realtime";
+export { RoomState } from "./roomstate";
 
 export default {
   fetch: (request: Request, env: Env, ctx: ExecutionContext) => app.fetch(request, env, ctx),

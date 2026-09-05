@@ -72,7 +72,7 @@ import {
 } from "../lib/room";
 import { homePaintedMs, takeRoomClick } from "../lib/perf";
 import { RoomControlLink, type ControlFrame, type SceneCutFrame } from "../lib/roomControl";
-import type { Contribution } from "../lib/ipc";
+import { overlayBridge, type Contribution, type Interaction } from "../lib/ipc";
 import {
   moveInOrder,
   participantKind,
@@ -655,6 +655,7 @@ export function GuestPanel({
   onStageToggle,
   onOrder,
   onModLink,
+  vote,
 }: {
   thumbs: Record<string, string>;
   roster: RoomGuest[];
@@ -674,6 +675,8 @@ export function GuestPanel({
   onOrder: (guestId: string, dir: -1 | 1) => void;
   /** Host only: mint a mod link (a control seat another Producer opens). */
   onModLink?: () => void;
+  /** Host only: the vote control (#51). */
+  vote?: ReactNode;
 }) {
   // render_url is the server's own statement of "this one may go on the
   // host". Waiting guests have none, so the gate is enforced there rather
@@ -691,6 +694,7 @@ export function GuestPanel({
 
   return (
     <div className="rm-guests">
+      {role === "host" && vote}
       {role === "host" && onModLink && (
         <div className="rm-guest-tools">
           <button className="rm-guest-modlink" title="Mint a link another Producer opens to help run this room: admit, stage, order, remove, and cut scenes. Never on the set." onClick={onModLink}>
@@ -826,6 +830,103 @@ export function GuestPanel({
             );
           })}
           {error && <div className="rm-chatsetup-err">{error}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The host's vote control (#51): open → live tally → reveal → close. The
+ * set's bar is fed from the frames this card also reads. */
+function VoteHostCard({
+  vote,
+  audienceLink,
+  onOpen,
+  onTransition,
+  onAudienceLink,
+}: {
+  vote: Interaction | null;
+  audienceLink: string | null;
+  onOpen: (input: { a: string; b: string; prompt: string; who: "guest" | "audience" | "both" }) => void;
+  onTransition: (t: "open" | "reveal" | "close" | "cancel", holdMs?: number) => void;
+  onAudienceLink: () => void;
+}) {
+  const [a, setA] = useState("");
+  const [b, setB] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [who, setWho] = useState<"guest" | "audience" | "both">("both");
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!vote || vote.state !== "collecting") return;
+    const t = window.setInterval(() => tick((n) => n + 1), 500);
+    return () => window.clearInterval(t);
+  }, [vote?.id, vote?.state]);
+  const live = vote && vote.state !== "closed" && vote.state !== "cancelled";
+  const total = vote?.tally?.total ?? 0;
+  const pct = (id: string) => (total ? Math.round(((vote?.tally?.options[id] ?? 0) / total) * 100) : 0);
+  const left = vote?.timing.reveal_at ? Math.max(0, Math.ceil((Date.parse(vote.timing.reveal_at) - Date.now()) / 1000)) : null;
+  return (
+    <div className="rm-vote">
+      <div className="rm-vote-head">
+        <span className="rm-vote-title">Vote</span>
+        <button className="rm-guest-modlink" onClick={onAudienceLink} title={audienceLink ?? "Copy a link the audience opens on their phones (no account)"}>
+          Audience link
+        </button>
+      </div>
+      {!live ? (
+        <div className="rm-vote-form">
+          <input className="rm-vote-in" placeholder="Question (optional)" value={prompt} onChange={(e) => setPrompt(e.target.value)} maxLength={140} />
+          <div className="rm-vote-row">
+            <input className="rm-vote-in" placeholder="Option A" value={a} onChange={(e) => setA(e.target.value)} maxLength={60} />
+            <input className="rm-vote-in" placeholder="Option B" value={b} onChange={(e) => setB(e.target.value)} maxLength={60} />
+          </div>
+          <div className="rm-vote-row">
+            <select className="rm-vote-in" value={who} onChange={(e) => setWho(e.target.value as "both")}>
+              <option value="both">Guests + audience</option>
+              <option value="guest">Guests only</option>
+              <option value="audience">Audience only</option>
+            </select>
+            <button className="rm-guest-admit" disabled={!a.trim() || !b.trim()} onClick={() => onOpen({ a: a.trim(), b: b.trim(), prompt: prompt.trim(), who })}>
+              Open vote
+            </button>
+          </div>
+          {vote && vote.tally && (
+            <div className="rm-vote-fine">
+              Last: {vote.spec.options.map((o) => `${o.label} ${pct(o.id)}%`).join(" · ")} ({total} vote{total === 1 ? "" : "s"})
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="rm-vote-live">
+          {vote!.spec.prompt && <div className="rm-vote-prompt">{vote!.spec.prompt}</div>}
+          {vote!.spec.options.map((o) => (
+            <div key={o.id} className={`rm-vote-bar${vote!.tally?.winner === o.id && vote!.state !== "collecting" ? " win" : ""}`}>
+              <span className="rm-vote-label">{o.label}</span>
+              <span className="rm-vote-track"><span className="rm-vote-fill" style={{ width: `${pct(o.id)}%` }} /></span>
+              <span className="rm-vote-n">{vote!.tally?.options[o.id] ?? 0}</span>
+            </div>
+          ))}
+          <div className="rm-vote-fine">
+            {vote!.state === "open" && "Not taking answers yet."}
+            {vote!.state === "collecting" && `${total} so far${left != null ? ` · reveals in ${left}s` : ""}`}
+            {vote!.state === "revealed" && `Revealed · ${total} vote${total === 1 ? "" : "s"}`}
+          </div>
+          <div className="rm-vote-row">
+            {vote!.state === "open" && (
+              <>
+                <button className="rm-guest-admit" onClick={() => onTransition("open")}>Start</button>
+                <button className="rm-guest-modlink" onClick={() => onTransition("cancel")}>Cancel</button>
+              </>
+            )}
+            {vote!.state === "collecting" && (
+              <>
+                <button className="rm-guest-admit" onClick={() => onTransition("reveal", 0)}>Reveal</button>
+                <button className="rm-guest-modlink" onClick={() => onTransition("reveal", 3000)} title="The server reveals in 3 s — a countdown on the set">Reveal in 3s</button>
+                <button className="rm-guest-modlink" onClick={() => onTransition("close")}>Close</button>
+              </>
+            )}
+            {vote!.state === "revealed" && <button className="rm-guest-admit" onClick={() => onTransition("close")}>Close</button>}
+          </div>
         </div>
       )}
     </div>
@@ -1820,6 +1921,7 @@ const EXTRA_ICONS: Record<string, ReactNode> = {
   color: ic.swatch,
   window: ic.screen,
   guest: ic.invite,
+  overlay: ic.link,
 };
 
 
@@ -3947,7 +4049,13 @@ export function LiveView({
       link = new RoomControlLink({
         origin: new URL(ep.base_url).origin,
         session: () => guestsIpc.controlSession(ep.id, sid),
+        subscribe: ["interaction:host"],
         onFrame: (frame: ControlFrame) => {
+          if (frame.type === "interaction") {
+            const ix = (frame as { payload?: unknown }).payload as Interaction | undefined;
+            if (ix && typeof ix === "object" && typeof ix.id === "string") onInteractionFrame(ix);
+            return;
+          }
           if (frame.type !== "scene.cut") return;
           const cut = frame as SceneCutFrame;
           // The engine ignores cuts for scenes not in the room's list —
@@ -3990,6 +4098,109 @@ export function LiveView({
         setBanner("Mod link copied — whoever opens it in Producer can admit, stage, order, remove and cut scenes. They never appear on the set.");
       } catch {
         setBanner(res.mod_url);
+      }
+      window.setTimeout(() => setBanner(null), 6000);
+    } catch (e) {
+      setGuestErr(String(e).replace(/^Error:\s*/, ""));
+    }
+  };
+
+  // ── Interactions: the two-choice vote (#51) ────────────────────────────
+  // The room's RoomState DO is authoritative; this Producer opens, starts,
+  // reveals and closes through the server and reads the running tally off
+  // its control socket (`interaction:host`). The bar on the SET is a browser
+  // source on the local bridge fed from HERE — never from the server — so
+  // what is on air follows the host's clock (INTERACTIVE.md decision 1).
+  const [vote, setVote] = useState<Interaction | null>(null);
+  const votesRef = useRef<Map<string, Interaction>>(new Map());
+  const [audienceLink, setAudienceLink] = useState<string | null>(null);
+  const onInteractionFrame = (ix: Interaction) => {
+    const cur = votesRef.current.get(ix.id);
+    if (cur && cur.version > ix.version) return;
+    votesRef.current.set(ix.id, ix);
+    // The one to show: collecting first, else the newest not cancelled.
+    const all = [...votesRef.current.values()];
+    const collecting = all.filter((i) => i.state === "collecting");
+    const alive = all.filter((i) => i.state !== "cancelled");
+    const shown = collecting[collecting.length - 1] ?? alive[alive.length - 1] ?? null;
+    setVote(shown);
+    overlayBridge.set(shown ? { interaction: shown, server_now: shown.server_now } : null).catch(() => {});
+  };
+
+  /** The vote bar lives in an `overlay` extra pointed at the local bridge.
+   * Created once per room; re-pointed if the bridge moved (port). */
+  const ensureVoteOverlay = async () => {
+    const url = await overlayBridge.start();
+    const c = cfgRef.current;
+    const existing = (c.sources.extras ?? []).find((e) => e.spec.kind === "overlay");
+    if (existing && existing.spec.kind === "overlay" && existing.spec.url === url) return;
+    if (existing) {
+      await extraSources.remove(existing.id).catch(() => {});
+      await extraSources.add(existing.id, existing.label, { kind: "overlay", url }).catch(() => {});
+      writeCfg({
+        ...c,
+        sources: { ...c.sources, extras: (c.sources.extras ?? []).map((e) => (e.id === existing.id ? { ...e, spec: { kind: "overlay", url } } : e)) },
+      });
+      return;
+    }
+    await addExtraSource("Vote bar", { kind: "overlay", url });
+  };
+
+  const openVote = async (input: { a: string; b: string; prompt: string; who: "guest" | "audience" | "both" }) => {
+    try {
+      const ep = await resolveActiveEndpoint();
+      if (!ep) throw new Error("Connect a workspace first.");
+      let sid = cfg.server_room_id;
+      if (!sid) {
+        const reg = await registerRoom(ep.id, room?.name ?? "Room", room?.id ?? "");
+        sid = reg.room.id;
+        writeCfg({ ...cfgRef.current, server_room_id: sid });
+      }
+      await ensureVoteOverlay();
+      const res = await guestsIpc.interactionCreate(ep.id, sid!, {
+        type: "vote",
+        prompt: input.prompt,
+        options: [input.a, input.b],
+        reveal: "manual",
+        input: { who: input.who, once: true, cooldown_ms: 0 },
+      });
+      onInteractionFrame(res.interaction);
+    } catch (e) {
+      setGuestErr(String(e).replace(/^Error:\s*/, ""));
+    }
+  };
+
+  const transitionVote = async (transition: "open" | "reveal" | "close" | "cancel", holdMs?: number) => {
+    const v = vote;
+    if (!v || !cfg.server_room_id) return;
+    try {
+      const ep = endpointRef.current ?? (await resolveActiveEndpoint())?.id;
+      if (!ep) return;
+      const res = await guestsIpc.interactionTransition(ep, cfg.server_room_id, v.id, transition, holdMs ?? null);
+      onInteractionFrame(res.interaction);
+      if (transition === "cancel" || transition === "close") {
+        // Leave the result on the set for a beat, then clear the bar.
+        window.setTimeout(() => {
+          const latest = votesRef.current.get(v.id);
+          if (latest && (latest.state === "closed" || latest.state === "cancelled")) overlayBridge.set(null).catch(() => {});
+        }, transition === "close" ? 8000 : 0);
+      }
+    } catch (e) {
+      setGuestErr(String(e).replace(/^Error:\s*/, ""));
+    }
+  };
+
+  const copyAudienceLink = async () => {
+    try {
+      const ep = await resolveActiveEndpoint();
+      if (!ep || !cfg.server_room_id) throw new Error("Open the room on a server first.");
+      const res = await guestsIpc.audienceLink(ep.id, cfg.server_room_id);
+      setAudienceLink(res.url);
+      try {
+        await navigator.clipboard.writeText(res.url);
+        setBanner(`Audience link copied — ${res.url} (code ${res.code}). Works while you're live; no account needed.`);
+      } catch {
+        setBanner(res.url);
       }
       window.setTimeout(() => setBanner(null), 6000);
     } catch (e) {
@@ -4778,6 +4989,15 @@ export function LiveView({
             onStageToggle={(id) => void modStageToggle(id)}
             onOrder={(id, dir) => void modOrder(id, dir)}
             onModLink={() => void mintModLink()}
+            vote={
+              <VoteHostCard
+                vote={vote}
+                audienceLink={audienceLink}
+                onOpen={(i) => void openVote(i)}
+                onTransition={(t, hold) => void transitionVote(t, hold)}
+                onAudienceLink={() => void copyAudienceLink()}
+              />
+            }
           />
         );
       case "mixer":

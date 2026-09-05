@@ -2,6 +2,7 @@
 //! artifact when present (`have_engine` cfg set by build.rs); otherwise the
 //! stubs keep the app building and the IPC surface truthful about it.
 
+pub mod bridge;
 pub mod commands;
 pub mod creds;
 

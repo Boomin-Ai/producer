@@ -128,6 +128,13 @@ export class RealtimeHub {
     }
     const state = (ws.deserializeAttachment() as SocketState | null) ?? { userId: "", roomId: "", channels: [] };
     if (msg.type === "subscribe" && msg.channel) {
+      // Per-role projections ride per-role channels: a guest socket may not
+      // subscribe to the host's (`interaction:host` carries the running
+      // tally and, later, raw inputs).
+      if (msg.channel.endsWith(":host") && state.role !== "host" && state.role !== "control") {
+        ws.send(JSON.stringify({ type: "error", code: "forbidden", status: 403, channel: msg.channel }));
+        return;
+      }
       if (!state.channels.includes(msg.channel)) {
         state.channels.push(msg.channel);
         ws.serializeAttachment(state);

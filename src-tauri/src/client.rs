@@ -382,6 +382,89 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
+    /// The room's interactions, projected for the host (#51).
+    pub async fn room_interactions(&self, room_id: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .get(self.root_url(&format!("/v1/app/live/rooms/{room_id}/interactions")))
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// Open an interaction (a two-choice vote); the body is the contract's
+    /// InteractionCreate, passed through unchanged.
+    pub async fn room_interaction_create(
+        &self,
+        room_id: &str,
+        body: &Value,
+    ) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/interactions")))
+            .bearer_auth(&self.token)
+            .json(body)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// open · reveal · close · cancel. A reveal with a hold ARMS the server's
+    /// alarm; the client never sets `revealed` itself.
+    pub async fn room_interaction_transition(
+        &self,
+        room_id: &str,
+        interaction_id: &str,
+        transition: &str,
+        reveal_hold_ms: Option<u64>,
+    ) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .patch(self.root_url(&format!(
+                "/v1/app/live/rooms/{room_id}/interactions/{interaction_id}"
+            )))
+            .bearer_auth(&self.token)
+            .json(
+                &serde_json::json!({ "transition": transition, "reveal_hold_ms": reveal_hold_ms }),
+            )
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// The room's audience code + share URL (/a/CODE); `rotate` mints a new one.
+    pub async fn room_audience_link(&self, room_id: &str, rotate: bool) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/audience-link")))
+            .bearer_auth(&self.token)
+            .json(&serde_json::json!({ "rotate": rotate }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     /// Host-controlled slot order — the FULL list of guest ids, first on top.
     pub async fn room_guest_order(&self, room_id: &str, order: &[String]) -> EngineResult<Value> {
         let resp = self
