@@ -4745,6 +4745,37 @@ export function LiveView({
   const panelBody = (id: PanelId) => {
     switch (id) {
       case "scenes":
+        // A mod's Producer on Boomin: the HOST's scenes, read from the room's
+        // directory, the active one lit by the server's `scene.cut` frames.
+        // A click is `POST …/scene`; nothing here touches our own engine.
+        if (hostScenes) {
+          return (
+            <div className="rm-scenes">
+              {hostScenes.scenes.length === 0 && (
+                <div className="rm-rows-empty">The host hasn't published scenes yet — they appear once their Producer opens the room.</div>
+              )}
+              {hostScenes.scenes.map((p, i) => (
+                <div
+                  key={p.id}
+                  role="button"
+                  tabIndex={0}
+                  className={`rm-scene-row${hostScenes.active_scene_id === p.id ? " active" : ""}`}
+                  title="Cut the host's room to this scene"
+                  onClick={() => void cutHostScene(p.id)}
+                  onKeyDown={(e) => e.key === "Enter" && void cutHostScene(p.id)}
+                >
+                  <span className="rm-scene-icon">{ic.screen}</span>
+                  <span className="rm-scene-name">{p.name}</span>
+                  {hostScenes.active_scene_id === p.id ? (
+                    <span className="rm-scene-live">On</span>
+                  ) : (
+                    <span className="rm-scene-key">{i < 9 ? `⌘${i + 1}` : ""}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          );
+        }
         return (
           <div className="rm-scenes">
             {scenes.map((p, i) => (
