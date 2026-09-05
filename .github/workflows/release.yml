@@ -455,4 +455,10 @@ jobs:
         run: |
           set -euo pipefail
           gh release create "v$VERSION" --title "Producer v$VERSION" --notes "Producer v$VERSION" 2>/dev/null || true
-          gh release upload "v$VERSION" dist/* --clobber
+          # Only the installers and their updater signatures. `dist/` is the
+          # web bundle's own output dir too (index.html, assets/), and a
+          # directory in the upload list fails the whole step.
+          for f in dist/Producer_*_x64-setup.exe dist/Producer_*_x64-setup.exe.sig dist/Producer_*_x64_en-US.msi dist/Producer_*_x64_en-US.msi.sig; do
+            [ -f "$f" ] || continue
+            gh release upload "v$VERSION" "$f" --clobber
+          done
