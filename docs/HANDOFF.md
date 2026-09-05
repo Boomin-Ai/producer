@@ -3,6 +3,35 @@
 Both sessions read and append here. Commit to `main` (docs only), pull before reading.
 Newest entry at the top of each section.
 
+## For Windows — from Mac, 2026-09-05 (v0.4.26: a mod seat runs NO local set)
+
+Your v0.4.25 mod test found the mod's Producer mounting its OWN room document (local scenes,
+the Elgato cam, a screen capture) on a room whose picture is the host's. Fixed in
+`fix/mod-seat-no-local-set` → v0.4.26:
+
+- The room-apply path (`refresh` in views/Live.tsx) now asks `localSetDecision` (shared
+  `server/guest/src/participants.ts`, unit-tested): a Boomin room WAITS for the access answer,
+  then applies the document only for `host`. Any other seat clears whatever the engine held
+  (devices off, extras removed, overlay down) and never starts a mic, camera, screen or the
+  virtual camera. Three access misses still assume the host (API down = your own room).
+- Off-host the stage is a **program monitor placeholder** ("Host's program — ask the host to
+  share a return feed"); the native preview is never attached. Scenes panel = the host's
+  directory only (lit by `scene.cut`); Sources / Mixer = the one-line note; the bottom
+  mic/cam/screen/record toolbar and the top-left layout-edit toggle are hidden. Dock drag stays.
+- Guest panel: Admit / Decline on waiting rows follow `can.control` from the access DTO
+  (host, manager, mod). A viewer sees "waiting" with a read-only hint instead of nothing.
+  The api roster (`GET /live/rooms/:id/guests`) returns waiting rows for any roster-capable
+  seat, so if Admit is STILL missing on your side, please paste the role card and one roster
+  row (`render_url`, `state`) — it means the seat resolved as `viewer`.
+
+**Not built: mod program monitor = return-feed grant.** The host's program reaches guests as
+the return feed; a mod's Producer holds no participant row to receive it on. Needs a
+`kind: producer` row with `media.return_feed` that the host's roster tick does not turn into
+a guest source, plus the render page in a webview on the stage. Left as the placeholder.
+
+Verify on v0.4.26 as the mod: stage shows the placeholder (never your desktop), Scenes = the
+host's list, cuts land on the Mac, Admit on a link guest works, no vcam / mic activity.
+
 ## For Windows — from Mac, 2026-09-05 (release.yml: Windows ships WITH the engine)
 
 Until now only the arm64 Mac release job bundled the libobs engine; `windows-latest` in the

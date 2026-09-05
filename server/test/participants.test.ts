@@ -15,6 +15,7 @@ import {
   roomRoleFrom,
   seatAccessFrom,
   setEditingAllowed,
+  localSetDecision,
   sourceIdsFor,
   wantedSourceIds,
 } from "../guest/src/participants";
@@ -232,5 +233,24 @@ describe("setEditingAllowed", () => {
   });
   it("a pending access answer is not a host", () => {
     expect(setEditingAllowed(roomAccessFrom(null), true)).toBe(false);
+  });
+});
+
+describe("localSetDecision", () => {
+  it("an open server applies the local document — the opener is the host", () => {
+    expect(localSetDecision({ boomin: false, answered: false, tries: 0, role: "host" })).toBe("apply");
+  });
+  it("a Boomin room waits for the access answer rather than mounting a mod's own set", () => {
+    expect(localSetDecision({ boomin: true, answered: false, tries: 0, role: "host" })).toBe("wait");
+    expect(localSetDecision({ boomin: true, answered: false, tries: 2, role: "host" })).toBe("wait");
+  });
+  it("three misses assume the host (the API is down, the room is theirs)", () => {
+    expect(localSetDecision({ boomin: true, answered: false, tries: 3, role: "host" })).toBe("apply");
+  });
+  it("an answered non-host seat never runs a local set", () => {
+    for (const role of ["mod", "manager", "viewer"] as const) {
+      expect(localSetDecision({ boomin: true, answered: true, tries: 1, role })).toBe("skip");
+    }
+    expect(localSetDecision({ boomin: true, answered: true, tries: 0, role: "host" })).toBe("apply");
   });
 });

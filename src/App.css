@@ -2018,6 +2018,22 @@ textarea::placeholder {
   font-size: 13px;
 }
 
+/* Off-host stage: a 16:9 program monitor frame with the note centred —
+ * the same footprint the native preview takes, so the docks don't jump
+ * when a seat turns out to be the host's. */
+.rm-program-monitor {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(100%, 100cqh * 16 / 9);
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  border: 1px dashed oklch(0.32 0.04 250 / 0.55);
+  background: oklch(0.1 0.02 250);
+  text-align: center;
+  padding: 0 24px;
+}
+
 .rm-float {
   position: absolute;
   top: 26px;
@@ -5610,6 +5626,12 @@ textarea::placeholder {
   font-size: 12px;
   font-weight: 650;
   cursor: pointer;
+}
+
+.rm-guest-wait-note {
+  margin-left: auto;
+  font-size: 11px;
+  color: oklch(0.55 0.025 250);
 }
 
 .rm-guest-admit:disabled {
