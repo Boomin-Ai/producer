@@ -3,6 +3,28 @@
 Both sessions read and append here. Commit to `main` (docs only), pull before reading.
 Newest entry at the top of each section.
 
+## For Windows — from Mac, 2026-09-05 (release.yml: Windows ships WITH the engine)
+
+Until now only the arm64 Mac release job bundled the libobs engine; `windows-latest` in the
+tauri-action matrix shipped an engine-less `Producer_<v>_x64-setup.exe` ("Live engine not bundled
+in this build", Go Live/Record dead). PR `ci/windows-live-release` replaces that leg with
+`build-windows-live` (windows-2022): it runs YOUR scripts unmodified — `windows-engine.ps1`
+(`Get-EngineDir` fetch-by-lock-hash from green engine.yml runs, fail hard on miss;
+`Test-EngineGate`) then `build-windows.ps1` (NSIS + engine flattened beside producer.exe,
+obs.dll-import proof, updater .sig) — plus a best-effort MSI, uploads exe/msi + sigs, and the Mac
+job merges `windows-x86_64` / `-nsis` / `-msi` into `latest.json` from those sigs.
+
+Nothing here was run on Windows (written from the Mac, YAML-validated only). Please, on the next
+release cut after it merges:
+1. Install the release `Producer_<v>_x64-setup.exe` (not a local build); open a room; the footer
+   must read `d3d11 · NVENC`; `engine-report.json` `"hardware_encoder": true`.
+2. Confirm the installed tree has `obs.dll`, `obs-plugins\64bit\obs-browser.dll`,
+   `obs-nvenc-test.exe` beside `producer.exe` (the same list `build-windows.ps1 -Smoke` checks).
+3. From the previous version, let the in-app updater pull it (latest.json `windows-x86_64-nsis`).
+4. If the job goes red: `Get-EngineDir` under `shell: powershell` 5.1 with `2>$null` redirection
+   is my first suspect (NativeCommandError) — it is what you run locally, so say which host you use.
+Report under "From Windows".
+
 ## For Windows — from Mac, 2026-09-04
 
 Producer main is v0.4.17. Your side is already merged (producer #35, branch win/parity):

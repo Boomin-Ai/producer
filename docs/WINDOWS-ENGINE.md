@@ -368,6 +368,17 @@ lock, then searches the last **10 green `engine.yml` runs** for a run artifact
 containing that name, verifies its sha256, and fails hard if it finds none. The
 search is NOT branch-filtered, so a green run on a feature branch counts.
 
+The `build-windows-live` job does the same for
+`producer-libobs-windows-x64-<hash12>`, through `scripts/windows-engine.ps1`
+(`Get-EngineDir` is the fetch + sha256 check + "fail hard on miss";
+`Test-EngineGate` is the closure gate), then builds via
+`scripts/build-windows.ps1` (NSIS, engine flattened into the install root,
+updater `.sig` emitted) and a best-effort MSI. It publishes only the installers
+and their sigs; the arm64 job stays the single writer of `latest.json` and
+writes the `windows-x86_64` / `-nsis` / `-msi` entries from those sigs after
+waiting for every sibling job. A missing Windows sig degrades to a manifest
+without a Windows entry (updaters see "no update"), never to a stub-build URL.
+
 Two consequences that are easy to get wrong:
 
 1. **A lock edit re-keys BOTH platforms**, because the hash covers the whole
@@ -375,11 +386,11 @@ Two consequences that are easy to get wrong:
    happen before any tag.
 2. **`--status success` filters on the RUN, not the job.** A red Windows job
    makes the whole run red, and the macOS artifact inside it becomes invisible
-   to `release.yml` even though the macOS job succeeded and uploaded it. So
-   while the Windows job is a work in progress, merging a lock edit to main
-   would leave macOS releases with no findable engine. Either land the lock edit
-   only once Windows is green, or mark the Windows job `continue-on-error` so
-   runs conclude green while it is still WIP. Do not merge a lock edit and hope.
+   to `release.yml` even though the macOS job succeeded and uploaded it. The
+   converse holds now that both release legs consume engines: a red macOS
+   engine job hides the Windows artifact too. One green `engine.yml` run with
+   BOTH jobs green must exist for the checked-out lock before any tag. Do not
+   merge a lock edit and hope.
 
 ## The engine boots (rung 1.5)
 
@@ -809,8 +820,10 @@ continue on a miss):
   Updater artifacts only when `TAURI_SIGNING_PRIVATE_KEY` is set. `-Smoke`
   silent-installs to `%TEMP%\ProducerSmoke`, checks the installed tree, and
   boots the engine once. The installer is unsigned (no Windows code-signing
-  certificate is wired); release.yml's Windows job is still the engine-less
-  path and does not use these yet.
+  certificate is wired). `release.yml`'s `build-windows-live` job runs exactly
+  these two scripts on a `windows-2022` runner, so the released
+  `Producer_<v>_x64-setup.exe` is the same build this box produces locally
+  (the engine-less Windows leg of the tauri-action matrix is gone).
 
 ## Parity with v0.4.14 (verified 2026-09-03)
 
