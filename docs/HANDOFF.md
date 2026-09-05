@@ -99,6 +99,47 @@ gate (#41 merged): any ffi.rs extern must have both shim.m and shim_win.c defini
 
 ## From Windows
 
+### 2026-09-05 — v0.4.20 verify list + the 4K record fix (PR #57)
+
+Pulled main to v0.4.20 (e731b64), built with the engine (lock unchanged, `f85b8f889ab3`); the
+extern-parity check passes locally too (no ffi.rs extern missing from shim_win.c).
+
+**(5) 4K60 record-while-streaming: FIXED, PR #57 (`live/record-shares-stream-encoder`), do not merge
+without you.** Implemented your policy: `Recorder::start` now takes the live session's video encoder
+(`obs_encoder_get_ref`, released with the recorder) and skips `obs_encoder_set_video` since the stream
+already bound it; it only creates its own encoder when nothing is streaming. There is no
+canvas/fps-mismatch fallback case — `SetVideo` refuses changes while a stream is live — so the
+"different canvas → second encoder capped at 30" branch you described is unreachable and I did not
+write it. Same box, same test, 2160p60 stream + 60 s recording:
+
+| | fps | skipped | dropped | file |
+|---|---|---|---|---|
+| before | 60, dip to 53 | 7,503, still climbing after record stop | 0 | 33.45 s / 2,065 frames |
+| after | 60.0 flat | **0** | 0 | **59.98 s / 3,599 frames**, decodes clean, 3840x2160 + AAC |
+
+Log line on the shared path: `[live] recording shares the stream's video encoder`. Trade-off, by
+construction: the stream's bitrate wins over the recording's quality bitrate. Please verify on Apple
+silicon.
+
+**(1) Cutout on Windows: passes.** Footer `d3d11 · NVENC` on v0.4.20. `producer_person_mask` registers,
+adds to a source, and takes `mode` soft → cut → off with feather/erode/blur; every setting round-trips
+through `live_filters`. Engine stayed at 60 fps, no mask errors in the log, and a pixel probe of the
+preview in `cut` mode shows normal content (not black, not a stalled frame).
+
+**(4) Overlay bridge: not blocked.** `overlay_bridge_start` → `http://127.0.0.1:47119/overlay`, listening
+confirmed in netstat; GET `/overlay` = 200 (3,859 bytes), and `/state.json` returns the vote state I
+pushed through `overlay_bridge_set`. Windows Firewall does not filter loopback, so the rule is
+irrelevant to this path — no action needed on any Windows box.
+
+**(2) and (3) need a human on both machines** — a browser guest going on/off stage, and a mod link
+cutting a scene from a second Producer. Kleveland now runs the installed prod build against
+`api.boomin.ai`, so those are his to drive; I can watch the Windows side's engine log live when he does.
+
+**Housekeeping:** a MediaMTX self-signed pair (`auto.crt`/`auto.key`) got into my first commit on that
+branch — the branch history was rewritten before anyone pulled it, and both names are gitignored now.
+MediaMTX writes them into the repo root when it is used as a local RTMP sink; worth knowing if you ever
+run it from the repo.
+
 ### 2026-09-04 18:10 — everything Windows is on main; ask: what are "segmentations"?
 
 - Merged to main: #32 (e004422, red crop edges + outline follows the picture), #40 (226b1aa,
