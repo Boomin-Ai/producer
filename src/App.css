@@ -8971,3 +8971,39 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   color: var(--muted-fg);
 }
 .onboarding-modlink .modlink-drop { width: min(440px, 100%); }
+
+/* ── Role card: what you are in this room (views/RoleCard.tsx) ─────────── */
+.role-card {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 11px;
+  border-radius: 12px;
+  border: 0.5px solid oklch(1 0 0 / 0.12);
+  background: oklch(1 0 0 / 0.05);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  color: var(--fg-1);
+  -webkit-app-region: no-drag;
+  max-width: 100%;
+}
+.role-card.compact { flex-direction: row; align-items: center; gap: 8px; padding: 0 10px; height: var(--h-ctl, 28px); border-radius: 999px; }
+.role-card.pending { opacity: 0.6; }
+.role-card-title { font-size: 12.5px; font-weight: 650; letter-spacing: -0.01em; white-space: nowrap; }
+.role-card.role-host .role-card-title { color: var(--fg-1); }
+.role-card.role-manager .role-card-title,
+.role-card.role-mod .role-card-title { color: oklch(0.85 0.09 165); }
+.role-card.role-viewer .role-card-title { color: var(--fg-2); }
+.role-card-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.role-card.compact .role-card-chips { flex-wrap: nowrap; }
+.role-chip {
+  font-size: 10.5px;
+  line-height: 1;
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 0.5px solid oklch(1 0 0 / 0.1);
+  color: var(--fg-3);
+  white-space: nowrap;
+}
+.rm-top-seat-note { font-size: 12px; color: var(--fg-3); padding: 0 6px; white-space: nowrap; }
+.rm-top-left .role-card.compact { margin-left: 6px; }

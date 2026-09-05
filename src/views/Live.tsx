@@ -93,12 +93,15 @@ import {
   moveInOrder,
   participantKind,
   resolveGrants,
-  roomRoleFrom,
+  roomAccessFrom,
+  capabilitiesOf,
   kindBadge,
   sourceIdsFor,
   wantedSourceIds,
+  type RoomAccessInfo,
   type RoomRole,
 } from "../lib/participants";
+import { RoleCard } from "./RoleCard";
 
 // Transport-truthful copy (M-L4 finding: an RTMP session can look healthy
 // while the platform discards it — only the dashboard confirms LIVE).
@@ -691,7 +694,8 @@ export function GuestPanel({
   onOrder: (guestId: string, dir: -1 | 1) => void;
   /** Host only: mint a mod link (a control seat another Producer opens). */
   onModLink?: () => void;
-  /** Host only: the vote control (#51). */
+  /** The vote control (#51) — the caller passes it only when the seat
+   * holds `room.interactions`. */
   vote?: ReactNode;
 }) {
   // render_url is the server's own statement of "this one may go on the
@@ -710,7 +714,7 @@ export function GuestPanel({
 
   return (
     <div className="rm-guests">
-      {role === "host" && vote}
+      {vote}
       {role === "host" && onModLink && (
         <div className="rm-guest-tools">
           <button className="rm-guest-modlink" title="Mint a link another Producer opens to help run this room: admit, stage, order, remove, and cut scenes. Never on the set." onClick={onModLink}>
@@ -2848,6 +2852,15 @@ export function LiveView({
   const [roomRole, setRoomRole] = useState<RoomRole>("host");
   const roomRoleRef = useRef<RoomRole>("host");
   const accessAsked = useRef(false);
+  const accessTries = useRef(0);
+  /** The whole answer (role · via · can) — what the role card shows and
+   * what the host-only chrome is gated on. Assumed host until the route
+   * answers; `known` says whether it did. */
+  const [roomAccess, setRoomAccess] = useState<RoomAccessInfo>(() => ({ role: "host", via: "server", can: capabilitiesOf("host"), known: false }));
+  /** A Boomin room whose access route hasn't answered yet: the host chrome
+   * stays hidden rather than flashing GO LIVE at a mod. */
+  const [accessPending, setAccessPending] = useState(false);
+  const isHost = roomRole === "host" && !accessPending;
   /** The room's server is Boomin (a brand-scoped endpoint) rather than an
    * open server: the room channel, votes, overlays and the run then use
    * Boomin's routes (lib/boominRoom.ts). Resolved with the endpoint. */
@@ -4560,14 +4573,29 @@ export function LiveView({
           setBoominRoom(boominRoomRef.current);
         }
         if (!accessAsked.current) {
-          accessAsked.current = true;
-          // Once per room open. A failure (offline blip) reads as "host",
-          // which is the pre-route behaviour and the safe default for the
-          // person who opened the room on their own machine.
+          // Once per room open — once it has ANSWERED. A transport failure
+          // (offline blip, a 5xx) is not an answer: on a Boomin room the tick
+          // asks again next time rather than settling on "host" for the rest
+          // of the session, which is how a mod used to get the host's room.
+          // 404 (no route: self-hosted, or Boomin before #380) and 401/403
+          // (refused) are answers; the shell maps them (client.rs).
+          if (boominRoomRef.current && accessTries.current === 0) setAccessPending(true);
           const acc = await guestsIpc.access(endpointRef.current, cfg.server_room_id!).catch(() => null);
-          const role = roomRoleFrom(acc);
-          roomRoleRef.current = role;
-          setRoomRole(role);
+          if (!alive) return;
+          if (acc === null && boominRoomRef.current) {
+            // Three misses (~9 s) and the person who opened their own room
+            // with the API down gets their room back — as the ASSUMED host
+            // (the card says so), while the tick keeps asking.
+            accessTries.current += 1;
+            if (accessTries.current >= 3) setAccessPending(false);
+            return;
+          }
+          accessAsked.current = true;
+          const info = roomAccessFrom(acc);
+          roomRoleRef.current = info.role;
+          setRoomRole(info.role);
+          setRoomAccess(info);
+          setAccessPending(false);
         }
         const res = await guestsIpc.roster(endpointRef.current, cfg.server_room_id!);
         if (!alive) return;
@@ -5027,6 +5055,9 @@ export function LiveView({
           </>
         );
       case "sources": {
+        if (!isHost) {
+          return <div className="rm-rows-empty">The set is the host's. Cut scenes and run the roster from here; sources live in their Producer.</div>;
+        }
         if (overlayInline) {
           return (
             <div className="rm-filters">
@@ -5279,19 +5310,22 @@ export function LiveView({
             onShow={(id, show) => (show ? void showGuestInSlot(id) : hideGuestFromSlot(id))}
             onStageToggle={(id) => void modStageToggle(id)}
             onOrder={(id, dir) => void modOrder(id, dir)}
-            onModLink={() => void mintModLink()}
+            onModLink={isHost ? () => void mintModLink() : undefined}
             vote={
-              <VoteHostCard
-                vote={vote}
-                audienceLink={audienceLink}
-                onOpen={(i) => void openVote(i)}
-                onTransition={(t, hold) => void transitionVote(t, hold)}
-                onAudienceLink={() => void copyAudienceLink()}
-              />
+              roomAccess.can.interactions ? (
+                <VoteHostCard
+                  vote={vote}
+                  audienceLink={audienceLink}
+                  onOpen={(i) => void openVote(i)}
+                  onTransition={(t, hold) => void transitionVote(t, hold)}
+                  onAudienceLink={() => void copyAudienceLink()}
+                />
+              ) : undefined
             }
           />
         );
       case "mixer":
+        if (!isHost) return <div className="rm-rows-empty">Audio is mixed in the host's Producer.</div>;
         return (
               <div className="rm-strips">
                 {sources.mic && micStrip}
@@ -5925,10 +5959,10 @@ export function LiveView({
 
       <header className="rm-top" data-tauri-drag-region>
         <div className="rm-top-left" data-tauri-drag-region>
-          {/* Stream health lives here, not in a dock. Health you have to go
-            * find — or that a layout can hide — is health you learn about too
-            * late. Dot is always present; the numbers appear once they mean
-            * something. */}
+          {/* What you are here — the same card a mod seat and a self-hosted
+            * room show (views/RoleCard.tsx). The host's own room says so
+            * quietly; a mod's says what the seat may do. */}
+          <RoleCard access={roomAccess} compact pending={accessPending} />
         </div>
 
         {/* The way DOWN and the way AROUND both live at the FAR LEFT, apart
@@ -5966,6 +6000,13 @@ export function LiveView({
         <div className="rm-top-drag" data-tauri-drag-region />
 
         <div className="rm-top-right">
+          {/* HOST-ONLY TRANSPORT. A mod or manager on Boomin holds a control
+            * seat, not the show: no guest link to hand out, no channels, no
+            * encoder, no recording, no GO LIVE, no virtual camera — exactly
+            * what an open-server mod seat (views/ModSeat.tsx) never shows.
+            * Scenes, guests, votes and chat stay, gated by `can`. */}
+          {isHost ? (
+            <>
           <button
             className="hd-chip hd-link"
             title="Copy this room's guest link"
@@ -6156,6 +6197,12 @@ export function LiveView({
               LIVE {`${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}`}
             </span>
           )}
+            </>
+          ) : (
+            <span className="rm-top-seat-note">
+              {accessPending ? "" : roomAccess.role === "viewer" ? "Read-only seat" : "Control seat — the host runs the show"}
+            </span>
+          )}
         </div>
       </header>
       {seat && <GreenRoomBar seat={guestSeat} spec={seat} onLeave={() => onLeave?.()} />}
@@ -6304,7 +6351,7 @@ export function LiveView({
                   items={sources.items ?? []}
                   baseW={(vh * 16) / 9}
                   baseH={vh}
-                  disabled={!engineOk}
+                  disabled={!engineOk || !isHost}
                   onOrder={(id, dir) => {
                     const items = sources.items ?? [];
                     const it = items.find((i) => i.id === id);
