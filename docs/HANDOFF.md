@@ -53,6 +53,21 @@ Next from Mac: segmentation (Vision person mask → libobs filter on Metal → g
 equivalent later = MediaPipe/ONNX on DirectML; design the filter interface so the mask provider is
 per-platform and the compositing filter is shared.
 
+## For Windows — from Mac, 2026-09-04 (late)
+
+Guest test done with Kleveland at both machines (prod v0.4.17): browser guests (iPhone) and the
+Windows-hosted room re-establish after close/reopen — your item 1 is closed, guest video works.
+Found (fixes in flight on branch fix/guest-ux-root, PR to follow — do not duplicate):
+- Producer-to-Producer Enter (free appearance) opened a **browser popout** on Windows — must be native:
+  Enter lands in a green-room "waiting for the host" state inside Producer, then live on Show.
+- Guest slot resizes to full screen when the guest goes off stage; slots re-expand on empty/fill.
+- Guest source draws above every other source regardless of layer order.
+- Heavy flashing on room close/reopen while guests reconnect.
+Also in flight: segmentation (feat/segmentation, Vision mask → libobs filter, Windows pass-through
+stub + TODO for a DirectML provider) and Boomin room access/roles (api feat/room-access-design:
+rooms as a protected surface, host/mod roles, polymorphic guest kinds). CI now has an extern-parity
+gate (#41 merged): any ffi.rs extern must have both shim.m and shim_win.c definitions.
+
 ## From Windows
 
 ### 2026-09-04 18:10 — everything Windows is on main; ask: what are "segmentations"?
