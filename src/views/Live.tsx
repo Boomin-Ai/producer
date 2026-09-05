@@ -800,6 +800,9 @@ function FilterEditor({
         <div className="rm-props">
           {spec.props.map((pr) => {
             const raw = current.settings[pr.key];
+            if (pr.showWhen && String(current.settings[pr.showWhen.key]) !== pr.showWhen.value) {
+              return null;
+            }
             if (pr.kind === "choice") {
               return (
                 <div key={pr.key} className="rm-prop">
@@ -893,7 +896,7 @@ function FilterEditor({
               No filters yet.{" "}
               {media === "audio"
                 ? "Most streamers run noise suppression, a gate, then a compressor."
-                : "Chroma key removes a green screen; colour correction fixes a dull camera."}
+                : "Cutout removes your background with no green screen; colour correction fixes a dull camera."}
             </div>
           )}
           {chain?.map((f, i) => (
