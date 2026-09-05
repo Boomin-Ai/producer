@@ -10,6 +10,8 @@
     "deploy": "wrangler deploy",
     "db:migrate:local": "wrangler d1 execute producer --local --file=./schema.sql",
     "db:migrate": "wrangler d1 execute producer --remote --file=./schema.sql",
+    "db:migrate:columns": "wrangler d1 migrations apply producer --remote",
+    "db:migrate:columns:local": "wrangler d1 migrations apply producer --local",
     "typecheck": "tsc --noEmit",
     "guest:build": "npm --prefix guest run build",
     "guest:typecheck": "npm --prefix guest run typecheck",

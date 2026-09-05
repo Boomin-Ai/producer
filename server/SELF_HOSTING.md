@@ -206,7 +206,11 @@ plus a ~3 s roster poll while the room is open.
 ## Updating
 
 ```sh
-git pull && npm install && npx wrangler deploy && npm run db:migrate
+git pull && npm install && npx wrangler deploy && npm run db:migrate && npm run db:migrate:columns
 ```
 
-The schema is idempotent; migrations never destroy data.
+The schema is idempotent; migrations never destroy data. `db:migrate`
+re-applies `schema.sql` (new tables); `db:migrate:columns` applies
+`migrations/*.sql` once each through D1's tracked migrations (new columns on
+existing tables — Phase 1 added participant `kind` / `grants` / `seat`, room
+runs and the audience code). A fresh install needs only `db:migrate`.
