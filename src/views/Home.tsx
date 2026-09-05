@@ -34,6 +34,8 @@ import { liveRoomId, parseConfig, serializeConfig } from "../lib/room";
 import { deleteRoomEverywhere, renameRoom, roomOccupancy, syncRooms } from "../lib/roomSync";
 import { useUpdater } from "../lib/updater";
 import { DestinationEditor, LiveView } from "./Live";
+import { ModSeat } from "./ModSeat";
+import { parseModLink, type ModLink } from "../lib/modSeat";
 
 const STATE_LABEL: Record<string, string> = {
   scheduled: "Scheduled",
@@ -50,7 +52,9 @@ type MainView =
   | { kind: "compose" }
   | { kind: "history" }
   /** The server's settings console (Brand settings, Payments, members…), delivered at runtime. */
-  | { kind: "console"; section: string };
+  | { kind: "console"; section: string }
+  /** A mod seat on someone else's open server (#47): roster + scene cuts, no engine. */
+  | { kind: "modseat"; link: ModLink };
 
 interface Attached {
   upload_id: string;
@@ -380,6 +384,10 @@ export function Home({
 
   const title = view.kind === "compose" ? "New post" : view.kind === "history" ? "Rundown" : view.kind === "console" ? "Settings" : null;
 
+  if (view.kind === "modseat") {
+    return <ModSeat link={view.link} onLeave={back} />;
+  }
+
   // The room owns the entire window, its own top bar included (mock-faithful).
   if (view.kind === "room") {
     return (
@@ -433,6 +441,21 @@ export function Home({
               <div className="cr-menu-backdrop" onClick={() => setAccountOpen(false)} />
               <div className="cr-menu">
                 <button onClick={() => { setAccountOpen(false); setView({ kind: "console", section: "general" }); }}>Brand settings</button>
+                <button
+                  onClick={() => {
+                    setAccountOpen(false);
+                    const raw = window.prompt("Paste a mod link (…/connect/mod/…) to help run someone's room:");
+                    if (!raw) return;
+                    const link = parseModLink(raw);
+                    if (!link) {
+                      window.alert("That isn't a mod link. It looks like https://their-server/connect/mod/gm_….");
+                      return;
+                    }
+                    setView({ kind: "modseat", link });
+                  }}
+                >
+                  Open a mod link…
+                </button>
                 {onSignOut && endpoints.some((e) => e.kind === "connected") && (
                   <button className="danger" onClick={() => { setAccountOpen(false); onSignOut(); }}>Sign out</button>
                 )}

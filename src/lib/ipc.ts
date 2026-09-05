@@ -757,6 +757,14 @@ export const guests = {
    * Producer behaves as the host, exactly as before. */
   access: (endpointId: string, roomId: string) =>
     invoke<{ available?: boolean; access?: unknown }>("room_access", { endpointId, roomId }),
+  /** Mint a MOD LINK (#47): a control seat another Producer opens. The URL
+   * comes back exactly once. */
+  modLink: (endpointId: string, roomId: string, displayName?: string | null) =>
+    invoke<{ guest: RoomGuest; mod_url: string }>("room_mod_link", { endpointId, roomId, displayName: displayName ?? null }),
+  /** A ticket to the room channel's CONTROL side for the host's Producer:
+   * scene list out, mods' cuts in. */
+  controlSession: (endpointId: string, roomId: string) =>
+    invoke<{ signaling_ticket: string; signaling_url: string; peer_id?: string }>("room_control_session", { endpointId, roomId }),
   /** Slot order — the FULL list of guest ids, first on top. */
   order: (endpointId: string, roomId: string, order: string[]) =>
     invoke("room_guest_order", { endpointId, roomId, order }),

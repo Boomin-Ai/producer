@@ -22,7 +22,9 @@ import { verifyTicket } from "./ticket";
 import {
   acceptGuest,
   admitGuest,
+  createModSeat,
   createRoom,
+  mintControlTicket,
   currentStage,
   declineGuest,
   deleteRoom,
@@ -207,6 +209,43 @@ liveHostRoutes.post("/guests/:id/grants", async (c) => {
   }
   const guest = await setGrant(c.env, c.req.param("id"), body.grant, body.enabled);
   return c.json({ guest: { ...publicGuest(guest), grants: grantList(guest) } });
+});
+
+/** The host mints a mod link (#47): a control seat another Producer opens. */
+liveHostRoutes.post("/rooms/:id/mod-link", async (c) => {
+  const body = await jsonBody<{ display_name?: unknown }>(c);
+  const result = await createModSeat(c.env, origin(c.req.url), {
+    roomId: c.req.param("id"),
+    displayName: typeof body.display_name === "string" ? body.display_name : null,
+  });
+  // The URL is returned EXACTLY ONCE — only its hash is stored.
+  return c.json({ guest: publicGuest(result.guest), mod_url: result.mod_url }, 201);
+});
+
+/** The room's control seats — the Moderators list. Revoke one with
+ *  `POST guests/:id/revoke` like any participant. */
+liveHostRoutes.get("/rooms/:id/mods", async (c) => {
+  const room = await loadRoom(c.env, c.req.param("id"));
+  const rows = await c.env.DB.prepare(
+    "SELECT * FROM live_room_guests WHERE room_id = ?1 AND seat = 'control' AND status = 'accepted' ORDER BY created_at DESC",
+  )
+    .bind(room.id)
+    .all<GuestRow>();
+  return c.json({ mods: (rows.results ?? []).map((g) => ({ ...publicGuest(g), grants: grantList(g) })) });
+});
+
+/** The host's Producer joins the room channel's CONTROL side: it publishes
+ *  its scene list there and receives mods' scene cuts as frames. */
+liveHostRoutes.post("/rooms/:id/control-session", async (c) => {
+  const room = await loadRoom(c.env, c.req.param("id"));
+  const s = await mintControlTicket(c.env, { roomId: room.id });
+  return c.json({
+    signaling_ticket: s.ticket,
+    signaling_url: `/v1/connect/room-control?ticket=${encodeURIComponent(s.ticket)}`,
+    peer_id: s.peerId,
+    role: "host",
+    expires_in: s.expiresIn,
+  });
 });
 
 /** What THIS token may do in the room (#47). One deployment = one host, and
@@ -396,6 +435,32 @@ connectGuestRoutes.get("/guest-room-signal", async (c) => {
   return realtime.get(realtime.idFromName(roomChannelName(roomId))).fetch(forwarded);
 });
 
+/** The room channel's CONTROL side: the host's Producer (sub "host") or a
+ *  mod seat (sub "control:<id>", grants sealed at mint and re-read from the
+ *  row here). Same DO as the guests' room channel, so a cut is one hop. */
+connectGuestRoutes.get("/room-control", async (c) => {
+  const { realtime, secret } = requireUpgrade(c, c.env);
+  const claims = await verifyTicket(secret, c.req.query("ticket") ?? "", "room-control");
+  if (!claims || !claims.room) throw new ApiError(401, "invalid_ticket", "Control ticket is invalid or expired.");
+  const forwarded = new Request(c.req.url, c.req.raw);
+  forwarded.headers.set("X-Producer-Room", claims.room);
+  if (claims.sub === "host") {
+    forwarded.headers.set("X-Producer-User", "host");
+    forwarded.headers.set("X-Producer-Role", "host");
+  } else {
+    const [kind, seatId] = claims.sub.split(":");
+    if (kind !== "control" || !seatId) throw new ApiError(401, "invalid_ticket", "Control ticket is malformed.");
+    const row = await loadGuestForUpgrade(c.env, seatId);
+    if (!row || row.room_id !== claims.room || row.seat !== "control" || row.status !== "accepted") {
+      throw new ApiError(410, "guest_unavailable", "This mod seat is no longer active.");
+    }
+    forwarded.headers.set("X-Producer-User", `control:${row.id}`);
+    forwarded.headers.set("X-Producer-Role", "control");
+    forwarded.headers.set("X-Producer-Grants", JSON.stringify(grantList(row)));
+  }
+  return realtime.get(realtime.idFromName(roomChannelName(claims.room))).fetch(forwarded);
+});
+
 // ── Static guest pages ───────────────────────────────────────────────────────
 // /connect/guest/:code, /connect/guest/room/:code, /connect/guest/render/:id all
 // serve the same single-page bundle from public/guest/index.html; the page
@@ -420,3 +485,7 @@ async function guestPage(c: { env: Env; req: { url: string } }): Promise<Respons
 guestPageRoutes.get("/guest/room/:code", guestPage);
 guestPageRoutes.get("/guest/render/:id", guestPage);
 guestPageRoutes.get("/guest/:code", guestPage);
+// The mod link lands on the same bundle: a browser shows "open this in
+// Producer" with the link; Producer itself never loads the page — it reads
+// the code off the URL and speaks /v1/connect/mod/:code directly.
+guestPageRoutes.get("/mod/:code", guestPage);

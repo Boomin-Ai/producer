@@ -8722,3 +8722,41 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .set .cr-chip.chan .chan-x:hover { color: #ffb4b4; }
 .set .cr-chip.chan .chan-x.go { color: #ffb4b4; font-weight: 700; }
 .set .set-connect-error.inline { display: block; margin-top: 6px; }
+
+/* ── Mod seat (#47): a control seat on someone else's room ─────────────── */
+.modseat {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-0, #0b0b0d);
+  color: var(--fg-1, #eee);
+}
+.modseat-title { font-size: 14px; font-weight: 600; }
+.modseat-role {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 0.5px solid var(--line-1);
+  color: var(--fg-2);
+}
+.modseat-dot { width: 8px; height: 8px; border-radius: 999px; background: oklch(0.5 0.03 250); }
+.modseat-dot.on { background: oklch(0.72 0.19 150); }
+.modseat-host { margin-left: auto; font-size: 12px; color: var(--fg-3); }
+.modseat-body { flex: 1; display: grid; grid-template-columns: 260px 1fr; gap: 0; min-height: 0; }
+.modseat-col { padding: 12px; overflow: auto; border-right: 0.5px solid var(--line-1); }
+.modseat-col:last-child { border-right: none; }
+.modseat-h { margin: 0 0 8px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); }
+.modseat-gone { padding: 32px; color: var(--fg-2); }
+.rm-scene-row.readonly { cursor: default; opacity: 0.7; }
+.rm-guest-tools { display: flex; justify-content: flex-end; padding: 0 0 8px; }
+.rm-guest-modlink {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: var(--r-ctl, 8px);
+  border: 0.5px solid var(--line-1);
+  background: var(--surface-1);
+  color: var(--fg-2);
+}
+.rm-guest-modlink:hover { color: var(--fg-1); }

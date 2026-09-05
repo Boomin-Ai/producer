@@ -278,6 +278,46 @@ impl ProducerClient {
         Ok(serde_json::json!({ "available": true, "access": body }))
     }
 
+    /// Mint a mod link (#47): a control seat (kind producer, control grants,
+    /// no media) another Producer opens. `mod_url` is returned exactly once.
+    pub async fn room_mod_link(
+        &self,
+        room_id: &str,
+        display_name: Option<&str>,
+    ) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/mod-link")))
+            .bearer_auth(&self.token)
+            .json(&serde_json::json!({ "display_name": display_name }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
+    /// A 120 s ticket to the room channel's control side (host role). The
+    /// webview opens the socket itself; this only mints the ticket.
+    pub async fn room_control_session(&self, room_id: &str) -> EngineResult<Value> {
+        let resp = self
+            .http
+            .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/control-session")))
+            .bearer_auth(&self.token)
+            .json(&serde_json::json!({}))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            return Err(EngineError::Other(error_message(&b, status)));
+        }
+        Ok(resp.json().await?)
+    }
+
     /// Host-controlled slot order — the FULL list of guest ids, first on top.
     pub async fn room_guest_order(&self, room_id: &str, order: &[String]) -> EngineResult<Value> {
         let resp = self

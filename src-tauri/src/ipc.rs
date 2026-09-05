@@ -458,6 +458,33 @@ pub async fn room_access(
 }
 
 #[tauri::command]
+pub async fn room_mod_link(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+    display_name: Option<String>,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .room_mod_link(&room_id, display_name.as_deref())
+        .await
+}
+
+#[tauri::command]
+pub async fn room_control_session(
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    room_id: String,
+) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    ProducerClient::new(&base_url, &token)
+        .with_brand(brand_slug)
+        .room_control_session(&room_id)
+        .await
+}
+
+#[tauri::command]
 pub async fn room_guest_order(
     state: State<'_, AppState>,
     endpoint_id: String,

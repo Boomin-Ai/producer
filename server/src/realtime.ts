@@ -17,6 +17,7 @@
 // authenticates the upgrade (short-lived ticket) and passes identity via
 // X-Producer-* headers, which this DO trusts.
 import type { Env } from "./env";
+import { EMPTY_SCENES, parseScenePublish, validateSceneCut, type SceneState } from "./scenes";
 
 type SocketRole = "host" | "guest" | "control";
 type SocketState = {
@@ -57,7 +58,10 @@ type ClientMessage =
   // the other socket in this DO. Deliberately opaque — the server never parses
   // or stores SDP, it just introduces two peers so their media can flow DIRECTLY
   // between them and never through this server. Kilobytes once, at connect time.
-  | { type: "signal"; payload: unknown; to?: string };
+  | { type: "signal"; payload: unknown; to?: string }
+  // Scene cuts by mods (#47) — see scenes.ts for the frames.
+  | { type: "scene.publish"; scenes: unknown; active_scene_id?: unknown }
+  | { type: "scene.cut"; scene_id: unknown; transition?: unknown };
 type PublishBody = { channels: string[]; action: string; payload: unknown };
 
 export class RealtimeHub {
@@ -96,7 +100,18 @@ export class RealtimeHub {
     this.state.acceptWebSocket(server);
     const socketState: SocketState = { userId, roomId, channels: [], role, ...(grants ? { grants } : {}) };
     server.serializeAttachment(socketState);
+    // A control seat starts from the host's last published scene list, so a
+    // mod who joins mid-show sees the active scene lit without waiting for
+    // the host to change something.
+    if (role === "control" || role === "host") {
+      const scenes = await this.sceneState();
+      if (scenes.version > 0) server.send(JSON.stringify({ type: "scene.state", ...scenes, server_now: Date.now() }));
+    }
     return client;
+  }
+
+  private async sceneState(): Promise<SceneState> {
+    return (await this.state.storage.get<SceneState>("scenes")) ?? EMPTY_SCENES;
   }
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
@@ -137,6 +152,38 @@ export class RealtimeHub {
       // broadcasting an offer meant for one guest to all four would have every
       // peer try to answer it.
       this.relaySignal(ws, state.userId, msg.payload, msg.to);
+    } else if (msg.type === "scene.publish") {
+      // Only the host knows the scene list; a mod publishing one is ignored.
+      if (state.role !== "host") return;
+      const next = parseScenePublish(msg, await this.sceneState());
+      if (!next) return;
+      await this.state.storage.put("scenes", next);
+      this.sendToRoles(["control", "host"], { type: "scene.state", ...next, server_now: Date.now() }, ws);
+    } else if (msg.type === "scene.cut") {
+      const verdict = validateSceneCut(msg, state, await this.sceneState());
+      if (!verdict.ok) {
+        ws.send(JSON.stringify({ type: "error", ...verdict, ok: undefined }));
+        return;
+      }
+      const now = Date.now();
+      // The frame the host's Producer applies as if the host pressed the scene.
+      this.sendToRoles(["host"], { type: "scene.cut", scene_id: verdict.scene_id, transition: verdict.transition, from: state.userId, server_now: now });
+      ws.send(JSON.stringify({ type: "scene.cut.ok", scene_id: verdict.scene_id, server_now: now }));
+    }
+  }
+
+  /** Send one frame to every socket holding one of `roles` (except `skip`). */
+  private sendToRoles(roles: SocketRole[], frame: Record<string, unknown>, skip?: WebSocket): void {
+    const data = JSON.stringify(frame);
+    for (const ws of this.state.getWebSockets()) {
+      if (ws === skip) continue;
+      const peer = ws.deserializeAttachment() as SocketState | null;
+      if (!peer || !roles.includes(peer.role ?? "guest")) continue;
+      try {
+        ws.send(data);
+      } catch {
+        // dead socket; webSocketClose cleans up
+      }
     }
   }
 

@@ -71,6 +71,7 @@ import {
   type RoomExtra,
 } from "../lib/room";
 import { homePaintedMs, takeRoomClick } from "../lib/perf";
+import { RoomControlLink, type ControlFrame, type SceneCutFrame } from "../lib/roomControl";
 import {
   moveInOrder,
   participantKind,
@@ -639,7 +640,7 @@ function SourceSettingsStrip({
  * Waiting guests are shown but NOT on the broadcast. The link is public, so
  * admitting is an explicit act — otherwise anyone holding the URL would appear
  * on air under a name they typed themselves. */
-function GuestPanel({
+export function GuestPanel({
   thumbs,
   roster,
   error,
@@ -652,6 +653,7 @@ function GuestPanel({
   onShow,
   onStageToggle,
   onOrder,
+  onModLink,
 }: {
   thumbs: Record<string, string>;
   roster: RoomGuest[];
@@ -669,6 +671,8 @@ function GuestPanel({
   onShow: (sourceId: string, show: boolean) => void;
   onStageToggle: (guestId: string) => void;
   onOrder: (guestId: string, dir: -1 | 1) => void;
+  /** Host only: mint a mod link (a control seat another Producer opens). */
+  onModLink?: () => void;
 }) {
   // render_url is the server's own statement of "this one may go on the
   // host". Waiting guests have none, so the gate is enforced there rather
@@ -686,6 +690,13 @@ function GuestPanel({
 
   return (
     <div className="rm-guests">
+      {role === "host" && onModLink && (
+        <div className="rm-guest-tools">
+          <button className="rm-guest-modlink" title="Mint a link another Producer opens to help run this room: admit, stage, order, remove, and cut scenes. Never on the set." onClick={onModLink}>
+            Mod link
+          </button>
+        </div>
+      )}
 
       {(
         <div className="rm-guest-list">
@@ -3842,6 +3853,78 @@ export function LiveView({
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  // ── Room control channel (#47) ──────────────────────────────────────────
+  // The host's Producer holds one socket to the room's Durable Object: it
+  // publishes the scene list (ids + names, never looks) so mod seats see it
+  // with the active scene lit, and it receives `scene.cut` frames from mods
+  // holding room.scene — applied exactly as the host's own keypress, which
+  // then persists active_scene and republishes.
+  const controlRef = useRef<RoomControlLink | null>(null);
+  const applySceneRef = useRef(applyScene);
+  applySceneRef.current = applyScene;
+  const scenesRef = useRef(scenes);
+  scenesRef.current = scenes;
+  useEffect(() => {
+    if (!room?.id || !cfg.server_room_id || roomRole !== "host") return;
+    const sid = cfg.server_room_id;
+    let link: RoomControlLink | null = null;
+    let alive = true;
+    void (async () => {
+      const ep = await resolveActiveEndpoint().catch(() => null);
+      if (!ep || !alive) return;
+      link = new RoomControlLink({
+        origin: new URL(ep.base_url).origin,
+        session: () => guestsIpc.controlSession(ep.id, sid),
+        onFrame: (frame: ControlFrame) => {
+          if (frame.type !== "scene.cut") return;
+          const cut = frame as SceneCutFrame;
+          // The engine ignores cuts for scenes not in the room's list —
+          // the DO already refused them, this is the second lock.
+          const sc = scenesRef.current.find((x) => x.id === cut.scene_id);
+          if (!sc) return;
+          void applySceneRef.current(sc, cut.transition === "cut" ? { cut: true } : undefined);
+        },
+        onOpen: () => link?.publishScenes(scenesRef.current, activeSceneRef.current),
+      });
+      controlRef.current = link;
+      link.start();
+    })();
+    return () => {
+      alive = false;
+      link?.stop();
+      if (controlRef.current === link) controlRef.current = null;
+    };
+  }, [room?.id, cfg.server_room_id, roomRole]);
+  // Every change to the list or the active scene reaches the mods.
+  useEffect(() => {
+    controlRef.current?.publishScenes(scenes, activeScene ?? null);
+  }, [scenes, activeScene]);
+
+  /** Mint a mod link and put it on the clipboard. The server keeps only a
+   * hash, so this is the one time the URL is readable. */
+  const mintModLink = async () => {
+    try {
+      const ep = await resolveActiveEndpoint();
+      if (!ep) throw new Error("Connect a workspace first.");
+      let sid = cfg.server_room_id;
+      if (!sid) {
+        const reg = await registerRoom(ep.id, room?.name ?? "Room", room?.id ?? "");
+        sid = reg.room.id;
+        writeCfg({ ...cfgRef.current, server_room_id: sid });
+      }
+      const res = await guestsIpc.modLink(ep.id, sid!);
+      try {
+        await navigator.clipboard.writeText(res.mod_url);
+        setBanner("Mod link copied — whoever opens it in Producer can admit, stage, order, remove and cut scenes. They never appear on the set.");
+      } catch {
+        setBanner(res.mod_url);
+      }
+      window.setTimeout(() => setBanner(null), 6000);
+    } catch (e) {
+      setGuestErr(String(e).replace(/^Error:\s*/, ""));
+    }
+  };
+
   /** Where a guest sits on stage, given how many are on. One fills the frame,
    * two split it, three or four make a grid — recomputed whenever the roster
    * changes so joining or leaving re-flows the panel. */
@@ -4541,6 +4624,7 @@ export function LiveView({
             onShow={(id, show) => (show ? void showGuestInSlot(id) : hideGuestFromSlot(id))}
             onStageToggle={(id) => void modStageToggle(id)}
             onOrder={(id, dir) => void modOrder(id, dir)}
+            onModLink={() => void mintModLink()}
           />
         );
       case "mixer":

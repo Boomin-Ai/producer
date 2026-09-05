@@ -18,6 +18,7 @@ import { senderFor, SENDERS } from "./senders";
 import type { JobInput } from "./senders/types";
 import { captionFromOverrides, rememberOrigin, tick, type JobRow } from "./queue";
 import { connectGuestRoutes, guestPageRoutes, liveHostRoutes } from "./live";
+import { modRoutes } from "./mod";
 import { contributionConnectStubs, contributionHostStubs } from "./stubs";
 
 type Vars = { tokenClass: TokenClass };
@@ -43,6 +44,36 @@ app.get("/v1/health", (c) => c.json(serverInfo()));
 
 // ── Bearer auth for everything else under /v1 ────────────────────────────────
 
+// The code-credentialed family (/v1/connect/*) is called cross-origin by
+// Producer itself: a mod seat is a Producer window talking to someone
+// else's server with nothing but the mod code. CORS is open there — the
+// code is the credential and there is no cookie to ride on.
+app.use("/v1/connect/*", async (c, next) => {
+  if (c.req.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Max-Age": "600",
+      },
+    });
+  }
+  await next();
+  // A 101 (a Durable Object's WebSocket answer) is passed through untouched;
+  // any other proxied Response has IMMUTABLE headers in workerd, so rebuild
+  // it rather than throw on the set.
+  if (c.res.status === 101) return;
+  try {
+    c.res.headers.set("Access-Control-Allow-Origin", "*");
+  } catch {
+    const rebuilt = new Response(c.res.body, c.res);
+    rebuilt.headers.set("Access-Control-Allow-Origin", "*");
+    c.res = rebuilt;
+  }
+});
+
 app.use("/v1/*", async (c, next) => {
   if (c.req.path === "/v1/health") return next();
   // The one-time PUT of upload bytes authenticates by its signed URL token,
@@ -51,6 +82,9 @@ app.use("/v1/*", async (c, next) => {
   // Guest pages and the signaling upgrades carry no bearer: the invite code,
   // room code, render key or 120-second ticket in the request IS the credential.
   if (c.req.path.startsWith("/v1/connect/guest")) return next();
+  // A mod seat's code is its credential (#47) — same family as the guests'.
+  if (c.req.path.startsWith("/v1/connect/mod")) return next();
+  if (c.req.path.startsWith("/v1/connect/room-control")) return next();
   // The audience door (docs/CONTRIBUTIONS.md): a room code mints a per-device
   // capability token; the token, not a bearer, is the credential afterwards.
   if (c.req.path.startsWith("/v1/connect/audience")) return next();
@@ -450,6 +484,7 @@ app.post("/v1/jobs/:jobId/retry", async (c) => {
 
 app.route("/v1/app/live", liveHostRoutes);
 app.route("/v1/connect", connectGuestRoutes);
+app.route("/v1/connect", modRoutes);
 
 // ── Contract-first stubs (docs/CONTRIBUTIONS.md) ─────────────────────────────
 // Documented in the contract, not built: 501 + the issue that builds each one.

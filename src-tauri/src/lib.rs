@@ -129,6 +129,8 @@ pub fn run() {
             ipc::room_join_link,
             ipc::room_access,
             ipc::room_guest_order,
+            ipc::room_mod_link,
+            ipc::room_control_session,
             ipc::network_connections,
             ipc::upload_media,
             ipc::list_jobs,
