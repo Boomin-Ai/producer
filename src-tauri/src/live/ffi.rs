@@ -532,6 +532,8 @@ extern "C" {
     pub fn obs_encoder_set_video(encoder: *mut obs_encoder_t, video: *mut video_t);
     pub fn obs_encoder_set_audio(encoder: *mut obs_encoder_t, audio: *mut audio_t);
     pub fn obs_encoder_release(encoder: *mut obs_encoder_t);
+    /// +1 ref on a live encoder (NULL if it is being destroyed); balance with obs_encoder_release.
+    pub fn obs_encoder_get_ref(encoder: *mut obs_encoder_t) -> *mut obs_encoder_t;
 
     pub fn obs_service_create(
         id: *const c_char,

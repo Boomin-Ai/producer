@@ -49,7 +49,21 @@ fn filename(stamp: &str) -> String {
 impl Recorder {
     /// Start recording to a new file. `stamp` is passed in so the engine
     /// never has to know the wall clock.
-    pub fn start(stamp: &str, bitrate: i64) -> Result<Recorder, String> {
+    ///
+    /// `shared`: the live stream's video encoder, when a stream is up. The
+    /// recording then rides that encoder (libobs lets one encoder feed two
+    /// outputs) instead of opening a second encode session -- on a GPU with
+    /// one encode engine (GTX 1660, Apple silicon) a second 4K60 session
+    /// made the STREAM skip frames and the file come out short. The canvas
+    /// and frame rate are the stream's by construction: SetVideo refuses
+    /// changes while a stream is live, so there is no mismatch case to fall
+    /// back from. The stream's bitrate wins over the recording's quality
+    /// bitrate; that is the price of zero extra encode work.
+    pub fn start(
+        stamp: &str,
+        bitrate: i64,
+        shared: Option<*mut ffi::obs_encoder_t>,
+    ) -> Result<Recorder, String> {
         let path = recordings_dir().join(filename(stamp));
         unsafe {
             // Quality-first: high CBR, 2s keyframes for scrubbing, on the
@@ -60,7 +74,17 @@ impl Recorder {
             let as_ = ffi::obs_data_create();
             ffi::obs_data_set_int(as_, cstr("bitrate").as_ptr(), 192);
 
-            let (venc, _used) = encoders::create_video("Producer REC H264", vs);
+            let shared_ref = shared
+                .filter(|p| !p.is_null())
+                .map(|p| ffi::obs_encoder_get_ref(p))
+                .filter(|p| !p.is_null());
+            let venc = match shared_ref {
+                Some(v) => {
+                    eprintln!("[live] recording shares the stream's video encoder");
+                    v
+                }
+                None => encoders::create_video("Producer REC H264", vs).0,
+            };
             let aenc = ffi::obs_audio_encoder_create(
                 cstr(encoders::audio_id()).as_ptr(),
                 cstr("Producer REC AAC").as_ptr(),
@@ -79,7 +103,9 @@ impl Recorder {
                 }
                 return Err("couldn't create the recording encoders".into());
             }
-            ffi::obs_encoder_set_video(venc, ffi::obs_get_video());
+            if shared_ref.is_none() {
+                ffi::obs_encoder_set_video(venc, ffi::obs_get_video());
+            }
             ffi::obs_encoder_set_audio(aenc, ffi::obs_get_audio());
 
             let settings = ffi::obs_data_create();

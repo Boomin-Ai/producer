@@ -43,3 +43,7 @@ src-tauri/win-capture/
 
 # Windows engine staging for the installer (scripts/build-windows.ps1)
 src-tauri/windows-bundle/
+
+# MediaMTX self-signed pair, generated in the repo root when it runs from here
+auto.crt
+auto.key
