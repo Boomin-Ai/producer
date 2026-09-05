@@ -350,7 +350,7 @@ jobs:
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     defaults:
       run:
-        # Windows PowerShell 5.1 — what the scripts were written and verified
+        # Windows PowerShell 5.1 - what the scripts were written and verified
         # against (build-windows.ps1 works around a 5.1 quoting quirk).
         shell: powershell
     steps:
@@ -372,8 +372,8 @@ jobs:
       # Get-EngineDir resolves producer-libobs-windows-x64-<sha256(obs.lock)[0:12]>
       # from the last 10 green engine.yml runs, checks the sha256 sidecar, and
       # throws "no engine artifact matches the current obs.lock (...)" on a
-      # miss — run engine.yml for this lock first, then re-run the release.
-      - name: Fetch engine artifact (current obs.lock hash — fail hard on miss)
+      # miss - run engine.yml for this lock first, then re-run the release.
+      - name: Fetch engine artifact (current obs.lock hash - fail hard on miss)
         run: |
           . .\scripts\windows-engine.ps1
           $name = Get-EngineName
@@ -382,7 +382,7 @@ jobs:
           # must not turn the path into an array.
           $dir = @(Get-EngineDir)[-1]
           if (-not (Test-Path (Join-Path $dir "bin\obs.dll"))) {
-            throw "FATAL: engine artifact missing after fetch — refusing to ship a stub build"
+            throw "FATAL: engine artifact missing after fetch - refusing to ship a stub build"
           }
           Write-Host "engine: CI source-build artifact at $dir"
           "ENGINE_NAME=$name" >> $env:GITHUB_ENV
@@ -392,7 +392,7 @@ jobs:
 
       # engine-closure-windows.sh: zero-Qt + full PE import closure + every
       # allowlisted plugin, obs-browser and its CEF payload present.
-      - name: Gate — engine closure
+      - name: Gate - engine closure
         run: |
           . .\scripts\windows-engine.ps1
           Test-EngineGate $env:PRODUCER_ENGINE_DIR
@@ -430,7 +430,7 @@ jobs:
           if ((Test-Path $msi) -and (Test-Path "$msi.sig")) {
             Copy-Item $msi, "$msi.sig" dist\
           } else {
-            Write-Host "::warning::MSI not produced (msi step outcome: ${{ steps.msi.outcome }}) — shipping the NSIS installer only"
+            Write-Host "::warning::MSI not produced (msi step outcome: ${{ steps.msi.outcome }}) - shipping the NSIS installer only"
           }
           Get-ChildItem dist | ForEach-Object { "{0,12:N0}  {1}" -f $_.Length, $_.Name }
           "VERSION=$version" >> $env:GITHUB_ENV
