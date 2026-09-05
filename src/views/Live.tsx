@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, ty
 import { createPortal } from "react-dom";
 import { installStageCutouts } from "../lib/stageCutouts";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { lookPatch } from "../lib/slotMath";
 import {
   ipc,
   listenLiveEvents,
@@ -29,7 +30,6 @@ import {
   type VcamStatus,
   type ExtraSpec,
   type LiveWindow,
-  type LiveTransformPatch,
   type ChatConnection,
   type DeviceOption,
 } from "../lib/ipc";
@@ -3547,8 +3547,7 @@ export function LiveView({
       // Hidden first (plain visibility flips), then visible bottom-to-top so
       // z-order lands exactly as the scene says.
       for (const [id, l] of entries.filter(([, l]) => !l.visible)) {
-        void l;
-        ipc.liveSetTransform(id, { visible: false }, true).catch(() => {});
+        ipc.liveSetTransform(id, lookPatch(l, false), true).catch(() => {});
       }
       const visible = entries
         .filter(([, l]) => l.visible)
@@ -3567,18 +3566,10 @@ export function LiveView({
             .filter(([, l]) => l.visible)
             .sort((a, b) => (a[1].z ?? 0) - (b[1].z ?? 0));
           for (const [id, l] of entries.filter(([, l]) => !l.visible)) {
-            void l;
-            ipc.liveSetTransform(id, { visible: false }, true).catch(() => {});
+            ipc.liveSetTransform(id, lookPatch(l, false), true).catch(() => {});
           }
           vis.forEach(([id, l], i) => {
-            const patch: LiveTransformPatch = { visible: true, z: i };
-            if (l.x != null && l.y != null && l.w != null && l.h != null) {
-              patch.x = l.x;
-              patch.y = l.y;
-              patch.w = l.w;
-              patch.h = l.h;
-            }
-            ipc.liveSetTransform(id, patch, true).catch(() => {});
+            ipc.liveSetTransform(id, lookPatch(l, true, i), true).catch(() => {});
           });
         };
         setActiveSceneId(p.id);
@@ -3607,14 +3598,7 @@ export function LiveView({
 
       if (!animate) {
         visible.forEach(([id, l], i) => {
-          const patch: LiveTransformPatch = { visible: true, z: i };
-          if (l.x != null && l.y != null && l.w != null && l.h != null) {
-            patch.x = l.x;
-            patch.y = l.y;
-            patch.w = l.w;
-            patch.h = l.h;
-          }
-          ipc.liveSetTransform(id, patch, true).catch(() => {});
+          ipc.liveSetTransform(id, lookPatch(l, true, i), true).catch(() => {});
         });
       } else {
         const from = new Map((sources.items ?? []).map((it) => [it.id, it]));
@@ -3623,7 +3607,7 @@ export function LiveView({
           // Items that stay simply stay — only what enters or leaves
           // dissolves. Anything that MOVES is `move`'s job, and the two can
           // be combined by picking one per scene.
-          const leaving = entries.filter(([, l]) => !l.visible).map(([id]) => id);
+          const leaving = entries.filter(([, l]) => !l.visible);
           const arriving = visible
             .map(([id]) => id)
             .filter((id) => !(from.get(id)?.visible ?? false));
@@ -3634,14 +3618,7 @@ export function LiveView({
             ipc.liveSetTransform(id, { visible: true }, false).catch(() => {});
           }
           visible.forEach(([id, l], i) => {
-            const patch: LiveTransformPatch = { visible: true, z: i };
-            if (l.x != null && l.y != null && l.w != null && l.h != null) {
-              patch.x = l.x;
-              patch.y = l.y;
-              patch.w = l.w;
-              patch.h = l.h;
-            }
-            ipc.liveSetTransform(id, patch, false).catch(() => {});
+            ipc.liveSetTransform(id, lookPatch(l, true, i), false).catch(() => {});
           });
           const t0f = performance.now();
           // If frames starve mid-dissolve (WebKit halts rAF when it deems the
@@ -3652,7 +3629,7 @@ export function LiveView({
             if (fadeDone) return;
             const k = Math.min(1, (performance.now() - t0f) / dur);
             for (const id of arriving) setOpacity(id, k).catch(() => {});
-            for (const id of leaving) setOpacity(id, 1 - k).catch(() => {});
+            for (const [id] of leaving) setOpacity(id, 1 - k).catch(() => {});
             if (k < 1) {
               requestAnimationFrame(stepFade);
               return;
@@ -3660,8 +3637,8 @@ export function LiveView({
             fadeDone = true;
             // Settle: hide what left and restore its opacity, so the next
             // scene that shows it doesn't inherit a transparent source.
-            for (const id of leaving) {
-              ipc.liveSetTransform(id, { visible: false }, true).catch(() => {});
+            for (const [id, l] of leaving) {
+              ipc.liveSetTransform(id, lookPatch(l, false), true).catch(() => {});
               setOpacity(id, 1).catch(() => {});
             }
             visible.forEach(([id], i) => {
@@ -3673,8 +3650,8 @@ export function LiveView({
           window.setTimeout(() => {
             if (!fadeDone) {
               fadeDone = true;
-              for (const id of leaving) {
-                ipc.liveSetTransform(id, { visible: false }, true).catch(() => {});
+              for (const [id, l] of leaving) {
+                ipc.liveSetTransform(id, lookPatch(l, false), true).catch(() => {});
                 setOpacity(id, 1).catch(() => {});
               }
               visible.forEach(([id], i) => {
@@ -3731,14 +3708,7 @@ export function LiveView({
           if (moveDone) return;
           moveDone = true;
           visible.forEach(([id, l], i) => {
-            const patch: LiveTransformPatch = { visible: true, z: i };
-            if (l.x != null && l.y != null && l.w != null && l.h != null) {
-              patch.x = l.x;
-              patch.y = l.y;
-              patch.w = l.w;
-              patch.h = l.h;
-            }
-            ipc.liveSetTransform(id, patch, true).catch(() => {});
+            ipc.liveSetTransform(id, lookPatch(l, true, i), true).catch(() => {});
           });
         }, dur + 80);
       }
