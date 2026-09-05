@@ -19,8 +19,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ── Windows / Linux / Intel-mac (engine-less, unchanged path) ──────────────
+  # ── Linux / Intel-mac (engine-less, unchanged path) ────────────────────────
   # Skipped on dry-runs so a dispatch can't clobber public release assets.
+  # Windows left this matrix when build-windows-live landed: an engine-less
+  # Windows exe here would race the live one for the same asset names, and
+  # tauri-action's latest.json entry would point updaters at a stub build.
   build:
     if: ${{ github.event_name == 'push' || inputs.publish }}
     permissions:
@@ -33,9 +36,6 @@ jobs:
             args: "--target x86_64-apple-darwin"
             targets: x86_64-apple-darwin
           - platform: ubuntu-latest
-            args: ""
-            targets: ""
-          - platform: windows-latest
             args: ""
             targets: ""
     runs-on: ${{ matrix.platform }}
@@ -80,9 +80,10 @@ jobs:
           releaseName: "Producer v__VERSION__"
           releaseBody: |
             Installers for macOS (Apple Silicon + Intel), Windows, and Linux.
-            The Apple Silicon build is signed, notarized, and includes Producer Live
-            (go live to Twitch, Kick, YouTube simultaneously). Signed builds have a
-            stable identity, so macOS permission grants now survive updates.
+            The Apple Silicon and Windows x64 builds include Producer Live
+            (go live to Twitch, Kick, YouTube simultaneously). The Apple Silicon
+            build is signed and notarized; signed builds have a stable identity,
+            so macOS permission grants survive updates.
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
@@ -279,9 +280,175 @@ jobs:
 
           MANIFEST=/tmp/latest.json
           if ! gh release download "v$VERSION" -p "latest.json" -O "$MANIFEST" --clobber 2>/dev/null; then
-            echo "WARN: matrix latest.json missing — publishing manifest with darwin-aarch64 only" >&2
+            echo "WARN: matrix latest.json missing — publishing manifest without linux/intel-mac entries" >&2
             printf '{"version":"%s","platforms":{}}' "$VERSION" > "$MANIFEST"
           fi
           SIG="$(cat "$UPD.sig")" REPO="${{ github.repository }}" \
             python3 scripts/merge-update-manifest.py "$MANIFEST" "$VERSION" "$UPD"
+
+          # Windows leg: build-windows-live (waited on above) uploaded the
+          # engine-bundled installer(s) + .sig; since windows-latest left the
+          # tauri-action matrix, its updater entries are written HERE, from
+          # those sigs, with the same key names tauri-action used to emit
+          # (windows-x86_64 + -nsis, and -msi when the MSI was produced).
+          rm -rf /tmp/winsig && mkdir -p /tmp/winsig
+          WIN_EXE="Producer_${VERSION}_x64-setup.exe"
+          WIN_MSI="Producer_${VERSION}_x64_en-US.msi"
+          for A in "$WIN_EXE" "$WIN_MSI"; do
+            gh release download "v$VERSION" -p "$A.sig" -D /tmp/winsig --clobber 2>/dev/null || true
+          done
+          REPO="${{ github.repository }}" VERSION="$VERSION" WIN_EXE="$WIN_EXE" WIN_MSI="$WIN_MSI" \
+            python3 - "$MANIFEST" <<'EOF'
+          import json, os, sys
+          path = sys.argv[1]
+          repo, version = os.environ["REPO"], os.environ["VERSION"]
+          m = json.load(open(path))
+          plats = m.setdefault("platforms", {})
+          def entry(asset):
+              sig = f"/tmp/winsig/{asset}.sig"
+              if not os.path.exists(sig):
+                  return None
+              return {"signature": open(sig).read().strip(),
+                      "url": f"https://github.com/{repo}/releases/download/v{version}/{asset}"}
+          exe = entry(os.environ["WIN_EXE"])
+          msi = entry(os.environ["WIN_MSI"])
+          for k in [k for k in plats if k.startswith("windows-")]:
+              del plats[k]
+          if exe:
+              plats["windows-x86_64"] = exe
+              plats["windows-x86_64-nsis"] = exe
+          else:
+              print("::warning::Windows installer .sig not on the release — build-windows-live failed? "
+                    "latest.json ships WITHOUT a windows-x86_64 entry (Windows updaters see no update).")
+          if msi:
+              plats["windows-x86_64-msi"] = msi
+          json.dump(m, open(path, "w"), indent=2)
+          print("manifest platforms:", sorted(plats))
+          EOF
           gh release upload "v$VERSION" "$MANIFEST" --clobber
+
+  # ── Windows x64 + Live engine (Producer Live) ──────────────────────────────
+  # Mirror of build-macos-arm64-live for the Windows engine. Same rule set:
+  #   engine artifact on disk BEFORE tauri build   (build.rs::link_live_engine_windows
+  #     sets cfg(have_engine) only when PRODUCER_ENGINE_DIR/bin/obs.dll exists;
+  #     absent artifact = silent stub build — build-windows.ps1 refuses an exe
+  #     that does not import obs.dll)
+  #   engine staged FLAT beside producer.exe       (src-tauri/windows-bundle/ →
+  #     install root; the loader only searches the exe's own directory, and
+  #     obs-*-test.exe encoder probes run relative to it)
+  # The whole body is the Windows session's local path (scripts/windows-engine.ps1
+  # + scripts/build-windows.ps1) so CI ships exactly what that box verified.
+  # There is no Windows code-signing certificate wired; the installer is unsigned.
+  build-windows-live:
+    permissions:
+      contents: write
+    runs-on: windows-2022
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    defaults:
+      run:
+        # Windows PowerShell 5.1 — what the scripts were written and verified
+        # against (build-windows.ps1 works around a 5.1 quoting quirk).
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: bun install --frozen-lockfile
+
+      # v0.2.0 postmortem applies here too: NO fallbacks, NO stale artifacts.
+      # Get-EngineDir resolves producer-libobs-windows-x64-<sha256(obs.lock)[0:12]>
+      # from the last 10 green engine.yml runs, checks the sha256 sidecar, and
+      # throws "no engine artifact matches the current obs.lock (...)" on a
+      # miss — run engine.yml for this lock first, then re-run the release.
+      - name: Fetch engine artifact (current obs.lock hash — fail hard on miss)
+        run: |
+          . .\scripts\windows-engine.ps1
+          $name = Get-EngineName
+          Write-Host "want: $name"
+          # Last pipeline element: pip/extract output from inside the function
+          # must not turn the path into an array.
+          $dir = @(Get-EngineDir)[-1]
+          if (-not (Test-Path (Join-Path $dir "bin\obs.dll"))) {
+            throw "FATAL: engine artifact missing after fetch — refusing to ship a stub build"
+          }
+          Write-Host "engine: CI source-build artifact at $dir"
+          "ENGINE_NAME=$name" >> $env:GITHUB_ENV
+          # Pin the artifact for every later cargo invocation in this job so
+          # build.rs never falls back to mtime resolution.
+          "PRODUCER_ENGINE_DIR=$dir" >> $env:GITHUB_ENV
+
+      # engine-closure-windows.sh: zero-Qt + full PE import closure + every
+      # allowlisted plugin, obs-browser and its CEF payload present.
+      - name: Gate — engine closure
+        run: |
+          . .\scripts\windows-engine.ps1
+          Test-EngineGate $env:PRODUCER_ENGINE_DIR
+
+      # Stages windows-bundle/, builds producer.exe against the engine, bundles
+      # the NSIS installer with the engine flattened into the install root, and
+      # refuses to continue if the exe does not import obs.dll. Updater .sig is
+      # emitted because TAURI_SIGNING_PRIVATE_KEY is set.
+      - name: Build NSIS installer (engine linked + staged beside producer.exe)
+        run: .\scripts\build-windows.ps1
+
+      # The MSI is a courtesy asset (the updater leg is the NSIS exe); the
+      # Windows session has only ever verified the NSIS path, so a WiX failure
+      # must not sink the release. Same build-only config the script wrote, so
+      # the resources map identically; cargo sees no change and just re-bundles.
+      - name: Build MSI installer (best-effort)
+        id: msi
+        continue-on-error: true
+        run: |
+          $cfg = Join-Path $env:TEMP "producer-local-build.json"
+          if (-not (Test-Path $cfg)) { throw "build-only config from build-windows.ps1 not found at $cfg" }
+          bun run tauri build --bundles msi --config $cfg
+          if ($LASTEXITCODE -ne 0) { throw "msi bundle failed" }
+
+      - name: Collect release assets
+        run: |
+          $version = (Get-Content src-tauri\tauri.conf.json -Raw | ConvertFrom-Json).version
+          $exe = "src-tauri\target\release\bundle\nsis\Producer_${version}_x64-setup.exe"
+          foreach ($f in $exe, "$exe.sig") {
+            if (-not (Test-Path $f)) { throw "FATAL: $f not produced" }
+          }
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item $exe, "$exe.sig" dist\
+          $msi = "src-tauri\target\release\bundle\msi\Producer_${version}_x64_en-US.msi"
+          if ((Test-Path $msi) -and (Test-Path "$msi.sig")) {
+            Copy-Item $msi, "$msi.sig" dist\
+          } else {
+            Write-Host "::warning::MSI not produced (msi step outcome: ${{ steps.msi.outcome }}) — shipping the NSIS installer only"
+          }
+          Get-ChildItem dist | ForEach-Object { "{0,12:N0}  {1}" -f $_.Length, $_.Name }
+          "VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Upload installers as Actions artifact (dry-run proof)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Producer-windows-x64-live
+          path: dist/*
+          if-no-files-found: error
+
+      # build-macos-arm64-live is the single writer of latest.json; it waits
+      # for this job, then reads the .sig files uploaded here to write the
+      # windows-x86_64 entries. Only the installers + sigs are published here.
+      - name: Publish to GitHub release
+        if: ${{ github.event_name == 'push' || inputs.publish }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "v$VERSION" --title "Producer v$VERSION" --notes "Producer v$VERSION" 2>/dev/null || true
+          gh release upload "v$VERSION" dist/* --clobber
