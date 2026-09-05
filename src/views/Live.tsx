@@ -77,7 +77,16 @@ import {
 import { homePaintedMs, takeRoomClick } from "../lib/perf";
 import { RoomControlLink, type ControlFrame, type SceneCutFrame } from "../lib/roomControl";
 import { overlayBridge, type Contribution, type Interaction } from "../lib/ipc";
-import { BOOMIN_ROOM_CHANNELS, parseBoominFrame, boominStageConfig, scenesFromBoominConfig, type ContributionFrame } from "../lib/boominRoom";
+import {
+  BOOMIN_ROOM_CHANNELS,
+  boominAudienceUrl,
+  boominStageConfig,
+  boominVoteBody,
+  normalizeBoominInteraction,
+  parseBoominFrame,
+  scenesFromBoominConfig,
+  type ContributionFrame,
+} from "../lib/boominRoom";
 import {
   moveInOrder,
   participantKind,
@@ -4290,14 +4299,24 @@ export function LiveView({
         writeCfg({ ...cfgRef.current, server_room_id: sid });
       }
       await ensureVoteOverlay();
-      const res = await guestsIpc.interactionCreate(ep.id, sid!, {
-        type: "vote",
-        prompt: input.prompt,
-        options: [input.a, input.b],
-        reveal: "manual",
-        input: { who: input.who, once: true, cooldown_ms: 0 },
-      });
-      onInteractionFrame(res.interaction);
+      // Boomin takes the contract envelope only and collects from the moment
+      // it opens; the open server also takes the short form and waits for
+      // Start. The card reads the state either way.
+      const res = await guestsIpc.interactionCreate(
+        ep.id,
+        sid!,
+        isBoomin(ep)
+          ? boominVoteBody(input)
+          : {
+              type: "vote",
+              prompt: input.prompt,
+              options: [input.a, input.b],
+              reveal: "manual",
+              input: { who: input.who, once: true, cooldown_ms: 0 },
+            },
+      );
+      const ix = isBoomin(ep) ? normalizeBoominInteraction(res.interaction) : res.interaction;
+      if (ix) onInteractionFrame(ix);
     } catch (e) {
       setGuestErr(String(e).replace(/^Error:\s*/, ""));
     }
@@ -4309,8 +4328,19 @@ export function LiveView({
     try {
       const ep = endpointRef.current ?? (await resolveActiveEndpoint())?.id;
       if (!ep) return;
+      if (boominRoomRef.current && transition === "reveal" && holdMs && holdMs > 0) {
+        // No reveal hold on Boomin's wire (the DO's alarm is `collect_ms` at
+        // open): a "Reveal in 3 s" is timed here, on the host's clock — the
+        // same clock the set follows (INTERACTIVE.md decision 1).
+        window.setTimeout(() => {
+          const latest = votesRef.current.get(v.id);
+          if (latest && latest.state === "collecting") void transitionVote("reveal");
+        }, holdMs);
+        return;
+      }
       const res = await guestsIpc.interactionTransition(ep, cfg.server_room_id, v.id, transition, holdMs ?? null);
-      onInteractionFrame(res.interaction);
+      const ix = boominRoomRef.current ? normalizeBoominInteraction(res.interaction) : res.interaction;
+      if (ix) onInteractionFrame(ix);
       if (transition === "cancel" || transition === "close") {
         // Leave the result on the set for a beat, then clear the bar.
         window.setTimeout(() => {
@@ -4327,13 +4357,26 @@ export function LiveView({
     try {
       const ep = await resolveActiveEndpoint();
       if (!ep || !cfg.server_room_id) throw new Error("Open the room on a server first.");
-      const res = await guestsIpc.audienceLink(ep.id, cfg.server_room_id);
-      setAudienceLink(res.url);
+      let url: string;
+      let hint: string;
+      if (isBoomin(ep)) {
+        // Boomin: no room-level code — the link is the vote's own page on
+        // boomin.ai (`/a/<interaction id>`), phones answer through the
+        // audience input route with a device id they keep.
+        if (!vote || vote.state === "closed" || vote.state === "cancelled") throw new Error("Open a vote first — on Boomin the audience link is per vote.");
+        url = boominAudienceUrl(vote.id);
+        hint = `Audience link copied — ${url}. Phones answer this vote; no account needed.`;
+      } else {
+        const res = await guestsIpc.audienceLink(ep.id, cfg.server_room_id);
+        url = res.url;
+        hint = `Audience link copied — ${res.url} (code ${res.code}). Works while you're live; no account needed.`;
+      }
+      setAudienceLink(url);
       try {
-        await navigator.clipboard.writeText(res.url);
-        setBanner(`Audience link copied — ${res.url} (code ${res.code}). Works while you're live; no account needed.`);
+        await navigator.clipboard.writeText(url);
+        setBanner(hint);
       } catch {
-        setBanner(res.url);
+        setBanner(url);
       }
       window.setTimeout(() => setBanner(null), 6000);
     } catch (e) {
