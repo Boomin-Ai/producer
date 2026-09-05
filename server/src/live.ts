@@ -32,6 +32,7 @@ import {
   inviteGuest,
   joinRoomByCode,
   listRooms,
+  loadRoom,
   mintGuestSignaling,
   mintRoomTicket,
   publicGuest,
@@ -42,8 +43,10 @@ import {
   roomRoster,
   setGuestPositions,
   setRoomJoinLink,
+  setGrant,
   setStage,
   updateRoom,
+  grantList,
   type GuestRow,
   type Quality,
 } from "./guests";
@@ -164,7 +167,10 @@ liveHostRoutes.post("/rooms/:id/guest-link", async (c) => {
  *  here rather than ignored: silently turning a verified-brand invite into an
  *  anonymous link would misrepresent who the host thinks is coming. */
 liveHostRoutes.post("/rooms/:id/guests", async (c) => {
-  const body = await jsonBody<{ guest_brand_id?: unknown; display_name?: unknown }>(c);
+  const body = await jsonBody<{ guest_brand_id?: unknown; display_name?: unknown; producer_ref?: unknown; kind?: unknown }>(c);
+  if (body.kind === "member" || body.kind === "connection") {
+    throw new ApiError(422, "network_unavailable", "member and connection participants need Boomin identities; this server knows visitor and producer.");
+  }
   if (body.guest_brand_id) {
     throw new ApiError(
       422,
@@ -175,6 +181,9 @@ liveHostRoutes.post("/rooms/:id/guests", async (c) => {
   const result = await inviteGuest(c.env, origin(c.req.url), {
     roomId: c.req.param("id"),
     displayName: typeof body.display_name === "string" ? body.display_name : null,
+    // `kind: producer` is honoured only as the presence of a producer_ref —
+    // the ref IS what makes the row a Producer's; the kind is never asserted bare.
+    producerRef: typeof body.producer_ref === "string" ? body.producer_ref : body.kind === "producer" ? "producer" : null,
   });
   // invite_url is returned EXACTLY ONCE (only its hash is stored); render_url
   // is derived and can be re-read from the roster.
@@ -189,6 +198,32 @@ liveHostRoutes.post("/guests/:id/revoke", async (c) => {
   return c.json({ guest: publicGuest(await revokeGuest(c.env, c.req.param("id"))) });
 });
 
+/** Grant or revoke ONE grant (#46). `media.screen` is the higher grant a
+ *  guest does not hold by default; this is where the host hands it out. */
+liveHostRoutes.post("/guests/:id/grants", async (c) => {
+  const body = await jsonBody<{ grant?: unknown; enabled?: unknown }>(c);
+  if (typeof body.grant !== "string" || typeof body.enabled !== "boolean") {
+    throw new ApiError(400, "invalid_request", "grant (string) and enabled (boolean) are required.");
+  }
+  const guest = await setGrant(c.env, c.req.param("id"), body.grant, body.enabled);
+  return c.json({ guest: { ...publicGuest(guest), grants: grantList(guest) } });
+});
+
+/** What THIS token may do in the room (#47). One deployment = one host, and
+ *  the primary token IS the host, so the answer is the host stub: everything
+ *  but billing, which does not exist here. Mods on this server are not
+ *  tokens — they are control seats behind the mod link (see modRoutes). */
+liveHostRoutes.get("/rooms/:id/access", async (c) => {
+  await loadRoom(c.env, c.req.param("id"));
+  return c.json({
+    role: "host",
+    via: "token",
+    can: { roster: true, control: true, manage: true, settings: true, billing: false },
+    grants: null,
+    implicit: true,
+  });
+});
+
 // ── Public guest routes: /v1/connect/guest* (no bearer; the code is the credential)
 
 export const connectGuestRoutes: App = new Hono<{ Bindings: Env; Variables: Vars }>();
@@ -198,13 +233,14 @@ export const connectGuestRoutes: App = new Hono<{ Bindings: Env; Variables: Vars
  *  until a human says so. (Snapshot upload is not accepted in v1: the field
  *  is ignored rather than rejected so a Boomin-shaped page still joins.) */
 connectGuestRoutes.post("/guest/room/:code/join", async (c) => {
-  const body = await jsonBody<{ display_name?: unknown; resume_code?: unknown }>(c);
+  const body = await jsonBody<{ display_name?: unknown; resume_code?: unknown; producer_ref?: unknown }>(c);
   if (typeof body.display_name !== "string") throw new ApiError(400, "invalid_request", "display_name is required.");
   const resumeCode = typeof body.resume_code === "string" ? body.resume_code.trim().slice(0, 120) : null;
   const { guest, invite_code, resumed } = await joinRoomByCode(c.env, {
     roomCode: c.req.param("code"),
     displayName: body.display_name,
     resumeCode,
+    producerRef: typeof body.producer_ref === "string" ? body.producer_ref : null,
   });
   // The guest keeps its own invite code so it can reconnect and poll its own
   // admission status without any session.
@@ -330,6 +366,10 @@ connectGuestRoutes.get("/guest-signal", async (c) => {
   const forwarded = new Request(c.req.url, c.req.raw);
   forwarded.headers.set("X-Producer-User", `${role}:${guestId}`);
   forwarded.headers.set("X-Producer-Room", row.room_id);
+  forwarded.headers.set("X-Producer-Role", role);
+  // Grants come from the ROW at connect, not the ticket: the ticket sealed
+  // them at mint (≤ 120 s ago); the row is what a revoke since then changed.
+  if (role === "guest") forwarded.headers.set("X-Producer-Grants", JSON.stringify(grantList(row)));
   return realtime.get(realtime.idFromName(guestChannelName(guestId))).fetch(forwarded);
 });
 
@@ -351,6 +391,8 @@ connectGuestRoutes.get("/guest-room-signal", async (c) => {
   // Identity is the GUEST id, which is what `to` targets when one guest offers to another.
   forwarded.headers.set("X-Producer-User", guestId);
   forwarded.headers.set("X-Producer-Room", roomId);
+  forwarded.headers.set("X-Producer-Role", "guest");
+  forwarded.headers.set("X-Producer-Grants", JSON.stringify(grantList(row)));
   return realtime.get(realtime.idFromName(roomChannelName(roomId))).fetch(forwarded);
 });
 

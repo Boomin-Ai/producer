@@ -72,11 +72,11 @@ import {
 } from "../lib/room";
 import { homePaintedMs, takeRoomClick } from "../lib/perf";
 import {
-  KIND_LABEL,
   moveInOrder,
   participantKind,
   resolveGrants,
   roomRoleFrom,
+  kindBadge,
   sourceIdsFor,
   wantedSourceIds,
   type RoomRole,
@@ -699,7 +699,7 @@ function GuestPanel({
               <span className="rm-wait-dot" />
               <span className="rm-guest-name">{g.display_name || "Guest"}</span>
               {/* Kind = identity strength, never what they may do. */}
-              <span className={`rm-kind ${participantKind(g)}`}>{KIND_LABEL[participantKind(g)]}</span>
+              <span className={`rm-kind ${participantKind(g)}`}>{kindBadge(g)}</span>
               {canControl && (
                 <>
                   <button
@@ -728,7 +728,7 @@ function GuestPanel({
                 <div className="rm-gcard-id">
                   <span className={`rm-qual ${q}`} />
                   <span className="rm-gcard-name">{g.display_name || "Guest"}</span>
-                  <span className={`rm-kind ${participantKind(g)}`}>{KIND_LABEL[participantKind(g)]}</span>
+                  <span className={`rm-kind ${participantKind(g)}`}>{kindBadge(g)}</span>
                   {onStage && <span className="rm-gcard-live">ON</span>}
                 </div>
                 {canControl && (
@@ -775,7 +775,7 @@ function GuestPanel({
                       : "No recent reading"
                   } />
                   <span className="rm-gcard-name">{g.display_name || "Guest"}</span>
-                  <span className={`rm-kind ${participantKind(g)}`}>{KIND_LABEL[participantKind(g)]}</span>
+                  <span className={`rm-kind ${participantKind(g)}`}>{kindBadge(g)}</span>
                   {item?.visible && <span className="rm-gcard-live">ON</span>}
                 </div>
                 {/* Controls: the card is the feed; hands appear on hover. */}

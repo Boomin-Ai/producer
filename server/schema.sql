@@ -141,6 +141,24 @@ CREATE TABLE IF NOT EXISTS live_room_guests (
   -- 'room_link' guests land in `waiting` and are not renderable until
   -- admitted; 'invite' guests were sent to a specific named person.
   joined_via TEXT NOT NULL DEFAULT 'invite' CHECK (joined_via IN ('invite', 'room_link')),
+  -- 'control' rows are MOD seats minted by the host's mod link (kind
+  -- 'producer', control grants, no media): another Producer opens the link
+  -- and gets the roster + scene list, never a source on the set.
+  seat TEXT NOT NULL DEFAULT 'guest' CHECK (seat IN ('guest', 'control')),
+  -- PARTICIPANT KIND = how strong the identity behind the row is, never what
+  -- it may do. 'visitor': the code is the whole credential. 'producer':
+  -- another Producer instance (producer_ref = display metadata, never a
+  -- credential). 'audience' is reserved: audiences are DO-only, never a row
+  -- per phone. 'member' / 'connection' need Boomin identities and are refused
+  -- here (422 network_unavailable).
+  kind TEXT NOT NULL DEFAULT 'visitor' CHECK (kind IN ('visitor', 'producer', 'audience')),
+  producer_ref TEXT,
+  -- GRANTS = what the participant may do: JSON array of the grant vocabulary
+  -- (guest/src/participants.ts). NULL = the default guest bundle (camera,
+  -- mic, return_feed, vote, text, hand — never screen). Sealed into every
+  -- ticket at mint and re-read from this row at every exchange, so revoking
+  -- here kills the capability at the next exchange.
+  grants TEXT,
   -- Host-controlled slot order; never derived from a timestamp a reload changes.
   position INTEGER,
   -- Reserved (v1 does not accept snapshot uploads on the public join route).

@@ -18,7 +18,36 @@
 // X-Producer-* headers, which this DO trusts.
 import type { Env } from "./env";
 
-type SocketState = { userId: string; roomId: string; channels: string[] };
+type SocketRole = "host" | "guest" | "control";
+type SocketState = {
+  userId: string;
+  roomId: string;
+  channels: string[];
+  /** Who this socket is: the host page / the host's Producer, a guest, or a
+   *  control seat (mod). Absent on sockets from before roles = guest. */
+  role?: SocketRole;
+  /** The participant's grants at CONNECT (from the row, via the Worker).
+   *  What the DO enforces: media.screen on the screen peer, room.scene on a
+   *  cut. Kept small — the attachment is capped at a few KB. */
+  grants?: string[];
+};
+
+/** Which peer a signaling frame belongs to (guest/src/participants.ts
+ *  `peerOf`): "screen" only when the frame says so. */
+const peerOf = (payload: unknown): "main" | "screen" =>
+  payload && typeof payload === "object" && (payload as { peer?: unknown }).peer === "screen" ? "screen" : "main";
+
+/** Ticket/row grants, parsed off the trusted header. Absent = the default
+ *  guest bundle, which never includes media.screen. */
+function parseGrantsHeader(raw: string | null): string[] | undefined {
+  if (!raw) return undefined;
+  try {
+    const v = JSON.parse(raw) as unknown;
+    return Array.isArray(v) ? v.filter((g): g is string => typeof g === "string") : undefined;
+  } catch {
+    return undefined;
+  }
+}
 type ClientMessage =
   | { type: "subscribe"; channel: string }
   | { type: "unsubscribe"; channel: string }
@@ -47,17 +76,27 @@ export class RealtimeHub {
     if (request.headers.get("Upgrade") !== "websocket") {
       return new Response("expected websocket", { status: 426 });
     }
+    const client = await this.acceptUpgrade(request);
+    return new Response(null, { status: 101, webSocket: client });
+  }
 
+  /** Accept the upgrade: read the trusted identity headers, take the server
+   *  half into hibernation with its attachment, hand back the client half.
+   *  Separate from fetch() so tests (plain Node, no 101 responses) can drive
+   *  the hub without workerd. */
+  async acceptUpgrade(request: Request): Promise<WebSocket> {
     const userId = request.headers.get("X-Producer-User") ?? "";
     const roomId = request.headers.get("X-Producer-Room") ?? "";
+    const roleHeader = request.headers.get("X-Producer-Role");
+    const role: SocketRole = roleHeader === "host" || roleHeader === "control" ? roleHeader : "guest";
+    const grants = parseGrantsHeader(request.headers.get("X-Producer-Grants"));
     const { 0: client, 1: server } = new WebSocketPair();
 
     // Hibernation: accept (don't .accept()/addEventListener) so idle sockets don't bill.
     this.state.acceptWebSocket(server);
-    const socketState: SocketState = { userId, roomId, channels: [] };
+    const socketState: SocketState = { userId, roomId, channels: [], role, ...(grants ? { grants } : {}) };
     server.serializeAttachment(socketState);
-
-    return new Response(null, { status: 101, webSocket: client });
+    return client;
   }
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
@@ -83,6 +122,14 @@ export class RealtimeHub {
       state.channels = state.channels.filter((c) => c !== msg.channel);
       ws.serializeAttachment(state);
     } else if (msg.type === "signal") {
+      // A guest's SCREEN peer exists only with media.screen. The grant was
+      // sealed into the ticket and re-read from the row at connect; a guest
+      // without it gets its screen offer dropped here, so a modified page
+      // cannot put a second track on the host by simply sending one.
+      if ((state.role ?? "guest") === "guest" && peerOf(msg.payload) === "screen" && !(state.grants ?? []).includes("media.screen")) {
+        ws.send(JSON.stringify({ type: "error", code: "grant_required", grant: "media.screen", status: 403 }));
+        return;
+      }
       // Relay to every OTHER socket here. Guest-signaling DOs are addressed per
       // guest session (idFromName("guest:<id>")), so "everyone else" is exactly
       // the counterpart peer — no channel bookkeeping needed. `to` targets one

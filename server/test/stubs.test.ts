@@ -27,7 +27,6 @@ async function call(method: string, path: string, token?: string) {
 }
 
 const host: Array<{ name: string; method: string; path: string; issue: string }> = [
-  { name: "participant grant", method: "POST", path: "/v1/app/live/guests/g1/grants", issue: CONTRIBUTIONS_ISSUES.participants },
   { name: "contributions ledger", method: "GET", path: "/v1/app/live/rooms/r1/contributions", issue: CONTRIBUTIONS_ISSUES.contributions },
   { name: "list interactions", method: "GET", path: "/v1/app/live/rooms/r1/interactions", issue: CONTRIBUTIONS_ISSUES.interactions },
   { name: "open interaction", method: "POST", path: "/v1/app/live/rooms/r1/interactions", issue: CONTRIBUTIONS_ISSUES.interactions },

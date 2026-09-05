@@ -714,6 +714,10 @@ export interface RoomGuest {
   /** What this participant may do. Absent → the default guest bundle
    * (camera, mic, return feed, inputs; never screen). Present → verbatim. */
   grants?: string[] | null;
+  /** Another Producer's origin / workspace id — display only (#46). */
+  producer_ref?: string | null;
+  /** `control` = a mod seat behind the host's mod link; never on the set. */
+  seat?: "guest" | "control" | string | null;
   guest_brand?: { id?: string; name?: string; slug?: string } | null;
   /** Host-set slot order (0 = first) and the join-time still — both on the
    * roster already; read by the mod view, which has no engine thumbs. */

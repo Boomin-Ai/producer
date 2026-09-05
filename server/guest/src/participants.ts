@@ -23,8 +23,32 @@ export type Grant =
   | "input.hand"
   | "room.admit"
   | "room.stage"
+  | "room.order"
   | "room.mute"
-  | "room.remove";
+  | "room.remove"
+  | "room.interactions"
+  | "room.scene";
+
+/** Every grant the wire knows. A server validates `POST guests/:id/grants`
+ *  against this list; an unknown string is a 400, never a silent no-op. */
+export const ALL_GRANTS: readonly Grant[] = [
+  "media.camera",
+  "media.mic",
+  "media.screen",
+  "media.return_feed",
+  "input.vote",
+  "input.text",
+  "input.hand",
+  "room.admit",
+  "room.stage",
+  "room.order",
+  "room.mute",
+  "room.remove",
+  "room.interactions",
+  "room.scene",
+];
+
+export const isGrant = (g: unknown): g is Grant => typeof g === "string" && (ALL_GRANTS as readonly string[]).includes(g);
 
 /** What a participant holds when the server says nothing. This is the
  *  "Guest (default)" column of the grants table: appear, hear the show, take
@@ -81,6 +105,25 @@ export function controlsFor(grants: ReadonlySet<string>): GuestControls {
   };
 }
 
+/** The control bundle a MOD holds on the open server: the shared mod link
+ *  mints exactly this (docs/CONTRIBUTIONS.md grants table, "Mod" column, plus
+ *  `room.scene` — founder decision 2026-09-04: a mod cuts scenes in the first
+ *  set of controls, not after). Never `room.end` / `room.settings`: host only.
+ *  No media: a control seat appears nowhere on the set. */
+export const MOD_GRANTS: readonly Grant[] = [
+  "room.admit",
+  "room.stage",
+  "room.order",
+  "room.remove",
+  "room.interactions",
+  "room.scene",
+];
+
+/** True when the participant may put media on the set at all. A row with no
+ *  media grant (a mod seat) gets no render URL — nothing to render. */
+export const hasAnyMedia = (grants: ReadonlySet<string>): boolean =>
+  grants.has("media.camera") || grants.has("media.mic") || grants.has("media.screen");
+
 // ── Kinds ────────────────────────────────────────────────────────────────────
 
 export type ParticipantKind = "host" | "member" | "connection" | "producer" | "visitor" | "audience";
@@ -110,6 +153,15 @@ export const KIND_LABEL: Record<ParticipantKind, string> = {
   visitor: "Visitor",
   audience: "Audience",
 };
+
+/** The badge text for a roster row: the kind, and for another Producer the
+ *  origin it presented (`producer_ref`, display metadata — never verified). */
+export function kindBadge(p: (ParticipantLike & { producer_ref?: unknown }) | null | undefined): string {
+  const kind = participantKind(p);
+  const ref = typeof p?.producer_ref === "string" ? p.producer_ref.trim() : "";
+  if (kind === "producer" && ref && ref !== "producer") return `Producer @ ${ref.replace(/^https?:\/\//, "").slice(0, 40)}`;
+  return KIND_LABEL[kind];
+}
 
 // ── Track labels ─────────────────────────────────────────────────────────────
 //

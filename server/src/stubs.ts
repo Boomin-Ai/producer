@@ -57,9 +57,7 @@ contributionHostStubs.use("*", async (c, next) => {
   return next();
 });
 
-/** Item 1 — grant / revoke one participant grant (`{ grant, enabled }`);
- *  `media.screen` is the higher grant a guest does not hold by default. */
-contributionHostStubs.post("/guests/:id/grants", (c) => notImplemented(c, CONTRIBUTIONS_ISSUES.participants));
+// Item 1 (#46) — `POST /guests/:id/grants` is IMPLEMENTED in live.ts.
 
 /** Item 5 — the run's interval ledger: `{ contributions: Contribution[] }`. */
 contributionHostStubs.get("/rooms/:id/contributions", (c) => notImplemented(c, CONTRIBUTIONS_ISSUES.contributions));
