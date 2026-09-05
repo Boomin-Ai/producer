@@ -636,6 +636,8 @@ pub async fn network_live_rooms(
         .await
 }
 
+/// Knock on a visible open stage. Returns the seat (`join_url`, `resumed`)
+/// plus `api_base` and `producer_cam` — see `network_deal_enter`.
 #[tauri::command]
 pub async fn network_enter_room(
     state: State<'_, AppState>,
@@ -643,10 +645,26 @@ pub async fn network_enter_room(
     room_id: String,
 ) -> EngineResult<Value> {
     let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
-    ProducerClient::new(&base_url, &token)
+    let res = ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)
         .network_enter_room(&room_id)
-        .await
+        .await?;
+    Ok(seat_result(
+        res,
+        &base_url,
+        state.live.set_virtual_cam(true).is_ok(),
+    ))
+}
+
+/// The seat a knock returns, completed for the native guest seat: the API
+/// the invite code is a credential for, and whether Producer's scene is the
+/// camera (the virtual camera started) this time.
+fn seat_result(mut res: Value, base_url: &str, producer_cam: bool) -> Value {
+    if let Some(o) = res.as_object_mut() {
+        o.insert("api_base".into(), Value::String(base_url.to_string()));
+        o.insert("producer_cam".into(), Value::Bool(producer_cam));
+    }
+    res
 }
 
 #[tauri::command]
@@ -700,69 +718,33 @@ pub async fn network_deal_action(
         .await
 }
 
-/// Enter a funded (or free) deal's show from Producer — no browser. Knocks
-/// through the deal via the API, then opens the returned guest page in its
-/// own webview window (`guest-<deal id>`). The join_url origin is whatever
-/// the endpoint hands back (prod, or a LAN/dev origin) — not restricted.
+/// Enter a funded (or free) deal's show from Producer as the BENEFICIARY.
+/// Knocks through the deal via the API (so the host admitting us settles
+/// it) and returns the seat: `join_url` (its invite code is the seat's
+/// credential), `resumed`, `api_base` and `producer_cam`. No browser and no
+/// window — the UI opens a room in guest mode and runs the guest half of
+/// the call natively (src/lib/guestSeat.ts). Producer IS the guest's camera:
+/// the scene goes out through the virtual camera and the seat prefers that
+/// device. No driver or no engine → the seat falls back to a real webcam.
 #[tauri::command]
 pub async fn network_deal_enter(
-    app: AppHandle,
     state: State<'_, AppState>,
     endpoint_id: String,
     deal_id: String,
-    window_title: Option<String>,
-    guest_name: Option<String>,
 ) -> EngineResult<Value> {
     let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
     let res = ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)
         .network_deal_enter(&deal_id)
         .await?;
-    let join_url = res
-        .get("join_url")
-        .and_then(Value::as_str)
-        .ok_or_else(|| EngineError::Other("enter returned no join_url".into()))?;
-    let mut parsed = tauri::Url::parse(join_url).map_err(|e| EngineError::Other(e.to_string()))?;
-    // Producer IS the guest's camera: the scene goes out through the virtual
-    // camera and the guest page pre-selects it (`?cam=producer`). No driver
-    // or no engine → plain join, the page falls back to a real webcam.
-    let producer_cam = state.live.set_virtual_cam(true).is_ok();
-    {
-        let mut q = parsed.query_pairs_mut();
-        if producer_cam {
-            q.append_pair("cam", "producer");
-        }
-        if let Some(name) = guest_name
-            .as_deref()
-            .map(str::trim)
-            .filter(|n| !n.is_empty())
-        {
-            q.append_pair("name", name);
-        }
+    if res.get("join_url").and_then(Value::as_str).is_none() {
+        return Err(EngineError::Other("enter returned no join_url".into()));
     }
-    // Window labels allow [a-zA-Z0-9-/:_]; deal ids are uuids, but scrub anyway.
-    let label = format!(
-        "guest-{}",
-        deal_id
-            .chars()
-            .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
-            .collect::<String>()
-    );
-    if let Some(existing) = app.get_webview_window(&label) {
-        // Re-entering: replace the stale page (its guest code may be spent).
-        let _ = existing.close();
-    }
-    tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::External(parsed))
-        .title(window_title.unwrap_or_else(|| "Guest".into()))
-        .inner_size(1100.0, 760.0)
-        .min_inner_size(640.0, 480.0)
-        .build()
-        .map_err(|e| EngineError::Other(e.to_string()))?;
-    let mut out = res;
-    if let Some(o) = out.as_object_mut() {
-        o.insert("producer_cam".into(), Value::Bool(producer_cam));
-    }
-    Ok(out)
+    Ok(seat_result(
+        res,
+        &base_url,
+        state.live.set_virtual_cam(true).is_ok(),
+    ))
 }
 
 /// The room's mount timings, written beside the engine report so a room

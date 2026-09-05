@@ -8722,3 +8722,121 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .set .cr-chip.chan .chan-x:hover { color: #ffb4b4; }
 .set .cr-chip.chan .chan-x.go { color: #ffb4b4; font-weight: 700; }
 .set .set-connect-error.inline { display: block; margin-top: 6px; }
+
+/* ── Green room: a room in GUEST mode ──────────────────────────────────────
+   The strip between the header and the stage while this Producer holds a
+   seat in someone else's room. Self-view left, one line of truth, the host's
+   program return once it arrives, and the seat's own controls. */
+.rm-seat {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border-bottom: 0.5px solid var(--line-1);
+  background: var(--surface-1);
+}
+.rm-seat-self {
+  position: relative;
+  flex: none;
+}
+.rm-seat-cam,
+.rm-seat-program {
+  display: block;
+  width: 112px;
+  height: 63px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #0b0f16;
+  border: 0.5px solid var(--line-2);
+}
+.rm-seat-camoff {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  color: var(--fg-3);
+  background: rgba(10, 13, 19, 0.7);
+  border-radius: 8px;
+}
+.rm-seat-text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.rm-seat-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+.rm-seat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fg-3);
+}
+.rm-seat-dot--waiting {
+  background: var(--amber);
+  animation: rm-seat-pulse 1.6s ease-in-out infinite;
+}
+.rm-seat-dot--connecting {
+  background: var(--amber);
+}
+.rm-seat-dot--live {
+  background: var(--mint);
+}
+.rm-seat-dot--gone,
+.rm-seat-dot--error {
+  background: var(--red);
+}
+@keyframes rm-seat-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.rm-seat-line {
+  margin-top: 2px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rm-seat-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rm-seat-return {
+  position: relative;
+  flex: none;
+}
+.rm-seat-return-label {
+  position: absolute;
+  left: 6px;
+  bottom: 5px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--fg-2);
+  background: rgba(10, 13, 19, 0.7);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.rm-seat-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.hd-chip.rm-seat-off {
+  color: var(--amber);
+}
+.hd-chip.rm-seat-leave {
+  color: var(--red);
+}

@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { installStageCutouts } from "../lib/stageCutouts";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { expandSlotBindings, guestSlotPatch, lookPatch, slotOfGuest } from "../lib/slotMath";
+import { GreenRoomBar, useGuestSeat } from "./GuestSeat";
+import type { GuestSeatSpec } from "../lib/guestSeat";
 import {
   ipc,
   listenLiveEvents,
@@ -2026,9 +2028,14 @@ let engineHeldRoom: string | null = null;
 export function LiveView({
   room,
   onLeave,
+  seat,
 }: {
   room?: RoomInfo;
   onLeave?: () => void;
+  /** GUEST MODE: this Producer holds a seat in someone else's room. The
+   * stage is the guest's own scene (their camera); the green-room strip
+   * above it is the seat. Leaving the view leaves the seat. */
+  seat?: GuestSeatSpec;
 }) {
   // Windows float mode: popovers/toasts over the stage are punched out of
   // the native preview so they stay visible. No-op elsewhere.
@@ -2520,6 +2527,7 @@ export function LiveView({
    * the extension being installed (once, with the user's approval) and the
    * output actually running. */
   const [vcamState, setVcamState] = useState<VcamStatus | null>(null);
+  const guestSeat = useGuestSeat(seat, vcamState?.device_name);
   const [vcamOn, setVcamOn] = useState(false);
 
   useEffect(() => {
@@ -3919,9 +3927,11 @@ export function LiveView({
     if (Object.keys(geometry).length) ipc.liveSetTransform(slotId, geometry, commit).catch(() => {});
   };
 
-  // Poll the roster and reconcile browser sources against it.
+  // Poll the roster and reconcile browser sources against it. Not while we
+  // hold a SEAT elsewhere: the poll is also the room-open heartbeat, and a
+  // guest's own stage must not read as open on the network.
   useEffect(() => {
-    if (!room?.id || !cfg.server_room_id) return;
+    if (!room?.id || !cfg.server_room_id || seat) return;
     let alive = true;
     const tick = async () => {
       try {
@@ -4055,7 +4065,7 @@ export function LiveView({
       alive = false;
       clearInterval(t);
     };
-  }, [room?.id, cfg.server_room_id, sources.items, snapshot?.video_height, guestSlot]);
+  }, [room?.id, cfg.server_room_id, sources.items, snapshot?.video_height, guestSlot, seat]);
 
   // Mount the room into its saved scene once the engine can take it.
   useEffect(() => {
@@ -5474,6 +5484,7 @@ export function LiveView({
           )}
         </div>
       </header>
+      {seat && <GreenRoomBar seat={guestSeat} spec={seat} onLeave={() => onLeave?.()} />}
 
       {layoutEdit && (
         <div className="rm-editbar">
