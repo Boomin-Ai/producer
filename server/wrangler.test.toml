@@ -27,9 +27,17 @@ bucket_name = "producer-media-test"
 name = "REALTIME"
 class_name = "RealtimeHub"
 
+[[durable_objects.bindings]]
+name = "ROOMSTATE"
+class_name = "RoomState"
+
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["RealtimeHub"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["RoomState"]
 
 # The guest join / render pages (public/guest/index.html). The worker serves
 # them at /connect/guest/*; anything under /guest/* (the bundle's own assets)
