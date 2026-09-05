@@ -35,7 +35,8 @@ import { deleteRoomEverywhere, renameRoom, roomOccupancy, syncRooms } from "../l
 import { useUpdater } from "../lib/updater";
 import { DestinationEditor, LiveView } from "./Live";
 import { ModSeat } from "./ModSeat";
-import { parseModLink, type ModLink } from "../lib/modSeat";
+import { ModLinkDrop } from "./ModLinkDrop";
+import type { ModLink } from "../lib/modSeat";
 import type { GuestSeatSpec } from "../lib/guestSeat";
 
 const STATE_LABEL: Record<string, string> = {
@@ -234,6 +235,7 @@ export function Home({
   onEndpointsChanged?: () => void;
 }) {
   const [view, setView] = useState<MainView>({ kind: "home" });
+  const activeEp = useActiveEndpoint();
   // Settings is a rail-side surface: it expands out of the left rail and
   // pushes the home surfaces right (never a panel over them). It only exists
   // at home, so opening it from another view returns home first.
@@ -464,22 +466,11 @@ export function Home({
             <>
               <div className="cr-menu-backdrop" onClick={() => setAccountOpen(false)} />
               <div className="cr-menu">
-                <button onClick={() => { setAccountOpen(false); setView({ kind: "console", section: "general" }); }}>Brand settings</button>
-                <button
-                  onClick={() => {
-                    setAccountOpen(false);
-                    const raw = window.prompt("Paste a mod link (…/connect/mod/…) to help run someone's room:");
-                    if (!raw) return;
-                    const link = parseModLink(raw);
-                    if (!link) {
-                      window.alert("That isn't a mod link. It looks like https://their-server/connect/mod/gm_….");
-                      return;
-                    }
-                    setView({ kind: "modseat", link });
-                  }}
-                >
-                  Open a mod link…
-                </button>
+                {/* Brand settings are a Boomin thing — a self-hosted server's
+                  * settings live on that server, not behind this avatar. */}
+                {activeEp && isBoomin(activeEp) && (
+                  <button onClick={() => { setAccountOpen(false); setView({ kind: "console", section: "general" }); }}>Brand settings</button>
+                )}
                 {onSignOut && endpoints.some((e) => e.kind === "connected") && (
                   <button className="danger" onClick={() => { setAccountOpen(false); onSignOut(); }}>Sign out</button>
                 )}
@@ -587,6 +578,7 @@ export function Home({
           }}
           onRoomsChanged={loadLive}
           onEnterSeat={enterSeat}
+          onModLink={(link) => setView({ kind: "modseat", link })}
           offNetwork={offNetwork}
           onCompose={() => setView({ kind: "compose" })}
           onHistory={() => setView({ kind: "history" })}
@@ -1084,6 +1076,7 @@ function ControlRoomHome({
   onOpenRoom,
   onRoomsChanged,
   onEnterSeat,
+  onModLink,
   offNetwork,
   onCompose,
   onHistory,
@@ -1098,6 +1091,7 @@ function ControlRoomHome({
   onRoomsChanged: () => void;
   /** Open our room in guest mode on a seat we just took (deal / knock). */
   onEnterSeat: (seat: GuestSeatSpec) => void;
+  onModLink: (link: ModLink) => void;
   /** Local rooms whose server row is gone (room sync); shown as a chip. */
   offNetwork: Set<string>;
   onCompose: () => void;
@@ -1141,6 +1135,11 @@ function ControlRoomHome({
         * here is harmless, whereas mid-broadcast it would be noise over a
         * running show. The rail is FIXED against the icon rail — attached,
         * full height, part of the furniture rather than a floating card. */}
+      {/* Someone else's mod link goes here — above the Network rail, a
+        * placeholder you drop into, never a prompt behind a menu. */}
+      <aside className={`modlink-rail${hasRail ? "" : " alone"}`}>
+        <ModLinkDrop onOpen={onModLink} />
+      </aside>
       <NetworkRail rooms={rooms} onAddEndpoint={onAddEndpoint} onEnterSeat={onEnterSeat} />
       <FirewallBanner />
       <LiveNowStrip onEnterSeat={onEnterSeat} />

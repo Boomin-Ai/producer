@@ -2,6 +2,8 @@ import { useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { hasTauri, ipc, networkJoin, network } from "../lib/ipc";
 import { setActiveEndpointId } from "../lib/workspace";
+import { ModLinkDrop } from "./ModLinkDrop";
+import type { ModLink } from "../lib/modSeat";
 
 /** The self-hosting walkthrough — deploy the open producer-server, then
  * connect it here with its URL + PRIMARY_TOKEN. */
@@ -39,7 +41,7 @@ function rememberSignedIn() {
  * opt-in — for someone who already knows the product (signed out, or a
  * returning machine). "Use my own server" is a first-class door beside it,
  * not a footnote: a self-hoster never needs a Boomin account to get in. */
-export function SignIn({ onConnected }: { onConnected: () => void }) {
+export function SignIn({ onConnected, onModLink }: { onConnected: () => void; onModLink?: (link: ModLink) => void }) {
   const [door, setDoor] = useState<"boomin" | "server">("boomin");
   if (door === "server") return <ServerForm onBack={() => setDoor("boomin")} onConnected={onConnected} />;
   return (
@@ -48,11 +50,12 @@ export function SignIn({ onConnected }: { onConnected: () => void }) {
       onBack={() => setDoor("server")}
       backLabel="Use my own server"
       onConnected={onConnected}
+      onModLink={onModLink}
     />
   );
 }
 
-export function Onboarding({ onConnected, onCancel }: { onConnected: () => void; onCancel?: () => void }) {
+export function Onboarding({ onConnected, onCancel, onModLink }: { onConnected: () => void; onCancel?: () => void; onModLink?: (link: ModLink) => void }) {
   const [door, setDoor] = useState<Door>("chooser");
 
   if (door === "boomin") return <BoominLogin onBack={() => setDoor("chooser")} onConnected={onConnected} />;
@@ -91,6 +94,14 @@ export function Onboarding({ onConnected, onCancel }: { onConnected: () => void;
           </button>
         </div>
       </div>
+      {/* The third door: no account anywhere, just a link someone sent you.
+        * A mod seat needs neither Boomin nor a server of your own. */}
+      {onModLink && (
+        <div className="onboarding-modlink">
+          <span>Helping run someone else&rsquo;s show?</span>
+          <ModLinkDrop compact onOpen={onModLink} />
+        </div>
+      )}
       <p className="status">v0.1.0-dev · open-source · cross-posting first</p>
     </div>
   );
@@ -101,6 +112,7 @@ function BoominLogin({
   onConnected,
   direct = false,
   backLabel = "Back",
+  onModLink,
 }: {
   onBack: () => void;
   onConnected: () => void;
@@ -108,6 +120,7 @@ function BoominLogin({
    *  joining. */
   direct?: boolean;
   backLabel?: string;
+  onModLink?: (link: ModLink) => void;
 }) {
   const [step, setStep] = useState<"email" | "code" | "brand" | "network">("email");
   // Opt-in, and OFF by default: a network listing is a public projection of
@@ -354,6 +367,12 @@ function BoominLogin({
           <button type="button" className="linkish" onClick={() => openUrl(SELF_HOSTING_GUIDE_URL).catch(() => {})}>
             Self-hosting guide
           </button>
+        </div>
+      )}
+      {direct && onModLink && (
+        <div className="onboarding-modlink">
+          <span>Helping run someone else&rsquo;s show?</span>
+          <ModLinkDrop compact onOpen={onModLink} />
         </div>
       )}
     </div>
