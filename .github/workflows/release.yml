@@ -375,6 +375,10 @@ jobs:
       # miss - run engine.yml for this lock first, then re-run the release.
       - name: Fetch engine artifact (current obs.lock hash - fail hard on miss)
         run: |
+          # The script probes `python -c "import zstandard"`; under
+          # $ErrorActionPreference=Stop a missing module's traceback on stderr
+          # is a terminating NativeCommandError. Satisfy the probe up front.
+          python -m pip install --quiet zstandard
           . .\scripts\windows-engine.ps1
           $name = Get-EngineName
           Write-Host "want: $name"
