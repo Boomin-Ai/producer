@@ -12,6 +12,7 @@
 //                  ticks can never advance the same job.
 
 import type { Env } from "./env";
+import { expireStale } from "./contributions";
 import { decryptSecret } from "./crypto";
 import { senderFor } from "./senders";
 import { SendError, type Checkpoint, type ChannelRow, type JobInput } from "./senders/types";
@@ -79,6 +80,13 @@ export async function tick(env: Env): Promise<void> {
 
   await refreshExpiringTokens(env);
   await expireOrphanMedia(env);
+  // The ledger's heartbeat rule: a crashed host's open intervals close at
+  // the last moment it was known alive (+ the presence window).
+  try {
+    await expireStale(env);
+  } catch (err) {
+    console.error("[tick] contribution expiry failed", err);
+  }
 }
 
 async function advance(env: Env, job: JobRow): Promise<void> {

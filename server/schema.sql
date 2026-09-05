@@ -125,6 +125,14 @@ CREATE TABLE IF NOT EXISTS live_rooms (
   -- Last time the host's Producer touched this room (roster poll / stage
   -- publish). A heartbeat, not a flag: a crashed host stops stamping.
   host_seen_at INTEGER,
+  -- The OPEN run (a go-live → end span). Contributions opened while a run is
+  -- open carry its id; NULL between runs. Producer starts one when it goes
+  -- live and stops it at End, then reads the run report.
+  run_id TEXT,
+  run_started_at INTEGER,
+  -- The audience door's short code (#51): resolvable only while the host is
+  -- present. Rotated per run.
+  audience_code TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -141,6 +149,24 @@ CREATE TABLE IF NOT EXISTS live_room_guests (
   -- 'room_link' guests land in `waiting` and are not renderable until
   -- admitted; 'invite' guests were sent to a specific named person.
   joined_via TEXT NOT NULL DEFAULT 'invite' CHECK (joined_via IN ('invite', 'room_link')),
+  -- 'control' rows are MOD seats minted by the host's mod link (kind
+  -- 'producer', control grants, no media): another Producer opens the link
+  -- and gets the roster + scene list, never a source on the set.
+  seat TEXT NOT NULL DEFAULT 'guest' CHECK (seat IN ('guest', 'control')),
+  -- PARTICIPANT KIND = how strong the identity behind the row is, never what
+  -- it may do. 'visitor': the code is the whole credential. 'producer':
+  -- another Producer instance (producer_ref = display metadata, never a
+  -- credential). 'audience' is reserved: audiences are DO-only, never a row
+  -- per phone. 'member' / 'connection' need Boomin identities and are refused
+  -- here (422 network_unavailable).
+  kind TEXT NOT NULL DEFAULT 'visitor' CHECK (kind IN ('visitor', 'producer', 'audience')),
+  producer_ref TEXT,
+  -- GRANTS = what the participant may do: JSON array of the grant vocabulary
+  -- (guest/src/participants.ts). NULL = the default guest bundle (camera,
+  -- mic, return_feed, vote, text, hand — never screen). Sealed into every
+  -- ticket at mint and re-read from this row at every exchange, so revoking
+  -- here kills the capability at the next exchange.
+  grants TEXT,
   -- Host-controlled slot order; never derived from a timestamp a reload changes.
   position INTEGER,
   -- Reserved (v1 does not accept snapshot uploads on the public join route).
@@ -167,3 +193,69 @@ CREATE TABLE IF NOT EXISTS live_room_guests (
 );
 
 CREATE INDEX IF NOT EXISTS live_room_guests_room_idx ON live_room_guests (room_id, created_at);
+
+-- ── Contributions ───────────────────────────────────────────────────────────
+-- WHO supplied WHAT to the program, FROM WHEN TO WHEN, WHERE on the set. One
+-- shape for presence on stage, a screen, a logo, a vote. Same shape as the
+-- hosted API's, kept here for the open server's own reasons: the roster, the
+-- run report, the recording's chapters, later the auto-clips. Intervals are
+-- append-only: close by writing ended_at once, never edit. The server stamps
+-- time; a client never asserts a duration. An open interval self-expires
+-- against the host heartbeat (queue tick). No price, no deal, no wallet —
+-- this table never learns those words.
+CREATE TABLE IF NOT EXISTS contributions (
+  id TEXT PRIMARY KEY,
+  room_id TEXT NOT NULL REFERENCES live_rooms(id) ON DELETE CASCADE,
+  run_id TEXT,
+  -- A roster guest id; NULL for host-supplied contributions (an overlay the
+  -- host shows) and for audience aggregates (never a row per phone).
+  participant_id TEXT,
+  kind TEXT NOT NULL CHECK (kind IN ('presence', 'media.screen', 'overlay', 'input', 'credit')),
+  -- Where on the set — a STABLE stage id: {slot}, {lane}, {corner}, {interaction_id}.
+  binding TEXT NOT NULL DEFAULT '{}',
+  -- MILLISECONDS (the one place this schema is not second-grained): a guest
+  -- who leaves and returns within a second must not collide on the UNIQUE.
+  started_at INTEGER NOT NULL,
+  ended_at INTEGER,
+  source TEXT NOT NULL CHECK (source IN ('host_stage', 'participant', 'interaction', 'host_credit')),
+  metadata TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL,
+  -- Retries never fork an interval.
+  UNIQUE (participant_id, kind, started_at)
+);
+
+CREATE INDEX IF NOT EXISTS contributions_room_idx ON contributions (room_id, run_id, started_at);
+CREATE INDEX IF NOT EXISTS contributions_open_idx ON contributions (room_id, ended_at);
+
+-- ── Interactions ────────────────────────────────────────────────────────────
+-- A typed prompt with a lifecycle (open → collecting → revealed → closed;
+-- cancelled from anywhere). v1 = a two-choice vote; every later game is a
+-- payload on this one row (docs/INTERACTIVE.md §2). The room's RoomState
+-- Durable Object is AUTHORITATIVE while the interaction is live (tallies,
+-- identity hashes, the reveal alarm); this row is what persists: the
+-- envelope at open, the final tally in `result` at reveal/close. Inputs
+-- never become rows here — aggregates land in `contributions` (kind input).
+CREATE TABLE IF NOT EXISTS interactions (
+  id TEXT PRIMARY KEY,
+  room_id TEXT NOT NULL REFERENCES live_rooms(id) ON DELETE CASCADE,
+  run_id TEXT,
+  type TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'open'
+    CHECK (state IN ('draft', 'open', 'collecting', 'revealed', 'closed', 'cancelled')),
+  -- The producer.interaction/v1 envelope, minus server-owned fields.
+  spec TEXT NOT NULL DEFAULT '{}',
+  input TEXT NOT NULL DEFAULT '{}',
+  visibility TEXT NOT NULL DEFAULT '{}',
+  timing TEXT NOT NULL DEFAULT '{}',
+  render TEXT NOT NULL DEFAULT '[]',
+  -- The final tally, written once at reveal / close. NULL while live.
+  result TEXT,
+  version INTEGER NOT NULL DEFAULT 0,
+  opened_at INTEGER,
+  revealed_at INTEGER,
+  closed_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS interactions_room_idx ON interactions (room_id, created_at);

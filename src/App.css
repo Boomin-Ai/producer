@@ -8723,6 +8723,88 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .set .cr-chip.chan .chan-x.go { color: #ffb4b4; font-weight: 700; }
 .set .set-connect-error.inline { display: block; margin-top: 6px; }
 
+/* ── Mod seat (#47): a control seat on someone else's room ─────────────── */
+.modseat {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-0, #0b0b0d);
+  color: var(--fg-1, #eee);
+}
+.modseat-title { font-size: 14px; font-weight: 600; }
+.modseat-role {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 0.5px solid var(--line-1);
+  color: var(--fg-2);
+}
+.modseat-dot { width: 8px; height: 8px; border-radius: 999px; background: oklch(0.5 0.03 250); }
+.modseat-dot.on { background: oklch(0.72 0.19 150); }
+.modseat-host { margin-left: auto; font-size: 12px; color: var(--fg-3); }
+.modseat-body { flex: 1; display: grid; grid-template-columns: 260px 1fr; gap: 0; min-height: 0; }
+.modseat-col { padding: 12px; overflow: auto; border-right: 0.5px solid var(--line-1); }
+.modseat-col:last-child { border-right: none; }
+.modseat-h { margin: 0 0 8px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); }
+.modseat-gone { padding: 32px; color: var(--fg-2); }
+.rm-scene-row.readonly { cursor: default; opacity: 0.7; }
+.rm-guest-tools { display: flex; justify-content: flex-end; padding: 0 0 8px; }
+.rm-guest-modlink {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: var(--r-ctl, 8px);
+  border: 0.5px solid var(--line-1);
+  background: var(--surface-1);
+  color: var(--fg-2);
+}
+.rm-guest-modlink:hover { color: var(--fg-1); }
+
+/* ── Run report (#50) ──────────────────────────────────────────────────── */
+.rm-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.45);
+  display: grid;
+  place-items: center;
+}
+.rm-runreport {
+  width: min(760px, 92vw);
+  max-height: 80vh;
+  overflow: auto;
+  background: var(--surface-1, #151517);
+  border: 0.5px solid var(--line-1);
+  border-radius: 12px;
+  padding: 14px 16px;
+  color: var(--fg-1);
+  font-size: 13px;
+}
+.rm-runreport-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.rm-runreport-head .rm-row-edit { margin-left: auto; }
+.rm-runreport-sub { color: var(--fg-3); font-size: 12px; }
+.rm-runreport-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.rm-runreport-table th { text-align: left; font-weight: 500; color: var(--fg-3); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 6px; border-bottom: 0.5px solid var(--line-1); }
+.rm-runreport-table td { padding: 6px; border-bottom: 0.5px solid var(--line-1); }
+.rm-row-credit.on { color: oklch(0.8 0.15 80); }
+
+/* ── Vote control (#51) ────────────────────────────────────────────────── */
+.rm-vote { border: 0.5px solid var(--line-1); border-radius: 10px; padding: 10px; margin-bottom: 10px; display: grid; gap: 8px; font-size: 12px; }
+.rm-vote-head { display: flex; align-items: center; justify-content: space-between; }
+.rm-vote-title { font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; font-size: 11px; color: var(--fg-3); }
+.rm-vote-form, .rm-vote-live { display: grid; gap: 6px; }
+.rm-vote-row { display: flex; gap: 6px; align-items: center; }
+.rm-vote-row > * { flex: 1; min-width: 0; }
+.rm-vote-in { height: 28px; padding: 0 8px; border-radius: 6px; border: 0.5px solid var(--line-1); background: var(--surface-1); color: var(--fg-1); font-size: 12px; }
+.rm-vote-prompt { font-weight: 600; }
+.rm-vote-bar { display: grid; grid-template-columns: 80px 1fr 32px; align-items: center; gap: 6px; }
+.rm-vote-bar.win .rm-vote-label { font-weight: 700; }
+.rm-vote-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rm-vote-track { height: 8px; border-radius: 999px; background: var(--surface-1); overflow: hidden; display: block; }
+.rm-vote-fill { display: block; height: 100%; background: oklch(0.65 0.18 260); transition: width 200ms ease; }
+.rm-vote-n { text-align: right; font-variant-numeric: tabular-nums; color: var(--fg-2); }
+.rm-vote-fine { color: var(--fg-3); font-size: 11px; }
 /* ── Green room: a room in GUEST mode ──────────────────────────────────────
    The strip between the header and the stage while this Producer holds a
    seat in someone else's room. Self-view left, one line of truth, the host's

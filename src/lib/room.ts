@@ -56,6 +56,10 @@ export interface RoomExtra {
   /** Guests only. The platform issues this once and never again, so it lives
    * with the room rather than only in the dialog that created it. */
   invite_url?: string;
+  /** Where this source sits in the program's ledger (#50): a source with a
+   * binding (e.g. `{ sponsor: "acme" }`) publishes show / hide as an
+   * `overlay` contribution. Absent = an ordinary source, nothing recorded. */
+  binding?: Record<string, unknown>;
 }
 
 export interface RoomSources {

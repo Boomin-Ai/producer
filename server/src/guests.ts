@@ -21,6 +21,11 @@ import type { Env } from "./env";
 import { randomToken, sha256Hex, timingSafeEqual } from "./crypto";
 import { ApiError } from "./errors";
 import { SIGNAL_TICKET_TTL_SECONDS, signTicket } from "./ticket";
+import { DEFAULT_GRANTS, MOD_GRANTS, hasAnyMedia, isGrant, resolveGrants, type Grant } from "../guest/src/participants";
+import { closeAllFor, syncPresence } from "./contributions";
+
+export type ParticipantKind = "visitor" | "producer" | "audience";
+export type Seat = "guest" | "control";
 
 export type GuestStatus = "invited" | "waiting" | "accepted" | "declined" | "revoked" | "ended";
 export type Quality = "good" | "degraded" | "failing";
@@ -28,6 +33,9 @@ export type Quality = "good" | "degraded" | "failing";
 export interface RoomRow {
   id: string;
   title: string | null;
+  run_id: string | null;
+  run_started_at: number | null;
+  audience_code: string | null;
   external_ref: string | null;
   config: string;
   guest_join_code_hash: string | null;
@@ -50,6 +58,11 @@ export interface GuestRow {
   invite_code_hash: string;
   status: GuestStatus;
   joined_via: "invite" | "room_link";
+  seat: Seat;
+  kind: ParticipantKind;
+  producer_ref: string | null;
+  /** JSON array of grants, or NULL = the default guest bundle. */
+  grants: string | null;
   position: number | null;
   snapshot: string | null;
   peer_id: string;
@@ -194,7 +207,7 @@ export async function updateRoom(
 export async function deleteRoom(env: Env, roomId: string): Promise<void> {
   const room = await loadRoom(env, roomId);
   const rows = await env.DB.prepare(
-    "SELECT status, last_seen_at FROM live_room_guests WHERE room_id = ?1 AND status IN ('waiting', 'accepted')",
+    "SELECT status, last_seen_at FROM live_room_guests WHERE room_id = ?1 AND seat = 'guest' AND status IN ('waiting', 'accepted')",
   )
     .bind(room.id)
     .all<Pick<GuestRow, "status" | "last_seen_at">>();
@@ -255,6 +268,11 @@ async function insertGuest(
     inviteCode: string;
     joinedVia: "invite" | "room_link";
     status: GuestStatus;
+    kind?: ParticipantKind;
+    producerRef?: string | null;
+    /** Explicit bundle; omitted = NULL = the default guest bundle. */
+    grants?: readonly Grant[];
+    seat?: Seat;
   },
 ): Promise<GuestRow> {
   const id = crypto.randomUUID();
@@ -262,8 +280,9 @@ async function insertGuest(
   const admitted = input.status === "accepted";
   await env.DB.prepare(
     `INSERT INTO live_room_guests
-       (id, room_id, display_name, invite_code_hash, status, joined_via, peer_id, accepted_at, admitted_at, created_at, updated_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?9)`,
+       (id, room_id, display_name, invite_code_hash, status, joined_via, peer_id, accepted_at, admitted_at, created_at, updated_at,
+        kind, producer_ref, grants, seat)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?9, ?10, ?11, ?12, ?13)`,
   )
     .bind(
       id,
@@ -276,6 +295,10 @@ async function insertGuest(
       `guest_${crypto.randomUUID()}`,
       admitted ? now : null,
       now,
+      input.kind ?? "visitor",
+      input.producerRef ?? null,
+      input.grants ? JSON.stringify(input.grants) : null,
+      input.seat ?? "guest",
     )
     .run();
   return (await loadGuest(env, id))!;
@@ -287,13 +310,22 @@ async function insertGuest(
 export async function inviteGuest(
   env: Env,
   origin: string,
-  input: { roomId: string; displayName?: string | null },
+  input: { roomId: string; displayName?: string | null; producerRef?: string | null },
 ): Promise<{ guest: GuestRow; invite_url: string; render_url: string }> {
   const room = await loadRoom(env, input.roomId);
   const displayName = input.displayName?.trim().slice(0, 80) || null;
   if (!displayName) throw new ApiError(400, "guest_name_required", "Give the guest a name — it labels their source.");
   const inviteCode = randomToken("gi_", 24);
-  const guest = await insertGuest(env, { roomId: room.id, displayName, inviteCode, joinedVia: "invite", status: "invited" });
+  const producerRef = cleanProducerRef(input.producerRef);
+  const guest = await insertGuest(env, {
+    roomId: room.id,
+    displayName,
+    inviteCode,
+    joinedVia: "invite",
+    status: "invited",
+    kind: producerRef ? "producer" : "visitor",
+    producerRef,
+  });
   return {
     guest,
     invite_url: guestJoinUrl(origin, inviteCode),
@@ -301,10 +333,83 @@ export async function inviteGuest(
   };
 }
 
+// ── Control seats (mods) ─────────────────────────────────────────────────────
+
+export const modUrl = (origin: string, code: string) => `${origin}/connect/mod/${code}`;
+
+/** The host mints a MOD LINK (#47): a participant of kind `producer` in the
+ *  `control` seat holding the mod bundle (admit, stage, order, remove,
+ *  interactions, scene) and NO media grant — it never appears on the set.
+ *  Another Producer opens the link and gets the roster + the scene list.
+ *  Single-user server: a mod is a capability the host hands out, never a
+ *  login. The link is returned exactly once (hashed at rest); revoking the
+ *  row (`POST guests/:id/revoke`) kills it at the seat's next exchange. */
+export async function createModSeat(
+  env: Env,
+  origin: string,
+  input: { roomId: string; displayName?: string | null },
+): Promise<{ guest: GuestRow; mod_url: string }> {
+  const room = await loadRoom(env, input.roomId);
+  const displayName = input.displayName?.trim().slice(0, 80) || "Mod";
+  const code = randomToken("gm_", 24);
+  const guest = await insertGuest(env, {
+    roomId: room.id,
+    displayName,
+    inviteCode: code,
+    joinedVia: "invite",
+    status: "accepted",
+    kind: "producer",
+    producerRef: "mod-link",
+    grants: MOD_GRANTS,
+    seat: "control",
+  });
+  return { guest, mod_url: modUrl(origin, code) };
+}
+
+/** Resolve a control seat by its mod code. A guest code does not open a seat
+ *  and a seat's code does not open the guest page: the seat column is the
+ *  wall between the two families. */
+export async function seatByModCode(env: Env, code: string): Promise<GuestRow> {
+  const row = await env.DB.prepare("SELECT * FROM live_room_guests WHERE invite_code_hash = ?1 AND seat = 'control'")
+    .bind(await sha256Hex(code))
+    .first<GuestRow>();
+  if (!row) throw new ApiError(404, "mod_link_not_found", "This mod link is not valid.");
+  assertUsable(row);
+  if (row.status !== "accepted") throw new ApiError(410, "guest_revoked", "This mod link was revoked.");
+  const now = nowSec();
+  await env.DB.prepare("UPDATE live_room_guests SET last_seen_at = ?2, updated_at = ?2 WHERE id = ?1").bind(row.id, now).run();
+  return row;
+}
+
+/** The seat must hold the grant; the server is the gate, the UI only hides. */
+export function requireGrant(seat: Pick<GuestRow, "grants">, grant: Grant): void {
+  if (!grantsOf(seat).has(grant)) {
+    throw new ApiError(403, "grant_required", `This seat does not hold ${grant}.`, { grant });
+  }
+}
+
+/** A ticket to the room channel's CONTROL side. The host's Producer gets
+ *  role host (everything); a mod seat gets its row's grants, re-read here at
+ *  every mint so a revoke lands at the next exchange. */
+export async function mintControlTicket(
+  env: Env,
+  input: { roomId: string; seat?: GuestRow | null },
+): Promise<{ ticket: string; peerId: string; expiresIn: number }> {
+  const seat = input.seat ?? null;
+  const ticket = await signTicket(requireSecret(env), {
+    sub: seat ? `control:${seat.id}` : "host",
+    aud: "room-control",
+    expiresInSeconds: SIGNAL_TICKET_TTL_SECONDS,
+    room: input.roomId,
+    ...(seat ? { grants: grantList(seat), kind: seat.kind } : {}),
+  });
+  return { ticket, peerId: seat ? `control:${seat.id}` : "host", expiresIn: SIGNAL_TICKET_TTL_SECONDS };
+}
+
 /** Resolve a guest by the invite code from their join page. Unauthenticated by
  *  design — the code IS the credential. */
 export async function guestByInviteCode(env: Env, inviteCode: string): Promise<GuestRow> {
-  const guest = await env.DB.prepare("SELECT * FROM live_room_guests WHERE invite_code_hash = ?1")
+  const guest = await env.DB.prepare("SELECT * FROM live_room_guests WHERE invite_code_hash = ?1 AND seat = 'guest'")
     .bind(await sha256Hex(inviteCode))
     .first<GuestRow>();
   if (!guest) throw new ApiError(404, "guest_not_found", "This invite link is not valid.");
@@ -390,7 +495,10 @@ export async function revokeGuest(env: Env, guestId: string): Promise<GuestRow> 
     .bind(guestId, now)
     .run();
   if (!res.meta.changes) throw new ApiError(404, "guest_not_found", "No such active guest.");
-  return (await loadGuest(env, guestId))!;
+  const row = (await loadGuest(env, guestId))!;
+  // Every interval they held ends here: presence, a share, an input aggregate.
+  await closeAllFor(env, row.room_id, row.id, Date.now());
+  return row;
 }
 
 // ── Room join link ───────────────────────────────────────────────────────────
@@ -412,6 +520,14 @@ export async function setRoomJoinLink(
 
   if (rotating) {
     const statuses = input.removeAdmitted ? "('waiting', 'accepted', 'invited')" : "('waiting', 'invited')";
+    if (input.removeAdmitted) {
+      const leaving = await env.DB.prepare(
+        "SELECT id FROM live_room_guests WHERE room_id = ?1 AND joined_via = 'room_link' AND status = 'accepted'",
+      )
+        .bind(room.id)
+        .all<{ id: string }>();
+      for (const g of leaving.results ?? []) await closeAllFor(env, room.id, g.id, Date.now());
+    }
     await env.DB.prepare(
       `UPDATE live_room_guests SET status = 'revoked', revoked_at = ?2, snapshot = NULL, updated_at = ?2,
          stage_seconds = stage_seconds + COALESCE(MAX(0, ?2 - stage_since), 0), stage_since = NULL
@@ -441,9 +557,10 @@ export async function setRoomJoinLink(
  *  is enforced here, and they land in `waiting` unless auto-admit is on. */
 export async function joinRoomByCode(
   env: Env,
-  input: { roomCode: string; displayName: string; resumeCode?: string | null },
+  input: { roomCode: string; displayName: string; resumeCode?: string | null; producerRef?: string | null },
 ): Promise<{ guest: GuestRow; invite_code: string; resumed: boolean }> {
   const name = input.displayName.trim().slice(0, 80);
+  const producerRef = cleanProducerRef(input.producerRef);
   if (!name) throw new ApiError(400, "guest_name_required", "Enter a name so the host knows who you are.");
 
   // RESUME an existing slot before creating a new one: a reload must not mint
@@ -490,8 +607,56 @@ export async function joinRoomByCode(
     inviteCode,
     joinedVia: "room_link",
     status: room.guest_auto_admit ? "accepted" : "waiting",
+    // Another Producer walking in through the room link: kind = producer,
+    // the ref is display metadata. Same bundle as any visitor — kind is
+    // never what they may do.
+    kind: producerRef ? "producer" : "visitor",
+    producerRef,
   });
   return { guest, invite_code: inviteCode, resumed: false };
+}
+
+/** `producer_ref` is display metadata (an origin, a workspace id) — never a
+ *  credential, so it is trimmed and bounded, not verified. */
+export function cleanProducerRef(ref: unknown): string | null {
+  if (typeof ref !== "string") return null;
+  const v = ref.trim().slice(0, 200);
+  return v || null;
+}
+
+// ── Grants ───────────────────────────────────────────────────────────────────
+
+/** The bundle a row holds. NULL column = the default guest bundle; a stored
+ *  array is verbatim (an empty array is a participant who may do nothing). */
+export function grantsOf(guest: Pick<GuestRow, "grants">): Set<string> {
+  let parsed: unknown;
+  if (guest.grants == null) return new Set(DEFAULT_GRANTS);
+  try {
+    parsed = JSON.parse(guest.grants);
+  } catch {
+    parsed = null;
+  }
+  return resolveGrants({ grants: parsed });
+}
+
+export const grantList = (guest: Pick<GuestRow, "grants">): string[] => [...grantsOf(guest)];
+
+/** Grant or revoke ONE grant on a live row. The change lands in the row now
+ *  and in the participant's ticket at its next exchange (tickets live 120 s),
+ *  which is also when a revoked media.screen kills the share: the DO refuses
+ *  the screen peer's next signaling frame. */
+export async function setGrant(env: Env, guestId: string, grant: string, enabled: boolean): Promise<GuestRow> {
+  if (!isGrant(grant)) throw new ApiError(400, "invalid_request", `Unknown grant: ${String(grant)}.`);
+  const guest = await loadGuest(env, guestId);
+  if (!guest) throw new ApiError(404, "guest_not_found", "No such guest.");
+  assertUsable(guest);
+  const next = grantsOf(guest);
+  if (enabled) next.add(grant);
+  else next.delete(grant);
+  await env.DB.prepare("UPDATE live_room_guests SET grants = ?2, updated_at = ?3 WHERE id = ?1")
+    .bind(guest.id, JSON.stringify([...next]), nowSec())
+    .run();
+  return (await loadGuest(env, guestId))!;
 }
 
 export async function admittedCount(env: Env, roomId: string): Promise<number> {
@@ -534,10 +699,16 @@ export const guestChannelName = (guestId: string) => `guest:${guestId}`;
  *  the SAME Durable Object (one per guest session), so "the other socket in
  *  here" is exactly the counterpart. */
 export async function mintGuestSignaling(env: Env, guest: GuestRow, role: "host" | "guest") {
+  // The guest's grants are SEALED into the ticket: the signaling DO reads
+  // them off the socket and refuses a screen peer from a guest without
+  // media.screen. Re-read from the row at every mint, so a revoke takes
+  // effect at the next exchange. The host side carries no grants — the
+  // host is the room.
   const ticket = await signTicket(requireSecret(env), {
     sub: `${role}:${guest.id}`,
     aud: "guest-signal",
     expiresInSeconds: SIGNAL_TICKET_TTL_SECONDS,
+    ...(role === "guest" ? { grants: grantList(guest), kind: guest.kind } : {}),
   });
   // Behaviour-derived presence: asking for a ticket is real evidence someone
   // is arriving, unlike a heartbeat the desktop asserts.
@@ -560,6 +731,8 @@ export async function mintRoomTicket(env: Env, guest: GuestRow): Promise<string>
     sub: `${guest.room_id}:${guest.id}`,
     aud: "guest-room",
     expiresInSeconds: SIGNAL_TICKET_TTL_SECONDS,
+    grants: grantList(guest),
+    kind: guest.kind,
   });
 }
 
@@ -575,6 +748,9 @@ export function publicGuest(guest: GuestRow) {
     avatar_url: guest.avatar_url,
     guest_brand: null,
     is_link_guest: true,
+    kind: guest.kind,
+    producer_ref: guest.producer_ref,
+    grants: grantList(guest),
     status: guest.status,
     invited_at: iso(guest.created_at),
     accepted_at: iso(guest.accepted_at),
@@ -608,17 +784,20 @@ export function freshQuality(guest: Pick<GuestRow, "quality" | "quality_at">, no
   return now - guest.quality_at * 1000 <= QUALITY_FRESH_MS ? guest.quality : "unknown";
 }
 
-/** The roster Producer polls (~3s). render_url is derived, so it comes back
+/** The roster Producer polls (~3s). Control seats (mods) are not on it —
+ *  they are never on the set; `GET rooms/:id/mods` lists them. render_url is derived, so it comes back
  *  on EVERY read; only an ADMITTED guest gets one — a waiting guest must not
  *  be renderable, or the waiting room is decoration. The poll doubles as the
  *  host's heartbeat. */
-export async function roomRoster(env: Env, origin: string, roomId: string) {
+export async function roomRoster(env: Env, origin: string, roomId: string, opts: { stampHost?: boolean } = {}) {
   await loadRoom(env, roomId);
-  await touchHostPresence(env, roomId);
+  // A mod seat reading the roster is not the host being alive.
+  if (opts.stampHost !== false) await touchHostPresence(env, roomId);
   const cutoff = nowSec() - Math.floor(LEFT_GRACE_MS / 1000);
   const rows = await env.DB.prepare(
     `SELECT * FROM live_room_guests
-     WHERE room_id = ?1 AND (status IN ('invited', 'waiting', 'accepted') OR (status = 'ended' AND updated_at >= ?2))
+     WHERE room_id = ?1 AND seat = 'guest'
+       AND (status IN ('invited', 'waiting', 'accepted') OR (status = 'ended' AND updated_at >= ?2))
      ORDER BY created_at DESC`,
   )
     .bind(roomId, cutoff)
@@ -629,7 +808,13 @@ export async function roomRoster(env: Env, origin: string, roomId: string) {
       display_name: g.display_name,
       state: rosterState(g),
       joined_via: g.joined_via,
-      render_url: g.status === "accepted" ? await guestRenderUrlFor(env, origin, g.id) : null,
+      kind: g.kind,
+      producer_ref: g.producer_ref,
+      grants: grantList(g),
+      seat: g.seat,
+      // Only an ADMITTED guest with a media grant is renderable: a control
+      // seat (mod) has nothing to put on the set.
+      render_url: g.status === "accepted" && hasAnyMedia(grantsOf(g)) ? await guestRenderUrlFor(env, origin, g.id) : null,
       guest_brand: null,
       avatar_url: g.avatar_url,
       position: g.position,
@@ -649,10 +834,10 @@ export async function roomRoster(env: Env, origin: string, roomId: string) {
  *  guest into everyone's subscribe set. */
 export async function setStage(
   env: Env,
-  input: { roomId: string; onStage: string[] },
+  input: { roomId: string; onStage: string[]; stampHost?: boolean },
 ): Promise<{ on_stage: string[]; version: number }> {
   const room = await loadRoom(env, input.roomId);
-  await touchHostPresence(env, room.id);
+  if (input.stampHost !== false) await touchHostPresence(env, room.id);
 
   const admitted = await env.DB.prepare(
     "SELECT id FROM live_room_guests WHERE room_id = ?1 AND status = 'accepted'",
@@ -665,7 +850,8 @@ export async function setStage(
     throw new ApiError(409, "stage_full", `A scene holds ${room.stage_capacity} guests.`);
   }
 
-  const now = nowSec();
+  const nowMs = Date.now();
+  const now = Math.floor(nowMs / 1000);
   const version = room.stage_version + 1;
   const placeholders = onStage.map((_, i) => `?${i + 3}`).join(", ");
   const statements: D1PreparedStatement[] = [
@@ -687,6 +873,10 @@ export async function setStage(
     );
   }
   await env.DB.batch(statements);
+  // The ledger's first row kind: presence follows the stage list. Same
+  // server time as the stage clock, so stage_seconds equals the summed
+  // closed presence intervals.
+  await syncPresence(env, room.id, onStage, nowMs);
 
   await publishStage(env, room.id, onStage, version);
   return { on_stage: onStage, version };

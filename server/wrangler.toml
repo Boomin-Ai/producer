@@ -27,9 +27,20 @@ bucket_name = "producer-media"
 name = "REALTIME"
 class_name = "RealtimeHub"
 
+# Interactions (#51): one RoomState per room — the live tally, the reveal
+# alarm, the audience phones' hibernating sockets. Never durable truth: the
+# outcome persists in D1 (`interactions.result`, `contributions`).
+[[durable_objects.bindings]]
+name = "ROOMSTATE"
+class_name = "RoomState"
+
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["RealtimeHub"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["RoomState"]
 
 # The guest join / render pages (public/guest/index.html). The worker serves
 # them at /connect/guest/*; anything under /guest/* (the bundle's own assets)

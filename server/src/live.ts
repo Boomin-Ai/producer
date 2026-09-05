@@ -19,10 +19,13 @@ import type { Env } from "./env";
 import { ApiError } from "./errors";
 import { requirePrimary, type TokenClass } from "./auth";
 import { verifyTicket } from "./ticket";
+import { closeInterval, listRun, openInterval, publicContribution, startRun, stopRun } from "./contributions";
 import {
   acceptGuest,
   admitGuest,
+  createModSeat,
   createRoom,
+  mintControlTicket,
   currentStage,
   declineGuest,
   deleteRoom,
@@ -32,6 +35,10 @@ import {
   inviteGuest,
   joinRoomByCode,
   listRooms,
+  loadRoom,
+  parseStage,
+  touchHostPresence,
+  grantsOf,
   mintGuestSignaling,
   mintRoomTicket,
   publicGuest,
@@ -42,8 +49,10 @@ import {
   roomRoster,
   setGuestPositions,
   setRoomJoinLink,
+  setGrant,
   setStage,
   updateRoom,
+  grantList,
   type GuestRow,
   type Quality,
 } from "./guests";
@@ -164,7 +173,10 @@ liveHostRoutes.post("/rooms/:id/guest-link", async (c) => {
  *  here rather than ignored: silently turning a verified-brand invite into an
  *  anonymous link would misrepresent who the host thinks is coming. */
 liveHostRoutes.post("/rooms/:id/guests", async (c) => {
-  const body = await jsonBody<{ guest_brand_id?: unknown; display_name?: unknown }>(c);
+  const body = await jsonBody<{ guest_brand_id?: unknown; display_name?: unknown; producer_ref?: unknown; kind?: unknown }>(c);
+  if (body.kind === "member" || body.kind === "connection") {
+    throw new ApiError(422, "network_unavailable", "member and connection participants need Boomin identities; this server knows visitor and producer.");
+  }
   if (body.guest_brand_id) {
     throw new ApiError(
       422,
@@ -175,6 +187,9 @@ liveHostRoutes.post("/rooms/:id/guests", async (c) => {
   const result = await inviteGuest(c.env, origin(c.req.url), {
     roomId: c.req.param("id"),
     displayName: typeof body.display_name === "string" ? body.display_name : null,
+    // `kind: producer` is honoured only as the presence of a producer_ref —
+    // the ref IS what makes the row a Producer's; the kind is never asserted bare.
+    producerRef: typeof body.producer_ref === "string" ? body.producer_ref : body.kind === "producer" ? "producer" : null,
   });
   // invite_url is returned EXACTLY ONCE (only its hash is stored); render_url
   // is derived and can be re-read from the roster.
@@ -189,6 +204,119 @@ liveHostRoutes.post("/guests/:id/revoke", async (c) => {
   return c.json({ guest: publicGuest(await revokeGuest(c.env, c.req.param("id"))) });
 });
 
+/** Grant or revoke ONE grant (#46). `media.screen` is the higher grant a
+ *  guest does not hold by default; this is where the host hands it out. */
+liveHostRoutes.post("/guests/:id/grants", async (c) => {
+  const body = await jsonBody<{ grant?: unknown; enabled?: unknown }>(c);
+  if (typeof body.grant !== "string" || typeof body.enabled !== "boolean") {
+    throw new ApiError(400, "invalid_request", "grant (string) and enabled (boolean) are required.");
+  }
+  const guest = await setGrant(c.env, c.req.param("id"), body.grant, body.enabled);
+  return c.json({ guest: { ...publicGuest(guest), grants: grantList(guest) } });
+});
+
+/** The host mints a mod link (#47): a control seat another Producer opens. */
+liveHostRoutes.post("/rooms/:id/mod-link", async (c) => {
+  const body = await jsonBody<{ display_name?: unknown }>(c);
+  const result = await createModSeat(c.env, origin(c.req.url), {
+    roomId: c.req.param("id"),
+    displayName: typeof body.display_name === "string" ? body.display_name : null,
+  });
+  // The URL is returned EXACTLY ONCE — only its hash is stored.
+  return c.json({ guest: publicGuest(result.guest), mod_url: result.mod_url }, 201);
+});
+
+/** The room's control seats — the Moderators list. Revoke one with
+ *  `POST guests/:id/revoke` like any participant. */
+liveHostRoutes.get("/rooms/:id/mods", async (c) => {
+  const room = await loadRoom(c.env, c.req.param("id"));
+  const rows = await c.env.DB.prepare(
+    "SELECT * FROM live_room_guests WHERE room_id = ?1 AND seat = 'control' AND status = 'accepted' ORDER BY created_at DESC",
+  )
+    .bind(room.id)
+    .all<GuestRow>();
+  return c.json({ mods: (rows.results ?? []).map((g) => ({ ...publicGuest(g), grants: grantList(g) })) });
+});
+
+/** The host's Producer joins the room channel's CONTROL side: it publishes
+ *  its scene list there and receives mods' scene cuts as frames. */
+liveHostRoutes.post("/rooms/:id/control-session", async (c) => {
+  const room = await loadRoom(c.env, c.req.param("id"));
+  const s = await mintControlTicket(c.env, { roomId: room.id });
+  return c.json({
+    signaling_ticket: s.ticket,
+    signaling_url: `/v1/connect/room-control?ticket=${encodeURIComponent(s.ticket)}`,
+    peer_id: s.peerId,
+    role: "host",
+    expires_in: s.expiresIn,
+  });
+});
+
+// ── The contribution ledger (#50) ────────────────────────────────────────────
+
+/** The run's interval ledger. `run_id` (or `run`) limits to one run; absent =
+ *  the open run, else the latest. Newest first; an open interval has
+ *  ended_at null. */
+liveHostRoutes.get("/rooms/:id/contributions", async (c) => {
+  const room = await loadRoom(c.env, c.req.param("id"));
+  const runId = c.req.query("run_id") ?? c.req.query("run") ?? null;
+  const { run_id, rows } = await listRun(c.env, room.id, runId);
+  return c.json({ contributions: rows.map(publicContribution), run_id });
+});
+
+/** Runs bracket a show: start when Producer goes live, stop at End. The
+ *  stop closes every open interval; the client then reads the report. */
+liveHostRoutes.post("/rooms/:id/runs", async (c) => {
+  const body = await jsonBody<{ action?: unknown }>(c);
+  const room = await loadRoom(c.env, c.req.param("id"));
+  if (body.action === "start") {
+    const stage = parseStage(room);
+    return c.json(await startRun(c.env, room.id, stage.on_stage), 201);
+  }
+  if (body.action === "stop") return c.json(await stopRun(c.env, room.id));
+  throw new ApiError(400, "invalid_request", "action must be start or stop.");
+});
+
+/** A host source with a binding (a sponsor's logo, a ticker) publishes show
+ *  and hide; one overlay interval per (source, binding). */
+liveHostRoutes.post("/rooms/:id/overlays", async (c) => {
+  const body = await jsonBody<{ source_id?: unknown; binding?: unknown; shown?: unknown; label?: unknown }>(c);
+  const room = await loadRoom(c.env, c.req.param("id"));
+  if (typeof body.source_id !== "string" || !body.source_id || typeof body.shown !== "boolean") {
+    throw new ApiError(400, "invalid_request", "source_id (string) and shown (boolean) are required.");
+  }
+  const rawBinding = body.binding && typeof body.binding === "object" && !Array.isArray(body.binding) ? (body.binding as Record<string, unknown>) : {};
+  if (JSON.stringify(rawBinding).length > 2048) throw new ApiError(413, "invalid_request", "binding is limited to 2 KB.");
+  const binding = { ...rawBinding, source_id: body.source_id };
+  await touchHostPresence(c.env, room.id);
+  const row = body.shown
+    ? await openInterval(c.env, {
+        roomId: room.id,
+        participantId: null,
+        kind: "overlay",
+        binding,
+        source: "host_stage",
+        metadata: typeof body.label === "string" ? { label: body.label.slice(0, 80) } : {},
+      })
+    : await closeInterval(c.env, { roomId: room.id, participantId: null, kind: "overlay", binding });
+  return c.json({ contribution: row ? publicContribution(row) : null });
+});
+
+/** What THIS token may do in the room (#47). One deployment = one host, and
+ *  the primary token IS the host, so the answer is the host stub: everything
+ *  but billing, which does not exist here. Mods on this server are not
+ *  tokens — they are control seats behind the mod link (see modRoutes). */
+liveHostRoutes.get("/rooms/:id/access", async (c) => {
+  await loadRoom(c.env, c.req.param("id"));
+  return c.json({
+    role: "host",
+    via: "token",
+    can: { roster: true, control: true, manage: true, settings: true, billing: false },
+    grants: null,
+    implicit: true,
+  });
+});
+
 // ── Public guest routes: /v1/connect/guest* (no bearer; the code is the credential)
 
 export const connectGuestRoutes: App = new Hono<{ Bindings: Env; Variables: Vars }>();
@@ -198,13 +326,14 @@ export const connectGuestRoutes: App = new Hono<{ Bindings: Env; Variables: Vars
  *  until a human says so. (Snapshot upload is not accepted in v1: the field
  *  is ignored rather than rejected so a Boomin-shaped page still joins.) */
 connectGuestRoutes.post("/guest/room/:code/join", async (c) => {
-  const body = await jsonBody<{ display_name?: unknown; resume_code?: unknown }>(c);
+  const body = await jsonBody<{ display_name?: unknown; resume_code?: unknown; producer_ref?: unknown }>(c);
   if (typeof body.display_name !== "string") throw new ApiError(400, "invalid_request", "display_name is required.");
   const resumeCode = typeof body.resume_code === "string" ? body.resume_code.trim().slice(0, 120) : null;
   const { guest, invite_code, resumed } = await joinRoomByCode(c.env, {
     roomCode: c.req.param("code"),
     displayName: body.display_name,
     resumeCode,
+    producerRef: typeof body.producer_ref === "string" ? body.producer_ref : null,
   });
   // The guest keeps its own invite code so it can reconnect and poll its own
   // admission status without any session.
@@ -245,6 +374,24 @@ connectGuestRoutes.post("/guest/:code/session", async (c) => {
   const guest = await guestByInviteCode(c.env, c.req.param("code"));
   if (guest.status !== "accepted") throw new ApiError(409, "guest_not_accepted", "Accept the invitation before joining.");
   return c.json(signalingResponse(await mintGuestSignaling(c.env, guest, "guest")));
+});
+
+/** The guest page reports its screen share starting and stopping (#50):
+ *  one media.screen interval per share. Opening needs the grant; the DO
+ *  enforces the track itself, this is the ledger's view of it. */
+connectGuestRoutes.post("/guest/:code/share", async (c) => {
+  const guest = await guestByInviteCode(c.env, c.req.param("code"));
+  const body = await jsonBody<{ active?: unknown }>(c);
+  if (typeof body.active !== "boolean") throw new ApiError(400, "invalid_request", "active (boolean) is required.");
+  if (guest.status !== "accepted") throw new ApiError(409, "guest_not_accepted", "Not in the room.");
+  const binding = { track: "screen" };
+  if (body.active) {
+    if (!grantsOf(guest).has("media.screen")) throw new ApiError(403, "grant_required", "This guest may not share a screen.", { grant: "media.screen" });
+    const row = await openInterval(c.env, { roomId: guest.room_id, participantId: guest.id, kind: "media.screen", binding, source: "participant" });
+    return c.json({ contribution: publicContribution(row) });
+  }
+  const row = await closeInterval(c.env, { roomId: guest.room_id, participantId: guest.id, kind: "media.screen", binding });
+  return c.json({ contribution: row ? publicContribution(row) : null });
 });
 
 /** The RENDER side's ticket — what Producer's browser source uses. NOT gated
@@ -330,6 +477,10 @@ connectGuestRoutes.get("/guest-signal", async (c) => {
   const forwarded = new Request(c.req.url, c.req.raw);
   forwarded.headers.set("X-Producer-User", `${role}:${guestId}`);
   forwarded.headers.set("X-Producer-Room", row.room_id);
+  forwarded.headers.set("X-Producer-Role", role);
+  // Grants come from the ROW at connect, not the ticket: the ticket sealed
+  // them at mint (≤ 120 s ago); the row is what a revoke since then changed.
+  if (role === "guest") forwarded.headers.set("X-Producer-Grants", JSON.stringify(grantList(row)));
   return realtime.get(realtime.idFromName(guestChannelName(guestId))).fetch(forwarded);
 });
 
@@ -351,7 +502,35 @@ connectGuestRoutes.get("/guest-room-signal", async (c) => {
   // Identity is the GUEST id, which is what `to` targets when one guest offers to another.
   forwarded.headers.set("X-Producer-User", guestId);
   forwarded.headers.set("X-Producer-Room", roomId);
+  forwarded.headers.set("X-Producer-Role", "guest");
+  forwarded.headers.set("X-Producer-Grants", JSON.stringify(grantList(row)));
   return realtime.get(realtime.idFromName(roomChannelName(roomId))).fetch(forwarded);
+});
+
+/** The room channel's CONTROL side: the host's Producer (sub "host") or a
+ *  mod seat (sub "control:<id>", grants sealed at mint and re-read from the
+ *  row here). Same DO as the guests' room channel, so a cut is one hop. */
+connectGuestRoutes.get("/room-control", async (c) => {
+  const { realtime, secret } = requireUpgrade(c, c.env);
+  const claims = await verifyTicket(secret, c.req.query("ticket") ?? "", "room-control");
+  if (!claims || !claims.room) throw new ApiError(401, "invalid_ticket", "Control ticket is invalid or expired.");
+  const forwarded = new Request(c.req.url, c.req.raw);
+  forwarded.headers.set("X-Producer-Room", claims.room);
+  if (claims.sub === "host") {
+    forwarded.headers.set("X-Producer-User", "host");
+    forwarded.headers.set("X-Producer-Role", "host");
+  } else {
+    const [kind, seatId] = claims.sub.split(":");
+    if (kind !== "control" || !seatId) throw new ApiError(401, "invalid_ticket", "Control ticket is malformed.");
+    const row = await loadGuestForUpgrade(c.env, seatId);
+    if (!row || row.room_id !== claims.room || row.seat !== "control" || row.status !== "accepted") {
+      throw new ApiError(410, "guest_unavailable", "This mod seat is no longer active.");
+    }
+    forwarded.headers.set("X-Producer-User", `control:${row.id}`);
+    forwarded.headers.set("X-Producer-Role", "control");
+    forwarded.headers.set("X-Producer-Grants", JSON.stringify(grantList(row)));
+  }
+  return realtime.get(realtime.idFromName(roomChannelName(claims.room))).fetch(forwarded);
 });
 
 // ── Static guest pages ───────────────────────────────────────────────────────
@@ -361,7 +540,7 @@ connectGuestRoutes.get("/guest-room-signal", async (c) => {
 
 export const guestPageRoutes: App = new Hono<{ Bindings: Env; Variables: Vars }>();
 
-async function guestPage(c: { env: Env; req: { url: string } }): Promise<Response> {
+export async function guestPage(c: { env: Env; req: { url: string } }): Promise<Response> {
   if (!c.env.ASSETS) {
     return new Response("<h3>Guest pages are not deployed on this server.</h3>", {
       status: 503,
@@ -378,3 +557,7 @@ async function guestPage(c: { env: Env; req: { url: string } }): Promise<Respons
 guestPageRoutes.get("/guest/room/:code", guestPage);
 guestPageRoutes.get("/guest/render/:id", guestPage);
 guestPageRoutes.get("/guest/:code", guestPage);
+// The mod link lands on the same bundle: a browser shows "open this in
+// Producer" with the link; Producer itself never loads the page — it reads
+// the code off the URL and speaks /v1/connect/mod/:code directly.
+guestPageRoutes.get("/mod/:code", guestPage);

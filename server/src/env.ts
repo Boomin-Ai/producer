@@ -22,6 +22,10 @@ export interface Env {
    *  the flavour available on the Workers Free plan). Optional so a deploy
    *  without the binding still publishes; guest routes 503 `realtime_unavailable`. */
   REALTIME?: DurableObjectNamespace;
+  /** The room's game-state Durable Object (class RoomState, SQLite-backed):
+   *  interactions, tallies, the reveal alarm, audience sockets. Optional so
+   *  a deploy without it still runs rooms; interaction routes 503. */
+  ROOMSTATE?: DurableObjectNamespace;
   /** Static guest pages (server/public). */
   ASSETS?: Fetcher;
   /** Signs the 120-second signaling tickets and derives per-guest render

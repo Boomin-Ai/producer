@@ -1,0 +1,65 @@
+<!doctype html>
+<!-- The vote overlay on the SET (#51). Loaded by a browser source from the
+     local bridge (127.0.0.1:<port>/overlay) and fed by the HOST's Producer
+     through /state.json — never from the server's Durable Object, so what is
+     on air follows the host's clock (docs/INTERACTIVE.md decision 1). Polls at
+     4 Hz; renders nothing until there is a vote to show. -->
+<html><head><meta charset="utf-8"><title>Vote</title>
+<style>
+  html, body { margin: 0; background: transparent; overflow: hidden; font-family: -apple-system, "Segoe UI", system-ui, sans-serif; }
+  #wrap { position: absolute; left: 4%; right: 4%; bottom: 6%; display: none; }
+  #wrap.on { display: block; }
+  .prompt { color: #fff; font-size: 34px; font-weight: 700; letter-spacing: -0.01em; text-shadow: 0 2px 12px rgba(0,0,0,.6); margin-bottom: 14px; }
+  .bar { display: flex; height: 64px; border-radius: 16px; overflow: hidden; background: rgba(10,10,12,.72); box-shadow: 0 6px 30px rgba(0,0,0,.45); }
+  .side { display: flex; align-items: center; justify-content: space-between; padding: 0 22px; color: #fff; font-size: 26px; font-weight: 700; min-width: 12%; transition: width 260ms ease; white-space: nowrap; overflow: hidden; }
+  .a { background: #2f6fed; } .b { background: #ed5f2f; }
+  .pct { font-variant-numeric: tabular-nums; opacity: .9; margin-left: 16px; }
+  .win { box-shadow: inset 0 0 0 4px rgba(255,255,255,.85); }
+  .foot { color: rgba(255,255,255,.8); font-size: 20px; margin-top: 10px; text-shadow: 0 1px 8px rgba(0,0,0,.6); }
+  .hidden-pct .pct { visibility: hidden; }
+</style></head>
+<body>
+<div id="wrap">
+  <div class="prompt" id="prompt"></div>
+  <div class="bar" id="bar">
+    <div class="side a" id="a"><span id="al"></span><span class="pct" id="ap"></span></div>
+    <div class="side b" id="b"><span id="bl"></span><span class="pct" id="bp"></span></div>
+  </div>
+  <div class="foot" id="foot"></div>
+</div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  let last = "";
+  function render(s) {
+    const wrap = $("wrap");
+    if (!s || !s.interaction || s.interaction.state === "open" || s.interaction.state === "cancelled" || s.hidden) { wrap.className = ""; return; }
+    const ix = s.interaction, opts = ix.spec.options || [], t = ix.tally || null;
+    const total = t ? t.total : 0;
+    const pa = total && t ? Math.round((t.options[opts[0].id] || 0) / total * 100) : 50;
+    const pb = total ? 100 - pa : 50;
+    const revealed = ix.state === "revealed" || ix.state === "closed";
+    $("prompt").textContent = ix.spec.prompt || "";
+    $("al").textContent = opts[0] ? opts[0].label : ""; $("bl").textContent = opts[1] ? opts[1].label : "";
+    $("ap").textContent = pa + "%"; $("bp").textContent = pb + "%";
+    $("a").style.width = pa + "%"; $("b").style.width = pb + "%";
+    $("bar").className = "bar" + (revealed ? "" : " hidden-pct");
+    $("a").classList.toggle("win", revealed && t && t.winner === (opts[0] && opts[0].id));
+    $("b").classList.toggle("win", revealed && t && t.winner === (opts[1] && opts[1].id));
+    let foot = "";
+    if (ix.state === "collecting") {
+      const left = ix.timing && ix.timing.reveal_at ? Math.max(0, Math.ceil((Date.parse(ix.timing.reveal_at) - (s.server_now || Date.now())) / 1000)) : null;
+      foot = left != null ? "Vote now · " + left + "s" : "Vote now";
+    } else if (revealed) foot = total + (total === 1 ? " vote" : " votes");
+    $("foot").textContent = foot;
+    wrap.className = "on";
+  }
+  async function tick() {
+    try {
+      const r = await fetch("/state.json", { cache: "no-store" });
+      const txt = await r.text();
+      if (txt !== last) { last = txt; render(JSON.parse(txt)); }
+    } catch (e) { /* bridge restarting */ }
+  }
+  setInterval(tick, 250); tick();
+</script>
+</body></html>

@@ -418,7 +418,7 @@ describe("roster", () => {
     expect(ar.guest_brand).toBeNull();
     expect(roster.find((g) => g.id === recent.guest.id)!.state).toBe("left");
     expect(Object.keys(ar).sort()).toEqual(
-      ["avatar_url", "display_name", "guest_brand", "id", "joined_at", "joined_via", "last_seen_at", "position", "quality", "render_url", "snapshot", "state"],
+      ["avatar_url", "display_name", "grants", "guest_brand", "id", "joined_at", "joined_via", "kind", "last_seen_at", "position", "producer_ref", "quality", "render_url", "seat", "snapshot", "state"],
     );
     expect((await loadRoom(e, room.id)).host_seen_at).not.toBeNull();
     await expectApi(roomRoster(e, ORIGIN, "nope"), "room_not_found", 404);

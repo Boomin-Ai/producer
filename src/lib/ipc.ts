@@ -417,7 +417,9 @@ export type ExtraSpec =
   | { kind: "text"; text: string; size?: number; color?: string }
   | { kind: "color"; color: string }
   | { kind: "window"; window: number }
-  | { kind: "guest"; url: string };
+  | { kind: "guest"; url: string }
+  /** A page rendered on the set, fed by THIS Producer over the local bridge (#51). */
+  | { kind: "overlay"; url: string };
 
 export const extraSources = {
   add: (id: string, label: string, spec: ExtraSpec) =>
@@ -721,6 +723,10 @@ export interface RoomGuest {
   /** What this participant may do. Absent → the default guest bundle
    * (camera, mic, return feed, inputs; never screen). Present → verbatim. */
   grants?: string[] | null;
+  /** Another Producer's origin / workspace id — display only (#46). */
+  producer_ref?: string | null;
+  /** `control` = a mod seat behind the host's mod link; never on the set. */
+  seat?: "guest" | "control" | string | null;
   guest_brand?: { id?: string; name?: string; slug?: string } | null;
   /** Host-set slot order (0 = first) and the join-time still — both on the
    * roster already; read by the mod view, which has no engine thumbs. */
@@ -737,6 +743,42 @@ export interface RoomGuest {
   joined_at?: string | null;
   last_seen_at?: string | null;
 }
+
+/** One row of the contribution ledger (#50): an interval, never a price. */
+export interface Contribution {
+  id: string;
+  room_id: string;
+  run_id: string | null;
+  participant_id: string | null;
+  kind: "presence" | "media.screen" | "overlay" | "input" | "credit" | string;
+  binding: Record<string, unknown>;
+  started_at: string;
+  ended_at: string | null;
+  source: string;
+  metadata: Record<string, unknown>;
+}
+
+/** An interaction as the host sees it (#51, producer.interaction/v1 projected). */
+export interface Interaction {
+  id: string;
+  room_id: string;
+  type: "vote" | string;
+  state: "draft" | "open" | "collecting" | "revealed" | "closed" | "cancelled" | string;
+  version: number;
+  spec: { prompt: string; options: { id: string; label: string }[] };
+  input: { roles: string[]; per_identity: string; cooldown_ms: number };
+  timing: { opened_at?: string; reveal_at?: string; revealed_at?: string; closed_at?: string; collect_ms: number; reveal_hold_ms: number };
+  render: { surface: string; kind: string; style?: string }[];
+  tally?: { total: number; options: Record<string, number>; by_kind: Record<string, number>; winner: string | null };
+  server_now: number;
+}
+
+/** The local overlay bridge (#51): the set's vote bar is a browser source
+ * on 127.0.0.1 fed by THIS Producer, never by the server. */
+export const overlayBridge = {
+  start: () => invoke<string>("overlay_bridge_start"),
+  set: (state: unknown) => invoke("overlay_bridge_set", { state }),
+};
 
 /** Guests arrive through the room link on their own, so the roster — not our
  * own bookkeeping — is the source of truth for who is present. */
@@ -760,6 +802,36 @@ export const guests = {
    * Producer behaves as the host, exactly as before. */
   access: (endpointId: string, roomId: string) =>
     invoke<{ available?: boolean; access?: unknown }>("room_access", { endpointId, roomId }),
+  /** Mint a MOD LINK (#47): a control seat another Producer opens. The URL
+   * comes back exactly once. */
+  modLink: (endpointId: string, roomId: string, displayName?: string | null) =>
+    invoke<{ guest: RoomGuest; mod_url: string }>("room_mod_link", { endpointId, roomId, displayName: displayName ?? null }),
+  /** The run's contribution ledger (#50): who supplied what, from when to
+   * when, where on the set. */
+  contributions: (endpointId: string, roomId: string, runId?: string | null) =>
+    invoke<{ contributions: Contribution[]; run_id: string | null }>("room_contributions", { endpointId, roomId, runId: runId ?? null }),
+  /** Runs bracket a show: start at go-live, stop at End. */
+  run: (endpointId: string, roomId: string, action: "start" | "stop") =>
+    invoke<{ run_id: string | null; started_at?: string; closed?: number }>("room_run", { endpointId, roomId, action }),
+  /** An overlay source with a binding (e.g. a sponsor's logo) was shown or hidden. */
+  overlay: (endpointId: string, roomId: string, sourceId: string, binding: Record<string, unknown>, shown: boolean, label?: string | null) =>
+    invoke("room_overlay", { endpointId, roomId, sourceId, binding, shown, label: label ?? null }),
+  /** Interactions (#51): the room's, projected for the host. */
+  interactions: (endpointId: string, roomId: string) =>
+    invoke<{ interactions: Interaction[] }>("room_interactions", { endpointId, roomId }),
+  /** Open a two-choice vote. Lands in state `open`; `transition("open")` starts collecting. */
+  interactionCreate: (endpointId: string, roomId: string, body: Record<string, unknown>) =>
+    invoke<{ interaction: Interaction }>("room_interaction_create", { endpointId, roomId, body }),
+  /** open · reveal · close · cancel. A reveal with a hold ARMS the server's alarm. */
+  interactionTransition: (endpointId: string, roomId: string, interactionId: string, transition: "open" | "reveal" | "close" | "cancel", revealHoldMs?: number | null) =>
+    invoke<{ interaction: Interaction }>("room_interaction_transition", { endpointId, roomId, interactionId, transition, revealHoldMs: revealHoldMs ?? null }),
+  /** The room's audience code + /a/CODE URL; rotate mints a new one. */
+  audienceLink: (endpointId: string, roomId: string, rotate = false) =>
+    invoke<{ code: string; url: string }>("room_audience_link", { endpointId, roomId, rotate }),
+  /** A ticket to the room channel's CONTROL side for the host's Producer:
+   * scene list out, mods' cuts in. */
+  controlSession: (endpointId: string, roomId: string) =>
+    invoke<{ signaling_ticket: string; signaling_url: string; peer_id?: string }>("room_control_session", { endpointId, roomId }),
   /** Slot order — the FULL list of guest ids, first on top. */
   order: (endpointId: string, roomId: string, order: string[]) =>
     invoke("room_guest_order", { endpointId, roomId, order }),

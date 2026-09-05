@@ -372,7 +372,7 @@ paths:
       summary: Rename / set config
       parameters: [{ $ref: "#/components/parameters/roomId" }]
       responses:
-        "200": { description: Updated room (`{ room }`). }
+        "200": { description: "Updated room (`{ room }`)." }
     delete:
       operationId: deleteLiveRoom
       x-token-class: primary
@@ -405,9 +405,17 @@ paths:
       x-token-class: primary
       summary: Invite a named guest by link (invite_url returned once)
       parameters: [{ $ref: "#/components/parameters/roomId" }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name: { type: string, maxLength: 80 }
+                producer_ref: { type: string, maxLength: 200, description: "Sets `kind: producer` (issue 46)." }
       responses:
-        "201": { description: "`{ guest, invite_url, render_url }`" }
-        "422": { description: "`network_unavailable` if guest_brand_id is sent — brand guests need Boomin." }
+        "201": { description: "`{ guest, invite_url, render_url }` — `guest` carries `kind` + `grants`." }
+        "422": { description: "`network_unavailable` if guest_brand_id, or kind member / connection, is sent — those need Boomin identities." }
   /v1/app/live/rooms/{roomId}/stage:
     post:
       operationId: setLiveStage
@@ -421,7 +429,7 @@ paths:
     post:
       operationId: setLiveGuestOrder
       x-token-class: primary
-      summary: Host-controlled slot order (`{ order: string[] }`)
+      summary: "Host-controlled slot order (`{ order: string[] }`)"
       parameters: [{ $ref: "#/components/parameters/roomId" }]
       responses:
         "200": { description: "`{ ok: true }`" }
@@ -475,6 +483,7 @@ paths:
               properties:
                 display_name: { type: string, maxLength: 80 }
                 resume_code: { type: string, description: Previous invite_code — resumes the SAME slot on reload. }
+                producer_ref: { type: string, maxLength: 200, description: "Another Producer instance entering as a guest presents its origin (self-host) or workspace id; sets `kind: producer` (issue 46). Display metadata, never a credential." }
       responses:
         "201": { description: "`{ guest, invite_code, resumed: false }`" }
         "200": { description: "`{ guest, invite_code, resumed: true }`" }
@@ -537,6 +546,401 @@ paths:
       responses:
         "101": { description: Switching protocols. }
 
+  # ── Contribution model (docs/CONTRIBUTIONS.md) — Phase 1 IMPLEMENTED ────────
+  # Every operation below is built on producer-server (`x-status: implemented`,
+  # `x-issue` = the issue that built it). Nouns: participant, grant,
+  # contribution, interaction. Never brand, deal, wallet. No money routes, ever.
+  #
+  # Realtime frames (not HTTP) that belong to this family:
+  #   room channel, control sockets (`GET /v1/connect/room-control?ticket=`):
+  #     host → DO      { type: "scene.publish", scenes: [{id,name}], active_scene_id }
+  #     DO → controls  { type: "scene.state", scenes, active_scene_id, version, server_now }
+  #     mod → DO       { type: "scene.cut", scene_id, transition? }        needs room.scene
+  #     DO → host      { type: "scene.cut", scene_id, transition?, from, server_now }
+  #     DO → mod       { type: "scene.cut.ok", scene_id, server_now }
+  #                  | { type: "error", code: "forbidden", status: 403, grant: "room.scene" }
+  #                  | { type: "error", code: "unknown_scene", status: 422, scene_id }
+  #   room channel, published (subscribe `interaction:host` — host/control only — or `interaction:guest`):
+  #     { channels: ["interaction:host"], action: "interaction", payload: Interaction }   (host projection, running tally)
+  #     { channels: ["interaction:guest"], action: "interaction", payload: Interaction }  (guest projection)
+  #   audience socket (`GET /v1/connect/audience-signal?token=`, read-only, hibernating):
+  #     { type: "snapshot", interactions: Interaction[], server_now }   on connect
+  #     { type: "interaction", interaction: Interaction, server_now }   state changes at once, tally deltas ≤ 4 Hz
+  #     { type: "pong", server_now }                                    answer to { type: "ping" }
+
+  /v1/app/live/guests/{guestId}/grants:
+    post:
+      operationId: setParticipantGrant
+      x-token-class: primary
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/46
+      summary: Grant or revoke ONE participant grant (e.g. media.screen, the higher grant a guest does not hold by default)
+      parameters: [{ $ref: "#/components/parameters/guestId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [grant, enabled]
+              properties:
+                grant: { $ref: "#/components/schemas/Grant" }
+                enabled: { type: boolean }
+      responses:
+        "200": { description: "`{ guest: RosterGuest }` with the updated `grants`. The bundle is sealed into the guest's ticket at its next exchange; revoking kills the track at that exchange." }
+  /v1/app/live/rooms/{roomId}/contributions:
+    get:
+      operationId: liveRoomContributions
+      x-token-class: primary
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/50
+      summary: The run's interval ledger — who supplied what, from when to when, where on the set
+      parameters:
+        - { $ref: "#/components/parameters/roomId" }
+        - { name: run_id, in: query, required: false, schema: { type: string }, description: "Limit to one run (`run` is accepted as an alias); default = the open run, else the latest run with rows, else everything. The response echoes the run it resolved to as `run_id`." }
+      responses:
+        "200":
+          description: "`{ contributions: Contribution[] }` newest first. Intervals are append-only; an open one has `ended_at: null`."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  contributions: { type: array, items: { $ref: "#/components/schemas/Contribution" } }
+  /v1/app/live/rooms/{roomId}/interactions:
+    get:
+      operationId: listInteractions
+      x-token-class: primary
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/51
+      summary: Interactions of the open run, projected for the host (raw inputs included)
+      parameters: [{ $ref: "#/components/parameters/roomId" }]
+      responses:
+        "200": { description: "`{ interactions: Interaction[] }`" }
+    post:
+      operationId: createInteraction
+      x-token-class: primary
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/51
+      summary: Open an interaction (v1 = a two-choice `vote`); the RoomState Durable Object is authoritative, outcomes persist
+      parameters: [{ $ref: "#/components/parameters/roomId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InteractionCreate" }
+      responses:
+        "201": { description: "`{ interaction: Interaction }` in state `open` with server-stamped `timing`." }
+  /v1/app/live/rooms/{roomId}/interactions/{interactionId}:
+    patch:
+      operationId: transitionInteraction
+      x-token-class: primary
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/51
+      summary: "Host/mod transition: `open` (start collecting) · `reveal` (arm the reveal — the SERVER fires it on an alarm at `reveal_at`; a client never sets `revealed` directly) · `close`"
+      parameters:
+        - { $ref: "#/components/parameters/roomId" }
+        - { $ref: "#/components/parameters/interactionId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transition]
+              properties:
+                transition: { type: string, enum: [open, reveal, close, cancel] }
+                reveal_hold_ms: { type: integer, minimum: 0, description: Dramatic pause before pixels (reveal only). }
+      responses:
+        "200": { description: "`{ interaction: Interaction }` — `version` incremented; clients ignore stale." }
+        "409": { description: "`interaction_state` — the transition is not legal from the current state (e.g. a client asking for `revealed` before `reveal_at`)." }
+
+  /v1/connect/audience/{code}/token:
+    post:
+      operationId: mintAudienceToken
+      security: []
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/51
+      summary: The room-code door — mint a per-DEVICE audience capability token. No account, no email, no cookie.
+      parameters: [{ name: code, in: path, required: true, schema: { type: string }, description: The room's short audience code (resolvable only while the room is open). }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_id: { type: string, maxLength: 64, description: Client-generated, replayed on reconnect so the same device keeps its identity hash. }
+                display_name: { type: string, maxLength: 24, description: Optional pseudonym, filtered at the door, room-scoped. }
+      responses:
+        "201":
+          description: "`AudienceToken` — `aud: audience`, `sub: aud_<random>`, expires with the show (max 12 h)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AudienceToken" }
+        "404": { description: "`room_not_open` — the code resolves only while the room is open." }
+        "409": { description: "`audience_full` | `audience_locked`" }
+  /v1/connect/audience/interactions/{interactionId}/inputs:
+    post:
+      operationId: submitAudienceInput
+      security: [{ audience: [] }]
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/51
+      summary: "An input from an audience device (`Authorization: Bearer <AudienceToken>`). Counted once per identity hash; the tally never stores the sub."
+      parameters: [{ $ref: "#/components/parameters/interactionId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InteractionInput" }
+      responses:
+        "202": { description: "`{ accepted: true, cooldown_until? }` — server clock; a control is disabled until a server timestamp, never a client countdown." }
+        "409": { description: "`interaction_not_collecting` | `input_already_counted`" }
+        "429": { description: "`rate_limited` — per-identity token bucket from `input.rate`." }
+  /v1/connect/guest/{code}/interactions/{interactionId}/inputs:
+    post:
+      operationId: submitGuestInput
+      security: []
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/51
+      summary: An input from a guest — the invite code is the credential. Writes one `input` contribution bound to the interaction.
+      parameters:
+        - { name: code, in: path, required: true, schema: { type: string } }
+        - { $ref: "#/components/parameters/interactionId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InteractionInput" }
+      responses:
+        "202": { description: "`{ accepted: true }`" }
+        "409": { description: "`interaction_not_collecting` | `input_already_counted` | `guest_not_accepted`" }
+
+
+  # ── Phase 1 additions beyond the original stubs (#47, #50, #51) ─────────────
+
+  /v1/app/live/rooms/{roomId}/access:
+    get:
+      operationId: liveRoomAccess
+      x-token-class: primary
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/47
+      summary: What THIS token may do in the room. One deployment = one host, so the primary token always answers the host stub.
+      parameters: [{ $ref: "#/components/parameters/roomId" }]
+      responses:
+        "200": { description: "`{ role: \"host\", via: \"token\", can: { roster, control, manage, settings: true, billing: false }, grants: null, implicit: true }`" }
+  /v1/app/live/rooms/{roomId}/mod-link:
+    post:
+      operationId: createModLink
+      x-token-class: primary
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/47
+      summary: Mint a MOD LINK — a control seat (kind producer, the mod bundle, no media) another Producer opens. The URL is returned exactly once (hashed at rest).
+      parameters: [{ $ref: "#/components/parameters/roomId" }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { display_name: { type: string, maxLength: 80 } } }
+      responses:
+        "201": { description: "`{ guest: RosterGuest (seat: control, grants: mod bundle), mod_url: \"{origin}/connect/mod/{code}\" }`. Revoke with `POST guests/{id}/revoke`." }
+  /v1/app/live/rooms/{roomId}/mods:
+    get:
+      operationId: listModSeats
+      x-token-class: primary
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/47
+      summary: The room's control seats (the Moderators list). Never on the roster.
+      parameters: [{ $ref: "#/components/parameters/roomId" }]
+      responses:
+        "200": { description: "`{ mods: RosterGuest[] }`" }
+  /v1/app/live/rooms/{roomId}/control-session:
+    post:
+      operationId: liveHostControlSession
+      x-token-class: primary
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/47
+      summary: The host's ticket to the room channel's CONTROL side (aud room-control, sub host). Producer publishes its scene list there and receives mods' scene.cut frames.
+      parameters: [{ $ref: "#/components/parameters/roomId" }]
+      responses:
+        "200": { description: "`{ signaling_ticket, signaling_url: \"/v1/connect/room-control?ticket=…\", peer_id: \"host\", role: \"host\", expires_in }`" }
+  /v1/app/live/rooms/{roomId}/runs:
+    post:
+      operationId: liveRoomRun
+      x-token-class: primary
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/50
+      summary: "Runs bracket a show: `start` at go-live (opens presence for whoever is on stage under a new run id), `stop` at End (closes every open interval)."
+      parameters: [{ $ref: "#/components/parameters/roomId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [action], properties: { action: { type: string, enum: [start, stop] } } }
+      responses:
+        "201": { description: "start → `{ run_id, started_at }` (idempotent while a run is open)" }
+        "200": { description: "stop → `{ run_id, closed }` (`run_id` null when none was open)" }
+  /v1/app/live/rooms/{roomId}/overlays:
+    post:
+      operationId: liveOverlayShown
+      x-token-class: primary
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/50
+      summary: A host source with a binding (a sponsor's logo, a ticker) was shown or hidden — one `overlay` contribution per (source, binding).
+      parameters: [{ $ref: "#/components/parameters/roomId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source_id, shown]
+              properties:
+                source_id: { type: string }
+                binding: { type: object, description: "e.g. `{ sponsor: \"acme\", corner: \"tl\" }`; `source_id` is merged in." }
+                shown: { type: boolean }
+                label: { type: string, maxLength: 80 }
+      responses:
+        "200": { description: "`{ contribution: Contribution | null }` (null when hiding nothing open)" }
+  /v1/app/live/rooms/{roomId}/audience-link:
+    post:
+      operationId: liveAudienceLink
+      x-token-class: primary
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/51
+      summary: "The room's short audience code (4 uppercase consonants) and its URL `/a/{code}`; `rotate: true` mints a new one. Resolvable only while the host is present."
+      parameters: [{ $ref: "#/components/parameters/roomId" }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { rotate: { type: boolean } } }
+      responses:
+        "200": { description: "`{ code, url }`" }
+
+  /v1/connect/mod/{code}:
+    get:
+      operationId: modSeatBootstrap
+      security: []
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/47
+      summary: "The control seat's bootstrap — the mod code IS the credential (like an invite code). CORS is open on /v1/connect/* so Producer's webview can speak it."
+      parameters: [{ name: code, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: "`{ seat: RosterGuest, room: LiveRoom, grants: Grant[], stage: { on_stage, version } }`" }
+        "404": { description: "`mod_link_not_found` (a guest code never opens a seat)" }
+        "410": { description: "`guest_revoked`" }
+  /v1/connect/mod/{code}/guests:
+    get:
+      operationId: modSeatRoster
+      security: []
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/47
+      summary: "The roster as the host sees it, render keys WITHHELD (`render_url: \\\"withheld\\\"` for admitted guests), plus the stage list read back. Does not stamp host presence."
+      parameters: [{ name: code, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: "`{ guests: RosterGuest[], stage: { on_stage, version } }`" }
+  /v1/connect/mod/{code}/guests/{guestId}/admit:
+    post:
+      operationId: modSeatAdmit
+      security: []
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/47
+      summary: Needs `room.admit`. A guest of another room is 404.
+      parameters: [{ name: code, in: path, required: true, schema: { type: string } }, { $ref: "#/components/parameters/guestId" }]
+      responses:
+        "200": { description: "`{ guest }`" }
+        "403": { description: "`grant_required` (`details.grant`)" }
+  /v1/connect/mod/{code}/guests/{guestId}/revoke:
+    post:
+      operationId: modSeatRevoke
+      security: []
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/47
+      summary: Needs `room.remove`.
+      parameters: [{ name: code, in: path, required: true, schema: { type: string } }, { $ref: "#/components/parameters/guestId" }]
+      responses:
+        "200": { description: "`{ guest }`" }
+        "403": { description: "`grant_required`" }
+  /v1/connect/mod/{code}/stage:
+    post:
+      operationId: modSeatStage
+      security: []
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/47
+      summary: Needs `room.stage`. The FULL on-stage list, like the host's.
+      parameters: [{ name: code, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: "`{ on_stage, version }`" }
+        "403": { description: "`grant_required`" }
+        "409": { description: "`stage_full`" }
+  /v1/connect/mod/{code}/guest-order:
+    post:
+      operationId: modSeatOrder
+      security: []
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/47
+      summary: Needs `room.order`.
+      parameters: [{ name: code, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: "`{ ok: true }`" }
+  /v1/connect/mod/{code}/session:
+    post:
+      operationId: modSeatSession
+      security: []
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/47
+      summary: The seat's ticket to the room channel's control side (aud room-control, sub control:{seatId}, the seat's grants sealed in — re-read from the row at every mint).
+      parameters: [{ name: code, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: "`{ signaling_ticket, signaling_url, peer_id, role: \"control\", grants, expires_in }`" }
+  /v1/connect/room-control:
+    get:
+      operationId: liveRoomControlSignal
+      security: []
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/47
+      summary: WebSocket upgrade (`?ticket=`, aud room-control) → the room's signaling Durable Object as the host or a control seat (grants re-read from the row at CONNECT). Carries the scene frames and the `interaction:host` channel.
+      responses:
+        "101": { description: Switching protocols. }
+        "401": { description: "`invalid_ticket`" }
+        "410": { description: "`guest_unavailable` — the seat was revoked." }
+  /v1/connect/guest/{code}/share:
+    post:
+      operationId: liveGuestShare
+      security: []
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/50
+      summary: The guest page reports its screen share starting / stopping — one `media.screen` contribution per share. Opening needs `media.screen`.
+      parameters: [{ name: code, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [active], properties: { active: { type: boolean } } }
+      responses:
+        "200": { description: "`{ contribution: Contribution | null }`" }
+        "403": { description: "`grant_required`" }
+        "409": { description: "`guest_not_accepted`" }
+  /v1/connect/audience/{code}:
+    get:
+      operationId: audienceProbe
+      security: []
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/51
+      summary: The room probe a phone reads before it opens a socket (no identity involved).
+      parameters: [{ name: code, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: "`{ open: true, room: { id, title }, full: false, locked: false, name_required: false, server_now }`" }
+        "404": { description: "`room_not_open`" }
+  /v1/connect/audience-signal:
+    get:
+      operationId: audienceSignal
+      security: []
+      x-status: implemented
+      x-issue: https://github.com/Boomin-Ai/producer/issues/51
+      summary: WebSocket upgrade (`?token=`, an AudienceToken) → the room's RoomState Durable Object. Read-only, hibernating; snapshot on connect, then `interaction` frames (state at once, tally deltas ≤ 4 Hz), `pong` with server_now.
+      responses:
+        "101": { description: Switching protocols. }
+        "401": { description: "`invalid_token`" }
+
 components:
   securitySchemes:
     bearer:
@@ -545,6 +949,15 @@ components:
       description: >
         Endpoint access token. Class `primary` or `automation`; see
         info.description for the class rules.
+    audience:
+      type: http
+      scheme: bearer
+      description: >
+        A per-device audience capability token minted at the room-code door
+        (`AudienceToken`, issue 51):
+        HS256 like the signaling tickets, `aud: audience`, `sub: aud_<random>`,
+        no identity in the payload. Authorizes inputs to interactions in ONE
+        room for the life of the show. Never an endpoint token class.
 
   parameters:
     idempotencyKey:
@@ -575,6 +988,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    interactionId:
+      name: interactionId
+      in: path
+      required: true
+      schema: { type: string, pattern: "^ix_[A-Za-z0-9]{12,}$" }
 
   responses:
     Unauthorized:
@@ -599,6 +1017,16 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
+    NotImplemented:
+      description: >
+        The operation is in the contract but this server has not built it yet
+        (`x-status: implemented`). Body carries the contract
+        error envelope AND the flat form: `code: not_implemented`, `issue`
+        = the tracking issue. The route IS mounted and gated — a 401/403 here
+        is the real access answer; only the 501 is temporary.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/NotImplementedResponse" }
 
   schemas:
     LiveRoom:
@@ -620,6 +1048,21 @@ components:
         display_name: { type: string }
         state: { type: string, enum: [waiting, invited, connected, admitted, left] }
         joined_via: { type: string, enum: [invite, room_link] }
+        kind:
+          allOf: [{ $ref: "#/components/schemas/ParticipantKind" }]
+          description: "What credential stands behind the row (issue 46). A self-hosted server emits `visitor` | `producer` only; `member` / `connection` are refused with 422 network_unavailable."
+        producer_ref:
+          type: string
+          nullable: true
+          description: "Another Producer's origin / workspace id, presented at join or invite. Display metadata, never a credential."
+        seat:
+          type: string
+          enum: [guest, control]
+          description: "`control` = a mod seat behind the host's mod link (never on the roster; `GET rooms/{id}/mods`). Present for parity; the roster only ever lists `guest`."
+        grants:
+          type: array
+          items: { $ref: "#/components/schemas/Grant" }
+          description: "The capabilities this participant holds in this room (issue 46); sealed into its ticket at mint, re-read from the row at every exchange and at every signaling CONNECT. Default = the guest bundle (camera, mic, return_feed, vote, text, hand — never screen). A control seat holds the mod bundle and no media."
         render_url: { type: string, nullable: true, description: Only for admitted guests. Stable for the guest's life. }
         guest_brand: { nullable: true, description: Always null on a self-hosted server. }
         avatar_url: { type: string, nullable: true }
@@ -875,3 +1318,135 @@ components:
       required: [error]
       properties:
         error: { $ref: "#/components/schemas/Error" }
+
+    # ── Contribution model (docs/CONTRIBUTIONS.md) — Phase 1 IMPLEMENTED ────────
+
+    ParticipantKind:
+      type: string
+      enum: [visitor, producer, audience, member, connection]
+      description: >
+        How strong the identity behind a participant row is — never what it
+        can do (that is `grants`). `visitor`: the invite/room code is the whole
+        credential. `producer`: another Producer instance entering (display
+        metadata `producer_ref`, never a third trust level). `audience`: a
+        per-device capability token, never media, never a roster row per phone.
+        `member` and `connection` require Boomin identities and are refused by
+        a self-hosted server (`422 network_unavailable`).
+
+    Grant:
+      type: string
+      enum:
+        - media.camera
+        - media.mic
+        - media.screen
+        - media.return_feed
+        - input.vote
+        - input.text
+        - input.hand
+        - room.admit
+        - room.stage
+        - room.order
+        - room.mute
+        - room.remove
+        - room.interactions
+        - room.scene
+      description: >
+        A capability a participant holds in a room. Three families — media,
+        input, control. A role (guest, contestant, audience, mod) is a named
+        bundle the host picks. `media.screen` is the higher grant a guest does
+        not hold by default. The mod link mints `room.admit, room.stage,
+        room.order, room.remove, room.interactions, room.scene` (`room.scene`
+        = cut scenes, founder decision 2026-09-04). `room.end` /
+        `room.settings` are never grants: host only. Nothing here is ever
+        about money.
+
+    ContributionKind:
+      type: string
+      enum: [presence, media.screen, overlay, input, credit]
+
+    Contribution:
+      type: object
+      required: [id, room_id, kind, binding, started_at, source]
+      description: >
+        WHO supplied WHAT to the program, FROM WHEN TO WHEN, WHERE on the set.
+        One shape for presence on stage, a screen, a logo, a vote, a typed
+        line. Intervals are append-only: close by writing `ended_at` once,
+        never edit. The server stamps time; a client never asserts a duration.
+        `UNIQUE (participant_id, kind, started_at)` — retries never fork an
+        interval. Same shape on Boomin; this server never prices one.
+      properties:
+        id: { type: string }
+        room_id: { type: string }
+        run_id: { type: string, nullable: true }
+        participant_id: { type: string, nullable: true, description: A roster guest id; null for host-supplied contributions (an overlay the host shows). }
+        kind: { $ref: "#/components/schemas/ContributionKind" }
+        binding:
+          type: object
+          description: "Where on the set — a STABLE stage id: `{ slot }`, `{ lane }`, `{ corner }`, `{ interaction_id }`."
+        started_at: { type: string, format: date-time, description: "Millisecond precision on the open server (a guest who leaves and returns inside one second never collides on the UNIQUE)." }
+        ended_at: { type: string, format: date-time, nullable: true, description: "null while open; an open interval self-expires against the host heartbeat (closed at last-seen + the presence window by the minute tick). Kind `input` is ONE aggregate row per participant kind per interaction (`binding: { interaction_id, participant_kind }`, `metadata: { count }`), written at close — never a row per phone." }
+        source: { type: string, enum: [host_stage, participant, interaction, host_credit] }
+        metadata: { type: object }
+
+    InteractionType:
+      type: string
+      enum: [vote, choice, text, reaction, hand, cue, share_request, rating, wordcloud]
+      description: v1 opens with `vote`; the rest are payloads on the same object (docs/INTERACTIVE.md §2.2). New game, no migration.
+
+    InteractionState:
+      type: string
+      enum: [draft, open, collecting, revealed, closed, cancelled]
+      description: "`open` = visible, inputs not yet accepted · `collecting` = accepting · `revealed` = results shown per visibility · `closed` = archived, immutable (result persisted; a close from `collecting` counts as the reveal). `revealed` is set by the SERVER — at once for a reveal with no hold, by the RoomState alarm at `reveal_at` otherwise — never named by a client (400)."
+
+    InteractionCreate:
+      type: object
+      required: [type, spec]
+      description: "The envelope from `producer.interaction/v1` (docs/INTERACTIVE.md §2.4), minus server-owned fields. producer-server also accepts the short form Producer sends: `{ type: \"vote\", prompt?, options: [a, b], reveal: on_close|manual|on_timer, input: { who: guest|audience|both, once: true, cooldown_ms } }`; both normalise to the same document. v1 = `vote` with exactly two options."
+      properties:
+        type: { $ref: "#/components/schemas/InteractionType" }
+        spec: { type: object, description: "Per-type body, e.g. `{ prompt, options: [{id,label}] }` for a vote." }
+        input: { type: object, description: "Who may input, how often, as whom: `{ roles, identity, per_identity, rate, moderation, filter }`." }
+        visibility: { type: object, description: "Who sees what, when: `{ running_tally, reveal, reveal_to, inputs }`. The set is a visibility target." }
+        timing: { type: object, description: "`{ collect_ms, reveal_hold_ms, close_after_ms, stream_delay_ms }` — the server stamps `opened_at` / `reveal_at`." }
+        render:
+          type: array
+          items: { type: object, description: "`{ surface: set|host|guest|audience, kind, style?, anchor?, z?, occlude? }`" }
+
+    Interaction:
+      allOf:
+        - { $ref: "#/components/schemas/InteractionCreate" }
+        - type: object
+          required: [id, room_id, state, version]
+          properties:
+            id: { type: string, pattern: "^ix_[A-Za-z0-9]{12,}$" }
+            room_id: { type: string }
+            state: { $ref: "#/components/schemas/InteractionState" }
+            version: { type: integer, minimum: 0, description: Increments on every transition; clients ignore stale. }
+            tally: { type: object, description: Server-computed results — the only thing an audience ever reads back. Projected per role before sending. }
+            server_now: { type: string, format: date-time, description: Every frame carries the server clock; countdowns are `reveal_at - server_now + local_offset`. }
+
+    InteractionInput:
+      type: object
+      required: [value]
+      description: One input. `value` is per type — an option id for vote/choice, text for text/wordcloud, an emoji for reaction, `true`/`false` for hand.
+      properties:
+        value: {}
+        client_input_id: { type: string, maxLength: 64, description: Client-generated; a retry with the same id is counted once. }
+
+    AudienceToken:
+      type: object
+      required: [token, expires_at, room]
+      properties:
+        token: { type: string, description: Bearer for the `audience` security scheme. Stored on the device, replayed on reconnect. }
+        expires_at: { type: string, format: date-time }
+        room: { type: object, properties: { id: { type: string }, title: { type: string, nullable: true } } }
+        display_name: { type: string, nullable: true }
+        signaling_url: { type: string, description: "The phone's read-only socket: `/v1/connect/audience-signal?token=…` (RoomState DO, hibernating)." }
+
+    NotImplementedResponse:
+      type: object
+      required: [error, code, issue]
+      properties:
+        error: { $ref: "#/components/schemas/Error" }
+        code: { type: string, enum: [not_implemented] }
+        issue: { type: string, format: uri, description: The issue that builds this operation. }
