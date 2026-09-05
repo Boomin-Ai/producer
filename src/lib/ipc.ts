@@ -806,8 +806,10 @@ export const overlayBridge = {
 export const guests = {
   roster: (endpointId: string, roomId: string) =>
     invoke<{ guests?: RoomGuest[] }>("room_guests", { endpointId, roomId }),
-  joinLink: (endpointId: string, roomId: string) =>
-    invoke<{ join_url?: string; url?: string }>("room_join_link", { endpointId, roomId }),
+  /** `rotate` mints a fresh code (revoking waiting link guests) — used when
+   * this machine has lost its copy: the server keeps only a hash. */
+  joinLink: (endpointId: string, roomId: string, rotate = false) =>
+    invoke<{ join_url?: string; url?: string }>("room_join_link", { endpointId, roomId, rotate }),
   /** A guest who joined by link waits until the host admits them — the link
    * is public, so nobody reaches the broadcast unreviewed. */
   admit: (endpointId: string, roomId: string, guestId: string) =>

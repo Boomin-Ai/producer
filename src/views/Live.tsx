@@ -77,6 +77,7 @@ import {
 import { homePaintedMs, takeRoomClick } from "../lib/perf";
 import { RoomControlLink, type ControlFrame, type SceneCutFrame } from "../lib/roomControl";
 import { overlayBridge, type Contribution, type Interaction } from "../lib/ipc";
+import { mintJoinLink } from "../lib/roomLink";
 import {
   BOOMIN_ROOM_CHANNELS,
   boominAudienceUrl,
@@ -2991,12 +2992,9 @@ export function LiveView({
         sid = reg.room.id;
         writeCfg({ ...cfgRef.current, server_room_id: sid });
       }
-      const res = await guestsIpc.joinLink(ep.id, sid!);
-      const url = res.join_url ?? res.url ?? null;
-      if (url) {
-        setGuestLink(url);
-        writeCfg({ ...cfgRef.current, guest_link: url });
-      }
+      const url = await mintJoinLink(ep.id, sid!);
+      setGuestLink(url);
+      writeCfg({ ...cfgRef.current, guest_link: url });
       return url;
     } catch (e) {
       setGuestErr(String(e).replace(/^Error:\s*/, ""));
