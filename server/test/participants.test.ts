@@ -14,6 +14,7 @@ import {
   roomAccessFrom,
   roomRoleFrom,
   seatAccessFrom,
+  setEditingAllowed,
   sourceIdsFor,
   wantedSourceIds,
 } from "../guest/src/participants";
@@ -217,5 +218,19 @@ describe("moveInOrder", () => {
     expect(moveInOrder(["a", "b", "c"], "a", -1)).toEqual(["a", "b", "c"]);
     expect(moveInOrder(["a", "b", "c"], "c", 1)).toEqual(["a", "b", "c"]);
     expect(moveInOrder(["a", "b"], "zz", 1)).toEqual(["a", "b"]);
+  });
+});
+
+describe("setEditingAllowed", () => {
+  it("only the host edits the set", () => {
+    expect(setEditingAllowed(roomAccessFrom(null))).toBe(true);
+    expect(setEditingAllowed(roomAccessFrom({ available: true, access: { role: "owner" } } as never))).toBe(true);
+    expect(setEditingAllowed(roomAccessFrom({ available: true, access: { role: "mod" } } as never))).toBe(false);
+    expect(setEditingAllowed(roomAccessFrom({ available: true, access: { role: "manager" } } as never))).toBe(false);
+    expect(setEditingAllowed(roomAccessFrom({ available: true, denied: true } as never))).toBe(false);
+    expect(setEditingAllowed(seatAccessFrom(["room.admit", "room.scene", "room.interactions"]))).toBe(false);
+  });
+  it("a pending access answer is not a host", () => {
+    expect(setEditingAllowed(roomAccessFrom(null), true)).toBe(false);
   });
 });

@@ -377,6 +377,18 @@ export function seatAccessFrom(grants: Iterable<string>): RoomAccessInfo {
   };
 }
 
+/** The banner every refused set edit shows — the same words as the panels. */
+export const SET_IS_HOSTS = "The set is the host's";
+
+/** May this seat edit the SET (sources, filters, transforms, mixer)? Only
+ *  the host's engine is the stage: a mod or manager cuts scenes, runs the
+ *  roster and votes, but never adds or removes what is on the picture.
+ *  While a Boomin access route is still pending we assume NOT — flashing
+ *  host chrome at a mod is worse than a beat of read-only at a host. */
+export function setEditingAllowed(info: Pick<RoomAccessInfo, "role">, pending = false): boolean {
+  return !pending && info.role === "host";
+}
+
 /** What to SAY about a role — one line, the same on every screen. */
 export function roleTitle(info: RoomAccessInfo, host?: string | null): string {
   if (info.via === "seat") return host ? `Mod seat on ${host}` : "Mod seat";
