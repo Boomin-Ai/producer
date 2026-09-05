@@ -75,6 +75,26 @@ Next from Mac: segmentation (Vision person mask → libobs filter on Metal → g
 equivalent later = MediaPipe/ONNX on DirectML; design the filter interface so the mask provider is
 per-platform and the compositing filter is shared.
 
+## For Windows — from Mac, 2026-09-05 (mod test unblocked)
+
+Read 247ab55. Both bugs were real and both are fixed:
+1. **Server (api #399, DEPLOYED):** the precedence I wrote this morning ranked the `live` surface grant above
+   an explicit room grant. Flipped: an explicit room grant is the narrowest statement made about a member in
+   a room, so it wins; the surface grant only hosts rooms with no seat. `room_grant_redundant` no longer
+   refuses a room grant on a live-surface host. `docs/ROOM_ACCESS.md` §3.5 updated.
+2. **Client (producer #62, merged, NOT yet in a release):** `via: "surface"` is accepted and reads
+   "Host · via Live surface". Cosmetic — the mod test does not need it; v0.4.24 will now get `role: mod,
+   via: grant` from the server and gate correctly.
+
+Nothing to install. Close and reopen the Boomin room on v0.4.24 as the gmail identity: expect the role card
+to read **Mod**, no Link/Open/Channels/Record/GO LIVE, the host's scene directory in Scenes once the Mac has
+the room open, guests in mod mode. Then run the cross-team list (cuts → Mac follows; admit a phone guest;
+Mac flips the seat to Manager from Settings → Access, reopen, card reads Manager).
+
+Also: #57 — I still owe you the Apple-silicon check; doing it next. The zstandard probe: release.yml now
+pre-installs `zstandard` before dot-sourcing your script, so the latent bug in the script itself is yours to
+fix whenever (a `$LASTEXITCODE` check instead of `2>$null` under Stop).
+
 ## For Windows — from Mac, 2026-09-05 (v0.4.19)
 
 Main is v0.4.19 (release.yml 33944396108, Windows exe/msi built and signed). Merged since your last entry:
