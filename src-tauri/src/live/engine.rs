@@ -1826,15 +1826,48 @@ pub fn start(
             // The virtual camera runs independently of streaming and
             // recording — all three can be on at once.
             let mut vcam: Option<*mut ffi::obs_output_t> = None;
-            // Studio output (studio.rs) — the studio scene over the room and
-            // the room-only mix the virtual camera uses while it is on.
+            // Studio output (studio.rs) — the studio scene over the room.
             let mut studio_out: Option<studio::Studio> = None;
-            /// Create + start the virtual camera output. While studio is on
-            /// the vcam is the guests' and mods' RETURN FEED, so it gets the
-            /// room-only mix — never the main mix, which is the UI.
-            unsafe fn start_vcam(
-                studio_out: Option<&studio::Studio>,
-            ) -> Result<*mut ffi::obs_output_t, String> {
+            // The room-only mix the virtual camera reads, in BOTH studio modes.
+            // Built once, before the vcam starts, and torn down only when the
+            // vcam is off — so a studio toggle never restarts the vcam output
+            // (studio.rs module docs: that restart was the v0.4.40 crash).
+            let mut room_mix: Option<studio::RoomMix> = None;
+            /// Build the room mix if it does not exist yet, and hand back its
+            /// `video_t`. Engine-thread only.
+            unsafe fn room_mix_video(
+                room_mix: &mut Option<studio::RoomMix>,
+            ) -> Result<*mut ffi::video_t, String> {
+                if room_mix.is_none() {
+                    let room = ffi::obs_get_output_source(0);
+                    let built = studio::RoomMix::build(room);
+                    if !room.is_null() {
+                        ffi::obs_source_release(room);
+                    }
+                    *room_mix = Some(built?);
+                }
+                Ok(room_mix.as_ref().unwrap().video())
+            }
+            /// Stop a virtual camera output and release it SAFELY.
+            ///
+            /// `obs_output_stop` is asynchronous. Releasing immediately after
+            /// it lets `obs_output_destroy` run `obs_output_actual_stop` a
+            /// SECOND time, which re-enters the plugin's stop callback — the
+            /// double `CFRelease` that crashed v0.4.40 on macOS. Drain the
+            /// output first; the plugin-side stop is idempotent as of the
+            /// v0.4.41 engine, this is the belt to that pair of braces.
+            unsafe fn stop_vcam(out: *mut ffi::obs_output_t) {
+                ffi::obs_output_stop(out);
+                let deadline = Instant::now() + Duration::from_secs(5);
+                while ffi::obs_output_active(out) && Instant::now() < deadline {
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                ffi::obs_output_release(out);
+            }
+            /// Create + start the virtual camera output on `mix` — the
+            /// guests' and mods' RETURN FEED, which is always the room scene,
+            /// never the main mix (which is the UI while studio is on).
+            unsafe fn start_vcam(mix: *mut ffi::video_t) -> Result<*mut ffi::obs_output_t, String> {
                 let id = CString::new("virtualcam_output").unwrap();
                 let name = CString::new(graph::VCAM_DEVICE_NAME).unwrap();
                 let out = ffi::obs_output_create(
@@ -1846,9 +1879,7 @@ pub fn start(
                 if out.is_null() {
                     return Err("this engine has no virtual camera output".into());
                 }
-                if let Some(st) = studio_out {
-                    ffi::obs_output_set_media(out, st.room_video(), ffi::obs_get_audio());
-                }
+                ffi::obs_output_set_media(out, mix, ffi::obs_get_audio());
                 if !ffi::obs_output_start(out) {
                     let e = ffi::obs_output_get_last_error(out);
                     // Upstream's text is OBS-branded; it reaches the user as
@@ -2180,15 +2211,21 @@ pub fn start(
                             unsafe {
                                 if !on {
                                     if let Some(o) = vcam.take() {
-                                        ffi::obs_output_stop(o);
-                                        ffi::obs_output_release(o);
+                                        stop_vcam(o);
+                                    }
+                                    // The mix outlives the studio, not the app:
+                                    // with no camera reading it there is nothing
+                                    // to render, so give the mix back.
+                                    if let Some(mut m) = room_mix.take() {
+                                        m.teardown();
                                     }
                                     return Ok(false);
                                 }
                                 if vcam.is_some() {
                                     return Ok(true);
                                 }
-                                vcam = Some(start_vcam(studio_out.as_ref())?);
+                                let mix = room_mix_video(&mut room_mix)?;
+                                vcam = Some(start_vcam(mix)?);
                                 Ok(true)
                             }
                         })();
@@ -2215,22 +2252,14 @@ pub fn start(
                                     st.teardown();
                                 }
                                 if let Some(sp) = spec {
-                                    let room = ffi::obs_get_output_source(0);
-                                    if room.is_null() {
-                                        return Err("the room scene is not on the program".into());
-                                    }
-                                    let built = studio::Studio::build(sp, room);
-                                    ffi::obs_source_release(room);
-                                    studio_out = Some(built?);
+                                    studio_out = Some(studio::Studio::build(sp)?);
                                 }
-                                // The virtual camera's media is fixed at start:
-                                // a running vcam is restarted on the mix the
-                                // new mode wants (room-only while studio is on).
-                                if let Some(o) = vcam.take() {
-                                    ffi::obs_output_stop(o);
-                                    ffi::obs_output_release(o);
-                                    vcam = Some(start_vcam(studio_out.as_ref())?);
-                                }
+                                // The virtual camera is NOT touched here. It
+                                // already reads the room-only mix in both
+                                // modes, so there is nothing to re-point — and
+                                // restarting it is what crashed v0.4.40 on
+                                // macOS and dropped the camera out of Google
+                                // Meet on Windows (studio.rs module docs).
                                 Ok(studio_out.is_some())
                             }
                         })();
@@ -2323,13 +2352,24 @@ pub fn start(
                             });
                         } else {
                             let module = graphics_module(report.graphics_backend.as_deref());
-                            // The studio owns a video mix and canvas-sized
-                            // items: take it down before the reset, rebuild
-                            // after (studio.rs).
+                            // A video reset destroys every mix and every
+                            // canvas-sized item, so the studio scene AND the
+                            // room mix under the virtual camera come down
+                            // first and are rebuilt after (studio.rs). This is
+                            // the one command that may cycle the vcam.
                             let studio_spec = studio_out.take().map(|mut st| {
                                 unsafe { st.teardown() };
                                 st.spec
                             });
+                            let vcam_was_on = vcam.is_some();
+                            unsafe {
+                                if let Some(o) = vcam.take() {
+                                    stop_vcam(o);
+                                }
+                                if let Some(mut m) = room_mix.take() {
+                                    m.teardown();
+                                }
+                            }
                             match reset_video(module, height, fps) {
                                 Ok(()) => {
                                     if let Some(g) = scene.as_mut() {
@@ -2337,15 +2377,23 @@ pub fn start(
                                     }
                                     if let Some(sp) = studio_spec {
                                         unsafe {
-                                            let room = ffi::obs_get_output_source(0);
-                                            if !room.is_null() {
-                                                match studio::Studio::build(sp, room) {
-                                                    Ok(st) => studio_out = Some(st),
-                                                    Err(e) => sink(&LiveEvent::EngineError {
-                                                        message: format!("studio: {e}"),
-                                                    }),
-                                                }
-                                                ffi::obs_source_release(room);
+                                            match studio::Studio::build(sp) {
+                                                Ok(st) => studio_out = Some(st),
+                                                Err(e) => sink(&LiveEvent::EngineError {
+                                                    message: format!("studio: {e}"),
+                                                }),
+                                            }
+                                        }
+                                    }
+                                    if vcam_was_on {
+                                        unsafe {
+                                            match room_mix_video(&mut room_mix)
+                                                .and_then(|mix| start_vcam(mix))
+                                            {
+                                                Ok(o) => vcam = Some(o),
+                                                Err(e) => sink(&LiveEvent::EngineError {
+                                                    message: format!("virtual camera: {e}"),
+                                                }),
                                             }
                                         }
                                     }
@@ -2435,6 +2483,14 @@ pub fn start(
                         }
                     }
                     Ok(Command::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        unsafe {
+                            if let Some(o) = vcam.take() {
+                                stop_vcam(o);
+                            }
+                            if let Some(mut m) = room_mix.take() {
+                                m.teardown();
+                            }
+                        }
                         if let Some(mut st) = studio_out.take() {
                             unsafe { st.teardown() };
                         }
