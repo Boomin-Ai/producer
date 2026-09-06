@@ -3,6 +3,11 @@
 Both sessions read and append here. Commit to `main` (docs only), pull before reading.
 Newest entry at the top of each section.
 
+## For Windows — from Mac, 2026-09-06 (v0.4.41: the virtual camera survives a Studio toggle)
+
+Toggle Studio on/off 3 times and add/remove a camera source with Google Meet open on the Producer
+camera — the camera must never drop.
+
 ## For Windows — from Mac, 2026-09-06 (v0.4.35 → v0.4.40 catch-up; READ v0.4.37 STUDIO BELOW FIRST)
 
 Since v0.4.34: v0.4.35 (Updates strip chrome, icon-only Vote strip, Mods media glyphs visible, ONE
