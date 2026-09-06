@@ -101,6 +101,122 @@ open(p, "w").write(s)
 print("gate patched")
 PYPATCH
 
+# Harden the stop path (v0.4.41).
+#
+# THE v0.4.40 CRASH. `obs_output_stop()` is asynchronous, so a release right
+# after it lets `obs_output_destroy()` run `obs_output_actual_stop()` a SECOND
+# time. Upstream's stop then CFReleases `formatDescription` and the pixel-buffer
+# pool unconditionally — a double release, which trips the pointer-auth check in
+# `CF_IS_OBJC` and kills the "live-engine" thread. The same unguarded release
+# also fires when start bailed out before those objects existed.
+#
+# So: a `running` latch makes stop a no-op the second time, and every release is
+# null-checked and NULLs what it released. The host stopped restarting the vcam
+# on a studio toggle in the same release (src-tauri/src/live/studio.rs); this is
+# the other half — the plugin must survive a double stop from ANY caller.
+python3 - "$WORK/plugin-main.mm" <<'PYSTOP'
+import sys
+
+p = sys.argv[1]
+s = open(p).read()
+
+# A latch in the (bzalloc'd, so zero-initialised) output state.
+old_field = "    CVPixelBufferPoolRef pool;\n"
+assert old_field in s, "virtualcam_data.pool moved upstream"
+s = s.replace(old_field, old_field + "    bool running;\n", 1)
+
+# Set it last, once start has fully succeeded.
+old_ok = """    if (!obs_output_begin_data_capture(vcam->output, 0)) {
+        return false;
+    }
+
+    return true;
+}"""
+assert old_ok in s, "virtualcam_output_start tail moved upstream"
+s = s.replace(old_ok, """    if (!obs_output_begin_data_capture(vcam->output, 0)) {
+        return false;
+    }
+
+    vcam->running = true;
+    return true;
+}""", 1)
+
+old_stop = """static void virtualcam_output_stop(void *data, uint64_t ts)
+{
+    UNUSED_PARAMETER(ts);
+
+    struct virtualcam_data *vcam = (struct virtualcam_data *) data;
+
+    obs_output_end_data_capture(vcam->output);
+    if (cmio_extension_supported()) {
+        CMIODeviceStopStream(vcam->deviceID, vcam->streamID);
+        CFRelease(vcam->formatDescription);
+    } else {
+        [vcam->machServer stop];
+    }
+    CVPixelBufferPoolRelease(vcam->pool);
+}"""
+assert old_stop in s, "virtualcam_output_stop moved upstream"
+s = s.replace(old_stop, """static void virtualcam_output_stop(void *data, uint64_t ts)
+{
+    UNUSED_PARAMETER(ts);
+
+    struct virtualcam_data *vcam = (struct virtualcam_data *) data;
+
+    // Producer: idempotent. obs_output_stop() is asynchronous, so
+    // obs_output_destroy() can reach this a second time; upstream double-
+    // released formatDescription and the pool (pointer-auth trap). A stop
+    // after a FAILED start released objects that were never created.
+    if (!vcam->running)
+        return;
+    vcam->running = false;
+
+    obs_output_end_data_capture(vcam->output);
+
+    if (cmio_extension_supported()) {
+        if (vcam->deviceID) {
+            CMIODeviceStopStream(vcam->deviceID, vcam->streamID);
+            vcam->deviceID = 0;
+            vcam->streamID = 0;
+        }
+        if (vcam->formatDescription) {
+            CFRelease(vcam->formatDescription);
+            vcam->formatDescription = NULL;
+        }
+    } else {
+        [vcam->machServer stop];
+    }
+
+    if (vcam->pool) {
+        CVPixelBufferPoolRelease(vcam->pool);
+        vcam->pool = NULL;
+    }
+}""", 1)
+
+# destroy must not release what stop already released; upstream's only drops
+# ObjC references, so all it needs is the latch cleared.
+old_destroy = """    if (cmio_extension_supported()) {
+        vcam->extensionDelegate = nil;
+    } else {
+        vcam->machServer = nil;
+    }
+
+    bfree(vcam);"""
+assert old_destroy in s, "virtualcam_output_destroy moved upstream"
+s = s.replace(old_destroy, """    vcam->running = false;
+
+    if (cmio_extension_supported()) {
+        vcam->extensionDelegate = nil;
+    } else {
+        vcam->machServer = nil;
+    }
+
+    bfree(vcam);""", 1)
+
+open(p, "w").write(s)
+print("stop path hardened")
+PYSTOP
+
 # Rebrand the rendezvous identifiers. Fail loudly if upstream renames them.
 grep -q 'com.obsproject.obs-studio.mac-camera-extension' "$WORK/plugin-main.mm" \
   || { echo "FATAL: extension id string moved upstream" >&2; exit 1; }
