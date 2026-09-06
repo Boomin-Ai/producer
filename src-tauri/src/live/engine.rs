@@ -2477,6 +2477,28 @@ pub fn start(
                         let _ = rects;
                     }
                     Ok(Command::DetachPreview) => {
+                        // Leaving the room takes the host's stage with it, and
+                        // the virtual camera and the studio are room-scoped
+                        // outputs. Left running they keep publishing the last
+                        // frame the room ever produced -- and the studio keeps
+                        // capturing our OWN window, which is the nested-Producer
+                        // picture people report as "the output is stuck". Only
+                        // Shutdown used to stop them, so the outputs outlived
+                        // every room but the last. Same order Shutdown uses: the
+                        // vcam first, because studio teardown requires it to be
+                        // stopped already (studio.rs) and re-entering a live
+                        // output's stop callback is what crashed mac-virtualcam.
+                        unsafe {
+                            if let Some(o) = vcam.take() {
+                                stop_vcam(o);
+                            }
+                            if let Some(mut m) = room_mix.take() {
+                                m.teardown();
+                            }
+                        }
+                        if let Some(mut st) = studio_out.take() {
+                            unsafe { st.teardown() };
+                        }
                         if let Some(p) = preview.take() {
                             p.detach();
                             snap.lock().unwrap().preview_attached = false;
