@@ -163,22 +163,47 @@ export function Walkthrough({
   const copy = WALK_COPY[step];
 
   // ── The welcome: an entire-room overlay, the one blocking moment ───────
+  // This is the first thing anyone sees inside Producer, so it is allowed to
+  // be a moment. Two stage lights sweep behind it, the room's own name is in
+  // the headline, and the five things they are about to do are on screen
+  // before they start — a walkthrough you can see the end of is one people
+  // finish. Everything animates in on a stagger; all of it stops dead under
+  // prefers-reduced-motion.
   if (step === "welcome") {
     return (
-      <div className="walk-veil" role="dialog" aria-modal="true" aria-label="Welcome to your Producer room">
+      <div className="walk-veil" role="dialog" aria-modal="true" aria-label="Welcome to your Room, Producer">
+        <div className="walk-lights" aria-hidden="true">
+          <span className="walk-beam walk-beam-a" />
+          <span className="walk-beam walk-beam-b" />
+          <span className="walk-glow" />
+        </div>
         <div className="walk-hero">
-          <span className="walk-kicker">Producer</span>
-          <h1 className="walk-title">{copy.title}</h1>
+          <span className="walk-kicker">
+            <span className="walk-kicker-dot" />
+            New room
+          </span>
+          <h1 className="walk-title">
+            Welcome to your Room,{" "}
+            <span className="walk-title-you">Producer</span>
+          </h1>
           <p className="walk-body">{copy.body}</p>
+          <ul className="walk-steps" aria-label="What you'll do">
+            {["A scene", "A source", "Guests", "Audio", "Going live"].map((label, i) => (
+              <li key={label} className="walk-chip" style={{ animationDelay: `${240 + i * 70}ms` }}>
+                <span className="walk-chip-n">{i + 1}</span>
+                {label}
+              </li>
+            ))}
+          </ul>
           <div className="walk-hero-acts">
-            <button className="walk-begin" onClick={() => setStep("edit")}>
+            <button className="walk-begin walk-begin-lg" onClick={() => setStep("edit")}>
               Begin
             </button>
             <button className="walk-skip" onClick={() => onClose("skip")}>
               Skip
             </button>
           </div>
-          <p className="walk-foot">You can turn this back on any time in Settings → App.</p>
+          <p className="walk-foot">Takes about a minute. Turn it back on any time in Settings → App.</p>
         </div>
       </div>
     );
