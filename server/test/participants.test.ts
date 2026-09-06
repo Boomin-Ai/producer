@@ -147,7 +147,7 @@ describe("source ids", () => {
     expect(isMediaSeat(monitorMap)).toBe(false);
     expect(isMediaSeat(monitorWithMedia)).toBe(true);
     // A guest with media is not a seat: the flag is what makes a monitor.
-    expect(isMediaSeat({ id: "q", grants: ["media.camera"] })).toBe(false);
+    expect(isMediaSeat({ grants: ["media.camera"] })).toBe(false);
   });
   it("a seat's name and source label drop the ' · monitor' suffix; the user id rides producer_ref", () => {
     const row = { display_name: "Jamie · monitor", producer_ref: "monitor:u-42" };
