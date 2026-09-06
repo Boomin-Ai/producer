@@ -11,6 +11,7 @@ account button = the rail avatar), v0.4.36 (one notice area in the top bar betwe
 v0.4.37 (STUDIO OUTPUT — the entry below is yours to verify on Windows: own-window capture by
 title, no mirror), v0.4.38 (empty docks vanish entirely; the last notice persists dimmed until
 hovered; the four-square dock picker is one button with a hover switch animation).
+v0.4.40 (#79): placement button is STATIC (glyph = where the panel is, click = glass menu top/right/bottom/left/hidden — no hover cycling); per-dock "+" is back in edit mode (empty docks = slim dashed edge with the "+"); the TOP dock now draws the mint insertion line on drag — verify all three on Windows.
 v0.4.39 (#78): seat sheet fixed — role list opens ABOVE the sheet, title → Member → Role → [hint · Seat], empty state = note + "Open Access"; the dimmed notice pill EXPANDS natively on hover (120 ms max-width, no tooltip) — verify both on Windows too.
 Verify on v0.4.38: (1) the v0.4.37 studio list below; (2) a new room opens blank and camera /
 screen / mic are added from Add a source (dshow / monitor_capture / wasapi); (3) an OLD room
