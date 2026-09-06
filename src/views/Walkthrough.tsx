@@ -163,47 +163,44 @@ export function Walkthrough({
   const copy = WALK_COPY[step];
 
   // ── The welcome: an entire-room overlay, the one blocking moment ───────
-  // This is the first thing anyone sees inside Producer, so it is allowed to
-  // be a moment. Two stage lights sweep behind it, the room's own name is in
-  // the headline, and the five things they are about to do are on screen
-  // before they start — a walkthrough you can see the end of is one people
-  // finish. Everything animates in on a stagger; all of it stops dead under
-  // prefers-reduced-motion.
+  // Built out of the ROOM'S OWN parts, not a landing page dropped on top of
+  // it: a panel at --r-card with a hairline, an 11px/0.16em group label in
+  // its head, and rows at 10px the way every list in the room is drawn. The
+  // first cut was pill buttons and a gradient headline — generic, and nothing
+  // else in Producer looks like that.
   if (step === "welcome") {
     return (
       <div className="walk-veil" role="dialog" aria-modal="true" aria-label="Welcome to your Room, Producer">
-        <div className="walk-lights" aria-hidden="true">
-          <span className="walk-beam walk-beam-a" />
-          <span className="walk-beam walk-beam-b" />
-          <span className="walk-glow" />
-        </div>
-        <div className="walk-hero">
-          <span className="walk-kicker">
-            <span className="walk-kicker-dot" />
-            New room
-          </span>
-          <h1 className="walk-title">
-            Welcome to your Room,{" "}
-            <span className="walk-title-you">Producer</span>
-          </h1>
-          <p className="walk-body">{copy.body}</p>
-          <ul className="walk-steps" aria-label="What you'll do">
-            {["A scene", "A source", "Guests", "Audio", "Going live"].map((label, i) => (
-              <li key={label} className="walk-chip" style={{ animationDelay: `${240 + i * 70}ms` }}>
-                <span className="walk-chip-n">{i + 1}</span>
-                {label}
-              </li>
-            ))}
-          </ul>
-          <div className="walk-hero-acts">
-            <button className="walk-begin walk-begin-lg" onClick={() => setStep("edit")}>
-              Begin
-            </button>
-            <button className="walk-skip" onClick={() => onClose("skip")}>
-              Skip
-            </button>
+        <div className="walk-panel">
+          <div className="walk-panel-head">
+            <span className="walk-live-dot" />
+            <span className="rm-group-label">NEW ROOM</span>
           </div>
-          <p className="walk-foot">Takes about a minute. Turn it back on any time in Settings → App.</p>
+          <div className="walk-panel-body">
+            <h1 className="walk-title">
+              Welcome to your Room, <span className="walk-title-you">Producer</span>
+            </h1>
+            <p className="walk-body">{copy.body}</p>
+            <ul className="walk-steps" aria-label="What you'll do">
+              {["A scene", "A source", "Guests", "Audio", "Going live"].map((label, i) => (
+                <li key={label} className="walk-step-row" style={{ animationDelay: `${200 + i * 60}ms` }}>
+                  <span className="walk-step-n">{i + 1}</span>
+                  <span className="walk-step-label">{label}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="walk-panel-foot">
+            <span className="walk-foot">About a minute. Settings → App turns it back on.</span>
+            <div className="walk-hero-acts">
+              <button className="walk-skip" onClick={() => onClose("skip")}>
+                Skip
+              </button>
+              <button className="walk-begin" onClick={() => setStep("edit")}>
+                Begin
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );

@@ -10730,134 +10730,125 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   pointer-events: none;
 }
 
-/* ── The welcome, dressed ─────────────────────────────────────────────────
-   The first thing anyone sees inside Producer. Two stage lights sweep behind
-   it, the five things they're about to do are on screen before they start,
-   and everything arrives on a stagger. Every animation here is decoration —
-   the reduced-motion block at the bottom removes all of it and the screen
-   still reads correctly. */
-.walk-lights { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.walk-beam {
-  position: absolute;
-  top: -40%;
-  width: 42vmax;
-  height: 180vmax;
-  transform-origin: 50% 0;
-  filter: blur(46px);
-  opacity: 0.5;
+/* ── The welcome ──────────────────────────────────────────────────────────
+   Made of the room's own parts. A panel at --r-card with a hairline and an
+   11px/0.16em group label in its head; rows at 10px like every list in the
+   room; controls at --r-ctl. No pills and no gradient text — nothing else in
+   Producer has either, and a welcome screen that does not look like the app
+   is just an advert for it. */
+.walk-panel {
+  position: relative;
+  z-index: 1;
+  width: min(560px, 100%);
+  text-align: left;
+  background: var(--surface-1);
+  border: 0.5px solid var(--line-2);
+  border-radius: var(--r-card);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+  animation: walk-rise 0.42s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
-/* Cool blue from the left, brand mint from the right — the two colours the
-   room already uses, thrown as light rather than painted as panels. */
-.walk-beam-a {
-  left: 6%;
-  background: linear-gradient(to bottom, oklch(0.62 0.19 255 / 0.5), transparent 62%);
-  animation: walk-sway-a 13s ease-in-out infinite alternate;
-}
-.walk-beam-b {
-  right: 4%;
-  background: linear-gradient(to bottom, oklch(0.78 0.16 165 / 0.42), transparent 60%);
-  animation: walk-sway-b 16s ease-in-out infinite alternate;
-}
-@keyframes walk-sway-a {
-  from { transform: rotate(-19deg); }
-  to { transform: rotate(9deg); }
-}
-@keyframes walk-sway-b {
-  from { transform: rotate(17deg); }
-  to { transform: rotate(-8deg); }
-}
-/* A soft floor pool so the beams look like they land on something. */
-.walk-glow {
-  position: absolute;
-  left: 50%;
-  bottom: -34%;
-  width: 92vmax;
-  height: 62vmax;
-  transform: translateX(-50%);
-  background: radial-gradient(ellipse at center, oklch(0.7 0.13 220 / 0.2), transparent 66%);
-  filter: blur(30px);
-}
-.walk-hero { position: relative; z-index: 1; }
-.walk-hero > * { animation: walk-rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
-.walk-hero > *:nth-child(1) { animation-delay: 40ms; }
-.walk-hero > *:nth-child(2) { animation-delay: 110ms; }
-.walk-hero > *:nth-child(3) { animation-delay: 180ms; }
-.walk-hero > *:nth-child(4) { animation-delay: 240ms; }
-.walk-hero > *:nth-child(5) { animation-delay: 560ms; }
-.walk-hero > *:nth-child(6) { animation-delay: 640ms; }
 @keyframes walk-rise {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: none; }
 }
-.walk-kicker { display: inline-flex; align-items: center; gap: 7px; }
-.walk-kicker-dot {
+.walk-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 12px var(--pad-card) 0;
+}
+.walk-live-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--mint);
-  box-shadow: 0 0 0 0 oklch(0.78 0.16 165 / 0.55);
-  animation: walk-live 2.2s ease-out infinite;
+  animation: walk-live 2.4s ease-out infinite;
 }
 @keyframes walk-live {
   0% { box-shadow: 0 0 0 0 oklch(0.78 0.16 165 / 0.5); }
-  70%, 100% { box-shadow: 0 0 0 9px oklch(0.78 0.16 165 / 0); }
+  70%, 100% { box-shadow: 0 0 0 8px oklch(0.78 0.16 165 / 0); }
 }
-.walk-title { font-size: clamp(28px, 4.4vw, 42px); }
-/* "Producer" is the READER, not the app — the greeting calls them by the job
-   they just took. Worth its own colour. */
-.walk-title-you {
-  background: linear-gradient(96deg, oklch(0.86 0.14 165), oklch(0.78 0.15 205));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  white-space: nowrap;
-}
-/* The whole journey, before they take a single step. */
-.walk-steps {
-  list-style: none;
-  margin: 4px 0 2px;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 7px;
-}
-.walk-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 12px 6px 6px;
-  border-radius: 999px;
-  border: 1px solid var(--line-2);
-  background: oklch(1 0 0 / 0.05);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--fg-2);
-  animation: walk-rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
-}
-.walk-chip-n {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: oklch(1 0 0 / 0.1);
-  font-size: 10.5px;
+.walk-panel-body { padding: 10px var(--pad-card) 14px; }
+.walk-title {
+  margin: 0 0 8px;
+  font-size: 26px;
+  line-height: 1.18;
+  letter-spacing: -0.02em;
   font-weight: 700;
   color: var(--fg-1);
 }
-.walk-begin-lg {
-  height: 42px;
-  padding: 0 30px;
-  font-size: 14px;
-  box-shadow: 0 8px 26px oklch(0.78 0.16 165 / 0.3);
-  transition: transform 0.14s ease, box-shadow 0.14s ease, filter 0.14s ease;
-}
-.walk-begin-lg:hover { transform: translateY(-1px); box-shadow: 0 12px 32px oklch(0.78 0.16 165 / 0.4); }
-.walk-begin-lg:active { transform: translateY(0); }
-.walk-skip { height: 42px; }
+/* The reader, not the app. One flat accent — the same mint the room uses for
+   anything that is ON. */
+.walk-title-you { color: var(--mint); }
+.walk-body { margin: 0 0 14px; font-size: 13.5px; line-height: 1.55; color: var(--fg-2); max-width: 46ch; }
 
+/* The whole journey up front, drawn as room rows. */
+.walk-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.walk-step-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: oklch(0.175 0.036 250);
+  border: 1px solid oklch(0.24 0.04 250);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+  animation: walk-rise 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.walk-step-n {
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 5px;
+  background: oklch(1 0 0 / 0.08);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-1);
+}
+.walk-panel-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px var(--pad-card);
+  border-top: 0.5px solid var(--line-1);
+}
+.walk-foot { margin: 0; font-size: 11.5px; color: var(--fg-3); min-width: 0; }
+.walk-hero-acts { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.walk-begin {
+  height: 32px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: var(--mint);
+  color: #06251b;
+  font-size: 12.5px;
+  font-weight: 680;
+  cursor: pointer;
+}
+.walk-begin:hover { filter: brightness(1.06); }
+.walk-begin:disabled { opacity: 0.5; cursor: default; filter: none; }
+.walk-skip {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--r-ctl);
+  border: 1px solid var(--line-2);
+  background: transparent;
+  color: var(--fg-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.walk-skip:hover { background: oklch(1 0 0 / 0.06); color: var(--fg-1); }
+
+@media (max-width: 560px) {
+  .walk-panel-foot { flex-direction: column; align-items: stretch; }
+  .walk-hero-acts { justify-content: flex-end; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .walk-beam, .walk-kicker-dot, .walk-hero > *, .walk-chip { animation: none; }
-  .walk-begin-lg { transition: none; }
+  .walk-panel, .walk-step-row, .walk-live-dot { animation: none; }
 }
