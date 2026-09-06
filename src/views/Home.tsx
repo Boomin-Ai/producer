@@ -8,6 +8,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ConsoleHost } from "./Console";
 import { AccountSheet } from "./AccountSheet";
+import { BugSheet } from "./BugSheet";
 import { AccessPanel } from "./Access";
 import { fetchMe, myRoomAccess } from "../lib/access";
 import { roleTitle, type RoomAccessInfo } from "../lib/participants";
@@ -898,6 +899,10 @@ function SettingsPanel({
   const [appVersion, setAppVersion] = useState<string | null>(null);
   type RepoRelease = { tag_name: string; name: string | null; body: string | null; published_at: string; html_url: string };
   const [appTab, setAppTab] = useState<"general" | "shortcuts">("general");
+  // Home has no status bar, so the Live footer's "Report a bug" gets its
+  // counterpart here — next to the version, which is where someone about to
+  // report something has already gone looking.
+  const [bugOpen, setBugOpen] = useState(false);
   const [wsId, setWsId] = useState<string | null>(() => activeEndpointId() ?? endpoints[0]?.id ?? null);
   useEffect(() => {
     const sync = () => setWsId(activeEndpointId() ?? endpoints[0]?.id ?? null);
@@ -1041,6 +1046,15 @@ function SettingsPanel({
           {releases === "err" && <div className="cr-sheet-row-sub">The update stream goes live when the repo does.</div>}
         </div>
 
+        <div className="cr-label set-gap">HELP</div>
+        <div className="set-list">
+          <div className="cr-sheet-row">
+            <span className="cr-sheet-row-name">Report a bug</span>
+            <span className="cr-sheet-row-sub">goes straight to the people who build Producer</span>
+            <button className="cr-ghost" onClick={() => setBugOpen(true)}>Report…</button>
+          </div>
+        </div>
+
         <div className="cr-label set-gap">DEV</div>
         <div className="set-list">
           <div className="cr-sheet-row">
@@ -1104,6 +1118,7 @@ function SettingsPanel({
           </>
         )}
         {section === "access" && <AccessPanel endpoint={current} />}
+        <BugSheet open={bugOpen} onClose={() => setBugOpen(false)} version={appVersion} />
         {!meta.built && (
           <div className="set-soon">
             {section === "output" && "Encoder override, rate control, keyframe interval, bitrate policy, recording format and folder, audio bitrate. Today these are fixed constants in the engine."}

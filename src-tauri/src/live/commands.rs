@@ -366,6 +366,84 @@ pub async fn ui_log(app: tauri::AppHandle, line: String) -> EngineResult<()> {
     Ok(())
 }
 
+/// What a bug report needs from the host: the tail of the webview's debug log,
+/// plus the OS and CPU architecture.
+///
+/// `ui_log`'s write side has existed since the monitor leg; this is the read
+/// side, and it exists because a bug report without the last few seconds of log
+/// is a bug report someone has to reply to before they can start.
+///
+/// OS and arch ride along because the webview cannot tell the truth about them:
+/// WKWebView's user agent says "Intel Mac OS X" on every Mac, Apple Silicon
+/// included, and arch is the single most useful triage field for a desktop app
+/// that ships separate arm64 and x64 builds. `std::env::consts` is decided at
+/// compile time and cannot be wrong. (This is also why no `@tauri-apps/plugin-os`
+/// dependency is added — the frontend still falls back to `navigator` when this
+/// command is missing, e.g. an engine-less build.)
+///
+/// The log read takes the LAST `max_bytes` (capped at 64 KB — the API takes
+/// 8 KB after redaction, and the client trims) and drops a leading partial line
+/// so the tail always starts at a line boundary. A missing log is an empty
+/// string, not an error: a fresh install has never written one, and that must
+/// not be the thing that stops a report.
+///
+/// Pure std::fs — no FFI, so no shim.m / shim_win.c parity entry is required.
+#[derive(serde::Serialize)]
+pub struct UiDiagnostics {
+    pub log: String,
+    pub os: String,
+    pub arch: String,
+}
+
+#[tauri::command]
+pub async fn ui_diagnostics(
+    app: tauri::AppHandle,
+    max_bytes: Option<u64>,
+) -> EngineResult<UiDiagnostics> {
+    let log = ui_log_tail(app, max_bytes).await?;
+    Ok(UiDiagnostics {
+        log,
+        os: std::env::consts::OS.to_string(),
+        arch: std::env::consts::ARCH.to_string(),
+    })
+}
+
+async fn ui_log_tail(app: tauri::AppHandle, max_bytes: Option<u64>) -> EngineResult<String> {
+    use std::io::{Read as _, Seek as _, SeekFrom};
+    use tauri::Manager as _;
+    let cap = max_bytes.unwrap_or(16 * 1024).min(64 * 1024);
+    let dir = app
+        .path()
+        .app_log_dir()
+        .map_err(|e| EngineError::Other(e.to_string()))?;
+    let path = dir.join("producer-ui.log");
+    let Ok(mut f) = std::fs::File::open(&path) else {
+        return Ok(String::new());
+    };
+    let len = f.metadata().map(|m| m.len()).unwrap_or(0);
+    let from = len.saturating_sub(cap);
+    if f.seek(SeekFrom::Start(from)).is_err() {
+        return Ok(String::new());
+    }
+    let mut buf = Vec::with_capacity(cap as usize);
+    if f.read_to_end(&mut buf).is_err() {
+        return Ok(String::new());
+    }
+    // Lossy on purpose: a truncated multi-byte character at the seek point must
+    // not cost the whole tail.
+    let text = String::from_utf8_lossy(&buf).into_owned();
+    // Started mid-line? Drop the fragment so the first line is a whole one.
+    let trimmed = if from > 0 {
+        match text.find('\n') {
+            Some(i) => text[i + 1..].to_string(),
+            None => text,
+        }
+    } else {
+        text
+    };
+    Ok(trimmed)
+}
+
 #[tauri::command]
 pub async fn live_set_thumb_rate(state: State<'_, AppState>, fps: u32) -> EngineResult<()> {
     state.live.set_thumb_rate(fps);

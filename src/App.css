@@ -9324,6 +9324,46 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .acc-confirm-err { font-size: 11px; color: #f5a3a3; }
 .acc-confirm-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 10px 8px 4px; }
 
+/* ── "Report a bug": the account sheet's glass, centred like acc-confirm.
+   A form, so it is a touch wider and its own controls are plain. ─────── */
+.acct-sheet.bug-sheet { left: 50%; top: 56px; width: min(520px, 94vw); transform: translate(-50%, -6px); }
+.acct-sheet.bug-sheet.open { transform: translate(-50%, 0); }
+.bug-lede { padding: 0 8px 10px; line-height: 1.5; }
+.bug-text {
+  width: 100%; min-height: 116px; resize: vertical; margin: 0 0 10px;
+  padding: 9px 10px; border-radius: 10px; border: 0.5px solid oklch(1 0 0 / 0.12);
+  background: oklch(0 0 0 / 0.22); color: var(--fg-1);
+  font: inherit; font-size: 12.5px; line-height: 1.55;
+}
+.bug-text::placeholder, .bug-contact::placeholder { color: var(--fg-3); }
+.bug-text:focus, .bug-contact:focus { outline: none; border-color: oklch(1 0 0 / 0.3); }
+.bug-check { display: flex; align-items: center; gap: 8px; padding: 2px 2px 8px; font-size: 12.5px; color: var(--fg-2); cursor: pointer; }
+.bug-check input { accent-color: var(--fg-2); margin: 0; }
+.bug-what { margin-left: auto; font-size: 11.5px; }
+.bug-what:disabled { opacity: 0.4; cursor: default; }
+.bug-preview {
+  max-height: 190px; overflow: auto; margin: 0 0 10px;
+  padding: 8px 10px; border-radius: 10px; border: 0.5px solid oklch(1 0 0 / 0.08);
+  background: oklch(0 0 0 / 0.28); color: var(--fg-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 1.5;
+  white-space: pre-wrap; word-break: break-word;
+}
+.bug-contact {
+  width: 100%; padding: 8px 10px; border-radius: 10px;
+  border: 0.5px solid oklch(1 0 0 / 0.12); background: oklch(0 0 0 / 0.22);
+  color: var(--fg-1); font: inherit; font-size: 12.5px;
+}
+.bug-failed { display: flex; flex-direction: column; gap: 4px; padding: 10px 2px 0; }
+.bug-failed-actions { display: flex; gap: 8px; padding-top: 6px; }
+
+/* The footer's quiet affordance: reads as label text until hovered. */
+.rm-foot-bug {
+  border: 0; background: none; padding: 0; font: inherit; font-size: 11px;
+  color: var(--fg-3); cursor: pointer; opacity: 0.75;
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+.rm-foot-bug:hover { color: var(--fg-1); opacity: 1; }
+
 /* ── v0.4.30: honest staging, Link ▾, read-only chat channels ──────────── */
 .rm-gcard.pending { border-color: oklch(0.75 0.12 80 / 0.55); }
 .rm-guest-stage.pending {

@@ -705,6 +705,14 @@ export const uiLog = (line: string): void => {
   invoke("ui_log", { line }).catch(() => {});
 };
 
+/** What a bug report needs from the host: the tail of that same log, plus the
+ * OS and CPU arch. Arch comes from Rust because WKWebView's user agent says
+ * "Intel Mac OS X" on every Mac — see the command's doc comment. A build
+ * without the command (or a missing log) is not an error: the caller falls
+ * back to `navigator` and sends no log. */
+export const uiDiagnostics = (maxBytes = 16384) =>
+  invoke<{ log: string; os: string; arch: string }>("ui_diagnostics", { maxBytes });
+
 /** Mount timings → <app data>/live/room-open-report.json, the ruler every
  * room-open speedup is measured against. */
 export const roomOpenReport = (report: Record<string, unknown>) =>

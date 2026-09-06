@@ -46,6 +46,7 @@ import {
 } from "../lib/filters";
 import { DEMO_CHAT, DEMO_VIDEO_URL, demoOn, type DemoPlatform } from "../lib/demo";
 import { activeEndpointId, isBoomin, resolveActiveEndpoint } from "../lib/workspace";
+import { BugSheet } from "./BugSheet";
 import { dismissKey, notify, notifyError } from "../lib/notices";
 import { NoticeHost } from "../components/Notice";
 import { PlacementButton } from "../components/PlacementButton";
@@ -2743,6 +2744,9 @@ export function LiveView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docApplied]);
   const [appVersion, setAppVersion] = useState<string | null>(null);
+  /** The footer's "Report a bug" sheet (v0.4.43). Lives here so the room's
+   * scene and source counts can ride along in the diagnostics. */
+  const [bugOpen, setBugOpen] = useState(false);
   type RepoRelease = { tag_name: string; name: string | null; body: string | null; published_at: string; html_url: string };
   const [releases, setReleases] = useState<RepoRelease[] | null | "err">(null);
   useEffect(() => {
@@ -8346,7 +8350,14 @@ export function LiveView({
         </div>
       )}
       <footer className="rm-foot">
-        <span className="rm-foot-item">Producer v{appVersion ?? "…"}</span>
+        <span className="rm-foot-item">
+          Producer v{appVersion ?? "…"}
+          {/* Quiet by design: it sits beside the version, reads as label text
+              until hovered, and never competes with the stream state. */}
+          <button className="rm-foot-bug" onClick={() => setBugOpen(true)} title="Tell us what went wrong — it goes straight to the people who build Producer">
+            Report a bug
+          </button>
+        </span>
         {mountMs != null && (
           <span className="rm-foot-item dim-inline" title="Room open → stage ready (engine boot phases in the console)">
             opened in {(mountMs / 1000).toFixed(2)}s
@@ -8381,6 +8392,15 @@ export function LiveView({
           {[snapshot?.graphics_backend, encoderLabel(snapshot?.video_encoder)].filter(Boolean).join(" · ")}
         </span>
       </footer>
+      <BugSheet
+        open={bugOpen}
+        onClose={() => setBugOpen(false)}
+        version={appVersion}
+        engine={snapshot?.graphics_backend}
+        encoder={encoderLabel(snapshot?.video_encoder) || null}
+        scenes={scenes.length}
+        sources={sources.items?.length ?? 0}
+      />
     </div>
   );
 }
