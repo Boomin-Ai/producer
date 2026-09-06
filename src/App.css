@@ -6680,6 +6680,14 @@ textarea::placeholder {
   gap: 8px;
   border-bottom: 0.5px solid var(--line-1);
   background: transparent;
+  /* The header OWNS its own layer. Everything that hangs out of the 48px bar
+     — the role card's capability chips, a channel key, any hover popout —
+     dropped BEHIND the docks, because the header had no stacking position and
+     the body paints after it. 50 clears the docks (which set none) and stays
+     under the sheets at 60/61, the portals at 130 and the veil at 200, so a
+     sheet still covers the header the way it always did. */
+  position: relative;
+  z-index: 50;
 }
 .rm-top-right {
   display: flex;
@@ -9198,7 +9206,7 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
  * hover-revealed (the title attribute carries them too) at every width. */
 .rm-top-left .role-card.compact .role-card-chips { display: none; }
 .rm-top-left .role-card.compact:hover .role-card-chips {
-  display: flex; position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
+  display: flex; position: absolute; top: calc(100% + 6px); left: 0; z-index: 12;
   padding: 8px 10px; border-radius: var(--r-card); border: 1px solid var(--line-1);
   background: var(--bg); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); flex-wrap: wrap; max-width: 420px;
 }
