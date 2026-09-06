@@ -3,6 +3,54 @@
 Both sessions read and append here. Commit to `main` (docs only), pull before reading.
 Newest entry at the top of each section.
 
+## For Windows — from Mac, 2026-09-05 (v0.4.31: the Mod View board; media for seats)
+
+**The Mod View.** Any non-host seat on a Boomin room (and a mod link on an open server) no
+longer gets the host's dock layout: it gets a BOARD (`src/views/ModBoard.tsx`, pure half
+`src/lib/modBoard.ts`, tests `server/test/mod-board.test.ts`). Top: HOST OUTPUT (the program
+monitor, room name, LIVE pill lit once frames flow, wall clock + on-air clock). Under it the
+strip: scene PADS (tap cuts, active pad lit, ⌘1–9), the Vote pad (expands into the vote card)
+and the Audience link. Left: PEOPLE (waiting → Admit/Decline; staged → Stage/order/remove with
+the honest pending states). Right: MY FEEDS — CAMERA and SCREEN windows: a live self-preview
+when the seat holds `media.camera` / `media.screen`, greyed "Ask the host for camera/screen" when
+not; each has one button, **Throw up**, which asks the host's set for a slot for the seat's OWN
+row through the same honest-staging path a guest goes through (pending until the host's set
+confirms; a full set snaps back with the reason). Mic meter + mute beside the camera when
+`media.mic`. Bottom: the row of switches — what the seat holds (chips) and what it sends
+(cam / mic / screen). Layout saved per seat under pref `producer.modboard.v1` (default = this;
+rearranging comes later, the regions already render from it).
+
+**Media for seats (the Jamie pattern; api #401).** The host's guests panel never lists a seat.
+A new dockable **Mods** panel (host / manager; lands in the left dock once, hide it if you like)
+lists the seats — name, role — and for the HOST three toggles per seat: camera / mic / screen.
+Only the host can give media (a manager or mod gets 403 `room_host_required`; a seat can never
+grant itself). When a seated mod holds media, its own Producer swaps the receive-only monitor
+leg for the guest-page leg on the SAME row (`src/lib/seatMedia.ts`: camera + mic on peer main,
+screen on peer screen, the program back as the return feed) and the host's Producer turns the row
+into a guest source "<name> · mod" (+ "<name> · mod · screen" with `media.screen`) — hidden until
+staged, exactly like a guest. The host stops its MonitorSender for such a row (two host peers
+on one channel would collide; the render page's return leg carries the program). Revoke the
+last media grant → the row goes back to a monitor, the source is dropped, the seat's board greys.
+"Seat someone" in the Mods panel = a room role for a team member (the Access tab's door).
+
+**Test list for two machines (host on Windows, seat on the Mac or the other way round):**
+1. Seat opens the host's room → the BOARD shows (no docks); HOST OUTPUT draws; pads cut; ⌘1–9 cuts.
+2. Vote pad → card opens; run a vote; the pad lights LIVE while collecting.
+3. PEOPLE: admit a link guest, Stage it → "Staging…" → "On stage" once the host's set confirms.
+4. Host: Mods panel lists the seat with its role. Toggle CAMERA → within ~3 s the seat's CAMERA
+   window shows its self-preview (camera permission prompt on the seat), the host's Sources list
+   gains "<name> · mod" (hidden). Toggle MIC → the meter moves; mute stops it.
+5. Seat: Throw up → "Asking the host…" → ON SET; the host's set shows the seat in a guest slot;
+   the Mods row says ON SET. "On the set — take down" → comes down.
+6. Host toggles SCREEN → seat's SCREEN window offers Share; Share + throw up → the host's Mods
+   row shows "Screen" → frames the share as its own source.
+7. Host takes the camera back → the seat's board greys "Ask the host for camera", the source
+   leaves the host's Sources, the monitor leg returns (HOST OUTPUT keeps drawing).
+8. A mod (not host) opening the Mods panel sees the toggles disabled ("Only the host gives…").
+9. Open server: Home → Open a mod link → the same board, HOST OUTPUT says the line about no
+   return feed, feeds greyed "A mod link on an open server carries no media".
+10. Windows installer / UAC — still the unverified item from v0.4.13.
+
 ## For Windows — from Mac, 2026-09-05 (v0.4.30: the monitor cannot go black; honest staging)
 
 Your two-machine test on v0.4.29 found five things; all five are in v0.4.30 (PR "fix/monitor-frames-and-room-truth").

@@ -87,8 +87,14 @@ export const isMonitor = (p: ParticipantLike | null | undefined): boolean => p?.
  *  dropped rather than failing the whole row. */
 export function resolveGrants(p: ParticipantLike | null | undefined): Set<string> {
   const raw = p?.grants;
-  if (!Array.isArray(raw)) return new Set(DEFAULT_GRANTS);
-  return new Set(raw.filter((g): g is string => typeof g === "string" && g.length > 0));
+  if (Array.isArray(raw)) return new Set(raw.filter((g): g is string => typeof g === "string" && g.length > 0));
+  // Boomin's roster and session carry the bundle as a MAP ({grant: bool},
+  // api participant-grants.ts); the open server as a list. Same set either
+  // way — a map that says nothing is true is a participant who may do nothing.
+  if (raw && typeof raw === "object") {
+    return new Set(Object.entries(raw as Record<string, unknown>).filter(([k, v]) => k.length > 0 && v === true).map(([k]) => k));
+  }
+  return new Set(DEFAULT_GRANTS);
 }
 
 export const hasGrant = (grants: ReadonlySet<string>, grant: Grant): boolean => grants.has(grant);
@@ -131,6 +137,31 @@ export const MOD_GRANTS: readonly Grant[] = [
  *  media grant (a mod seat) gets no render URL — nothing to render. */
 export const hasAnyMedia = (grants: ReadonlySet<string>): boolean =>
   grants.has("media.camera") || grants.has("media.mic") || grants.has("media.screen");
+
+/** A SEAT WITH MEDIA (the Jamie pattern): a program monitor row the host has
+ *  handed camera / mic / screen. It stays a monitor (never a guests-panel
+ *  row) but becomes ELIGIBLE for the set — a guest source, staged through
+ *  the honest-staging path like anyone else. Without media it stays
+ *  invisible to the set, exactly as before. */
+export const isMediaSeat = (p: ParticipantLike | null | undefined): boolean => isMonitor(p) && hasAnyMedia(resolveGrants(p));
+
+/** The person behind a monitor row: `display_name` is minted as
+ *  "<name> · monitor" (api services/live/monitor.ts) — the board and the
+ *  Mods panel show the name alone. */
+export function seatDisplayName(p: { display_name?: unknown } | null | undefined): string {
+  const raw = typeof p?.display_name === "string" ? p.display_name : "";
+  return raw.replace(/\s*·\s*monitor\s*$/i, "").trim() || "Seat";
+}
+
+/** The label the seat's feed wears on the host's set: "<name> · mod". */
+export const seatSourceLabel = (p: { display_name?: unknown } | null | undefined): string => `${seatDisplayName(p)} · mod`;
+
+/** The user id a monitor row stands for (`producer_ref "monitor:<userId>"`),
+ *  or null — display metadata, never a credential. */
+export function seatUserId(p: (ParticipantLike & { producer_ref?: unknown }) | null | undefined): string | null {
+  const ref = typeof p?.producer_ref === "string" ? p.producer_ref : "";
+  return ref.startsWith("monitor:") && ref.length > 8 ? ref.slice(8) : null;
+}
 
 // ── Kinds ────────────────────────────────────────────────────────────────────
 
@@ -242,15 +273,17 @@ export function sourceIdsFor(guestId: string): { camera: string; screen: string 
 
 /** Which guest source ids the roster wants alive: the camera for every
  *  admitted guest, plus a screen source for those who hold media.screen.
- *  A program monitor is never a source: it supplies nothing to the set, it
+ *  A program monitor is not a source: it supplies nothing to the set, it
  *  only receives the program, so the reconcile must not spawn a render page
- *  (a hidden CEF item, a stage slot, a "guest" in the panel) for it. */
+ *  (a hidden CEF item, a stage slot, a "guest" in the panel) for it — UNLESS
+ *  the host handed it media (isMediaSeat): then it is eligible exactly like
+ *  a guest, its camera page hidden until the seat is staged. */
 export function wantedSourceIds<T extends ParticipantLike & { id: string }>(
   admitted: readonly T[],
 ): Map<string, { guest: T; track: TrackLabel }> {
   const out = new Map<string, { guest: T; track: TrackLabel }>();
   for (const guest of admitted) {
-    if (isMonitor(guest)) continue;
+    if (isMonitor(guest) && !isMediaSeat(guest)) continue;
     const ids = sourceIdsFor(guest.id);
     out.set(ids.camera, { guest, track: "camera" });
     if (resolveGrants(guest).has("media.screen")) out.set(ids.screen, { guest, track: "screen" });

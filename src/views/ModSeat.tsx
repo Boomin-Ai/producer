@@ -11,6 +11,10 @@ import { moveInOrder, seatAccessFrom } from "../lib/participants";
 import { RoleCard } from "./RoleCard";
 import type { RoomGuest } from "../lib/ipc";
 import { GuestPanel } from "./Live";
+import { ModBoard } from "./ModBoard";
+import { DEFAULT_MOD_BOARD, MOD_BOARD_PREF, normalizeModBoard, seatFeeds, throwUpState, type ModBoardLayout } from "../lib/modBoard";
+import { prefGet } from "../lib/prefs";
+import { EMPTY_MOD_STAGE, type ModStageState } from "../lib/stageTruth";
 
 export function ModSeat({ link, onLeave }: { link: ModLink; onLeave: () => void }) {
   const [title, setTitle] = useState<string>("Room");
@@ -22,6 +26,17 @@ export function ModSeat({ link, onLeave }: { link: ModLink; onLeave: () => void 
   const [online, setOnline] = useState(false);
   const [gone, setGone] = useState(false);
   const controlRef = useRef<RoomControlLink | null>(null);
+  /** The board's own layout (lib/modBoard.ts) — the same pref a Boomin seat saves. */
+  const [boardLayout, setBoardLayout] = useState<ModBoardLayout>(DEFAULT_MOD_BOARD);
+  useEffect(() => {
+    let alive = true;
+    prefGet(MOD_BOARD_PREF)
+      .then((v) => alive && setBoardLayout(normalizeModBoard(v)))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
   const rosterRef = useRef<RoomGuest[]>([]);
   rosterRef.current = roster;
   const stageRef = useRef<string[]>([]);
@@ -149,6 +164,10 @@ export function ModSeat({ link, onLeave }: { link: ModLink; onLeave: () => void 
     );
   }
 
+  // The open server's stage list IS the truth here (no honest-staging
+  // frames on this line yet): confirmed = the server's list, nothing pending.
+  const stageState: ModStageState = { ...EMPTY_MOD_STAGE, confirmed: stage };
+  // A mod link carries no media: the feed windows say so, the throw-up is off.
   return (
     <div className="modseat">
       <header className="rm-top" data-tauri-drag-region>
@@ -157,42 +176,28 @@ export function ModSeat({ link, onLeave }: { link: ModLink; onLeave: () => void 
         <RoleCard access={access} host={new URL(link.origin).host} compact />
         <span className={`modseat-dot${online ? " on" : ""}`} title={online ? "Connected to the room" : "Reconnecting…"} />
       </header>
-      <div className="modseat-body">
-        <section className="modseat-col">
-          <h3 className="modseat-h">Scenes</h3>
-          {!scenes ? (
-            <div className="rm-rows-empty">Waiting for the host's scene list…</div>
-          ) : (
-            <div className="rm-scenes">
-              {scenes.scenes.map((sc, i) => {
-                const active = scenes.active_scene_id === sc.id;
-                return (
-                  <div
-                    key={sc.id}
-                    role="button"
-                    tabIndex={0}
-                    className={`rm-scene-row${active ? " active onair" : ""}${can("room.scene") ? "" : " readonly"}`}
-                    onClick={() => can("room.scene") && cut(sc.id)}
-                    onKeyDown={(e) => e.key === "Enter" && can("room.scene") && cut(sc.id)}
-                    title={can("room.scene") ? `Cut to ${sc.name} (⌘${i + 1})` : "This seat can't cut scenes"}
-                  >
-                    <span className="rm-scene-name">{sc.name}</span>
-                    {active && <span className="rm-scene-live">On</span>}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-        <section className="modseat-col">
-          <h3 className="modseat-h">Guests</h3>
+      {/* The same board a Boomin seat gets (views/ModBoard.tsx), on the open
+        * server's data: scene pads off the control channel, the roster off
+        * the mod code, no return feed and no media (a mod link carries neither). */}
+      <ModBoard
+        title={title}
+        access={access}
+        host={new URL(link.origin).host}
+        pending={false}
+        boomin={false}
+        online={online}
+        program={null}
+        scenes={scenes ? { scenes: scenes.scenes, active_scene_id: scenes.active_scene_id } : null}
+        onCut={cut}
+        people={
           <GuestPanel
             thumbs={{}}
             roster={roster}
-            error={err}
+            error={null}
             items={[]}
             role={can("room.admit") || can("room.stage") || can("room.remove") ? "mod" : "viewer"}
             stage={stage}
+            stageState={stageState}
             onAdmit={(id) => void modSeat.admit(link, id).catch(fail)}
             onRemove={(id) => void modSeat.remove(link, id).catch(fail)}
             onMute={() => {}}
@@ -200,8 +205,15 @@ export function ModSeat({ link, onLeave }: { link: ModLink; onLeave: () => void 
             onStageToggle={(id) => void stageToggle(id)}
             onOrder={(id, dir) => void order(id, dir)}
           />
-        </section>
-      </div>
+        }
+        grants={grants}
+        feeds={seatFeeds(grants)}
+        media={null}
+        throwUp={throwUpState({ stage: stageState, seatId: null, grants, canAsk: can("room.stage") })}
+        onThrowUp={() => {}}
+        layout={boardLayout}
+        error={err}
+      />
     </div>
   );
 }

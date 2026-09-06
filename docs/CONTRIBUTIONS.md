@@ -197,3 +197,15 @@ guest source, a stage slot or a guests-panel row. Leaving the room ends the row
 (`DELETE …/monitor`); a revoked room grant or the run end ends it server-side.
 **Open server:** a mod link carries no media leg, so the placeholder stays there
 and says so.
+**The Mod View + media for seats (v0.4.31, `feat/mod-view`; api #401).** A non-host
+seat renders a BOARD of its own (`src/views/ModBoard.tsx`; pure half `src/lib/modBoard.ts`,
+pref `producer.modboard.v1`): host output on top, scene pads + Vote + Audience link in a
+strip, PEOPLE left, MY FEEDS right, the row of switches at the bottom — the same component
+for a Boomin seat (views/Live.tsx) and an open-server mod link (views/ModSeat.tsx). A seat's
+monitor row may now hold `media.camera` / `media.mic` / `media.screen`, and only the HOST can
+give them (`403 room_host_required` for anyone else; inputs and the return feed are pinned).
+With media the seat's Producer opens the guest-page leg on the same row (`src/lib/seatMedia.ts`)
+and "throws up" through honest staging; the host's reconcile makes such a row a guest source
+("<name> · mod") — `wantedSourceIds` admits a monitor row only when `isMediaSeat` — and stops
+its MonitorSender for it. The host's guests panel still never lists a seat; the new **Mods**
+panel does (name, role, media toggles, "seat someone").

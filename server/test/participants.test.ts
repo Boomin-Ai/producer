@@ -19,6 +19,10 @@ import {
   sourceIdsFor,
   wantedSourceIds,
   isMonitor,
+  isMediaSeat,
+  seatDisplayName,
+  seatSourceLabel,
+  seatUserId,
 } from "../guest/src/participants";
 
 describe("resolveGrants", () => {
@@ -26,6 +30,12 @@ describe("resolveGrants", () => {
     expect([...resolveGrants(undefined)].sort()).toEqual([...DEFAULT_GRANTS].sort());
     expect([...resolveGrants({})].sort()).toEqual([...DEFAULT_GRANTS].sort());
     expect([...resolveGrants({ grants: null })].sort()).toEqual([...DEFAULT_GRANTS].sort());
+  });
+
+  it("Boomin's map form resolves to the true keys — an all-false map is a participant who may do nothing", () => {
+    expect([...resolveGrants({ grants: { "media.camera": true, "media.mic": false, "media.screen": true } })].sort()).toEqual(["media.camera", "media.screen"]);
+    expect(resolveGrants({ grants: { "media.camera": false } }).size).toBe(0);
+    expect(resolveGrants({ grants: { "": true } }).size).toBe(0);
   });
 
   it("present grants are taken verbatim — an empty list means nothing, not the default", () => {
@@ -118,18 +128,34 @@ describe("source ids", () => {
     expect(w.get("guest-aaaaaaaa-screen")).toEqual({ guest: a, track: "screen" });
     expect(w.get("guest-bbbbbbbb")?.track).toBe("camera");
   });
-  it("never wants a source for a program monitor (a seat's return-feed row)", () => {
+  it("never wants a source for a program monitor (a seat's return-feed row) — unless the host handed it media", () => {
     const guest = { id: "aaaaaaaa-1" };
     const monitor = { id: "mmmmmmmm-1", kind: "producer", monitor: true, grants: ["media.return_feed"] };
-    // A monitor that somehow carried media grants is STILL not a source.
-    const monitorWithMedia = { id: "nnnnnnnn-1", monitor: true, grants: ["media.camera", "media.screen"] };
+    // Boomin sends the bundle as a map: return feed alone → still invisible.
+    const monitorMap = { id: "pppppppp-1", monitor: true, grants: { "media.return_feed": true, "media.camera": false, "media.screen": false } };
+    // A SEAT WITH MEDIA (the Jamie pattern) is eligible like a guest: a camera
+    // source, and a screen source when it holds media.screen.
+    const monitorWithMedia = { id: "nnnnnnnn-1", monitor: true, grants: ["media.camera", "media.screen", "media.return_feed"] };
     // Anything but `true` is a guest: an older server sends nothing at all.
     const notMonitor = { id: "oooooooo-1", monitor: "true" };
-    const w = wantedSourceIds([guest, monitor, monitorWithMedia, notMonitor]);
-    expect([...w.keys()].sort()).toEqual(["guest-aaaaaaaa", "guest-oooooooo"]);
+    const w = wantedSourceIds([guest, monitor, monitorMap, monitorWithMedia, notMonitor]);
+    expect([...w.keys()].sort()).toEqual(["guest-aaaaaaaa", "guest-nnnnnnnn", "guest-nnnnnnnn-screen", "guest-oooooooo"]);
     expect(isMonitor(monitor)).toBe(true);
     expect(isMonitor(notMonitor)).toBe(false);
     expect(isMonitor(undefined)).toBe(false);
+    expect(isMediaSeat(monitor)).toBe(false);
+    expect(isMediaSeat(monitorMap)).toBe(false);
+    expect(isMediaSeat(monitorWithMedia)).toBe(true);
+    // A guest with media is not a seat: the flag is what makes a monitor.
+    expect(isMediaSeat({ grants: ["media.camera"] })).toBe(false);
+  });
+  it("a seat's name and source label drop the ' · monitor' suffix; the user id rides producer_ref", () => {
+    const row = { display_name: "Jamie · monitor", producer_ref: "monitor:u-42" };
+    expect(seatDisplayName(row)).toBe("Jamie");
+    expect(seatSourceLabel(row)).toBe("Jamie · mod");
+    expect(seatUserId(row)).toBe("u-42");
+    expect(seatDisplayName({ display_name: "" })).toBe("Seat");
+    expect(seatUserId({ producer_ref: "https://producer.dev" })).toBeNull();
   });
 });
 
