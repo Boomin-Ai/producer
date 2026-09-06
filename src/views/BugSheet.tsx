@@ -185,9 +185,12 @@ export function BugSheet({ open, onClose, version, engine, encoder, scenes, sour
   };
 
   const copy = async () => {
-    notify((await copyText(reportToText(report))) ? "Report copied" : "Couldn't copy — select the text instead", {
-      tone: "success",
-      check: true,
+    const ok = await copyText(reportToText(report));
+    // A failed copy must not wear the success tone — the whole point of this
+    // button is that the user can trust they now have their words somewhere.
+    notify(ok ? "Report copied" : "Couldn't copy — select the text and copy it by hand", {
+      tone: ok ? "success" : "warning",
+      check: ok,
     });
   };
 
