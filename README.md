@@ -14,6 +14,13 @@ platform or on a server you deploy yourself for $0.
 Download at [producer.dev](https://producer.dev) · macOS (signed and
 notarized), Windows, Linux · updates itself.
 
+> **Open beta — not recommended for production shows yet.**
+> Producer is public and usable, and we run our own shows on it, but it is
+> young: expect rough edges, expect breaking changes between releases, and
+> keep a fallback ready for anything you cannot afford to drop. If a bug
+> costs you a take, [open an issue](https://github.com/Boomin-Ai/producer/issues)
+> — that is exactly what this beta is for.
+
 ## What it does today
 
 **Live**

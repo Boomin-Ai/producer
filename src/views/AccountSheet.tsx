@@ -43,7 +43,7 @@ export function AccountSheet({
   /** Self-hosted rows: forget this server on this machine. */
   onRemoveEndpoint: (endpointId: string) => void;
   /** The front door: Boomin sign-in OR your own server. */
-  onAddWorkspace: () => void;
+  onAddWorkspace: (door?: "server") => void;
   onSignOut?: () => void;
   onClose: () => void;
 }) {
@@ -237,13 +237,31 @@ export function AccountSheet({
 
           {note && <div className="cr-hint">{note}</div>}
 
-          {/* ── Always: the door ── */}
+          {/* ── The doors. Adding a BRAND never leaves this sheet: every brand on
+            * the account is already a row above, and tapping one binds it here.
+            * The only door that has to take the whole window is a server —
+            * it needs a URL and a token, which is a page, not a row. ── */}
           <div className="ws-pop-foot">
-            <button className="ws-row acct-add" onClick={() => { onClose(); onAddWorkspace(); }}>
+            {boominEp && (
+              <button
+                className="ws-row acct-add"
+                title="Opens boomin.ai in your browser"
+                onClick={() => void openUrl("https://boomin.ai").catch(() => {})}
+              >
+                <span className="ws-ava sm acct-plus">+</span>
+                <span className="ws-pop-txt">
+                  <span className="ws-pop-name">New brand</span>
+                  <span className="ws-pop-slug">Make it on boomin.ai — it lands in this list</span>
+                </span>
+              </button>
+            )}
+            <button className="ws-row acct-add" onClick={() => { onClose(); onAddWorkspace(boominEp ? "server" : undefined); }}>
               <span className="ws-ava sm acct-plus">+</span>
               <span className="ws-pop-txt">
-                <span className="ws-pop-name">Add a workspace</span>
-                <span className="ws-pop-slug">Sign in to Boomin, or use your own server</span>
+                <span className="ws-pop-name">{boominEp ? "Connect a server" : "Add a workspace"}</span>
+                <span className="ws-pop-slug">
+                  {boominEp ? "Your own producer-server" : "Sign in to Boomin, or use your own server"}
+                </span>
               </span>
             </button>
             {onSignOut && boominEp && (
