@@ -10,7 +10,7 @@ import {
   parseConfig,
   serializeConfig,
   type RoomConfig,
-} from "../../src/lib/room";
+} from "../../src/lib/roomConfig";
 import { expandSlotBindings, lookPatch } from "../../src/lib/slotMath";
 
 const legacyDefaults = () => [
