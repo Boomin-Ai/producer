@@ -3,6 +3,28 @@
 Both sessions read and append here. Commit to `main` (docs only), pull before reading.
 Newest entry at the top of each section.
 
+## For Windows — from Mac, 2026-09-06 (v0.4.43: Report a bug)
+
+A "Report a bug" button in the room footer beside "Producer v…", and a HELP row in Settings → App.
+Both open the same glass sheet (textarea · "Attach diagnostics" checkbox with a "What's sent?"
+collapsible showing the LITERAL payload · optional email · Cancel/Send). Reports go to
+`POST /v1/app/support/report` on api.boomin.ai — authenticated through `endpoint_request` on a
+Boomin workspace, unauthenticated otherwise, so a self-hosted or signed-out Windows box can file
+one. Success shows "Filed as #N" (opens the issue) or "Sent — thank you".
+
+**Verify on Windows:**
+1. The footer button is visible and quiet next to the version, and the sheet's glass matches the
+   account sheet (this is the first use of the centred `acct-sheet` chrome outside Access).
+2. `ui_diagnostics` reads the log tail from `%LOCALAPPDATA%\ai.boomin.producer\logs\producer-ui.log`
+   — the mac path is `~/Library/Logs/`, and the Windows read side has never been exercised. Open
+   "What's sent?" and confirm `log` is present and NOT empty after a room open. `os` must read
+   `windows` and `arch` `x86_64` (both come from Rust `std::env::consts`, not the user agent).
+3. `gpu` should name the real card ("ANGLE (NVIDIA …)" / "… Direct3D11 …") — it comes from a WebGL
+   context in the webview, and WebView2 may report it differently from WKWebView.
+4. Pull the network and press Send: the sheet must KEEP the typed text and offer "Open GitHub"
+   (prefilled issue form in the default browser) and "Copy report" (clipboard via `copy_text`).
+5. Nothing new in ffi.rs — `ui_diagnostics` is pure Rust, so extern parity is untouched.
+
 ## For Windows — from Mac, 2026-09-06 (v0.4.41: the virtual camera survives a Studio toggle)
 
 Toggle Studio on/off 3 times and add/remove a camera source with Google Meet open on the Producer
