@@ -276,6 +276,14 @@ export function sourceIdsFor(guestId: string): { camera: string; screen: string 
   return { camera, screen: `${camera}-screen` };
 }
 
+/** The ids the guest reconcile may add or REMOVE: only `guest`-kind items.
+ * Every other source — the vote bar overlay above all — is the host's own
+ * and never touched by the roster (closing a vote keeps its overlay; the
+ * bar just renders empty until the next question). */
+export function guestReconcileIds(items: readonly { id: string; kind: string }[]): Set<string> {
+  return new Set(items.filter((i) => i.kind === "guest").map((i) => i.id));
+}
+
 /** Which GUEST source ids the roster wants alive: the camera for every
  *  admitted guest, plus a screen source for those who hold media.screen.
  *  Program monitors are excluded entirely — a seat's media is a MOD source

@@ -100,6 +100,7 @@ import {
   kindBadge,
   sourceIdsFor,
   wantedSourceIds,
+  guestReconcileIds,
   wantedModSourceIds,
   modSourceIdsFor,
   modSourceLabel,
@@ -122,6 +123,8 @@ import {
 import { MonitorSender, ProgramMonitor, monitorLog, monitorPlaceholder, type MonitorRoomInfo, type MonitorState, type ProgramSource } from "../lib/monitorFeed";
 import { SeatMediaLeg } from "../lib/seatMedia";
 import { ModBoard } from "./ModBoard";
+import { VotePanel, VoteEditor } from "./VotePanel";
+import { voteFormFor, firstSentence } from "../lib/votePanel";
 import { DEFAULT_MOD_BOARD, MOD_BOARD_PREF, normalizeModBoard, seatFeeds, throwUpState, type ModBoardLayout } from "../lib/modBoard";
 import { prefGet } from "../lib/prefs";
 import { team } from "../lib/access";
@@ -709,10 +712,9 @@ export function GuestPanel({
   onShow,
   onStageToggle,
   onOrder,
-  onModLink,
-  vote,
   control,
   stageState,
+  form = "column",
 }: {
   thumbs: Record<string, string>;
   roster: RoomGuest[];
@@ -733,11 +735,10 @@ export function GuestPanel({
   onShow: (sourceId: string, show: boolean) => void;
   onStageToggle: (guestId: string) => void;
   onOrder: (guestId: string, dir: -1 | 1) => void;
-  /** Host only: mint a mod link (a control seat another Producer opens). */
-  onModLink?: () => void;
-  /** The vote control (#51) — the caller passes it only when the seat
-   * holds `room.interactions`. */
-  vote?: ReactNode;
+  /** Dock form (v0.4.33): `row` = one 40px tile per guest scrolling
+   * sideways (a slim top/bottom dock); `column` = the cards. The mod link
+   * and the room cap live in the panel HEAD, never in the body. */
+  form?: "row" | "column";
   /** Room control (`can.control` from the access answer): admit / remove /
    * stage / order. Host, manager and mod hold it; a viewer does not.
    * Defaults from the role for callers without the DTO. */
@@ -757,17 +758,76 @@ export function GuestPanel({
   const canControl = control ?? role !== "viewer";
 
 
+  if (form === "row") {
+    // ROW FORM: one tile per person — thumb, name, ONE control. Waiting
+    // guests are an Admit chip. The list scrolls sideways under the dock's
+    // sideways rules; nothing wraps, nothing grows tall.
+    return (
+      <div className="rm-guests rm-guests-row">
+        {roster.length === 0 && <div className="rm-rows-empty">No one yet — copy the link from the panel head.</div>}
+        {waiting.map((g) => (
+          <div key={g.id} className="rm-gtile waiting">
+            <span className="rm-wait-dot" />
+            <span className="rm-gtile-name">{g.display_name || "Guest"}</span>
+            {canControl ? (
+              <button
+                className="rm-guest-admit"
+                disabled={live.length >= ROOM_CAP}
+                title={live.length >= ROOM_CAP ? `Room is full (${ROOM_CAP})` : "Bring them into the room"}
+                onClick={() => onAdmit(g.id)}
+              >
+                Admit
+              </button>
+            ) : (
+              <span className="rm-guest-wait-note">waiting</span>
+            )}
+          </div>
+        ))}
+        {live.map((g) => {
+          if (role === "host") {
+            const ids = sourceIdsFor(g.id);
+            const item = items.find((i) => i.id === ids.camera);
+            return (
+              <div key={g.id} className={`rm-gtile${item?.visible ? " on" : ""}`}>
+                {thumbs[ids.camera] ? <img className="rm-gtile-img" src={thumbs[ids.camera]} alt="" /> : <span className="rm-gtile-img empty" />}
+                <span className="rm-gtile-name">{g.display_name || "Guest"}</span>
+                <button
+                  className={`rm-guest-stage${item?.visible ? " on" : ""}`}
+                  disabled={!item}
+                  title={item?.visible ? "Take off screen (stays in the room)" : "Pop into the next free guest slot"}
+                  onClick={() => item && onShow(item.id, !item.visible)}
+                >
+                  {item?.visible ? "On" : "Show"}
+                </button>
+              </div>
+            );
+          }
+          const row = stageState ? modRowStage(stageState, g.id) : stage.includes(g.id) ? "on" : "off";
+          const onStage = row === "on";
+          const pendingRow = row === "pending-on" || row === "pending-off";
+          return (
+            <div key={g.id} className={`rm-gtile${onStage ? " on" : ""}${pendingRow ? " pending" : ""}`}>
+              {g.snapshot ? <img className="rm-gtile-img" src={g.snapshot} alt="" /> : <span className="rm-gtile-img empty" />}
+              <span className="rm-gtile-name">{g.display_name || "Guest"}</span>
+              {canControl && (
+                <button
+                  className={`rm-guest-stage${onStage ? " on" : ""}${pendingRow ? " pending" : ""}`}
+                  disabled={pendingRow}
+                  onClick={() => onStageToggle(g.id)}
+                >
+                  {row === "pending-on" ? "…" : row === "pending-off" ? "…" : onStage ? "On" : "Stage"}
+                </button>
+              )}
+            </div>
+          );
+        })}
+        {error && <div className="rm-chatsetup-err">{error}</div>}
+      </div>
+    );
+  }
+
   return (
     <div className="rm-guests">
-      {vote}
-      {role === "host" && onModLink && (
-        <div className="rm-guest-tools">
-          <button className="rm-guest-modlink" title="Mint a link another Producer opens to help run this room: admit, stage, order, remove, and cut scenes. Never on the set." onClick={onModLink}>
-            Mod link
-          </button>
-        </div>
-      )}
-
       {(
         <div className="rm-guest-list">
           {roster.length === 0 && (
@@ -908,110 +968,6 @@ export function GuestPanel({
             );
           })}
           {error && <div className="rm-chatsetup-err">{error}</div>}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** The host's vote control (#51): open → live tally → reveal → close. The
- * set's bar is fed from the frames this card also reads. */
-function VoteHostCard({
-  vote,
-  audienceLink,
-  onOpen,
-  onTransition,
-  onAudienceLink,
-}: {
-  vote: Interaction | null;
-  audienceLink: string | null;
-  onOpen: (input: { a: string; b: string; prompt: string; who: "guest" | "audience" | "both" }) => void;
-  onTransition: (t: "open" | "reveal" | "close" | "cancel", holdMs?: number) => void;
-  onAudienceLink: () => void;
-}) {
-  const [a, setA] = useState("");
-  const [b, setB] = useState("");
-  const [prompt, setPrompt] = useState("");
-  const [who, setWho] = useState<"guest" | "audience" | "both">("both");
-  const [, tick] = useState(0);
-  useEffect(() => {
-    if (!vote || vote.state !== "collecting") return;
-    const t = window.setInterval(() => tick((n) => n + 1), 500);
-    return () => window.clearInterval(t);
-  }, [vote?.id, vote?.state]);
-  const live = vote && vote.state !== "closed" && vote.state !== "cancelled";
-  const total = vote?.tally?.total ?? 0;
-  const pct = (id: string) => (total ? Math.round(((vote?.tally?.options[id] ?? 0) / total) * 100) : 0);
-  const left = vote?.timing.reveal_at ? Math.max(0, Math.ceil((Date.parse(vote.timing.reveal_at) - Date.now()) / 1000)) : null;
-  return (
-    <div className="rm-vote">
-      <div className="rm-vote-head">
-        <span className="rm-vote-title">Vote</span>
-        <button className="rm-guest-modlink" onClick={onAudienceLink} title={audienceLink ?? "Copy a link the audience opens on their phones (no account)"}>
-          Audience link
-        </button>
-      </div>
-      {!live ? (
-        <div className="rm-vote-form">
-          <input className="rm-vote-in" placeholder="Question (optional)" value={prompt} onChange={(e) => setPrompt(e.target.value)} maxLength={140} />
-          <div className="rm-vote-row">
-            <input className="rm-vote-in" placeholder="Option A" value={a} onChange={(e) => setA(e.target.value)} maxLength={60} />
-            <input className="rm-vote-in" placeholder="Option B" value={b} onChange={(e) => setB(e.target.value)} maxLength={60} />
-          </div>
-          <div className="rm-vote-row">
-            <Select
-              size="sm"
-              className="rm-vote-in"
-              value={who}
-              onChange={(v) => setWho(v as "both")}
-              title="Who votes"
-              options={[
-                { value: "both", label: "Guests + audience" },
-                { value: "guest", label: "Guests only" },
-                { value: "audience", label: "Audience only" },
-              ]}
-            />
-            <button className="rm-guest-admit" disabled={!a.trim() || !b.trim()} onClick={() => onOpen({ a: a.trim(), b: b.trim(), prompt: prompt.trim(), who })}>
-              Open vote
-            </button>
-          </div>
-          {vote && vote.tally && (
-            <div className="rm-vote-fine">
-              Last: {vote.spec.options.map((o) => `${o.label} ${pct(o.id)}%`).join(" · ")} ({total} vote{total === 1 ? "" : "s"})
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="rm-vote-live">
-          {vote!.spec.prompt && <div className="rm-vote-prompt">{vote!.spec.prompt}</div>}
-          {vote!.spec.options.map((o) => (
-            <div key={o.id} className={`rm-vote-bar${vote!.tally?.winner === o.id && vote!.state !== "collecting" ? " win" : ""}`}>
-              <span className="rm-vote-label">{o.label}</span>
-              <span className="rm-vote-track"><span className="rm-vote-fill" style={{ width: `${pct(o.id)}%` }} /></span>
-              <span className="rm-vote-n">{vote!.tally?.options[o.id] ?? 0}</span>
-            </div>
-          ))}
-          <div className="rm-vote-fine">
-            {vote!.state === "open" && "Not taking answers yet."}
-            {vote!.state === "collecting" && `${total} so far${left != null ? ` · reveals in ${left}s` : ""}`}
-            {vote!.state === "revealed" && `Revealed · ${total} vote${total === 1 ? "" : "s"}`}
-          </div>
-          <div className="rm-vote-row">
-            {vote!.state === "open" && (
-              <>
-                <button className="rm-guest-admit" onClick={() => onTransition("open")}>Start</button>
-                <button className="rm-guest-modlink" onClick={() => onTransition("cancel")}>Cancel</button>
-              </>
-            )}
-            {vote!.state === "collecting" && (
-              <>
-                <button className="rm-guest-admit" onClick={() => onTransition("reveal", 0)}>Reveal</button>
-                <button className="rm-guest-modlink" onClick={() => onTransition("reveal", 3000)} title="The server reveals in 3 s — a countdown on the set">Reveal in 3s</button>
-                <button className="rm-guest-modlink" onClick={() => onTransition("close")}>Close</button>
-              </>
-            )}
-            {vote!.state === "revealed" && <button className="rm-guest-admit" onClick={() => onTransition("close")}>Close</button>}
-          </div>
         </div>
       )}
     </div>
@@ -3731,6 +3687,10 @@ export function LiveView({
   const [sceneSettings, setSceneSettings] = useState<string | null>(null);
   /** Which source's filter chain the Sources panel is drilled into. */
   const [filterFor, setFilterFor] = useState<{ id: string; label: string; media: "video" | "audio" } | null>(null);
+  /** The Vote panel's question editor is open (v0.4.33) — a sub-page in a
+   * column dock, a popover over the strip in a row dock. Cleared on Open
+   * and on back, exactly like `filterFor`. */
+  const [voteEdit, setVoteEdit] = useState(false);
   /** Device picking drills into the Sources panel exactly like Filters does —
    *  same crumb, same place — instead of popping a floating menu. */
   const [deviceFor, setDeviceFor] = useState<{ key: string; label: string } | null>(null);
@@ -5113,7 +5073,20 @@ export function LiveView({
     if (!isHostRef.current) return;
     const url = await overlayBridge.start();
     const c = cfgRef.current;
-    const existing = (c.sources.extras ?? []).find((e) => e.spec.kind === "overlay");
+    // The bar's source is the overlay that points at THIS Producer's bridge
+    // (127.0.0.1/overlay) — found by where it points, never by its label, so
+    // a renamed source still counts and a sponsor's overlay is never
+    // hijacked. It is an ordinary overlay otherwise: Sources row, eye, drag,
+    // geometry, filters. Closing a vote leaves it in place, rendering empty.
+    const isBridge = (u: string) => {
+      try {
+        const x = new URL(u);
+        return x.hostname === "127.0.0.1" && x.pathname === "/overlay";
+      } catch {
+        return false;
+      }
+    };
+    const existing = (c.sources.extras ?? []).find((e) => e.spec.kind === "overlay" && isBridge(e.spec.url));
     if (existing && existing.spec.kind === "overlay" && existing.spec.url === url) return;
     if (existing) {
       await extraSources.remove(existing.id).catch(() => {});
@@ -5156,6 +5129,7 @@ export function LiveView({
       );
       const ix = isBoomin(ep) ? normalizeBoominInteraction(res.interaction) : res.interaction;
       if (ix) onInteractionFrame(ix);
+      setVoteEdit(false);
     } catch (e) {
       setGuestErr(String(e).replace(/^Error:\s*/, ""));
     }
@@ -5645,9 +5619,9 @@ export function LiveView({
         // auto-admitting would put an unknown person on air with a name they
         // chose themselves.
         const live = liveRowsRef.current.filter((g) => !!g.render_url);
-        const present = new Set(
-          (sources.items ?? []).filter((i) => i.kind === "guest").map((i) => i.id),
-        );
+        // Guest-kind items ONLY — the vote bar overlay and every other
+        // host source are never the roster's to remove.
+        const present = guestReconcileIds(sources.items ?? []);
         // One source per TRACK: the camera for everyone, and a second
         // "<name> · screen" source for a guest who holds media.screen. The
         // screen page shares the guest's signaling channel and receives only
@@ -5884,9 +5858,10 @@ export function LiveView({
     setDeviceMenu(null);
     setSrcSubPop(null);
     setSceneSettings(null);
+    if (formDockOf("vote") === "top") setVoteEdit(false);
   };
   const anyPop =
-    destsOpen || qualityOpen || micPopOpen || chatOpen || linkMenuOpen || srcAddOpen || deviceMenu !== null || srcSubPop !== null ||
+    destsOpen || (voteEdit && formDockOf("vote") === "top") || qualityOpen || micPopOpen || chatOpen || linkMenuOpen || srcAddOpen || deviceMenu !== null || srcSubPop !== null ||
     // Scene settings are a POPOVER only on a side rail; in the bottom sheet
     // and the top rail they are a strip in the flow — a popover backdrop
     // there would sit over the strip and eat every click.
@@ -6414,20 +6389,37 @@ export function LiveView({
             onShow={(id, show) => (show ? void showGuestInSlot(id) : hideGuestFromSlot(id))}
             onStageToggle={(id) => void modStageToggle(id)}
             onOrder={(id, dir) => void modOrder(id, dir)}
-            onModLink={isHost ? () => void mintModLink() : undefined}
-            vote={
-              roomAccess.can.interactions ? (
-                <VoteHostCard
-                  vote={vote}
-                  audienceLink={audienceLink}
-                  onOpen={(i) => void openVote(i)}
-                  onTransition={(t, hold) => void transitionVote(t, hold)}
-                  onAudienceLink={() => void copyAudienceLink()}
-                />
-              ) : undefined
+            form={formDockOf("guests") === "top" ? "row" : "column"}
+          />
+        );
+      case "vote": {
+        // The vote is its own panel (v0.4.33): one question, the set shows
+        // the answer. Form follows the dock (lib/votePanel.ts).
+        if (!roomAccess.can.interactions) {
+          return <div className="rm-rows-empty">This seat can't run votes — the host grants room.interactions.</div>;
+        }
+        const form = voteFormFor(formDockOf("vote"), { state: vote?.state ?? null, editing: voteEdit });
+        return (
+          <VotePanel
+            form={form}
+            vote={vote}
+            audienceLink={audienceLink}
+            editing={voteEdit}
+            onEdit={(open, anchor) => {
+              if (anchor) setPopAnchor(anchor);
+              setVoteEdit(open);
+            }}
+            onOpen={(i) => void openVote(i)}
+            onTransition={(t, hold) => void transitionVote(t, hold)}
+            onAudienceLink={() => void copyAudienceLink()}
+            popover={
+              <Pop anchor={popAnchor} align="right" className="rm-pop-vote">
+                <VoteEditor onOpen={(i) => void openVote(i)} onBack={() => setVoteEdit(false)} />
+              </Pop>
             }
           />
         );
+      }
       case "mods":
         // Seats — never guests (founder: the guests panel never lists a
         // monitor row). Host: media toggles per seat + seat someone.
@@ -6608,6 +6600,23 @@ export function LiveView({
             }
             return part;
           });
+        if (formDockOf("updates") === "top") {
+          // ROW FORM: one line — the latest tag and its first sentence,
+          // ellipsized like chat's last message. The list is column-only.
+          const latest = Array.isArray(releases) ? releases[0] : null;
+          return (
+            <div className="upd upd-strip">
+              {releases === null && <span className="upd-line">Checking for updates…</span>}
+              {releases === "err" && <span className="upd-line">The update stream goes live when the repo does.</span>}
+              {latest && (
+                <span className="upd-line" onClick={() => openUrl(latest.html_url).catch(() => {})} title={latest.name || latest.tag_name}>
+                  <span className="upd-tag">{latest.tag_name}</span>
+                  <span className="upd-sentence"> · {firstSentence(latest.body) || latest.name || ""}</span>
+                </span>
+              )}
+            </div>
+          );
+        }
         return (
           <div className="upd">
             {releases === null && <div className="rm-rows-empty">Checking for updates…</div>}
@@ -6705,6 +6714,15 @@ export function LiveView({
           <span className="rm-cnt">
             {liveGuests.length}/8{waitingN > 0 && <em>{waitingN} waiting</em>}
           </span>
+          {isHost && (
+            <button
+              className="rm-guest-modlink rm-head-modlink"
+              title="Mint a link another Producer opens to help run this room: admit, stage, order, remove, and cut scenes. Never on the set."
+              onClick={() => void mintModLink()}
+            >
+              Mod link
+            </button>
+          )}
           <button
             className="rm-panel-plus"
             title="Copy the room's guest link"
@@ -7414,9 +7432,12 @@ export function LiveView({
           onCut={(id) => void cutHostScene(id)}
           vote={
             roomAccess.can.interactions ? (
-              <VoteHostCard
+              <VotePanel
+                form={voteFormFor("left", { state: vote?.state ?? null, editing: voteEdit })}
                 vote={vote}
                 audienceLink={audienceLink}
+                editing={voteEdit}
+                onEdit={(open) => setVoteEdit(open)}
                 onOpen={(i) => void openVote(i)}
                 onTransition={(t, hold) => void transitionVote(t, hold)}
                 onAudienceLink={() => void copyAudienceLink()}
