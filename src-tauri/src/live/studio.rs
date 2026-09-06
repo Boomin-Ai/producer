@@ -157,11 +157,14 @@ impl RoomMix {
 }
 
 /// win-capture's window id string: `title:class:exe`, `:` in the title
-/// escaped as `#3A` (docs/WINDOWS-ENGINE.md). tao registers every Tauri
-/// top-level window under the class "Window Class".
+/// escaped as `#3A` (docs/WINDOWS-ENGINE.md). Measured on a real box against
+/// the shipped v0.4.40 build: tao registers our top-level window under the
+/// class "Tauri Window" (GetClassName on the main HWND), not "Window Class".
+/// The title still carries the match (`priority` = WINDOW_PRIORITY_TITLE), so
+/// a future tao rename degrades to a title-only match rather than breaking.
 #[cfg_attr(target_os = "macos", allow(dead_code))]
 pub fn windows_capture_id(title: &str) -> String {
-    format!("{}:Window Class:producer.exe", title.replace(':', "#3A"))
+    format!("{}:Tauri Window:producer.exe", title.replace(':', "#3A"))
 }
 
 impl Studio {
@@ -509,11 +512,11 @@ mod tests {
     fn windows_capture_id_escapes_colons() {
         assert_eq!(
             windows_capture_id("Producer"),
-            "Producer:Window Class:producer.exe"
+            "Producer:Tauri Window:producer.exe"
         );
         assert_eq!(
             windows_capture_id("Room: A"),
-            "Room#3A A:Window Class:producer.exe"
+            "Room#3A A:Tauri Window:producer.exe"
         );
     }
 }
