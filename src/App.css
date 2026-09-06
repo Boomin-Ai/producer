@@ -8905,7 +8905,6 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .modseat-h { margin: 0 0 8px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); }
 .modseat-gone { padding: 32px; color: var(--fg-2); }
 .rm-scene-row.readonly { cursor: default; opacity: 0.7; }
-.rm-guest-tools { display: flex; justify-content: flex-end; padding: 0 0 8px; }
 .rm-guest-modlink {
   font-size: 12px;
   padding: 4px 10px;
@@ -9543,3 +9542,172 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .sel-opt.active .sel-dot { background: var(--mint); box-shadow: 0 0 6px oklch(0.85 0.14 160 / 0.6); }
 .sel-opt-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .sel-opt-hint { color: var(--fg-3); font-size: 11px; }
+
+/* ═══ VOTE PANEL (v0.4.33) — one component, three forms by dock ═══════════ */
+.rm-panel-vote .rm-panel-body {
+  min-width: 0;
+  overflow: hidden;
+}
+.rm-vote { margin-bottom: 0; min-width: 0; }
+.rm-vote-card .rm-vote-last {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.rm-vote-last-q {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-2);
+}
+.rm-vote-last-q em { font-style: normal; }
+.rm-vote-edit .rm-vote-form { min-width: 0; }
+.rm-vote-form .rm-vote-in { width: 100%; box-sizing: border-box; min-width: 0; }
+.rm-vote-opts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  min-width: 0;
+}
+.rm-vote-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+.rm-vote-actions .rm-guest-admit { margin-left: 0; }
+.rm-vote-actions > * { flex: 0 0 auto; }
+/* narrow column: the two options stack; the transport wraps by itself */
+@container panel (max-width: 240px) {
+  .rm-vote-opts { grid-template-columns: 1fr; }
+}
+@container panel (max-width: 220px) {
+  .rm-vote-actions > * { flex: 1 1 auto; }
+}
+.rm-vote-live .rm-vote-bar { grid-template-columns: minmax(48px, 80px) 1fr 32px; }
+.rm-vote-aud { flex: 0 0 auto; }
+
+/* the popover editor over a row-dock strip */
+.rm-pop-vote { min-width: 268px; max-width: 340px; }
+.rm-pop-vote .rm-vote-edit { min-width: 0; }
+
+/* ROW FORM: one line at strip sizing, never wider than the dock */
+.rm-vote-strip {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  height: 40px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+.rm-vote-strip[data-live="1"] { border-color: oklch(0.5 0.11 168 / 0.7); }
+.rm-vote-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  flex: 0 0 auto;
+}
+.rm-vote-strip-q {
+  flex: 1 1 auto;
+  min-width: 40px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12.5px;
+  color: var(--fg-1);
+}
+.rm-vote-strip-tally {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+.rm-vote-strip-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 12px;
+}
+.rm-vote-strip-opt .rm-vote-label { max-width: 90px; }
+.rm-vote-strip-opt .rm-vote-track { width: 48px; flex: 0 0 auto; }
+.rm-vote-strip-opt.win .rm-vote-label { font-weight: 700; }
+.rm-vote-strip .rm-vote-actions { flex-wrap: nowrap; flex: 0 0 auto; }
+.rm-vote-strip .rm-vote-anchor { flex: 0 0 auto; display: inline-flex; }
+.rm-vote-strip .rm-guest-admit { display: inline-flex; align-items: center; gap: 3px; }
+
+/* ═══ GUESTS — row form: one 40px tile per person, scrolling sideways ═════ */
+.rm-guests-row {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  align-content: center;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  width: 100%;
+  min-width: 0;
+}
+.rm-gtile {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 8px 0 4px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: #0a0d13;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+}
+.rm-gtile.on { border-color: oklch(0.5 0.11 168 / 0.7); }
+.rm-gtile.waiting { border-style: dashed; }
+.rm-gtile-img {
+  width: 54px;
+  height: 30px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #060810;
+  flex: 0 0 auto;
+}
+.rm-gtile-img.empty { display: inline-block; }
+.rm-gtile-name {
+  font-size: 12px;
+  font-weight: 600;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rm-gtile .rm-guest-admit { margin-left: 0; }
+.rm-head-modlink { height: 22px; padding: 0 9px; font-size: 11px; }
+
+/* ═══ UPDATES — a centered column; a one-line strip in a row dock ═════════ */
+.rm-panel-updates .rm-panel-body { display: flex; flex-direction: column; }
+.upd { max-width: 560px; width: 100%; margin: 0 auto; }
+.upd-head { justify-content: space-between; }
+.upd-name { flex: 1 1 auto; }
+.rm-panel[data-in="top"] .upd.upd-strip { flex-direction: row; align-items: center; overflow: hidden; margin: 0; max-width: none; }
+.upd-line {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  line-height: 1.3;
+  cursor: pointer;
+  color: var(--fg-2);
+}
+.upd-line:hover .upd-tag { color: var(--mint); }
