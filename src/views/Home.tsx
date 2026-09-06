@@ -1164,7 +1164,7 @@ function ControlRoomHome({
   /** The in-app "add a Boomin workspace" door — the self-hoster's Network card leads here. */
   onAddEndpoint: (door?: "server") => void;
 }) {
-  const { mainId, endpointId: mainEndpointId } = useMainRoom(rooms);
+  const { mainId, endpointId: mainEndpointId, setMain } = useMainRoom(rooms);
   const seats = useRoomSeats(rooms, useActiveEndpoint());
   // ONE order, sorted once per list: the main stage first, then by
   // creation. Never by last_live_at — that changes the moment you leave a
@@ -1234,7 +1234,9 @@ function ControlRoomHome({
               onMakeMain={async () => {
                 const sid = parseConfig(room.config).server_room_id;
                 if (!mainEndpointId || !sid) return;
+                setMain(room.id); // optimistic: the card wears the pin now
                 await roomSetDefault(mainEndpointId, sid).catch(() => {});
+                notifyRoomsChanged(); // forces the server re-read that confirms it
                 onRoomsChanged();
               }}
               onOpen={() => onOpenRoom(room)}
@@ -3064,7 +3066,7 @@ function FirewallBanner() {
 /** The brand's main stage, as a LOCAL room id. Boomin gives every brand
  *  exactly one default room (Network bookings and deals land there); we find
  *  the local row registered against it. Self-hosted workspaces have none. */
-function useMainRoom(rooms: LiveRoom[]): { mainId: string | null; endpointId: string | null } {
+function useMainRoom(rooms: LiveRoom[]): { mainId: string | null; endpointId: string | null; setMain: (id: string) => void } {
   const [state, setState] = useState<{ mainId: string | null; endpointId: string | null }>({ mainId: null, endpointId: null });
   // Re-run when the MAPPING inputs change (which rooms exist, which server
   // rows they point at), not on every list identity — and read the server
@@ -3099,7 +3101,11 @@ function useMainRoom(rooms: LiveRoom[]): { mainId: string | null; endpointId: st
       window.removeEventListener(ROOMS_EVENT, on);
     };
   }, [key]);
-  return state;
+  // The pin moves the moment you choose it. The server read that follows
+  // either agrees or corrects it — waiting on a cached list meant the menu
+  // closed with nothing visibly changed until something else refreshed.
+  const setMain = (id: string) => setState((p) => ({ ...p, mainId: id }));
+  return { ...state, setMain };
 }
 
 

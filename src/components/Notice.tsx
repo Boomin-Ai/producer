@@ -43,6 +43,9 @@ function NoticePill({ n }: { n: NoticeT }) {
   return (
     <div
       className={`rm-notice tone-${n.tone}${n.check ? " check" : ""}${n.faded ? " faded" : ""}${clipped ? " clipped" : ""}`}
+      // The hover card reads this, so the full line can wrap below the bar
+      // instead of the pill widening into the Link cluster.
+      data-full={n.text}
       role={n.tone === "error" ? "alert" : "status"}
       onMouseEnter={() => {
         hoverRef.current = true;

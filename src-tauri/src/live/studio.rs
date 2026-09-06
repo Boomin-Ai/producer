@@ -93,6 +93,11 @@ pub struct Studio {
     scene: *mut ffi::obs_scene_t,
     bg: *mut ffi::obs_source_t,
     cap: *mut ffi::obs_source_t,
+    /// The capture's scene item, kept so teardown can remove it explicitly.
+    /// Releasing our own reference is not enough: the scene holds one too, so
+    /// the window capture (and macOS's screen-sharing indicator with it)
+    /// outlived Studio being switched off.
+    cap_item: *mut ffi::obs_sceneitem_t,
     pub spec: StudioSpec,
 }
 
@@ -181,6 +186,7 @@ impl Studio {
             scene,
             bg: ptr::null_mut(),
             cap: ptr::null_mut(),
+            cap_item: ptr::null_mut(),
             spec: spec.clone(),
         };
 
@@ -247,6 +253,7 @@ impl Studio {
                 return Err("studio window capture creation failed".into());
             }
             let item = ffi::obs_scene_add(scene, me.cap);
+            me.cap_item = item;
             if item.is_null() {
                 me.teardown();
                 return Err("studio window capture could not join the scene".into());
@@ -270,6 +277,13 @@ impl Studio {
     pub unsafe fn teardown(&mut self) {
         STUDIO_ON.store(false, Ordering::SeqCst);
         ffi::obs_set_output_source(STUDIO_CHANNEL, ptr::null_mut());
+        // The capture leaves the SCENE first. The scene owns a reference of
+        // its own, so dropping only ours left the window capture alive and
+        // macOS kept showing "Currently Sharing" after Studio was off.
+        if !self.cap_item.is_null() {
+            ffi::obs_sceneitem_remove(self.cap_item);
+            self.cap_item = ptr::null_mut();
+        }
         if !self.cap.is_null() {
             ffi::obs_source_release(self.cap);
             self.cap = ptr::null_mut();
