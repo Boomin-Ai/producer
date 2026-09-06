@@ -9762,3 +9762,271 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   color: var(--fg-2);
 }
 .upd-line:hover .upd-tag { color: var(--mint); }
+
+/* ═══ v0.4.36 POLISH ═══════════════════════════════════════════════════════ */
+
+/* ── Notices: the ONE place the room talks back. A centred glass pill in the
+   top bar's drag strip. The strip stays a window-drag region; only the pill
+   takes the pointer. Tones are TOKENS: success = mint, info = surface-2,
+   warning = amber, error = red. Hover pauses the clock; click dismisses. */
+.rm-top-drag {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  overflow: hidden;
+}
+.rm-notices {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: 60%;
+  min-width: 0;
+  pointer-events: none;
+}
+.rm-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  min-width: 0;
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--fg-1);
+  background: var(--surface-2);
+  border: 1px solid var(--line-1);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  pointer-events: auto;
+  cursor: default;
+  -webkit-app-region: no-drag;
+  animation: rm-notice-in 0.18s ease-out;
+}
+.rm-notice-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rm-notice.tone-info { background: var(--surface-2); }
+.rm-notice.tone-success {
+  background: color-mix(in srgb, var(--mint) 18%, var(--surface-2));
+  border-color: color-mix(in srgb, var(--mint) 45%, transparent);
+  color: color-mix(in srgb, var(--mint) 55%, var(--fg-1));
+}
+.rm-notice.tone-warning {
+  background: color-mix(in srgb, var(--amber) 16%, var(--surface-2));
+  border-color: color-mix(in srgb, var(--amber) 45%, transparent);
+  color: color-mix(in srgb, var(--amber) 55%, var(--fg-1));
+}
+.rm-notice.tone-error {
+  background: color-mix(in srgb, var(--red) 16%, var(--surface-2));
+  border-color: color-mix(in srgb, var(--red) 45%, transparent);
+  color: color-mix(in srgb, var(--red) 45%, var(--fg-1));
+}
+/* Copy-link confirmation: the check draws in, the pill pulses once. */
+.rm-notice.check { animation: rm-notice-in 0.18s ease-out, rm-notice-pulse 0.55s ease-out 0.05s; }
+.rm-notice-check { width: 14px; height: 14px; flex: 0 0 auto; }
+.rm-notice-check path {
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  animation: rm-notice-draw 0.35s ease-out 0.08s forwards;
+}
+@keyframes rm-notice-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes rm-notice-pulse {
+  0% { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28), 0 0 0 0 color-mix(in srgb, var(--mint) 45%, transparent); }
+  100% { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28), 0 0 0 10px transparent; }
+}
+@keyframes rm-notice-draw { to { stroke-dashoffset: 0; } }
+
+/* ── Vote strip ghost: a panel with no head actions used to hover an EMPTY
+   plate (the actions pill with only the hidden ✕ inside). No children → no
+   plate. */
+.room:not(.layout-edit) .rm-panel-actions:not(:has(> :not(.rm-panel-hide))) {
+  display: none;
+}
+
+/* ── Mods panel: Seated (rows) / Seat someone (form) — the Access sheet's
+   glass list pattern. */
+.rm-mods { gap: 12px; }
+.rm-mods-sec { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.rm-mods-sec-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  padding: 0 2px;
+}
+.rm-mods-sec-label em {
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--fg-3);
+  opacity: 0.8;
+}
+.rm-mods-seatform {
+  padding: 8px 10px 10px;
+  border-radius: 10px;
+  border: 0.5px solid var(--line-1);
+  background: var(--surface-1);
+}
+.rm-mods-seatform .rm-mod-seat { padding-top: 0; }
+.rm-mod-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--fg-1);
+  background: var(--surface-2);
+  border: 0.5px solid var(--line-2);
+}
+/* "Seat a mod" landed here: one soft mint sweep on the card. */
+.rm-panel.flash { animation: rm-panel-flash 1.3s ease-out; }
+@keyframes rm-panel-flash {
+  0% { box-shadow: inset 0 0 0 1.5px var(--mint), 0 0 0 0 color-mix(in srgb, var(--mint) 35%, transparent); }
+  60% { box-shadow: inset 0 0 0 1.5px var(--mint), 0 0 0 8px transparent; }
+  100% { box-shadow: none; }
+}
+
+/* ── Side dock at its floor (SIDE_MIN): the head stays, title ellipsized, so
+   a minimized rail still says which card is which. */
+.room:not(.layout-edit) .rm-dock-side.mini .rm-panel:not(.rm-panel-guests) > .rm-panel-head {
+  position: static;
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+  padding: 6px var(--pad-card) 0;
+  min-height: 0;
+  gap: 4px;
+}
+.room:not(.layout-edit) .rm-dock-side.mini .rm-panel-head .rm-group-label {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+}
+.room:not(.layout-edit) .rm-dock-side.mini .rm-panel:not(.rm-panel-guests) .rm-panel-actions {
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+/* ── Stats in a row dock: exactly the vote/chat strip height; tiles shrink to
+   the width (min 64px), label goes first, then the number scales. */
+.rm-panel-stats[data-in="top"] .rm-panel-body {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.rm-panel[data-in="top"] .stx {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 32px;
+  overflow: hidden;
+  padding: 0 2px;
+}
+.rm-panel[data-in="top"] .stx-grid {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  container-type: inline-size;
+  container-name: stxgrid;
+}
+.rm-panel[data-in="top"] .stx-tile {
+  flex: 1 1 64px;
+  min-width: 64px;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  overflow: hidden;
+}
+.rm-panel[data-in="top"] .stx-lbl { font-size: 9px; }
+.rm-panel[data-in="top"] .stx-num { font-size: clamp(11px, 2.6cqi, 13px); }
+@container stxgrid (max-width: 420px) {
+  .stx-lbl { display: none; }
+}
+.rm-panel[data-in="top"] .stx-warns { flex: 0 0 auto; white-space: nowrap; }
+
+/* ── Handle tooltips: ours, never the OS bubble under the cursor. Drawn
+   AWAY from the dock interior (toward the stage), pointer-events none. */
+.rm-split,
+.rm-vtab,
+.rm-sheet-head {
+  position: relative;
+}
+.rm-split[data-tip]::after,
+.rm-vtab[data-tip]::after,
+.rm-sheet-head[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  z-index: 60;
+  pointer-events: none;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fg-1);
+  background: oklch(0.16 0.02 250 / 0.94);
+  border: 1px solid var(--line-1);
+  border-radius: 7px;
+  padding: 4px 8px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transform: translate(-50%, 0);
+  transition: opacity 0.12s ease 0.25s;
+}
+.rm-split[data-tip]:hover::after,
+.rm-vtab[data-tip]:hover::after,
+.rm-sheet-head[data-tip]:hover::after { opacity: 1; }
+.rm-split:active::after,
+.rm-vtab:active::after,
+.rm-sheet-head:active::after { opacity: 0 !important; }
+/* bottom dock: above the handle, into the stage */
+.rm-sheet-head[data-kind="bottom"]::after,
+.rm-split[data-kind="bottom"]::after { left: 50%; bottom: calc(100% + 6px); }
+/* top dock: below the handle, into the stage */
+.rm-vtab[data-kind="top"]::after,
+.rm-split[data-kind="top"]::after { left: 50%; top: calc(100% + 6px); }
+/* side docks: beside the handle, toward the stage */
+.rm-split[data-kind="left"]::after { left: calc(100% + 8px); top: 50%; transform: translate(0, -50%); }
+.rm-split[data-kind="right"]::after { right: calc(100% + 8px); top: 50%; transform: translate(0, -50%); }
+/* a pair splitter INSIDE a dock (row or column): above it, small */
+.rm-split-row[data-tip]::after { left: 50%; right: auto; top: auto; bottom: calc(100% + 4px); transform: translate(-50%, 0); }
+.rm-split-v[data-tip]::after { left: calc(100% + 8px); right: auto; top: 50%; bottom: auto; transform: translate(0, -50%); }
+
+/* ── Source row rename (camera): the scene's field, in the row. */
+.rm-row-rename-field { flex: 1 1 auto; min-width: 0; }
+.rm-row-rename { font-size: 12px; }
