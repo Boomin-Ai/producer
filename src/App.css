@@ -10048,13 +10048,21 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 }
 
 /* The Mods head "+" sheet: the account sheet's glass, popover-placed. */
-.rm-pop-seat { width: 300px; background: oklch(0.2 0.038 250 / 0.92); backdrop-filter: blur(18px) saturate(1.2); -webkit-backdrop-filter: blur(18px) saturate(1.2); }
-.rm-seat-sheet { display: flex; flex-direction: column; gap: 6px; padding: 2px 0 0; }
+.rm-pop-seat { width: 300px; background: oklch(0.2 0.038 250 / 0.92); backdrop-filter: blur(18px) saturate(1.2); -webkit-backdrop-filter: blur(18px) saturate(1.2); overflow: visible; }
+.rm-seat-sheet { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 0; }
 .rm-seat-sheet .sel { width: 100%; }
-.rm-seat-go { align-self: flex-end; min-width: 72px; }
+.rm-seat-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+.rm-seat-hint { flex: 1 1 auto; min-width: 0; color: var(--fg-3); font-size: 11.5px; line-height: 1.35; }
+.rm-seat-go { flex: 0 0 auto; margin-left: 0; min-width: 72px; }
 .rm-seat-err { color: #f5a3a3; font-size: 12px; line-height: 1.45; padding: 8px 4px 2px; }
 .rm-seat-retry { border: 0; background: none; color: var(--fg-1); font-size: 12px; text-decoration: underline; cursor: pointer; padding: 0; }
-.rm-seat-note { color: var(--fg-3); font-size: 12px; line-height: 1.45; padding: 8px 4px 2px; }
+.rm-seat-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 4px 4px 2px; }
+.rm-seat-note { color: var(--fg-3); font-size: 12px; line-height: 1.45; }
+.rm-seat-link { border: 0; background: none; padding: 0; color: var(--mint); font-size: 12px; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.rm-seat-link:hover { filter: brightness(1.1); }
+/* A Select opened INSIDE a portaled popover (the seat sheet) must list ABOVE
+   it: the sheet is .rm-pop-portal at 130, the list was .cr-menu's 61. */
+.sel-menu.cr-menu { z-index: 140; }
 
 /* Channels popover, nothing connected yet: one line + the way to Integrations. */
 .rm-chn-empty { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; min-width: 220px; }
@@ -10118,9 +10126,18 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
    After its ttl the LAST notice stays, dimmed, until hovered / clicked /
    replaced. Errors never dim. The pill widens to the whole middle strip
    before it ellipsizes. */
-.rm-top-drag { min-width: 0; }
-.rm-notices { max-width: 100%; width: 100%; }
-.rm-notice { max-width: calc(100% - 8px); transition: opacity 0.18s ease; }
+.rm-top-drag { min-width: 0; position: relative; }
+/* v0.4.39 — the pill stack is ABSOLUTE in the middle slot: a pill that
+   widens on hover can only ever overlap the drag region, never push the
+   Link / layout buttons. Ellipsized at rest (a share of the slot), it
+   EXPANDS natively to the full slot on hover — max-width transition, 120 ms
+   ease-out, no delay, no browser tooltip. */
+.rm-notices { position: absolute; inset: 0; width: auto; max-width: none; justify-content: center; }
+.rm-notice {
+  max-width: 62%;
+  transition: opacity 0.18s ease, max-width 0.12s ease-out;
+}
+.rm-notice.clipped:hover { max-width: calc(100% - 8px); }
 .rm-notice.faded { opacity: 0.55; }
 .rm-notice.faded:hover { opacity: 1; }
 
