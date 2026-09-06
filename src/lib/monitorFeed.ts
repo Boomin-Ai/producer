@@ -182,6 +182,15 @@ export interface MonitorState {
   stalled: boolean;
 }
 
+/** What the stage needs from ANY program leg: the receive-only monitor
+ *  (below) or a seat's sending half (lib/seatMedia.ts). */
+export interface ProgramSource {
+  subscribe(fn: () => void): () => void;
+  snapshot(): MonitorState;
+  programStream(): MediaStream | null;
+  noteFrame(): void;
+}
+
 export interface ProgramMonitorSpec {
   /** The join URL the monitor route answered; the invite code is its last
    * path segment — the seat's credential for the status poll and re-mints. */
@@ -203,7 +212,7 @@ const INITIAL: MonitorState = {
   stalled: false,
 };
 
-export class ProgramMonitor {
+export class ProgramMonitor implements ProgramSource {
   readonly spec: ProgramMonitorSpec;
   private readonly api: string;
   private readonly code: string | null;

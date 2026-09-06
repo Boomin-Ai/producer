@@ -104,8 +104,19 @@ import {
   setEditingAllowed,
   localSetDecision,
   isMonitor,
+  isMediaSeat,
+  hasAnyMedia,
+  seatDisplayName,
+  seatSourceLabel,
+  seatUserId,
 } from "../lib/participants";
-import { MonitorSender, ProgramMonitor, monitorLog, monitorPlaceholder, type MonitorRoomInfo, type MonitorState } from "../lib/monitorFeed";
+import { MonitorSender, ProgramMonitor, monitorLog, monitorPlaceholder, type MonitorRoomInfo, type MonitorState, type ProgramSource } from "../lib/monitorFeed";
+import { SeatMediaLeg } from "../lib/seatMedia";
+import { ModBoard } from "./ModBoard";
+import { DEFAULT_MOD_BOARD, MOD_BOARD_PREF, normalizeModBoard, seatFeeds, throwUpState, type ModBoardLayout } from "../lib/modBoard";
+import { prefGet } from "../lib/prefs";
+import { memberRoomRole, team } from "../lib/access";
+import type { Member } from "../lib/accessDiff";
 import {
   EMPTY_MOD_STAGE,
   hostStagePlan,
@@ -987,6 +998,120 @@ function VoteHostCard({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** The host's MODS panel: the seats in the room (program-monitor rows —
+ * never listed among the guests, founder rule), each with its name and
+ * role, and for the HOST three media toggles per seat (camera / mic /
+ * screen — the Jamie pattern; media grants are the host's alone to give),
+ * plus "seat someone": a room role for a team member through the same door
+ * the Access tab uses. A seat holding media that threw up shows ON SET,
+ * with Show / Screen to frame its feed exactly like a guest card. */
+function ModsPanel({
+  seats,
+  items,
+  isHost,
+  canManage,
+  members,
+  roomId,
+  onToggleGrant,
+  onShow,
+  onSeat,
+  error,
+}: {
+  seats: RoomGuest[];
+  items: LiveItem[];
+  isHost: boolean;
+  canManage: boolean;
+  members: Member[] | null;
+  roomId: string | null;
+  onToggleGrant: (seat: RoomGuest, grant: "media.camera" | "media.mic" | "media.screen", enabled: boolean) => void;
+  onShow: (sourceId: string, show: boolean) => void;
+  onSeat: (memberId: string, role: "admin" | "editor" | "viewer") => void;
+  error: string | null;
+}) {
+  const [pick, setPick] = useState("");
+  const [role, setRole] = useState<"admin" | "editor" | "viewer">("editor");
+  const seated = new Set(seats.map((g) => seatUserId(g)).filter((x): x is string => !!x));
+  const roleOf = (g: RoomGuest): string => {
+    const uid = seatUserId(g);
+    const m = uid ? members?.find((x) => x.user_id === uid) : undefined;
+    if (!m) return "seat";
+    if (m.type === "team" && (m.role === "owner" || m.role === "admin" || m.role === "editor")) return "host";
+    const r = roomId ? memberRoomRole(m, roomId).role : null;
+    return r ?? (m.grants.some((x) => x.scope_type === "brand" && x.role !== "viewer") ? "host" : "viewer");
+  };
+  const candidates = (members ?? []).filter((m) => !seated.has(m.user_id) && !(m.type === "team" && (m.role === "owner" || m.role === "admin" || m.role === "editor")));
+  return (
+    <div className="rm-mods">
+      {seats.length === 0 && <div className="rm-rows-empty">No one is seated. A manager or mod who opens this room takes a seat here.</div>}
+      {seats.map((g) => {
+        const grants = resolveGrants(g);
+        const ids = sourceIdsFor(g.id);
+        const cam = items.find((i) => i.id === ids.camera);
+        const scr = grants.has("media.screen") ? items.find((i) => i.id === ids.screen) : undefined;
+        const media = isMediaSeat(g);
+        const tg = (grant: "media.camera" | "media.mic" | "media.screen", icon: ReactNode, name: string) => (
+          <button
+            className={`rm-mod-tg${grants.has(grant) ? " on" : ""}`}
+            disabled={!isHost}
+            title={!isHost ? `Only the host gives ${name}` : grants.has(grant) ? `Take ${name} back` : `Give ${name}`}
+            onClick={() => onToggleGrant(g, grant, !grants.has(grant))}
+          >
+            {icon}
+          </button>
+        );
+        return (
+          <div key={g.id} className="rm-mod-row">
+            <div className="rm-mod-id">
+              <span className="rm-mod-name">{seatDisplayName(g)}</span>
+              <span className="rm-mod-role">{roleOf(g)}</span>
+              {cam?.visible && <span className="rm-mod-onset">ON SET</span>}
+            </div>
+            <div className="rm-mod-media">
+              {tg("media.camera", ic.cam, "camera")}
+              {tg("media.mic", ic.mic, "mic")}
+              {tg("media.screen", ic.screen, "screen")}
+            </div>
+            {media && isHost && (
+              <div className="rm-mod-set">
+                <button className={`rm-guest-stage${cam?.visible ? " on" : ""}`} disabled={!cam} title={cam?.visible ? "Take their feed off the set" : "Pop their feed into the next free guest slot"} onClick={() => cam && onShow(cam.id, !cam.visible)}>
+                  {cam?.visible ? "On set" : cam ? "Show" : "Feed connecting…"}
+                </button>
+                {scr && (
+                  <button className={`rm-guest-stage${scr.visible ? " on" : ""}`} title={scr.visible ? "Take their screen off" : "Pop their screen share into the next free guest slot"} onClick={() => onShow(scr.id, !scr.visible)}>
+                    {scr.visible ? "Screen on" : "Screen"}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {canManage && (
+        <div className="rm-mod-seat">
+          <select value={pick} onChange={(e) => setPick(e.target.value)} title="Seat a team member">
+            <option value="">Seat someone…</option>
+            {candidates.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name || m.email}
+              </option>
+            ))}
+          </select>
+          <select value={role} onChange={(e) => setRole(e.target.value as "editor")} title="Their role in this room">
+            <option value="editor">Mod</option>
+            <option value="viewer">Viewer</option>
+            <option value="admin">Manager</option>
+          </select>
+          <button className="rm-guest-admit" disabled={!pick} onClick={() => { if (pick) { onSeat(pick, role); setPick(""); } }}>
+            Seat
+          </button>
+        </div>
+      )}
+      {!canManage && seats.length > 0 && <div className="rm-mod-note">Seating someone is a manager's act — the Access tab.</div>}
+      {error && <div className="rm-chatsetup-err">{error}</div>}
     </div>
   );
 }
@@ -2996,6 +3121,37 @@ export function LiveView({
   const monitorStartedFor = useRef<string | null>(null);
   const [monitorSeat, setMonitorSeat] = useState<ProgramMonitor | null>(null);
   const monitorSenders = useRef<Map<string, MonitorSender>>(new Map());
+  // ── A seat WITH MEDIA (lib/seatMedia.ts, the Jamie pattern) ──────────
+  // When the host hands this seat camera / mic / screen, its monitor row
+  // becomes a sending participant: the receive-only leg above is replaced
+  // by the guest-page leg on the SAME row (camera + mic on peer main, the
+  // screen on peer screen, the program back as the return feed).
+  const mediaLegRef = useRef<SeatMediaLeg | null>(null);
+  const [mediaLeg, setMediaLeg] = useState<SeatMediaLeg | null>(null);
+  /** This seat's own participant row: id + join URL from `POST …/monitor`,
+   * and the media it holds (re-read off the roster every tick). */
+  const mySeatRef = useRef<{ id: string; joinUrl: string; media: string } | null>(null);
+  const [mySeatId, setMySeatId] = useState<string | null>(null);
+  const [myGrants, setMyGrants] = useState<Set<string>>(() => new Set());
+  /** HOST: the seats in the room (monitor rows) for the Mods panel — never
+   * in `roster` (the guests panel never lists them, founder rule). */
+  const [seatRows, setSeatRows] = useState<RoomGuest[]>([]);
+  /** HOST: everything that may be on the set — guests, plus seats holding
+   * media. The stage truth and the reconcile read THIS, not `roster`. */
+  const liveRowsRef = useRef<RoomGuest[]>([]);
+  const [members, setMembers] = useState<Member[] | null>(null);
+  const [modsErr, setModsErr] = useState<string | null>(null);
+  /** The board's own layout (lib/modBoard.ts), saved per seat. */
+  const [boardLayout, setBoardLayout] = useState<ModBoardLayout>(DEFAULT_MOD_BOARD);
+  useEffect(() => {
+    let alive = true;
+    prefGet(MOD_BOARD_PREF)
+      .then((v) => alive && setBoardLayout(normalizeModBoard(v)))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
   /** The engine's program thumb runs while ANY monitor seat asked for it. */
   const programThumbOn = useRef(false);
   const monitorThumbDemand = () => {
@@ -3166,7 +3322,7 @@ export function LiveView({
    * guests already BOUND to a slot (placed a moment ago; the engine's
    * visibility echo lands a frame later) — mapped back through the roster. */
   const shownGuestIds = (): string[] => {
-    const live = rosterRef.current.filter((g) => !!g.render_url);
+    const live = liveRowsRef.current.filter((g) => !!g.render_url);
     const visible = new Set((sourcesRef.current.items ?? []).filter((i) => i.kind === "guest" && i.visible).map((i) => i.id));
     const bound = new Set(Object.values(cfgRef.current.slot_bindings ?? {}));
     return live.filter((g) => visible.has(sourceIdsFor(g.id).camera) || bound.has(sourceIdsFor(g.id).camera)).map((g) => g.id);
@@ -3199,7 +3355,7 @@ export function LiveView({
     }
     if (isOwnEcho(version, hostPostedVersionRef.current)) return;
     if (!roomApplied.current) return; // the set is not mounted; the tick posts the truth when it is
-    const live = rosterRef.current.filter((g) => !!g.render_url);
+    const live = liveRowsRef.current.filter((g) => !!g.render_url);
     const shown = shownGuestIds();
     // The server pushes the frame BEFORE our own POST resolves, so the
     // version alone cannot tell our echo from a request: a list equal to
@@ -3217,7 +3373,7 @@ export function LiveView({
       }
       for (const gid of plan.toHide) hideGuestFromSlot(sourceIdsFor(gid).camera);
       if (refused.length) {
-        const names = refused.map((gid) => live.find((g) => g.id === gid)?.display_name || "a guest").join(", ");
+        const names = refused.map((gid) => { const g = live.find((x) => x.id === gid); return g ? (isMonitor(g) ? seatDisplayName(g) : g.display_name || "a guest") : "a guest"; }).join(", ");
         setBanner(`A mod asked to stage ${names} — no free guest slot. Add one: Sources → + → Guest slot`);
         window.setTimeout(() => setBanner(null), 8000);
       }
@@ -3269,6 +3425,73 @@ export function LiveView({
       setGuestErr(String(e).replace(/^Error:\s*/, ""));
     }
   };
+
+  /** Seat: THROW UP — ask the host's set for a slot for this seat's own row
+   * through the honest-staging path (lib/stageTruth.ts). The screen window
+   * starts the share first; the host frames the share from its Mods panel. */
+  const throwUp = async (kind: "camera" | "screen") => {
+    const id = mySeatRef.current?.id;
+    if (!id) return;
+    const leg = mediaLegRef.current;
+    if (kind === "screen" && leg && !leg.snapshot().sharing) {
+      const ok = await leg.toggleShare();
+      if (!ok) return;
+    }
+    if (kind === "screen" && modRowStage(modStageRef.current, id) === "on") return;
+    await modStageToggle(id);
+  };
+  /** HOST: give or take a seat's camera / mic / screen (api: host-only). */
+  const toggleSeatGrant = async (seatRow: RoomGuest, grant: "media.camera" | "media.mic" | "media.screen", enabled: boolean) => {
+    const ep = endpointRef.current;
+    if (!ep) return;
+    try {
+      const r = await guestsIpc.request(ep, "POST", `/v1/app/live/guests/${seatRow.id}/grants`, { grant, enabled });
+      if (!r.available) throw new Error("This server has no seat media (update the API).");
+      if (r.status >= 400) {
+        const b = (r.body ?? {}) as { code?: string; message?: string };
+        throw new Error(b.code === "room_host_required" ? "Only the host gives a seat media." : b.message ?? b.code ?? `HTTP ${r.status}`);
+      }
+      setModsErr(null);
+      rosterTickRef.current?.();
+    } catch (e) {
+      setModsErr(String(e).replace(/^Error:\s*/, ""));
+    }
+  };
+  /** HOST / MANAGER: seat a team member — a room role through the Access
+   * tab's own door (`POST …/access/grants`). They take the seat when they
+   * open this room. */
+  const seatMember = async (memberId: string, grant: "admin" | "editor" | "viewer") => {
+    const ep = endpointRef.current;
+    const sid = cfg.server_room_id;
+    if (!ep || !sid) return;
+    try {
+      await team.setRoomRole(ep, sid, memberId, grant);
+      setModsErr(null);
+      setBanner("Seated — they take the seat when they open this room in Producer.");
+      window.setTimeout(() => setBanner(null), 5000);
+    } catch (e) {
+      setModsErr(String(e).replace(/^Error:\s*/, ""));
+    }
+  };
+  /** The team, for the Mods panel's names / roles / "seat someone". Read
+   * once per room open, only on Boomin and only for a seat that manages. */
+  const membersAsked = useRef(false);
+  useEffect(() => {
+    if (!boominRoom || accessPending || !(roomRole === "host" || roomAccess.can.manage) || membersAsked.current) return;
+    if (seatRows.length === 0 && dockOf(layout, "mods") === "hidden") return;
+    const ep = endpointRef.current;
+    if (!ep) return;
+    membersAsked.current = true;
+    void (async () => {
+      try {
+        const bid = await team.brandId(ep);
+        if (!bid) return;
+        setMembers(await team.members(ep, bid));
+      } catch {
+        membersAsked.current = false;
+      }
+    })();
+  }, [boominRoom, accessPending, roomRole, roomAccess.can.manage, seatRows.length, layout]);
 
   /** Mint (or reuse) the room's shareable link. */
   const ensureGuestLink = async () => {
@@ -4969,15 +5192,50 @@ export function LiveView({
     try {
       const res = await guestsIpc.request(epId, "POST", `/v1/app/live/rooms/${serverRoomId}/monitor`, {});
       if (!res.available || !endpointBaseRef.current) return;
-      const body = (res.body ?? {}) as { join_url?: string };
+      const body = (res.body ?? {}) as { join_url?: string; participant?: { id?: string; grants?: unknown } };
       if (!body.join_url) return;
-      monitorRef.current?.leave();
-      const m = new ProgramMonitor({ joinUrl: body.join_url, apiBase: endpointBaseRef.current, hostName: room?.name ?? null });
+      const grants = resolveGrants({ grants: body.participant?.grants });
+      const id = typeof body.participant?.id === "string" ? body.participant.id : null;
+      mySeatRef.current = id ? { id, joinUrl: body.join_url, media: mediaKey(grants) } : null;
+      setMySeatId(id);
+      setMyGrants(grants);
+      openSeatLeg(body.join_url, grants);
+    } catch (e) {
+      setGuestErr(String(e).replace(/^Error:\s*/, ""));
+    }
+  };
+  /** The media a seat holds, as one comparable key. */
+  const mediaKey = (g: ReadonlySet<string>) => ["media.camera", "media.mic", "media.screen"].filter((k) => g.has(k)).join(",");
+  /** Open the leg this seat's grants call for: the receive-only monitor, or
+   * — when the host handed it media — the sending half on the same row.
+   * Never both: two host peers on one channel would collide. */
+  const openSeatLeg = (joinUrl: string, grants: ReadonlySet<string>) => {
+    monitorRef.current?.leave();
+    monitorRef.current = null;
+    setMonitorSeat(null);
+    mediaLegRef.current?.leave();
+    mediaLegRef.current = null;
+    setMediaLeg(null);
+    const apiBase = endpointBaseRef.current;
+    if (!apiBase) return;
+    if (hasAnyMedia(grants)) {
+      monitorLog(`seat: the host gave this seat ${mediaKey(grants)} — opening the sending half`);
+      const leg = new SeatMediaLeg({
+        joinUrl,
+        apiBase,
+        hostName: room?.name ?? null,
+        camera: grants.has("media.camera"),
+        mic: grants.has("media.mic"),
+        screen: grants.has("media.screen"),
+      });
+      mediaLegRef.current = leg;
+      setMediaLeg(leg);
+      void leg.start();
+    } else {
+      const m = new ProgramMonitor({ joinUrl, apiBase, hostName: room?.name ?? null });
       monitorRef.current = m;
       setMonitorSeat(m);
       m.start();
-    } catch (e) {
-      setGuestErr(String(e).replace(/^Error:\s*/, ""));
     }
   };
   // The monitor legs live exactly as long as the room is open in this view:
@@ -5000,8 +5258,14 @@ export function LiveView({
       monitorRef.current = null;
       monitorStartedFor.current = null;
       setMonitorSeat(null);
-      if (m) {
-        m.leave();
+      const leg = mediaLegRef.current;
+      mediaLegRef.current = null;
+      setMediaLeg(null);
+      leg?.leave();
+      mySeatRef.current = null;
+      setMySeatId(null);
+      if (m || leg) {
+        m?.leave();
         const epId = endpointRef.current;
         const sid = parseConfig(room.config).server_room_id;
         if (epId && sid) guestsIpc.request(epId, "DELETE", `/v1/app/live/rooms/${sid}/monitor`).catch(() => {});
@@ -5072,13 +5336,35 @@ export function LiveView({
             monitorStartedFor.current = room.id;
             void startProgramMonitor(epId, cfg.server_room_id!);
           }
+          // Our own row rides the roster: the media the host gave (or took
+          // back) shows up here, and the leg follows it — the sending half
+          // opens the moment camera / mic / screen lands, the receive-only
+          // monitor returns when the last one is revoked.
+          const me = mySeatRef.current;
+          const mine = me ? full.find((g) => g.id === me.id) : undefined;
+          if (me && mine) {
+            const grants = resolveGrants(mine);
+            const key = mediaKey(grants);
+            if (key !== me.media) {
+              me.media = key;
+              setMyGrants(grants);
+              openSeatLeg(me.joinUrl, grants);
+            }
+          }
           return;
         }
+        // Seats (monitor rows) for the Mods panel — and the set's candidate
+        // list: guests plus seats the host handed media (isMediaSeat).
+        const seats = full.filter((g) => isMonitor(g));
+        setSeatRows((prev) => (JSON.stringify(prev) === JSON.stringify(seats) ? prev : seats));
+        liveRowsRef.current = full.filter((g) => !isMonitor(g) || isMediaSeat(g));
         // The host's half of every monitor leg: one sender per monitor row,
         // dropped when the row leaves the roster (seat left, grant revoked,
-        // run ended). The engine never sees these.
+        // run ended) — or when the seat gained media: its render page's
+        // return leg carries the program then, and a second host peer on
+        // the same channel would collide. The engine never sees these.
         if (endpointBaseRef.current) {
-          const wantedMonitors = new Map(full.filter((g) => isMonitor(g) && !!g.render_url).map((g) => [g.id, g] as const));
+          const wantedMonitors = new Map(full.filter((g) => isMonitor(g) && !isMediaSeat(g) && !!g.render_url).map((g) => [g.id, g] as const));
           for (const [id, sender] of monitorSenders.current) {
             if (!wantedMonitors.has(id)) {
               sender.stop();
@@ -5152,7 +5438,7 @@ export function LiveView({
         // deliberately NOT on the broadcast: the room link is public, so
         // auto-admitting would put an unknown person on air with a name they
         // chose themselves.
-        const live = list.filter((g) => !!g.render_url);
+        const live = liveRowsRef.current.filter((g) => !!g.render_url);
         const present = new Set(
           (sources.items ?? []).filter((i) => i.kind === "guest").map((i) => i.id),
         );
@@ -5177,7 +5463,8 @@ export function LiveView({
               // No media.return_feed → the page never opens the return leg.
               if (!resolveGrants(g).has("media.return_feed")) u.searchParams.set("feed", "0");
             }
-            const name = g.display_name || "Guest";
+            // A seat's feed wears its name and role: "<name> · mod".
+            const name = isMonitor(g) ? seatSourceLabel(g) : g.display_name || "Guest";
             await extraSources
               .add(id, track === "screen" ? `${name} · screen` : name, { kind: "guest", url: u.toString() })
               .catch(() => {});
@@ -5875,6 +6162,24 @@ export function LiveView({
                 />
               ) : undefined
             }
+          />
+        );
+      case "mods":
+        // Seats — never guests (founder: the guests panel never lists a
+        // monitor row). Host: media toggles per seat + seat someone.
+        if (!boominRoom) return <div className="rm-rows-empty">Seats live on Boomin rooms. On an open server, mint a mod link from Guests.</div>;
+        return (
+          <ModsPanel
+            seats={seatRows}
+            items={(sources.items ?? []).filter((i) => i.kind === "guest")}
+            isHost={isHost}
+            canManage={isHost || roomAccess.can.manage}
+            members={members}
+            roomId={cfg.server_room_id ?? null}
+            onToggleGrant={(g, grant, on) => void toggleSeatGrant(g, grant, on)}
+            onShow={(id, show) => (show ? void showGuestInSlot(id) : hideGuestFromSlot(id))}
+            onSeat={(m, r) => void seatMember(m, r)}
+            error={modsErr}
           />
         );
       case "mixer":
@@ -6827,6 +7132,61 @@ export function LiveView({
       </header>
       {seat && <GreenRoomBar seat={guestSeat} spec={seat} onLeave={() => onLeave?.()} />}
 
+      {/* THE MOD VIEW (views/ModBoard.tsx): a non-host seat gets a board of
+        * its own — host output, scene pads, people, my feeds, switches —
+        * never the host's dock layout. The host's body follows. */}
+      {!isHost ? (
+        <ModBoard
+          title={room?.name ?? "Room"}
+          access={roomAccess}
+          pending={accessPending}
+          boomin={boominRoom}
+          online={!!monitorSeat || !!mediaLeg}
+          program={(mediaLeg as ProgramSource | null) ?? monitorSeat}
+          scenes={hostScenes}
+          onCut={(id) => void cutHostScene(id)}
+          vote={
+            roomAccess.can.interactions ? (
+              <VoteHostCard
+                vote={vote}
+                audienceLink={audienceLink}
+                onOpen={(i) => void openVote(i)}
+                onTransition={(t, hold) => void transitionVote(t, hold)}
+                onAudienceLink={() => void copyAudienceLink()}
+              />
+            ) : undefined
+          }
+          voteLive={!!vote && vote.state !== "closed" && vote.state !== "cancelled"}
+          onAudienceLink={roomAccess.can.interactions ? () => void copyAudienceLink() : undefined}
+          audienceLink={audienceLink}
+          people={
+            <GuestPanel
+              thumbs={{}}
+              roster={roster}
+              error={null}
+              items={[]}
+              role={roomRole}
+              control={roomAccess.can.control}
+              stage={modStage.confirmed}
+              stageState={modStage}
+              onAdmit={admitGuest}
+              onRemove={removeGuest}
+              onMute={() => {}}
+              onShow={() => {}}
+              onStageToggle={(id) => void modStageToggle(id)}
+              onOrder={(id, dir) => void modOrder(id, dir)}
+            />
+          }
+          grants={myGrants}
+          feeds={seatFeeds(myGrants)}
+          media={mediaLeg}
+          throwUp={throwUpState({ stage: modStage, seatId: mySeatId, grants: myGrants, canAsk: roomAccess.can.control })}
+          onThrowUp={(k) => void throwUp(k)}
+          layout={boardLayout}
+          error={guestErr}
+        />
+      ) : (
+      <>
       {layoutEdit && (
         <div className="rm-editbar">
           <span className="rm-editbar-dot" />
@@ -7124,6 +7484,8 @@ export function LiveView({
           </aside>
         )}
       </div>
+      </>
+      )}
 
       {sceneSettings && dockOf(layout, "scenes") !== "bottom" && dockOf(layout, "scenes") !== "top" && (
         <Pop anchor={popAnchor} align="right" className="rm-pop-devices">

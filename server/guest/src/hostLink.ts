@@ -92,6 +92,11 @@ export class HostLink {
     return !!this.screen;
   }
 
+  /** The share being sent, for a self-preview. Null while not sharing. */
+  screenStream(): MediaStream | null {
+    return this.screen;
+  }
+
   mainConnectionState(): RTCPeerConnectionState | null {
     return this.peers.get("main")?.pc.connectionState ?? null;
   }
