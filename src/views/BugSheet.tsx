@@ -167,10 +167,11 @@ export function BugSheet({ open, onClose, version, engine, encoder, scenes, sour
         }
       }
       const n = typeof body.issue_number === "number" ? body.issue_number : null;
-      const url = typeof body.issue_url === "string" ? body.issue_url : null;
       if (n !== null) {
+        // The number, and nothing else. Filing a bug must not throw the user out
+        // of the app they were using into a browser — they were mid-show, and a
+        // GitHub tab is our business, not theirs.
         notify(`Filed as #${n}`, { tone: "success", check: true, ttl: 9000 });
-        if (url) void openUrl(url).catch(() => {});
       } else {
         notify("Sent — thank you", { tone: "success", check: true });
       }
