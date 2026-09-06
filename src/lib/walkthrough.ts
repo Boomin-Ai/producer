@@ -93,7 +93,7 @@ export interface WalkCopy {
 
 export const WALK_COPY: Record<WalkStep, WalkCopy> = {
   welcome: {
-    title: "Welcome to your Producer room",
+    title: "Welcome to your Room, Producer",
     body: "This is your stage. In about a minute you'll have a scene with a camera in it, built the way every show here is built.",
   },
   edit: {
