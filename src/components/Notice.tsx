@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { type Notice as NoticeT, dismiss, subscribeNotices } from "../lib/notices";
+import { useEffect, useRef, useState } from "react";
+import { type Notice as NoticeT, dismiss, fade, subscribeNotices } from "../lib/notices";
 
 /** The live list of notices; one subscriber per host. */
 export function useNotices(): NoticeT[] {
@@ -8,19 +8,36 @@ export function useNotices(): NoticeT[] {
   return list;
 }
 
-/** One glass pill. Auto-dismisses after its ttl; hovering pauses the clock. */
+/** One glass pill. After its ttl it FADES in place (opacity 0.55) rather
+ * than vanishing — the last thing the room said stays readable until you
+ * hover it (full opacity, and the full text as a tooltip when the pill had
+ * to ellipsize), click it (dismiss), or a newer notice replaces it. Errors
+ * never fade: full opacity until dismissed. Hovering pauses the clock. */
 function NoticePill({ n }: { n: NoticeT }) {
   const [paused, setPaused] = useState(false);
+  const [clipped, setClipped] = useState(false);
+  const textRef = useRef<HTMLSpanElement>(null);
   useEffect(() => {
-    if (n.sticky || paused) return;
-    const t = window.setTimeout(() => dismiss(n.id), n.ttl);
+    if (n.sticky || paused || n.faded || n.tone === "error") return;
+    const t = window.setTimeout(() => fade(n.id), n.ttl);
     return () => window.clearTimeout(t);
-  }, [n.id, n.ttl, n.sticky, paused]);
+  }, [n.id, n.ttl, n.sticky, n.tone, n.faded, paused]);
+  // Tooltip only when the text had to ellipsize — a pill that fits says
+  // everything already.
+  useEffect(() => {
+    const el = textRef.current;
+    if (!el) return;
+    const check = () => setClipped(el.scrollWidth > el.clientWidth + 1);
+    check();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(check) : null;
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, [n.text]);
   return (
     <div
-      className={`rm-notice tone-${n.tone}${n.check ? " check" : ""}`}
+      className={`rm-notice tone-${n.tone}${n.check ? " check" : ""}${n.faded ? " faded" : ""}`}
       role={n.tone === "error" ? "alert" : "status"}
-      title={n.text}
+      title={clipped ? n.text : undefined}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onClick={() => dismiss(n.id)}
@@ -30,7 +47,7 @@ function NoticePill({ n }: { n: NoticeT }) {
           <path d="M3 8.5l3.2 3.2L13 4.8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       )}
-      <span className="rm-notice-text">{n.text}</span>
+      <span ref={textRef} className="rm-notice-text">{n.text}</span>
     </div>
   );
 }
@@ -40,8 +57,12 @@ function NoticePill({ n }: { n: NoticeT }) {
 export function NoticeHost() {
   const list = useNotices();
   if (list.length === 0) return null;
-  // Newest last; at most three on screen so a burst never buries the bar.
-  const shown = list.slice(-3);
+  // Newest last; at most three ACTIVE on screen so a burst never buries the
+  // bar. The one faded notice (if any) rides along — the store keeps at most
+  // one, and a fresh notice drops it.
+  const active = list.filter((n) => !n.faded).slice(-3);
+  const faded = list.filter((n) => n.faded);
+  const shown = [...faded, ...active];
   return (
     <div className="rm-notices" data-tauri-drag-region>
       {shown.map((n) => (
