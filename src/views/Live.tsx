@@ -2664,6 +2664,9 @@ export function LiveView({
    * the settle signal — the engine acknowledging the transforms — instead
    * of a timer guessing how long that takes. */
   const settleOnSources = useRef(false);
+  /** Room open: the engine reports its items AFTER the document is applied,
+   *  so the first scene apply has nothing to hide. Re-apply once they land. */
+  const reapplyOnSources = useRef(false);
   const [statuses, setStatuses] = useState<Map<string, LiveDestStatus>>(new Map());
 
   // Header health. Derived every render, never stored: a health number that
@@ -3879,7 +3882,9 @@ export function LiveView({
       const stage = stageLook(sourcesRef.current.items ?? []);
       const scenes = c.scenes.map((sc) => {
         if (sc.id !== active || spec.kind === "mic") return sc;
-        const look = { ...(sc.look && Object.keys(sc.look).length ? sc.look : stage) };
+        // A scene that never recorded a look is materialized from the stage
+        // so it has one to join; an existing (even empty) look is the truth.
+        const look = { ...(sc.look ?? stage) };
         look[id] = { ...(look[id] ?? {}), visible: true };
         return { ...sc, look };
       });
@@ -3925,7 +3930,9 @@ export function LiveView({
     const isMic = (c.sources.extras ?? []).find((e) => e.id === id)?.spec.kind === "mic";
     const stillUsed = !isMic && all.some((sc) => sc.id !== active && !!sc.look && id in sc.look);
     if (active && stillUsed) {
-      // Leave THIS scene: drop the membership, hide the item, keep the source.
+      // Another scene still holds it: leave THIS scene only. The Sources
+      // list is the active scene's, so the row goes away here and the other
+      // scene keeps its source.
       ipc.liveSetTransform(id, { visible: false }, true).catch(() => {});
       writeCfg({
         ...c,
@@ -3938,7 +3945,7 @@ export function LiveView({
       });
       return;
     }
-    // Last scene using it: the source leaves the graph, every look is scrubbed.
+    // Nobody else holds it: the source leaves the graph, every look is scrubbed.
     extraSources.remove(id).catch(() => {});
     writeCfg({
       ...c,
@@ -3961,7 +3968,7 @@ export function LiveView({
     const c = cfgRef.current;
     const active = activeSceneRef.current;
     const all = c.scenes;
-    const realLook = (sc: RoomScene) => !!(sc.look && Object.keys(sc.look).length);
+    const realLook = (sc: RoomScene) => !!sc.look;
     const stillUsed = all.some((sc) => sc.id !== active && realLook(sc) && id in sc.look!);
     const stage = stageLook(sourcesRef.current.items ?? []);
     const leaveScene = (sc: RoomScene) => {
@@ -4357,6 +4364,11 @@ export function LiveView({
           settleOnSources.current = false;
           setSceneSettled(true);
         }
+        if (reapplyOnSources.current) {
+          reapplyOnSources.current = false;
+          const sc = cfgRef.current.scenes.find((x) => x.id === activeSceneRef.current);
+          if (sc) window.setTimeout(() => void applySceneRef.current(sc, { cut: true }), 0);
+        }
         setSources(ev.sources);
         // The room document follows the scene, without disturbing the rest
         // of the document (layout, scenes, channels).
@@ -4609,7 +4621,10 @@ export function LiveView({
     // Guests AND mod feeds are excluded: transient ids; slots carry guest
     // geometry, `mod_feeds` carries a seat's (lib/modFeed.ts).
     const look = stageLook(sourcesRef.current.items ?? []);
-    if (!Object.keys(look).length) return;
+    // An empty stage is a real look. Bailing here meant a scene you emptied
+    // (or a brand-new one) kept whatever it had recorded before, which is
+    // how deleted sources came back on the next cut.
+    if (!sourcesRef.current.items) return;
     const base = cfgRef.current;
     writeCfg({
       ...base,
@@ -4664,8 +4679,9 @@ export function LiveView({
       const look = p.look ?? {};
       // Only address items that actually exist — a transform on a missing
       // id is an engine error, not a no-op, and a look never creates one.
+      const liveNow = sourcesRef.current.items ?? [];
       const exists = new Set([
-        ...(sources.items ?? []).map((i) => i.id),
+        ...liveNow.map((i) => i.id),
         ...(overlayActive ? ["overlay"] : []),
       ]);
       // SLOT MODEL: a slot bound to a guest applies AS the guest — same rect,
@@ -4690,9 +4706,12 @@ export function LiveView({
       // (a scene that dropped its camera stays camera-less); guests, mod
       // feeds and mics are exempt: slots and mod_feeds carry the first two
       // across every scene, and a mic is room-level audio with no look.
-      const realLook = !!(p.look && Object.keys(p.look).length);
+      // A look that EXISTS is the membership list, even when it is empty:
+      // an empty one means an empty stage. Only a scene with no look at all
+      // (never recorded) leaves the stage as it found it.
+      const realLook = !!p.look;
       if (realLook) {
-        for (const it of sources.items ?? []) {
+        for (const it of liveNow) {
           if (it.kind === "guest" || it.kind === "mod" || it.kind === "mic") continue;
           if (!(it.id in look) && it.visible) {
             ipc.liveSetTransform(it.id, { visible: false }, true).catch(() => {});
@@ -4879,16 +4898,22 @@ export function LiveView({
   const addScene = () => {
     if (refuseSetEdit()) return;
     const n = scenes.length + 1;
-    // Save the CURRENT look, extras included — the scene is a snapshot of
-    // the whole stage, not just which slots are on.
-    const look = stageLook(sources.items ?? []);
+    // A NEW scene is EMPTY. Snapshotting the stage meant every new scene
+    // arrived carrying the last one's sources, and the first thing you did
+    // was delete them back out. An empty look is a real look — the
+    // membership rule below reads it as "nothing belongs to this scene yet" —
+    // so you add what the moment needs and it records itself on the way out.
     const next: RoomScene = {
       id: `s${Date.now().toString(36)}`,
       name: `Scene ${n}`,
-      look,
+      look: {},
     };
     writeCfg({ ...cfg, scenes: [...scenes, next] });
-    setActiveSceneId(next.id);
+    // Marking it active was not enough: nothing repainted the stage, so the
+    // previous scene's sources stayed up — and the next look capture wrote
+    // them INTO the new scene. Cut to it, which clears the stage and makes
+    // the empty look true.
+    void applyScene(next, { cut: true });
   };
 
   const removeScene = (id: string) => {
@@ -4959,6 +4984,13 @@ export function LiveView({
       if (!e.metaKey || e.altKey || e.ctrlKey) return;
       const el = document.activeElement as HTMLElement | null;
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      // ⌘E: edit the layout — the same toggle as the header chip, on the
+      // key nearest the thing it does. Any seat may rearrange its own panels.
+      if (e.key.toLowerCase() === "e" && !e.shiftKey) {
+        e.preventDefault();
+        setLayoutEdit((v) => !v);
+        return;
+      }
       // ⌘N: a new scene from the stage as it is (host only; a blank room
       // starts with none).
       if (e.key.toLowerCase() === "n" && !e.shiftKey) {
@@ -5140,22 +5172,6 @@ export function LiveView({
   hostScenesRef.current = hostScenes;
 
   /** Bring the Mods panel forward: show it if hidden, then flash it. */
-  const focusModsPanel = () => {
-    if (dockOf(layout, "mods") === "hidden") {
-      const side = layout.right.length <= layout.left.length ? "right" : "left";
-      setLayout(movePanel(layout, "mods", side));
-    }
-    window.setTimeout(() => {
-      const el = document.querySelector<HTMLElement>('[data-panel="mods"]');
-      if (!el) return;
-      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
-      el.classList.remove("flash");
-      void el.offsetWidth;
-      el.classList.add("flash");
-      window.setTimeout(() => el.classList.remove("flash"), 1400);
-    }, 60);
-  };
-
   /** Mint a mod link and put it on the clipboard. The server keeps only a
    * hash, so this is the one time the URL is readable. */
   const mintModLink = async () => {
@@ -5916,6 +5932,7 @@ export function LiveView({
       // not for laying out a room nobody is watching yet.
       if (sc) {
         const seen0 = srcEvCount.current;
+        reapplyOnSources.current = true;
         await applyScene(sc, { cut: true });
         mark("applied");
         if (srcEvCount.current > seen0) {
@@ -6058,7 +6075,7 @@ export function LiveView({
           <div className="rm-scenes">
             {scenes.length === 0 && (
               <div className="rm-rows-empty">
-                No scenes yet — add one with + or ⌘N to save the stage as it is.
+                No scenes yet — add one with + or ⌘N, then put what it needs on the stage.
               </div>
             )}
             {scenes.map((p, i) => (
@@ -6313,7 +6330,10 @@ export function LiveView({
         // not a row here).
         const inScene = (id: string) => {
           const sc = scenes.find((x) => x.id === activeScene);
-          return !sc?.look || Object.keys(sc.look).length === 0 || id in sc.look;
+          // A look that EXISTS is the membership list, even when empty — an
+          // empty scene lists nothing. Only a scene that never recorded one
+          // falls back to showing the whole graph.
+          return !sc?.look || id in sc.look;
         };
         const activeRows = (
           [
@@ -6890,7 +6910,9 @@ export function LiveView({
           </span>
           {/* A mod LINK is an open-server thing (`POST …/mod-link` lives only
             * there — on Boomin it answered 404 "Route not found"). On Boomin
-            * a seat is made in the Mods panel, so the button takes you there. */}
+            * a seat is made in the Mods panel and nowhere else: a button here
+            * that only sends you to another panel is the action in the wrong
+            * place, so this head carries nothing on a Boomin room. */}
           {isHost && !boominRoom && (
             <button
               className="rm-guest-modlink rm-head-modlink"
@@ -6898,15 +6920,6 @@ export function LiveView({
               onClick={() => void mintModLink()}
             >
               Mod link
-            </button>
-          )}
-          {isHost && boominRoom && (
-            <button
-              className="rm-guest-modlink rm-head-modlink"
-              title="Seats are made in the Mods panel — pick a member and a role"
-              onClick={focusModsPanel}
-            >
-              Seat a mod
             </button>
           )}
           <button
@@ -7367,7 +7380,21 @@ export function LiveView({
       key={id}
       data-panel={id}
       data-in={formDockOf(id)}
-      className={`rm-panel rm-panel-${id}${dragging === id ? " dragging" : ""}`}
+      className={`rm-panel rm-panel-${id}${dragging === id ? " dragging" : ""}${layoutEdit ? " grabbable" : ""}`}
+      {...(layoutEdit
+        ? {
+            // In edit mode the whole card is the handle — the grip stays as
+            // the affordance, but nobody should have to aim for it. Buttons
+            // inside the head (hide, placement) keep their clicks.
+            onPointerDown: (e: React.PointerEvent) => {
+              if ((e.target as HTMLElement).closest("button,[role='button'],input,select,textarea")) return;
+              gripDown(id)(e);
+            },
+            onPointerMove: gripMove,
+            onPointerUp: gripUp,
+            onPointerCancel: gripUp,
+          }
+        : {})}
       style={(() => {
         // A weight is RELATIVE to a sibling and EARNED in a specific dock:
         // alone, or in a dock it wasn't dragged in, it must not apply — a
@@ -7449,7 +7476,7 @@ export function LiveView({
               setLayoutEdit((e) => !e);
               setLayoutMenu(false);
             }}
-            title={layoutEdit ? "Done editing layout" : "Edit layout"}
+            title={layoutEdit ? "Done editing layout (⌘E)" : "Edit layout (⌘E)"}
           >
             {ic.layout}
           </button>
@@ -8260,24 +8287,24 @@ export function LiveView({
         </>
       )}
 
-      {(layout.bottom.length > 0 || dragging) && (
-        <div className={`rm-sheet${sheetOpen ? "" : " collapsed"}${layout.bottom.length === 0 ? " empty" : ""}${sheetOpen && srcSettings && dockOf(layout, "sources") === "bottom" ? " has-strip" : ""}`}>
-          {layout.bottom.length > 0 && (
-          <div
-            className="rm-sheet-head"
-            role="button"
-            tabIndex={0}
-            data-tip={sheetOpen ? "Drag to resize — click to hide" : "Show the bottom row"}
-            data-kind="bottom"
-            aria-label={sheetOpen ? "Drag to resize — click to hide" : "Show the bottom row"}
-            onPointerDown={(e) => beginResize(e, "bottom", undefined, undefined, sheetOpen)}
-            onPointerMove={moveResize}
-            onPointerUp={() => endResize(() => setSheetOpen((o) => !o))}
-            onPointerCancel={() => endResize()}
-            onKeyDown={(e) => e.key === "Enter" && setSheetOpen((o) => !o)}
-          >
-            <span className="rm-sheet-handle" />
-          </div>
+      {(layout.bottom.length > 0 || dragging || layoutEdit) && (
+        <div className={`rm-sheet${sheetOpen || layoutEdit ? "" : " collapsed"}${layout.bottom.length === 0 ? " empty" : ""}${sheetOpen && srcSettings && dockOf(layout, "sources") === "bottom" ? " has-strip" : ""}`}>
+          {layout.bottom.length > 0 && !layoutEdit && (
+            <div
+              className="rm-sheet-head"
+              role="button"
+              tabIndex={0}
+              data-tip={sheetOpen ? "Drag to resize — click to hide" : "Show the bottom row"}
+              data-kind="bottom"
+              aria-label={sheetOpen ? "Drag to resize — click to hide" : "Show the bottom row"}
+              onPointerDown={(e) => beginResize(e, "bottom", undefined, undefined, sheetOpen)}
+              onPointerMove={moveResize}
+              onPointerUp={() => endResize(() => setSheetOpen((o) => !o))}
+              onPointerCancel={() => endResize()}
+              onKeyDown={(e) => e.key === "Enter" && setSheetOpen((o) => !o)}
+            >
+              <span className="rm-sheet-handle" />
+            </div>
           )}
           {sheetOpen && streaming && (
             <div className="rm-livewarn">

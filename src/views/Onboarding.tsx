@@ -9,12 +9,10 @@ import type { ModLink } from "../lib/modSeat";
  * connect it here with its URL + PRIMARY_TOKEN. */
 export const SELF_HOSTING_GUIDE_URL = "https://github.com/Boomin-Ai/producer/blob/main/server/SELF_HOSTING.md";
 
-export function Wordmark() {
-  return (
-    <div className="wordmark">
-      PRODUCER <span className="by">by Boomin</span>
-    </div>
-  );
+/** The name, alone. `big` is the first-impression form (sign-in, first run);
+ *  everywhere else it is the same mark at a quieter size. */
+export function Wordmark({ big = false }: { big?: boolean }) {
+  return <div className={`wordmark${big ? " big" : ""}`}>PRODUCER</div>;
 }
 
 type Door = "chooser" | "boomin" | "server";
@@ -55,11 +53,21 @@ export function SignIn({ onConnected, onModLink }: { onConnected: () => void; on
   );
 }
 
-export function Onboarding({ onConnected, onCancel, onModLink }: { onConnected: () => void; onCancel?: () => void; onModLink?: (link: ModLink) => void }) {
-  const [door, setDoor] = useState<Door>("chooser");
+export function Onboarding({ onConnected, onCancel, onModLink, start }: { onConnected: () => void; onCancel?: () => void; onModLink?: (link: ModLink) => void; start?: "server" }) {
+  const [door, setDoor] = useState<Door>(start ?? "chooser");
 
   if (door === "boomin") return <BoominLogin onBack={() => setDoor("chooser")} onConnected={onConnected} />;
-  if (door === "server") return <ServerForm onBack={() => setDoor("chooser")} onConnected={onConnected} />;
+  // Arriving straight on the server form (the account sheet's "Connect a
+  // server") means there is no chooser behind it — Back returns to where the
+  // click came from, the dashboard.
+  if (door === "server")
+    return (
+      <ServerForm
+        onBack={start === "server" && onCancel ? onCancel : () => setDoor("chooser")}
+        backLabel={start === "server" && onCancel ? "Back" : undefined}
+        onConnected={onConnected}
+      />
+    );
 
   return (
     <div className="onboarding">
@@ -131,6 +139,9 @@ function BoominLogin({
   const [brands, setBrands] = useState<{ slug: string; name: string }[]>([]);
   const [apiRoot, setApiRoot] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  /** The mod-link door is a disclosure, not a third input competing with the
+   *  email field: one thing to do on this screen, the rest one click away. */
+  const [modOpen, setModOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -294,14 +305,14 @@ function BoominLogin({
   }
 
   return (
-    <div className="onboarding">
-      <Wordmark />
+    <div className={`onboarding${direct ? " signin" : ""}`}>
+      <Wordmark big />
       <h1>
         <strong>{direct ? "Welcome back." : "Sign in with Boomin."}</strong>
       </h1>
       {direct && <p className="muted">Sign in with the email on your Boomin account.</p>}
       <form
-        className="server-form"
+        className="server-form signin-card"
         onSubmit={(e) => {
           e.preventDefault();
           if (step === "email") requestCode();
@@ -333,7 +344,7 @@ function BoominLogin({
             />
           </label>
         )}
-        {showAdvanced ? (
+        {showAdvanced && (
           <label>
             API root (advanced)
             <input
@@ -342,44 +353,64 @@ function BoominLogin({
               placeholder="https://api.boomin.ai"
             />
           </label>
-        ) : (
+        )}
+        {!showAdvanced && !direct && (
           <button type="button" className="linkish" onClick={() => setShowAdvanced(true)}>
             Advanced: custom API root
           </button>
         )}
         {error && <p className="error">{error}</p>}
-        <div className="form-actions">
-          <button type="button" className="ghost" onClick={step === "code" ? () => setStep("email") : onBack}>
-            {step === "code" ? "Back" : backLabel}
+        {/* One primary, full width: the email step has exactly one thing to do.
+          * Every other door lives in the quiet list below the card. */}
+        {direct && step === "email" ? (
+          <button type="submit" className="signin-go" disabled={busy}>
+            {busy ? "Working…" : "Email me a code"}
           </button>
-          <button type="submit" disabled={busy}>
-            {busy ? "Working…" : step === "email" ? "Email me a code" : "Verify & connect"}
-          </button>
-        </div>
+        ) : (
+          <div className="form-actions">
+            <button type="button" className="ghost" onClick={step === "code" ? () => setStep("email") : onBack}>
+              {step === "code" ? "Back" : backLabel}
+            </button>
+            <button type="submit" disabled={busy}>
+              {busy ? "Working…" : step === "email" ? "Email me a code" : "Verify & connect"}
+            </button>
+          </div>
+        )}
       </form>
       {direct && (
-        <div className="signin-doors">
-          <span>Running your own producer-server?</span>
-          <button type="button" className="linkish" onClick={onBack}>
-            Use my own server
-          </button>
-          <span className="sep">·</span>
-          <button type="button" className="linkish" onClick={() => openUrl(SELF_HOSTING_GUIDE_URL).catch(() => {})}>
-            Self-hosting guide
-          </button>
-        </div>
-      )}
-      {direct && onModLink && (
-        <div className="onboarding-modlink">
-          <span>Helping run someone else&rsquo;s show?</span>
-          <ModLinkDrop compact onOpen={onModLink} />
-        </div>
+        <>
+          <div className="signin-or"><span>or</span></div>
+          <div className="signin-alt">
+            <button type="button" className="signin-alt-row" onClick={onBack}>
+              <span className="signin-alt-t">Use my own server</span>
+              <span className="signin-alt-s">Run producer-server yourself — nothing touches Boomin</span>
+            </button>
+            {onModLink && (
+              <div className={`signin-alt-row static${modOpen ? " open" : ""}`}>
+                <button type="button" className="signin-alt-head" onClick={() => setModOpen((v) => !v)}>
+                  <span className="signin-alt-t">Open a mod link</span>
+                  <span className="signin-alt-s">Someone sent you a seat — no account needed</span>
+                </button>
+                {modOpen && <ModLinkDrop compact onOpen={onModLink} />}
+              </div>
+            )}
+          </div>
+          <div className="signin-foot">
+            <button type="button" className="linkish" onClick={() => setShowAdvanced((v) => !v)}>
+              {showAdvanced ? "Hide advanced" : "Advanced"}
+            </button>
+            <span className="sep">·</span>
+            <button type="button" className="linkish" onClick={() => openUrl(SELF_HOSTING_GUIDE_URL).catch(() => {})}>
+              Self-hosting guide
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
 }
 
-function ServerForm({ onBack, onConnected }: { onBack: () => void; onConnected: () => void }) {
+function ServerForm({ onBack, onConnected, backLabel = "Back" }: { onBack: () => void; onConnected: () => void; backLabel?: string }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -433,7 +464,7 @@ function ServerForm({ onBack, onConnected }: { onBack: () => void; onConnected: 
         {error && <p className="error">{error}</p>}
         <div className="form-actions">
           <button type="button" className="ghost" onClick={onBack}>
-            Back
+            {backLabel}
           </button>
           <button type="submit" disabled={busy}>
             {busy ? "Verifying…" : "Verify & connect"}

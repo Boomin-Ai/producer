@@ -8,7 +8,7 @@ import { setActiveEndpointId } from "./lib/workspace";
 import { FirstLight, firstLightDone } from "./views/FirstLight";
 import { Home } from "./views/Home";
 
-type View = "loading" | "onboarding" | "signin" | "home" | { kind: "modseat"; link: ModLink; from: "onboarding" | "signin" };
+type View = "loading" | "onboarding" | "onboarding-server" | "signin" | "home" | { kind: "modseat"; link: ModLink; from: "onboarding" | "signin" };
 
 function App() {
   const [view, setView] = useState<View>("loading");
@@ -79,10 +79,13 @@ function App() {
     );
   }
 
-  if (view === "onboarding") {
+  if (view === "onboarding" || view === "onboarding-server") {
     return (
       <main className="shell">
         <Onboarding
+          // Someone who already has a workspace and picked "Connect a server"
+          // has made the choice — land on the form, not on the chooser.
+          start={view === "onboarding-server" ? "server" : undefined}
           onConnected={refresh}
           onModLink={(link) => setView({ kind: "modseat", link, from: "onboarding" })}
           onCancel={endpoints.length > 0 ? () => setView("home") : undefined}
@@ -94,7 +97,7 @@ function App() {
   return (
     <Home
       endpoints={endpoints}
-      onAddEndpoint={() => setView("onboarding")}
+      onAddEndpoint={(door) => setView(door === "server" ? "onboarding-server" : "onboarding")}
       onRemoveEndpoint={removeEndpoint}
       onSignOut={signOut}
       onEndpointsChanged={() => void refresh()}

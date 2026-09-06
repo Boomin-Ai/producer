@@ -234,7 +234,7 @@ export function Home({
   onEndpointsChanged,
 }: {
   endpoints: EndpointInfo[];
-  onAddEndpoint: () => void;
+  onAddEndpoint: (door?: "server") => void;
   onRemoveEndpoint: (id: string) => void;
   onSignOut?: () => void;
   /** A brand was bound as a new workspace from the popout — reload the endpoint list. */
@@ -484,7 +484,15 @@ export function Home({
   }
 
   return (
-    <div className={view.kind === "home" ? `cr cr--vibrant${settingsOpen ? " settings-open" : ""}` : "cr"}>
+    // The vibrant ground is what makes the rail read as glass — every view
+    // that keeps the rail keeps the ground under it.
+    <div
+      className={
+        view.kind === "home" || view.kind === "compose" || view.kind === "history"
+          ? `cr cr--vibrant${settingsOpen && view.kind === "home" ? " settings-open" : ""}`
+          : "cr"
+      }
+    >
       <header className="cr-top" data-tauri-drag-region>
         <div className="cr-top-left" data-tauri-drag-region>
           {view.kind !== "home" && (
@@ -559,7 +567,7 @@ export function Home({
         </aside>
       )}
 
-      {view.kind === "home" && (
+      {(view.kind === "home" || view.kind === "compose" || view.kind === "history") && (
         <HomeRail
           brandName={(endpoints.find((e) => e.id === activeId) ?? endpoints.find((e) => e.kind === "connected") ?? endpoints[0])?.name ?? "Workspace"}
           avatarUrl={meAvatar}
@@ -567,8 +575,9 @@ export function Home({
           onSurface={(s) => {
             closeSettings();
             setSurface(s);
+            setView({ kind: "home" });
           }}
-          onCompose={() => setView({ kind: "compose" })}
+          onCompose={() => { closeSettings(); setView({ kind: "compose" }); }}
           onProfile={() => setAccountOpen((v) => !v)}
           settingsOpen={settingsOpen}
           onSettings={() => (settingsOpen ? closeSettings() : openSettings())}
@@ -614,14 +623,14 @@ export function Home({
           onEnterSeat={enterSeat}
           onModLink={(link) => setView({ kind: "modseat", link })}
           offNetwork={offNetwork}
-          onCompose={() => setView({ kind: "compose" })}
+          onCompose={() => { closeSettings(); setView({ kind: "compose" }); }}
           onHistory={() => setView({ kind: "history" })}
           onAddEndpoint={onAddEndpoint}
         />
       )}
 
       {view.kind === "compose" && (
-        <main className="cr-page">
+        <main className="cr-page railed">
           <ComposerDetail
             channels={channels.filter((c) => c.status === "active")}
             independents={endpoints.filter((e) => e.kind === "independent")}
@@ -635,7 +644,7 @@ export function Home({
       )}
 
       {view.kind === "history" && (
-        <main className="cr-page">
+        <main className="cr-page railed">
           <HistoryView jobs={jobs} channels={channels} onRefresh={loadJobs} />
         </main>
       )}
@@ -1063,6 +1072,8 @@ function SettingsPanel({
                 <div className="ks compact set-keys-list">
                   {([
                     ["⌘1–9", "Cut to a scene"],
+                    ["⌘E", "Edit the layout"],
+                    ["⌘N", "New (empty) scene"],
                     ["Arrows", "Nudge selected (⇧ ×10)"],
                     ["⌥ drag edge", "Crop instead of scale"],
                     ["Esc", "Deselect"],
@@ -1136,7 +1147,7 @@ function ControlRoomHome({
   onCompose: () => void;
   onHistory: () => void;
   /** The in-app "add a Boomin workspace" door — the self-hoster's Network card leads here. */
-  onAddEndpoint: () => void;
+  onAddEndpoint: (door?: "server") => void;
 }) {
   const { mainId, endpointId: mainEndpointId } = useMainRoom(rooms);
   const seats = useRoomSeats(rooms, useActiveEndpoint());
@@ -1438,7 +1449,7 @@ function ComposerDetail({
     <>
       <header className="main-top">
         <div className="crumb">
-          Producer <span className="sep">›</span> <strong>New post</strong>
+          <strong>New post</strong>
         </div>
         <div className="top-meta">
           <span className="meta-block dist-block">
@@ -1829,7 +1840,7 @@ function HistoryView({
     <>
       <header className="main-top">
         <div className="crumb">
-          Producer <span className="sep">›</span> <strong>Queue &amp; history</strong>
+          <strong>Queue &amp; history</strong>
         </div>
         <div className="top-meta">
           <button onClick={onRefresh}>Refresh</button>
@@ -1923,7 +1934,7 @@ const NetworkRail = memo(function NetworkRail({
   onEnterSeat,
 }: {
   rooms: LiveRoom[];
-  onAddEndpoint: () => void;
+  onAddEndpoint: (door?: "server") => void;
   onEnterSeat: (seat: GuestSeatSpec) => void;
 }) {
   const activeEp = useActiveEndpoint();
