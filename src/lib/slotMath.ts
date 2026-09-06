@@ -23,7 +23,7 @@
  *     by its own creation, or by a reorder that did not know about it, is put
  *     back at the slot's layer.
  */
-import type { LiveTransformPatch } from "./ipc";
+import type { LiveTransformPatch } from "./sourceSpec";
 
 export interface LookEntry {
   visible: boolean;

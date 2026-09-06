@@ -160,30 +160,6 @@ impl Live {
     pub fn shutdown(&self) {}
 
     #[cfg(have_engine)]
-    pub fn set_sources(&self, screen: bool, camera: bool, mic: bool) -> Result<(), String> {
-        self.handle
-            .as_ref()
-            .ok_or("live engine not running")?
-            .set_sources(screen, camera, mic)
-    }
-    #[cfg(not(have_engine))]
-    pub fn set_sources(&self, _s: bool, _c: bool, _m: bool) -> Result<(), String> {
-        Err("live engine not bundled in this build".into())
-    }
-
-    #[cfg(have_engine)]
-    pub fn set_mic_audio(&self, volume: Option<f32>, muted: Option<bool>) -> Result<(), String> {
-        self.handle
-            .as_ref()
-            .ok_or("live engine not running")?
-            .set_mic_audio(volume, muted)
-    }
-    #[cfg(not(have_engine))]
-    pub fn set_mic_audio(&self, _v: Option<f32>, _m: Option<bool>) -> Result<(), String> {
-        Err("live engine not bundled in this build".into())
-    }
-
-    #[cfg(have_engine)]
     pub fn set_transform(
         &self,
         id: String,
@@ -390,14 +366,14 @@ impl Live {
     }
 
     #[cfg(have_engine)]
-    pub fn set_device(&self, kind: String, device: String) -> Result<(), String> {
+    pub fn set_device(&self, id: String, device: String) -> Result<(), String> {
         self.handle
             .as_ref()
             .ok_or("live engine not running")?
-            .set_device(kind, device)
+            .set_device(id, device)
     }
     #[cfg(not(have_engine))]
-    pub fn set_device(&self, _kind: String, _device: String) -> Result<(), String> {
+    pub fn set_device(&self, _id: String, _device: String) -> Result<(), String> {
         Err("live engine not bundled in this build".into())
     }
 

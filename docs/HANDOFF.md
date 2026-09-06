@@ -3,6 +3,56 @@
 Both sessions read and append here. Commit to `main` (docs only), pull before reading.
 Newest entry at the top of each section.
 
+## For Windows — from Mac, 2026-09-06 (v0.4.34: blank rooms; camera / screen / mic are real sources)
+
+**Rooms can be blank and the camera can be deleted.** Root cause of both: the engine had three
+BUILT-IN switches (`live_set_sources(screen, camera, mic)`), rooms were seeded with PiP / Full cam /
+Screen, and `applyScene` turned the camera back on from the scene's `camera:true` flag. v0.4.34
+removes the switches entirely:
+
+- **Engine** (`src-tauri/src/live/graph.rs`): `ExtraSpec::Camera { device? }`, `Screen { display? }`,
+  `Mic { device? }` — created through the SAME `add_extra` path as browser / guest / mod sources,
+  with the settings the built-ins used. Source ids per OS: camera = `macos-avcapture` /
+  `dshow_input` (`device` / `video_device_id`, `enable_audio=false`); screen = `screen_capture`
+  (`display_uuid`, SCK type 0) / `monitor_capture` (`monitor_id`, `method=1` DXGI); mic =
+  `coreaudio_input_capture` / `wasapi_input_capture` (`device_id`; no device = system default).
+  A mic is a scene item too (audio mixes through the scene; `has_frame` is true from creation so
+  the veil never waits on it) and meters like a guest (`metered()` = guest | mod | media | mic).
+  `SceneGraph` lost `screen` / `camera` / `mic` / `layout_camera` / `set_mic_audio` / the
+  `*_device` fields; `ItemState` gained `device`. **No new ffi extern** (parity PASS).
+- **IPC removed**: `live_set_sources`, `live_set_mic_audio`. **Changed**: `live_set_source_device`
+  now takes the ITEM ID (`{ id, device }`), not a kind. `live_source_devices(kind)` unchanged
+  (instance-first over any extra of that kind). `levels` event lost `mic_peak` (mics ride
+  `extra_peaks`). `SourcesState` is now just `{ overlay_window, overlay_url, items }`.
+- **Room document** (`src/lib/room.ts`): `defaultConfig()` = `scenes: []`, `sources: {}`; the
+  parser no longer re-seeds empty scenes; `DEFAULT_SCENES` is gone. `RoomScene.screen/camera` and
+  `RoomSources.screen/camera/mic/mic_volume/mic_muted` are LEGACY, read only by
+  `migrateBuiltinsToExtras(config, devices, canvas)` (pure; `server/test/real-sources.test.ts`).
+- **Migration rule** (runs once on room open, then the doc is written back without flags): a
+  capture extra is synthesized when the room used it — saved switch on, OR any scene's flag asked
+  for it (mic: switch only) — under the legacy ids `camera` / `screen` / `mic` (so saved custom
+  looks keyed by them still apply), unless an extra of that kind already exists. A flag-only scene
+  gets the exact built-in recipe as its look (screen full z0, overlay z1, camera PiP 28% / full z2);
+  a scene with its own look is untouched. User scenes are never deleted; a room saved with the three
+  defaults keeps them.
+- **Scenes carry looks only**: `applyScene` applies `look` (visibility + geometry per item id) and
+  nothing else; an id the graph does not hold is skipped — a scene can never turn on a source the
+  room removed. Mics (like guests and mod feeds) are not scene members: a row in every scene, never
+  hidden by a look.
+- **UI**: Add a source → Camera / Screen / Microphone (several of each allowed: "Camera 2"). Rows,
+  gear (device picker per ITEM), eye, filters (Cutout on a camera; audio chain on a mic), mixer
+  strips (mics first), stage-bar mute (all mics) / camera / screen eye toggles, the permission
+  banner (by kind presence; a fresh grant re-creates every source of that kind under its own id and
+  re-dresses it) all work off `items`. Scenes panel: "No scenes yet — add one with + or ⌘N".
+  `active_scene` may be null everywhere.
+- **Please verify on Windows**: (1) Add a source → Camera creates a `dshow_input` item and the gear
+  lists DirectShow devices and re-points it; (2) Screen creates `monitor_capture` and a second Screen
+  can pick another monitor; (3) Microphone creates `wasapi_input_capture`, the mixer strip meters
+  and mutes it, and the guest page's `?mic=` label still resolves; (4) open a room saved by
+  v0.4.33 or older (PiP / Full cam / Screen): it must come up looking the same, with Camera / Screen /
+  Microphone as rows, and the saved doc must lose `screen:`/`camera:` flags after the first open;
+  (5) a brand-new room opens BLANK (no rows, no scenes) and stays blank across reopen.
+
 ## For Windows — from Mac, 2026-09-05 (v0.4.32: the official MOD source; Mods panel truth; one Select)
 
 **A mod is not a guest.** In v0.4.31 a seated mod with media reached the host's set as a

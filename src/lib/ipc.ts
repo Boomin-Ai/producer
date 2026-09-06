@@ -135,8 +135,6 @@ export const ipc = {
   liveGoLive: () => invoke("live_go_live"),
   liveStop: () => invoke("live_stop"),
   liveEngineStatus: () => invoke<LiveSnapshot>("live_engine_status"),
-  liveSetSources: (screen: boolean, camera: boolean, mic: boolean) =>
-    invoke("live_set_sources", { screen, camera, mic }),
   liveAttachPreview: (x: number, y: number, w: number, h: number) =>
     invoke<boolean>("live_attach_preview", { x, y, w, h }),
   liveMovePreview: (x: number, y: number, w: number, h: number) =>
@@ -170,8 +168,6 @@ export const ipc = {
   liveListWindows: () => invoke<LiveWindow[]>("live_list_windows"),
   liveSetOverlay: (windowId: number | null, colorKey: boolean, url?: string | null) =>
     invoke("live_set_overlay", { windowId, colorKey, url: url ?? null }),
-  liveSetMicAudio: (patch: { volume?: number; muted?: boolean }) =>
-    invoke("live_set_mic_audio", { volume: patch.volume ?? null, muted: patch.muted ?? null }),
   liveSetVideo: (height: number, fps: number) => invoke("live_set_video", { height, fps }),
   liveHomeGlass: () => invoke("live_home_glass"),
   /** Preview demand control: fps the engine should spend on guest thumbs
@@ -243,34 +239,20 @@ export interface LiveItem {
   has_audio: boolean;
   volume: number;
   muted: boolean;
+  /** Capture kinds (camera / screen / mic): the device the source is on,
+   * as libobs names it. Absent for everything else. */
+  device?: string | null;
 }
 
-export interface LiveTransformPatch {
-  x?: number;
-  y?: number;
-  w?: number;
-  h?: number;
-  rot?: number;
-  crop_left?: number;
-  crop_top?: number;
-  crop_right?: number;
-  crop_bottom?: number;
-  z?: number;
-  visible?: boolean;
-}
+export type { LiveTransformPatch } from "./sourceSpec";
+import type { LiveTransformPatch } from "./sourceSpec";
 
+/** Engine truth about the set. Since v0.4.34 the engine has no built-in
+ * switches: camera, screen and mic are items like everything else. */
 export interface LiveSources {
-  screen: boolean;
-  camera: boolean;
-  mic: boolean;
-  mic_volume?: number;
-  mic_muted?: boolean;
   overlay_window?: number | null;
   overlay_url?: string | null;
   items?: LiveItem[];
-  camera_device?: string | null;
-  mic_device?: string | null;
-  screen_device?: string | null;
 }
 
 export type LivePreset = "twitch" | "kick" | "youtube" | "custom";
@@ -352,7 +334,7 @@ export type LiveEvent =
   | { type: "status"; elapsed_secs: number; destinations: LiveDestStatus[] }
   | { type: "session_ended"; report: { ok: boolean; destinations: LiveDestStatus[]; notes: string[] } }
   | { type: "sources_changed"; sources: LiveSources }
-  | { type: "levels"; mic_peak: number; extra_peaks: { id: string; peak: number }[] }
+  | { type: "levels"; extra_peaks: { id: string; peak: number }[] }
   | { type: "guest_thumbs"; w: number; h: number; thumbs: { id: string; jpeg: string }[] }
   | { type: "video_changed"; height: number; fps: number }
   | { type: "engine_error"; message: string };
@@ -413,22 +395,12 @@ export interface DeviceOption {
 export const devices = {
   /** kind: "camera" | "mic" | "screen" */
   list: (kind: string) => invoke<DeviceOption[]>("live_source_devices", { kind }),
-  set: (kind: string, device: string) => invoke("live_set_source_device", { kind, device }),
+  /** Point ONE capture source (by item id) at a device; its transform survives. */
+  set: (id: string, device: string) => invoke("live_set_source_device", { id, device }),
 };
 
-/** Open-list source spec (UI-P2.10 item-list model). Tagged for serde. */
-export type ExtraSpec =
-  | { kind: "media"; path: string; looping?: boolean }
-  | { kind: "image"; path: string }
-  | { kind: "text"; text: string; size?: number; color?: string }
-  | { kind: "color"; color: string }
-  | { kind: "window"; window: number }
-  | { kind: "guest"; url: string }
-  /** A seated MOD's feed (v0.4.32): the same render page a guest uses, but
-   * its own source kind — own label, layer, placement; never a guest slot. */
-  | { kind: "mod"; url: string }
-  /** A page rendered on the set, fed by THIS Producer over the local bridge (#51). */
-  | { kind: "overlay"; url: string };
+export type { ExtraSpec } from "./sourceSpec";
+import type { ExtraSpec } from "./sourceSpec";
 
 export const extraSources = {
   add: (id: string, label: string, spec: ExtraSpec) =>

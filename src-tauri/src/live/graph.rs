@@ -325,6 +325,9 @@ pub struct ItemState {
     pub sync_ms: i64,
     pub volume: f32,
     pub muted: bool,
+    /// Capture sources (camera / screen / mic): the device they are pointed
+    /// at, as libobs names it. None for everything else.
+    pub device: Option<String>,
 }
 
 /// Patch semantics: only present fields are applied — the stage editor
@@ -346,12 +349,6 @@ pub struct TransformPatch {
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SourcesState {
-    pub screen: bool,
-    pub camera: bool,
-    pub mic: bool,
-    /// Mic gain multiplier (0..=1 linear; the UI applies its own taper).
-    pub mic_volume: f32,
-    pub mic_muted: bool,
     /// Window-capture overlay (D1's sanctioned v1 escape hatch); the CGWindowID
     /// being captured, if any.
     pub overlay_window: Option<u32>,
@@ -359,27 +356,14 @@ pub struct SourcesState {
     pub overlay_url: Option<String>,
     /// Scene items with live geometry, back-to-front (UI-P1).
     pub items: Vec<ItemState>,
-    /// Which device each picker is on (None = system default) — the strip
-    /// highlights the active chip from these.
-    pub camera_device: Option<String>,
-    pub mic_device: Option<String>,
-    pub screen_device: Option<String>,
 }
 
 impl Default for SourcesState {
     fn default() -> Self {
         SourcesState {
-            screen: false,
-            camera: false,
-            mic: false,
-            mic_volume: 1.0,
-            mic_muted: false,
             overlay_window: None,
             overlay_url: None,
             items: Vec::new(),
-            camera_device: None,
-            mic_device: None,
-            screen_device: None,
         }
     }
 }
@@ -417,6 +401,26 @@ pub enum ExtraSpec {
     Color { color: String },
     /// One window via SCK (same mechanism as the overlay's window mode).
     Window { window: u32 },
+    /// A webcam / capture card (v0.4.34: an ordinary source, not a built-in
+    /// switch). `device` = libobs device id; None = the system default. Its
+    /// own audio stays out of the mix — a `Mic` source carries voice.
+    Camera {
+        #[serde(default)]
+        device: Option<String>,
+    },
+    /// One display. `display` = the platform's display id (CG UUID on macOS,
+    /// monitor_id on Windows); None = the main display.
+    Screen {
+        #[serde(default)]
+        display: Option<String>,
+    },
+    /// An audio input. Audio-only; it still lives in the scene so the eye,
+    /// the strip and the look all speak the one item language. `device` =
+    /// libobs device id; None = the system default input.
+    Mic {
+        #[serde(default)]
+        device: Option<String>,
+    },
     /// A remote guest, rendered by the Connect guest page over a peer-to-peer
     /// WebRTC connection. This is a browser source with a specific contract:
     /// one URL PER GUEST, so each guest gets independent geometry on the stage
@@ -446,6 +450,13 @@ struct ExtraItem {
     label: String,
     item: *mut ffi::obs_sceneitem_t,
     src: *mut ffi::obs_source_t,
+    /// Capture kinds only: the device the source is on.
+    device: Option<String>,
+}
+
+/// Extras whose audio the mixer meters (own strip in the UI).
+fn metered(kind: &str) -> bool {
+    matches!(kind, "guest" | "mod" | "media" | "mic")
 }
 
 /// "#rrggbb" → the 0xAABBGGRR integer OBS stores in data "color".
@@ -460,31 +471,21 @@ fn parse_color(hex: &str) -> Option<i64> {
     Some(0xFF00_0000 | (b << 16) | (g << 8) | r)
 }
 
-/// The implicit scene (§2.2: "UI exposes one implicit scene"): screen
-/// full-frame, camera picture-in-picture bottom-right, mic on channel 1.
-/// Sources are created when toggled ON (that's when TCC fires — the coach's
-/// moment) and destroyed when toggled OFF, so "off" truly means not
-/// capturing. Engine thread only.
+/// The scene graph: one libobs scene on output channel 0, every item an
+/// `ExtraItem` created through `add_extra` (v0.4.34: camera, screen and mic
+/// included — there are no built-in switches; "off" means the item is not in
+/// the room). The overlay is the one remaining well-known item. Engine
+/// thread only.
 pub struct SceneGraph {
     scene: *mut ffi::obs_scene_t,
-    screen: Option<(*mut ffi::obs_sceneitem_t, *mut ffi::obs_source_t)>,
-    camera: Option<(*mut ffi::obs_sceneitem_t, *mut ffi::obs_source_t)>,
-    mic: Option<*mut ffi::obs_source_t>,
-    mic_volume: f32,
-    mic_muted: bool,
     overlay: Option<(
         *mut ffi::obs_sceneitem_t,
         *mut ffi::obs_source_t,
         OverlaySpec,
     )>,
-    /// Chosen device per picker; survives a source being toggled off and on
-    /// so the user's external mic or capture card is not silently forgotten.
-    camera_device: Option<String>,
-    mic_device: Option<String>,
-    screen_device: Option<String>,
-    /// The open-ended half of the item list (media, image, text, color,
-    /// window). The three slots above are just well-known items; everything
-    /// here rides the same transform/z/visibility pipeline.
+    /// The item list (v0.4.34): camera, screen and mic included. There are
+    /// no well-known slots any more — every item rides the same
+    /// transform/z/visibility pipeline and the room document owns the ids.
     extras: Vec<ExtraItem>,
     /// The stinger clip while a transition is in flight. Deliberately NOT an
     /// extra: it is transition machinery, not a source the user owns, so it
@@ -687,15 +688,7 @@ impl SceneGraph {
             ffi::obs_set_output_source(0, ffi::obs_scene_get_source(scene));
             Ok(SceneGraph {
                 scene,
-                screen: None,
-                camera: None,
-                mic: None,
-                mic_volume: 1.0,
-                mic_muted: false,
                 overlay: None,
-                camera_device: None,
-                mic_device: None,
-                screen_device: None,
                 extras: Vec::new(),
                 thumb_rt: std::ptr::null_mut(),
                 thumb_ss: std::ptr::null_mut(),
@@ -731,11 +724,6 @@ impl SceneGraph {
 
     pub fn state(&self) -> SourcesState {
         SourcesState {
-            screen: self.screen.is_some(),
-            camera: self.camera.is_some(),
-            mic: self.mic.is_some(),
-            mic_volume: self.mic_volume,
-            mic_muted: self.mic_muted,
             overlay_window: self.overlay.as_ref().and_then(|(_, _, spec)| match spec {
                 OverlaySpec::Window { id, .. } => Some(*id),
                 _ => None,
@@ -745,17 +733,18 @@ impl SceneGraph {
                 _ => None,
             }),
             items: self.items(),
-            camera_device: self.camera_device.clone(),
-            mic_device: self.mic_device.clone(),
-            screen_device: self.screen_device.clone(),
         }
     }
 
-    /// The three video slots as uniform items. Read straight from libobs so
-    /// the editor always sees engine truth, never a cached shadow.
+    /// Every scene item, uniformly. Read straight from libobs so the editor
+    /// always sees engine truth, never a cached shadow.
     fn items(&self) -> Vec<ItemState> {
         let mut out = Vec::new();
-        let mut push = |id: &str, kind: &str, label: &str, item: *mut ffi::obs_sceneitem_t| unsafe {
+        let mut push = |id: &str,
+                        kind: &str,
+                        label: &str,
+                        item: *mut ffi::obs_sceneitem_t,
+                        device: Option<String>| unsafe {
             let src = ffi::obs_sceneitem_get_source(item);
             let mut pos = ffi::vec2 { x: 0.0, y: 0.0 };
             let mut bounds = ffi::vec2 { x: 0.0, y: 0.0 };
@@ -793,7 +782,9 @@ impl SceneGraph {
                 crop_bottom: crop.bottom,
                 z: ffi::obs_sceneitem_get_order_position(item),
                 src_w,
-                has_frame: src_w > 0,
+                // Audio-only kinds have no frame to wait for: they are "on
+                // stage" from creation (the veil must not hold on a mic).
+                has_frame: src_w > 0 || kind == "mic",
                 src_h,
                 // OBS_SOURCE_AUDIO = 1 << 1
                 has_audio: !src.is_null() && (ffi::obs_source_get_output_flags(src) & 0x2) != 0,
@@ -808,40 +799,30 @@ impl SceneGraph {
                     ffi::obs_source_get_volume(src)
                 },
                 muted: !src.is_null() && ffi::obs_source_muted(src),
+                device,
             });
         };
-        if let Some((item, _)) = self.screen {
-            push("screen", "screen", "Screen", item);
-        }
-        if let Some((item, _)) = self.camera {
-            push("camera", "camera", "Camera", item);
-        }
         if let Some((item, _, _)) = self.overlay.as_ref() {
-            push("overlay", "overlay", "Overlay", *item);
+            push("overlay", "overlay", "Overlay", *item, None);
         }
         for e in &self.extras {
-            push(&e.id, e.kind, &e.label, e.item);
+            push(&e.id, e.kind, &e.label, e.item, e.device.clone());
         }
         out.sort_by_key(|i| i.z);
         out
     }
 
-    /// The underlying source for any item id, including the audio-only mic.
+    /// The underlying source for any item id, including audio-only mics.
     /// Filters attach to sources, not scene items.
     pub fn source_by_id(&self, id: &str) -> Option<*mut ffi::obs_source_t> {
         match id {
-            "screen" => self.screen.map(|(_, s)| s),
-            "camera" => self.camera.map(|(_, s)| s),
             "overlay" => self.overlay.as_ref().map(|(_, s, _)| *s),
-            "mic" => self.mic,
             other => self.extras.iter().find(|e| e.id == other).map(|e| e.src),
         }
     }
 
     fn item_by_id(&self, id: &str) -> Option<*mut ffi::obs_sceneitem_t> {
         match id {
-            "screen" => self.screen.map(|(i, _)| i),
-            "camera" => self.camera.map(|(i, _)| i),
             "overlay" => self.overlay.as_ref().map(|(i, _, _)| *i),
             other => self.extras.iter().find(|e| e.id == other).map(|e| e.item),
         }
@@ -1144,11 +1125,71 @@ impl SceneGraph {
     /// caller-chosen (the room document owns it, so a room can respawn its
     /// items with stable identity); duplicates are refused.
     pub fn add_extra(&mut self, id: &str, label: &str, spec: &ExtraSpec) -> Result<(), String> {
-        if matches!(id, "screen" | "camera" | "overlay") || self.extras.iter().any(|e| e.id == id) {
+        if id == "overlay" || self.extras.iter().any(|e| e.id == id) {
             return Err(format!("an item named {id} already exists"));
         }
+        let mut device: Option<String> = None;
         unsafe {
             let (type_id, kind, settings): (&str, &'static str, *mut ffi::obs_data_t) = match spec {
+                ExtraSpec::Camera { device: want } => {
+                    // mac-avcapture needs an explicit device id (same lesson
+                    // as SCK's display_uuid): resolve the default ourselves.
+                    let dev = match want.clone() {
+                        Some(d) => d,
+                        None => default_camera_id().ok_or("no camera device found")?,
+                    };
+                    let d = ffi::obs_data_create();
+                    // The device property is per-platform: `device` on
+                    // mac-avcapture, `video_device_id` on dshow_input.
+                    let k = CString::new(ids::CAMERA_KEYS[0]).unwrap();
+                    let v = CString::new(dev.as_str()).map_err(|_| "bad device id")?;
+                    ffi::obs_data_set_string(d, k.as_ptr(), v.as_ptr());
+                    // A webcam is a picture; its own audio stays out of the
+                    // mix (a Mic source carries voice).
+                    ffi::obs_data_set_bool(
+                        d,
+                        CString::new("enable_audio").unwrap().as_ptr(),
+                        false,
+                    );
+                    device = Some(dev);
+                    (ids::CAMERA, "camera", d)
+                }
+                ExtraSpec::Screen { display } => {
+                    let dev = match display.clone() {
+                        Some(d) => d,
+                        None => main_display_uuid().ok_or("could not resolve main display UUID")?,
+                    };
+                    let d = ffi::obs_data_create();
+                    let k = CString::new(ids::SCREEN_KEY).unwrap();
+                    let v = CString::new(dev.as_str()).map_err(|_| "bad display id")?;
+                    ffi::obs_data_set_string(d, k.as_ptr(), v.as_ptr());
+                    // SCK display mode: ScreenCaptureDisplayStream = 0.
+                    #[cfg(target_os = "macos")]
+                    ffi::obs_data_set_int(d, CString::new("type").unwrap().as_ptr(), 0);
+                    // monitor_capture method: 1 = DXGI desktop duplication, proven to
+                    // deliver frames here (cursor and desktop visible in the mix).
+                    // "auto" prefers WGC on Win10 1903+, which is untested in this
+                    // host and needs the process to carry the capability; revisit
+                    // when WGC is verified rather than assumed.
+                    #[cfg(target_os = "windows")]
+                    ffi::obs_data_set_int(d, CString::new("method").unwrap().as_ptr(), 1);
+                    device = Some(dev);
+                    (ids::SCREEN, "screen", d)
+                }
+                ExtraSpec::Mic { device: want } => {
+                    // NULL-equivalent settings = system default input.
+                    let d = ffi::obs_data_create();
+                    if let Some(dev) = want.clone() {
+                        let v = CString::new(dev.as_str()).map_err(|_| "bad device id")?;
+                        for key in ids::MIC_KEYS {
+                            if let Ok(k) = CString::new(*key) {
+                                ffi::obs_data_set_string(d, k.as_ptr(), v.as_ptr());
+                            }
+                        }
+                        device = Some(dev);
+                    }
+                    (ids::MIC, "mic", d)
+                }
                 // PRODUCER_TEST_MONITOR=1 forces media sources to MONITOR_ONLY
                 // so a recording can be inspected for leaks against a known
                 // loud signal. Applied after creation.
@@ -1325,7 +1366,7 @@ impl SceneGraph {
                 ffi::obs_source_set_muted(src, true);
             }
             // Meter every audio-bearing extra the mixer shows a strip for.
-            if matches!(kind, "guest" | "mod" | "media") {
+            if metered(kind) {
                 peak_slot_register(src);
                 ffi::obs_source_add_audio_capture_callback(src, extra_audio_cb, ptr::null_mut());
             }
@@ -1335,6 +1376,7 @@ impl SceneGraph {
                 label: label.to_string(),
                 item,
                 src,
+                device,
             });
         }
         Ok(())
@@ -1348,7 +1390,7 @@ impl SceneGraph {
             .position(|e| e.id == id)
             .ok_or_else(|| format!("no item named {id}"))?;
         let e = self.extras.remove(idx);
-        if matches!(e.kind, "guest" | "mod" | "media") {
+        if metered(e.kind) {
             unsafe {
                 ffi::obs_source_remove_audio_capture_callback(
                     e.src,
@@ -1376,215 +1418,12 @@ impl SceneGraph {
         (1280.0, 720.0)
     }
 
-    pub fn set_screen(&mut self, on: bool) -> Result<(), String> {
-        unsafe {
-            match (on, self.screen.take()) {
-                (true, Some(existing)) => self.screen = Some(existing),
-                (false, None) => {}
-                (false, Some((item, src))) => {
-                    ffi::obs_sceneitem_remove(item);
-                    ffi::obs_source_release(src);
-                }
-                (true, None) => {
-                    let uuid = match self.screen_device.clone() {
-                        Some(d) => d,
-                        None => main_display_uuid().ok_or("could not resolve main display UUID")?,
-                    };
-                    self.screen_device = Some(uuid.clone());
-                    let settings = ffi::obs_data_create();
-                    let key = CString::new(ids::SCREEN_KEY).unwrap();
-                    let val = CString::new(uuid).unwrap();
-                    ffi::obs_data_set_string(settings, key.as_ptr(), val.as_ptr());
-                    // monitor_capture method: 1 = DXGI desktop duplication, proven to
-                    // deliver frames here (cursor and desktop visible in the mix).
-                    // "auto" prefers WGC on Win10 1903+, which is untested in this
-                    // host and needs the process to carry the capability; revisit
-                    // when WGC is verified rather than assumed.
-                    #[cfg(target_os = "windows")]
-                    ffi::obs_data_set_int(settings, CString::new("method").unwrap().as_ptr(), 1);
-                    let id = CString::new(ids::SCREEN).unwrap();
-                    let name = CString::new("Screen").unwrap();
-                    let src = ffi::obs_source_create(
-                        id.as_ptr(),
-                        name.as_ptr(),
-                        settings,
-                        ptr::null_mut(),
-                    );
-                    ffi::obs_data_release(settings);
-                    if src.is_null() {
-                        return Err("screen_capture creation failed".into());
-                    }
-                    let item = ffi::obs_scene_add(self.scene, src);
-                    if item.is_null() {
-                        ffi::obs_source_release(src);
-                        return Err("scene add failed for screen".into());
-                    }
-                    ffi::obs_sceneitem_set_visible(item, true);
-                    // Bounds-driven like every other item, so the stage
-                    // editor speaks one geometry language (UI-P1).
-                    let (bw, bh) = Self::base_size();
-                    ffi::obs_sceneitem_set_bounds_type(item, ffi::OBS_BOUNDS_SCALE_INNER);
-                    let bounds = ffi::vec2 { x: bw, y: bh };
-                    ffi::obs_sceneitem_set_bounds(item, &bounds);
-                    let pos = ffi::vec2 { x: 0.0, y: 0.0 };
-                    ffi::obs_sceneitem_set_pos(item, &pos);
-                    self.screen = Some((item, src));
-                }
-            }
-        }
-        self.layout_camera();
-        Ok(())
-    }
-
-    pub fn set_camera(&mut self, on: bool) -> Result<(), String> {
-        unsafe {
-            match (on, self.camera.take()) {
-                (true, Some(existing)) => self.camera = Some(existing),
-                (false, None) => {}
-                (false, Some((item, src))) => {
-                    ffi::obs_sceneitem_remove(item);
-                    ffi::obs_source_release(src);
-                }
-                (true, None) => {
-                    // mac-avcapture needs an explicit device id (same lesson
-                    // as SCK's display_uuid).
-                    let device = match self.camera_device.clone() {
-                        Some(d) => d,
-                        None => default_camera_id().ok_or("no camera device found")?,
-                    };
-                    self.camera_device = Some(device.clone());
-                    let settings = ffi::obs_data_create();
-                    // The device property is per-platform too: `device` on
-                    // mac-avcapture, `video_device_id` on dshow_input.
-                    let k_device = CString::new(ids::CAMERA_KEYS[0]).unwrap();
-                    let v_device = CString::new(device).unwrap();
-                    ffi::obs_data_set_string(settings, k_device.as_ptr(), v_device.as_ptr());
-                    // The webcam is a video PiP; its own audio stays out of
-                    // the mix (mic is a separate toggle).
-                    ffi::obs_data_set_bool(
-                        settings,
-                        CString::new("enable_audio").unwrap().as_ptr(),
-                        false,
-                    );
-                    let id = CString::new(ids::CAMERA).unwrap();
-                    let name = CString::new("Camera").unwrap();
-                    let src = ffi::obs_source_create(
-                        id.as_ptr(),
-                        name.as_ptr(),
-                        settings,
-                        ptr::null_mut(),
-                    );
-                    ffi::obs_data_release(settings);
-                    if src.is_null() {
-                        return Err("camera source creation failed".into());
-                    }
-                    let item = ffi::obs_scene_add(self.scene, src);
-                    if item.is_null() {
-                        ffi::obs_source_release(src);
-                        return Err("scene add failed for camera".into());
-                    }
-                    ffi::obs_sceneitem_set_visible(item, true);
-                    self.camera = Some((item, src));
-                    self.layout_camera();
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// Camera placement follows the scene: full-frame when it's the only
-    /// video source ("Full cam"), picture-in-picture bottom-right when the
-    /// screen is up ("PiP"). Engine thread only.
-    fn layout_camera(&mut self) {
-        let Some((item, _)) = self.camera else { return };
-        let (bw, bh) = Self::base_size();
-        unsafe {
-            ffi::obs_sceneitem_set_bounds_type(item, ffi::OBS_BOUNDS_SCALE_INNER);
-            if self.screen.is_some() {
-                let pip_w = bw * 0.28;
-                let pip_h = pip_w * 9.0 / 16.0;
-                let margin = 24.0;
-                let bounds = ffi::vec2 { x: pip_w, y: pip_h };
-                ffi::obs_sceneitem_set_bounds(item, &bounds);
-                let pos = ffi::vec2 {
-                    x: bw - pip_w - margin,
-                    y: bh - pip_h - margin,
-                };
-                ffi::obs_sceneitem_set_pos(item, &pos);
-            } else {
-                let bounds = ffi::vec2 { x: bw, y: bh };
-                ffi::obs_sceneitem_set_bounds(item, &bounds);
-                let pos = ffi::vec2 { x: 0.0, y: 0.0 };
-                ffi::obs_sceneitem_set_pos(item, &pos);
-            }
-        }
-    }
-
-    pub fn set_mic(&mut self, on: bool) -> Result<(), String> {
-        unsafe {
-            match (on, self.mic.take()) {
-                (true, Some(existing)) => self.mic = Some(existing),
-                (false, None) => {}
-                (false, Some(src)) => {
-                    ffi::obs_source_remove_audio_capture_callback(src, audio_cb, ptr::null_mut());
-                    ffi::obs_set_output_source(1, ptr::null_mut());
-                    ffi::obs_source_release(src);
-                }
-                (true, None) => {
-                    let id = CString::new(ids::MIC).unwrap();
-                    let name = CString::new("Mic").unwrap();
-                    // NULL settings = system default input; a chosen device
-                    // (USB mic, interface) is remembered across toggles.
-                    let settings = match self.mic_device.as_deref() {
-                        Some(d) => {
-                            let s = ffi::obs_data_create();
-                            if let Ok(v) = CString::new(d) {
-                                ffi::obs_data_set_string(
-                                    s,
-                                    CString::new("device_id").unwrap().as_ptr(),
-                                    v.as_ptr(),
-                                );
-                            }
-                            s
-                        }
-                        None => ptr::null_mut(),
-                    };
-                    let src = ffi::obs_source_create(
-                        id.as_ptr(),
-                        name.as_ptr(),
-                        settings,
-                        ptr::null_mut(),
-                    );
-                    if !settings.is_null() {
-                        ffi::obs_data_release(settings);
-                    }
-                    if src.is_null() {
-                        return Err("mic source creation failed".into());
-                    }
-                    // The meter rides the capture callback (audio thread →
-                    // one atomic, §5.1); volume/mute survive re-creation.
-                    ffi::obs_source_add_audio_capture_callback(src, audio_cb, ptr::null_mut());
-                    ffi::obs_source_set_volume(src, self.mic_volume);
-                    ffi::obs_source_set_muted(src, self.mic_muted);
-                    ffi::obs_set_output_source(1, src);
-                    self.mic = Some(src);
-                }
-            }
-        }
-        Ok(())
-    }
-
     /// Devices for one picker, instance-first: mac-avcapture (and friends)
     /// only fill their device dropdowns on obs_source_properties of a LIVE
     /// source — the bare type returns an empty list. Fall back to the type
     /// when the source is toggled off.
     pub fn devices(&self, kind: &str) -> Vec<DeviceOption> {
-        let src = match kind {
-            "camera" => self.camera.map(|(_, s)| s),
-            "mic" => self.mic,
-            "screen" => self.screen.map(|(_, s)| s),
-            _ => None,
-        };
+        let src = self.extras.iter().find(|e| e.kind == kind).map(|e| e.src);
         if let (Some(src), Some((_, props_names))) = (src, device_picker_spec(kind)) {
             unsafe {
                 let props = ffi::obs_source_properties(src);
@@ -1607,17 +1446,17 @@ impl SceneGraph {
     /// display. Applied with obs_source_update so the scene item, its
     /// transform and its place in the stack all survive the swap; the user
     /// sees the picture change, not the layout reset.
-    pub fn set_device(&mut self, kind: &str, device: &str) -> Result<(), String> {
+    pub fn set_device(&mut self, id: &str, device: &str) -> Result<(), String> {
+        let idx = self
+            .extras
+            .iter()
+            .position(|e| e.id == id)
+            .ok_or_else(|| format!("{id} is not on the stage"))?;
+        let kind = self.extras[idx].kind;
+        let src = self.extras[idx].src;
         let Some((_, props)) = device_picker_spec(kind) else {
-            return Err(format!("no device picker for {kind}"));
+            return Err(format!("{id} ({kind}) has no device to pick"));
         };
-        let src = match kind {
-            "camera" => self.camera.map(|(_, s)| s),
-            "mic" => self.mic,
-            "screen" => self.screen.map(|(_, s)| s),
-            _ => None,
-        }
-        .ok_or_else(|| format!("{kind} is not on the stage"))?;
 
         unsafe {
             let settings = ffi::obs_data_create();
@@ -1644,28 +1483,13 @@ impl SceneGraph {
             ffi::obs_source_update(src, settings);
             ffi::obs_data_release(settings);
         }
-        match kind {
-            "camera" => self.camera_device = Some(device.to_string()),
-            "mic" => self.mic_device = Some(device.to_string()),
-            "screen" => self.screen_device = Some(device.to_string()),
-            _ => {}
-        }
+        self.extras[idx].device = Some(device.to_string());
         Ok(())
     }
 
-    /// Which device each picker is currently pointed at.
-    pub fn devices_selected(&self) -> (Option<String>, Option<String>, Option<String>) {
-        (
-            self.camera_device.clone(),
-            self.mic_device.clone(),
-            self.screen_device.clone(),
-        )
-    }
-
-    /// Re-fit scene items after a video-settings change: camera placement
-    /// and the overlay's full-frame bounds both derive from the base size.
+    /// Re-fit scene items after a video-settings change: the overlay's
+    /// full-frame bounds derive from the base size.
     pub fn relayout(&mut self) {
-        self.layout_camera();
         if let Some((item, _, _)) = self.overlay {
             let (bw, bh) = Self::base_size();
             unsafe {
@@ -1721,10 +1545,6 @@ impl SceneGraph {
         volume: Option<f32>,
         muted: Option<bool>,
     ) -> Result<(), String> {
-        if id == "mic" {
-            self.set_mic_audio(volume, muted);
-            return Ok(());
-        }
         let src = self
             .source_by_id(id)
             .ok_or_else(|| format!("{id} is not on the stage"))?;
@@ -1738,27 +1558,6 @@ impl SceneGraph {
         }
         Ok(())
     }
-
-    pub fn set_mic_audio(&mut self, volume: Option<f32>, muted: Option<bool>) {
-        if let Some(v) = volume {
-            self.mic_volume = v.clamp(0.0, 1.0);
-        }
-        if let Some(m) = muted {
-            self.mic_muted = m;
-        }
-        if let Some(src) = self.mic {
-            unsafe {
-                ffi::obs_source_set_volume(src, self.mic_volume);
-                ffi::obs_source_set_muted(src, self.mic_muted);
-            }
-        }
-    }
-}
-
-/// Peak absolute mic sample since the last call (0..=1), consumed on read —
-/// the engine tick turns this into the meter event stream.
-pub fn take_mic_peak() -> f64 {
-    AUDIO_PEAK_MICRO.swap(0, Ordering::Relaxed) as f64 / 1_000_000.0
 }
 
 /// Create the default capture graph (SCK main display + default mic) and
@@ -1961,17 +1760,14 @@ pub fn capture_probe(window: Duration) -> CaptureProbeReport {
 impl SceneGraph {
     /// Cheap gate: does any metered extra exist at all?
     pub fn take_extra_peaks_ids_empty(&self) -> bool {
-        !self
-            .extras
-            .iter()
-            .any(|e| matches!(e.kind, "guest" | "mod" | "media"))
+        !self.extras.iter().any(|e| metered(e.kind))
     }
 
     /// Peak-and-reset for every metered extra since the last call, 0..=1.
     pub fn take_extra_peaks(&self) -> Vec<(String, f64)> {
         let mut out = Vec::new();
         for e in &self.extras {
-            if !matches!(e.kind, "guest" | "mod" | "media") {
+            if !metered(e.kind) {
                 continue;
             }
             let key = e.src as usize;
@@ -2083,10 +1879,12 @@ impl ThumbHub {
         // and the problem is browser-source-specific; if BOTH are black, the
         // capture path itself is broken.
         #[cfg(debug_assertions)]
-        if let Some((_, cam)) = scene.camera {
-            if !cam.is_null() {
-                wanted.push(("camera", cam));
-            }
+        if let Some(cam) = scene
+            .extras
+            .iter()
+            .find(|e| e.kind == "camera" && !e.src.is_null())
+        {
+            wanted.push((cam.id.as_str(), cam.src));
         }
         // The program: whatever sits on output channel 0 (the transition
         // wrapping the scene). obs_get_output_source hands back its OWN ref;
