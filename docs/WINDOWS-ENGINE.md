@@ -441,6 +441,12 @@ Three notes for picker work:
   `default` as a valid id --- not by index.
 - `window_capture`'s ids are `title:windowclass:executable`, with `:` in the
   title escaped as `#3A`. Parse accordingly.
+- Studio output (v0.4.37) captures Producer's OWN window this way:
+  `studio::windows_capture_id(title)` = `<title>:Window Class:producer.exe`,
+  priority = title. TODO(win): confirm the class name on a real box and that
+  the capture composites the preview child HWND (else `method` = WGC). There
+  is no HWND-keyed selection in win-capture, so `producer_window_id` is 0 on
+  Windows by design.
 - `browser_source`'s `shutdown` is shutdown-on-invisible. It DESTROYS the
   browser when the source stops showing, which matters for anything that
   renders a guest outside the composited scene.

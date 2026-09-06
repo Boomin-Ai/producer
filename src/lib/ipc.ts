@@ -169,6 +169,9 @@ export const ipc = {
   liveSetOverlay: (windowId: number | null, colorKey: boolean, url?: string | null) =>
     invoke("live_set_overlay", { windowId, colorKey, url: url ?? null }),
   liveSetVideo: (height: number, fps: number) => invoke("live_set_video", { height, fps }),
+  /** Studio output: the program becomes a capture of Producer's own window
+   * (lib/studioOutput.ts). Resolves to the engine's resulting state. */
+  liveSetStudio: (on: boolean) => invoke<boolean>("live_set_studio", { on }),
   liveHomeGlass: () => invoke("live_home_glass"),
   /** Preview demand control: fps the engine should spend on guest thumbs
    * (0 = off). The UI asks for what it can actually display. */

@@ -166,6 +166,7 @@ pub fn run() {
             live::commands::live_home_glass,
             live::commands::live_request_permission,
             live::commands::live_set_overlay,
+            live::commands::live_set_studio,
             live::commands::live_list_windows,
             live::commands::live_screen_coach,
             live::commands::firstlight_resume,
