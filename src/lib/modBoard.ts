@@ -23,7 +23,7 @@
  */
 
 import { hasAnyMedia } from "./participants";
-import { modRowStage, type ModStageState } from "./stageTruth";
+import { MOD_FEED_NOT_PLACED, NO_FREE_SLOT, modRowStage, type ModStageState } from "./stageTruth";
 
 // ── Layout ──────────────────────────────────────────────────────────────────
 
@@ -168,10 +168,12 @@ export function heldChips(input: { grants: ReadonlySet<string>; can: { control: 
 
 // ── Throw up: the seat's own row through honest staging ─────────────────────
 //
-// "Throw up" asks the host's set for a slot for THIS seat: the seat's row
-// (its monitor row on Boomin) goes through the same stage request every
-// participant does (lib/stageTruth.ts). The button is therefore a projection
-// of the honest-staging state for one guest id — never optimistic.
+// "Throw up" asks the host's set to PLACE THIS SEAT'S MOD FEED: the seat's
+// row (its monitor row on Boomin) goes through the same stage request every
+// participant does (lib/stageTruth.ts), and the host honours a seat through
+// the mod path — its own source kind and rect, never a guest slot. The
+// button is therefore a projection of the honest-staging state for one
+// participant id — never optimistic.
 
 export type ThrowUpRow =
   /** No media granted: nothing to throw. */
@@ -202,7 +204,10 @@ export function throwUpState(input: {
   if (!hasAnyMedia(input.grants)) return { row: "no-media", notice: null, label: "Throw up", disabled: true };
   if (!input.seatId || !input.canAsk) return { row: "unavailable", notice: null, label: "Throw up", disabled: true };
   const row = modRowStage(input.stage, input.seatId);
-  const notice = input.stage.notice?.guestId === input.seatId ? input.stage.notice.text : null;
+  // The seat's own row is a MOD FEED (v0.4.32): it has no guest slot to run
+  // out of, so the reducer's generic refusal is reworded for it.
+  const raw = input.stage.notice?.guestId === input.seatId ? input.stage.notice.text : null;
+  const notice = raw === NO_FREE_SLOT ? MOD_FEED_NOT_PLACED : raw;
   switch (row) {
     case "pending-on":
       return { row, notice, label: "Asking the host…", disabled: true };

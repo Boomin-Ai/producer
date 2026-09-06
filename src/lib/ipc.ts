@@ -424,6 +424,9 @@ export type ExtraSpec =
   | { kind: "color"; color: string }
   | { kind: "window"; window: number }
   | { kind: "guest"; url: string }
+  /** A seated MOD's feed (v0.4.32): the same render page a guest uses, but
+   * its own source kind — own label, layer, placement; never a guest slot. */
+  | { kind: "mod"; url: string }
   /** A page rendered on the set, fed by THIS Producer over the local bridge (#51). */
   | { kind: "overlay"; url: string };
 

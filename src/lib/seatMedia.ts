@@ -185,11 +185,33 @@ export class SeatMediaLeg implements ProgramSource {
     if (link.sharing) {
       link.stopShare();
       this.set({ sharing: false });
+      void this.announceShare(false);
       return false;
     }
     const ok = await link.startShare();
     this.set({ sharing: ok });
+    if (ok) void this.announceShare(true);
     return ok;
+  }
+
+  /** The share as SERVER TRUTH: `POST /guest/:code/screen {sharing}` opens
+   *  (closes) the seat's `media.screen` contribution interval — the same
+   *  door the guest page uses. The host's Producer hears the interval on
+   *  the room channel and places (removes) the seat's MOD SCREEN feed from
+   *  it (v0.4.32), so "on set" for a screen is never a guess. Best effort:
+   *  a server without the route still gets the share over the peer. */
+  private async announceShare(sharing: boolean): Promise<void> {
+    if (!this.code) return;
+    try {
+      const res = await fetch(`${this.api}/guest/${encodeURIComponent(this.code)}/screen`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sharing, binding: { track: "share", kind: "mod" } }),
+      });
+      monitorLog(`seat-media: share ${sharing ? "start" : "stop"} announced → ${res.status}`);
+    } catch (e) {
+      monitorLog(`seat-media: share announce failed: ${String(e)}`);
+    }
   }
 
   // ── Media ──────────────────────────────────────────────────────────────
@@ -316,7 +338,10 @@ export class SeatMediaLeg implements ProgramSource {
         const m = msg as { kind?: unknown; info?: MonitorRoomInfo };
         if (m && m.kind === "room-info" && m.info) this.set({ roomInfo: m.info });
       },
-      onShareEnded: () => this.set({ sharing: false }),
+      onShareEnded: () => {
+        this.set({ sharing: false });
+        void this.announceShare(false);
+      },
       onMainState: (st) => {
         if (!mine()) return;
         monitorLog(`seat-media: main ${st}`);

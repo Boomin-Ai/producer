@@ -3,6 +3,82 @@
 Both sessions read and append here. Commit to `main` (docs only), pull before reading.
 Newest entry at the top of each section.
 
+## For Windows — from Mac, 2026-09-05 (v0.4.32: the official MOD source; Mods panel truth; one Select)
+
+**A mod is not a guest.** In v0.4.31 a seated mod with media reached the host's set as a
+`kind:"guest"` extra "<name> · mod" through the guest slot path. v0.4.32 makes `mod` a source
+kind of its own, end to end:
+
+- **Engine** (`src-tauri/src/live/graph.rs`): `ExtraSpec::Mod { url }` — same browser-source
+  contract as a guest (one page per participant, own audio strip, born hidden, never suspended)
+  but `kind = "mod"`. No new ffi extern (parity script unchanged, PASS).
+- **Ids / labels** (`server/guest/src/participants.ts`): `mod-<uuid8>` (camera + mic page) and
+  `mod-<uuid8>-screen`; labels "<name> — mod camera" / "<name> — mod screen"; own icon (shield)
+  in the source rows and in Add a source → **Mod feed** (pick a seated mod holding media).
+  `wantedSourceIds` now EXCLUDES every monitor row; `wantedModSourceIds` is the mod set. Slot math
+  (`slotMath.ts`, `slot_bindings`, `freeSlot`) never sees a mod row.
+- **Layer**: placed just UNDER the lowest overlay (above every guest slot and guest), on top when
+  there is no overlay (`lib/modFeed.ts` `modFeedZ`).
+- **Placement**: its own rect, saved on the room doc `mod_feeds[participantId][track]` as canvas
+  FRACTIONS (survives 720p→4K). Default camera = lower-right PiP 28% wide; screen = full frame.
+  Drag / resize it in the stage editor → remembered (`rememberModPlacement`), across sessions.
+  Not scene furniture: excluded from scene looks like guests, a row in every scene while placed.
+- **Throw up** (seat side, `lib/modBoard.ts` + `views/ModBoard.tsx`): CAMERA = the honest stage
+  request as before; the host honours a SEAT through the mod path (`hostStagePlan` now returns
+  `toPlaceMod` / `toRemoveMod`; `seats` input) → places the mod camera feed → posts truth → the
+  seat's window shows ON SET. A refusal reads "The host's set didn't place your feed — is it
+  connected?" (MOD_FEED_NOT_PLACED), never the guest-slot line. SCREEN = the share is announced
+  to the server as a `media.screen` interval (`lib/seatMedia.ts` → `POST /connect/guest/:code/screen`);
+  the host hears `contribution.opened` on the room channel and places the mod SCREEN feed
+  full-frame for a seat that is on the set (a seat sharing before it is on the set gets its
+  screen the moment its camera lands); `contribution.closed` takes it down.
+- **Ledger**: placing a mod feed opens a contribution interval (`POST …/contributions`,
+  kind overlay) bound `{kind:"mod", track, participant_id, source_id}`, closed on remove / seat
+  leaving / grant revoked. The api's binding is a free record (comment added); rooms-smoke checks
+  the round trip.
+- **Mods panel** (host): per seat the three media toggles (camera / mic / screen icons, mint on,
+  hairline off, tooltips + aria-labels + aria-pressed) AND, once the seat holds media, "Camera" /
+  "Screen" ON-SET toggles that place / remove the mod source, with a readout ("on set · camera +
+  screen" / "off set" / "feed connecting…"). The guests panel never lists a seat.
+  **Role label** reads truth: the room's grant roster (`GET …/access` → `grants`, joined by user)
+  → Manager / Mod / Viewer; no grant + TEAM member editor+ → Host; otherwise Viewer — never Host
+  by default (`seatRoleLabel`). **One row per member**: `dedupeSeatRows` hides ended / left rows
+  and keeps the newest accepted row per user (render url beats none, later `joined_at` wins);
+  the api roster (`roomRoster`) no longer lists an ended monitor row in the grace window.
+- **Select**: `src/components/Select.tsx` (glass 32px trigger, portaled `.cr-menu` popover, mint
+  dot on the active item, listbox/option roles, one open at a time; keyboard: arrows wrap and
+  skip disabled, Home/End, Enter/Space, Escape, type-ahead — `lib/selectKeys.ts`, tested) replaces
+  EVERY native `<select>` in src/views (Live ×5, Access ×5, Home ×3).
+
+Tests: `server/test/mod-source.test.ts` (ids, wanted sets never overlap, dedupe, role label,
+placement math, layer, the seat branch of hostStagePlan, the throw-up wording),
+`server/test/select-keys.test.ts`. Api: rooms-smoke (roster hides the ended monitor; mod binding
+accepted and closed exactly).
+
+**Test list for two machines (host on Windows, seat on the Mac or the other way round):**
+1. Host: Mods panel lists ONE row per seated person after the seat closes + reopens the room
+   (no "· monitor" ghost; the old row is gone within one roster tick). Role label reads Mod for a
+   room-mod grant, Manager for admin, Host for a team editor+ — a fresh viewer reads Viewer.
+2. Host toggles CAMERA on the seat → the Sources rail does NOT gain a row yet (the feed is
+   connecting, hidden); the Mods row readout says "feed connecting…" then "off set".
+3. Seat: Throw up (camera) → "Asking the host…" → ON SET. Host's set shows "<name> — mod camera"
+   as a lower-right PiP ABOVE the guest slots, below the vote overlay; the Sources rail shows the
+   row with the shield icon; the Mods row says ON SET / "on set · camera". No guest slot was used
+   (a full set of slots does not refuse it).
+4. Host drags the PiP to the upper-left and resizes; seat takes it down and throws up again → it
+   lands where it was left. Close and reopen the room → still there (`mod_feeds` on the doc).
+5. Seat: Share + throw up (screen) → the host's set shows "<name> — mod screen" full frame under
+   the PiP within ~2 s; Stop share → it comes down; the ledger (End → run report) lists the two
+   `mod` intervals.
+6. Host: Add a source → Mod feed → lists the seated mod's camera / screen; picking one places it.
+   Mods panel "Camera on set" / "Screen on set" toggles do the same; ✕ on the row takes it down.
+7. Host takes the camera back → the mod source leaves the graph, the seat's board greys,
+   the Mods row readout says "no media".
+8. Every dropdown (vote "who", window pick, destination preset, Access seat / type / role / room,
+   Home booking rooms, Threads reply control, Mods "Seat someone…" + role) is the glass Select:
+   arrows travel, Enter picks, Escape closes, typing a letter jumps, only one open at a time.
+9. Windows installer / UAC — still the unverified item from v0.4.13.
+
 ## For Windows — from Mac, 2026-09-05 (v0.4.31: the Mod View board; media for seats)
 
 **The Mod View.** Any non-host seat on a Boomin room (and a mod link on an open server) no

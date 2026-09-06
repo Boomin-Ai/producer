@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Select } from "../components/Select";
 import { cached, reconcile, remember, swr } from "../lib/fetchCache";
 import { sortRooms } from "../lib/roomOrder";
 import { createPortal } from "react-dom";
@@ -1717,15 +1718,17 @@ function ComposerDetail({
                           <>
                             <div className="acc-row">
                               <span className="acc-label">Who can reply</span>
-                              <select
-                                className="acc-select"
+                              <Select
+                                size="sm"
                                 value={p.reply_control}
-                                onChange={(e) => patchParams(c.id, { reply_control: e.target.value })}
-                              >
-                                <option value="">Everyone (default)</option>
-                                <option value="accounts_you_follow">Accounts you follow</option>
-                                <option value="mentioned_only">Mentioned only</option>
-                              </select>
+                                onChange={(v) => patchParams(c.id, { reply_control: v })}
+                                title="Who can reply"
+                                options={[
+                                  { value: "", label: "Everyone (default)" },
+                                  { value: "accounts_you_follow", label: "Accounts you follow" },
+                                  { value: "mentioned_only", label: "Mentioned only" },
+                                ]}
+                              />
                             </div>
                             <div className="acc-row">
                               <span className="acc-label">Topic tag</span>
@@ -2420,16 +2423,18 @@ const NetworkRail = memo(function NetworkRail({
                     </div>
                     <label className="net-field">
                       <span>Their room</span>
-                      <select value={bookHostRoom} onChange={(e) => setBookHostRoom(e.target.value)}>
-                        <option value="">Choose…</option>
-                        {netRooms
-                          .filter((r) => r.brand.id === c.counterparty.id)
-                          .map((r) => (
-                            <option key={r.room_id} value={r.room_id}>
-                              {r.title ?? "Room"}{r.status === "live" ? " · live" : ""}
-                            </option>
-                          ))}
-                      </select>
+                      <Select
+                        value={bookHostRoom}
+                        onChange={setBookHostRoom}
+                        placeholder="Choose…"
+                        title="Their room"
+                        options={[
+                          { value: "", label: "Choose…" },
+                          ...netRooms
+                            .filter((r) => r.brand.id === c.counterparty.id)
+                            .map((r) => ({ value: r.room_id, label: r.title ?? "Room", hint: r.status === "live" ? "live" : undefined })),
+                        ]}
+                      />
                     </label>
                     <div className="net-field-row">
                       <label className="net-field">
@@ -2474,13 +2479,7 @@ const NetworkRail = memo(function NetworkRail({
                     </div>
                     <label className="net-field">
                       <span>Room</span>
-                      <select value={bookRoom} onChange={(e) => setBookRoom(e.target.value)}>
-                        {rooms.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name}
-                          </option>
-                        ))}
-                      </select>
+                      <Select value={bookRoom} onChange={setBookRoom} title="Room" options={rooms.map((r) => ({ value: r.id, label: r.name }))} />
                     </label>
                     <label className="net-check">
                       <input type="checkbox" checked={bookFree} onChange={(e) => setBookFree(e.target.checked)} />
