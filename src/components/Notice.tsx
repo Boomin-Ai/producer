@@ -10,9 +10,10 @@ export function useNotices(): NoticeT[] {
 
 /** One glass pill. After its ttl it FADES in place (opacity 0.55) rather
  * than vanishing — the last thing the room said stays readable until you
- * hover it (full opacity, and the full text as a tooltip when the pill had
- * to ellipsize), click it (dismiss), or a newer notice replaces it. Errors
- * never fade: full opacity until dismissed. Hovering pauses the clock. */
+ * hover it (full opacity; a pill that had to ellipsize EXPANDS natively to
+ * its full text — a 120 ms max-width transition, no browser tooltip), click
+ * it (dismiss), or a newer notice replaces it. Errors never fade: full
+ * opacity until dismissed. Hovering pauses the clock. */
 function NoticePill({ n }: { n: NoticeT }) {
   const [paused, setPaused] = useState(false);
   const [clipped, setClipped] = useState(false);
@@ -22,12 +23,18 @@ function NoticePill({ n }: { n: NoticeT }) {
     const t = window.setTimeout(() => fade(n.id), n.ttl);
     return () => window.clearTimeout(t);
   }, [n.id, n.ttl, n.sticky, n.tone, n.faded, paused]);
-  // Tooltip only when the text had to ellipsize — a pill that fits says
-  // everything already.
+  // Expansion only when the text had to ellipsize — a pill that fits says
+  // everything already (and must not jump on hover).
+  const hoverRef = useRef(false);
   useEffect(() => {
     const el = textRef.current;
     if (!el) return;
-    const check = () => setClipped(el.scrollWidth > el.clientWidth + 1);
+    // Never re-measure while hovered: the expanded pill would read as
+    // "fits", drop the class, and snap shut under the pointer.
+    const check = () => {
+      if (hoverRef.current) return;
+      setClipped(el.scrollWidth > el.clientWidth + 1);
+    };
     check();
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(check) : null;
     ro?.observe(el);
@@ -35,11 +42,16 @@ function NoticePill({ n }: { n: NoticeT }) {
   }, [n.text]);
   return (
     <div
-      className={`rm-notice tone-${n.tone}${n.check ? " check" : ""}${n.faded ? " faded" : ""}`}
+      className={`rm-notice tone-${n.tone}${n.check ? " check" : ""}${n.faded ? " faded" : ""}${clipped ? " clipped" : ""}`}
       role={n.tone === "error" ? "alert" : "status"}
-      title={clipped ? n.text : undefined}
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
+      onMouseEnter={() => {
+        hoverRef.current = true;
+        setPaused(true);
+      }}
+      onMouseLeave={() => {
+        hoverRef.current = false;
+        setPaused(false);
+      }}
       onClick={() => dismiss(n.id)}
     >
       {n.check && (

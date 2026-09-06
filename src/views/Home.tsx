@@ -463,6 +463,11 @@ export function Home({
             setSettingsSection("integrations");
             openSettings();
           }}
+          onOpenAccess={() => {
+            back();
+            setSettingsSection("access");
+            openSettings();
+          }}
         />
       </>
     );

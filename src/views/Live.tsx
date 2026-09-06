@@ -1111,7 +1111,11 @@ function ModsPanel({
 /** The Mods panel head's "+" sheet: pick a brand member (the Access tab's
  * `team` API — already-seated people and team-type hosts excluded), a room
  * role, Seat. Loading and failure are said in the sheet, never swallowed;
- * Seat stays disabled until a real member is chosen (lib/seatPick.ts). */
+ * Seat stays disabled until a real member is chosen (lib/seatPick.ts).
+ * Layout (v0.4.39): title → Member → Role → footer [note · Seat]. With no
+ * one left to seat the form goes away entirely — only the note stays, with
+ * an "Open Access" link that leaves the room the way Open Integrations
+ * does (Settings → Access). */
 function SeatSheet({
   anchor,
   members,
@@ -1121,6 +1125,7 @@ function SeatSheet({
   onRetry,
   onSeat,
   onClose,
+  onOpenAccess,
 }: {
   anchor: HTMLElement | null;
   members: Member[] | null;
@@ -1130,56 +1135,79 @@ function SeatSheet({
   onRetry: () => void;
   onSeat: (memberId: string, role: "admin" | "editor" | "viewer") => Promise<boolean>;
   onClose: () => void;
+  onOpenAccess?: () => void;
 }) {
   const [pick, setPick] = useState("");
   const [role, setRole] = useState<"admin" | "editor" | "viewer">("editor");
   const [busy, setBusy] = useState(false);
   const candidates = seatCandidates(members, seatedUserIds);
   const ready = canSeat(pick, candidates) && !busy;
+  const nobody = !loadError && !loading && members !== null && candidates.length === 0;
   return (
     <Pop anchor={anchor} align="right" className="rm-pop-seat">
       <div className="rm-pop-title">SEAT SOMEONE</div>
-      <div className="rm-seat-sheet">
-        <Select
-          size="sm"
-          value={pick}
-          onChange={setPick}
-          placeholder={loading ? "Loading members…" : candidates.length === 0 ? "No one to seat" : "Pick a member…"}
-          disabled={loading || candidates.length === 0}
-          title="A member of this brand (Settings → Access)"
-          aria-label="Member"
-          options={candidates.map((m) => ({ value: m.id, label: memberLabel(m) }))}
-        />
-        <Select
-          size="sm"
-          value={role}
-          onChange={(v) => setRole(v as "editor")}
-          title="Their role in this room"
-          aria-label="Role"
-          options={[
-            { value: "editor", label: "Mod" },
-            { value: "viewer", label: "Viewer" },
-            { value: "admin", label: "Manager" },
-          ]}
-        />
-        <button
-          className="rm-guest-admit rm-seat-go"
-          disabled={!ready}
-          title={ready ? "Give them this seat" : "Pick a member first"}
-          onClick={async () => {
-            if (!ready) return;
-            setBusy(true);
-            const ok = await onSeat(pick, role);
-            setBusy(false);
-            if (ok) {
-              setPick("");
-              onClose();
-            }
-          }}
-        >
-          {busy ? "Seating…" : "Seat"}
-        </button>
-      </div>
+      {nobody ? (
+        <div className="rm-seat-empty">
+          <div className="rm-seat-note">Everyone on the team is either a host or already seated. Add people in Settings → Access.</div>
+          {onOpenAccess && (
+            <button
+              type="button"
+              className="rm-seat-link"
+              onClick={() => {
+                onClose();
+                onOpenAccess();
+              }}
+            >
+              Open Access
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="rm-seat-sheet">
+          <Select
+            size="sm"
+            value={pick}
+            onChange={setPick}
+            placeholder={loading ? "Loading members…" : "Pick a member…"}
+            disabled={loading || candidates.length === 0}
+            title="A member of this brand (Settings → Access)"
+            aria-label="Member"
+            options={candidates.map((m) => ({ value: m.id, label: memberLabel(m) }))}
+          />
+          <Select
+            size="sm"
+            value={role}
+            onChange={(v) => setRole(v as "editor")}
+            title="Their role in this room"
+            aria-label="Role"
+            options={[
+              { value: "editor", label: "Mod" },
+              { value: "viewer", label: "Viewer" },
+              { value: "admin", label: "Manager" },
+            ]}
+          />
+          <div className="rm-seat-foot">
+            <span className="rm-seat-hint">{loading ? "Loading the team…" : "Seats are room roles — never a brand role."}</span>
+            <button
+              className="rm-guest-admit rm-seat-go"
+              disabled={!ready}
+              title={ready ? "Give them this seat" : "Pick a member first"}
+              onClick={async () => {
+                if (!ready) return;
+                setBusy(true);
+                const ok = await onSeat(pick, role);
+                setBusy(false);
+                if (ok) {
+                  setPick("");
+                  onClose();
+                }
+              }}
+            >
+              {busy ? "Seating…" : "Seat"}
+            </button>
+          </div>
+        </div>
+      )}
       {loadError && (
         <div className="rm-seat-err" role="alert">
           {loadError}{" "}
@@ -1187,9 +1215,6 @@ function SeatSheet({
             Retry
           </button>
         </div>
-      )}
-      {!loadError && !loading && members !== null && candidates.length === 0 && (
-        <div className="rm-seat-note">Everyone on the team is either a host or already seated. Add people in Settings → Access.</div>
       )}
     </Pop>
   );
@@ -2558,6 +2583,7 @@ export function LiveView({
   room,
   onLeave,
   onOpenIntegrations,
+  onOpenAccess,
   seat,
 }: {
   room?: RoomInfo;
@@ -2565,6 +2591,9 @@ export function LiveView({
   /** "Connect a channel first" → leave the room (the collapse path) and open
    * Settings → Integrations. Absent = the empty state is a plain line. */
   onOpenIntegrations?: () => void;
+  /** The seat sheet's empty state → leave the room, open Settings → Access
+   * (same leave path as Open Integrations). */
+  onOpenAccess?: () => void;
   /** GUEST MODE: this Producer holds a seat in someone else's room. The
    * stage is the guest's own scene (their camera); the green-room strip
    * above it is the seat. Leaving the view leaves the seat. */
@@ -6917,6 +6946,7 @@ export function LiveView({
               onRetry={() => void loadMembers()}
               onSeat={seatMember}
               onClose={() => setSeatOpen(false)}
+              onOpenAccess={onOpenAccess}
             />
           )}
         </>
