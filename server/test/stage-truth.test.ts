@@ -97,6 +97,8 @@ describe("hostStagePlan / isOwnEcho", () => {
     expect(hostStagePlan({ requested: [G, H, "ghost"], shown: [H, "old"], admitted: [G, H, "old"] })).toEqual({
       toShow: [G],
       toHide: ["old"],
+      toPlaceMod: [],
+      toRemoveMod: [],
     });
   });
   it("a frame no newer than the host's own post is its echo", () => {

@@ -47,6 +47,8 @@ import {
 import { DEMO_CHAT, DEMO_VIDEO_URL, demoOn, type DemoPlatform } from "../lib/demo";
 import { activeEndpointId, isBoomin, resolveActiveEndpoint } from "../lib/workspace";
 import { StageEditor } from "./StageEditor";
+import { Select } from "../components/Select";
+import { fromCanvas, modFeedRect, modFeedZ, modSourceOwner, rememberModFeed, toCanvas, type ModFeedTrack } from "../lib/modFeed";
 import {
   PANEL_META,
   PANEL_ORDER,
@@ -98,6 +100,13 @@ import {
   kindBadge,
   sourceIdsFor,
   wantedSourceIds,
+  wantedModSourceIds,
+  modSourceIdsFor,
+  modSourceLabel,
+  isModSourceId,
+  dedupeSeatRows,
+  seatRoleLabel,
+  type RoomGrantRowLike,
   type RoomAccessInfo,
   type RoomRole,
   SET_IS_HOSTS,
@@ -107,7 +116,7 @@ import {
   isMediaSeat,
   hasAnyMedia,
   seatDisplayName,
-  seatSourceLabel,
+
   seatUserId,
 } from "../lib/participants";
 import { MonitorSender, ProgramMonitor, monitorLog, monitorPlaceholder, type MonitorRoomInfo, type MonitorState, type ProgramSource } from "../lib/monitorFeed";
@@ -115,7 +124,7 @@ import { SeatMediaLeg } from "../lib/seatMedia";
 import { ModBoard } from "./ModBoard";
 import { DEFAULT_MOD_BOARD, MOD_BOARD_PREF, normalizeModBoard, seatFeeds, throwUpState, type ModBoardLayout } from "../lib/modBoard";
 import { prefGet } from "../lib/prefs";
-import { memberRoomRole, team } from "../lib/access";
+import { team } from "../lib/access";
 import type { Member } from "../lib/accessDiff";
 import {
   EMPTY_MOD_STAGE,
@@ -950,11 +959,18 @@ function VoteHostCard({
             <input className="rm-vote-in" placeholder="Option B" value={b} onChange={(e) => setB(e.target.value)} maxLength={60} />
           </div>
           <div className="rm-vote-row">
-            <select className="rm-vote-in" value={who} onChange={(e) => setWho(e.target.value as "both")}>
-              <option value="both">Guests + audience</option>
-              <option value="guest">Guests only</option>
-              <option value="audience">Audience only</option>
-            </select>
+            <Select
+              size="sm"
+              className="rm-vote-in"
+              value={who}
+              onChange={(v) => setWho(v as "both")}
+              title="Who votes"
+              options={[
+                { value: "both", label: "Guests + audience" },
+                { value: "guest", label: "Guests only" },
+                { value: "audience", label: "Audience only" },
+              ]}
+            />
             <button className="rm-guest-admit" disabled={!a.trim() || !b.trim()} onClick={() => onOpen({ a: a.trim(), b: b.trim(), prompt: prompt.trim(), who })}>
               Open vote
             </button>
@@ -1003,21 +1019,25 @@ function VoteHostCard({
 }
 
 /** The host's MODS panel: the seats in the room (program-monitor rows —
- * never listed among the guests, founder rule), each with its name and
- * role, and for the HOST three media toggles per seat (camera / mic /
- * screen — the Jamie pattern; media grants are the host's alone to give),
- * plus "seat someone": a room role for a team member through the same door
- * the Access tab uses. A seat holding media that threw up shows ON SET,
- * with Show / Screen to frame its feed exactly like a guest card. */
+ * never listed among the guests, founder rule), ONE row per member
+ * (dedupeSeatRows), each with its name and its role read from TRUTH — the
+ * room's grant roster joined by user, team editor+ = Host, never Host by
+ * default (seatRoleLabel). For the HOST three media toggles per seat
+ * (camera / mic / screen — the Jamie pattern; media grants are the host's
+ * alone to give) and, once the seat holds media, ON SET toggles for the
+ * camera and the screen: they place / remove the seat's MOD SOURCE (its own
+ * kind, its own placement — never a guest slot; v0.4.32), with a readout of
+ * what the set shows. "Seat someone" = a room role for a team member
+ * through the same door the Access tab uses. */
 function ModsPanel({
   seats,
   items,
   isHost,
   canManage,
   members,
-  roomId,
+  grants,
   onToggleGrant,
-  onShow,
+  onPlace,
   onSeat,
   error,
 }: {
@@ -1026,64 +1046,98 @@ function ModsPanel({
   isHost: boolean;
   canManage: boolean;
   members: Member[] | null;
-  roomId: string | null;
+  grants: RoomGrantRowLike[] | null;
   onToggleGrant: (seat: RoomGuest, grant: "media.camera" | "media.mic" | "media.screen", enabled: boolean) => void;
-  onShow: (sourceId: string, show: boolean) => void;
+  onPlace: (seat: RoomGuest, track: ModFeedTrack, on: boolean) => void;
   onSeat: (memberId: string, role: "admin" | "editor" | "viewer") => void;
   error: string | null;
 }) {
   const [pick, setPick] = useState("");
   const [role, setRole] = useState<"admin" | "editor" | "viewer">("editor");
   const seated = new Set(seats.map((g) => seatUserId(g)).filter((x): x is string => !!x));
-  const roleOf = (g: RoomGuest): string => {
-    const uid = seatUserId(g);
-    const m = uid ? members?.find((x) => x.user_id === uid) : undefined;
-    if (!m) return "seat";
-    if (m.type === "team" && (m.role === "owner" || m.role === "admin" || m.role === "editor")) return "host";
-    const r = roomId ? memberRoomRole(m, roomId).role : null;
-    return r ?? (m.grants.some((x) => x.scope_type === "brand" && x.role !== "viewer") ? "host" : "viewer");
-  };
   const candidates = (members ?? []).filter((m) => !seated.has(m.user_id) && !(m.type === "team" && (m.role === "owner" || m.role === "admin" || m.role === "editor")));
   return (
     <div className="rm-mods">
       {seats.length === 0 && <div className="rm-rows-empty">No one is seated. A manager or mod who opens this room takes a seat here.</div>}
       {seats.map((g) => {
-        const grants = resolveGrants(g);
-        const ids = sourceIdsFor(g.id);
+        const grants_ = resolveGrants(g);
+        const ids = modSourceIdsFor(g.id);
         const cam = items.find((i) => i.id === ids.camera);
-        const scr = grants.has("media.screen") ? items.find((i) => i.id === ids.screen) : undefined;
+        const scr = grants_.has("media.screen") ? items.find((i) => i.id === ids.screen) : undefined;
         const media = isMediaSeat(g);
-        const tg = (grant: "media.camera" | "media.mic" | "media.screen", icon: ReactNode, name: string) => (
-          <button
-            className={`rm-mod-tg${grants.has(grant) ? " on" : ""}`}
-            disabled={!isHost}
-            title={!isHost ? `Only the host gives ${name}` : grants.has(grant) ? `Take ${name} back` : `Give ${name}`}
-            onClick={() => onToggleGrant(g, grant, !grants.has(grant))}
-          >
-            {icon}
-          </button>
-        );
+        const name = seatDisplayName(g);
+        const roleLabel = seatRoleLabel({ seat: g, grants, members });
+        const tg = (grant: "media.camera" | "media.mic" | "media.screen", icon: ReactNode, what: string) => {
+          const on = grants_.has(grant);
+          const tip = !isHost ? `Only the host gives ${what}` : on ? `Take ${what} back from ${name}` : `Give ${name} ${what}`;
+          return (
+            <button
+              type="button"
+              className={`rm-mod-tg${on ? " on" : ""}`}
+              disabled={!isHost}
+              title={tip}
+              aria-label={tip}
+              aria-pressed={on}
+              onClick={() => onToggleGrant(g, grant, !on)}
+            >
+              {icon}
+            </button>
+          );
+        };
+        const onSet = !!cam?.visible;
+        const scrOn = !!scr?.visible;
+        const readout = !media
+          ? "no media"
+          : onSet && scrOn
+            ? "on set · camera + screen"
+            : onSet
+              ? "on set · camera"
+              : scrOn
+                ? "on set · screen"
+                : cam || scr
+                  ? "off set"
+                  : "feed connecting…";
         return (
           <div key={g.id} className="rm-mod-row">
             <div className="rm-mod-id">
-              <span className="rm-mod-name">{seatDisplayName(g)}</span>
-              <span className="rm-mod-role">{roleOf(g)}</span>
-              {cam?.visible && <span className="rm-mod-onset">ON SET</span>}
+              <span className="rm-mod-name">{name}</span>
+              <span className="rm-mod-role" title="Role in this room, from the room's grants">{roleLabel}</span>
+              {(onSet || scrOn) && <span className="rm-mod-onset">ON SET</span>}
             </div>
-            <div className="rm-mod-media">
+            <div className="rm-mod-media" role="group" aria-label={`${name}: media`}>
               {tg("media.camera", ic.cam, "camera")}
               {tg("media.mic", ic.mic, "mic")}
               {tg("media.screen", ic.screen, "screen")}
             </div>
-            {media && isHost && (
+            {media && (
               <div className="rm-mod-set">
-                <button className={`rm-guest-stage${cam?.visible ? " on" : ""}`} disabled={!cam} title={cam?.visible ? "Take their feed off the set" : "Pop their feed into the next free guest slot"} onClick={() => cam && onShow(cam.id, !cam.visible)}>
-                  {cam?.visible ? "On set" : cam ? "Show" : "Feed connecting…"}
-                </button>
-                {scr && (
-                  <button className={`rm-guest-stage${scr.visible ? " on" : ""}`} title={scr.visible ? "Take their screen off" : "Pop their screen share into the next free guest slot"} onClick={() => onShow(scr.id, !scr.visible)}>
-                    {scr.visible ? "Screen on" : "Screen"}
-                  </button>
+                <span className="rm-mod-readout" title="What the host's set shows for this seat">
+                  {readout}
+                </span>
+                {isHost && (
+                  <>
+                    <button
+                      type="button"
+                      className={`rm-guest-stage${onSet ? " on" : ""}`}
+                      disabled={!cam}
+                      aria-pressed={onSet}
+                      title={onSet ? `Take ${name}'s camera off the set` : cam ? `Place ${name}'s camera on the set (mod feed, lower-right)` : "Their feed hasn't connected yet"}
+                      onClick={() => cam && onPlace(g, "camera", !onSet)}
+                    >
+                      {ic.cam} {onSet ? "Camera on set" : "Camera"}
+                    </button>
+                    {scr && (
+                      <button
+                        type="button"
+                        className={`rm-guest-stage${scrOn ? " on" : ""}`}
+                        aria-pressed={scrOn}
+                        title={scrOn ? `Take ${name}'s screen off the set` : `Place ${name}'s screen on the set (mod feed, full frame)`}
+                        onClick={() => onPlace(g, "screen", !scrOn)}
+                      >
+                        {ic.screen} {scrOn ? "Screen on set" : "Screen"}
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -1092,19 +1146,25 @@ function ModsPanel({
       })}
       {canManage && (
         <div className="rm-mod-seat">
-          <select value={pick} onChange={(e) => setPick(e.target.value)} title="Seat a team member">
-            <option value="">Seat someone…</option>
-            {candidates.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name || m.email}
-              </option>
-            ))}
-          </select>
-          <select value={role} onChange={(e) => setRole(e.target.value as "editor")} title="Their role in this room">
-            <option value="editor">Mod</option>
-            <option value="viewer">Viewer</option>
-            <option value="admin">Manager</option>
-          </select>
+          <Select
+            size="sm"
+            value={pick}
+            onChange={setPick}
+            placeholder="Seat someone…"
+            title="Seat a team member"
+            options={[{ value: "", label: "Seat someone…" }, ...candidates.map((m) => ({ value: m.id, label: m.name || m.email }))]}
+          />
+          <Select
+            size="sm"
+            value={role}
+            onChange={(v) => setRole(v as "editor")}
+            title="Their role in this room"
+            options={[
+              { value: "editor", label: "Mod" },
+              { value: "viewer", label: "Viewer" },
+              { value: "admin", label: "Manager" },
+            ]}
+          />
           <button className="rm-guest-admit" disabled={!pick} onClick={() => { if (pick) { onSeat(pick, role); setPick(""); } }}>
             Seat
           </button>
@@ -1812,15 +1872,13 @@ function OverlayPicker({ activeWindow, activeUrl }: { activeWindow: number | nul
       {mode === "window" ? (
         <>
           <div className="live-overlay-row">
-            <select value={selected} onChange={(e) => setSelected(e.target.value === "" ? "" : Number(e.target.value))}>
-              <option value="">Choose a window…</option>
-              {windows.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.owner}
-                  {w.title ? ` — ${w.title}` : ""}
-                </option>
-              ))}
-            </select>
+            <Select
+              value={selected === "" ? "" : String(selected)}
+              onChange={(v) => setSelected(v === "" ? "" : Number(v))}
+              placeholder="Choose a window…"
+              title="Window"
+              options={[{ value: "", label: "Choose a window…" }, ...windows.map((w) => ({ value: String(w.id), label: `${w.owner}${w.title ? ` — ${w.title}` : ""}` }))]}
+            />
             <button onClick={load} title="Refresh window list">
               ↻
             </button>
@@ -1977,6 +2035,13 @@ const ic = {
       <path d="M12 11V8M10 9.5l2-1.5 2 1.5M8 21h8" />
     </svg>
   ),
+  /** A mod feed: a shield with a dot — the seat's badge, not a guest's invite. */
+  mod: (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3 5 6v5.5c0 4.2 2.9 7.6 7 8.5 4.1-.9 7-4.3 7-8.5V6z" />
+      <circle cx="12" cy="11.5" r="2" fill="currentColor" stroke="none" />
+    </svg>
+  ),
   link: (
     <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
@@ -2116,6 +2181,7 @@ const EXTRA_ICONS: Record<string, ReactNode> = {
   color: ic.swatch,
   window: ic.screen,
   guest: ic.invite,
+  mod: ic.mod,
   overlay: ic.link,
 };
 
@@ -2353,13 +2419,7 @@ export function DestinationEditor({
   return (
     <div className="live-editor">
       <div className="live-editor-row">
-        <select value={preset} onChange={(e) => setPreset(e.target.value as LivePreset)} disabled={!!existing}>
-          {PRESETS.map((p) => (
-            <option key={p.value} value={p.value}>
-              {p.label}
-            </option>
-          ))}
-        </select>
+        <Select value={preset} onChange={(v) => setPreset(v as LivePreset)} disabled={!!existing} title="Destination" options={PRESETS.map((p) => ({ value: p.value, label: p.label }))} />
         <input placeholder="Label (optional)" value={label} onChange={(e) => setLabel(e.target.value)} />
       </div>
       {needsServer && (
@@ -2569,6 +2629,9 @@ export function LiveView({
   const [adding, setAdding] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [sources, setSources] = useState<LiveSources>({ screen: false, camera: false, mic: false });
+  /** The canvas height the engine reports (720 until it does) — read by the
+   * mod-feed placement, which works in canvas fractions (lib/modFeed.ts). */
+  const vhRef = useRef(720);
   /** First PIXELS, per source. The engine's has_frame only reaches React on
    * a sources_changed edge, so we POLL engine truth every 100ms from the
    * moment the document is applied: each visible item's first-frame time is
@@ -2929,6 +2992,11 @@ export function LiveView({
     const it = (sources.items ?? []).find((i) => i.id === id);
     if (!it) return;
     if (it.kind === "guest") return void hideGuestFromSlot(id);
+    if (it.kind === "mod") {
+      const owner = modSourceOwner(id, liveRowsRef.current);
+      if (owner) removeModFeed(owner.row.id, owner.track, "stage delete");
+      return;
+    }
     void removeExtraSource(id);
   };
   const videoApplied = useRef(false);
@@ -3140,6 +3208,10 @@ export function LiveView({
    * media. The stage truth and the reconcile read THIS, not `roster`. */
   const liveRowsRef = useRef<RoomGuest[]>([]);
   const [members, setMembers] = useState<Member[] | null>(null);
+  /** The room's grant roster (`GET …/access` → `grants`, a manager's view):
+   * what the Mods panel's role label is READ from. Null = not a manager,
+   * or not answered yet — the label then falls back to team standing. */
+  const [roomGrants, setRoomGrants] = useState<RoomGrantRowLike[] | null>(null);
   const [modsErr, setModsErr] = useState<string | null>(null);
   /** The board's own layout (lib/modBoard.ts), saved per seat. */
   const [boardLayout, setBoardLayout] = useState<ModBoardLayout>(DEFAULT_MOD_BOARD);
@@ -3294,6 +3366,71 @@ export function LiveView({
     requestAnimationFrame(step);
   };
 
+  // ── MOD FEEDS (v0.4.32): the seat's own source kind on the set ─────────
+  // A seat's feed is `mod-<uuid8>` (camera + mic page) / `-screen` (share).
+  // Placing it is NOT a slot: it takes its remembered rect (default:
+  // lower-right PiP for the camera, full frame for the screen), the layer
+  // just under the overlays, and opens a contribution interval bound
+  // `{kind:"mod", track}`; removing closes it. Nothing here touches
+  // slot_bindings — slot math never sees a mod row.
+  const modPlacedRef = useRef<Map<string, boolean>>(new Map());
+  const placeModFeed = async (participantId: string, track: ModFeedTrack, why: string): Promise<boolean> => {
+    const id = modSourceIdsFor(participantId)[track];
+    const items = sourcesRef.current.items ?? [];
+    const it = items.find((i) => i.id === id);
+    if (!it) {
+      monitorLog(`host: mod feed ${id} not placed (${why}) — the source is not on the graph yet`);
+      return false;
+    }
+    const bw = (vhRef.current * 16) / 9;
+    const bh = vhRef.current;
+    const rect = toCanvas(modFeedRect(cfgRef.current.mod_feeds, participantId, track), bw, bh);
+    const z = modFeedZ(items.filter((i) => i.id !== id));
+    await ipc.liveSetTransform(id, { ...rect, z, visible: false }, true).catch(() => {});
+    fadeGuest(id, true);
+    // Remember the rect (the default becomes explicit the first time).
+    const feeds = rememberModFeed(cfgRef.current.mod_feeds, participantId, track, modFeedRect(cfgRef.current.mod_feeds, participantId, track));
+    writeCfg({ ...cfgRef.current, mod_feeds: feeds });
+    modLedger(participantId, track, id, true);
+    monitorLog(`host: mod feed ${id} placed (${why}) at ${Math.round(rect.x)},${Math.round(rect.y)} ${Math.round(rect.w)}×${Math.round(rect.h)} z${z}`);
+    return true;
+  };
+  const removeModFeed = (participantId: string, track: ModFeedTrack, why: string) => {
+    const id = modSourceIdsFor(participantId)[track];
+    const it = (sourcesRef.current.items ?? []).find((i) => i.id === id);
+    if (it?.visible) fadeGuest(id, false);
+    modLedger(participantId, track, id, false);
+    monitorLog(`host: mod feed ${id} removed (${why})`);
+  };
+  /** The ledger half: one open interval per placed mod feed, bound
+   * `{kind:"mod", track, participant_id, source_id}` — closed on remove,
+   * on the row leaving, and at End (the overlay path closes with it). */
+  const modLedger = (participantId: string, track: ModFeedTrack, sourceId: string, shown: boolean) => {
+    const ep = endpointRef.current;
+    const sid = cfgRef.current.server_room_id;
+    if (!ep || !sid || !boominRoomRef.current) return;
+    const was = modPlacedRef.current.get(sourceId) ?? false;
+    if (was === shown) return;
+    modPlacedRef.current.set(sourceId, shown);
+    const row = liveRowsRef.current.find((g) => g.id === participantId);
+    const label = row ? modSourceLabel(row, track) : sourceId;
+    guestsIpc.overlay(ep, sid, sourceId, { kind: "mod", track, participant_id: participantId }, shown, label).catch((e) => monitorLog(`host: mod ledger ${shown ? "open" : "close"} failed: ${String(e)}`));
+  };
+  /** The stage editor moved / resized a placed mod feed: remember the rect
+   * as canvas fractions so the next placement (and the next session) lands
+   * there. */
+  const rememberModPlacement = (id: string, patch: LiveTransformPatch) => {
+    if (!isModSourceId(id)) return;
+    const owner = modSourceOwner(id, liveRowsRef.current);
+    if (!owner) return;
+    const it = (sourcesRef.current.items ?? []).find((i) => i.id === id);
+    if (!it) return;
+    const g = { x: patch.x ?? it.x, y: patch.y ?? it.y, w: patch.w ?? it.w, h: patch.h ?? it.h };
+    const bw = (vhRef.current * 16) / 9;
+    const rect = fromCanvas(g, bw, vhRef.current);
+    writeCfg({ ...cfgRef.current, mod_feeds: rememberModFeed(cfgRef.current.mod_feeds, owner.row.id, owner.track, rect) });
+  };
+
   const admitGuest = async (id: string) => {
     if (!endpointRef.current || !cfg.server_room_id) return;
     // The guest's return video IS the virtual camera — the render page opens
@@ -3323,9 +3460,16 @@ export function LiveView({
    * visibility echo lands a frame later) — mapped back through the roster. */
   const shownGuestIds = (): string[] => {
     const live = liveRowsRef.current.filter((g) => !!g.render_url);
-    const visible = new Set((sourcesRef.current.items ?? []).filter((i) => i.kind === "guest" && i.visible).map((i) => i.id));
+    const visible = new Set((sourcesRef.current.items ?? []).filter((i) => (i.kind === "guest" || i.kind === "mod") && i.visible).map((i) => i.id));
     const bound = new Set(Object.values(cfgRef.current.slot_bindings ?? {}));
-    return live.filter((g) => visible.has(sourceIdsFor(g.id).camera) || bound.has(sourceIdsFor(g.id).camera)).map((g) => g.id);
+    return live
+      .filter((g) =>
+        isMonitor(g)
+          ? // A seat is on the set when its MOD camera feed is placed (v0.4.32).
+            visible.has(modSourceIdsFor(g.id).camera)
+          : visible.has(sourceIdsFor(g.id).camera) || bound.has(sourceIdsFor(g.id).camera),
+      )
+      .map((g) => g.id);
   };
   const sameIds = (a: readonly string[], b: readonly string[]) => a.length === b.length && [...a].sort().every((x, i) => x === [...b].sort()[i]);
   /** Host: post the stage list UNCONDITIONALLY — after acting on a mod's
@@ -3362,8 +3506,10 @@ export function LiveView({
     // the set's truth is nothing to act on — and answering it would post
     // again, echo again, forever.
     if (sameIds(onStage, shown)) return;
-    const plan = hostStagePlan({ requested: onStage, shown, admitted: live.map((g) => g.id) });
-    monitorLog(`host: stage request v${version} — show [${plan.toShow.map((x) => x.slice(0, 8)).join(", ")}] hide [${plan.toHide.map((x) => x.slice(0, 8)).join(", ")}]`);
+    // Seats go through the MOD path — their own source, never a slot.
+    const seats = live.filter((g) => isMonitor(g)).map((g) => g.id);
+    const plan = hostStagePlan({ requested: onStage, shown, admitted: live.map((g) => g.id), seats });
+    monitorLog(`host: stage request v${version} — show [${plan.toShow.map((x) => x.slice(0, 8)).join(", ")}] hide [${plan.toHide.map((x) => x.slice(0, 8)).join(", ")}] place-mod [${plan.toPlaceMod.map((x) => x.slice(0, 8)).join(", ")}] remove-mod [${plan.toRemoveMod.map((x) => x.slice(0, 8)).join(", ")}]`);
     void (async () => {
       const placed: string[] = [];
       const refused: string[] = [];
@@ -3372,18 +3518,57 @@ export function LiveView({
         (ok ? placed : refused).push(gid);
       }
       for (const gid of plan.toHide) hideGuestFromSlot(sourceIdsFor(gid).camera);
-      if (refused.length) {
-        const names = refused.map((gid) => { const g = live.find((x) => x.id === gid); return g ? (isMonitor(g) ? seatDisplayName(g) : g.display_name || "a guest") : "a guest"; }).join(", ");
+      for (const pid of plan.toPlaceMod) {
+        // "Place my camera": the mod camera feed at its own rect. A seat
+        // that is also sharing gets its screen from the share interval.
+        const ok = await placeModFeed(pid, "camera", "throw up");
+        (ok ? placed : refused).push(pid);
+        if (ok && pendingSeatShare.current.delete(pid)) void placeModFeed(pid, "screen", "share pending");
+      }
+      for (const pid of plan.toRemoveMod) {
+        removeModFeed(pid, "camera", "take down");
+        removeModFeed(pid, "screen", "take down");
+      }
+      const refusedGuests = refused.filter((id) => !seats.includes(id));
+      if (refusedGuests.length) {
+        const names = refusedGuests.map((gid) => live.find((x) => x.id === gid)?.display_name || "a guest").join(", ");
         setBanner(`A mod asked to stage ${names} — no free guest slot. Add one: Sources → + → Guest slot`);
         window.setTimeout(() => setBanner(null), 8000);
       }
       // The truth the set is about to show: what stayed, plus what was
       // placed (the engine's visibility echo lands a frame later).
-      const hide = new Set(plan.toHide);
+      const hide = new Set([...plan.toHide, ...plan.toRemoveMod]);
       const truth = [...shown.filter((id) => !hide.has(id)), ...placed];
       await postStageTruth(truth, refused.length ? "mod request, partly refused" : "mod request");
     })();
   };
+
+  /** A seat's SHARE as server truth: its `media.screen` interval opening /
+   * closing on the room channel (lib/seatMedia.ts announces it). Host: a
+   * seat that is ON THE SET (camera placed, or being placed) gets its MOD
+   * SCREEN feed placed full-frame; the interval closing takes it down.
+   * A seat not on the set: nothing — "place my screen" is the seat's
+   * throw-up, which stages the seat first. */
+  const onSeatShareRef = useRef<((c: Contribution, opened: boolean) => void) | null>(null);
+  onSeatShareRef.current = (c, opened) => {
+    if (roomRoleRef.current !== "host" || c.kind !== "media.screen" || !c.participant_id) return;
+    const row = liveRowsRef.current.find((g) => g.id === c.participant_id);
+    if (!row || !isMonitor(row)) return;
+    if (!opened) {
+      removeModFeed(row.id, "screen", "share ended");
+      return;
+    }
+    const ids = modSourceIdsFor(row.id);
+    const cam = (sourcesRef.current.items ?? []).find((i) => i.id === ids.camera);
+    if (!cam?.visible) {
+      monitorLog(`host: seat ${row.id.slice(0, 8)} is sharing but not on the set — waiting for its throw-up`);
+      pendingSeatShare.current.add(row.id);
+      return;
+    }
+    void placeModFeed(row.id, "screen", "share started");
+  };
+  /** Seats sharing while off the set: their screen lands when they come on. */
+  const pendingSeatShare = useRef<Set<string>>(new Set());
 
   /** Mod: ASK the host to put a guest on or off the stage. The server takes
    * the full list (a dropped call is corrected by the next one) and echoes
@@ -3433,11 +3618,17 @@ export function LiveView({
     const id = mySeatRef.current?.id;
     if (!id) return;
     const leg = mediaLegRef.current;
-    if (kind === "screen" && leg && !leg.snapshot().sharing) {
-      const ok = await leg.toggleShare();
-      if (!ok) return;
+    if (kind === "screen") {
+      // "Place my screen": the share is announced to the server as a
+      // media.screen interval (lib/seatMedia.ts); the host's set places the
+      // MOD SCREEN feed from that interval once the seat is on the set —
+      // so stage the seat if it is not yet.
+      if (leg && !leg.snapshot().sharing) {
+        const ok = await leg.toggleShare();
+        if (!ok) return;
+      }
+      if (modRowStage(modStageRef.current, id) === "on") return;
     }
-    if (kind === "screen" && modRowStage(modStageRef.current, id) === "on") return;
     await modStageToggle(id);
   };
   /** HOST: give or take a seat's camera / mic / screen (api: host-only). */
@@ -3544,7 +3735,7 @@ export function LiveView({
    *  same crumb, same place — instead of popping a floating menu. */
   const [deviceFor, setDeviceFor] = useState<{ key: string; label: string } | null>(null);
   /** Mini-editor popover for adding an open-list source. */
-  const [srcSubPop, setSrcSubPop] = useState<"text" | "color" | "window" | null>(null);
+  const [srcSubPop, setSrcSubPop] = useState<"text" | "color" | "window" | "mod" | null>(null);
 
   /** Add an open-list item and record it in the room document so it
    * respawns when the room reopens. */
@@ -3573,7 +3764,7 @@ export function LiveView({
       const active = activeSceneRef.current;
       const stage: Record<string, SceneItemLook> = Object.fromEntries(
         (sourcesRef.current.items ?? [])
-          .filter((i) => i.kind !== "guest")
+          .filter((i) => i.kind !== "guest" && i.kind !== "mod")
           .map((i) => [i.id, { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z }]),
       );
       const scenes = (c.scenes.length ? c.scenes : DEFAULT_SCENES).map((sc) => {
@@ -3952,7 +4143,7 @@ export function LiveView({
       const kept = new Set<string>();
       for (const i of held) {
         const doc = listed.get(i.id);
-        if (hot && (i.kind === "guest" || (doc && doc.spec.kind === i.kind))) {
+        if (hot && (i.kind === "guest" || i.kind === "mod" || (doc && doc.spec.kind === i.kind))) {
           kept.add(i.id);
           continue;
         }
@@ -4310,7 +4501,9 @@ export function LiveView({
   const lookOwed = useRef<string | null>(null);
   const captureLookNow = (sceneId: string) => {
     if (!roomApplied.current) return;
-    const items = (sourcesRef.current.items ?? []).filter((i) => i.kind !== "guest");
+    // Guests AND mod feeds are excluded: transient ids; slots carry guest
+    // geometry, `mod_feeds` carries a seat's (lib/modFeed.ts).
+    const items = (sourcesRef.current.items ?? []).filter((i) => i.kind !== "guest" && i.kind !== "mod");
     if (!items.length) return;
     const look: Record<string, SceneItemLook> = Object.fromEntries(
       items.map((i) => [i.id, { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z }]),
@@ -4420,7 +4613,9 @@ export function LiveView({
       const realLook = !!(p.look && Object.keys(p.look).length);
       if (realLook) {
         for (const it of sources.items ?? []) {
-          if (it.kind === "guest") continue;
+          // Guests and mod feeds are not scene members: slots and mod_feeds
+          // carry them across every scene.
+          if (it.kind === "guest" || it.kind === "mod") continue;
           if (!(it.id in look) && it.visible) {
             ipc.liveSetTransform(it.id, { visible: false }, true).catch(() => {});
           }
@@ -4754,6 +4949,11 @@ export function LiveView({
             // it, a deal capped): a bound source still showing on the set
             // comes down, so the ledger and the picture agree.
             onContributionClosed((frame as ContributionFrame).contribution as unknown as Contribution);
+            onSeatShareRef.current?.((frame as ContributionFrame).contribution as unknown as Contribution, false);
+            return;
+          }
+          if (frame.type === "contribution.opened") {
+            onSeatShareRef.current?.((frame as ContributionFrame).contribution as unknown as Contribution, true);
             return;
           }
           if (frame.type === "stage") {
@@ -5307,6 +5507,10 @@ export function LiveView({
           }
           accessAsked.current = true;
           const info = roomAccessFrom(acc);
+          {
+            const dto = (acc && typeof acc === "object" ? (acc as { access?: unknown }).access : null) as { grants?: unknown } | null;
+            setRoomGrants(Array.isArray(dto?.grants) ? (dto!.grants as RoomGrantRowLike[]) : null);
+          }
           roomRoleRef.current = info.role;
           setRoomRole(info.role);
           setRoomAccess(info);
@@ -5355,9 +5559,11 @@ export function LiveView({
         }
         // Seats (monitor rows) for the Mods panel — and the set's candidate
         // list: guests plus seats the host handed media (isMediaSeat).
-        const seats = full.filter((g) => isMonitor(g));
+        // One row per member (dedupeSeatRows): ended rows hidden, the newest
+        // accepted row wins when the api still lists a reopened seat twice.
+        const seats = dedupeSeatRows(full);
         setSeatRows((prev) => (JSON.stringify(prev) === JSON.stringify(seats) ? prev : seats));
-        liveRowsRef.current = full.filter((g) => !isMonitor(g) || isMediaSeat(g));
+        liveRowsRef.current = [...full.filter((g) => !isMonitor(g)), ...seats.filter((g) => isMediaSeat(g))];
         // The host's half of every monitor leg: one sender per monitor row,
         // dropped when the row leaves the roster (seat left, grant revoked,
         // run ended) — or when the seat gained media: its render page's
@@ -5463,8 +5669,8 @@ export function LiveView({
               // No media.return_feed → the page never opens the return leg.
               if (!resolveGrants(g).has("media.return_feed")) u.searchParams.set("feed", "0");
             }
-            // A seat's feed wears its name and role: "<name> · mod".
-            const name = isMonitor(g) ? seatSourceLabel(g) : g.display_name || "Guest";
+            // Guests only here — a seat's feed is a MOD source (below).
+            const name = g.display_name || "Guest";
             await extraSources
               .add(id, track === "screen" ? `${name} · screen` : name, { kind: "guest", url: u.toString() })
               .catch(() => {});
@@ -5483,6 +5689,50 @@ export function LiveView({
             } else {
               await extraSources.remove(id).catch(() => {});
             }
+          }
+        }
+
+        // MOD SOURCES (v0.4.32): one `mod-<uuid8>` page per seat holding
+        // camera / mic, one `-screen` page per seat holding media.screen —
+        // their own kind, born hidden at their remembered rect on the mod
+        // layer, never a guest slot. Dropped when the grant goes or the
+        // seat leaves (the ledger interval closes with it).
+        {
+          const presentMods = new Set((sources.items ?? []).filter((i) => i.kind === "mod").map((i) => i.id));
+          const wantedMods = wantedModSourceIds(seats.filter((g) => !!g.render_url));
+          for (const [id, { seat, track }] of wantedMods) {
+            if (presentMods.has(id)) continue;
+            const u = new URL(seat.render_url!);
+            if (track === "screen") {
+              u.searchParams.set("track", "screen");
+            } else {
+              if (micDeviceLabel) u.searchParams.set("mic", micDeviceLabel);
+              u.searchParams.set("program", vcamState?.device_name ?? "Producer Virtual Camera");
+              if (!resolveGrants(seat).has("media.return_feed")) u.searchParams.set("feed", "0");
+            }
+            const label = modSourceLabel(seat, track);
+            await extraSources.add(id, label, { kind: "mod", url: u.toString() }).catch(() => {});
+            // Its place and layer, hidden: the seat's throw-up / the Mods
+            // panel reveal it there rather than full-frame on top.
+            const bw = (vhRef.current * 16) / 9;
+            const rect = toCanvas(modFeedRect(cfgRef.current.mod_feeds, seat.id, track), bw, vhRef.current);
+            const z = modFeedZ(sources.items ?? []);
+            ipc.liveSetTransform(id, { ...rect, z, visible: false }, true).catch(() => {});
+            monitorLog(`host: mod source ${id} (${label}) added, hidden at its rect`);
+          }
+          for (const id of presentMods) {
+            if (wantedMods.has(id)) continue;
+            const it = (sources.items ?? []).find((i) => i.id === id);
+            const owner = modSourceOwner(id, full);
+            if (owner) modLedger(owner.row.id, owner.track, id, false);
+            else if (modPlacedRef.current.get(id)) modPlacedRef.current.set(id, false);
+            if (it?.visible) {
+              fadeGuest(id, false);
+              window.setTimeout(() => extraSources.remove(id).catch(() => {}), 320);
+            } else {
+              await extraSources.remove(id).catch(() => {});
+            }
+            monitorLog(`host: mod source ${id} dropped (grant revoked or seat left)`);
           }
         }
 
@@ -5510,8 +5760,11 @@ export function LiveView({
         // the roster rather than un-truncating. Fire-and-forget: the server
         // list is a cache for reconnecting guests, never read back here —
         // scene-item visibility in the engine stays the only truth.
-        const stageIds = shown
-          .map((it) => live.find((g) => sourceIdsFor(g.id).camera === it.id)?.id)
+        const shownMods = (sources.items ?? []).filter((i) => i.kind === "mod" && i.visible);
+        const stageIds = [
+          ...shown.map((it) => live.find((g) => !isMonitor(g) && sourceIdsFor(g.id).camera === it.id)?.id),
+          ...shownMods.map((it) => live.find((g) => isMonitor(g) && modSourceIdsFor(g.id).camera === it.id)?.id),
+        ]
           .filter((id): id is string => !!id)
           .sort();
         const stageKey = stageIds.join(",");
@@ -5599,6 +5852,7 @@ export function LiveView({
   };
 
   const vh = snapshot?.video_height || 720;
+  vhRef.current = vh;
   const vf = snapshot?.video_fps || 30;
   // 4K is a hardware-encoder feature: the engine reports whether one
   // registered (VideoToolbox, NVENC, QSV, or AMF).
@@ -5972,7 +6226,10 @@ export function LiveView({
             // exactly what slots replaced.
             ...liveItems
               .filter((i) => !["screen", "camera", "overlay"].includes(i.id) && i.kind !== "guest")
-              .filter((i) => inScene(i.id))
+              // A MOD FEED is a row in every scene (it is not scene furniture:
+              // its place is the room's mod_feeds), and only while it is on
+              // the set — a connected-but-unplaced seat lives in Mods.
+              .filter((i) => (i.kind === "mod" ? i.visible : inScene(i.id)))
               .map((i) => ({
                 key: i.id,
                 label: i.label || i.kind,
@@ -5984,7 +6241,14 @@ export function LiveView({
                 credit: ["image", "text", "media", "color"].includes(i.kind)
                   ? (cfg.sources.extras ?? []).find((e) => e.id === i.id)?.binding?.sponsor ?? ""
                   : undefined,
-                remove: () => removeExtraSource(i.id),
+                remove: () => {
+                  if (i.kind === "mod") {
+                    const owner = modSourceOwner(i.id, liveRowsRef.current);
+                    if (owner) removeModFeed(owner.row.id, owner.track, "source row");
+                    return;
+                  }
+                  removeExtraSource(i.id);
+                },
               })),
           ].filter(Boolean) as {
             key: string;
@@ -6171,13 +6435,13 @@ export function LiveView({
         return (
           <ModsPanel
             seats={seatRows}
-            items={(sources.items ?? []).filter((i) => i.kind === "guest")}
+            items={(sources.items ?? []).filter((i) => i.kind === "mod")}
             isHost={isHost}
             canManage={isHost || roomAccess.can.manage}
             members={members}
-            roomId={cfg.server_room_id ?? null}
+            grants={roomGrants}
             onToggleGrant={(g, grant, on) => void toggleSeatGrant(g, grant, on)}
-            onShow={(id, show) => (show ? void showGuestInSlot(id) : hideGuestFromSlot(id))}
+            onPlace={(g, track, on) => (on ? void placeModFeed(g.id, track, "mods panel") : removeModFeed(g.id, track, "mods panel"))}
             onSeat={(m, r) => void seatMember(m, r)}
             error={modsErr}
           />
@@ -6604,6 +6868,9 @@ export function LiveView({
           },
         },
         { key: "window", label: "Window capture", icon: ic.screen, act: () => setSrcSubPop("window") },
+        // A seated mod's feed (v0.4.32): pick a seat holding media; its
+        // camera / screen lands as a MOD source — own layer, own rect.
+        boominRoom && { key: "mod", label: "Mod feed", icon: ic.mod, act: () => setSrcSubPop("mod") },
       ].filter(Boolean) as { key: string; label: string; icon: ReactNode; act: () => void }[];
       return (
         <>
@@ -7369,6 +7636,7 @@ export function LiveView({
                   onLive={(id, patch) => mirrorToSlot(id, patch, false)}
                   onCommit={(id, patch) => {
                     mirrorToSlot(id, patch, true);
+                    rememberModPlacement(id, patch);
                     captureActiveLook();
                   }}
                 />
@@ -7568,6 +7836,48 @@ export function LiveView({
                 addExtraSource(title, { kind: "window", window: id });
               }}
             />
+          )}
+          {srcSubPop === "mod" && (
+            <div className="rm-devices">
+              <div className="rm-devices-head">Mod feed</div>
+              {(() => {
+                const rows = seatRows
+                  .filter((g) => isMediaSeat(g))
+                  .flatMap((g) => {
+                    const grants_ = resolveGrants(g);
+                    const ids = modSourceIdsFor(g.id);
+                    const out: { key: string; label: string; icon: ReactNode; ready: boolean; act: () => void }[] = [];
+                    const items = sources.items ?? [];
+                    if (grants_.has("media.camera") || grants_.has("media.mic")) {
+                      const it = items.find((i) => i.id === ids.camera);
+                      out.push({ key: ids.camera, label: modSourceLabel(g, "camera"), icon: ic.cam, ready: !!it && !it.visible, act: () => void placeModFeed(g.id, "camera", "add menu") });
+                    }
+                    if (grants_.has("media.screen")) {
+                      const it = items.find((i) => i.id === ids.screen);
+                      out.push({ key: ids.screen, label: modSourceLabel(g, "screen"), icon: ic.screen, ready: !!it && !it.visible, act: () => void placeModFeed(g.id, "screen", "add menu") });
+                    }
+                    return out;
+                  });
+                if (!rows.length) return <div className="rm-pop-empty">No seated mod holds media — give one camera or screen in Mods.</div>;
+                return rows.map((r) => (
+                  <div
+                    key={r.key}
+                    role="button"
+                    tabIndex={0}
+                    className={`rm-device rm-addsource${r.ready ? "" : " dim"}`}
+                    title={r.ready ? "Place on the set" : "Already on the set, or its feed hasn't connected yet"}
+                    onClick={() => {
+                      if (!r.ready) return;
+                      setSrcSubPop(null);
+                      r.act();
+                    }}
+                  >
+                    <span className="rm-row-icon">{r.icon}</span>
+                    <span className="rm-device-name">{r.label}</span>
+                  </div>
+                ));
+              })()}
+            </div>
           )}
         </Pop>
       )}

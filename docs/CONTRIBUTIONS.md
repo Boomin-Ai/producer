@@ -39,6 +39,16 @@ The self-host server has no accounts, so a *mod* is a capability the host hands
 out (a shared mod link), never a login. Boomin maps the same bundles onto its
 member grants; the desktop app renders one DTO for both.
 
+**A mod with media is a MOD SOURCE, never a guest (Producer v0.4.32).** When
+the host hands a seat camera / mic / screen, the seat's feed reaches the set as
+its own source kind — `mod-<uuid8>` / `mod-<uuid8>-screen`, labelled
+"<name> — mod camera" / "— mod screen" — with its own placement rect (room doc
+`mod_feeds[participantId][track]`, canvas fractions; default lower-right PiP
+28% for the camera, full frame for the screen) and its own layer (above the
+guest slots, below the overlays). It never takes a guest slot and never counts
+toward slot math. Placing it opens a contribution interval (`overlay` kind,
+binding `{kind:"mod", track, participant_id, source_id}`); removing closes it.
+
 ### Contributions (the ledger the open server keeps for its own reasons)
 
 ```sql

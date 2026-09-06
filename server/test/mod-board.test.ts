@@ -14,7 +14,7 @@ import {
   serializeModBoard,
   throwUpState,
 } from "../../src/lib/modBoard";
-import { EMPTY_MOD_STAGE, HOST_ANSWER_MS, HOST_SILENT, NO_FREE_SLOT, modStageReduce, type ModStageState } from "../../src/lib/stageTruth";
+import { MOD_FEED_NOT_PLACED, EMPTY_MOD_STAGE, HOST_ANSWER_MS, HOST_SILENT, NO_FREE_SLOT, modStageReduce, type ModStageState } from "../../src/lib/stageTruth";
 
 const SEAT = "33333333-3333-4333-8333-333333333333";
 const OTHER = "44444444-4444-4444-8444-444444444444";
@@ -83,13 +83,14 @@ describe("throw up (the seat's own row through honest staging)", () => {
     expect(throwUpState({ stage: s, seatId: SEAT, grants: media, canAsk: true })).toMatchObject({ row: "on", disabled: false });
     expect(throwUpState({ stage: s, seatId: SEAT, grants: media, canAsk: true }).label).toMatch(/take down/i);
   });
-  it("a refusal (no free slot) snaps back to off with the reason on the button", () => {
+  it("a refusal snaps back to off with the reason on the button — worded for a MOD FEED (no slot to run out of, v0.4.32)", () => {
     let s: ModStageState = { ...EMPTY_MOD_STAGE, confirmed: [], version: 5 };
     s = modStageReduce(s, { type: "request", guestId: SEAT, want: true, version: 6, now: 0 });
     s = modStageReduce(s, { type: "frame", on_stage: [], version: 7, now: 5 });
+    expect(s.notice?.text).toBe(NO_FREE_SLOT);
     const t = throwUpState({ stage: s, seatId: SEAT, grants: media, canAsk: true });
     expect(t.row).toBe("off");
-    expect(t.notice).toBe(NO_FREE_SLOT);
+    expect(t.notice).toBe(MOD_FEED_NOT_PLACED);
   });
   it("the host's silence is its own message; another guest's notice is not ours", () => {
     let s: ModStageState = { ...EMPTY_MOD_STAGE, confirmed: [], version: 1 };

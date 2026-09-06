@@ -424,6 +424,14 @@ pub enum ExtraSpec {
     /// independent fader in the mixer. A single room page would fuse every
     /// guest into one track that can never be separated again.
     Guest { url: String },
+    /// A seated MOD's feed (v0.4.32): the same render page a guest uses,
+    /// carried as its OWN kind — "mod" — so the roster's reconcile, the
+    /// slot model and the source rows never mistake it for a guest. Same
+    /// contract as `Guest` (one URL per participant, own audio strip, born
+    /// hidden, never suspended); the difference is what the UI does with
+    /// it: own label, own layer (above guest slots, below overlays), own
+    /// placement rect — never a guest slot.
+    Mod { url: String },
     /// A browser page rendered ON the set, fed by this Producer over a local
     /// path (live/bridge.rs): the vote bar (#51). Full-canvas, transparent,
     /// no audio, never suspended when hidden (its state is a poll away, and a
@@ -1201,7 +1209,12 @@ impl SceneGraph {
                     ffi::obs_data_set_int(d, CString::new("height").unwrap().as_ptr(), bh as i64);
                     ("color_source_v3", "color", d)
                 }
-                ExtraSpec::Guest { url } => {
+                ExtraSpec::Guest { url } | ExtraSpec::Mod { url } => {
+                    let kind = if matches!(spec, ExtraSpec::Mod { .. }) {
+                        "mod"
+                    } else {
+                        "guest"
+                    };
                     // The URL is the server's render_url, used VERBATIM: for
                     // a Boomin room it lives on Boomin's web origin, for a
                     // self-hosted room on that server's own origin. Nothing
@@ -1233,7 +1246,7 @@ impl SceneGraph {
                         CString::new("restart_when_active").unwrap().as_ptr(),
                         false,
                     );
-                    ("browser_source", "guest", d)
+                    ("browser_source", kind, d)
                 }
                 ExtraSpec::Overlay { url } => {
                     let (bw, bh) = Self::base_size();
@@ -1303,7 +1316,7 @@ impl SceneGraph {
                 ffi::obs_source_set_monitoring_type(src, 1);
                 eprintln!("[test] {id} forced to MONITOR_ONLY");
             }
-            let born_visible = !matches!(spec, ExtraSpec::Guest { .. });
+            let born_visible = !matches!(spec, ExtraSpec::Guest { .. } | ExtraSpec::Mod { .. });
             ffi::obs_sceneitem_set_visible(item, born_visible);
             // A guest in the room is SEEN, NOT HEARD: they arrive muted and
             // stay muted until put on screen. Preview is for judging whether
@@ -1312,7 +1325,7 @@ impl SceneGraph {
                 ffi::obs_source_set_muted(src, true);
             }
             // Meter every audio-bearing extra the mixer shows a strip for.
-            if matches!(kind, "guest" | "media") {
+            if matches!(kind, "guest" | "mod" | "media") {
                 peak_slot_register(src);
                 ffi::obs_source_add_audio_capture_callback(src, extra_audio_cb, ptr::null_mut());
             }
@@ -1335,7 +1348,7 @@ impl SceneGraph {
             .position(|e| e.id == id)
             .ok_or_else(|| format!("no item named {id}"))?;
         let e = self.extras.remove(idx);
-        if matches!(e.kind, "guest" | "media") {
+        if matches!(e.kind, "guest" | "mod" | "media") {
             unsafe {
                 ffi::obs_source_remove_audio_capture_callback(
                     e.src,
@@ -1951,14 +1964,14 @@ impl SceneGraph {
         !self
             .extras
             .iter()
-            .any(|e| matches!(e.kind, "guest" | "media"))
+            .any(|e| matches!(e.kind, "guest" | "mod" | "media"))
     }
 
     /// Peak-and-reset for every metered extra since the last call, 0..=1.
     pub fn take_extra_peaks(&self) -> Vec<(String, f64)> {
         let mut out = Vec::new();
         for e in &self.extras {
-            if !matches!(e.kind, "guest" | "media") {
+            if !matches!(e.kind, "guest" | "mod" | "media") {
                 continue;
             }
             let key = e.src as usize;
@@ -2062,7 +2075,7 @@ impl ThumbHub {
         let mut wanted: Vec<(&str, *mut ffi::obs_source_t)> = scene
             .extras
             .iter()
-            .filter(|e| e.kind == "guest" && !e.src.is_null())
+            .filter(|e| matches!(e.kind, "guest" | "mod") && !e.src.is_null())
             .map(|e| (e.id.as_str(), e.src))
             .collect();
         // Debug discriminator: the camera is a KNOWN-GOOD renderer. If its

@@ -28,6 +28,9 @@ export const HOST_ANSWER_MS = 12_000;
 export const NO_FREE_SLOT = "No free guest slot on the host's set — ask the host to add one";
 export const HOST_KEPT_ON = "The host's set kept them on — ask the host";
 export const HOST_SILENT = "The host's Producer didn't confirm — is the host in the room?";
+/** A seat's feed has no slot to run out of — a refusal there is the host's
+ * own choice (or its feed had not connected yet). */
+export const MOD_FEED_NOT_PLACED = "The host's set didn't place your feed — is it connected? Ask the host";
 
 export interface ModStageRequest {
   guestId: string;
@@ -128,22 +131,46 @@ export function modStageWish(state: ModStageState, guestId: string): { on_stage:
 export interface HostStageInput {
   /** The list a `stage` frame carried. */
   requested: readonly string[];
-  /** Guest ids currently SHOWN by the engine (the truth). */
+  /** Participant ids currently ON THE SET by the engine's truth: guests
+   * shown in a slot, seats whose MOD camera feed is placed. */
   shown: readonly string[];
-  /** Guest ids admitted on the roster — only these can be shown. */
+  /** Participant ids that may be put on: admitted guests, and seats the
+   * host handed media. */
   admitted: readonly string[];
+  /** Participant ids that are SEATS (monitor rows with media, v0.4.32).
+   * A seat is honoured through the MOD path — its own source kind, its own
+   * placement — never through a guest slot. Absent = everyone is a guest. */
+  seats?: readonly string[];
+}
+
+export interface HostStagePlan {
+  /** Guests to pop into a free guest slot, in request order. */
+  toShow: string[];
+  /** Guests to pop out of their slot. */
+  toHide: string[];
+  /** Seats whose MOD camera feed must be PLACED (mod path). */
+  toPlaceMod: string[];
+  /** Seats whose MOD feed must be REMOVED from the set. */
+  toRemoveMod: string[];
 }
 
 /** What the host must do to honour a request: show the requested-and-
  * admitted guests it is not showing, hide the shown guests the request
- * left out. Order preserved from the request. */
-export function hostStagePlan(input: HostStageInput): { toShow: string[]; toHide: string[] } {
+ * left out — and the same for seats, on the MOD path. Order preserved
+ * from the request. A seat is never in toShow / toHide; a guest is never
+ * in toPlaceMod / toRemoveMod. */
+export function hostStagePlan(input: HostStageInput): HostStagePlan {
   const admitted = new Set(input.admitted);
   const shown = new Set(input.shown);
   const requested = new Set(input.requested);
+  const seats = new Set(input.seats ?? []);
+  const wantOn = input.requested.filter((id) => admitted.has(id) && !shown.has(id));
+  const wantOff = input.shown.filter((id) => !requested.has(id));
   return {
-    toShow: input.requested.filter((id) => admitted.has(id) && !shown.has(id)),
-    toHide: input.shown.filter((id) => !requested.has(id)),
+    toShow: wantOn.filter((id) => !seats.has(id)),
+    toHide: wantOff.filter((id) => !seats.has(id)),
+    toPlaceMod: wantOn.filter((id) => seats.has(id)),
+    toRemoveMod: wantOff.filter((id) => seats.has(id)),
   };
 }
 

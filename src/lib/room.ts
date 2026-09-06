@@ -5,6 +5,7 @@
 
 import { DEFAULT_LAYOUT, normalize, type DockSizes, type Layout } from "./layout";
 import type { ExtraSpec } from "./ipc";
+import { parseModFeeds, type ModFeeds } from "./modFeed";
 
 /** One item's appearance inside a scene: visibility, geometry (canvas
  * units), stacking. Scenes are LOOKS — applying one never creates or
@@ -102,6 +103,10 @@ export interface RoomConfig {
    * furniture (gslot-N extras); guests pop into them and pop out, the slot
    * geometry never moves. */
   slot_bindings?: Record<string, string>;
+  /** MOD FEED placement (v0.4.32): participant id → per-track rect as
+   * canvas fractions. A seat's feed is its own source kind with its own
+   * place — never a guest slot (lib/modFeed.ts). */
+  mod_feeds?: ModFeeds;
   /** Room-wide default transition; a scene may override it. */
   transition?: SceneTransition;
   /** Dock-level surface ownership. true = the DOCK paints the card background
@@ -183,6 +188,10 @@ export function parseConfig(raw: string | null | undefined): RoomConfig {
         ([k, val]) => k.startsWith("gslot-") && typeof val === "string",
       ),
     ) as Record<string, string>;
+  }
+  if (v.mod_feeds && typeof v.mod_feeds === "object") {
+    const mf = parseModFeeds(v.mod_feeds);
+    if (Object.keys(mf).length) base.mod_feeds = mf;
   }
   if (v.sizes && typeof v.sizes === "object") base.sizes = v.sizes as DockSizes;
   if (v.stage_bar === "bottom" || v.stage_bar === "top" || v.stage_bar === "left" || v.stage_bar === "right") {

@@ -153,8 +153,13 @@ export function seatDisplayName(p: { display_name?: unknown } | null | undefined
   return raw.replace(/\s*·\s*monitor\s*$/i, "").trim() || "Seat";
 }
 
-/** The label the seat's feed wears on the host's set: "<name> · mod". */
-export const seatSourceLabel = (p: { display_name?: unknown } | null | undefined): string => `${seatDisplayName(p)} · mod`;
+/** The label a MOD FEED wears on the host's set: "<name> — mod camera" /
+ *  "<name> — mod screen". Never "· guest": a mod is not a guest (v0.4.32). */
+export const modSourceLabel = (p: { display_name?: unknown } | null | undefined, track: TrackLabel): string =>
+  `${seatDisplayName(p)} — mod ${track}`;
+
+/** @deprecated v0.4.31 name; the camera feed's label. */
+export const seatSourceLabel = (p: { display_name?: unknown } | null | undefined): string => modSourceLabel(p, "camera");
 
 /** The user id a monitor row stands for (`producer_ref "monitor:<userId>"`),
  *  or null — display metadata, never a credential. */
@@ -271,24 +276,152 @@ export function sourceIdsFor(guestId: string): { camera: string; screen: string 
   return { camera, screen: `${camera}-screen` };
 }
 
-/** Which guest source ids the roster wants alive: the camera for every
+/** Which GUEST source ids the roster wants alive: the camera for every
  *  admitted guest, plus a screen source for those who hold media.screen.
- *  A program monitor is not a source: it supplies nothing to the set, it
- *  only receives the program, so the reconcile must not spawn a render page
- *  (a hidden CEF item, a stage slot, a "guest" in the panel) for it — UNLESS
- *  the host handed it media (isMediaSeat): then it is eligible exactly like
- *  a guest, its camera page hidden until the seat is staged. */
+ *  Program monitors are excluded entirely — a seat's media is a MOD source
+ *  (below), never a guest source, never a guest slot. */
 export function wantedSourceIds<T extends ParticipantLike & { id: string }>(
   admitted: readonly T[],
 ): Map<string, { guest: T; track: TrackLabel }> {
   const out = new Map<string, { guest: T; track: TrackLabel }>();
   for (const guest of admitted) {
-    if (isMonitor(guest) && !isMediaSeat(guest)) continue;
+    // A seat NEVER goes through the guest path (v0.4.32): its media is a
+    // MOD source (wantedModSourceIds) — its own kind, layer and placement,
+    // never a guest slot. A monitor without media is not a source at all.
+    if (isMonitor(guest)) continue;
     const ids = sourceIdsFor(guest.id);
     out.set(ids.camera, { guest, track: "camera" });
     if (resolveGrants(guest).has("media.screen")) out.set(ids.screen, { guest, track: "screen" });
   }
   return out;
+}
+
+// ── MOD sources (v0.4.32) ─────────────────────────────────────────────────────
+//
+// A seated mod with media is an OFFICIAL SOURCE KIND on the host's set:
+// `mod-<uuid8>` (camera + mic page) and `mod-<uuid8>-screen` (the share).
+// It is not a guest: it never takes a guest slot, never counts toward slot
+// math, sits ABOVE the guest slots and below overlays by default, and has its
+// own placement rect (room doc `mod_feeds[participantId]`, lib/modFeed.ts).
+
+export const MOD_SOURCE_PREFIX = "mod-";
+export const isModSourceId = (id: string): boolean => id.startsWith(MOD_SOURCE_PREFIX);
+
+export function modSourceIdsFor(participantId: string): { camera: string; screen: string } {
+  const camera = `${MOD_SOURCE_PREFIX}${participantId.slice(0, 8)}`;
+  return { camera, screen: `${camera}-screen` };
+}
+
+/** Which MOD source ids the roster wants alive: for every seat (monitor row)
+ *  the host handed media, a camera page when it holds camera or mic (the
+ *  camera page carries the mic), and a screen page when it holds
+ *  media.screen. A seat without media, a guest, a non-monitor: nothing. */
+export function wantedModSourceIds<T extends ParticipantLike & { id: string }>(
+  rows: readonly T[],
+): Map<string, { seat: T; track: TrackLabel }> {
+  const out = new Map<string, { seat: T; track: TrackLabel }>();
+  for (const seat of rows) {
+    if (!isMediaSeat(seat)) continue;
+    const g = resolveGrants(seat);
+    const ids = modSourceIdsFor(seat.id);
+    if (g.has("media.camera") || g.has("media.mic")) out.set(ids.camera, { seat, track: "camera" });
+    if (g.has("media.screen")) out.set(ids.screen, { seat, track: "screen" });
+  }
+  return out;
+}
+
+/** Seat rows the Mods panel lists — ONE per (room, member). The api mints a
+ *  fresh monitor row every time a seat reopens the room, so a roster can
+ *  carry the same person twice (the old one ended, in grace). Rule: ended /
+ *  left / revoked rows are hidden; among the rest, rows are keyed by the
+ *  user behind them (`producer_ref` "monitor:<userId>", else the ref
+ *  itself, else the row id) and the NEWEST ACCEPTED row wins — a row with a
+ *  render url beats one without; later `joined_at` beats earlier. Order of
+ *  the result follows the winner's first appearance. */
+export function dedupeSeatRows<T extends ParticipantLike & { id: string; state?: unknown; render_url?: unknown; producer_ref?: unknown; joined_at?: unknown }>(
+  rows: readonly T[],
+): T[] {
+  const gone = new Set(["left", "ended", "revoked", "declined", "expired"]);
+  const key = (r: T): string => {
+    const uid = seatUserId(r);
+    if (uid) return `u:${uid}`;
+    const ref = typeof r.producer_ref === "string" ? r.producer_ref.trim() : "";
+    return ref ? `r:${ref}` : `i:${r.id}`;
+  };
+  const when = (r: T): number => {
+    const t = typeof r.joined_at === "string" || typeof r.joined_at === "number" ? new Date(r.joined_at).getTime() : NaN;
+    return Number.isFinite(t) ? t : 0;
+  };
+  const better = (a: T, b: T): boolean => {
+    const ra = !!a.render_url;
+    const rb = !!b.render_url;
+    if (ra !== rb) return ra;
+    return when(a) > when(b);
+  };
+  const order: string[] = [];
+  const best = new Map<string, T>();
+  for (const r of rows) {
+    if (!isMonitor(r)) continue;
+    if (typeof r.state === "string" && gone.has(r.state)) continue;
+    const k = key(r);
+    const cur = best.get(k);
+    if (!cur) {
+      order.push(k);
+      best.set(k, r);
+    } else if (better(r, cur)) {
+      best.set(k, r);
+    }
+  }
+  return order.map((k) => best.get(k)!);
+}
+
+/** One room-grant row as the access DTO lists them (`GET
+ *  /live/rooms/:id/access` → `grants`, api room-access.ts listRoomGrants). */
+export interface RoomGrantRowLike {
+  room_role?: unknown;
+  grant_role?: unknown;
+  member?: { id?: unknown; role?: unknown; type?: unknown } | null;
+  user?: { id?: unknown } | null;
+}
+
+/** A brand member as the team route lists them — the part the label needs. */
+export interface MemberLike {
+  user_id?: unknown;
+  type?: unknown;
+  role?: unknown;
+}
+
+export type SeatRoleLabel = "Host" | "Manager" | "Mod" | "Viewer";
+
+/** The Mods panel's role label for a seat, from TRUTH and nothing else:
+ *   1. a room grant on this room for the seat's user → its room_role
+ *      (manager → Manager, mod → Mod, else Viewer);
+ *   2. no grant: a TEAM member at editor or above is the brand's host
+ *      standing → Host (they hold no grant row; the standing is implicit);
+ *   3. otherwise Viewer.
+ *  Never Host by default: an unknown seat is a viewer until the truth says
+ *  more. */
+export function seatRoleLabel(input: {
+  seat: (ParticipantLike & { producer_ref?: unknown }) | null | undefined;
+  grants: readonly RoomGrantRowLike[] | null | undefined;
+  members: readonly MemberLike[] | null | undefined;
+}): SeatRoleLabel {
+  const uid = seatUserId(input.seat);
+  if (!uid) return "Viewer";
+  const g = (input.grants ?? []).find((x) => x?.user && x.user.id === uid);
+  if (g) {
+    const rr = typeof g.room_role === "string" ? g.room_role.toLowerCase() : "";
+    if (rr === "manager") return "Manager";
+    if (rr === "mod") return "Mod";
+    if (rr === "host") return "Host";
+    const gr = typeof g.grant_role === "string" ? g.grant_role.toLowerCase() : "";
+    if (gr === "admin" || gr === "owner") return "Manager";
+    if (gr === "editor") return "Mod";
+    return "Viewer";
+  }
+  const m = (input.members ?? []).find((x) => x?.user_id === uid);
+  if (m && m.type === "team" && (m.role === "owner" || m.role === "admin" || m.role === "editor")) return "Host";
+  return "Viewer";
 }
 
 // ── Room role, from the access route ─────────────────────────────────────────

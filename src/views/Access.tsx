@@ -15,6 +15,7 @@
 //
 // Same glass list pattern as App / Integrations. Native, never a web console.
 import { useCallback, useEffect, useState } from "react";
+import { Select } from "../components/Select";
 import { ipc, listServerRooms, type EndpointInfo, type LiveRoom } from "../lib/ipc";
 import { WORKSPACE_EVENT, isBoomin } from "../lib/workspace";
 import { parseConfig } from "../lib/room";
@@ -334,12 +335,13 @@ function TeamAccess({ endpoint }: { endpoint: EndpointInfo }) {
                                     <s>{cur ? seatLabel(cur) : "No seat"}</s>
                                   </span>
                                 )}
-                                <select className="acc-select" value={want} onChange={(e) => setSeat(m, r.sid, e.target.value as SeatRole | "")}>
-                                  <option value="">No seat</option>
-                                  {ROOM_ROLES.filter((x) => x.grant).map((x) => (
-                                    <option key={x.role} value={x.role}>{x.label}</option>
-                                  ))}
-                                </select>
+                                <Select
+                                  size="sm"
+                                  value={want}
+                                  onChange={(v) => setSeat(m, r.sid, v as SeatRole | "")}
+                                  title={`${r.name}: seat`}
+                                  options={[{ value: "", label: "No seat" }, ...ROOM_ROLES.filter((x) => x.grant).map((x) => ({ value: x.role, label: x.label }))]}
+                                />
                               </div>
                             );
                           })}
@@ -441,15 +443,27 @@ function InviteForm({
     >
       <div className="acc-invite-row">
         <input type="email" required placeholder="name@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <select value={type} onChange={(e) => setType(e.target.value as "team" | "collaborator")} className="acc-select">
-          <option value="collaborator">Collaborator</option>
-          <option value="team">Team</option>
-        </select>
-        <select value={role} onChange={(e) => setRole(e.target.value as "admin" | "editor" | "viewer")} className="acc-select">
-          <option value="viewer">Viewer</option>
-          <option value="editor">Editor</option>
-          <option value="admin">Admin</option>
-        </select>
+        <Select
+          size="sm"
+          value={type}
+          onChange={(v) => setType(v as "team" | "collaborator")}
+          title="Member type"
+          options={[
+            { value: "collaborator", label: "Collaborator" },
+            { value: "team", label: "Team" },
+          ]}
+        />
+        <Select
+          size="sm"
+          value={role}
+          onChange={(v) => setRole(v as "admin" | "editor" | "viewer")}
+          title="Role"
+          options={[
+            { value: "viewer", label: "Viewer" },
+            { value: "editor", label: "Editor" },
+            { value: "admin", label: "Admin" },
+          ]}
+        />
       </div>
       {type === "collaborator" && (
         <>
@@ -475,17 +489,25 @@ function InviteForm({
           {rooms.length > 0 && (
             <div className="acc-invite-row">
               <span className="cr-sheet-row-sub">Room seat</span>
-              <select value={roomSid} onChange={(e) => setRoomSid(e.target.value)} className="acc-select">
-                <option value="">None</option>
-                {rooms.map((r) => (
-                  <option key={r.sid} value={r.sid}>{r.name}</option>
-                ))}
-              </select>
-              <select value={roomRole} disabled={!roomSid} onChange={(e) => setRoomRole(e.target.value as "admin" | "editor" | "viewer")} className="acc-select">
-                <option value="admin">Manager</option>
-                <option value="editor">Mod</option>
-                <option value="viewer">Viewer</option>
-              </select>
+              <Select
+                size="sm"
+                value={roomSid}
+                onChange={setRoomSid}
+                title="Room"
+                options={[{ value: "", label: "None" }, ...rooms.map((r) => ({ value: r.sid, label: r.name }))]}
+              />
+              <Select
+                size="sm"
+                value={roomRole}
+                disabled={!roomSid}
+                onChange={(v) => setRoomRole(v as "admin" | "editor" | "viewer")}
+                title="Room role"
+                options={[
+                  { value: "admin", label: "Manager" },
+                  { value: "editor", label: "Mod" },
+                  { value: "viewer", label: "Viewer" },
+                ]}
+              />
             </div>
           )}
         </>

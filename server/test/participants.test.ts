@@ -128,18 +128,18 @@ describe("source ids", () => {
     expect(w.get("guest-aaaaaaaa-screen")).toEqual({ guest: a, track: "screen" });
     expect(w.get("guest-bbbbbbbb")?.track).toBe("camera");
   });
-  it("never wants a source for a program monitor (a seat's return-feed row) — unless the host handed it media", () => {
+  it("never wants a GUEST source for a program monitor — with or without media (a seat's media is a MOD source, v0.4.32)", () => {
     const guest = { id: "aaaaaaaa-1" };
     const monitor = { id: "mmmmmmmm-1", kind: "producer", monitor: true, grants: ["media.return_feed"] };
     // Boomin sends the bundle as a map: return feed alone → still invisible.
     const monitorMap = { id: "pppppppp-1", monitor: true, grants: { "media.return_feed": true, "media.camera": false, "media.screen": false } };
-    // A SEAT WITH MEDIA (the Jamie pattern) is eligible like a guest: a camera
-    // source, and a screen source when it holds media.screen.
+    // A SEAT WITH MEDIA (the Jamie pattern) is eligible for the set — as a
+    // MOD source (wantedModSourceIds, mod-source.test.ts), never as a guest.
     const monitorWithMedia = { id: "nnnnnnnn-1", monitor: true, grants: ["media.camera", "media.screen", "media.return_feed"] };
     // Anything but `true` is a guest: an older server sends nothing at all.
     const notMonitor = { id: "oooooooo-1", monitor: "true" };
     const w = wantedSourceIds([guest, monitor, monitorMap, monitorWithMedia, notMonitor]);
-    expect([...w.keys()].sort()).toEqual(["guest-aaaaaaaa", "guest-nnnnnnnn", "guest-nnnnnnnn-screen", "guest-oooooooo"]);
+    expect([...w.keys()].sort()).toEqual(["guest-aaaaaaaa", "guest-oooooooo"]);
     expect(isMonitor(monitor)).toBe(true);
     expect(isMonitor(notMonitor)).toBe(false);
     expect(isMonitor(undefined)).toBe(false);
@@ -152,7 +152,7 @@ describe("source ids", () => {
   it("a seat's name and source label drop the ' · monitor' suffix; the user id rides producer_ref", () => {
     const row = { display_name: "Jamie · monitor", producer_ref: "monitor:u-42" };
     expect(seatDisplayName(row)).toBe("Jamie");
-    expect(seatSourceLabel(row)).toBe("Jamie · mod");
+    expect(seatSourceLabel(row)).toBe("Jamie — mod camera");
     expect(seatUserId(row)).toBe("u-42");
     expect(seatDisplayName({ display_name: "" })).toBe("Seat");
     expect(seatUserId({ producer_ref: "https://producer.dev" })).toBeNull();
