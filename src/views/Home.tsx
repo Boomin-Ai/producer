@@ -16,6 +16,7 @@ import type { Channel, EndpointInfo, Job, LiveDestination, LiveRoom, LiveSnapsho
 import type { TargetResult } from "../lib/ipc";
 import { WORKSPACE_EVENT, activeEndpointId, isBoomin, resolveActiveEndpoint, setActiveEndpointId } from "../lib/workspace";
 import { PREFS_EVENT, PREF_NETWORK_INVITE_DISMISSED, prefGet, prefSet } from "../lib/prefs";
+import { PREF_WALKTHROUGH_OFF, PREF_WALKTHROUGH_ROOM, PREF_WALKTHROUGH_STEP } from "../lib/walkthrough";
 import { copyText, ensureRoomJoinLink } from "../lib/roomLink";
 import { ipc,
   firewall,
@@ -609,6 +610,17 @@ export function Home({
           onClose={closeSettings}
         />
       )}
+      {/* Outside the room by construction — the room view returns earlier. */}
+      {(
+        <WalkthroughReturn
+          rooms={rooms}
+          onResume={(room) => {
+            closeSettings();
+            markRoomClick();
+            setView({ kind: "room", room });
+          }}
+        />
+      )}
       {view.kind === "home" && !settingsOpen && (
         <ControlRoomHome
           surface={surface}
@@ -843,6 +855,96 @@ function ChannelsBlock({
   );
 }
 
+/** The way BACK. The walkthrough deliberately leaves the room to show where
+ *  stream keys live — and that unmounts the room view entirely, so nothing in
+ *  the room can bring the user home again. This bar is the return leg: it
+ *  survives outside the room, names the room by title, and puts them back
+ *  where they were with the walkthrough still running.
+ *
+ *  Fixed to the bottom so it is visible over Settings too, which is exactly
+ *  where the user is standing when they need it. */
+function WalkthroughReturn({ rooms, onResume }: { rooms: LiveRoom[]; onResume: (room: LiveRoom) => void }) {
+  const [roomId, setRoomId] = useState<string | null>(null);
+  useEffect(() => {
+    const read = () =>
+      void Promise.all([prefGet(PREF_WALKTHROUGH_STEP), prefGet(PREF_WALKTHROUGH_ROOM)]).then(([step, id]) => {
+        // Only while the walkthrough is genuinely mid-trip. A finished or
+        // skipped run clears both, and this bar must not outlive it.
+        setRoomId(step === "back" && id ? id : null);
+      });
+    read();
+    window.addEventListener(PREFS_EVENT, read);
+    return () => window.removeEventListener(PREFS_EVENT, read);
+  }, []);
+  const room = roomId ? rooms.find((r) => r.id === roomId) : undefined;
+  // The room was deleted, or this machine no longer lists it: drop the
+  // breadcrumb rather than offering a door that goes nowhere.
+  useEffect(() => {
+    if (roomId && rooms.length > 0 && !room) void prefSet(PREF_WALKTHROUGH_ROOM, null);
+  }, [roomId, room, rooms.length]);
+  if (!room) return null;
+  return (
+    <div className="walk-return" role="status">
+      <span className="walk-return-dot" />
+      <span className="walk-return-text">
+        Walkthrough paused — this is where stream keys live.
+      </span>
+      <button className="walk-return-go" onClick={() => onResume(room)}>
+        Back to {room.name || "your room"}
+      </button>
+    </div>
+  );
+}
+
+/** Settings row: the first-room walkthrough, as a switch.
+ *
+ *  A switch rather than a button because this is a STATE, not an errand —
+ *  "is guidance on" is the question, and a button reading "Show it again"
+ *  cannot answer it. Turning it on also clears the saved step, so replaying
+ *  starts at the welcome instead of dropping you back at whatever step you
+ *  abandoned weeks ago. */
+function WalkthroughSwitch() {
+  const [off, setOff] = useState<boolean | null>(null);
+  useEffect(() => {
+    const read = () => void prefGet(PREF_WALKTHROUGH_OFF).then((v) => setOff(v === "1"));
+    read();
+    window.addEventListener(PREFS_EVENT, read);
+    return () => window.removeEventListener(PREFS_EVENT, read);
+  }, []);
+  const on = off === false;
+  const toggle = () => {
+    if (on) {
+      void prefSet(PREF_WALKTHROUGH_OFF, "1");
+    } else {
+      // Back to the beginning, not to where they gave up.
+      void prefSet(PREF_WALKTHROUGH_STEP, null);
+      void prefSet(PREF_WALKTHROUGH_OFF, null);
+    }
+  };
+  return (
+    <div className="set-toggle">
+      <div className="set-toggle-text">
+        <span className="set-toggle-name">Room walkthrough</span>
+        <span className="set-toggle-sub">
+          {on
+            ? "Runs the next time you open an empty room: a scene, a source, guests, audio, and where the stream keys live."
+            : "Off. Turn it on to walk through building a room again."}
+        </span>
+      </div>
+      <button
+        role="switch"
+        aria-checked={on}
+        aria-label="Room walkthrough"
+        className={`rm-switch${on ? " on" : ""}`}
+        disabled={off === null}
+        onClick={toggle}
+      >
+        <span className="rm-switch-knob" />
+      </button>
+    </div>
+  );
+}
+
 /** Settings row: bring the self-hoster's Network invitation back. Only shown
  * when there is a self-hosted workspace AND the card was dismissed — the
  * one place it can be un-dismissed. */
@@ -996,6 +1098,8 @@ function SettingsPanel({
             </div>
             {appTab === "general" && (
               <>
+        <div className="cr-label set-gap">GUIDANCE</div>
+        <WalkthroughSwitch />
         <div className="cr-label set-gap">UPDATES</div>
         <div className="set-upd">
           <div className="set-upd-status">

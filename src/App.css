@@ -10469,3 +10469,263 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   color: var(--fg-3);
 }
 .signin-foot .sep { opacity: 0.5; }
+
+/* ── The first-room walkthrough (views/Walkthrough.tsx) ───────────────────
+   Two shapes. The WELCOME is an entire-room veil — the one moment the room
+   is deliberately blocked, because a new user staring at an empty stage has
+   nothing to click anyway. Every step after it is a coach card beside the
+   real control, with the room fully live underneath: the user is doing the
+   work, not watching a demo, so nothing may be covered. */
+.walk-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 320; /* over the docks, the editbar and the sheets; under nothing */
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: oklch(0.14 0.02 250 / 0.82);
+  backdrop-filter: blur(22px) saturate(1.1);
+  -webkit-backdrop-filter: blur(22px) saturate(1.1);
+  animation: walk-in 0.24s ease-out;
+}
+@keyframes walk-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.walk-hero {
+  max-width: 520px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.walk-kicker {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  font-weight: 650;
+}
+.walk-title {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+  color: var(--fg-1);
+}
+.walk-body {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--fg-2);
+  max-width: 42ch;
+}
+.walk-hero-acts { display: flex; gap: 10px; margin-top: 6px; }
+.walk-begin {
+  height: 36px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--mint);
+  color: #06251b;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.walk-begin:hover { filter: brightness(1.06); }
+.walk-skip {
+  height: 36px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: transparent;
+  color: var(--fg-2);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.walk-skip:hover { background: oklch(1 0 0 / 0.06); color: var(--fg-1); }
+.walk-foot { margin: 2px 0 0; font-size: 12px; color: var(--fg-3); }
+
+/* The coach card. Positioned from the measured rect of the real control, and
+   clamped to the viewport by the view — a card that hangs off the edge is a
+   card the user cannot read. */
+.walk-card {
+  position: fixed;
+  z-index: 321;
+  width: 320px;
+  padding: 14px;
+  border-radius: var(--r-card, 12px);
+  border: 1px solid var(--line-2);
+  background: oklch(0.2 0.035 250 / 0.96);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+  animation: walk-card-in 0.18s ease-out;
+}
+@keyframes walk-card-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+.walk-card-centre {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: none;
+}
+.walk-card.done { border-color: var(--mint); }
+.walk-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.walk-step { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); font-weight: 650; }
+.walk-x {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--fg-3);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.walk-x:hover { color: var(--fg-1); }
+.walk-card-title { margin: 0 0 6px; font-size: 15px; font-weight: 680; letter-spacing: -0.01em; color: var(--fg-1); }
+.walk-card-body { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--fg-2); }
+.walk-do {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: oklch(0.75 0.15 165 / 0.12);
+  border: 1px solid oklch(0.75 0.15 165 / 0.3);
+  color: #b9f2dd;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.walk-card-acts { display: flex; justify-content: flex-end; margin-top: 12px; }
+
+/* The ring around the control the step is about. Pointer-events NONE — the
+   user has to be able to click the thing we are pointing at. */
+.walk-ring {
+  position: fixed;
+  z-index: 319;
+  pointer-events: none;
+  border-radius: 12px;
+  border: 2px solid var(--mint);
+  box-shadow: 0 0 0 4px oklch(0.75 0.15 165 / 0.18);
+  animation: walk-pulse 1.8s ease-in-out infinite;
+}
+.walk-ring.hit { animation: none; border-color: var(--mint); box-shadow: 0 0 0 8px oklch(0.75 0.15 165 / 0.3); }
+@keyframes walk-pulse {
+  0%, 100% { box-shadow: 0 0 0 4px oklch(0.75 0.15 165 / 0.16); }
+  50% { box-shadow: 0 0 0 8px oklch(0.75 0.15 165 / 0.06); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .walk-ring, .walk-veil, .walk-card { animation: none; }
+}
+.walk-card-acts-split { justify-content: space-between; gap: 10px; }
+.walk-card-acts-split .walk-skip,
+.walk-card-acts-split .walk-begin { height: 32px; font-size: 12.5px; }
+.walk-begin:disabled { opacity: 0.5; cursor: default; filter: none; }
+
+/* A settings TOGGLE row: a name, a sentence that says what the switch does,
+   and the switch. Distinct from `.cr-sheet-row`, whose sub-label carries
+   `margin-left: auto` because it is a trailing value — nesting a description
+   in there collided with the name. A description is not a value. */
+.set-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 12px 14px;
+  border-radius: var(--r-card, 12px);
+  border: 1px solid var(--line-1);
+  background: oklch(1 0 0 / 0.03);
+}
+.set-toggle-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.set-toggle-name { font-size: 13.5px; font-weight: 620; color: var(--fg-1); }
+.set-toggle-sub { font-size: 12px; line-height: 1.45; color: var(--fg-2); }
+/* The switch is a fixed 34px control: it must not stretch, and it sits on the
+   first line rather than centred against a two-line description. */
+.set-toggle .rm-switch { margin-left: auto; flex: 0 0 auto; margin-top: 2px; }
+.set-toggle .rm-switch:disabled { opacity: 0.5; cursor: default; }
+/* Ending the whole walkthrough is deliberately quieter than skipping one
+   step: the header link moves you ON, this one gets you OUT. Two different
+   intentions that used to share a single "Skip". */
+.walk-end {
+  display: block;
+  margin: 12px auto 0;
+  border: 0;
+  background: none;
+  padding: 2px 4px;
+  color: var(--fg-3);
+  font-size: 11px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.walk-end:hover { color: var(--fg-2); text-decoration: underline; text-underline-offset: 2px; }
+
+/* The walkthrough's return leg. Fixed to the bottom because the user is
+   standing in Settings when they need it, and Settings is its own surface —
+   a bar anchored to the home page would be behind them. */
+.walk-return {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  z-index: 322; /* over Settings (39/45) and the walkthrough's own cards */
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 10px 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: oklch(0.2 0.035 250 / 0.96);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+  animation: walk-card-in 0.2s ease-out;
+}
+.walk-return-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mint);
+  flex-shrink: 0;
+}
+.walk-return-text {
+  font-size: 12.5px;
+  color: var(--fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.walk-return-go {
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--mint);
+  color: #06251b;
+  font-size: 12.5px;
+  font-weight: 680;
+  cursor: pointer;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.walk-return-go:hover { filter: brightness(1.06); }
+@media (max-width: 620px) {
+  .walk-return-text { display: none; }
+}
+/* The confetti canvas: over the room, UNDER the card it is celebrating, and
+   never in the way of the button. */
+.walk-confetti {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  pointer-events: none;
+}

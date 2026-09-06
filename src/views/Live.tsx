@@ -72,6 +72,7 @@ import {
 import {
   isCaptureKind,
   markLiveRoom,
+  adoptOrphanSources,
   migrateBuiltinsToExtras,
   parseConfig,
   serializeConfig,
@@ -133,7 +134,7 @@ import { ModBoard } from "./ModBoard";
 import { VotePanel, VoteEditor } from "./VotePanel";
 import { voteFormFor, firstSentence } from "../lib/votePanel";
 import { DEFAULT_MOD_BOARD, MOD_BOARD_PREF, normalizeModBoard, seatFeeds, throwUpState, type ModBoardLayout } from "../lib/modBoard";
-import { prefGet } from "../lib/prefs";
+import { PREFS_EVENT, prefGet, prefSet } from "../lib/prefs";
 import { team } from "../lib/access";
 import type { Member } from "../lib/accessDiff";
 import { canSeat, memberLabel, seatCandidates } from "../lib/seatPick";
@@ -149,6 +150,14 @@ import {
   type ModStageState,
 } from "../lib/stageTruth";
 import { RoleCard } from "./RoleCard";
+import { Walkthrough } from "./Walkthrough";
+import {
+  PREF_WALKTHROUGH_OFF,
+  PREF_WALKTHROUGH_ROOM,
+  PREF_WALKTHROUGH_STEP,
+  roomIsFresh,
+  type WalkStep,
+} from "../lib/walkthrough";
 import { areaPath, pushSample, renderPressure, renderScale, renderTone } from "../lib/renderLoad";
 
 // Transport-truthful copy (M-L4 finding: an RTMP session can look healthy
@@ -2763,7 +2772,12 @@ export function LiveView({
   }, []);
   /** Per-source meter levels for audio-bearing extras (guests, media). */
   const [extraLevels, setExtraLevels] = useState<Record<string, number>>({});
-  const [sheetOpen, setSheetOpen] = useState(true);
+  // The bottom row starts COLLAPSED. Open, it covers the bottom of the stage
+  // the moment a room opens — the first thing a new user sees is a stats
+  // drawer over their own picture. The handle is right there when they want
+  // it; a drawer that opens itself every time is not a default, it is a
+  // decision made for them.
+  const [sheetOpen, setSheetOpen] = useState(false);
   // Every dock retracts, same grammar everywhere: its boundary handle DRAGS
   // to resize and CLICKS to hide/show.
   const [leftOpen, setLeftOpen] = useState(true);
@@ -2777,6 +2791,15 @@ export function LiveView({
   const [panelMenu, setPanelMenu] = useState<PanelId | null>(null);
   const [layoutMenu, setLayoutMenu] = useState(false);
   const [layoutEdit, setLayoutEdit] = useState(false);
+  /** The first-room walkthrough (lib/walkthrough.ts). `null` while the pref is
+   * still being read — a flash of the welcome veil on every room open would be
+   * worse than a beat of nothing. It arms ONCE, on a room with no scenes and
+   * no sources, and only for the host: a mod seat is not learning to build a
+   * set it does not own. */
+  const [walkOn, setWalkOn] = useState<boolean | null>(null);
+  /** Resume point across the Settings trip (lib/walkthrough.ts). */
+  const [walkStep, setWalkStep] = useState<WalkStep>("welcome");
+  const walkArmed = useRef(false);
   const [dragging, setDragging] = useState<PanelId | null>(null);
   const [dropHint, setDropHint] = useState<{ dock: Dock; index: number } | null>(null);
 
@@ -3865,6 +3888,19 @@ export function LiveView({
    * respawns when the room reopens. */
   const addExtraSource = async (label: string, spec: ExtraSpec, inviteUrl?: string) => {
     if (refuseSetEdit()) return;
+    // A SOURCE NEEDS A SCENE TO JOIN. Sources are looks over one graph, and a
+    // look belongs to a scene — so with no scenes there is nothing for this to
+    // join. It used to be allowed: the source rendered (no scene = the whole
+    // graph is the stage), and then the user's first scene stranded it. Not in
+    // that scene's look, so no row in the panel; still in the graph, so still
+    // on the stage. Live, unreachable, undeletable. Refuse instead.
+    if ((cfgRef.current.scenes ?? []).length === 0) {
+      notify("Make a scene first — a source joins the scene you add it in, and there isn't one yet.", {
+        key: "banner",
+        tone: "warning",
+      });
+      return;
+    }
     const id = `${spec.kind}-${Math.random().toString(36).slice(2, 8)}`;
     try {
       await extraSources.add(id, label, spec);
@@ -4234,10 +4270,12 @@ export function LiveView({
       // switches. Fold them into ordinary sources ONCE (lib/room.ts) and
       // write the document back, before anything spawns from it.
       let opened = parseConfig(room.config);
-      const migrated = migrateBuiltinsToExtras(opened, {}, {
-        h: snap.video_height || 720,
-        w: ((snap.video_height || 720) * 16) / 9,
-      });
+      const migrated = adoptOrphanSources(
+        migrateBuiltinsToExtras(opened, {}, {
+          h: snap.video_height || 720,
+          w: ((snap.video_height || 720) * 16) / 9,
+        }),
+      );
       if (migrated !== opened) {
         opened = migrated;
         cfgRef.current = migrated;
@@ -5042,6 +5080,47 @@ export function LiveView({
   const controlRef = useRef<RoomControlLink | null>(null);
   const applySceneRef = useRef(applyScene);
   applySceneRef.current = applyScene;
+  // ── Arming the first-room walkthrough ────────────────────────────────
+  // Once, on a room that has nothing in it yet, for the host only. The pref
+  // is durable, so "skip" means skipped forever until Settings turns it back
+  // on; a room someone already built is never a classroom.
+  useEffect(() => {
+    if (walkArmed.current || !isHost || mountVeil) return;
+    walkArmed.current = true;
+    void Promise.all([prefGet(PREF_WALKTHROUGH_OFF), prefGet(PREF_WALKTHROUGH_STEP)]).then(([off, at]) => {
+      if (off === "1") {
+        setWalkOn(false);
+        return;
+      }
+      // RESUMING beats freshness. By the time the walkthrough sends the user
+      // out to Settings the room has a scene, a camera and a mic in it — so a
+      // fresh-room test would refuse to let them back in at the last step.
+      const resuming = !!at && at !== "welcome";
+      if (resuming) {
+        setWalkStep(at as WalkStep);
+        setWalkOn(true);
+        return;
+      }
+      setWalkOn(roomIsFresh({ scenes: scenes.length, extras: (cfg.sources.extras ?? []).length }));
+    });
+  }, [isHost, mountVeil, scenes.length, cfg.sources.extras, cfg]);
+
+  // Settings can switch it back on. The pref event is the only signal — the
+  // room does not poll, and a reset while a room is open should take effect
+  // without reopening it.
+  useEffect(() => {
+    const onPrefs = () => {
+      void prefGet(PREF_WALKTHROUGH_OFF).then((v) => {
+        if (v !== "1" && isHost) {
+          walkArmed.current = true;
+          setWalkOn(true);
+        }
+      });
+    };
+    window.addEventListener(PREFS_EVENT, onPrefs);
+    return () => window.removeEventListener(PREFS_EVENT, onPrefs);
+  }, [isHost]);
+
   const scenesRef = useRef(scenes);
   scenesRef.current = scenes;
   useEffect(() => {
@@ -7473,6 +7552,41 @@ export function LiveView({
           <span className="rm-veil-note">{veilNote}</span>
         </div>
       )}
+      {/* The first-room walkthrough. Renders over everything but the mount
+        * veil — teaching a room that has not finished opening would point at
+        * controls that are not there yet. */}
+      {walkOn && !mountVeil && (
+        <Walkthrough
+          world={{
+            layoutEdit,
+            layout,
+            scenes: scenes.length,
+            extras: (cfg.sources.extras ?? []).length,
+            mics: (cfg.sources.extras ?? []).filter((e) => e.spec.kind === "mic").length,
+          }}
+          start={walkStep}
+          onStep={(s) => void prefSet(PREF_WALKTHROUGH_STEP, s)}
+          onOpenIntegrations={
+            onOpenIntegrations && room
+              ? () => {
+                  // Which room to come back to. Written BEFORE the leave: the
+                  // room view is about to unmount and take every ref with it.
+                  void prefSet(PREF_WALKTHROUGH_ROOM, room.id);
+                  onOpenIntegrations();
+                }
+              : undefined
+          }
+          onClose={(reason) => {
+            setWalkOn(false);
+            void prefSet(PREF_WALKTHROUGH_STEP, null);
+            void prefSet(PREF_WALKTHROUGH_ROOM, null);
+            void prefSet(PREF_WALKTHROUGH_OFF, "1");
+            if (reason === "skip") {
+              notify("Walkthrough off. Turn it back on in Settings → App.", { key: "banner", tone: "info" });
+            }
+          }}
+        />
+      )}
       {anyPop && <div className="rm-pop-backdrop" onClick={closePops} />}
 
       <header className="rm-top" data-tauri-drag-region>
@@ -7496,6 +7610,7 @@ export function LiveView({
           * a control seat gets the panels as they are. */}
         {isHost && (
           <button
+            data-walk="edit"
             className={`rm-icon-chip${layoutEdit ? " on" : ""}`}
             onClick={() => {
               setLayoutEdit((e) => !e);
