@@ -13,6 +13,7 @@
  * pattern as the Sources panel's `filterFor`. In a row dock the caller opens
  * the editor as a popover over the strip (VoteEditor is exported for it). */
 import { useEffect, useState, type ReactNode } from "react";
+import type React from "react";
 import { Select } from "../components/Select";
 import type { Interaction } from "../lib/ipc";
 import { voteIsLive, type VoteForm } from "../lib/votePanel";
@@ -30,6 +31,46 @@ const chevRight = (
     <path d="M9 6l6 6-6 6" />
   </svg>
 );
+
+/** The strip's transport is icon-only (28px glass buttons, tooltips). */
+const svgProps = { width: 14, height: 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+const sic = {
+  plus: (
+    <svg {...svgProps}>
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  ),
+  play: (
+    <svg {...svgProps}>
+      <path d="M7 5v14l11-7z" fill="currentColor" stroke="none" />
+    </svg>
+  ),
+  eye: (
+    <svg {...svgProps}>
+      <path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z" />
+      <circle cx="12" cy="12" r="2.8" />
+    </svg>
+  ),
+  check: (
+    <svg {...svgProps}>
+      <path d="M5 12.5l4.5 4.5L19 7.5" />
+    </svg>
+  ),
+  x: (
+    <svg {...svgProps}>
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  ),
+};
+
+/** One icon-only strip button: the tooltip IS the label. */
+function StripBtn({ icon, tip, primary, onClick }: { icon: ReactNode; tip: string; primary?: boolean; onClick: (e: React.MouseEvent<HTMLButtonElement>) => void }) {
+  return (
+    <button type="button" className={`rm-vote-ib${primary ? " primary" : ""}`} title={tip} aria-label={tip} onClick={onClick}>
+      {icon}
+    </button>
+  );
+}
 
 /** Percent of the tally one option holds; 0 while nobody has answered. */
 function pctOf(vote: Interaction | null, id: string): number {
@@ -183,10 +224,32 @@ export function VotePanel({
   );
 
   if (form === "strip") {
-    // ONE line, chat-strip sizing, never wider than the dock: the label, the
-    // question, the inline tally, the transport — every span may ellipsize.
+    // ONE line, chat-strip sizing, never wider than the dock: the label
+    // (fixed width), the question, the inline tally, an icon-only transport
+    // — every span may ellipsize; everything sits on the row's centre line.
+    const stripTransport = live && vote && (
+      <span className="rm-vote-actions rm-vote-strip-actions">
+        {vote.state === "open" && (
+          <>
+            <StripBtn icon={sic.play} tip="Start collecting answers" primary onClick={() => onTransition("open")} />
+            <StripBtn icon={sic.x} tip="Cancel this vote" onClick={() => onTransition("cancel")} />
+          </>
+        )}
+        {vote.state === "collecting" && (
+          <>
+            <StripBtn icon={sic.eye} tip="Reveal the result now" primary onClick={() => onTransition("reveal", 0)} />
+            <button type="button" className="rm-vote-ib rm-vote-ib-txt" title="The server reveals in 3 s — a countdown on the set" aria-label="Reveal in 3 seconds" onClick={() => onTransition("reveal", 3000)}>
+              3s
+            </button>
+            <StripBtn icon={sic.check} tip="Close the vote" onClick={() => onTransition("close")} />
+            <StripBtn icon={sic.x} tip="Cancel this vote" onClick={() => onTransition("cancel")} />
+          </>
+        )}
+        {vote.state === "revealed" && <StripBtn icon={sic.check} tip="Close the vote" onClick={() => onTransition("close")} />}
+      </span>
+    );
     return (
-      <div className="rm-strip rm-vote-strip" data-live={live ? "1" : undefined}>
+      <div className="rm-strip rm-row-strip rm-vote-strip" data-live={live ? "1" : undefined}>
         <span className="rm-vote-tag">Vote</span>
         <span className="rm-vote-strip-q" title={last ?? undefined}>
           {live && vote ? (vote.spec.prompt || last) : last ?? "No vote"}
@@ -204,16 +267,10 @@ export function VotePanel({
           </span>
         )}
         {live ? (
-          transport
+          stripTransport
         ) : (
           <span className="rm-pop-anchor rm-vote-anchor">
-            <button
-              className="rm-guest-admit"
-              title="Write a question"
-              onClick={(e) => onEdit(!editing, e.currentTarget)}
-            >
-              Open {chevRight}
-            </button>
+            <StripBtn icon={sic.plus} tip="Set up a vote" onClick={(e) => onEdit(!editing, e.currentTarget)} />
             {editing && popover}
           </span>
         )}

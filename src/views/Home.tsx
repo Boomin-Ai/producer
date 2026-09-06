@@ -282,10 +282,10 @@ export function Home({
   const [rooms, setRooms] = useState<LiveRoom[]>(() => cached<LiveRoom[]>(`rooms:${activeEndpointId() ?? ""}`) ?? []);
   const roomsRef = useRef(rooms);
   roomsRef.current = rooms;
-  // One popout: the account sheet pulls down from the top-right avatar; the
-  // rail's avatar opens the same sheet (never two surfaces at once).
+  // One popout: the account sheet pulls out beside the rail's avatar — the
+  // ONE account button at home (the header carries no avatar).
   const [accountOpen, setAccountOpen] = useState(false);
-  // The account's profile picture (Boomin `/auth/me`), shown in the punch-hole
+  // The account's profile picture (Boomin `/auth/me`), shown in the rail's
   // avatar; the workspace initial until the session serves one.
   const [meAvatar, setMeAvatar] = useState<string | null>(null);
   useEffect(() => {
@@ -494,20 +494,6 @@ export function Home({
               <span className="update-dot" /> Restart to update
             </button>
           )}
-          {/* You, not the brand: who is signed in, workspaces, the door to
-            * add one, sign out. Pulls DOWN from the avatar the way Settings
-            * pulls OUT of the rail (views/AccountSheet.tsx). */}
-          <button
-            className={`cr-profile${accountOpen ? " on" : ""}`}
-            title="Account"
-            onClick={() => setAccountOpen((v) => !v)}
-          >
-            {meAvatar ? (
-              <img src={meAvatar} alt="" />
-            ) : (
-              ((endpoints.find((e) => e.id === activeId) ?? endpoints[0])?.name?.[0] ?? "?").toUpperCase()
-            )}
-          </button>
         </div>
       </header>
 
@@ -564,6 +550,7 @@ export function Home({
       {view.kind === "home" && (
         <HomeRail
           brandName={(endpoints.find((e) => e.id === activeId) ?? endpoints.find((e) => e.kind === "connected") ?? endpoints[0])?.name ?? "Workspace"}
+          avatarUrl={meAvatar}
           surface={surface}
           onSurface={(s) => {
             closeSettings();
@@ -3511,7 +3498,8 @@ function HomeRail({
   onBack,
 }: {
   brandName: string;
-  /** The brand's avatar once the session serves it; initial until then. */
+  /** The account's profile picture once the session serves it; the
+   * workspace initial until then. */
   avatarUrl?: string | null;
   surface: "rooms" | "manager";
   onSurface: (s: "rooms" | "manager") => void;
@@ -3531,7 +3519,7 @@ function HomeRail({
           {railIc.back}
         </button>
       ) : (
-        <button className="home-rail-avatar" title={`${brandName} — workspaces`} onClick={onProfile}>
+        <button className="home-rail-avatar" title="Account" aria-label={`Account — ${brandName}`} onClick={onProfile}>
           {avatarUrl ? <img src={avatarUrl} alt="" /> : <span>{(brandName[0] ?? "?").toUpperCase()}</span>}
           <i className="home-rail-presence" />
         </button>

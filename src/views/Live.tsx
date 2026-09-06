@@ -6545,8 +6545,11 @@ export function LiveView({
           // ROW FORM: one line — the latest tag and its first sentence,
           // ellipsized like chat's last message. The list is column-only.
           const latest = Array.isArray(releases) ? releases[0] : null;
+          // Same strip chrome as Vote's row form (.rm-row-strip): the fixed
+          // label column, then one ellipsizing line on the row's centre.
           return (
-            <div className="upd upd-strip">
+            <div className="rm-strip rm-row-strip upd upd-strip">
+              <span className="rm-vote-tag">Updates</span>
               {releases === null && <span className="upd-line">Checking for updates…</span>}
               {releases === "err" && <span className="upd-line">The update stream goes live when the repo does.</span>}
               {latest && (

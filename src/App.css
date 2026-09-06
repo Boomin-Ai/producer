@@ -5882,8 +5882,8 @@ textarea::placeholder {
   cursor: pointer;
   padding: 0;
   position: relative;
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   margin-bottom: 8px;
   border-radius: 50%;
   display: grid;
@@ -8634,25 +8634,9 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .ws-row:hover .ws-gear, .ws-gear:focus-visible { opacity: 1; }
 .ws-gear:hover { background: var(--surface-3); color: var(--fg-1); }
 
-/* header account button + menu (you, not the brand).
-   The avatar sits in a PUNCH-HOLE: the opaque content ground (the vibrant
-   home's fixed `::after`, which is the surface behind both the room list
-   and Settings) has a circle masked out of its top-right corner, and the
-   avatar is centred in it, so the glass shows through a ring around it —
-   one element, no extra chrome. Geometry: header 52px high → centre y 26;
-   header right padding 20 + half of 26 → centre x = right 33px. */
-.cr-profile {
-  width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line-2);
-  background: var(--surface-2); color: var(--fg-1); font-size: 11px; font-weight: 700;
-  display: grid; place-items: center; cursor: pointer; -webkit-app-region: no-drag;
-  padding: 0; overflow: hidden;
-}
-.cr-profile img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
-.cr-profile:hover { background: var(--surface-3); }
-#root > .cr.cr--vibrant::after {
-  -webkit-mask-image: radial-gradient(circle at calc(100% - 33px) 26px, transparent 17px, #000 18px);
-  mask-image: radial-gradient(circle at calc(100% - 33px) 26px, transparent 17px, #000 18px);
-}
+/* The header carries no avatar: the ONE account button at home is the
+   rail's avatar (.home-rail-avatar), and the account sheet pulls out
+   beside it. */
 .cr-menu-backdrop { position: fixed; inset: 0; z-index: 60; }
 .cr-menu {
   position: fixed; right: 12px; top: 44px; z-index: 61; min-width: 180px; padding: 6px;
@@ -9172,12 +9156,13 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 }
 .rm-top-left .role-card.compact { position: relative; }
 
-/* ── Account sheet: the pull-down under the top-right avatar ───────────── */
+/* ── Account sheet: pulls OUT beside the rail's avatar (the one account
+   button), the way Settings pulls out of the rail ─────────────────────── */
 .acct-backdrop { position: fixed; inset: 0; z-index: 60; }
 .acct-sheet {
   position: fixed;
-  right: 12px;
-  top: 44px;
+  left: 80px;
+  top: 48px;
   z-index: 61;
   width: 320px;
   max-height: 0;
@@ -9188,14 +9173,14 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   backdrop-filter: blur(28px) saturate(1.3);
   -webkit-backdrop-filter: blur(28px) saturate(1.3);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
-  transform: translateY(-6px);
+  transform: translateX(-8px);
   opacity: 0;
   transition: max-height 0.26s ease, transform 0.26s ease, opacity 0.2s ease, border-color 0.2s ease;
   pointer-events: none;
 }
 .acct-sheet.open {
   max-height: min(78vh, 720px);
-  transform: translateY(0);
+  transform: translateX(0);
   opacity: 1;
   border-color: var(--line-2);
   pointer-events: auto;
@@ -9211,7 +9196,6 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .acct-plus { font-size: 16px; font-weight: 500; background: oklch(1 0 0 / 0.08); }
 .acct-add .ws-pop-name { color: var(--fg-1); }
 .acct-sheet .ws-drop { width: auto; padding: 0 8px; font-size: 11px; }
-.cr-profile.on { background: var(--surface-3); border-color: oklch(1 0 0 / 0.25); }
 
 /* ── Settings → Access (views/Access.tsx): the same glass list as App ──── */
 .acc-list { display: flex; flex-direction: column; gap: 2px; }
@@ -9279,7 +9263,7 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .acc-review-bar .cr-sheet-row-sub { flex: 1; }
 .acc-primary { color: var(--fg-1); border-color: oklch(1 0 0 / 0.3); }
 /* The confirm sheet: the account sheet's glass and pull-down motion, centred. */
-.acct-sheet.acc-confirm { right: auto; left: 50%; top: 56px; width: min(460px, 92vw); transform: translate(-50%, -6px); }
+.acct-sheet.acc-confirm { left: 50%; top: 56px; width: min(460px, 92vw); transform: translate(-50%, -6px); }
 .acct-sheet.acc-confirm.open { transform: translate(-50%, 0); }
 .acc-confirm-title { font-size: 13px; font-weight: 650; color: var(--fg-1); padding: 6px 8px 8px; }
 .acc-confirm-summary { display: flex; flex-direction: column; gap: 4px; padding: 0 8px 10px; font-size: 12.5px; line-height: 1.5; color: var(--fg-1); }
@@ -9496,16 +9480,21 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .rm-mod-role { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(238, 241, 246, 0.72); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 5px; padding: 1px 5px; }
 .rm-mod-onset { font-size: 9px; font-weight: 800; letter-spacing: 0.1em; color: #06251b; background: var(--mint); border-radius: 5px; padding: 2px 5px; }
 .rm-mod-media { display: inline-flex; gap: 4px; }
-.rm-mod-tg { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 26px; border-radius: 7px; border: 0.5px solid var(--line-2); background: var(--surface-2); color: var(--fg-3); cursor: pointer; }
+/* The media toggles' glyphs were "empty squares": a 1.8-unit stroke at 15px
+   in --fg-3 (38% alpha) under the disabled 0.4 opacity (any seat while the
+   host flag is pending) lands at ~15% — invisible on --surface-2. The glyph
+   reads at --fg-2 with a 2-unit stroke; disabled dims less, never compounds
+   to nothing. Mint when on. */
+.rm-mod-tg { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 26px; border-radius: 7px; border: 0.5px solid var(--line-2); background: var(--surface-2); color: var(--fg-2); cursor: pointer; }
 .rm-mod-tg:hover { color: var(--fg-1); }
 .rm-mod-tg.on { color: #06251b; background: var(--mint); border-color: transparent; }
-.rm-mod-tg:disabled { opacity: 0.4; cursor: default; }
+.rm-mod-tg:disabled { opacity: 0.6; cursor: default; }
 .rm-mod-set { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .rm-mod-set .rm-guest-stage { display: inline-flex; align-items: center; gap: 5px; }
 .rm-mod-set .rm-guest-stage svg { width: 13px; height: 13px; }
 .rm-mod-readout { font-size: 10.5px; color: var(--fg-3); letter-spacing: 0.02em; margin-right: auto; }
 .rm-mod-tg:focus-visible { outline: none; border-color: oklch(0.85 0.12 160 / 0.7); }
-.rm-mod-tg svg { width: 15px; height: 15px; }
+.rm-mod-tg svg { width: 14px; height: 14px; display: block; flex: none; stroke-width: 2; }
 .rm-addsource.dim { opacity: 0.45; cursor: default; }
 .rm-mod-seat .sel { flex: 1 1 120px; min-width: 0; }
 .rm-mod-seat { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding-top: 4px; }
@@ -9646,6 +9635,68 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .rm-vote-strip .rm-vote-actions { flex-wrap: nowrap; flex: 0 0 auto; }
 .rm-vote-strip .rm-vote-anchor { flex: 0 0 auto; display: inline-flex; }
 .rm-vote-strip .rm-guest-admit { display: inline-flex; align-items: center; gap: 3px; }
+
+/* ═══ ROW STRIPS (v0.4.35) — Vote and Updates share ONE strip in a row dock:
+   the panel card is the chrome; the strip itself is a bare centred line —
+   fixed label column, ellipsizing content, icon-only transport. The slim
+   dock's mixer reset (.rm-strip → 26px, transparent) is overridden here. */
+.rm-dock-top:not(.expanded) .rm-row-strip,
+.rm-dock-bottom.slim .rm-row-strip,
+.rm-panel[data-in="top"] .rm-row-strip {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 32px;
+  margin: 0;
+  padding: 0 2px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.rm-row-strip .rm-vote-tag { width: 64px; flex: 0 0 64px; overflow: hidden; text-overflow: ellipsis; line-height: 1; }
+/* The panel body of a row-form Vote/Updates is a centred row, full height —
+   the line sits on the panel's centre, never its top edge. */
+.rm-panel-vote[data-in="top"] .rm-panel-body,
+.rm-panel-updates[data-in="top"] .rm-panel-body {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.rm-row-strip .upd-line { flex: 1 1 auto; min-width: 40px; }
+.rm-vote-strip-actions { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.rm-vote-ib {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  border: 0.5px solid var(--line-2);
+  background: oklch(1 0 0 / 0.06);
+  color: var(--fg-2);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.rm-vote-ib:hover { background: oklch(1 0 0 / 0.12); color: var(--fg-1); }
+.rm-vote-ib:focus-visible { border-color: oklch(0.85 0.12 160 / 0.7); }
+.rm-vote-ib.primary { background: var(--primary); color: #08110c; border-color: transparent; }
+.rm-vote-ib.primary:hover { background: var(--primary); color: #08110c; filter: brightness(1.08); }
+.rm-vote-ib svg { width: 14px; height: 14px; display: block; }
+.rm-vote-ib-txt { width: auto; padding: 0 8px; font-size: 11px; font-weight: 650; letter-spacing: 0.02em; }
 
 /* ═══ GUESTS — row form: one 40px tile per person, scrolling sideways ═════ */
 .rm-guests-row {
