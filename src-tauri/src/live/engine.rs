@@ -2485,9 +2485,10 @@ pub fn start(
                         // picture people report as "the output is stuck". Only
                         // Shutdown used to stop them, so the outputs outlived
                         // every room but the last. Same order Shutdown uses: the
-                        // vcam first, because studio teardown requires it to be
-                        // stopped already (studio.rs) and re-entering a live
-                        // output's stop callback is what crashed mac-virtualcam.
+                        // vcam first, because the ROOM MIX is what it reads and
+                        // RoomMix::teardown requires it stopped already, and
+                        // re-entering a live output's stop callback is what
+                        // crashed mac-virtualcam (engine rev 7).
                         unsafe {
                             if let Some(o) = vcam.take() {
                                 stop_vcam(o);
