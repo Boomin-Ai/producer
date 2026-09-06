@@ -567,6 +567,50 @@
   .compose .hint { margin-top: 13px; font-size: 12px; color: var(--faint); }
 
   /* ── closing ── */
+
+  /* ── Everything in the room: the features the scroll story cannot hold ── */
+  .feats { position: relative; z-index: 1; padding: 96px 0 40px; }
+  .feats .eyebrow {
+    font-size: 11.5px; font-weight: 600; letter-spacing: 0.22em;
+    color: var(--mint); text-transform: uppercase; text-align: center;
+  }
+  .feats h2 {
+    font-weight: 700; letter-spacing: -0.025em; text-align: center;
+    font-size: clamp(28px, 4vw, 48px); line-height: 1.08; margin: 12px 0 8px;
+    text-wrap: balance;
+  }
+  .feats .sub {
+    text-align: center; color: var(--dim); max-width: 680px; margin: 0 auto 44px;
+    font-size: 15.5px; line-height: 1.6; text-wrap: balance;
+  }
+  .feat-grid {
+    display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+  .feat {
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.028);
+    padding: 20px 20px 22px;
+    backdrop-filter: blur(14px);
+  }
+  .feat h3 {
+    font-size: 16.5px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 7px;
+  }
+  .feat p { margin: 0; color: var(--dim); font-size: 14.5px; line-height: 1.58; }
+  .feat .tag {
+    display: inline-block; margin-bottom: 10px; font-size: 10.5px; font-weight: 700;
+    letter-spacing: 0.16em; text-transform: uppercase; color: var(--mint);
+  }
+  .feat.wide { grid-column: span 2; }
+  @media (max-width: 720px) { .feat.wide { grid-column: auto; } }
+  .beta-note {
+    margin: 40px auto 0; max-width: 720px; text-align: center;
+    color: var(--dim); font-size: 13.5px; line-height: 1.6;
+    border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 20px;
+  }
+  .beta-note strong { color: #fff; font-weight: 700; }
+
   .closing { position: relative; z-index: 1; padding: 90px 0 100px; text-align: center; }
   .closing .chair { width: 140px; margin: 0 auto 4px; filter: drop-shadow(0 26px 52px rgba(0, 0, 0, 0.6)); animation: float 7s ease-in-out infinite; }
   @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
@@ -966,7 +1010,7 @@
           <div class="pc"><span class="k">Renderer</span><span class="v">libobs on Metal</span><span class="d">Compositing, filters, and transitions run on the GPU. The CPU stays free for the show.</span></div>
           <div class="pc"><span class="k">Encode</span><span class="v">VideoToolbox H.264</span><span class="d">Apple's hardware encoder. One encode, 1080p or 4K, fans out to Twitch, Kick, and YouTube.</span></div>
           <div class="pc"><span class="k">Core</span><span class="v">Rust + Tauri 2</span><span class="d">Native engine, native window. The UI is React; the parts that matter are compiled.</span></div>
-          <div class="pc"><span class="k">Windows</span><span class="v">x264 today</span><span class="d">NVENC, AMF, and QSV are next. Same engine, same rooms.</span></div>
+          <div class="pc"><span class="k">Windows</span><span class="v">NVENC · QSV · AMF</span><span class="d">Hardware encode on Windows too, picked at boot. Same engine, same rooms, 4K60.</span></div>
         </div>
       </div>
     </div>
@@ -992,6 +1036,84 @@
     </div>
 
   </div>
+</div>
+
+<div class="wrap">
+  <section class="feats">
+    <div class="eyebrow">Everything in the room</div>
+    <h2>The show is the room. <span class="soft">Everyone in it holds a seat.</span></h2>
+    <p class="sub">Producer is a live studio, a guest stage, a mod booth and an audience floor in one window — on your machine, on your channels, with your own keys.</p>
+
+    <div class="feat-grid">
+      <div class="feat">
+        <span class="tag">Mods</span>
+        <h3>Seat someone to run the show</h3>
+        <p>A teammate opens your room from their own Producer and cuts scenes, admits and stages guests, and runs votes — never touching your sources. Grant them a camera or a screen and their feed lands on your set as its own kind. Seats on Boomin, mod links on your own server.</p>
+      </div>
+
+      <div class="feat">
+        <span class="tag">Audience</span>
+        <h3>The audience is in the show</h3>
+        <p>Send one link. Phones vote with no account, the bar reveals on the set, and the tally lands in the run report. The result is a fact about the show, not a chat plugin's overlay.</p>
+      </div>
+
+      <div class="feat">
+        <span class="tag">Cross-platform</span>
+        <h3>One link, every platform at once</h3>
+        <p>The video rides Twitch, Kick and YouTube. The room is yours. So the same audience link works no matter where someone is watching.</p>
+      </div>
+
+      <div class="feat">
+        <span class="tag">Studio mode</span>
+        <h3>Broadcast the studio itself</h3>
+        <p>Put the whole Producer window on the stream with your face on the stage inside it — no infinite mirror. Guests and mods keep seeing the show, never your UI.</p>
+      </div>
+
+      <div class="feat">
+        <span class="tag">Virtual camera</span>
+        <h3>Take your scenes into any meeting</h3>
+        <p>Producer appears as a camera to any app that takes one — Meet, Zoom, a browser tab. Cut scenes, drop in a screen share, bring on a guest, mid-call.</p>
+      </div>
+
+      <div class="feat">
+        <span class="tag">Guests</span>
+        <h3>A link, a browser, and they're on</h3>
+        <p>Guests are free and need no account. Camera and mic go straight to your computer. Screen share is a grant you hand out, not a setting they find.</p>
+      </div>
+
+      <div class="feat">
+        <span class="tag">Cutout</span>
+        <h3>No green screen</h3>
+        <p>Add Cutout to a camera and the background goes — soft or hard edge, feather and erode. On Apple silicon today; on Windows the filter is there but still passes frames through.</p>
+      </div>
+
+      <div class="feat">
+        <span class="tag">Sponsors</span>
+        <h3>Overlays that bill by the minute</h3>
+        <p>Agree a rate and a cap, show the overlay, hide it. The clock is the invoice, and on Boomin the money moves wallet to wallet when the run is released.</p>
+      </div>
+
+      <div class="feat">
+        <span class="tag">Run report</span>
+        <h3>Every appearance is a fact</h3>
+        <p>Who was on the set, from when to when, in which slot, on what terms. Every room keeps the ledger; on Boomin it drives credits, payouts and a sponsor's receipt.</p>
+      </div>
+
+      <div class="feat wide">
+        <span class="tag">Yours to host</span>
+        <h3>Run the whole thing on your own server</h3>
+        <p>Deploy the open producer-server to your own Cloudflare account and guests, mod links and the audience page all work with nothing touching Boomin — for $0. Sign in to Boomin only when you want identity, the Network and money.</p>
+      </div>
+
+      <div class="feat">
+        <span class="tag">Mac &amp; Windows</span>
+        <h3>4K60, hardware encoded</h3>
+        <p>Apple silicon on VideoToolbox, Windows on NVENC, QSV or AMF. One encode feeds every channel and the recording.</p>
+      </div>
+    </div>
+
+    <p class="beta-note"><strong>Open beta.</strong> Producer is public and we run our own shows on it, but it is young: expect rough edges and breaking changes between releases, and keep a fallback for anything you cannot afford to drop.</p>
+  </section>
 </div>
 
 <div class="wrap">
