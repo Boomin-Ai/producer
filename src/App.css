@@ -10030,3 +10030,14 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 /* ── Source row rename (camera): the scene's field, in the row. */
 .rm-row-rename-field { flex: 1 1 auto; min-width: 0; }
 .rm-row-rename { font-size: 12px; }
+
+/* Mods row in a narrow rail: the name owns the slack, the role pill never
+   overlaps the media glyphs; under 260px the glyphs drop to a second line. */
+.rm-mod-row { grid-template-columns: minmax(0, 1fr) auto; }
+.rm-mod-id { overflow: hidden; }
+.rm-mod-name { flex: 1 1 auto; }
+.rm-mod-role, .rm-mod-onset { flex: 0 0 auto; white-space: nowrap; }
+@container panel (max-width: 260px) {
+  .rm-mod-row { grid-template-columns: minmax(0, 1fr); }
+  .rm-mod-media { justify-self: start; }
+}
