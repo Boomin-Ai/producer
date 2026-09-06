@@ -48,6 +48,8 @@ import { DEMO_CHAT, DEMO_VIDEO_URL, demoOn, type DemoPlatform } from "../lib/dem
 import { activeEndpointId, isBoomin, resolveActiveEndpoint } from "../lib/workspace";
 import { dismissKey, notify, notifyError } from "../lib/notices";
 import { NoticeHost } from "../components/Notice";
+import { PlacementButton } from "../components/PlacementButton";
+import { PLACEMENTS } from "../lib/placement";
 import { StageEditor } from "./StageEditor";
 import { Select } from "../components/Select";
 import { fromCanvas, modFeedRect, modFeedZ, modSourceOwner, rememberModFeed, toCanvas, type ModFeedTrack } from "../lib/modFeed";
@@ -7196,48 +7198,45 @@ export function LiveView({
     setGhost(null);
   };
 
-  const addButton = (dock: Dock) => {
-    const available = PANEL_ORDER.filter((id) => dockOf(layout, id) !== dock);
-    return (
-      <div className="rm-pop-anchor rm-add-anchor" key={`${dock}-add`}>
-        <button
-          className="rm-add-panel"
-          title="Add a panel here"
-          onClick={(e) => {
-            setPopAnchor(e.currentTarget);
-            setAddMenu((m) => (m === dock ? null : dock));
-          }}
-        >
-          {ic.plus}
-        </button>
-        {addMenu === dock && (
-          <Pop
-            anchor={popAnchor}
-            align={dock === "bottom" ? "up" : dock === "left" ? "left" : "right"}
-            className="rm-pop-add"
-          >
-            <div className="rm-pop-title">ADD PANEL</div>
-            {available.map((id) => (
-              <button
-                key={id}
-                className="rm-pop-row"
-                onClick={() => {
-                  setLayout(movePanelTo(layout, id, dock, layout[dock].length));
-                  setAddMenu(null);
-                }}
-              >
+  /** The layout bar's PANELS list (v0.4.38): every panel with its dock and
+   * ONE placement button — the ring includes "hidden", so this is both how a
+   * hidden panel comes back and how an empty dock gets its first panel.
+   * Empty docks draw nothing at all, so there is no "+" to click in them. */
+  const PANEL_RING: readonly Dock[] = [...PLACEMENTS, "hidden"];
+  const panelsMenu = () => (
+    <div className="rm-pop-anchor">
+      <button
+        className="rm-editbar-btn"
+        onClick={(e) => {
+          setPopAnchor(e.currentTarget);
+          setAddMenu((m) => (m === "bottom" ? null : "bottom"));
+        }}
+      >
+        Panels
+        {ic.chev}
+      </button>
+      {addMenu === "bottom" && (
+        <Pop anchor={popAnchor} align="right" className="rm-pop-add">
+          <div className="rm-pop-title">PANELS</div>
+          {PANEL_ORDER.map((id) => {
+            const d = dockOf(layout, id);
+            return (
+              <div key={id} className="rm-pop-row rm-add-row">
                 <span className="rm-add-name">{PANEL_META[id].title}</span>
-                <span className="rm-add-where">
-                  {dockOf(layout, id) === "hidden" ? "hidden" : `from ${dockOf(layout, id)}`}
-                </span>
-              </button>
-            ))}
-            {available.length === 0 && <div className="rm-rows-empty">Everything is already here.</div>}
-          </Pop>
-        )}
-      </div>
-    );
-  };
+                <span className="rm-add-where">{d}</span>
+                <PlacementButton
+                  value={d}
+                  order={PANEL_RING}
+                  labelFor={(p) => (p === "hidden" ? "Hide" : `Move to ${p}`)}
+                  onChange={(to) => setLayout(movePanel(layout, id, to))}
+                />
+              </div>
+            );
+          })}
+        </Pop>
+      )}
+    </div>
+  );
 
   /** Dock-level surface ownership (edit mode only): the DOCK paints one card
    * and its components go flat, or every panel keeps its own card. Dock-level
@@ -7276,7 +7275,6 @@ export function LiveView({
           </Fragment>
         ))}
         {slot(dock, ids.length)}
-        {addButton(dock)}
         {bgToggle(dock)}
       </>
     );
@@ -7315,6 +7313,14 @@ export function LiveView({
         <span className="rm-group-label">{PANEL_META[id].title.toUpperCase()}</span>
         <div className="rm-panel-actions">
           {panelExtra(id)}
+          {layoutEdit && (
+            <PlacementButton
+              className="rm-panel-place"
+              value={dockOf(layout, id)}
+              order={PLACEMENTS}
+              onChange={(to) => setLayout(movePanel(layout, id, to))}
+            />
+          )}
           <button
             className="rm-panel-plus rm-panel-hide"
             title="Hide this panel"
@@ -7734,30 +7740,23 @@ export function LiveView({
               </Pop>
             )}
           </div>
+          {panelsMenu()}
           <button className="rm-editbar-done" onClick={() => setLayoutEdit(false)}>
             Done
           </button>
-          {/* Where the stage's quick controls float — an edge of the canvas. */}
+          {/* Where the stage's quick controls float — an edge of the canvas.
+            * One placement button: hover previews the next edge, click moves. */}
           <span className="rm-editbar-ctl" title="Quick controls position">
-            {(["left", "top", "bottom", "right"] as const).map((pos) => (
-              <button
-                key={pos}
-                className={`rm-editbar-pos${(cfg.stage_bar ?? "bottom") === pos ? " on" : ""}`}
-                title={`Controls on the ${pos}`}
-                onClick={() => writeCfg({ ...cfgRef.current, stage_bar: pos })}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <rect x="3" y="3" width="18" height="18" rx="4" />
-                  {pos === "left" && <rect x="5" y="8" width="4" height="8" rx="1" fill="currentColor" stroke="none" />}
-                  {pos === "right" && <rect x="15" y="8" width="4" height="8" rx="1" fill="currentColor" stroke="none" />}
-                  {pos === "top" && <rect x="8" y="5" width="8" height="4" rx="1" fill="currentColor" stroke="none" />}
-                  {pos === "bottom" && <rect x="8" y="15" width="8" height="4" rx="1" fill="currentColor" stroke="none" />}
-                </svg>
-              </button>
-            ))}
+            <span className="rm-editbar-ctl-label">Controls</span>
+            <PlacementButton
+              value={cfg.stage_bar ?? "bottom"}
+              order={PLACEMENTS}
+              labelFor={(p) => `Move controls to ${p}`}
+              onChange={(pos) => writeCfg({ ...cfgRef.current, stage_bar: pos })}
+            />
           </span>
           <span className="rm-editbar-text">
-            Editing layout — drag a panel by its grip, or use + to add one
+            Editing layout — drag a panel by its grip, or move it with its placement button
           </span>
         </div>
       )}
@@ -7765,12 +7764,12 @@ export function LiveView({
       {/* The TOP DOCK: a real dock — drag any panel up here (Controller
         * belongs; chat while chatting; whatever the show needs). Renders only
         * when populated or while editing, so the default room stays clean. */}
-      {(layout.top.length > 0 || layoutEdit) && (
+      {(layout.top.length > 0 || dragging) && (
         <>
-          {(topOpen || layoutEdit) && (
+          {(topOpen || layoutEdit || dragging) && (
             <div
               data-dock="top"
-              className={`rm-dock rm-dock-top${layout.top.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "top" ? " hot" : ""}${cfg.dock_bg?.top ? " dock-bg" : ""}${shown.top ? " sized" : ""}${topExpanded ? " expanded" : ""}`}
+              className={`rm-dock rm-dock-top${layout.top.length === 0 ? " empty drop-edge" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "top" ? " hot" : ""}${cfg.dock_bg?.top ? " dock-bg" : ""}${shown.top ? " sized" : ""}${topExpanded ? " expanded" : ""}`}
               style={topOpen && shown.top ? { height: shown.top } : undefined}
             >
               {renderDock("top")}
@@ -7800,7 +7799,7 @@ export function LiveView({
               onPickWindow={replaceWindowSource}
             />
           )}
-          {!layoutEdit && (
+          {!layoutEdit && layout.top.length > 0 && (
             <div
               className={`rm-vtab rm-vtab-top${topOpen ? "" : " closed"}`}
               role="button"
@@ -7821,10 +7820,10 @@ export function LiveView({
       )}
 
       <div className="rm-body">
-        {(leftOpen || layoutEdit) && (
+        {(layout.left.length > 0 ? leftOpen || layoutEdit : !!dragging) && (
           <aside
             data-dock="left"
-            className={`rm-dock rm-dock-side${layout.left.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "left" ? " hot" : ""}${cfg.dock_bg?.left ? " dock-bg" : ""}${shown.left != null && shown.left <= SIDE_MIN ? " mini" : ""}`}
+            className={`rm-dock rm-dock-side${layout.left.length === 0 ? " empty drop-edge" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "left" ? " hot" : ""}${cfg.dock_bg?.left ? " dock-bg" : ""}${shown.left != null && shown.left <= SIDE_MIN ? " mini" : ""}`}
             style={layout.left.length && shown.left ? { width: shown.left, flex: "0 0 auto" } : undefined}
           >
             {renderDock("left")}
@@ -7994,10 +7993,10 @@ export function LiveView({
 
         {layout.right.length > 0 && !layoutEdit &&
           splitter("right", undefined, undefined, { open: rightOpen, onToggle: () => setRightOpen((o) => !o) })}
-        {(rightOpen || layoutEdit) && (
+        {(layout.right.length > 0 ? rightOpen || layoutEdit : !!dragging) && (
           <aside
             data-dock="right"
-            className={`rm-dock rm-dock-side${layout.right.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "right" ? " hot" : ""}${cfg.dock_bg?.right ? " dock-bg" : ""}${shown.right != null && shown.right <= SIDE_MIN ? " mini" : ""}`}
+            className={`rm-dock rm-dock-side${layout.right.length === 0 ? " empty drop-edge" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "right" ? " hot" : ""}${cfg.dock_bg?.right ? " dock-bg" : ""}${shown.right != null && shown.right <= SIDE_MIN ? " mini" : ""}`}
             style={layout.right.length && shown.right ? { width: shown.right, flex: "0 0 auto" } : undefined}
           >
             {renderDock("right")}
@@ -8184,7 +8183,8 @@ export function LiveView({
       )}
 
       {(layout.bottom.length > 0 || dragging) && (
-        <div className={`rm-sheet${sheetOpen ? "" : " collapsed"}${sheetOpen && srcSettings && dockOf(layout, "sources") === "bottom" ? " has-strip" : ""}`}>
+        <div className={`rm-sheet${sheetOpen ? "" : " collapsed"}${layout.bottom.length === 0 ? " empty" : ""}${sheetOpen && srcSettings && dockOf(layout, "sources") === "bottom" ? " has-strip" : ""}`}>
+          {layout.bottom.length > 0 && (
           <div
             className="rm-sheet-head"
             role="button"
@@ -8200,6 +8200,7 @@ export function LiveView({
           >
             <span className="rm-sheet-handle" />
           </div>
+          )}
           {sheetOpen && streaming && (
             <div className="rm-livewarn">
               <span className="rm-live-dot" />
@@ -8233,7 +8234,7 @@ export function LiveView({
           {(sheetOpen || dragging) && (
             <div
               data-dock="bottom"
-              className={`rm-dock rm-dock-bottom${layoutEdit ? " armed" : ""}${dropHint?.dock === "bottom" ? " hot" : ""}${cfg.dock_bg?.bottom ? " dock-bg" : ""}${shown.bottom ? " sized" : ""}${bottomSlim ? " slim" : ""}`}
+              className={`rm-dock rm-dock-bottom${layout.bottom.length === 0 ? " empty drop-edge" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "bottom" ? " hot" : ""}${cfg.dock_bg?.bottom ? " dock-bg" : ""}${shown.bottom ? " sized" : ""}${bottomSlim ? " slim" : ""}`}
               style={shown.bottom ? { height: shown.bottom } : undefined}
             >{renderDock("bottom")}</div>
           )}

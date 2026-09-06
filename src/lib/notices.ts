@@ -22,8 +22,11 @@ export interface Notice {
   sticky?: boolean;
   /** Draw the check-draws-in confirmation (copy success). */
   check?: boolean;
-  /** ms before auto-dismiss (hover pauses). Default 4000. */
+  /** ms before the notice FADES (hover pauses). Default 4000. */
   ttl: number;
+  /** Past its ttl: still drawn, dimmed, until hovered, clicked or replaced
+   * (v0.4.38). Only the LAST notice persists — a fade drops older ones. */
+  faded?: boolean;
 }
 
 export interface NotifyOpts {
@@ -58,9 +61,35 @@ export function notify(text: string, opts: NotifyOpts = {}): number {
     check: opts.check,
     ttl: opts.ttl ?? 4000,
   };
-  list = [...(n.key ? list.filter((x) => x.key !== n.key) : list), n];
+  // A new notice REPLACES whatever was lingering faded — the slot is for
+  // the latest thing the room said, never a stack of stale ones.
+  list = pushIn(list, n);
   emit();
   return id;
+}
+
+/** The ttl ran out. Errors never fade (they stay at full opacity until
+ * dismissed); everything else dims in place and outlives the clock. Any
+ * OTHER faded notice goes — one persisted notice, the last. */
+export function fade(id: number) {
+  const next = fadeIn(list, id);
+  if (next === list) return;
+  list = next;
+  emit();
+}
+
+/** Pure reducer over a list — what `fade` does, for tests and for anyone
+ * who wants to reason about the persistence rule without the store. */
+export function fadeIn(l: Notice[], id: number): Notice[] {
+  const n = l.find((x) => x.id === id);
+  if (!n || n.tone === "error") return l;
+  return l.filter((x) => x.id === id || !x.faded).map((x) => (x.id === id ? { ...x, faded: true } : x));
+}
+
+/** Pure form of `notify`'s list rule: the new notice drops faded ones and
+ * anything sharing its key. */
+export function pushIn(l: Notice[], n: Notice): Notice[] {
+  return [...l.filter((x) => !x.faded && (!n.key || x.key !== n.key)), n];
 }
 
 export function dismiss(id: number) {

@@ -10065,3 +10065,117 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 /* Studio output: the top-bar chip and the footer tag. */
 .hd-chip.hd-studio.on { background: oklch(0.72 0.15 300 / 0.22); border-color: oklch(0.72 0.15 300 / 0.6); color: #efe6ff; }
 .rm-foot-studio { color: #d9c8ff; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; font-size: 10.5px; }
+
+/* ── v0.4.38: empty docks are NOTHING ─────────────────────────────────────
+   No placeholder strip, no "+", no handle — in edit mode too. A dock
+   exists only when a panel lives in it. While a panel is in flight, an empty
+   dock shows as a thin edge you can drop on (mint when you're over it). */
+.rm-dock.empty { display: none; }
+.layout-edit .rm-dock-side.empty { display: none; width: 0; padding: 0; }
+.rm-dock-top.empty:not(.armed) { display: none; }
+.rm-sheet .rm-dock-bottom:empty { min-height: 0; }
+.rm-dock.empty.drop-edge {
+  display: flex;
+  position: relative;
+  padding: 0 !important;
+  margin: 0 !important;
+  gap: 0;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+.rm-dock.empty.drop-edge::before { display: none; }
+.rm-dock.empty.drop-edge::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: oklch(0.32 0.045 250);
+  transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+.rm-dock.empty.drop-edge.hot::after {
+  background: var(--mint);
+  box-shadow: 0 0 14px oklch(0.75 0.14 165 / 0.75);
+}
+.rm-dock-side.empty.drop-edge { width: 5px !important; align-self: stretch; margin: 8px 3px !important; }
+.rm-dock-top.empty.drop-edge,
+.rm-dock-bottom.empty.drop-edge { height: 5px !important; min-height: 5px; margin: 3px 12px !important; }
+.rm-dock.empty.drop-edge > .rm-slot,
+.rm-dock.empty.drop-edge > .rm-dock-bgbtn { display: none; }
+/* The bottom sheet around an empty (drag-only) bottom dock is nothing too. */
+.rm-sheet.empty {
+  padding: 0 !important;
+  min-height: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0;
+  animation: none;
+}
+
+/* ── v0.4.38: notices persist ─────────────────────────────────────────────
+   After its ttl the LAST notice stays, dimmed, until hovered / clicked /
+   replaced. Errors never dim. The pill widens to the whole middle strip
+   before it ellipsizes. */
+.rm-top-drag { min-width: 0; }
+.rm-notices { max-width: 100%; width: 100%; }
+.rm-notice { max-width: calc(100% - 8px); transition: opacity 0.18s ease; }
+.rm-notice.faded { opacity: 0.55; }
+.rm-notice.faded:hover { opacity: 1; }
+
+/* ── v0.4.38: the ONE placement button ────────────────────────────────────
+   A 4-cell mini layout; the active edge is filled. Hover previews the next
+   edge (the fill slides over in 160 ms and keeps stepping every 900 ms);
+   click applies the preview. */
+.rm-place {
+  all: unset;
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid var(--line-1);
+  color: var(--fg-3);
+  background: transparent;
+  box-sizing: border-box;
+  -webkit-app-region: no-drag;
+  transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+.rm-place:hover,
+.rm-place:focus-visible { color: var(--fg-1); border-color: var(--line-2); background: var(--surface-2); }
+.rm-place:focus-visible { outline: 2px solid oklch(0.75 0.14 165 / 0.5); outline-offset: 1px; }
+.rm-place.previewing { color: var(--mint); border-color: oklch(0.75 0.14 165 / 0.5); }
+.rm-place-grid {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  opacity: 0.9;
+  box-sizing: border-box;
+}
+.rm-place-cell {
+  position: absolute;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.18;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  transform: scale(0.85);
+}
+.rm-place-cell.t { top: 1px; left: 1px; right: 1px; height: 3px; }
+.rm-place-cell.b { bottom: 1px; left: 1px; right: 1px; height: 3px; }
+.rm-place-cell.l { top: 1px; bottom: 1px; left: 1px; width: 3px; }
+.rm-place-cell.r { top: 1px; bottom: 1px; right: 1px; width: 3px; }
+.rm-place[data-place="top"] .rm-place-cell.t,
+.rm-place[data-place="bottom"] .rm-place-cell.b,
+.rm-place[data-place="left"] .rm-place-cell.l,
+.rm-place[data-place="right"] .rm-place-cell.r { opacity: 1; transform: scale(1); }
+.rm-place[data-place="none"] .rm-place-grid { border-style: dashed; opacity: 0.6; }
+.rm-panel-place { width: 22px; height: 22px; border-radius: 6px; }
+.layout-edit .rm-panel-place { display: inline-grid; }
+.rm-editbar-ctl { align-items: center; gap: 6px; }
+.rm-editbar-ctl-label { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-3); }
+.rm-add-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; }
+.rm-add-row .rm-add-where { text-transform: lowercase; }
