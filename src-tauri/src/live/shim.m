@@ -121,6 +121,17 @@ int producer_preview_prepare_window(void *ns_window) {
     return ok;
 }
 
+// Studio output: the CGWindowID of OUR window, for a ScreenCaptureKit window
+// capture of Producer itself. `windowNumber` IS the CGWindowID on macOS.
+uint32_t producer_window_id(void *ns_window) {
+    __block uint32_t wid = 0;
+    run_on_main(^{
+        NSWindow *win = (__bridge NSWindow *)ns_window;
+        if (win && win.windowNumber > 0) wid = (uint32_t)win.windowNumber;
+    });
+    return wid;
+}
+
 // Returns a retained NSView* (as void*) added BELOW the webview; writes the
 // backing pixel size (for obs_display) into out_px_w/out_px_h.
 void *producer_preview_attach(void *ns_window, double x, double y, double w, double h,

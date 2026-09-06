@@ -130,6 +130,10 @@ export interface RoomConfig {
   /** Chat channels the ROOM reads — public handles, set by the host and
    * published to every seat over the monitor leg (lib/monitorFeed.ts). */
   chat_channels?: { twitch?: string; kick?: string; youtube?: string };
+  /** Studio output (v0.4.37): the PROGRAM is a capture of Producer's own
+   * window — the whole studio goes out. The stage and the return feed keep
+   * showing the room scene (lib/studioOutput.ts). Persisted per room. */
+  studio_output?: boolean;
 }
 
 export interface RoomVideo {
@@ -223,6 +227,7 @@ export function parseConfig(raw: string | null | undefined): RoomConfig {
       ),
     ) as RoomConfig["chat_channels"];
   }
+  if (typeof v.studio_output === "boolean") base.studio_output = v.studio_output;
   return base;
 }
 

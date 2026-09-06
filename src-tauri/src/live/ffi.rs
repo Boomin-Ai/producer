@@ -69,6 +69,7 @@ pub enum obs_service_t {}
 pub enum obs_output_t {}
 pub enum video_t {}
 pub enum audio_t {}
+pub enum obs_view_t {}
 pub enum signal_handler_t {}
 pub enum calldata_t {}
 
@@ -443,6 +444,10 @@ extern "C" {
     pub fn producer_screen_capture_preflight() -> c_int;
     pub fn producer_screen_capture_request();
     pub fn producer_copy_text(utf8: *const c_char) -> c_int;
+    /// The window-server id of OUR window (CGWindowID on macOS) for the studio
+    /// output's self-capture. Windows returns 0: win-capture finds windows by
+    /// `title:class:exe`, so the engine builds that string from the title.
+    pub fn producer_window_id(ns_window: *mut c_void) -> u32;
     pub fn producer_default_camera_id(buf: *mut c_char, buflen: c_int) -> c_int;
     pub fn producer_list_windows(buf: *mut c_char, buflen: c_int) -> c_int;
     pub fn producer_drag_chip_show();
@@ -515,6 +520,19 @@ extern "C" {
 extern "C" {
     pub fn obs_get_video() -> *mut video_t;
     pub fn obs_get_audio() -> *mut audio_t;
+    // Studio output (v0.4.37): an auxiliary view whose mix is the ROOM scene
+    // alone, so the virtual camera (guests' return feed, mod monitors) keeps
+    // seeing the room while the main mix carries the studio window capture.
+    pub fn obs_view_create() -> *mut obs_view_t;
+    pub fn obs_view_destroy(view: *mut obs_view_t);
+    pub fn obs_view_set_source(view: *mut obs_view_t, channel: u32, source: *mut obs_source_t);
+    pub fn obs_view_add(view: *mut obs_view_t) -> *mut video_t;
+    pub fn obs_view_remove(view: *mut obs_view_t);
+    pub fn obs_output_set_media(
+        output: *mut obs_output_t,
+        video: *mut video_t,
+        audio: *mut audio_t,
+    );
 
     pub fn obs_video_encoder_create(
         id: *const c_char,

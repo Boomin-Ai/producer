@@ -16,6 +16,7 @@ use serde::Serialize;
 
 use super::ffi;
 use super::record;
+use super::studio;
 
 /// Registration IDs the product requires, per LIVE-REVIEW.md §2.1 / M-L1.
 ///
@@ -717,6 +718,13 @@ pub enum Command {
         on: bool,
         reply: std::sync::mpsc::Sender<Result<bool, String>>,
     },
+    /// Studio output (studio.rs): Some = broadcast our own window as the
+    /// program, None = back to the room scene. Replies with the resulting
+    /// state.
+    SetStudio {
+        spec: Option<studio::StudioSpec>,
+        reply: std::sync::mpsc::Sender<Result<bool, String>>,
+    },
     /// Point a live source at a different device, keeping its transform.
     SetDevice {
         id: String,
@@ -771,6 +779,7 @@ fn cmd_name(c: &Command) -> &'static str {
         Command::PrepareStinger { .. } => "PrepareStinger",
         Command::StopStinger { .. } => "StopStinger",
         Command::SetVirtualCam { .. } => "SetVirtualCam",
+        Command::SetStudio { .. } => "SetStudio",
         Command::SetDevice { .. } => "SetDevice",
         Command::AddExtra { .. } => "AddExtra",
         Command::RemoveExtra { .. } => "RemoveExtra",
@@ -1035,6 +1044,15 @@ impl LiveHandle {
         let (tx, rx) = std::sync::mpsc::channel();
         self.cmd
             .send(Command::SetVirtualCam { on, reply: tx })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(std::time::Duration::from_secs(10))
+            .map_err(|_| "the engine did not answer in time".to_string())?
+    }
+
+    pub fn set_studio(&self, spec: Option<studio::StudioSpec>) -> Result<bool, String> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.cmd
+            .send(Command::SetStudio { spec, reply: tx })
             .map_err(|e| e.to_string())?;
         rx.recv_timeout(std::time::Duration::from_secs(10))
             .map_err(|_| "the engine did not answer in time".to_string())?
@@ -1379,7 +1397,18 @@ extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, cx: u32, cy: u32) 
         ffi::gs_viewport_push();
         ffi::gs_projection_push();
         ffi::gs_ortho(0.0, bw, 0.0, bh, -100.0, 100.0);
-        ffi::obs_render_main_texture();
+        if studio::STUDIO_ON.load(std::sync::atomic::Ordering::Relaxed) {
+            // Studio output: the main texture is a capture of THIS window.
+            // Drawing it here would be the infinite mirror; the stage shows
+            // the ROOM scene (channel 0) instead — studio.rs.
+            let room = ffi::obs_get_output_source(0);
+            if !room.is_null() {
+                ffi::obs_source_video_render(room);
+                ffi::obs_source_release(room);
+            }
+        } else {
+            ffi::obs_render_main_texture();
+        }
         // Windows float mode: the selection outline lives HERE, in the display
         // pass after the mix --- never in the mix itself, which feeds the
         // encoder, the recording, the virtual camera and the guests.
@@ -1744,13 +1773,30 @@ pub fn start(
                         let k_url = CString::new("url").unwrap();
                         let v_url = CString::new("about:blank").unwrap();
                         ffi::obs_data_set_string(settings, k_url.as_ptr(), v_url.as_ptr());
-                        ffi::obs_data_set_int(settings, CString::new("width").unwrap().as_ptr(), 16);
-                        ffi::obs_data_set_int(settings, CString::new("height").unwrap().as_ptr(), 16);
+                        ffi::obs_data_set_int(
+                            settings,
+                            CString::new("width").unwrap().as_ptr(),
+                            16,
+                        );
+                        ffi::obs_data_set_int(
+                            settings,
+                            CString::new("height").unwrap().as_ptr(),
+                            16,
+                        );
                         let id = CString::new("browser_source").unwrap();
                         let name = CString::new("cef-warm").unwrap();
-                        let src = ffi::obs_source_create(id.as_ptr(), name.as_ptr(), settings, ptr::null_mut());
+                        let src = ffi::obs_source_create(
+                            id.as_ptr(),
+                            name.as_ptr(),
+                            settings,
+                            ptr::null_mut(),
+                        );
                         ffi::obs_data_release(settings);
-                        eprintln!("[live] cef warm-up: {} ms (src null: {})", t0.elapsed().as_millis(), src.is_null());
+                        eprintln!(
+                            "[live] cef warm-up: {} ms (src null: {})",
+                            t0.elapsed().as_millis(),
+                            src.is_null()
+                        );
                         // Kept alive on purpose (released with the process).
                         CEF_WARM.store(src as usize, std::sync::atomic::Ordering::Relaxed);
                     })
@@ -1780,6 +1826,52 @@ pub fn start(
             // The virtual camera runs independently of streaming and
             // recording — all three can be on at once.
             let mut vcam: Option<*mut ffi::obs_output_t> = None;
+            // Studio output (studio.rs) — the studio scene over the room and
+            // the room-only mix the virtual camera uses while it is on.
+            let mut studio_out: Option<studio::Studio> = None;
+            /// Create + start the virtual camera output. While studio is on
+            /// the vcam is the guests' and mods' RETURN FEED, so it gets the
+            /// room-only mix — never the main mix, which is the UI.
+            unsafe fn start_vcam(
+                studio_out: Option<&studio::Studio>,
+            ) -> Result<*mut ffi::obs_output_t, String> {
+                let id = CString::new("virtualcam_output").unwrap();
+                let name = CString::new(graph::VCAM_DEVICE_NAME).unwrap();
+                let out = ffi::obs_output_create(
+                    id.as_ptr(),
+                    name.as_ptr(),
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                );
+                if out.is_null() {
+                    return Err("this engine has no virtual camera output".into());
+                }
+                if let Some(st) = studio_out {
+                    ffi::obs_output_set_media(out, st.room_video(), ffi::obs_get_audio());
+                }
+                if !ffi::obs_output_start(out) {
+                    let e = ffi::obs_output_get_last_error(out);
+                    // Upstream's text is OBS-branded; it reaches the user as
+                    // a command error, which never passes through the sink.
+                    let msg = if e.is_null() {
+                        #[cfg(target_os = "macos")]
+                        {
+                            "the virtual camera refused to start — is the extension approved?"
+                                .to_string()
+                        }
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            "the virtual camera refused to start — install the camera first"
+                                .to_string()
+                        }
+                    } else {
+                        user_facing(&CStr::from_ptr(e).to_string_lossy())
+                    };
+                    ffi::obs_output_release(out);
+                    return Err(msg);
+                }
+                Ok(out)
+            }
             let mut scene = if report.ok {
                 match graph::SceneGraph::create() {
                     Ok(s) => Some(s),
@@ -1833,8 +1925,20 @@ pub fn start(
                     if ms > 150 {
                         if let Some(dir) = module_config_dir.parent() {
                             use std::io::Write;
-                            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("slow-cmds.log")) {
-                                let _ = f.write_all(format!("{} {} {}ms\n", probe_t0.elapsed().as_millis(), label, ms).as_bytes());
+                            if let Ok(mut f) = std::fs::OpenOptions::new()
+                                .create(true)
+                                .append(true)
+                                .open(dir.join("slow-cmds.log"))
+                            {
+                                let _ = f.write_all(
+                                    format!(
+                                        "{} {} {}ms\n",
+                                        probe_t0.elapsed().as_millis(),
+                                        label,
+                                        ms
+                                    )
+                                    .as_bytes(),
+                                );
                             }
                         }
                     }
@@ -1857,7 +1961,12 @@ pub fn start(
                         // takes the capture plugin's lock, and hammering it while
                         // the camera starts serialized the loop behind it
                         // (sub-second 'idle' iterations after the fix).
-                        let probe = if probe_last.elapsed() > Duration::from_millis(500) { probe_last = Instant::now(); g.frame_probe() } else { Vec::new() };
+                        let probe = if probe_last.elapsed() > Duration::from_millis(500) {
+                            probe_last = Instant::now();
+                            g.frame_probe()
+                        } else {
+                            Vec::new()
+                        };
                         if probe.iter().any(|(_, w, _, _)| *w == 0) {
                             if let Some(dir) = module_config_dir.parent() {
                                 let total = unsafe { ffi::obs_get_total_frames() };
@@ -1867,7 +1976,9 @@ pub fn start(
                                     total,
                                     probe
                                         .iter()
-                                        .map(|(id, w, a, sh)| format!("{id}:w={w},active={a},showing={sh}"))
+                                        .map(|(id, w, a, sh)| format!(
+                                            "{id}:w={w},active={a},showing={sh}"
+                                        ))
                                         .collect::<Vec<_>>()
                                         .join(" ")
                                 );
@@ -2043,7 +2154,9 @@ pub fn start(
                                 .ok_or_else(|| format!("{source} is not on the stage"))?;
                             match &op {
                                 FilterOp::List => {}
-                                FilterOp::Add { kind, name } => super::filters::add(src, kind, name)?,
+                                FilterOp::Add { kind, name } => {
+                                    super::filters::add(src, kind, name)?
+                                }
                                 FilterOp::Remove { name } => super::filters::remove(src, name)?,
                                 FilterOp::Enable { name, on } => {
                                     super::filters::set_enabled(src, name, *on)?
@@ -2075,35 +2188,50 @@ pub fn start(
                                 if vcam.is_some() {
                                     return Ok(true);
                                 }
-                                let id = CString::new("virtualcam_output").unwrap();
-                                let name = CString::new(graph::VCAM_DEVICE_NAME).unwrap();
-                                let out = ffi::obs_output_create(
-                                    id.as_ptr(),
-                                    name.as_ptr(),
-                                    ptr::null_mut(),
-                                    ptr::null_mut(),
-                                );
-                                if out.is_null() {
-                                    return Err("this engine has no virtual camera output".into());
-                                }
-                                if !ffi::obs_output_start(out) {
-                                    let e = ffi::obs_output_get_last_error(out);
-                                    // Upstream's text is OBS-branded; it reaches
-                                    // the user as a command error, which never
-                                    // passes through the event sink.
-                                    let msg = if e.is_null() {
-                                        #[cfg(target_os = "macos")]
-                                        { "the virtual camera refused to start — is the extension approved?".to_string() }
-                                        #[cfg(not(target_os = "macos"))]
-                                        { "the virtual camera refused to start — install the camera first".to_string() }
-                                    } else {
-                                        user_facing(&CStr::from_ptr(e).to_string_lossy())
-                                    };
-                                    ffi::obs_output_release(out);
-                                    return Err(msg);
-                                }
-                                vcam = Some(out);
+                                vcam = Some(start_vcam(studio_out.as_ref())?);
                                 Ok(true)
+                            }
+                        })();
+                        if let Err(e) = &r {
+                            sink(&LiveEvent::EngineError { message: e.clone() });
+                        }
+                        let _ = reply.send(r);
+                    }
+                    Ok(Command::SetStudio { spec, reply }) => {
+                        let r = (|| -> Result<bool, String> {
+                            unsafe {
+                                let same = match (&studio_out, &spec) {
+                                    (Some(st), Some(sp)) => {
+                                        st.spec.window_id == sp.window_id
+                                            && st.spec.title == sp.title
+                                    }
+                                    (None, None) => true,
+                                    _ => false,
+                                };
+                                if same {
+                                    return Ok(studio_out.is_some());
+                                }
+                                if let Some(mut st) = studio_out.take() {
+                                    st.teardown();
+                                }
+                                if let Some(sp) = spec {
+                                    let room = ffi::obs_get_output_source(0);
+                                    if room.is_null() {
+                                        return Err("the room scene is not on the program".into());
+                                    }
+                                    let built = studio::Studio::build(sp, room);
+                                    ffi::obs_source_release(room);
+                                    studio_out = Some(built?);
+                                }
+                                // The virtual camera's media is fixed at start:
+                                // a running vcam is restarted on the mix the
+                                // new mode wants (room-only while studio is on).
+                                if let Some(o) = vcam.take() {
+                                    ffi::obs_output_stop(o);
+                                    ffi::obs_output_release(o);
+                                    vcam = Some(start_vcam(studio_out.as_ref())?);
+                                }
+                                Ok(studio_out.is_some())
                             }
                         })();
                         if let Err(e) = &r {
@@ -2180,11 +2308,14 @@ pub fn start(
                             });
                         } else if !video_mode_ok(height, fps) {
                             sink(&LiveEvent::EngineError {
-                                message: "video settings must be 720p/1080p/2160p at 30/60fps".into(),
+                                message: "video settings must be 720p/1080p/2160p at 30/60fps"
+                                    .into(),
                             });
                         } else if height == 2160 && !report.hardware_encoder {
                             sink(&LiveEvent::EngineError {
-                                message: "4K needs a hardware encoder (VideoToolbox, NVENC, QSV, or AMF)".into(),
+                                message:
+                                    "4K needs a hardware encoder (VideoToolbox, NVENC, QSV, or AMF)"
+                                        .into(),
                             });
                         } else if height == 2160 && fps == 60 && !four_k_60_ok() {
                             sink(&LiveEvent::EngineError {
@@ -2192,10 +2323,31 @@ pub fn start(
                             });
                         } else {
                             let module = graphics_module(report.graphics_backend.as_deref());
+                            // The studio owns a video mix and canvas-sized
+                            // items: take it down before the reset, rebuild
+                            // after (studio.rs).
+                            let studio_spec = studio_out.take().map(|mut st| {
+                                unsafe { st.teardown() };
+                                st.spec
+                            });
                             match reset_video(module, height, fps) {
                                 Ok(()) => {
                                     if let Some(g) = scene.as_mut() {
                                         g.relayout();
+                                    }
+                                    if let Some(sp) = studio_spec {
+                                        unsafe {
+                                            let room = ffi::obs_get_output_source(0);
+                                            if !room.is_null() {
+                                                match studio::Studio::build(sp, room) {
+                                                    Ok(st) => studio_out = Some(st),
+                                                    Err(e) => sink(&LiveEvent::EngineError {
+                                                        message: format!("studio: {e}"),
+                                                    }),
+                                                }
+                                                ffi::obs_source_release(room);
+                                            }
+                                        }
                                     }
                                     {
                                         let mut sn = snap.lock().unwrap();
@@ -2244,7 +2396,16 @@ pub fn start(
                     Ok(Command::SetPreviewHidden(hidden)) => {
                         if let Some(p) = preview.as_ref() {
                             unsafe {
-                                { let v = p.view as usize; let h = if hidden { 1 } else { 0 }; on_window_thread(move || ffi::producer_preview_set_hidden(v as *mut std::os::raw::c_void, h)) }
+                                {
+                                    let v = p.view as usize;
+                                    let h = if hidden { 1 } else { 0 };
+                                    on_window_thread(move || {
+                                        ffi::producer_preview_set_hidden(
+                                            v as *mut std::os::raw::c_void,
+                                            h,
+                                        )
+                                    })
+                                }
                             };
                         }
                     }
@@ -2274,6 +2435,9 @@ pub fn start(
                         }
                     }
                     Ok(Command::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        if let Some(mut st) = studio_out.take() {
+                            unsafe { st.teardown() };
+                        }
                         if let Some(p) = preview.take() {
                             p.detach();
                         }
@@ -2315,7 +2479,6 @@ pub fn start(
                             .unwrap_or_default(),
                     });
                 }
-
 
                 if let Some(s) = session.as_mut() {
                     let done = s.pump();

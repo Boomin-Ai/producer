@@ -133,6 +133,8 @@ import { DEFAULT_MOD_BOARD, MOD_BOARD_PREF, normalizeModBoard, seatFeeds, throwU
 import { prefGet } from "../lib/prefs";
 import { team } from "../lib/access";
 import type { Member } from "../lib/accessDiff";
+import { canSeat, memberLabel, seatCandidates } from "../lib/seatPick";
+import { studioToggleTarget } from "../lib/studioOutput";
 import {
   EMPTY_MOD_STAGE,
   hostStagePlan,
@@ -981,8 +983,8 @@ export function GuestPanel({
  * alone to give) and, once the seat holds media, ON SET toggles for the
  * camera and the screen: they place / remove the seat's MOD SOURCE (its own
  * kind, its own placement — never a guest slot; v0.4.32), with a readout of
- * what the set shows. "Seat someone" = a room role for a team member
- * through the same door the Access tab uses. */
+ * what the set shows. Seating someone lives in the panel HEAD's "+" sheet
+ * (SeatSheet, v0.4.37) — the body lists only who is seated. */
 function ModsPanel({
   seats,
   items,
@@ -992,7 +994,6 @@ function ModsPanel({
   grants,
   onToggleGrant,
   onPlace,
-  onSeat,
   error,
 }: {
   seats: RoomGuest[];
@@ -1003,18 +1004,12 @@ function ModsPanel({
   grants: RoomGrantRowLike[] | null;
   onToggleGrant: (seat: RoomGuest, grant: "media.camera" | "media.mic" | "media.screen", enabled: boolean) => void;
   onPlace: (seat: RoomGuest, track: ModFeedTrack, on: boolean) => void;
-  onSeat: (memberId: string, role: "admin" | "editor" | "viewer") => void;
   error: string | null;
 }) {
-  const [pick, setPick] = useState("");
-  const [role, setRole] = useState<"admin" | "editor" | "viewer">("editor");
-  const seated = new Set(seats.map((g) => seatUserId(g)).filter((x): x is string => !!x));
-  const candidates = (members ?? []).filter((m) => !seated.has(m.user_id) && !(m.type === "team" && (m.role === "owner" || m.role === "admin" || m.role === "editor")));
   return (
     <div className="rm-mods">
       <section className="rm-mods-sec rm-mods-seated" aria-label="Seated">
-        <div className="rm-mods-sec-label">Seated{seats.length > 0 && <em>{seats.length}</em>}</div>
-        {seats.length === 0 && <div className="rm-rows-empty">No one is seated. A manager or mod who opens this room takes a seat here.</div>}
+        {seats.length === 0 && <div className="rm-rows-empty">No one is seated.</div>}
         {seats.map((g) => {
         const grants_ = resolveGrants(g);
         const ids = modSourceIdsFor(g.id);
@@ -1059,9 +1054,11 @@ function ModsPanel({
             <div className="rm-mod-id">
               <span className="rm-mod-avatar" aria-hidden>{initial}</span>
               <span className="rm-mod-name">{name}</span>
-              <span className="rm-mod-role" title="Role in this room, from the room's grants">{roleLabel}</span>
               {(onSet || scrOn) && <span className="rm-mod-onset">ON SET</span>}
             </div>
+            {/* The role pill is its own grid column (v0.4.37): it can never
+              * share a cell with the media glyphs. */}
+            <span className="rm-mod-role" title="Role in this room, from the room's grants">{roleLabel}</span>
             <div className="rm-mod-media" role="group" aria-label={`${name}: media`}>
               {tg("media.camera", ic.cam, "camera")}
               {tg("media.mic", ic.mic, "mic")}
@@ -1103,38 +1100,96 @@ function ModsPanel({
         );
       })}
       </section>
-      {canManage && (
-        <section className="rm-mods-sec rm-mods-seatform" aria-label="Seat someone">
-          <div className="rm-mods-sec-label">Seat someone</div>
-          <div className="rm-mod-seat">
-          <Select
-            size="sm"
-            value={pick}
-            onChange={setPick}
-            placeholder="Seat someone…"
-            title="Seat a team member"
-            options={[{ value: "", label: "Seat someone…" }, ...candidates.map((m) => ({ value: m.id, label: m.name || m.email }))]}
-          />
-          <Select
-            size="sm"
-            value={role}
-            onChange={(v) => setRole(v as "editor")}
-            title="Their role in this room"
-            options={[
-              { value: "editor", label: "Mod" },
-              { value: "viewer", label: "Viewer" },
-              { value: "admin", label: "Manager" },
-            ]}
-          />
-          <button className="rm-guest-admit" disabled={!pick} onClick={() => { if (pick) { onSeat(pick, role); setPick(""); } }}>
-            Seat
-          </button>
-          </div>
-        </section>
-      )}
       {!canManage && seats.length > 0 && <div className="rm-mod-note">Seating someone is a manager's act — the Access tab.</div>}
       {error && <div className="rm-chatsetup-err">{error}</div>}
     </div>
+  );
+}
+
+/** The Mods panel head's "+" sheet: pick a brand member (the Access tab's
+ * `team` API — already-seated people and team-type hosts excluded), a room
+ * role, Seat. Loading and failure are said in the sheet, never swallowed;
+ * Seat stays disabled until a real member is chosen (lib/seatPick.ts). */
+function SeatSheet({
+  anchor,
+  members,
+  loading,
+  loadError,
+  seatedUserIds,
+  onRetry,
+  onSeat,
+  onClose,
+}: {
+  anchor: HTMLElement | null;
+  members: Member[] | null;
+  loading: boolean;
+  loadError: string | null;
+  seatedUserIds: string[];
+  onRetry: () => void;
+  onSeat: (memberId: string, role: "admin" | "editor" | "viewer") => Promise<boolean>;
+  onClose: () => void;
+}) {
+  const [pick, setPick] = useState("");
+  const [role, setRole] = useState<"admin" | "editor" | "viewer">("editor");
+  const [busy, setBusy] = useState(false);
+  const candidates = seatCandidates(members, seatedUserIds);
+  const ready = canSeat(pick, candidates) && !busy;
+  return (
+    <Pop anchor={anchor} align="right" className="rm-pop-seat">
+      <div className="rm-pop-title">SEAT SOMEONE</div>
+      <div className="rm-seat-sheet">
+        <Select
+          size="sm"
+          value={pick}
+          onChange={setPick}
+          placeholder={loading ? "Loading members…" : candidates.length === 0 ? "No one to seat" : "Pick a member…"}
+          disabled={loading || candidates.length === 0}
+          title="A member of this brand (Settings → Access)"
+          aria-label="Member"
+          options={candidates.map((m) => ({ value: m.id, label: memberLabel(m) }))}
+        />
+        <Select
+          size="sm"
+          value={role}
+          onChange={(v) => setRole(v as "editor")}
+          title="Their role in this room"
+          aria-label="Role"
+          options={[
+            { value: "editor", label: "Mod" },
+            { value: "viewer", label: "Viewer" },
+            { value: "admin", label: "Manager" },
+          ]}
+        />
+        <button
+          className="rm-guest-admit rm-seat-go"
+          disabled={!ready}
+          title={ready ? "Give them this seat" : "Pick a member first"}
+          onClick={async () => {
+            if (!ready) return;
+            setBusy(true);
+            const ok = await onSeat(pick, role);
+            setBusy(false);
+            if (ok) {
+              setPick("");
+              onClose();
+            }
+          }}
+        >
+          {busy ? "Seating…" : "Seat"}
+        </button>
+      </div>
+      {loadError && (
+        <div className="rm-seat-err" role="alert">
+          {loadError}{" "}
+          <button type="button" className="rm-seat-retry" onClick={onRetry}>
+            Retry
+          </button>
+        </div>
+      )}
+      {!loadError && !loading && members !== null && candidates.length === 0 && (
+        <div className="rm-seat-note">Everyone on the team is either a host or already seated. Add people in Settings → Access.</div>
+      )}
+    </Pop>
   );
 }
 
@@ -2500,10 +2555,14 @@ function ProgramMonitorStage({ seat, pending, boomin }: { seat: ProgramMonitor |
 export function LiveView({
   room,
   onLeave,
+  onOpenIntegrations,
   seat,
 }: {
   room?: RoomInfo;
   onLeave?: () => void;
+  /** "Connect a channel first" → leave the room (the collapse path) and open
+   * Settings → Integrations. Absent = the empty state is a plain line. */
+  onOpenIntegrations?: () => void;
   /** GUEST MODE: this Producer holds a seat in someone else's room. The
    * stage is the guest's own scene (their camera); the green-room strip
    * above it is the seat. Leaving the view leaves the seat. */
@@ -2975,6 +3034,7 @@ export function LiveView({
     void removeExtraSource(id);
   };
   const videoApplied = useRef(false);
+  const studioApplied = useRef(false);
   const channelsApplied = useRef(false);
   const demoVideoSet = useRef(false);
   const demo = demoOn();
@@ -3033,6 +3093,33 @@ export function LiveView({
   const [vcamState, setVcamState] = useState<VcamStatus | null>(null);
   const guestSeat = useGuestSeat(seat, vcamState?.device_name);
   const [vcamOn, setVcamOn] = useState(false);
+  /** Studio output (lib/studioOutput.ts): the room doc holds the wish, the
+   * engine holds the truth; `studioOn` is what the engine last confirmed. */
+  const [studioOn, setStudioOn] = useState(false);
+  const [studioBusy, setStudioBusy] = useState(false);
+  const applyStudio = async (on: boolean): Promise<boolean> => {
+    setStudioBusy(true);
+    try {
+      const got = await ipc.liveSetStudio(on);
+      setStudioOn(got);
+      return got;
+    } catch (e) {
+      notifyError(e, { key: "banner" });
+      return studioOn;
+    } finally {
+      setStudioBusy(false);
+    }
+  };
+  const toggleStudio = async () => {
+    const t = studioToggleTarget(studioOn, !!engineOk);
+    if ("blocked" in t) {
+      notify(t.blocked, { key: "banner", tone: "warning" });
+      return;
+    }
+    const got = await applyStudio(t.on);
+    if (got !== !!cfgRef.current.studio_output) writeCfg({ ...cfgRef.current, studio_output: got });
+    if (got) notify("Studio on — the whole window is the program. Guests and the stage keep seeing the room.", { key: "banner", tone: "info", ttl: 6000 });
+  };
   const vcamOnRef = useRef(false);
   vcamOnRef.current = vcamOn;
   const vcamStateRef = useRef<VcamStatus | null>(null);
@@ -3620,37 +3707,60 @@ export function LiveView({
   /** HOST / MANAGER: seat a team member — a room role through the Access
    * tab's own door (`POST …/access/grants`). They take the seat when they
    * open this room. */
-  const seatMember = async (memberId: string, grant: "admin" | "editor" | "viewer") => {
+  const seatMember = async (memberId: string, grant: "admin" | "editor" | "viewer"): Promise<boolean> => {
     const ep = endpointRef.current;
     const sid = cfg.server_room_id;
-    if (!ep || !sid) return;
+    if (!ep || !sid) {
+      notify("This room isn't registered with Boomin yet — open it once online, then seat people.", { key: "mods", tone: "warning" });
+      return false;
+    }
     try {
       await team.setRoomRole(ep, sid, memberId, grant);
       dismissKey("mods");
       notify("Seated — they take the seat when they open this room in Producer.", { key: "banner", tone: "success", check: true });
+      return true;
     } catch (e) {
       notifyError(e, { key: "mods" });
+      return false;
     }
   };
-  /** The team, for the Mods panel's names / roles / "seat someone". Read
-   * once per room open, only on Boomin and only for a seat that manages. */
+  /** The team, for the Mods panel's names / roles and the "+" seating sheet
+   * (the Access tab's `team` API). Read once per room open, only on Boomin
+   * and only for a seat that manages; the sheet can ask again (Retry). */
   const membersAsked = useRef(false);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersError, setMembersError] = useState<string | null>(null);
+  const loadMembers = async () => {
+    const ep = endpointRef.current;
+    if (!ep) {
+      setMembersError("Not connected to a workspace.");
+      return;
+    }
+    membersAsked.current = true;
+    setMembersLoading(true);
+    setMembersError(null);
+    try {
+      const bid = await team.brandId(ep);
+      if (!bid) throw new Error("This workspace has no brand — members live on a brand.");
+      setMembers(await team.members(ep, bid));
+    } catch (e) {
+      membersAsked.current = false;
+      setMembersError(`Couldn't load the team: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setMembersLoading(false);
+    }
+  };
+  const loadMembersRef = useRef(loadMembers);
+  loadMembersRef.current = loadMembers;
   useEffect(() => {
     if (!boominRoom || accessPending || !(roomRole === "host" || roomAccess.can.manage) || membersAsked.current) return;
     if (seatRows.length === 0 && dockOf(layout, "mods") === "hidden") return;
-    const ep = endpointRef.current;
-    if (!ep) return;
-    membersAsked.current = true;
-    void (async () => {
-      try {
-        const bid = await team.brandId(ep);
-        if (!bid) return;
-        setMembers(await team.members(ep, bid));
-      } catch {
-        membersAsked.current = false;
-      }
-    })();
+    if (!endpointRef.current) return;
+    void loadMembersRef.current();
   }, [boominRoom, accessPending, roomRole, roomAccess.can.manage, seatRows.length, layout]);
+  /** The Mods head's "+" sheet. */
+  const [seatOpen, setSeatOpen] = useState(false);
+  const [seatAnchor, setSeatAnchor] = useState<HTMLElement | null>(null);
 
   /** Mint (or reuse) the room's shareable link. */
   const ensureGuestLink = async () => {
@@ -4156,6 +4266,13 @@ export function LiveView({
       } catch {
         /* bad stored value — engine default stands */
       }
+    }
+    // Studio output from the room document → the engine, once (v0.4.37).
+    if (!studioApplied.current && snap.engine_ready && snap.session_state === "idle" && room) {
+      studioApplied.current = true;
+      // Always stated, both ways: the engine outlives rooms, and a room
+      // without the wish must not inherit the last room's studio.
+      void applyStudio(!!parseConfig(room.config).studio_output);
     }
     // Channel selection from the room document → engine flags.
     if (!channelsApplied.current && room && roomApplied.current) {
@@ -5836,6 +5953,7 @@ export function LiveView({
 
   const closePops = () => {
     setDestsOpen(false);
+    setSeatOpen(false);
     setQualityOpen(false);
     setPanelMenu(null);
     setLayoutMenu(false);
@@ -5851,7 +5969,7 @@ export function LiveView({
     if (formDockOf("vote") === "top") setVoteEdit(false);
   };
   const anyPop =
-    destsOpen || (voteEdit && formDockOf("vote") === "top") || qualityOpen || micPopOpen || chatOpen || linkMenuOpen || srcAddOpen || deviceMenu !== null || srcSubPop !== null ||
+    destsOpen || seatOpen || (voteEdit && formDockOf("vote") === "top") || qualityOpen || micPopOpen || chatOpen || linkMenuOpen || srcAddOpen || deviceMenu !== null || srcSubPop !== null ||
     // Scene settings are a POPOVER only on a side rail; in the bottom sheet
     // and the top rail they are a strip in the flow — a popover backdrop
     // there would sit over the strip and eat every click.
@@ -6453,7 +6571,6 @@ export function LiveView({
             grants={roomGrants}
             onToggleGrant={(g, grant, on) => void toggleSeatGrant(g, grant, on)}
             onPlace={(g, track, on) => (on ? void placeModFeed(g.id, track, "mods panel") : removeModFeed(g.id, track, "mods panel"))}
-            onSeat={(m, r) => void seatMember(m, r)}
             error={null}
           />
         );
@@ -6768,6 +6885,38 @@ export function LiveView({
           >
             {ic.link}
           </button>
+        </>
+      );
+    }
+    if (id === "mods" && boominRoom && (isHost || roomAccess.can.manage)) {
+      return (
+        <>
+          <button
+            className={`rm-panel-plus${seatOpen ? " on" : ""}`}
+            title="Seat someone — a team member takes a mod, viewer or manager seat"
+            aria-label="Seat someone"
+            aria-expanded={seatOpen}
+            onClick={(e) => {
+              setSeatAnchor(e.currentTarget);
+              const next = !seatOpen;
+              setSeatOpen(next);
+              if (next && members === null && !membersLoading) void loadMembers();
+            }}
+          >
+            {ic.plus}
+          </button>
+          {seatOpen && (
+            <SeatSheet
+              anchor={seatAnchor}
+              members={members}
+              loading={membersLoading}
+              loadError={membersError}
+              seatedUserIds={seatRows.map((g) => seatUserId(g)).filter((x): x is string => !!x)}
+              onRetry={() => void loadMembers()}
+              onSeat={seatMember}
+              onClose={() => setSeatOpen(false)}
+            />
+          )}
         </>
       );
     }
@@ -7328,7 +7477,22 @@ export function LiveView({
                   </div>
                 );
               })}
-              {destinations.length === 0 && <div className="rm-rows-empty">No channels yet.</div>}
+              {destinations.length === 0 && (
+                <div className="rm-chn-empty">
+                  <div className="rm-rows-empty">Connect a channel first</div>
+                  {onOpenIntegrations && (
+                    <button
+                      className="rm-chn-open"
+                      onClick={() => {
+                        setDestsOpen(false);
+                        onOpenIntegrations();
+                      }}
+                    >
+                      Open Integrations
+                    </button>
+                  )}
+                </div>
+              )}
             </Pop>
           )}
 
@@ -7342,6 +7506,17 @@ export function LiveView({
           >
             {vh}p · {vf}
             {ic.chev}
+          </button>
+
+          <button
+            className={`hd-chip hd-studio${studioOn ? " on" : ""}`}
+            onClick={toggleStudio}
+            disabled={!engineOk || studioBusy}
+            aria-pressed={studioOn}
+            title="Broadcast the studio — the whole Producer window goes out"
+          >
+            {ic.layout}
+            {studioOn ? "Studio on" : "Studio"}
           </button>
 
           <button
@@ -8086,6 +8261,11 @@ export function LiveView({
           </span>
           <span className="rm-foot-q">{quality === "off" ? "idle" : quality}</span>
         </span>
+        {studioOn && (
+          <span className="rm-foot-item rm-foot-studio" title="Studio output: the program is the whole Producer window; the stage and the return feed show the room">
+            Studio
+          </span>
+        )}
         {recPath && (
           <span className="rm-foot-item rec">
             <span className="rm-rec-dot" /> Recording {`${Math.floor(recElapsed / 60)}:${String(recElapsed % 60).padStart(2, "0")}`}

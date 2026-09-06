@@ -341,6 +341,15 @@ void producer_preview_detach(void *view_ptr)
         DestroyWindow(child);
 }
 
+/* Studio output: macOS answers the CGWindowID here. win-capture's window_capture
+ * selects by `title:class:exe`, not by HWND, so the Rust side builds that
+ * string from the Tauri window title and this stays 0 (see WINDOWS-ENGINE.md). */
+uint32_t producer_window_id(void *ns_window)
+{
+    (void)ns_window;
+    return 0;
+}
+
 /* macOS-only: prepares the window for the transparent-hole preview mode. */
 /* FLOAT MODE ONLY, and now known why. The transparent-hole mode was tried:
  * tauri.windows.conf.json transparent + the room's CSS hole + this returning 1

@@ -41,6 +41,10 @@ pub mod encoders;
 mod record;
 #[cfg(have_engine)]
 pub mod stream;
+// Studio output (v0.4.37): the studio scene, the room-only mix, and the
+// pure "who sees which scene" decision.
+#[cfg(have_engine)]
+pub mod studio;
 
 use std::path::{Path, PathBuf};
 
@@ -338,6 +342,20 @@ impl Live {
     }
     #[cfg(not(have_engine))]
     pub fn set_virtual_cam(&self, _on: bool) -> Result<bool, String> {
+        Err("live engine not bundled in this build".into())
+    }
+
+    /// Studio output on/off. `window_id` = our CGWindowID (macOS; 0 on
+    /// Windows), `title` = our window title (what win-capture matches on).
+    #[cfg(have_engine)]
+    pub fn set_studio(&self, on: bool, window_id: u32, title: String) -> Result<bool, String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .set_studio(on.then(|| studio::StudioSpec { window_id, title }))
+    }
+    #[cfg(not(have_engine))]
+    pub fn set_studio(&self, _on: bool, _w: u32, _t: String) -> Result<bool, String> {
         Err("live engine not bundled in this build".into())
     }
 

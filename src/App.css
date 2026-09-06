@@ -10031,13 +10031,37 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .rm-row-rename-field { flex: 1 1 auto; min-width: 0; }
 .rm-row-rename { font-size: 12px; }
 
-/* Mods row in a narrow rail: the name owns the slack, the role pill never
-   overlaps the media glyphs; under 260px the glyphs drop to a second line. */
-.rm-mod-row { grid-template-columns: minmax(0, 1fr) auto; }
+/* Mods row (v0.4.37): identity | role pill | three glyph toggles — three
+   columns, so the pill and the glyphs can never share a cell. The pill is a
+   fixed-width column, the glyph cluster is its own 3-col grid at a 6px gap,
+   the name owns whatever slack is left. */
+.rm-mod-row { grid-template-columns: minmax(0, 1fr) minmax(56px, auto) auto; gap: 6px; column-gap: 8px; }
 .rm-mod-id { overflow: hidden; }
 .rm-mod-name { flex: 1 1 auto; }
-.rm-mod-role, .rm-mod-onset { flex: 0 0 auto; white-space: nowrap; }
+.rm-mod-role { grid-column: 2; justify-self: end; white-space: nowrap; }
+.rm-mod-onset { flex: 0 0 auto; white-space: nowrap; }
+.rm-mod-media { grid-column: 3; display: grid; grid-template-columns: repeat(3, 28px); gap: 6px; }
+.rm-mod-set { grid-column: 1 / -1; }
 @container panel (max-width: 260px) {
-  .rm-mod-row { grid-template-columns: minmax(0, 1fr); }
-  .rm-mod-media { justify-self: start; }
+  .rm-mod-row { grid-template-columns: minmax(0, 1fr) minmax(56px, auto); }
+  .rm-mod-media { grid-column: 1 / -1; justify-self: start; }
 }
+
+/* The Mods head "+" sheet: the account sheet's glass, popover-placed. */
+.rm-pop-seat { width: 300px; background: oklch(0.2 0.038 250 / 0.92); backdrop-filter: blur(18px) saturate(1.2); -webkit-backdrop-filter: blur(18px) saturate(1.2); }
+.rm-seat-sheet { display: flex; flex-direction: column; gap: 6px; padding: 2px 0 0; }
+.rm-seat-sheet .sel { width: 100%; }
+.rm-seat-go { align-self: flex-end; min-width: 72px; }
+.rm-seat-err { color: #f5a3a3; font-size: 12px; line-height: 1.45; padding: 8px 4px 2px; }
+.rm-seat-retry { border: 0; background: none; color: var(--fg-1); font-size: 12px; text-decoration: underline; cursor: pointer; padding: 0; }
+.rm-seat-note { color: var(--fg-3); font-size: 12px; line-height: 1.45; padding: 8px 4px 2px; }
+
+/* Channels popover, nothing connected yet: one line + the way to Integrations. */
+.rm-chn-empty { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; min-width: 220px; }
+.rm-chn-empty .rm-rows-empty { padding-bottom: 0; }
+.rm-chn-open { height: 28px; padding: 0 12px; border-radius: 8px; border: 0; background: var(--mint); color: #06251b; font-size: 12px; font-weight: 650; cursor: pointer; }
+.rm-chn-open:hover { filter: brightness(1.06); }
+
+/* Studio output: the top-bar chip and the footer tag. */
+.hd-chip.hd-studio.on { background: oklch(0.72 0.15 300 / 0.22); border-color: oklch(0.72 0.15 300 / 0.6); color: #efe6ff; }
+.rm-foot-studio { color: #d9c8ff; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; font-size: 10.5px; }

@@ -456,6 +456,13 @@ export function Home({
           key={view.room.id}
           room={view.room}
           onLeave={back}
+          onOpenIntegrations={() => {
+            // The collapse path first (the stream keeps running), then the
+            // rail-side Settings on its Integrations section.
+            back();
+            setSettingsSection("integrations");
+            openSettings();
+          }}
         />
       </>
     );

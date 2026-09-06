@@ -693,6 +693,42 @@ pub async fn live_vcam_output(state: State<'_, AppState>, on: bool) -> EngineRes
     state.live.set_virtual_cam(on).map_err(map)
 }
 
+/// Studio output (live/studio.rs): broadcast the whole Producer window. The
+/// engine needs OUR window's identity — the CGWindowID on macOS, the title on
+/// Windows (win-capture matches `title:class:exe`).
+#[tauri::command]
+pub async fn live_set_studio(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    on: bool,
+) -> EngineResult<bool> {
+    use tauri::Manager;
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| EngineError::Other("main window missing".into()))?;
+    let title = window.title().unwrap_or_else(|_| "Producer".into());
+    #[cfg(all(target_os = "macos", have_engine))]
+    let window_id: u32 = {
+        let ns_window = window
+            .ns_window()
+            .map_err(|e| EngineError::Other(format!("ns_window: {e}")))?;
+        let id =
+            unsafe { crate::live::ffi::producer_window_id(ns_window as *mut std::ffi::c_void) };
+        if on && id == 0 {
+            return Err(EngineError::Other(
+                "could not identify Producer's own window".into(),
+            ));
+        }
+        id
+    };
+    #[cfg(not(all(target_os = "macos", have_engine)))]
+    let window_id: u32 = 0;
+    state
+        .live
+        .set_studio(on, window_id, title)
+        .map_err(EngineError::Other)
+}
+
 #[tauri::command]
 pub async fn live_prepare_stinger(state: State<'_, AppState>, path: String) -> EngineResult<()> {
     state.live.prepare_stinger(path).map_err(EngineError::Other)
