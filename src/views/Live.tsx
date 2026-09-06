@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { installStageCutouts } from "../lib/stageCutouts";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -46,6 +46,8 @@ import {
 } from "../lib/filters";
 import { DEMO_CHAT, DEMO_VIDEO_URL, demoOn, type DemoPlatform } from "../lib/demo";
 import { activeEndpointId, isBoomin, resolveActiveEndpoint } from "../lib/workspace";
+import { dismissKey, notify, notifyError } from "../lib/notices";
+import { NoticeHost } from "../components/Notice";
 import { StageEditor } from "./StageEditor";
 import { Select } from "../components/Select";
 import { fromCanvas, modFeedRect, modFeedZ, modSourceOwner, rememberModFeed, toCanvas, type ModFeedTrack } from "../lib/modFeed";
@@ -1010,8 +1012,10 @@ function ModsPanel({
   const candidates = (members ?? []).filter((m) => !seated.has(m.user_id) && !(m.type === "team" && (m.role === "owner" || m.role === "admin" || m.role === "editor")));
   return (
     <div className="rm-mods">
-      {seats.length === 0 && <div className="rm-rows-empty">No one is seated. A manager or mod who opens this room takes a seat here.</div>}
-      {seats.map((g) => {
+      <section className="rm-mods-sec rm-mods-seated" aria-label="Seated">
+        <div className="rm-mods-sec-label">Seated{seats.length > 0 && <em>{seats.length}</em>}</div>
+        {seats.length === 0 && <div className="rm-rows-empty">No one is seated. A manager or mod who opens this room takes a seat here.</div>}
+        {seats.map((g) => {
         const grants_ = resolveGrants(g);
         const ids = modSourceIdsFor(g.id);
         const cam = items.find((i) => i.id === ids.camera);
@@ -1049,9 +1053,11 @@ function ModsPanel({
                 : cam || scr
                   ? "off set"
                   : "feed connecting…";
+        const initial = (name.trim()[0] ?? "?").toUpperCase();
         return (
           <div key={g.id} className="rm-mod-row">
             <div className="rm-mod-id">
+              <span className="rm-mod-avatar" aria-hidden>{initial}</span>
               <span className="rm-mod-name">{name}</span>
               <span className="rm-mod-role" title="Role in this room, from the room's grants">{roleLabel}</span>
               {(onSet || scrOn) && <span className="rm-mod-onset">ON SET</span>}
@@ -1096,8 +1102,11 @@ function ModsPanel({
           </div>
         );
       })}
+      </section>
       {canManage && (
-        <div className="rm-mod-seat">
+        <section className="rm-mods-sec rm-mods-seatform" aria-label="Seat someone">
+          <div className="rm-mods-sec-label">Seat someone</div>
+          <div className="rm-mod-seat">
           <Select
             size="sm"
             value={pick}
@@ -1120,7 +1129,8 @@ function ModsPanel({
           <button className="rm-guest-admit" disabled={!pick} onClick={() => { if (pick) { onSeat(pick, role); setPick(""); } }}>
             Seat
           </button>
-        </div>
+          </div>
+        </section>
       )}
       {!canManage && seats.length > 0 && <div className="rm-mod-note">Seating someone is a manager's act — the Access tab.</div>}
       {error && <div className="rm-chatsetup-err">{error}</div>}
@@ -2576,8 +2586,7 @@ export function LiveView({
   const [elapsed, setElapsed] = useState(0);
   const [editing, setEditing] = useState<LiveDestination | null>(null);
   const [adding, setAdding] = useState(false);
-  const [banner, setBanner] = useState<string | null>(null);
-  const [sources, setSources] = useState<LiveSources>({});
+  const [rawSources, setSources] = useState<LiveSources>({});
   /** The canvas height the engine reports (720 until it does) — read by the
    * mod-feed placement, which works in canvas fractions (lib/modFeed.ts). */
   const vhRef = useRef(720);
@@ -2727,6 +2736,22 @@ export function LiveView({
   const [popAnchor, setPopAnchor] = useState<HTMLElement | null>(null);
   // The room document: dock layout, scenes, channel selection, scene state.
   const [cfg, setCfgState] = useState<RoomConfig>(() => parseConfig(room?.config));
+  /** Engine truth, wearing the room's names: an extra's `label` in the room
+   * doc (a renamed camera, v0.4.36) wins over the label the engine spawned
+   * with, so rows, mixer strips and the stage editor all say the same thing. */
+  const sources = useMemo<LiveSources>(() => {
+    const extras = cfg.sources.extras ?? [];
+    if (!rawSources.items || extras.length === 0) return rawSources;
+    const byId = new Map(extras.map((e) => [e.id, e.label]));
+    let changed = false;
+    const items = rawSources.items.map((i) => {
+      const l = byId.get(i.id);
+      if (!l || l === i.label) return i;
+      changed = true;
+      return { ...i, label: l };
+    });
+    return changed ? { ...rawSources, items } : rawSources;
+  }, [rawSources, cfg.sources.extras]);
   // Event handlers registered once must not close over a stale document.
   const cfgRef = useRef(cfg);
   cfgRef.current = cfg;
@@ -2918,7 +2943,9 @@ export function LiveView({
             : "rm-split-v"
           : "rm-split-h"
       }${dockCtl && !dockCtl.open ? " closed" : ""}`}
-      title={a ? "Drag to resize" : dockCtl?.open ? "Drag to resize — click to hide" : "Show this dock"}
+      data-tip={a ? "Drag to resize" : dockCtl?.open ? "Drag to resize — click to hide" : "Show this dock"}
+      data-kind={kind}
+      aria-label={a ? "Drag to resize" : dockCtl?.open ? "Drag to resize — click to hide" : "Show this dock"}
       onPointerDown={(e) => beginResize(e, kind, a, b, dockCtl ? dockCtl.open : true)}
       onPointerMove={moveResize}
       onPointerUp={() => endResize(dockCtl?.onToggle)}
@@ -3047,31 +3074,26 @@ export function LiveView({
         if (!st) continue;
         setVcamState(st);
         if (st.state === "failed") {
-          setBanner(st.error ?? "macOS refused the camera extension.");
-          window.setTimeout(() => setBanner(null), 12000);
+          notify(st.error ?? "macOS refused the camera extension.", { key: "banner", tone: "error", ttl: 12000 });
           return;
         }
         if (st.state === "needs_approval") {
-          setBanner("Approve Producer's camera extension in System Settings › General › Login Items & Extensions.");
-          window.setTimeout(() => setBanner(null), 12000);
+          notify("Approve Producer's camera extension in System Settings › General › Login Items & Extensions.", { key: "banner", tone: "warning", ttl: 12000 });
           return;
         }
         if (st.state === "active" || st.installed) {
-          setBanner("Virtual camera installed. Click again to start it.");
-          window.setTimeout(() => setBanner(null), 6000);
+          notify("Virtual camera installed. Click again to start it.", { key: "banner", tone: "success" });
           return;
         }
       }
-      setBanner("Still waiting on macOS for the camera extension.");
-      window.setTimeout(() => setBanner(null), 6000);
+      notify("Still waiting on macOS for the camera extension.", { key: "banner", tone: "warning" });
       return;
     }
     try {
       const on = await vcamIpc.output(!vcamOn);
       setVcamOn(on);
     } catch (e) {
-      setBanner(String(e));
-      window.setTimeout(() => setBanner(null), 5000);
+      notifyError(e, { key: "banner" });
     }
   };
 
@@ -3089,14 +3111,13 @@ export function LiveView({
   const toggleRecord = async () => {
     if (recPath) {
       const done = await recIpc.stop().catch((e) => {
-        setBanner(String(e));
+        notifyError(e, { key: "banner" });
         return null;
       });
       setRecPath(null);
       if (done) {
         setLastRec(done);
-        setBanner(`Saved ${done.split("/").pop()}`);
-        window.setTimeout(() => setBanner(null), 4000);
+        notify(`Saved ${done.split("/").pop()}`, { key: "banner", tone: "success", check: true });
       }
       return;
     }
@@ -3110,8 +3131,7 @@ export function LiveView({
       setRecSince(Date.now());
       setRecTick(0);
     } catch (e) {
-      setBanner(String(e));
-      window.setTimeout(() => setBanner(null), 5000);
+      notifyError(e, { key: "banner" });
     }
   };
 
@@ -3125,7 +3145,6 @@ export function LiveView({
   // the other way round.
   const [roster, setRoster] = useState<RoomGuest[]>([]);
   const [guestLink, setGuestLink] = useState<string | null>(cfg.guest_link ?? null);
-  const [guestErr, setGuestErr] = useState<string | null>(null);
   const rosterRef = useRef<RoomGuest[]>([]);
   rosterRef.current = roster;
   const endpointRef = useRef<string | null>(null);
@@ -3164,7 +3183,6 @@ export function LiveView({
    * what the Mods panel's role label is READ from. Null = not a manager,
    * or not answered yet — the label then falls back to team standing. */
   const [roomGrants, setRoomGrants] = useState<RoomGrantRowLike[] | null>(null);
-  const [modsErr, setModsErr] = useState<string | null>(null);
   /** The board's own layout (lib/modBoard.ts), saved per seat. */
   const [boardLayout, setBoardLayout] = useState<ModBoardLayout>(DEFAULT_MOD_BOARD);
   useEffect(() => {
@@ -3210,7 +3228,7 @@ export function LiveView({
    * keyboard shortcut, a stale popover) cannot edit the host's set. */
   const refuseSetEdit = (): boolean => {
     if (isHostRef.current) return false;
-    setBanner(SET_IS_HOSTS);
+    notify(SET_IS_HOSTS, { key: "banner", tone: "warning" });
     return true;
   };
   /** The room's server is Boomin (a brand-scoped endpoint) rather than an
@@ -3265,7 +3283,7 @@ export function LiveView({
   const showGuestInSlot = async (guestItemId: string): Promise<boolean> => {
     const sl = freeSlot();
     if (!sl) {
-      setBanner("Scene is full — add a Guest slot (Sources → + → Guest slot)");
+      notify("Scene is full — add a Guest slot (Sources → + → Guest slot)", { key: "banner", tone: "warning" });
       return false;
     }
     const b = cfgRef.current.slot_bindings ?? {};
@@ -3393,7 +3411,7 @@ export function LiveView({
       await vcamIpc.output(true).catch(() => {});
     }
     await guestsIpc.admit(endpointRef.current, cfg.server_room_id, id).catch((e) =>
-      setGuestErr(String(e).replace(/^Error:\s*/, "")),
+      notifyError(e, { key: "guests" }),
     );
   };
 
@@ -3403,7 +3421,7 @@ export function LiveView({
       await guestsIpc.revoke(endpointRef.current, id);
       rosterTickRef.current?.();
     } catch (e) {
-      setGuestErr(String(e).replace(/^Error:\s*/, ""));
+      notifyError(e, { key: "guests" });
     }
   };
 
@@ -3484,8 +3502,7 @@ export function LiveView({
       const refusedGuests = refused.filter((id) => !seats.includes(id));
       if (refusedGuests.length) {
         const names = refusedGuests.map((gid) => live.find((x) => x.id === gid)?.display_name || "a guest").join(", ");
-        setBanner(`A mod asked to stage ${names} — no free guest slot. Add one: Sources → + → Guest slot`);
-        window.setTimeout(() => setBanner(null), 8000);
+        notify(`A mod asked to stage ${names} — no free guest slot. Add one: Sources → + → Guest slot`, { key: "banner", tone: "warning", ttl: 8000 });
       }
       // The truth the set is about to show: what stayed, plus what was
       // placed (the engine's visibility echo lands a frame later).
@@ -3559,7 +3576,7 @@ export function LiveView({
       await guestsIpc.order(endpointRef.current, cfg.server_room_id, next);
       rosterTickRef.current?.();
     } catch (e) {
-      setGuestErr(String(e).replace(/^Error:\s*/, ""));
+      notifyError(e, { key: "guests" });
     }
   };
 
@@ -3594,10 +3611,10 @@ export function LiveView({
         const b = (r.body ?? {}) as { code?: string; message?: string };
         throw new Error(b.code === "room_host_required" ? "Only the host gives a seat media." : b.message ?? b.code ?? `HTTP ${r.status}`);
       }
-      setModsErr(null);
+      dismissKey("mods");
       rosterTickRef.current?.();
     } catch (e) {
-      setModsErr(String(e).replace(/^Error:\s*/, ""));
+      notifyError(e, { key: "mods" });
     }
   };
   /** HOST / MANAGER: seat a team member — a room role through the Access
@@ -3609,11 +3626,10 @@ export function LiveView({
     if (!ep || !sid) return;
     try {
       await team.setRoomRole(ep, sid, memberId, grant);
-      setModsErr(null);
-      setBanner("Seated — they take the seat when they open this room in Producer.");
-      window.setTimeout(() => setBanner(null), 5000);
+      dismissKey("mods");
+      notify("Seated — they take the seat when they open this room in Producer.", { key: "banner", tone: "success", check: true });
     } catch (e) {
-      setModsErr(String(e).replace(/^Error:\s*/, ""));
+      notifyError(e, { key: "mods" });
     }
   };
   /** The team, for the Mods panel's names / roles / "seat someone". Read
@@ -3653,7 +3669,7 @@ export function LiveView({
       writeCfg({ ...cfgRef.current, guest_link: url });
       return url;
     } catch (e) {
-      setGuestErr(String(e).replace(/^Error:\s*/, ""));
+      notifyError(e, { key: "guests" });
       return null;
     }
   };
@@ -3668,13 +3684,14 @@ export function LiveView({
       await navigator.clipboard.writeText(url);
       // Deals are a Boomin thing; a self-hosted room has none.
       const boomin = isBoomin(await resolveActiveEndpoint().catch(() => null));
-      setBanner(
+      notify(
         boomin
           ? "Room link copied — send it to your guests. Deal guests must enter through the deal."
           : "Room link copied — send it to your guests.",
+        { key: "banner", tone: "success", check: true },
       );
     } catch {
-      setBanner(url);
+      notify(url, { key: "banner", tone: "info", ttl: 8000 });
     }
   };
 
@@ -3727,7 +3744,7 @@ export function LiveView({
       });
       writeCfg({ ...c, scenes, sources: { ...c.sources, extras: [...(c.sources.extras ?? []), entry] } });
     } catch (e) {
-      setBanner(String(e));
+      notifyError(e, { key: "banner" });
     }
   };
 
@@ -3749,7 +3766,7 @@ export function LiveView({
         },
       });
     } catch (e) {
-      setBanner(String(e));
+      notifyError(e, { key: "banner" });
     }
   };
 
@@ -4181,11 +4198,11 @@ export function LiveView({
         setStatuses(new Map(ev.destinations.map((d) => [d.id, d])));
       } else if (ev.type === "session_state") {
         setSnapshot((s) => (s ? { ...s, session_state: ev.state } : s));
-        if (ev.state === "idle") setBanner(null);
+        if (ev.state === "idle") dismissKey("banner");
       } else if (ev.type === "session_ended") {
         markLiveRoom(null);
         setStatuses(new Map(ev.report.destinations.map((d) => [d.id, d])));
-        if (!ev.report.ok && ev.report.notes.length > 0) setBanner(ev.report.notes.join(" · "));
+        if (!ev.report.ok && ev.report.notes.length > 0) notify(ev.report.notes.join(" · "), { key: "banner", tone: "warning", ttl: 8000 });
       } else if (ev.type === "sources_changed") {
         srcEvCount.current += 1;
         if (settleOnSources.current) {
@@ -4247,9 +4264,9 @@ export function LiveView({
         }
         if (Object.keys(next).length) setGuestThumbs((prev) => ({ ...prev, ...next }));
       } else if (ev.type === "engine_error") {
-        setBanner(ev.message);
+        notify(ev.message, { key: "banner", tone: "error", sticky: true });
       } else if (ev.type === "engine_ready") {
-        if (!ev.ok) setBanner("Live engine failed to initialize — see engine report.");
+        if (!ev.ok) notify("Live engine failed to initialize — see engine report.", { key: "banner", tone: "error", sticky: true });
         // A room opened DURING boot must apply the moment the engine is up —
         // previously nothing re-ran refresh on success, so the veil rode to
         // its cap and the room mounted unconfigured.
@@ -4388,7 +4405,7 @@ export function LiveView({
   }
 
   async function goLive() {
-    setBanner(null);
+    dismissKey("banner");
     try {
       await ipc.liveGoLive();
       if (roomId) {
@@ -4396,7 +4413,7 @@ export function LiveView({
         markLiveRoom(roomId);
       }
     } catch (e) {
-      setBanner(String(e));
+      notifyError(e, { key: "banner" });
     }
   }
 
@@ -4573,8 +4590,7 @@ export function LiveView({
         } catch (e) {
           // A missing or unreadable clip must never cost the switch itself —
           // and must never be left covering the stage.
-          setBanner(String(e));
-          window.setTimeout(() => setBanner(null), 2600);
+          notifyError(e, { key: "banner" });
           stingerIpc.stop().catch(() => {});
           applyLook();
         }
@@ -4708,7 +4724,7 @@ export function LiveView({
       const c = cfgRef.current;
       writeCfg({ ...c, active_scene: p.id });
     } catch (e) {
-      setBanner(String(e));
+      notifyError(e, { key: "banner" });
     }
   };
 
@@ -4743,8 +4759,7 @@ export function LiveView({
       ...base,
       scenes: base.scenes.map((x) => (x.id === id ? { ...x, look } : x)),
     });
-    setBanner("Scene updated to the current stage.");
-    window.setTimeout(() => setBanner(null), 2200);
+    notify("Scene updated to the current stage.", { key: "banner", tone: "success" });
   };
 
   /** What a scene will actually do: its own override, else the room default,
@@ -4767,14 +4782,25 @@ export function LiveView({
   };
 
   const [renamingScene, setRenamingScene] = useState<string | null>(null);
+  /** A source row (camera) being renamed — same field, same commit. */
+  const [renamingExtra, setRenamingExtra] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const commitRename = () => {
     const id = renamingScene;
+    const extraId = renamingExtra;
     setRenamingScene(null);
+    setRenamingExtra(null);
     const name = renameDraft.trim();
-    if (!id || !name) return;
+    if (!name) return;
     if (refuseSetEdit()) return;
-    writeCfg({ ...cfg, scenes: scenes.map((x) => (x.id === id ? { ...x, name } : x)) });
+    if (id) writeCfg({ ...cfg, scenes: scenes.map((x) => (x.id === id ? { ...x, name } : x)) });
+    // An extra's label lives in the room doc; the engine keeps the name it
+    // spawned with until the room next opens — `sources` overlays it now.
+    if (extraId)
+      writeCfg({
+        ...cfgRef.current,
+        sources: { ...cfgRef.current.sources, extras: (cfgRef.current.sources.extras ?? []).map((e) => (e.id === extraId ? { ...e, label: name } : e)) },
+      });
   };
 
   // R1: ⌘1–⌘9 cut to a scene. The rows have advertised these since the
@@ -4959,11 +4985,28 @@ export function LiveView({
       await guestsIpc.sceneCut(ep, cfg.server_room_id, sceneId);
       setHostScenes((h) => (h ? { ...h, active_scene_id: sceneId } : h));
     } catch (e) {
-      setGuestErr(String(e).replace(/^Error:\s*/, ""));
+      notifyError(e, { key: "guests" });
     }
   };
   const hostScenesRef = useRef(hostScenes);
   hostScenesRef.current = hostScenes;
+
+  /** Bring the Mods panel forward: show it if hidden, then flash it. */
+  const focusModsPanel = () => {
+    if (dockOf(layout, "mods") === "hidden") {
+      const side = layout.right.length <= layout.left.length ? "right" : "left";
+      setLayout(movePanel(layout, "mods", side));
+    }
+    window.setTimeout(() => {
+      const el = document.querySelector<HTMLElement>('[data-panel="mods"]');
+      if (!el) return;
+      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      el.classList.remove("flash");
+      void el.offsetWidth;
+      el.classList.add("flash");
+      window.setTimeout(() => el.classList.remove("flash"), 1400);
+    }, 60);
+  };
 
   /** Mint a mod link and put it on the clipboard. The server keeps only a
    * hash, so this is the one time the URL is readable. */
@@ -4980,13 +5023,12 @@ export function LiveView({
       const res = await guestsIpc.modLink(ep.id, sid!);
       try {
         await navigator.clipboard.writeText(res.mod_url);
-        setBanner("Mod link copied — whoever opens it in Producer can admit, stage, order, remove and cut scenes. They never appear on the set.");
+        notify("Mod link copied — whoever opens it in Producer can admit, stage, order, remove and cut scenes. They never appear on the set.", { key: "banner", tone: "success", check: true, ttl: 6000 });
       } catch {
-        setBanner(res.mod_url);
+        notify(res.mod_url, { key: "banner", tone: "info", ttl: 8000 });
       }
-      window.setTimeout(() => setBanner(null), 6000);
     } catch (e) {
-      setGuestErr(String(e).replace(/^Error:\s*/, ""));
+      notifyError(e, { key: "guests" });
     }
   };
 
@@ -5078,7 +5120,7 @@ export function LiveView({
       if (ix) onInteractionFrame(ix);
       setVoteEdit(false);
     } catch (e) {
-      setGuestErr(String(e).replace(/^Error:\s*/, ""));
+      notifyError(e, { key: "guests" });
     }
   };
 
@@ -5109,7 +5151,7 @@ export function LiveView({
         }, transition === "close" ? 8000 : 0);
       }
     } catch (e) {
-      setGuestErr(String(e).replace(/^Error:\s*/, ""));
+      notifyError(e, { key: "guests" });
     }
   };
 
@@ -5134,13 +5176,12 @@ export function LiveView({
       setAudienceLink(url);
       try {
         await navigator.clipboard.writeText(url);
-        setBanner(hint);
+        notify(hint, { key: "banner", tone: "success", check: true, ttl: 6000 });
       } catch {
-        setBanner(url);
+        notify(url, { key: "banner", tone: "info", ttl: 8000 });
       }
-      window.setTimeout(() => setBanner(null), 6000);
     } catch (e) {
-      setGuestErr(String(e).replace(/^Error:\s*/, ""));
+      notifyError(e, { key: "guests" });
     }
   };
 
@@ -5322,7 +5363,7 @@ export function LiveView({
       setMyGrants(grants);
       openSeatLeg(body.join_url, grants);
     } catch (e) {
-      setGuestErr(String(e).replace(/^Error:\s*/, ""));
+      notifyError(e, { key: "guests" });
     }
   };
   /** The media a seat holds, as one comparable key. */
@@ -5451,7 +5492,7 @@ export function LiveView({
         const list = full.filter((g) => !isMonitor(g));
         // Reconcile, never replace-on-equal: an identical roster is not news.
         setRoster((prev) => (JSON.stringify(prev) === JSON.stringify(list) ? prev : list));
-        setGuestErr(null);
+        dismissKey("guests");
         if (roomRoleRef.current !== "host") {
           // Not the host: the roster is all we do. No render pages (they would
           // be a second host peer on every guest's channel), no stage post
@@ -5700,7 +5741,7 @@ export function LiveView({
             });
         }
       } catch (e) {
-        if (alive) setGuestErr(String(e).replace(/^Error:\s*/, ""));
+        if (alive) notifyError(e, { key: "guests" });
       }
     };
     rosterTickRef.current = () => void tick();
@@ -5760,7 +5801,7 @@ export function LiveView({
   const toggleMute = () => {
     if (!micItems.length) return;
     const m = !micMuted;
-    for (const i of micItems) setSourceAudio(i.id, undefined, m).catch((e) => setBanner(String(e)));
+    for (const i of micItems) setSourceAudio(i.id, undefined, m).catch((e) => notifyError(e, { key: "banner" }));
   };
   const [keyFor, setKeyFor] = useState<string | null>(null);
   const [keyVal, setKeyVal] = useState("");
@@ -5771,7 +5812,7 @@ export function LiveView({
       setKeyFor(null);
       setKeyVal("");
     } catch (e) {
-      setBanner(String(e));
+      notifyError(e, { key: "banner" });
     }
   };
   const vh = snapshot?.video_height || 720;
@@ -5789,7 +5830,7 @@ export function LiveView({
       // The room remembers its own canvas so reopening it lands where it was.
       writeCfg({ ...cfgRef.current, video: { h, f } });
     } catch (e) {
-      setBanner(String(e));
+      notifyError(e, { key: "banner" });
     }
   }
 
@@ -6240,7 +6281,48 @@ export function LiveView({
                         </span>
                       )}
                       <span className="rm-row-icon">{t.icon}</span>
-                      <span className="rm-row-name">{t.label}</span>
+                      {renamingExtra === t.key ? (
+                        <input
+                          className="rm-scene-rename rm-row-rename-field"
+                          autoFocus
+                          onFocus={(e) => e.currentTarget.select()}
+                          value={renameDraft}
+                          onChange={(e) => setRenameDraft(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => {
+                            e.stopPropagation();
+                            if (e.key === "Enter") commitRename();
+                            if (e.key === "Escape") setRenamingExtra(null);
+                          }}
+                          onBlur={commitRename}
+                        />
+                      ) : (
+                        <span
+                          className="rm-row-name"
+                          title={item?.kind === "camera" ? "Double-click to rename" : undefined}
+                          onDoubleClick={(e) => {
+                            if (item?.kind !== "camera" || !isHost) return;
+                            e.stopPropagation();
+                            setRenamingExtra(t.key);
+                            setRenameDraft(t.label);
+                          }}
+                        >
+                          {t.label}
+                        </span>
+                      )}
+                      {item?.kind === "camera" && isHost && (
+                        <button
+                          className="rm-row-edit rm-row-rename"
+                          title="Rename"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRenamingExtra(t.key);
+                            setRenameDraft(t.label);
+                          }}
+                        >
+                          ✎
+                        </button>
+                      )}
                       <button
                         className="rm-row-edit rm-row-fx"
                         title="Filters"
@@ -6314,7 +6396,7 @@ export function LiveView({
           <GuestPanel
             thumbs={guestThumbs}
             roster={roster}
-            error={guestErr}
+            error={null}
             items={(sources.items ?? []).filter((i) => i.kind === "guest")}
             role={roomRole}
             control={roomAccess.can.control}
@@ -6372,7 +6454,7 @@ export function LiveView({
             onToggleGrant={(g, grant, on) => void toggleSeatGrant(g, grant, on)}
             onPlace={(g, track, on) => (on ? void placeModFeed(g.id, track, "mods panel") : removeModFeed(g.id, track, "mods panel"))}
             onSeat={(m, r) => void seatMember(m, r)}
-            error={modsErr}
+            error={null}
           />
         );
       case "mixer":
@@ -6658,13 +6740,25 @@ export function LiveView({
           <span className="rm-cnt">
             {liveGuests.length}/8{waitingN > 0 && <em>{waitingN} waiting</em>}
           </span>
-          {isHost && (
+          {/* A mod LINK is an open-server thing (`POST …/mod-link` lives only
+            * there — on Boomin it answered 404 "Route not found"). On Boomin
+            * a seat is made in the Mods panel, so the button takes you there. */}
+          {isHost && !boominRoom && (
             <button
               className="rm-guest-modlink rm-head-modlink"
               title="Mint a link another Producer opens to help run this room: admit, stage, order, remove, and cut scenes. Never on the set."
               onClick={() => void mintModLink()}
             >
               Mod link
+            </button>
+          )}
+          {isHost && boominRoom && (
+            <button
+              className="rm-guest-modlink rm-head-modlink"
+              title="Seats are made in the Mods panel — pick a member and a role"
+              onClick={focusModsPanel}
+            >
+              Seat a mod
             </button>
           )}
           <button
@@ -6832,7 +6926,7 @@ export function LiveView({
                   },
                 });
               })
-              .catch((e) => setBanner(String(e)));
+              .catch((e) => notifyError(e, { key: "banner" }));
           },
         },
         { key: "window", label: "Window capture", icon: ic.screen, act: () => setSrcSubPop("window") },
@@ -7140,7 +7234,9 @@ export function LiveView({
             Last take
           </button>
         )}
-        <div className="rm-top-drag" data-tauri-drag-region />
+        <div className="rm-top-drag" data-tauri-drag-region>
+          <NoticeHost />
+        </div>
 
         <div className="rm-top-right">
           {/* HOST-ONLY TRANSPORT. A mod or manager on Boomin holds a control
@@ -7180,7 +7276,7 @@ export function LiveView({
                   // (a self-hosted server's own origin, or Boomin's). Producer
                   // never rewrites the host.
                   const url = guestLink ?? (await ensureGuestLink());
-                  if (url) await openUrl(url).catch(() => setBanner(url));
+                  if (url) await openUrl(url).catch(() => notify(url, { key: "banner", tone: "info", ttl: 8000 }));
                 }}
               >
                 Open guest page in browser
@@ -7421,7 +7517,7 @@ export function LiveView({
           throwUp={throwUpState({ stage: modStage, seatId: mySeatId, grants: myGrants, canAsk: roomAccess.can.control })}
           onThrowUp={(k) => void throwUp(k)}
           layout={boardLayout}
-          error={guestErr}
+          error={null}
         />
       ) : (
       <>
@@ -7534,7 +7630,9 @@ export function LiveView({
               className={`rm-vtab rm-vtab-top${topOpen ? "" : " closed"}`}
               role="button"
               tabIndex={0}
-              title={topOpen ? "Drag to resize — click to hide" : "Show the top dock"}
+              data-tip={topOpen ? "Drag to resize — click to hide" : "Show the top dock"}
+              data-kind="top"
+              aria-label={topOpen ? "Drag to resize — click to hide" : "Show the top dock"}
               onPointerDown={(e) => beginResize(e, "top", undefined, undefined, topOpen)}
               onPointerMove={moveResize}
               onPointerUp={() => endResize(() => setTopOpen((o) => !o))}
@@ -7551,7 +7649,7 @@ export function LiveView({
         {(leftOpen || layoutEdit) && (
           <aside
             data-dock="left"
-            className={`rm-dock rm-dock-side${layout.left.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "left" ? " hot" : ""}${cfg.dock_bg?.left ? " dock-bg" : ""}`}
+            className={`rm-dock rm-dock-side${layout.left.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "left" ? " hot" : ""}${cfg.dock_bg?.left ? " dock-bg" : ""}${shown.left != null && shown.left <= SIDE_MIN ? " mini" : ""}`}
             style={layout.left.length && shown.left ? { width: shown.left, flex: "0 0 auto" } : undefined}
           >
             {renderDock("left")}
@@ -7672,7 +7770,6 @@ export function LiveView({
               </button>
             </div>
           )}
-          <div className="rm-float">{banner && <div className="rm-banner">{banner}</div>}</div>
           {runReport && (
             <RunReportSheet
               report={runReport}
@@ -7725,7 +7822,7 @@ export function LiveView({
         {(rightOpen || layoutEdit) && (
           <aside
             data-dock="right"
-            className={`rm-dock rm-dock-side${layout.right.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "right" ? " hot" : ""}${cfg.dock_bg?.right ? " dock-bg" : ""}`}
+            className={`rm-dock rm-dock-side${layout.right.length === 0 ? " empty" : ""}${layoutEdit ? " armed" : ""}${dropHint?.dock === "right" ? " hot" : ""}${cfg.dock_bg?.right ? " dock-bg" : ""}${shown.right != null && shown.right <= SIDE_MIN ? " mini" : ""}`}
             style={layout.right.length && shown.right ? { width: shown.right, flex: "0 0 auto" } : undefined}
           >
             {renderDock("right")}
@@ -7917,7 +8014,9 @@ export function LiveView({
             className="rm-sheet-head"
             role="button"
             tabIndex={0}
-            title={sheetOpen ? "Drag to resize — click to hide" : "Show the bottom row"}
+            data-tip={sheetOpen ? "Drag to resize — click to hide" : "Show the bottom row"}
+            data-kind="bottom"
+            aria-label={sheetOpen ? "Drag to resize — click to hide" : "Show the bottom row"}
             onPointerDown={(e) => beginResize(e, "bottom", undefined, undefined, sheetOpen)}
             onPointerMove={moveResize}
             onPointerUp={() => endResize(() => setSheetOpen((o) => !o))}
