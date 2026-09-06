@@ -297,6 +297,39 @@ function hasLegacySources(src: RoomSources): boolean {
 }
 
 /** Does the room still carry the pre-v0.4.34 built-in switches anywhere? */
+/** An extra that no scene's look mentions. It renders (with no scene, the
+ *  whole graph is the stage) but has NO ROW in any scene's source list, so it
+ *  cannot be selected, hidden or deleted — live and unreachable.
+ *
+ *  How a room got here: sources could be added before any scene existed. They
+ *  joined nothing, and the user's first scene stranded them. `addExtraSource`
+ *  now refuses that, but rooms already in the state have to be rescued. */
+export function orphanExtraIds(c: RoomConfig): string[] {
+  if (c.scenes.length === 0) return [];
+  const claimed = new Set<string>();
+  for (const sc of c.scenes) for (const id of Object.keys(sc.look ?? {})) claimed.add(id);
+  return (c.sources.extras ?? []).map((e) => e.id).filter((id) => !claimed.has(id));
+}
+
+/** Give every orphan a home: the FIRST scene, HIDDEN.
+ *
+ *  First scene rather than all of them, because membership is the doctrine —
+ *  a source belongs to the scenes you put it in, and inventing membership
+ *  everywhere would undo the rule this rescue exists to protect. Hidden
+ *  rather than visible, because the complaint is that it is stuck ON: a row
+ *  you can see and switch is the fix, not a source that keeps rendering.
+ *
+ *  Pure; returns the same object when there is nothing to rescue. */
+export function adoptOrphanSources(c: RoomConfig): RoomConfig {
+  const orphans = orphanExtraIds(c);
+  if (orphans.length === 0) return c;
+  const [first, ...rest] = c.scenes;
+  if (!first) return c;
+  const look = { ...(first.look ?? {}) };
+  for (const id of orphans) look[id] = { ...(look[id] ?? {}), visible: false };
+  return { ...c, scenes: [{ ...first, look }, ...rest] };
+}
+
 export function needsBuiltinMigration(c: RoomConfig): boolean {
   return hasLegacySources(c.sources) || c.scenes.some(hasLegacyFlags);
 }
