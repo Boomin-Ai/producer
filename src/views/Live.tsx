@@ -1772,7 +1772,10 @@ function PreviewPanel({ children }: { children?: ReactNode }) {
 function stageLook(items: LiveItem[]): Record<string, SceneItemLook> {
   return Object.fromEntries(
     items
-      .filter((i) => i.kind !== "guest" && i.kind !== "mod" && i.kind !== "mic")
+      // Guests and mod feeds are transient (slots and mod_feeds carry their
+      // geometry). MICS ARE MEMBERS: a scene chooses which mic is live, so
+      // switching scenes switches mics, and a scene with none is silent.
+      .filter((i) => i.kind !== "guest" && i.kind !== "mod")
       .map((i) => [i.id, { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z }]),
   );
 }
@@ -3881,7 +3884,7 @@ export function LiveView({
       const active = activeSceneRef.current;
       const stage = stageLook(sourcesRef.current.items ?? []);
       const scenes = c.scenes.map((sc) => {
-        if (sc.id !== active || spec.kind === "mic") return sc;
+        if (sc.id !== active) return sc;
         // A scene that never recorded a look is materialized from the stage
         // so it has one to join; an existing (even empty) look is the truth.
         const look = { ...(sc.look ?? stage) };
@@ -3925,10 +3928,7 @@ export function LiveView({
     const c = cfgRef.current;
     const active = activeSceneRef.current;
     const all = c.scenes;
-    // A mic is room-level (audio has no look): it never belongs to one
-    // scene, so removing it always leaves the graph.
-    const isMic = (c.sources.extras ?? []).find((e) => e.id === id)?.spec.kind === "mic";
-    const stillUsed = !isMic && all.some((sc) => sc.id !== active && !!sc.look && id in sc.look);
+    const stillUsed = all.some((sc) => sc.id !== active && !!sc.look && id in sc.look);
     if (active && stillUsed) {
       // Another scene still holds it: leave THIS scene only. The Sources
       // list is the active scene's, so the row goes away here and the other
@@ -4620,12 +4620,23 @@ export function LiveView({
     if (!roomApplied.current) return;
     // Guests AND mod feeds are excluded: transient ids; slots carry guest
     // geometry, `mod_feeds` carries a seat's (lib/modFeed.ts).
-    const look = stageLook(sourcesRef.current.items ?? []);
     // An empty stage is a real look. Bailing here meant a scene you emptied
     // (or a brand-new one) kept whatever it had recorded before, which is
     // how deleted sources came back on the next cut.
     if (!sourcesRef.current.items) return;
     const base = cfgRef.current;
+    const stage = stageLook(sourcesRef.current.items ?? []);
+    const prev = base.scenes.find((x) => x.id === sceneId)?.look;
+    // MEMBERSHIP SURVIVES THE CAPTURE. `stageLook` reads the whole graph,
+    // hidden items included — every source in the room, not this scene's.
+    // Writing that wholesale made every scene slowly absorb every source as
+    // a disabled row (a camera belonging to Webcam(full) showing up greyed
+    // in Pip). A source joins a look only when it is VISIBLE here; one that
+    // is hidden stays only if this scene already held it, so the eye keeps
+    // working without letting another scene's source leak in.
+    const look = Object.fromEntries(
+      Object.entries(stage).filter(([id, l]) => l.visible || !prev || id in prev),
+    );
     writeCfg({
       ...base,
       scenes: base.scenes.map((x) => (x.id === sceneId ? { ...x, look } : x)),
@@ -4702,17 +4713,17 @@ export function LiveView({
       }
       // MEMBERSHIP: a scene's look is the set of sources that belong to it.
       // Anything the look does not mention is not in this scene — hide it.
-      // Camera/screen/overlay follow the same rule as every other source
-      // (a scene that dropped its camera stays camera-less); guests, mod
-      // feeds and mics are exempt: slots and mod_feeds carry the first two
-      // across every scene, and a mic is room-level audio with no look.
+      // Camera, screen, overlay AND MICS follow one rule (a scene that
+      // dropped its camera stays camera-less; a scene with a different mic
+      // switches mics; a scene with none is silent). Guests and mod feeds
+      // are exempt: slots and mod_feeds carry them across every scene.
       // A look that EXISTS is the membership list, even when it is empty:
       // an empty one means an empty stage. Only a scene with no look at all
       // (never recorded) leaves the stage as it found it.
       const realLook = !!p.look;
       if (realLook) {
         for (const it of liveNow) {
-          if (it.kind === "guest" || it.kind === "mod" || it.kind === "mic") continue;
+          if (it.kind === "guest" || it.kind === "mod") continue;
           if (!(it.id in look) && it.visible) {
             ipc.liveSetTransform(it.id, { visible: false }, true).catch(() => {});
           }
@@ -5959,8 +5970,10 @@ export function LiveView({
   /** Stage-bar mute: every mic in the room together (one button, one
    * meaning). Per-mic faders live in the mixer. */
   const micItems = (sources.items ?? []).filter((i) => i.kind === "mic");
+  const sceneLook = scenes.find((x) => x.id === activeScene)?.look;
+  const memberHere = (id: string) => !sceneLook || id in sceneLook;
   const mixerItems = (sources.items ?? [])
-    .filter((i) => i.kind === "mic" || (i.has_audio && (i.kind === "guest" || i.kind === "media")))
+    .filter((i) => (i.kind === "mic" ? memberHere(i.id) : i.has_audio && (i.kind === "guest" || i.kind === "media")))
     .sort((a, b) => (a.kind === "mic" ? 0 : 1) - (b.kind === "mic" ? 0 : 1));
   const micMuted = micItems.length > 0 && micItems.every((i) => i.muted);
   const toggleMute = () => {
@@ -6349,7 +6362,7 @@ export function LiveView({
               // its place is the room's mod_feeds), and only while it is on
               // the set — a connected-but-unplaced seat lives in Mods. A mic
               // is room-level audio: a row in every scene too.
-              .filter((i) => (i.kind === "mod" ? i.visible : i.kind === "mic" ? true : inScene(i.id)))
+              .filter((i) => (i.kind === "mod" ? i.visible : inScene(i.id)))
               .map((i) => ({
                 key: i.id,
                 label: i.label || i.kind,
@@ -6660,7 +6673,7 @@ export function LiveView({
                 ))}
                 {mixerItems.length === 0 && (
                   <div className="rm-rows-empty">
-                    No audio sources. Add a microphone from Sources.
+                    This scene has no audio. Add a microphone from Sources — each scene carries its own.
                   </div>
                 )}
               </div>
@@ -7188,10 +7201,18 @@ export function LiveView({
   const dragRef = useRef<{ id: PanelId; x: number; y: number; moved: boolean } | null>(null);
 
   const hitTest = (x: number, y: number): { dock: Dock; index: number } | null => {
-    const docks = Array.from(document.querySelectorAll<HTMLElement>("[data-dock]"));
-    for (const el of docks) {
+    const all = Array.from(document.querySelectorAll<HTMLElement>("[data-dock]"));
+    // TWO PASSES. A dock the pointer is actually INSIDE always wins; only if
+    // it is inside none do we accept a near-miss. One pass with a 16px halo
+    // meant the first dock in the DOM whose halo you clipped took the drop —
+    // so aiming at a side rail could light the row you started in.
+    const inside = all.filter((el) => {
       const r = el.getBoundingClientRect();
-      const pad = 16;
+      return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    });
+    for (const el of inside.length ? inside : all) {
+      const r = el.getBoundingClientRect();
+      const pad = inside.length ? 0 : 16;
       if (x < r.left - pad || x > r.right + pad || y < r.top - pad || y > r.bottom + pad) continue;
       const dock = el.dataset.dock as Dock;
       const horizontal = dock === "bottom" || dock === "top";

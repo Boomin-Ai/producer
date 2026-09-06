@@ -10185,7 +10185,41 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   max-width: 62%;
   transition: opacity 0.18s ease, max-width 0.12s ease-out;
 }
-.rm-notice.clipped:hover { max-width: calc(100% - 8px); }
+/* Hovering a clipped notice DROPS A CARD instead of widening the pill: the
+ * pill only had the middle of the bar to grow into and ran straight into the
+ * Link cluster. The card hangs below the bar, wraps, and reads in full. */
+.rm-notice.clipped:hover { max-width: 62%; }
+.rm-notice.clipped:hover::after {
+  content: attr(data-full);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(560px, 60vw);
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  white-space: normal;
+  text-align: left;
+  color: var(--fg-1);
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42);
+  z-index: 400;
+  pointer-events: none;
+}
+.rm-notice { position: relative; }
+/* One reading at a time: while the card is open the pill keeps its shape and
+ * its icon, but drops the clipped copy that the card is already showing. */
+.rm-notice.clipped:hover .rm-notice-text { opacity: 0; }
+/* The bar cannot clip the card, and the card outranks the docks under it. */
+.rm-top, .rm-top-drag, .rm-notices { overflow: visible; }
+.rm-notices { z-index: 400; }
 .rm-notice.faded { opacity: 0.55; }
 .rm-notice.faded:hover { opacity: 1; }
 
