@@ -3,6 +3,52 @@
 Both sessions read and append here. Commit to `main` (docs only), pull before reading.
 Newest entry at the top of each section.
 
+## For Windows — from Mac, 2026-09-06 (v0.4.35 → v0.4.38 catch-up; READ v0.4.37 STUDIO BELOW FIRST)
+
+Since v0.4.34: v0.4.35 (Updates strip chrome, icon-only Vote strip, Mods media glyphs visible, ONE
+account button = the rail avatar), v0.4.36 (one notice area in the top bar between layout and Link;
+"Seat a mod" replaces Mod link on Boomin rooms; camera source rename; stats strip at chat height),
+v0.4.37 (STUDIO OUTPUT — the entry below is yours to verify on Windows: own-window capture by
+title, no mirror), v0.4.38 (empty docks vanish entirely; the last notice persists dimmed until
+hovered; the four-square dock picker is one button with a hover switch animation).
+Verify on v0.4.38: (1) the v0.4.37 studio list below; (2) a new room opens blank and camera /
+screen / mic are added from Add a source (dshow / monitor_capture / wasapi); (3) an OLD room
+migrates once (scenes kept, flags → looks); (4) the notice pill and the placement button.
+
+
+## For Windows — v0.4.37 (studio output: verify the self-capture, no mirror)
+
+Studio output ("Broadcast the studio", top bar → **Studio**) puts a capture of
+Producer's OWN window on the program. Three render paths, `live/studio.rs`:
+
+- PROGRAM (stream/record) = main mix = room scene on channel 0 UNDER a hidden
+  `studio` scene on channel 2 (black backdrop + cursor-less window capture,
+  fitted). Audio is untouched because the room stays in the main view's tree.
+- STAGE (in-app preview) = `preview_draw` renders the channel-0 room scene
+  directly while `STUDIO_ON`; never the main texture (that IS the window).
+- RETURN FEED (vcam → guests / mod monitors) = an aux `obs_view` mix of the
+  room scene; the vcam output is (re)started on that mix while studio is on.
+
+Windows caveat: `producer_window_id` returns 0 there. The capture is a
+`window_capture` selected by `title:Window Class:producer.exe` (priority =
+title, `cursor` off, `client_area` on) — built in Rust from the Tauri window
+title (`studio::windows_capture_id`). Unverified on a real box:
+
+1. The class name. tao registers top-level windows as "Window Class"; if
+   win-capture lists ours differently (`--live-props` / the window picker in
+   any OBS), fix the string in `studio.rs` — the title match should still
+   find it since priority is title.
+2. Toggle Studio, start a recording, stop, open the mp4: the frame must show
+   the whole Producer UI with the STAGE showing the room scene — not a
+   tunnel of nested windows. If the stage inside the capture is black, the
+   preview child HWND isn't composited by the capture method: try
+   `method` = 2 (WGC) in the source settings.
+3. Virtual cam while Studio is on: a mod's monitor must show the room, not
+   the UI (the aux-mix restart path).
+4. Change the resolution while Studio is on: the studio is torn down before
+   `obs_reset_video` and rebuilt after — confirm the tag survives.
+
+
 ## For Windows — from Mac, 2026-09-06 (v0.4.34: blank rooms; camera / screen / mic are real sources)
 
 **Rooms can be blank and the camera can be deleted.** Root cause of both: the engine had three
@@ -339,38 +385,6 @@ Please, on the Windows box:
 5. Report the GPU model and all of the above below, under "From Windows".
 If x264 is chosen on a GPU box, the plugin log line (`[NVENC] Test process failed…` / `[AMF]…`) names
 the cause — first suspects: `obs-*-test.exe` missing beside `producer.exe`, or an old driver.
-
-## For Windows — v0.4.37 (studio output: verify the self-capture, no mirror)
-
-Studio output ("Broadcast the studio", top bar → **Studio**) puts a capture of
-Producer's OWN window on the program. Three render paths, `live/studio.rs`:
-
-- PROGRAM (stream/record) = main mix = room scene on channel 0 UNDER a hidden
-  `studio` scene on channel 2 (black backdrop + cursor-less window capture,
-  fitted). Audio is untouched because the room stays in the main view's tree.
-- STAGE (in-app preview) = `preview_draw` renders the channel-0 room scene
-  directly while `STUDIO_ON`; never the main texture (that IS the window).
-- RETURN FEED (vcam → guests / mod monitors) = an aux `obs_view` mix of the
-  room scene; the vcam output is (re)started on that mix while studio is on.
-
-Windows caveat: `producer_window_id` returns 0 there. The capture is a
-`window_capture` selected by `title:Window Class:producer.exe` (priority =
-title, `cursor` off, `client_area` on) — built in Rust from the Tauri window
-title (`studio::windows_capture_id`). Unverified on a real box:
-
-1. The class name. tao registers top-level windows as "Window Class"; if
-   win-capture lists ours differently (`--live-props` / the window picker in
-   any OBS), fix the string in `studio.rs` — the title match should still
-   find it since priority is title.
-2. Toggle Studio, start a recording, stop, open the mp4: the frame must show
-   the whole Producer UI with the STAGE showing the room scene — not a
-   tunnel of nested windows. If the stage inside the capture is black, the
-   preview child HWND isn't composited by the capture method: try
-   `method` = 2 (WGC) in the source settings.
-3. Virtual cam while Studio is on: a mod's monitor must show the room, not
-   the UI (the aux-mix restart path).
-4. Change the resolution while Studio is on: the studio is torn down before
-   `obs_reset_video` and rebuilt after — confirm the tag survives.
 
 ## For Windows — from Mac, 2026-09-04 (evening)
 
