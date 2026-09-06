@@ -652,15 +652,6 @@ pub enum Command {
     },
     GoLive(MultiConfig),
     StopLive,
-    SetSources {
-        screen: bool,
-        camera: bool,
-        mic: bool,
-    },
-    SetMicAudio {
-        volume: Option<f32>,
-        muted: Option<bool>,
-    },
     /// Stage-editor transform (UI-P1). `commit: false` applies silently at
     /// gesture rate; `commit: true` (pointer-up) echoes SourcesChanged so
     /// the UI and room document settle on engine truth.
@@ -728,7 +719,7 @@ pub enum Command {
     },
     /// Point a live source at a different device, keeping its transform.
     SetDevice {
-        kind: String,
+        id: String,
         device: String,
     },
     /// Add an open-list scene item (UI-P2.10). Id and label come from the
@@ -768,8 +759,6 @@ fn cmd_name(c: &Command) -> &'static str {
         Command::SetProgramThumb { .. } => "SetProgramThumb",
         Command::GoLive { .. } => "GoLive",
         Command::StopLive { .. } => "StopLive",
-        Command::SetSources { .. } => "SetSources",
-        Command::SetMicAudio { .. } => "SetMicAudio",
         Command::SetTransform { .. } => "SetTransform",
         Command::ListDevices { .. } => "ListDevices",
         Command::PlayStinger { .. } => "PlayStinger",
@@ -853,10 +842,9 @@ pub enum LiveEvent {
     SourcesChanged {
         sources: graph::SourcesState,
     },
-    /// Mic meter tick (~8 Hz while the mic is on): peak absolute sample
-    /// since the previous tick, 0..=1.
+    /// Meter tick (~8 Hz while any metered source exists): per-source peak
+    /// absolute sample since the previous tick, 0..=1.
     Levels {
-        mic_peak: f64,
         extra_peaks: Vec<ExtraPeak>,
     },
     /// Live guest previews (~7 Hz): 256x144 JPEG, base64 — the panel shows a
@@ -943,22 +931,6 @@ impl LiveHandle {
     pub fn stop_live(&self) -> Result<(), String> {
         self.proxy().stop_live()
     }
-    pub fn set_sources(&self, screen: bool, camera: bool, mic: bool) -> Result<(), String> {
-        self.cmd
-            .send(Command::SetSources {
-                screen,
-                camera,
-                mic,
-            })
-            .map_err(|e| e.to_string())
-    }
-
-    pub fn set_mic_audio(&self, volume: Option<f32>, muted: Option<bool>) -> Result<(), String> {
-        self.cmd
-            .send(Command::SetMicAudio { volume, muted })
-            .map_err(|e| e.to_string())
-    }
-
     pub fn set_transform(
         &self,
         id: String,
@@ -1080,9 +1052,9 @@ impl LiveHandle {
             .map_err(|e| e.to_string())
     }
 
-    pub fn set_device(&self, kind: String, device: String) -> Result<(), String> {
+    pub fn set_device(&self, id: String, device: String) -> Result<(), String> {
         self.cmd
-            .send(Command::SetDevice { kind, device })
+            .send(Command::SetDevice { id, device })
             .map_err(|e| e.to_string())
     }
 
@@ -1978,36 +1950,6 @@ pub fn start(
                             set_state(&mut state, SessionState::Stopping, &snap, &sink);
                         }
                     }
-                    Ok(Command::SetSources {
-                        screen,
-                        camera,
-                        mic,
-                    }) => {
-                        if let Some(g) = scene.as_mut() {
-                            for (label, result) in [
-                                ("screen", g.set_screen(screen)),
-                                ("camera", g.set_camera(camera)),
-                                ("mic", g.set_mic(mic)),
-                            ] {
-                                if let Err(e) = result {
-                                    sink(&LiveEvent::EngineError {
-                                        message: format!("{label}: {e}"),
-                                    });
-                                }
-                            }
-                            let sources = g.state();
-                            snap.lock().unwrap().sources = sources.clone();
-                            sink(&LiveEvent::SourcesChanged { sources });
-                        }
-                    }
-                    Ok(Command::SetMicAudio { volume, muted }) => {
-                        if let Some(g) = scene.as_mut() {
-                            g.set_mic_audio(volume, muted);
-                            let sources = g.state();
-                            snap.lock().unwrap().sources = sources.clone();
-                            sink(&LiveEvent::SourcesChanged { sources });
-                        }
-                    }
                     Ok(Command::SetTransform { id, patch, commit }) => {
                         if let Some(g) = scene.as_mut() {
                             if let Err(e) = g.set_transform(&id, &patch) {
@@ -2182,9 +2124,9 @@ pub fn start(
                             g.hide_stinger();
                         }
                     }
-                    Ok(Command::SetDevice { kind, device }) => {
+                    Ok(Command::SetDevice { id, device }) => {
                         if let Some(g) = scene.as_mut() {
-                            match g.set_device(&kind, &device) {
+                            match g.set_device(&id, &device) {
                                 Ok(()) => {
                                     let sources = g.state();
                                     snap.lock().unwrap().sources = sources.clone();
@@ -2353,16 +2295,15 @@ pub fn start(
                     }
                 }
 
-                // Meter stream — while a mic OR any metered extra (guest,
-                // media) exists; guests must meter with the host mic off.
+                // Meter stream — while any metered extra (mic, guest, mod,
+                // media) exists.
                 if scene
                     .as_ref()
-                    .is_some_and(|g| g.state().mic || !g.take_extra_peaks_ids_empty())
+                    .is_some_and(|g| !g.take_extra_peaks_ids_empty())
                     && last_levels_emit.elapsed() > Duration::from_millis(110)
                 {
                     last_levels_emit = Instant::now();
                     sink(&LiveEvent::Levels {
-                        mic_peak: graph::take_mic_peak(),
                         extra_peaks: scene
                             .as_ref()
                             .map(|g| {

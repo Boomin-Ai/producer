@@ -65,8 +65,9 @@ import {
   BOTTOM_MAX, TOP_MAX, ROW_SNAP, ROW_MINI,
 } from "../lib/layout";
 import {
-  DEFAULT_SCENES,
+  isCaptureKind,
   markLiveRoom,
+  migrateBuiltinsToExtras,
   parseConfig,
   serializeConfig,
   type RoomConfig,
@@ -75,6 +76,7 @@ import {
   type SceneTransition,
   type TransitionKind,
   type RoomExtra,
+  type CaptureKind,
 } from "../lib/room";
 import { homePaintedMs, takeRoomClick } from "../lib/perf";
 import { RoomControlLink, type ControlFrame, type SceneCutFrame } from "../lib/roomControl";
@@ -521,29 +523,28 @@ function SceneSettingsStrip({
 function SourceSettingsStrip({
   rowKey,
   items,
-  sources,
   onClose,
   openOverlay,
   onPickWindow,
 }: {
   rowKey: string;
   items: LiveItem[];
-  sources: LiveSources;
   onClose: () => void;
   openOverlay: () => void;
   onPickWindow: (itemId: string, windowId: number, label: string) => Promise<void>;
 }) {
-  const meta: Record<string, { name: string; icon: ReactNode }> = {
-    screen: { name: "Screen", icon: ic.screen },
-    camera: { name: "Camera", icon: ic.cam },
-    mic: { name: "Microphone", icon: ic.mic },
-    alerts: { name: "Overlay", icon: ic.link },
-  };
   const windowItemId = rowKey.startsWith("window:") ? rowKey.slice(7) : null;
+  // A capture row is an ITEM (v0.4.34): its kind names the device class,
+  // its id is what the picker re-points.
+  const captureItem = windowItemId || rowKey === "alerts" ? undefined : items.find((i) => i.id === rowKey);
+  const deviceKind: CaptureKind | null = captureItem && isCaptureKind(captureItem.kind) ? captureItem.kind : null;
   const m = windowItemId
     ? { name: "Window", icon: ic.screen }
-    : (meta[rowKey] ?? { name: rowKey, icon: ic.link });
-  const deviceKind = rowKey === "alerts" || windowItemId ? null : rowKey; // camera | mic | screen
+    : rowKey === "alerts"
+      ? { name: "Overlay", icon: ic.link }
+      : captureItem
+        ? { name: captureItem.label || captureItem.kind, icon: EXTRA_ICONS[captureItem.kind] ?? ic.link }
+        : { name: rowKey, icon: ic.link };
   const [list, setList] = useState<DeviceOption[] | null>(null);
   const [denied, setDenied] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -585,12 +586,7 @@ function SourceSettingsStrip({
 
   // Only sources that actually carry audio can drift against their video.
   const syncItem = items.find((i) => i.id === (rowKey === "alerts" ? "overlay" : rowKey) && i.has_audio);
-  const active =
-    deviceKind === "camera"
-      ? sources.camera_device
-      : deviceKind === "mic"
-        ? sources.mic_device
-        : sources.screen_device;
+  const active = captureItem?.device ?? null;
 
   return (
     <div className="rm-srcstrip">
@@ -671,7 +667,7 @@ function SourceSettingsStrip({
                 onClick={async () => {
                   setBusy(true);
                   try {
-                    await deviceIpc.set(deviceKind, d.id);
+                    await deviceIpc.set(captureItem!.id, d.id);
                   } catch {
                     /* engine reports via banner */
                   } finally {
@@ -1490,7 +1486,7 @@ function WindowSourceForm({ onAdd }: { onAdd: (id: number, title: string) => voi
  * interface, second display — appears here without Producer knowing the
  * hardware. Switching applies in place: the source keeps its position, size
  * and place in the stack. */
-function DevicePicker({ kind, onClose }: { kind: string; onClose: () => void }) {
+function DevicePicker({ itemId, kind, onClose }: { itemId: string; kind: CaptureKind; onClose: () => void }) {
   const [list, setList] = useState<DeviceOption[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -1566,7 +1562,7 @@ function DevicePicker({ kind, onClose }: { kind: string; onClose: () => void }) 
           onClick={async () => {
             setBusy(d.id);
             try {
-              await deviceIpc.set(kind, d.id);
+              await deviceIpc.set(itemId, d.id);
               onClose();
             } catch (e) {
               setError(String(e));
@@ -1678,22 +1674,15 @@ function PreviewPanel({ children }: { children?: ReactNode }) {
   );
 }
 
-/** The three built-in scenes as canvas-sized recipes. Deterministic z is
- * the point: screen 0, overlay above it, camera on top — never an accident
- * of which source happened to be created last. */
-function builtinLook(p: RoomScene, bw: number, bh: number): Record<string, SceneItemLook> {
-  const pipW = Math.round(bw * 0.28);
-  const pipH = Math.round((pipW * 9) / 16);
-  const m = Math.round(bw * 0.02);
-  const look: Record<string, SceneItemLook> = {};
-  look.screen = p.screen ? { visible: true, x: 0, y: 0, w: bw, h: bh, z: 0 } : { visible: false };
-  look.overlay = { visible: true, z: 1 };
-  look.camera = p.camera
-    ? p.screen
-      ? { visible: true, x: bw - pipW - m, y: bh - pipH - m, w: pipW, h: pipH, z: 2 }
-      : { visible: true, x: 0, y: 0, w: bw, h: bh, z: 2 }
-    : { visible: false };
-  return look;
+/** The stage as a look: every item that belongs to a scene, at its current
+ * geometry. Guests (slots carry them), mod feeds (`mod_feeds` carries them)
+ * and mics (room-level audio, no look) are not scene members. */
+function stageLook(items: LiveItem[]): Record<string, SceneItemLook> {
+  return Object.fromEntries(
+    items
+      .filter((i) => i.kind !== "guest" && i.kind !== "mod" && i.kind !== "mic")
+      .map((i) => [i.id, { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z }]),
+  );
 }
 
 /** Permission state lives with the controls, not over the canvas: a slim
@@ -1743,10 +1732,11 @@ function PermBanner({
   }, []);
 
   if (!perms) return null;
+  const hasKind = (k: CaptureKind) => (sources.items ?? []).some((i) => i.kind === k);
   const rows: { kind: "screen" | "camera" | "mic"; label: string; status: string; needed: boolean }[] = [
-    { kind: "screen", label: "Screen recording", status: perms.screen, needed: sources.screen },
-    { kind: "camera", label: "Camera", status: perms.camera, needed: sources.camera },
-    { kind: "mic", label: "Microphone", status: perms.mic, needed: sources.mic },
+    { kind: "screen", label: "Screen recording", status: perms.screen, needed: hasKind("screen") },
+    { kind: "camera", label: "Camera", status: perms.camera, needed: hasKind("camera") },
+    { kind: "mic", label: "Microphone", status: perms.mic, needed: hasKind("mic") },
   ];
   const pending = rows.filter((r) => r.needed && r.status !== "granted");
   if (pending.length === 0) return null;
@@ -2131,6 +2121,9 @@ function ChatText({
 
 /** Icon per open-list source kind, for panel rows. */
 const EXTRA_ICONS: Record<string, ReactNode> = {
+  camera: ic.cam,
+  screen: ic.screen,
+  mic: ic.mic,
   media: ic.play,
   image: ic.image,
   text: ic.text,
@@ -2584,7 +2577,7 @@ export function LiveView({
   const [editing, setEditing] = useState<LiveDestination | null>(null);
   const [adding, setAdding] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
-  const [sources, setSources] = useState<LiveSources>({ screen: false, camera: false, mic: false });
+  const [sources, setSources] = useState<LiveSources>({});
   /** The canvas height the engine reports (720 until it does) — read by the
    * mod-feed placement, which works in canvas fractions (lib/modFeed.ts). */
   const vhRef = useRef(720);
@@ -2635,7 +2628,7 @@ export function LiveView({
       if (!alive) return;
       const items = (snap?.sources?.items ?? []).filter((i) => i.visible);
       for (const i of items) if (i.has_frame && seen[i.id] == null) seen[i.id] = Math.round(performance.now() - mountT0.current);
-      const pending = items.filter((i) => !i.has_frame).map((i) => i.id);
+      const pending = items.filter((i) => !i.has_frame && i.kind !== "mic").map((i) => i.id);
       setPendingFrames((p) => (p.length === pending.length && p.every((x, k) => x === pending[k]) ? p : pending));
       if (items.length && pending.length === 0) return finish([]);
       if (performance.now() - t0 > 10_000) return finish(pending);
@@ -2647,7 +2640,6 @@ export function LiveView({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docApplied]);
-  const [micLevel, setMicLevel] = useState(0);
   const [appVersion, setAppVersion] = useState<string | null>(null);
   type RepoRelease = { tag_name: string; name: string | null; body: string | null; published_at: string; html_url: string };
   const [releases, setReleases] = useState<RepoRelease[] | null | "err">(null);
@@ -2935,7 +2927,7 @@ export function LiveView({
       <span className="rm-split-grab" />
     </div>
   );
-  const scenes: RoomScene[] = cfg.scenes.length ? cfg.scenes : DEFAULT_SCENES;
+  const scenes: RoomScene[] = cfg.scenes;
   /** Overlay config drills IN like Filters — a menu inside the Sources
    * panel, never a popout over the stage. */
   const [overlayInline, setOverlayInline] = useState(false);
@@ -2944,7 +2936,7 @@ export function LiveView({
   /** Delete on the stage keymap: same effect as the row's ✕, per kind. */
   const deleteStageItem = (id: string) => {
     if (refuseSetEdit()) return;
-    if (id === "screen" || id === "camera" || id === "overlay") return removeCoreSource(id);
+    if (id === "overlay") return removeOverlaySource();
     const it = (sources.items ?? []).find((i) => i.id === id);
     if (!it) return;
     if (it.kind === "guest") return void hideGuestFromSlot(id);
@@ -2979,9 +2971,14 @@ export function LiveView({
    * opens the host mic for return audio and can only match by label — browser
    * device ids are salted per origin and can never equal libobs's. */
   const [micDeviceLabel, setMicDeviceLabel] = useState<string | null>(null);
+  /** The room's first mic SOURCE (v0.4.34: a mic is an item like any other;
+   * the first one is the show's voice as far as seats are concerned). */
+  const micItem = (sources.items ?? []).find((i) => i.kind === "mic");
+  const micItemId = micItem?.id ?? null;
+  const micItemDevice = micItem?.device ?? null;
 
   useEffect(() => {
-    if (!sources.mic) {
+    if (!micItemId) {
       setMicDeviceLabel(null);
       return;
     }
@@ -2990,8 +2987,7 @@ export function LiveView({
       .list("mic")
       .then((list) => {
         if (!alive || !Array.isArray(list)) return;
-        const id = sources.mic_device;
-        const hit = id ? list.find((d) => d.id === id) : undefined;
+        const hit = micItemDevice ? list.find((d) => d.id === micItemDevice) : undefined;
         // No explicit selection means the system default, which the page
         // also falls back to — so send nothing rather than guess wrong.
         setMicDeviceLabel(hit?.name ?? null);
@@ -3000,7 +2996,7 @@ export function LiveView({
     return () => {
       alive = false;
     };
-  }, [sources.mic, sources.mic_device]);
+  }, [micItemId, micItemDevice]);
   /** Experimental: source settings as a horizontal strip above the docked
    * panels — which row's settings are showing. */
   /** R3: recording is independent of streaming — either, both, or neither. */
@@ -3722,13 +3718,9 @@ export function LiveView({
       // other. A scene without a look is materialized from the stage first
       // so it has one to join. Absence from a look = not in that scene.
       const active = activeSceneRef.current;
-      const stage: Record<string, SceneItemLook> = Object.fromEntries(
-        (sourcesRef.current.items ?? [])
-          .filter((i) => i.kind !== "guest" && i.kind !== "mod")
-          .map((i) => [i.id, { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z }]),
-      );
-      const scenes = (c.scenes.length ? c.scenes : DEFAULT_SCENES).map((sc) => {
-        if (sc.id !== active) return sc;
+      const stage = stageLook(sourcesRef.current.items ?? []);
+      const scenes = c.scenes.map((sc) => {
+        if (sc.id !== active || spec.kind === "mic") return sc;
         const look = { ...(sc.look && Object.keys(sc.look).length ? sc.look : stage) };
         look[id] = { ...(look[id] ?? {}), visible: true };
         return { ...sc, look };
@@ -3769,8 +3761,11 @@ export function LiveView({
     if (refuseSetEdit()) return;
     const c = cfgRef.current;
     const active = activeSceneRef.current;
-    const all = c.scenes.length ? c.scenes : DEFAULT_SCENES;
-    const stillUsed = all.some((sc) => sc.id !== active && !!sc.look && id in sc.look);
+    const all = c.scenes;
+    // A mic is room-level (audio has no look): it never belongs to one
+    // scene, so removing it always leaves the graph.
+    const isMic = (c.sources.extras ?? []).find((e) => e.id === id)?.spec.kind === "mic";
+    const stillUsed = !isMic && all.some((sc) => sc.id !== active && !!sc.look && id in sc.look);
     if (active && stillUsed) {
       // Leave THIS scene: drop the membership, hide the item, keep the source.
       ipc.liveSetTransform(id, { visible: false }, true).catch(() => {});
@@ -3798,33 +3793,23 @@ export function LiveView({
       sources: { ...c.sources, extras: (c.sources.extras ?? []).filter((e) => e.id !== id) },
     });
   };
-  /** MEMBERSHIP delete for the well-known sources (screen/camera/overlay).
-   * Before this they were exempt: "remove" tore the engine source down
-   * globally, the scene's look still listed it, and the next applyScene
-   * re-created it — the edit undid itself on every switch. Now, exactly like
-   * extras: leave THIS scene's look (materialized from the stage if the scene
-   * was still running on its built-in recipe); tear the source down only when
-   * no other scene needs it. */
-  const removeCoreSource = (id: "screen" | "camera" | "overlay") => {
+  /** MEMBERSHIP delete for the overlay (the one source that is still not
+   * an extra): leave THIS scene's look (materialized from the stage if the
+   * scene had none); tear the overlay down only when no other scene lists
+   * it. Camera/screen/mic go through removeExtraSource like everything else. */
+  const removeOverlaySource = () => {
     if (refuseSetEdit()) return;
+    const id = "overlay";
     const c = cfgRef.current;
     const active = activeSceneRef.current;
-    const all = c.scenes.length ? c.scenes : DEFAULT_SCENES;
+    const all = c.scenes;
     const realLook = (sc: RoomScene) => !!(sc.look && Object.keys(sc.look).length);
-    // A scene needs a core source if its look lists it, or — still on the
-    // built-in recipe — its flags imply it (overlay is always in a recipe).
-    const needs = (sc: RoomScene) =>
-      realLook(sc) ? id in sc.look! : id === "overlay" ? true : id === "screen" ? sc.screen : sc.camera;
-    const stillUsed = all.some((sc) => sc.id !== active && needs(sc));
-    const stage: Record<string, SceneItemLook> = Object.fromEntries(
-      (sourcesRef.current.items ?? [])
-        .filter((i) => i.kind !== "guest")
-        .map((i) => [i.id, { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z }]),
-    );
+    const stillUsed = all.some((sc) => sc.id !== active && realLook(sc) && id in sc.look!);
+    const stage = stageLook(sourcesRef.current.items ?? []);
     const leaveScene = (sc: RoomScene) => {
       const look = { ...(realLook(sc) ? sc.look! : stage) };
       delete look[id];
-      return { ...sc, look, ...(id === "screen" ? { screen: false } : id === "camera" ? { camera: false } : {}) };
+      return { ...sc, look };
     };
     window.clearTimeout(lookTimer.current); // a pending capture would re-list it
     if (active && stillUsed) {
@@ -3832,9 +3817,7 @@ export function LiveView({
       writeCfg({ ...c, scenes: all.map((sc) => (sc.id === active ? leaveScene(sc) : sc)) });
       return;
     }
-    // No scene needs it: the source leaves the graph, every look is scrubbed.
-    if (id === "overlay") ipc.liveSetOverlay(null, false).catch(() => {});
-    else void setSrc(id === "screen" ? { screen: false } : { camera: false });
+    ipc.liveSetOverlay(null, false).catch(() => {});
     writeCfg({
       ...c,
       scenes: all.map((sc) => (sc.id === active || (sc.look && id in sc.look) ? leaveScene(sc) : sc)),
@@ -4063,8 +4046,7 @@ export function LiveView({
         // show it — devices off, no items, no overlay, no mic capture.
         if (!localSetSkipped.current) {
           localSetSkipped.current = true;
-          await ipc.liveSetSources(false, false, false).catch(() => {});
-          for (const i of (snap.sources?.items ?? []).filter((x) => !["screen", "camera", "overlay"].includes(x.id))) {
+          for (const i of (snap.sources?.items ?? []).filter((x) => x.id !== "overlay")) {
             await extraSources.remove(i.id).catch(() => {});
           }
           if (snap.sources?.overlay_window != null || snap.sources?.overlay_url) {
@@ -4079,14 +4061,21 @@ export function LiveView({
         return;
       }
       roomApplied.current = true;
-      const saved = parseConfig(room.config).sources;
-      if (typeof saved.screen === "boolean") {
-        await ipc.liveSetSources(saved.screen, saved.camera ?? false, saved.mic ?? false);
-        if (saved.mic_volume != null || saved.mic_muted != null) {
-          await ipc.liveSetMicAudio({ volume: saved.mic_volume, muted: saved.mic_muted });
-        }
-        setSources((s) => ({ ...s, ...saved }));
+      // v0.4.34: a room saved by an older build still carries the built-in
+      // switches. Fold them into ordinary sources ONCE (lib/room.ts) and
+      // write the document back, before anything spawns from it.
+      let opened = parseConfig(room.config);
+      const migrated = migrateBuiltinsToExtras(opened, {}, {
+        h: snap.video_height || 720,
+        w: ((snap.video_height || 720) * 16) / 9,
+      });
+      if (migrated !== opened) {
+        opened = migrated;
+        cfgRef.current = migrated;
+        setCfgState(migrated);
+        ipc.liveUpdateRoom(room.id, { config: serializeConfig(migrated) }).catch(() => {});
       }
+      const saved = opened.sources;
       // Item-list half of the document. A DIFFERENT room: clear whatever
       // open-list items the engine is holding from the previous one, then
       // respawn this room's. The SAME room reopened: the engine already holds
@@ -4096,9 +4085,7 @@ export function LiveView({
       // call), add only what is missing. Nothing flashes, nothing
       // reconnects that did not have to.
       const hot = engineHeldRoom === room.id;
-      const held = (snap.sources?.items ?? []).filter(
-        (i) => !["screen", "camera", "overlay"].includes(i.id),
-      );
+      const held = (snap.sources?.items ?? []).filter((i) => i.id !== "overlay");
       const listed = new Map((saved.extras ?? []).map((e) => [e.id, e]));
       const kept = new Set<string>();
       for (const i of held) {
@@ -4123,18 +4110,14 @@ export function LiveView({
         hot &&
         (snap.sources?.overlay_window ?? null) === (saved.overlay_window ?? null) &&
         (snap.sources?.overlay_url ?? null) === (saved.overlay_url ?? null);
-      if (
-        typeof saved.screen === "boolean" &&
-        (saved.overlay_window != null || saved.overlay_url) &&
-        !overlaySame
-      ) {
+      if ((saved.overlay_window != null || saved.overlay_url) && !overlaySame) {
         ipc.liveSetOverlay(saved.overlay_window ?? null, true, saved.overlay_url ?? null).catch(() => {});
       }
-      const mount = parseConfig(room.config).active_scene;
+      const mount = opened.active_scene;
       if (mount) setPendingScene(mount);
       setDocApplied(true);
       // Warm the stinger the room already uses, so the first cut is instant.
-      const cfgNow = parseConfig(room.config);
+      const cfgNow = opened;
       const firstStinger =
         cfgNow.transition?.stinger ?? cfgNow.scenes.find((x) => x.transition?.stinger)?.transition?.stinger;
       if (firstStinger) stingerIpc.prepare(firstStinger).catch(() => {});
@@ -4219,7 +4202,11 @@ export function LiveView({
           // change, which is why guests didn't survive a reopen.
           const next = {
             ...cfgRef.current,
-            sources: { ...ev.sources, extras: cfgRef.current.sources.extras },
+            sources: {
+              ...cfgRef.current.sources,
+              overlay_window: ev.sources.overlay_window ?? null,
+              overlay_url: ev.sources.overlay_url ?? null,
+            },
           };
           cfgRef.current = next;
           setCfgState(next);
@@ -4229,9 +4216,6 @@ export function LiveView({
         setSnapshot((s) => (s ? { ...s, video_height: ev.height, video_fps: ev.fps } : s));
       } else if (ev.type === "levels") {
         // peak → dB → 0..1 over a 50dB window, with a falling ballistic.
-        const db = ev.mic_peak > 0.00001 ? 20 * Math.log10(ev.mic_peak) : -60;
-        const pct = Math.max(0, Math.min(1, (db + 50) / 50));
-        setMicLevel((prev) => Math.max(pct, prev * 0.78));
         if (ev.extra_peaks?.length) {
           setExtraLevels((prev) => {
             const next = { ...prev };
@@ -4355,10 +4339,11 @@ export function LiveView({
     // from trapping the user (and is recorded, so it is never silent).
     if (!framesReady && !framesCapped) {
       const who = pendingFrames[0];
+      const whoKind = who === "overlay" ? "overlay" : (snapRef.current?.sources?.items ?? []).find((i) => i.id === who)?.kind;
       setVeilNote(
-        who === "camera" ? "Starting camera…"
-        : who === "screen" ? "Starting screen capture…"
-        : who === "overlay" ? "Loading overlay…"
+        whoKind === "camera" ? "Starting camera…"
+        : whoKind === "screen" ? "Starting screen capture…"
+        : whoKind === "overlay" ? "Loading overlay…"
         : who?.startsWith("gslot") || !who ? "Preparing the stage…"
         : "Starting sources…",
       );
@@ -4429,22 +4414,17 @@ export function LiveView({
       const cur = c.sources ?? {};
       const next = {
         ...cur,
-        screen: sources.screen,
-        camera: sources.camera,
-        mic: sources.mic,
-        mic_volume: sources.mic_volume,
-        mic_muted: sources.mic_muted,
         overlay_window: sources.overlay_window ?? null,
         overlay_url: sources.overlay_url ?? null,
       };
-      const KEYS = ["screen", "camera", "mic", "mic_volume", "mic_muted", "overlay_window", "overlay_url"] as const;
+      const KEYS = ["overlay_window", "overlay_url"] as const;
       if (KEYS.some((k) => (cur as Record<string, unknown>)[k] !== (next as Record<string, unknown>)[k])) {
         writeCfg({ ...c, sources: next });
       }
     }, 400);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sources.screen, sources.camera, sources.mic, sources.mic_volume, sources.mic_muted, sources.overlay_window, sources.overlay_url, room]);
+  }, [sources.overlay_window, sources.overlay_url, room]);
 
   // ── WRITE-THROUGH (room state, mirror 2) ─────────────────────────────────
   /** The active scene IS what you're looking at: any real edit — drag, nudge,
@@ -4463,17 +4443,12 @@ export function LiveView({
     if (!roomApplied.current) return;
     // Guests AND mod feeds are excluded: transient ids; slots carry guest
     // geometry, `mod_feeds` carries a seat's (lib/modFeed.ts).
-    const items = (sourcesRef.current.items ?? []).filter((i) => i.kind !== "guest" && i.kind !== "mod");
-    if (!items.length) return;
-    const look: Record<string, SceneItemLook> = Object.fromEntries(
-      items.map((i) => [i.id, { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z }]),
-    );
+    const look = stageLook(sourcesRef.current.items ?? []);
+    if (!Object.keys(look).length) return;
     const base = cfgRef.current;
     writeCfg({
       ...base,
-      scenes: (base.scenes.length ? base.scenes : DEFAULT_SCENES).map((x) =>
-        x.id === sceneId ? { ...x, look, screen: sourcesRef.current.screen, camera: sourcesRef.current.camera } : x,
-      ),
+      scenes: base.scenes.map((x) => (x.id === sceneId ? { ...x, look } : x)),
     });
   };
   const captureActiveLook = () => {
@@ -4495,17 +4470,6 @@ export function LiveView({
     captureLookNow(owed);
   };
 
-  async function setSrc(patch: Partial<Pick<LiveSources, "screen" | "camera" | "mic">>) {
-    if (refuseSetEdit()) return;
-    const next = { ...sources, ...patch };
-    setSources(next);
-    try {
-      await ipc.liveSetSources(next.screen, next.camera, next.mic);
-    } catch (e) {
-      setBanner(String(e));
-    }
-  }
-
   const overlayActive = sources.overlay_window != null || !!sources.overlay_url;
   const enabledDests = destinations.filter((d) => d.enabled);
 
@@ -4513,16 +4477,15 @@ export function LiveView({
   /** Scene to mount into once the engine is ready (set when the room's
    * document is applied on open). */
   const [pendingScene, setPendingScene] = useState<string | null>(null);
-  // Legacy fallback so a room saved before looks existed still highlights.
-  const activeScene =
-    activeSceneId ?? scenes.find((p) => p.screen === sources.screen && p.camera === sources.camera)?.id;
+  const activeScene = activeSceneId ?? undefined;
   activeSceneRef.current = activeScene ?? null;
 
   /** Apply a scene as a LOOK: sources are never created or destroyed on a
    * switch (no flicker, no permission re-prompts, no z scramble) — only
    * visibility, geometry and stacking change, through the same transform
-   * pipeline the stage editor uses. Missing well-known sources the scene
-   * needs are created once; nothing is ever torn down. */
+   * pipeline the stage editor uses. A scene can never turn on a source the
+   * room removed: a look entry for an id the graph does not hold is
+   * skipped, and a scene with no look leaves the stage as it is. */
   const applyScene = async (p: RoomScene, opts?: { cut?: boolean }) => {
     // A selection belongs to the scene it was made in: leaving the scene
     // drops it, or the outline (and Delete) would follow you to items that
@@ -4533,20 +4496,11 @@ export function LiveView({
     flushActiveLook();
     if (!engineOk) return;
     try {
-      const bh = snapshot?.video_height || 720;
-      const bw = (bh * 16) / 9;
-      const look = p.look && Object.keys(p.look).length ? p.look : builtinLook(p, bw, bh);
-      const needScreen = look.screen?.visible ?? false;
-      const needCamera = look.camera?.visible ?? false;
-      if ((needScreen && !sources.screen) || (needCamera && !sources.camera)) {
-        await ipc.liveSetSources(sources.screen || needScreen, sources.camera || needCamera, sources.mic);
-      }
-      // Only address items that actually exist (or were just created) — a
-      // transform on a missing id is an engine error, not a no-op.
+      const look = p.look ?? {};
+      // Only address items that actually exist — a transform on a missing
+      // id is an engine error, not a no-op, and a look never creates one.
       const exists = new Set([
         ...(sources.items ?? []).map((i) => i.id),
-        ...(sources.screen || needScreen ? ["screen"] : []),
-        ...(sources.camera || needCamera ? ["camera"] : []),
         ...(overlayActive ? ["overlay"] : []),
       ]);
       // SLOT MODEL: a slot bound to a guest applies AS the guest — same rect,
@@ -4567,15 +4521,14 @@ export function LiveView({
       }
       // MEMBERSHIP: a scene's look is the set of sources that belong to it.
       // Anything the look does not mention is not in this scene — hide it.
-      // Screen/camera/overlay follow the same rule as every other source
-      // (a scene that dropped its camera stays camera-less); only guests are
-      // exempt, because slots — not scenes — carry their geometry.
+      // Camera/screen/overlay follow the same rule as every other source
+      // (a scene that dropped its camera stays camera-less); guests, mod
+      // feeds and mics are exempt: slots and mod_feeds carry the first two
+      // across every scene, and a mic is room-level audio with no look.
       const realLook = !!(p.look && Object.keys(p.look).length);
       if (realLook) {
         for (const it of sources.items ?? []) {
-          // Guests and mod feeds are not scene members: slots and mod_feeds
-          // carry them across every scene.
-          if (it.kind === "guest" || it.kind === "mod") continue;
+          if (it.kind === "guest" || it.kind === "mod" || it.kind === "mic") continue;
           if (!(it.id in look) && it.visible) {
             ipc.liveSetTransform(it.id, { visible: false }, true).catch(() => {});
           }
@@ -4764,16 +4717,10 @@ export function LiveView({
     const n = scenes.length + 1;
     // Save the CURRENT look, extras included — the scene is a snapshot of
     // the whole stage, not just which slots are on.
-    const look: Record<string, SceneItemLook> = Object.fromEntries(
-      (sources.items ?? [])
-        .filter((i) => i.kind !== "guest") // slots carry guest geometry; ids are transient
-        .map((i) => [i.id, { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z }]),
-    );
+    const look = stageLook(sources.items ?? []);
     const next: RoomScene = {
       id: `s${Date.now().toString(36)}`,
       name: `Scene ${n}`,
-      screen: sources.screen,
-      camera: sources.camera,
       look,
     };
     writeCfg({ ...cfg, scenes: [...scenes, next] });
@@ -4790,17 +4737,11 @@ export function LiveView({
    * and the old recipe would undo you every time. */
   const updateScene = (id: string) => {
     if (refuseSetEdit()) return;
-    const look: Record<string, SceneItemLook> = Object.fromEntries(
-      (sources.items ?? [])
-        .filter((i) => i.kind !== "guest") // slots carry guest geometry; ids are transient
-        .map((i) => [i.id, { visible: i.visible, x: i.x, y: i.y, w: i.w, h: i.h, z: i.z }]),
-    );
+    const look = stageLook(sources.items ?? []);
     const base = cfgRef.current;
     writeCfg({
       ...base,
-      scenes: (base.scenes.length ? base.scenes : DEFAULT_SCENES).map((x) =>
-        x.id === id ? { ...x, look, screen: sources.screen, camera: sources.camera } : x,
-      ),
+      scenes: base.scenes.map((x) => (x.id === id ? { ...x, look } : x)),
     });
     setBanner("Scene updated to the current stage.");
     window.setTimeout(() => setBanner(null), 2200);
@@ -4820,9 +4761,7 @@ export function LiveView({
     } else {
       writeCfg({
         ...c,
-        scenes: (c.scenes.length ? c.scenes : DEFAULT_SCENES).map((x) =>
-          x.id === sceneId ? { ...x, transition: t } : x,
-        ),
+        scenes: c.scenes.map((x) => (x.id === sceneId ? { ...x, transition: t } : x)),
       });
     }
   };
@@ -4846,6 +4785,14 @@ export function LiveView({
       if (!e.metaKey || e.altKey || e.ctrlKey) return;
       const el = document.activeElement as HTMLElement | null;
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      // ⌘N: a new scene from the stage as it is (host only; a blank room
+      // starts with none).
+      if (e.key.toLowerCase() === "n" && !e.shiftKey) {
+        if (!isHostRef.current) return;
+        e.preventDefault();
+        addScene();
+        return;
+      }
       const n = Number(e.key);
       if (!Number.isInteger(n) || n < 1 || n > 9) return;
       if (hostScenesRef.current) {
@@ -5803,9 +5750,17 @@ export function LiveView({
   }, [pendingScene, engineOk, docApplied]);
 
 
-  const setVolume = (v: number) => {
-    setSources((s) => ({ ...s, mic_volume: v }));
-    ipc.liveSetMicAudio({ volume: v }).catch((e) => setBanner(String(e)));
+  /** Stage-bar mute: every mic in the room together (one button, one
+   * meaning). Per-mic faders live in the mixer. */
+  const micItems = (sources.items ?? []).filter((i) => i.kind === "mic");
+  const mixerItems = (sources.items ?? [])
+    .filter((i) => i.kind === "mic" || (i.has_audio && (i.kind === "guest" || i.kind === "media")))
+    .sort((a, b) => (a.kind === "mic" ? 0 : 1) - (b.kind === "mic" ? 0 : 1));
+  const micMuted = micItems.length > 0 && micItems.every((i) => i.muted);
+  const toggleMute = () => {
+    if (!micItems.length) return;
+    const m = !micMuted;
+    for (const i of micItems) setSourceAudio(i.id, undefined, m).catch((e) => setBanner(String(e)));
   };
   const [keyFor, setKeyFor] = useState<string | null>(null);
   const [keyVal, setKeyVal] = useState("");
@@ -5819,12 +5774,6 @@ export function LiveView({
       setBanner(String(e));
     }
   };
-  const toggleMute = () => {
-    const m = !(sources.mic_muted ?? false);
-    setSources((s) => ({ ...s, mic_muted: m }));
-    ipc.liveSetMicAudio({ muted: m }).catch((e) => setBanner(String(e)));
-  };
-
   const vh = snapshot?.video_height || 720;
   vhRef.current = vh;
   const vf = snapshot?.video_fps || 30;
@@ -5867,28 +5816,6 @@ export function LiveView({
     // there would sit over the strip and eat every click.
     (sceneSettings !== null && dockOf(layout, "scenes") !== "bottom" && dockOf(layout, "scenes") !== "top") || panelMenu !== null || layoutMenu || addMenu !== null || adding || !!editing;
 
-  const micStrip = (
-    <MeterStrip
-      horizontal={formDockOf("mixer") === "top"}
-      label="Mic"
-      icon={ic.mic}
-      level={micLevel}
-      volume={sources.mic_volume ?? 1}
-      muted={sources.mic_muted ?? false}
-      disabled={!sources.mic}
-      onVolume={setVolume}
-      onMute={toggleMute}
-      onToggle={() => setSrc({ mic: !sources.mic })}
-      onFilters={() => {
-        // The mic's chain lives in the Sources panel navigator; make sure
-        // that panel is actually visible before sending them there.
-        if (dockOf(layout, "sources") === "hidden") {
-          setLayout(movePanel(layout, "sources", dockOf(layout, "mixer")));
-        }
-        setFilterFor({ id: "mic", label: "Microphone", media: "audio" });
-      }}
-    />
-  );
 
 
   // ── Panels: everything that isn't the stage is a dockable panel ────────
@@ -5939,6 +5866,11 @@ export function LiveView({
         }
         return (
           <div className="rm-scenes">
+            {scenes.length === 0 && (
+              <div className="rm-rows-empty">
+                No scenes yet — add one with + or ⌘N to save the stage as it is.
+              </div>
+            )}
             {scenes.map((p, i) => (
               <div
                 key={p.id}
@@ -6003,7 +5935,7 @@ export function LiveView({
                       {ic.gear}
                     </button>
                     <span className="rm-scene-key">{i < 9 ? `⌘${i + 1}` : ""}</span>
-                    {!DEFAULT_SCENES.some((d) => d.id === p.id) && (
+                    {(
                       <button
                         className="rm-scene-x"
                         title="Remove scene"
@@ -6171,7 +6103,14 @@ export function LiveView({
                   />
                 </div>
               ) : (
-                <DevicePicker kind={deviceFor.key} onClose={() => setDeviceFor(null)} />
+                (() => {
+                  const it = (sources.items ?? []).find((i) => i.id === deviceFor.key);
+                  return it && isCaptureKind(it.kind) ? (
+                    <DevicePicker itemId={it.id} kind={it.kind} onClose={() => setDeviceFor(null)} />
+                  ) : (
+                    <div className="rm-devices-empty">That source is gone.</div>
+                  );
+                })()
               )}
             </div>
           );
@@ -6188,29 +6127,27 @@ export function LiveView({
         };
         const activeRows = (
           [
-            sources.screen && inScene("screen") && { key: "screen", label: "Screen", icon: ic.screen, device: "screen", remove: () => removeCoreSource("screen") },
-            sources.camera && inScene("camera") && { key: "camera", label: "Camera", icon: ic.cam, device: "camera", remove: () => removeCoreSource("camera") },
-            overlayActive && inScene("overlay") && { key: "alerts", label: "Overlay", icon: ic.link, remove: () => removeCoreSource("overlay") },
-            // Audio is a source, like OBS: the picker lives here, the fader
-            // lives in the mixer.
-            sources.mic && { key: "mic", label: "Microphone", icon: ic.mic, device: "mic", audio: true, remove: () => setSrc({ mic: false }) },
-            // Open-list items, straight from engine truth. Guest ITEMS are
-            // excluded: slots are the general idea — guest geometry belongs
-            // to gslot scene furniture, and people are managed per-person in
-            // the Guests panel. The retired aggregate "Guests · n/m" row is
-            // exactly what slots replaced.
+            overlayActive && inScene("overlay") && { key: "alerts", label: "Overlay", icon: ic.link, remove: () => removeOverlaySource() },
+            // Every item, straight from engine truth — camera, screen and
+            // mic included (v0.4.34: they are sources like any other). Guest
+            // ITEMS are excluded: slots are the general idea — guest geometry
+            // belongs to gslot scene furniture, and people are managed
+            // per-person in the Guests panel.
             ...liveItems
-              .filter((i) => !["screen", "camera", "overlay"].includes(i.id) && i.kind !== "guest")
+              .filter((i) => i.id !== "overlay" && i.kind !== "guest")
               // A MOD FEED is a row in every scene (it is not scene furniture:
               // its place is the room's mod_feeds), and only while it is on
-              // the set — a connected-but-unplaced seat lives in Mods.
-              .filter((i) => (i.kind === "mod" ? i.visible : inScene(i.id)))
+              // the set — a connected-but-unplaced seat lives in Mods. A mic
+              // is room-level audio: a row in every scene too.
+              .filter((i) => (i.kind === "mod" ? i.visible : i.kind === "mic" ? true : inScene(i.id)))
               .map((i) => ({
                 key: i.id,
                 label: i.label || i.kind,
                 icon: EXTRA_ICONS[i.kind] ?? ic.link,
-                // Window items are re-selectable: same strip, list of windows.
-                device: i.kind === "window" ? `window:${i.id}` : undefined,
+                audio: i.kind === "mic" ? true : undefined,
+                // Capture items re-point at a device; window items at a
+                // window. Same gear, its own list.
+                device: i.kind === "window" ? `window:${i.id}` : isCaptureKind(i.kind) ? i.id : undefined,
                 inviteUrl: (cfg.sources.extras ?? []).find((e) => e.id === i.id)?.invite_url,
                 // Visual extras can carry a sponsor credit (#50).
                 credit: ["image", "text", "media", "color"].includes(i.kind)
@@ -6235,8 +6172,8 @@ export function LiveView({
             remove: () => void;
           }[]
         ).sort((a, b) => {
-          // Microphone (audio-only, grip-less) stays at the bottom.
-          const rank = (k: string) => (k === "mic" ? 1 : 0);
+          // Microphones (audio-only) stay at the bottom.
+          const rank = (k: string) => (itemFor(k)?.kind === "mic" ? 1 : 0);
           if (rank(a.key) !== rank(b.key)) return rank(a.key) - rank(b.key);
           const zOf = (k: string) => itemFor(k)?.z;
           const za = zOf(a.key);
@@ -6311,7 +6248,7 @@ export function LiveView({
                           setFilterFor({
                             id: t.key === "alerts" ? "overlay" : t.key,
                             label: t.label,
-                            media: t.key === "mic" ? "audio" : "video",
+                            media: itemFor(t.key)?.kind === "mic" ? "audio" : "video",
                           })
                         }
                       >
@@ -6442,32 +6379,36 @@ export function LiveView({
         if (!isHost) return <div className="rm-rows-empty">Audio is mixed in the host's Producer.</div>;
         return (
               <div className="rm-strips">
-                {sources.mic && micStrip}
-                {/* Every audio-bearing source gets a strip, not just the mic —
-                  * a guest you cannot level is only half a guest. */}
-                {(sources.items ?? [])
-                  // Guests and media genuinely carry audio. Screen and camera
-                  // advertise the capability but produce no track in our
-                  // graph, and a row of silent faders just buries the ones
-                  // that matter.
-                  .filter((i) => i.has_audio && (i.kind === "guest" || i.kind === "media"))
-                  .map((i) => (
-                    <MeterStrip
-                      horizontal={formDockOf("mixer") === "top"}
-                      key={i.id}
-                      label={i.label || i.kind}
-                      icon={i.kind === "guest" ? ic.invite : ic.play}
-                      level={extraLevels[i.id] ?? 0}
-                      volume={i.volume ?? 1}
-                      muted={i.muted ?? false}
-                      onVolume={(v) => setSourceAudio(i.id, v).catch(() => {})}
-                      onMute={() => setSourceAudio(i.id, undefined, !i.muted).catch(() => {})}
-                    />
-                  ))}
-                {!sources.mic &&
-                  (sources.items ?? []).every(
-                    (i) => !(i.has_audio && (i.kind === "guest" || i.kind === "media")),
-                  ) && (
+                {/* Every audio-bearing source gets a strip — mics first, then
+                  * guests and media. Screen and camera advertise the
+                  * capability but produce no track in our graph, and a row of
+                  * silent faders just buries the ones that matter. */}
+                {mixerItems.map((i) => (
+                  <MeterStrip
+                    horizontal={formDockOf("mixer") === "top"}
+                    key={i.id}
+                    label={i.label || i.kind}
+                    icon={EXTRA_ICONS[i.kind] ?? ic.play}
+                    level={extraLevels[i.id] ?? 0}
+                    volume={i.volume ?? 1}
+                    muted={i.muted ?? false}
+                    onVolume={(v) => setSourceAudio(i.id, v).catch(() => {})}
+                    onMute={() => setSourceAudio(i.id, undefined, !i.muted).catch(() => {})}
+                    onFilters={
+                      i.kind === "mic"
+                        ? () => {
+                            // The mic's chain lives in the Sources panel
+                            // navigator; make sure that panel is visible.
+                            if (dockOf(layout, "sources") === "hidden") {
+                              setLayout(movePanel(layout, "sources", dockOf(layout, "mixer")));
+                            }
+                            setFilterFor({ id: i.id, label: i.label || "Microphone", media: "audio" });
+                          }
+                        : undefined
+                    }
+                  />
+                ))}
+                {mixerItems.length === 0 && (
                   <div className="rm-rows-empty">
                     No audio sources. Add a microphone from Sources.
                   </div>
@@ -6832,11 +6773,17 @@ export function LiveView({
     if (id === "sources") {
       // A non-host seat has no "+": the set is the host's (the body says so).
       if (!isHost) return null;
+      // Camera, screen and mic are picked like anything else (v0.4.34) and
+      // there can be several of each — a second camera, a second display.
+      const nth = (kind: string, label: string) => {
+        const n = (sources.items ?? []).filter((i) => i.kind === kind).length;
+        return n ? `${label} ${n + 1}` : label;
+      };
       const addable = [
-        !sources.screen && { key: "screen", label: "Screen", icon: ic.screen, act: () => setSrc({ screen: true }) },
-        !sources.camera && { key: "camera", label: "Camera", icon: ic.cam, act: () => setSrc({ camera: true }) },
+        { key: "camera", label: "Camera", icon: ic.cam, act: () => addExtraSource(nth("camera", "Camera"), { kind: "camera" }) },
+        { key: "screen", label: "Screen", icon: ic.screen, act: () => addExtraSource(nth("screen", "Screen"), { kind: "screen" }) },
+        { key: "mic", label: "Microphone", icon: ic.mic, act: () => addExtraSource(nth("mic", "Microphone"), { kind: "mic" }) },
         !overlayActive && { key: "alerts", label: "Overlay", icon: ic.link, act: () => setOverlayInline(true) },
-        !sources.mic && { key: "mic", label: "Microphone", icon: ic.mic, act: () => setSrc({ mic: true }) },
         {
           key: "media",
           label: "Media file",
@@ -6931,7 +6878,7 @@ export function LiveView({
       );
     }
     if (id === "mixer")
-      return <span className="rm-card-sub">{sources.mic ? (sources.mic_muted ? "mic muted" : "mic open") : "mic off"}</span>;
+      return <span className="rm-card-sub">{micItems.length ? (micMuted ? "mic muted" : "mic open") : "no mic"}</span>;
     return null;
   };
 
@@ -7574,7 +7521,6 @@ export function LiveView({
             <SourceSettingsStrip
               rowKey={srcSettings}
               items={sources.items ?? []}
-              sources={sources}
               onClose={() => setSrcSettings(null)}
               openOverlay={() => { setSrcSettings(null); setOverlayInline(true); }}
               onPickWindow={replaceWindowSource}
@@ -7625,7 +7571,8 @@ export function LiveView({
             {engineOk && isHost && (
               <PreviewPanel>
                 <StageEditor
-                  items={sources.items ?? []}
+                  // A mic has no picture: never a box on the stage.
+                  items={(sources.items ?? []).filter((i) => i.kind !== "mic")}
                   baseW={(vh * 16) / 9}
                   baseH={vh}
                   disabled={!engineOk || !isHost}
@@ -7673,21 +7620,24 @@ export function LiveView({
           {/* Mic / camera / screen / record act on OUR engine — host only. */}
           {engineOk && isHost && (
             <div className={`stg-bar pos-${cfg.stage_bar ?? "bottom"}`}>
-              <button
-                className={`stg-btn${sources.mic_muted ? " off" : ""}`}
-                title={sources.mic_muted ? "Unmute mic" : "Mute mic"}
-                onClick={toggleMute}
-              >
-                {ic.mic}
-              </button>
+              {micItems.length > 0 && (
+                <button
+                  className={`stg-btn${micMuted ? " off" : ""}`}
+                  title={micMuted ? "Unmute mic" : "Mute mic"}
+                  onClick={toggleMute}
+                >
+                  {ic.mic}
+                </button>
+              )}
               {(() => {
-                const cam = (sources.items ?? []).find((i) => i.id === "camera");
-                return cam && isHost ? (
+                // The room's first camera / screen: quick eye toggles.
+                const cam = (sources.items ?? []).find((i) => i.kind === "camera");
+                return cam ? (
                   <button
                     className={`stg-btn${cam.visible ? "" : " off"}`}
                     title={cam.visible ? "Hide camera" : "Show camera"}
                     onClick={() => {
-                      ipc.liveSetTransform("camera", { visible: !cam.visible }, true).catch(() => {});
+                      ipc.liveSetTransform(cam.id, { visible: !cam.visible }, true).catch(() => {});
                       captureActiveLook();
                     }}
                   >
@@ -7696,13 +7646,13 @@ export function LiveView({
                 ) : null;
               })()}
               {(() => {
-                const scr = (sources.items ?? []).find((i) => i.id === "screen");
-                return scr && isHost ? (
+                const scr = (sources.items ?? []).find((i) => i.kind === "screen");
+                return scr ? (
                   <button
                     className={`stg-btn${scr.visible ? "" : " off"}`}
                     title={scr.visible ? "Hide screen" : "Show screen"}
                     onClick={() => {
-                      ipc.liveSetTransform("screen", { visible: !scr.visible }, true).catch(() => {});
+                      ipc.liveSetTransform(scr.id, { visible: !scr.visible }, true).catch(() => {});
                       captureActiveLook();
                     }}
                   >
@@ -7736,27 +7686,33 @@ export function LiveView({
               // nothing — macOS does not retrofit access onto a live
               // capture session. Bounce just that source so the grant
               // takes effect without a relaunch or a second Allow.
-              const b = sources;
-              const bounce = async (screen: boolean, camera: boolean, mic: boolean, on: () => Promise<unknown>) => {
+              // Every source of that kind is re-created under its own id
+              // and spec, then re-dressed with the look it had.
+              const affected = (cfgRef.current.sources.extras ?? []).filter((e) => e.spec.kind === kind);
+              if (!affected.length) return;
+              const before = new Map((sources.items ?? []).map((i) => [i.id, i]));
+              void (async () => {
                 // The grant is confirmed but the sources restart to bind it —
                 // hold the veil over the flicker instead of showing it.
                 setVeilNote("Applying access…");
                 setMountVeil(true);
                 try {
-                  await ipc.liveSetSources(screen, camera, mic);
-                  await on();
+                  for (const e of affected) {
+                    await extraSources.remove(e.id).catch(() => {});
+                    await extraSources.add(e.id, e.label, e.spec);
+                    const was = before.get(e.id);
+                    if (was) {
+                      await ipc
+                        .liveSetTransform(e.id, { x: was.x, y: was.y, w: was.w, h: was.h, z: was.z, visible: was.visible }, true)
+                        .catch(() => {});
+                    }
+                  }
                 } catch {
                   /* engine reports via banner */
                 } finally {
                   window.setTimeout(() => setMountVeil(false), 300);
                 }
-              };
-              if (kind === "mic" && b.mic)
-                bounce(b.screen, b.camera, false, () => ipc.liveSetSources(b.screen, b.camera, true));
-              if (kind === "camera" && b.camera)
-                bounce(b.screen, false, b.mic, () => ipc.liveSetSources(b.screen, true, b.mic));
-              if (kind === "screen" && b.screen)
-                bounce(false, b.camera, b.mic, () => ipc.liveSetSources(true, b.camera, b.mic));
+              })();
             }}
           />
         </div>
@@ -7915,7 +7871,12 @@ export function LiveView({
               />
             </div>
           ) : (
-            <DevicePicker kind={deviceMenu} onClose={() => setDeviceMenu(null)} />
+            (() => {
+              const it = (sources.items ?? []).find((i) => i.id === deviceMenu);
+              return it && isCaptureKind(it.kind) ? (
+                <DevicePicker itemId={it.id} kind={it.kind} onClose={() => setDeviceMenu(null)} />
+              ) : null;
+            })()
           )}
         </Pop>
       )}
@@ -7987,7 +7948,6 @@ export function LiveView({
             <SourceSettingsStrip
               rowKey={srcSettings}
               items={sources.items ?? []}
-              sources={sources}
               onClose={() => setSrcSettings(null)}
               openOverlay={() => { setSrcSettings(null); setOverlayInline(true); }}
               onPickWindow={replaceWindowSource}

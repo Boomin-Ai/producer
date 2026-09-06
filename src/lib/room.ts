@@ -40,12 +40,13 @@ export interface RoomScene {
   name: string;
   /** Per-scene override; absent = use the room default. */
   transition?: SceneTransition;
-  /** Legacy flags — still written so old builds stay readable; the built-in
-   * scenes also derive their recipes from these. */
-  screen: boolean;
-  camera: boolean;
-  /** Full captured look, keyed by item id (custom scenes). Built-ins leave
-   * this unset and compute a canvas-sized recipe at apply time. */
+  /** LEGACY (pre-v0.4.34) built-in switches. Never written any more and
+   * never read by the stage: `migrateBuiltinsToExtras` folds them into
+   * `look` once, on the first open of an old room, and strips them. */
+  screen?: boolean;
+  camera?: boolean;
+  /** The look, keyed by item id. Absent/empty = "everything as it is". A
+   * scene can only re-dress items the room owns; it never creates one. */
   look?: Record<string, SceneItemLook>;
 }
 
@@ -64,6 +65,8 @@ export interface RoomExtra {
 }
 
 export interface RoomSources {
+  /** LEGACY (pre-v0.4.34) built-in switches — migration inputs only, see
+   * `migrateBuiltinsToExtras`. Camera, screen and mic are `extras` now. */
   screen?: boolean;
   camera?: boolean;
   mic?: boolean;
@@ -130,17 +133,13 @@ export interface RoomVideo {
   f: number;
 }
 
-export const DEFAULT_SCENES: RoomScene[] = [
-  { id: "pip", name: "PiP", screen: true, camera: true },
-  { id: "cam", name: "Full cam", screen: false, camera: true },
-  { id: "screen", name: "Screen", screen: true, camera: false },
-];
-
+/** A new room is BLANK (v0.4.34): no scenes, no sources. Everything on the
+ * stage is something the host added. */
 export function defaultConfig(): RoomConfig {
   return {
     sources: {},
     layout: { ...DEFAULT_LAYOUT, left: [...DEFAULT_LAYOUT.left], right: [...DEFAULT_LAYOUT.right], bottom: [...DEFAULT_LAYOUT.bottom], hidden: [...DEFAULT_LAYOUT.hidden] },
-    scenes: DEFAULT_SCENES.map((s) => ({ ...s })),
+    scenes: [],
     channels: {},
   };
 }
@@ -168,11 +167,11 @@ export function parseConfig(raw: string | null | undefined): RoomConfig {
     // existed must not be able to ask for one that has since been retired.
     base.layout = normalize(v.layout as Partial<Layout>);
   }
-  if (Array.isArray(v.scenes) && v.scenes.length) {
+  if (Array.isArray(v.scenes)) {
+    // Empty stays empty: a blank room is a real state, not a missing one.
     base.scenes = (v.scenes as RoomScene[]).filter(
       (s) => s && typeof s.id === "string" && typeof s.name === "string",
     );
-    if (base.scenes.length === 0) base.scenes = DEFAULT_SCENES.map((s) => ({ ...s }));
   }
   if (v.channels && typeof v.channels === "object") base.channels = v.channels as Record<string, boolean>;
   if (typeof v.active_scene === "string") base.active_scene = v.active_scene;
@@ -246,4 +245,142 @@ export function liveRoomId(): string | null {
   } catch {
     return null;
   }
+}
+
+// --- v0.4.34 migration: built-in switches → ordinary sources ---------------
+
+/** Ids the migrated capture sources keep. They match the engine item ids the
+ * built-ins used, so a saved custom `look` keyed by "camera"/"screen" keeps
+ * dressing the same picture after the move. */
+export const LEGACY_CAMERA_ID = "camera";
+export const LEGACY_SCREEN_ID = "screen";
+export const LEGACY_MIC_ID = "mic";
+
+/** Which devices the built-ins would have used (engine selection at the
+ * time, if known). Absent = system default, which is what a fresh built-in
+ * resolved to. */
+export interface LegacyDevices {
+  camera?: string | null;
+  screen?: string | null;
+  mic?: string | null;
+}
+
+export type CaptureKind = "camera" | "screen" | "mic";
+
+export function isCaptureKind(kind: string | undefined | null): kind is CaptureKind {
+  return kind === "camera" || kind === "screen" || kind === "mic";
+}
+
+/** The old built-in recipe for a flag pair, as a look over the legacy ids:
+ * screen full-frame at z 0, overlay above it, camera on top — PiP
+ * bottom-right when the screen is up, full-frame otherwise. Used ONLY to
+ * migrate a flag-only scene; nothing computes recipes at apply time now. */
+export function builtinLook(
+  p: { screen?: boolean; camera?: boolean },
+  bw: number,
+  bh: number,
+): Record<string, SceneItemLook> {
+  const pipW = Math.round(bw * 0.28);
+  const pipH = Math.round((pipW * 9) / 16);
+  const m = Math.round(bw * 0.02);
+  const look: Record<string, SceneItemLook> = {};
+  look[LEGACY_SCREEN_ID] = p.screen ? { visible: true, x: 0, y: 0, w: bw, h: bh, z: 0 } : { visible: false };
+  look.overlay = { visible: true, z: 1 };
+  look[LEGACY_CAMERA_ID] = p.camera
+    ? p.screen
+      ? { visible: true, x: bw - pipW - m, y: bh - pipH - m, w: pipW, h: pipH, z: 2 }
+      : { visible: true, x: 0, y: 0, w: bw, h: bh, z: 2 }
+    : { visible: false };
+  return look;
+}
+
+function hasLegacyFlags(s: RoomScene): boolean {
+  return typeof s.screen === "boolean" || typeof s.camera === "boolean";
+}
+
+function hasLegacySources(src: RoomSources): boolean {
+  return (
+    typeof src.screen === "boolean" ||
+    typeof src.camera === "boolean" ||
+    typeof src.mic === "boolean" ||
+    typeof src.mic_volume === "number" ||
+    typeof src.mic_muted === "boolean"
+  );
+}
+
+/** Does the room still carry the pre-v0.4.34 built-in switches anywhere? */
+export function needsBuiltinMigration(c: RoomConfig): boolean {
+  return hasLegacySources(c.sources) || c.scenes.some(hasLegacyFlags);
+}
+
+/** Fold the built-in switches of a pre-v0.4.34 room into ordinary sources,
+ * ONCE. Pure; returns the same object when nothing needs doing.
+ *
+ * Rule:
+ *  - A capture source is synthesized when the room used it: the saved
+ *    switch was on, or any scene's flag asked for it (a flag-only scene
+ *    turned the source on at apply time, so the room depended on it). The
+ *    mic follows its switch alone — scenes never carried a mic flag.
+ *  - Ids are the legacy engine ids ("camera" / "screen" / "mic"), so every
+ *    saved custom look keyed by them still applies. Nothing is synthesized
+ *    when an extra of that kind already exists (a room saved by this build
+ *    or later).
+ *  - A scene with flags and no look gets the built-in recipe as its look
+ *    (the exact geometry the flags produced); a scene that already has a
+ *    look keeps it untouched — under the old apply the look won anyway.
+ *  - The flags and the switches are stripped. User scenes are never
+ *    deleted; a room saved with the three defaults keeps them.
+ */
+export function migrateBuiltinsToExtras(
+  c: RoomConfig,
+  devices: LegacyDevices = {},
+  canvas: { w: number; h: number } = { w: 1280, h: 720 },
+): RoomConfig {
+  if (!needsBuiltinMigration(c)) return c;
+  const src = c.sources;
+  const extras: RoomExtra[] = [...(src.extras ?? [])];
+  const has = (kind: CaptureKind) => extras.some((e) => e.spec.kind === kind);
+  const anyFlag = (k: "screen" | "camera") => c.scenes.some((s) => s[k] === true);
+  const wantScreen = src.screen === true || anyFlag("screen");
+  const wantCamera = src.camera === true || anyFlag("camera");
+  const wantMic = src.mic === true;
+
+  if (wantCamera && !has("camera")) {
+    extras.push({
+      id: LEGACY_CAMERA_ID,
+      label: "Camera",
+      spec: devices.camera ? { kind: "camera", device: devices.camera } : { kind: "camera" },
+    });
+  }
+  if (wantScreen && !has("screen")) {
+    extras.push({
+      id: LEGACY_SCREEN_ID,
+      label: "Screen",
+      spec: devices.screen ? { kind: "screen", display: devices.screen } : { kind: "screen" },
+    });
+  }
+  if (wantMic && !has("mic")) {
+    extras.push({
+      id: LEGACY_MIC_ID,
+      label: "Microphone",
+      spec: devices.mic ? { kind: "mic", device: devices.mic } : { kind: "mic" },
+    });
+  }
+
+  const scenes = c.scenes.map((s) => {
+    if (!hasLegacyFlags(s)) return s;
+    const { screen, camera, ...rest } = s;
+    const own = rest.look && Object.keys(rest.look).length ? rest.look : null;
+    if (own) return rest;
+    // A recipe may only name items the room owns: drop entries for a
+    // source that was never synthesized (flag false everywhere).
+    const recipe = builtinLook({ screen, camera }, canvas.w, canvas.h);
+    const owned = new Set([...extras.map((e) => e.id), "overlay"]);
+    const look = Object.fromEntries(Object.entries(recipe).filter(([id]) => owned.has(id)));
+    return { ...rest, look };
+  });
+
+  const { screen: _s, camera: _c, mic: _m, mic_volume: _v, mic_muted: _mm, ...restSources } = src;
+  void _s; void _c; void _m; void _v; void _mm;
+  return { ...c, sources: { ...restSources, extras }, scenes };
 }

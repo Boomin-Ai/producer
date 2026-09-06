@@ -225,19 +225,6 @@ pub async fn live_engine_status(state: State<'_, AppState>) -> EngineResult<serd
 }
 
 #[tauri::command]
-pub async fn live_set_sources(
-    state: State<'_, AppState>,
-    screen: bool,
-    camera: bool,
-    mic: bool,
-) -> EngineResult<()> {
-    state
-        .live
-        .set_sources(screen, camera, mic)
-        .map_err(EngineError::Other)
-}
-
-#[tauri::command]
 pub async fn live_attach_preview(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
@@ -514,16 +501,17 @@ pub async fn live_source_devices(
 #[tauri::command]
 pub async fn live_set_source_device(
     state: State<'_, AppState>,
-    kind: String,
+    id: String,
     device: String,
 ) -> EngineResult<()> {
     state
         .live
-        .set_device(kind, device)
+        .set_device(id, device)
         .map_err(EngineError::Other)
 }
 
-/// Add an item from the open list (media/image/text/color/window). The spec
+/// Add an item from the open list (camera/screen/mic/media/image/text/color/
+/// window/guest/mod/overlay). The spec
 /// arrives as tagged JSON and is validated by serde before it can touch the
 /// engine; the room document owns the id.
 #[tauri::command]
@@ -723,21 +711,6 @@ pub async fn live_set_video(state: State<'_, AppState>, height: u32, fps: u32) -
         .map_err(EngineError::Other)
 }
 
-#[tauri::command]
-pub async fn live_set_mic_audio(
-    state: State<'_, AppState>,
-    volume: Option<f32>,
-    muted: Option<bool>,
-) -> EngineResult<()> {
-    state
-        .live
-        .set_mic_audio(volume, muted)
-        .map_err(EngineError::Other)
-}
-
-/// Day-one chat: the platform's own popout chat in a compact companion
-/// window (cookies persist in the webview data store, so one login lasts).
-/// Host-allowlisted — this must never become an arbitrary-URL opener.
 #[tauri::command]
 pub async fn live_open_chat(app: tauri::AppHandle, url: String) -> EngineResult<()> {
     use tauri::Manager;
