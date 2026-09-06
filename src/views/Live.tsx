@@ -6285,6 +6285,7 @@ export function LiveView({
                         <input
                           className="rm-scene-rename rm-row-rename-field"
                           autoFocus
+                          onFocus={(e) => e.currentTarget.select()}
                           value={renameDraft}
                           onChange={(e) => setRenameDraft(e.target.value)}
                           onClick={(e) => e.stopPropagation()}
