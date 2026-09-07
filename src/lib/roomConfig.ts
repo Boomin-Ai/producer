@@ -10,6 +10,7 @@
 import { DEFAULT_LAYOUT, normalize, type DockSizes, type Layout } from "./layout";
 import type { ExtraSpec } from "./sourceSpec";
 import { parseModFeeds, type ModFeeds } from "./modFeed";
+import { isSlotId } from "./slotMath";
 
 /** One item's appearance inside a scene: visibility, geometry (canvas
  * units), stacking. Scenes are LOOKS — applying one never creates or
@@ -320,8 +321,44 @@ export function orphanExtraIds(c: RoomConfig): string[] {
  *  you can see and switch is the fix, not a source that keeps rendering.
  *
  *  Pure; returns the same object when there is nothing to rescue. */
+/** The guest slot's fill. Transparent: an empty slot must not paint a dark
+ *  rectangle on the program before anyone has joined. */
+export const SLOT_COLOR = "#00000000";
+
+/** Rooms saved before slots were transparent carry the old opaque fill, and a
+ *  room document is the only place that colour lives — so it is corrected on
+ *  load rather than leaving every existing room with a black box in it.
+ *  Pure; returns the same object when there is nothing to change. */
+export function transparentSlots(c: RoomConfig): RoomConfig {
+  const extras = c.sources.extras ?? [];
+  const stale = extras.some(
+    (e) => isSlotId(e.id) && e.spec.kind === "color" && e.spec.color !== SLOT_COLOR,
+  );
+  if (!stale) return c;
+  return {
+    ...c,
+    sources: {
+      ...c.sources,
+      extras: extras.map((e) =>
+        isSlotId(e.id) && e.spec.kind === "color" ? { ...e, spec: { ...e.spec, color: SLOT_COLOR } } : e,
+      ),
+    },
+  };
+}
+
 export function adoptOrphanSources(c: RoomConfig): RoomConfig {
-  const orphans = orphanExtraIds(c);
+  // NEVER adopt a guest slot. A slot is not furniture that merely sits there:
+  // a guest BOUND to it inherits the slot's whole look entry, visibility
+  // included (lib/slotMath.ts `expandSlotBindings`). Adopting an orphan slot
+  // as hidden therefore does not quietly park a rectangle — it explicitly
+  // hides the PERSON standing in it, on every scene apply, and the host has
+  // no row to turn them back on.
+  //
+  // Before this rescue existed an orphan slot was in no look at all, so the
+  // guest was never addressed and stayed visible. Adopting it was strictly
+  // worse than leaving it alone. Slots get their home from the fixed add
+  // path instead, which joins them to the scene they were made in.
+  const orphans = orphanExtraIds(c).filter((id) => !isSlotId(id));
   if (orphans.length === 0) return c;
   const [first, ...rest] = c.scenes;
   if (!first) return c;

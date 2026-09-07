@@ -1839,6 +1839,21 @@ pub fn start(
                 room_mix: &mut Option<studio::RoomMix>,
             ) -> Result<*mut ffi::video_t, String> {
                 if room_mix.is_none() {
+                    // SIZE ON THE RECORD. macOS's CoreMediaIO extension
+                    // advertises a HARDCODED 1920x1080 (obs-studio#10263); when
+                    // the mix it is fed differs, macOS implicitly rescales and
+                    // the consumer shows a CROPPED picture — corners gone,
+                    // subject blown up. That is exactly the report, so the one
+                    // number that settles it is what this mix actually is.
+                    let mut ovi: std::mem::MaybeUninit<ffi::obs_video_info> =
+                        std::mem::MaybeUninit::zeroed();
+                    if ffi::obs_get_video_info(ovi.as_mut_ptr()) {
+                        let o = ovi.assume_init();
+                        eprintln!(
+                            "[vcam] room mix built: base {}x{} output {}x{} — the macOS camera device is a fixed 1920x1080, so anything but 1920x1080 here is rescaled and cropped",
+                            o.base_width, o.base_height, o.output_width, o.output_height
+                        );
+                    }
                     let room = ffi::obs_get_output_source(0);
                     let built = studio::RoomMix::build(room);
                     if !room.is_null() {
@@ -2254,12 +2269,39 @@ pub fn start(
                                 if let Some(sp) = spec {
                                     studio_out = Some(studio::Studio::build(sp)?);
                                 }
-                                // The virtual camera is NOT touched here. It
-                                // already reads the room-only mix in both
-                                // modes, so there is nothing to re-point — and
-                                // restarting it is what crashed v0.4.40 on
-                                // macOS and dropped the camera out of Google
-                                // Meet on Windows (studio.rs module docs).
+                                // v0.4.48 — STUDIO IS THE WHOLE OUTPUT. The
+                                // virtual camera used to show the room even
+                                // with studio on, so a host using Producer as
+                                // their camera in Meet or Zoom sent the stage
+                                // while the stream sent the studio. "Broadcast
+                                // the studio" now means every output.
+                                //
+                                // Re-point the MIX, never the OUTPUT: the vcam
+                                // keeps running and keeps its video_t, and only
+                                // the source behind it changes. Restarting the
+                                // output is what crashed v0.4.40 on macOS and
+                                // dropped the camera out of Google Meet on
+                                // Windows (studio.rs module docs) — that
+                                // invariant is intact.
+                                if let Some(m) = room_mix.as_mut() {
+                                    match studio_out.as_ref() {
+                                        // The studio scene is borrowed from
+                                        // Studio; set_source takes its own ref.
+                                        Some(st) => m.set_source(st.source()),
+                                        None => {
+                                            // Off: back to channel 0's room
+                                            // scene. obs_get_output_source
+                                            // hands back an OWNED reference —
+                                            // release it after, exactly as
+                                            // room_mix_video does above.
+                                            let room = ffi::obs_get_output_source(0);
+                                            m.set_source(room);
+                                            if !room.is_null() {
+                                                ffi::obs_source_release(room);
+                                            }
+                                        }
+                                    }
+                                }
                                 Ok(studio_out.is_some())
                             }
                         })();

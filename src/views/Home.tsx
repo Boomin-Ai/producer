@@ -17,6 +17,8 @@ import type { TargetResult } from "../lib/ipc";
 import { WORKSPACE_EVENT, activeEndpointId, isBoomin, resolveActiveEndpoint, setActiveEndpointId } from "../lib/workspace";
 import { PREFS_EVENT, PREF_NETWORK_INVITE_DISMISSED, prefGet, prefSet } from "../lib/prefs";
 import { PREF_WALKTHROUGH_OFF, PREF_WALKTHROUGH_ROOM, PREF_WALKTHROUGH_STEP } from "../lib/walkthrough";
+import { FEATURE_FLAGS, FLAG_CONTACT } from "../lib/featureFlags";
+import { useFeatureFlags } from "../lib/useFeatureFlags";
 import { copyText, ensureRoomJoinLink } from "../lib/roomLink";
 import { ipc,
   firewall,
@@ -279,6 +281,17 @@ export function Home({
   // The active workspace (brand). Rooms, destinations and the network rail
   // all key on it; the profile popout switches it.
   const [activeId, setActiveId] = useState<string | null>(() => activeEndpointId());
+  /** For the top bar's BETA line. Settings and the room each resolve their own
+   *  copy; this is Home's. Absent until Tauri answers, and on a plain browser
+   *  it never does — the mark then reads "PRODUCER BETA" with no version
+   *  rather than "v" and a gap. */
+  const [brandVersion, setBrandVersion] = useState<string | null>(null);
+  useEffect(() => {
+    import("@tauri-apps/api/app")
+      .then(({ getVersion }) => getVersion())
+      .then(setBrandVersion)
+      .catch(() => {});
+  }, []);
   // Last-known first (lib/fetchCache.ts): coming back from a room must not
   // flash an empty stage list while the IPC round-trips.
   const [rooms, setRooms] = useState<LiveRoom[]>(() => cached<LiveRoom[]>(`rooms:${activeEndpointId() ?? ""}`) ?? []);
@@ -502,8 +515,13 @@ export function Home({
               ✕
             </button>
           )}
+          {/* The app's top bar carries its own mark (the Wordmark component is
+              the sign-in / first-run one), so BETA has to be said in both. */}
           <span className="cr-brand" data-tauri-drag-region>
             PRODUCER
+            <span className="cr-brand-beta">
+              BETA{brandVersion ? ` v${brandVersion}` : ""}
+            </span>
           </span>
           {title && <span className="cr-title">{title}</span>}
           {streaming && <span className="cr-live-pill">LIVE</span>}
@@ -896,6 +914,54 @@ function WalkthroughReturn({ rooms, onResume }: { rooms: LiveRoom[]; onResume: (
   );
 }
 
+/** Settings → App → Feature flags. A READOUT, not a control panel.
+ *
+ *  Nothing here toggles. Guests and Mods are gated because they are not good
+ *  enough yet, and a switch that let someone turn on a broken feature would be
+ *  a worse lie than no switch at all. So each row says where it stands and
+ *  where to write. When they are ready the rows become real switches and this
+ *  copy goes away. */
+function FeatureFlagsSection() {
+  const { flags, email, known } = useFeatureFlags();
+  return (
+    <>
+      <div className="cr-label set-gap">FEATURE FLAGS</div>
+      <div className="set-flags">
+        {FEATURE_FLAGS.map((f) => {
+          const on = flags.has(f.id);
+          return (
+            <div key={f.id} className={`set-flag${on ? " on" : ""}`}>
+              <div className="set-flag-text">
+                <span className="set-flag-name">{f.label}</span>
+                <span className="set-flag-blurb">{f.blurb}</span>
+              </div>
+              <span className={`set-flag-state${on ? " on" : ""}`}>
+                {!known ? "Checking…" : on ? "On" : "Off"}
+              </span>
+            </div>
+          );
+        })}
+        <p className="set-flag-foot">
+          {flags.size > 0 ? (
+            <>
+              These are on for your account{email ? ` (${email})` : ""}. They are still in development — expect rough
+              edges, and tell us when you find them.
+            </>
+          ) : (
+            <>
+              These are off while we finish them. They can&apos;t be switched on here — if you need them, write to{" "}
+              <a className="set-flag-mail" href={`mailto:${FLAG_CONTACT}`}>
+                {FLAG_CONTACT}
+              </a>{" "}
+              and we&apos;ll talk it through.
+            </>
+          )}
+        </p>
+      </div>
+    </>
+  );
+}
+
 /** Settings row: the first-room walkthrough, as a switch.
  *
  *  A switch rather than a button because this is a STATE, not an errand —
@@ -1098,6 +1164,8 @@ function SettingsPanel({
             </div>
             {appTab === "general" && (
               <>
+        <FeatureFlagsSection />
+
         <div className="cr-label set-gap">GUIDANCE</div>
         <WalkthroughSwitch />
         <div className="cr-label set-gap">UPDATES</div>
@@ -1284,7 +1352,12 @@ function ControlRoomHome({
   // a self-hosted workspace only until the invitation card is dismissed.
   const activeEp = useActiveEndpoint();
   const inviteDismissed = useNetworkInviteDismissed();
-  const hasRail = !activeEp || isBoomin(activeEp) || inviteDismissed === false;
+  // The flag comes FIRST: without it there is no rail, so there is no gutter
+  // either. Gating only the component would leave the page holding a column
+  // of empty space for something that never renders.
+  const { flags: homeFlags } = useFeatureFlags();
+  const hasRail =
+    homeFlags.has("network") && (!activeEp || isBoomin(activeEp) || inviteDismissed === false);
   const liveRoom = streaming ? liveRoomId() : null;
   const [name, setName] = useState("");
 
@@ -1312,10 +1385,16 @@ function ControlRoomHome({
         * full height, part of the furniture rather than a floating card. */}
       {/* Someone else's mod link goes here — above the Network rail, a
         * placeholder you drop into, never a prompt behind a menu. */}
-      <aside className={`modlink-rail${hasRail ? "" : " alone"}`}>
-        <ModLinkDrop onOpen={onModLink} />
-      </aside>
-      <NetworkRail rooms={rooms} onAddEndpoint={onAddEndpoint} onEnterSeat={onEnterSeat} />
+      {/* Taking someone else's mod link is a MOD surface — gated with them. */}
+      {homeFlags.has("mods") && (
+        <aside className={`modlink-rail${hasRail ? "" : " alone"}`}>
+          <ModLinkDrop onOpen={onModLink} />
+        </aside>
+      )}
+      {/* Gated: without the flag the Network rail is not rendered at all —
+        * not collapsed, not empty, absent. `hasRail` already carries the flag
+        * (it drives the gutter), so this is the same single truth. */}
+      {hasRail && <NetworkRail rooms={rooms} onAddEndpoint={onAddEndpoint} onEnterSeat={onEnterSeat} />}
       <FirewallBanner />
       <LiveNowStrip onEnterSeat={onEnterSeat} />
       <section className="cr-section" id="sec-onair">

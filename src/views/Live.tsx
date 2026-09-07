@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { createPortal } from "react-dom";
 import { installStageCutouts } from "../lib/stageCutouts";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { expandSlotBindings, guestSlotPatch, lookPatch, slotOfGuest } from "../lib/slotMath";
+import { expandSlotBindings, guestSlotPatch, isSlotId, lookPatch, slotOfGuest } from "../lib/slotMath";
 import { GreenRoomBar, useGuestSeat } from "./GuestSeat";
 import type { GuestSeatSpec } from "../lib/guestSeat";
 import {
@@ -72,7 +72,9 @@ import {
 import {
   isCaptureKind,
   markLiveRoom,
+  SLOT_COLOR,
   adoptOrphanSources,
+  transparentSlots,
   migrateBuiltinsToExtras,
   parseConfig,
   serializeConfig,
@@ -128,6 +130,8 @@ import {
 
   seatUserId,
 } from "../lib/participants";
+import { useFeatureFlags } from "../lib/useFeatureFlags";
+import { panelAllowed } from "../lib/featureFlags";
 import { MonitorSender, ProgramMonitor, monitorLog, monitorPlaceholder, type MonitorRoomInfo, type MonitorState, type ProgramSource } from "../lib/monitorFeed";
 import { SeatMediaLeg } from "../lib/seatMedia";
 import { ModBoard } from "./ModBoard";
@@ -2791,6 +2795,13 @@ export function LiveView({
   const [panelMenu, setPanelMenu] = useState<PanelId | null>(null);
   const [layoutMenu, setLayoutMenu] = useState(false);
   const [layoutEdit, setLayoutEdit] = useState(false);
+  /** GATED CAPABILITIES (lib/featureFlags.ts). Guests and Mods are hidden
+   *  from accounts that do not hold the flag: their panels, their rows in the
+   *  Panels menu, their entries in Sources → +, and the room's guest Link.
+   *  Fails closed, so an unidentified account gets the gated room. */
+  const { flags: featureFlags } = useFeatureFlags();
+  const canGuests = featureFlags.has("guests");
+  const canMods = featureFlags.has("mods");
   /** The first-room walkthrough (lib/walkthrough.ts). `null` while the pref is
    * still being read — a flash of the welcome veil on every room open would be
    * worse than a beat of nothing. It arms ONCE, on a room with no scenes and
@@ -3454,7 +3465,24 @@ export function LiveView({
       const nb = { ...b };
       delete nb[slotId];
       writeCfg({ ...cfgRef.current, slot_bindings: nb });
-      ipc.liveSetTransform(slotId, { visible: true }, true).catch(() => {});
+      // Show the placeholder again ONLY if it still exists AND belongs to the
+      // scene that is on air.
+      //
+      // Existence: on the delete path the slot is on its way out, and
+      // un-hiding it would flash the empty rectangle on the way to nothing.
+      //
+      // MEMBERSHIP: this fires from the roster too — a guest leaving, a
+      // reconnect, a mod popping someone out — which can happen while a scene
+      // that does not contain this slot is live. Restoring it then pushes a
+      // bare placeholder onto the PROGRAM seconds after a cut, in a scene the
+      // host never put it in, with no row in Sources to remove it. Scene
+      // membership decides what is on screen; a pop-out must not overrule it.
+      const items = sourcesRef.current.items ?? [];
+      const activeLook = cfgRef.current.scenes.find((sc) => sc.id === activeSceneRef.current)?.look;
+      const inThisScene = !activeLook || slotId in activeLook;
+      if (items.some((i) => i.id === slotId) && inThisScene) {
+        ipc.liveSetTransform(slotId, { visible: true }, true).catch(() => {});
+      }
     }
     fadeGuest(guestItemId, false);
   };
@@ -3588,7 +3616,20 @@ export function LiveView({
         isMonitor(g)
           ? // A seat is on the set when its MOD camera feed is placed (v0.4.32).
             visible.has(modSourceIdsFor(g.id).camera)
-          : visible.has(sourceIdsFor(g.id).camera) || bound.has(sourceIdsFor(g.id).camera),
+          : // BOUND IS THE TRUTH for a guest, not visibility.
+            //
+            // A guest is on the set because they were placed in a slot. Their
+            // engine item's `visible` is a different question — scene
+            // membership turns it off whenever the live scene does not carry
+            // that slot, which is correct for the PICTURE and says nothing
+            // about whether they are still in the show.
+            //
+            // Reading visibility here made the two disagree: cut to a scene
+            // without the slot, this reported the guest as gone, and honest
+            // staging faithfully "corrected" reality by unbinding them —
+            // dropping a live guest back to the green room a few seconds
+            // after an unrelated scene change.
+            bound.has(sourceIdsFor(g.id).camera),
       )
       .map((g) => g.id);
   };
@@ -3886,7 +3927,15 @@ export function LiveView({
 
   /** Add an open-list item and record it in the room document so it
    * respawns when the room reopens. */
-  const addExtraSource = async (label: string, spec: ExtraSpec, inviteUrl?: string) => {
+  const addExtraSource = async (
+    label: string,
+    spec: ExtraSpec,
+    inviteUrl?: string,
+    /** Guest slots must be `gslot-N`: slotItems() finds them by that prefix
+     *  and slot_bindings address them by it. Every other source gets a
+     *  random id. */
+    forceId?: string,
+  ) => {
     if (refuseSetEdit()) return;
     // A SOURCE NEEDS A SCENE TO JOIN. Sources are looks over one graph, and a
     // look belongs to a scene — so with no scenes there is nothing for this to
@@ -3901,7 +3950,7 @@ export function LiveView({
       });
       return;
     }
-    const id = `${spec.kind}-${Math.random().toString(36).slice(2, 8)}`;
+    const id = forceId ?? `${spec.kind}-${Math.random().toString(36).slice(2, 8)}`;
     try {
       await extraSources.add(id, label, spec);
       // A guest invite link is issued ONCE and never reissued, so it lives on
@@ -3965,6 +4014,21 @@ export function LiveView({
    * (a slot deleted in PiP vanished from Full cam and Screen too). */
   const removeExtraSource = (id: string) => {
     if (refuseSetEdit()) return;
+    // DELETING A SLOT MUST NOT STRAND THE PERSON IN IT. A guest bound to a
+    // slot is a SEPARATE engine item that inherits the slot's look
+    // (lib/slotMath.ts `expandSlotBindings`) and carries its own transform.
+    // Deleting the slot only ever touched the slot, so the guest kept its last
+    // transform and stayed on screen with nothing left to control it — and
+    // slot_bindings kept pointing at a slot id that no longer existed, so slot
+    // math, the scene apply and the next guest looking for a free slot all
+    // read a dead entry.
+    //
+    // Drop them back to the green room: they are still connected, and
+    // deleting furniture must not eject a person from the room.
+    if (isSlotId(id)) {
+      const bound = (cfgRef.current.slot_bindings ?? {})[id];
+      if (bound) hideGuestFromSlot(bound);
+    }
     const c = cfgRef.current;
     const active = activeSceneRef.current;
     const all = c.scenes;
@@ -4270,11 +4334,15 @@ export function LiveView({
       // switches. Fold them into ordinary sources ONCE (lib/room.ts) and
       // write the document back, before anything spawns from it.
       let opened = parseConfig(room.config);
-      const migrated = adoptOrphanSources(
-        migrateBuiltinsToExtras(opened, {}, {
-          h: snap.video_height || 720,
-          w: ((snap.video_height || 720) * 16) / 9,
-        }),
+      // …and rooms saved before slots were transparent get their opaque
+      // placeholders corrected here, not left as black boxes on the program.
+      const migrated = transparentSlots(
+        adoptOrphanSources(
+          migrateBuiltinsToExtras(opened, {}, {
+            h: snap.video_height || 720,
+            w: ((snap.video_height || 720) * 16) / 9,
+          }),
+        ),
       );
       if (migrated !== opened) {
         opened = migrated;
@@ -4765,7 +4833,25 @@ export function LiveView({
       const realLook = !!p.look;
       if (realLook) {
         for (const it of liveNow) {
-          if (it.kind === "guest" || it.kind === "mod") continue;
+          if (it.kind === "mod") continue;
+          if (it.kind === "guest") {
+            // A GUEST FOLLOWS ITS SLOT. Guests are exempt from plain
+            // membership because a slot carries them — but that only works
+            // while the slot is IN this look. Cut to a scene without the
+            // slot and the slot itself was hidden by the rule below, while
+            // the guest, exempt, kept its last transform and stayed on the
+            // program: a face frozen over a scene that has no guest in it,
+            // at whatever size it was left. Deleting it "fixed" it because
+            // that path removes the item outright.
+            //
+            // So: bound to a slot this scene does not list → hide with it.
+            // Bound to nothing (green room, never staged) → still exempt.
+            const slot = slotOfGuest(bindings, it.id);
+            if (slot && !(slot in look) && it.visible) {
+              ipc.liveSetTransform(it.id, { visible: false }, true).catch(() => {});
+            }
+            continue;
+          }
           if (!(it.id in look) && it.visible) {
             ipc.liveSetTransform(it.id, { visible: false }, true).catch(() => {});
           }
@@ -5820,12 +5906,24 @@ export function LiveView({
           // started it, so the monitor got a black frame, then nothing.
           // Start it for the seat; stop it when the last seat leaves, but
           // only if the host did not switch it on themselves.
-          const wantVcam = wantedMonitors.size > 0;
+          // …and a GUEST's return leg captures it too. The device only ever
+          // started for monitor seats, so a host with guests and no mod in the
+          // room never started it at all: the guest page went looking for
+          // "Producer Virtual Camera", found no such device, and sat on
+          // "Waiting for the show" forever. The guest's own camera reached the
+          // stage fine — this is the other direction, and it was never wired.
+          //
+          // Anyone whose render page carries the program counts: monitor seats,
+          // and any seat or guest holding media.return_feed.
+          const wantsProgram = full.filter((g) => !!g.render_url && resolveGrants(g).has("media.return_feed"));
+          const wantVcam = wantedMonitors.size > 0 || wantsProgram.length > 0;
           const vs = vcamStateRef.current;
           if (wantVcam && !vcamOnRef.current && Date.now() > vcamAutoNextTry.current) {
             vcamAutoNextTry.current = Date.now() + 10_000;
             if (vs?.installed || vs?.state === "active") {
-              monitorLog("host: a monitor seat is present — starting the virtual camera for it");
+              monitorLog(
+                `host: ${wantedMonitors.size} monitor seat(s) + ${wantsProgram.length} return-feed viewer(s) — starting the virtual camera`,
+              );
               vcamIpc
                 .output(true)
                 .then((on) => {
@@ -5842,7 +5940,7 @@ export function LiveView({
           if (!wantVcam && vcamAutoRef.current) {
             vcamAutoRef.current = false;
             if (vcamOnRef.current) {
-              monitorLog("host: last monitor left — stopping the virtual camera we started for it");
+              monitorLog("host: nobody needs the program any more — stopping the virtual camera we started");
               vcamIpc
                 .output(false)
                 .then((on) => {
@@ -5891,6 +5989,22 @@ export function LiveView({
             }
             // Guests only here — a seat's feed is a MOD source (below).
             const name = g.display_name || "Guest";
+            // WHY A GUEST IS DARK, on the record. The three things that decide
+            // it — the grants we resolved, whether that killed the return leg,
+            // and the page we actually opened — were nowhere: the URL is built
+            // host-side and never logged, so "is feed=0 set?" could not be
+            // answered from either machine. Now it is one line in the monitor
+            // log. Grants are printed even when empty: an EMPTY set is the
+            // interesting case, because that is what a resolver reading the
+            // wrong shape returns.
+            if (track !== "screen") {
+              const gr = [...resolveGrants(g)];
+              monitorLog(
+                `host: guest ${id} (${name}) grants=[${gr.join(" ")}]${
+                  gr.length === 0 ? " EMPTY" : ""
+                } return_feed=${u.searchParams.get("feed") === "0" ? "OFF (feed=0)" : "on"} url=${u.toString()}`,
+              );
+            }
             await extraSources
               .add(id, track === "screen" ? `${name} · screen` : name, { kind: "guest", url: u.toString() })
               .catch(() => {});
@@ -5967,9 +6081,15 @@ export function LiveView({
           const stale = Object.entries(b).filter(([, gid]) => !liveIds.has(gid));
           if (stale.length) {
             const nb = { ...b };
+            const activeLook = cfgRef.current.scenes.find((sc) => sc.id === activeSceneRef.current)?.look;
             for (const [slotId] of stale) {
               delete nb[slotId];
-              ipc.liveSetTransform(slotId, { visible: true }, true).catch(() => {});
+              // Only restore the placeholder in a scene that actually holds
+              // this slot — otherwise a guest leaving pushes a bare rectangle
+              // onto whatever is on air (same bug as hideGuestFromSlot).
+              if (!activeLook || slotId in activeLook) {
+                ipc.liveSetTransform(slotId, { visible: true }, true).catch(() => {});
+              }
             }
             writeCfg({ ...cfgRef.current, slot_bindings: nb });
           }
@@ -7197,32 +7317,36 @@ export function LiveView({
         },
         { key: "text", label: "Text", icon: ic.text, act: () => setSrcSubPop("text") },
         { key: "color", label: "Color", icon: ic.swatch, act: () => setSrcSubPop("color") },
-        {
+        // A guest slot is only furniture for a guest — gated with them.
+        ...(canGuests ? [{
           key: "gslot",
           label: "Guest slot",
           icon: ic.invite,
           act: () => {
-            const n = slotItems().length + 1;
-            const id = `gslot-${n}`;
-            extraSources
-              .add(id, `Guest ${n}`, { kind: "color", color: "#10151d" })
-              .then(() => {
-                const c = cfgRef.current;
-                writeCfg({
-                  ...c,
-                  sources: {
-                    ...c.sources,
-                    extras: [...(c.sources.extras ?? []), { id, label: `Guest ${n}`, spec: { kind: "color", color: "#10151d" } }],
-                  },
-                });
-              })
-              .catch((e) => notifyError(e, { key: "banner" }));
+            // Through the SHARED path. This used to add the slot to the engine
+            // and write it to `extras` by hand, skipping the step that joins
+            // it to the active scene's look — so the slot rendered on the
+            // stage (that dark rectangle) while the Sources panel, which lists
+            // a scene's own members, had no row for it. Added, visible, and
+            // unreachable. It also skipped the host check and the no-scenes
+            // guard for the same reason: it wasn't the real path.
+            //
+            // Lowest FREE number, not count+1: delete Guest 1 while Guest 2
+            // lives and count+1 hands out `gslot-2` a second time.
+            const taken = new Set(slotItems().map((i) => i.id));
+            let n = 1;
+            while (taken.has(`gslot-${n}`)) n += 1;
+            // TRANSPARENT. A slot is a placeholder for where someone will
+            // stand; painted opaque it put a dark rectangle on the program
+            // before anyone had joined. Still selectable, sizable and
+            // draggable — it just shows the audience nothing.
+            void addExtraSource(`Guest ${n}`, { kind: "color", color: SLOT_COLOR }, undefined, `gslot-${n}`);
           },
-        },
+        }] : []),
         { key: "window", label: "Window capture", icon: ic.screen, act: () => setSrcSubPop("window") },
         // A seated mod's feed (v0.4.32): pick a seat holding media; its
         // camera / screen lands as a MOD source — own layer, own rect.
-        boominRoom && { key: "mod", label: "Mod feed", icon: ic.mod, act: () => setSrcSubPop("mod") },
+        boominRoom && canMods && { key: "mod", label: "Mod feed", icon: ic.mod, act: () => setSrcSubPop("mod") },
       ].filter(Boolean) as { key: string; label: string; icon: ReactNode; act: () => void }[];
       return (
         <>
@@ -7413,7 +7537,7 @@ export function LiveView({
       {addMenu === "hidden" && (
         <Pop anchor={popAnchor} align="right" className="rm-pop-add">
           <div className="rm-pop-title">PANELS</div>
-          {PANEL_ORDER.map((id) => {
+          {PANEL_ORDER.filter((id) => panelAllowed(id, featureFlags)).map((id) => {
             const d = dockOf(layout, id);
             return (
               <div key={id} className="rm-pop-row rm-add-row">
@@ -7479,6 +7603,10 @@ export function LiveView({
     // Belt to normalize's braces: an unknown id must never render, because
     // one missing entry in the inventory would otherwise blank the room.
     if (!PANEL_META[id]) return null;
+    // THE gate for gated panels. Every dock renders through here, so a saved
+    // layout that already has Guests or Mods in it — or a preset that places
+    // them — cannot bring one back for an account without the flag.
+    if (!panelAllowed(id, featureFlags)) return null;
     return (
     <section
       key={id}
@@ -7646,7 +7774,8 @@ export function LiveView({
             * Scenes, guests, votes and chat stay, gated by `can`. */}
           {isHost ? (
             <>
-          <span className="hd-link-group">
+          {/* The guest link IS the guest feature: no flag, no door. */}
+          <span className="hd-link-group" hidden={!canGuests}>
             <button
               className="hd-chip hd-link"
               title="Copy this room's guest link"
