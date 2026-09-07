@@ -608,7 +608,7 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
 // ---------------------------------------------------------------------------
 
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use super::graph;
@@ -931,6 +931,8 @@ pub struct LiveHandle {
     cmd: mpsc::Sender<Command>,
     pub snapshot: Arc<Mutex<Snapshot>>,
     streaming: Arc<AtomicBool>,
+    /// Set by the engine thread as its last act, so `shutdown` can WAIT.
+    stopped: Arc<(Mutex<bool>, Condvar)>,
 }
 
 impl LiveHandle {
@@ -1129,8 +1131,18 @@ impl LiveHandle {
             .send(Command::DetachPreview)
             .map_err(|e| e.to_string())
     }
+    /// Ask the engine to tear down, and WAIT for it. This used to send and
+    /// return, so `RunEvent::Exit` let the process die before the arm ran: the
+    /// stream was never stopped, the virtual camera never released, and
+    /// Chromium never shut down. The arm bounds itself (~15s with a live
+    /// session), so cap the wait just above that and give up rather than hang
+    /// the app on exit.
     pub fn shutdown(&self) {
         let _ = self.cmd.send(Command::Shutdown);
+        let (done, cv) = &*self.stopped;
+        if let Ok(g) = done.lock() {
+            let _ = cv.wait_timeout_while(g, Duration::from_secs(20), |d| !*d);
+        }
     }
     pub fn proxy(&self) -> LiveProxy {
         LiveProxy {
@@ -1727,6 +1739,8 @@ pub fn start(
     let hub_engine = hub.clone();
     let snapshot = Arc::new(Mutex::new(Snapshot::default()));
     let streaming = Arc::new(AtomicBool::new(false));
+    let stopped = Arc::new((Mutex::new(false), Condvar::new()));
+    let stopped_thread = stopped.clone();
     let snap = snapshot.clone();
     let streaming_flag = streaming.clone();
 
@@ -1857,10 +1871,20 @@ pub fn start(
             /// output first; the plugin-side stop is idempotent as of the
             /// v0.4.41 engine, this is the belt to that pair of braces.
             unsafe fn stop_vcam(out: *mut ffi::obs_output_t) {
+                let t0 = Instant::now();
                 ffi::obs_output_stop(out);
-                let deadline = Instant::now() + Duration::from_secs(5);
+                let deadline = t0 + Duration::from_secs(5);
                 while ffi::obs_output_active(out) && Instant::now() < deadline {
                     std::thread::sleep(Duration::from_millis(20));
+                }
+                // The drain is the whole story when the camera wedges: a stop
+                // that never completes means we are about to release a LIVE
+                // output, and the caller is about to destroy the mix under it.
+                if ffi::obs_output_active(out) {
+                    eprintln!(
+                        "[vcam] stop TIMED OUT after {} ms - releasing a LIVE output",
+                        t0.elapsed().as_millis()
+                    );
                 }
                 ffi::obs_output_release(out);
             }
@@ -2576,8 +2600,25 @@ pub fn start(
                     }
                 }
             }
-            // Process exit path: outputs already stopped above; skip
-            // obs_shutdown — teardown of a dying process, not a lifecycle.
+            // Chromium is not optional to shut down. obs-browser holds a
+            // live CEF context — plus our warm browser, kept hot since boot
+            // and deliberately never released — and Chromium's exit-time
+            // teardown fatals when the process goes down with it still up:
+            // __fastfail, 0xc0000409, always at the same instruction in
+            // obs-browser.dll. Release the warm source, then obs_shutdown
+            // unloads the module, and THAT is what calls CefShutdown.
+            unsafe {
+                let warm = CEF_WARM.swap(0, std::sync::atomic::Ordering::Relaxed);
+                if warm != 0 {
+                    ffi::obs_source_release(warm as *mut ffi::obs_source_t);
+                }
+                let t0 = Instant::now();
+                ffi::obs_shutdown();
+                eprintln!("[live] obs_shutdown: {} ms", t0.elapsed().as_millis());
+            }
+            let (done, cv) = &*stopped_thread;
+            *done.lock().unwrap() = true;
+            cv.notify_all();
         })
         .expect("spawn live-engine thread");
 
@@ -2585,5 +2626,6 @@ pub fn start(
         cmd: cmd_tx,
         snapshot,
         streaming,
+        stopped,
     }
 }
