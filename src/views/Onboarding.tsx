@@ -9,10 +9,20 @@ import type { ModLink } from "../lib/modSeat";
  * connect it here with its URL + PRIMARY_TOKEN. */
 export const SELF_HOSTING_GUIDE_URL = "https://github.com/Boomin-Ai/producer/blob/main/server/SELF_HOSTING.md";
 
-/** The name, alone. `big` is the first-impression form (sign-in, first run);
- *  everywhere else it is the same mark at a quieter size. */
+/** The name, with where it stands. `big` is the first-impression form
+ *  (sign-in, first run); everywhere else it is the same mark at a quieter
+ *  size.
+ *
+ *  BETA rides along in a lighter weight and a quieter colour: it is a
+ *  qualifier on the name, not part of it, and setting it in the same bold
+ *  caps would read as "Producer Beta" — a product with that name. Thin, so
+ *  the eye takes the name first and the status second. */
 export function Wordmark({ big = false }: { big?: boolean }) {
-  return <div className={`wordmark${big ? " big" : ""}`}>PRODUCER</div>;
+  return (
+    <div className={`wordmark${big ? " big" : ""}`}>
+      PRODUCER<span className="wordmark-beta">BETA</span>
+    </div>
+  );
 }
 
 type Door = "chooser" | "boomin" | "server";

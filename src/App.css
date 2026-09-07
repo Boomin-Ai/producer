@@ -10852,3 +10852,59 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 @media (prefers-reduced-motion: reduce) {
   .walk-panel, .walk-step-row, .walk-live-dot { animation: none; }
 }
+
+/* ── Settings → Feature flags ─────────────────────────────────────────────
+   A readout, not a control panel: rows state where a capability stands and
+   the foot says where to write. No switches — see lib/featureFlags.ts. */
+.set-flags { display: flex; flex-direction: column; gap: 8px; }
+.set-flag {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 12px 14px;
+  border-radius: var(--r-card, 12px);
+  border: 1px solid var(--line-1);
+  background: oklch(1 0 0 / 0.03);
+}
+.set-flag-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.set-flag-name { font-size: 13.5px; font-weight: 620; color: var(--fg-1); }
+.set-flag-blurb { font-size: 12px; line-height: 1.45; color: var(--fg-2); }
+/* The state reads as a fact, not a button — no hover, no pointer. */
+.set-flag-state {
+  flex: 0 0 auto;
+  margin-left: auto;
+  margin-top: 1px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: oklch(1 0 0 / 0.04);
+  color: var(--fg-3);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.set-flag-state.on { background: oklch(0.78 0.16 165 / 0.16); border-color: oklch(0.78 0.16 165 / 0.5); color: #bff3de; }
+.set-flag-foot { margin: 2px 2px 0; font-size: 12px; line-height: 1.5; color: var(--fg-3); }
+.set-flag-mail { color: var(--mint); text-decoration: underline; text-underline-offset: 2px; }
+
+/* BETA beside the wordmark: a qualifier, not part of the name. Light weight,
+   quieter colour, and its own tracking — the mark's 0.2em is set for caps at
+   700 and turns a thin 11px into loose confetti. Sized in `em` so it follows
+   the mark between its two sizes without a second rule. */
+.wordmark-beta {
+  margin-left: 0.55em;
+  font-size: 0.55em;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  color: var(--fg-3);
+  vertical-align: baseline;
+}
+/* BETA in the app's top bar. Same idea as .wordmark-beta, against .cr-brand's
+   own size and tracking. */
+.cr-brand-beta {
+  margin-left: 0.5em;
+  font-size: 0.82em;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  color: var(--fg-3);
+}

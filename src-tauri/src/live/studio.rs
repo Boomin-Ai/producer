@@ -142,6 +142,22 @@ impl RoomMix {
         self.video
     }
 
+    /// Point the mix at a different scene, WITHOUT touching the output that
+    /// reads it. This is the whole reason the studio toggle is now safe: the
+    /// vcam output keeps running and keeps its `video_t`, and only the source
+    /// behind that mix changes. Re-pointing the OUTPUT instead is what
+    /// double-released mac-virtualcam's format description in v0.4.40 and made
+    /// the camera vanish from Google Meet on Windows.
+    ///
+    /// `src` is borrowed; `obs_view_set_source` takes its own reference and
+    /// releases the previous one. Engine-thread only (§5.1).
+    pub unsafe fn set_source(&mut self, src: *mut ffi::obs_source_t) {
+        if src.is_null() {
+            return;
+        }
+        ffi::obs_view_set_source(self.view, 0, src);
+    }
+
     /// Undo, in reverse. Idempotent. The vcam must already be stopped.
     pub unsafe fn teardown(&mut self) {
         if !self.view.is_null() {
@@ -168,6 +184,13 @@ pub fn windows_capture_id(title: &str) -> String {
 }
 
 impl Studio {
+    /// The studio scene as a source, for whoever needs to render it — the
+    /// program takes it on [`STUDIO_CHANNEL`], and (v0.4.48) the room mix
+    /// under the virtual camera takes it too while studio is on.
+    pub fn source(&self) -> *mut ffi::obs_source_t {
+        unsafe { ffi::obs_scene_get_source(self.scene) }
+    }
+
     /// Build the studio scene over the room scene that already sits on channel
     /// 0. The return feed's mix is NOT built here — see [`RoomMix`].
     /// Engine-thread only (§5.1).

@@ -460,15 +460,21 @@ fn metered(kind: &str) -> bool {
 }
 
 /// "#rrggbb" → the 0xAABBGGRR integer OBS stores in data "color".
+/// `#rrggbb` (opaque) or `#rrggbbaa` (with alpha). The alpha form exists for
+/// the GUEST SLOT: an empty slot is a placeholder for where someone will
+/// stand, and painting it opaque put a dark rectangle on the program before
+/// anyone had joined. `#00000000` is a slot you can still select, size and
+/// drag, that shows the audience nothing.
 fn parse_color(hex: &str) -> Option<i64> {
     let h = hex.trim().trim_start_matches('#');
-    if h.len() != 6 {
+    if h.len() != 6 && h.len() != 8 {
         return None;
     }
     let r = i64::from_str_radix(&h[0..2], 16).ok()?;
     let g = i64::from_str_radix(&h[2..4], 16).ok()?;
     let b = i64::from_str_radix(&h[4..6], 16).ok()?;
-    Some(0xFF00_0000 | (b << 16) | (g << 8) | r)
+    let a = if h.len() == 8 { i64::from_str_radix(&h[6..8], 16).ok()? } else { 0xFF };
+    Some((a << 24) | (b << 16) | (g << 8) | r)
 }
 
 /// The scene graph: one libobs scene on output channel 0, every item an
@@ -1243,7 +1249,7 @@ impl SceneGraph {
                 }
                 ExtraSpec::Color { color } => {
                     let d = ffi::obs_data_create();
-                    let c = parse_color(color).ok_or("color must be #rrggbb")?;
+                    let c = parse_color(color).ok_or("color must be #rrggbb or #rrggbbaa")?;
                     ffi::obs_data_set_int(d, CString::new("color").unwrap().as_ptr(), c);
                     let (bw, bh) = Self::base_size();
                     ffi::obs_data_set_int(d, CString::new("width").unwrap().as_ptr(), bw as i64);
