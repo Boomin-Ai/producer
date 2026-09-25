@@ -93,6 +93,13 @@ done
 # Build and stage the rebranded virtual-camera plugin + camera extension.
 "$(dirname "${BASH_SOURCE[0]}")/build-virtualcam-plugin.sh" --stage "$STAGE"
 "$(dirname "${BASH_SOURCE[0]}")/build-camera-extension.sh"
+# Release CI only downloads STAGE, not this build runner's working tree.
+# Keep both halves of the virtual camera in the engine archive.
+CAMERA_EXT="$REPO_ROOT/engine/camera-extension/ai.boomin.producer.camera-extension.systemextension"
+[[ -x "$CAMERA_EXT/Contents/MacOS/ai.boomin.producer.camera-extension" ]] \
+  || { echo "FATAL: camera extension executable not built" >&2; exit 1; }
+mkdir -p "$STAGE/SystemExtensions"
+cp -R "$CAMERA_EXT" "$STAGE/SystemExtensions/"
 [[ -d "$STAGE/PlugIns/mac-virtualcam.plugin" ]] \
   || { echo "FATAL: mac-virtualcam.plugin not staged" >&2; exit 1; }
 # Recording/replay (obs-ffmpeg): the plugin spawns obs-ffmpeg-mux, which

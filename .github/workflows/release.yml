@@ -104,6 +104,7 @@ jobs:
       SIGN_IDENT: ${{ secrets.APPLE_SIGNING_IDENTITY }}
       CERT_B64: ${{ secrets.APPLE_CERTIFICATE }}
       CERT_PW: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      PROFILE_B64: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
       NOTARY_ID: ${{ secrets.APPLE_ID }}
       NOTARY_PW: ${{ secrets.APPLE_PASSWORD }}
       NOTARY_TEAM: ${{ secrets.APPLE_TEAM_ID }}
@@ -169,6 +170,23 @@ jobs:
           rm /tmp/cert.p12
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k ci "$KC" >/dev/null
 
+      - name: Restore camera provisioning profile
+        run: |
+          set -euo pipefail
+          test -n "$PROFILE_B64" || { echo "FATAL: APPLE_PROVISIONING_PROFILE is required for camera installation" >&2; exit 1; }
+          printf '%s' "$PROFILE_B64" | base64 --decode > scripts/embedded.provisionprofile
+          security cms -D -i scripts/embedded.provisionprofile > /tmp/producer-profile.plist
+          python3 - <<'PY'
+          import datetime, os, plistlib
+          with open('/tmp/producer-profile.plist', 'rb') as f:
+              profile = plistlib.load(f)
+          ent = profile['Entitlements']
+          assert profile['ExpirationDate'] > datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None), 'Provisioning profile expired'
+          assert profile['TeamIdentifier'] == [os.environ['NOTARY_TEAM']], 'Wrong provisioning team'
+          assert ent.get('com.apple.application-identifier') == os.environ['NOTARY_TEAM'] + '.ai.boomin.producer', 'Wrong provisioning app'
+          assert ent.get('com.apple.developer.system-extension.install') is True, 'System Extension capability missing'
+          PY
+
       # No APPLE_* env here on purpose: tauri must NOT sign/notarize the
       # engine-less intermediate app; signing happens after engine assembly.
       - name: Build app (engine linked, unsigned)
@@ -199,6 +217,7 @@ jobs:
           ./scripts/engine-closure.sh "$APP/Contents"
           ./scripts/check-no-qt.sh "$APP"
           codesign --verify --deep --strict --verbose=2 "$APP"
+          python3 scripts/check-camera-bundle.py "$APP"
 
       - name: Notarize + staple app
         if: env.SIGN_IDENT != ''

@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSSystemExtensionUsageDescription</key>
+	<string>Producer uses a camera extension so other apps can use your production as a webcam.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Producer uses your microphone as an audio source when you go live or record.</string>
 	<key>NSCameraUsageDescription</key>

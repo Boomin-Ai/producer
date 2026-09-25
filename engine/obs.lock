@@ -22,8 +22,9 @@
     "url": "https://github.com/obsproject/obs-studio/releases/download/32.1.2/OBS-Studio-32.1.2-macOS-Apple.dmg",
     "sha256": "2aeb3aaa99544fefd557f10ac6550e73df71540dd57528b2a1e6f39a55ebacfb"
   },
-  "artifact_rev": 7,
+  "artifact_rev": 8,
   "artifact_adds": [
+    "rev 8: stage the source-built Producer camera system extension in the engine archive for clean release runners",
     "obs-ffmpeg",
     "bin/obs-ffmpeg-mux",
     "mac-virtualcam + camera system extension",

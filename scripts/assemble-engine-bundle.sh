@@ -64,6 +64,11 @@ elif [[ -d "$STAGE/SystemExtensions" ]]; then
   done
 fi
 
+# A camera plugin without its device extension cannot work on a fresh Mac.
+# Do not let an old engine archive silently produce another broken release.
+[[ -x "$CONTENTS/Library/SystemExtensions/$VCAM_EXT_ID.systemextension/Contents/MacOS/$VCAM_EXT_ID" ]] \
+  || { echo "FATAL: camera extension missing from engine artifact — rebuild with build-engine.sh" >&2; exit 1; }
+
 # Provisioning profile: profile-backed entitlements (system extension, app
 # groups) are only honoured when the profile ships INSIDE the bundle. Without
 # it launchd refuses to spawn the app at all.
