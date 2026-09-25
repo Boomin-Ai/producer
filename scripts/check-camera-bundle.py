@@ -42,9 +42,9 @@ plugin = plist(contents / 'PlugIns' / 'mac-virtualcam.plugin' / 'Contents' / 'In
 assert plugin['OBSCameraDeviceUUID'] == ext_info['OBSCameraDeviceUUID'], 'Camera plugin/device UUID mismatch'
 with tempfile.TemporaryDirectory(prefix='producer-camera-signing-') as tmp:
     prefix = str(pathlib.Path(tmp) / 'cert')
-    output('codesign', '-d', '--extract-certificates', prefix, str(app))
+    output('codesign', '-d', '--extract-certificates=' + prefix, str(app))
     cert = pathlib.Path(prefix + '0').read_bytes()
     assert cert in profile['DeveloperCertificates'], 'Profile does not authorize the signing certificate'
-    output('codesign', '-d', '--extract-certificates', prefix, str(ext))
+    output('codesign', '-d', '--extract-certificates=' + prefix, str(ext))
     assert pathlib.Path(prefix + '0').read_bytes() == cert, 'App and camera signed with different certificates'
 print('PASS: camera bundle, signing identity, provisioning, and plugin pairing')
