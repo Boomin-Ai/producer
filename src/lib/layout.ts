@@ -80,13 +80,13 @@ export const PRESETS: { key: string; label: string; note: string; layout: Layout
     key: "simple",
     label: "Simple",
     note: "Stage plus the two things you touch live",
-    layout: { top: [], left: [], right: [], bottom: ["sources", "mixer"], hidden: ["scenes", "chat", "channels", "guests", "vote", "mods", "stats", "updates"] },
+    layout: { top: [], left: [], right: [], bottom: ["sources", "mixer"], hidden: ["scenes", "chat", "channels", "guests", "vote", "mods", "stats", "updates", "dj"] },
   },
   {
     key: "chat",
     label: "Chat first",
     note: "The conversation gets the column; controls stay below",
-    layout: { top: [], left: [], right: ["chat"], bottom: ["sources", "mixer", "guests"], hidden: ["scenes", "channels", "vote", "mods", "stats", "updates"] },
+    layout: { top: [], left: [], right: ["chat"], bottom: ["sources", "mixer", "guests"], hidden: ["scenes", "channels", "vote", "mods", "stats", "updates", "dj"] },
   },
 ]
 
