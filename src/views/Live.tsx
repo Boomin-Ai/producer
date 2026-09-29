@@ -1,3 +1,7 @@
+import { previewSession } from "../lib/previewSession";
+import { roomSession } from "../lib/roomSession";
+import { RecordingPanel } from "../components/RecordingPanel";
+import type { LocalRecording } from "../lib/ipc";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { installStageCutouts } from "../lib/stageCutouts";
@@ -1686,90 +1690,33 @@ function DevicePicker({ itemId, kind, onClose }: { itemId: string; kind: Capture
 
 function PreviewPanel({ children }: { children?: ReactNode }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const attached = useRef(false);
-  /** Attach in flight: syncs that land meanwhile must not attach AGAIN
-   * (the engine ignores a second attach and their newer rect was lost —
-   * the "stale frame on first join" bug). They park their rect here and
-   * it is replayed as a move the moment the attach resolves. */
-  const attaching = useRef(false);
-  const pending = useRef<DOMRect | null>(null);
-  const lastSent = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
-
   useEffect(() => {
-    // Coalesced on a MACROTASK, not an animation frame: once the native
-    // preview sits over the webview WebKit may deem the page occluded and
-    // halt rAF — a dock resize would then leave the stage misplaced until
-    // frames resume. Timers keep running.
-    let raf = 0;
-    const send = async (r: DOMRect) => {
-      lastSent.current = { x: r.x, y: r.y, w: r.width, h: r.height };
-      await ipc.liveMovePreview(r.x, r.y, r.width, r.height);
+    const session = previewSession({
+      attach: (r) => ipc.liveAttachPreview(r.x, r.y, r.width, r.height),
+      move: (r) => ipc.liveMovePreview(r.x, r.y, r.width, r.height),
+      detach: () => ipc.liveDetachPreview(),
+    }, (transparent) => { document.documentElement.dataset.stage = transparent ? "transparent" : "opaque"; });
+    const measure = () => {
+      const r = ref.current?.getBoundingClientRect();
+      return r ? { x: r.x, y: r.y, width: r.width, height: r.height } : undefined;
     };
+    let timer = 0;
     const sync = () => {
-      window.clearTimeout(raf);
-      raf = window.setTimeout(async () => {
-        const el = ref.current;
-        if (!el) return;
-        const r = el.getBoundingClientRect();
-        if (r.width < 10 || r.height < 10) return;
-        try {
-          if (attaching.current) {
-            pending.current = r;
-            return;
-          }
-          if (!attached.current) {
-            attaching.current = true;
-            // The attach call itself reports whether the stage can be a
-            // transparent hole (preview behind the webview) — no polling.
-            const transparent = await ipc.liveAttachPreview(r.x, r.y, r.width, r.height);
-            lastSent.current = { x: r.x, y: r.y, w: r.width, h: r.height };
-            attached.current = true;
-            attaching.current = false;
-            document.documentElement.dataset.stage = transparent ? "transparent" : "opaque";
-            // Replay whatever the layout did while we were attaching — and
-            // re-measure regardless: the rect at attach time is rarely final.
-            const now = pending.current ?? el.getBoundingClientRect();
-            pending.current = null;
-            if (now.width >= 10 && now.height >= 10) await send(now);
-          } else {
-            await send(r);
-          }
-        } catch {
-          attaching.current = false;
-          // engine not ready yet; retry on next layout change
-        }
-      }, 0);
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => void session.sync(measure), 0);
     };
     sync();
     const ro = new ResizeObserver(sync);
     if (ref.current) ro.observe(ref.current);
     window.addEventListener("resize", sync);
     window.addEventListener("scroll", sync, true);
-    // Reconcile: a lost move (engine busy, event coalesced away) must not
-    // leave the stage misplaced — every second, if the measured rect differs
-    // from the last one sent, send it again.
-    const tick = window.setInterval(() => {
-      const el = ref.current;
-      if (!el || !attached.current || attaching.current) return;
-      const r = el.getBoundingClientRect();
-      const l = lastSent.current;
-      if (r.width < 10 || r.height < 10) return;
-      if (!l || Math.abs(l.x - r.x) > 0.5 || Math.abs(l.y - r.y) > 0.5 || Math.abs(l.w - r.width) > 0.5 || Math.abs(l.h - r.height) > 0.5) {
-        void send(r).catch(() => {});
-      }
-    }, 250);
+    // Timers also run when WebKit pauses animation frames behind native video.
+    const tick = window.setInterval(() => void session.sync(measure), 250);
     return () => {
-      window.clearInterval(tick);
-      window.clearTimeout(raf);
-      ro.disconnect();
+      window.clearInterval(tick); window.clearTimeout(timer); ro.disconnect();
       window.removeEventListener("resize", sync);
       window.removeEventListener("scroll", sync, true);
-      if (attached.current) {
-        attached.current = false;
-        // Home must not inherit the hole: its ground rules assume opaque.
-        document.documentElement.dataset.stage = "opaque";
-        ipc.liveDetachPreview().catch(() => {});
-      }
+      void session.close();
     };
   }, []);
 
@@ -2511,13 +2458,8 @@ export interface RoomInfo {
   config: string;
 }
 
-/** The room whose document the ENGINE currently holds. The engine session
- * outlives this view — leaving for Home unmounts the React tree, not the
- * graph — so reopening the same room must reconcile against what is already
- * there rather than destroy and respawn it. Tearing every item down cost a
- * black stage, every CEF guest page re-created (renegotiation, "Connecting…",
- * a flash per guest) and every slot popping in at full frame before its look
- * landed. Module-scoped on purpose: it is a fact about the engine. */
+/** The engine keeps a room while an output uses it. Idle departure releases
+ * capture and clears this identity; the next open restores the saved document. */
 let engineHeldRoom: string | null = null;
 
 function useMonitorState(seat: ProgramMonitor | null): MonitorState | null {
@@ -2601,10 +2543,12 @@ export function LiveView({
   onLeave,
   onOpenIntegrations,
   onOpenAccess,
+  onOpenRecording,
   seat,
 }: {
   room?: RoomInfo;
   onLeave?: () => void;
+  onOpenRecording?: (captureId: string) => void;
   /** "Connect a channel first" → leave the room (the collapse path) and open
    * Settings → Integrations. Absent = the empty state is a plain line. */
   onOpenIntegrations?: () => void;
@@ -2623,6 +2567,21 @@ export function LiveView({
   }, []);
   const [destinations, setDestinations] = useState<LiveDestination[]>([]);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
+  const roomEngineRef = useRef<ReturnType<typeof roomSession> | null>(null);
+  useEffect(() => {
+    const session = roomSession();
+    roomEngineRef.current = session;
+    return () => {
+      void session.close(async () => {
+        if (await ipc.liveReleaseIdleRoom()) {
+          engineHeldRoom = null;
+          roomApplied.current = false;
+          localSetSkipped.current = false;
+          studioApplied.current = false;
+        }
+      }).catch((error) => console.warn("Room capture cleanup failed", error));
+    };
+  }, []);
   /** 60-sample render-PRESSURE history for the stats chart (1 Hz): mean
    * render time over the frame budget, from the engine snapshot. */
   const [loadHist, setLoadHist] = useState<number[]>([]);
@@ -3262,6 +3221,7 @@ export function LiveView({
   const [recPath, setRecPath] = useState<string | null>(null);
   const [recSince, setRecSince] = useState<number>(0);
   const [recTick, setRecTick] = useState(0);
+  const [savedRecording, setSavedRecording] = useState<LocalRecording | null>(null);
   const [lastRec, setLastRec] = useState<string | null>(null);
 
   useEffect(() => {
@@ -3279,6 +3239,11 @@ export function LiveView({
       setRecPath(null);
       if (done) {
         setLastRec(done);
+        const capture = await recIpc.byPath(done).catch(() => null);
+        if (capture) {
+          setSavedRecording(capture);
+          if (capture.endpoint_id) void recIpc.sync(capture.endpoint_id).catch(() => {});
+        }
         notify(`Saved ${done.split("/").pop()}`, { key: "banner", tone: "success", check: true });
       }
       return;
@@ -3288,7 +3253,7 @@ export function LiveView({
     const pad = (n: number) => String(n).padStart(2, "0");
     const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}.${pad(d.getMinutes())}.${pad(d.getSeconds())}`;
     try {
-      const path = await recIpc.start(stamp);
+      const path = await recIpc.start(stamp, room?.id);
       setRecPath(path);
       setRecSince(Date.now());
       setRecTick(0);
@@ -4287,6 +4252,7 @@ export function LiveView({
   };
 
   const refresh = useCallback(async () => {
+    await roomEngineRef.current?.run(async () => {
     setDestinations(await ipc.liveListDestinations(activeEndpointId() ?? undefined));
     const snap = await ipc.liveEngineStatus();
     setSnapshot(snap);
@@ -4453,11 +4419,14 @@ export function LiveView({
       demoVideoSet.current = true;
       ipc.liveSetOverlay(null, false, DEMO_VIDEO_URL).catch(() => {});
     }
+    });
   }, [room]);
 
   useEffect(() => {
     refresh();
+    let alive = true;
     listenLiveEvents((ev) => {
+      if (!alive) return;
       if (ev.type === "status") {
         setElapsed(ev.elapsed_secs);
         setStatuses(new Map(ev.destinations.map((d) => [d.id, d])));
@@ -4543,10 +4512,13 @@ export function LiveView({
         else void refresh();
       }
     }).then((un) => {
-      unlisten.current = un;
+      if (alive) unlisten.current = un;
+      else un();
     });
     return () => {
+      alive = false;
       unlisten.current?.();
+      unlisten.current = null;
     };
   }, [refresh, roomId]);
 
@@ -7752,10 +7724,11 @@ export function LiveView({
 
         {/* The header's health chip was the footer's stream-health meter said
           * twice; the footer keeps it (with fps), the LIVE pill keeps time. */}
+        {savedRecording && <RecordingPanel capture={savedRecording} onClose={() => setSavedRecording(null)} onOpenManager={onOpenRecording ? () => onOpenRecording(savedRecording.id) : undefined} />}
         {!streaming && lastRec && (
           <button
             className="rm-health-rec"
-            onClick={() => recIpc.reveal(lastRec).catch(() => {})}
+            onClick={() => recIpc.byPath(lastRec).then((capture) => capture ? setSavedRecording(capture) : recIpc.reveal(lastRec)).catch(() => {})}
             title={lastRec}
           >
             {ic.play}
@@ -8261,7 +8234,11 @@ export function LiveView({
             )}
             {!engineOk && snapshot && (
               <div className="rm-canvas-msg">
-                {snapshot.disabled ? "Live engine not bundled in this build." : "Warming up the engine…"}
+                {snapshot.disabled
+                  ? "Live engine not bundled in this build."
+                  : snapshot.engine_ready && !snapshot.bootstrap_ok
+                    ? "The live engine failed to initialize. Reopen Producer after checking the engine setup."
+                    : "Warming up the engine…"}
               </div>
             )}
           </div>

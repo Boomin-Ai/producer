@@ -473,7 +473,11 @@ fn parse_color(hex: &str) -> Option<i64> {
     let r = i64::from_str_radix(&h[0..2], 16).ok()?;
     let g = i64::from_str_radix(&h[2..4], 16).ok()?;
     let b = i64::from_str_radix(&h[4..6], 16).ok()?;
-    let a = if h.len() == 8 { i64::from_str_radix(&h[6..8], 16).ok()? } else { 0xFF };
+    let a = if h.len() == 8 {
+        i64::from_str_radix(&h[6..8], 16).ok()?
+    } else {
+        0xFF
+    };
     Some((a << 24) | (b << 16) | (g << 8) | r)
 }
 
@@ -1389,6 +1393,15 @@ impl SceneGraph {
     }
 
     /// Remove one open-list item and release its source.
+    pub fn clear_room(&mut self) -> Result<(), String> {
+        self.set_overlay(OverlaySpec::None)?;
+        let ids: Vec<String> = self.extras.iter().map(|e| e.id.clone()).collect();
+        for id in ids {
+            self.remove_extra(&id)?;
+        }
+        Ok(())
+    }
+
     pub fn remove_extra(&mut self, id: &str) -> Result<(), String> {
         let idx = self
             .extras

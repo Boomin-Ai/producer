@@ -304,6 +304,11 @@ pub async fn live_detach_preview(state: State<'_, AppState>) -> EngineResult<()>
 }
 
 #[tauri::command]
+pub async fn live_release_idle_room(state: State<'_, AppState>) -> EngineResult<bool> {
+    state.live.release_idle_room().map_err(EngineError::Other)
+}
+
+#[tauri::command]
 pub async fn live_set_overlay(
     state: State<'_, AppState>,
     window_id: Option<u32>,
@@ -454,16 +459,16 @@ pub async fn live_set_thumb_rate(state: State<'_, AppState>, fps: u32) -> Engine
 pub async fn live_home_glass(app: tauri::AppHandle) -> EngineResult<()> {
     // Home wears the glass; rooms strip it on preview attach (shim.m). This
     // is the way back when the user leaves a room.
-    #[cfg(all(target_os = "macos", have_engine))]
+    #[cfg(target_os = "macos")]
     {
         use tauri::Manager;
         if let Some(window) = app.get_webview_window("main") {
             if let Ok(ns) = window.ns_window() {
-                unsafe { crate::live::ffi::producer_apply_window_vibrancy(ns) };
+                crate::window::apply_vibrancy(ns);
             }
         }
     }
-    #[cfg(not(all(target_os = "macos", have_engine)))]
+    #[cfg(not(target_os = "macos"))]
     let _ = app;
     Ok(())
 }
@@ -664,16 +669,31 @@ pub async fn live_play_stinger(state: State<'_, AppState>, path: String) -> Engi
 pub async fn live_start_recording(
     state: State<'_, AppState>,
     stamp: String,
+    room_id: Option<String>,
 ) -> EngineResult<String> {
-    state
+    let path = state
         .live
         .start_recording(stamp)
-        .map_err(EngineError::Other)
+        .map_err(EngineError::Other)?;
+    let result = {
+        let db = state.db.lock().unwrap();
+        crate::recordings::begin(&db, &path, room_id.as_deref())
+    };
+    if let Err(error) = result {
+        let _ = state.live.stop_recording();
+        return Err(error);
+    }
+    Ok(path)
 }
 
 #[tauri::command]
 pub async fn live_stop_recording(state: State<'_, AppState>) -> EngineResult<Option<String>> {
-    state.live.stop_recording().map_err(EngineError::Other)
+    let path = state.live.stop_recording().map_err(EngineError::Other)?;
+    if let Some(ref path) = path {
+        let db = state.db.lock().unwrap();
+        crate::recordings::finish(&db, path)?;
+    }
+    Ok(path)
 }
 
 /// Reveal a finished recording in Finder.

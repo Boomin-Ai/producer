@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Pull posts regression</title></head><body><div id="root"></div><output id="result">Running</output><script type="module">
+import React from 'react';import {createRoot} from 'react-dom/client';import {PullPostsButton} from '/src/components/PullPostsButton.tsx';
+let starts=0,polls=0,changes=0;
+window.addEventListener('producer:cache-change',e=>{if(e.detail.endpointId!=='test-brand')throw Error('Wrong cache scope');changes++;});
+window.__TAURI_INTERNALS__={invoke:async(command,args)=>{
+ if(command!=='endpoint_request'||args.endpointId!=='test-brand'||!args.path.includes('/test-channel/'))throw Error('Wrong request scope');
+ if(args.method==='POST'){starts++;await new Promise(r=>setTimeout(r,100));return {available:true,status:200,body:{success:true}};}
+ polls++;return {available:true,status:200,body:{active_jobs:polls===1?3:0,archive_failed_jobs:1,status:'failed'}};
+}};
+const root=createRoot(document.getElementById('root'));const pause=()=>new Promise(r=>setTimeout(r,20));async function until(fn){for(let n=0;n<600;n++){if(fn())return;await pause();}throw Error('timeout');}const check=(v,m)=>{if(!v)throw Error(m);};
+try{root.render(React.createElement(PullPostsButton,{endpointId:'test-brand',channelId:'test-channel'}));await until(()=>document.querySelector('button'));check(starts===0,'pull started without click');const button=document.querySelector('button');button.click();button.click();await until(()=>button.disabled);check(starts===1,'duplicate pull started');await until(()=>document.body.textContent.includes('Some media could not be archived'));check(polls===2,'poll completion incorrect');check(changes===3,'cache invalidation missing');check(!button.disabled,'failed archive prevented retry');document.getElementById('result').textContent='PASS: explicit pull, duplicate-click guard, endpoint/channel scope, polling, cache invalidation and archive failure retry. No real provider requests.';}catch(e){document.getElementById('result').textContent='FAIL: '+e.message;}
+</script></body></html>

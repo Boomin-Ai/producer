@@ -1,5 +1,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { StoragePanel } from "../components/StoragePanel";
+import { PullPostsButton } from "../components/PullPostsButton";
 import { Select } from "../components/Select";
+import { ChannelPostSettings, DEFAULT_CHANNEL_PARAMS, buildChannelOverrides, type ChannelParams } from "../components/ChannelPostSettings";
 import { cached, reconcile, remember, swr } from "../lib/fetchCache";
 import { sortRooms } from "../lib/roomOrder";
 import { createPortal } from "react-dom";
@@ -44,6 +47,7 @@ import { liveRoomId, parseConfig, serializeConfig } from "../lib/room";
 import { ROOMS_EVENT, deleteRoomEverywhere, notifyRoomsChanged, renameRoom, roomOccupancy, syncRooms } from "../lib/roomSync";
 import { useUpdater } from "../lib/updater";
 import { DestinationEditor, LiveView } from "./Live";
+import { HostedManager } from "../features/manager/HostedManager";
 import { ModSeat } from "./ModSeat";
 import { ModLinkDrop } from "./ModLinkDrop";
 import type { ModLink } from "../lib/modSeat";
@@ -80,120 +84,7 @@ interface Attached {
   local_path: string;
 }
 
-/** Per-channel platform params. Each platform gets its own real knobs:
- *  Instagram mirrors the web ChannelAccordion; Threads carries reply
- *  control, one topic tag, and a text-only link attachment. */
-interface ChannelParams {
-  useCaption: boolean;
-  caption: string;
-  // instagram
-  feed: boolean;
-  location: string;
-  userTags: string[];
-  collaborators: string[];
-  cover_url: string;
-  trial_post: boolean;
-  // threads
-  reply_control: string;
-  topic_tag: string;
-  link_attachment: string;
-}
-
-const DEFAULT_PARAMS: ChannelParams = {
-  useCaption: false,
-  caption: "",
-  feed: true,
-  location: "",
-  userTags: [],
-  collaborators: [],
-  cover_url: "",
-  trial_post: false,
-  reply_control: "",
-  topic_tag: "",
-  link_attachment: "",
-};
-
-function buildOverrides(p: ChannelParams | undefined, platform: string): Record<string, unknown> | undefined {
-  if (!p) return undefined;
-  const o: Record<string, unknown> = {};
-  if (p.useCaption && p.caption.trim()) o.caption = p.caption.trim();
-  if (platform === "instagram") {
-    o.feed = p.feed;
-    if (p.location.trim()) o.location = p.location.trim();
-    if (p.userTags.length) o.userTags = p.userTags;
-    if (p.collaborators.length) o.collaborators = p.collaborators;
-    if (p.cover_url.trim()) o.cover_url = p.cover_url.trim();
-    if (p.trial_post) o.trial_post = true;
-  }
-  if (platform === "threads") {
-    if (p.reply_control) o.reply_control = p.reply_control;
-    if (p.topic_tag.trim()) o.topic_tag = p.topic_tag.trim();
-    if (p.link_attachment.trim()) o.link_attachment = p.link_attachment.trim();
-  }
-  return o;
-}
-
-/** Chip-style tag input: Enter/comma adds, Backspace on empty or ✕
- *  removes. Emits a clean array — no separator parsing downstream. */
-function TagInput({
-  values: rawValues,
-  onChange,
-  placeholder,
-}: {
-  values: string[];
-  onChange: (values: string[]) => void;
-  placeholder: string;
-}) {
-  const [draft, setDraft] = useState("");
-  // Defensive: survive stale in-memory state from hot reloads or older
-  // shapes — never let a non-array white-screen the composer.
-  const values = Array.isArray(rawValues) ? rawValues : [];
-
-  function commit() {
-    const tag = draft.trim().replace(/^@/, "").replace(/,+$/, "");
-    setDraft("");
-    if (tag && !values.includes(tag)) onChange([...values, tag]);
-  }
-
-  return (
-    <div className="tag-input">
-      {values.map((v) => (
-        <span key={v} className="tag-chip">
-          @{v}
-          <button
-            type="button"
-            aria-label={`remove ${v}`}
-            onClick={() => onChange(values.filter((x) => x !== v))}
-          >
-            ✕
-          </button>
-        </span>
-      ))}
-      <input
-        value={draft}
-        onChange={(e) => {
-          if (e.target.value.endsWith(",")) {
-            setDraft(e.target.value);
-            commit();
-          } else {
-            setDraft(e.target.value);
-          }
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            commit();
-          } else if (e.key === "Backspace" && !draft && values.length) {
-            onChange(values.slice(0, -1));
-          }
-        }}
-        onBlur={commit}
-        placeholder={values.length ? "" : placeholder}
-      />
-    </div>
-  );
-}
-
+/** The small toggle also used outside the per-channel composer. */
 function Switch({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
@@ -268,7 +159,16 @@ export function Home({
   }, [settingsOpen]);
   // Home is SURFACES, not one long page: Rooms (the stage list) and Manager
   // (channels, network, rundown — productions soon). The rail switches them.
-  const [surface, setSurface] = useState<"rooms" | "manager">("rooms");
+  // The native design preview starts on Manager inside Producer's real frame.
+  const [managerRecordingId, setManagerRecordingId] = useState<string | null>(null);
+  const [surface, setSurface] = useState<"rooms" | "manager">(
+    import.meta.env.DEV && import.meta.env.VITE_MANAGER_PREVIEW === "1" ? "manager" : "rooms",
+  );
+  useEffect(() => {
+    // A native dev window may retain Home state through Vite HMR. Enter the
+    // preview once when this build flavor mounts, then leave rail switching to the user.
+    if (import.meta.env.DEV && import.meta.env.VITE_MANAGER_PREVIEW === "1") setSurface("manager");
+  }, []);
   // Rooms strip the window glass so stage overlays work (shim.m); returning
   // home puts it back.
   useEffect(() => {
@@ -281,17 +181,6 @@ export function Home({
   // The active workspace (brand). Rooms, destinations and the network rail
   // all key on it; the profile popout switches it.
   const [activeId, setActiveId] = useState<string | null>(() => activeEndpointId());
-  /** For the top bar's BETA line. Settings and the room each resolve their own
-   *  copy; this is Home's. Absent until Tauri answers, and on a plain browser
-   *  it never does — the mark then reads "PRODUCER BETA" with no version
-   *  rather than "v" and a gap. */
-  const [brandVersion, setBrandVersion] = useState<string | null>(null);
-  useEffect(() => {
-    import("@tauri-apps/api/app")
-      .then(({ getVersion }) => getVersion())
-      .then(setBrandVersion)
-      .catch(() => {});
-  }, []);
   // Last-known first (lib/fetchCache.ts): coming back from a room must not
   // flash an empty stage list while the IPC round-trips.
   const [rooms, setRooms] = useState<LiveRoom[]>(() => cached<LiveRoom[]>(`rooms:${activeEndpointId() ?? ""}`) ?? []);
@@ -454,7 +343,6 @@ export function Home({
     setView({ kind: "seat", room: own, seat });
   }, []);
 
-  const title = view.kind === "compose" ? "New post" : view.kind === "history" ? "Rundown" : view.kind === "console" ? "Settings" : null;
 
   if (view.kind === "modseat") {
     return <ModSeat link={view.link} onLeave={back} />;
@@ -471,6 +359,7 @@ export function Home({
           key={view.room.id}
           room={view.room}
           onLeave={back}
+          onOpenRecording={isBoomin(endpoints.find((ep) => ep.id === activeId)) ? (captureId) => { setManagerRecordingId(captureId); setSurface("manager"); back(); } : undefined}
           onOpenIntegrations={() => {
             // The collapse path first (the stream keeps running), then the
             // rail-side Settings on its Integrations section.
@@ -508,35 +397,6 @@ export function Home({
           : "cr"
       }
     >
-      <header className="cr-top" data-tauri-drag-region>
-        <div className="cr-top-left" data-tauri-drag-region>
-          {view.kind !== "home" && (
-            <button className="cr-back" onClick={back} title="Back to the control room">
-              ✕
-            </button>
-          )}
-          {/* The app's top bar carries its own mark (the Wordmark component is
-              the sign-in / first-run one), so BETA has to be said in both. */}
-          <span className="cr-brand" data-tauri-drag-region>
-            PRODUCER
-            <span className="cr-brand-beta">
-              BETA{brandVersion ? ` v${brandVersion}` : ""}
-            </span>
-          </span>
-          {title && <span className="cr-title">{title}</span>}
-          {streaming && <span className="cr-live-pill">LIVE</span>}
-        </div>
-        <div className="cr-top-drag" data-tauri-drag-region />
-
-        <div className="cr-top-right">
-          {updater.state === "ready" && (
-            <button className="cr-update" onClick={updater.restart} title={`Producer ${updater.version} is staged`}>
-              <span className="update-dot" /> Restart to update
-            </button>
-          )}
-        </div>
-      </header>
-
       <AccountSheet
         open={accountOpen}
         endpoints={endpoints}
@@ -639,7 +499,15 @@ export function Home({
           }}
         />
       )}
-      {view.kind === "home" && !settingsOpen && (
+      {view.kind === "home" && !settingsOpen && surface === "manager" && isBoomin(endpoints.find((ep) => ep.id === activeId)) ? (
+        <HostedManager
+          key={activeId ?? "manager"}
+          endpoint={endpoints.find((ep) => ep.id === activeId)!}
+          initialRecordingId={managerRecordingId}
+          channels={channels.filter((channel) => channel.endpoint_id === activeId && channel.status === "active")}
+          onCompose={() => { closeSettings(); setView({ kind: "compose" }); }}
+        />
+      ) : view.kind === "home" && !settingsOpen && (
         <ControlRoomHome
           surface={surface}
           rooms={rooms}
@@ -660,7 +528,12 @@ export function Home({
         />
       )}
 
-      {view.kind === "compose" && (
+      {view.kind === "compose" && isBoomin(endpoints.find((ep) => ep.id === activeId)) ? (
+        <HostedManager key={activeId ?? "manager-compose"} endpoint={endpoints.find((ep) => ep.id === activeId)!} composing
+          channels={channels.filter((channel) => channel.endpoint_id === activeId && channel.status === "active")}
+          onCompose={() => {}} onComposeClosed={() => { setView({ kind: "home" }); setSurface("manager"); }}
+          onSubmitted={() => { void loadJobs(); setView({ kind: "home" }); setSurface("manager"); }} />
+      ) : view.kind === "compose" && (
         <main className="cr-page railed">
           <ComposerDetail
             channels={channels.filter((c) => c.status === "active")}
@@ -717,11 +590,13 @@ function ChannelChip({
   endpointId,
   onError,
   onChanged,
+  canPull = false,
 }: {
   channel: Channel;
   endpointId: string;
   onError: (message: string | null) => void;
   onChanged: () => void;
+  canPull?: boolean;
 }) {
   const [state, setState] = useState<"idle" | "confirm" | "busy">("idle");
   const drop = async () => {
@@ -743,6 +618,7 @@ function ChannelChip({
       <span className="cr-chip-dot" style={{ background: PRESET_TONE[channel.platform] ?? "#8b93a7" }} />
       {channel.display_name}
       <span className="cr-chip-kind">{channel.platform}</span>
+      {canPull && state === "idle" && <PullPostsButton endpointId={endpointId} channelId={channel.id} />}
       {state === "idle" && (
         <button className="chan-x" title={`Disconnect ${channel.display_name}`} onClick={() => setState("confirm")}>✕</button>
       )}
@@ -839,7 +715,7 @@ function ChannelsBlock({
               </div>
               <div className="cr-channels">
                 {mine.map((c) => (
-                  <ChannelChip key={c.id} channel={c} endpointId={ep.id} onError={setConnectError} onChanged={onChanged} />
+                  <ChannelChip key={c.id} channel={c} endpointId={ep.id} canPull={boomin && c.platform === "instagram" && c.status === "active"} onError={setConnectError} onChanged={onChanged} />
                 ))}
                 {/* One native path for both backends: ask the workspace for an
                     OAuth url, open the user's browser, the token lands server
@@ -1030,7 +906,7 @@ function NetworkInviteReset({ endpoints }: { endpoints: EndpointInfo[] }) {
 /** The body of Settings. Lives inside the rail-side `.home-settings`
  * surface (see Home): no backdrop, no sheet chrome — the rail's Back button
  * and Esc close it. */
-type SettingsSection = "app" | "output" | "audio" | "guests" | "integrations" | "access" | "vcam";
+type SettingsSection = "app" | "output" | "audio" | "guests" | "integrations" | "access" | "storage";
 const SETTINGS_SECTIONS: { id: SettingsSection; label: string; sub: string; built: boolean }[] = [
   { id: "app", label: "App", sub: "Version, updates, shortcuts", built: true },
   { id: "integrations", label: "Integrations", sub: "Live destinations, posting channels", built: true },
@@ -1039,7 +915,7 @@ const SETTINGS_SECTIONS: { id: SettingsSection; label: string; sub: string; buil
   { id: "output", label: "Output", sub: "Encoder, bitrate, recording", built: false },
   { id: "audio", label: "Audio", sub: "Devices, monitoring, filters", built: false },
   { id: "guests", label: "Guests", sub: "Admit rules, TURN relay", built: false },
-  { id: "vcam", label: "Virtual camera", sub: "Auto-start, output", built: false },
+  { id: "storage", label: "Storage", sub: "Hosted media, app data, recordings", built: true },
 ];
 
 function SettingsPanel({
@@ -1116,12 +992,13 @@ function SettingsPanel({
   if (mode === "nav") {
     return (
       <div className="home-settings-in set set-nav">
-        <div className="rm-filters-head set-nav-head">
+        <div className="rm-filters-head set-nav-head" data-tauri-drag-region>
           <button className="rm-crumb" onClick={onClose} title="Back to your rooms">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
             Rooms
           </button>
           <span className="rm-filters-title">Settings{current ? ` · ${current.name}` : ""}</span>
+          <div className="set-producer-brand"><strong>Producer</strong><span>BETA{appVersion ? ` v${appVersion}` : ""}</span></div>
         </div>
         <div className="set-nav-list">
           {SETTINGS_SECTIONS.map((it) => (
@@ -1290,13 +1167,13 @@ function SettingsPanel({
           </>
         )}
         {section === "access" && <AccessPanel endpoint={current} />}
+        {section === "storage" && <StoragePanel endpoint={current} />}
         <BugSheet open={bugOpen} onClose={() => setBugOpen(false)} version={appVersion} />
         {!meta.built && (
           <div className="set-soon">
             {section === "output" && "Encoder override, rate control, keyframe interval, bitrate policy, recording format and folder, audio bitrate. Today these are fixed constants in the engine."}
             {section === "audio" && "Default mic and desktop audio, monitoring device, sample rate, and the audio filter library. Today: 48 kHz fixed, four filters."}
             {section === "guests" && "Auto-admit, guest cap, and a TURN relay for guests behind strict networks. Today the relay is a server variable."}
-            {section === "vcam" && "Start the virtual camera with the room, choose what it outputs. Today: on or off."}
           </div>
         )}
       </div>
@@ -1398,7 +1275,7 @@ function ControlRoomHome({
       <FirewallBanner />
       <LiveNowStrip onEnterSeat={onEnterSeat} />
       <section className="cr-section" id="sec-onair">
-        <div className="cr-label">
+        <div className="cr-label" data-tauri-drag-region>
           ON AIR
           {streaming && <span className="cr-live-pill">LIVE</span>}
         </div>
@@ -1554,7 +1431,7 @@ function ComposerDetail({
   function patchParams(channelId: string, patch: Partial<ChannelParams>) {
     setParams((prev) => ({
       ...prev,
-      [channelId]: { ...(prev[channelId] ?? DEFAULT_PARAMS), ...patch },
+      [channelId]: { ...(prev[channelId] ?? DEFAULT_CHANNEL_PARAMS), ...patch },
     }));
   }
 
@@ -1609,7 +1486,7 @@ function ComposerDetail({
         .map((c) => ({
           endpoint_id: c.endpoint_id,
           channel_id: c.id,
-          overrides: buildOverrides(params[c.id] ?? DEFAULT_PARAMS, c.platform),
+          overrides: buildChannelOverrides(params[c.id] ?? DEFAULT_CHANNEL_PARAMS, c.platform),
         }));
       const { results } = await ipc.submitPost({
         text: text || undefined,
@@ -1818,149 +1695,18 @@ function ComposerDetail({
                 {channels
                   .filter((c) => selected.has(c.id))
                   .map((c) => {
-                    const p = params[c.id] ?? DEFAULT_PARAMS;
+                    const p = params[c.id] ?? DEFAULT_CHANNEL_PARAMS;
                     const isOpen = expanded.has(c.id);
                     return (
-                      <div key={c.id} className="channel-acc">
-                        <div
-                          className="acc-head clickable"
-                          onClick={() => toggleExpanded(c.id)}
-                          role="button"
-                          aria-expanded={isOpen}
-                        >
-                          <span className={`chev${isOpen ? " open" : ""}`}>▸</span>
-                          <span className="platform">{c.platform}</span>
-                          <span className="name">{c.display_name}</span>
-                          {c.external_handle && (
-                            <span className="muted">@{c.external_handle}</span>
-                          )}
-                          <span className="mode-tag">
-                            {c.endpoint_kind === "connected" ? "Boomin" : "Self-hosted"}
-                          </span>
-                          <button
-                            className="linkish"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggle(c.id);
-                            }}
-                          >
-                            remove
-                          </button>
-                        </div>
-
-                        {isOpen && (
-                          <>
-                        <div className="acc-row">
-                          <span className="acc-group">Caption</span>
-                          <span className="muted">
-                            {p.useCaption ? "Custom for this channel" : "Using global"}
-                          </span>
-                          <span className="acc-control">
-                            <Switch
-                              on={p.useCaption}
-                              onChange={(v) => patchParams(c.id, { useCaption: v })}
-                            />
-                          </span>
-                        </div>
-                        {p.useCaption && (
-                          <textarea
-                            className="acc-caption"
-                            value={p.caption}
-                            onChange={(e) => patchParams(c.id, { caption: e.target.value })}
-                            placeholder={`Caption just for ${c.display_name}…`}
-                          />
-                        )}
-
-                        {c.platform === "instagram" && (
-                          <>
-                            <div className="acc-row">
-                              <span className="acc-label">Show on Feed</span>
-                              <span className="acc-control">
-                                <Switch on={p.feed} onChange={(v) => patchParams(c.id, { feed: v })} />
-                              </span>
-                            </div>
-                            <div className="acc-row">
-                              <span className="acc-label">Location</span>
-                              <input
-                                value={p.location}
-                                onChange={(e) => patchParams(c.id, { location: e.target.value })}
-                                placeholder="Add location…"
-                              />
-                            </div>
-                            <div className="acc-row">
-                              <span className="acc-label">User Tags</span>
-                              <TagInput
-                                values={p.userTags}
-                                onChange={(v) => patchParams(c.id, { userTags: v })}
-                                placeholder="@username — press Enter to add"
-                              />
-                            </div>
-                            <div className="acc-row">
-                              <span className="acc-label">Collaborators</span>
-                              <TagInput
-                                values={p.collaborators}
-                                onChange={(v) => patchParams(c.id, { collaborators: v.slice(0, 3) })}
-                                placeholder="@collaborator — press Enter to add (max 3)"
-                              />
-                            </div>
-                            <div className="acc-row">
-                              <span className="acc-group">Cover photo</span>
-                              <input
-                                value={p.cover_url}
-                                onChange={(e) => patchParams(c.id, { cover_url: e.target.value })}
-                                placeholder="https://… (optional — sets the Reel thumbnail)"
-                              />
-                            </div>
-                            <div className="acc-row">
-                              <span className="acc-group">Trial</span>
-                              <span className="acc-label">Post as trial reel</span>
-                              <span className="acc-control">
-                                <Switch
-                                  on={p.trial_post}
-                                  onChange={(v) => patchParams(c.id, { trial_post: v })}
-                                />
-                              </span>
-                            </div>
-                          </>
-                        )}
-
-                        {c.platform === "threads" && (
-                          <>
-                            <div className="acc-row">
-                              <span className="acc-label">Who can reply</span>
-                              <Select
-                                size="sm"
-                                value={p.reply_control}
-                                onChange={(v) => patchParams(c.id, { reply_control: v })}
-                                title="Who can reply"
-                                options={[
-                                  { value: "", label: "Everyone (default)" },
-                                  { value: "accounts_you_follow", label: "Accounts you follow" },
-                                  { value: "mentioned_only", label: "Mentioned only" },
-                                ]}
-                              />
-                            </div>
-                            <div className="acc-row">
-                              <span className="acc-label">Topic tag</span>
-                              <input
-                                value={p.topic_tag}
-                                onChange={(e) => patchParams(c.id, { topic_tag: e.target.value })}
-                                placeholder="one topic, no # needed (e.g. Producer)"
-                              />
-                            </div>
-                            <div className="acc-row">
-                              <span className="acc-label">Link attachment</span>
-                              <input
-                                value={p.link_attachment}
-                                onChange={(e) => patchParams(c.id, { link_attachment: e.target.value })}
-                                placeholder="https://… (text-only posts — shows a preview card)"
-                              />
-                            </div>
-                          </>
-                        )}
-                          </>
-                        )}
-                      </div>
+                      <ChannelPostSettings
+                        key={c.id}
+                        channel={c}
+                        params={p}
+                        expanded={isOpen}
+                        onToggle={() => toggleExpanded(c.id)}
+                        onPatch={(patch) => patchParams(c.id, patch)}
+                        onRemove={() => toggle(c.id)}
+                      />
                     );
                   })}
               </div>

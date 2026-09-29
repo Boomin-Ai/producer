@@ -2,8 +2,25 @@ use std::path::PathBuf;
 
 fn main() {
     println!("cargo:rustc-check-cfg=cfg(have_engine)");
+    link_window_vibrancy_macos();
     link_live_engine();
     tauri_build::build()
+}
+
+/// Window glass is part of the app shell, even when the OBS engine artifact
+/// is unavailable for a frontend-only development build.
+fn link_window_vibrancy_macos() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
+        return;
+    }
+    println!("cargo:rerun-if-changed=src/window_vibrancy.m");
+    cc::Build::new()
+        .file("src/window_vibrancy.m")
+        .flag("-fobjc-arc")
+        .flag("-fmodules")
+        .compile("producer_window_vibrancy");
+    println!("cargo:rustc-link-lib=framework=AppKit");
+    println!("cargo:rustc-link-lib=framework=WebKit");
 }
 
 /// Link the Producer engine artifact (libobs + plugin allowlist; see

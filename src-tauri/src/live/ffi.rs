@@ -438,7 +438,6 @@ extern "C" {
     #[cfg(target_os = "windows")]
     pub fn producer_preview_set_cutouts(view: *mut c_void, xywh: *const f64, n: c_int);
     pub fn producer_preview_prepare_window(ns_window: *mut c_void) -> c_int;
-    pub fn producer_apply_window_vibrancy(ns_window: *mut c_void) -> c_int;
     pub fn producer_av_authorization_status(media_type: c_int) -> c_int;
     pub fn producer_av_request_access(media_type: c_int);
     pub fn producer_screen_capture_preflight() -> c_int;
