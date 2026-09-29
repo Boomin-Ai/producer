@@ -714,6 +714,10 @@ extern "C" {
     pub fn os_cpu_usage_info_query(info: *mut c_void) -> f64;
     /// Media playback (stingers). Duration is 0 until the file is opened.
     pub fn obs_source_media_get_duration(source: *mut obs_source_t) -> i64;
+    pub fn obs_source_media_get_time(source: *mut obs_source_t) -> i64;
+    pub fn obs_source_media_set_time(source: *mut obs_source_t, ms: i64);
+    pub fn obs_source_media_get_state(source: *mut obs_source_t) -> c_int;
+    pub fn obs_source_media_play_pause(source: *mut obs_source_t, pause: bool);
 
     // --- Used by shim_win.c's pass-through Cutout filter, NOT by Rust ---
     // On Windows the C shim reaches obs.dll through the raw-dylib import

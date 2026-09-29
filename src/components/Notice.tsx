@@ -76,7 +76,7 @@ function NoticePill({ n }: { n: NoticeT }) {
 
 /** The host: sits in the top bar's drag strip. Only the pills take the
  * pointer — the strip around them stays a window-drag region. */
-export function NoticeHost() {
+export function NoticeHost({ action }: { action?: { label: string; onClick: () => void; noticeKey: string } } = {}) {
   const list = useNotices();
   if (list.length === 0) return null;
   // Newest last; at most three ACTIVE on screen so a burst never buries the
@@ -85,11 +85,13 @@ export function NoticeHost() {
   const active = list.filter((n) => !n.faded).slice(-3);
   const faded = list.filter((n) => n.faded);
   const shown = [...faded, ...active];
+  const visibleAction = action && shown.some((n) => n.key === action.noticeKey) ? action : undefined;
   return (
-    <div className="rm-notices" data-tauri-drag-region>
+    <div className={`rm-notices${visibleAction ? " with-action" : ""}`} data-tauri-drag-region>
       {shown.map((n) => (
         <NoticePill key={n.id} n={n} />
       ))}
+      {visibleAction && <button type="button" className="rm-notice-action" onClick={visibleAction.onClick}>{visibleAction.label} <span aria-hidden="true">↗</span></button>}
     </div>
   );
 }

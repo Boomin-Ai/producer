@@ -1,6 +1,6 @@
 [package]
 name = "producer"
-version = "0.4.50"
+version = "0.4.51"
 description = "Producer by Boomin — the open-source studio for creators: post everywhere, stream everywhere."
 authors = ["Boomin"]
 license = "AGPL-3.0-only"
@@ -51,3 +51,9 @@ tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
 base64 = "0.22"
 jpeg-encoder = "0.6"
+
+# DJ: local tags, audio decoding, BPM detection and pitch-preserving tempo.
+lofty = "0.22"
+symphonia = { version = "0.5", features = ["mp3", "aac", "isomp4", "alac", "wav", "pcm", "flac"] }
+soundtouch = { version = "0.5.4", features = ["bundled"] }
+hound = "3.5"

@@ -1,6 +1,6 @@
 import { previewSession } from "../lib/previewSession";
 import { roomSession } from "../lib/roomSession";
-import { RecordingPanel } from "../components/RecordingPanel";
+import { DJPanel } from "../components/DJPanel";
 import type { LocalRecording } from "../lib/ipc";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -200,6 +200,14 @@ interface ChatLine {
   text: string;
   color?: string | null;
   emotes?: Record<string, string>;
+}
+
+function isChatOverlay(spec: ExtraSpec): boolean {
+  if (spec.kind !== "overlay") return false;
+  try {
+    const url = new URL(spec.url);
+    return url.hostname === "127.0.0.1" && url.pathname === "/chat";
+  } catch { return false; }
 }
 
 /** Which channels this machine reads chat from. Not a credential — a name. */
@@ -3074,6 +3082,12 @@ export function LiveView({
   const demo = demoOn();
   const [chatOn, setChatOn] = useState<Record<string, boolean>>({ twitch: true, kick: true, youtube: true });
   const [chatChipsOpen, setChatChipsOpen] = useState(false);
+  const [chatOutputBusy, setChatOutputBusy] = useState(false);
+  const chatOutputEntry = (cfg.sources.extras ?? []).find((e) => isChatOverlay(e.spec));
+  const chatOutputLook = cfg.scenes.find((sc) => sc.id === cfg.active_scene)?.look;
+  const chatOutputOn = !!chatOutputEntry && (chatOutputLook
+    ? !!chatOutputLook[chatOutputEntry.id] && chatOutputLook[chatOutputEntry.id].visible !== false
+    : !!sources.items?.find((i) => i.id === chatOutputEntry.id && i.visible));
   const [chatMsgs, setChatMsgs] = useState<ChatLine[]>(() => (demoOn() ? DEMO_CHAT.slice(0, 9) : []));
   const chatEnd = useRef<HTMLDivElement | null>(null);
   const chatList = useRef<HTMLDivElement | null>(null);
@@ -3222,7 +3236,6 @@ export function LiveView({
   const [recSince, setRecSince] = useState<number>(0);
   const [recTick, setRecTick] = useState(0);
   const [savedRecording, setSavedRecording] = useState<LocalRecording | null>(null);
-  const [lastRec, setLastRec] = useState<string | null>(null);
 
   useEffect(() => {
     if (!recPath) return;
@@ -3238,13 +3251,12 @@ export function LiveView({
       });
       setRecPath(null);
       if (done) {
-        setLastRec(done);
         const capture = await recIpc.byPath(done).catch(() => null);
         if (capture) {
           setSavedRecording(capture);
           if (capture.endpoint_id) void recIpc.sync(capture.endpoint_id).catch(() => {});
         }
-        notify(`Saved ${done.split("/").pop()}`, { key: "banner", tone: "success", check: true });
+        notify(`Saved ${done.split("/").pop()}`, { key: "recording-saved", tone: "success", check: true });
       }
       return;
     }
@@ -4027,6 +4039,36 @@ export function LiveView({
       sources: { ...c.sources, extras: (c.sources.extras ?? []).filter((e) => e.id !== id) },
     });
   };
+
+  const toggleChatOutput = async () => {
+    if (chatOutputBusy || refuseSetEdit()) return;
+    setChatOutputBusy(true);
+    try {
+      const c = cfgRef.current;
+      const existing = (c.sources.extras ?? []).find((e) => isChatOverlay(e.spec));
+      if (!existing) {
+        const url = await overlayBridge.chatStart();
+        await addExtraSource("Chat", { kind: "overlay", url });
+        return;
+      }
+      const visible = !chatOutputOn;
+      await ipc.liveSetTransform(existing.id, { visible }, true);
+      const current = cfgRef.current;
+      writeCfg({
+        ...current,
+        scenes: current.scenes.map((sc) => {
+          if (sc.id !== activeSceneRef.current) return sc;
+          const look = { ...(sc.look ?? stageLook(sourcesRef.current.items ?? [])) };
+          look[existing.id] = { ...(look[existing.id] ?? {}), visible };
+          return { ...sc, look };
+        }),
+      });
+    } catch (error) {
+      notifyError(error, { key: "banner" });
+    } finally {
+      setChatOutputBusy(false);
+    }
+  };
   /** MEMBERSHIP delete for the overlay (the one source that is still not
    * an extra): leave THIS scene's look (materialized from the stage if the
    * scene had none); tear the overlay down only when no other scene lists
@@ -4315,6 +4357,14 @@ export function LiveView({
         cfgRef.current = migrated;
         setCfgState(migrated);
         ipc.liveUpdateRoom(room.id, { config: serializeConfig(migrated) }).catch(() => {});
+      }
+      // Start the local chat bridge before restoring its browser source.
+      // Its port can change when another Producer instance holds the default.
+      if ((opened.sources.extras ?? []).some((e) => isChatOverlay(e.spec))) {
+        const url = await overlayBridge.chatStart();
+        const extras = (opened.sources.extras ?? []).map((e) => isChatOverlay(e.spec) ? { ...e, spec: { kind: "overlay" as const, url } } : e);
+        opened = { ...opened, sources: { ...opened.sources, extras } };
+        writeCfg(opened);
       }
       const saved = opened.sources;
       // Item-list half of the document. A DIFFERENT room: clear whatever
@@ -6216,6 +6266,8 @@ export function LiveView({
   // ── Panels: everything that isn't the stage is a dockable panel ────────
   const panelBody = (id: PanelId) => {
     switch (id) {
+      case "dj":
+        return isHost ? <DJPanel key={roomId ?? "local"} roomId={roomId ?? "local"} enabled={docApplied} mini={formDockOf("dj") === "top"} /> : <div className="rm-rows-empty">The host controls the room’s DJ mix.</div>;
       case "scenes":
         // A mod's Producer on Boomin: the HOST's scenes, read from the room's
         // directory, the active one lit by the server's `scene.cut` frames.
@@ -7187,6 +7239,19 @@ export function LiveView({
     if (id === "chat")
       return (
         <>
+          {isHost && (
+            <button
+              className={`rm-chat-output${chatOutputOn ? " on" : ""}`}
+              role="switch"
+              aria-checked={chatOutputOn}
+              disabled={chatOutputBusy || !docApplied}
+              title="Show transparent chat on stream, recordings and virtual camera. Move it in Studio."
+              onClick={() => void toggleChatOutput()}
+            >
+              <span>Show on output</span>
+              <span className="rm-chat-output-track" aria-hidden="true"><span /></span>
+            </button>
+          )}
           <button
             className={`rm-panel-plus rm-chat-plug${chatLive ? " live" : ""}`}
             title={!isHost ? "Chat channels — set by the host" : chatLive ? "Chat channels" : "Connect your chat"}
@@ -7724,19 +7789,12 @@ export function LiveView({
 
         {/* The header's health chip was the footer's stream-health meter said
           * twice; the footer keeps it (with fps), the LIVE pill keeps time. */}
-        {savedRecording && <RecordingPanel capture={savedRecording} onClose={() => setSavedRecording(null)} onOpenManager={onOpenRecording ? () => onOpenRecording(savedRecording.id) : undefined} />}
-        {!streaming && lastRec && (
-          <button
-            className="rm-health-rec"
-            onClick={() => recIpc.byPath(lastRec).then((capture) => capture ? setSavedRecording(capture) : recIpc.reveal(lastRec)).catch(() => {})}
-            title={lastRec}
-          >
-            {ic.play}
-            Last take
-          </button>
-        )}
         <div className="rm-top-drag" data-tauri-drag-region>
-          <NoticeHost />
+          <NoticeHost action={savedRecording && onOpenRecording ? {
+            label: "View in Manager",
+            noticeKey: "recording-saved",
+            onClick: () => onOpenRecording(savedRecording.id),
+          } : undefined} />
         </div>
 
         <div className="rm-top-right">

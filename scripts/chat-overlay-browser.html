@@ -1,0 +1,30 @@
+<!doctype html><html><body><output id="result">Running</output>
+<iframe id="overlay" src="/src-tauri/overlay/chat.html" style="width:1280px;height:720px"></iframe>
+<script>
+const frame=document.getElementById('overlay');
+frame.onload=()=>{
+  try {
+    const w=frame.contentWindow,d=frame.contentDocument;
+    const check=(v,m)=>{if(!v)throw Error(m)};
+    const now=Date.now();
+    const data={messages:Array.from({length:12},(_,i)=>({id:String(i),platform:['twitch','kick','youtube'][i%3],user:'viewer',text:i===11?'<img src=x onerror=alert(1)> Kappa':'hello',received_at:now,color:'#aaffaa'})),emotes:{youtube:{Kappa:'https://example.com/emote.png'}}};
+    w.eval('snapshot='+JSON.stringify(data)+';render('+now+')');
+    check(d.querySelectorAll('.message').length===8,'recent buffer not bounded');
+    check(d.body.textContent.includes('<img src=x onerror=alert(1)>'),'message markup was interpreted');
+    check(d.querySelectorAll('img').length===1,'emote rendering failed');
+    check(w.getComputedStyle(d.body).backgroundColor==='rgba(0, 0, 0, 0)','background is opaque');
+    check([...d.querySelectorAll('.platform')].some(n=>n.textContent==='TW'),'Twitch missing');
+    check([...d.querySelectorAll('.platform')].some(n=>n.textContent==='K'),'Kick missing');
+    check([...d.querySelectorAll('.platform')].some(n=>n.textContent==='YT'),'YouTube missing');
+    w.eval('render('+(now+3600000)+')');
+    check(d.querySelectorAll('.message').length===8,'quiet chat disappeared');
+    check(w.getComputedStyle(d.querySelector('.message')).opacity==='1','messages faded');
+    data.messages.push({id:'new',platform:'twitch',user:'next',text:'new arrival',received_at:now+3600000});
+    w.eval('snapshot='+JSON.stringify(data)+';render()');
+    check(d.querySelectorAll('.message').length===8,'visible message count grew');
+    check(d.querySelector('.message .platform').textContent==='YT','oldest message was not pushed out');
+    check(d.querySelector('.message:last-child').textContent.includes('new arrival'),'new message not at bottom');
+    document.getElementById('result').textContent='PASS: transparent combined chat, safe text, emotes, persistent messages and new arrivals pushing older messages upward.';
+  } catch(e) {document.getElementById('result').textContent='FAIL: '+e.message;}
+};
+</script></body></html>
