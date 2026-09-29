@@ -5,6 +5,8 @@
 pub mod bridge;
 pub mod commands;
 pub mod creds;
+#[cfg(have_engine)]
+pub mod dj;
 
 /// The virtual camera's label, identical on both platforms: macOS bakes it
 /// into the camera extension (build-camera-extension.sh), Windows patches it
@@ -81,6 +83,25 @@ pub struct Live {
 }
 
 impl Live {
+    pub fn clone_handle_for_dj(
+        &self,
+    ) -> Result<
+        Box<dyn FnOnce(crate::dj::Action) -> Result<crate::dj::Status, String> + Send>,
+        String,
+    > {
+        #[cfg(have_engine)]
+        {
+            self.handle
+                .as_ref()
+                .ok_or("The room audio engine is not running")?
+                .dj_dispatch()
+        }
+        #[cfg(not(have_engine))]
+        {
+            Err("DJ needs a build with the native room engine".into())
+        }
+    }
+
     pub fn disabled() -> Self {
         Live {
             #[cfg(have_engine)]
@@ -921,11 +942,11 @@ pub fn legacy_harness_requested() -> bool {
 /// main thread, and this IS the main thread, so a plain block would deadlock
 /// against itself. Windows does no such marshalling, so it just waits.
 #[cfg(all(have_engine, target_os = "macos"))]
-fn idle_tick() {
+pub(crate) fn idle_tick() {
     unsafe { ffi::CFRunLoopRunInMode(ffi::kCFRunLoopDefaultMode, 0.05, false) };
 }
 #[cfg(all(have_engine, target_os = "windows"))]
-fn idle_tick() {
+pub(crate) fn idle_tick() {
     std::thread::sleep(std::time::Duration::from_millis(20));
 }
 

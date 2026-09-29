@@ -52,11 +52,13 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libclang-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
       - run: cargo check --manifest-path src-tauri/Cargo.toml
+        env:
+          CXXFLAGS: ${{ runner.os == 'Linux' && '-fPIC' || '' }}
       - run: cargo test --manifest-path src-tauri/Cargo.toml --lib
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check

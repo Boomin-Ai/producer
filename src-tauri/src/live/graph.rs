@@ -1778,6 +1778,25 @@ pub fn capture_probe(window: Duration) -> CaptureProbeReport {
 
 impl SceneGraph {
     /// Cheap gate: does any metered extra exist at all?
+    /// Peek without draining the UI meters. Only microphone inputs duck DJ;
+    /// music, guest audio and browser chat must not duck themselves.
+    pub fn dj_speaking(&self) -> bool {
+        self.extras.iter().filter(|e| e.kind == "mic").any(|e| {
+            unsafe {
+                if ffi::obs_source_muted(e.src)
+                    || !ffi::obs_source_active(e.src)
+                    || ffi::obs_source_get_volume(e.src) <= 0.
+                {
+                    return false;
+                }
+            }
+            EXTRA_PEAKS.iter().any(|(src, peak)| {
+                src.load(Ordering::Relaxed) == e.src as usize
+                    && peak.load(Ordering::Relaxed) > 45000
+            })
+        })
+    }
+
     pub fn take_extra_peaks_ids_empty(&self) -> bool {
         !self.extras.iter().any(|e| metered(e.kind))
     }

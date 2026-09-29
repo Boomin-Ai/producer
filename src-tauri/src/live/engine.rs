@@ -643,6 +643,10 @@ pub enum FilterOp {
 }
 
 pub enum Command {
+    Dj {
+        action: crate::dj::Action,
+        reply: std::sync::mpsc::Sender<Result<crate::dj::Status, String>>,
+    },
     SetThumbRate {
         fps: u32,
     },
@@ -766,6 +770,7 @@ pub enum Command {
 /// Variant name for the engine-loop stall log (no reflection in Rust).
 fn cmd_name(c: &Command) -> &'static str {
     match c {
+        Command::Dj { .. } => "Dj",
         Command::SetThumbRate { .. } => "SetThumbRate",
         Command::SetProgramThumb { .. } => "SetProgramThumb",
         Command::GoLive { .. } => "GoLive",
@@ -1008,6 +1013,23 @@ impl LiveHandle {
         self.cmd
             .send(Command::SetSyncOffset { id, ms })
             .map_err(|e| e.to_string())
+    }
+
+    pub fn dj_dispatch(
+        &self,
+    ) -> Result<
+        Box<dyn FnOnce(crate::dj::Action) -> Result<crate::dj::Status, String> + Send>,
+        String,
+    > {
+        let sender = self.cmd.clone();
+        Ok(Box::new(move |action| {
+            let (tx, rx) = std::sync::mpsc::channel();
+            sender
+                .send(Command::Dj { action, reply: tx })
+                .map_err(|e| e.to_string())?;
+            rx.recv_timeout(Duration::from_secs(5))
+                .map_err(|_| "The DJ audio engine did not answer".to_string())?
+        }))
     }
 
     pub fn set_source_audio(
@@ -1943,6 +1965,7 @@ pub fn start(
             } else {
                 None
             };
+            let mut dj = super::dj::Dj::default();
             let mut preview: Option<Preview> = None;
             let mut session: Option<Session> = None;
             let mut state = SessionState::Idle;
@@ -2087,6 +2110,10 @@ pub fn start(
                 }
                 iter_prev = Some((iter_t0, iter_label));
                 match received {
+                    Ok(Command::Dj { action, reply }) => {
+                        let result = if report.ok { dj.apply(action) } else { Err("The room audio engine did not start".into()) };
+                        let _ = reply.send(result);
+                    }
                     Ok(Command::GoLive(config)) => {
                         if session.is_some() {
                             sink(&LiveEvent::EngineError {
@@ -2538,6 +2565,7 @@ pub fn start(
                         if session.is_some() || recorder.is_some() {
                             let _ = reply.send(Ok(false));
                         } else {
+                            dj.clear();
                             if let Some(output) = vcam.take() { unsafe { stop_vcam(output); } }
                             if let Some(mut m) = room_mix.take() { unsafe { m.teardown(); } }
                             if let Some(mut st) = studio_out.take() { unsafe { st.teardown(); } }
@@ -2592,6 +2620,8 @@ pub fn start(
                         }
                     }
                 }
+
+                dj.tick(scene.as_ref().is_some_and(|g| g.dj_speaking()));
 
                 // Meter stream — while any metered extra (mic, guest, mod,
                 // media) exists.

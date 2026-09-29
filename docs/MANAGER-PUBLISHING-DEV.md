@@ -31,7 +31,7 @@ open/leave check on the relaunched dev app.
 
 ## Publishing
 
-Boomin New Post entry points now open the light Manager composer in all builds.
+Boomin New Post entry points in development now open the light Manager composer.
 The global rail and Manager overview both use `PublishComposer`.
 
 The composer uses the existing native `upload_media` and `submit_post` commands.
@@ -50,6 +50,5 @@ uncertain result, so the user can inspect posting activity before trying again.
 
 Verification: TypeScript/Vite build and the mocked native transport browser check
 in `scripts/publish-composer-browser.html`. No real post was submitted by the test.
-The user successfully published to @kleveland and confirmed the room fixes.
-Production Boomin workspaces now use the same Manager and composer. Independent
-endpoints retain their existing routes. Release uses the existing Apple pipeline.
+The user will test @kleveland in the running native dev app before release work.
+Production routing, self-hosted routing, and Apple signing are unchanged.

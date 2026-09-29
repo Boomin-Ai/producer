@@ -10,8 +10,10 @@ const check=(value,message)=>{if(!value)throw Error(message)};
 const pause=()=>new Promise(resolve=>setTimeout(resolve,20));
 async function until(fn){for(let n=0;n<100;n++){if(fn())return;await pause();}throw Error('timeout');}
 try {
-  createRoot(document.getElementById('root')).render(React.createElement(NoticeHost));
+  let opened = 0;
+  createRoot(document.getElementById('root')).render(React.createElement(NoticeHost, {action: {noticeKey: 'hover-test', label: 'View in Manager', onClick: () => opened++}}));
   await pause();
+  check(!document.querySelector('.rm-notice-action'), 'orphan Manager action before notice');
   const text='https://boomin.ai/connect/'+ 'long-url-path'.repeat(20);
   notify(text,{key:'hover-test',sticky:true});
   await until(()=>document.querySelector('.rm-notice.clipped'));
@@ -27,8 +29,12 @@ try {
   const bounds=tooltip.getBoundingClientRect();
   check(bounds.left>=0&&bounds.right<=innerWidth,'tooltip exceeds viewport');
   check(getComputedStyle(tooltip).overflowWrap==='anywhere','long URL cannot wrap');
+  document.querySelector('.rm-notice-action').click();
+  check(opened===1 && document.querySelector('.rm-notice'), 'Manager action dismissed saved notice');
   pill.click();
   await until(()=>!document.querySelector('[role=tooltip]'));
-  document.getElementById('result').textContent='PASS: full portaled hover text, stable readable pill, viewport bounds, URL wrapping, and dismiss cleanup.';
+  check(!document.querySelector('.rm-notice-action'), 'Manager button remained after dismiss');
+  check(!document.querySelector('[role=dialog]'), 'recording action opened a popup');
+  document.getElementById('result').textContent='PASS: Manager action without a modal, full portaled hover text, stable readable pill, viewport bounds, URL wrapping, and dismiss removes the Manager button.';
 } catch(error) { document.getElementById('result').textContent='FAIL: '+error.message; }
 </script></body></html>

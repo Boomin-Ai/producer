@@ -90,6 +90,7 @@ impl ChatHub {
     }
 
     pub fn emit(&self, ev: ChatEvent) {
+        crate::live::bridge::chat_event(&ev);
         let _ = self.app.emit("chat://event", ev);
     }
 
@@ -156,6 +157,7 @@ impl ChatHub {
 
     pub fn disconnect(&self, platform: &str) {
         let platform = platform.to_ascii_lowercase();
+        crate::live::bridge::clear_chat(&platform);
         if let Some(c) = self.conns.lock().unwrap().remove(&platform) {
             c.stop.store(true, Ordering::SeqCst);
         }

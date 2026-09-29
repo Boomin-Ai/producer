@@ -16,6 +16,78 @@ use std::sync::{Arc, Mutex, OnceLock};
 use crate::error::{EngineError, EngineResult};
 
 const OVERLAY_HTML: &str = include_str!("../../overlay/vote.html");
+const CHAT_HTML: &str = include_str!("../../overlay/chat.html");
+
+#[derive(Default, serde::Serialize)]
+struct ChatState {
+    messages: Vec<ChatLine>,
+    emotes: std::collections::HashMap<String, std::collections::HashMap<String, String>>,
+}
+
+#[derive(serde::Serialize)]
+struct ChatLine {
+    #[serde(flatten)]
+    msg: crate::chat::ChatMsg,
+    received_at: u64,
+}
+
+impl ChatState {
+    fn push(&mut self, msg: &crate::chat::ChatMsg, now: u64) {
+        if !msg.id.is_empty()
+            && self
+                .messages
+                .iter()
+                .any(|m| m.msg.platform == msg.platform && m.msg.id == msg.id)
+        {
+            return;
+        }
+        self.messages.push(ChatLine {
+            msg: msg.clone(),
+            received_at: now,
+        });
+        if self.messages.len() > 24 {
+            self.messages.drain(..self.messages.len() - 24);
+        }
+    }
+}
+
+static CHAT: OnceLock<Mutex<ChatState>> = OnceLock::new();
+static START_LOCK: Mutex<()> = Mutex::new(());
+
+fn chat_cell() -> &'static Mutex<ChatState> {
+    CHAT.get_or_init(|| Mutex::new(ChatState::default()))
+}
+
+/// Native readers feed the output even while the room webview is closed.
+pub fn chat_event(event: &crate::chat::ChatEvent) {
+    let Ok(mut state) = chat_cell().lock() else {
+        return;
+    };
+    match event {
+        crate::chat::ChatEvent::Message { msg } => {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
+            state.push(msg, now);
+        }
+        crate::chat::ChatEvent::EmoteSet { platform, emotes } => {
+            state
+                .emotes
+                .entry(platform.clone())
+                .or_default()
+                .extend(emotes.clone());
+        }
+        _ => {}
+    }
+}
+
+pub fn clear_chat(platform: &str) {
+    if let Ok(mut state) = chat_cell().lock() {
+        state.messages.retain(|m| m.msg.platform != platform);
+        state.emotes.remove(platform);
+    }
+}
 
 static STATE: OnceLock<Arc<Mutex<String>>> = OnceLock::new();
 static PORT: OnceLock<u16> = OnceLock::new();
@@ -28,6 +100,9 @@ fn state_cell() -> Arc<Mutex<String>> {
 
 /// Start the bridge once; later calls return the same port.
 pub fn start() -> EngineResult<u16> {
+    let _guard = START_LOCK
+        .lock()
+        .map_err(|e| EngineError::Other(e.to_string()))?;
     if let Some(p) = PORT.get() {
         return Ok(*p);
     }
@@ -51,7 +126,7 @@ pub fn start() -> EngineResult<u16> {
             }
         })
         .map_err(|e| EngineError::Other(e.to_string()))?;
-    // A second racing start() loses harmlessly: its listener drops.
+    // Starting is serialized so chat and vote overlays share one listener.
     let _ = PORT.set(port);
     Ok(*PORT.get().unwrap_or(&port))
 }
@@ -71,7 +146,18 @@ fn serve(mut stream: TcpStream, state: Arc<Mutex<String>>) {
     };
     let req = String::from_utf8_lossy(&buf[..n]);
     let path = req.split_whitespace().nth(1).unwrap_or("/");
-    let (ctype, body): (&str, String) = if path.starts_with("/state.json") {
+    let path = path.split('?').next().unwrap_or(path);
+    let (ctype, body): (&str, String) = if path == "/chat-state.json" {
+        (
+            "application/json",
+            chat_cell()
+                .lock()
+                .map(|s| serde_json::to_string(&*s).unwrap_or_else(|_| "null".into()))
+                .unwrap_or_else(|_| "null".into()),
+        )
+    } else if path == "/chat" {
+        ("text/html; charset=utf-8", CHAT_HTML.to_string())
+    } else if path == "/state.json" {
         (
             "application/json",
             state
@@ -98,9 +184,49 @@ pub async fn overlay_bridge_start() -> EngineResult<String> {
     Ok(format!("http://127.0.0.1:{port}/overlay"))
 }
 
+#[tauri::command]
+pub async fn chat_overlay_start() -> EngineResult<String> {
+    Ok(format!("http://127.0.0.1:{}/chat", start()?))
+}
+
 /// Feed the overlay: `{ interaction, server_now, hidden? }` or null.
 #[tauri::command]
 pub async fn overlay_bridge_set(state: Value) -> EngineResult<()> {
     set_state(&state);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn msg(id: &str, platform: &str) -> crate::chat::ChatMsg {
+        crate::chat::ChatMsg {
+            id: id.into(),
+            platform: platform.into(),
+            user: "viewer".into(),
+            color: None,
+            text: "hello".into(),
+            emotes: None,
+        }
+    }
+    #[test]
+    fn chat_dedupes_per_platform_and_keeps_messages_when_chat_is_quiet() {
+        let mut state = ChatState::default();
+        state.push(&msg("one", "twitch"), 1_000);
+        state.push(&msg("one", "twitch"), 1_100);
+        state.push(&msg("one", "kick"), 1_200);
+        assert_eq!(state.messages.len(), 2);
+        state.push(&msg("new", "twitch"), 3_601_200);
+        assert_eq!(state.messages.len(), 3);
+        assert_eq!(state.messages[0].msg.id, "one");
+    }
+    #[test]
+    fn chat_keeps_a_bounded_recent_buffer() {
+        let mut state = ChatState::default();
+        for i in 0..100 {
+            state.push(&msg(&i.to_string(), "twitch"), i);
+        }
+        assert_eq!(state.messages.len(), 24);
+        assert_eq!(state.messages[0].msg.id, "76");
+    }
 }

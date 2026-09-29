@@ -2,6 +2,7 @@ mod boomin;
 mod cache;
 mod chat;
 mod client;
+mod dj;
 mod error;
 mod firewall;
 mod ipc;
@@ -33,6 +34,10 @@ pub struct AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(all(have_engine, debug_assertions))]
+    if std::env::var_os("PRODUCER_DJ_SELFTEST").is_some() {
+        live::dj::selftest_main();
+    }
     // Headless engine self-test (M-L1 acceptance harness): bootstrap libobs,
     // print the discovery report, exit — no window, no webview.
     if std::env::var("PRODUCER_LIVE_SELFTEST").is_ok() {
@@ -155,6 +160,7 @@ pub fn run() {
             ipc::room_interaction_transition,
             ipc::room_audience_link,
             live::bridge::overlay_bridge_start,
+            live::bridge::chat_overlay_start,
             live::bridge::overlay_bridge_set,
             ipc::network_connections,
             ipc::upload_media,
@@ -200,6 +206,13 @@ pub fn run() {
             live::commands::live_filters,
             live::commands::live_set_opacity,
             live::commands::live_set_source_audio,
+            dj::dj_library,
+            dj::dj_import,
+            dj::dj_save_playlist,
+            dj::dj_update_track,
+            dj::dj_analyze,
+            dj::dj_match_tempo,
+            dj::dj_control,
             live::commands::live_set_sync_offset,
             live::commands::live_start_recording,
             live::commands::live_stop_recording,

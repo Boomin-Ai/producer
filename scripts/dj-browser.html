@@ -1,0 +1,301 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>DJ regression</title>
+  </head>
+  <body style="background: #080e18; color: #ddd">
+    <div id="root"></div>
+    <output id="result">Running</output>
+    <script type="module">
+      import React from "react";
+      import "/src/App.css";
+      import { createRoot } from "react-dom/client";
+      import { DJPanel } from "/src/components/DJPanel.tsx";
+      import { normalize } from "/src/lib/layout.ts";
+      import { tracklistTracks, tapBpm } from "/src/lib/dj.ts";
+      const check = (v, m) => {
+          if (!v) throw Error(m);
+        },
+        pause = () => new Promise((r) => setTimeout(r, 20));
+      async function until(fn) {
+        for (let n = 0; n < 150; n++) {
+          if (fn()) return;
+          await pause();
+        }
+        throw Error("timeout");
+      }
+      const track = (id, title) => ({
+        id,
+        path: "/tmp/" + id + ".wav",
+        title,
+        artist: "Producer",
+        duration_ms: 10000,
+        cover: null,
+        bpm: 120,
+        analyzed: true,
+        fingerprint: "1",
+      });
+      let lib = {
+        folder: "/tmp/music",
+        tracks: [track("a", "First beat"), track("b", "Second beat")],
+        playlists: [{ id: "list", name: "My beats", tracks: ["b", "a"] }],
+      };
+      let status = {
+        decks: [
+          {
+            track: null,
+            position_ms: 0,
+            duration_ms: 0,
+            state: 5,
+            looping: false,
+          },
+          {
+            track: null,
+            position_ms: 0,
+            duration_ms: 0,
+            state: 5,
+            looping: false,
+          },
+        ],
+        active: 0,
+        volume: 0.65,
+        crossfader: 0,
+        fade: 2,
+        repeat: false,
+        shuffle: false,
+        duck: false,
+        transitioning: false,
+        error: null,
+      };
+      let calls = [],
+        dialogs = 0,
+        phase = "render";
+      window.__TAURI_INTERNALS__ = {
+        convertFileSrc: (p) => p,
+        invoke: async (command, args) => {
+          if (command === "dj_library") return structuredClone(lib);
+          if (command === "plugin:dialog|open") {
+            dialogs++;
+            await pause();
+            return ["/tmp/c.wav"];
+          }
+          if (command === "dj_import") {
+            lib.tracks.push(track("c", "Third beat"));
+            return structuredClone(lib);
+          }
+          if (command === "dj_save_playlist") {
+            lib.playlists = lib.playlists.filter(
+              (p) => p.id !== args.playlist.id,
+            );
+            if (!args.remove) lib.playlists.push(args.playlist);
+            return structuredClone(lib);
+          }
+          if (command === "dj_control") {
+            calls.push(args.action);
+            const a = args.action;
+            if (a.kind === "load")
+              status.decks[a.deck] = {
+                track: a.track,
+                position_ms: 0,
+                duration_ms: 10000,
+                state: 4,
+                looping: false,
+              };
+            if (a.kind === "play") {
+              status.active = a.deck;
+              status.decks[a.deck].state = 1;
+              if (!a.preserve_fader) status.crossfader = a.deck;
+            }
+            if (a.kind === "pause") status.decks[a.deck].state = 4;
+            if (a.kind === "pause_all")
+              status.decks.forEach((d) => (d.state = 4));
+            if (a.kind === "stop_all")
+              status.decks.forEach((d) => (d.state = 5));
+            if (a.kind === "mix") Object.assign(status, a);
+            if (a.kind === "clear")
+              throw Error("panel must not clear native playback");
+            return structuredClone(status);
+          }
+          throw Error("Unexpected command " + command);
+        },
+      };
+      const root = createRoot(document.getElementById("root"));
+      const props = { roomId: "dj-test", enabled: true, mini: false };
+      if (new URLSearchParams(location.search).has("design")) {
+        localStorage.setItem("dj-mode:dj-test", "mix");
+        lib.tracks.forEach((t, i) => {
+          t.title = i
+            ? "Charge Me — Future, Metro Boomin, extended studio recording"
+            : "Future — 712PM (Directed by the room)";
+          t.cover =
+            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect width='80' height='80' fill='%23466a66'/%3E%3C/svg%3E";
+        });
+        lib.tracks.push(
+          ...Array.from({ length: 60 }, (_, i) =>
+            track(`extra-${i}`, `Library track ${i + 1}`),
+          ),
+        );
+        window.djCalls = calls;
+        status.decks.forEach((d, i) =>
+          Object.assign(d, {
+            track: lib.tracks[i],
+            duration_ms: 10000,
+            position_ms: 3500,
+            state: i ? 4 : 1,
+          }),
+        );
+        window.renderDJ = (width = 240, dock = "left", mini = false) =>
+          root.render(
+            React.createElement(
+              "section",
+              {
+                "data-in": dock,
+                className: "rm-panel rm-panel-dj",
+                style: {
+                  width,
+                  height: mini ? 54 : 650,
+                  display: "flex",
+                  flexDirection: "column",
+                },
+              },
+              React.createElement(
+                "div",
+                { className: "rm-panel-body" },
+                React.createElement(DJPanel, { ...props, mini }),
+              ),
+            ),
+          );
+        window.renderDJ();
+      } else {
+        try {
+          localStorage.removeItem("dj-list:dj-test");
+          localStorage.removeItem("dj-mode:dj-test");
+          localStorage.setItem(
+            "dj-mix:dj-test",
+            JSON.stringify({
+              volume: 0.65,
+              fade: 2,
+              repeat: false,
+              shuffle: false,
+              duck: false,
+            }),
+          );
+          check(
+            normalize({
+              top: [],
+              left: [],
+              right: [],
+              bottom: [],
+              hidden: [],
+            }).bottom.includes("dj"),
+            "DJ not introduced in bottom dock",
+          );
+          check(
+            normalize({
+              top: [],
+              left: [],
+              right: [],
+              bottom: [],
+              hidden: ["dj"],
+            }).hidden.includes("dj"),
+            "hidden DJ placement lost",
+          );
+          check(
+            tracklistTracks(lib, "list")
+              .map((t) => t.id)
+              .join(",") === "b,a",
+            "tracklist order",
+          );
+          check(tapBpm([0, 500, 1000, 1500]) === 120, "tap BPM");
+          root.render(
+            React.createElement(
+              "section",
+              {
+                "data-in": "left",
+                className: "rm-panel rm-panel-dj",
+                style: { width: 240, height: 900 },
+              },
+              React.createElement(
+                "div",
+                { className: "rm-panel-body" },
+                React.createElement(DJPanel, props),
+              ),
+            ),
+          );
+          await until(() => document.querySelector(".dj-track-title"));
+          check(
+            calls.every((a) => a.kind !== "play"),
+            "autoplayed on open",
+          );
+          phase = "import";
+          document.querySelector('[aria-label="Track library options"]').click();
+          await until(() => document.querySelector('.dj-library-menu'));
+          const add = [...document.querySelectorAll("button")].find(
+            (b) => b.getAttribute("aria-label") === "Add tracks",
+          );
+          add.click();
+          add.click();
+          await until(() => lib.tracks.length === 3);
+          check(dialogs === 1, "duplicate import");
+          phase = "play";
+          await until(
+            () => !document.querySelector(".dj-track-title").disabled,
+          );
+          document.querySelector(".dj-track-title").click();
+          await until(() => status.decks[0].state === 1);
+          check(status.decks[0].track.id === "a", "play selected track");
+          phase = "mini";
+          root.render(React.createElement(DJPanel, { ...props, mini: true }));
+          await until(() => document.querySelector(".dj-mini"));
+          check(
+            document
+              .querySelector(".dj-mini")
+              .textContent.includes("First beat"),
+            "mini lost track",
+          );
+          check(status.decks[0].state === 1, "resize paused");
+          root.render(null);
+          await pause();
+          check(status.decks[0].state === 1, "hiding stopped playback");
+          status.active = 1;
+          status.decks[1] = {
+            track: lib.tracks[1],
+            position_ms: 3500,
+            duration_ms: 10000,
+            state: 1,
+            looping: false,
+          };
+          status.crossfader = 1;
+          const mixCount = calls.filter((a) => a.kind === "mix").length;
+          root.render(React.createElement(DJPanel, { ...props, mini: true }));
+          await until(() => document.querySelector(".dj-mini"));
+          await new Promise((r) => setTimeout(r, 500));
+          check(status.crossfader === 1, "reopening reset active B fader");
+          check(
+            calls.filter((a) => a.kind === "mix").length === mixCount,
+            "reopening reset native mix",
+          );
+          document.querySelector('[aria-label="Pause"]').click();
+          await until(() => status.decks.every((d) => d.state === 4));
+          document.querySelector('[aria-label="Stop"]').click();
+          await until(() => status.decks.every((d) => d.state === 5));
+          document.getElementById("result").textContent =
+            "PASS: dock placement, ordered tracklists, tap BPM, no autoplay, duplicate import guard, transport, mini view, hidden playback and deck B preservation.";
+          root.unmount();
+        } catch (e) {
+          document.getElementById("result").textContent =
+            "FAIL: " +
+            phase +
+            " " +
+            e.message +
+            " calls=" +
+            JSON.stringify(calls) +
+            " dialogs=" +
+            dialogs;
+          root.unmount();
+        }
+      }
+    </script>
+  </body>
+</html>

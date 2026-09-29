@@ -854,6 +854,7 @@ export interface Interaction {
  * on 127.0.0.1 fed by THIS Producer, never by the server. */
 export const overlayBridge = {
   start: () => invoke<string>("overlay_bridge_start"),
+  chatStart: () => invoke<string>("chat_overlay_start"),
   set: (state: unknown) => invoke("overlay_bridge_set", { state }),
 };
 

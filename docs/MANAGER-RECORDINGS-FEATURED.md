@@ -4,7 +4,7 @@
 
 - The bottom sidebar `+` offers New series and New featured unit. No collection-kind badges or labels appear in the sidebar.
 - A featured entry creates one unit and opens it directly. The database prevents a second unit, including concurrent writers.
-- Finishing a room recording opens a playback panel. Last take reopens it; Show file reveals the original.
+- Finishing a room recording shows a saved notice with a compact **View in Manager** action beside it. The action opens the latest recording in Manager; no playback modal or separate Last take control is shown.
 - A durable local catalog captures the room and workspace when recording starts. Completed captures appear in Manager, grouped by room, even before registration succeeds.
 - Registration sends provenance only. Files stay on the recording device; this work does not upload, publish, or transcribe them.
 - Recording units start at `studio` (In production), use `long-video`, and do not populate Drafts automatically.
