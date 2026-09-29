@@ -22,6 +22,7 @@
 // and an independent fader in the mixer.
 
 import { useEffect, useRef } from "react";
+import { GuestReturnFeed } from "./guestReturnFeed";
 import { useSearchParams } from "./router";
 import { CONNECT_API_BASE_URL } from "./apiConfig";
 import { labelForStream, parseTrackAnnouncement, peerOf, type HostPeer, type TrackLabel } from "./participants";
@@ -56,11 +57,6 @@ export default function GuestRenderPage({ id }: { id: string }) {
   // capture CEF may deny or hang is never even attempted for them. The
   // guest page gates the same thing on its side; this saves the work.
   const sendReturn = !isScreen && params.get("feed") !== "0";
-  const attachProgramRef = useRef<((tries?: number) => Promise<void>) | null>(null);
-  /** Re-entrancy guard: devicechange and the backoff can fire together. */
-  const attachingProgram = useRef(false);
-  const attachedProgram = useRef(false);
-
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const teardownRef = useRef<(() => void) | null>(null);
 
@@ -76,41 +72,26 @@ export default function GuestRenderPage({ id }: { id: string }) {
       if (cancelled) return;
       let pc: RTCPeerConnection | null = null;
       let ws: WebSocket | null = null;
-      let localStream: MediaStream | null = null;
-      let programStream: MediaStream | null = null;
-      let programRetry: number | null = null;
-      // Held out here so the teardown below can unhook it: this page
-      // reconnects, and a listener per reconnect is a leak.
-      let onDeviceChange: (() => void) | null = null;
+      let returnFeed: GuestReturnFeed | null = null;
+      let disposed = false;
       let qualityTimer: number | null = null;
 
       const cleanup = () => {
+        if (disposed) return;
+        disposed = true;
+        returnFeed?.close();
+        if (ws) { ws.onclose = null; ws.onmessage = null; ws.onopen = null; }
+        if (pc) { pc.onconnectionstatechange = null; pc.oniceconnectionstatechange = null; pc.onnegotiationneeded = null; }
         try { ws?.close(); } catch { /* already closed */ }
         try { pc?.close(); } catch { /* already closed */ }
-        localStream?.getTracks().forEach((t) => t.stop());
         if (qualityTimer) { window.clearInterval(qualityTimer); qualityTimer = null; }
-        programStream?.getTracks().forEach((t) => t.stop());
-        programStream = null;
-        if (programRetry) window.clearTimeout(programRetry);
-        programRetry = null;
-        // RESET THE GUARDS. This page reconnects, and these refs outlive the
-        // peer connection they describe: left true, the reconnected page skips
-        // the program attach entirely and the guest never sees the show again
-        // after the first blip. The track itself is gone with the old pc, so
-        // "already attached" would be a claim about nothing.
-        attachedProgram.current = false;
-        attachingProgram.current = false;
-        if (onDeviceChange) {
-          navigator.mediaDevices.removeEventListener?.("devicechange", onDeviceChange);
-          onDeviceChange = null;
-        }
         ws = null;
         pc = null;
-        localStream = null;
       };
       teardownRef.current = cleanup;
 
       const retry = () => {
+        if (disposed) return;
         cleanup();
         if (cancelled) return;
         const wait = RETRY_MS[Math.min(attempt, RETRY_MS.length - 1)];
@@ -128,207 +109,12 @@ export default function GuestRenderPage({ id }: { id: string }) {
         if (res.status === 410) return;
         if (!res.ok) return retry();
         const session = (await res.json()) as Session;
-        if (cancelled) return;
+        if (cancelled || disposed) return;
 
         pc = new RTCPeerConnection({ iceServers: session.ice_servers });
 
-        // ── the return leg: host mic OUT, never played here ──────────────────
-        // FIRE AND FORGET. This is deliberately NOT awaited and NOT on the
-        // negotiation path.
-        //
-        // obs-browser installs no CefPermissionHandler and passes no
-        // media-capture switches, and CEF DENIES capture by default when no
-        // handler exists. So inside a Producer browser source getUserMedia
-        // fails — and worse, it can hang rather than reject. Awaiting it meant
-        // the WebSocket never opened and the guest sat on "Connecting…"
-        // forever, which is precisely what happened on the first live test.
-        //
-        // Getting the guest ON SCREEN is the primary job; return audio is an
-        // enhancement. A guest visible with no return audio is a working
-        // feature. A guest who never appears is not. So we negotiate first and
-        // attach the mic later if it ever arrives — perfect negotiation handles
-        // the renegotiation when addTrack fires onnegotiationneeded.
-        void (async () => {
-          // The screen page sends nothing back; the camera page owns the
-          // leg — and only for a participant granted the return feed.
-          if (!sendReturn) return;
-          try {
-            // Hard timeout: a hung getUserMedia must never leave a dangling
-            // promise holding a live MediaStream we can no longer reach.
-            const captured = await Promise.race([
-              navigator.mediaDevices.getUserMedia({
-                audio: { echoCancellation: true, noiseSuppression: true },
-                video: false,
-              }),
-              new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 5000)),
-            ]);
-            if (!captured || cancelled || !pc || pc.connectionState === "closed") {
-              captured?.getTracks().forEach((t) => t.stop());
-              return;
-            }
-            localStream = captured;
-
-            // Labels are only populated AFTER permission is granted, so
-            // enumerate now. Match by LABEL because getUserMedia deviceIds are
-            // per-origin salted hashes — Producer's CoreAudio id could never
-            // match one, and passing it would silently always fall back to the
-            // default input.
-            if (micLabel) {
-              const devices = await navigator.mediaDevices.enumerateDevices();
-              const match = devices.find((d) => d.kind === "audioinput" && d.label === micLabel);
-              if (match && !cancelled) {
-                const exact = await navigator.mediaDevices.getUserMedia({
-                  audio: { deviceId: { exact: match.deviceId }, echoCancellation: true, noiseSuppression: true },
-                  video: false,
-                }).catch(() => null);
-                if (exact) {
-                  localStream.getTracks().forEach((t) => t.stop());
-                  localStream = exact;
-                }
-              }
-              // No match → keep the default capture. Never fail over a mic.
-            }
-            // signalingState, not connectionState: TS has already narrowed the
-            // latter by the earlier guard, and "closed" is the signalling fact
-            // we actually care about before touching the connection.
-            if (cancelled || !pc || pc.signalingState === "closed") {
-              localStream.getTracks().forEach((t) => t.stop());
-              return;
-            }
-            // ── program VIDEO for the return leg — NEVER program audio ────
-            // The program mix contains the guest's own voice, delayed by the
-            // encoder. Encoder latency defeats browser echo cancellation, which
-            // is exactly why remote-guest tools demand headphones. Sending video
-            // only removes the echo path entirely instead of policing it: the
-            // guest sees the show and hears the HOST MIC, and their own voice
-            // never comes back to them.
-            //
-            // Matched by PREFIX, not equality — a label can gain a suffix when
-            // macOS disambiguates duplicate device names, and "OBS Virtual
-            // Camera" is commonly installed alongside ours on a streamer's
-            // machine.
-            // The program leg attaches ON DEMAND — when the guest says it is
-            // ready to decode it (kind:"program-ready" over signaling), not at
-            // connect. Decoding the program while acquiring the camera and
-            // spinning the mesh is what crashed iOS at admit; a phone asks
-            // once its connection has settled, a desktop asks immediately.
-            // THE PROGRAM LEG, built the way the MOD monitor builds it.
-            //
-            // src/lib/monitorFeed.ts `attachProgram` is the version that has
-            // actually worked across two machines, and this is a faithful port
-            // of it. Three things make it work, and this page had none of them:
-            //
-            //  1. IT RETRIES. The program is the virtual camera, a device that
-            //     exists only while the vcam RUNS. The guest says
-            //     "program-ready" the moment its page is up, which is normally
-            //     BEFORE the host has started it — the host starts it *because*
-            //     a guest arrived. One look was always going to miss.
-            //  2. IT UNLOCKS LABELS. enumerateDevices returns EMPTY labels
-            //     without a camera grant, and this page matches purely on label
-            //     text — so with no grant it can never match anything, and
-            //     retrying alone would spin forever. Take any camera once,
-            //     throw it away, and the labels become readable.
-            //  3. IT RE-ARMS. A program track that ENDS (the host stopped the
-            //     vcam, toggled studio, changed resolution) leaves the guest
-            //     black forever otherwise.
-            //
-            // The mod's second picture — the engine's program thumb over a data
-            // channel — is NOT ported: it comes from the host's own app, and a
-            // second host peer on this session is exactly the collision the
-            // roster code avoids. The guest's fallback stays "no program yet".
-            const PROGRAM_RETRY_MS = 2000;
-            const PROGRAM_RETRY_MAX = 90; // ~3 minutes, as the mod leg allows
-
-            const pickProgramDevice = (devices: readonly MediaDeviceInfo[]) => {
-              const want = (programLabel || "Producer Virtual Camera").toLowerCase();
-              return (
-                devices.find((d) => d.kind === "videoinput" && d.label.toLowerCase().includes(want)) ??
-                devices.find(
-                  (d) =>
-                    d.kind === "videoinput" &&
-                    d.label.toLowerCase().includes("producer") &&
-                    d.label.toLowerCase().includes("virtual camera"),
-                ) ??
-                null
-              );
-            };
-
-            const scheduleProgram = (tries: number) => {
-              if (tries >= PROGRAM_RETRY_MAX || cancelled || attachedProgram.current) return;
-              if (programRetry) window.clearTimeout(programRetry);
-              programRetry = window.setTimeout(() => {
-                void attachProgramRef.current?.(tries + 1);
-              }, PROGRAM_RETRY_MS);
-            };
-
-            attachProgramRef.current = async (tries = 0) => {
-              if (!programLabel || attachedProgram.current || attachingProgram.current) return;
-              attachingProgram.current = true;
-              try {
-                // Any camera grant first, or the labels are unreadable.
-                let devices = await navigator.mediaDevices.enumerateDevices();
-                let cam = pickProgramDevice(devices);
-                if (!cam || !cam.label) {
-                  const probe = await navigator.mediaDevices
-                    .getUserMedia({ video: true, audio: false })
-                    .catch(() => null);
-                  probe?.getTracks().forEach((t) => t.stop());
-                  devices = await navigator.mediaDevices.enumerateDevices();
-                  cam = pickProgramDevice(devices);
-                }
-                if (cancelled) return;
-                if (!cam) {
-                  scheduleProgram(tries);
-                  return;
-                }
-                const prog = await navigator.mediaDevices
-                  .getUserMedia({
-                    // Small on purpose. Every guest's page encodes its OWN copy
-                    // of the program, on a machine already capturing,
-                    // compositing and encoding to three platforms. They need to
-                    // see what is on screen and stay in sync, not receive
-                    // broadcast quality.
-                    video: { deviceId: { exact: cam.deviceId }, width: 640, height: 360, frameRate: 15 },
-                    audio: false,
-                  })
-                  .catch(() => null);
-                if (cancelled || !prog || !pc) {
-                  prog?.getTracks().forEach((t) => t.stop());
-                  if (!prog) scheduleProgram(tries);
-                  return;
-                }
-                programStream = prog;
-                prog.getVideoTracks().forEach((t) => pc!.addTrack(t, prog));
-                // Only NOW is it attached.
-                attachedProgram.current = true;
-                // The vcam stopping must not leave the guest black forever.
-                prog.getVideoTracks()[0]?.addEventListener("ended", () => {
-                  if (programStream !== prog) return;
-                  programStream = null;
-                  attachedProgram.current = false;
-                  scheduleProgram(0);
-                });
-              } catch {
-                // No return video is degraded, not broken — and retryable.
-                scheduleProgram(tries);
-              } finally {
-                attachingProgram.current = false;
-              }
-            };
-
-            // The device appearing is the signal we actually want; the backoff
-            // above covers platforms that do not fire it inside CEF.
-            onDeviceChange = () => void attachProgramRef.current?.(0);
-            navigator.mediaDevices.addEventListener?.("devicechange", onDeviceChange);
-
-            // Triggers onnegotiationneeded → a second offer carrying the return
-            // track(s). The guest is already on screen by this point.
-            localStream.getTracks().forEach((t) => pc!.addTrack(t, localStream!));
-          } catch {
-            // Capture unavailable (the normal case in an unpatched
-            // obs-browser). One-way is a complete, working outcome.
-          }
-        })();
+        // Register video requests synchronously; audio capture is independent.
+        returnFeed = new GuestReturnFeed({ pc, programLabel, micLabel, enabled: sendReturn });
 
         // ── the guest's media IN ──────────────────────────────────────────────
         // Which stream is which: the guest announces a label per MediaStream
@@ -469,7 +255,7 @@ export default function GuestRenderPage({ id }: { id: string }) {
               return;
             }
             if (msg.kind === "program-ready") {
-              void attachProgramRef.current?.();
+              returnFeed?.request();
               return;
             }
             if (msg.kind === "ice" && msg.candidate) {
