@@ -15,6 +15,9 @@ jobs:
           bun-version: latest
       - run: bun install --frozen-lockfile
       - run: bun run build
+      - run: bun run test:manager-cache
+      - run: node scripts/test-preview-session.mjs
+      - run: node scripts/test-room-session.mjs
 
   server:
     runs-on: ubuntu-latest
@@ -55,4 +58,5 @@ jobs:
         with:
           workspaces: src-tauri
       - run: cargo check --manifest-path src-tauri/Cargo.toml
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --lib
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check

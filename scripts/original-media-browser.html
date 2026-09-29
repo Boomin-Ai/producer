@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Original restoration regression</title></head><body><div id="root"></div><output id="result">Running</output><script type="module">
+import React from 'react';import {createRoot} from 'react-dom/client';import {OriginalMediaPanel} from '/src/components/OriginalMediaPanel.tsx';
+let uploads=0,requests=0,changes=0,restored=0;const check=(v,m)=>{if(!v)throw Error(m)};
+window.addEventListener('producer:cache-change',e=>{check(e.detail.endpointId==='test-brand','cache scope');changes++;});
+window.__TAURI_INTERNALS__={invoke:async(command,args)=>{
+ if(command==='plugin:dialog|open')return '/mock/original.mp4';
+ if(command==='upload_media'){check(args.endpointId==='test-brand','upload scope');uploads++;return {upload_id:'test-file',endpoint_id:'test-brand'};}
+ check(command==='endpoint_request','unexpected native command');check(args.endpointId==='test-brand'&&args.path==='/v1/app/content/social-posts/test-post/original'&&args.method==='POST'&&args.body.file_id==='test-file','restore scope');requests++;return {available:true,status:requests===1?503:200,body:{}};
+}};
+const root=createRoot(document.getElementById('root'));const pause=()=>new Promise(r=>setTimeout(r,20));async function until(fn){for(let n=0;n<150;n++){if(fn())return;await pause();}throw Error('timeout');}
+try{root.render(React.createElement(OriginalMediaPanel,{endpointId:'test-brand',onRestored:()=>{restored++;},post:{id:'test-post',type:'short-video',previewUrl:'saved-thumbnail',originalMediaAvailable:false}}));await until(()=>document.querySelector('button'));check(uploads===0&&requests===0,'restore started without click');const button=document.querySelector('button');button.click();button.click();await until(()=>document.querySelector('[role=alert]'));check(uploads===1&&requests===1,'duplicate upload or restore');button.click();await until(()=>changes===1);check(uploads===1&&requests===2,'retry did not reuse uploaded file');check(restored===1,'active view did not refresh');check(!document.querySelector('[role=alert]'),'error did not clear');document.getElementById('result').textContent='PASS: missing-original copy, explicit restore, duplicate-click guard, scoped requests, upload reuse after failure, cache invalidation. No real uploads or publishing.';}catch(e){document.getElementById('result').textContent='FAIL: '+e.message;}
+</script></body></html>

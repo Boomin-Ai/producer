@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { type Notice as NoticeT, dismiss, fade, subscribeNotices } from "../lib/notices";
 
 /** The live list of notices; one subscriber per host. */
@@ -8,16 +9,13 @@ export function useNotices(): NoticeT[] {
   return list;
 }
 
-/** One glass pill. After its ttl it FADES in place (opacity 0.55) rather
- * than vanishing — the last thing the room said stays readable until you
- * hover it (full opacity; a pill that had to ellipsize EXPANDS natively to
- * its full text — a 120 ms max-width transition, no browser tooltip), click
- * it (dismiss), or a newer notice replaces it. Errors never fade: full
- * opacity until dismissed. Hovering pauses the clock. */
+/** Notices fade in place; hover pauses the clock and shows clipped text in
+ * a portaled card without changing the pill or the surrounding toolbar. */
 function NoticePill({ n }: { n: NoticeT }) {
   const [paused, setPaused] = useState(false);
   const [clipped, setClipped] = useState(false);
   const textRef = useRef<HTMLSpanElement>(null);
+  const [tip, setTip] = useState<{ left: number; top: number; width: number } | null>(null);
   useEffect(() => {
     if (n.sticky || paused || n.faded || n.tone === "error") return;
     const t = window.setTimeout(() => fade(n.id), n.ttl);
@@ -41,19 +39,23 @@ function NoticePill({ n }: { n: NoticeT }) {
     return () => ro?.disconnect();
   }, [n.text]);
   return (
+    <>
     <div
       className={`rm-notice tone-${n.tone}${n.check ? " check" : ""}${n.faded ? " faded" : ""}${clipped ? " clipped" : ""}`}
-      // The hover card reads this, so the full line can wrap below the bar
-      // instead of the pill widening into the Link cluster.
-      data-full={n.text}
       role={n.tone === "error" ? "alert" : "status"}
       onMouseEnter={() => {
         hoverRef.current = true;
         setPaused(true);
+        const rect = textRef.current?.parentElement?.getBoundingClientRect();
+        if (rect) {
+          const width = Math.min(560, window.innerWidth - 24);
+          setTip({ left: Math.max(12, Math.min(rect.left, window.innerWidth - width - 12)), top: rect.bottom + 8, width });
+        }
       }}
       onMouseLeave={() => {
         hoverRef.current = false;
         setPaused(false);
+        setTip(null);
       }}
       onClick={() => dismiss(n.id)}
     >
@@ -64,6 +66,11 @@ function NoticePill({ n }: { n: NoticeT }) {
       )}
       <span ref={textRef} className="rm-notice-text">{n.text}</span>
     </div>
+    {paused && clipped && tip && createPortal(
+      <div className="rm-notice-detail" data-over-stage role="tooltip" style={tip}>{n.text}</div>,
+      document.body,
+    )}
+    </>
   );
 }
 

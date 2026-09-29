@@ -619,6 +619,22 @@ textarea::placeholder {
   background: var(--soft);
 }
 
+.acc-disclosure {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.acc-disclosure:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 3px; }
+
 .acc-head.clickable {
   cursor: pointer;
   user-select: none;
@@ -5853,6 +5869,10 @@ textarea::placeholder {
   background: transparent;
   transition: width 0.26s ease;
 }
+.set-nav-head.rm-filters-head { flex-wrap: wrap; }
+.set-producer-brand { display: flex; flex-basis: 100%; align-items: baseline; gap: 8px; padding-top: 5px; color: var(--text); }
+.set-producer-brand strong { font-size: 14px; }
+.set-producer-brand span { color: var(--muted); font-size: 11px; }
 .home-settings.open {
   width: var(--settings-w, 340px);
 }
@@ -8776,6 +8796,16 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .set .set-list .cr-sheet-row:last-of-type { border-bottom: 0; }
 .set .set-add { align-self: flex-start; margin-top: 10px; }
 .set .set-gap { margin-top: 28px; }
+.set-storage { display: grid; gap: 20px; }
+.set-storage-card { border: 1px solid oklch(1 0 0 / .1); border-radius: 14px; padding: 24px; }
+.set-storage-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.set-storage-heading h2, .set-storage-card h2 { margin: 0; font-size: 17px; }
+.set-storage-total { display: block; font-size: 38px; letter-spacing: -.04em; margin-top: 18px; }
+.set-storage-note { color: var(--fg-2); font-size: 13px; line-height: 1.5; }
+.set-storage-rows { margin: 20px 0; }
+.set-storage-rows > div { display: flex; justify-content: space-between; gap: 16px; border-top: 1px solid oklch(1 0 0 / .07); padding: 12px 0; }
+.set-storage-rows dd { margin: 0; }
+.set-storage-rows small { color: var(--fg-2); margin-left: 8px; }
 .set .upd-sheet .upd-item { background: none; border: 0; padding: 12px 0; border-bottom: 1px solid oklch(1 0 0 / 0.07); border-radius: 0; }
 /* What's new is a window, not the whole panel: fixed height, scrolls inside. */
 .set .upd-sheet { max-height: 220px; overflow-y: auto; padding-right: 6px; border: 1px solid oklch(1 0 0 / 0.07); border-radius: 10px; padding: 2px 10px; }
@@ -10237,20 +10267,16 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
  * pill only had the middle of the bar to grow into and ran straight into the
  * Link cluster. The card hangs below the bar, wraps, and reads in full. */
 .rm-notice.clipped:hover { max-width: 62%; }
-.rm-notice.clipped:hover::after {
-  content: attr(data-full);
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: max-content;
-  max-width: min(560px, 60vw);
+.rm-notice-detail {
+  position: fixed;
+  box-sizing: border-box;
   padding: 9px 12px;
   border-radius: 12px;
   font-size: 12.5px;
   font-weight: 500;
   line-height: 1.45;
   white-space: normal;
+  overflow-wrap: anywhere;
   text-align: left;
   color: var(--fg-1);
   background: var(--surface-2);
@@ -10262,9 +10288,7 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   pointer-events: none;
 }
 .rm-notice { position: relative; }
-/* One reading at a time: while the card is open the pill keeps its shape and
- * its icon, but drops the clipped copy that the card is already showing. */
-.rm-notice.clipped:hover .rm-notice-text { opacity: 0; }
+/* Keep the pill readable while its full text is shown in the portal. */
 /* The bar cannot clip the card, and the card outranks the docks under it. */
 .rm-top, .rm-top-drag, .rm-notices { overflow: visible; }
 .rm-notices { z-index: 400; }
@@ -10908,3 +10932,15 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   letter-spacing: 0.1em;
   color: var(--fg-3);
 }
+.recording-panel-layer { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; padding: 24px; }
+.recording-panel-scrim { position: absolute; inset: 0; background: #06101c99; border: 0; border-radius: 0; }
+.recording-panel { position: relative; width: min(760px, 100%); max-height: calc(100vh - 48px); overflow: auto; border-radius: 16px; background: #fff; color: #242d3d; box-shadow: 0 20px 80px #0005; }
+.recording-panel header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; }
+.recording-panel small { color: #697589; letter-spacing: .08em; }
+.recording-panel h2 { margin: 6px 0 0; font-size: 22px; }
+.recording-panel header button { font-size: 24px; }
+.recording-panel video { display: block; width: 100%; max-height: 60vh; background: #07111d; }
+.recording-panel footer { display: flex; align-items: center; gap: 12px; padding: 18px 24px; flex-wrap: wrap; }
+.recording-panel footer span { margin-right: auto; color: #697589; }
+.recording-panel button { color: #242d3d; }
+.recording-panel .recording-panel-primary { background: #242d3d; color: #fff; border-radius: 8px; }

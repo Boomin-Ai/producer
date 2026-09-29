@@ -89,6 +89,36 @@ fn init(conn: &Connection) -> EngineResult<()> {
             key   TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS manager_cache (
+            endpoint_id TEXT NOT NULL REFERENCES endpoints(id) ON DELETE CASCADE,
+            session_scope TEXT NOT NULL,
+            resource TEXT NOT NULL,
+            value TEXT NOT NULL,
+            updated_at INTEGER NOT NULL,
+            expires_at INTEGER NOT NULL,
+            PRIMARY KEY(endpoint_id, session_scope, resource)
+        );
+
+        -- Capture catalog: paths are local; only provenance syncs to Boomin.
+        CREATE TABLE IF NOT EXISTS local_recordings (
+            id TEXT PRIMARY KEY,
+            endpoint_id TEXT,
+            room_id TEXT NOT NULL,
+            room_name TEXT NOT NULL,
+            source_room_id TEXT,
+            path TEXT NOT NULL UNIQUE,
+            started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+            started_ms INTEGER NOT NULL,
+            ended_at TEXT,
+            duration_ms INTEGER NOT NULL DEFAULT 0,
+            file_size INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'recording' CHECK (status IN ('recording','ready','interrupted')),
+            collection_id TEXT,
+            unit_id TEXT,
+            sync_error TEXT
+        );
+        CREATE INDEX IF NOT EXISTS local_recordings_endpoint_idx ON local_recordings(endpoint_id, started_at);
         "#,
     )?;
     // v2: connected endpoints carry the hosted workspace scope. A backend-

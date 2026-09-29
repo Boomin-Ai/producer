@@ -653,6 +653,9 @@ pub enum Command {
     },
     GoLive(MultiConfig),
     StopLive,
+    ReleaseIdleRoom {
+        reply: mpsc::Sender<Result<bool, String>>,
+    },
     /// Stage-editor transform (UI-P1). `commit: false` applies silently at
     /// gesture rate; `commit: true` (pointer-up) echoes SourcesChanged so
     /// the UI and room document settle on engine truth.
@@ -767,6 +770,7 @@ fn cmd_name(c: &Command) -> &'static str {
         Command::SetProgramThumb { .. } => "SetProgramThumb",
         Command::GoLive { .. } => "GoLive",
         Command::StopLive { .. } => "StopLive",
+        Command::ReleaseIdleRoom { .. } => "ReleaseIdleRoom",
         Command::SetTransform { .. } => "SetTransform",
         Command::ListDevices { .. } => "ListDevices",
         Command::PlayStinger { .. } => "PlayStinger",
@@ -1128,6 +1132,14 @@ impl LiveHandle {
         self.cmd
             .send(Command::DetachPreview)
             .map_err(|e| e.to_string())
+    }
+    pub fn release_idle_room(&self) -> Result<bool, String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd
+            .send(Command::ReleaseIdleRoom { reply: tx })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(10))
+            .map_err(|_| "the engine did not release the room in time".to_string())?
     }
     pub fn shutdown(&self) {
         let _ = self.cmd.send(Command::Shutdown);
@@ -2466,7 +2478,9 @@ pub fn start(
                         }
                     }
                     Ok(Command::AttachPreview { window, rect }) => {
-                        if preview.is_none() {
+                        if let Some(p) = preview.as_mut() {
+                            p.set_rect(rect);
+                        } else {
                             match Preview::attach(window as *mut std::os::raw::c_void, rect) {
                                 Ok(p) => {
                                     preview = Some(p);
@@ -2517,6 +2531,28 @@ pub fn start(
                         }
                         #[cfg(not(target_os = "windows"))]
                         let _ = rects;
+                    }
+                    Ok(Command::ReleaseIdleRoom { reply }) => {
+                        // Evaluate on the engine thread, so an output starting
+                        // during navigation cannot lose its capture sources.
+                        if session.is_some() || recorder.is_some() {
+                            let _ = reply.send(Ok(false));
+                        } else {
+                            if let Some(output) = vcam.take() { unsafe { stop_vcam(output); } }
+                            if let Some(mut m) = room_mix.take() { unsafe { m.teardown(); } }
+                            if let Some(mut st) = studio_out.take() { unsafe { st.teardown(); } }
+                            let result = if let Some(g) = scene.as_mut() {
+                                g.clear_room().map(|()| {
+                                    // Release thumbnail-owned camera references too.
+                                    hub_engine.publish_targets(g);
+                                    snap.lock().unwrap().sources = g.state();
+                                    true
+                                })
+                            } else { Ok(true) };
+                            // No SourcesChanged: unloading must not rewrite the
+                            // saved room document or the next mounted room.
+                            let _ = reply.send(result);
+                        }
                     }
                     Ok(Command::DetachPreview) => {
                         if let Some(p) = preview.take() {

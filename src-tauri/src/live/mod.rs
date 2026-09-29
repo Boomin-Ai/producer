@@ -542,6 +542,18 @@ impl Live {
     pub fn detach_preview(&self) -> Result<(), String> {
         Ok(())
     }
+
+    #[cfg(have_engine)]
+    pub fn release_idle_room(&self) -> Result<bool, String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .release_idle_room()
+    }
+    #[cfg(not(have_engine))]
+    pub fn release_idle_room(&self) -> Result<bool, String> {
+        Ok(true)
+    }
 }
 
 /// TCC status for the coach (M-L6). Names, not booleans, so the UI can

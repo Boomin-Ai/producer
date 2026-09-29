@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Publish composer regression</title></head><body><div id="root"></div><output id="result">Running</output><script type="module">
+import React from 'react';import {createRoot} from 'react-dom/client';import {HostedManager} from '/src/features/manager/HostedManager.tsx';import {PublishComposer} from '/src/features/manager/PublishComposer.tsx';
+const calls=[];let completed=0;const endpoint={id:'test',name:'Test',kind:'connected',base_url:'https://example.test',brand_slug:'test',created_at:''};const channel={id:'ig',platform:'instagram',display_name:'kleveland',external_handle:'kleveland',status:'active',endpoint_id:'test',endpoint_kind:'connected',capabilities:{text:{maxChars:2200}}};
+window.__TAURI_INTERNALS__={convertFileSrc:()=> 'asset://test.jpg',invoke:async(command,args)=>{
+ if(command==='manager_cache_scope')return 'test-session';if(command==='manager_cache_get')return null;if(command==='manager_cache_set'||command==='pref_set')return;if(command==='pref_get')return null;if(command==='recordings_list')return [];if(command==='endpoint_channels')return {channels:[channel]};
+ if(command==='endpoint_request'){const path=args.path;return {available:true,status:200,body:path.includes('collections')?{collections:[]}:path.includes('social-posts')?{posts:[]}:path.includes('recordings')?{recordings:[]}:path.includes('units')?{units:[]}: {files:[]}};}
+ if(command==='plugin:dialog|open')return '/tmp/test.jpg';if(command==='upload_media'){calls.push({command,args});return {upload_id:'upload',endpoint_id:'test',filename:'test.jpg',kind:'image'};}
+ if(command==='submit_post'){calls.push({command,args});await new Promise(r=>setTimeout(r,50));return {intent_id:'intent',results:[{endpoint_id:'test',channel_id:'ig',accepted:true,replayed:false,error:null}]};}throw Error(command);
+}};
+const root=createRoot(document.getElementById('root'));const pause=()=>new Promise(r=>setTimeout(r,20));async function until(fn){for(let n=0;n<250;n++){if(fn())return;await pause();}throw Error('timeout');}const check=(v,m)=>{if(!v)throw Error(m);};function value(selector,text){const input=document.querySelector(selector);Object.getOwnPropertyDescriptor(input instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype,'value').set.call(input,text);input.dispatchEvent(new Event('input',{bubbles:true}));}
+try{
+ root.render(React.createElement(HostedManager,{endpoint,channels:[],onCompose:()=>{}}));await until(()=>document.querySelector('.pm-main'));
+ check(document.querySelector('.pm-overview-header .pm-header-refresh')&&!document.querySelector('.pm-live-toolbar'),'refresh was not moved into the white Manager header');
+ check(!document.querySelector('.pm-publish-composer'),'initial inventory unexpectedly opened composer');
+ // The rail changes the route on an already mounted Manager with warm cache.
+ let closed=0;
+ root.render(React.createElement(HostedManager,{endpoint,channels:[],composing:true,onCompose:()=>{},onComposeClosed:()=>{closed++;root.render(React.createElement(HostedManager,{endpoint,channels:[],composing:false,onCompose:()=>{}}));}}));await until(()=>document.querySelector('.pm-publish-composer'));
+ document.querySelector('.pm-sidebar-nav button, [aria-label="Stages"]').click();await until(()=>closed===1&&!document.querySelector('.pm-publish-composer'));
+ check(document.querySelector('.pm-main h1')?.textContent==='Stages','sidebar destination lost while closing outer composer');
+ root.render(React.createElement(HostedManager,{endpoint,channels:[],composing:true,onCompose:()=>{},onSubmitted:()=>{completed++;}}));await until(()=>document.querySelector('.pm-publish-composer'));
+ check(!document.querySelector('.pm-header-refresh'),'refresh remains visible in New Post');
+ check(document.querySelectorAll('.pm-main').length===1,'composer rendered alongside inventory');
+ check(!document.body.textContent.includes('Create draft preview'),'native compose still uses preview draft action');
+ document.querySelector('[aria-label="Choose channels"]').click();await pause();document.querySelector('.pm-new-post-channel-option input').click();await pause();
+ value('[aria-label="Caption"]','Native test caption');value('[aria-label="Public media URL"]','https://example.test/image.jpg');await pause();
+ value('[aria-label="Schedule time"]','2020-01-01T12:00');await pause();document.querySelector('.pm-new-post-save').click();await until(()=>document.querySelector('[role=alert]'));check(calls.length===0,'invalid schedule submitted');
+ value('[aria-label="Schedule time"]','');await pause();document.querySelector('.pm-new-post-media-actions button').click();await until(()=>calls.some(c=>c.command==='upload_media'));await until(()=>document.querySelector('.pm-new-post-preview-head').textContent.includes('test.jpg'));
+ document.querySelector('.pm-new-post-save').click();document.querySelector('.pm-new-post-save').click();await until(()=>completed===1);
+ const submissions=calls.filter(c=>c.command==='submit_post');check(submissions.length===1,'double click submitted twice');const input=submissions[0].args.input;check(input.media_upload_id==='upload'&&!input.media_url,'upload ref was not passed');check(input.text==='Native test caption','caption missing');check(input.targets[0].channel_id==='ig'&&input.targets[0].endpoint_id==='test','target scope incorrect');check(input.targets[0].overrides.feed===true,'per-channel settings missing');check(!document.querySelector('.pm-publish-composer'),'accepted submission did not return to inventory');
+ root.render(React.createElement(PublishComposer,{endpointId:'test',channels:[channel,{...channel,id:'foreign',endpoint_id:'another',display_name:'Foreign brand'}],onBack:()=>{},onSubmitted:()=>{}}));await until(()=>document.querySelector('.pm-publish-composer'));document.querySelector('[aria-label="Choose channels"]').click();await pause();check(document.querySelectorAll('.pm-new-post-channel-option').length===1,'foreign workspace channel leaked');
+ document.getElementById('result').textContent='PASS: native Manager composer routing, upload reference, caption/settings, schedule validation, duplicate submit prevention, accepted return and workspace isolation';
+}catch(e){document.getElementById('result').textContent='FAIL: '+e.message;}
+</script></body></html>

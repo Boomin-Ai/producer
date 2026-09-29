@@ -10,12 +10,17 @@
   },
   "type": "module",
   "scripts": {
+    "test:manager-cache": "node scripts/test-manager-cache.mjs",
     "dev": "vite",
+    "dev:room": "bash scripts/dev-room.sh",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:manager-preview": "tauri dev --config src-tauri/tauri.manager-preview.conf.json"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.104.0",
+    "@tanstack/react-query-persist-client": "^5.104.0",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2",
     "@tauri-apps/plugin-opener": "^2",
@@ -25,11 +30,11 @@
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4",
-    "@tauri-apps/cli": "^2"
+    "vite": "^7.0.4"
   }
 }

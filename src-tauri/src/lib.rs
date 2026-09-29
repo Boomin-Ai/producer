@@ -1,4 +1,5 @@
 mod boomin;
+mod cache;
 mod chat;
 mod client;
 mod error;
@@ -6,9 +7,13 @@ mod firewall;
 mod ipc;
 mod live;
 mod outbox;
+mod recordings;
+mod storage;
 mod store;
 mod submit;
 mod vault;
+#[cfg(target_os = "macos")]
+mod window;
 
 use std::sync::Mutex;
 
@@ -39,14 +44,13 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
-            // Real glass base coat (see shim.m): must run at startup so the
-            // home rail's gutter shows the desktop before any room attaches.
-            #[cfg(all(target_os = "macos", have_engine))]
+            // The window glass belongs to the app shell, including builds
+            // without the live engine used for frontend development.
+            #[cfg(target_os = "macos")]
             {
-                use tauri::Manager;
                 if let Some(window) = app.get_webview_window("main") {
                     if let Ok(ns) = window.ns_window() {
-                        unsafe { live::ffi::producer_apply_window_vibrancy(ns) };
+                        window::apply_vibrancy(ns);
                     }
                 }
             }
@@ -54,6 +58,7 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             let conn = store::open(&data_dir.join("producer.db"))
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
+            recordings::recover(&conn).map_err(|e| std::io::Error::other(e.to_string()))?;
 
             // Live engine. Legacy evidence harnesses (--live-capture-probe /
             // --live-first-light) bootstrap on a bare thread; every other
@@ -87,8 +92,15 @@ pub fn run() {
             ipc::list_endpoints,
             ipc::add_endpoint,
             ipc::remove_endpoint,
+            cache::manager_cache_scope,
+            cache::manager_cache_get,
+            cache::manager_cache_set,
+            storage::producer_storage_usage,
             ipc::pref_get,
             ipc::pref_set,
+            recordings::recordings_list,
+            recordings::recordings_sync,
+            recordings::recording_by_path,
             ipc::endpoint_channels,
             ipc::boomin_request_otp,
             ipc::boomin_connect,
@@ -159,6 +171,7 @@ pub fn run() {
             live::commands::live_attach_preview,
             live::commands::live_move_preview,
             live::commands::live_detach_preview,
+            live::commands::live_release_idle_room,
             live::commands::live_permissions,
             live::commands::live_set_thumb_rate,
             live::commands::live_set_program_thumb,
