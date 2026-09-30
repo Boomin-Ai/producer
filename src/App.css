@@ -1142,6 +1142,21 @@ textarea::placeholder {
 }
 .live-editor-row > * { flex: 1; }
 
+.live-destination-help {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--fg-2);
+  font-size: 12px;
+  line-height: 1.5;
+  flex-basis: 100%;
+  min-width: 0;
+}
+.live-destination-help > span { flex: 1 1 220px; }
+.live-destination-help > button { align-self: center; font-size: 12px; }
+.chn-key:has(.live-destination-help) { flex-wrap: wrap; }
+.chn-key input { min-width: 0; }
+
 /* --- Live M-L6: preview, sources, coach --- */
 .live-preview {
   width: 100%;

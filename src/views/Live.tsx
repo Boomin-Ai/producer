@@ -186,8 +186,31 @@ const PRESETS: { value: LivePreset; label: string; needsServer: boolean }[] = [
   { value: "twitch", label: "Twitch", needsServer: false },
   { value: "kick", label: "Kick", needsServer: true },
   { value: "youtube", label: "YouTube", needsServer: false },
+  { value: "facebook", label: "Facebook Live", needsServer: true },
+  { value: "instagram", label: "Instagram Live", needsServer: true },
+  { value: "rumble", label: "Rumble", needsServer: true },
+  { value: "tiktok", label: "TikTok LIVE", needsServer: true },
   { value: "custom", label: "Custom RTMP", needsServer: true },
 ];
+
+const STREAM_SETUP: Partial<Record<LivePreset, { url: string; hint: string }>> = {
+  facebook: {
+    url: "https://www.facebook.com/live/producer/",
+    hint: "Open Facebook Live Producer and choose Streaming software. Copy the server URL and stream key here; enable Persistent stream key in Facebook to reuse it. Start sending, check the preview, then click Go Live in Facebook.",
+  },
+  instagram: {
+    url: "https://www.instagram.com/",
+    hint: "Open Instagram → Create → Live video. Paste the URL and a fresh key for each broadcast. Keep Live Producer open, then confirm Go Live there once the preview appears.",
+  },
+  rumble: {
+    url: "https://rumble.com/live",
+    hint: "Create your livestream in Rumble, then copy its server URL and stream key here.",
+  },
+  tiktok: {
+    url: "https://www.tiktok.com/live/creators",
+    hint: "Requires TikTok access to streaming software with a server URL and stream key. LIVE access alone may not include these credentials. Copy the current broadcast details from TikTok.",
+  },
+};
 
 function fmtBitrate(bytes: number, secs: number): string {
   if (secs <= 0) return "—";
@@ -2198,6 +2221,27 @@ const EXTRA_ICONS: Record<string, ReactNode> = {
 
 /** Brand marks (twitch/youtube via svgl.app; kick authored to brand green). */
 const PLATFORM_LOGO: Record<string, ReactNode> = {
+  facebook: (
+    <svg width="15" height="15" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="11" fill="#1877f2" />
+      <path fill="#fff" d="M13.5 22v-9h3l.5-3h-3.5V8.5c0-1 .4-1.5 1.5-1.5h2V4h-2.5C11.5 4 10 5.5 10 8v2H7v3h3v9Z" />
+    </svg>
+  ),
+  instagram: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#e1306c" strokeWidth="2">
+      <rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" fill="#e1306c" stroke="none" />
+    </svg>
+  ),
+  rumble: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#85c742" strokeWidth="2" strokeLinejoin="round">
+      <path d="M6 3 21 12 6 21Z" /><path d="m10 8 7 4-7 4Z" />
+    </svg>
+  ),
+  tiktok: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#25f4ee" strokeWidth="2" strokeLinecap="round">
+      <path d="M14 3v13a4 4 0 1 1-4-4M14 3c1 4 3 5 6 5" />
+    </svg>
+  ),
   twitch: (
     <svg width="15" height="15" viewBox="0 0 2400 2800">
       <path fill="#fff" d="m2200 1300-400 400h-400l-350 350v-350H600V200h1600z" />
@@ -2221,9 +2265,13 @@ const PLATFORM_LOGO: Record<string, ReactNode> = {
 };
 
 const PLATFORM_TINT: Record<string, string> = {
+  facebook: "#1877f2",
   twitch: "#a970ff",
   kick: "#53fc18",
   youtube: "#ff4e45",
+  instagram: "#e1306c",
+  rumble: "#85c742",
+  tiktok: "#25f4ee",
 };
 
 /** One track per voice: the live meter fills the rail, and the DJ thumb sets gain. */
@@ -2399,6 +2447,7 @@ export function DestinationEditor({
         preset,
         label: label.trim() || PRESETS.find((p) => p.value === preset)!.label,
         server: needsServer ? server.trim() : undefined,
+        enabled: existing?.enabled ?? true,
         // The key leaves this component exactly once, straight to the
         // keychain. It is never readable back.
         key: key.trim() ? key.trim() : undefined,
@@ -2427,14 +2476,20 @@ export function DestinationEditor({
       )}
       <input
         type="password"
-        placeholder={existing ? "Stream key (stored — paste to replace)" : "Stream key"}
+        placeholder={preset === "instagram" ? "Fresh stream key for this broadcast" : existing ? "Stream key (stored — paste to replace)" : "Stream key"}
         value={key}
         onChange={(e) => setKey(e.target.value)}
         autoComplete="off"
       />
+      {STREAM_SETUP[preset] && (
+        <div className="live-destination-help">
+          <span>{STREAM_SETUP[preset]!.hint}</span>
+          <button type="button" onClick={() => openUrl(STREAM_SETUP[preset]!.url).catch((e) => setError(String(e)))}>Open {PRESETS.find((p) => p.value === preset)!.label}</button>
+        </div>
+      )}
       {error && <div className="live-error">{error}</div>}
       <div className="live-editor-row">
-        <button className="primary" onClick={save} disabled={saving}>
+        <button className="primary" onClick={save} disabled={saving || (needsServer && !server.trim()) || (!existing && !key.trim())}>
           {existing ? "Save" : "Add destination"}
         </button>
         <button onClick={onCancel}>Cancel</button>
@@ -6213,9 +6268,10 @@ export function LiveView({
   };
   const [keyFor, setKeyFor] = useState<string | null>(null);
   const [keyVal, setKeyVal] = useState("");
+  const [keyServer, setKeyServer] = useState("");
   const saveChannelKey = async (d: LiveDestination) => {
     try {
-      await ipc.liveUpsertDestination({ id: d.id, preset: d.preset, label: d.label, server: d.server ?? undefined, key: keyVal, enabled: d.enabled });
+      await ipc.liveUpsertDestination({ id: d.id, preset: d.preset, label: d.label, server: d.server !== null ? keyServer.trim() : undefined, key: keyVal, enabled: d.enabled });
       setDestinations(await ipc.liveListDestinations(activeEndpointId() ?? undefined));
       setKeyFor(null);
       setKeyVal("");
@@ -6990,6 +7046,7 @@ export function LiveView({
                     onClick={() => {
                       if (streaming) return;
                       setKeyVal("");
+                      setKeyServer(d.server ?? "");
                       setKeyFor(open ? null : d.id);
                     }}
                   >
@@ -7015,10 +7072,11 @@ export function LiveView({
                   </div>
                   {open && (
                     <div className="chn-key" onClick={(e) => e.stopPropagation()}>
+                      {d.server !== null && <input aria-label="Stream server URL" placeholder="Stream server URL" value={keyServer} onChange={(e) => setKeyServer(e.target.value)} />}
                       <input
                         type="password"
                         autoFocus
-                        placeholder="Stream key (stored in Keychain — paste to replace)"
+                        placeholder={d.preset === "instagram" ? "Fresh stream key for this broadcast" : "Stream key (stored in Keychain — paste to replace)"}
                         value={keyVal}
                         onChange={(e) => setKeyVal(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && keyVal && saveChannelKey(d)}
@@ -7026,6 +7084,7 @@ export function LiveView({
                       <button className="chn-key-save" disabled={!keyVal} onClick={() => saveChannelKey(d)}>
                         Save
                       </button>
+                      {STREAM_SETUP[d.preset] && <div className="live-destination-help"><span>{STREAM_SETUP[d.preset]!.hint}</span><button onClick={() => openUrl(STREAM_SETUP[d.preset]!.url).catch((e) => notifyError(e, { key: "banner" }))}>Open {PRESETS.find((p) => p.value === d.preset)!.label}</button></div>}
                     </div>
                   )}
                 </div>

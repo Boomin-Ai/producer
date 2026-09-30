@@ -279,7 +279,7 @@ export interface LiveSources {
   items?: LiveItem[];
 }
 
-export type LivePreset = "twitch" | "kick" | "youtube" | "custom";
+export type LivePreset = "twitch" | "kick" | "youtube" | "facebook" | "instagram" | "rumble" | "tiktok" | "custom";
 
 export interface LiveDestination {
   id: string;

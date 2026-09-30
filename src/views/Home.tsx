@@ -106,6 +106,8 @@ const PRESET_TONE: Record<string, string> = {
   youtube: "#ff4e45",
   custom: "#8b93a7",
   instagram: "#e1306c",
+  rumble: "#85c742",
+  tiktok: "#25f4ee",
   facebook: "#1877f2",
   threads: "#e7eaf3",
 };
@@ -672,7 +674,7 @@ function ChannelsBlock({
             <button className="set-plat add" onClick={() => { setEditingDest(null); setAddingDest(true); }}>+ Add</button>
           </div>
           <div className="cr-channels">
-            {destinations.length === 0 && <span className="set-sub-empty">None yet. Twitch, Kick, YouTube, or any RTMP.</span>}
+            {destinations.length === 0 && <span className="set-sub-empty">Twitch, Kick, YouTube, Facebook, Instagram, Rumble, TikTok, or custom RTMP.</span>}
             {destinations.map((d) => (
               <button
                 key={d.id}
