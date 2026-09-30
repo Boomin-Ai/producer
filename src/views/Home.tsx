@@ -818,7 +818,7 @@ function FeatureFlagsSection() {
           );
         })}
         <p className="set-flag-foot">
-          {flags.size > 0 ? (
+          {FEATURE_FLAGS.some((f) => flags.has(f.id)) ? (
             <>
               These are on for your account{email ? ` (${email})` : ""}. They are still in development — expect rough
               edges, and tell us when you find them.
