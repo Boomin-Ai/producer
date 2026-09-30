@@ -21,6 +21,7 @@ jobs:
       - run: node scripts/test-guest-return.mjs
       - run: node --experimental-strip-types --test tests/slotMath.test.ts
       - run: node --experimental-strip-types --test tests/stageTruth.test.ts
+      - run: node --experimental-strip-types --test tests/featureFlags.test.ts
 
   server:
     runs-on: ubuntu-latest
