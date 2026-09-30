@@ -56,10 +56,10 @@ unsafe fn current_canvas() -> (u32, i32) {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DestinationSpec {
     pub id: String,
-    /// "twitch" | "youtube" | "kick" | "custom"
+    /// Named platform preset or "custom".
     pub kind: String,
     pub credential_id: String,
-    /// Required for kick/custom: the ingest URL.
+    /// Required for platforms with a dashboard-issued ingest URL.
     #[serde(default)]
     pub server: Option<String>,
 }
@@ -227,11 +227,11 @@ unsafe fn create_service(
             );
             "rtmp_common"
         }
-        "kick" | "custom" => {
+        "kick" | "custom" | "facebook" | "instagram" | "rumble" | "tiktok" => {
             let raw = spec
                 .server
                 .as_deref()
-                .ok_or("kick/custom destination needs a server URL")?;
+                .ok_or("destination needs a server URL")?;
             let server = if spec.kind == "kick" {
                 normalize_kick_server(raw)?
             } else {

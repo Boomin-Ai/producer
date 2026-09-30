@@ -39,7 +39,16 @@ pub struct UpsertDestination {
     pub endpoint_id: Option<String>,
 }
 
-const PRESETS: &[&str] = &["twitch", "kick", "youtube", "custom"];
+const PRESETS: &[&str] = &[
+    "twitch",
+    "kick",
+    "youtube",
+    "facebook",
+    "instagram",
+    "rumble",
+    "tiktok",
+    "custom",
+];
 
 fn row_from_db(r: &rusqlite::Row<'_>) -> rusqlite::Result<DestinationRow> {
     Ok(DestinationRow {
@@ -90,11 +99,11 @@ pub async fn live_upsert_destination(
             })?;
             Some(crate::live::normalize_kick_server_checked(raw).map_err(EngineError::Other)?)
         }
-        "custom" => {
+        "custom" | "facebook" | "instagram" | "rumble" | "tiktok" => {
             let raw = input
                 .server
                 .as_deref()
-                .ok_or_else(|| EngineError::Other("Custom RTMP needs a server URL".into()))?
+                .ok_or_else(|| EngineError::Other("This destination needs a server URL".into()))?
                 .trim()
                 .to_string();
             if !(raw.starts_with("rtmp://") || raw.starts_with("rtmps://")) {
