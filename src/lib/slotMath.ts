@@ -45,6 +45,37 @@ export interface Placed {
 export const SLOT_PREFIX = "gslot-";
 export const isSlotId = (id: string) => id.startsWith(SLOT_PREFIX);
 
+/** Capture authored scene state, rather than the occupied placeholder's
+ * engine visibility. A hidden slot with a visible occupant is still enabled.
+ * Geometry comes from the slot, which the stage editor mirrors on every edit. */
+export function captureSlotLook(
+  items: (Placed & { id: string; kind: string; visible: boolean })[],
+  bindings: Record<string, string>,
+  previous?: Record<string, LookEntry>,
+): Record<string, LookEntry> {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  return Object.fromEntries(items
+    .filter((item) => item.kind !== "guest" && item.kind !== "mod")
+    .map((item) => {
+      const occupant = isSlotId(item.id) ? byId.get(bindings[item.id]) : undefined;
+      return [item.id, {
+        visible: occupant ? occupant.visible
+          : bindings[item.id] && previous?.[item.id] ? previous[item.id].visible : item.visible,
+        x: item.x, y: item.y, w: item.w, h: item.h, z: item.z,
+      }];
+    }));
+}
+
+/** Persist the final edit, without waiting for an engine visibility/geometry
+ * echo. Only scene fields belong in the JSON; runtime guest ids do not. */
+export function commitSlotEdit(previous: LookEntry, patch: LiveTransformPatch): LookEntry {
+  const next = { ...previous };
+  for (const key of ["x", "y", "w", "h", "z"] as const) {
+    if (patch[key] != null) next[key] = patch[key];
+  }
+  return next;
+}
+
 /** The transform one look entry means for its item. Geometry rides along
  * whether or not the entry is visible — an item you cannot see still has a
  * place, and it must be there when it becomes visible again. `z` is the

@@ -3370,7 +3370,7 @@ textarea::placeholder {
 
 .rm-dock-bottom > .rm-panel-mixer {
   flex: 0 1 auto;
-  min-width: 240px;
+  min-width: 128px;
 }
 
 .rm-panel {
@@ -3386,6 +3386,10 @@ textarea::placeholder {
   flex: 1 1 auto;
   min-height: 148px;
   overflow: hidden;
+}
+
+.rm-dock-side > .rm-panel-mixer {
+  min-height: 112px;
 }
 
 .rm-dock-side > .rm-panel-scenes {
@@ -4160,7 +4164,7 @@ textarea::placeholder {
 }
 
 .rm-sheet {
-  padding: 8px 16px 14px;
+  padding: 4px 16px 14px;
 }
 
 .rm-sheet-head {
@@ -7238,112 +7242,6 @@ textarea::placeholder {
   border-radius: 0;
 }
 
-/* ── One-track mixer: the meter IS the fader ────────────────────────────── */
-.rm-strip .rm-track {
-  position: relative;
-  align-self: center;
-  width: 16px;
-  flex: 1;
-  min-height: 40px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  border: 0.5px solid var(--line-1);
-  cursor: ns-resize;
-  touch-action: none;
-}
-.rm-track-fill {
-  position: absolute;
-  left: 1px;
-  right: 1px;
-  bottom: 1px;
-  border-radius: 999px;
-  background: linear-gradient(0deg, oklch(0.62 0.11 165), var(--mint));
-  opacity: 0.85;
-  transition: height 60ms linear;
-}
-.rm-track-thumb {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 26px;
-  height: 13px;
-  border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-}
-.rm-strip.dead .rm-track { cursor: default; opacity: 0.5; }
-.rm-strip.horizontal .rm-track {
-  width: auto;
-  min-height: 0;
-  height: 12px;
-  flex: 1;
-  align-self: center;
-  cursor: ew-resize;
-}
-.rm-strip.horizontal .rm-track-fill {
-  /* Full-size box, revealed by clip-path — `right: auto` left this a
-   * zero-width element, so the level moved invisibly in the mini form. */
-  top: 1px;
-  bottom: 1px;
-  left: 1px;
-  right: 1px;
-  transition: clip-path 60ms linear;
-}
-.rm-strip.horizontal .rm-track-thumb {
-  top: 50%;
-  left: auto;
-  transform: translateY(-50%);
-  width: 13px;
-  height: 20px;
-}
-
-/* The WARM SCALE: colors anchor to the rail, not the fill — green through
- * amber into red at the top, the same read the old segmented meter gave.
- * The rail shows the whole scale faintly; the fill is the vivid clip of it;
- * a light redline marks where hot begins so you can SEE where you sit. */
-.rm-strip .rm-track::before {
-  content: "";
-  position: absolute;
-  inset: 1px;
-  border-radius: 999px;
-  background: linear-gradient(to top, var(--mint) 0%, var(--mint) 55%, var(--amber) 80%, var(--red) 96%);
-  opacity: 0.14;
-}
-.rm-track-fill {
-  inset: 1px;
-  height: auto;
-  width: auto;
-  background: linear-gradient(to top, var(--mint) 0%, var(--mint) 55%, var(--amber) 80%, var(--red) 96%);
-}
-.rm-strip .rm-track::after {
-  content: "";
-  position: absolute;
-  left: 2px;
-  right: 2px;
-  top: 12%;
-  height: 1px;
-  background: var(--red);
-  opacity: 0.45;
-}
-.rm-strip.horizontal .rm-track::before,
-.rm-strip.horizontal .rm-track-fill {
-  background: linear-gradient(to right, var(--mint) 0%, var(--mint) 55%, var(--amber) 80%, var(--red) 96%);
-}
-.rm-strip.horizontal .rm-track::after {
-  left: auto;
-  right: 12%;
-  top: 2px;
-  bottom: 2px;
-  height: auto;
-  width: 1px;
-}
-/* The mini strip must hold a REAL rail — it collapsed to the thumb when the
- * console form declared strips non-growing. */
-.rm-strip.horizontal .rm-track {
-  flex: 0 0 96px;
-  min-width: 96px;
-}
-
 /* ── Side-mount ergonomics ──────────────────────────────────────────────── */
 /* Grips appear on hover; the name gets the row until you reach for it. */
 .rm-panel[data-in="left"] .rm-row-grip,
@@ -8263,12 +8161,165 @@ button.ks-key:hover { border-color: var(--line-2); }
   padding: 6px 8px 8px;
 }
 .rm-strips {
-  justify-content: flex-start;
+  justify-content: safe center;
   align-items: stretch;
   gap: 8px;
 }
 .rm-strip {
   padding: 10px 10px 8px;
+}
+
+/* The mixer is an open control strip; the DJ slider supplies its visual rhythm. */
+.rm-panel-mixer .rm-strip {
+  --deck-accent: #8bdfbd;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.rm-panel-mixer .rm-strip:hover {
+  border-color: transparent;
+  background: transparent;
+}
+.rm-panel-mixer .rm-strip .dj-slider.vertical {
+  flex: 1 1 70px;
+  width: 22px;
+  min-width: 22px;
+  min-height: 70px;
+}
+.rm-panel-mixer .rm-strip.horizontal .dj-slider {
+  flex: 0 0 96px;
+  width: 96px;
+  height: 22px;
+}
+/* Every expanded audio source shares one vertical console strip. */
+.rm-panel-mixer .rm-strip.compact {
+  position: relative;
+  display: grid;
+  container: mixer-strip / inline-size;
+  grid-template-columns: minmax(0, 1fr) 22px 30px;
+  grid-template-rows: 24px minmax(40px, 1fr) 14px;
+  align-items: center;
+  gap: 3px;
+  width: auto;
+  min-width: 96px;
+  min-height: 92px;
+  max-height: 190px;
+  max-width: 176px;
+  flex: 1 1 96px;
+  align-self: stretch;
+  padding: 4px 6px;
+}
+.rm-panel-mixer .rm-strip.compact .rm-strip-name {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rm-panel-mixer .rm-strip.compact:not(.horizontal) .rm-strip-name {
+  font-size: 10px;
+  letter-spacing: 0.01em;
+}
+.rm-strip-name-short { display: none; }
+.rm-panel-mixer .rm-strip.compact .rm-strip-fx {
+  grid-column: 2;
+  grid-row: 1;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+}
+/* The small ellipsis is the filter affordance; hover or focus reveals ƒ. */
+.rm-panel-mixer .rm-strip.compact:not(.horizontal) .rm-strip-fx {
+  position: relative;
+  color: transparent;
+  background: transparent;
+  border-color: transparent;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+.rm-panel-mixer .rm-strip.compact:not(.horizontal) .rm-strip-fx::after {
+  content: "···";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--fg-3);
+  font-style: normal;
+  font-size: 13px;
+  letter-spacing: 1px;
+  opacity: 0.65;
+  transition: opacity 150ms ease;
+}
+.rm-panel-mixer .rm-strip.compact:not(.horizontal):is(:hover, :focus-within) .rm-strip-fx {
+  color: var(--mint);
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.rm-panel-mixer .rm-strip.compact:not(.horizontal):is(:hover, :focus-within) .rm-strip-fx::after {
+  opacity: 0;
+}
+.rm-panel-mixer .rm-strip.compact .rm-strip-icon {
+  grid-column: 3;
+  grid-row: 1;
+  width: 26px;
+  height: 26px;
+}
+.rm-panel-mixer .rm-strip.compact .dj-slider {
+  grid-column: 1 / 4;
+  grid-row: 2;
+  width: 22px;
+  min-width: 22px;
+  height: 100%;
+  min-height: 40px;
+  flex: none;
+  justify-self: center;
+}
+.rm-panel-mixer .rm-strip.compact .rm-strip-db {
+  grid-column: 1 / 4;
+  grid-row: 3;
+  white-space: nowrap;
+  text-align: center;
+  align-self: center;
+}
+@container panel (max-width: 180px) {
+  .rm-panel-mixer .rm-strip.compact .rm-strip-name-full { display: none; }
+  .rm-panel-mixer .rm-strip.compact .rm-strip-name-short { display: inline; }
+}
+@container mixer-strip (max-width: 145px) {
+  .rm-panel-mixer .rm-strip.compact .rm-strip-name-full { display: none; }
+  .rm-panel-mixer .rm-strip.compact .rm-strip-name-short { display: inline; }
+}
+/* The 56px dock remains one line; mute leads so it is never hidden by scroll. */
+.rm-dock-top:not(.expanded) .rm-panel-mixer .rm-strip.compact,
+.rm-dock-bottom.slim .rm-panel-mixer .rm-strip.compact {
+  display: flex;
+  flex-direction: row;
+  width: auto;
+  height: 26px;
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  max-height: none;
+  container: none;
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 0;
+  gap: 8px;
+}
+.rm-dock-top:not(.expanded) .rm-panel-mixer .rm-strip.compact .rm-strip-icon,
+.rm-dock-bottom.slim .rm-panel-mixer .rm-strip.compact .rm-strip-icon { order: -3; flex: 0 0 26px; }
+.rm-dock-top:not(.expanded) .rm-panel-mixer .rm-strip.compact .rm-strip-name,
+.rm-dock-bottom.slim .rm-panel-mixer .rm-strip.compact .rm-strip-name { order: -2; flex: 0 1 auto; }
+.rm-dock-top:not(.expanded) .rm-panel-mixer .rm-strip.compact .dj-slider,
+.rm-dock-bottom.slim .rm-panel-mixer .rm-strip.compact .dj-slider { order: -1; flex: 0 1 96px; width: 96px; min-width: 24px; min-height: 0; height: 22px; }
+.rm-dock-top:not(.expanded) .rm-panel-mixer .rm-strips,
+.rm-dock-bottom.slim .rm-panel-mixer .rm-strips {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+  overflow-x: auto;
 }
 
 /* ── Updates panel: the shipping stream ── */
@@ -10153,8 +10204,7 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 /* ── Handle tooltips: ours, never the OS bubble under the cursor. Drawn
    AWAY from the dock interior (toward the stage), pointer-events none. */
 .rm-split,
-.rm-vtab,
-.rm-sheet-head {
+.rm-vtab {
   position: relative;
 }
 .rm-split[data-tip]::after,
@@ -10238,6 +10288,12 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .rm-chn-empty .rm-rows-empty { padding-bottom: 0; }
 .rm-chn-open { height: 28px; padding: 0 12px; border-radius: 8px; border: 0; background: var(--mint); color: #06251b; font-size: 12px; font-weight: 650; cursor: pointer; }
 .rm-chn-open:hover { filter: brightness(1.06); }
+/* The docked Channels panel needs the same route when it has no destinations. */
+.chn-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; max-width: 280px; padding: 8px 4px; }
+.chn-empty p { margin: 0; color: var(--fg-3); font-size: 12px; line-height: 1.45; }
+.rm-panel-channels[data-in="top"] .chn-empty { flex-direction: row; align-items: center; gap: 10px; max-width: none; min-width: 0; padding: 0 4px; }
+.rm-panel-channels[data-in="top"] .chn-empty p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rm-panel-channels[data-in="top"] .chn-empty button { flex-shrink: 0; }
 
 /* Studio output: the top-bar chip and the footer tag. */
 .hd-chip.hd-studio.on { background: oklch(0.72 0.15 300 / 0.22); border-color: oklch(0.72 0.15 300 / 0.6); color: #efe6ff; }

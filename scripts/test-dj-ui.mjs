@@ -90,6 +90,28 @@ try {
       `${width}/${dock}: clipped controls`,
     );
   }
+  for (const width of [600, 900, 1250]) {
+    await page.evaluate((w) => window.renderDJ(w, "bottom", false), width);
+    await page.waitForSelector(".deck-b");
+    for (const height of [121, 170, 200]) {
+      const clipped = await page.evaluate((h) => {
+        document.querySelector(".rm-panel-dj").style.height = `${h}px`;
+        const consoleBottom = document
+          .querySelector(".dj-console")
+          .getBoundingClientRect().bottom;
+        return [...document.querySelectorAll(".dj-deck")].flatMap((deck) => {
+          const controls = [...deck.querySelectorAll(".dj-deck-bottom button")];
+          return [deck, ...controls]
+            .filter((element) => {
+              const bounds = element.getBoundingClientRect();
+              return bounds.width > 0 && bounds.bottom > consoleBottom + 1;
+            })
+            .map((element) => element.getAttribute("aria-label") || element.textContent.trim());
+        });
+      }, height);
+      assert.deepEqual(clipped, [], `${width}px wide, ${height}px tall: deck controls clipped`);
+    }
+  }
   await page.evaluate(() => window.renderDJ(240, "left", false));
   await page.waitForSelector(".deck-a .dj-platter img");
   assert.equal(
