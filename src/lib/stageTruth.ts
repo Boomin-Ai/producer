@@ -180,6 +180,37 @@ export function isOwnEcho(frameVersion: number, lastPostedVersion: number): bool
   return frameVersion <= lastPostedVersion;
 }
 
+/** WebSocket stage broadcasts can arrive before the publishing HTTP response.
+ * Track outstanding host publications so those frames cannot become mod asks. */
+export class PendingStagePublications {
+  private pending = new Map<string, number>();
+  private key(ids: readonly string[]) { return JSON.stringify([...ids].sort()); }
+  begin(ids: readonly string[]): () => void {
+    const key = this.key(ids);
+    this.pending.set(key, (this.pending.get(key) ?? 0) + 1);
+    let done = false;
+    return () => {
+      if (done) return;
+      done = true;
+      const count = (this.pending.get(key) ?? 1) - 1;
+      if (count) this.pending.set(key, count);
+      else this.pending.delete(key);
+    };
+  }
+  has(ids: readonly string[]): boolean { return this.pending.has(this.key(ids)); }
+}
+
+/** Scene visibility is independent of occupancy. An admitted guest bound to
+ * an off-scene slot stays staged; a seat's feed is staged by visibility. */
+export function boundStageIds(
+  participants: { id: string; sourceId: string; seat: boolean }[],
+  visible: ReadonlySet<string>,
+  bindings: Record<string, string>,
+): string[] {
+  const bound = new Set(Object.values(bindings));
+  return participants.filter((p) => p.seat ? visible.has(p.sourceId) : bound.has(p.sourceId)).map((p) => p.id);
+}
+
 function sameList(a: readonly string[], b: readonly string[]): boolean {
   if (a.length !== b.length) return false;
   const sa = [...a].sort();

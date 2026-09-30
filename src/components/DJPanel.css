@@ -4,6 +4,10 @@
   container-type: inline-size;
   container-name: dj;
 }
+.rm-panel-dj[data-in="bottom"] .rm-panel-body {
+  /* Expanded row docks have a known height, so the decks can follow it. */
+  container-type: size;
+}
 .dj-panel {
   display: flex;
   flex-direction: column;
@@ -793,7 +797,7 @@
 }
 .dj-slider-fill {
   display: block;
-  width: var(--dj-position);
+  width: var(--dj-fill-position, var(--dj-position));
   height: 100%;
   background: var(--deck-accent, #8bdfbd);
   border-radius: inherit;
@@ -1086,7 +1090,7 @@
   position: absolute;
   bottom: 0;
   width: 100%;
-  height: var(--dj-position);
+  height: var(--dj-fill-position, var(--dj-position));
 }
 .dj-slider.vertical .dj-slider-thumb {
   left: 50%;
@@ -1299,5 +1303,171 @@
   .rm-panel-dj:is([data-in="top"], [data-in="bottom"]) .dj-library {
     grid-column: 4;
     grid-row: 1;
+  }
+}
+
+/* Keep both deck transports visible as the expanded bottom row gets shorter. */
+@container dj (max-height: 260px) {
+  .rm-panel-dj[data-in="bottom"] .dj-panel {
+    padding: 6px 10px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-console {
+    gap: 4px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-crossfade {
+    height: 20px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-deck {
+    padding: 8px 10px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-cover.dj-platter {
+    width: clamp(34px, 22cqh, 50px);
+    height: clamp(34px, 22cqh, 50px);
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-deck-top {
+    gap: 8px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-track-info {
+    gap: 2px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-progress {
+    margin-top: 4px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-progress .dj-slider {
+    height: 18px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-progress .dj-slider-rail {
+    top: 7px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-progress .dj-slider-thumb {
+    top: 3px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-deck-bottom {
+    margin-top: 3px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-transport button {
+    width: 24px;
+    height: 24px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-transport .dj-play {
+    width: 27px;
+    height: 27px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-loop {
+    width: 21px;
+    height: 21px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-bpm,
+  .rm-panel-dj[data-in="bottom"] .dj-match {
+    padding: 2px 4px;
+    font-size: 8px !important;
+  }
+}
+@container dj (max-height: 170px) {
+  .rm-panel-dj[data-in="bottom"] .dj-panel {
+    padding: 4px 8px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-console {
+    gap: 2px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-crossfade {
+    height: 16px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-deck {
+    padding: 5px 8px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-cover.dj-platter {
+    width: 30px;
+    height: 30px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-track-info small {
+    display: none;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-progress {
+    margin-top: 1px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-progress .dj-slider {
+    height: 14px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-progress .dj-slider-rail {
+    top: 5px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-progress .dj-slider-thumb {
+    top: 1px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-progress small {
+    font-size: 8px;
+    line-height: 10px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-deck-bottom {
+    margin-top: 1px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-transport button {
+    width: 20px;
+    height: 20px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-transport .dj-play {
+    width: 24px;
+    height: 24px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-bpm,
+  .rm-panel-dj[data-in="bottom"] .dj-match {
+    padding: 2px 4px;
+  }
+}
+@container dj (max-height: 138px) {
+  .rm-panel-dj[data-in="bottom"] .dj-panel {
+    padding: 3px 8px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-crossfade {
+    height: 14px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-deck {
+    padding: 4px 8px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-cover.dj-platter {
+    width: 27px;
+    height: 27px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-deck-label > span {
+    width: 14px;
+    height: 14px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-track-info {
+    gap: 1px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-track-info strong {
+    font-size: 11px;
+    line-height: 12px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-transport .dj-play {
+    width: 22px;
+    height: 22px;
+  }
+}
+@container dj (max-width: 719px) and (max-height: 138px) {
+  .rm-panel-dj[data-in="bottom"] .dj-panel {
+    padding-block: 2px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-crossfade {
+    height: 11px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-deck {
+    padding-block: 2px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-cover.dj-platter {
+    width: 23px;
+    height: 23px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-progress small {
+    line-height: 8px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-transport button {
+    width: 18px;
+    height: 18px;
+  }
+  .rm-panel-dj[data-in="bottom"] .dj-transport .dj-play {
+    width: 20px;
+    height: 20px;
   }
 }

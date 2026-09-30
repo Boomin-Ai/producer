@@ -11,6 +11,8 @@ export function DJSlider({
   orientation = "horizontal",
   disabled,
   live = false,
+  fill,
+  valueText,
   onValue,
 }: {
   value: number;
@@ -21,6 +23,9 @@ export function DJSlider({
   orientation?: "horizontal" | "vertical";
   disabled?: boolean;
   live?: boolean;
+  /** Optional live meter fill; the thumb still represents value. */
+  fill?: number;
+  valueText?: string;
   onValue: (value: number) => void;
 }) {
   const [draft, setDraft] = useState(value);
@@ -92,11 +97,11 @@ export function DJSlider({
       aria-valuemax={max}
       aria-valuenow={clamp(draft)}
       aria-valuetext={
-        label === "Crossfader"
+        valueText ?? (label === "Crossfader"
           ? Math.abs(fraction - 0.5) < 0.005
             ? "Center — equal A and B"
             : `A ${Math.round((1 - fraction) * 100)}%, B ${Math.round(fraction * 100)}%`
-          : undefined
+          : undefined)
       }
       aria-disabled={!!disabled}
       aria-orientation={orientation}
@@ -105,6 +110,7 @@ export function DJSlider({
         {
           "--dj-position": `${fraction * 100}%`,
           "--dj-fraction": fraction,
+          "--dj-fill-position": `${Math.max(0, Math.min(1, fill ?? fraction)) * 100}%`,
         } as React.CSSProperties
       }
       onPointerDown={(e) => {

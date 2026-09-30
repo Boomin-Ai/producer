@@ -63,6 +63,12 @@ export const TOP_MAX = 240;
 export const ROW_SNAP = 120;
 export const ROW_MINI = 56;
 
+/** Pair splitter floors follow the panel's controls, not a single row size. */
+export function panelPairMin(dock: Dock, id: PanelId): number {
+  if (dock === "left" || dock === "right") return id === "mixer" ? 112 : 100;
+  return id === "mixer" ? 128 : 140;
+}
+
 export const PRESETS: { key: string; label: string; note: string; layout: Layout }[] = [
   {
     key: "studio",
