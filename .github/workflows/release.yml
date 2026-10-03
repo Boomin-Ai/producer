@@ -81,11 +81,20 @@ jobs:
           tagName: v__VERSION__
           releaseName: "Producer v__VERSION__"
           releaseBody: |
-            Installers for macOS (Apple Silicon + Intel), Windows, and Linux.
-            The Apple Silicon and Windows x64 builds include Producer Live
-            (go live to Twitch, Kick, YouTube simultaneously). The Apple Silicon
-            build is signed and notarized; signed builds have a stable identity,
-            so macOS permission grants survive updates.
+            Interactive audience rooms on your own hardware: share a link for
+            watching, chat, votes, reactions and stage invitations. Includes
+            guest audio monitoring, processed program return, phone playback
+            recovery, publisher reconnect fixes and compact audience controls.
+
+            Direct video defaults to four viewers, capped at eight. Room
+            interactions allow 100 connected audience identities; this is not
+            a claim of 100 simultaneous video viewers.
+
+            Apple Silicon and Windows x64 include the native Live engine.
+            Apple Silicon installers are signed and notarized.
+            Intel macOS and Linux retain their existing engine-less builds.
+
+            Full release details: https://github.com/Boomin-Ai/producer/blob/main/docs/RELEASE-0.4.60.md
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}

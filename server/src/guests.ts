@@ -282,7 +282,10 @@ async function insertGuest(
     `INSERT INTO live_room_guests
        (id, room_id, display_name, invite_code_hash, status, joined_via, peer_id, accepted_at, admitted_at, created_at, updated_at,
         kind, producer_ref, grants, seat)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?9, ?10, ?11, ?12, ?13)`,
+     SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?9, ?10, ?11, ?12, ?13
+       WHERE ?5 <> 'accepted' OR
+         (SELECT COUNT(*) FROM live_room_guests WHERE room_id = ?2 AND status = 'accepted')
+         < (SELECT guest_capacity FROM live_rooms WHERE id = ?2)`,
   )
     .bind(
       id,
@@ -301,7 +304,9 @@ async function insertGuest(
       input.seat ?? "guest",
     )
     .run();
-  return (await loadGuest(env, id))!;
+  const inserted = await loadGuest(env,id);
+  if (!inserted) throw new ApiError(409,"guest_room_full","This room is full right now. Ask the host to make space.");
+  return inserted;
 }
 
 /** Invite a named guest by link. The link goes to the guest, the render URL
@@ -445,13 +450,16 @@ export function assertUsable(guest: Pick<GuestRow, "status">): void {
 export async function acceptGuest(env: Env, guestId: string): Promise<GuestRow> {
   const now = nowSec();
   const res = await env.DB.prepare(
-    "UPDATE live_room_guests SET status = 'accepted', accepted_at = ?2, updated_at = ?2 WHERE id = ?1 AND status = 'invited'",
+    `UPDATE live_room_guests SET status = 'accepted', accepted_at = ?2, updated_at = ?2 WHERE id = ?1 AND status = 'invited'
+      AND (SELECT COUNT(*) FROM live_room_guests AS occupants WHERE occupants.room_id = live_room_guests.room_id AND occupants.status = 'accepted')
+      < (SELECT guest_capacity FROM live_rooms WHERE id = live_room_guests.room_id)`,
   )
     .bind(guestId, now)
     .run();
   const row = await loadGuest(env, guestId);
   if (res.meta.changes && row) return row;
   if (row?.status === "accepted") return row;
+  if (row?.status === "invited") throw new ApiError(409,"guest_room_full","This room is full right now. Ask the host to make space.");
   throw new ApiError(409, "guest_not_acceptable", "This invitation can no longer be accepted.");
 }
 
@@ -471,11 +479,17 @@ export async function admitGuest(env: Env, guestId: string): Promise<GuestRow> {
   const res = await env.DB.prepare(
     `UPDATE live_room_guests
        SET status = 'accepted', accepted_at = ?2, admitted_at = ?2, snapshot = NULL, updated_at = ?2
-     WHERE id = ?1 AND status IN ('waiting', 'invited')`,
+     WHERE id = ?1 AND status IN ('waiting', 'invited')
+       AND (SELECT COUNT(*) FROM live_room_guests AS occupants WHERE occupants.room_id = live_room_guests.room_id AND occupants.status = 'accepted')
+       < (SELECT guest_capacity FROM live_rooms WHERE id = live_room_guests.room_id)`,
   )
     .bind(guestId, now)
     .run();
-  if (!res.meta.changes) throw new ApiError(404, "guest_not_found", "No such guest awaiting admission.");
+  if (!res.meta.changes) {
+    const row=await loadGuest(env,guestId);
+    if(row && ["waiting","invited"].includes(row.status))throw new ApiError(409,"guest_room_full","This room is full right now. Ask the host to make space.");
+    throw new ApiError(404, "guest_not_found", "No such guest awaiting admission.");
+  }
   return (await loadGuest(env, guestId))!;
 }
 
@@ -834,9 +848,18 @@ export async function roomRoster(env: Env, origin: string, roomId: string, opts:
  *  guest into everyone's subscribe set. */
 export async function setStage(
   env: Env,
-  input: { roomId: string; onStage: string[]; stampHost?: boolean },
+  input: { roomId: string; onStage: string[]; stampHost?: boolean; expectedVersion?: number },
+  fromRoomCoordinator = false,
 ): Promise<{ on_stage: string[]; version: number }> {
+  if(env.REALTIME && !fromRoomCoordinator){
+    const stub=env.REALTIME.get(env.REALTIME.idFromName(roomChannelName(input.roomId)));
+    const response=await stub.fetch("https://do/room-stage",{method:"POST",body:JSON.stringify(input)});
+    const body=await response.json() as {on_stage:string[];version:number;error?:{code:string;message:string}};
+    if(!response.ok)throw new ApiError(response.status,body.error?.code??"room_control_unavailable",body.error?.message??"Room control is unavailable.");
+    return {on_stage:body.on_stage,version:body.version};
+  }
   const room = await loadRoom(env, input.roomId);
+  if(input.expectedVersion!==undefined && input.expectedVersion!==room.stage_version)throw new ApiError(409,"stale_stage","The stage changed. Refresh before trying again.");
   if (input.stampHost !== false) await touchHostPresence(env, room.id);
 
   const admitted = await env.DB.prepare(

@@ -18,6 +18,17 @@ use serde::Serialize;
 
 use super::ffi;
 
+/// Remote voices reach the host's playback device and the program mix.
+/// Bus 1 is the stage return: keeping remotes off it prevents self-return.
+/// Admission starts muted; the existing stage/mixer controls make them audible.
+///
+/// Safety: `src` must be a live OBS source owned by the engine thread.
+pub(super) unsafe fn configure_remote_audio(src: *mut ffi::obs_source_t) {
+    ffi::obs_source_set_muted(src, true);
+    ffi::obs_source_set_audio_mixers(src, 1);
+    ffi::obs_source_set_monitoring_type(src, 2); // MONITOR_AND_OUTPUT
+}
+
 static AUDIO_CALLBACKS: AtomicU64 = AtomicU64::new(0);
 static AUDIO_FRAMES: AtomicU64 = AtomicU64::new(0);
 /// Peak absolute sample value across the probe window, in millionths.
@@ -358,6 +369,13 @@ pub struct SourcesState {
     pub items: Vec<ItemState>,
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct SceneChange {
+    pub id: String,
+    pub patch: TransformPatch,
+    pub muted: Option<bool>,
+}
+
 impl Default for SourcesState {
     fn default() -> Self {
         SourcesState {
@@ -695,6 +713,7 @@ impl SceneGraph {
             if scene.is_null() {
                 return Err("obs_scene_create failed".into());
             }
+            ffi::obs_source_set_audio_mixers(ffi::obs_scene_get_source(scene), 3);
             ffi::obs_set_output_source(0, ffi::obs_scene_get_source(scene));
             Ok(SceneGraph {
                 scene,
@@ -839,6 +858,52 @@ impl SceneGraph {
     }
 
     /// Apply a transform patch to one item (UI-P1). Engine thread only.
+    pub fn apply_scene(&mut self, changes: &[SceneChange]) -> Result<(), String> {
+        if changes.len() > 128 {
+            return Err("A scene has too many changes".into());
+        }
+        // Validate the entire plan before touching the graph. A missing source
+        // must not leave half a scene on air.
+        for change in changes {
+            if self.item_by_id(&change.id).is_none() {
+                return Err(format!("no item {}", change.id));
+            }
+            let p = &change.patch;
+            if [p.x, p.y, p.w, p.h, p.rot]
+                .into_iter()
+                .flatten()
+                .any(|v| !v.is_finite())
+            {
+                return Err("Scene geometry must be finite".into());
+            }
+            if change.muted.is_some() && self.source_by_id(&change.id).is_none() {
+                return Err(format!("no audio source {}", change.id));
+            }
+        }
+        struct Apply<'a> {
+            graph: &'a mut SceneGraph,
+            changes: &'a [SceneChange],
+        }
+        extern "C" fn update(data: *mut std::os::raw::c_void, _: *mut ffi::obs_scene_t) {
+            let apply = unsafe { &mut *(data as *mut Apply<'_>) };
+            for change in apply.changes {
+                // Validated above; native scene locking prevents a render
+                // observing intermediate geometry or stacking.
+                let _ = apply.graph.set_transform(&change.id, &change.patch);
+                if let Some(muted) = change.muted {
+                    let _ = apply.graph.set_source_audio(&change.id, None, Some(muted));
+                }
+            }
+        }
+        let scene = self.scene;
+        let mut apply = Apply {
+            graph: self,
+            changes,
+        };
+        unsafe { ffi::obs_scene_atomic_update(scene, update, &mut apply as *mut _ as *mut _) };
+        Ok(())
+    }
+
     pub fn set_transform(&mut self, id: &str, t: &TransformPatch) -> Result<(), String> {
         let item = self.item_by_id(id).ok_or_else(|| format!("no item {id}"))?;
         unsafe {
@@ -1114,6 +1179,7 @@ impl SceneGraph {
             ffi::obs_sceneitem_set_visible(item, true);
             // Above every real item — the whole point is to hide the cut.
             ffi::obs_sceneitem_set_order_position(item, 999);
+            ffi::obs_source_set_audio_mixers(src, 3);
             let dur = ffi::obs_source_media_get_duration(src);
             self.stinger = Some((item, src));
             Ok(dur.max(0))
@@ -1361,20 +1427,20 @@ impl SceneGraph {
             // you added it because you want to see it. Doing this here rather
             // than with a follow-up transform removes a race where the hide
             // could arrive before the item existed.
+            let remote = matches!(spec, ExtraSpec::Guest { .. } | ExtraSpec::Mod { .. });
+            if remote {
+                configure_remote_audio(src);
+            } else {
+                ffi::obs_source_set_audio_mixers(src, 3);
+            }
             // Leak test: force this source monitor-only so a recording can be
             // inspected against a known loud signal. Env-gated, dev only.
             if std::env::var("PRODUCER_TEST_MONITOR").as_deref() == Ok("1") {
                 ffi::obs_source_set_monitoring_type(src, 1);
                 eprintln!("[test] {id} forced to MONITOR_ONLY");
             }
-            let born_visible = !matches!(spec, ExtraSpec::Guest { .. } | ExtraSpec::Mod { .. });
+            let born_visible = !remote;
             ffi::obs_sceneitem_set_visible(item, born_visible);
-            // A guest in the room is SEEN, NOT HEARD: they arrive muted and
-            // stay muted until put on screen. Preview is for judging whether
-            // someone is ready, not for putting their kitchen into the show.
-            if !born_visible {
-                ffi::obs_source_set_muted(src, true);
-            }
             // Meter every audio-bearing extra the mixer shows a strip for.
             if metered(kind) {
                 peak_slot_register(src);
@@ -1544,13 +1610,26 @@ impl SceneGraph {
         let src = self
             .source_by_id(id)
             .ok_or_else(|| format!("{id} is not on the stage"))?;
+        let normal_monitoring = if self
+            .extras
+            .iter()
+            .any(|extra| extra.id == id && matches!(extra.kind, "guest" | "mod"))
+        {
+            2
+        } else {
+            0
+        };
         unsafe {
             // Cue implies audible: a muted source is silent everywhere,
             // monitoring included.
-            ffi::obs_source_set_muted(src, false);
-            ffi::obs_source_set_monitoring_type(src, if on { 1 } else { 0 });
+            // Mute before leaving cue so restoring program output cannot leak
+            // green-room audio between the monitoring and mute calls.
             if !on {
                 ffi::obs_source_set_muted(src, true);
+            }
+            ffi::obs_source_set_monitoring_type(src, if on { 1 } else { normal_monitoring });
+            if on {
+                ffi::obs_source_set_muted(src, false);
             }
         }
         Ok(())
@@ -1614,6 +1693,7 @@ pub fn attach_capture_sources() -> Result<(), String> {
             return Err("mic source creation failed".into());
         }
         ffi::obs_set_output_source(0, screen);
+        ffi::obs_source_set_audio_mixers(mic, 3);
         ffi::obs_set_output_source(1, mic);
         ffi::obs_source_release(screen);
         ffi::obs_source_release(mic);
@@ -1710,6 +1790,7 @@ pub fn capture_probe(window: Duration) -> CaptureProbeReport {
 
     unsafe {
         ffi::obs_set_output_source(0, screen);
+        ffi::obs_source_set_audio_mixers(mic, 3);
         ffi::obs_set_output_source(1, mic);
         if !mic.is_null() {
             ffi::obs_source_add_audio_capture_callback(mic, audio_cb, ptr::null_mut());

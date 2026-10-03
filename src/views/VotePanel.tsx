@@ -157,16 +157,18 @@ export function VoteEditor({
 export function VotePanel({
   form,
   vote,
-  audienceLink,
+  savedVotes = [],
+  onSelectVote,
   editing,
   onEdit,
   onOpen,
   onTransition,
-  onAudienceLink,
   popover,
 }: {
   form: VoteForm;
   vote: Interaction | null;
+  savedVotes?: Interaction[];
+  onSelectVote?: (id: string) => void;
   audienceLink: string | null;
   /** The editor is open (LiveView's `voteEdit`). */
   editing: boolean;
@@ -193,11 +195,14 @@ export function VotePanel({
   const pct = (id: string) => pctOf(vote, id);
   const left = vote?.timing.reveal_at ? Math.max(0, Math.ceil((Date.parse(vote.timing.reveal_at) - Date.now()) / 1000)) : null;
   const last = lastQuestion(vote);
-
-  const audienceBtn = (
-    <button className="rm-guest-modlink rm-vote-aud" onClick={onAudienceLink} title={audienceLink ?? "Copy a link the audience opens on their phones (no account)"}>
-      Audience link
-    </button>
+  const history = savedVotes.length > 1 && onSelectVote && (
+    <select aria-label="Saved room votes" value={vote?.id ?? ""}
+      className="rm-vote-in" onChange={event => onSelectVote(event.target.value)}>
+      <option value="">Current audience vote</option>
+      {savedVotes.map(item => <option key={item.id} value={item.id}>
+        {lastQuestion(item) ?? "Untitled vote"} · {item.state}
+      </option>)}
+    </select>
   );
 
   /** The transport for a live vote — one row that wraps under 220px. */
@@ -251,6 +256,7 @@ export function VotePanel({
     return (
       <div className="rm-strip rm-row-strip rm-vote-strip" data-live={live ? "1" : undefined}>
         <span className="rm-vote-tag">Vote</span>
+        {history}
         <span className="rm-vote-strip-q" title={last ?? undefined}>
           {live && vote ? (vote.spec.prompt || last) : last ?? "No vote"}
         </span>
@@ -291,9 +297,9 @@ export function VotePanel({
             {vote.state === "collecting" && "Collecting"}
             {vote.state === "revealed" && "Revealed"}
           </span>
-          {audienceBtn}
         </div>
         {vote.spec.prompt && <div className="rm-vote-prompt">{vote.spec.prompt}</div>}
+        {history}
         {vote.spec.options.map((o) => (
           <div key={o.id} className={`rm-vote-bar${vote.tally?.winner === o.id && vote.state !== "collecting" ? " win" : ""}`}>
             <span className="rm-vote-label">{o.label}</span>
@@ -316,7 +322,6 @@ export function VotePanel({
     <div className="rm-vote rm-vote-card">
       <div className="rm-vote-head">
         <span className="rm-vote-title">Vote</span>
-        {audienceBtn}
       </div>
       <div className="rm-vote-last">
         <span className="rm-vote-last-q" title={last ?? undefined}>
@@ -329,6 +334,7 @@ export function VotePanel({
           Set up
         </button>
       </div>
+      {history}
     </div>
   );
 }

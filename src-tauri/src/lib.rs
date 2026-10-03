@@ -35,6 +35,10 @@ pub struct AppState {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(all(have_engine, debug_assertions))]
+    if std::env::var_os("PRODUCER_PROGRAM_SELFTEST").is_some() {
+        live::program_audio::verification::run();
+    }
+    #[cfg(all(have_engine, debug_assertions))]
     if std::env::var_os("PRODUCER_DJ_SELFTEST").is_some() {
         live::dj::selftest_main();
     }
@@ -192,6 +196,10 @@ pub fn run() {
             live::commands::firstlight_resume,
             live::commands::live_set_video,
             live::commands::live_set_transform,
+            live::commands::live_apply_scene,
+            live::commands::live_program_audio_start,
+            live::commands::live_program_audio_read,
+            live::commands::live_program_audio_stop,
             live::commands::live_set_selection,
             live::commands::live_preview_cutouts,
             live::commands::live_source_devices,

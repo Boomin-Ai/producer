@@ -51,6 +51,7 @@
  */
 
 import { connectApiBase, inviteCodeFromJoinUrl } from "./guestSeat";
+import { sharedProgramCapture, type ProgramLease } from "./programCapture";
 import { uiLog } from "./ipc";
 
 type Session = { signaling_ticket: string; signaling_url: string; ice_servers: RTCIceServer[] };
@@ -430,6 +431,7 @@ export class ProgramMonitor implements ProgramSource {
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "signal", payload }));
     };
     let makingOffer = false;
+    const pendingIce: RTCIceCandidateInit[] = [];
     pc.onicecandidate = (e) => {
       if (e.candidate) send({ kind: "ice", candidate: e.candidate.toJSON() });
     };
@@ -483,12 +485,14 @@ export class ProgramMonitor implements ProgramSource {
           // POLITE peer (as the seat is): on a collision roll back, take theirs.
           if (collision) await pc.setLocalDescription({ type: "rollback" } as RTCLocalSessionDescriptionInit);
           await pc.setRemoteDescription(msg.description);
+          for (const candidate of pendingIce.splice(0)) await pc.addIceCandidate(candidate).catch(() => {});
           if (msg.description.type === "offer") {
             await pc.setLocalDescription();
             send({ kind: "sdp", description: pc.localDescription });
           }
         } else if (msg.kind === "ice" && msg.candidate) {
-          await pc.addIceCandidate(msg.candidate).catch(() => {});
+          if (pc.remoteDescription) await pc.addIceCandidate(msg.candidate).catch(() => {});
+          else if (pendingIce.length < 64) pendingIce.push(msg.candidate);
         } else if (msg.kind === "hello") {
           // The host (re)arrived: ask for the program again — a fresh host
           // peer holds no memory of the last request.
@@ -608,6 +612,9 @@ export interface MonitorSenderSpec {
   /** The seat asked for (or dropped) the thumb leg — the host turns the
    * engine's program thumb on while any sender wants it. */
   onThumbDemand?: (wanted: boolean) => void;
+  /** Dedicated program peer: camera input stays on the render page's main peer. */
+  peer?: "main" | "program";
+  audioBus?: 0 | 1;
 }
 
 export class MonitorSender {
@@ -620,11 +627,14 @@ export class MonitorSender {
   private ws: WebSocket | null = null;
   private dc: RTCDataChannel | null = null;
   private program: MediaStream | null = null;
+  private lease: ProgramLease | null = null;
+  private senders: RTCRtpSender[] = [];
   private attaching = false;
   private timer = 0;
   private generation = 0;
   private attempt = 0;
   private retryTimer = 0;
+  private statsTimer = 0;
   private roomInfo: MonitorRoomInfo | null = null;
   private thumbsWanted = false;
   private lastThumbSent = 0;
@@ -658,6 +668,7 @@ export class MonitorSender {
     this.generation += 1;
     window.clearTimeout(this.timer);
     window.clearTimeout(this.retryTimer);
+    window.clearTimeout(this.statsTimer);
     if (this.thumbsWanted) {
       this.thumbsWanted = false;
       this.spec.onThumbDemand?.(false);
@@ -707,6 +718,7 @@ export class MonitorSender {
   }
 
   private teardown() {
+    window.clearTimeout(this.statsTimer);
     try {
       this.dc?.close();
     } catch {
@@ -725,7 +737,9 @@ export class MonitorSender {
     this.dc = null;
     this.ws = null;
     this.pc = null;
-    this.program?.getTracks().forEach((t) => t.stop());
+    this.lease?.release();
+    this.lease = null;
+    this.senders = [];
     this.program = null;
     this.attaching = false;
     this.lastState = null;
@@ -753,55 +767,31 @@ export class MonitorSender {
     this.attaching = true;
     try {
       this.setState("searching");
-      // Any camera grant first, or labels are unreadable.
-      let devices = await navigator.mediaDevices.enumerateDevices();
-      let cam = pickProgramDevice(devices, this.spec.programLabel);
-      if (!cam || !cam.label) {
-        const probe = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }).catch((e: unknown) => {
-          monitorLog(`host[${this.tag}]: camera grant probe failed: ${String(e)}`);
-          return null;
-        });
-        probe?.getTracks().forEach((t) => t.stop());
-        devices = await navigator.mediaDevices.enumerateDevices();
-        cam = pickProgramDevice(devices, this.spec.programLabel);
+      const lease = await sharedProgramCapture.acquire(this.spec.audioBus ?? 0, this.spec.programLabel ?? undefined);
+      if (!this.alive || gen !== this.generation || this.pc !== pc) { lease.release(); return; }
+      this.lease = lease;
+      const stream = new MediaStream([lease.video, lease.audio]);
+      this.program = stream;
+      for (const [i, track] of stream.getTracks().entries()) {
+        if (this.senders[i]) await this.senders[i].replaceTrack(track);
+        else this.senders[i] = pc.addTrack(track, stream);
       }
-      if (gen !== this.generation || this.pc !== pc) return;
-      if (!cam) {
-        const labels = devices.filter((d) => d.kind === "videoinput").map((d) => d.label || "(no label)");
-        this.setState("no-device", `video inputs: ${labels.join(", ") || "none"}`);
-        this.scheduleAttach(pc, gen, tries);
-        return;
-      }
-      let prog: MediaStream | null = null;
-      let err: string | null = null;
-      try {
-        prog = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: { exact: cam.deviceId }, width: 640, height: 360, frameRate: 15 },
-          audio: false,
-        });
-      } catch (e) {
-        err = String(e);
-      }
-      if (gen !== this.generation || this.pc !== pc) {
-        prog?.getTracks().forEach((t) => t.stop());
-        return;
-      }
-      if (!prog) {
-        this.setState("denied", err ?? "getUserMedia returned nothing");
-        this.scheduleAttach(pc, gen, tries);
-        return;
-      }
-      this.program = prog;
-      const track = prog.getVideoTracks()[0];
-      const settings = track?.getSettings() ?? {};
-      prog.getVideoTracks().forEach((t) => pc.addTrack(t, prog));
-      this.setState("capturing", `${cam.label} ${settings.width ?? "?"}×${settings.height ?? "?"}@${settings.frameRate ?? "?"}`);
-      track?.addEventListener("ended", () => {
-        if (this.program !== prog) return;
-        monitorLog(`host[${this.tag}]: program track ended — looking again`);
-        this.program = null;
+      this.setState("capturing", "Shared native program and processed audio");
+      this.statsTimer = window.setTimeout(() => {
+        if (!this.alive || gen !== this.generation || this.pc !== pc) return;
+        void pc.getStats().then((stats) => {
+          stats.forEach((r) => {
+            if (r.type === "outbound-rtp" && (r.kind === "video" || r.mediaType === "video")) {
+              monitorLog(`host[${this.tag}]: return video frames=${r.framesEncoded ?? 0} bytes=${r.bytesSent ?? 0} connection=${pc.connectionState}`);
+            }
+          });
+        }).catch(() => {});
+      }, 6000);
+      lease.video.addEventListener("ended", () => {
+        if (this.lease !== lease) return;
+        lease.release(); this.lease = null; this.program = null;
         this.scheduleAttach(pc, gen, 0);
-      });
+      }, { once: true });
     } catch (e) {
       // No program is degraded, not broken: keep looking.
       this.setState("no-device", String(e));
@@ -846,8 +836,12 @@ export class MonitorSender {
     const pc = new RTCPeerConnection({ iceServers: session.ice_servers });
     this.pc = pc;
     // The data channel rides the first offer: thumbs, room info, state.
-    const dc = pc.createDataChannel(DATA_CHANNEL, { ordered: true });
+    // Guest return carries media only. Its stage/cue messages already ride
+    // the render peer. Avoid negotiating an empty video/data offer first:
+    // the first return offer must contain the actual camera and audio tracks.
+    const dc = this.spec.peer === "program" ? null : pc.createDataChannel(DATA_CHANNEL, { ordered: true });
     this.dc = dc;
+    if (dc) {
     dc.binaryType = "arraybuffer";
     dc.onopen = () => {
       monitorLog(`host[${this.tag}]: data channel open`);
@@ -867,12 +861,14 @@ export class MonitorSender {
         }
       }
     };
+    }
     const ws = signalingSocket(this.api, session);
     this.ws = ws;
     const send = (payload: unknown) => {
-      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "signal", payload }));
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "signal", payload: { ...(payload as object), peer: this.spec.peer ?? "main" } }));
     };
     let makingOffer = false;
+    const pendingIce: RTCIceCandidateInit[] = [];
     pc.onicecandidate = (e) => {
       if (e.candidate) send({ kind: "ice", candidate: e.candidate.toJSON() });
     };
@@ -898,6 +894,8 @@ export class MonitorSender {
       this.attempt = 0;
       monitorLog(`host[${this.tag}]: signaling open — hello`);
       send({ kind: "hello" });
+      // Guests request the return after their camera connection has settled.
+      // Starting here bypassed that iPhone delay and raced capture/decoding.
       if (pc.localDescription) send({ kind: "sdp", description: pc.localDescription });
     };
     ws.onclose = () => {
@@ -910,6 +908,10 @@ export class MonitorSender {
     ws.onmessage = async (event) => {
       const msg = parseFrame(event.data);
       if (!msg || gen !== this.generation) return;
+      // Older guest pages send readiness without a peer tag. Accept that
+      // control message while keeping their camera SDP/ICE on the main peer.
+      const legacyReady = this.spec.peer === "program" && (msg.peer ?? "main") === "main" && msg.kind === "program-ready";
+      if (!legacyReady && (msg.peer ?? "main") !== (this.spec.peer ?? "main")) return;
       try {
         if (msg.kind === "hello") {
           // The seat arrived. Kick negotiation the way the render page does.
@@ -920,7 +922,17 @@ export class MonitorSender {
         }
         if (msg.kind === "program-ready") {
           monitorLog(`host[${this.tag}]: seat program-ready`);
-          void this.attachProgram(pc, gen);
+          if (this.program) {
+            // A reload can replace the receiving peer while capture stays
+            // alive. Re-send a missed offer, or renew ICE for the new receiver.
+            if (pc.signalingState === "have-local-offer" && pc.localDescription) {
+              send({ kind: "sdp", description: pc.localDescription });
+            } else if (pc.signalingState === "stable") {
+              pc.restartIce();
+            }
+          } else {
+            void this.attachProgram(pc, gen);
+          }
           return;
         }
         if (msg.kind === "sdp" && msg.description) {
@@ -928,18 +940,22 @@ export class MonitorSender {
           // IMPOLITE peer (as the render page is): keep our own offer.
           if (collision) return;
           await pc.setRemoteDescription(msg.description);
+          for (const candidate of pendingIce.splice(0)) await pc.addIceCandidate(candidate).catch(() => {});
           if (msg.description.type === "offer") {
             await pc.setLocalDescription();
             send({ kind: "sdp", description: pc.localDescription });
           }
           return;
         }
-        if (msg.kind === "ice" && msg.candidate) await pc.addIceCandidate(msg.candidate).catch(() => {});
+        if (msg.kind === "ice" && msg.candidate) {
+          if (pc.remoteDescription) await pc.addIceCandidate(msg.candidate).catch(() => {});
+          else if (pendingIce.length < 64) pendingIce.push(msg.candidate);
+        }
       } catch (e) {
         monitorLog(`host[${this.tag}]: signal frame failed: ${String(e)}`);
       }
     };
     // Something to negotiate over before the program attaches.
-    pc.addTransceiver("video", { direction: "sendonly" });
+    if (this.spec.peer !== "program") pc.addTransceiver("video", { direction: "sendonly" });
   }
 }

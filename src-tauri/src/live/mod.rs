@@ -7,6 +7,9 @@ pub mod commands;
 pub mod creds;
 #[cfg(have_engine)]
 pub mod dj;
+pub mod presence;
+#[cfg(have_engine)]
+pub mod program_audio;
 
 /// The virtual camera's label, identical on both platforms: macOS bakes it
 /// into the camera extension (build-camera-extension.sh), Windows patches it
@@ -83,6 +86,24 @@ pub struct Live {
 }
 
 impl Live {
+    pub fn apply_scene(&self, changes: serde_json::Value) -> Result<serde_json::Value, String> {
+        #[cfg(have_engine)]
+        {
+            let changes =
+                serde_json::from_value(changes).map_err(|e| format!("Invalid scene: {e}"))?;
+            let sources = self
+                .handle
+                .as_ref()
+                .ok_or("live engine not running")?
+                .apply_scene(changes)?;
+            serde_json::to_value(sources).map_err(|e| e.to_string())
+        }
+        #[cfg(not(have_engine))]
+        {
+            let _ = changes;
+            Err("live engine not bundled in this build".into())
+        }
+    }
     pub fn clone_handle_for_dj(
         &self,
     ) -> Result<

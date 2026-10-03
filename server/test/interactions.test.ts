@@ -335,7 +335,11 @@ describe("[interaction] participant-side helpers (guest/src/interactions.ts)", (
     expect(list[0].state).toBe("collecting");
     expect(m.activeInteraction(list)?.id).toBe(d.id);
     list = m.mergeInteraction(list, { ...d, version: 2, state: "cancelled" });
-    expect(list).toHaveLength(0);
+    expect(list).toHaveLength(1);
+    expect(m.activeInteraction(list)).toBeNull();
+    list = m.mergeInteractionSnapshot(list, [d]);
+    expect(list[0].state).toBe("cancelled");
+    expect(m.activeInteraction(list)).toBeNull();
     list = m.mergeInteraction(list, { ...d, version: 3, state: "closed", tally: { total: 3, options: { a: 2, b: 1 }, winner: "a" } });
     expect(m.activeInteraction(list)?.state).toBe("closed");
     expect(m.shares(list[0].tally, list[0].spec.options)).toEqual({ a: 67, b: 33 });

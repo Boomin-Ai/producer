@@ -2,6 +2,7 @@ import { previewSession } from "../lib/previewSession";
 import { roomSession } from "../lib/roomSession";
 import { DJPanel } from "../components/DJPanel";
 import { DJSlider } from "../components/DJSlider";
+import { AudienceDestination, AudienceDestinationMark } from "../components/AudienceDestination";
 import type { LocalRecording } from "../lib/ipc";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -95,10 +96,9 @@ import {
 import { homePaintedMs, takeRoomClick } from "../lib/perf";
 import { RoomControlLink, type ControlFrame, type SceneCutFrame } from "../lib/roomControl";
 import { overlayBridge, type Contribution, type Interaction } from "../lib/ipc";
-import { mintJoinLink } from "../lib/roomLink";
+import { copyText, mintJoinLink } from "../lib/roomLink";
 import {
   BOOMIN_ROOM_CHANNELS,
-  boominAudienceUrl,
   boominStageConfig,
   boominVoteBody,
   contributionsInWindow,
@@ -138,11 +138,15 @@ import {
 } from "../lib/participants";
 import { useFeatureFlags } from "../lib/useFeatureFlags";
 import { panelAllowed } from "../lib/featureFlags";
+import { roomGuestInvite } from "../lib/ipc";
+import { AudiencePanel, type AudienceSnapshot, type AudienceHand } from "../components/AudiencePanel";
+import { AudienceSender, type MediaSignal } from "../lib/audienceMedia";
 import { MonitorSender, ProgramMonitor, monitorLog, monitorPlaceholder, type MonitorRoomInfo, type MonitorState, type ProgramSource } from "../lib/monitorFeed";
 import { SeatMediaLeg } from "../lib/seatMedia";
 import { ModBoard } from "./ModBoard";
 import { VotePanel, VoteEditor } from "./VotePanel";
 import { voteFormFor, firstSentence } from "../lib/votePanel";
+import { activeRoomVote, mergeRoomVote, newestVotes } from "../lib/roomVotes";
 import { DEFAULT_MOD_BOARD, MOD_BOARD_PREF, normalizeModBoard, seatFeeds, throwUpState, type ModBoardLayout } from "../lib/modBoard";
 import { PREFS_EVENT, prefGet, prefSet } from "../lib/prefs";
 import { team } from "../lib/access";
@@ -3910,8 +3914,7 @@ export function LiveView({
   const copyRoomLink = async () => {
     const url = guestLink ?? (await ensureGuestLink());
     if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
+    if (await copyText(url)) {
       // Deals are a Boomin thing; a self-hosted room has none.
       const boomin = isBoomin(await resolveActiveEndpoint().catch(() => null));
       notify(
@@ -3920,7 +3923,7 @@ export function LiveView({
           : "Room link copied — send it to your guests.",
         { key: "banner", tone: "success", check: true },
       );
-    } catch {
+    } else {
       notify(url, { key: "banner", tone: "info", ttl: 8000 });
     }
   };
@@ -4737,7 +4740,8 @@ export function LiveView({
   async function goLive() {
     dismissKey("banner");
     try {
-      await ipc.liveGoLive();
+      const ep = await resolveActiveEndpoint().catch(() => null);
+      await ipc.liveGoLive(ep && isBoomin(ep) ? ep.id : undefined, cfg.server_room_id ?? undefined);
       if (roomId) {
         ipc.liveUpdateRoom(roomId, { touchLive: true }).catch(() => {});
         markLiveRoom(roomId);
@@ -4878,6 +4882,31 @@ export function LiveView({
         bindings,
         exists,
       );
+      const immediate = opts?.cut || (p.transition ?? cfgRef.current.transition ?? { kind: "cut" }).kind === "cut";
+      if (immediate) {
+        const changes = new Map<string, { id: string; patch: LiveTransformPatch; muted?: boolean }>();
+        if (p.look) {
+          for (const item of liveNow) {
+            if (item.kind === "mod") continue;
+            if (item.kind === "guest") {
+              const slot = slotOfGuest(bindings, item.id);
+              if (slot && !(slot in look)) changes.set(item.id, { id: item.id, patch: { visible: false }, muted: true });
+            } else if (!(item.id in look)) {
+              changes.set(item.id, { id: item.id, patch: { visible: false } });
+            }
+          }
+        }
+        const ordered = [...entries.filter(([, l]) => !l.visible), ...entries.filter(([, l]) => l.visible).sort((a, b) => (a[1].z ?? 0) - (b[1].z ?? 0))];
+        let z = 0;
+        for (const [id, l] of ordered) {
+          const boundGuest = id.startsWith("guest-") && bindings[slotOfGuest(bindings, id) ?? ""] === id;
+          changes.set(id, { id, patch: lookPatch(l, !!l.visible, l.visible ? z++ : undefined), ...(boundGuest ? { muted: !l.visible } : {}) });
+        }
+        await ipc.liveApplyScene([...changes.values()]);
+        setActiveSceneId(p.id);
+        writeCfg({ ...cfgRef.current, active_scene: p.id });
+        return true;
+      }
       // Seen, not heard: a guest a scene hides is muted; one it shows speaks.
       for (const [id, l] of entries) {
         if (id.startsWith("guest-") && bindings[slotOfGuest(bindings, id) ?? ""] === id) {
@@ -5228,6 +5257,27 @@ export function LiveView({
   // holding room.scene — applied exactly as the host's own keypress, which
   // then persists active_scene and republishes.
   const controlRef = useRef<RoomControlLink | null>(null);
+  const audienceSenders = useRef(new Map<string, AudienceSender>());
+  const [audienceState, setAudienceState] = useState<AudienceSnapshot>({});
+  const [audienceHands, setAudienceHands] = useState<AudienceHand[]>([]);
+  const [audienceError, setAudienceError] = useState<string | null>(null);
+  const audienceAvailable = !!cfg.server_room_id;
+  const audienceEnabled = audienceAvailable && audienceState.enabled === true;
+  const sendAudienceFrame = (frame: Record<string, unknown>) => {
+    const sent = controlRef.current?.send(frame) ?? false;
+    if (!sent) {
+      setAudienceError("Reconnect to the room first.");
+      notifyError("Reconnect to the room first.", { key: "banner" });
+    }
+    return sent;
+  };
+  const audienceDestination = (compact = false) => audienceAvailable && <AudienceDestination
+    enabled={audienceEnabled}
+    available={isHost && typeof audienceState.enabled === "boolean"}
+    hosted={boominRoom}
+    compact={compact}
+    onChange={enabled => sendAudienceFrame({ type: "audience.configure", enabled, direct_limit: audienceState.direct_limit ?? 4 })}
+  />;
   const applySceneRef = useRef(applyScene);
   applySceneRef.current = applyScene;
   // ── Arming the first-room walkthrough ────────────────────────────────
@@ -5271,6 +5321,11 @@ export function LiveView({
     return () => window.removeEventListener(PREFS_EVENT, onPrefs);
   }, [isHost]);
 
+  const audienceStateRef = useRef(audienceState);
+  audienceStateRef.current = audienceState;
+  const sceneOrderRef = useRef({ epoch: 0, sequence: 0 });
+  const sceneExecutionRef = useRef<Promise<unknown>>(Promise.resolve());
+  const controlHasSnapshot = useRef(false);
   const scenesRef = useRef(scenes);
   scenesRef.current = scenes;
   useEffect(() => {
@@ -5280,8 +5335,16 @@ export function LiveView({
     // and takes the tally on `interactions:control` (the hub gates it).
     if (roomRole !== "host" && !boominRoom) return;
     const sid = cfg.server_room_id;
+    sceneOrderRef.current = { epoch: 0, sequence: 0 };
+    controlHasSnapshot.current = false;
     let link: RoomControlLink | null = null;
     let alive = true;
+    let votesRequest = 0;
+    votesRef.current.clear();
+    setVote(null);
+    setSavedVotes([]);
+    selectedVoteRef.current = null;
+    let restoreAudienceOnSnapshot = false;
     void (async () => {
       const ep = await resolveActiveEndpoint().catch(() => null);
       if (!ep || !alive) return;
@@ -5295,7 +5358,38 @@ export function LiveView({
         // and the host answers with its set's truth (lib/stageTruth.ts).
         subscribe: boomin ? [...BOOMIN_ROOM_CHANNELS] : ["interaction:host", "stage"],
         parse: boomin ? parseBoominFrame : undefined,
+        renewAfterMs: 105_000,
         onFrame: (frame: ControlFrame) => {
+          if (frame.type.startsWith("audience.")) {
+            const f = frame as Record<string, unknown>;
+            if (frame.type === "audience.snapshot") {
+              setAudienceState((previous) => ({ ...previous, ...f }));
+              if (restoreAudienceOnSnapshot && roomRoleRef.current === "host") {
+                restoreAudienceOnSnapshot = false;
+                // Restore the server's saved settings, not an empty React state.
+                // The scene publication was sent first; the room queue commits it
+                // before this publisher ownership check.
+                link?.send({ type: "audience.configure", enabled: f.enabled === true, direct_limit: f.direct_limit ?? 4 });
+              }
+            }
+            if (frame.type === "audience.presence") setAudienceState((previous) => ({ ...previous, online: Number(f.online) }));
+            if (frame.type === "audience.hands" && Array.isArray(f.hands)) setAudienceHands(f.hands as AudienceHand[]);
+            if (frame.type === "audience.chat") setAudienceState((previous) => ({ ...previous, chat: [...(previous.chat ?? []).slice(-99), f.message as NonNullable<AudienceSnapshot['chat']>[number]] }));
+            if (frame.type === "audience.invite.request" && roomRoleRef.current === "host" && typeof f.id === "string") void inviteAudience(f.id);
+            if (frame.type === "audience.error") setAudienceError(f.code === "publisher_busy"
+              ? "Another Producer session controls this room. Close that room session, then reopen this one."
+              : String(f.code));
+            if (frame.type === "audience.capacity") setAudienceError("The direct video limit has been reached. New viewers can still chat and vote. Increase the limit only if this computer and upload connection have spare capacity.");
+            if (frame.type === "audience.viewer" && roomRoleRef.current === "host" && typeof f.id === "string") {
+              const id = f.id;
+              audienceSenders.current.get(id)?.stop();
+              const sender = new AudienceSender((payload) => { link?.send({ type: "audience.signal", to: id, payload }); }, () => { link?.send({ type: "audience.unwatch", id }); setAudienceError("Audience video delivery failed. Check the virtual camera, native audio, and upload connection."); });
+              audienceSenders.current.set(id, sender);
+            }
+            if (frame.type === "audience.signal" && typeof f.from === "string") audienceSenders.current.get(f.from)?.signal(f.payload as MediaSignal);
+            if (frame.type === "audience.viewer.left" && typeof f.id === "string") { audienceSenders.current.get(f.id)?.stop(); audienceSenders.current.delete(f.id); }
+            return;
+          }
           if (frame.type === "interaction") {
             const ix = (frame as { payload?: unknown }).payload as Interaction | undefined;
             if (ix && typeof ix === "object" && typeof ix.id === "string") onInteractionFrame(ix);
@@ -5320,22 +5414,66 @@ export function LiveView({
             }
             return;
           }
-          if (frame.type !== "scene.cut") return;
-          const cut = frame as SceneCutFrame;
-          if (roomRoleRef.current !== "host") {
-            // A mod's Producer on Boomin: the host cut (or another mod did) —
-            // light it, never apply it to our own engine.
-            setHostScenes((h) => (h ? { ...h, active_scene_id: cut.scene_id } : h));
+          if (frame.type === "scene.state") {
+            controlHasSnapshot.current = true;
+            if (roomRoleRef.current !== "host") {
+              const snapshot = frame as unknown as { scenes: { id: string; name: string }[]; active_scene_id: string | null };
+              if (Array.isArray(snapshot.scenes)) setHostScenes(snapshot);
+            }
             return;
           }
-          // The engine ignores cuts for scenes not in the room's list —
-          // the DO already refused them, this is the second lock.
-          const sc = scenesRef.current.find((x) => x.id === cut.scene_id);
-          if (!sc) return;
-          void applySceneRef.current(sc, cut.transition === "cut" ? { cut: true } : undefined);
+          if (frame.type === "scene.command") {
+            const command = frame as unknown as { status: string; scene_id: string; error?: string };
+            if (command.status === "applied" && roomRoleRef.current !== "host") {
+              setHostScenes((h) => h ? { ...h, active_scene_id: command.scene_id } : h);
+            } else if (command.status === "failed" || command.status === "expired") {
+              notifyError(command.error ?? "Producer did not confirm the scene cut.", { key: "guests" });
+            }
+            return;
+          }
+          if (frame.type === "error" && !(frame as { channel?: string }).channel) {
+            const code = (frame as { code?: string }).code;
+            notifyError(code === "publisher_busy"
+              ? "Another Producer session controls this room. Close that room session, then reopen this one."
+              : code ?? "Room control unavailable", { key: "guests" });
+            return;
+          }
+          if (frame.type !== "scene.cut" || roomRoleRef.current !== "host") return;
+          const cut = frame as SceneCutFrame;
+          if (cut.command_id && typeof cut.sequence === "number" && typeof cut.epoch === "number") {
+            const previous = sceneOrderRef.current;
+            if (cut.epoch < previous.epoch || (cut.epoch === previous.epoch && cut.sequence <= previous.sequence)) return;
+            sceneOrderRef.current = { epoch: cut.epoch, sequence: cut.sequence };
+          }
+          // Serialize native cuts. A newer command supersedes work still waiting
+          // in our queue. Deadline uses the server's relative clock budget.
+          const deadline = performance.now() + Math.max(0, (cut.expires_at ?? cut.server_now + 4000) - cut.server_now);
+          sceneExecutionRef.current = sceneExecutionRef.current.catch(() => {}).then(async () => {
+            if (!alive || performance.now() >= deadline) return;
+            const newest = sceneOrderRef.current;
+            if (cut.command_id && (newest.epoch !== cut.epoch || newest.sequence !== cut.sequence)) return;
+            const sc = scenesRef.current.find((x) => x.id === cut.scene_id);
+            const applied = sc && await applySceneRef.current(sc, { cut: true });
+            if (cut.command_id) link?.acknowledge(cut.command_id, applied === true ? "applied" : "failed", applied === true ? undefined : "Scene could not be applied by the production engine");
+          });
         },
+        onClose: () => { votesRequest++; for (const sender of audienceSenders.current.values()) sender.stop(); audienceSenders.current.clear(); },
         onOpen: () => {
-          if (!boomin) link?.publishScenes(scenesRef.current, activeSceneRef.current);
+          setAudienceError(null);
+          const request = ++votesRequest;
+          void guestsIpc.interactions(ep.id, sid).then(({ interactions }) => {
+            if (!alive || request !== votesRequest) return;
+            for (const raw of interactions) {
+              const ix = boomin ? normalizeBoominInteraction(raw) : raw;
+              if (ix && ix.room_id === sid) onInteractionFrame(ix, true);
+            }
+          }).catch(() => {
+            if (alive && request === votesRequest) setAudienceError("Saved votes could not be loaded. Reopen the room to retry.");
+          });
+          if (roomRoleRef.current === "host") {
+            restoreAudienceOnSnapshot = true;
+            link?.publishScenes(scenesRef.current, activeSceneRef.current);
+          }
         },
       });
       controlRef.current = link;
@@ -5344,6 +5482,8 @@ export function LiveView({
     return () => {
       alive = false;
       link?.stop();
+      for (const sender of audienceSenders.current.values()) sender.stop();
+      audienceSenders.current.clear();
       if (controlRef.current === link) controlRef.current = null;
     };
   }, [room?.id, cfg.server_room_id, roomRole, boominRoom]);
@@ -5353,7 +5493,7 @@ export function LiveView({
   // validates against — debounced, and only when it actually changed.
   const publishedCfgRef = useRef<string | null>(null);
   useEffect(() => {
-    controlRef.current?.publishScenes(scenes, activeScene ?? null);
+    if (roomRole === "host") controlRef.current?.publishScenes(scenes, activeScene ?? null);
     if (!boominRoom || roomRole !== "host" || !cfg.server_room_id) return;
     const sid = cfg.server_room_id;
     const config = boominStageConfig(scenes, activeScene ?? null);
@@ -5390,7 +5530,7 @@ export function LiveView({
       const r = res?.rooms?.find((x) => x.id === sid);
       if (!alive || !r) return;
       const dir = scenesFromBoominConfig(r.config);
-      setHostScenes((h) => ({ scenes: dir.scenes, active_scene_id: dir.active_scene_id ?? h?.active_scene_id ?? null }));
+      if (!controlHasSnapshot.current) setHostScenes((h) => ({ scenes: dir.scenes, active_scene_id: dir.active_scene_id ?? h?.active_scene_id ?? null }));
     };
     void read();
     // The directory changes rarely (the host adds a scene); the active one
@@ -5403,14 +5543,20 @@ export function LiveView({
   }, [boominRoom, roomRole, cfg.server_room_id]);
   /** Boomin mod: cut the host's room to one of its scenes. */
   const cutHostScene = async (sceneId: string) => {
-    const ep = endpointRef.current;
-    if (!ep || !cfg.server_room_id) return;
+    if (!controlRef.current?.cut(sceneId)) notifyError("Reconnect to the room before cutting a scene.", { key: "guests" });
+  };
+  const inviteAudience = async (id: string) => {
+    const endpoint = endpointRef.current;
+    if (!endpoint || !cfg.server_room_id) return;
     try {
-      await guestsIpc.sceneCut(ep, cfg.server_room_id, sceneId);
-      setHostScenes((h) => (h ? { ...h, active_scene_id: sceneId } : h));
-    } catch (e) {
-      notifyError(e, { key: "guests" });
-    }
+      if (roomRoleRef.current !== "host") {
+        if (!controlRef.current?.send({type:"audience.invite.request", id})) throw new Error("Reconnect to the room first");
+        return;
+      }
+      const result = await roomGuestInvite(endpoint, cfg.server_room_id, audienceHands.find(h => h.id === id)?.name ?? "Audience guest");
+      const url = (result as { invite_url?: string }).invite_url;
+      if (!url || !controlRef.current?.send({ type: "audience.invite", id, url })) throw new Error("Could not deliver the stage invitation");
+    } catch (error) { notifyError(error, { key: "guests" }); }
   };
   const hostScenesRef = useRef(hostScenes);
   hostScenesRef.current = hostScenes;
@@ -5429,10 +5575,9 @@ export function LiveView({
         writeCfg({ ...cfgRef.current, server_room_id: sid });
       }
       const res = await guestsIpc.modLink(ep.id, sid!);
-      try {
-        await navigator.clipboard.writeText(res.mod_url);
+      if (await copyText(res.mod_url)) {
         notify("Mod link copied — whoever opens it in Producer can admit, stage, order, remove and cut scenes. They never appear on the set.", { key: "banner", tone: "success", check: true, ttl: 6000 });
-      } catch {
+      } else {
         notify(res.mod_url, { key: "banner", tone: "info", ttl: 8000 });
       }
     } catch (e) {
@@ -5448,19 +5593,25 @@ export function LiveView({
   // what is on air follows the host's clock (INTERACTIVE.md decision 1).
   const [vote, setVote] = useState<Interaction | null>(null);
   const votesRef = useRef<Map<string, Interaction>>(new Map());
+  const [savedVotes, setSavedVotes] = useState<Interaction[]>([]);
+  const selectedVoteRef = useRef<string | null>(null);
   const [audienceLink, setAudienceLink] = useState<string | null>(null);
-  const onInteractionFrame = (ix: Interaction) => {
-    const cur = votesRef.current.get(ix.id);
-    if (cur && cur.version > ix.version) return;
-    votesRef.current.set(ix.id, ix);
-    // The one to show: collecting first, else the newest not cancelled.
+  const refreshVote = () => {
     const all = [...votesRef.current.values()];
-    const collecting = all.filter((i) => i.state === "collecting");
-    const alive = all.filter((i) => i.state !== "cancelled");
-    const shown = collecting[collecting.length - 1] ?? alive[alive.length - 1] ?? null;
+    const saved = newestVotes(all).filter(v => v.type === "vote" && v.state !== "cancelled" && v.state !== "draft");
+    setSavedVotes(saved);
+    const selected = saved.find(v => v.id === selectedVoteRef.current);
+    const shown = selected ?? activeRoomVote(all);
+    if (!selected) selectedVoteRef.current = null;
     setVote(shown);
-    overlayBridge.set(shown ? { interaction: shown, server_now: shown.server_now } : null).catch(() => {});
+    // The on-air overlay always follows the active vote, not a host browsing history.
+    const active = activeRoomVote(all);
+    overlayBridge.set(active ? { interaction: active, server_now: active.server_now } : null).catch(() => {});
   };
+  const onInteractionFrame = (ix: Interaction, snapshot = false) => {
+    if (mergeRoomVote(votesRef.current, ix, snapshot)) refreshVote();
+  };
+  const selectSavedVote = (id: string) => { selectedVoteRef.current = id || null; refreshVote(); };
 
   /** The vote bar lives in an `overlay` extra pointed at the local bridge.
    * Created once per room; re-pointed if the bridge moved (port). */
@@ -5563,33 +5714,50 @@ export function LiveView({
     }
   };
 
+  const resolveAudienceShare = async () => {
+    const ep = await resolveActiveEndpoint();
+    if (!ep || !cfg.server_room_id) throw new Error("Open the room on a server first.");
+    let url: string;
+    let hint: string;
+    if (isBoomin(ep)) {
+      url = `https://boomin.ai/audience/${cfg.server_room_id}`;
+      hint = `Audience link copied — ${url}. Open audience access to let anyone with this link watch and participate.`;
+    } else {
+      const res = await guestsIpc.audienceLink(ep.id, cfg.server_room_id);
+      url = res.url;
+      hint = `Audience link copied — ${res.url} (code ${res.code}). Works while you're live; no account needed.`;
+    }
+    setAudienceLink(url);
+    return { url, hint };
+  };
+
   const copyAudienceLink = async () => {
     try {
-      const ep = await resolveActiveEndpoint();
-      if (!ep || !cfg.server_room_id) throw new Error("Open the room on a server first.");
-      let url: string;
-      let hint: string;
-      if (isBoomin(ep)) {
-        // Boomin: no room-level code — the link is the vote's own page on
-        // boomin.ai (`/a/<interaction id>`), phones answer through the
-        // audience input route with a device id they keep.
-        if (!vote || vote.state === "closed" || vote.state === "cancelled") throw new Error("Open a vote first — on Boomin the audience link is per vote.");
-        url = boominAudienceUrl(vote.id);
-        hint = `Audience link copied — ${url}. Phones answer this vote; no account needed.`;
-      } else {
-        const res = await guestsIpc.audienceLink(ep.id, cfg.server_room_id);
-        url = res.url;
-        hint = `Audience link copied — ${res.url} (code ${res.code}). Works while you're live; no account needed.`;
-      }
-      setAudienceLink(url);
-      try {
-        await navigator.clipboard.writeText(url);
+      const { url, hint } = await resolveAudienceShare();
+      if (await copyText(url)) {
         notify(hint, { key: "banner", tone: "success", check: true, ttl: 6000 });
-      } catch {
+      } else {
         notify(url, { key: "banner", tone: "info", ttl: 8000 });
       }
     } catch (e) {
       notifyError(e, { key: "guests" });
+    }
+  };
+
+  const openAudienceSocial = async (site: string) => {
+    try {
+      if (site === "https://x.com/") {
+        const { url } = await resolveAudienceShare();
+        const parameters = new URLSearchParams({
+          text: `Join me for ${(room?.name ?? "my live show").slice(0, 120)}! Watch, chat, and join the conversation.`,
+          url,
+        });
+        await openUrl(`https://x.com/intent/tweet?${parameters}`);
+      } else {
+        await openUrl(site);
+      }
+    } catch (error) {
+      notifyError(error, { key: "banner" });
     }
   };
 
@@ -5974,7 +6142,7 @@ export function LiveView({
         // return leg carries the program then, and a second host peer on
         // the same channel would collide. The engine never sees these.
         if (endpointBaseRef.current) {
-          const wantedMonitors = new Map(full.filter((g) => isMonitor(g) && !isMediaSeat(g) && !!g.render_url).map((g) => [g.id, g] as const));
+          const wantedMonitors = new Map(full.filter((g) => resolveGrants(g).has("media.return_feed") && !!g.render_url).map((g) => [g.id, g] as const));
           for (const [id, sender] of monitorSenders.current) {
             if (!wantedMonitors.has(id)) {
               sender.stop();
@@ -5990,6 +6158,8 @@ export function LiveView({
               apiBase: endpointBaseRef.current,
               programLabel: vcamStateRef.current?.device_name,
               tag: g.display_name ?? id.slice(0, 8),
+              peer: isMonitor(g) && !isMediaSeat(g) ? "main" : "program",
+              audioBus: isMonitor(g) && !isMediaSeat(g) ? 0 : 1,
               onThumbDemand: () => monitorThumbDemand(),
             });
             sender.setRoomInfo(roomInfoRef.current);
@@ -6014,6 +6184,7 @@ export function LiveView({
           // Anyone whose render page carries the program counts: monitor seats,
           // and any seat or guest holding media.return_feed.
           const wantsProgram = full.filter((g) => !!g.render_url && resolveGrants(g).has("media.return_feed"));
+          if (audienceStateRef.current.enabled) wantsProgram.push({} as RoomGuest);
           const wantVcam = wantedMonitors.size > 0 || wantsProgram.length > 0;
           const vs = vcamStateRef.current;
           if (wantVcam && !vcamOnRef.current && Date.now() > vcamAutoNextTry.current) {
@@ -6083,7 +6254,7 @@ export function LiveView({
               if (micDeviceLabel) u.searchParams.set("mic", micDeviceLabel);
               u.searchParams.set("program", vcamState?.device_name ?? "Producer Virtual Camera");
               // No media.return_feed → the page never opens the return leg.
-              if (!resolveGrants(g).has("media.return_feed")) u.searchParams.set("feed", "0");
+              u.searchParams.set("feed", "0");
             }
             // Guests only here — a seat's feed is a MOD source (below).
             const name = g.display_name || "Guest";
@@ -6135,6 +6306,7 @@ export function LiveView({
           for (const [id, { seat, track }] of wantedMods) {
             if (presentMods.has(id)) continue;
             const u = new URL(seat.render_url!);
+            u.searchParams.set("feed", "0");
             if (track === "screen") {
               u.searchParams.set("track", "screen");
             } else {
@@ -6904,9 +7076,12 @@ export function LiveView({
         }
         const form = voteFormFor(formDockOf("vote"), { state: vote?.state ?? null, editing: voteEdit });
         return (
+          <AudiencePanel state={audienceState} hands={audienceHands} host={isHost} hosted={boominRoom} compact={form === "strip"} send={sendAudienceFrame} share={() => void copyAudienceLink()} openSocial={site => void openAudienceSocial(site)} invite={(id) => void inviteAudience(id)} error={audienceError}>
           <VotePanel
             form={form}
             vote={vote}
+            savedVotes={savedVotes}
+            onSelectVote={selectSavedVote}
             audienceLink={audienceLink}
             editing={voteEdit}
             onEdit={(open, anchor) => {
@@ -6922,6 +7097,7 @@ export function LiveView({
               </Pop>
             }
           />
+          </AudiencePanel>
         );
       }
       case "mods":
@@ -6987,7 +7163,7 @@ export function LiveView({
         // header popover and Home settings.
         const emptyChannels = destinations.length === 0 && (
           <div className="chn-empty">
-            <p>No live channels connected. Add a destination in Settings → Integrations.</p>
+            <p>{audienceAvailable ? "Add external channels in Settings → Integrations." : "No live channels connected. Add a destination in Settings → Integrations."}</p>
             {onOpenIntegrations && (
               <button className="rm-chn-open" onClick={onOpenIntegrations}>
                 Open Integrations
@@ -7000,7 +7176,8 @@ export function LiveView({
           // Top bar: the LOGO is the toggle. Lit = armed. Nothing else.
           return (
             <div className="chn chn-icons">
-              {emptyChannels}
+              {audienceDestination(true)}
+              {!audienceAvailable && emptyChannels}
               {destinations.map((d) => {
                 const st = statuses.get(d.id);
                 return (
@@ -7035,6 +7212,7 @@ export function LiveView({
         }
         return (
           <div className="chn">
+            {audienceDestination()}
             {destinations.map((d) => {
               const st = statuses.get(d.id);
               const phase = st ? PHASE_COPY[st.phase] ?? PHASE_COPY.idle : PHASE_COPY.idle;
@@ -7936,20 +8114,22 @@ export function LiveView({
               setDestsOpen((o) => !o);
             }}
           >
+            {audienceEnabled && <><span className="hd-chan-logo"><AudienceDestinationMark /></span><span>{boominRoom ? "Boomin" : "Audience"}</span></>}
             {enabledDests.length > 0 ? (
               enabledDests.map((d) => (
                 <span key={d.id} className="hd-chan-logo">
                   {PLATFORM_LOGO[d.preset] ?? <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />}
                 </span>
               ))
-            ) : (
+            ) : !audienceEnabled ? (
               <span>Channels</span>
-            )}
+            ) : null}
             {ic.chev}
           </button>
           {destsOpen && (
             <Pop anchor={popAnchor} align="right" className="rm-pop-dests">
               <div className="rm-pop-title">CHANNELS</div>
+              {audienceDestination()}
               {destinations.map((d) => {
                 const st = statuses.get(d.id);
                 const phase = st ? PHASE_COPY[st.phase] ?? PHASE_COPY.idle : PHASE_COPY.idle;
@@ -7975,7 +8155,7 @@ export function LiveView({
               })}
               {destinations.length === 0 && (
                 <div className="rm-chn-empty">
-                  <div className="rm-rows-empty">Connect a channel first</div>
+                  <div className="rm-rows-empty">{audienceAvailable ? "Add external channels" : "Connect a channel first"}</div>
                   {onOpenIntegrations && (
                     <button
                       className="rm-chn-open"
@@ -8057,7 +8237,9 @@ export function LiveView({
               className="hd-golive"
               onClick={goLive}
               disabled={!engineOk || enabledDests.length === 0}
-              title={enabledDests.length === 0 ? "Arm a channel first" : undefined}
+              title={audienceEnabled
+                ? "Boomin audience access is open. Select an external channel to stream there too."
+                : enabledDests.length === 0 ? "Select an external channel, or open audience access in Channels." : undefined}
             >
               {ic.onair}
               GO LIVE
@@ -8148,17 +8330,21 @@ export function LiveView({
           scenes={hostScenes}
           onCut={(id) => void cutHostScene(id)}
           vote={
-            roomAccess.can.interactions ? (
-              <VotePanel
+            roomAccess.can.interactions || roomAccess.can.control ? (
+              <AudiencePanel state={audienceState} hands={audienceHands} host={false} hosted={boominRoom} controls={roomAccess.can.control} send={(frame)=>controlRef.current?.send(frame)??false} share={()=>void copyAudienceLink()} openSocial={site => void openAudienceSocial(site)} invite={(id)=>void inviteAudience(id)} error={audienceError}>
+              {roomAccess.can.interactions && <VotePanel
                 form={voteFormFor("left", { state: vote?.state ?? null, editing: voteEdit })}
                 vote={vote}
+                savedVotes={savedVotes}
+                onSelectVote={selectSavedVote}
                 audienceLink={audienceLink}
                 editing={voteEdit}
                 onEdit={(open) => setVoteEdit(open)}
                 onOpen={(i) => void openVote(i)}
                 onTransition={(t, hold) => void transitionVote(t, hold)}
                 onAudienceLink={() => void copyAudienceLink()}
-              />
+              />}
+              </AudiencePanel>
             ) : undefined
           }
           voteLive={!!vote && vote.state !== "closed" && vote.state !== "cancelled"}
@@ -8751,7 +8937,7 @@ export function LiveView({
         )}
         {engineOk && (
           <span className="rm-foot-item dim-inline">
-            {!streaming && enabledDests.length === 0 ? "No channels · " : ""}
+            {audienceEnabled ? `${boominRoom ? "Boomin" : "Audience"} open · ` : !streaming && enabledDests.length === 0 ? "No channels · " : ""}
             {(snapshot?.fps ?? 0).toFixed(0)} fps
           </span>
         )}

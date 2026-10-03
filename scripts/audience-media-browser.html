@@ -1,0 +1,70 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Interactive publisher regression</title>
+<button id="run">Run media check</button>
+<video id="one" autoplay playsinline muted></video>
+<video id="two" autoplay playsinline muted></video>
+<script type="module">
+import { AudienceSender } from '/src/lib/audienceMedia.ts';
+import { sharedProgramCapture } from '/src/lib/programCapture.ts';
+import { ProgramReceiver } from '/server/guest/src/programReceiver.ts';
+import { GuestMesh } from '/server/guest/src/guestMesh.ts';
+window.runAudienceTest = async () => {
+  const canvas=document.createElement('canvas');canvas.width=320;canvas.height=180;
+  const context=canvas.getContext('2d');let frame=0, captures=0, starts=0, stops=0, phase=0, failures=0;
+  const draw=setInterval(()=>{context.fillStyle=++frame%2?'#ea9841':'#334455';context.fillRect(0,0,320,180);},66);
+  const program=canvas.captureStream(15), media=navigator.mediaDevices;
+  const originalCapture=media.getUserMedia.bind(media), originalEnumerate=media.enumerateDevices.bind(media), originalTauri=window.__TAURI_INTERNALS__;
+  media.enumerateDevices=async()=>[{kind:'videoinput',deviceId:'program-test',label:'Producer Virtual Camera'}];
+  media.getUserMedia=async constraints=>{if(constraints.audio)throw new Error('Raw microphone must never be captured');captures++;return program;};
+  window.__TAURI_INTERNALS__={invoke:async command=>{
+    if(command==='live_program_audio_start'){starts++;return;}
+    if(command==='live_program_audio_stop'){stops++;return;}
+    if(command==='live_program_audio_read'){
+      const frames=960,buffer=new ArrayBuffer((16+frames*8)*2),view=new DataView(buffer);
+      for(let bus=0;bus<2;bus++){const pos=bus*(16+frames*8);view.setUint32(pos,bus,true);view.setUint32(pos+4,frames,true);
+        for(let i=0;i<frames;i++){const sample=Math.sin((phase+i)*2*Math.PI*440/48000)*0.2;view.setFloat32(pos+16+i*8,sample,true);view.setFloat32(pos+20+i*8,sample,true);}}
+      phase+=frames;return buffer;
+    }
+    throw new Error(`Unexpected IPC ${command}`);
+  }};
+  const legs=[];
+  try {
+    for(const name of ['one','two']){
+      let sender;const receiver=new ProgramReceiver([],signal=>sender.signal(signal),event=>{document.getElementById(name).srcObject=event.streams[0];void document.getElementById(name).play().catch(()=>{});});
+      sender=new AudienceSender(signal=>receiver.handle(signal),()=>failures++);legs.push({sender,receiver,name});
+    }
+    const began=Date.now();let decoded=[0,0], energies=[0,0];
+    while(Date.now()-began<15000){await new Promise(resolve=>setTimeout(resolve,100));
+      for(let i=0;i<legs.length;i++){const pc=legs[i].receiver.pc;if(!pc)continue;const stats=await pc.getStats();stats.forEach(r=>{if(r.type==='inbound-rtp'&&r.kind==='video')decoded[i]=r.framesDecoded||0;if(r.type==='inbound-rtp'&&r.kind==='audio')energies[i]=r.totalAudioEnergy||0;});}
+      if(decoded.every(n=>n>5)&&energies.every(n=>n>0.001))break;
+    }
+    legs[0].sender.stop();legs[0].receiver.close();
+    const firstReleasedStillLive=program.getVideoTracks()[0].readyState==='live';
+    legs[1].sender.stop();legs[1].receiver.close();
+    await new Promise(resolve=>setTimeout(resolve,30));
+    return {decoded,energies,captures,starts,stops,failures,contextState:sharedProgramCapture.context?.state,peers:legs.map(leg=>({sender:leg.sender.pc.connectionState,receiver:leg.receiver.pc?.connectionState,senderSdp:leg.sender.pc.localDescription?.type})),firstReleasedStillLive,lastReleasedEnded:program.getVideoTracks()[0].readyState==='ended'};
+  } finally {
+    legs.forEach(({sender,receiver})=>{sender.stop();receiver.close();});sharedProgramCapture.stop();clearInterval(draw);program.getTracks().forEach(t=>t.stop());
+    media.getUserMedia=originalCapture;media.enumerateDevices=originalEnumerate;window.__TAURI_INTERNALS__=originalTauri;
+  }
+};
+window.runMeshTest = async () => {
+  const context=new AudioContext();await context.resume();const oscillator=context.createOscillator();const destination=context.createMediaStreamDestination();oscillator.connect(destination);oscillator.start();
+  const original=destination.stream.getAudioTracks()[0];let one,two;
+  one=new GuestMesh({selfId:'one',iceServers:[],localStream:()=>destination.stream,send:(to,frame)=>void two.onSignal('one',frame),onPeerAudio:()=>{}});
+  two=new GuestMesh({selfId:'two',iceServers:[],localStream:()=>destination.stream,send:(to,frame)=>void one.onSignal('two',frame),onPeerAudio:()=>{}});
+  const stage={version:1,on_stage:['one','two']};
+  try {
+    one.applyStage(stage,'host');two.applyStage(stage,'host');
+    await new Promise(resolve=>setTimeout(resolve,1500));
+    const pc=one.peers.get('two').pc;
+    const connected=pc.connectionState==='connected';
+    one.suspend();const suspended=one.peers.get('two').audio.sender.track.enabled===false;
+    const sourcePreserved=original.enabled;
+    one.applyStage(stage,'host');const resumed=one.peers.get('two').audio.sender.track.enabled===true;
+    return {connected,suspended,sourcePreserved,resumed};
+  } finally {one.close();two.close();destination.stream.getTracks().forEach(t=>t.stop());oscillator.stop();await context.close();}
+};
+document.getElementById('run').onclick=()=>{window.resultPromise=window.runAudienceTest().then(async audience=>({...audience,mesh:await window.runMeshTest()}));};
+</script>

@@ -68,6 +68,8 @@ export default function GuestJoinPage({ code }: { code: string }) {
   // host's voice arrives separately on #host-return.
   const programRef = useRef<HTMLVideoElement | null>(null);
   const [hasProgram, setHasProgram] = useState(false);
+  const [programPlaying, setProgramPlaying] = useState(false);
+  const programStreamRef = useRef<MediaStream | null>(null);
   const [cameraOff, setCameraOff] = useState(false);
 
   const previewRef = useRef<HTMLVideoElement | null>(null);
@@ -160,6 +162,14 @@ export default function GuestJoinPage({ code }: { code: string }) {
     linkRef.current?.close();
   }, []);
 
+  useEffect(() => {
+    const video = programRef.current;
+    if (video && programStreamRef.current) {
+      if (video.srcObject !== programStreamRef.current) video.srcObject = programStreamRef.current;
+      if (hasProgram && video.paused) void video.play().catch(() => {});
+    }
+  });
+
   const goLive = useCallback(async () => {
     // No stream is fine when no media grant exists: they join to receive.
     if (!code || (!streamRef.current && (can.camera || can.mic))) return;
@@ -220,6 +230,7 @@ export default function GuestJoinPage({ code }: { code: string }) {
         onProgram: (stream) => {
           // The program return — show the guest what is actually on air.
           if (!canRef.current.returnFeed) return;
+          programStreamRef.current = stream;
           const v = programRef.current;
           if (v) { v.srcObject = stream; void v.play().catch(() => {}); }
           setHasProgram(!!stream);
@@ -285,6 +296,9 @@ export default function GuestJoinPage({ code }: { code: string }) {
         <div style={S.stage}>
           <video
             ref={programRef}
+            onPlaying={() => setProgramPlaying(true)}
+            onPause={() => setProgramPlaying(false)}
+            onWaiting={() => setProgramPlaying(false)}
             autoPlay
             playsInline
             muted
@@ -338,6 +352,13 @@ export default function GuestJoinPage({ code }: { code: string }) {
           </div>
         )}
 
+        {phase === "live" && can.returnFeed && !programPlaying && (
+          <button style={S.ghost} onClick={() => {
+            linkRef.current?.resumeProgram();
+            const video = programRef.current;
+            if (video && programStreamRef.current) { video.srcObject = programStreamRef.current; void video.play().catch(() => {}); }
+          }}>Watch the show</button>
+        )}
         <div style={S.controls}>
           {can.mic && <button onClick={toggleMute} style={S.ghost}>{muted ? "Unmute" : "Mute"}</button>}
           {can.camera && <button onClick={toggleCamera} style={S.ghost}>{cameraOff ? "Start camera" : "Stop camera"}</button>}

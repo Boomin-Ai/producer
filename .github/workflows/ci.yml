@@ -18,6 +18,9 @@ jobs:
       - run: bun run test:manager-cache
       - run: node scripts/test-preview-session.mjs
       - run: node scripts/test-room-session.mjs
+      - run: node scripts/test-room-control.mjs
+      - run: node scripts/test-room-votes.mjs
+      - run: node scripts/test-program-readiness.mjs
       - run: node scripts/test-guest-return.mjs
       - run: node --experimental-strip-types --test tests/slotMath.test.ts
       - run: node --experimental-strip-types --test tests/stageTruth.test.ts
