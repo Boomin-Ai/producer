@@ -49,6 +49,39 @@ export default {
       return Response.redirect(url.toString(), 301);
     }
 
+    // Public room pages reuse Boomin's dedicated room bundle. Only HTML and
+    // assets pass through this site; API/WebSocket/media paths stay unchanged.
+    const branded = /^\/[^/]+\/(?:audience\/[^/]+|guest\/[^/]+\/(?:gr_|gi_)[A-Za-z0-9_-]+)\/?$/.test(url.pathname);
+    const roomAsset = url.pathname.startsWith("/room-assets/");
+    const legacy = /^\/audience\/[^/]+\/?$/.test(url.pathname) || /^\/connect\/guest\/(?:room\/)?(?:gr_|gi_)[A-Za-z0-9_-]+\/?$/.test(url.pathname);
+    if (branded || roomAsset || legacy) {
+      if (!["GET", "HEAD"].includes(req.method)) return new Response("Method not allowed", { status: 405 });
+      const upstreamUrl = new URL(url.pathname + url.search, "https://boomin.ai");
+      if (legacy) { upstreamUrl.pathname = "/room-assets/room.html"; upstreamUrl.search = ""; }
+      const upstream = await fetch(upstreamUrl, {
+        headers: { accept: roomAsset ? "*/*" : "text/html" },
+        redirect: "manual",
+      });
+      if (!upstream.ok || (roomAsset && upstream.headers.get("content-type")?.includes("text/html")))
+        return new Response("The room page is temporarily unavailable. Please try again.", { status: 503, headers: { "Cache-Control": "no-store" } });
+      const headers = new Headers(upstream.headers);
+      headers.delete("set-cookie");
+      headers.set("Cache-Control", roomAsset ? "no-cache" : "no-store");
+      headers.set("Referrer-Policy", "no-referrer");
+      if (roomAsset) return new Response(req.method === "HEAD" ? null : upstream.body, { status: upstream.status, headers });
+      // The upstream shell contains no credentials in its metadata. Keep the
+      // public brand and canonical audience URL on the selected domain.
+      headers.delete("content-length");
+      headers.delete("content-encoding");
+      let html = await upstream.text();
+      html = html.replace(/<meta property="og:site_name" content="[^"]*">/, '<meta property="og:site_name" content="Producer">');
+      if (!url.pathname.includes("/guest/")) {
+        const escape = value => value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        html = html.replace(/<meta property="og:url" content="[^"]*">/, `<meta property="og:url" content="${escape(url.origin + url.pathname)}">`);
+      }
+      return new Response(req.method === "HEAD" ? null : html, { status: upstream.status, headers });
+    }
+
     if (url.pathname === "/download/meta.json") {
       const rel = await latestRelease();
       if (!rel) return new Response("{}", { status: 503, headers: { "content-type": "application/json" } });

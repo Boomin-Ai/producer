@@ -25,6 +25,8 @@ jobs:
       - run: node --experimental-strip-types --test tests/slotMath.test.ts
       - run: node --experimental-strip-types --test tests/stageTruth.test.ts
       - run: node --experimental-strip-types --test tests/featureFlags.test.ts
+      - run: node --experimental-strip-types --test tests/shareDomain.test.ts
+      - run: node --test tests/siteRoomRoutes.test.mjs
 
   server:
     runs-on: ubuntu-latest
