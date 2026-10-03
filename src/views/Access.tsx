@@ -1,3 +1,4 @@
+import { formatGuestLink } from "../lib/hostedShare";
 // SETTINGS → ACCESS. Who may do what on this workspace's server, in that
 // server's own nouns (docs/CONTRIBUTIONS.md):
 //
@@ -583,7 +584,9 @@ function RoomMods({ endpoint, room, local }: { endpoint: EndpointInfo; room: { s
   };
   const setDoorState = async (input: { enabled: boolean; rotate?: boolean; auto_admit?: boolean }) => {
     const r = await guestDoor.set(endpoint.id, room.sid, input);
-    setDoor({ enabled: r.enabled, auto_admit: r.auto_admit, join_url: r.join_url ?? (input.rotate ? null : door.join_url) });
+    const original = r.join_url ?? (input.rotate ? null : door.join_url);
+    const url = original ? await formatGuestLink(endpoint, room.sid, original) : null;
+    setDoor({ enabled: r.enabled, auto_admit: r.auto_admit, join_url: url });
     setErr(null);
   };
   const ask = (key: string, text: string, run: () => Promise<unknown>) => setConfirm({ key, text, run });
@@ -650,7 +653,7 @@ function RoomMods({ endpoint, room, local }: { endpoint: EndpointInfo; room: { s
         {door.join_url && (
           <div className="acc-minted">
             <code>{door.join_url}</code>
-            <button className="cr-ghost" onClick={() => void copyText(door.join_url!)}>Copy</button>
+            <button className="cr-ghost" onClick={() => void formatGuestLink(endpoint, room.sid, door.join_url!).then(copyText).catch(e => setErr(errText(e)))}>Copy</button>
           </div>
         )}
         <div className="cr-sheet-row">

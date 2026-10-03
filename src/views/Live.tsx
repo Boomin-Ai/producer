@@ -1,3 +1,4 @@
+import { formatGuestLink, hostedAudienceLink } from "../lib/hostedShare";
 import { previewSession } from "../lib/previewSession";
 import { roomSession } from "../lib/roomSession";
 import { DJPanel } from "../components/DJPanel";
@@ -3888,8 +3889,7 @@ export function LiveView({
 
   /** Mint (or reuse) the room's shareable link. */
   const ensureGuestLink = async () => {
-    if (guestLink) return guestLink;
-    try {
+        try {
       const ep = await resolveActiveEndpoint();
       if (!ep) throw new Error("Connect a workspace first.");
       let sid = cfg.server_room_id;
@@ -3898,7 +3898,8 @@ export function LiveView({
         sid = reg.room.id;
         writeCfg({ ...cfgRef.current, server_room_id: sid });
       }
-      const url = await mintJoinLink(ep.id, sid!);
+      const original = guestLink ?? await mintJoinLink(ep.id, sid!);
+      const url = await formatGuestLink(ep, sid!, original);
       setGuestLink(url);
       writeCfg({ ...cfgRef.current, guest_link: url });
       return url;
@@ -3912,7 +3913,7 @@ export function LiveView({
    * panel's link button go through here — the panel button used to copy
    * silently (and swallow clipboard failures), which read as "doesn't work". */
   const copyRoomLink = async () => {
-    const url = guestLink ?? (await ensureGuestLink());
+    const url = await ensureGuestLink();
     if (!url) return;
     if (await copyText(url)) {
       // Deals are a Boomin thing; a self-hosted room has none.
@@ -5554,7 +5555,8 @@ export function LiveView({
         return;
       }
       const result = await roomGuestInvite(endpoint, cfg.server_room_id, audienceHands.find(h => h.id === id)?.name ?? "Audience guest");
-      const url = (result as { invite_url?: string }).invite_url;
+      const rawUrl = (result as { invite_url?: string }).invite_url;
+      const url = rawUrl ? await formatGuestLink(endpoint, cfg.server_room_id, rawUrl) : null;
       if (!url || !controlRef.current?.send({ type: "audience.invite", id, url })) throw new Error("Could not deliver the stage invitation");
     } catch (error) { notifyError(error, { key: "guests" }); }
   };
@@ -5720,7 +5722,7 @@ export function LiveView({
     let url: string;
     let hint: string;
     if (isBoomin(ep)) {
-      url = `https://boomin.ai/audience/${cfg.server_room_id}`;
+      url = await hostedAudienceLink(ep.id, cfg.server_room_id);
       hint = `Audience link copied — ${url}. Open audience access to let anyone with this link watch and participate.`;
     } else {
       const res = await guestsIpc.audienceLink(ep.id, cfg.server_room_id);
@@ -8095,10 +8097,9 @@ export function LiveView({
                 className="rm-pop-row"
                 onClick={async () => {
                   setLinkMenuOpen(false);
-                  // VERBATIM: the join link is whatever the endpoint returned
-                  // (a self-hosted server's own origin, or Boomin's). Producer
-                  // never rewrites the host.
-                  const url = guestLink ?? (await ensureGuestLink());
+                  // Read the current share-domain preference; self-hosted links
+                  // remain the endpoint's own URL.
+                  const url = await ensureGuestLink();
                   if (url) await openUrl(url).catch(() => notify(url, { key: "banner", tone: "info", ttl: 8000 }));
                 }}
               >

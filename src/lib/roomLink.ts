@@ -1,3 +1,4 @@
+import { formatGuestLink } from "./hostedShare";
 // The room's guest link — the thing a host sends out. One helper for the room
 // card, the room header and the Guests panel, so every place mints the same
 // link the same way: register the local room with the ACTIVE workspace's
@@ -26,15 +27,15 @@ export async function mintJoinLink(endpointId: string, serverRoomId: string): Pr
 
 export async function ensureRoomJoinLink(room: LiveRoom): Promise<string> {
   const cfg = parseConfig(room.config);
-  if (cfg.guest_link) return cfg.guest_link;
-  const ep = await resolveActiveEndpoint();
+    const ep = await resolveActiveEndpoint();
   if (!ep) throw new Error("Connect a workspace first.");
   let sid = cfg.server_room_id;
   if (!sid) {
     const reg = await registerRoom(ep.id, room.name, room.id);
     sid = reg.room.id;
   }
-  const url = await mintJoinLink(ep.id, sid);
+  const original = cfg.guest_link ?? await mintJoinLink(ep.id, sid);
+  const url = await formatGuestLink(ep, sid, original);
   // Read-modify-write against FRESH config (a slot binding saved meanwhile must survive).
   const fresh = (await ipc.liveListRooms()).find((r) => r.id === room.id);
   const now = parseConfig(fresh?.config ?? room.config);

@@ -1,3 +1,4 @@
+import { ShareDomainSettings } from "../components/ShareDomainSettings";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StoragePanel } from "../components/StoragePanel";
 import { PullPostsButton } from "../components/PullPostsButton";
@@ -1043,6 +1044,7 @@ function SettingsPanel({
             </div>
             {appTab === "general" && (
               <>
+        <ShareDomainSettings />
         <FeatureFlagsSection />
 
         <div className="cr-label set-gap">GUIDANCE</div>
