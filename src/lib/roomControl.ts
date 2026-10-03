@@ -2,15 +2,15 @@
 //
 // One WebSocket to the room's Durable Object, opened by the HOST's Producer
 // (to publish its scene list and receive mods' cuts) and by a MOD's Producer
-// (to see the list and send cuts). A 120-second ticket opens it; the socket
-// outlives the ticket, and a reconnect mints a fresh one through `session`.
+// (to see the list and send cuts). Hosted sockets renew their short-lived
+// authorization; every reconnect mints a fresh ticket through `session`.
 //
 // Frames (server/src/scenes.ts is the authority):
 //   → { type: "scene.publish", scenes: [{id,name}], active_scene_id }   host only
 //   ← { type: "scene.state",   scenes, active_scene_id, version, server_now }
 //   → { type: "scene.cut",     scene_id, transition? }                   needs room.scene
 //   ← { type: "scene.cut",     scene_id, transition?, from, server_now } host receives
-//   ← { type: "scene.cut.ok",  scene_id, server_now }
+//   ← { type: "scene.command", command_id, status, sequence, epoch }
 //   ← { type: "error", code: "forbidden" | "unknown_scene" | …, status }
 
 export interface ControlSession {
@@ -29,6 +29,8 @@ export interface SceneStateFrame {
   scenes: SceneRef[];
   active_scene_id: string | null;
   version: number;
+  epoch?: number;
+  sequence?: number;
   server_now: number;
 }
 
@@ -36,6 +38,10 @@ export interface SceneCutFrame {
   type: "scene.cut";
   scene_id: string;
   transition?: string;
+  command_id?: string;
+  epoch?: number;
+  sequence?: number;
+  expires_at?: number;
   from: string;
   server_now: number;
 }
@@ -99,6 +105,7 @@ export function parseControlFrame(raw: unknown): ControlFrame | null {
 export function scenePublishFrame(scenes: readonly { id: string; name: string }[], activeSceneId: string | null | undefined): string {
   return JSON.stringify({
     type: "scene.publish",
+    command_protocol: 2,
     scenes: scenes.map((s) => ({ id: s.id, name: s.name })),
     active_scene_id: activeSceneId ?? null,
   });
@@ -117,6 +124,8 @@ export interface RoomControlOptions {
   /** Wire → frame. Default: the open server's `{type}` frames; Boomin's
    *  `{channels, action, payload}` publishes pass lib/boominRoom.ts here. */
   parse?: (raw: unknown) => ControlFrame | null;
+  /** Re-authorize long-running sockets before the short-lived room ticket expires. */
+  renewAfterMs?: number;
 }
 
 /** A self-healing control socket. `send` queues while offline; the newest
@@ -127,21 +136,32 @@ export class RoomControlLink {
   private retryMs = 1000;
   private timer: number | null = null;
   private ping: number | null = null;
+  private renewal: number | null = null;
+  private renewalAck: number | null = null;
+  private renewalId: string | null = null;
   private pendingPublish: string | null = null;
+  private generation = 0;
 
   constructor(private readonly opts: RoomControlOptions) {}
 
   start(): void {
+    if (this.ws || this.timer) return;
     this.closed = false;
     void this.connect();
   }
 
   stop(): void {
     this.closed = true;
+    this.generation++;
     if (this.timer) window.clearTimeout(this.timer);
     if (this.ping) window.clearInterval(this.ping);
     this.timer = null;
     this.ping = null;
+    if (this.renewal) window.clearTimeout(this.renewal);
+    this.renewal = null;
+    if (this.renewalAck) window.clearTimeout(this.renewalAck);
+    this.renewalAck = null;
+    this.renewalId = null;
     try {
       this.ws?.close();
     } catch {
@@ -162,22 +182,33 @@ export class RoomControlLink {
   }
 
   /** Mod: cut to a scene. Resolves false if the socket is not open. */
-  cut(sceneId: string, transition?: string): boolean {
+  cut(sceneId: string, transition?: string): string | null {
+    if (!this.open) return null;
+    const command_id = crypto.randomUUID();
+    this.ws!.send(JSON.stringify({ type: "scene.cut", command_id, scene_id: sceneId, ...(transition ? { transition } : {}) }));
+    return command_id;
+  }
+
+  send(frame: Record<string, unknown>): boolean {
     if (!this.open) return false;
-    this.ws!.send(JSON.stringify({ type: "scene.cut", scene_id: sceneId, ...(transition ? { transition } : {}) }));
-    return true;
+    this.ws!.send(JSON.stringify(frame)); return true;
+  }
+
+  acknowledge(commandId: string, status: "applied" | "failed", error?: string): void {
+    if (this.open) this.ws!.send(JSON.stringify({ type: "scene.ack", command_id: commandId, status, error }));
   }
 
   private async connect(): Promise<void> {
     if (this.closed) return;
+    const generation = ++this.generation;
     let session: ControlSession;
     try {
       session = await this.opts.session();
     } catch {
-      this.scheduleRetry();
+      if (!this.closed && generation === this.generation) this.scheduleRetry();
       return;
     }
-    if (this.closed) return;
+    if (this.closed || generation !== this.generation) return;
     let ws: WebSocket;
     try {
       ws = new WebSocket(controlWsUrl(this.opts.origin, session));
@@ -187,6 +218,7 @@ export class RoomControlLink {
     }
     this.ws = ws;
     ws.onopen = () => {
+      if (this.closed || this.ws !== ws || generation !== this.generation) { ws.close(); return; }
       this.retryMs = 1000;
       for (const channel of this.opts.subscribe ?? []) ws.send(JSON.stringify({ type: "subscribe", channel }));
       if (this.pendingPublish) {
@@ -197,16 +229,29 @@ export class RoomControlLink {
       this.ping = window.setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping" }));
       }, 25_000);
+      if (this.renewal) window.clearTimeout(this.renewal);
+      this.scheduleRenewal(ws);
       this.opts.onOpen?.();
     };
     ws.onmessage = (ev) => {
+      if (this.closed || this.ws !== ws || generation !== this.generation) return;
       const frame = (this.opts.parse ?? parseControlFrame)(ev.data);
+      if (frame?.type === "room.authorized" && frame.request_id === this.renewalId && this.renewalId) {
+        if (this.renewalAck) window.clearTimeout(this.renewalAck);
+        this.renewalAck = null; this.renewalId = null;
+        this.scheduleRenewal(ws); return;
+      }
       if (frame && frame.type !== "pong") this.opts.onFrame(frame);
     };
     ws.onclose = () => {
-      if (this.ws === ws) this.ws = null;
+      if (this.closed || this.ws !== ws || generation !== this.generation) return;
+      this.ws = null;
       if (this.ping) window.clearInterval(this.ping);
       this.ping = null;
+      if (this.renewal) window.clearTimeout(this.renewal);
+      this.renewal = null;
+      if (this.renewalAck) window.clearTimeout(this.renewalAck);
+      this.renewalAck = null; this.renewalId = null;
       this.opts.onClose?.();
       this.scheduleRetry();
     };
@@ -217,6 +262,22 @@ export class RoomControlLink {
         // closing
       }
     };
+  }
+
+  private scheduleRenewal(ws: WebSocket): void {
+    if (!this.opts.renewAfterMs) return;
+    this.renewal = window.setTimeout(async () => {
+      this.renewal = null;
+      try {
+        // Re-read permission through the normal ticket service, keeping the
+        // same publisher socket and media legs alive during successful renewal.
+        const session = await this.opts.session();
+        if (this.closed || this.ws !== ws || ws.readyState !== WebSocket.OPEN) return;
+        this.renewalId = crypto.randomUUID();
+        ws.send(JSON.stringify({type:"auth.refresh",ticket:session.signaling_ticket,request_id:this.renewalId}));
+        this.renewalAck = window.setTimeout(() => ws.close(1000,"Renew room authorization"),6000);
+      } catch { if (this.ws === ws) ws.close(4001,"Room authorization expired"); }
+    },this.opts.renewAfterMs);
   }
 
   private scheduleRetry(): void {

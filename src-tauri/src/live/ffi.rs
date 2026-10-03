@@ -91,6 +91,11 @@ pub type raw_video_cb_t = extern "C" fn(param: *mut c_void, frame: *mut video_da
 // works as a dev engine. Harmless when a source build DID produce a .lib.
 #[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
 extern "C" {
+    pub fn obs_scene_atomic_update(
+        scene: *mut obs_scene_t,
+        callback: extern "C" fn(*mut c_void, *mut obs_scene_t),
+        data: *mut c_void,
+    );
     pub fn obs_startup(
         locale: *const c_char,
         module_config_path: *const c_char,
@@ -206,6 +211,7 @@ extern "C" {
     /// deserve a mixer strip without guessing from their kind.
     pub fn obs_source_get_output_flags(source: *mut obs_source_t) -> u32;
     pub fn obs_source_set_muted(source: *mut obs_source_t, muted: bool);
+    pub fn obs_source_set_audio_mixers(source: *mut obs_source_t, mixers: u32);
     /// 0 NONE, 1 MONITOR_ONLY, 2 MONITOR_AND_OUTPUT. MONITOR_ONLY is what
     /// makes cue possible: libobs gates the audio out at the SOURCE, before
     /// it enters any mix, so it cannot reach stream, recording or any output.

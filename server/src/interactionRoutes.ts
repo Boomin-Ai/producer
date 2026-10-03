@@ -25,7 +25,7 @@ import { ApiError } from "./errors";
 import { requirePrimary, type TokenClass } from "./auth";
 import { sha256Hex } from "./crypto";
 import { signTicket, verifyTicket } from "./ticket";
-import { grantsOf, guestByInviteCode, hostPresent, loadRoom, type RoomRow } from "./guests";
+import { iceServers, roomChannelName, grantsOf, guestByInviteCode, hostPresent, loadRoom, type RoomRow } from "./guests";
 import { InteractionError, parseInteractionCreate, type InteractionDoc, type Transition } from "./interactions/schema";
 import type { InputKind } from "./interactions/tally";
 
@@ -233,6 +233,10 @@ async function roomByAudienceCode(env: Env, code: string): Promise<RoomRow> {
 
 /** The room probe (INTERACTIVE.md §4.5): a phone reads this before it opens
  *  a socket. No identity involved. */
+interactionConnectRoutes.get("/audience/:code/interactions", async c => {
+  const room = await roomByAudienceCode(c.env, c.req.param("code"));
+  return roomStateStub(c.env, room.id).fetch("https://do/audience/snapshot");
+});
 interactionConnectRoutes.get("/audience/:code", async (c) => {
   const room = await roomByAudienceCode(c.env, c.req.param("code"));
   return c.json({ open: true, room: { id: room.id, title: room.title }, full: false, locked: false, name_required: false, server_now: Date.now() });
@@ -256,6 +260,7 @@ interactionConnectRoutes.post("/audience/:code/token", async (c) => {
       expires_at: new Date((nowSec() + AUDIENCE_TOKEN_TTL_SECONDS) * 1000).toISOString(),
       room: { id: room.id, title: room.title },
       display_name: displayName,
+      ice_servers: iceServers(c.env),
       signaling_url: `/v1/connect/audience-signal?token=${encodeURIComponent(token)}`,
     },
     201,
@@ -288,8 +293,11 @@ interactionConnectRoutes.get("/audience-signal", async (c) => {
   if (!c.env.SIGNALING_SECRET) throw new ApiError(503, "realtime_unavailable", "SIGNALING_SECRET is not configured.");
   const claims = await verifyTicket(c.env.SIGNALING_SECRET, c.req.query("token") ?? "", "audience");
   if (!claims || !claims.room) throw new ApiError(401, "invalid_token", "Audience token is invalid or expired.");
-  const forwarded = new Request(`https://do/audience-ws`, c.req.raw);
+  const forwarded = new Request(c.req.url, c.req.raw);
   forwarded.headers.set("X-Producer-User", claims.sub);
   forwarded.headers.set("X-Producer-Room", claims.room);
-  return roomStateStub(c.env, claims.room).fetch(forwarded);
+  forwarded.headers.set("X-Producer-Role", "audience");
+  forwarded.headers.delete("X-Producer-Grants");
+  if (!c.env.REALTIME) throw new ApiError(503, "realtime_unavailable", "Realtime is not configured.");
+  return c.env.REALTIME.get(c.env.REALTIME.idFromName(roomChannelName(claims.room))).fetch(forwarded);
 });

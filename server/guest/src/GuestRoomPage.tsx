@@ -68,6 +68,7 @@ export default function GuestRoomPage({ code }: { code: string }) {
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const [cameraOff, setCameraOff] = useState(false);
   const [hasShow, setHasShow] = useState(false);
+  const [showPlaying, setShowPlaying] = useState(false);
   const [onStage, setOnStage] = useState(false);
   /** The program fills the picture only ON STAGE and only once it arrived;
    *  otherwise the self view stays large, never doubled. */
@@ -174,9 +175,9 @@ export default function GuestRoomPage({ code }: { code: string }) {
       void selfEl.play().catch(() => {});
     }
     const showEl = showRef.current;
-    if (showEl && showStreamRef.current && showEl.srcObject !== showStreamRef.current) {
-      showEl.srcObject = showStreamRef.current;
-      void showEl.play().catch(() => {});
+    if (showEl && showStreamRef.current) {
+      if (showEl.srcObject !== showStreamRef.current) showEl.srcObject = showStreamRef.current;
+      if (hasShow && !showHidden && showEl.paused) void showEl.play().catch(() => {});
     }
   });
 
@@ -519,7 +520,7 @@ export default function GuestRoomPage({ code }: { code: string }) {
                 show until you are brought on. Tap either tile to hide it. */}
             <div style={S.stage}>
               {programMain ? (
-                <video ref={showRef} autoPlay playsInline muted style={S.video} />
+                <video ref={showRef} onPlaying={() => setShowPlaying(true)} onPause={() => setShowPlaying(false)} onWaiting={() => setShowPlaying(false)} autoPlay playsInline muted style={S.video} />
               ) : (
                 <video ref={selfRef} autoPlay playsInline muted style={{ ...S.video, transform: "scaleX(-1)", ...(selfHidden ? { visibility: "hidden" } : null) }} />
               )}
@@ -548,7 +549,7 @@ export default function GuestRoomPage({ code }: { code: string }) {
               )}
               {!programMain && can.returnFeed && (
                 <video
-                  ref={showRef}
+                  ref={showRef} onPlaying={() => setShowPlaying(true)} onPause={() => setShowPlaying(false)} onWaiting={() => setShowPlaying(false)}
                   autoPlay playsInline muted
                   title="Tap to hide"
                   onClick={() => setShowHidden(true)}
@@ -588,6 +589,15 @@ export default function GuestRoomPage({ code }: { code: string }) {
               />
             )}
           </>
+        )}
+
+        {phase === "live" && can.returnFeed && !showPlaying && (
+          <button style={S.ghost} onClick={() => {
+            setShowHidden(false);
+            linkRef.current?.resumeProgram();
+            const video = showRef.current;
+            if (video && showStreamRef.current) { video.srcObject = showStreamRef.current; void video.play().catch(() => {}); }
+          }}>Watch the show</button>
         )}
 
         {activeVote && phase === "live" && (

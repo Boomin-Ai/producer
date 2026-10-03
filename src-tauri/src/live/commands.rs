@@ -193,7 +193,23 @@ pub async fn live_delete_destination(state: State<'_, AppState>, id: String) -> 
 }
 
 #[tauri::command]
-pub async fn live_go_live(state: State<'_, AppState>) -> EngineResult<()> {
+pub async fn live_go_live(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    endpoint_id: Option<String>,
+    server_room_id: Option<String>,
+) -> EngineResult<()> {
+    // Capture credentials/workspace once for THIS room, before enqueueing the
+    // engine start. They never cross back into the webview.
+    let presence = match (endpoint_id, server_room_id) {
+        (Some(endpoint), Some(room)) => {
+            Uuid::parse_str(&room)
+                .map_err(|_| EngineError::Other("invalid server room id".into()))?;
+            let (base, brand, token) = crate::ipc::endpoint_access(&state, &endpoint)?;
+            brand.map(|brand| (base, brand, token, room))
+        }
+        _ => None,
+    };
     let specs: Vec<(String, String, Option<String>, String)> = {
         let conn = state.db.lock().expect("db mutex poisoned");
         let mut stmt = conn.prepare(
@@ -214,7 +230,14 @@ pub async fn live_go_live(state: State<'_, AppState>) -> EngineResult<()> {
     if specs.is_empty() {
         return Err(EngineError::Other("no enabled destinations".into()));
     }
-    state.live.go_live_specs(specs).map_err(EngineError::Other)
+    state
+        .live
+        .go_live_specs(specs)
+        .map_err(EngineError::Other)?;
+    if let Some((base, brand, token, room)) = presence {
+        crate::live::presence::start(app, base, brand, token, room);
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -553,6 +576,14 @@ pub async fn live_set_transform(
             .set_transform(id, patch, commit)
             .map_err(EngineError::Other)
     }
+}
+
+#[tauri::command]
+pub async fn live_apply_scene(
+    state: State<'_, AppState>,
+    changes: serde_json::Value,
+) -> EngineResult<serde_json::Value> {
+    state.live.apply_scene(changes).map_err(EngineError::Other)
 }
 
 /// Devices behind a source picker: cameras and capture cards, microphones
@@ -1045,4 +1076,35 @@ pub fn live_set_selection(id: Option<String>) -> EngineResult<()> {
     #[cfg(not(have_engine))]
     let _ = id;
     Ok(())
+}
+
+/// Only the local application can read processed audio; no HTTP/CORS endpoint.
+#[tauri::command]
+pub async fn live_program_audio_start() -> EngineResult<()> {
+    #[cfg(have_engine)]
+    {
+        return super::program_audio::start().map_err(EngineError::Other);
+    }
+    #[cfg(not(have_engine))]
+    {
+        Err(EngineError::Other(
+            "Native audio requires the production engine".into(),
+        ))
+    }
+}
+#[tauri::command]
+pub async fn live_program_audio_read() -> tauri::ipc::Response {
+    #[cfg(have_engine)]
+    {
+        return tauri::ipc::Response::new(super::program_audio::drain());
+    }
+    #[cfg(not(have_engine))]
+    {
+        tauri::ipc::Response::new(Vec::<u8>::new())
+    }
+}
+#[tauri::command]
+pub async fn live_program_audio_stop() {
+    #[cfg(have_engine)]
+    super::program_audio::stop();
 }

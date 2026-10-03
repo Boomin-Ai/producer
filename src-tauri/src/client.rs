@@ -474,6 +474,25 @@ impl ProducerClient {
         Ok(resp.json().await?)
     }
 
+    /// Native on-air lease. Separate from the contribution run and roster.
+    pub async fn producer_stream(
+        &self,
+        room_id: &str,
+        session_id: &str,
+        streaming: bool,
+    ) -> EngineResult<Value> {
+        tokio::time::timeout(
+            std::time::Duration::from_secs(8),
+            self.root_request(
+                reqwest::Method::POST,
+                &format!("/v1/app/live/rooms/{room_id}/producer-stream"),
+                Some(&serde_json::json!({ "session_id": session_id, "streaming": streaming })),
+            ),
+        )
+        .await
+        .map_err(|_| EngineError::Other("stream presence request timed out".into()))?
+    }
+
     /// Start / stop a run — the span the ledger reports on.
     pub async fn room_run(&self, room_id: &str, action: &str) -> EngineResult<Value> {
         if self.is_boomin() {

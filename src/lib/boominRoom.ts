@@ -93,6 +93,9 @@ export function parseBoominFrame(raw: unknown): BoominFrame | null {
   const channels = Array.isArray(f.channels) ? (f.channels as string[]) : [];
   const p = (f.payload && typeof f.payload === "object" ? f.payload : {}) as Record<string, unknown>;
   switch (f.action) {
+    case "scene.state":
+    case "scene.command":
+      return { ...p, type: f.action } as BoominFrame;
     case "scene.cut": {
       if (typeof p.scene_id !== "string") return null;
       const by = (p.by && typeof p.by === "object" ? p.by : {}) as { user_id?: unknown; role?: unknown };

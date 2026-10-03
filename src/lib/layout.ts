@@ -28,7 +28,7 @@ export const PANEL_META: Record<PanelId, { title: string; hint: string }> = {
   stats: { title: "Stats", hint: "FPS, CPU, bitrate, drops — the numbers behind the health dot" },
   updates: { title: "Updates", hint: "What shipped — every entry links to its exact PR" },
   guests: { title: "Guests", hint: "Who's in the room, and who's on screen" },
-  vote: { title: "Vote", hint: "One question, the set shows the answer" },
+  vote: { title: "Audience", hint: "Viewer access, room chat, stage invitations, and votes" },
   mods: { title: "Mods", hint: "The seats in the room — who helps run it, and the camera, mic or screen you've given them" },
 
 };

@@ -110,6 +110,7 @@ impl Dj {
         if src.is_null() {
             return Err("The native audio player couldn't open this track".into());
         }
+        ffi::obs_source_set_audio_mixers(src, 3);
         ffi::obs_source_set_volume(src, 0.);
         ffi::obs_source_set_monitoring_type(
             src,

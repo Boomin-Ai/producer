@@ -153,7 +153,7 @@ export class ProgramRequest {
     if (document.visibilityState === "visible") this.connected();
   };
 
-  constructor(private readonly pc: RTCPeerConnection, private readonly send: () => void, private readonly delayMs = 0) {
+  constructor(private readonly pc: RTCPeerConnection, private readonly send: () => void, private readonly delayMs = 0, private readonly readStats: () => Promise<RTCStatsReport> = () => pc.getStats()) {
     document.addEventListener("visibilitychange", this.visible);
   }
 
@@ -179,7 +179,7 @@ export class ProgramRequest {
     if (document.visibilityState !== "visible") { this.timer = 0; return; }
     let decoded = false;
     try {
-      const stats = await this.pc.getStats();
+      const stats = await this.readStats();
       let frames = 0;
       stats.forEach((stat) => {
         if (stat.type === "inbound-rtp" && !stat.isRemote && (stat.kind === "video" || stat.mediaType === "video")) frames += Number(stat.framesDecoded ?? 0);

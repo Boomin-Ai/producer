@@ -15,6 +15,7 @@ import { ModBoard } from "./ModBoard";
 import { DEFAULT_MOD_BOARD, MOD_BOARD_PREF, normalizeModBoard, seatFeeds, throwUpState, type ModBoardLayout } from "../lib/modBoard";
 import { prefGet } from "../lib/prefs";
 import { EMPTY_MOD_STAGE, type ModStageState } from "../lib/stageTruth";
+import { AudiencePanel, type AudienceSnapshot, type AudienceHand } from "../components/AudiencePanel";
 
 export function ModSeat({ link, onLeave }: { link: ModLink; onLeave: () => void }) {
   const [title, setTitle] = useState<string>("Room");
@@ -25,6 +26,8 @@ export function ModSeat({ link, onLeave }: { link: ModLink; onLeave: () => void 
   const [err, setErr] = useState<string | null>(null);
   const [online, setOnline] = useState(false);
   const [gone, setGone] = useState(false);
+  const [audience, setAudience] = useState<AudienceSnapshot>({});
+  const [hands, setHands] = useState<AudienceHand[]>([]);
   const controlRef = useRef<RoomControlLink | null>(null);
   /** The board's own layout (lib/modBoard.ts) — the same pref a Boomin seat saves. */
   const [boardLayout, setBoardLayout] = useState<ModBoardLayout>(DEFAULT_MOD_BOARD);
@@ -87,9 +90,23 @@ export function ModSeat({ link, onLeave }: { link: ModLink; onLeave: () => void 
     const c = new RoomControlLink({
       origin: link.origin,
       session: () => modSeat.session(link),
+      renewAfterMs: 105_000,
       onFrame: (f: ControlFrame) => {
+        if (f.type.startsWith("audience.")) {
+          const frame=f as Record<string,unknown>;
+          if (f.type === "audience.snapshot") setAudience(previous=>({...previous,...frame}));
+          if (f.type === "audience.hands" && Array.isArray(frame.hands)) setHands(frame.hands as AudienceHand[]);
+          if (f.type === "audience.chat" && frame.message) setAudience(previous=>({...previous,chat:[...(previous.chat??[]).slice(-99),frame.message as NonNullable<AudienceSnapshot['chat']>[number]]}));
+          if (f.type === "audience.presence") setAudience(previous=>({...previous,online:Number(frame.online)}));
+          if (f.type === "audience.error") setErr(String(frame.code));
+          return;
+        }
         if (f.type === "scene.state") setScenes(f as SceneStateFrame);
-        else if (f.type === "error") {
+        else if (f.type === "scene.command") {
+          const c = f as unknown as { status: string; scene_id: string; error?: string };
+          if (c.status === "applied") setScenes((current) => current ? { ...current, active_scene_id: c.scene_id } : current);
+          if (c.status === "failed" || c.status === "expired") setErr(c.error ?? "Producer did not confirm the cut.");
+        } else if (f.type === "error") {
           const e = f as { code: string; status?: number };
           setErr(e.code === "forbidden" ? "This seat can't cut scenes." : e.code === "unknown_scene" ? "That scene is gone." : e.code);
           window.setTimeout(() => setErr(null), 3000);
@@ -214,6 +231,7 @@ export function ModSeat({ link, onLeave }: { link: ModLink; onLeave: () => void 
         layout={boardLayout}
         error={err}
       />
+      {can("room.remove") && <AudiencePanel state={audience} hands={hands} host={false} hosted={false} canInvite={can("room.admit")} canShare={false} send={frame=>controlRef.current?.send(frame)??false} share={()=>{}} invite={id=>{if(!controlRef.current?.send({type:"audience.invite.request",id}))setErr("Reconnect to the room first.");}} error={err} />}
     </div>
   );
 }

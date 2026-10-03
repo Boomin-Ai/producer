@@ -4,6 +4,7 @@
 export class FakeSocket {
   sent: string[] = [];
   closed: number | null = null;
+  get readyState() { return this.closed === null ? 1 : 3; }
   private attachment: unknown = null;
   constructor(public readonly tag = "") {}
   send(data: string) {

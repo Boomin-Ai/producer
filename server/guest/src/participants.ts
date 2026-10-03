@@ -257,11 +257,11 @@ export function labelForStream(labels: ReadonlyMap<string, TrackLabel>, streamId
 // belongs to; a frame without one is from a page older than screen share and
 // belongs to the main (camera) peer.
 
-export type HostPeer = "main" | "screen";
+export type HostPeer = "main" | "screen" | "program";
 
 export function peerOf(payload: unknown): HostPeer {
   const p = payload && typeof payload === "object" ? (payload as { peer?: unknown }).peer : undefined;
-  return p === "screen" ? "screen" : "main";
+  return p === "screen" || p === "program" ? p : "main";
 }
 
 // ── Producer source ids ──────────────────────────────────────────────────────

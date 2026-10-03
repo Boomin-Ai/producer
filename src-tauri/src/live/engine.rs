@@ -668,6 +668,10 @@ pub enum Command {
         patch: graph::TransformPatch,
         commit: bool,
     },
+    ApplyScene {
+        changes: Vec<graph::SceneChange>,
+        reply: mpsc::Sender<Result<graph::SourcesState, String>>,
+    },
     /// Devices behind a source's picker (camera / mic / screen). Carries its
     /// own reply channel: obs_* calls must happen on the engine-owner thread
     /// (§5.1), so the caller asks and waits rather than touching libobs.
@@ -777,6 +781,7 @@ fn cmd_name(c: &Command) -> &'static str {
         Command::StopLive { .. } => "StopLive",
         Command::ReleaseIdleRoom { .. } => "ReleaseIdleRoom",
         Command::SetTransform { .. } => "SetTransform",
+        Command::ApplyScene { .. } => "ApplyScene",
         Command::ListDevices { .. } => "ListDevices",
         Command::PlayStinger { .. } => "PlayStinger",
         Command::StartRecording { .. } => "StartRecording",
@@ -943,6 +948,17 @@ pub struct LiveHandle {
 }
 
 impl LiveHandle {
+    pub fn apply_scene(
+        &self,
+        changes: Vec<graph::SceneChange>,
+    ) -> Result<graph::SourcesState, String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd
+            .send(Command::ApplyScene { changes, reply: tx })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(5))
+            .map_err(|_| "The scene engine did not answer".to_string())?
+    }
     pub fn go_live(&self, config: MultiConfig) -> Result<(), String> {
         self.proxy().go_live(config)
     }
@@ -2156,6 +2172,17 @@ pub fn start(
                                 sink(&LiveEvent::SourcesChanged { sources });
                             }
                         }
+                    }
+                    Ok(Command::ApplyScene { changes, reply }) => {
+                        let result = match scene.as_mut() {
+                            Some(g) => g.apply_scene(&changes).map(|()| g.state()),
+                            None => Err("The room scene is not running".into()),
+                        };
+                        if let Ok(sources) = &result {
+                            snap.lock().unwrap().sources = sources.clone();
+                            sink(&LiveEvent::SourcesChanged { sources: sources.clone() });
+                        }
+                        let _ = reply.send(result);
                     }
                     Ok(Command::ListDevices { kind, reply }) => {
                         let list = match scene.as_ref() {

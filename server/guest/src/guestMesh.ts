@@ -29,6 +29,8 @@ type Peer = {
   audio: RTCRtpTransceiver | null;
   stream: MediaStream;
   makingOffer: boolean;
+  ice: RTCIceCandidateInit[];
+  queue: Promise<unknown>;
 };
 
 export type MeshOptions = {
@@ -56,7 +58,8 @@ export class GuestMesh {
    *  makes concurrent promote/demote deterministic rather than a race. */
   applyStage(update: StageUpdate, source: "host" | "server" = "host"): void {
     if (!update || typeof update.version !== "number") return;
-    if (update.version <= this.version) return;
+    if (update.version < this.version) return;
+    if (update.version === this.version && (source !== "host" || this.confirmed)) return;
     this.version = update.version;
     // The server copy is a CACHE that Producer writes fire-and-forget; the host
     // channel is live truth. Only the latter confirms.
@@ -113,13 +116,13 @@ export class GuestMesh {
   private connect(peerId: string): void {
     const pc = new RTCPeerConnection({ iceServers: this.opts.iceServers });
     const stream = new MediaStream();
-    const peer: Peer = { pc, audio: null, stream, makingOffer: false };
+    const peer: Peer = { pc, audio: null, stream, makingOffer: false, ice: [], queue: Promise.resolve() };
     this.peers.set(peerId, peer);
 
     // Audio only. Guests see each other through the host's program feed, so a
     // mesh of video would multiply uplink for something already on screen.
     const local = this.opts.localStream();
-    const track = local?.getAudioTracks()[0];
+    const track = local?.getAudioTracks()[0]?.clone();
     peer.audio = pc.addTransceiver(track ?? "audio", { direction: "inactive" });
 
     pc.ontrack = (event) => {
@@ -160,23 +163,27 @@ export class GuestMesh {
     if (!peer) return;
     const polite = this.opts.selfId > from;
 
+    await (peer.queue = peer.queue.catch(()=>{}).then(async()=>{
     try {
       if (msg.kind === "sdp" && msg.description) {
         const collision = msg.description.type === "offer" && (peer.makingOffer || peer.pc.signalingState !== "stable");
         if (collision && !polite) return;
         if (collision) await peer.pc.setLocalDescription({ type: "rollback" } as RTCLocalSessionDescriptionInit);
         await peer.pc.setRemoteDescription(msg.description);
+        for (const candidate of peer.ice.splice(0)) await peer.pc.addIceCandidate(candidate).catch(()=>{});
         if (msg.description.type === "offer") {
           await peer.pc.setLocalDescription();
           this.opts.send(from, { kind: "sdp", description: peer.pc.localDescription });
         }
         this.applyDirection(from, peer);
       } else if (msg.kind === "ice" && msg.candidate) {
-        await peer.pc.addIceCandidate(msg.candidate).catch(() => {});
+        if (peer.pc.remoteDescription) await peer.pc.addIceCandidate(msg.candidate).catch(() => {});
+        else if (peer.ice.length < 64) peer.ice.push(msg.candidate);
       }
     } catch {
       /* one bad frame must never take the mesh down */
     }
+    }));
   }
 
   /** Go silent WITHOUT losing our place in the version sequence.
@@ -200,6 +207,7 @@ export class GuestMesh {
 
   close(): void {
     for (const [id, peer] of this.peers) {
+      peer.audio?.sender.track?.stop();
       try { peer.pc.close(); } catch { /* already closed */ }
       this.opts.onPeerAudio(id, null);
     }

@@ -1,0 +1,10 @@
+.aud-destination-mark { display: block; width: 18px; height: 18px; border-radius: 4px; flex-shrink: 0; }
+.hd-chan-logo .aud-destination-mark { width: 15px; height: 15px; }
+.aud-destination-row { cursor: pointer; min-width: 230px; }
+.rm-pop-dests .aud-destination-row { height: 48px; }
+.aud-destination-copy { display: flex; flex-direction: column; gap: 2px; }
+.aud-destination-copy small { font-size: 10px; color: var(--fg-3); }
+.aud-destination-row input { margin-left: auto; accent-color: var(--mint); width: 15px; height: 15px; cursor: pointer; }
+.chn-ico.aud-destination-tile { width: auto; min-width: 36px; display: flex; gap: 5px; padding: 0 7px; }
+.aud-destination-short { font-size: 11px; color: var(--fg-1); }
+.rm-panel-channels:is([data-in="left"], [data-in="right"]) .aud-destination-short { display: none; }

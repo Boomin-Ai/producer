@@ -152,7 +152,7 @@ export const ipc = {
     enabled?: boolean;
   }) => invoke<LiveDestination>("live_upsert_destination", { input }),
   liveDeleteDestination: (id: string) => invoke("live_delete_destination", { id }),
-  liveGoLive: () => invoke("live_go_live"),
+  liveGoLive: (endpointId?: string, serverRoomId?: string) => invoke("live_go_live", { endpointId, serverRoomId }),
   liveStop: () => invoke("live_stop"),
   liveEngineStatus: () => invoke<LiveSnapshot>("live_engine_status"),
   liveAttachPreview: (x: number, y: number, w: number, h: number) =>
@@ -203,6 +203,8 @@ export const ipc = {
   /** Stage editor: commit=false at gesture rate, commit=true on release. */
   liveSetTransform: (id: string, patch: LiveTransformPatch, commit: boolean) =>
     invoke("live_set_transform", { id, patch, commit }),
+  liveApplyScene: (changes: { id: string; patch: LiveTransformPatch; muted?: boolean }[]) =>
+    invoke<LiveSources>("live_apply_scene", { changes }),
   livePreviewHidden: (hidden: boolean) => invoke("live_preview_hidden", { hidden }),
   /** Rects (CSS px, window coords) the native preview must leave to the webview. */
   livePreviewCutouts: (rects: { x: number; y: number; w: number; h: number }[]) =>

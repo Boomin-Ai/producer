@@ -314,7 +314,7 @@ fn api_root_of(base_url: &str) -> String {
 
 /// Load an endpoint's connection details (base URL, hosted workspace scope,
 /// keychain token).
-fn endpoint_access(
+pub(crate) fn endpoint_access(
     state: &State<'_, AppState>,
     endpoint_id: &str,
 ) -> EngineResult<(String, Option<String>, String)> {
