@@ -317,12 +317,45 @@ pub fn update(source: *mut ffi::obs_source_t, name: &str, patch: &Value) -> Resu
 /// is created on first use, named with the internal prefix so it never shows
 /// up in the user's filter list, and left attached (it is inert at 1.0).
 pub fn set_opacity(source: *mut ffi::obs_source_t, opacity: f64) -> Result<(), String> {
+    set_named_opacity(source, OPACITY_FILTER, opacity)
+}
+
+const MOD_VIDEO_FILTER: &str = "__producer_mod_video_visibility";
+
+/// Hide moderator video without stopping its independent audio contribution.
+pub fn set_mod_video_visible(source: *mut ffi::obs_source_t, visible: bool) -> Result<(), String> {
+    set_named_opacity(source, MOD_VIDEO_FILTER, if visible { 1.0 } else { 0.0 })
+}
+
+pub fn mod_video_visible(source: *mut ffi::obs_source_t) -> bool {
+    unsafe {
+        let filter = ffi::obs_source_get_filter_by_name(
+            source,
+            CString::new(MOD_VIDEO_FILTER).unwrap().as_ptr(),
+        );
+        if filter.is_null() {
+            return true;
+        }
+        let data = ffi::obs_source_get_settings(filter);
+        let visible =
+            ffi::obs_data_get_double(data, CString::new("opacity").unwrap().as_ptr()) > 0.0;
+        ffi::obs_data_release(data);
+        ffi::obs_source_release(filter);
+        visible
+    }
+}
+
+fn set_named_opacity(
+    source: *mut ffi::obs_source_t,
+    filter_name: &str,
+    opacity: f64,
+) -> Result<(), String> {
     if source.is_null() {
         return Err("no such source".into());
     }
     let clamped = opacity.clamp(0.0, 1.0);
     unsafe {
-        let name = CString::new(OPACITY_FILTER).unwrap();
+        let name = CString::new(filter_name).unwrap();
         let mut f = ffi::obs_source_get_filter_by_name(source, name.as_ptr());
         if f.is_null() {
             let kind = CString::new("color_filter_v2").unwrap();

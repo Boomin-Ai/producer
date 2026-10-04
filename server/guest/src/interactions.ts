@@ -39,7 +39,7 @@ export function interactionFromFrame(raw: unknown): ProjectedInteraction | null 
   return doc as unknown as ProjectedInteraction;
 }
 
-/** Keep the newest version, including cancellation tombstones. */
+/** Keep the newest version of each interaction; drop what is archived. */
 export function mergeInteraction(list: ProjectedInteraction[], next: ProjectedInteraction): ProjectedInteraction[] {
   const rest = list.filter((i) => i.id !== next.id);
   const cur = list.find((i) => i.id === next.id);

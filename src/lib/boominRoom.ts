@@ -95,6 +95,8 @@ export function parseBoominFrame(raw: unknown): BoominFrame | null {
   switch (f.action) {
     case "scene.state":
     case "scene.command":
+    case "room.sources":
+    case "room.action.command":
       return { ...p, type: f.action } as BoominFrame;
     case "scene.cut": {
       if (typeof p.scene_id !== "string") return null;

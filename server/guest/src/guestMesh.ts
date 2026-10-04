@@ -22,7 +22,7 @@
 // play. Silence is recoverable and someone says "you're muted". Unexpected audio
 // on air is not.
 
-export type StageUpdate = { on_stage: string[]; version: number };
+export type StageUpdate = { on_stage: string[]; version: number; audible?: string[] };
 
 type Peer = {
   pc: RTCPeerConnection;
@@ -51,6 +51,29 @@ export class GuestMesh {
   /** Has the HOST confirmed this stage list, or is it only the server's cached
    *  copy? See applyStage — we may listen on an unconfirmed list, never speak. */
   private confirmed = false;
+  private audible = new Set<string>();
+  private microphoneEnabled = true;
+
+  /** Every cloned sender must follow the owner's mute, including future peers. */
+  setMicrophoneEnabled(enabled: boolean): void {
+    this.microphoneEnabled = enabled;
+    for (const [id, peer] of this.peers) this.applyDirection(id, peer);
+  }
+
+  refreshMicrophone(): void {
+    const original = this.opts.localStream()?.getAudioTracks()[0];
+    for (const [id, peer] of this.peers) {
+      const sender = peer.audio?.sender;
+      if (!sender) continue;
+      const old = sender.track;
+      const next = original?.clone() ?? null;
+      if (next) next.enabled = false;
+      void sender.replaceTrack(next).then(() => {
+        old?.stop();
+        this.applyDirection(id, peer);
+      }).catch(() => next?.stop());
+    }
+  }
 
   constructor(private readonly opts: MeshOptions) {}
 
@@ -63,8 +86,9 @@ export class GuestMesh {
     this.version = update.version;
     // The server copy is a CACHE that Producer writes fire-and-forget; the host
     // channel is live truth. Only the latter confirms.
-    if (source === "host") this.confirmed = true;
+    this.confirmed = source === "host";
     this.onStage = new Set(Array.isArray(update.on_stage) ? update.on_stage : []);
+    this.audible = new Set(Array.isArray(update.audible) ? update.audible : [...this.onStage]);
     this.selfOnStage = this.onStage.has(this.opts.selfId);
 
     // Connect to on-stage peers we don't have yet.
@@ -79,7 +103,7 @@ export class GuestMesh {
    *  never from what a peer claims about itself. */
   private applyDirection(peerId: string, peer: Peer): void {
     if (!peer.audio) return;
-    const theyAreOnStage = this.onStage.has(peerId);
+    const theyAreOnStage = this.onStage.has(peerId) && this.audible.has(peerId);
     // MAY LISTEN ON AN UNCONFIRMED LIST, MAY NOT SPEAK ON ONE.
     //
     // The cold-start list comes from the server's cached copy, which Producer
@@ -95,7 +119,9 @@ export class GuestMesh {
     // the live channel. Listening does not: hearing someone who has just left the
     // stage for a moment is recoverable, being heard when you believe you are
     // private is not.
-    const mayPublish = this.selfOnStage && this.confirmed;
+    const original = this.opts.localStream()?.getAudioTracks()[0];
+    const mayPublish = this.selfOnStage && this.confirmed && this.audible.has(this.opts.selfId)
+      && this.microphoneEnabled && !!original && original.enabled && original.readyState !== "ended";
     const direction: RTCRtpTransceiverDirection = mayPublish
       ? (theyAreOnStage ? "sendrecv" : "sendonly")
       : (theyAreOnStage ? "recvonly" : "inactive");

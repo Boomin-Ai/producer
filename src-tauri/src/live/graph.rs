@@ -799,7 +799,8 @@ impl SceneGraph {
                 id: id.into(),
                 kind: kind.into(),
                 label: label.into(),
-                visible: ffi::obs_sceneitem_visible(item),
+                visible: ffi::obs_sceneitem_visible(item)
+                    && (kind != "mod" || super::filters::mod_video_visible(src)),
                 x: pos.x,
                 y: pos.y,
                 w,
@@ -948,7 +949,17 @@ impl SceneGraph {
                 ffi::obs_sceneitem_set_order_position(item, z.max(0));
             }
             if let Some(v) = t.visible {
-                ffi::obs_sceneitem_set_visible(item, v);
+                let src = ffi::obs_sceneitem_get_source(item);
+                let is_mod = self
+                    .extras
+                    .iter()
+                    .any(|extra| extra.item == item && extra.kind == "mod");
+                if is_mod {
+                    super::filters::set_mod_video_visible(src, v)?;
+                    ffi::obs_sceneitem_set_visible(item, v || !ffi::obs_source_muted(src));
+                } else {
+                    ffi::obs_sceneitem_set_visible(item, v);
+                }
             }
         }
         Ok(())
@@ -1439,6 +1450,9 @@ impl SceneGraph {
                 ffi::obs_source_set_monitoring_type(src, 1);
                 eprintln!("[test] {id} forced to MONITOR_ONLY");
             }
+            if kind == "mod" {
+                super::filters::set_mod_video_visible(src, false)?;
+            }
             let born_visible = !remote;
             ffi::obs_sceneitem_set_visible(item, born_visible);
             // Meter every audio-bearing extra the mixer shows a strip for.
@@ -1652,6 +1666,17 @@ impl SceneGraph {
             }
             if let Some(m) = muted {
                 ffi::obs_source_set_muted(src, m);
+                if let Some(extra) = self
+                    .extras
+                    .iter()
+                    .find(|extra| extra.src == src && extra.kind == "mod")
+                {
+                    // An audible moderator remains active even with its video hidden.
+                    ffi::obs_sceneitem_set_visible(
+                        extra.item,
+                        super::filters::mod_video_visible(src) || !m,
+                    );
+                }
             }
         }
         Ok(())

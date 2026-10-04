@@ -1,3 +1,4 @@
+import type { RoomSource, RoomActionKind, RoomAction } from "../../server/src/roomActions";
 // The room channel's CONTROL side, from Producer (#47).
 //
 // One WebSocket to the room's Durable Object, opened by the HOST's Producer
@@ -179,6 +180,21 @@ export class RoomControlLink {
     const frame = scenePublishFrame(scenes, activeSceneId);
     if (this.open) this.ws!.send(frame);
     else this.pendingPublish = frame;
+  }
+
+  publishSources(sources: RoomSource[], participants: string[], onStage: string[]): boolean {
+    return this.send({ type: "room.sources.publish", sources, participants, on_stage: onStage });
+  }
+
+  sourceAction(kind: RoomActionKind, target: string, on: boolean, revision?: number): string | null {
+    if (!this.open) return null;
+    const command_id = crypto.randomUUID();
+    this.send({ type: "room.action", command_id, kind, target, on, expected_revision: revision });
+    return command_id;
+  }
+
+  acknowledgeAction(command: RoomAction, sources: RoomSource[], participants: string[], onStage: string[], error?: string): void {
+    this.send({ type: "room.action.ack", command_id: command.command_id, status: error ? "failed" : "applied", sources, participants, on_stage: onStage, error });
   }
 
   /** Mod: cut to a scene. Resolves false if the socket is not open. */
