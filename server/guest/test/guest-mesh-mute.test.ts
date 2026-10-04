@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { GuestMesh } from "../guest/src/guestMesh";
+import { GuestMesh } from "../src/guestMesh";
 
 class Track {
   kind = "audio"; enabled = true; readyState = "live";

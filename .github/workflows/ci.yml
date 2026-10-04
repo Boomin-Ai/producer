@@ -40,6 +40,7 @@ jobs:
           node-version: "22"
       - run: npm ci
       - run: npx tsc --noEmit
+      - run: npx tsc --noEmit -p tsconfig.browser-tests.json
       - run: npx vitest run
 
   rust:
