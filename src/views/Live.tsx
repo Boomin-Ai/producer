@@ -3321,7 +3321,7 @@ export function LiveView({
   const [roomSources, setRoomSources] = useState<RoomSource[]>([]);
   const roomSourcesRef = useRef<RoomSource[]>([]);
   const [sourceCommands, setSourceCommands] = useState<Record<string, RoomAction>>({});
-  const actionWaiters = useRef(new Map<string, { kind: "camera" | "screen" | "guest"; target: string; timer: number }>());
+  const actionWaiters = useRef(new Map<string, { kind: "camera" | "screen" | "microphone" | "guest"; target: string; timer: number }>());
   const sourceProtocolRef = useRef(false);
   const sourceOrder = useRef(new Map<string, number>());
   const actionEpoch = useRef(0);
@@ -3702,6 +3702,19 @@ export function LiveView({
     const timer = window.setTimeout(() => { actionWaiters.current.delete(commandId); setSourceCommands(previous => { const next = { ...previous }; delete next[source.id]; return next; }); notifyError("The host did not confirm this source change. Try again.", { key: "guests" }); }, 7000);
     actionWaiters.current.set(commandId, { kind, target: source.id, timer });
     setSourceCommands(previous => ({ ...previous, [source.id]: { command_id: commandId, kind: "source.visibility", target: source.id, on: on ?? !source.visible, status: "accepted" } as RoomAction }));
+  };
+  const requestSourceMute = (id: string, muted: boolean) => {
+    const source = roomSourcesRef.current.find(item => item.id === id && item.participant_id === mySeatRef.current?.id);
+    if (!source || [...actionWaiters.current.values()].some(waiter => waiter.target === id)) return;
+    const commandId = controlRef.current?.sourceAction("source.mute", id, muted, source.revision);
+    if (!commandId) { notifyError("Reconnect to the host before changing the microphone mix.", { key: "guests" }); return; }
+    const timer = window.setTimeout(() => {
+      actionWaiters.current.delete(commandId);
+      setSourceCommands(previous => { const next = { ...previous }; delete next[id]; return next; });
+      notifyError("The host did not confirm the microphone change. Try again.", { key: "guests" });
+    }, 7000);
+    actionWaiters.current.set(commandId, { kind: "microphone", target: id, timer });
+    setSourceCommands(previous => ({ ...previous, [id]: { command_id: commandId, kind: "source.mute", target: id, on: muted, status: "accepted" } as RoomAction }));
   };
   const sameIds = (a: readonly string[], b: readonly string[]) => a.length === b.length && [...a].sort().every((x, i) => x === [...b].sort()[i]);
   /** Host: post the stage list UNCONDITIONALLY — after acting on a mod's
@@ -8492,7 +8505,7 @@ export function LiveView({
           throwUp={throwUpState({ stage: modStage, seatId: mySeatId, grants: myGrants, canAsk: roomAccess.can.control })}
           sourceStates={roomSources.filter(i => i.participant_id === mySeatId)}
           pendingSources={new Set(Object.keys(sourceCommands))}
-          onSourceMute={(id, muted) => { const source = roomSources.find(i => i.id === id); if (source) controlRef.current?.sourceAction("source.mute", id, muted, source.revision); }}
+          onSourceMute={requestSourceMute}
           onThrowUp={(k) => void throwUp(k)}
           layout={boardLayout}
           error={null}

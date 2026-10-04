@@ -149,7 +149,7 @@ function HostOutput({ program, pending, boomin, title, online }: { program: Prog
         </span>
       </header>
       <div className={`mb-monitor${has ? " has-program" : ""}`}>
-        <video ref={ref} className="mb-monitor-video" autoPlay playsInline muted hidden={!showVideo} />
+        <video ref={ref} className="mb-monitor-video" autoPlay playsInline muted hidden={!stream} />
         {showThumb && <img className="mb-monitor-video" src={st!.thumbUrl!} alt="" />}
         {!has && <span className="mb-monitor-line">{line}</span>}
         {has && <span className="mb-tag">PROGRAM</span>}
@@ -269,7 +269,7 @@ function MyFeeds({ feeds, media, sourceStates, pendingSources, onThrowUp, onSour
     {feeds.mic && <div className="mb-source mb-source-mic">
       <div className="mb-source-head"><strong>{bi.mic} Microphone</strong><span>{st?.sending !== "live" ? "Not sending" : st.muted ? "Muted locally" : "Sending to host"}</span></div>
       <div className="mb-source-actions"><button disabled={!media} onClick={() => media?.toggleMute()}>{st?.muted ? "Unmute microphone" : "Mute microphone"}</button>
-        {sourceStates.filter(s => s.kind === "microphone").map(source => <button key={source.id} disabled={!onSourceMute} onClick={() => onSourceMute?.(source.id, !source.muted)}>{source.muted ? "Enable in program" : "Mute in program"}</button>)}
+        {sourceStates.filter(s => s.kind === "microphone").map(source => <button key={source.id} disabled={!onSourceMute || pendingSources.has(source.id)} onClick={() => onSourceMute?.(source.id, !source.muted)}>{pendingSources.has(source.id) ? "Waiting for host…" : source.muted ? "Enable in program" : "Mute in program"}</button>)}
       </div><span className="mb-meter-track"><span className="mb-meter-fill" style={{ width: `${Math.round((st?.micLevel ?? 0) * 100)}%` }} /></span>
     </div>}
     {!feeds.any && <p className="mb-feeds-note">{boomin ? "The host can allow your camera, microphone and screen. Your controls work without those permissions." : "This moderator link provides room controls. Media permissions are managed by the host."}</p>}
