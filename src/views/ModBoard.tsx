@@ -1,31 +1,12 @@
-/** THE MOD VIEW — a board, not the host's dock layout.
- *
- * Rendered for any non-host seat on a Boomin room (views/Live.tsx) and for a
- * mod seat on an open server (views/ModSeat.tsx) — one component, two data
- * sources. Its pure half (layout + throw-up) is lib/modBoard.ts.
- *
- *   top      HOST OUTPUT — the program monitor, large, with the room name,
- *            the live pill and the clock.
- *   strip    scene PADS across (one tap cuts, the active pad lit, ⌘1–9),
- *            then the Vote as one pad that expands into the vote card, and
- *            the Audience link.
- *   left     PEOPLE — waiting guests (Admit / Decline), staged guests
- *            (Stage / order / remove) with the honest pending states.
- *   right    MY FEEDS — CAMERA and SCREEN: live self-preview when the seat
- *            holds the grant, greyed "Ask the host…" when not; one button
- *            each, Throw up, that asks the host's set for a slot through
- *            the honest-staging path. Mic meter + mute by the camera.
- *   bottom   the row of switches — what the seat holds (chips) and what it
- *            is sending (cam / mic / screen), the capabilities quietly.
- *
- * The board is a layout of its own, saved per seat (`producer.modboard.v1`);
- * panels render from their region, so a future "sound board" strip is one
- * more panel id. Glass tokens throughout; no blue backgrounds.
- */
+import type { RoomSource } from "../../server/src/roomActions";
+/** Moderator workspace shared by authenticated seats and self-hosted control
+ * links. Program and Scenes show the host's confirmed output. My Sources
+ * separates local capture from placement and mixing in that output. Guests
+ * and Audience tabs hold show controls according to the seat's permissions. */
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { type RoomAccessInfo, roleTitle } from "../lib/participants";
 import { monitorPlaceholder, type MonitorState, type ProgramSource } from "../lib/monitorFeed";
-import { type ModBoardLayout, type ModBoardPanel, type SeatFeeds, type ThrowUpState, ASK_HOST, MOD_BOARD_META, heldChips } from "../lib/modBoard";
+import { type ModBoardLayout, type SeatFeeds, type ThrowUpState } from "../lib/modBoard";
 import type { SeatMediaLeg, SeatMediaState } from "../lib/seatMedia";
 
 // ── Small icons (the room's line weight, 1.8) ───────────────────────────────
@@ -158,20 +139,20 @@ function HostOutput({ program, pending, boomin, title, online }: { program: Prog
         ? "Connecting to the host's output…"
         : monitorPlaceholder({ phase: st.phase, message: st.message, connected: st.phase === "live", programState: st.programState, stalled: st.stalled });
   return (
-    <section className="mb-output" aria-label="Host output">
+    <section className="mb-output" aria-label="Program">
       <header className="mb-output-head">
         <span className="mb-output-title">{title}</span>
-        <span className={`mb-pill${has ? " live" : online ? " on" : ""}`}>{has ? "LIVE" : online ? "ROOM OPEN" : "OFF"}</span>
+        <span className={`mb-pill${has ? " live" : online ? " on" : ""}`}>{has ? "RECEIVING" : online ? "CONNECTING" : "OFFLINE"}</span>
         <span className="mb-clock">
           {clock.onAir && <span className="mb-clock-air">{clock.onAir}</span>}
           <span className="mb-clock-wall">{clock.wall}</span>
         </span>
       </header>
       <div className={`mb-monitor${has ? " has-program" : ""}`}>
-        <video ref={ref} className="mb-monitor-video" autoPlay playsInline muted hidden={!showVideo} />
+        <video ref={ref} className="mb-monitor-video" autoPlay playsInline muted hidden={!stream} />
         {showThumb && <img className="mb-monitor-video" src={st!.thumbUrl!} alt="" />}
         {!has && <span className="mb-monitor-line">{line}</span>}
-        {has && <span className="mb-tag">HOST OUTPUT</span>}
+        {has && <span className="mb-tag">PROGRAM</span>}
         {showThumb && <span className="mb-tag mb-tag-right">8 fps preview</span>}
       </div>
     </section>
@@ -265,156 +246,38 @@ function useSeatMedia(media: SeatMediaLeg | null): SeatMediaState | null {
   );
 }
 
-function FeedWindow({
-  kind,
-  granted,
-  stream,
-  off,
-  note,
-  children,
-  throwUp,
-  onThrowUp,
-  mirror,
-}: {
-  kind: "camera" | "screen";
-  granted: boolean;
-  stream: MediaStream | null;
-  off?: boolean;
-  note?: string | null;
-  children?: ReactNode;
-  throwUp: ThrowUpState;
-  onThrowUp: () => void;
-  mirror?: boolean;
+function MyFeeds({ feeds, media, sourceStates, pendingSources, onThrowUp, onSourceMute, boomin }: {
+  feeds: SeatFeeds; media: SeatMediaLeg | null; sourceStates: RoomSource[]; pendingSources: ReadonlySet<string>;
+  onThrowUp: (kind: "camera" | "screen") => void; onSourceMute?: (id: string, muted: boolean) => void; boomin: boolean;
 }) {
-  const label = kind === "camera" ? "CAMERA" : "SCREEN";
-  return (
-    <div className={`mb-feed${granted ? "" : " off"}${throwUp.row === "on" ? " onset" : ""}`}>
-      <div className="mb-feed-head">
-        <span className="mb-feed-label">
-          {kind === "camera" ? bi.cam : bi.screen} {label}
-        </span>
-        {throwUp.row === "on" && <span className="mb-feed-live">ON SET</span>}
-        {throwUp.row.startsWith("pending") && <span className="mb-feed-pending">asking…</span>}
-      </div>
-      <div className="mb-feed-window">
-        {granted && stream && !off ? (
-          <Stream stream={stream} className="mb-feed-video" muted mirror={mirror} />
-        ) : (
-          <span className="mb-feed-note">{granted ? note ?? (off ? "Off" : "Starting…") : ASK_HOST[kind]}</span>
-        )}
-      </div>
-      <div className="mb-feed-ctl">
-        {children}
-        <button
-          className={`mb-throw${throwUp.row === "on" ? " on" : ""}`}
-          disabled={throwUp.disabled || !granted}
-          title={
-            !granted
-              ? ASK_HOST[kind]
-              : throwUp.row === "unavailable"
-                ? "Your seat can't ask the host's set for a slot"
-                : throwUp.row === "on"
-                  ? "Ask the host's set to take you down"
-                  : "Ask the host's set for a slot — pending until their set confirms"
-          }
-          onClick={onThrowUp}
-        >
-          {bi.up} {throwUp.label}
-        </button>
-      </div>
-      {throwUp.notice && granted && <div className="mb-feed-notice">{throwUp.notice}</div>}
-    </div>
-  );
-}
-
-function MyFeeds({ feeds, media, throwUp, onThrowUp, boomin }: { feeds: SeatFeeds; media: SeatMediaLeg | null; throwUp: ThrowUpState; onThrowUp: (kind: "camera" | "screen") => void; boomin: boolean }) {
   const st = useSeatMedia(media);
-  const level = st?.micLevel ?? 0;
-  // One row, two windows: the seat is on the set as a whole, but the screen
-  // window only reads ON SET while a share is actually going out.
-  const screenThrow: ThrowUpState = st?.sharing || throwUp.row !== "on" ? throwUp : { ...throwUp, row: "off", label: "Share + throw up", disabled: false };
-  return (
-    <section className="mb-feeds" aria-label="My feeds">
-      <FeedWindow
-        kind="camera"
-        granted={feeds.camera}
-        stream={media?.localStream() ?? null}
-        off={!!st?.cameraOff}
-        note={st?.mediaError ?? (st?.sending === "gone" ? "The host's room closed this seat." : null)}
-        throwUp={throwUp}
-        onThrowUp={() => onThrowUp("camera")}
-        mirror
-      >
-        {feeds.mic && (
-          <span className="mb-meter" title={st?.muted ? "Muted" : "Mic level"}>
-            <button className={`mb-sw${st?.muted ? " off" : ""}`} onClick={() => media?.toggleMute()} disabled={!media} title={st?.muted ? "Unmute" : "Mute"}>
-              {bi.mic}
-            </button>
-            <span className="mb-meter-track">
-              <span className="mb-meter-fill" style={{ width: `${Math.round(level * 100)}%` }} />
-            </span>
-          </span>
-        )}
-      </FeedWindow>
-      <FeedWindow
-        kind="screen"
-        granted={feeds.screen}
-        stream={media?.screenStream() ?? null}
-        note={st?.sharing ? null : "Not sharing"}
-        throwUp={screenThrow}
-        onThrowUp={() => onThrowUp("screen")}
-      >
-        {feeds.screen && (
-          <button className={`mb-sw${st?.sharing ? " on" : ""}`} onClick={() => void media?.toggleShare()} disabled={!media || st?.sending !== "live"} title={st?.sharing ? "Stop sharing" : "Share a screen or window"}>
-            {bi.screen} {st?.sharing ? "Stop" : "Share"}
-          </button>
-        )}
-      </FeedWindow>
-      {!feeds.any && (
-        <div className="mb-feeds-note">
-          {boomin ? "The host can give this seat a camera, mic or screen from their Mods panel." : "A mod link on an open server carries no media."}
+  return <section className="mb-source-list" aria-label="My sources">
+    {(["camera", "screen"] as const).map(kind => {
+      const granted = feeds[kind];
+      const source = sourceStates.find(s => s.kind === kind);
+      const capturing = kind === "camera" ? !!media && !st?.cameraOff : !!st?.sharing;
+      const busy = !!source && pendingSources.has(source.id);
+      return <div className="mb-source" key={kind}>
+        <div className="mb-source-head"><strong>{kind === "camera" ? bi.cam : bi.screen} {kind === "camera" ? "Camera" : "Screen"}</strong><span>{source?.visible ? "In program" : capturing ? "Ready" : "Off"}</span></div>
+        <div className="mb-source-preview">{granted && capturing ? <Stream stream={kind === "camera" ? media?.localStream() ?? null : media?.screenStream() ?? null} className="mb-feed-video" muted mirror={kind === "camera"} /> : <span>{!granted ? `The host can allow your ${kind}.` : st?.mediaError ?? (kind === "screen" ? "Choose a screen or window to share." : "Your camera is off.")}</span>}</div>
+        <div className="mb-source-actions">
+          <button disabled={!granted || !media} onClick={() => kind === "camera" ? media?.toggleCamera() : void media?.toggleShare()}>{kind === "camera" ? (capturing ? "Stop camera" : "Start camera") : (capturing ? "Stop sharing" : "Share screen")}</button>
+          <button disabled={!granted || !source || busy || (!capturing && !source.visible)} onClick={() => onThrowUp(kind)}>{busy ? "Waiting for host…" : source?.visible ? "Remove from scene" : "Add to scene"}</button>
         </div>
-      )}
-      <HostAudio stream={media?.hostAudioStream() ?? null} />
-    </section>
-  );
+      </div>;
+    })}
+    {feeds.mic && <div className="mb-source mb-source-mic">
+      <div className="mb-source-head"><strong>{bi.mic} Microphone</strong><span>{st?.sending !== "live" ? "Not sending" : st.muted ? "Muted locally" : "Sending to host"}</span></div>
+      <div className="mb-source-actions"><button disabled={!media} onClick={() => media?.toggleMute()}>{st?.muted ? "Unmute microphone" : "Mute microphone"}</button>
+        {sourceStates.filter(s => s.kind === "microphone").map(source => <button key={source.id} disabled={!onSourceMute || pendingSources.has(source.id)} onClick={() => onSourceMute?.(source.id, !source.muted)}>{pendingSources.has(source.id) ? "Waiting for host…" : source.muted ? "Enable in program" : "Mute in program"}</button>)}
+      </div><span className="mb-meter-track"><span className="mb-meter-fill" style={{ width: `${Math.round((st?.micLevel ?? 0) * 100)}%` }} /></span>
+    </div>}
+    {!feeds.any && <p className="mb-feeds-note">{boomin ? "The host can allow your camera, microphone and screen. Your controls work without those permissions." : "This moderator link provides room controls. Media permissions are managed by the host."}</p>}
+    <HostAudio stream={media?.hostAudioStream() ?? null} />
+  </section>;
 }
 
 // ── The row of switches ─────────────────────────────────────────────────────
-
-function Switches({ access, host, grants, feeds, media }: { access: RoomAccessInfo; host?: string | null; grants: ReadonlySet<string>; feeds: SeatFeeds; media: SeatMediaLeg | null }) {
-  const st = useSeatMedia(media);
-  const chips = heldChips({ grants, can: access.can });
-  const camOn = feeds.camera && !!media && !st?.cameraOff;
-  const micOn = feeds.mic && !!media && !st?.muted;
-  const scrOn = feeds.screen && !!st?.sharing;
-  return (
-    <section className="mb-switches" aria-label="Switches">
-      <div className="mb-holds">
-        <span className="mb-holds-label">{roleTitle(access, host)}</span>
-        {chips.map((c) => (
-          <span key={c} className="mb-chip">
-            {c}
-          </span>
-        ))}
-        {chips.length === 0 && <span className="mb-chip dim">watches the roster</span>}
-      </div>
-      <div className="mb-sends">
-        <span className="mb-sends-label">sending</span>
-        <button className={`mb-sw${camOn ? " on" : ""}`} disabled={!feeds.camera || !media} onClick={() => media?.toggleCamera()} title={!feeds.camera ? ASK_HOST.camera : camOn ? "Stop camera" : "Start camera"}>
-          {bi.cam} cam
-        </button>
-        <button className={`mb-sw${micOn ? " on" : ""}`} disabled={!feeds.mic || !media} onClick={() => media?.toggleMute()} title={!feeds.mic ? "Ask the host for mic" : micOn ? "Mute" : "Unmute"}>
-          {bi.mic} mic
-        </button>
-        <button className={`mb-sw${scrOn ? " on" : ""}`} disabled={!feeds.screen || !media || st?.sending !== "live"} onClick={() => void media?.toggleShare()} title={!feeds.screen ? ASK_HOST.screen : scrOn ? "Stop sharing" : "Share a screen"}>
-          {bi.screen} screen
-        </button>
-        {media && <span className={`mb-send-dot ${st?.sending ?? "starting"}`} title={`Your feed: ${st?.sending ?? "starting"}`} />}
-      </div>
-    </section>
-  );
-}
 
 // ── The board ───────────────────────────────────────────────────────────────
 
@@ -443,63 +306,26 @@ export interface ModBoardProps {
   media: SeatMediaLeg | null;
   throwUp: ThrowUpState;
   onThrowUp: (kind: "camera" | "screen") => void;
+  sourceStates?: RoomSource[];
+  pendingSources?: ReadonlySet<string>;
+  onSourceMute?: (id: string, muted: boolean) => void;
   layout: ModBoardLayout;
   error?: string | null;
 }
 
 export function ModBoard(p: ModBoardProps) {
-  const panel = (id: ModBoardPanel): ReactNode => {
-    switch (id) {
-      case "monitor":
-        return <HostOutput key={id} program={p.program} pending={p.pending} boomin={p.boomin} title={p.title} online={p.online} />;
-      case "scenes":
-        return (
-          <ScenePads
-            key={id}
-            scenes={p.scenes}
-            canCut={p.access.can.scene && !p.pending}
-            onCut={p.onCut}
-            pending={p.pending}
-            vote={p.vote}
-            voteLive={!!p.voteLive}
-            canVote={p.access.can.interactions}
-            onAudienceLink={p.onAudienceLink}
-            audienceLink={p.audienceLink}
-          />
-        );
-      case "people":
-        return (
-          <section key={id} className="mb-people" aria-label="People">
-            <h3 className="mb-h">{MOD_BOARD_META.people.title}</h3>
-            {p.people}
-          </section>
-        );
-      case "feeds":
-        return (
-          <section key={id} className="mb-feeds-wrap">
-            <h3 className="mb-h">{MOD_BOARD_META.feeds.title}</h3>
-            <MyFeeds feeds={p.feeds} media={p.media} throwUp={p.throwUp} onThrowUp={p.onThrowUp} boomin={p.boomin} />
-          </section>
-        );
-      case "switches":
-        return <Switches key={id} access={p.access} host={p.host} grants={p.grants} feeds={p.feeds} media={p.media} />;
-    }
-  };
-  const region = (name: keyof ModBoardLayout, cls: string) => {
-    const ids = p.layout[name];
-    if (name === "hidden" || ids.length === 0) return null;
-    return <div className={`mb-region ${cls}`}>{ids.map(panel)}</div>;
-  };
-  return (
-    <div className="modboard" data-region-layout>
-      {region("top", "mb-r-top")}
-      {region("strip", "mb-r-strip")}
-      <div className="mb-columns">
-        {region("left", "mb-r-left")}
-        {region("right", "mb-r-right")}
-      </div>
-      {region("bottom", "mb-r-bottom")}
-      {p.error && <div className="mb-error">{p.error}</div>}
-    </div>
-  );
+  const [tab, setTab] = useState<"people" | "audience">("people");
+  return <div className="modboard mb-workspace">
+    <main className="mb-production">
+      <HostOutput program={p.program} pending={p.pending} boomin={p.boomin} title={p.title} online={p.online} />
+      <section className="mb-scene-section"><h3 className="mb-h">Scenes</h3><ScenePads scenes={p.scenes} canCut={p.access.can.scene && !p.pending} onCut={p.onCut} pending={p.pending} voteLive={false} canVote={false} /></section>
+      <section className="mb-operations">
+        <nav className="mb-tabs" aria-label="Room controls"><button className={tab === "people" ? "active" : ""} onClick={() => setTab("people")}>Guests</button>{p.vote && <button className={tab === "audience" ? "active" : ""} onClick={() => setTab("audience")}>Audience & votes{p.voteLive ? " · active" : ""}</button>}{p.onAudienceLink && <button className="mb-copy-audience" onClick={p.onAudienceLink}>Copy audience link</button>}</nav>
+        <div className="mb-operation-content">{tab === "people" ? p.people : p.vote}</div>
+      </section>
+    </main>
+    <aside className="mb-source-sidebar"><h3 className="mb-h">My Sources</h3><p className="mb-source-explanation">Choose what to send. Add camera and screen sources to the host’s current scene.</p><MyFeeds feeds={p.feeds} media={p.media} sourceStates={p.sourceStates ?? []} pendingSources={p.pendingSources ?? new Set()} onThrowUp={p.onThrowUp} onSourceMute={p.onSourceMute} boomin={p.boomin} /></aside>
+    <footer className="mb-role-status"><span>{roleTitle(p.access, p.host)}</span><span>{p.pending ? "Checking permissions…" : p.online ? "Connected to host" : "Waiting for host"}</span></footer>
+    {p.error && <div className="mb-error" role="alert">{p.error}</div>}
+  </div>;
 }

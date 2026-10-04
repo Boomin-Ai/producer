@@ -32,4 +32,8 @@ else
   codesign --force --sign - "$DEV_APP"
 fi
 codesign --verify --deep --strict "$DEV_APP"
-open -n "$DEV_APP"
+if [[ "${1:-}" != "--prepare" ]]; then
+  open -n "$DEV_APP"
+else
+  echo "Prepared signed preview: $DEV_APP"
+fi

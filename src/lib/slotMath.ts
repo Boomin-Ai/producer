@@ -55,7 +55,7 @@ export function captureSlotLook(
 ): Record<string, LookEntry> {
   const byId = new Map(items.map((item) => [item.id, item]));
   return Object.fromEntries(items
-    .filter((item) => item.kind !== "guest" && item.kind !== "mod")
+    .filter((item) => item.kind !== "guest")
     .map((item) => {
       const occupant = isSlotId(item.id) ? byId.get(bindings[item.id]) : undefined;
       return [item.id, {

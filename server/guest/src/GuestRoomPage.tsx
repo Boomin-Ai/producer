@@ -25,7 +25,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { CONNECT_API_BASE_URL } from "./apiConfig";
-import { GuestMesh, type StageUpdate } from "./guestMesh";
+import type { StageUpdate } from "./guestMesh";
+import { GuestConversation } from "./guestConversation";
 import { controlsFor, resolveGrants, type GuestControls, type ParticipantLike } from "./participants";
 import { HostLink, signalingWsUrl, type Session } from "./hostLink";
 import { VoteCard } from "./VoteCard";
@@ -76,8 +77,7 @@ export default function GuestRoomPage({ code }: { code: string }) {
   const [hostListening, setHostListening] = useState(false);
   const [hostDown, setHostDown] = useState(false);
   const hostDownTimer = useRef<number | null>(null);
-  const meshRef = useRef<GuestMesh | null>(null);
-  const roomWsRef = useRef<WebSocket | null>(null);
+  const meshRef = useRef<GuestConversation | null>(null);
 
   // What this participant may do. Unknown before the join answers (the room
   // link carries no identity), so the preview opens on the default bundle and
@@ -192,7 +192,7 @@ export default function GuestRoomPage({ code }: { code: string }) {
       void (async () => {
         await startPreview();
         const fresh = streamRef.current;
-        if (fresh) linkRef.current?.replaceLocalTracks(fresh);
+        if (fresh) { linkRef.current?.replaceLocalTracks(fresh); meshRef.current?.refreshMicrophone(); }
       })();
     };
     document.addEventListener("visibilitychange", onVis);
@@ -259,7 +259,7 @@ export default function GuestRoomPage({ code }: { code: string }) {
       onData: (raw) => {
         const msg = raw as { kind?: string; on_stage?: string[]; version?: number; listening?: boolean };
         if (msg.kind === "stage" && Array.isArray(msg.on_stage) && typeof msg.version === "number") {
-          const update: StageUpdate = { on_stage: msg.on_stage, version: msg.version };
+          const update: StageUpdate = { on_stage: msg.on_stage, version: msg.version, audible: (msg as StageUpdate).audible };
           // "host": live truth from Producer, which is what unlocks publishing.
           meshRef.current?.applyStage(update, "host");
           setOnStage(msg.on_stage.includes(guestIdRef.current ?? ""));
@@ -315,68 +315,14 @@ export default function GuestRoomPage({ code }: { code: string }) {
    *  render page is a separate browser process, so the host cannot relay between
    *  them. */
   const joinRoomChannel = useCallback(async (inviteCode: string) => {
-    const res = await fetch(`${CONNECT_API_BASE_URL}/guest/${encodeURIComponent(inviteCode)}/room-session`, { method: "POST" });
-    if (!res.ok) return;
-    const body = (await res.json()) as {
-      signaling_ticket: string; signaling_url: string; peer_id: string;
-      stage: StageUpdate; ice_servers?: RTCIceServer[];
-    };
-    guestIdRef.current = body.peer_id;
-
-    const api = new URL(CONNECT_API_BASE_URL, window.location.origin);
-    const wsUrl = new URL(body.signaling_url, api.origin);
-    wsUrl.protocol = api.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(wsUrl.toString());
-    roomWsRef.current = ws;
-
-    const mesh = new GuestMesh({
-      selfId: body.peer_id,
-      iceServers: body.ice_servers ?? [{ urls: ["stun:stun.cloudflare.com:3478", "stun:stun.l.google.com:19302"] }],
-      localStream: () => streamRef.current,
-      send: (to, payload) => {
-        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "signal", to, payload }));
-      },
-      onPeerAudio: (peerId, stream) => {
-        const elId = `peer-${peerId}`;
-        let el = document.getElementById(elId) as HTMLAudioElement | null;
-        if (!stream) { if (el) { el.srcObject = null; el.remove(); } return; }
-        if (!el) {
-          el = document.createElement("audio");
-          el.id = elId;
-          el.autoplay = true;
-          document.body.appendChild(el);
-        }
-        el.srcObject = stream;
-        void el.play().catch(() => {});
-      },
+    meshRef.current?.stop();
+    const conversation = new GuestConversation({ api: CONNECT_API_BASE_URL, code: inviteCode, interactionChannel: "interaction:guest", localStream: () => streamRef.current,
+      onSession: (peerId, stage) => { guestIdRef.current = peerId; setOnStage(stage.on_stage.includes(peerId)); },
+      onFrame: raw => { let frame: unknown; try { frame = JSON.parse(String(raw)); } catch { return; } const ix = interactionFromFrame(frame); if (ix) { setInteractions(current => mergeInteraction(current, ix)); if (typeof ix.server_now === "number") setClock(clockOffset(ix.server_now)); } },
     });
-    meshRef.current = mesh;
-
-    // Seed from the server's copy so we start CORRECT rather than waiting for
-    // the host's first push. This is the cold-start path.
-    // "server": the cached copy. Enough to start LISTENING immediately, not
-    // enough to start speaking — see applyStage.
-    mesh.applyStage(body.stage, "server");
-    setOnStage(body.stage.on_stage.includes(body.peer_id));
-
-    ws.onopen = () => {
-      // The guest's projection of every interaction in the room.
-      ws.send(JSON.stringify({ type: "subscribe", channel: "interaction:guest" }));
-    };
-    ws.onmessage = (event) => {
-      let frame: { type?: string; action?: string; from?: string; payload?: Record<string, unknown> };
-      try { frame = JSON.parse(String(event.data)); } catch { return; }
-      if (frame.type === "signal" && frame.from && frame.payload) {
-        void mesh.onSignal(frame.from, frame.payload as never);
-        return;
-      }
-      if (frame.action === "interaction") {
-        const doc = interactionFromFrame(frame);
-        if (!doc) return;
-        setClock(clockOffset(doc.server_now));
-        setInteractions((l) => mergeInteraction(l, doc));
-      }
-    };
+    meshRef.current = conversation;
+    conversation.setMicrophoneEnabled(streamRef.current?.getAudioTracks()[0]?.enabled !== false);
+    conversation.start();
   }, []);
 
   /** One still frame so the host sees a face rather than a self-typed name.
@@ -433,8 +379,7 @@ export default function GuestRoomPage({ code }: { code: string }) {
 
   useEffect(() => () => {
     if (hostDownTimer.current) window.clearTimeout(hostDownTimer.current);
-    meshRef.current?.close();
-    try { roomWsRef.current?.close(); } catch { /* already closed */ }
+    meshRef.current?.stop();
   }, []);
 
   // While waiting, watch for the host to admit us.
@@ -455,7 +400,7 @@ export default function GuestRoomPage({ code }: { code: string }) {
 
   const toggleMute = () => {
     const t = streamRef.current?.getAudioTracks()[0];
-    if (!t) return; t.enabled = !t.enabled; setMuted(!t.enabled);
+    if (!t) return; t.enabled = !t.enabled; meshRef.current?.setMicrophoneEnabled(t.enabled); setMuted(!t.enabled);
   };
   const toggleCamera = () => {
     const t = streamRef.current?.getVideoTracks()[0];

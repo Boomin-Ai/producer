@@ -1,3 +1,4 @@
+import type { RoomSource, RoomAction } from "../../server/src/roomActions";
 import { formatGuestLink, hostedAudienceLink } from "../lib/hostedShare";
 import { previewSession } from "../lib/previewSession";
 import { roomSession } from "../lib/roomSession";
@@ -162,7 +163,6 @@ import {
   isOwnEcho,
   modRowStage,
   modStageReduce,
-  modStageWish,
   type ModStageEvent,
   type ModStageState,
 } from "../lib/stageTruth";
@@ -1053,7 +1053,6 @@ function ModsPanel({
   members,
   grants,
   onToggleGrant,
-  onPlace,
   error,
 }: {
   seats: RoomGuest[];
@@ -1072,7 +1071,7 @@ function ModsPanel({
         {seats.length === 0 && <div className="rm-rows-empty">No one is seated.</div>}
         {seats.map((g) => {
         const grants_ = resolveGrants(g);
-        const ids = modSourceIdsFor(g.id);
+        const ids = modSourceIdsFor(g.id, g.producer_ref);
         const cam = items.find((i) => i.id === ids.camera);
         const scr = grants_.has("media.screen") ? items.find((i) => i.id === ids.screen) : undefined;
         const media = isMediaSeat(g);
@@ -1091,7 +1090,7 @@ function ModsPanel({
               aria-pressed={on}
               onClick={() => onToggleGrant(g, grant, !on)}
             >
-              {icon}
+              {icon} Allow {what}
             </button>
           );
         };
@@ -1129,31 +1128,7 @@ function ModsPanel({
                 <span className="rm-mod-readout" title="What the host's set shows for this seat">
                   {readout}
                 </span>
-                {isHost && (
-                  <>
-                    <button
-                      type="button"
-                      className={`rm-guest-stage${onSet ? " on" : ""}`}
-                      disabled={!cam}
-                      aria-pressed={onSet}
-                      title={onSet ? `Take ${name}'s camera off the set` : cam ? `Place ${name}'s camera on the set (mod feed, lower-right)` : "Their feed hasn't connected yet"}
-                      onClick={() => cam && onPlace(g, "camera", !onSet)}
-                    >
-                      {ic.cam} {onSet ? "Camera on set" : "Camera"}
-                    </button>
-                    {scr && (
-                      <button
-                        type="button"
-                        className={`rm-guest-stage${scrOn ? " on" : ""}`}
-                        aria-pressed={scrOn}
-                        title={scrOn ? `Take ${name}'s screen off the set` : `Place ${name}'s screen on the set (mod feed, full frame)`}
-                        onClick={() => onPlace(g, "screen", !scrOn)}
-                      >
-                        {ic.screen} {scrOn ? "Screen on set" : "Screen"}
-                      </button>
-                    )}
-                  </>
-                )}
+                <span className="rm-mod-readout">Place and mix these in Sources.</span>
               </div>
             )}
           </div>
@@ -3343,6 +3318,16 @@ export function LiveView({
   const monitorStartedFor = useRef<string | null>(null);
   const [monitorSeat, setMonitorSeat] = useState<ProgramMonitor | null>(null);
   const monitorSenders = useRef<Map<string, MonitorSender>>(new Map());
+  const [roomSources, setRoomSources] = useState<RoomSource[]>([]);
+  const roomSourcesRef = useRef<RoomSource[]>([]);
+  const [sourceCommands, setSourceCommands] = useState<Record<string, RoomAction>>({});
+  const actionWaiters = useRef(new Map<string, { kind: "camera" | "screen" | "microphone" | "guest"; target: string; timer: number }>());
+  const sourceProtocolRef = useRef(false);
+  const sourceOrder = useRef(new Map<string, number>());
+  const actionEpoch = useRef(0);
+  const audioStageVersion = useRef(Date.now());
+  const modTransportUrls = useRef(new Map<string, string>());
+
   // ── A seat WITH MEDIA (lib/seatMedia.ts, the Jamie pattern) ──────────
   // When the host hands this seat camera / mic / screen, its monitor row
   // becomes a sending participant: the receive-only leg above is replaced
@@ -3522,6 +3507,33 @@ export function LiveView({
     fadeGuest(guestItemId, false);
   };
 
+  /** Remote requests commit placement only after the engine confirms it. */
+  const applyParticipantStage = async (guestItemId: string, on: boolean) => {
+    const items = sourcesRef.current.items ?? [];
+    if (!items.some(item => item.id === guestItemId)) throw new Error("Guest source is no longer available.");
+    const current = cfgRef.current;
+    const bindings = current.slot_bindings ?? {};
+    const look = current.scenes.find(scene => scene.id === activeSceneRef.current)?.look;
+    const existing = slotOfGuest(bindings, guestItemId);
+    const slot = on ? (existing && (!look || existing in look)
+      ? items.find(item => item.id === existing) : freeSlot()) : items.find(item => item.id === existing);
+    if (on && !slot) throw new Error("No guest slot is available in this scene.");
+    await setOpacity(guestItemId, 1);
+    const changes: Parameters<typeof ipc.liveApplyScene>[0] = [{ id: guestItemId,
+      patch: on && slot ? { x: slot.x, y: slot.y, w: slot.w, h: slot.h, z: slot.z, visible: true } : { visible: false }, muted: !on }];
+    if (slot && (!look || slot.id in look)) changes.push({ id: slot.id, patch: { visible: !on } });
+    const actual = await ipc.liveApplyScene(changes);
+    const guest = actual.items?.find(item => item.id === guestItemId);
+    if (!guest || guest.visible !== on || guest.muted !== !on) throw new Error("The production engine did not confirm guest placement.");
+    sourcesRef.current = actual; setSources(actual);
+    const nextBindings = { ...bindings };
+    if (existing) delete nextBindings[existing];
+    if (on && slot) nextBindings[slot.id] = guestItemId;
+    writeCfg({ ...current, slot_bindings: nextBindings,
+      scenes: current.scenes.map(scene => on && slot && scene.id === activeSceneRef.current ? { ...scene,
+        look: { ...(scene.look ?? stageLook(items, bindings)), [slot.id]: { visible: true, x: slot.x, y: slot.y, w: slot.w, h: slot.h, z: slot.z } } } : scene) });
+  };
+
   const fadeGuest = (id: string, show: boolean, ms = 260) => {
     if (show) {
       setOpacity(id, 0).catch(() => {});
@@ -3559,7 +3571,7 @@ export function LiveView({
   // slot_bindings — slot math never sees a mod row.
   const modPlacedRef = useRef<Map<string, boolean>>(new Map());
   const placeModFeed = async (participantId: string, track: ModFeedTrack, why: string): Promise<boolean> => {
-    const id = modSourceIdsFor(participantId)[track];
+    const id = modSourceIdsFor(participantId, liveRowsRef.current.find(g => g.id === participantId)?.producer_ref)[track];
     const items = sourcesRef.current.items ?? [];
     const it = items.find((i) => i.id === id);
     if (!it) {
@@ -3568,21 +3580,23 @@ export function LiveView({
     }
     const bw = (vhRef.current * 16) / 9;
     const bh = vhRef.current;
-    const rect = toCanvas(modFeedRect(cfgRef.current.mod_feeds, participantId, track), bw, bh);
+    const rect = toCanvas(modFeedRect(cfgRef.current.mod_feeds, String(liveRowsRef.current.find(g => g.id === participantId)?.producer_ref ?? participantId), track), bw, bh);
     const z = modFeedZ(items.filter((i) => i.id !== id));
-    await ipc.liveSetTransform(id, { ...rect, z, visible: false }, true).catch(() => {});
-    fadeGuest(id, true);
+    const actual = await ipc.liveApplyScene([{ id, patch: { ...rect, z, visible: true } }]);
+    sourcesRef.current = actual;
+    setSources(actual);
+    captureActiveLook();
     // Remember the rect (the default becomes explicit the first time).
-    const feeds = rememberModFeed(cfgRef.current.mod_feeds, participantId, track, modFeedRect(cfgRef.current.mod_feeds, participantId, track));
+    const feeds = rememberModFeed(cfgRef.current.mod_feeds, String(liveRowsRef.current.find(g => g.id === participantId)?.producer_ref ?? participantId), track, modFeedRect(cfgRef.current.mod_feeds, String(liveRowsRef.current.find(g => g.id === participantId)?.producer_ref ?? participantId), track));
     writeCfg({ ...cfgRef.current, mod_feeds: feeds });
     modLedger(participantId, track, id, true);
     monitorLog(`host: mod feed ${id} placed (${why}) at ${Math.round(rect.x)},${Math.round(rect.y)} ${Math.round(rect.w)}×${Math.round(rect.h)} z${z}`);
     return true;
   };
   const removeModFeed = (participantId: string, track: ModFeedTrack, why: string) => {
-    const id = modSourceIdsFor(participantId)[track];
+    const id = modSourceIdsFor(participantId, liveRowsRef.current.find(g => g.id === participantId)?.producer_ref)[track];
     const it = (sourcesRef.current.items ?? []).find((i) => i.id === id);
-    if (it?.visible) fadeGuest(id, false);
+    if (it?.visible) void ipc.liveApplyScene([{ id, patch: { visible: false } }]).then(actual => { sourcesRef.current = actual; setSources(actual); captureActiveLook(); }).catch(e => notifyError(e));
     modLedger(participantId, track, id, false);
     monitorLog(`host: mod feed ${id} removed (${why})`);
   };
@@ -3612,7 +3626,7 @@ export function LiveView({
     const g = { x: patch.x ?? it.x, y: patch.y ?? it.y, w: patch.w ?? it.w, h: patch.h ?? it.h };
     const bw = (vhRef.current * 16) / 9;
     const rect = fromCanvas(g, bw, vhRef.current);
-    writeCfg({ ...cfgRef.current, mod_feeds: rememberModFeed(cfgRef.current.mod_feeds, owner.row.id, owner.track, rect) });
+    writeCfg({ ...cfgRef.current, mod_feeds: rememberModFeed(cfgRef.current.mod_feeds, String(owner.row.producer_ref ?? owner.row.id), owner.track, rect) });
   };
 
   const admitGuest = async (id: string) => {
@@ -3647,8 +3661,60 @@ export function LiveView({
     const visible = new Set((sourcesRef.current.items ?? []).filter((i) => (i.kind === "guest" || i.kind === "mod") && i.visible).map((i) => i.id));
     return boundStageIds(live.map((g) => ({
       id: g.id, seat: isMonitor(g),
-      sourceId: isMonitor(g) ? modSourceIdsFor(g.id).camera : sourceIdsFor(g.id).camera,
+      sourceId: isMonitor(g) ? modSourceIdsFor(g.id, g.producer_ref).camera : sourceIdsFor(g.id).camera,
     })), visible, cfgRef.current.slot_bindings ?? {});
+  };
+  const sourceCatalog = (items = sourcesRef.current.items ?? []): RoomSource[] => {
+    const result: RoomSource[] = [];
+    for (const row of liveRowsRef.current.filter(g => isMonitor(g))) {
+      const grants = resolveGrants(row);
+      const ids = modSourceIdsFor(row.id, row.producer_ref);
+      for (const kind of ["camera", "screen"] as const) {
+        const item = items.find(i => i.id === ids[kind]);
+        if (!item) continue;
+        if (grants.has(`media.${kind}`)) result.push({ id: item.id, participant_id: row.id, owner_id: String(row.producer_ref ?? row.id), label: `${seatDisplayName(row)} · ${kind}`, kind,
+          visible: item.visible, muted: item.muted, ready: item.has_frame !== false, scene_id: activeSceneRef.current, revision: 0 });
+        if (kind === "camera" && grants.has("media.mic")) result.push({ id: `${item.id}:mic`, participant_id: row.id, owner_id: String(row.producer_ref ?? row.id), label: `${seatDisplayName(row)} · microphone`, kind: "microphone",
+          visible: false, muted: item.muted, ready: item.has_audio, scene_id: null, revision: 0 });
+      }
+    }
+    return result;
+  };
+  const publishSourceTruth = () => {
+    if (roomRoleRef.current !== "host") return;
+    const participants = liveRowsRef.current.filter(g => !!g.render_url).map(g => g.id);
+    const catalog = sourceCatalog();
+    const onStage = shownGuestIds();
+    const audible = liveRowsRef.current.filter(g => {
+      const id = isMonitor(g) ? modSourceIdsFor(g.id, g.producer_ref).camera : sourceIdsFor(g.id).camera;
+      const item = sourcesRef.current.items?.find(i => i.id === id);
+      return item && !item.muted && (item.visible || isMonitor(g));
+    }).map(g => g.id);
+    const mediaStage = [...new Set([...onStage, ...audible])];
+    for (const sender of monitorSenders.current.values()) sender.setStage(mediaStage, audible, ++audioStageVersion.current);
+    controlRef.current?.publishSources(catalog, participants, onStage);
+  };
+  const requestSource = (kind: "camera" | "screen", on?: boolean) => {
+    const source = roomSourcesRef.current.find(i => i.participant_id === mySeatRef.current?.id && i.kind === kind);
+    if (!source) { notifyError("Waiting for the host to publish your sources.", { key: "guests" }); return; }
+    const commandId = controlRef.current?.sourceAction("source.visibility", source.id, on ?? !source.visible, source.revision);
+    if (!commandId) { notifyError("Reconnect to the host before changing sources.", { key: "guests" }); return; }
+    const timer = window.setTimeout(() => { actionWaiters.current.delete(commandId); setSourceCommands(previous => { const next = { ...previous }; delete next[source.id]; return next; }); notifyError("The host did not confirm this source change. Try again.", { key: "guests" }); }, 7000);
+    actionWaiters.current.set(commandId, { kind, target: source.id, timer });
+    setSourceCommands(previous => ({ ...previous, [source.id]: { command_id: commandId, kind: "source.visibility", target: source.id, on: on ?? !source.visible, status: "accepted" } as RoomAction }));
+  };
+  const requestSourceMute = (id: string, muted: boolean) => {
+    const source = roomSourcesRef.current.find(item => item.id === id && item.participant_id === mySeatRef.current?.id);
+    if (!source || [...actionWaiters.current.values()].some(waiter => waiter.target === id)) return;
+    const commandId = controlRef.current?.sourceAction("source.mute", id, muted, source.revision);
+    if (!commandId) { notifyError("Reconnect to the host before changing the microphone mix.", { key: "guests" }); return; }
+    const timer = window.setTimeout(() => {
+      actionWaiters.current.delete(commandId);
+      setSourceCommands(previous => { const next = { ...previous }; delete next[id]; return next; });
+      notifyError("The host did not confirm the microphone change. Try again.", { key: "guests" });
+    }, 7000);
+    actionWaiters.current.set(commandId, { kind: "microphone", target: id, timer });
+    setSourceCommands(previous => ({ ...previous, [id]: { command_id: commandId, kind: "source.mute", target: id, on: muted, status: "accepted" } as RoomAction }));
   };
   const sameIds = (a: readonly string[], b: readonly string[]) => a.length === b.length && [...a].sort().every((x, i) => x === [...b].sort()[i]);
   /** Host: post the stage list UNCONDITIONALLY — after acting on a mod's
@@ -3676,6 +3742,7 @@ export function LiveView({
   const onStageFrameRef = useRef<((onStage: string[], version: number) => void) | null>(null);
   onStageFrameRef.current = (onStage, version) => {
     if (roomRoleRef.current !== "host") {
+      if (sourceProtocolRef.current) return;
       dispatchStage({ type: "frame", on_stage: onStage, version, now: Date.now() });
       return;
     }
@@ -3739,14 +3806,8 @@ export function LiveView({
       removeModFeed(row.id, "screen", "share ended");
       return;
     }
-    const ids = modSourceIdsFor(row.id);
-    const cam = (sourcesRef.current.items ?? []).find((i) => i.id === ids.camera);
-    if (!cam?.visible) {
-      monitorLog(`host: seat ${row.id.slice(0, 8)} is sharing but not on the set — waiting for its throw-up`);
-      pendingSeatShare.current.add(row.id);
-      return;
-    }
-    void placeModFeed(row.id, "screen", "share started");
+    // Starting capture only makes the source available. Placement is explicit.
+    rosterTickRef.current?.();
   };
   /** Seats sharing while off the set: their screen lands when they come on. */
   const pendingSeatShare = useRef<Set<string>>(new Set());
@@ -3758,17 +3819,14 @@ export function LiveView({
   const modStageToggle = async (guestId: string) => {
     if (!endpointRef.current || !cfg.server_room_id) return;
     const st = modStageRef.current;
-    if (st.pending) return; // one ask at a time; the host answers in order
-    const { on_stage, want } = modStageWish(st, guestId);
-    dispatchStage({ type: "dismiss", guestId });
-    try {
-      const res = (await guestsIpc.setStage(endpointRef.current, cfg.server_room_id, on_stage)) as { version?: unknown } | null;
-      const version = typeof res?.version === "number" ? res.version : st.version + 1;
-      dispatchStage({ type: "request", guestId, want, version, now: Date.now() });
-    } catch (e) {
-      const msg = String(e).replace(/^Error:\s*/, "");
-      dispatchStage({ type: "request-failed", guestId, error: /stage_full|holds/i.test(msg) ? "The server's stage is full — ask the host" : msg });
-    }
+    if (st.pending) return;
+    if (!sourceProtocolRef.current) { notifyError("The host needs the updated Producer build to confirm source changes.", { key: "guests" }); return; }
+    const want = !st.confirmed.includes(guestId);
+    const commandId = controlRef.current?.sourceAction("participant.stage", guestId, want);
+    if (!commandId) return;
+    dispatchStage({ type: "request", guestId, want, version: st.version, now: Date.now() });
+    const timer = window.setTimeout(() => { actionWaiters.current.delete(commandId); dispatchStage({ type: "request-failed", guestId, error: "The host did not confirm the stage change." }); }, 7000);
+    actionWaiters.current.set(commandId, { kind: "guest", target: guestId, timer });
   };
   /** The roster tick, callable from an action: order/remove are server
    * truth, so the panel re-reads instead of guessing. */
@@ -3796,21 +3854,14 @@ export function LiveView({
    * through the honest-staging path (lib/stageTruth.ts). The screen window
    * starts the share first; the host frames the share from its Mods panel. */
   const throwUp = async (kind: "camera" | "screen") => {
-    const id = mySeatRef.current?.id;
-    if (!id) return;
-    const leg = mediaLegRef.current;
-    if (kind === "screen") {
-      // "Place my screen": the share is announced to the server as a
-      // media.screen interval (lib/seatMedia.ts); the host's set places the
-      // MOD SCREEN feed from that interval once the seat is on the set —
-      // so stage the seat if it is not yet.
-      if (leg && !leg.snapshot().sharing) {
-        const ok = await leg.toggleShare();
-        if (!ok) return;
+    if (kind === "screen" && !mediaLegRef.current?.snapshot().sharing) {
+      if (!await mediaLegRef.current?.toggleShare()) return;
+      // The host creates the screen source before it becomes placeable.
+      if (!roomSourcesRef.current.some(i => i.participant_id === mySeatRef.current?.id && i.kind === kind)) {
+        notify("Screen sharing started. Place it when the host source is ready.", { key: "guests" }); return;
       }
-      if (modRowStage(modStageRef.current, id) === "on") return;
     }
-    await modStageToggle(id);
+    requestSource(kind);
   };
   /** HOST: give or take a seat's camera / mic / screen (api: host-only). */
   const toggleSeatGrant = async (seatRow: RoomGuest, grant: "media.camera" | "media.mic" | "media.screen", enabled: boolean) => {
@@ -4888,7 +4939,7 @@ export function LiveView({
         const changes = new Map<string, { id: string; patch: LiveTransformPatch; muted?: boolean }>();
         if (p.look) {
           for (const item of liveNow) {
-            if (item.kind === "mod") continue;
+
             if (item.kind === "guest") {
               const slot = slotOfGuest(bindings, item.id);
               if (slot && !(slot in look)) changes.set(item.id, { id: item.id, patch: { visible: false }, muted: true });
@@ -4926,7 +4977,7 @@ export function LiveView({
       const realLook = !!p.look;
       if (realLook) {
         for (const it of liveNow) {
-          if (it.kind === "mod") continue;
+
           if (it.kind === "guest") {
             // A GUEST FOLLOWS ITS SLOT. Guests are exempt from plain
             // membership because a slot carries them — but that only works
@@ -5391,6 +5442,63 @@ export function LiveView({
             if (frame.type === "audience.viewer.left" && typeof f.id === "string") { audienceSenders.current.get(f.id)?.stop(); audienceSenders.current.delete(f.id); }
             return;
           }
+          if (frame.type === "room.sources") {
+            const f = frame as unknown as { sources: RoomSource[]; on_stage: string[]; epoch: number; command_protocol: number };
+            if (!Array.isArray(f.sources) || !Array.isArray(f.on_stage) || f.epoch < actionEpoch.current) return;
+            if (f.epoch > actionEpoch.current) sourceOrder.current.clear();
+            actionEpoch.current = f.epoch;
+            sourceProtocolRef.current = f.command_protocol === 1;
+            roomSourcesRef.current = f.sources; setRoomSources(f.sources);
+            if (roomRoleRef.current !== "host" && !modStageRef.current.pending) dispatchStage({ type: "frame", on_stage: f.on_stage, version: modStageRef.current.version + 1, now: Date.now() });
+            return;
+          }
+          if (frame.type === "room.action.command") {
+            const command = frame as unknown as RoomAction;
+            const waiter = actionWaiters.current.get(command.command_id);
+            if (waiter && command.status !== "accepted") {
+              window.clearTimeout(waiter.timer); actionWaiters.current.delete(command.command_id);
+              if (waiter.kind === "guest") {
+                if (command.status === "applied") dispatchStage({ type: "frame", on_stage: command.on ? [...modStageRef.current.confirmed.filter(id => id !== command.target), command.target] : modStageRef.current.confirmed.filter(id => id !== command.target), version: modStageRef.current.version + 1, now: Date.now() });
+                else dispatchStage({ type: "request-failed", guestId: command.target, error: command.error ?? "The host did not apply this stage change." });
+              } else {
+                setSourceCommands(previous => { const next = { ...previous }; delete next[waiter.target]; return next; });
+                if (command.status !== "applied") notifyError(command.error ?? "The host did not apply this source change.", { key: "guests" });
+              }
+            }
+            return;
+          }
+          if (frame.type === "room.action" && roomRoleRef.current === "host") {
+            const command = frame as unknown as RoomAction & { server_now: number };
+            const key = `${command.kind}:${command.target}`;
+            if (command.epoch < actionEpoch.current || command.sequence <= (sourceOrder.current.get(key) ?? 0)) return;
+            if (command.epoch > actionEpoch.current) sourceOrder.current.clear();
+            actionEpoch.current = command.epoch; sourceOrder.current.set(key, command.sequence);
+            const deadline = performance.now() + Math.max(0, command.expires_at - command.server_now);
+            sceneExecutionRef.current = sceneExecutionRef.current.catch(() => {}).then(async () => {
+              if (!alive || performance.now() >= deadline || actionEpoch.current !== command.epoch || sourceOrder.current.get(key) !== command.sequence) return;
+              let error: string | undefined;
+              try {
+                if (command.kind === "participant.stage") {
+                  const row = liveRowsRef.current.find(g => g.id === command.target && !isMonitor(g));
+                  if (!row) throw new Error("Participant is no longer available.");
+                  await applyParticipantStage(sourceIdsFor(row.id).camera, command.on);
+                  await postStageTruth(shownGuestIds(), "confirmed moderator command");
+                } else {
+                  const source = sourceCatalog().find(i => i.id === command.target);
+                  if (!source || source.participant_id !== command.participant_id || !liveRowsRef.current.some(g => g.id === source.participant_id)) throw new Error("Source is no longer available.");
+                  if (command.kind === "source.visibility" && source.scene_id !== command.scene_id) throw new Error("The scene changed. Try this action again.");
+                  const id = source.kind === "microphone" ? command.target.replace(/:mic$/, "") : command.target;
+                  const actual = await ipc.liveApplyScene([{ id, patch: command.kind === "source.visibility" ? { visible: command.on } : {}, ...(command.kind === "source.mute" ? { muted: command.on } : {}) }]);
+                  sourcesRef.current = actual; setSources(actual);
+                  captureActiveLook();
+                  if (command.kind === "source.visibility") modLedger(source.participant_id, source.kind as ModFeedTrack, id, command.on);
+                }
+              } catch (e) { error = String(e); }
+              publishSourceTruth();
+              link?.acknowledgeAction(command, sourceCatalog(), liveRowsRef.current.filter(g => !!g.render_url).map(g => g.id), shownGuestIds(), error);
+            });
+            return;
+          }
           if (frame.type === "interaction") {
             const ix = (frame as { payload?: unknown }).payload as Interaction | undefined;
             if (ix && typeof ix === "object" && typeof ix.id === "string") onInteractionFrame(ix);
@@ -5474,6 +5582,7 @@ export function LiveView({
           if (roomRoleRef.current === "host") {
             restoreAudienceOnSnapshot = true;
             link?.publishScenes(scenesRef.current, activeSceneRef.current);
+            publishSourceTruth();
           }
         },
       });
@@ -5488,6 +5597,8 @@ export function LiveView({
       if (controlRef.current === link) controlRef.current = null;
     };
   }, [room?.id, cfg.server_room_id, roomRole, boominRoom]);
+  useEffect(() => { publishSourceTruth(); }, [sources, roomRole]);
+
   // Every change to the list or the active scene reaches the mods. Open
   // server: a `scene.publish` frame. Boomin: the room config carries a scene
   // DIRECTORY (ids + labels, `stage_enabled: false`) that `POST …/scene`
@@ -6146,7 +6257,10 @@ export function LiveView({
         if (endpointBaseRef.current) {
           const wantedMonitors = new Map(full.filter((g) => resolveGrants(g).has("media.return_feed") && !!g.render_url).map((g) => [g.id, g] as const));
           for (const [id, sender] of monitorSenders.current) {
-            if (!wantedMonitors.has(id)) {
+            const row = wantedMonitors.get(id);
+            const peer = row && isMonitor(row) && !isMediaSeat(row) ? "main" : "program";
+            const bus = peer === "main" ? 0 : 1;
+            if (!row || sender.spec.peer !== peer || sender.spec.audioBus !== bus) {
               sender.stop();
               monitorSenders.current.delete(id);
               monitorThumbDemand();
@@ -6306,7 +6420,6 @@ export function LiveView({
           const presentMods = new Set((sources.items ?? []).filter((i) => i.kind === "mod").map((i) => i.id));
           const wantedMods = wantedModSourceIds(seats.filter((g) => !!g.render_url));
           for (const [id, { seat, track }] of wantedMods) {
-            if (presentMods.has(id)) continue;
             const u = new URL(seat.render_url!);
             u.searchParams.set("feed", "0");
             if (track === "screen") {
@@ -6316,14 +6429,30 @@ export function LiveView({
               u.searchParams.set("program", vcamState?.device_name ?? "Producer Virtual Camera");
               if (!resolveGrants(seat).has("media.return_feed")) u.searchParams.set("feed", "0");
             }
+            const existing = (sourcesRef.current.items ?? []).find(i => i.id === id);
+            const previousUrl = modTransportUrls.current.get(id);
+            if (existing && previousUrl === u.toString()) continue;
+            if (existing) await extraSources.remove(id);
             const label = modSourceLabel(seat, track);
             await extraSources.add(id, label, { kind: "mod", url: u.toString() }).catch(() => {});
             // Its place and layer, hidden: the seat's throw-up / the Mods
             // panel reveal it there rather than full-frame on top.
             const bw = (vhRef.current * 16) / 9;
-            const rect = toCanvas(modFeedRect(cfgRef.current.mod_feeds, seat.id, track), bw, vhRef.current);
+            const rect = existing ? { x: existing.x, y: existing.y, w: existing.w, h: existing.h } : toCanvas(modFeedRect(cfgRef.current.mod_feeds, String(seat.producer_ref ?? seat.id), track), bw, vhRef.current);
             const z = modFeedZ(sources.items ?? []);
-            ipc.liveSetTransform(id, { ...rect, z, visible: false }, true).catch(() => {});
+            await ipc.liveApplyScene([{ id, patch: { ...rect, z, visible: existing?.visible ?? false }, muted: existing?.muted ?? true }]);
+            modTransportUrls.current.set(id, u.toString());
+            const current = cfgRef.current;
+            const active = activeSceneRef.current;
+            const oldId = modSourceIdsFor(seat.id)[track];
+            writeCfg({ ...current, scenes: current.scenes.map(sc => {
+              const oldLook = sc.look?.[oldId];
+              if (sc.id !== active && !oldLook) return sc;
+              const look = { ...(sc.look ?? {}) };
+              if (oldId !== id) delete look[oldId];
+              look[id] = oldLook ?? { ...rect, z, visible: false };
+              return { ...sc, look };
+            }) });
             monitorLog(`host: mod source ${id} (${label}) added, hidden at its rect`);
           }
           for (const id of presentMods) {
@@ -6369,6 +6498,7 @@ export function LiveView({
 
         // Publish the same binding truth used to answer stage requests.
         // A scene hiding a guest is not a request to release their slot.
+        publishSourceTruth();
         const stageIds = shownGuestIds().sort();
         const stageKey = stageIds.join(",");
         if (stageKey !== stagePostedRef.current && endpointRef.current && cfg.server_room_id) {
@@ -6824,7 +6954,7 @@ export function LiveView({
               // its place is the room's mod_feeds), and only while it is on
               // the set — a connected-but-unplaced seat lives in Mods. A mic
               // is room-level audio: a row in every scene too.
-              .filter((i) => (i.kind === "mod" ? i.visible : inScene(i.id)))
+              .filter((i) => i.kind === "mod" || inScene(i.id))
               .map((i) => ({
                 key: i.id,
                 label: i.label || i.kind,
@@ -8373,6 +8503,9 @@ export function LiveView({
           feeds={seatFeeds(myGrants)}
           media={mediaLeg}
           throwUp={throwUpState({ stage: modStage, seatId: mySeatId, grants: myGrants, canAsk: roomAccess.can.control })}
+          sourceStates={roomSources.filter(i => i.participant_id === mySeatId)}
+          pendingSources={new Set(Object.keys(sourceCommands))}
+          onSourceMute={requestSourceMute}
           onThrowUp={(k) => void throwUp(k)}
           layout={boardLayout}
           error={null}
@@ -8778,7 +8911,7 @@ export function LiveView({
                   .filter((g) => isMediaSeat(g))
                   .flatMap((g) => {
                     const grants_ = resolveGrants(g);
-                    const ids = modSourceIdsFor(g.id);
+                    const ids = modSourceIdsFor(g.id, g.producer_ref);
                     const out: { key: string; label: string; icon: ReactNode; ready: boolean; act: () => void }[] = [];
                     const items = sources.items ?? [];
                     if (grants_.has("media.camera") || grants_.has("media.mic")) {

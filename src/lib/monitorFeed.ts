@@ -619,6 +619,7 @@ export interface MonitorSenderSpec {
 
 export class MonitorSender {
   readonly spec: MonitorSenderSpec;
+  private stage: { kind: "stage"; on_stage: string[]; audible: string[]; version: number } | null = null;
   private readonly api: string;
   private readonly target: { id: string; key: string } | null;
   private readonly tag: string;
@@ -681,6 +682,15 @@ export class MonitorSender {
   setRoomInfo(info: MonitorRoomInfo): void {
     this.roomInfo = info;
     this.sendData({ kind: "room-info", info });
+  }
+
+  setStage(onStage: string[], audible: string[], version: number): void {
+    this.stage = { kind: "stage", on_stage: onStage, audible, version };
+    this.sendStage();
+  }
+
+  private sendStage(): void {
+    if (this.stage && this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ type: "signal", payload: { ...this.stage, peer: this.spec.peer ?? "main" } }));
   }
 
   /** One program thumb (JPEG bytes). Dropped unless the seat asked, and
@@ -893,6 +903,7 @@ export class MonitorSender {
     ws.onopen = () => {
       this.attempt = 0;
       monitorLog(`host[${this.tag}]: signaling open — hello`);
+      this.sendStage();
       send({ kind: "hello" });
       // Guests request the return after their camera connection has settled.
       // Starting here bypassed that iPhone delay and raced capture/decoding.
@@ -922,6 +933,7 @@ export class MonitorSender {
         }
         if (msg.kind === "program-ready") {
           monitorLog(`host[${this.tag}]: seat program-ready`);
+          this.sendStage();
           if (this.program) {
             // A reload can replace the receiving peer while capture stays
             // alive. Re-send a missed offer, or renew ICE for the new receiver.
