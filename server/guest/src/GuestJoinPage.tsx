@@ -1,3 +1,4 @@
+import "./GuestRoomPage.css";
 // ── The guest's door — the page a person opens from an invite link ────────────
 //
 // Route: /connect/guest/:code
@@ -52,6 +53,27 @@ export default function GuestJoinPage({ code }: { code: string }) {
   const preferProducerCam = search.get("cam") === "producer";
   const nameHint = sanitizeName(search.get("name"));
   const [guest, setGuest] = useState<Guest | null>(null);
+  const [fullscreen,setFullscreen]=useState(false);
+  const cardRef=useRef<HTMLDivElement>(null);
+  const fullscreenTrigger=useRef<HTMLButtonElement>(null);
+  const nativeFullscreen=useRef(false);
+  const toggleFullscreen=async()=> {
+    if(fullscreen){setFullscreen(false);if(document.fullscreenElement===cardRef.current)await document.exitFullscreen().catch(()=>{});fullscreenTrigger.current?.focus();return;}
+    setFullscreen(true);
+    if(cardRef.current?.requestFullscreen)await cardRef.current.requestFullscreen().then(()=>{nativeFullscreen.current=true;}).catch(()=>{});
+  };
+  useEffect(()=>{
+    const changed=()=>{if(!document.fullscreenElement && nativeFullscreen.current){nativeFullscreen.current=false;setFullscreen(false);fullscreenTrigger.current?.focus();}};
+    document.addEventListener('fullscreenchange',changed);
+    return()=>{document.removeEventListener('fullscreenchange',changed);if(document.fullscreenElement===cardRef.current)void document.exitFullscreen().catch(()=>{});};
+  },[]);
+  useEffect(()=>{
+    if(!fullscreen)return;
+    const prior=document.body.style.overflow;document.body.style.overflow='hidden';
+    const key=(e:KeyboardEvent)=>{if(e.key==='Escape'){setFullscreen(false);fullscreenTrigger.current?.focus();}};
+    window.addEventListener('keydown',key);
+    return()=>{document.body.style.overflow=prior;window.removeEventListener('keydown',key);};
+  },[fullscreen]);
   // The invite row is read BEFORE the preview opens, so here the grants gate
   // the capture itself: a participant without media.camera is never asked
   // for a camera at all.
@@ -59,6 +81,12 @@ export default function GuestJoinPage({ code }: { code: string }) {
   const canRef = useRef(can);
   canRef.current = can;
   const [phase, setPhase] = useState<Phase>("loading");
+  useEffect(() => {
+    if (phase !== "live") {
+      setFullscreen(false);
+      if (document.fullscreenElement === cardRef.current) void document.exitFullscreen().catch(() => {});
+    }
+  }, [phase]);
   const [message, setMessage] = useState("");
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [camId, setCamId] = useState<string>("");
@@ -276,8 +304,8 @@ export default function GuestJoinPage({ code }: { code: string }) {
 
   if (phase === "gone" || phase === "error") {
     return (
-      <div style={S.shell}>
-        <div style={S.card}>
+      <div className="guest-room-shell" style={S.shell}>
+        <div ref={cardRef} className={`guest-room-card${fullscreen ? " is-fullscreen" : ""}`} style={S.card}>
           <h1 style={S.title}>{phase === "gone" ? "This link has expired" : "Something went wrong"}</h1>
           <p style={S.sub}>{message || "Ask whoever invited you for a fresh link."}</p>
         </div>
@@ -286,14 +314,14 @@ export default function GuestJoinPage({ code }: { code: string }) {
   }
 
   return (
-    <div style={S.shell}>
-      <div style={S.card}>
+    <div className="guest-room-shell" style={S.shell}>
+      <div ref={cardRef} className={`guest-room-card${fullscreen ? " is-fullscreen" : ""}`} style={S.card}>
         <p style={S.eyebrow}>
           {phase === "live" ? "You're on" : phase === "waiting" ? "The host has been asked to let you in" : "You've been invited to join"}
         </p>
         <h1 style={S.title}>{nameHint || guest?.display_name || "Live show"}</h1>
 
-        <div style={S.stage}>
+        <div className="guest-room-stage" style={S.stage}>
           <video
             ref={programRef}
             onPlaying={() => setProgramPlaying(true)}
@@ -359,7 +387,8 @@ export default function GuestJoinPage({ code }: { code: string }) {
             if (video && programStreamRef.current) { video.srcObject = programStreamRef.current; void video.play().catch(() => {}); }
           }}>Watch the show</button>
         )}
-        <div style={S.controls}>
+        <div className="guest-room-controls" style={S.controls}>
+          {phase === "live" && <button ref={fullscreenTrigger} onClick={()=>void toggleFullscreen()} aria-pressed={fullscreen} style={S.ghost}>{fullscreen ? "Exit fullscreen" : "Fullscreen"}</button>}
           {can.mic && <button onClick={toggleMute} style={S.ghost}>{muted ? "Unmute" : "Mute"}</button>}
           {can.camera && <button onClick={toggleCamera} style={S.ghost}>{cameraOff ? "Start camera" : "Stop camera"}</button>}
           {can.screen && phase === "live" && (
@@ -375,11 +404,11 @@ export default function GuestJoinPage({ code }: { code: string }) {
         </div>
 
         {message && <p style={S.note}>{message}</p>}
-        <p style={S.fine}>
+        <p className="guest-room-fine" style={S.fine}>
           Your camera and audio go straight to the host's computer. This server
           doesn't record or store this video.
         </p>
-        <p style={S.fine}>
+        <p className="guest-room-fine" style={S.fine}>
           Powered by{" "}
           <a href="https://producer.dev" target="_blank" rel="noreferrer" style={S.plug}>Producer</a>
         </p>

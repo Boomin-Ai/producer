@@ -203,6 +203,17 @@ export const ipc = {
   /** Stage editor: commit=false at gesture rate, commit=true on release. */
   liveSetTransform: (id: string, patch: LiveTransformPatch, commit: boolean) =>
     invoke("live_set_transform", { id, patch, commit }),
+  liveRestoreRoom: (restore: {
+    keep_ids: string[];
+    extras: { id: string; label: string; spec: ExtraSpec }[];
+    overlay_window: number | null;
+    overlay_url: string | null;
+    changes: { id: string; patch: LiveTransformPatch; muted?: boolean }[];
+  }) => invoke<{ sources: LiveSources; warnings: string[] }>("live_restore_room", { restore }),
+  liveSetStatus: () => invoke<import('../features/presentation/useSetOutput').SetOutputStatus>("live_set_status"),
+  liveSetApply: (request: {generation:number;lease:string;projection:import('../features/presentation/projection').OutputProjection;bindings:Record<string,string>}) =>
+    invoke<import('../features/presentation/useSetOutput').SetOutputStatus>("live_set_apply", {request}),
+  liveSetReturn: (lease:string) => invoke<import('../features/presentation/useSetOutput').SetOutputStatus>("live_set_return", {lease}),
   liveApplyScene: (changes: { id: string; patch: LiveTransformPatch; muted?: boolean }[]) =>
     invoke<LiveSources>("live_apply_scene", { changes }),
   livePreviewHidden: (hidden: boolean) => invoke("live_preview_hidden", { hidden }),
@@ -429,6 +440,8 @@ export type { ExtraSpec } from "./sourceSpec";
 import type { ExtraSpec } from "./sourceSpec";
 
 export const extraSources = {
+  replace: (id: string, label: string, spec: ExtraSpec, initial?: { id: string; patch: LiveTransformPatch; muted?: boolean }) =>
+    invoke<LiveSources>("live_replace_source", { id, label, spec, initial: initial ?? null }),
   add: (id: string, label: string, spec: ExtraSpec) =>
     invoke("live_add_source", { id, label, spec }),
   remove: (id: string) => invoke("live_remove_source", { id }),
@@ -857,6 +870,8 @@ export interface Interaction {
 export const overlayBridge = {
   start: () => invoke<string>("overlay_bridge_start"),
   chatStart: () => invoke<string>("chat_overlay_start"),
+  chatUpdate: (projection: { room: string | null; messages: { id: string; name: string; text: string; at?: number }[]; channels: string[] }) =>
+    invoke("chat_overlay_update", { projection }),
   set: (state: unknown) => invoke("overlay_bridge_set", { state }),
 };
 

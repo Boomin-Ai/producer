@@ -60,6 +60,8 @@ export const PANEL_FLAG: Partial<Record<string, FeatureFlag>> = {
 
 /** Can this panel be shown at all? */
 export function panelAllowed(panelId: string, flags: Set<FeatureFlag>): boolean {
+  // Sets are available to every room; live output still requires the native engine.
+  if (panelId === "setControls") return true;
   const need = PANEL_FLAG[panelId];
   return !need || flags.has(need);
 }

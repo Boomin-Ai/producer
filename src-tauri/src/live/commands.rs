@@ -579,6 +579,28 @@ pub async fn live_set_transform(
 }
 
 #[tauri::command]
+pub async fn live_replace_source(
+    state: State<'_, AppState>,
+    id: String,
+    label: String,
+    spec: serde_json::Value,
+    initial: Option<serde_json::Value>,
+) -> EngineResult<serde_json::Value> {
+    state
+        .live
+        .replace_extra(id, label, spec, initial)
+        .map_err(EngineError::Other)
+}
+
+#[tauri::command]
+pub async fn live_restore_room(
+    state: State<'_, AppState>,
+    restore: serde_json::Value,
+) -> EngineResult<serde_json::Value> {
+    state.live.restore_room(restore).map_err(EngineError::Other)
+}
+
+#[tauri::command]
 pub async fn live_apply_scene(
     state: State<'_, AppState>,
     changes: serde_json::Value,
@@ -1107,4 +1129,34 @@ pub async fn live_program_audio_read() -> tauri::ipc::Response {
 pub async fn live_program_audio_stop() {
     #[cfg(have_engine)]
     super::program_audio::stop();
+}
+
+#[tauri::command]
+pub async fn live_set_status(
+    state: State<'_, AppState>,
+) -> EngineResult<super::presentation::Status> {
+    state.live.presentation_status().map_err(EngineError::Other)
+}
+#[tauri::command]
+pub async fn live_set_apply(
+    app: tauri::AppHandle,
+    request: super::presentation::Request,
+) -> EngineResult<super::presentation::Status> {
+    use tauri::Manager;
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<AppState>().live.presentation_apply(request)
+    })
+    .await
+    .map_err(|e| EngineError::Other(e.to_string()))?
+    .map_err(EngineError::Other)
+}
+#[tauri::command]
+pub async fn live_set_return(
+    state: State<'_, AppState>,
+    lease: Option<String>,
+) -> EngineResult<super::presentation::Status> {
+    state
+        .live
+        .presentation_return(lease)
+        .map_err(EngineError::Other)
 }

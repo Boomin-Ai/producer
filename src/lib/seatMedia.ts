@@ -21,6 +21,8 @@
  */
 
 import { HostLink, signalingWsUrl, type Session } from "../../server/guest/src/hostLink";
+import { GuestConversation } from "../../server/guest/src/guestConversation";
+import type { StageUpdate } from "../../server/guest/src/guestMesh";
 import { connectApiBase, inviteCodeFromJoinUrl } from "./guestSeat";
 import { monitorLog, type MonitorPhase, type MonitorRoomInfo, type MonitorState, type ProgramSource } from "./monitorFeed";
 
@@ -84,6 +86,7 @@ export class SeatMediaLeg implements ProgramSource {
   private program: MediaStream | null = null;
   private hostAudio: MediaStream | null = null;
   private link: HostLink | null = null;
+  private conversation: GuestConversation | null = null;
   private timer = 0;
   private watch = 0;
   private downSince = 0;
@@ -169,6 +172,7 @@ export class SeatMediaLeg implements ProgramSource {
     const t = this.local?.getAudioTracks()[0];
     if (!t) return;
     t.enabled = !t.enabled;
+    this.conversation?.setMicrophoneEnabled(t.enabled);
     this.set({ muted: !t.enabled });
   }
   toggleCamera(): void {
@@ -217,7 +221,8 @@ export class SeatMediaLeg implements ProgramSource {
   // ── Media ──────────────────────────────────────────────────────────────
   private async openMedia(): Promise<void> {
     if (!this.spec.camera && !this.spec.mic) return;
-    let stream = await navigator.mediaDevices.getUserMedia({ video: this.spec.camera, audio: this.spec.mic });
+    const audio = this.spec.mic ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } : false;
+    let stream = await navigator.mediaDevices.getUserMedia({ video: this.spec.camera, audio });
     if (this.spec.camera && this.spec.camLabel) {
       // The seat's own Producer stage as its camera, when the virtual camera runs.
       const want = this.spec.camLabel.toLowerCase();
@@ -226,7 +231,7 @@ export class SeatMediaLeg implements ProgramSource {
       const current = stream.getVideoTracks()[0]?.getSettings().deviceId;
       if (vcam && vcam.deviceId !== current) {
         try {
-          const swapped = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: vcam.deviceId } }, audio: this.spec.mic });
+          const swapped = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: vcam.deviceId } }, audio });
           stream.getTracks().forEach((t) => t.stop());
           stream = swapped;
         } catch {
@@ -299,6 +304,9 @@ export class SeatMediaLeg implements ProgramSource {
     if (!mine()) return;
     this.teardownCall();
     this.downSince = 0;
+    this.conversation = new GuestConversation({ api: this.api, code: this.code!, localStream: () => this.local });
+    this.conversation.setMicrophoneEnabled(!this.state.muted);
+    this.conversation.start();
     this.link = new HostLink({
       session,
       wsUrl: signalingWsUrl(this.api, session),
@@ -337,6 +345,7 @@ export class SeatMediaLeg implements ProgramSource {
         // room-info frame names the chat handles like the monitor leg does.
         const m = msg as { kind?: unknown; info?: MonitorRoomInfo };
         if (m && m.kind === "room-info" && m.info) this.set({ roomInfo: m.info });
+        if (m?.kind === "stage") this.conversation?.applyStage(msg as StageUpdate);
       },
       onShareEnded: () => {
         this.set({ sharing: false });
@@ -349,6 +358,7 @@ export class SeatMediaLeg implements ProgramSource {
           this.downSince = 0;
           this.set({ phase: "live", sending: "live", message: "" });
         } else if (st === "failed" || st === "disconnected" || st === "closed") {
+          this.conversation?.suspend();
           this.downSince = this.downSince || Date.now();
           this.set({ phase: "connecting", sending: "connecting", message: "Reconnecting…" });
         }
@@ -383,6 +393,7 @@ export class SeatMediaLeg implements ProgramSource {
   }
 
   private teardownCall() {
+    this.conversation?.stop(); this.conversation = null;
     try {
       this.link?.close();
     } catch {

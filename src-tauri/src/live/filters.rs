@@ -115,6 +115,14 @@ enum KeyType {
 /// reader and the writer can never disagree about a key's type.
 fn known_keys(kind: &str) -> &'static [(&'static str, KeyType)] {
     match kind {
+        "producer_source_appearance" => &[
+            ("shape", KeyType::Text),
+            ("cornerRadius", KeyType::Double),
+            ("outlineWidth", KeyType::Double),
+            ("outlineColor", KeyType::Text),
+            ("grayscale", KeyType::Double),
+            ("opacity", KeyType::Double),
+        ],
         "chroma_key_filter_v2" => &[
             ("key_color_type", KeyType::Text),
             ("key_color", KeyType::Int),
@@ -274,6 +282,12 @@ pub fn update(source: *mut ffi::obs_source_t, name: &str, patch: &Value) -> Resu
         } else {
             CStr::from_ptr(kind_ptr).to_string_lossy().into_owned()
         };
+        if kind == "producer_source_appearance" {
+            if let Err(error) = validate_appearance_patch(obj) {
+                ffi::obs_source_release(f);
+                return Err(error);
+            }
+        }
         let data = ffi::obs_data_create();
         for (key, ty) in known_keys(&kind) {
             let Some(v) = obj.get(*key) else { continue };
@@ -310,6 +324,31 @@ pub fn update(source: *mut ffi::obs_source_t, name: &str, patch: &Value) -> Resu
     Ok(())
 }
 
+pub(crate) fn validate_appearance_patch(obj: &Map<String, Value>) -> Result<(), String> {
+    for (key, v) in obj {
+        let valid = match key.as_str() {
+            "shape" => matches!(v.as_str(), Some("rectangle" | "circle")),
+            "outlineColor" => v.as_str().is_some_and(|s| {
+                s.len() == 7 && s.starts_with('#') && s[1..].bytes().all(|b| b.is_ascii_hexdigit())
+            }),
+            "cornerRadius" | "outlineWidth" | "grayscale" | "opacity" => {
+                let max = match key.as_str() {
+                    "cornerRadius" => 960.0,
+                    "outlineWidth" => 64.0,
+                    _ => 1.0,
+                };
+                v.as_f64()
+                    .is_some_and(|n| n.is_finite() && n >= 0.0 && n <= max)
+            }
+            _ => false,
+        };
+        if !valid {
+            return Err(format!("invalid source appearance {key}"));
+        }
+    }
+    Ok(())
+}
+
 /// Set an item's opacity (0.0–1.0) for scene fades.
 ///
 /// libobs scene items have NO opacity of their own — OBS itself fades by
@@ -317,12 +356,45 @@ pub fn update(source: *mut ffi::obs_source_t, name: &str, patch: &Value) -> Resu
 /// is created on first use, named with the internal prefix so it never shows
 /// up in the user's filter list, and left attached (it is inert at 1.0).
 pub fn set_opacity(source: *mut ffi::obs_source_t, opacity: f64) -> Result<(), String> {
+    set_named_opacity(source, OPACITY_FILTER, opacity)
+}
+
+const MOD_VIDEO_FILTER: &str = "__producer_mod_video_visibility";
+
+/// Hide moderator video without stopping its independent audio contribution.
+pub fn set_mod_video_visible(source: *mut ffi::obs_source_t, visible: bool) -> Result<(), String> {
+    set_named_opacity(source, MOD_VIDEO_FILTER, if visible { 1.0 } else { 0.0 })
+}
+
+pub fn mod_video_visible(source: *mut ffi::obs_source_t) -> bool {
+    unsafe {
+        let filter = ffi::obs_source_get_filter_by_name(
+            source,
+            CString::new(MOD_VIDEO_FILTER).unwrap().as_ptr(),
+        );
+        if filter.is_null() {
+            return true;
+        }
+        let data = ffi::obs_source_get_settings(filter);
+        let visible =
+            ffi::obs_data_get_double(data, CString::new("opacity").unwrap().as_ptr()) > 0.0;
+        ffi::obs_data_release(data);
+        ffi::obs_source_release(filter);
+        visible
+    }
+}
+
+fn set_named_opacity(
+    source: *mut ffi::obs_source_t,
+    filter_name: &str,
+    opacity: f64,
+) -> Result<(), String> {
     if source.is_null() {
         return Err("no such source".into());
     }
     let clamped = opacity.clamp(0.0, 1.0);
     unsafe {
-        let name = CString::new(OPACITY_FILTER).unwrap();
+        let name = CString::new(filter_name).unwrap();
         let mut f = ffi::obs_source_get_filter_by_name(source, name.as_ptr());
         if f.is_null() {
             let kind = CString::new("color_filter_v2").unwrap();

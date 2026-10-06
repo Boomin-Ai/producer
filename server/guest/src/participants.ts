@@ -315,8 +315,10 @@ export function wantedSourceIds<T extends ParticipantLike & { id: string }>(
 export const MOD_SOURCE_PREFIX = "mod-";
 export const isModSourceId = (id: string): boolean => id.startsWith(MOD_SOURCE_PREFIX);
 
-export function modSourceIdsFor(participantId: string): { camera: string; screen: string } {
-  const camera = `${MOD_SOURCE_PREFIX}${participantId.slice(0, 8)}`;
+export function modSourceIdsFor(participantId: string, ownerRef?: unknown): { camera: string; screen: string } {
+  const owner = typeof ownerRef === "string" && ownerRef.startsWith("monitor:") ? ownerRef.slice(8) : "";
+  const stable = owner && /^[a-zA-Z0-9_-]+$/.test(owner) ? `member-${owner}` : participantId.slice(0, 8);
+  const camera = `${MOD_SOURCE_PREFIX}${stable}`;
   return { camera, screen: `${camera}-screen` };
 }
 
@@ -324,14 +326,14 @@ export function modSourceIdsFor(participantId: string): { camera: string; screen
  *  the host handed media, a camera page when it holds camera or mic (the
  *  camera page carries the mic), and a screen page when it holds
  *  media.screen. A seat without media, a guest, a non-monitor: nothing. */
-export function wantedModSourceIds<T extends ParticipantLike & { id: string }>(
+export function wantedModSourceIds<T extends ParticipantLike & { id: string; producer_ref?: unknown }>(
   rows: readonly T[],
 ): Map<string, { seat: T; track: TrackLabel }> {
   const out = new Map<string, { seat: T; track: TrackLabel }>();
   for (const seat of rows) {
     if (!isMediaSeat(seat)) continue;
     const g = resolveGrants(seat);
-    const ids = modSourceIdsFor(seat.id);
+    const ids = modSourceIdsFor(seat.id, seat.producer_ref);
     if (g.has("media.camera") || g.has("media.mic")) out.set(ids.camera, { seat, track: "camera" });
     if (g.has("media.screen")) out.set(ids.screen, { seat, track: "screen" });
   }

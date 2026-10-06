@@ -6,7 +6,7 @@
  * canvas. Everything else is a card.
  * Beginners pick a preset; everyone else moves panels one by one. */
 
-export type PanelId = "scenes" | "sources" | "mixer" | "chat" | "channels" | "guests" | "vote" | "mods" | "stats" | "updates" | "dj";
+export type PanelId = "scenes" | "sources" | "mixer" | "chat" | "channels" | "guests" | "vote" | "mods" | "stats" | "updates" | "dj" | "setControls";
 
 export type Dock = "top" | "left" | "right" | "bottom" | "hidden";
 
@@ -19,6 +19,7 @@ export interface Layout {
 }
 
 export const PANEL_META: Record<PanelId, { title: string; hint: string }> = {
+  setControls: { title: "Set controls", hint: "Set fields, layouts, show segments and rehearsal" },
   dj: { title: "DJ", hint: "Your tracks, tracklists and live music mix" },
   scenes: { title: "Scenes", hint: "Cut between looks — hits the broadcast instantly" },
   sources: { title: "Sources", hint: "What's in the scene right now" },
@@ -27,15 +28,15 @@ export const PANEL_META: Record<PanelId, { title: string; hint: string }> = {
   channels: { title: "Channels", hint: "Where this room goes out" },
   stats: { title: "Stats", hint: "FPS, CPU, bitrate, drops — the numbers behind the health dot" },
   updates: { title: "Updates", hint: "What shipped — every entry links to its exact PR" },
-  guests: { title: "Guests", hint: "Who's in the room, and who's on screen" },
-  vote: { title: "Audience", hint: "Viewer access, room chat, stage invitations, and votes" },
+  guests: { title: "People", hint: "Guest invites, audience viewing links, backstage and stage requests" },
+  vote: { title: "Interactions", hint: "Polls and votes for guests and audience" },
   mods: { title: "Mods", hint: "The seats in the room — who helps run it, and the camera, mic or screen you've given them" },
 
 };
 
 // Stream health is deliberately NOT here: it lives in the header, always
 // visible. Health you have to dock is health you find out about too late.
-export const PANEL_ORDER: PanelId[] = ["scenes", "sources", "mixer", "chat", "channels", "guests", "vote", "mods", "stats", "updates", "dj"];
+export const PANEL_ORDER: PanelId[] = ["scenes", "sources", "mixer", "chat", "channels", "guests", "vote", "mods", "stats", "updates", "dj", "setControls"];
 
 /** Per-room sizing: bottom panels carry a flex weight (they share one row),
  * side docks carry a pixel width. Absent = the built-in default. */
@@ -73,26 +74,26 @@ export const PRESETS: { key: string; label: string; note: string; layout: Layout
   {
     key: "studio",
     label: "Studio",
-    note: "The full desk — scenes and guests left, chat and channels right",
+    note: "The full desk — scenes and people left, chat and channels right",
     layout: {
       top: [],
       left: ["scenes", "guests", "vote", "sources", "mods"],
       right: ["chat", "channels", "updates"],
       bottom: ["mixer", "stats", "dj"],
-      hidden: [],
+      hidden: ["setControls"],
     },
   },
   {
     key: "simple",
     label: "Simple",
     note: "Stage plus the two things you touch live",
-    layout: { top: [], left: [], right: [], bottom: ["sources", "mixer"], hidden: ["scenes", "chat", "channels", "guests", "vote", "mods", "stats", "updates", "dj"] },
+    layout: { top: [], left: [], right: [], bottom: ["sources", "mixer"], hidden: ["scenes", "chat", "channels", "guests", "vote", "mods", "stats", "updates", "dj", "setControls"] },
   },
   {
     key: "chat",
     label: "Chat first",
     note: "The conversation gets the column; controls stay below",
-    layout: { top: [], left: [], right: ["chat"], bottom: ["sources", "mixer", "guests"], hidden: ["scenes", "channels", "vote", "mods", "stats", "updates", "dj"] },
+    layout: { top: [], left: [], right: ["chat"], bottom: ["sources", "mixer", "guests"], hidden: ["scenes", "channels", "vote", "mods", "stats", "updates", "dj", "setControls"] },
   },
 ]
 

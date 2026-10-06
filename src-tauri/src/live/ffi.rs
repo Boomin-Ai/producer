@@ -191,7 +191,13 @@ extern "C" {
         cb: extern "C" fn(*mut c_void, u32, u32),
         param: *mut c_void,
     );
+    pub fn obs_remove_main_render_callback(
+        cb: extern "C" fn(*mut c_void, u32, u32),
+        param: *mut c_void,
+    );
     pub fn obs_source_get_ref(source: *mut obs_source_t) -> *mut obs_source_t;
+    pub fn obs_source_inc_active(source: *mut obs_source_t);
+    pub fn obs_source_dec_active(source: *mut obs_source_t);
     pub fn obs_source_inc_showing(source: *mut obs_source_t);
     pub fn obs_source_dec_showing(source: *mut obs_source_t);
     pub fn gs_blend_state_push();
@@ -250,6 +256,7 @@ extern "C" {
 #[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
 extern "C" {
     pub fn obs_data_create() -> *mut obs_data_t;
+    pub fn obs_data_create_from_json(json: *const c_char) -> *mut obs_data_t;
     pub fn obs_data_release(data: *mut obs_data_t);
     pub fn obs_data_set_string(data: *mut obs_data_t, name: *const c_char, value: *const c_char);
     pub fn obs_data_set_int(data: *mut obs_data_t, name: *const c_char, value: i64);
@@ -462,6 +469,10 @@ extern "C" {
     /// pass-through under the same id so scene configs round-trip. Call once,
     /// after obs_startup and before any source is created.
     pub fn producer_person_mask_register();
+    pub fn producer_source_appearance_register();
+    /// Video-only private placement; owner thread after readiness/grant checks.
+    /// Caller owns the returned reference. Capture is retained, never cloned.
+    pub fn producer_source_placement_create(capture: *mut obs_source_t) -> *mut obs_source_t;
     pub fn producer_open_screen_settings();
     pub fn producer_open_camera_settings();
     /// Virtual camera (R13): ask macOS to install the bundled CMIO extension.
