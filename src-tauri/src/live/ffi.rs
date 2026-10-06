@@ -130,6 +130,37 @@ extern "C" {
         settings: *mut obs_data_t,
         hotkey_data: *mut obs_data_t,
     ) -> *mut obs_source_t;
+    // Windows raw-dylib synthesizes its import library from this block.
+    // Include the APIs called by shared C filters even when Rust never calls
+    // them directly; otherwise their __imp_* references fail at release link.
+    pub fn blog(level: c_int, format: *const c_char, ...);
+    pub fn obs_source_process_filter_begin(
+        source: *mut obs_source_t,
+        format: c_int,
+        direct: c_int,
+    ) -> bool;
+    pub fn obs_source_process_filter_end(
+        source: *mut obs_source_t,
+        effect: *mut c_void,
+        width: u32,
+        height: u32,
+    );
+    pub fn obs_filter_get_target(source: *const obs_source_t) -> *mut obs_source_t;
+    pub fn obs_source_get_base_width(source: *mut obs_source_t) -> u32;
+    pub fn obs_source_get_base_height(source: *mut obs_source_t) -> u32;
+    pub fn obs_source_get_type(source: *const obs_source_t) -> c_int;
+    pub fn obs_obj_get_data(object: *mut c_void) -> *mut c_void;
+    pub fn obs_source_add_active_child(parent: *mut obs_source_t, child: *mut obs_source_t)
+        -> bool;
+    pub fn obs_source_remove_active_child(parent: *mut obs_source_t, child: *mut obs_source_t);
+    pub fn gs_effect_create(
+        source: *const c_char,
+        filename: *const c_char,
+        error: *mut *mut c_char,
+    ) -> *mut c_void;
+    pub fn gs_effect_destroy(effect: *mut c_void);
+    pub fn gs_effect_set_float(param: *mut c_void, value: f32);
+    pub fn gs_effect_set_vec2(param: *mut c_void, value: *const vec2);
     pub fn obs_source_release(source: *mut obs_source_t);
     pub fn obs_get_output_source(channel: u32) -> *mut obs_source_t;
     pub fn obs_get_main_texture() -> *mut c_void;
