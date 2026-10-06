@@ -16,6 +16,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run build
       - run: bun run test:presentation
+      - run: node scripts/test-windows-native-imports.mjs
       - run: bun run test:scene-restoration
       - run: bun run test:manager-cache
       - run: node scripts/test-preview-session.mjs
