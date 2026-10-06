@@ -1,0 +1,34 @@
+name: Notarize Intel installer
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing release version whose signed Intel DMG needs a notarization ticket
+        required: true
+        default: '0.4.63'
+permissions:
+  contents: write
+concurrency:
+  group: notarize-intel-installer-${{ inputs.version }}
+  cancel-in-progress: false
+jobs:
+  notarize:
+    runs-on: macos-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NOTARY_ID: ${{ secrets.APPLE_ID }}
+      NOTARY_PW: ${{ secrets.APPLE_PASSWORD }}
+      NOTARY_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate release version
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          echo "DMG=Producer_${VERSION}_x64.dmg" >> "$GITHUB_ENV"
+      - name: Download the existing signed installer
+        run: gh release download "v$VERSION" --pattern "$DMG"
+      - name: Notarize, staple and assess installer
+        run: bash scripts/notarize-intel-dmg.sh "$DMG"
+      - name: Replace installer with its verified stapled image
+        run: gh release upload "v$VERSION" "$DMG" --clobber
