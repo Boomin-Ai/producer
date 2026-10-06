@@ -475,7 +475,7 @@ extern "C" fn prepare_render(data: *mut std::ffi::c_void, _: u32, _: u32) {
                 100.,
             );
             ffi::gs_blend_state_push();
-            ffi::gs_blend_function(ffi::GS_BLEND_ONE, ffi::GS_BLEND_INVSRCALPHA);
+            ffi::gs_blend_function(ffi::GS_BLEND_ONE, ffi::GS_BLEND_ZERO);
             ffi::obs_source_video_render(ffi::obs_scene_get_source(render.scene));
             ffi::gs_blend_state_pop();
             ffi::gs_texrender_end(render.target);
