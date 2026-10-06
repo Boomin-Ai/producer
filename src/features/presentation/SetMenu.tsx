@@ -50,13 +50,24 @@ export function SetMenu({ session, onChange, onControls, output }: {
         {![AFTER_HOURS.id, HEAD_TO_HEAD.id, SIGNAL_DESK.id].includes(session.package.id) && <option value="imported">{session.package.name}</option>}
       </select></label>
       <button onClick={() => { close(); onControls(); }}>Open set controls</button>
-      {output && <button disabled={!output.active && !output.busy && (rehearsing || !!session.package.show)} onClick={() => {close();void (output.active || output.busy ? output.returnToRoom() : output.apply());}}>{output.active || output.busy ? 'Return to room' : 'Apply set'}</button>}
+      {output && <button disabled={!output.active && !output.busy && rehearsing} onClick={() => {close();void (output.active || output.busy ? output.returnToRoom() : output.apply());}}>{output.active || output.busy ? 'Return to room' : 'Apply set'}</button>}
       <div className="set-menu-agent"><button onClick={() => edit('edit-set')}>Edit set with agent</button>
         <button className="set-agent-help" aria-label="About editing sets and shows with an agent" aria-expanded={help} onClick={() => setHelp(!help)}>?</button></div>
       {help && <p>Edit the set design and optional show with an agent. Export your configured set and brief, then import the updated JSON and rehearse it.</p>}
+      {!session.package.show && <button aria-haspopup="dialog" onClick={() => edit('add-show')}>Add show with agent</button>}
       <div className="set-menu-files"><button onClick={() => { setError(''); file.current?.click(); }}>Import JSON</button>
         <button onClick={() => edit('export')}>Export package</button></div>
       {error && <p role="alert">{error}</p>}
+      {!!Object.keys(session.package.set.feeds).length && <details className="set-test-data"><summary>Test data</summary>
+        <p>Manual inputs for data connected to this set, such as headlines or meters. These are simulated values, not guest video or audience responses.</p>
+        {!rehearsing && <p>Enter rehearsal to test changes. Exiting rehearsal restores your prepared values.</p>}
+        <div className="set-controls-fields">{Object.entries(session.package.set.feeds).map(([key, def]) => <label key={key}>{key}<input aria-label={`Test ${key}`} disabled={!rehearsing}
+          type={def.type === 'number' ? 'range' : def.type === 'boolean' ? 'checkbox' : 'text'}
+          value={def.type === 'boolean' ? undefined : String(state.feeds[key])} checked={def.type === 'boolean' ? !!state.feeds[key] : undefined}
+          min={def.type === 'number' ? def.min : undefined} max={def.type === 'number' ? def.max : undefined} step="0.01"
+          maxLength={def.type === 'text' ? def.maxLength : undefined}
+          onChange={e => session.send({ type: 'feed', key, value: def.type === 'boolean' ? e.target.checked : def.type === 'number' ? Number(e.target.value) : e.target.value })} /></label>)}</div>
+      </details>}
       <details className="set-trace"><summary>Activity</summary><ol>{state.trace.map((entry, i) => <li key={`${i}-${entry.at}`}>{Math.round(entry.at / 1000)}s · {entry.message}</li>)}</ol></details>
     </div>, document.body)}
     <input ref={file} className="set-file-input" type="file" accept=".json,application/json" aria-label="Import set package" onChange={e => void importFile(e.target.files?.[0])} />

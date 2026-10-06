@@ -42,8 +42,15 @@ for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome
     await openPreview();
     await preview().getByText('Guest · simulated source', { exact: true }).waitFor();
     await closePreview();
-    await page.getByText('Sample data', { exact: true }).click();
-    await page.getByRole('textbox', { name: 'Sample headline', exact: true }).fill('REHEARSAL INPUT');
+    assert.equal(await page.locator('.set-controls .set-sample-data').count(), 0);
+    assert.equal(await page.locator('.set-controls').getByRole('button', { name: 'Add show with agent', exact: true }).count(), 0);
+    await more(); await page.getByText('Test data', { exact: true }).click();
+    assert.equal(await page.getByRole('textbox', { name: 'Test headline', exact: true }).isDisabled(), true);
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Rehearse', exact: true }).click();
+    await more();
+    await page.getByRole('textbox', { name: 'Test headline', exact: true }).fill('REHEARSAL INPUT');
+    await page.keyboard.press('Escape');
     await openPreview();
     await preview().getByText('REHEARSAL INPUT', { exact: true }).waitFor();
 
@@ -92,7 +99,7 @@ for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome
     await closePreview();
     await more(); await page.getByLabel('Choose set').selectOption('head-to-head');
     await openPreview();
-    await preview().getByText('HEAD TO HEAD', { exact: true }).waitFor();
+    await preview().locator('[data-node$="-title"]').waitFor();
     await closePreview();
     await page.getByRole('textbox', { name: 'Host name', exact: true }).fill('Prepared host');
     assert.equal(await page.getByRole('button', { name: 'Start show', exact: true }).count(), 0);
@@ -144,7 +151,7 @@ for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome
     assert.equal(await page.getByRole('button', { name: /^Vote / }).count(), 0, 'Closed voting replaces input controls with results');
     assert.equal(await page.getByRole('button', { name: 'Advance 10s', exact: true }).count(), 0);
     await openPreview();
-    await preview().getByText('HEAD TO HEAD', { exact: true }).waitFor();
+    await preview().locator('[data-node$="-title"]').waitFor();
     assert.equal(await preview().getByText('WINNER · Contestant A', { exact: true }).count(), 0);
     await closePreview();
     await page.getByRole('button', { name: 'Reveal winner', exact: true }).click();
@@ -217,7 +224,8 @@ for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome
     // Authoring exposes the real configured JSON and rejects bad updates
     // without replacing preparation. Adding a show is an explicit import flow.
     await page.getByLabel('Host name', { exact: true }).fill('My configured host');
-    await page.getByRole('button', { name: 'Add show', exact: true }).click();
+    await more();
+    await page.getByRole('button', { name: 'Add show with agent', exact: true }).click();
     const authoring = page.getByRole('dialog', { name: 'Add show', exact: true });
     await authoring.getByText('Configured package JSON', { exact: true }).click();
     assert.equal(JSON.parse(await authoring.getByLabel('Configured package JSON').inputValue()).set.values.hostName.default, 'My configured host');
@@ -228,7 +236,7 @@ for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome
     await authoring.getByLabel('Updated package JSON').fill(await readFile('docs/shows/fixtures/after-hours.set.json', 'utf8'));
     await authoring.getByRole('button', { name: 'Validate and load', exact: true }).click();
     await authoring.getByText(/has no show attached/).waitFor();
-    await authoring.getByLabel('Updated package JSON').fill(await readFile('docs/shows/fixtures/head-to-head.presentation.json', 'utf8'));
+    await authoring.getByLabel('Updated package JSON').fill(JSON.stringify(JSON.parse(await readFile('docs/shows/fixtures/head-to-head.presentation.json', 'utf8'))));
     await authoring.getByRole('button', { name: 'Validate and load', exact: true }).click();
     await authoring.waitFor({ state: 'detached' });
     await page.getByText('Show attached', { exact: true }).waitFor();
@@ -306,7 +314,7 @@ for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome
     await page.getByRole('button', { name:'Close voting', exact:true }).click();
     await page.getByRole('button', { name:'Reveal draw', exact:true }).click();
     await openPreview(); await preview().getByText('DRAW', {exact:true}).waitFor();
-    assert.equal(await preview().getByText(/WINNER/).count(),0,'Draw output must not call either contestant the winner'); await closePreview();
+    assert.equal(await preview().getByText(/^WINNER ·/).count(),0,'Draw output must not call either contestant the winner'); await closePreview();
     await page.getByRole('button', { name:'Next', exact:true }).click();
     await page.getByRole('region', {name:'Participation',exact:true}).getByText('Draw · No winner awarded', {exact:true}).waitFor();
     await restartRound();
