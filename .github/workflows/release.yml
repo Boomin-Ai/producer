@@ -99,6 +99,21 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
 
+      - name: Notarize and staple Intel installer image
+        if: runner.os == 'macOS'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTARY_ID: ${{ secrets.APPLE_ID }}
+          NOTARY_PW: ${{ secrets.APPLE_PASSWORD }}
+          NOTARY_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          VERSION="$(python3 -c "import json;print(json.load(open('src-tauri/tauri.conf.json'))['version'])")"
+          DMG="Producer_${VERSION}_x64.dmg"
+          gh release download "v$VERSION" --pattern "$DMG"
+          bash scripts/notarize-intel-dmg.sh "$DMG"
+          gh release upload "v$VERSION" "$DMG" --clobber
+
   # ── macOS arm64 + Live engine (Producer Live) ──────────────────────────────
   # Ordering is load-bearing (see docs/LIVE-REVIEW.md §5.2/D5):
   #   engine artifact on disk BEFORE tauri build   (build.rs links libobs then;
