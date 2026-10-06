@@ -109,6 +109,11 @@ pub unsafe fn start(
             let baseline = serde_json::to_value(&handle.snapshot.lock().unwrap().sources)
                 .map_err(|e| e.to_string())?;
             let before = capture(&path, "room-before")?;
+            let recording = if path.join("recording-check").exists() {
+                Some(handle.start_recording(format!("set-acceptance-{lease}"))?)
+            } else {
+                None
+            };
             let mut results = Vec::new();
             for (index, projection) in projections.into_iter().enumerate() {
                 let mut bindings =
@@ -150,6 +155,9 @@ pub unsafe fn start(
                     return Err("A duplicate revision was accepted".into());
                 }
             }
+            if recording.is_some() {
+                handle.stop_recording()?;
+            }
             let returned = handle.presentation_return(Some(lease.clone()))?;
             if returned.lease.is_some() || returned.generation == status.generation {
                 return Err("Return did not fence the old composition".into());
@@ -187,7 +195,7 @@ pub unsafe fn start(
                 return Err("Cancelled preparation remained active".into());
             }
             Ok(
-                serde_json::json!({"ok":true,"frames":results,"baseline":baseline,"cancelledPreparation":true,"roomRestored":true}),
+                serde_json::json!({"ok":true,"frames":results,"baseline":baseline,"cancelledPreparation":true,"roomRestored":true,"recording":recording}),
             )
         })();
         let result = match test {
