@@ -253,6 +253,7 @@ pub struct Bridge {
     pub origin: String,
     projection: Projection,
     active: AtomicBool,
+    painted: AtomicBool,
     state: Mutex<BridgeState>,
 }
 impl Bridge {
@@ -264,6 +265,7 @@ impl Bridge {
             origin: format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port()),
             projection,
             active: AtomicBool::new(true),
+            painted: AtomicBool::new(true),
             state: Mutex::new(BridgeState {
                 receipts: HashMap::new(),
             }),
@@ -305,7 +307,10 @@ impl Bridge {
                     state.receipts.get("background"),
                     state.receipts.get("foreground"),
                 ) {
-                    if bg.revision == self.projection.revision && fg.revision == bg.revision {
+                    if bg.revision == self.projection.revision
+                        && fg.revision == bg.revision
+                        && self.painted.load(Ordering::SeqCst)
+                    {
                         return Ok(fg.slots.clone());
                     }
                 }
@@ -445,7 +450,7 @@ impl Bridge {
         } else {
             "transparent"
         };
-        format!("<!doctype html><style>html,body{{margin:0;width:100%;height:100%;overflow:hidden;background:{bg}}}iframe{{width:100%;height:100%;border:0}}</style><iframe sandbox=\"allow-scripts\" allow=\"camera 'none'; microphone 'none'; display-capture 'none'\"></iframe><script nonce=\"{nonce}\">const f=document.querySelector('iframe');let port;addEventListener('message',e=>{{if(e.source!==f.contentWindow||e.data!=='presentation.ready'||port)return;const c=new MessageChannel();port=c.port1;port.onmessage=e=>{{if(e.data?.type==='prepared')fetch('ready',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{...e.data,surface:'{surface}',type:undefined}}),credentials:'omit'}});}};port.start();f.contentWindow.postMessage('presentation.connect','*',[c.port2]);port.postMessage({{type:'output',surface:'{surface}',projection:{projection}}});}});f.srcdoc={frame};</script>")
+        format!("<!doctype html><style>html,body{{margin:0;width:100%;height:100%;overflow:hidden;background:{bg}}}iframe{{width:calc(100% - 2px);height:100%;border:0}}#paint{{position:absolute;right:0;top:0;width:2px;height:2px;background:#fff;display:none}}</style><div id=\"paint\"></div><iframe sandbox=\"allow-scripts\" allow=\"camera 'none'; microphone 'none'; display-capture 'none'\"></iframe><script nonce=\"{nonce}\">const f=document.querySelector('iframe');let port;addEventListener('message',e=>{{if(e.source!==f.contentWindow||e.data!=='presentation.ready'||port)return;const c=new MessageChannel();port=c.port1;port.onmessage=e=>{{if(e.data?.type==='prepared'){{document.getElementById('paint').style.display='block';fetch('ready',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{...e.data,surface:'{surface}',type:undefined}}),credentials:'omit'}});}}}};port.start();f.contentWindow.postMessage('presentation.connect','*',[c.port2]);port.postMessage({{type:'output',surface:'{surface}',projection:{projection}}});}});f.srcdoc={frame};</script>")
     }
 }
 
@@ -454,10 +459,12 @@ impl Bridge {
 // its geometry receipt arrives. Never warm it by adding it to the room scene.
 #[cfg(have_engine)]
 struct PreparationRender {
-    scene: *mut super::ffi::obs_scene_t,
+    sources: Vec<*mut super::ffi::obs_source_t>,
+    bridge: Arc<Bridge>,
     target: *mut std::ffi::c_void,
+    stage: *mut std::ffi::c_void,
     width: u32,
-    height: u32,
+    painted: Vec<bool>,
 }
 #[cfg(have_engine)]
 extern "C" fn prepare_render(data: *mut std::ffi::c_void, _: u32, _: u32) {
@@ -466,25 +473,52 @@ extern "C" fn prepare_render(data: *mut std::ffi::c_void, _: u32, _: u32) {
         let render = &mut *(data as *mut PreparationRender);
         if render.target.is_null() {
             render.target = ffi::gs_texrender_create(ffi::GS_RGBA, ffi::GS_ZS_NONE);
+            render.stage = ffi::gs_stagesurface_create(2, 1, ffi::GS_RGBA);
         }
-        if render.target.is_null() {
+        if render.target.is_null() || render.stage.is_null() {
             return;
         }
-        ffi::gs_texrender_reset(render.target);
-        if ffi::gs_texrender_begin(render.target, render.width, render.height) {
+        for (index, source) in render.sources.iter().enumerate() {
+            ffi::gs_texrender_reset(render.target);
+            if !ffi::gs_texrender_begin(render.target, 2, 1) {
+                continue;
+            }
+            let clear = ffi::vec4 {
+                x: 0.,
+                y: 0.,
+                z: 0.,
+                w: 0.,
+            };
+            ffi::gs_clear(1, &clear, 0., 0);
+            // The trusted parent places a white beacon outside the design only
+            // after the child has measured its layout. Read actual GPU pixels
+            // for each fresh browser surface; DOM receipts alone are insufficient.
             ffi::gs_ortho(
-                0.,
+                render.width as f32 - 2.,
                 render.width as f32,
                 0.,
-                render.height as f32,
+                1.,
                 -100.,
                 100.,
             );
             ffi::gs_blend_state_push();
             ffi::gs_blend_function(ffi::GS_BLEND_ONE, ffi::GS_BLEND_INVSRCALPHA);
-            ffi::obs_source_video_render(ffi::obs_scene_get_source(render.scene));
+            ffi::obs_source_video_render(*source);
             ffi::gs_blend_state_pop();
             ffi::gs_texrender_end(render.target);
+            ffi::gs_stage_texture(render.stage, ffi::gs_texrender_get_texture(render.target));
+            let mut pixels = std::ptr::null_mut();
+            let mut linesize = 0;
+            if ffi::gs_stagesurface_map(render.stage, &mut pixels, &mut linesize) {
+                if !pixels.is_null() && linesize >= 8 {
+                    let p = std::slice::from_raw_parts(pixels, 8);
+                    render.painted[index] |= p.iter().all(|v| *v >= 240);
+                }
+                ffi::gs_stagesurface_unmap(render.stage);
+            }
+        }
+        if render.painted.iter().all(|p| *p) {
+            render.bridge.painted.store(true, Ordering::SeqCst);
         }
     }
 }
@@ -508,6 +542,7 @@ impl Composition {
         use super::ffi;
         use std::ffi::CString;
         let bridge = Bridge::start(request.projection.clone())?;
+        bridge.painted.store(false, Ordering::SeqCst);
         let scene = ffi::obs_scene_create(
             CString::new(format!("Set {}", bridge.token))
                 .unwrap()
@@ -570,7 +605,7 @@ impl Composition {
                 CString::new(out.bridge.url(surface)).unwrap().as_ptr(),
             );
             for (key, value) in [
-                ("width", out.request.projection.width as i64),
+                ("width", out.request.projection.width as i64 + 2),
                 ("height", out.request.projection.height as i64),
                 ("fps", 30),
                 ("webpage_control_level", 0),
@@ -604,6 +639,16 @@ impl Composition {
             if item.is_null() {
                 return Err("Set graphics attachment failed".into());
             }
+            // The readiness beacon is outside the set canvas and is never on air.
+            ffi::obs_sceneitem_set_crop(
+                item,
+                &ffi::obs_sceneitem_crop {
+                    left: 0,
+                    top: 0,
+                    right: 2,
+                    bottom: 0,
+                },
+            );
             ffi::obs_sceneitem_set_pos(
                 item,
                 &ffi::vec2 {
@@ -621,10 +666,12 @@ impl Composition {
             );
         }
         let mut render = Box::new(PreparationRender {
-            scene,
+            sources: out.showing.clone(),
+            bridge: out.bridge.clone(),
             target: std::ptr::null_mut(),
-            width: info.base_width,
-            height: info.base_height,
+            stage: std::ptr::null_mut(),
+            width: out.request.projection.width + 2,
+            painted: vec![false; out.showing.len()],
         });
         ffi::obs_add_main_render_callback(prepare_render, &mut *render as *mut _ as *mut _);
         out.preparation_render = Some(render);
@@ -639,6 +686,9 @@ impl Composition {
             if !render.target.is_null() {
                 super::ffi::obs_enter_graphics();
                 super::ffi::gs_texrender_destroy(render.target);
+                if !render.stage.is_null() {
+                    super::ffi::gs_stagesurface_destroy(render.stage);
+                }
                 super::ffi::obs_leave_graphics();
             }
         }

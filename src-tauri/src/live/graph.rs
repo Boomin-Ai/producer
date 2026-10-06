@@ -2813,6 +2813,7 @@ impl SceneGraph {
             graph: &'a mut SceneGraph,
             candidate: Option<super::presentation::Composition>,
             failed: bool,
+            retired: Option<super::presentation::Composition>,
         }
         extern "C" fn swap_graph(data: *mut c_void, _: *mut ffi::obs_scene_t) {
             unsafe {
@@ -2829,6 +2830,10 @@ impl SceneGraph {
                 ffi::obs_sceneitem_set_order_position(candidate.item, i32::MAX);
                 // Every nested source is video-only; the original room scene and
                 // its single audio path remain untouched beneath the opaque backdrop.
+                swap.retired = swap.graph.presentation.take();
+                if let Some(old) = &swap.retired {
+                    ffi::obs_sceneitem_set_visible(old.item, false);
+                }
                 swap.graph.presentation = swap.candidate.take();
             }
         }
@@ -2837,10 +2842,15 @@ impl SceneGraph {
             graph: self,
             candidate: Some(candidate),
             failed: false,
+            retired: None,
         };
         unsafe {
             ffi::obs_scene_atomic_update(scene, swap_graph, &mut swap as *mut _ as *mut _);
         }
+        // Destroy item render targets outside the scene's atomic lock. The
+        // graphics thread takes graphics -> scene locks; releasing targets
+        // while holding scene -> graphics locks can deadlock repeated cuts.
+        drop(swap.retired.take());
         if swap.failed {
             return Err("Set activation failed; room output was kept".into());
         }
@@ -2863,14 +2873,24 @@ impl SceneGraph {
             // cannot resurrect a returned set or a room's previous composition.
             self.presentation_generation += 1;
             self.presentation_pending = None;
-            struct Remove<'a>(&'a mut SceneGraph);
+            struct Remove<'a> {
+                graph: &'a mut SceneGraph,
+                retired: Option<super::presentation::Composition>,
+            }
             extern "C" fn remove_graph(data: *mut c_void, _: *mut ffi::obs_scene_t) {
                 unsafe {
-                    (*(data as *mut Remove<'_>)).0.presentation = None;
+                    let remove = &mut *(data as *mut Remove<'_>);
+                    remove.retired = remove.graph.presentation.take();
+                    if let Some(old) = &remove.retired {
+                        ffi::obs_sceneitem_set_visible(old.item, false);
+                    }
                 }
             }
             let scene = self.scene;
-            let mut remove = Remove(self);
+            let mut remove = Remove {
+                graph: self,
+                retired: None,
+            };
             unsafe {
                 ffi::obs_scene_atomic_update(scene, remove_graph, &mut remove as *mut _ as *mut _);
             }
