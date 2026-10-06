@@ -57,7 +57,7 @@ export default {
     if (branded || roomAsset || legacy) {
       if (!["GET", "HEAD"].includes(req.method)) return new Response("Method not allowed", { status: 405 });
       const upstreamUrl = new URL(url.pathname + url.search, "https://boomin.ai");
-      if (legacy) { upstreamUrl.pathname = "/room-assets/room.html"; upstreamUrl.search = ""; }
+      if (legacy) { upstreamUrl.pathname = "/room-assets/room"; upstreamUrl.search = ""; }
       const upstream = await fetch(upstreamUrl, {
         headers: { accept: roomAsset ? "*/*" : "text/html" },
         redirect: "manual",
