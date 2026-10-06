@@ -1,7 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { evaluate, RehearsalSession, voteLeaders } from './rehearsal';
 import { RehearsalPreview } from './RehearsalPreview';
-import { PackageAuthoringDialog, type AuthoringIntent } from './PackageAuthoringDialog';
 import { rundown, timeLabel } from './rundown';
 import type { PresentationPackage, SetControl } from './schema';
 import type { SetOutputControls } from './useSetOutput';
@@ -13,7 +12,6 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const [error, setError] = useState('');
   const [player, setPlayer] = useState('player-1');
-  const [authoring, setAuthoring] = useState<{ intent: AuthoringIntent; doc: PresentationPackage; trigger: HTMLElement } | null>(null);
   // Fast Refresh can retain a session built by the previous runtime module.
   // Replace that rehearsal instance while retaining its prepared configuration.
   const staleSession = !(session instanceof RehearsalSession);
@@ -21,7 +19,6 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
     if (staleSession) onChange((session as RehearsalSession).exportPreparedPackage());
   }, [staleSession, session, onChange]);
   if (staleSession) return <div className="set-controls"><p role="status">Updating rehearsal controls…</p></div>;
-  const openAuthoring = (intent: AuthoringIntent, trigger: HTMLElement) => setAuthoring({ intent, doc: session.exportPreparedPackage(), trigger });
   const doc = session.package;
   const rehearsing = state.workspaceMode === 'rehearsal';
   const showControls = doc.set.controls.filter(c => c.type === 'button' && c.action.type.startsWith('show.'));
@@ -46,7 +43,6 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
     (c.action.type === 'show.start' ? !state.running : c.action.type === 'show.next' && state.running && !!phase?.next &&
       !state.show.collecting && (!phase.collectMs || state.show.revealed)));
   const hint = tied ? 'Tied vote. Reopen voting, start a fresh tie-break, or reveal a draw to continue.' : state.show.total ? 'Voting is closed. Reveal the winner or reopen voting.' : 'No votes yet. Reopen voting to collect responses.';
-  const safeChange = (next: PresentationPackage) => { setError(''); onChange(next); };
   function renderControl(c: SetControl) {
     if (c.when !== undefined && !evaluate(c.when, state)) return null;
     if (c.type === 'button') {
@@ -93,7 +89,6 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
         <RehearsalPreview doc={doc} state={state} />
       </div>
     </header>
-    {authoring && <PackageAuthoringDialog {...authoring} returnFocus={authoring.trigger} onLoad={safeChange} onClose={() => setAuthoring(null)} />}
     {output?.error && <div role="alert" className="set-error">{output.error} <button disabled={output.busy || rehearsing} onClick={()=>void output.apply()}>Retry update</button></div>}
     {error && <p role="alert" className="set-error">{error}</p>}
     {state.trace[state.trace.length - 1]?.message.startsWith('Rejected:') && <p role="status" className="set-error">{state.trace[state.trace.length - 1]!.message}</p>}
@@ -128,7 +123,7 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
             <span className="set-segment-position">Segment {displayedStepIndex + 1}/{schedule.phases.length}</span>
             </div>
             {!rehearsing && <p className="set-rehearsal-note">Rehearse to practice this show. Live show output is not connected yet.</p>}
-          </> : <><strong>Set rehearsal</strong><p className="set-rehearsal-note">Try layouts, fields and sample data in Setup. Preview shows your changes.</p></>}
+          </> : <><strong>Set rehearsal</strong><p className="set-rehearsal-note">Try layouts and content here. Test data is in Set settings.</p></>}
         </div>
         {doc.show && <>
           <div className="set-segments" role="region" aria-label="Show segments">
@@ -196,22 +191,8 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
               </select><SlotFramingControls label={slot.label} value={output.framing[slot.id] ?? findSlotFraming(doc.set.layouts.find(l=>l.id===state.layoutId)?.root,slot.id)} disabled={rehearsing || output.busy} onChange={value=>output.frame(slot.id,value)} /></label>)}</div> : <ul>{doc.set.slots.map(slot => <li key={slot.id}><strong>{slot.label}</strong><span>Sample video</span></li>)}</ul>}
               <p className="set-section-note">{output ? 'Assign sources already on the room output. Empty slots stay empty; audio follows the room mixer.' : 'This preview uses sample video.'}</p>
             </details>
-            <details className="set-sample-data"><summary>Sample data</summary><div className="set-controls-fields">
-              {Object.entries(doc.set.feeds).map(([key, def]) => <label key={key}>{key}<input aria-label={`Sample ${key}`}
-                type={def.type === 'number' ? 'range' : def.type === 'boolean' ? 'checkbox' : 'text'}
-                value={String(state.feeds[key])} checked={def.type === 'boolean' ? !!state.feeds[key] : undefined}
-                min={def.type === 'number' ? def.min : undefined} max={def.type === 'number' ? def.max : undefined} step="0.01"
-                maxLength={def.type === 'text' ? def.maxLength : undefined}
-                onChange={e => session.send({ type: 'feed', key, value: def.type === 'boolean' ? e.target.checked : def.type === 'number' ? Number(e.target.value) : e.target.value })} /></label>)}
-            </div></details>
           </details>
         </section>
-        {!doc.show && <section className="set-show-section" aria-label="Show">
-          <div className="set-only-summary">
-            <div className="set-show-heading"><h3>Show <span>Optional</span></h3><button aria-haspopup="dialog" onClick={e => openAuthoring('add-show', e.currentTarget)}>Add show</button></div>
-            <p>Add segments, timing and interactions to this set.</p>
-          </div>
-        </section>}
         <p className="set-prepared-note">{rehearsing ? "Sample inputs only · Room output unchanged" : output ? output.active ? "Set is on the room output · Audio follows the room mixer" : "Prepare your sources, then Apply set" : "Prepared for preview and rehearsal · Live set output is not connected yet"}</p>
       </div>
     </div>

@@ -202,3 +202,11 @@
 .set-slot-position { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
 .set-slot-position input { width:100%; min-width:0; }
 .set-slot-framing button { justify-self:start; }
+
+.set-test-data { border-top:1px solid var(--line-1,#353b48); padding-top:8px; }
+.set-test-data summary { cursor:pointer; font-weight:600; }
+.set-test-data[open] { display:flex; flex-direction:column; gap:8px; }
+.set-test-data .set-controls-fields { display:grid; gap:8px; }
+.set-test-data input { width:100%; min-width:0; font:inherit; color:inherit; padding:6px 8px; background:#101520; border:1px solid var(--line-1,#353b48); border-radius:6px; }
+.set-test-data input[type=checkbox] { width:auto; align-self:flex-start; }
+.set-test-data input:disabled { opacity:.5; }

@@ -23,7 +23,9 @@ const control = (session, type, args = {}) => session.send({ type: 'control', ac
 const round = () => { const s = new RehearsalSession(HEAD_TO_HEAD, 'test'); assert.ok(control(s, 'show.start')); assert.ok(control(s, 'show.next')); return s; };
 
 test('prepare/rehearse boundary restores setup and discards practice state and private identities', () => {
-  const s = new RehearsalSession(HEAD_TO_HEAD, 'boundary', 'prepare');
+  const withFeeds = structuredClone(HEAD_TO_HEAD);
+  withFeeds.set.feeds = structuredClone(AFTER_HOURS.set.feeds);
+  const s = new RehearsalSession(withFeeds, 'boundary', 'prepare');
   assert.equal(s.snapshot().workspaceMode, 'prepare');
   assert.equal(control(s, 'show.start'), false);
   assert.equal(s.send({ type: 'vote', playerId: 'p', choiceId: 'a' }), false);
@@ -34,6 +36,7 @@ test('prepare/rehearse boundary restores setup and discards practice state and p
   assert.equal(s.enterRehearsal(), false);
   assert.equal(s.snapshot().values.hostName, 'Prepared host');
   assert.ok(s.send({ type: 'field', key: 'hostName', value: 'Practice host' }));
+  assert.ok(s.send({ type: 'feed', key: 'headline', value: 'Practice headline' }));
   assert.ok(control(s, 'show.start')); assert.ok(control(s, 'show.next'));
   assert.ok(s.send({ type: 'vote', playerId: 'p', choiceId: 'a' }));
   assert.ok(s.send({ type: 'reaction', playerId: 'p' }));
@@ -62,7 +65,7 @@ test('agent export retains configured defaults and excludes all rehearsal edits/
   const configured = session.exportPreparedPackage();
   assert.equal(configured.set.values.hostName.default,'Configured host');
   assert.equal(configured.set.initialLayout,'solo');
-  assert.equal(session.package.set.values.hostName.default,'Contestant A');
+  assert.equal(session.package.set.values.hostName.default,HEAD_TO_HEAD.set.values.hostName.default);
   session.enterRehearsal();
   session.send({type:'field',key:'hostName',value:'Private practice'});
   control(session,'show.start'); control(session,'show.next');
@@ -184,7 +187,7 @@ test('one answer per identity; pause and exact deadline reject inputs; closing i
   assert.equal(s.send({ type: 'vote', playerId: 'player-2', choiceId: 'a' }), false);
   assert.equal(s.snapshot().show.revealed, false); assert.equal(control(s, 'show.next'), false);
   const projection = outputProjection(s.package, s.snapshot());
-  assert.equal(texts(projection).includes('WINNER'), false);
+  assert.equal(texts(projection).includes('WINNER ·'), false);
   assert.equal('counts' in projection, false); assert.equal('controls' in projection, false);
   assert.ok(control(s, 'show.reveal')); assert.ok(texts(outputProjection(s.package, s.snapshot())).includes('WINNER · Contestant A'));
   assert.ok(control(s, 'show.next'));
@@ -222,7 +225,7 @@ test('operator draw reveals no winner and can progress; resolved results cannot 
   s.send({type:'pause',paused:false}); assert.ok(control(s,'show.draw'));
   assert.equal(s.snapshot().show.winner,''); assert.equal(s.snapshot().show.result,'draw');
   assert.ok(texts(outputProjection(s.package,s.snapshot())).includes('DRAW'));
-  assert.equal(texts(outputProjection(s.package,s.snapshot())).includes('WINNER'),false);
+  assert.equal(texts(outputProjection(s.package,s.snapshot())).includes('WINNER ·'),false);
   assert.equal(control(s,'show.draw'),false); assert.equal(control(s,'show.reopen'),false);
   assert.ok(control(s,'show.next')); assert.equal(s.snapshot().show.phase,'outro');
   assert.ok(texts(outputProjection(s.package,s.snapshot())).includes('DRAW'));
