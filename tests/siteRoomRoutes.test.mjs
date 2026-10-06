@@ -39,6 +39,6 @@ test("legacy guest links serve the same dedicated entry bundle", async () => {
   globalThis.fetch = async url => { target = String(url); return new Response("room entry", { headers: { "Content-Type": "text/html" } }); };
   try {
     assert.equal((await worker.fetch(new Request("https://producer.dev/connect/guest/room/gr_123456789012345678901234"), {})).status, 200);
-    assert.equal(target, "https://boomin.ai/room-assets/room.html");
+    assert.equal(target, "https://boomin.ai/room-assets/room");
   } finally { globalThis.fetch = previous; }
 });
