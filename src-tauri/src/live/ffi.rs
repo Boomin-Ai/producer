@@ -306,6 +306,7 @@ pub const GS_RGBA: c_int = 3;
 pub const OBS_TASK_GRAPHICS: c_int = 1;
 pub const GS_BLEND_ZERO: c_int = 0;
 pub const GS_BLEND_ONE: c_int = 1;
+pub const GS_BLEND_INVSRCALPHA: c_int = 5;
 pub const GS_ZS_NONE: c_int = 0;
 // obs.h enum obs_bounds_type
 pub const OBS_BOUNDS_SCALE_INNER: c_int = 2;

@@ -317,6 +317,12 @@ impl Bridge {
         }
     }
     fn serve(&self, mut stream: TcpStream) {
+        // macOS can inherit O_NONBLOCK from the listener. Chromium may connect
+        // before sending its request; treating WouldBlock as EOF then produces
+        // an intermittent ERR_EMPTY_RESPONSE instead of preparing the surface.
+        if stream.set_nonblocking(false).is_err() {
+            return;
+        }
         let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
         let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
         let started = Instant::now();
@@ -475,7 +481,7 @@ extern "C" fn prepare_render(data: *mut std::ffi::c_void, _: u32, _: u32) {
                 100.,
             );
             ffi::gs_blend_state_push();
-            ffi::gs_blend_function(ffi::GS_BLEND_ONE, ffi::GS_BLEND_ZERO);
+            ffi::gs_blend_function(ffi::GS_BLEND_ONE, ffi::GS_BLEND_INVSRCALPHA);
             ffi::obs_source_video_render(ffi::obs_scene_get_source(render.scene));
             ffi::gs_blend_state_pop();
             ffi::gs_texrender_end(render.target);
@@ -889,6 +895,31 @@ mod tests {
         let mut response = String::new();
         let _ = stream.read_to_string(&mut response);
         response
+    }
+    #[test]
+    fn private_bridge_accepts_a_request_after_connect() {
+        let bridge = Bridge::start(request().projection).unwrap();
+        let host = bridge.origin.trim_start_matches("http://");
+        let mut stream = TcpStream::connect(host).unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        // Chromium preconnects before writing the navigation request. The
+        // nonblocking listener must not make that pause look like EOF.
+        std::thread::sleep(Duration::from_millis(100));
+        stream
+            .write_all(
+                format!(
+                    "GET /{}/background HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n",
+                    bridge.token
+                )
+                .as_bytes(),
+            )
+            .unwrap();
+        let mut response = String::new();
+        stream.read_to_string(&mut response).unwrap();
+        assert!(response.starts_with("HTTP/1.1 200"));
+        bridge.revoke();
     }
     #[test]
     fn private_bridge_is_scoped_bounded_and_revocable() {

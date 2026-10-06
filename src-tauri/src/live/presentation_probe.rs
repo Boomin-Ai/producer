@@ -129,6 +129,12 @@ pub unsafe fn start(
                 if corner == pixel(&before, 8, 8) {
                     return Err("Set backdrop did not replace the room pixels".into());
                 }
+                if path.join("framing-check").exists() && (corner.2 < 150 || corner.0 > 100) {
+                    return Err(format!(
+                        "Revision {} lost the expected blue set graphics: {:?}",
+                        applied.revision, corner
+                    ));
+                }
                 results.push(serde_json::json!({"revision":applied.revision,"corner":corner}));
                 // The capture graph remains the original graph, including its transforms,
                 // visibility, muted state, sync offsets and source identities.
