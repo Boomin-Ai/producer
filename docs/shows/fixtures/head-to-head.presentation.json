@@ -1,0 +1,560 @@
+{
+  "schema": "producer.presentation/1",
+  "id": "head-to-head",
+  "version": "0.1.0",
+  "name": "Head to Head",
+  "set": {
+    "initialLayout": "conversation",
+    "values": {
+      "hostName": {
+        "type": "text",
+        "default": "Contestant A",
+        "maxLength": 40
+      },
+      "guestName": {
+        "type": "text",
+        "default": "Contestant B",
+        "maxLength": 40
+      },
+      "topic": {
+        "type": "text",
+        "default": "Who takes the round?",
+        "maxLength": 100
+      }
+    },
+    "feeds": {
+      "headline": {
+        "type": "text",
+        "default": "LIVE FROM YOUR STUDIO",
+        "maxLength": 80
+      },
+      "energy": {
+        "type": "number",
+        "default": 0.4,
+        "min": 0,
+        "max": 1
+      }
+    },
+    "slots": [
+      {
+        "id": "host",
+        "label": "Host"
+      },
+      {
+        "id": "guest",
+        "label": "Guest"
+      }
+    ],
+    "components": {
+      "Nameplate": {
+        "props": {
+          "name": "Name",
+          "accent": "#ffc58a"
+        },
+        "root": {
+          "id": "nameplate",
+          "styles": {
+            "display": "flex",
+            "alignItems": "center",
+            "gap": "12px"
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "name-mark",
+              "styles": {
+                "width": "5px",
+                "height": "30px",
+                "background": {
+                  "get": "props.accent"
+                },
+                "borderRadius": "4px"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "name-text",
+              "styles": {
+                "fontSize": "24px",
+                "fontWeight": 600,
+                "color": "#f5f2fb"
+              },
+              "type": "text",
+              "text": {
+                "get": "props.name"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "layouts": [
+      {
+        "id": "conversation",
+        "label": "Conversation",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "conversation-root",
+          "styles": {
+            "position": "absolute",
+            "inset": 0,
+            "background": "radial-gradient(ellipse at 25% 0%, #342343, #17161e 60%, #100f15)"
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "conversation-heat",
+              "styles": {
+                "position": "absolute",
+                "inset": 0,
+                "background": "radial-gradient(ellipse at 50% 40%, #f0883244, #f0601022)",
+                "opacity": {
+                  "get": "show.heat"
+                }
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "conversation-title",
+              "styles": {
+                "position": "absolute",
+                "left": "4%",
+                "top": "6%",
+                "fontSize": "25px",
+                "letterSpacing": ".18em",
+                "color": "#cfb7f2"
+              },
+              "type": "text",
+              "text": "HEAD TO HEAD"
+            },
+            {
+              "id": "conversation-brand",
+              "styles": {
+                "position": "absolute",
+                "right": "4%",
+                "top": "7%",
+                "fontSize": "16px",
+                "letterSpacing": ".14em",
+                "color": "#b6aebd"
+              },
+              "type": "text",
+              "text": "PRODUCER"
+            },
+            {
+              "id": "conversation-host",
+              "styles": {
+                "position": "absolute",
+                "left": "4%",
+                "top": "20%",
+                "width": "44%",
+                "height": "57%"
+              },
+              "type": "slot",
+              "slotId": "host",
+              "appearance": {
+                "cornerRadius": 16
+              }
+            },
+            {
+              "id": "conversation-guest",
+              "styles": {
+                "position": "absolute",
+                "left": "52%",
+                "top": "20%",
+                "width": "44%",
+                "height": "57%"
+              },
+              "type": "slot",
+              "slotId": "guest",
+              "appearance": {
+                "cornerRadius": 16
+              }
+            },
+            {
+              "id": "conversation-host-name",
+              "styles": {
+                "position": "absolute",
+                "left": "4%",
+                "top": "80%"
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "host-plate",
+                  "type": "component",
+                  "component": "Nameplate",
+                  "props": {
+                    "name": {
+                      "get": "values.hostName"
+                    },
+                    "accent": "#ffc58a"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "conversation-guest-name",
+              "styles": {
+                "position": "absolute",
+                "left": "52%",
+                "top": "80%"
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "guest-plate",
+                  "type": "component",
+                  "component": "Nameplate",
+                  "props": {
+                    "name": {
+                      "get": "values.guestName"
+                    },
+                    "accent": "#cfb7f2"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "conversation-topic",
+              "styles": {
+                "position": "absolute",
+                "left": "4%",
+                "bottom": "6%",
+                "fontSize": "18px",
+                "color": "#b6aebd"
+              },
+              "type": "text",
+              "text": {
+                "get": "values.topic"
+              }
+            },
+            {
+              "id": "conversation-feed",
+              "styles": {
+                "position": "absolute",
+                "right": "4%",
+                "bottom": "6%",
+                "fontSize": "13px",
+                "color": "#cfb7f2",
+                "letterSpacing": ".08em"
+              },
+              "type": "text",
+              "text": {
+                "get": "feeds.headline"
+              }
+            },
+            {
+              "id": "conversation-line",
+              "styles": {
+                "position": "absolute",
+                "left": "4%",
+                "bottom": "3%",
+                "width": "92%",
+                "height": "2px",
+                "background": "linear-gradient(90deg, #b996e8, #ffc58a, transparent)",
+                "opacity": {
+                  "get": "feeds.energy"
+                }
+              },
+              "motion": {
+                "durationMs": 6000,
+                "property": "transform",
+                "from": "scaleX(0.95)",
+                "to": "scaleX(1)"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "conversation-winner",
+              "styles": {
+                "position": "absolute",
+                "left": "35%",
+                "top": "11%",
+                "fontSize": "30px",
+                "color": "#ffc58a",
+                "fontWeight": 700
+              },
+              "when": {
+                "get": "show.revealed"
+              },
+              "type": "text",
+              "text": {
+                "op": "if",
+                "args": [
+                  {
+                    "op": "eq",
+                    "args": [
+                      {
+                        "get": "show.result"
+                      },
+                      "draw"
+                    ]
+                  },
+                  "DRAW",
+                  {
+                    "op": "concat",
+                    "args": [
+                      "WINNER · ",
+                      {
+                        "get": "show.winner"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "solo",
+        "label": "Solo",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "solo-root",
+          "styles": {
+            "position": "absolute",
+            "inset": 0,
+            "background": "radial-gradient(ellipse at 25% 0%, #342343, #17161e 60%, #100f15)"
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "solo-heat",
+              "styles": {
+                "position": "absolute",
+                "inset": 0,
+                "background": "radial-gradient(ellipse at 50% 40%, #f0883244, #f0601022)",
+                "opacity": {
+                  "get": "show.heat"
+                }
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "solo-title",
+              "styles": {
+                "position": "absolute",
+                "left": "4%",
+                "top": "6%",
+                "fontSize": "25px",
+                "letterSpacing": ".18em",
+                "color": "#cfb7f2"
+              },
+              "type": "text",
+              "text": "HEAD TO HEAD"
+            },
+            {
+              "id": "solo-host",
+              "styles": {
+                "position": "absolute",
+                "left": "15%",
+                "top": "18%",
+                "width": "70%",
+                "height": "61%"
+              },
+              "type": "slot",
+              "slotId": "host",
+              "appearance": {
+                "cornerRadius": 16
+              }
+            },
+            {
+              "id": "solo-host-name",
+              "styles": {
+                "position": "absolute",
+                "left": "15%",
+                "top": "82%"
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "solo-plate",
+                  "type": "component",
+                  "component": "Nameplate",
+                  "props": {
+                    "name": {
+                      "get": "values.hostName"
+                    },
+                    "accent": "#ffc58a"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "solo-topic",
+              "styles": {
+                "position": "absolute",
+                "right": "15%",
+                "top": "83%",
+                "fontSize": "18px",
+                "color": "#b6aebd"
+              },
+              "type": "text",
+              "text": {
+                "get": "values.topic"
+              }
+            },
+            {
+              "id": "solo-feed",
+              "styles": {
+                "position": "absolute",
+                "left": "4%",
+                "bottom": "5%",
+                "fontSize": "13px",
+                "color": "#cfb7f2",
+                "letterSpacing": ".08em"
+              },
+              "type": "text",
+              "text": {
+                "get": "feeds.headline"
+              }
+            },
+            {
+              "id": "solo-winner",
+              "styles": {
+                "position": "absolute",
+                "left": "35%",
+                "top": "11%",
+                "fontSize": "30px",
+                "color": "#ffc58a",
+                "fontWeight": 700
+              },
+              "when": {
+                "get": "show.revealed"
+              },
+              "type": "text",
+              "text": {
+                "op": "if",
+                "args": [
+                  {
+                    "op": "eq",
+                    "args": [
+                      {
+                        "get": "show.result"
+                      },
+                      "draw"
+                    ]
+                  },
+                  "DRAW",
+                  {
+                    "op": "concat",
+                    "args": [
+                      "WINNER · ",
+                      {
+                        "get": "show.winner"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "controls": [
+      {
+        "id": "solo-button",
+        "type": "button",
+        "label": "Solo",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "solo"
+        }
+      },
+      {
+        "id": "conversation-button",
+        "type": "button",
+        "label": "Conversation",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "conversation"
+        }
+      },
+      {
+        "id": "host-name",
+        "type": "text",
+        "label": "Host name",
+        "key": "hostName"
+      },
+      {
+        "id": "guest-name",
+        "type": "text",
+        "label": "Guest name",
+        "key": "guestName"
+      },
+      {
+        "id": "topic-field",
+        "type": "text",
+        "label": "Topic",
+        "key": "topic"
+      },
+      {
+        "id": "start-show",
+        "type": "button",
+        "label": "Start show",
+        "action": {
+          "type": "show.start"
+        }
+      },
+      {
+        "id": "next-phase",
+        "type": "button",
+        "label": "Next",
+        "action": {
+          "type": "show.next"
+        }
+      },
+      {
+        "id": "reveal-winner",
+        "type": "button",
+        "label": "Reveal winner",
+        "action": {
+          "type": "show.reveal"
+        }
+      }
+    ]
+  },
+  "show": {
+    "id": "head-to-head",
+    "version": "0.1.0",
+    "initialPhase": "intro",
+    "phases": [
+      {
+        "id": "intro",
+        "label": "Introduction",
+        "layoutId": "conversation",
+        "next": "round"
+      },
+      {
+        "id": "round",
+        "label": "Audience vote",
+        "layoutId": "conversation",
+        "next": "outro",
+        "collectMs": 60000
+      },
+      {
+        "id": "outro",
+        "label": "Winner reveal",
+        "layoutId": "conversation"
+      }
+    ],
+    "choices": [
+      {
+        "id": "a",
+        "label": "Contestant A"
+      },
+      {
+        "id": "b",
+        "label": "Contestant B"
+      }
+    ]
+  }
+}

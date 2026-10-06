@@ -18,17 +18,37 @@ use crate::error::{EngineError, EngineResult};
 const OVERLAY_HTML: &str = include_str!("../../overlay/vote.html");
 const CHAT_HTML: &str = include_str!("../../overlay/chat.html");
 
-#[derive(Default, serde::Serialize)]
+#[derive(Default)]
 struct ChatState {
     messages: Vec<ChatLine>,
+    room: Option<String>,
+    room_messages: Vec<ChatLine>,
+    channels: Option<Vec<String>>,
     emotes: std::collections::HashMap<String, std::collections::HashMap<String, String>>,
 }
 
-#[derive(serde::Serialize)]
+#[derive(Clone, serde::Serialize)]
 struct ChatLine {
     #[serde(flatten)]
     msg: crate::chat::ChatMsg,
     received_at: u64,
+}
+
+// A complete authoritative room snapshot, including deletions. Kept separate
+// from native platform readers so updates never re-emit or duplicate messages.
+#[derive(serde::Deserialize)]
+pub struct ChatRoomProjection {
+    room: Option<String>,
+    messages: Vec<RoomChatMessage>,
+    channels: Vec<String>,
+}
+#[derive(serde::Deserialize)]
+struct RoomChatMessage {
+    id: String,
+    name: String,
+    text: String,
+    #[serde(default)]
+    at: u64,
 }
 
 impl ChatState {
@@ -48,6 +68,58 @@ impl ChatState {
         if self.messages.len() > 24 {
             self.messages.drain(..self.messages.len() - 24);
         }
+    }
+
+    fn project_room(&mut self, projection: ChatRoomProjection) {
+        self.room = projection.room;
+        self.channels = Some(
+            projection
+                .channels
+                .into_iter()
+                .filter(|channel| {
+                    matches!(channel.as_str(), "boomin" | "twitch" | "kick" | "youtube")
+                })
+                .collect(),
+        );
+        self.room_messages.clear();
+        if let Some(room) = &self.room {
+            let mut ids = std::collections::HashSet::new();
+            // The server's bounded history is replaced rather than appended:
+            // deletion and a room switch must also disappear from the output.
+            for message in projection.messages.into_iter().rev().take(100).rev() {
+                if message.id.is_empty() || !ids.insert(message.id.clone()) {
+                    continue;
+                }
+                self.room_messages.push(ChatLine {
+                    msg: crate::chat::ChatMsg {
+                        platform: "boomin".into(),
+                        id: format!("{room}:{}", message.id),
+                        user: message.name,
+                        text: message.text,
+                        color: None,
+                        emotes: None,
+                    },
+                    received_at: message.at,
+                });
+            }
+        }
+    }
+
+    fn output(&self) -> Value {
+        let mut messages: Vec<_> = self
+            .messages
+            .iter()
+            .chain(self.room_messages.iter())
+            .filter(|line| {
+                self.channels
+                    .as_ref()
+                    .map_or(true, |channels| channels.contains(&line.msg.platform))
+            })
+            .cloned()
+            .collect();
+        messages.sort_by_key(|line| line.received_at);
+        let start = messages.len().saturating_sub(24);
+        serde_json::json!({ "messages": &messages[start..], "emotes": self.emotes })
     }
 }
 
@@ -152,7 +224,7 @@ fn serve(mut stream: TcpStream, state: Arc<Mutex<String>>) {
             "application/json",
             chat_cell()
                 .lock()
-                .map(|s| serde_json::to_string(&*s).unwrap_or_else(|_| "null".into()))
+                .map(|s| s.output().to_string())
                 .unwrap_or_else(|_| "null".into()),
         )
     } else if path == "/chat" {
@@ -187,6 +259,16 @@ pub async fn overlay_bridge_start() -> EngineResult<String> {
 #[tauri::command]
 pub async fn chat_overlay_start() -> EngineResult<String> {
     Ok(format!("http://127.0.0.1:{}/chat", start()?))
+}
+
+/// Mirror the host's selected channels and authoritative room chat snapshot.
+#[tauri::command]
+pub fn chat_overlay_update(projection: ChatRoomProjection) -> EngineResult<()> {
+    let mut state = chat_cell()
+        .lock()
+        .map_err(|e| EngineError::Other(e.to_string()))?;
+    state.project_room(projection);
+    Ok(())
 }
 
 /// Feed the overlay: `{ interaction, server_now, hidden? }` or null.
@@ -228,5 +310,63 @@ mod tests {
         }
         assert_eq!(state.messages.len(), 24);
         assert_eq!(state.messages[0].msg.id, "76");
+    }
+    fn projection(
+        room: Option<&str>,
+        ids: &[(&str, u64)],
+        channels: &[&str],
+    ) -> ChatRoomProjection {
+        ChatRoomProjection {
+            room: room.map(str::to_owned),
+            messages: ids
+                .iter()
+                .map(|(id, at)| RoomChatMessage {
+                    id: id.to_string(),
+                    name: "Guest".into(),
+                    text: "room hello".into(),
+                    at: *at,
+                })
+                .collect(),
+            channels: channels.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+    #[test]
+    fn room_chat_matches_filters_and_preserves_native_reader_history() {
+        let mut state = ChatState::default();
+        state.push(&msg("external", "twitch"), 2);
+        state.project_room(projection(
+            Some("one"),
+            &[("room", 1), ("room", 1)],
+            &["boomin"],
+        ));
+        assert_eq!(state.output()["messages"].as_array().unwrap().len(), 1);
+        assert_eq!(state.output()["messages"][0]["platform"], "boomin");
+        state.project_room(projection(
+            Some("one"),
+            &[("room", 1)],
+            &["boomin", "twitch"],
+        ));
+        assert_eq!(state.output()["messages"][1]["platform"], "twitch");
+        state.project_room(projection(Some("one"), &[("room", 1)], &[]));
+        assert!(state.output()["messages"].as_array().unwrap().is_empty());
+        assert_eq!(state.messages.len(), 1);
+    }
+    #[test]
+    fn room_deletion_switch_and_leave_replace_the_output_snapshot() {
+        let mut state = ChatState::default();
+        state.push(&msg("external", "twitch"), 1);
+        state.project_room(projection(
+            Some("one"),
+            &[("a", 2), ("b", 3)],
+            &["boomin", "twitch"],
+        ));
+        state.project_room(projection(Some("one"), &[("b", 3)], &["boomin", "twitch"]));
+        assert_eq!(state.room_messages.len(), 1);
+        assert_eq!(state.room_messages[0].msg.id, "one:b");
+        state.project_room(projection(Some("two"), &[("b", 4)], &["boomin", "twitch"]));
+        assert_eq!(state.room_messages[0].msg.id, "two:b");
+        state.project_room(projection(None, &[("b", 4)], &["boomin", "twitch"]));
+        assert!(state.room_messages.is_empty());
+        assert_eq!(state.output()["messages"].as_array().unwrap().len(), 1);
     }
 }

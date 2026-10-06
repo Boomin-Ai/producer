@@ -102,7 +102,8 @@ def c_definitions(path):
             defs.add(m.group(1))
     return defs
 
-defs = {p: c_definitions(f) for p, f in SHIMS.items()}
+common = c_definitions("src-tauri/src/live/source_appearance.c")
+defs = {p: c_definitions(f) | common for p, f in SHIMS.items()}
 
 # ---- 3. diff --------------------------------------------------------------
 missing = {p: [] for p in SHIMS}

@@ -8,6 +8,9 @@ pub mod creds;
 #[cfg(have_engine)]
 pub mod dj;
 pub mod presence;
+pub mod presentation;
+#[cfg(all(have_engine, debug_assertions))]
+mod presentation_probe;
 #[cfg(have_engine)]
 pub mod program_audio;
 
@@ -86,6 +89,98 @@ pub struct Live {
 }
 
 impl Live {
+    pub fn replace_extra(
+        &self,
+        id: String,
+        label: String,
+        spec: serde_json::Value,
+        initial: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value, String> {
+        #[cfg(have_engine)]
+        {
+            let spec = serde_json::from_value(spec).map_err(|e| format!("Invalid source: {e}"))?;
+            let initial = initial
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|e| format!("Invalid placement: {e}"))?;
+            let sources = self
+                .handle
+                .as_ref()
+                .ok_or("live engine not running")?
+                .replace_extra(id, label, spec, initial)?;
+            serde_json::to_value(sources).map_err(|e| e.to_string())
+        }
+        #[cfg(not(have_engine))]
+        {
+            let _ = (id, label, spec, initial);
+            Err("live engine not bundled in this build".into())
+        }
+    }
+    pub fn presentation_status(&self) -> Result<presentation::Status, String> {
+        #[cfg(have_engine)]
+        {
+            self.handle
+                .as_ref()
+                .ok_or("live engine not running")?
+                .presentation_status()
+        }
+        #[cfg(not(have_engine))]
+        {
+            Err("Set output needs the native engine".into())
+        }
+    }
+    pub fn presentation_apply(
+        &self,
+        request: presentation::Request,
+    ) -> Result<presentation::Status, String> {
+        #[cfg(have_engine)]
+        {
+            self.handle
+                .as_ref()
+                .ok_or("live engine not running")?
+                .presentation_apply(request)
+        }
+        #[cfg(not(have_engine))]
+        {
+            let _ = request;
+            Err("Set output needs the native engine".into())
+        }
+    }
+    pub fn presentation_return(
+        &self,
+        lease: Option<String>,
+    ) -> Result<presentation::Status, String> {
+        #[cfg(have_engine)]
+        {
+            self.handle
+                .as_ref()
+                .ok_or("live engine not running")?
+                .presentation_return(lease)
+        }
+        #[cfg(not(have_engine))]
+        {
+            let _ = lease;
+            Err("Set output needs the native engine".into())
+        }
+    }
+    pub fn restore_room(&self, restore: serde_json::Value) -> Result<serde_json::Value, String> {
+        #[cfg(have_engine)]
+        {
+            let restore =
+                serde_json::from_value(restore).map_err(|e| format!("Invalid room: {e}"))?;
+            let result = self
+                .handle
+                .as_ref()
+                .ok_or("live engine not running")?
+                .restore_room(restore)?;
+            serde_json::to_value(result).map_err(|e| e.to_string())
+        }
+        #[cfg(not(have_engine))]
+        {
+            let _ = restore;
+            Err("live engine not bundled in this build".into())
+        }
+    }
     pub fn apply_scene(&self, changes: serde_json::Value) -> Result<serde_json::Value, String> {
         #[cfg(have_engine)]
         {

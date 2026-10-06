@@ -435,7 +435,10 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
     // Producer's own filters, registered like a plugin would but from the
     // shim: Cutout (person mask). Before modules load so it is present
     // whenever a scene config that names it is read.
-    unsafe { ffi::producer_person_mask_register() };
+    unsafe {
+        ffi::producer_person_mask_register();
+        ffi::producer_source_appearance_register();
+    };
 
     #[cfg(target_os = "macos")]
     // Dev-mode escape hatch: outside a .app bundle, NSBundle's builtInPlugInsURL
@@ -643,6 +646,25 @@ pub enum FilterOp {
 }
 
 pub enum Command {
+    PresentationStatus {
+        reply: mpsc::Sender<super::presentation::Status>,
+    },
+    PresentationPrepare {
+        request: super::presentation::Request,
+        reply: mpsc::Sender<Result<Arc<super::presentation::Bridge>, String>>,
+    },
+    PresentationCommit {
+        token: String,
+        placements: Vec<super::presentation::Placement>,
+        reply: mpsc::Sender<Result<super::presentation::Status, String>>,
+    },
+    PresentationAbort {
+        token: String,
+    },
+    PresentationReturn {
+        lease: Option<String>,
+        reply: mpsc::Sender<Result<super::presentation::Status, String>>,
+    },
     Dj {
         action: crate::dj::Action,
         reply: std::sync::mpsc::Sender<Result<crate::dj::Status, String>>,
@@ -743,6 +765,17 @@ pub enum Command {
     },
     /// Add an open-list scene item (UI-P2.10). Id and label come from the
     /// room document so items respawn with stable identity.
+    ReplaceExtra {
+        id: String,
+        label: String,
+        spec: graph::ExtraSpec,
+        initial: Option<graph::SceneChange>,
+        reply: mpsc::Sender<Result<graph::SourcesState, String>>,
+    },
+    RestoreRoom {
+        restore: graph::RoomRestore,
+        reply: mpsc::Sender<Result<graph::RoomRestoreResult, String>>,
+    },
     AddExtra {
         id: String,
         label: String,
@@ -782,6 +815,11 @@ fn cmd_name(c: &Command) -> &'static str {
         Command::ReleaseIdleRoom { .. } => "ReleaseIdleRoom",
         Command::SetTransform { .. } => "SetTransform",
         Command::ApplyScene { .. } => "ApplyScene",
+        Command::PresentationStatus { .. } => "PresentationStatus",
+        Command::PresentationPrepare { .. } => "PresentationPrepare",
+        Command::PresentationCommit { .. } => "PresentationCommit",
+        Command::PresentationAbort { .. } => "PresentationAbort",
+        Command::PresentationReturn { .. } => "PresentationReturn",
         Command::ListDevices { .. } => "ListDevices",
         Command::PlayStinger { .. } => "PlayStinger",
         Command::StartRecording { .. } => "StartRecording",
@@ -795,6 +833,8 @@ fn cmd_name(c: &Command) -> &'static str {
         Command::SetVirtualCam { .. } => "SetVirtualCam",
         Command::SetStudio { .. } => "SetStudio",
         Command::SetDevice { .. } => "SetDevice",
+        Command::ReplaceExtra { .. } => "ReplaceExtra",
+        Command::RestoreRoom { .. } => "RestoreRoom",
         Command::AddExtra { .. } => "AddExtra",
         Command::RemoveExtra { .. } => "RemoveExtra",
         Command::SetVideo { .. } => "SetVideo",
@@ -948,6 +988,97 @@ pub struct LiveHandle {
 }
 
 impl LiveHandle {
+    #[cfg(debug_assertions)]
+    pub(super) fn probe_sender(&self) -> mpsc::Sender<Command> {
+        self.cmd.clone()
+    }
+
+    pub fn presentation_status(&self) -> Result<super::presentation::Status, String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd
+            .send(Command::PresentationStatus { reply: tx })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(5))
+            .map_err(|_| "Set engine did not answer".into())
+    }
+    pub fn presentation_apply(
+        &self,
+        request: super::presentation::Request,
+    ) -> Result<super::presentation::Status, String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd
+            .send(Command::PresentationPrepare { request, reply: tx })
+            .map_err(|e| e.to_string())?;
+        let bridge = rx
+            .recv_timeout(Duration::from_secs(10))
+            .map_err(|_| "Set preparation did not start".to_string())??;
+        // Wait outside the engine owner: Stop/Return/room restoration can cancel
+        // preparation immediately while the private renderers obtain their receipt.
+        let placements = match bridge.wait() {
+            Ok(p) => p,
+            Err(e) => {
+                bridge.revoke();
+                let _ = self.cmd.send(Command::PresentationAbort {
+                    token: bridge.token.clone(),
+                });
+                return Err(e);
+            }
+        };
+        let (tx, rx) = mpsc::channel();
+        self.cmd
+            .send(Command::PresentationCommit {
+                token: bridge.token.clone(),
+                placements,
+                reply: tx,
+            })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(5))
+            .map_err(|_| "Set activation did not answer".to_string())?
+    }
+    pub fn presentation_return(
+        &self,
+        lease: Option<String>,
+    ) -> Result<super::presentation::Status, String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd
+            .send(Command::PresentationReturn { lease, reply: tx })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(5))
+            .map_err(|_| "Return to room did not answer".to_string())?
+    }
+
+    pub fn replace_extra(
+        &self,
+        id: String,
+        label: String,
+        spec: graph::ExtraSpec,
+        initial: Option<graph::SceneChange>,
+    ) -> Result<graph::SourcesState, String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd
+            .send(Command::ReplaceExtra {
+                id,
+                label,
+                spec,
+                initial,
+                reply: tx,
+            })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(30))
+            .map_err(|_| "Source replacement did not finish".to_string())?
+    }
+    pub fn restore_room(
+        &self,
+        restore: graph::RoomRestore,
+    ) -> Result<graph::RoomRestoreResult, String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd
+            .send(Command::RestoreRoom { restore, reply: tx })
+            .map_err(|e| e.to_string())?;
+        // Multiple cold browser/capture creations can take longer than a cut.
+        rx.recv_timeout(Duration::from_secs(120))
+            .map_err(|_| "Room restoration did not finish".to_string())?
+    }
     pub fn apply_scene(
         &self,
         changes: Vec<graph::SceneChange>,
@@ -1778,6 +1909,8 @@ pub fn start(
     let snapshot = Arc::new(Mutex::new(Snapshot::default()));
     let streaming = Arc::new(AtomicBool::new(false));
     let snap = snapshot.clone();
+    #[cfg(debug_assertions)]
+    let probe_cmd = cmd_tx.clone();
     let streaming_flag = streaming.clone();
 
     std::thread::Builder::new()
@@ -1981,6 +2114,11 @@ pub fn start(
             } else {
                 None
             };
+            #[cfg(debug_assertions)]
+            if let (Some(g),Ok(path))=(scene.as_mut(),std::env::var("PRODUCER_SET_OUTPUT_PROBE")) {
+                let handle=LiveHandle{cmd:probe_cmd,snapshot:snap.clone(),streaming:streaming_flag.clone()};
+                if let Err(e)=unsafe {super::presentation_probe::start(g,handle,std::path::PathBuf::from(path.clone()))} {let _=std::fs::write(std::path::Path::new(&path).join("result.json"),serde_json::json!({"ok":false,"error":e}).to_string());}
+            }
             let mut dj = super::dj::Dj::default();
             let mut preview: Option<Preview> = None;
             let mut session: Option<Session> = None;
@@ -2173,6 +2311,11 @@ pub fn start(
                             }
                         }
                     }
+                    Ok(Command::PresentationStatus {reply})=> {let _=reply.send(scene.as_ref().map_or(super::presentation::Status{generation:0,lease:None,revision:0},|g|g.presentation_status()));}
+                    Ok(Command::PresentationPrepare {request,reply})=> {let result=scene.as_mut().ok_or_else(||"The room scene is not running".to_string()).and_then(|g|g.prepare_presentation(request));let _=reply.send(result);}
+                    Ok(Command::PresentationCommit {token,placements,reply})=> {let result=scene.as_mut().ok_or_else(||"The room scene is not running".to_string()).and_then(|g|g.commit_presentation(&token,placements));let _=reply.send(result);}
+                    Ok(Command::PresentationAbort {token})=> {if let Some(g)=scene.as_mut(){g.abort_presentation(&token);}}
+                    Ok(Command::PresentationReturn {lease,reply})=> {let result=scene.as_mut().ok_or_else(||"The room scene is not running".to_string()).and_then(|g|g.return_presentation(lease.as_deref()));let _=reply.send(result);}
                     Ok(Command::ApplyScene { changes, reply }) => {
                         let result = match scene.as_mut() {
                             Some(g) => g.apply_scene(&changes).map(|()| g.state()),
@@ -2400,6 +2543,36 @@ pub fn start(
                                 Err(e) => sink(&LiveEvent::EngineError { message: e }),
                             }
                         }
+                    }
+                    Ok(Command::ReplaceExtra { id, label, spec, initial, reply }) => {
+                        let result = match scene.as_mut() {
+                            Some(g) => g.replace_extra(&id, &label, &spec, initial),
+                            None => Err("The room scene is not running".into()),
+                        };
+                        if let Some(g) = scene.as_ref() {
+                            let sources = g.state();
+                            snap.lock().unwrap().sources = sources.clone();
+                            sink(&LiveEvent::SourcesChanged { sources });
+                        }
+                        let _ = reply.send(result);
+                    }
+                    Ok(Command::RestoreRoom { restore, reply }) => {
+                        let result = if session.is_some() || recorder.is_some() {
+                            Err("Stop streaming and recording before restoring a room".into())
+                        } else {
+                            match scene.as_mut() {
+                                Some(g) => g.restore_room(restore),
+                                None => Err("The room scene is not running".into()),
+                            }
+                        };
+                        // Even a failure leaves the graph hidden. Publish actual engine
+                        // truth, never the pre-restore snapshot or a per-source echo.
+                        if let Some(g) = scene.as_ref() {
+                            let sources = g.state();
+                            snap.lock().unwrap().sources = sources.clone();
+                            sink(&LiveEvent::SourcesChanged { sources });
+                        }
+                        let _ = reply.send(result);
                     }
                     Ok(Command::AddExtra { id, label, spec }) => {
                         if let Some(g) = scene.as_mut() {

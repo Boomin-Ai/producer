@@ -1,3 +1,4 @@
+import "./GuestRoomPage.css";
 // ── The room door — what a stranger opens ─────────────────────────────────────
 //
 // Route: /connect/guest/room/:code
@@ -50,7 +51,34 @@ type Phase = "name" | "waiting" | "live" | "gone" | "error";
 const storageKey = (code: string) => `producer.guest.${code}`;
 
 export default function GuestRoomPage({ code }: { code: string }) {
+  const [fullscreen,setFullscreen]=useState(false);
+  const cardRef=useRef<HTMLDivElement>(null);
+  const fullscreenTrigger=useRef<HTMLButtonElement>(null);
+  const nativeFullscreen=useRef(false);
+  const toggleFullscreen=async()=> {
+    if(fullscreen){setFullscreen(false);if(document.fullscreenElement===cardRef.current)await document.exitFullscreen().catch(()=>{});fullscreenTrigger.current?.focus();return;}
+    setFullscreen(true);
+    if(cardRef.current?.requestFullscreen)await cardRef.current.requestFullscreen().then(()=>{nativeFullscreen.current=true;}).catch(()=>{});
+  };
+  useEffect(()=>{
+    const changed=()=>{if(!document.fullscreenElement && nativeFullscreen.current){nativeFullscreen.current=false;setFullscreen(false);fullscreenTrigger.current?.focus();}};
+    document.addEventListener('fullscreenchange',changed);
+    return()=>{document.removeEventListener('fullscreenchange',changed);if(document.fullscreenElement===cardRef.current)void document.exitFullscreen().catch(()=>{});};
+  },[]);
+  useEffect(()=>{
+    if(!fullscreen)return;
+    const prior=document.body.style.overflow;document.body.style.overflow='hidden';
+    const key=(e:KeyboardEvent)=>{if(e.key==='Escape'){setFullscreen(false);fullscreenTrigger.current?.focus();}};
+    window.addEventListener('keydown',key);
+    return()=>{document.body.style.overflow=prior;window.removeEventListener('keydown',key);};
+  },[fullscreen]);
   const [phase, setPhase] = useState<Phase>("name");
+  useEffect(() => {
+    if (phase !== "live") {
+      setFullscreen(false);
+      if (document.fullscreenElement === cardRef.current) void document.exitFullscreen().catch(() => {});
+    }
+  }, [phase]);
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
   const [guest, setGuest] = useState<Guest | null>(null);
@@ -492,7 +520,7 @@ export default function GuestRoomPage({ code }: { code: string }) {
 
   if (phase === "gone" || phase === "error") {
     return (
-      <div style={S.shell}><div style={S.card}>
+      <div className="guest-room-shell" style={S.shell}><div ref={cardRef} className={`guest-room-card${fullscreen ? " is-fullscreen" : ""}`} style={S.card}>
         <h1 style={S.title}>This link has expired</h1>
         <p style={S.sub}>{message || "Ask whoever invited you for a fresh link."}</p>
       </div></div>
@@ -500,8 +528,8 @@ export default function GuestRoomPage({ code }: { code: string }) {
   }
 
   return (
-    <div style={S.shell}>
-      <div style={S.card}>
+    <div className="guest-room-shell" style={S.shell}>
+      <div ref={cardRef} className={`guest-room-card${fullscreen ? " is-fullscreen" : ""}`} style={S.card}>
         {phase === "live" ? (
           <>
             <p style={S.eyebrow}>
@@ -518,9 +546,9 @@ export default function GuestRoomPage({ code }: { code: string }) {
                 own preview stays large (as while waiting), and the program,
                 once it arrives, becomes the corner tile so you can follow the
                 show until you are brought on. Tap either tile to hide it. */}
-            <div style={S.stage}>
+            <div className="guest-room-stage" style={S.stage}>
               {programMain ? (
-                <video ref={showRef} onPlaying={() => setShowPlaying(true)} onPause={() => setShowPlaying(false)} onWaiting={() => setShowPlaying(false)} autoPlay playsInline muted style={S.video} />
+                <video ref={showRef} onPlaying={() => setShowPlaying(true)} onPause={() => setShowPlaying(false)} onWaiting={() => setShowPlaying(false)} autoPlay playsInline muted style={{...S.video,objectFit:"contain"}} />
               ) : (
                 <video ref={selfRef} autoPlay playsInline muted style={{ ...S.video, transform: "scaleX(-1)", ...(selfHidden ? { visibility: "hidden" } : null) }} />
               )}
@@ -571,7 +599,7 @@ export default function GuestRoomPage({ code }: { code: string }) {
           <>
             <p style={S.eyebrow}>{phase === "waiting" ? "Waiting to be let in" : "Join the show"}</p>
             <h1 style={S.title}>{phase === "waiting" ? "You're in the queue" : "What should we call you?"}</h1>
-            <div style={S.stage}>
+            <div className="guest-room-stage" style={S.stage}>
               <video ref={selfRef} autoPlay playsInline muted style={{ ...S.video, transform: "scaleX(-1)", ...(selfHidden ? { visibility: "hidden" } : null) }} />
               {can.camera && cameraOff && <div style={S.placeholder}>Camera off</div>}
               {!can.camera && <div style={S.placeholder}>{can.mic ? "Audio only" : "You're here to watch and take part"}</div>}
@@ -601,7 +629,7 @@ export default function GuestRoomPage({ code }: { code: string }) {
         )}
 
         {activeVote && phase === "live" && (
-          <div style={{ margin: "12px 0" }}>
+          <div className="guest-room-interaction" style={{ margin: "12px 0" }}>
             <VoteCard
               interaction={activeVote}
               offset={clock}
@@ -616,7 +644,8 @@ export default function GuestRoomPage({ code }: { code: string }) {
         {/* Controls exist only for grants held. A control the participant
             cannot use is not disabled — it is absent, so the page reads as
             what THEY are here to do. */}
-        <div style={S.controls}>
+        <div className="guest-room-controls" style={S.controls}>
+          {phase === "live" && <button ref={fullscreenTrigger} onClick={()=>void toggleFullscreen()} aria-pressed={fullscreen} style={S.ghost}>{fullscreen ? "Exit fullscreen" : "Fullscreen"}</button>}
           {can.mic && <button onClick={toggleMute} style={S.ghost}>{muted ? "Unmute" : "Mute"}</button>}
           {can.camera && <button onClick={toggleCamera} style={S.ghost}>{cameraOff ? "Start camera" : "Stop camera"}</button>}
           {can.camera && (
@@ -633,12 +662,12 @@ export default function GuestRoomPage({ code }: { code: string }) {
         </div>
 
         {message && <p style={S.note}>{message}</p>}
-        <p style={S.fine}>
+        <p className="guest-room-fine" style={S.fine}>
           Your camera and audio go straight to the host's computer. This server
           doesn't record or store this video. You're only heard by the audience
           while you're on air.
         </p>
-        <p style={S.fine}>
+        <p className="guest-room-fine" style={S.fine}>
           Powered by{" "}
           <a href="https://producer.dev" target="_blank" rel="noreferrer" style={S.plug}>Producer</a>
         </p>
@@ -651,7 +680,7 @@ export default function GuestRoomPage({ code }: { code: string }) {
 }
 
 const S: Record<string, CSSProperties> = {
-  shell: { minHeight: "100vh", display: "grid", placeItems: "center", background: "#0a0a0b", padding: 24, fontFamily: "system-ui, sans-serif" },
+  shell: { minHeight: "100vh", display: "grid", alignItems: "start", justifyItems: "center", background: "#0a0a0b", boxSizing:"border-box", padding: 24, fontFamily: "system-ui, sans-serif" },
   card: { width: "min(680px, 100%)", color: "#fff" },
   eyebrow: { margin: 0, fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase", color: "#8b8b93", display: "flex", alignItems: "center", gap: 8 },
   dot: { width: 7, height: 7, borderRadius: 999, background: "#ff3b30", display: "inline-block" },

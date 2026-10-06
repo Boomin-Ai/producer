@@ -15,7 +15,7 @@
  * sessions. Pure: no DOM, no IPC (server/test runs it).
  */
 
-import { isModSourceId, type TrackLabel } from "../../server/guest/src/participants";
+import { modSourceIdsFor, isModSourceId, type TrackLabel } from "../../server/guest/src/participants";
 
 /** A rect as fractions of the canvas, 0..1. */
 export interface ModFeedRect {
@@ -106,10 +106,10 @@ export function modFeedZ(items: readonly { id: string; kind: string; z: number }
 
 /** Which participant a mod source id belongs to, given the rows that could
  * own it (ids are `mod-<uuid8>`; the roster maps them back). */
-export function modSourceOwner<T extends { id: string }>(sourceId: string, rows: readonly T[]): { row: T; track: ModFeedTrack } | null {
+export function modSourceOwner<T extends { id: string; producer_ref?: unknown }>(sourceId: string, rows: readonly T[]): { row: T; track: ModFeedTrack } | null {
   if (!isModSourceId(sourceId)) return null;
   const screen = sourceId.endsWith("-screen");
   const base = screen ? sourceId.slice(0, -"-screen".length) : sourceId;
-  const row = rows.find((r) => `mod-${r.id.slice(0, 8)}` === base);
+  const row = rows.find((r) => modSourceIdsFor(r.id, r.producer_ref).camera === base || `mod-${r.id.slice(0, 8)}` === base);
   return row ? { row, track: screen ? "screen" : "camera" } : null;
 }

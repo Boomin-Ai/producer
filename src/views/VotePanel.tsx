@@ -169,7 +169,6 @@ export function VotePanel({
   vote: Interaction | null;
   savedVotes?: Interaction[];
   onSelectVote?: (id: string) => void;
-  audienceLink: string | null;
   /** The editor is open (LiveView's `voteEdit`). */
   editing: boolean;
   /** Open / close the editor. The strip passes the button it was pressed
@@ -177,7 +176,6 @@ export function VotePanel({
   onEdit: (open: boolean, anchor?: HTMLElement) => void;
   onOpen: (input: VoteOpenInput) => void;
   onTransition: (t: "open" | "reveal" | "close" | "cancel", holdMs?: number) => void;
-  onAudienceLink: () => void;
   /** Row dock only: the caller's popover (the editor in a Pop), rendered
    * inside the strip's anchor so it lands under the Set up button. */
   popover?: ReactNode;
@@ -255,7 +253,7 @@ export function VotePanel({
     );
     return (
       <div className="rm-strip rm-row-strip rm-vote-strip" data-live={live ? "1" : undefined}>
-        <span className="rm-vote-tag">Vote</span>
+        <span className="rm-vote-tag" title="Interactions">Poll</span>
         {history}
         <span className="rm-vote-strip-q" title={last ?? undefined}>
           {live && vote ? (vote.spec.prompt || last) : last ?? "No vote"}

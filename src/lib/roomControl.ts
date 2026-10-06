@@ -1,3 +1,4 @@
+import type { RoomSource, RoomActionKind, RoomAction } from "../../server/src/roomActions";
 // The room channel's CONTROL side, from Producer (#47).
 //
 // One WebSocket to the room's Durable Object, opened by the HOST's Producer
@@ -140,6 +141,12 @@ export class RoomControlLink {
   private renewalAck: number | null = null;
   private renewalId: string | null = null;
   private pendingPublish: string | null = null;
+  private latestPublish: string | null = null;
+  private registerRetryAt = 0;
+  private pendingSources: string | null = null;
+  // OPEN describes transport readiness, not whether this socket has sent the
+  // host registration. IPC source updates can arrive before the open callback.
+  private scenesPublished = false;
   private generation = 0;
 
   constructor(private readonly opts: RoomControlOptions) {}
@@ -162,6 +169,11 @@ export class RoomControlLink {
     if (this.renewalAck) window.clearTimeout(this.renewalAck);
     this.renewalAck = null;
     this.renewalId = null;
+    this.pendingPublish = null;
+    this.latestPublish = null;
+    this.registerRetryAt = 0;
+    this.pendingSources = null;
+    this.scenesPublished = false;
     try {
       this.ws?.close();
     } catch {
@@ -177,8 +189,38 @@ export class RoomControlLink {
   /** Host: publish the scene list. Re-sent on reconnect if it never went out. */
   publishScenes(scenes: readonly { id: string; name: string }[], activeSceneId: string | null | undefined): void {
     const frame = scenePublishFrame(scenes, activeSceneId);
-    if (this.open) this.ws!.send(frame);
+    if (this.closed) return;
+    this.latestPublish = frame;
+    if (this.open) {
+      this.ws!.send(frame);
+      this.scenesPublished = true;
+      this.flushSources();
+    }
     else this.pendingPublish = frame;
+  }
+
+  publishSources(sources: RoomSource[], participants: string[], onStage: string[]): boolean {
+    if (this.closed) return false;
+    this.pendingSources = JSON.stringify({ type: "room.sources.publish", sources, participants, on_stage: onStage });
+    return this.flushSources();
+  }
+
+  private flushSources(): boolean {
+    if (!this.open || !this.scenesPublished || !this.pendingSources) return false;
+    this.ws!.send(this.pendingSources);
+    this.pendingSources = null;
+    return true;
+  }
+
+  sourceAction(kind: RoomActionKind, target: string, on: boolean, revision?: number): string | null {
+    if (!this.open) return null;
+    const command_id = crypto.randomUUID();
+    this.send({ type: "room.action", command_id, kind, target, on, expected_revision: revision });
+    return command_id;
+  }
+
+  acknowledgeAction(command: RoomAction, sources: RoomSource[], participants: string[], onStage: string[], error?: string): void {
+    this.send({ type: "room.action.ack", command_id: command.command_id, status: error ? "failed" : "applied", sources, participants, on_stage: onStage, error });
   }
 
   /** Mod: cut to a scene. Resolves false if the socket is not open. */
@@ -217,6 +259,7 @@ export class RoomControlLink {
       return;
     }
     this.ws = ws;
+    this.scenesPublished = false;
     ws.onopen = () => {
       if (this.closed || this.ws !== ws || generation !== this.generation) { ws.close(); return; }
       this.retryMs = 1000;
@@ -224,6 +267,8 @@ export class RoomControlLink {
       if (this.pendingPublish) {
         ws.send(this.pendingPublish);
         this.pendingPublish = null;
+        this.scenesPublished = true;
+        this.flushSources();
       }
       if (this.ping) window.clearInterval(this.ping);
       this.ping = window.setInterval(() => {
@@ -241,11 +286,19 @@ export class RoomControlLink {
         this.renewalAck = null; this.renewalId = null;
         this.scheduleRenewal(ws); return;
       }
+      // The former owner can disappear after our startup was rejected. Retry
+      // registration on this socket before further source updates; the server
+      // still refuses takeover of a live, authorized host. Mods have no publish.
+      if (frame?.type === "error" && frame.code === "host_unavailable" && this.latestPublish && Date.now() >= this.registerRetryAt) {
+        this.registerRetryAt = Date.now() + 5000;
+        ws.send(this.latestPublish);
+      }
       if (frame && frame.type !== "pong") this.opts.onFrame(frame);
     };
     ws.onclose = () => {
       if (this.closed || this.ws !== ws || generation !== this.generation) return;
       this.ws = null;
+      this.scenesPublished = false;
       if (this.ping) window.clearInterval(this.ping);
       this.ping = null;
       if (this.renewal) window.clearTimeout(this.renewal);

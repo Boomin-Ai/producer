@@ -1,0 +1,28 @@
+.room-chat { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; gap: 8px; }
+.room-chat .rm-chat-chips { flex-wrap: wrap; gap: 4px; }
+.room-chat .rm-chat-list { overscroll-behavior: contain; }
+.room-chat-message { display: flex; align-items: flex-start; gap: 6px; }
+.room-chat-message-body { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.room-chat-platform { display: inline-flex; width: 14px; height: 14px; margin-right: 5px; vertical-align: middle; }
+.room-chat-platform :is(svg,img) { width: 14px; height: 14px; }
+.room-chat-composer { display: flex; flex-shrink: 0; gap: 6px; min-width: 0; }
+.room-chat-composer input { flex: 1; min-width: 0; width: 0; padding: 7px 8px; border: 1px solid var(--line-1); border-radius: 7px; background: var(--surface-1); color: var(--fg-1); font: inherit; font-size: 12px; }
+:is(.room-chat,.room-chat-compose-pop) :is(.room-chat-composer button,.room-chat-actions button,.room-chat-write,.room-chat-notice button) { padding: 5px 8px; min-height: 28px; border: 1px solid var(--line-1); border-radius: 7px; background: var(--surface-1); color: var(--fg-1); font: inherit; font-size: 11px; cursor: pointer; }
+.room-chat-composer button:disabled { opacity: .45; cursor: default; }
+:is(.room-chat,.room-chat-compose-pop) :is(button,input,summary):focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.room-chat-actions { flex-shrink: 0; font-size: 10px; }
+.room-chat-actions summary { cursor: pointer; list-style: none; padding: 2px 5px; color: var(--fg-3); }
+.room-chat-actions summary::-webkit-details-marker { display: none; }
+.room-chat-actions > div { display: grid; gap: 4px; padding: 4px 0; }
+.room-chat-actions button { text-align: left; }
+.room-chat-notice { display: flex; align-items: center; gap: 6px; color: var(--fg-2); font-size: 11px; }
+.room-chat-notice span { flex: 1; }
+.room-chat-mini { flex-direction: row; align-items: center; }
+.room-chat-mini .rm-chat-chips { flex-wrap: nowrap; }
+.room-chat-compose-pop { width: min(340px, calc(100vw - 24px)); padding: 10px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--bg); color: var(--fg-1); }
+.room-chat-compose-pop:popover-open { display: grid; gap: 8px; }
+.room-chat-compose-pop::backdrop { background: transparent; }
+.mb-operation-content:has(.room-chat) { height: 260px; display: flex; }
+
+/* Leave the room's floating output tools below the composer. */
+.room:not(.layout-edit) .rm-panel-chat:not([data-in="top"]) .rm-panel-body { padding-bottom: 44px; }

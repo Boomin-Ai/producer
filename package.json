@@ -2,7 +2,7 @@
   "name": "producer",
   "private": true,
   "version": "0.3.0",
-  "description": "Producer by Boomin — the open-source studio for creators: post everywhere, stream everywhere.",
+  "description": "Producer by Boomin \u2014 the open-source studio for creators: post everywhere, stream everywhere.",
   "license": "AGPL-3.0-only",
   "repository": {
     "type": "git",
@@ -16,7 +16,16 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "tauri:manager-preview": "tauri dev --config src-tauri/tauri.manager-preview.conf.json"
+    "tauri:manager-preview": "tauri dev --config src-tauri/tauri.manager-preview.conf.json",
+    "test:people-panels-browser": "node scripts/test-people-panels-browser.mjs",
+    "test:presentation": "node scripts/test-presentation.mjs",
+    "test:room-chat-browser": "node scripts/test-room-chat-browser.mjs",
+    "test:presentation-browser": "node scripts/test-presentation-browser.mjs",
+    "export:presentation": "node scripts/export-presentation-contract.mjs",
+    "test:presentation-output": "node scripts/test-presentation-output.mjs",
+    "test:presentation-native-sources": "node scripts/test-presentation-output.mjs --native-sources",
+    "test:presentation-native-output": "node scripts/test-presentation-output.mjs --native",
+    "test:scene-restoration": "node scripts/test-scene-restoration.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.0",
