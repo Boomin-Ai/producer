@@ -1,7 +1,7 @@
 {
   "name": "producer",
   "private": true,
-  "version": "0.4.63",
+  "version": "0.4.64",
   "description": "Producer by Boomin \u2014 the open-source studio for creators: post everywhere, stream everywhere.",
   "license": "AGPL-3.0-only",
   "repository": {
