@@ -315,7 +315,11 @@ impl Bridge {
                     }
                 }
             }
-            if start.elapsed() > Duration::from_secs(10) {
+            // Cold production webviews can take longer to initialize than the
+            // dev room, especially while native camera surfaces are starting.
+            // Keep the existing room output while allowing the set surfaces
+            // enough time to acknowledge their first painted frame.
+            if start.elapsed() > Duration::from_secs(30) {
                 return Err("Set graphics did not finish preparing; room output was kept".into());
             }
             std::thread::sleep(Duration::from_millis(20));
