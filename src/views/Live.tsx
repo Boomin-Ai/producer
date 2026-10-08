@@ -8318,7 +8318,7 @@ export function LiveView({
             {studioOn ? "Studio on" : "Studio"}
           </button>
 
-          {import.meta.env.DEV && <>
+          {<>
             <SetMenu session={setRehearsal} output={setOutput} onChange={changeSet}
               onControls={() => {
                 const current = dockOf(layout, "setControls");
