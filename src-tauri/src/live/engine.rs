@@ -2652,7 +2652,12 @@ pub fn start(
                         let result={let _=request;Err("Portrait preview is currently a Mac dev capability".into())};
                         let _=reply.send(result);
                     }
-                    Ok(Command::PortraitAbort{token,revision})=>{if let Some(g)=scene.as_mut(){g.portrait_abort(&token,revision);}}
+                    Ok(Command::PortraitAbort{token,revision})=>{
+                        #[cfg(target_os="macos")]
+                        if let Some(g)=scene.as_mut(){g.portrait_abort(&token,revision);}
+                        #[cfg(not(target_os="macos"))]
+                        let _=(token,revision);
+                    }
                     Ok(Command::PortraitCommit{token,placements,reply})=>{
                         #[cfg(target_os="macos")]
                         let result=scene.as_mut().ok_or("Room scene unavailable".to_string()).and_then(|g|g.portrait_commit(&token,placements));
