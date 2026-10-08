@@ -30,6 +30,8 @@ import {
   type GuestRow,
 } from "../src/guests";
 import { ApiError } from "../src/errors";
+import { RealtimeHub } from "../src/realtime";
+import { asState, fakeNamespace } from "./do";
 
 const ORIGIN = "https://producer.example.workers.dev";
 
@@ -59,6 +61,46 @@ async function expectApi(p: Promise<unknown>, code: string, status?: number) {
   }
   throw new Error(`expected ${code}`);
 }
+
+describe("concurrent hardware reservations",()=>{
+  it("two admissions cannot consume the same final media slot",async()=>{
+    const e=env(),{room,code}=await openRoom(e);
+    await e.DB.prepare("UPDATE live_rooms SET guest_capacity = 1 WHERE id = ?1").bind(room.id).run();
+    const [a,b]=await Promise.all(["A","B"].map(displayName=>joinRoomByCode(e,{roomCode:code,displayName})));
+    const invited=await inviteGuest(e,ORIGIN,{roomId:room.id,displayName:"Invited"});
+    const result=await Promise.allSettled([admitGuest(e,a.guest.id),admitGuest(e,b.guest.id)]);
+    expect(result.filter(r=>r.status==="fulfilled")).toHaveLength(1);
+    expect((result.find(r=>r.status==="rejected") as PromiseRejectedResult).reason.code).toBe("guest_room_full");
+    await expectApi(acceptGuest(e,invited.guest.id),"guest_room_full",409);
+    const count=await e.DB.prepare("SELECT COUNT(*) AS n FROM live_room_guests WHERE room_id = ?1 AND status = 'accepted'").bind(room.id).first<{n:number}>();
+    expect(count?.n).toBe(1);
+  });
+  it("concurrent auto-admits enforce capacity in the insertion itself",async()=>{
+    const e=env(),{room}=await openRoom(e);
+    await e.DB.prepare("UPDATE live_rooms SET guest_capacity = 1 WHERE id = ?1").bind(room.id).run();
+    const link=await setRoomJoinLink(e,ORIGIN,{roomId:room.id,enabled:true,rotate:true,autoAdmit:true});
+    const roomCode=link.join_url!.split("/").pop()!;
+    const result=await Promise.allSettled(["A","B","C"].map(displayName=>joinRoomByCode(e,{roomCode,displayName})));
+    expect(result.filter(r=>r.status==="fulfilled")).toHaveLength(1);
+    for(const r of result)if(r.status==="rejected")expect(r.reason.code).toBe("guest_room_full");
+  });
+  it("room authority rejects a stale stage and finishes clocks before the next mutation",async()=>{
+    const e=env(),{room,code}=await openRoom(e);
+    const [a,b]=await Promise.all(["A","B"].map(displayName=>joinRoomByCode(e,{roomCode:code,displayName})));
+    await admitGuest(e,a.guest.id);await admitGuest(e,b.guest.id);
+    const REALTIME=fakeNamespace(state=>new RealtimeHub(asState(state),e));Object.assign(e,{REALTIME});
+    const result=await Promise.allSettled([
+      setStage(e,{roomId:room.id,onStage:[a.guest.id],expectedVersion:0}),
+      setStage(e,{roomId:room.id,onStage:[b.guest.id],expectedVersion:0}),
+    ]);
+    expect(result.filter(r=>r.status==="fulfilled")).toHaveLength(1);
+    expect((result.find(r=>r.status==="rejected") as PromiseRejectedResult).reason.code).toBe("stale_stage");
+    const ordered=await Promise.all([setStage(e,{roomId:room.id,onStage:[a.guest.id]}),setStage(e,{roomId:room.id,onStage:[b.guest.id]})]);
+    expect(ordered.map(s=>s.version)).toEqual([2,3]);
+    const rows=await e.DB.prepare("SELECT id FROM live_room_guests WHERE room_id = ?1 AND stage_since IS NOT NULL").bind(room.id).all<{id:string}>();
+    expect(rows.results.map(r=>r.id)).toEqual([b.guest.id]);
+  });
+});
 
 describe("codes", () => {
   it("hash round trip: only the sha256 of the code is stored, and it resolves the guest", async () => {

@@ -22,13 +22,15 @@
 // play. Silence is recoverable and someone says "you're muted". Unexpected audio
 // on air is not.
 
-export type StageUpdate = { on_stage: string[]; version: number };
+export type StageUpdate = { on_stage: string[]; version: number; audible?: string[] };
 
 type Peer = {
   pc: RTCPeerConnection;
   audio: RTCRtpTransceiver | null;
   stream: MediaStream;
   makingOffer: boolean;
+  ice: RTCIceCandidateInit[];
+  queue: Promise<unknown>;
 };
 
 export type MeshOptions = {
@@ -49,6 +51,29 @@ export class GuestMesh {
   /** Has the HOST confirmed this stage list, or is it only the server's cached
    *  copy? See applyStage — we may listen on an unconfirmed list, never speak. */
   private confirmed = false;
+  private audible = new Set<string>();
+  private microphoneEnabled = true;
+
+  /** Every cloned sender must follow the owner's mute, including future peers. */
+  setMicrophoneEnabled(enabled: boolean): void {
+    this.microphoneEnabled = enabled;
+    for (const [id, peer] of this.peers) this.applyDirection(id, peer);
+  }
+
+  refreshMicrophone(): void {
+    const original = this.opts.localStream()?.getAudioTracks()[0];
+    for (const [id, peer] of this.peers) {
+      const sender = peer.audio?.sender;
+      if (!sender) continue;
+      const old = sender.track;
+      const next = original?.clone() ?? null;
+      if (next) next.enabled = false;
+      void sender.replaceTrack(next).then(() => {
+        old?.stop();
+        this.applyDirection(id, peer);
+      }).catch(() => next?.stop());
+    }
+  }
 
   constructor(private readonly opts: MeshOptions) {}
 
@@ -56,12 +81,14 @@ export class GuestMesh {
    *  makes concurrent promote/demote deterministic rather than a race. */
   applyStage(update: StageUpdate, source: "host" | "server" = "host"): void {
     if (!update || typeof update.version !== "number") return;
-    if (update.version <= this.version) return;
+    if (update.version < this.version) return;
+    if (update.version === this.version && (source !== "host" || this.confirmed)) return;
     this.version = update.version;
     // The server copy is a CACHE that Producer writes fire-and-forget; the host
     // channel is live truth. Only the latter confirms.
-    if (source === "host") this.confirmed = true;
+    this.confirmed = source === "host";
     this.onStage = new Set(Array.isArray(update.on_stage) ? update.on_stage : []);
+    this.audible = new Set(Array.isArray(update.audible) ? update.audible : [...this.onStage]);
     this.selfOnStage = this.onStage.has(this.opts.selfId);
 
     // Connect to on-stage peers we don't have yet.
@@ -76,7 +103,7 @@ export class GuestMesh {
    *  never from what a peer claims about itself. */
   private applyDirection(peerId: string, peer: Peer): void {
     if (!peer.audio) return;
-    const theyAreOnStage = this.onStage.has(peerId);
+    const theyAreOnStage = this.onStage.has(peerId) && this.audible.has(peerId);
     // MAY LISTEN ON AN UNCONFIRMED LIST, MAY NOT SPEAK ON ONE.
     //
     // The cold-start list comes from the server's cached copy, which Producer
@@ -92,7 +119,9 @@ export class GuestMesh {
     // the live channel. Listening does not: hearing someone who has just left the
     // stage for a moment is recoverable, being heard when you believe you are
     // private is not.
-    const mayPublish = this.selfOnStage && this.confirmed;
+    const original = this.opts.localStream()?.getAudioTracks()[0];
+    const mayPublish = this.selfOnStage && this.confirmed && this.audible.has(this.opts.selfId)
+      && this.microphoneEnabled && !!original && original.enabled && original.readyState !== "ended";
     const direction: RTCRtpTransceiverDirection = mayPublish
       ? (theyAreOnStage ? "sendrecv" : "sendonly")
       : (theyAreOnStage ? "recvonly" : "inactive");
@@ -113,13 +142,13 @@ export class GuestMesh {
   private connect(peerId: string): void {
     const pc = new RTCPeerConnection({ iceServers: this.opts.iceServers });
     const stream = new MediaStream();
-    const peer: Peer = { pc, audio: null, stream, makingOffer: false };
+    const peer: Peer = { pc, audio: null, stream, makingOffer: false, ice: [], queue: Promise.resolve() };
     this.peers.set(peerId, peer);
 
     // Audio only. Guests see each other through the host's program feed, so a
     // mesh of video would multiply uplink for something already on screen.
     const local = this.opts.localStream();
-    const track = local?.getAudioTracks()[0];
+    const track = local?.getAudioTracks()[0]?.clone();
     peer.audio = pc.addTransceiver(track ?? "audio", { direction: "inactive" });
 
     pc.ontrack = (event) => {
@@ -160,23 +189,27 @@ export class GuestMesh {
     if (!peer) return;
     const polite = this.opts.selfId > from;
 
+    await (peer.queue = peer.queue.catch(()=>{}).then(async()=>{
     try {
       if (msg.kind === "sdp" && msg.description) {
         const collision = msg.description.type === "offer" && (peer.makingOffer || peer.pc.signalingState !== "stable");
         if (collision && !polite) return;
         if (collision) await peer.pc.setLocalDescription({ type: "rollback" } as RTCLocalSessionDescriptionInit);
         await peer.pc.setRemoteDescription(msg.description);
+        for (const candidate of peer.ice.splice(0)) await peer.pc.addIceCandidate(candidate).catch(()=>{});
         if (msg.description.type === "offer") {
           await peer.pc.setLocalDescription();
           this.opts.send(from, { kind: "sdp", description: peer.pc.localDescription });
         }
         this.applyDirection(from, peer);
       } else if (msg.kind === "ice" && msg.candidate) {
-        await peer.pc.addIceCandidate(msg.candidate).catch(() => {});
+        if (peer.pc.remoteDescription) await peer.pc.addIceCandidate(msg.candidate).catch(() => {});
+        else if (peer.ice.length < 64) peer.ice.push(msg.candidate);
       }
     } catch {
       /* one bad frame must never take the mesh down */
     }
+    }));
   }
 
   /** Go silent WITHOUT losing our place in the version sequence.
@@ -200,6 +233,7 @@ export class GuestMesh {
 
   close(): void {
     for (const [id, peer] of this.peers) {
+      peer.audio?.sender.track?.stop();
       try { peer.pc.close(); } catch { /* already closed */ }
       this.opts.onPeerAudio(id, null);
     }

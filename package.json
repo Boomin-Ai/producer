@@ -10,26 +10,42 @@
   },
   "type": "module",
   "scripts": {
+    "test:people-panels-browser": "node scripts/test-people-panels-browser.mjs",
+    "test:presentation": "node scripts/test-presentation.mjs",
+    "test:room-chat-browser": "node scripts/test-room-chat-browser.mjs",
+    "test:presentation-browser": "node scripts/test-presentation-browser.mjs",
+    "export:presentation": "node scripts/export-presentation-contract.mjs",
+    "test:manager-cache": "node scripts/test-manager-cache.mjs",
+    "test:manager-ui": "node scripts/test-manager-ui.mjs",
     "dev": "vite",
+    "dev:room": "bash scripts/dev-room.sh",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:manager-preview": "tauri dev --config src-tauri/tauri.manager-preview.conf.json",
+    "test:presentation-output": "node scripts/test-presentation-output.mjs",
+    "test:presentation-native-sources": "node scripts/test-presentation-output.mjs --native-sources",
+    "test:presentation-native-output": "node scripts/test-presentation-output.mjs --native",
+    "test:scene-restoration": "node scripts/test-scene-restoration.mjs"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.104.0",
+    "@tanstack/react-query-persist-client": "^5.104.0",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2",
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.10.1",
+    "lottie-web": "^5.13.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4",
-    "@tauri-apps/cli": "^2"
+    "vite": "^7.0.4"
   }
 }

@@ -60,11 +60,15 @@ describe("wantedSourceIds vs wantedModSourceIds", () => {
   });
   it("mod sources: camera page for camera OR mic, screen page for media.screen; nothing for a bare monitor or a guest", () => {
     const w = wantedModSourceIds([g, gScreen, sCam, sMic, sScr, sAll, sNone]);
-    expect([...w.keys()].sort()).toEqual(["mod-s1", "mod-s2", "mod-s3-screen", "mod-s4", "mod-s4-screen"]);
-    expect(w.get("mod-s1")).toMatchObject({ seat: sCam, track: "camera" });
-    expect(w.get("mod-s3-screen")).toMatchObject({ seat: sScr, track: "screen" });
-    expect(w.has("mod-s5")).toBe(false);
+    expect([...w.keys()].sort()).toEqual(["mod-member-u1", "mod-member-u2", "mod-member-u3-screen", "mod-member-u4", "mod-member-u4-screen"]);
+    expect(w.get("mod-member-u1")).toMatchObject({ seat: sCam, track: "camera" });
+    expect(w.get("mod-member-u3-screen")).toMatchObject({ seat: sScr, track: "screen" });
+    expect(w.has("mod-member-u5")).toBe(false);
     expect(w.has("mod-g1")).toBe(false);
+  });
+  it("preserves a member's source identity when its session changes", () => {
+    expect(modSourceIdsFor("old-session", "monitor:member-123")).toEqual(modSourceIdsFor("new-session", "monitor:member-123"));
+    expect(modSourceIdsFor("old-session", "monitor:member-123")).not.toEqual(modSourceIdsFor("new-session", "monitor:other-member"));
   });
   it("the two sets never overlap", () => {
     const rows = [g, gScreen, sCam, sAll];

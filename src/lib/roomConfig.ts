@@ -7,6 +7,7 @@
  * switches the whole show, not just the picture. Persisted as JSON in
  * live_rooms.config (see live_update_room). */
 
+import { parsePackage, type PresentationPackage } from "../features/presentation/schema";
 import { DEFAULT_LAYOUT, normalize, type DockSizes, type Layout } from "./layout";
 import type { ExtraSpec } from "./sourceSpec";
 import { parseModFeeds, type ModFeeds } from "./modFeed";
@@ -50,7 +51,7 @@ export interface RoomScene {
    * `look` once, on the first open of an old room, and strips them. */
   screen?: boolean;
   camera?: boolean;
-  /** The look, keyed by item id. Absent/empty = "everything as it is". A
+  /** The look, keyed by item id. Empty = an empty stage. An absent look opens empty until authored. A
    * scene can only re-dress items the room owns; it never creates one. */
   look?: Record<string, SceneItemLook>;
 }
@@ -83,6 +84,7 @@ export interface RoomSources {
 }
 
 export interface RoomConfig {
+  presentation?: {manualNameKeys?:string[];package:PresentationPackage;bindings:Record<string,string>;framing?:Record<string,import('../features/presentation/schema').SlotFraming>};
   sources: RoomSources;
   layout: Layout;
   scenes: RoomScene[];
@@ -227,6 +229,17 @@ export function parseConfig(raw: string | null | undefined): RoomConfig {
         ([k, val]) => ["twitch", "kick", "youtube"].includes(k) && typeof val === "string" && val.trim(),
       ),
     ) as RoomConfig["chat_channels"];
+  }
+  if (v.presentation && typeof v.presentation === 'object') {
+    try {
+      const p=v.presentation as {package:unknown;manualNameKeys?:unknown;bindings?:Record<string,unknown>;framing?:Record<string,unknown>};
+      const doc=parsePackage(p.package);
+      const slots=new Set(doc.set.slots.map(slot=>slot.id));
+      const bindings=Object.fromEntries(Object.entries(p.bindings ?? {}).filter(([k,val])=>slots.has(k) && typeof val==='string' && val.length<=128));
+      const framing:Record<string,import('../features/presentation/schema').SlotFraming>={};
+      for(const [key,value] of Object.entries(p.framing ?? {})){const f=value as {mode:string;x:number;y:number};if(slots.has(key)&&f&&['fill','fit'].includes(f.mode)&&Number.isFinite(f.x)&&f.x>=0&&f.x<=1&&Number.isFinite(f.y)&&f.y>=0&&f.y<=1)framing[key]={mode:f.mode as 'fill'|'fit',x:f.x,y:f.y};}
+      base.presentation={package:doc,bindings:bindings as Record<string,string>,framing,manualNameKeys:Array.isArray(p.manualNameKeys)?p.manualNameKeys.filter((key):key is string=>typeof key==='string' && !!doc.set.values[key]).slice(0,100):[]};
+    } catch { /* An invalid set cannot prevent the room from opening. */ }
   }
   if (typeof v.studio_output === "boolean") base.studio_output = v.studio_output;
   return base;

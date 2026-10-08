@@ -144,6 +144,15 @@ textarea {
   padding: 8px 11px;
 }
 
+/* Sliders must not inherit the text-field inset: it shortens thumb travel. */
+input[type="range"] {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 input::placeholder,
 textarea::placeholder {
   color: #5b6478;
@@ -618,6 +627,22 @@ textarea::placeholder {
   border-bottom: 1px solid var(--border);
   background: var(--soft);
 }
+
+.acc-disclosure {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.acc-disclosure:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 3px; }
 
 .acc-head.clickable {
   cursor: pointer;
@@ -1116,6 +1141,21 @@ textarea::placeholder {
   gap: 8px;
 }
 .live-editor-row > * { flex: 1; }
+
+.live-destination-help {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--fg-2);
+  font-size: 12px;
+  line-height: 1.5;
+  flex-basis: 100%;
+  min-width: 0;
+}
+.live-destination-help > span { flex: 1 1 220px; }
+.live-destination-help > button { align-self: center; font-size: 12px; }
+.chn-key:has(.live-destination-help) { flex-wrap: wrap; }
+.chn-key input { min-width: 0; }
 
 /* --- Live M-L6: preview, sources, coach --- */
 .live-preview {
@@ -3345,7 +3385,7 @@ textarea::placeholder {
 
 .rm-dock-bottom > .rm-panel-mixer {
   flex: 0 1 auto;
-  min-width: 240px;
+  min-width: 128px;
 }
 
 .rm-panel {
@@ -3361,6 +3401,10 @@ textarea::placeholder {
   flex: 1 1 auto;
   min-height: 148px;
   overflow: hidden;
+}
+
+.rm-dock-side > .rm-panel-mixer {
+  min-height: 112px;
 }
 
 .rm-dock-side > .rm-panel-scenes {
@@ -4135,7 +4179,7 @@ textarea::placeholder {
 }
 
 .rm-sheet {
-  padding: 8px 16px 14px;
+  padding: 4px 16px 14px;
 }
 
 .rm-sheet-head {
@@ -4253,6 +4297,40 @@ textarea::placeholder {
 .rm-chat-plug.live {
   color: var(--mint);
 }
+
+.rm-chat-output {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  background: transparent;
+  color: oklch(0.65 0.025 250);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 2px;
+  white-space: nowrap;
+}
+.rm-chat-output.on { color: var(--mint); }
+.rm-chat-output:disabled { opacity: .45; cursor: wait; }
+.rm-chat-output-track {
+  width: 26px;
+  height: 15px;
+  border-radius: 20px;
+  background: #444b56;
+  padding: 2px;
+  box-sizing: border-box;
+}
+.rm-chat-output-track > span {
+  display: block;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: white;
+  transition: transform 150ms;
+}
+.rm-chat-output.on .rm-chat-output-track { background: var(--mint); }
+.rm-chat-output.on .rm-chat-output-track > span { transform: translateX(11px); background: #072b22; }
 
 .rm-pop-chat {
   min-width: 268px;
@@ -5853,6 +5931,10 @@ textarea::placeholder {
   background: transparent;
   transition: width 0.26s ease;
 }
+.set-nav-head.rm-filters-head { flex-wrap: wrap; }
+.set-producer-brand { display: flex; flex-basis: 100%; align-items: baseline; gap: 8px; padding-top: 5px; color: var(--text); }
+.set-producer-brand strong { font-size: 14px; }
+.set-producer-brand span { color: var(--muted); font-size: 11px; }
 .home-settings.open {
   width: var(--settings-w, 340px);
 }
@@ -7175,112 +7257,6 @@ textarea::placeholder {
   border-radius: 0;
 }
 
-/* ── One-track mixer: the meter IS the fader ────────────────────────────── */
-.rm-strip .rm-track {
-  position: relative;
-  align-self: center;
-  width: 16px;
-  flex: 1;
-  min-height: 40px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  border: 0.5px solid var(--line-1);
-  cursor: ns-resize;
-  touch-action: none;
-}
-.rm-track-fill {
-  position: absolute;
-  left: 1px;
-  right: 1px;
-  bottom: 1px;
-  border-radius: 999px;
-  background: linear-gradient(0deg, oklch(0.62 0.11 165), var(--mint));
-  opacity: 0.85;
-  transition: height 60ms linear;
-}
-.rm-track-thumb {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 26px;
-  height: 13px;
-  border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-}
-.rm-strip.dead .rm-track { cursor: default; opacity: 0.5; }
-.rm-strip.horizontal .rm-track {
-  width: auto;
-  min-height: 0;
-  height: 12px;
-  flex: 1;
-  align-self: center;
-  cursor: ew-resize;
-}
-.rm-strip.horizontal .rm-track-fill {
-  /* Full-size box, revealed by clip-path — `right: auto` left this a
-   * zero-width element, so the level moved invisibly in the mini form. */
-  top: 1px;
-  bottom: 1px;
-  left: 1px;
-  right: 1px;
-  transition: clip-path 60ms linear;
-}
-.rm-strip.horizontal .rm-track-thumb {
-  top: 50%;
-  left: auto;
-  transform: translateY(-50%);
-  width: 13px;
-  height: 20px;
-}
-
-/* The WARM SCALE: colors anchor to the rail, not the fill — green through
- * amber into red at the top, the same read the old segmented meter gave.
- * The rail shows the whole scale faintly; the fill is the vivid clip of it;
- * a light redline marks where hot begins so you can SEE where you sit. */
-.rm-strip .rm-track::before {
-  content: "";
-  position: absolute;
-  inset: 1px;
-  border-radius: 999px;
-  background: linear-gradient(to top, var(--mint) 0%, var(--mint) 55%, var(--amber) 80%, var(--red) 96%);
-  opacity: 0.14;
-}
-.rm-track-fill {
-  inset: 1px;
-  height: auto;
-  width: auto;
-  background: linear-gradient(to top, var(--mint) 0%, var(--mint) 55%, var(--amber) 80%, var(--red) 96%);
-}
-.rm-strip .rm-track::after {
-  content: "";
-  position: absolute;
-  left: 2px;
-  right: 2px;
-  top: 12%;
-  height: 1px;
-  background: var(--red);
-  opacity: 0.45;
-}
-.rm-strip.horizontal .rm-track::before,
-.rm-strip.horizontal .rm-track-fill {
-  background: linear-gradient(to right, var(--mint) 0%, var(--mint) 55%, var(--amber) 80%, var(--red) 96%);
-}
-.rm-strip.horizontal .rm-track::after {
-  left: auto;
-  right: 12%;
-  top: 2px;
-  bottom: 2px;
-  height: auto;
-  width: 1px;
-}
-/* The mini strip must hold a REAL rail — it collapsed to the thumb when the
- * console form declared strips non-growing. */
-.rm-strip.horizontal .rm-track {
-  flex: 0 0 96px;
-  min-width: 96px;
-}
-
 /* ── Side-mount ergonomics ──────────────────────────────────────────────── */
 /* Grips appear on hover; the name gets the row until you reach for it. */
 .rm-panel[data-in="left"] .rm-row-grip,
@@ -8200,12 +8176,165 @@ button.ks-key:hover { border-color: var(--line-2); }
   padding: 6px 8px 8px;
 }
 .rm-strips {
-  justify-content: flex-start;
+  justify-content: safe center;
   align-items: stretch;
   gap: 8px;
 }
 .rm-strip {
   padding: 10px 10px 8px;
+}
+
+/* The mixer is an open control strip; the DJ slider supplies its visual rhythm. */
+.rm-panel-mixer .rm-strip {
+  --deck-accent: #8bdfbd;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.rm-panel-mixer .rm-strip:hover {
+  border-color: transparent;
+  background: transparent;
+}
+.rm-panel-mixer .rm-strip .dj-slider.vertical {
+  flex: 1 1 70px;
+  width: 22px;
+  min-width: 22px;
+  min-height: 70px;
+}
+.rm-panel-mixer .rm-strip.horizontal .dj-slider {
+  flex: 0 0 96px;
+  width: 96px;
+  height: 22px;
+}
+/* Every expanded audio source shares one vertical console strip. */
+.rm-panel-mixer .rm-strip.compact {
+  position: relative;
+  display: grid;
+  container: mixer-strip / inline-size;
+  grid-template-columns: minmax(0, 1fr) 22px 30px;
+  grid-template-rows: 24px minmax(40px, 1fr) 14px;
+  align-items: center;
+  gap: 3px;
+  width: auto;
+  min-width: 96px;
+  min-height: 92px;
+  max-height: 190px;
+  max-width: 176px;
+  flex: 1 1 96px;
+  align-self: stretch;
+  padding: 4px 6px;
+}
+.rm-panel-mixer .rm-strip.compact .rm-strip-name {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rm-panel-mixer .rm-strip.compact:not(.horizontal) .rm-strip-name {
+  font-size: 10px;
+  letter-spacing: 0.01em;
+}
+.rm-strip-name-short { display: none; }
+.rm-panel-mixer .rm-strip.compact .rm-strip-fx {
+  grid-column: 2;
+  grid-row: 1;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+}
+/* The small ellipsis is the filter affordance; hover or focus reveals ƒ. */
+.rm-panel-mixer .rm-strip.compact:not(.horizontal) .rm-strip-fx {
+  position: relative;
+  color: transparent;
+  background: transparent;
+  border-color: transparent;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+.rm-panel-mixer .rm-strip.compact:not(.horizontal) .rm-strip-fx::after {
+  content: "···";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--fg-3);
+  font-style: normal;
+  font-size: 13px;
+  letter-spacing: 1px;
+  opacity: 0.65;
+  transition: opacity 150ms ease;
+}
+.rm-panel-mixer .rm-strip.compact:not(.horizontal):is(:hover, :focus-within) .rm-strip-fx {
+  color: var(--mint);
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.rm-panel-mixer .rm-strip.compact:not(.horizontal):is(:hover, :focus-within) .rm-strip-fx::after {
+  opacity: 0;
+}
+.rm-panel-mixer .rm-strip.compact .rm-strip-icon {
+  grid-column: 3;
+  grid-row: 1;
+  width: 26px;
+  height: 26px;
+}
+.rm-panel-mixer .rm-strip.compact .dj-slider {
+  grid-column: 1 / 4;
+  grid-row: 2;
+  width: 22px;
+  min-width: 22px;
+  height: 100%;
+  min-height: 40px;
+  flex: none;
+  justify-self: center;
+}
+.rm-panel-mixer .rm-strip.compact .rm-strip-db {
+  grid-column: 1 / 4;
+  grid-row: 3;
+  white-space: nowrap;
+  text-align: center;
+  align-self: center;
+}
+@container panel (max-width: 180px) {
+  .rm-panel-mixer .rm-strip.compact .rm-strip-name-full { display: none; }
+  .rm-panel-mixer .rm-strip.compact .rm-strip-name-short { display: inline; }
+}
+@container mixer-strip (max-width: 145px) {
+  .rm-panel-mixer .rm-strip.compact .rm-strip-name-full { display: none; }
+  .rm-panel-mixer .rm-strip.compact .rm-strip-name-short { display: inline; }
+}
+/* The 56px dock remains one line; mute leads so it is never hidden by scroll. */
+.rm-dock-top:not(.expanded) .rm-panel-mixer .rm-strip.compact,
+.rm-dock-bottom.slim .rm-panel-mixer .rm-strip.compact {
+  display: flex;
+  flex-direction: row;
+  width: auto;
+  height: 26px;
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  max-height: none;
+  container: none;
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 0;
+  gap: 8px;
+}
+.rm-dock-top:not(.expanded) .rm-panel-mixer .rm-strip.compact .rm-strip-icon,
+.rm-dock-bottom.slim .rm-panel-mixer .rm-strip.compact .rm-strip-icon { order: -3; flex: 0 0 26px; }
+.rm-dock-top:not(.expanded) .rm-panel-mixer .rm-strip.compact .rm-strip-name,
+.rm-dock-bottom.slim .rm-panel-mixer .rm-strip.compact .rm-strip-name { order: -2; flex: 0 1 auto; }
+.rm-dock-top:not(.expanded) .rm-panel-mixer .rm-strip.compact .dj-slider,
+.rm-dock-bottom.slim .rm-panel-mixer .rm-strip.compact .dj-slider { order: -1; flex: 0 1 96px; width: 96px; min-width: 24px; min-height: 0; height: 22px; }
+.rm-dock-top:not(.expanded) .rm-panel-mixer .rm-strips,
+.rm-dock-bottom.slim .rm-panel-mixer .rm-strips {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+  overflow-x: auto;
 }
 
 /* ── Updates panel: the shipping stream ── */
@@ -8776,6 +8905,16 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .set .set-list .cr-sheet-row:last-of-type { border-bottom: 0; }
 .set .set-add { align-self: flex-start; margin-top: 10px; }
 .set .set-gap { margin-top: 28px; }
+.set-storage { display: grid; gap: 20px; }
+.set-storage-card { border: 1px solid oklch(1 0 0 / .1); border-radius: 14px; padding: 24px; }
+.set-storage-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.set-storage-heading h2, .set-storage-card h2 { margin: 0; font-size: 17px; }
+.set-storage-total { display: block; font-size: 38px; letter-spacing: -.04em; margin-top: 18px; }
+.set-storage-note { color: var(--fg-2); font-size: 13px; line-height: 1.5; }
+.set-storage-rows { margin: 20px 0; }
+.set-storage-rows > div { display: flex; justify-content: space-between; gap: 16px; border-top: 1px solid oklch(1 0 0 / .07); padding: 12px 0; }
+.set-storage-rows dd { margin: 0; }
+.set-storage-rows small { color: var(--fg-2); margin-left: 8px; }
 .set .upd-sheet .upd-item { background: none; border: 0; padding: 12px 0; border-bottom: 1px solid oklch(1 0 0 / 0.07); border-radius: 0; }
 /* What's new is a window, not the whole panel: fixed height, scrolls inside. */
 .set .upd-sheet { max-height: 220px; overflow-y: auto; padding-right: 6px; border: 1px solid oklch(1 0 0 / 0.07); border-radius: 10px; padding: 2px 10px; }
@@ -9456,7 +9595,8 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.8);
 }
 .mb-monitor.has-program { background: #000; border-color: rgba(255, 255, 255, 0.16); }
-.mb-monitor-video { width: 100%; height: 100%; object-fit: contain; display: block; }
+.mb-monitor-video { position: absolute; inset: 0; width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; object-position: center; display: block; }
+.mb-monitor-video[hidden] { display: none; }
 .mb-monitor-line { color: var(--fg-3); font-size: 13px; text-align: center; padding: 0 24px; }
 .mb-tag { position: absolute; top: 8px; left: 10px; font-size: 10px; font-weight: 800; letter-spacing: 0.12em; color: var(--fg-1); background: rgba(0, 0, 0, 0.55); border: 0.5px solid rgba(255, 255, 255, 0.14); padding: 2px 7px; border-radius: 6px; backdrop-filter: blur(6px); }
 .mb-tag-right { left: auto; right: 10px; color: var(--amber); }
@@ -10080,8 +10220,7 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 /* ── Handle tooltips: ours, never the OS bubble under the cursor. Drawn
    AWAY from the dock interior (toward the stage), pointer-events none. */
 .rm-split,
-.rm-vtab,
-.rm-sheet-head {
+.rm-vtab {
   position: relative;
 }
 .rm-split[data-tip]::after,
@@ -10165,6 +10304,12 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .rm-chn-empty .rm-rows-empty { padding-bottom: 0; }
 .rm-chn-open { height: 28px; padding: 0 12px; border-radius: 8px; border: 0; background: var(--mint); color: #06251b; font-size: 12px; font-weight: 650; cursor: pointer; }
 .rm-chn-open:hover { filter: brightness(1.06); }
+/* The docked Channels panel needs the same route when it has no destinations. */
+.chn-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; max-width: 280px; padding: 8px 4px; }
+.chn-empty p { margin: 0; color: var(--fg-3); font-size: 12px; line-height: 1.45; }
+.rm-panel-channels[data-in="top"] .chn-empty { flex-direction: row; align-items: center; gap: 10px; max-width: none; min-width: 0; padding: 0 4px; }
+.rm-panel-channels[data-in="top"] .chn-empty p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rm-panel-channels[data-in="top"] .chn-empty button { flex-shrink: 0; }
 
 /* Studio output: the top-bar chip and the footer tag. */
 .hd-chip.hd-studio.on { background: oklch(0.72 0.15 300 / 0.22); border-color: oklch(0.72 0.15 300 / 0.6); color: #efe6ff; }
@@ -10237,20 +10382,16 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
  * pill only had the middle of the bar to grow into and ran straight into the
  * Link cluster. The card hangs below the bar, wraps, and reads in full. */
 .rm-notice.clipped:hover { max-width: 62%; }
-.rm-notice.clipped:hover::after {
-  content: attr(data-full);
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: max-content;
-  max-width: min(560px, 60vw);
+.rm-notice-detail {
+  position: fixed;
+  box-sizing: border-box;
   padding: 9px 12px;
   border-radius: 12px;
   font-size: 12.5px;
   font-weight: 500;
   line-height: 1.45;
   white-space: normal;
+  overflow-wrap: anywhere;
   text-align: left;
   color: var(--fg-1);
   background: var(--surface-2);
@@ -10262,9 +10403,7 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   pointer-events: none;
 }
 .rm-notice { position: relative; }
-/* One reading at a time: while the card is open the pill keeps its shape and
- * its icon, but drops the clipped copy that the card is already showing. */
-.rm-notice.clipped:hover .rm-notice-text { opacity: 0; }
+/* Keep the pill readable while its full text is shown in the portal. */
 /* The bar cannot clip the card, and the card outranks the docks under it. */
 .rm-top, .rm-top-drag, .rm-notices { overflow: visible; }
 .rm-notices { z-index: 400; }
@@ -10908,3 +11047,113 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   letter-spacing: 0.1em;
   color: var(--fg-3);
 }
+
+
+/* Latest recording remains one action beside the room's notices. */
+.rm-top .rm-notice-action {
+  flex: 0 0 auto; pointer-events: auto;
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 26px; padding: 0 10px; border: 1px solid var(--line-1);
+  -webkit-app-region: no-drag;
+  border-radius: 999px; background: var(--surface-2);
+  color: var(--fg-1); font-size: 11px; line-height: 1.2;
+  white-space: nowrap; cursor: pointer;
+}
+.rm-top .rm-notice-action:hover { background: var(--surface-3); }
+
+.rm-notices.with-action { flex-direction: row; gap: 6px; }
+.rm-notices.with-action .rm-notice { flex: 0 1 auto; }
+
+/* Moderator workspace: one program, separate source controls and room operations. */
+.modboard.mb-workspace {display:grid; grid-template-columns:minmax(0,1fr) minmax(260px,320px); grid-template-rows:minmax(0,1fr) auto; gap:12px; padding:12px; min-height:0; height:100%; overflow:hidden;}
+.mb-production {display:flex; flex-direction:column; gap:10px; min-width:0; min-height:0; overflow:auto;}
+.mb-workspace .mb-output {flex:0 0 auto; min-height:0;}
+.mb-workspace .mb-monitor {height:clamp(180px,36vh,420px); min-height:0;}
+.mb-workspace .mb-output-head {padding:8px 12px;}
+.mb-workspace .mb-clock-air {display:none;}
+.mb-workspace .mb-strip {padding:0;}
+.mb-workspace .mb-pad {min-width:90px; min-height:64px;}
+.mb-workspace .mb-scene-section .mb-h {margin:0 0 8px;}
+.mb-operations {min-height:170px; border:1px solid var(--border); border-radius:12px; overflow:hidden; flex:1 0 170px;}
+.mb-tabs {display:flex; gap:6px; padding:8px; border-bottom:1px solid var(--border); align-items:center;}
+.mb-tabs button, .mb-source-actions button {padding:7px 10px; border-radius:8px; font-size:12px;}
+.mb-tabs button.active {color:var(--mint); background:color-mix(in srgb,var(--mint) 10%,transparent);}
+.mb-copy-audience {margin-left:auto;}
+.mb-operation-content {padding:8px;}
+.mb-source-sidebar {min-height:0; overflow:auto; padding:12px; border:1px solid var(--border); border-radius:12px; background:var(--card);}
+.mb-source-sidebar .mb-h {margin:0 0 6px;}
+.mb-source-explanation {font-size:12px; color:var(--fg-2); margin:0 0 12px; line-height:1.5;}
+.mb-source-list {display:flex; flex-direction:column; gap:12px;}
+.mb-source {border-bottom:1px solid var(--border); padding-bottom:12px;}
+.mb-source-head {display:flex; justify-content:space-between; gap:8px; align-items:center; margin-bottom:8px; font-size:12px;}
+.mb-source-head strong {display:flex; align-items:center; gap:6px;}
+.mb-source-head span {color:var(--fg-2); font-size:11px;}
+.mb-source-preview {position:relative; aspect-ratio:16/9; background:#080b10; border-radius:8px; overflow:hidden; display:grid; place-items:center; color:var(--fg-2); font-size:12px; text-align:center;}
+.mb-source-preview > span {padding:12px;}
+.mb-source-actions {display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
+.mb-role-status {grid-column:1/-1; display:flex; justify-content:space-between; color:var(--fg-2); font-size:12px; padding:4px 0;}
+@media(max-width:850px) {.modboard.mb-workspace {grid-template-columns:minmax(0,1fr) 260px; padding:8px; gap:8px;} .mb-workspace .mb-monitor {height:30vh;} }
+@media(max-width:640px) {.modboard.mb-workspace {display:flex;flex-direction:column;overflow:auto;} .mb-production,.mb-source-sidebar {overflow:visible;flex-shrink:0;} }
+.rm-output-settings { position:fixed; inset:auto; margin:0; width:320px; max-width:calc(100vw - 16px); padding:14px; border:1px solid #33404d; border-radius:12px; background:#141c28; color:#e7edf2; box-shadow:0 14px 40px #0009; font:12px system-ui,sans-serif; }
+.rm-output-settings header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.rm-output-settings header strong { font-size:14px; }
+.rm-output-settings header button { border:0; background:transparent; color:inherit; font-size:20px; cursor:pointer; }
+.rm-output-settings p { margin:8px 0; color:#9aa8b7; }
+.rm-output-format { display:flex; justify-content:space-between; gap:8px; border:1px solid #2a3544; padding:10px; border-radius:7px; margin:6px 0; }
+.rm-output-format span { color:#9aa8b7; font-size:11px; }
+.rm-output-format.active { border-color:#6bd6ad66; background:#6bd6ad12; }
+.rm-output-format.active span { color:#6bd6ad; }
+.rm-output-settings .rm-output-settings-note { font-size:11px; line-height:1.5; margin:12px 0 0; }
+.rm-output-settings { width:340px; max-height:calc(100dvh - 16px); overflow:auto; }
+.rm-portrait-test h4 { display:flex; justify-content:space-between; margin:12px 0; font-size:13px; }
+.rm-portrait-test small { color:#edc78b; font-size:10px; }
+.rm-portrait-test label { display:flex; flex-direction:column; gap:5px; margin:8px 0; color:#a9b6c3; }
+.rm-portrait-test select,.rm-portrait-start { width:100%; padding:7px 8px; border:1px solid #344052; border-radius:6px; background:#1b2532; color:#e7edf2; font:inherit; }
+.rm-portrait-start { cursor:pointer; border-color:#6bd6ad77; margin-top:6px; }
+.rm-portrait-preview { margin:12px auto; width:min(100%,200px); aspect-ratio:9/16; background:#060b11; border:1px solid #344052; border-radius:8px; overflow:hidden; display:grid; place-items:center; }
+.rm-portrait-preview img { width:100%; height:100%; object-fit:contain; }
+.rm-portrait-preview span { font-size:11px; text-align:center; padding:12px; }
+
+/* Room viewing choices preserve each output's composition and aspect ratio. */
+.rm-output-views {display:flex;gap:6px;margin:12px 0 18px;}
+.rm-output-views button {flex:1;padding:9px 6px;border:1px solid #334052;border-radius:8px;background:#111923;color:#dce6ee;}
+.rm-output-views button[aria-pressed="true"] {border-color:#72dcb1;background:#203b34;color:#a2f0ce;}
+.rm-landscape-monitor {width:100%;height:100%;min-width:0;min-height:0;display:flex;align-items:center;justify-content:center;container-type:size;}
+.rm-canvas.output-view-both {display:grid;grid-template-columns:256fr 81fr;gap:14px;}
+.rm-portrait-monitor {position:relative;aspect-ratio:9/16;width:min(100%,100cqh * 9 / 16);max-height:100%;border:1px solid #334052;border-radius:8px;overflow:hidden;background:#081019;display:flex;align-items:center;justify-content:center;color:#a7b8c8;font-size:13px;}
+.rm-portrait-monitor img {width:100%;height:100%;object-fit:contain;display:block;}
+.rm-portrait-monitor [role="status"] {padding:20px;text-align:center;}
+.rm-portrait-native {position:absolute;inset:0;background:transparent;}
+[data-stage="transparent"] .rm-portrait-monitor {background:transparent;}
+.rm-portrait-error {position:absolute;left:10px;right:10px;bottom:10px;padding:10px;background:#28181eee;color:#ffc5cb;font-size:12px;z-index:3;}
+.rm-portrait-sources {margin:12px 0;color:#b6c8d5;}
+.rm-portrait-sources summary {cursor:pointer;font-size:13px;}
+.rm-portrait-sources button {display:flex;justify-content:space-between;gap:12px;width:100%;padding:9px;margin-top:6px;border:1px solid #334052;background:#111923;color:#dce6ee;border-radius:6px;}
+.rm-portrait-sources button[aria-pressed="true"] span:last-child {color:#90dfb9;}
+
+/* Keep notices off the transport row and reserve a visible window grip. */
+.rm-window-drag-handle {position:absolute;left:84px;right:12px;top:0;height:12px;cursor:grab;-webkit-app-region:drag;z-index:1;}
+.rm-window-drag-handle::after {content:"";position:absolute;top:3px;left:50%;transform:translateX(-50%);width:64px;height:3px;border-radius:3px;background:#64758a;opacity:.6;pointer-events:none;}
+.rm-window-drag-handle:hover::after {opacity:1;background:#a8b9cd;}
+.rm-top .rm-top-drag .rm-notices {position:fixed;inset:auto;top:calc(var(--h-header) + 12px);left:50%;transform:translateX(-50%);width:max-content;max-width:min(520px,calc(100vw - 24px));flex-wrap:wrap;justify-content:center;gap:6px;}
+.rm-top .rm-top-drag .rm-notice,.rm-top .rm-top-drag .rm-notice.clipped:hover {max-width:100%;min-width:0;}
+.rm-top .rm-top-drag .rm-notice-action {height:30px;background:var(--surface-2);box-shadow:0 4px 16px #0005;}
+/* Room ledger: one quiet trigger, messages inside an opaque readable panel. */
+.rm-top .rm-top-drag {flex:0 0 38px;min-width:38px;}
+.rm-activity {position:relative;pointer-events:auto;}
+.rm-activity-trigger {position:relative;display:grid;place-items:center;width:34px;height:34px;border:1px solid var(--line-1);border-radius:10px;background:var(--surface-2);color:var(--fg-2);cursor:pointer;}
+.rm-activity-count {position:absolute;right:-4px;top:-4px;min-width:15px;height:15px;padding:0 3px;border-radius:8px;background:#85d8b7;color:#082218;font:10px system-ui;}
+.rm-activity-panel {position:fixed;top:calc(var(--h-header) + 10px);right:16px;width:min(380px,calc(100vw - 32px));border:1px solid #354051;border-radius:14px;background:#111925;color:#e6edf5;box-shadow:0 16px 50px #0008;z-index:500;overflow:hidden;}
+.rm-activity-panel header {display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #2c3747;font-size:13px;}
+.rm-activity-panel button {border:0;background:transparent;color:#a4d5fc;cursor:pointer;font:inherit;}
+.rm-activity-list {max-height:min(420px,65vh);overflow:auto;}
+.rm-activity-entry {display:flex;gap:10px;padding:13px 16px;border-bottom:1px solid #263141;font-size:12px;line-height:1.5;}
+.rm-activity-entry p {margin:0;overflow-wrap:anywhere;}
+.rm-activity-entry button {padding:7px 0 0;font-weight:600;}
+.rm-activity-tone {color:#8fc7ff;}.rm-activity-entry.tone-success .rm-activity-tone {color:#85d8b7;}.rm-activity-entry.tone-error .rm-activity-tone {color:#ff8f9b;}
+.rm-activity-empty {padding:16px;font-size:12px;color:#a7b4c7;}
+.rm-top.is-editing .rm-top-right {display:none;}
+.rm-top .rm-editbar {flex:1;min-width:0;margin:0;padding:0 6px;height:38px;border:0;border-radius:0;background:transparent;gap:8px;}
+.rm-top .rm-editbar-text {display:none;}
+.rm-top .set-picker-trigger {max-width:240px;gap:8px;}
+.rm-top .set-picker-trigger>span:first-child {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}

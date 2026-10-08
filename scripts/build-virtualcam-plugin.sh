@@ -217,6 +217,29 @@ open(p, "w").write(s)
 print("stop path hardened")
 PYSTOP
 
+# The attached video can be the portrait canvas. Upstream reads only the
+# main OBS video info, which scales a portrait return feed back to landscape.
+python3 - "$WORK/plugin-main.mm" <<'PYVIDEO'
+import sys
+p=sys.argv[1]
+s=open(p).read()
+old="    obs_get_video_info(&vcam->videoInfo);"
+assert old in s, "virtual camera video initialization moved upstream"
+s=s.replace(old,old+"""
+    const struct video_output_info *selected = video_output_get_info(obs_output_video(vcam->output));
+    if (!selected)
+        return false;
+    vcam->videoInfo.output_width = 1920;
+    vcam->videoInfo.output_height = 1080;
+    vcam->videoInfo.output_format = selected->format;
+    vcam->videoInfo.fps_num = selected->fps_num;
+    vcam->videoInfo.fps_den = selected->fps_den;
+    vcam->videoInfo.colorspace = selected->colorspace;
+    vcam->videoInfo.range = selected->range;
+""",1)
+open(p,'w').write(s)
+PYVIDEO
+
 # Rebrand the rendezvous identifiers. Fail loudly if upstream renames them.
 grep -q 'com.obsproject.obs-studio.mac-camera-extension' "$WORK/plugin-main.mm" \
   || { echo "FATAL: extension id string moved upstream" >&2; exit 1; }

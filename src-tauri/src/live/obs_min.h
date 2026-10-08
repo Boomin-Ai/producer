@@ -38,6 +38,7 @@ enum obs_source_type {
 	OBS_SOURCE_TYPE_SCENE,
 };
 #define OBS_SOURCE_VIDEO (1 << 0)
+#define OBS_SOURCE_CUSTOM_DRAW (1 << 3)
 #define OBS_SOURCE_SRGB (1 << 15)
 
 /* libobs/obs.h */
@@ -198,11 +199,24 @@ OBS_IMPORT void obs_register_source_s(const struct obs_source_info *info, size_t
 OBS_IMPORT void blog(int log_level, const char *format, ...);
 OBS_IMPORT void bfree(void *ptr);
 
+OBS_IMPORT bool obs_source_process_filter_begin(obs_source_t *filter, enum gs_color_format format, enum obs_allow_direct_render allow_direct);
+OBS_IMPORT void obs_source_process_filter_end(obs_source_t *filter, gs_effect_t *effect, uint32_t width, uint32_t height);
 OBS_IMPORT obs_source_t *obs_filter_get_target(const obs_source_t *filter);
 OBS_IMPORT obs_source_t *obs_filter_get_parent(const obs_source_t *filter);
 OBS_IMPORT uint32_t obs_source_get_base_width(obs_source_t *source);
 OBS_IMPORT uint32_t obs_source_get_base_height(obs_source_t *source);
 OBS_IMPORT void obs_source_video_render(obs_source_t *source);
+OBS_IMPORT obs_source_t *obs_source_create_private(const char *id, const char *name, obs_data_t *settings);
+OBS_IMPORT obs_source_t *obs_source_get_ref(obs_source_t *source);
+OBS_IMPORT void obs_source_release(obs_source_t *source);
+OBS_IMPORT uint32_t obs_source_get_width(obs_source_t *source);
+OBS_IMPORT uint32_t obs_source_get_height(obs_source_t *source);
+OBS_IMPORT enum obs_source_type obs_source_get_type(const obs_source_t *source);
+OBS_IMPORT const char *obs_source_get_id(const obs_source_t *source);
+OBS_IMPORT uint32_t obs_source_get_output_flags(const obs_source_t *source);
+OBS_IMPORT void *obs_obj_get_data(void *object);
+OBS_IMPORT bool obs_source_add_active_child(obs_source_t *parent, obs_source_t *child);
+OBS_IMPORT void obs_source_remove_active_child(obs_source_t *parent, obs_source_t *child);
 OBS_IMPORT void obs_source_skip_video_filter(obs_source_t *filter);
 OBS_IMPORT enum gs_color_space obs_source_get_color_space(obs_source_t *source, size_t count,
 							  const enum gs_color_space *preferred_spaces);
@@ -211,6 +225,9 @@ OBS_IMPORT void obs_leave_graphics(void);
 OBS_IMPORT gs_effect_t *obs_get_base_effect(enum obs_base_effect effect);
 
 OBS_IMPORT const char *obs_data_get_string(obs_data_t *data, const char *name);
+OBS_IMPORT obs_data_t *obs_data_create_from_json(const char *json_string);
+OBS_IMPORT void obs_data_set_string(obs_data_t *data, const char *name, const char *val);
+OBS_IMPORT void obs_data_release(obs_data_t *data);
 OBS_IMPORT double obs_data_get_double(obs_data_t *data, const char *name);
 OBS_IMPORT void obs_data_set_default_string(obs_data_t *data, const char *name, const char *val);
 OBS_IMPORT void obs_data_set_default_double(obs_data_t *data, const char *name, double val);
@@ -231,6 +248,7 @@ OBS_IMPORT void gs_effect_set_texture(gs_eparam_t *param, gs_texture_t *val);
 OBS_IMPORT void gs_effect_set_texture_srgb(gs_eparam_t *param, gs_texture_t *val);
 OBS_IMPORT void gs_effect_set_float(gs_eparam_t *param, float val);
 OBS_IMPORT void gs_effect_set_vec2(gs_eparam_t *param, const struct vec2 *val);
+OBS_IMPORT void gs_effect_set_vec4(gs_eparam_t *param, const struct vec4 *val);
 OBS_IMPORT size_t gs_technique_begin(gs_technique_t *technique);
 OBS_IMPORT void gs_technique_end(gs_technique_t *technique);
 OBS_IMPORT bool gs_technique_begin_pass(gs_technique_t *technique, size_t pass);

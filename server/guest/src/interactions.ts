@@ -29,7 +29,9 @@ export interface ProjectedInteraction {
 export function interactionFromFrame(raw: unknown): ProjectedInteraction | null {
   if (!raw || typeof raw !== "object") return null;
   const f = raw as Record<string, unknown>;
-  const doc = (f.action === "interaction" ? f.payload : f.type === "interaction" ? f.interaction : f) as Record<string, unknown> | undefined;
+  const payload = f.payload as Record<string, unknown> | undefined;
+  const doc = (typeof f.action === "string" && f.action.startsWith("interaction")
+    ? payload?.interaction ?? payload : f.type === "interaction" ? f.interaction : f) as Record<string, unknown> | undefined;
   if (!doc || typeof doc !== "object") return null;
   if (typeof doc.id !== "string" || doc.type !== "vote" || typeof doc.state !== "string") return null;
   const spec = doc.spec as { options?: unknown } | undefined;
@@ -42,17 +44,24 @@ export function mergeInteraction(list: ProjectedInteraction[], next: ProjectedIn
   const rest = list.filter((i) => i.id !== next.id);
   const cur = list.find((i) => i.id === next.id);
   if (cur && cur.version > next.version) return list;
-  if (next.state === "cancelled") return rest;
+  // Retain tombstones: an older HTTP snapshot must not revive a cancelled vote.
   return [...rest, next];
+}
+
+export function mergeInteractionSnapshot(list: ProjectedInteraction[], snapshot: ProjectedInteraction[]): ProjectedInteraction[] {
+  return snapshot.reduce((all, next) => {
+    const current = all.find(i => i.id === next.id);
+    return current && current.version >= next.version ? all : mergeInteraction(all, next);
+  }, list);
 }
 
 /** The one interaction to show: collecting first, then revealed/closed
  *  (results linger), never `open` (not yet accepting). */
 export function activeInteraction(list: ProjectedInteraction[]): ProjectedInteraction | null {
-  const collecting = list.filter((i) => i.state === "collecting");
-  if (collecting.length) return collecting[collecting.length - 1];
-  const shown = list.filter((i) => i.state === "revealed" || i.state === "closed");
-  return shown.length ? shown[shown.length - 1] : null;
+  const time = (i: ProjectedInteraction) => Date.parse(i.timing.opened_at ?? "") || 0;
+  const ordered = [...list].sort((a, b) => time(b) - time(a) || b.id.localeCompare(a.id));
+  return ordered.find(i => i.state === "collecting")
+    ?? ordered.find(i => i.state === "revealed" || i.state === "closed") ?? null;
 }
 
 /** server_now - Date.now() at the last frame: add to local time to get the

@@ -24,6 +24,8 @@
 // ({kind:"track", stream_id, label}) BEFORE the offer that carries it, so the
 // receiving page knows which track is which by msid rather than by guessing.
 
+import { ProgramReceiver } from "./programReceiver";
+import { ProgramRequest } from "./guestReturnFeed";
 import { announceTrack, peerOf, type HostPeer } from "./participants";
 
 export type Session = { signaling_ticket: string; signaling_url: string; ice_servers: RTCIceServer[] };
@@ -33,11 +35,13 @@ type SignalPayload = {
   peer?: unknown;
   description?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidateInit;
+  on_stage?: string[]; audible?: string[]; version?: number;
 };
 
 type PeerState = {
   pc: RTCPeerConnection;
   makingOffer: boolean;
+  ice: RTCIceCandidateInit[];
 };
 
 export interface HostLinkOptions {
@@ -67,11 +71,18 @@ export class HostLink {
   private readonly ws: WebSocket;
   private readonly peers = new Map<HostPeer, PeerState>();
   private screen: MediaStream | null = null;
-  private programAsked = false;
+  private programRequest: ProgramRequest | null = null;
   private closed = false;
+  private readonly programReceiver: ProgramReceiver;
 
   constructor(private readonly opts: HostLinkOptions) {
     this.ws = new WebSocket(opts.wsUrl);
+    this.programReceiver = new ProgramReceiver(opts.session.ice_servers, payload => this.send("program", payload), event => {
+      const stream = event.streams[0];
+      if (!stream) return;
+      if (event.track.kind === "video") this.opts.onProgram(stream);
+      else this.opts.onHostAudio(stream);
+    });
     this.ws.onopen = () => {
       // Labels are announced BEFORE any offer that could carry the stream.
       this.announceLocal();
@@ -100,6 +111,8 @@ export class HostLink {
   mainConnectionState(): RTCPeerConnectionState | null {
     return this.peers.get("main")?.pc.connectionState ?? null;
   }
+
+  resumeProgram(): void { this.programRequest?.restart(); }
 
   // ── Publishing ─────────────────────────────────────────────────────────────
 
@@ -180,7 +193,7 @@ export class HostLink {
     if (existing) return existing;
 
     const pc = new RTCPeerConnection({ iceServers: this.opts.session.ice_servers });
-    const peer: PeerState = { pc, makingOffer: false };
+    const peer: PeerState = { pc, makingOffer: false, ice: [] };
     this.peers.set(name, peer);
 
     if (name === "main") {
@@ -210,6 +223,10 @@ export class HostLink {
         };
       };
 
+      if (this.opts.returnFeed) this.programRequest = new ProgramRequest(
+        pc, () => this.send("program", { kind: "program-ready" }), this.opts.delayReturnFeedMs,
+        () => this.programReceiver.getStats(),
+      );
       pc.ontrack = (event) => {
         const [stream] = event.streams;
         if (!stream) return;
@@ -224,7 +241,7 @@ export class HostLink {
       };
 
       pc.onconnectionstatechange = () => {
-        if (pc.connectionState === "connected") this.maybeAskProgram(pc);
+        if (pc.connectionState === "connected") this.programRequest?.connected();
         if (pc.connectionState === "failed") pc.restartIce();
         this.opts.onMainState(pc.connectionState);
       };
@@ -252,21 +269,6 @@ export class HostLink {
     return peer;
   }
 
-  /** Ask for the program return leg once, when this end can afford to decode
-   *  it and holds the grant for it. */
-  private maybeAskProgram(pc: RTCPeerConnection): void {
-    if (!this.opts.returnFeed || this.programAsked) return;
-    const ask = () => {
-      if (this.programAsked || this.closed) return;
-      this.programAsked = true;
-      this.send("main", { kind: "program-ready" });
-    };
-    if (this.opts.delayReturnFeedMs <= 0) { ask(); return; }
-    window.setTimeout(() => {
-      if (pc.connectionState === "connected" && document.visibilityState === "visible") ask();
-    }, this.opts.delayReturnFeedMs);
-  }
-
   // ── Signaling ──────────────────────────────────────────────────────────────
 
   private send(peer: HostPeer, payload: object): void {
@@ -279,16 +281,24 @@ export class HostLink {
     try { frame = JSON.parse(String(event.data)); } catch { return; }
     if (frame.type !== "signal" || !frame.payload) return;
     const msg = frame.payload;
+    if (msg.kind === "stage" && Array.isArray(msg.on_stage) && typeof msg.version === "number") { this.opts.onData?.(msg); return; }
     const name = peerOf(msg);
+    if (name === "program") {
+      if (!this.opts.returnFeed) return;
+      if (msg.kind === "hello") this.programRequest?.restart();
+      else this.programReceiver.handle(msg);
+      return;
+    }
     try {
       if (msg.kind === "hello") {
         // A host page arrived (or came back). The screen page is created on
         // demand — it exists only because Producer loaded one for us.
         if (name === "screen") this.ensurePeer("screen");
         this.announceLocal();
+        if (name === "main") this.programRequest?.restart();
         return;
       }
-      const peer = this.peers.get(name) ?? (name === "screen" ? this.ensurePeer("screen") : null);
+      const peer = this.peers.get(name) ?? (name === "screen" ? this.ensurePeer(name) : null);
       if (!peer) return;
       const pc = peer.pc;
       if (msg.kind === "sdp" && msg.description) {
@@ -296,18 +306,22 @@ export class HostLink {
         // POLITE peer: on a collision we roll back and take theirs.
         if (collision) await pc.setLocalDescription({ type: "rollback" } as RTCLocalSessionDescriptionInit);
         await pc.setRemoteDescription(msg.description);
+        for (const candidate of peer.ice.splice(0)) await pc.addIceCandidate(candidate).catch(() => {});
         if (msg.description.type === "offer") {
           await pc.setLocalDescription();
           this.send(name, { kind: "sdp", description: pc.localDescription });
         }
       } else if (msg.kind === "ice" && msg.candidate) {
-        await pc.addIceCandidate(msg.candidate).catch(() => {});
+        if (pc.remoteDescription) await pc.addIceCandidate(msg.candidate).catch(() => {});
+        else if (peer.ice.length < 64) peer.ice.push(msg.candidate);
       }
     } catch { /* one bad frame must never kill the call */ }
   }
 
   close(): void {
     this.closed = true;
+    this.programRequest?.close();
+    this.programReceiver.close();
     this.screen?.getTracks().forEach((t) => t.stop());
     this.screen = null;
     try { this.ws.close(); } catch { /* already closed */ }

@@ -146,19 +146,20 @@ describe("[mod] scene cuts on the room channel", () => {
     const viewer = await sock({ "X-Producer-User": "control:v1", "X-Producer-Room": "r1", "X-Producer-Role": "control", "X-Producer-Grants": "[]" });
     const guest = await sock({ "X-Producer-User": "g1", "X-Producer-Room": "r1", "X-Producer-Role": "guest" });
 
+    host.sent.length = 0; // initial audience state is independent of scene authority
     // Only the host's publish counts.
-    await hub.webSocketMessage(mod as never, JSON.stringify({ type: "scene.publish", scenes: [{ id: "evil" }] }));
+    await hub.webSocketMessage(mod as never, JSON.stringify({ type: "scene.publish", command_protocol: 2, scenes: [{ id: "evil" }] }));
     expect(host.sent).toHaveLength(0);
-    await hub.webSocketMessage(host as never, JSON.stringify({ type: "scene.publish", scenes: [{ id: "s1", name: "Wide" }, { id: "s2", name: "Close" }], active_scene_id: "s1" }));
+    await hub.webSocketMessage(host as never, JSON.stringify({ type: "scene.publish", command_protocol: 2, scenes: [{ id: "s1", name: "Wide" }, { id: "s2", name: "Close" }], active_scene_id: "s1" }));
     expect(mod.frames().at(-1)).toMatchObject({ type: "scene.state", active_scene_id: "s1", version: 1 });
     expect(viewer.frames().at(-1)).toMatchObject({ type: "scene.state" });
     expect(guest.sent).toHaveLength(0); // guests never see the scene list
 
     await hub.webSocketMessage(mod as never, JSON.stringify({ type: "scene.cut", scene_id: "s2" }));
-    const cut = host.frames().at(-1)!;
+    const cut = host.frames().find((frame) => frame.type === "scene.cut")!;
     expect(cut).toMatchObject({ type: "scene.cut", scene_id: "s2", from: "control:m1" });
     expect(typeof cut.server_now).toBe("number");
-    expect(mod.frames().at(-1)).toMatchObject({ type: "scene.cut.ok", scene_id: "s2" });
+    expect(mod.frames().at(-1)).toMatchObject({ type: "scene.command", scene_id: "s2", status: "accepted" });
 
     await hub.webSocketMessage(viewer as never, JSON.stringify({ type: "scene.cut", scene_id: "s2" }));
     expect(viewer.frames().at(-1)).toMatchObject({ type: "error", code: "forbidden", status: 403, grant: "room.scene" });
@@ -169,5 +170,7 @@ describe("[mod] scene cuts on the room channel", () => {
     // A seat connecting later starts from the stored list.
     const late = await sock({ "X-Producer-User": "control:m2", "X-Producer-Room": "r1", "X-Producer-Role": "control", "X-Producer-Grants": JSON.stringify(MOD_GRANTS) });
     expect(late.frames()[0]).toMatchObject({ type: "scene.state", active_scene_id: "s1", scenes: [{ id: "s1", name: "Wide" }, { id: "s2", name: "Close" }] });
+    await hub.webSocketMessage(host as never, JSON.stringify({ type: "scene.ack", command_id: cut.command_id, status: "applied" }));
+    expect(mod.frames().at(-1)).toMatchObject({ type: "scene.command", status: "applied", scene_id: "s2" });
   });
 });

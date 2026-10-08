@@ -24,6 +24,7 @@ export interface Channel {
   platform: string;
   display_name: string;
   external_handle?: string;
+  avatar_url?: string | null;
   status: "active" | "needs_reconnect" | "disabled";
   capabilities?: {
     rateLimit?: { type: string; max: number; windowSeconds: number };
@@ -60,9 +61,18 @@ export interface TargetResult {
 
 export const hasTauri = () => "__TAURI_INTERNALS__" in window;
 
+function cacheChanged(endpointId?: string, clear = false) {
+  window.dispatchEvent(new CustomEvent("producer:cache-change", { detail: { endpointId, clear } }));
+}
+
 export const ipc = {
+  setLibraryList:()=>invoke<Array<{file:string;id:string;name:string}>>("set_library_list"),
+  setLibraryRead:(file:string)=>invoke<string>("set_library_read",{file}),
+  setLibrarySave:(text:string)=>invoke<void>("set_library_save",{text}),
   listEndpoints: () => invoke<EndpointInfo[]>("list_endpoints"),
-  removeEndpoint: (endpointId: string) => invoke("remove_endpoint", { endpointId }),
+  removeEndpoint: async (endpointId: string) => {
+    await invoke("remove_endpoint", { endpointId }); cacheChanged(endpointId, true);
+  },
   /** Durable app preferences (SQLite `prefs`), see src/lib/prefs.ts. */
   prefGet: (key: string) => invoke<string | null>("pref_get", { key }),
   prefSet: (key: string, value: string | null) => invoke("pref_set", { key, value }),
@@ -70,12 +80,19 @@ export const ipc = {
     invoke("add_endpoint", { kind, name, baseUrl, token }),
   boominRequestOtp: (email: string, apiRoot?: string) =>
     invoke("boomin_request_otp", { email, apiRoot: apiRoot || null }),
-  boominConnect: (email: string, code: string, apiRoot?: string) =>
-    invoke<{ needs_brand?: boolean; brands?: { slug: string; name: string }[] }>(
+  boominConnect: async (email: string, code: string, apiRoot?: string) => {
+    const result = await invoke<{ id?: string; needs_brand?: boolean; brands?: { slug: string; name: string }[] }>(
       "boomin_connect",
       { email, code, apiRoot: apiRoot || null },
-    ),
-  boominSelectBrand: (brandSlug: string) => invoke<{ id?: string }>("boomin_select_brand", { brandSlug }),
+    );
+    if (result.id) cacheChanged(result.id, true);
+    return result;
+  },
+  boominSelectBrand: async (brandSlug: string) => {
+    const result = await invoke<{ id?: string }>("boomin_select_brand", { brandSlug });
+    if (result.id) cacheChanged(result.id, true);
+    return result;
+  },
   /** The server's runtime-delivered settings console (null when it has none)
    *  plus a one-time handoff code to sign it in. */
   consoleOpen: (endpointId: string) =>
@@ -88,12 +105,15 @@ export const ipc = {
   boominListBrands: (endpointId: string) =>
     invoke<{ brands: { slug: string; name: string }[] }>("boomin_list_brands", { endpointId }),
   /** Bind another brand of the same account as its own workspace (token reused). */
-  boominAddBrand: (endpointId: string, brandSlug: string) =>
-    invoke<{ id: string; refreshed?: boolean }>("boomin_add_brand", { endpointId, brandSlug }),
+  boominAddBrand: async (endpointId: string, brandSlug: string) => {
+    const result = await invoke<{ id: string; refreshed?: boolean }>("boomin_add_brand", { endpointId, brandSlug });
+    cacheChanged(result.id, true); return result;
+  },
   /** Disconnect a posting channel. Boomin answers 501 until its own route
    *  lands; the message names where to do it. */
-  disconnectChannel: (endpointId: string, channelId: string) =>
-    invoke("disconnect_channel", { endpointId, channelId }),
+  disconnectChannel: async (endpointId: string, channelId: string) => {
+    const result = await invoke("disconnect_channel", { endpointId, channelId }); cacheChanged(endpointId); return result;
+  },
   connectChannel: (endpointId: string, platform: string) =>
     invoke<{ browser_url: string; expires_at: string }>("connect_channel", { endpointId, platform }),
   endpointChannels: (endpointId: string) =>
@@ -115,7 +135,10 @@ export const ipc = {
       channel_id: string;
       overrides?: Record<string, unknown>;
     }[];
-  }) => invoke<{ intent_id: string; results: TargetResult[] }>("submit_post", { input }),
+  }) => invoke<{ intent_id: string; results: TargetResult[] }>("submit_post", { input }).then((result) => {
+    for (const id of new Set(result.results.filter((row) => row.accepted).map((row) => row.endpoint_id))) cacheChanged(id);
+    return result;
+  }),
 
   // --- Live (LIVE-REVIEW.md §5.4 / §8) ---
   // Stream keys cross this boundary exactly once, inside upsert; nothing
@@ -132,7 +155,7 @@ export const ipc = {
     enabled?: boolean;
   }) => invoke<LiveDestination>("live_upsert_destination", { input }),
   liveDeleteDestination: (id: string) => invoke("live_delete_destination", { id }),
-  liveGoLive: () => invoke("live_go_live"),
+  liveGoLive: (endpointId?: string, serverRoomId?: string) => invoke("live_go_live", { endpointId, serverRoomId }),
   liveStop: () => invoke("live_stop"),
   liveEngineStatus: () => invoke<LiveSnapshot>("live_engine_status"),
   liveAttachPreview: (x: number, y: number, w: number, h: number) =>
@@ -140,6 +163,7 @@ export const ipc = {
   liveMovePreview: (x: number, y: number, w: number, h: number) =>
     invoke("live_move_preview", { x, y, w, h }),
   liveDetachPreview: () => invoke("live_detach_preview"),
+  liveReleaseIdleRoom: () => invoke<boolean>("live_release_idle_room"),
   livePermissions: () => invoke<LivePermissions>("live_permissions"),
   liveRequestPermission: (kind: "screen" | "camera" | "mic") =>
     invoke("live_request_permission", { kind }),
@@ -182,6 +206,29 @@ export const ipc = {
   /** Stage editor: commit=false at gesture rate, commit=true on release. */
   liveSetTransform: (id: string, patch: LiveTransformPatch, commit: boolean) =>
     invoke("live_set_transform", { id, patch, commit }),
+  liveRestoreRoom: (restore: {
+    keep_ids: string[];
+    extras: { id: string; label: string; spec: ExtraSpec }[];
+    overlay_window: number | null;
+    overlay_url: string | null;
+    changes: { id: string; patch: LiveTransformPatch; muted?: boolean }[];
+  }) => invoke<{ sources: LiveSources; warnings: string[] }>("live_restore_room", { restore }),
+  livePortraitRoom: ()=>invoke<LiveSources>('live_portrait_room'),
+  liveSelectOutput: (portrait:boolean)=>invoke<void>('live_select_output',{portrait}),
+  livePortraitState: ()=>invoke<LiveSources>('live_portrait_state'),
+  livePortraitTransform: (id:string,patch:LiveTransformPatch)=>invoke<LiveSources>('live_portrait_transform',{id,patch}),
+  livePortraitPreview: (rect:{x:number;y:number;w:number;h:number}|null)=>invoke<boolean>('live_portrait_preview',{rect}),
+  livePortraitWarm:(request:{assetIds?:string[];preload?:import('../features/presentation/projection').OutputProjection;generation:number;lease:string;projection:import('../features/presentation/projection').OutputProjection;bindings:Record<string,string>})=>invoke<void>('live_portrait_warm',{request}),
+  livePortraitApply: (request:{assetIds?:string[];preload?:import('../features/presentation/projection').OutputProjection;generation:number;lease:string;projection:import('../features/presentation/projection').OutputProjection;bindings:Record<string,string>})=>invoke<void>('live_portrait_apply',{request}),
+  livePortraitStop: ()=>invoke<void>('live_portrait_stop'),
+  livePortraitFrame: ()=>invoke<string>('live_portrait_frame'),
+  liveSetStatus: () => invoke<import('../features/presentation/useSetOutput').SetOutputStatus>("live_set_status"),
+  liveSetWarm:(request:{assetIds?:string[];preload?:import('../features/presentation/projection').OutputProjection;generation:number;lease:string;projection:import('../features/presentation/projection').OutputProjection;bindings:Record<string,string>})=>invoke<void>('live_set_warm',{request}),
+  liveSetApply: (request: {assetIds?:string[];preload?:import('../features/presentation/projection').OutputProjection;generation:number;lease:string;projection:import('../features/presentation/projection').OutputProjection;bindings:Record<string,string>}) =>
+    invoke<import('../features/presentation/useSetOutput').SetOutputStatus>("live_set_apply", {request}),
+  liveSetReturn: (lease:string) => invoke<import('../features/presentation/useSetOutput').SetOutputStatus>("live_set_return", {lease}),
+  liveApplyScene: (changes: { id: string; patch: LiveTransformPatch; muted?: boolean }[]) =>
+    invoke<LiveSources>("live_apply_scene", { changes }),
   livePreviewHidden: (hidden: boolean) => invoke("live_preview_hidden", { hidden }),
   /** Rects (CSS px, window coords) the native preview must leave to the webview. */
   livePreviewCutouts: (rects: { x: number; y: number; w: number; h: number }[]) =>
@@ -258,7 +305,7 @@ export interface LiveSources {
   items?: LiveItem[];
 }
 
-export type LivePreset = "twitch" | "kick" | "youtube" | "custom";
+export type LivePreset = "twitch" | "kick" | "youtube" | "facebook" | "instagram" | "rumble" | "tiktok" | "custom";
 
 export interface LiveDestination {
   id: string;
@@ -406,6 +453,8 @@ export type { ExtraSpec } from "./sourceSpec";
 import type { ExtraSpec } from "./sourceSpec";
 
 export const extraSources = {
+  replace: (id: string, label: string, spec: ExtraSpec, initial?: { id: string; patch: LiveTransformPatch; muted?: boolean }) =>
+    invoke<LiveSources>("live_replace_source", { id, label, spec, initial: initial ?? null }),
   add: (id: string, label: string, spec: ExtraSpec) =>
     invoke("live_add_source", { id, label, spec }),
   remove: (id: string) => invoke("live_remove_source", { id }),
@@ -424,10 +473,42 @@ export const stinger = {
 
 export const recording = {
   /** stamp names the file; resolves the path being written. */
-  start: (stamp: string) => invoke<string>("live_start_recording", { stamp }),
+  start: (stamp: string, roomId?: string, dual=false) => invoke<string>("live_start_recording", { stamp, roomId: roomId ?? null,dual }),
   stop: () => invoke<string | null>("live_stop_recording"),
   reveal: (path: string) => invoke("live_reveal_file", { path }),
+  list: (endpointId: string) => invoke<LocalRecording[]>("recordings_list", { endpointId }),
+  sync: (endpointId: string) => invoke<void>("recordings_sync", { endpointId }),
+  byPath: (path: string) => invoke<LocalRecording | null>("recording_by_path", { path }),
 };
+
+export interface ProducerStorageUsage {
+  total_bytes: number;
+  app_data_bytes: number;
+  recording_bytes: number;
+  recording_count: number;
+  missing_recordings: number;
+  unreadable_entries: number;
+}
+export const storage = {
+  localUsage: () => invoke<ProducerStorageUsage>("producer_storage_usage"),
+};
+
+export interface LocalRecording {
+  id: string;
+  endpoint_id: string | null;
+  room_id: string;
+  room_name: string;
+  source_room_id: string | null;
+  path: string;
+  started_at: string;
+  ended_at: string | null;
+  duration_ms: number;
+  file_size: number;
+  status: "recording" | "ready" | "interrupted";
+  collection_id: string | null;
+  unit_id: string | null;
+  sync_error: string | null;
+}
 
 export interface VcamStatus {
   /** The camera's label as other apps see it; per platform (Windows: OBS's filter name). */
@@ -801,6 +882,9 @@ export interface Interaction {
  * on 127.0.0.1 fed by THIS Producer, never by the server. */
 export const overlayBridge = {
   start: () => invoke<string>("overlay_bridge_start"),
+  chatStart: () => invoke<string>("chat_overlay_start"),
+  chatUpdate: (projection: { room: string | null; messages: { id: string; name: string; text: string; at?: number }[]; channels: string[] }) =>
+    invoke("chat_overlay_update", { projection }),
   set: (state: unknown) => invoke("overlay_bridge_set", { state }),
 };
 
@@ -831,8 +915,11 @@ export const guests = {
   /** One authenticated call against the API root for the ACCESS surface
    * (lib/access.ts): members, grants, invites, mod seats, `/auth/me`. A 404
    * answers `available: false` — "this server has no such route". */
-  request: (endpointId: string, method: "GET" | "POST" | "PATCH" | "DELETE", path: string, body?: unknown) =>
-    invoke<{ available: boolean; status: number; body?: unknown }>("endpoint_request", { endpointId, method, path, body: body ?? null }),
+  request: async (endpointId: string, method: "GET" | "POST" | "PATCH" | "DELETE", path: string, body?: unknown) => {
+    const result = await invoke<{ available: boolean; status: number; body?: unknown }>("endpoint_request", { endpointId, method, path, body: body ?? null });
+    if (method !== "GET" && result.status >= 200 && result.status < 300 && /^\/v1\/app\/(content|files|series)(\/|$)/.test(path)) cacheChanged(endpointId);
+    return result;
+  },
   /** Mint a MOD LINK (#47): a control seat another Producer opens. The URL
    * comes back exactly once. */
   modLink: (endpointId: string, roomId: string, displayName?: string | null) =>

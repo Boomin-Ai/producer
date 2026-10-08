@@ -24,7 +24,7 @@ export const filters = (source: string, op: FilterOp) =>
 export interface FilterProp {
   key: string;
   label: string;
-  kind: "slider" | "choice";
+  kind: "slider" | "choice" | "color";
   min?: number;
   max?: number;
   step?: number;
@@ -48,6 +48,18 @@ export interface FilterSpec {
 /** The launch set: the filters people actually reach for. The engine ships
  * ~20; these ten cover the standard webcam and microphone chains. */
 export const FILTER_CATALOG: FilterSpec[] = [
+  {
+    kind: "producer_source_appearance", label: "Source appearance", media: "video",
+    hint: "Round corners, circle crop, outline and black-and-white video.",
+    props: [
+      { key: "shape", label: "Shape", kind: "choice", choices: [{value:"rectangle",label:"Rectangle"},{value:"circle",label:"Circle"}] },
+      { key: "cornerRadius", label: "Corner radius", kind: "slider", min:0,max:960,step:1,unit:"px",showWhen:{key:"shape",value:"rectangle"} },
+      { key: "outlineWidth", label: "Outline width", kind: "slider", min:0,max:64,step:1,unit:"px" },
+      { key: "outlineColor", label: "Outline color", kind: "color" },
+      { key: "grayscale", label: "Black and white", kind: "slider", min:0,max:1,step:0.01 },
+      { key: "opacity", label: "Opacity", kind: "slider", min:0,max:1,step:0.01 },
+    ],
+  },
   {
     // Producer's own filter (person_mask.m): Apple Vision person
     // segmentation on macOS; a pass-through on Windows until it has a mask

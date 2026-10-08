@@ -269,6 +269,12 @@ pub fn bootstrap() -> EngineReport {
 
 /// The engine as the app boots it: a real config directory, always.
 pub fn bootstrap_with_config(module_config_dir: &std::path::Path) -> EngineReport {
+    // An explicitly isolated dev renderer can run beside the installed app.
+    // CEF refuses to initialize twice against the same browser cache.
+    #[cfg(debug_assertions)]
+    if let Ok(dir) = std::env::var("PRODUCER_DEV_MODULE_CONFIG_DIR") {
+        return bootstrap_inner(Some(std::path::Path::new(&dir)));
+    }
     bootstrap_inner(Some(module_config_dir))
 }
 
@@ -435,7 +441,10 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
     // Producer's own filters, registered like a plugin would but from the
     // shim: Cutout (person mask). Before modules load so it is present
     // whenever a scene config that names it is read.
-    unsafe { ffi::producer_person_mask_register() };
+    unsafe {
+        ffi::producer_person_mask_register();
+        ffi::producer_source_appearance_register();
+    };
 
     #[cfg(target_os = "macos")]
     // Dev-mode escape hatch: outside a .app bundle, NSBundle's builtInPlugInsURL
@@ -545,6 +554,11 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
     unsafe { ffi::obs_module_failure_info_free(&mut mfi) };
     phase(&mut report, "load_modules");
 
+    #[cfg(target_os = "macos")]
+    if unsafe { ffi::producer_capture_guard_install() } == 0 {
+        eprintln!("[live] Camera startup protection could not attach to mac-avcapture");
+    }
+
     // F3 ★: validate required IDs, then obs_post_load_modules. VideoToolbox
     // registers its encoders during post-load, so VT is re-checked after it.
     unsafe { ffi::obs_post_load_modules() };
@@ -643,6 +657,23 @@ pub enum FilterOp {
 }
 
 pub enum Command {
+    PortraitRoom {reply:mpsc::Sender<Result<graph::SourcesState,String>>},
+    PortraitState {reply:mpsc::Sender<Result<graph::SourcesState,String>>},
+    PortraitTransform {id:String,patch:graph::TransformPatch,reply:mpsc::Sender<Result<graph::SourcesState,String>>},
+    PortraitPreview {window:usize,rect:Option<PreviewRect>,reply:mpsc::Sender<Result<(),String>>},
+    PortraitWarm {request:super::presentation::Request,reply:mpsc::Sender<Result<Arc<super::presentation::Bridge>,String>>},
+    PortraitPrepare {request:super::presentation::Request,reply:mpsc::Sender<Result<Arc<super::presentation::Bridge>,String>>},
+    PortraitAbort {token:String,revision:u64},
+    PortraitCommit {token:String,placements:Vec<super::presentation::Placement>,reply:mpsc::Sender<Result<(),String>>},
+    PortraitStop {reply:mpsc::Sender<()>},
+    PortraitFrame {reply:mpsc::Sender<String>},
+    PresentationStatus { reply:mpsc::Sender<super::presentation::Status> },
+    PresentationWarm {request:super::presentation::Request,reply:mpsc::Sender<Result<Arc<super::presentation::Bridge>,String>>},
+    PresentationPrepare { request:super::presentation::Request, reply:mpsc::Sender<Result<Arc<super::presentation::Bridge>,String>> },
+    PresentationCommit { token:String, placements:Vec<super::presentation::Placement>, reply:mpsc::Sender<Result<super::presentation::Status,String>> },
+    PresentationAbort { token:String,revision:u64 },
+    PresentationReturn { lease:Option<String>, reply:mpsc::Sender<Result<super::presentation::Status,String>> },
+    Dj { action: crate::dj::Action, reply: std::sync::mpsc::Sender<Result<crate::dj::Status, String>> },
     SetThumbRate {
         fps: u32,
     },
@@ -651,8 +682,12 @@ pub enum Command {
     SetProgramThumb {
         on: bool,
     },
+    SelectOutput { portrait: bool, reply: mpsc::Sender<Result<(),String>> },
     GoLive(MultiConfig),
     StopLive,
+    ReleaseIdleRoom {
+        reply: mpsc::Sender<Result<bool, String>>,
+    },
     /// Stage-editor transform (UI-P1). `commit: false` applies silently at
     /// gesture rate; `commit: true` (pointer-up) echoes SourcesChanged so
     /// the UI and room document settle on engine truth.
@@ -660,6 +695,10 @@ pub enum Command {
         id: String,
         patch: graph::TransformPatch,
         commit: bool,
+    },
+    ApplyScene {
+        changes: Vec<graph::SceneChange>,
+        reply: mpsc::Sender<Result<graph::SourcesState, String>>,
     },
     /// Devices behind a source's picker (camera / mic / screen). Carries its
     /// own reply channel: obs_* calls must happen on the engine-owner thread
@@ -678,6 +717,7 @@ pub enum Command {
     /// engine never reads a clock.
     StartRecording {
         stamp: String,
+        dual: bool,
         reply: std::sync::mpsc::Sender<Result<String, String>>,
     },
     StopRecording {
@@ -732,6 +772,14 @@ pub enum Command {
     },
     /// Add an open-list scene item (UI-P2.10). Id and label come from the
     /// room document so items respawn with stable identity.
+    ReplaceExtra {
+        id: String, label: String, spec: graph::ExtraSpec, initial: Option<graph::SceneChange>,
+        reply: mpsc::Sender<Result<graph::SourcesState, String>>,
+    },
+    RestoreRoom {
+        restore: graph::RoomRestore,
+        reply: mpsc::Sender<Result<graph::RoomRestoreResult, String>>,
+    },
     AddExtra {
         id: String,
         label: String,
@@ -763,13 +811,33 @@ pub enum Command {
 /// Variant name for the engine-loop stall log (no reflection in Rust).
 fn cmd_name(c: &Command) -> &'static str {
     match c {
+        Command::Dj { .. } => "Dj",
         Command::SetThumbRate { .. } => "SetThumbRate",
         Command::SetProgramThumb { .. } => "SetProgramThumb",
         Command::GoLive { .. } => "GoLive",
         Command::StopLive { .. } => "StopLive",
+        Command::ReleaseIdleRoom { .. } => "ReleaseIdleRoom",
         Command::SetTransform { .. } => "SetTransform",
+        Command::ApplyScene { .. } => "ApplyScene",
+        Command::PresentationWarm {..} => "PresentationWarm",
+        Command::PresentationStatus { .. } => "PresentationStatus",
+        Command::PortraitRoom{..}=>"PortraitRoom",
+        Command::PortraitState{..}=>"PortraitState",
+        Command::PortraitTransform{..}=>"PortraitTransform",
+        Command::PortraitPreview{..}=>"PortraitPreview",
+        Command::PortraitWarm{..}=>"PortraitWarm",
+        Command::PortraitPrepare{..}=>"PortraitPrepare",
+        Command::PortraitAbort{..}=>"PortraitAbort",
+        Command::PortraitCommit{..}=>"PortraitCommit",
+        Command::PortraitStop{..}=>"PortraitStop",
+        Command::PortraitFrame{..}=>"PortraitFrame",
+        Command::PresentationPrepare { .. } => "PresentationPrepare",
+        Command::PresentationCommit { .. } => "PresentationCommit",
+        Command::PresentationAbort { .. } => "PresentationAbort",
+        Command::PresentationReturn { .. } => "PresentationReturn",
         Command::ListDevices { .. } => "ListDevices",
         Command::PlayStinger { .. } => "PlayStinger",
+        Command::SelectOutput { .. } => "SelectOutput",
         Command::StartRecording { .. } => "StartRecording",
         Command::StopRecording { .. } => "StopRecording",
         Command::SetSyncOffset { .. } => "SetSyncOffset",
@@ -781,6 +849,8 @@ fn cmd_name(c: &Command) -> &'static str {
         Command::SetVirtualCam { .. } => "SetVirtualCam",
         Command::SetStudio { .. } => "SetStudio",
         Command::SetDevice { .. } => "SetDevice",
+        Command::ReplaceExtra { .. } => "ReplaceExtra",
+        Command::RestoreRoom { .. } => "RestoreRoom",
         Command::AddExtra { .. } => "AddExtra",
         Command::RemoveExtra { .. } => "RemoveExtra",
         Command::SetVideo { .. } => "SetVideo",
@@ -934,6 +1004,68 @@ pub struct LiveHandle {
 }
 
 impl LiveHandle {
+    #[cfg(debug_assertions)]
+    pub(super) fn probe_sender(&self)->mpsc::Sender<Command>{self.cmd.clone()}
+
+    pub fn portrait_room(&self)->Result<graph::SourcesState,String>{let(tx,rx)=mpsc::channel();self.cmd.send(Command::PortraitRoom{reply:tx}).map_err(|e|e.to_string())?;rx.recv_timeout(Duration::from_secs(10)).map_err(|e|e.to_string())?}
+    pub fn portrait_state(&self)->Result<graph::SourcesState,String>{let(tx,rx)=mpsc::channel();self.cmd.send(Command::PortraitState{reply:tx}).map_err(|e|e.to_string())?;rx.recv_timeout(Duration::from_secs(5)).map_err(|e|e.to_string())?}
+    pub fn portrait_transform(&self,id:String,patch:graph::TransformPatch)->Result<graph::SourcesState,String>{let(tx,rx)=mpsc::channel();self.cmd.send(Command::PortraitTransform{id,patch,reply:tx}).map_err(|e|e.to_string())?;rx.recv_timeout(Duration::from_secs(5)).map_err(|e|e.to_string())?}
+    pub fn portrait_preview(&self,window:usize,rect:Option<PreviewRect>)->Result<(),String>{let(tx,rx)=mpsc::channel();self.cmd.send(Command::PortraitPreview{window,rect,reply:tx}).map_err(|e|e.to_string())?;rx.recv_timeout(Duration::from_secs(10)).map_err(|e|e.to_string())?}
+    pub fn portrait_warm(&self,request:super::presentation::Request)->Result<(),String>{
+        let revision=request.projection.revision;let(tx,rx)=mpsc::channel();self.cmd.send(Command::PortraitWarm{request,reply:tx}).map_err(|e|e.to_string())?;
+        let bridge=rx.recv_timeout(Duration::from_secs(10)).map_err(|e|e.to_string())??;
+        if let Err(e)=bridge.wait_revision(revision){let _=self.cmd.send(Command::PortraitAbort{token:bridge.token.clone(),revision});return Err(e);}Ok(())
+    }
+    pub fn portrait_apply(&self,request:super::presentation::Request)->Result<(),String>{
+        let revision=request.projection.revision;
+        let(tx,rx)=mpsc::channel();self.cmd.send(Command::PortraitPrepare{request,reply:tx}).map_err(|e|e.to_string())?;
+        let bridge=rx.recv_timeout(Duration::from_secs(10)).map_err(|e|e.to_string())??;
+        let placements=match bridge.wait_revision(revision){Ok(p)=>p,Err(e)=>{let _=self.cmd.send(Command::PortraitAbort{token:bridge.token.clone(),revision});return Err(e)}};
+        let(tx,rx)=mpsc::channel();self.cmd.send(Command::PortraitCommit{token:bridge.token.clone(),placements,reply:tx}).map_err(|e|e.to_string())?;rx.recv_timeout(Duration::from_secs(10)).map_err(|e|e.to_string())?
+    }
+    pub fn portrait_stop(&self)->Result<(),String>{let(tx,rx)=mpsc::channel();self.cmd.send(Command::PortraitStop{reply:tx}).map_err(|e|e.to_string())?;rx.recv_timeout(Duration::from_secs(10)).map_err(|e|e.to_string())}
+    pub fn portrait_frame(&self)->Result<String,String>{let(tx,rx)=mpsc::channel();self.cmd.send(Command::PortraitFrame{reply:tx}).map_err(|e|e.to_string())?;rx.recv_timeout(Duration::from_secs(5)).map_err(|e|e.to_string())}
+    pub fn presentation_status(&self)->Result<super::presentation::Status,String> {
+        let (tx,rx)=mpsc::channel();self.cmd.send(Command::PresentationStatus{reply:tx}).map_err(|e|e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(5)).map_err(|_|"Set engine did not answer".into())
+    }
+    pub fn presentation_warm(&self,request:super::presentation::Request)->Result<(),String>{
+        let revision=request.projection.revision;let(tx,rx)=mpsc::channel();self.cmd.send(Command::PresentationWarm{request,reply:tx}).map_err(|e|e.to_string())?;
+        let bridge=rx.recv_timeout(Duration::from_secs(10)).map_err(|_|"Set warmup did not start".to_string())??;
+        if let Err(e)=bridge.wait_revision(revision){let _=self.cmd.send(Command::PresentationAbort{token:bridge.token.clone(),revision});return Err(e);}Ok(())
+    }
+    pub fn presentation_apply(&self,request:super::presentation::Request)->Result<super::presentation::Status,String> {
+        let started=Instant::now();let revision=request.projection.revision;
+        let (tx,rx)=mpsc::channel();self.cmd.send(Command::PresentationPrepare{request,reply:tx}).map_err(|e|e.to_string())?;
+        let bridge=rx.recv_timeout(Duration::from_secs(10)).map_err(|_|"Set preparation did not start".to_string())??;let prepared_ms=started.elapsed().as_millis();
+        // Wait outside the engine owner: Stop/Return/room restoration can cancel
+        // preparation immediately while the private renderers obtain their receipt.
+        let placements=match bridge.wait_revision(revision){Ok(p)=>p,Err(e)=>{let _=self.cmd.send(Command::PresentationAbort{token:bridge.token.clone(),revision});return Err(e)}};
+        let ready_ms=started.elapsed().as_millis();let (tx,rx)=mpsc::channel();self.cmd.send(Command::PresentationCommit{token:bridge.token.clone(),placements,reply:tx}).map_err(|e|e.to_string())?;
+        let result=rx.recv_timeout(Duration::from_secs(5)).map_err(|_|"Set activation did not answer".to_string())?;
+        eprintln!("[set-perf] revision={revision} apply_ms={} prepare_ms={prepared_ms} ready_ms={ready_ms} renderer={}",started.elapsed().as_millis(),bridge.token);result
+    }
+    pub fn presentation_return(&self,lease:Option<String>)->Result<super::presentation::Status,String> {
+        let (tx,rx)=mpsc::channel();self.cmd.send(Command::PresentationReturn{lease,reply:tx}).map_err(|e|e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(5)).map_err(|_|"Return to room did not answer".to_string())?
+    }
+
+    pub fn replace_extra(&self, id: String, label: String, spec: graph::ExtraSpec, initial: Option<graph::SceneChange>) -> Result<graph::SourcesState, String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd.send(Command::ReplaceExtra { id, label, spec, initial, reply: tx }).map_err(|e| e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(30)).map_err(|_| "Source replacement did not finish".to_string())?
+    }
+    pub fn restore_room(&self, restore: graph::RoomRestore) -> Result<graph::RoomRestoreResult, String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd.send(Command::RestoreRoom { restore, reply: tx }).map_err(|e| e.to_string())?;
+        // Multiple cold browser/capture creations can take longer than a cut.
+        rx.recv_timeout(Duration::from_secs(120)).map_err(|_| "Room restoration did not finish".to_string())?
+    }
+    pub fn apply_scene(&self, changes: Vec<graph::SceneChange>) -> Result<graph::SourcesState, String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd.send(Command::ApplyScene { changes, reply: tx }).map_err(|e| e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(5)).map_err(|_| "The scene engine did not answer".to_string())?
+    }
     pub fn go_live(&self, config: MultiConfig) -> Result<(), String> {
         self.proxy().go_live(config)
     }
@@ -978,14 +1110,21 @@ impl LiveHandle {
 
     /// The program thumb for a seat's monitor fallback (docs/THUMB-PIPELINE-V2.md
     /// target `program`, PROGRAM_THUMB_FPS while on).
+    pub fn select_output(&self, portrait:bool)->Result<(),String>{
+        let(tx,rx)=mpsc::channel();self.cmd.send(Command::SelectOutput{portrait,reply:tx}).map_err(|e|e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(10)).map_err(|_|"Output selection timed out".to_string())?
+    }
     pub fn set_program_thumb(&self, on: bool) {
         let _ = self.cmd.send(Command::SetProgramThumb { on });
     }
 
     pub fn start_recording(&self, stamp: String) -> Result<String, String> {
+        self.start_recording_mode(stamp,false)
+    }
+    pub fn start_recording_mode(&self,stamp:String,dual:bool)->Result<String,String>{
         let (tx, rx) = std::sync::mpsc::channel();
         self.cmd
-            .send(Command::StartRecording { stamp, reply: tx })
+            .send(Command::StartRecording { stamp, dual, reply: tx })
             .map_err(|e| e.to_string())?;
         rx.recv_timeout(std::time::Duration::from_secs(10))
             .map_err(|_| "the engine did not answer in time".to_string())?
@@ -1004,6 +1143,15 @@ impl LiveHandle {
         self.cmd
             .send(Command::SetSyncOffset { id, ms })
             .map_err(|e| e.to_string())
+    }
+
+    pub fn dj_dispatch(&self) -> Result<Box<dyn FnOnce(crate::dj::Action) -> Result<crate::dj::Status, String> + Send>, String> {
+        let sender = self.cmd.clone();
+        Ok(Box::new(move |action| {
+            let (tx, rx) = std::sync::mpsc::channel();
+            sender.send(Command::Dj { action, reply: tx }).map_err(|e| e.to_string())?;
+            rx.recv_timeout(Duration::from_secs(5)).map_err(|_| "The DJ audio engine did not answer".to_string())?
+        }))
     }
 
     pub fn set_source_audio(
@@ -1129,6 +1277,14 @@ impl LiveHandle {
             .send(Command::DetachPreview)
             .map_err(|e| e.to_string())
     }
+    pub fn release_idle_room(&self) -> Result<bool, String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd
+            .send(Command::ReleaseIdleRoom { reply: tx })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(10))
+            .map_err(|_| "the engine did not release the room in time".to_string())?
+    }
     pub fn shutdown(&self) {
         let _ = self.cmd.send(Command::Shutdown);
     }
@@ -1147,6 +1303,8 @@ impl LiveHandle {
 struct Preview {
     view: *mut std::os::raw::c_void,
     display: *mut ffi::obs_display_t,
+    canvas: *mut std::os::raw::c_void,
+    rect: PreviewRect,
 }
 
 static PREVIEW_DRAWS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -1419,6 +1577,17 @@ extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, cx: u32, cy: u32) 
     }
 }
 
+#[cfg(target_os="macos")]
+pub(super) static PORTRAIT_DRAWS:std::sync::atomic::AtomicU64=std::sync::atomic::AtomicU64::new(0);
+#[cfg(target_os="macos")]
+extern "C" fn portrait_draw(canvas:*mut std::os::raw::c_void,_:u32,_:u32){unsafe{
+    let mut info=std::mem::MaybeUninit::<ffi::obs_video_info>::zeroed();
+    if !ffi::obs_get_video_info(info.as_mut_ptr()){return;}let info=info.assume_init();
+    ffi::gs_viewport_push();ffi::gs_projection_push();ffi::gs_ortho(0.0,info.base_height as f32,0.0,info.base_width as f32,-100.0,100.0);
+    PORTRAIT_DRAWS.fetch_add(1,std::sync::atomic::Ordering::Relaxed);
+    super::portrait::obs_canvas_render(canvas.cast());ffi::gs_projection_pop();ffi::gs_viewport_pop();
+}}
+
 /// Run a preview-window op on the thread that OWNS that window.
 ///
 /// macOS: shim.m already wraps its own body in run_on_main, so calling straight
@@ -1523,11 +1692,17 @@ impl Preview {
             }
             let display = display_addr as *mut ffi::obs_display_t;
             ffi::obs_display_add_draw_callback(display, preview_draw, std::ptr::null_mut());
-            Ok(Preview { view, display })
+            Ok(Preview { view, display,canvas:std::ptr::null_mut(),rect })
         }
     }
 
+    #[cfg(target_os="macos")]
+    unsafe fn attach_canvas(window:*mut std::os::raw::c_void,rect:PreviewRect,canvas:*mut super::portrait::Canvas)->Result<Self,String>{
+        let mut p=Self::attach(window,rect)?;ffi::obs_display_remove_draw_callback(p.display,preview_draw,std::ptr::null_mut());
+        p.canvas=super::portrait::obs_canvas_get_ref(canvas).cast();ffi::obs_display_add_draw_callback(p.display,portrait_draw,p.canvas);Ok(p)
+    }
     fn set_rect(&mut self, rect: PreviewRect) {
+        if (self.rect.x-rect.x).abs()<0.1&&(self.rect.y-rect.y).abs()<0.1&&(self.rect.w-rect.w).abs()<0.1&&(self.rect.h-rect.h).abs()<0.1{return;}self.rect=rect;
         unsafe {
             let (mut px_w, mut px_h) = (0f64, 0f64);
             let v = self.view as usize;
@@ -1557,11 +1732,16 @@ impl Preview {
 
     fn detach(self) {
         unsafe {
-            ffi::obs_display_remove_draw_callback(self.display, preview_draw, std::ptr::null_mut());
+            #[cfg(target_os="macos")]
+            if !self.canvas.is_null(){ffi::obs_display_remove_draw_callback(self.display,portrait_draw,self.canvas);}else{ffi::obs_display_remove_draw_callback(self.display,preview_draw,std::ptr::null_mut());}
+            #[cfg(not(target_os="macos"))]
+            ffi::obs_display_remove_draw_callback(self.display,preview_draw,std::ptr::null_mut());
             let display_addr = self.display as usize;
             graph::on_main_thread(move || {
                 ffi::obs_display_destroy(display_addr as *mut ffi::obs_display_t);
             });
+            #[cfg(target_os="macos")]
+            if !self.canvas.is_null(){super::portrait::release_display_canvas(self.canvas);}
             let v = self.view as usize;
             on_window_thread(move || ffi::producer_preview_detach(v as *mut std::os::raw::c_void));
         }
@@ -1728,6 +1908,8 @@ pub fn start(
     let snapshot = Arc::new(Mutex::new(Snapshot::default()));
     let streaming = Arc::new(AtomicBool::new(false));
     let snap = snapshot.clone();
+    #[cfg(debug_assertions)]
+    let probe_cmd=cmd_tx.clone();
     let streaming_flag = streaming.clone();
 
     std::thread::Builder::new()
@@ -1823,6 +2005,7 @@ pub fn start(
             // Recording lives beside the session, not inside it: you can
             // record without streaming and keep recording after a stream ends.
             let mut recorder: Option<record::Recorder> = None;
+            let mut portrait_recorder: Option<record::Recorder> = None;
             // The virtual camera runs independently of streaming and
             // recording — all three can be on at once.
             let mut vcam: Option<*mut ffi::obs_output_t> = None;
@@ -1931,7 +2114,16 @@ pub fn start(
             } else {
                 None
             };
+            #[cfg(debug_assertions)]
+            if let (Some(g),Ok(path))=(scene.as_mut(),std::env::var("PRODUCER_SET_OUTPUT_PROBE")) {
+                let handle=LiveHandle{cmd:probe_cmd,snapshot:snap.clone(),streaming:streaming_flag.clone()};
+                if let Err(e)=unsafe {super::presentation_probe::start(g,handle,std::path::PathBuf::from(path.clone()))} {let _=std::fs::write(std::path::Path::new(&path).join("result.json"),serde_json::json!({"ok":false,"error":e}).to_string());}
+            }
+            let mut dj = super::dj::Dj::default();
             let mut preview: Option<Preview> = None;
+            let mut portrait_preview: Option<Preview> = None;
+            let mut selected_portrait=false;
+            let mut selected_video=unsafe{ffi::obs_get_video()};
             let mut session: Option<Session> = None;
             let mut state = SessionState::Idle;
             let mut last_status_emit = Instant::now();
@@ -2069,12 +2261,30 @@ pub fn start(
                 }
 
                 // 120ms tick: meters want ~8Hz; command latency stays low.
+                if let Some(g)=scene.as_mut(){g.warm_ready_buffers();}
                 let received = cmd_rx.recv_timeout(Duration::from_millis(120));
                 if let Ok(c) = &received {
                     iter_label = cmd_name(c);
                 }
                 iter_prev = Some((iter_t0, iter_label));
                 match received {
+                    Ok(Command::Dj { action, reply }) => {
+                        let result = if report.ok { dj.apply(action) } else { Err("The room audio engine did not start".into()) };
+                        let _ = reply.send(result);
+                    }
+                    Ok(Command::SelectOutput{portrait,reply})=>{
+                        let result=(||->Result<(),String>{
+                            if selected_portrait==portrait{return Ok(());}
+                            if session.is_some()||recorder.is_some()||portrait_recorder.is_some(){return Err("Stop streaming and recording before changing the output canvas".into());}
+                            let video=if portrait{
+                                #[cfg(target_os="macos")]{scene.as_mut().ok_or("Room is not ready")?.portrait_video()?}
+                                #[cfg(not(target_os="macos"))]{return Err("Portrait output is unavailable in this build".into());}
+                            }else{unsafe{ffi::obs_get_video()}};
+                            #[cfg(target_os="macos")]super::portrait::select_program(portrait);
+                            if selected_portrait!=portrait {selected_video=video;selected_portrait=portrait;hub_engine.program_portrait.store(portrait,std::sync::atomic::Ordering::Relaxed);if let Some(g)=scene.as_ref(){hub_engine.publish_targets(g);}}
+                            Ok(())
+                        })();let _=reply.send(result);
+                    }
                     Ok(Command::GoLive(config)) => {
                         if session.is_some() {
                             sink(&LiveEvent::EngineError {
@@ -2086,7 +2296,7 @@ pub fn start(
                             });
                         } else {
                             set_state(&mut state, SessionState::Starting, &snap, &sink);
-                            match Session::start(config) {
+                            match Session::start_video(config,if selected_portrait{selected_video}else{unsafe{ffi::obs_get_video()}}) {
                                 Ok(s) => {
                                     session = Some(s);
                                     streaming_flag.store(true, AtomicOrdering::SeqCst);
@@ -2118,6 +2328,63 @@ pub fn start(
                             }
                         }
                     }
+                    Ok(Command::PortraitRoom{reply})=>{
+                        #[cfg(target_os="macos")]let result=scene.as_mut().ok_or("Room is not ready".into()).and_then(|g|g.portrait_room());
+                        #[cfg(not(target_os="macos"))]let result=Err("Portrait output is unavailable on this platform".into());let _=reply.send(result);
+                    }
+                    Ok(Command::PortraitState{reply})=>{
+                        #[cfg(target_os="macos")]let result=scene.as_mut().ok_or("Room is not ready".into()).and_then(|g|{if g.portrait_canvas().is_err(){return Err("Portrait room is unavailable".into());}g.sync_portrait_room();Ok(g.portrait_state())});
+                        #[cfg(not(target_os="macos"))]let result=Err("Portrait output is unavailable on this platform".into());let _=reply.send(result);
+                    }
+                    Ok(Command::PortraitTransform{id,patch,reply})=>{
+                        #[cfg(target_os="macos")]let result=scene.as_mut().ok_or("Room is not ready".into()).and_then(|g|g.portrait_transform(&id,patch));
+                        #[cfg(not(target_os="macos"))]let result={let _=(id,patch);Err("Portrait output is unavailable on this platform".into())};let _=reply.send(result);
+                    }
+                    Ok(Command::PortraitPreview{window,rect,reply})=>{
+                        #[cfg(target_os="macos")]let result=(||->Result<(),String>{if let Some(rect)=rect{if let Some(p)=portrait_preview.as_mut(){p.set_rect(rect);}else{let canvas=scene.as_mut().ok_or("Room is not ready")?.portrait_canvas()?;portrait_preview=Some(unsafe{Preview::attach_canvas(window as *mut _,rect,canvas)?});}}else if let Some(p)=portrait_preview.take(){p.detach();}Ok(())})();
+                        #[cfg(not(target_os="macos"))]let result={let _=(window,rect);Err("Portrait output is unavailable on this platform".into())};let _=reply.send(result);
+                    }
+                    Ok(Command::PortraitWarm{request,reply})=>{
+                        #[cfg(target_os="macos")]
+                        let result=scene.as_mut().ok_or("Room scene unavailable".to_string()).and_then(|g|g.portrait_warm(request));
+                        #[cfg(not(target_os="macos"))]
+                        let result={let _=request;Err("Portrait warmup is currently a Mac dev capability".into())};
+                        let _=reply.send(result);
+                    }
+                    Ok(Command::PortraitPrepare{request,reply})=>{
+                        #[cfg(target_os="macos")]
+                        let result=scene.as_mut().ok_or("Room scene unavailable".to_string()).and_then(|g|g.portrait_prepare(request));
+                        #[cfg(not(target_os="macos"))]
+                        let result={let _=request;Err("Portrait preview is currently a Mac dev capability".into())};
+                        let _=reply.send(result);
+                    }
+                    Ok(Command::PortraitAbort{token,revision})=>{if let Some(g)=scene.as_mut(){g.portrait_abort(&token,revision);}}
+                    Ok(Command::PortraitCommit{token,placements,reply})=>{
+                        #[cfg(target_os="macos")]
+                        let result=scene.as_mut().ok_or("Room scene unavailable".to_string()).and_then(|g|g.portrait_commit(&token,placements));
+                        #[cfg(not(target_os="macos"))]
+                        let result={let _=(token,placements);Err("Portrait preview is currently a Mac dev capability".into())};
+                        let _=reply.send(result);
+                    }
+                    Ok(Command::PortraitStop{reply})=>{if portrait_recorder.is_some()||selected_portrait{let _=reply.send(());continue;}if let Some(p)=portrait_preview.take(){p.detach();}#[cfg(target_os="macos")]if let Some(g)=scene.as_mut(){g.portrait_stop();}let _=reply.send(());}
+                    Ok(Command::PortraitFrame{reply})=>{#[cfg(target_os="macos")]let frame=scene.as_ref().map(|g|g.portrait_frame()).unwrap_or_default();#[cfg(not(target_os="macos"))]let frame=String::new();let _=reply.send(frame);}
+                    Ok(Command::PresentationStatus {reply})=> {let _=reply.send(scene.as_ref().map_or(super::presentation::Status{generation:0,lease:None,revision:0},|g|g.presentation_status()));}
+                    Ok(Command::PresentationWarm{request,reply})=>{let result=scene.as_mut().ok_or("Room scene unavailable".to_string()).and_then(|g|g.warm_presentation(request));let _=reply.send(result);}
+                    Ok(Command::PresentationPrepare {request,reply})=> {let result=scene.as_mut().ok_or_else(||"The room scene is not running".to_string()).and_then(|g|g.prepare_presentation(request));let _=reply.send(result);}
+                    Ok(Command::PresentationCommit {token,placements,reply})=> {let result=scene.as_mut().ok_or_else(||"The room scene is not running".to_string()).and_then(|g|g.commit_presentation(&token,placements));let _=reply.send(result);}
+                    Ok(Command::PresentationAbort {token,revision})=> {if let Some(g)=scene.as_mut(){g.abort_presentation(&token,revision);}}
+                    Ok(Command::PresentationReturn {lease,reply})=> {let result=scene.as_mut().ok_or_else(||"The room scene is not running".to_string()).and_then(|g|g.return_presentation(lease.as_deref()));let _=reply.send(result);}
+                    Ok(Command::ApplyScene { changes, reply }) => {
+                        let result = match scene.as_mut() {
+                            Some(g) => g.apply_scene(&changes).map(|()| g.state()),
+                            None => Err("The room scene is not running".into()),
+                        };
+                        if let Ok(sources) = &result {
+                            snap.lock().unwrap().sources = sources.clone();
+                            sink(&LiveEvent::SourcesChanged { sources: sources.clone() });
+                        }
+                        let _ = reply.send(result);
+                    }
                     Ok(Command::ListDevices { kind, reply }) => {
                         let list = match scene.as_ref() {
                             Some(g) => g.devices(&kind),
@@ -2135,7 +2402,7 @@ pub fn start(
                         }
                         let _ = reply.send(r);
                     }
-                    Ok(Command::StartRecording { stamp, reply }) => {
+                    Ok(Command::StartRecording { stamp, dual, reply }) => {
                         if recorder.is_some() {
                             let _ = reply.send(Err("already recording".into()));
                         } else {
@@ -2145,20 +2412,18 @@ pub fn start(
                                 let s = snap.lock().unwrap();
                                 record_kbps(s.video_height, s.video_fps)
                             };
-                            match record::Recorder::start(&stamp, br) {
-                                Ok(r) => {
-                                    let p = r.path();
-                                    recorder = Some(r);
-                                    let _ = reply.send(Ok(p));
+                            let result=(||->Result<String,String>{
+                                if dual {
+                                    #[cfg(target_os="macos")]{let video=scene.as_mut().ok_or("Room is not ready")?.portrait_video()?;portrait_recorder=Some(unsafe{record::Recorder::start_video(&format!("{stamp} Portrait"),br,video)?});}
+                                    #[cfg(not(target_os="macos"))]return Err("Dual recording is unavailable on this platform".into());
                                 }
-                                Err(e) => {
-                                    sink(&LiveEvent::EngineError { message: e.clone() });
-                                    let _ = reply.send(Err(e));
-                                }
-                            }
+                                match unsafe{record::Recorder::start_video(&stamp,br,if selected_portrait{selected_video}else{ffi::obs_get_video()})}{Ok(r)=>{let path=r.path();recorder=Some(r);Ok(path)},Err(e)=>{if let Some(r)=portrait_recorder.take(){r.stop();}Err(e)}}
+                            })();
+                            if let Err(e)=&result{sink(&LiveEvent::EngineError{message:e.clone()});}let _=reply.send(result);
                         }
                     }
                     Ok(Command::StopRecording { reply }) => {
+                        if let Some(r)=portrait_recorder.take(){r.stop();}
                         let _ = reply.send(recorder.take().map(|r| r.stop()));
                     }
                     Ok(Command::SetSyncOffset { id, ms }) => {
@@ -2335,6 +2600,36 @@ pub fn start(
                             }
                         }
                     }
+                    Ok(Command::ReplaceExtra { id, label, spec, initial, reply }) => {
+                        let result = match scene.as_mut() {
+                            Some(g) => g.replace_extra(&id, &label, &spec, initial),
+                            None => Err("The room scene is not running".into()),
+                        };
+                        if let Some(g) = scene.as_ref() {
+                            let sources = g.state();
+                            snap.lock().unwrap().sources = sources.clone();
+                            sink(&LiveEvent::SourcesChanged { sources });
+                        }
+                        let _ = reply.send(result);
+                    }
+                    Ok(Command::RestoreRoom { restore, reply }) => {
+                        let result = if session.is_some() || recorder.is_some() {
+                            Err("Stop streaming and recording before restoring a room".into())
+                        } else {
+                            match scene.as_mut() {
+                                Some(g) => g.restore_room(restore),
+                                None => Err("The room scene is not running".into()),
+                            }
+                        };
+                        // Even a failure leaves the graph hidden. Publish actual engine
+                        // truth, never the pre-restore snapshot or a per-source echo.
+                        if let Some(g) = scene.as_ref() {
+                            let sources = g.state();
+                            snap.lock().unwrap().sources = sources.clone();
+                            sink(&LiveEvent::SourcesChanged { sources });
+                        }
+                        let _ = reply.send(result);
+                    }
                     Ok(Command::AddExtra { id, label, spec }) => {
                         if let Some(g) = scene.as_mut() {
                             match g.add_extra(&id, &label, &spec) {
@@ -2373,6 +2668,7 @@ pub fn start(
                         }
                     }
                     Ok(Command::SetVideo { height, fps }) => {
+                        if recorder.is_some()||portrait_recorder.is_some(){sink(&LiveEvent::EngineError{message:"Stop recording before changing video settings".into()});continue;}
                         if session.is_some() {
                             sink(&LiveEvent::EngineError {
                                 message: "stop the stream to change video settings".into(),
@@ -2393,6 +2689,8 @@ pub fn start(
                                 message: "4K on an Intel Mac runs at 30 fps".into(),
                             });
                         } else {
+                            if let Some(p)=portrait_preview.take(){p.detach();}
+                            #[cfg(target_os="macos")]if let Some(g)=scene.as_mut(){g.portrait_stop();}
                             let module = graphics_module(report.graphics_backend.as_deref());
                             // A video reset destroys every mix and every
                             // canvas-sized item, so the studio scene AND the
@@ -2416,6 +2714,7 @@ pub fn start(
                                 Ok(()) => {
                                     if let Some(g) = scene.as_mut() {
                                         g.relayout();
+                                        #[cfg(target_os="macos")]if selected_portrait{if let Err(e)=g.portrait_room(){sink(&LiveEvent::EngineError{message:format!("portrait resize: {e}")});}}
                                     }
                                     if let Some(sp) = studio_spec {
                                         unsafe {
@@ -2466,7 +2765,9 @@ pub fn start(
                         }
                     }
                     Ok(Command::AttachPreview { window, rect }) => {
-                        if preview.is_none() {
+                        if let Some(p) = preview.as_mut() {
+                            p.set_rect(rect);
+                        } else {
                             match Preview::attach(window as *mut std::os::raw::c_void, rect) {
                                 Ok(p) => {
                                     preview = Some(p);
@@ -2518,13 +2819,41 @@ pub fn start(
                         #[cfg(not(target_os = "windows"))]
                         let _ = rects;
                     }
+                    Ok(Command::ReleaseIdleRoom { reply }) => {
+                        // Evaluate on the engine thread, so an output starting
+                        // during navigation cannot lose its capture sources.
+                        if session.is_some() || recorder.is_some() {
+                            let _ = reply.send(Ok(false));
+                        } else {
+                            #[cfg(target_os="macos")]super::portrait::select_program(false);
+                            selected_portrait=false;selected_video=unsafe{ffi::obs_get_video()};hub_engine.program_portrait.store(false,std::sync::atomic::Ordering::Relaxed);
+                            dj.clear();
+                            if let Some(output) = vcam.take() { unsafe { stop_vcam(output); } }
+                            if let Some(mut m) = room_mix.take() { unsafe { m.teardown(); } }
+                            if let Some(mut st) = studio_out.take() { unsafe { st.teardown(); } }
+                            let result = if let Some(g) = scene.as_mut() {
+                                g.clear_room().map(|()| {
+                                    // Release thumbnail-owned camera references too.
+                                    hub_engine.publish_targets(g);
+                                    snap.lock().unwrap().sources = g.state();
+                                    true
+                                })
+                            } else { Ok(true) };
+                            // No SourcesChanged: unloading must not rewrite the
+                            // saved room document or the next mounted room.
+                            let _ = reply.send(result);
+                        }
+                    }
                     Ok(Command::DetachPreview) => {
+                        if let Some(p)=portrait_preview.take(){p.detach();}
                         if let Some(p) = preview.take() {
                             p.detach();
                             snap.lock().unwrap().preview_attached = false;
                         }
                     }
                     Ok(Command::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        if let Some(r)=portrait_recorder.take(){r.stop();}
+                        if let Some(r)=recorder.take(){r.stop();}
                         unsafe {
                             if let Some(o) = vcam.take() {
                                 stop_vcam(o);
@@ -2536,6 +2865,7 @@ pub fn start(
                         if let Some(mut st) = studio_out.take() {
                             unsafe { st.teardown() };
                         }
+                        if let Some(p)=portrait_preview.take(){p.detach();}
                         if let Some(p) = preview.take() {
                             p.detach();
                         }
@@ -2556,6 +2886,10 @@ pub fn start(
                         }
                     }
                 }
+
+                #[cfg(target_os="macos")]
+                if let Some(g)=scene.as_mut(){g.sync_portrait_room();}
+                dj.tick(scene.as_ref().is_some_and(|g| g.dj_speaking()));
 
                 // Meter stream — while any metered extra (mic, guest, mod,
                 // media) exists.

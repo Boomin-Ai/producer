@@ -91,6 +91,7 @@ pub type raw_video_cb_t = extern "C" fn(param: *mut c_void, frame: *mut video_da
 // works as a dev engine. Harmless when a source build DID produce a .lib.
 #[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
 extern "C" {
+    pub fn obs_scene_atomic_update(scene: *mut obs_scene_t, callback: extern "C" fn(*mut c_void, *mut obs_scene_t), data: *mut c_void);
     pub fn obs_startup(
         locale: *const c_char,
         module_config_path: *const c_char,
@@ -186,8 +187,11 @@ extern "C" {
         cb: extern "C" fn(*mut c_void, u32, u32),
         param: *mut c_void,
     );
+    pub fn obs_remove_main_render_callback(callback: extern "C" fn(*mut c_void, u32, u32), param: *mut c_void);
     pub fn obs_source_get_ref(source: *mut obs_source_t) -> *mut obs_source_t;
     pub fn obs_source_inc_showing(source: *mut obs_source_t);
+    pub fn obs_source_inc_active(source: *mut obs_source_t);
+    pub fn obs_source_dec_active(source: *mut obs_source_t);
     pub fn obs_source_dec_showing(source: *mut obs_source_t);
     pub fn gs_blend_state_push();
     pub fn gs_blend_state_pop();
@@ -206,6 +210,7 @@ extern "C" {
     /// deserve a mixer strip without guessing from their kind.
     pub fn obs_source_get_output_flags(source: *mut obs_source_t) -> u32;
     pub fn obs_source_set_muted(source: *mut obs_source_t, muted: bool);
+    pub fn obs_source_set_audio_mixers(source: *mut obs_source_t, mixers: u32);
     /// 0 NONE, 1 MONITOR_ONLY, 2 MONITOR_AND_OUTPUT. MONITOR_ONLY is what
     /// makes cue possible: libobs gates the audio out at the SOURCE, before
     /// it enters any mix, so it cannot reach stream, recording or any output.
@@ -244,6 +249,7 @@ extern "C" {
 #[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
 extern "C" {
     pub fn obs_data_create() -> *mut obs_data_t;
+    pub fn obs_data_create_from_json(json: *const c_char) -> *mut obs_data_t;
     pub fn obs_data_release(data: *mut obs_data_t);
     pub fn obs_data_set_string(data: *mut obs_data_t, name: *const c_char, value: *const c_char);
     pub fn obs_data_set_int(data: *mut obs_data_t, name: *const c_char, value: i64);
@@ -293,8 +299,10 @@ pub const GS_RGBA: c_int = 3;
 pub const OBS_TASK_GRAPHICS: c_int = 1;
 pub const GS_BLEND_ZERO: c_int = 0;
 pub const GS_BLEND_ONE: c_int = 1;
+pub const GS_BLEND_INVSRCALPHA: c_int = 5;
 pub const GS_ZS_NONE: c_int = 0;
 // obs.h enum obs_bounds_type
+pub const OBS_BOUNDS_STRETCH: c_int = 1;
 pub const OBS_BOUNDS_SCALE_INNER: c_int = 2;
 
 /// graphics/graphics.h struct gs_window (macOS arm: a single NSView* slot)
@@ -386,6 +394,7 @@ extern "C" {
     pub fn gs_ortho(left: f32, right: f32, top: f32, bottom: f32, znear: f32, zfar: f32);
 
     pub fn obs_scene_create(name: *const c_char) -> *mut obs_scene_t;
+    pub fn obs_scene_create_private(name: *const c_char) -> *mut obs_scene_t;
     pub fn obs_scene_release(scene: *mut obs_scene_t);
     pub fn obs_scene_get_source(scene: *const obs_scene_t) -> *mut obs_source_t;
     pub fn obs_scene_add(
@@ -438,7 +447,6 @@ extern "C" {
     #[cfg(target_os = "windows")]
     pub fn producer_preview_set_cutouts(view: *mut c_void, xywh: *const f64, n: c_int);
     pub fn producer_preview_prepare_window(ns_window: *mut c_void) -> c_int;
-    pub fn producer_apply_window_vibrancy(ns_window: *mut c_void) -> c_int;
     pub fn producer_av_authorization_status(media_type: c_int) -> c_int;
     pub fn producer_av_request_access(media_type: c_int);
     pub fn producer_screen_capture_preflight() -> c_int;
@@ -449,6 +457,8 @@ extern "C" {
     /// `title:class:exe`, so the engine builds that string from the title.
     pub fn producer_window_id(ns_window: *mut c_void) -> u32;
     pub fn producer_default_camera_id(buf: *mut c_char, buflen: c_int) -> c_int;
+    #[cfg(target_os = "macos")]
+    pub fn producer_capture_guard_install() -> c_int;
     pub fn producer_list_windows(buf: *mut c_char, buflen: c_int) -> c_int;
     pub fn producer_drag_chip_show();
     pub fn producer_drag_chip_hide();
@@ -457,6 +467,13 @@ extern "C" {
     /// pass-through under the same id so scene configs round-trip. Call once,
     /// after obs_startup and before any source is created.
     pub fn producer_person_mask_register();
+    pub fn producer_source_appearance_register();
+    pub fn producer_shader_create(settings:*const c_char,effect:*const c_char)->*mut obs_source_t;
+    pub fn producer_shader_extent(source:*mut obs_source_t,width:f32,height:f32);
+    pub fn producer_shader_frame(source:*mut obs_source_t,time:f32,intensity:f32,scale:f32,opacity:f32);
+    /// Video-only private placement; owner thread after readiness/grant checks.
+    /// Caller owns the returned reference. Capture is retained, never cloned.
+    pub fn producer_source_placement_create(capture: *mut obs_source_t) -> *mut obs_source_t;
     pub fn producer_open_screen_settings();
     pub fn producer_open_camera_settings();
     /// Virtual camera (R13): ask macOS to install the bundled CMIO extension.
@@ -715,6 +732,10 @@ extern "C" {
     pub fn os_cpu_usage_info_query(info: *mut c_void) -> f64;
     /// Media playback (stingers). Duration is 0 until the file is opened.
     pub fn obs_source_media_get_duration(source: *mut obs_source_t) -> i64;
+    pub fn obs_source_media_get_time(source: *mut obs_source_t) -> i64;
+    pub fn obs_source_media_set_time(source: *mut obs_source_t, ms: i64);
+    pub fn obs_source_media_get_state(source: *mut obs_source_t) -> c_int;
+    pub fn obs_source_media_play_pause(source: *mut obs_source_t, pause: bool);
 
     // --- Used by shim_win.c's pass-through Cutout filter, NOT by Rust ---
     // On Windows the C shim reaches obs.dll through the raw-dylib import

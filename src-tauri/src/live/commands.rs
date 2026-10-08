@@ -39,7 +39,7 @@ pub struct UpsertDestination {
     pub endpoint_id: Option<String>,
 }
 
-const PRESETS: &[&str] = &["twitch", "kick", "youtube", "custom"];
+const PRESETS: &[&str] = &["twitch", "kick", "youtube", "facebook", "instagram", "rumble", "tiktok", "custom"];
 
 fn row_from_db(r: &rusqlite::Row<'_>) -> rusqlite::Result<DestinationRow> {
     Ok(DestinationRow {
@@ -90,11 +90,11 @@ pub async fn live_upsert_destination(
             })?;
             Some(crate::live::normalize_kick_server_checked(raw).map_err(EngineError::Other)?)
         }
-        "custom" => {
+        "custom" | "facebook" | "instagram" | "rumble" | "tiktok" => {
             let raw = input
                 .server
                 .as_deref()
-                .ok_or_else(|| EngineError::Other("Custom RTMP needs a server URL".into()))?
+                .ok_or_else(|| EngineError::Other("This destination needs a server URL".into()))?
                 .trim()
                 .to_string();
             if !(raw.starts_with("rtmp://") || raw.starts_with("rtmps://")) {
@@ -184,7 +184,22 @@ pub async fn live_delete_destination(state: State<'_, AppState>, id: String) -> 
 }
 
 #[tauri::command]
-pub async fn live_go_live(state: State<'_, AppState>) -> EngineResult<()> {
+pub async fn live_go_live(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    endpoint_id: Option<String>,
+    server_room_id: Option<String>,
+) -> EngineResult<()> {
+    // Capture credentials/workspace once for THIS room, before enqueueing the
+    // engine start. They never cross back into the webview.
+    let presence = match (endpoint_id, server_room_id) {
+        (Some(endpoint), Some(room)) => {
+            Uuid::parse_str(&room).map_err(|_| EngineError::Other("invalid server room id".into()))?;
+            let (base, brand, token) = crate::ipc::endpoint_access(&state, &endpoint)?;
+            brand.map(|brand| (base, brand, token, room))
+        }
+        _ => None,
+    };
     let specs: Vec<(String, String, Option<String>, String)> = {
         let conn = state.db.lock().expect("db mutex poisoned");
         let mut stmt = conn.prepare(
@@ -205,7 +220,11 @@ pub async fn live_go_live(state: State<'_, AppState>) -> EngineResult<()> {
     if specs.is_empty() {
         return Err(EngineError::Other("no enabled destinations".into()));
     }
-    state.live.go_live_specs(specs).map_err(EngineError::Other)
+    state.live.go_live_specs(specs).map_err(EngineError::Other)?;
+    if let Some((base, brand, token, room)) = presence {
+        crate::live::presence::start(app, base, brand, token, room);
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -301,6 +320,11 @@ pub async fn live_move_preview(
 #[tauri::command]
 pub async fn live_detach_preview(state: State<'_, AppState>) -> EngineResult<()> {
     state.live.detach_preview().map_err(EngineError::Other)
+}
+
+#[tauri::command]
+pub async fn live_release_idle_room(state: State<'_, AppState>) -> EngineResult<bool> {
+    state.live.release_idle_room().map_err(EngineError::Other)
 }
 
 #[tauri::command]
@@ -454,16 +478,16 @@ pub async fn live_set_thumb_rate(state: State<'_, AppState>, fps: u32) -> Engine
 pub async fn live_home_glass(app: tauri::AppHandle) -> EngineResult<()> {
     // Home wears the glass; rooms strip it on preview attach (shim.m). This
     // is the way back when the user leaves a room.
-    #[cfg(all(target_os = "macos", have_engine))]
+    #[cfg(target_os = "macos")]
     {
         use tauri::Manager;
         if let Some(window) = app.get_webview_window("main") {
             if let Ok(ns) = window.ns_window() {
-                unsafe { crate::live::ffi::producer_apply_window_vibrancy(ns) };
+                crate::window::apply_vibrancy(ns);
             }
         }
     }
-    #[cfg(not(all(target_os = "macos", have_engine)))]
+    #[cfg(not(target_os = "macos"))]
     let _ = app;
     Ok(())
 }
@@ -539,6 +563,21 @@ pub async fn live_set_transform(
             .set_transform(id, patch, commit)
             .map_err(EngineError::Other)
     }
+}
+
+#[tauri::command]
+pub async fn live_replace_source(state: State<'_, AppState>, id: String, label: String, spec: serde_json::Value, initial: Option<serde_json::Value>) -> EngineResult<serde_json::Value> {
+    state.live.replace_extra(id, label, spec, initial).map_err(EngineError::Other)
+}
+
+#[tauri::command]
+pub async fn live_restore_room(state: State<'_, AppState>, restore: serde_json::Value) -> EngineResult<serde_json::Value> {
+    state.live.restore_room(restore).map_err(EngineError::Other)
+}
+
+#[tauri::command]
+pub async fn live_apply_scene(state: State<'_, AppState>, changes: serde_json::Value) -> EngineResult<serde_json::Value> {
+    state.live.apply_scene(changes).map_err(EngineError::Other)
 }
 
 /// Devices behind a source picker: cameras and capture cards, microphones
@@ -664,16 +703,36 @@ pub async fn live_play_stinger(state: State<'_, AppState>, path: String) -> Engi
 pub async fn live_start_recording(
     state: State<'_, AppState>,
     stamp: String,
+    room_id: Option<String>,
+    dual: Option<bool>,
 ) -> EngineResult<String> {
-    state
+    let path = state
         .live
-        .start_recording(stamp)
-        .map_err(EngineError::Other)
+        .start_recording_mode(stamp,dual.unwrap_or(false))
+        .map_err(EngineError::Other)?;
+    let result = {
+        let db = state.db.lock().unwrap();
+        crate::recordings::begin(&db, &path, room_id.as_deref()).and_then(|_|{
+            if dual.unwrap_or(false){let portrait=path.strip_suffix(".mp4").unwrap_or(&path).to_owned()+" Portrait.mp4";crate::recordings::begin(&db,&portrait,room_id.as_deref())?;}Ok(())
+        })
+    };
+    if let Err(error) = result {
+        let _ = state.live.stop_recording();
+        return Err(error);
+    }
+    Ok(path)
 }
 
 #[tauri::command]
 pub async fn live_stop_recording(state: State<'_, AppState>) -> EngineResult<Option<String>> {
-    state.live.stop_recording().map_err(EngineError::Other)
+    let path = state.live.stop_recording().map_err(EngineError::Other)?;
+    if let Some(ref path) = path {
+        let db = state.db.lock().unwrap();
+        crate::recordings::finish(&db, path)?;
+        let portrait=path.strip_suffix(".mp4").unwrap_or(path).to_owned()+" Portrait.mp4";
+        if std::path::Path::new(&portrait).exists(){crate::recordings::finish(&db,&portrait)?;}
+    }
+    Ok(path)
 }
 
 /// Reveal a finished recording in Finder.
@@ -1016,4 +1075,77 @@ pub fn live_set_selection(id: Option<String>) -> EngineResult<()> {
     #[cfg(not(have_engine))]
     let _ = id;
     Ok(())
+}
+
+/// Only the local application can read processed audio; no HTTP/CORS endpoint.
+#[tauri::command]
+pub async fn live_program_audio_start() -> EngineResult<()> {
+    #[cfg(have_engine)] { return super::program_audio::start().map_err(EngineError::Other); }
+    #[cfg(not(have_engine))] { Err(EngineError::Other("Native audio requires the production engine".into())) }
+}
+#[tauri::command]
+pub async fn live_program_audio_read() -> tauri::ipc::Response {
+    #[cfg(have_engine)] { return tauri::ipc::Response::new(super::program_audio::drain()); }
+    #[cfg(not(have_engine))] { tauri::ipc::Response::new(Vec::<u8>::new()) }
+}
+#[tauri::command]
+pub async fn live_program_audio_stop() {
+    #[cfg(have_engine)] super::program_audio::stop();
+}
+
+#[tauri::command]
+pub async fn live_set_status(state: State<'_, AppState>)->EngineResult<super::presentation::Status> {state.live.presentation_status().map_err(EngineError::Other)}
+#[tauri::command]
+pub async fn live_set_warm(app:tauri::AppHandle,request:super::presentation::Request)->EngineResult<()>{use tauri::Manager;tauri::async_runtime::spawn_blocking(move||app.state::<AppState>().live.presentation_warm(request)).await.map_err(|e|EngineError::Other(e.to_string()))?.map_err(EngineError::Other)}
+#[tauri::command]
+pub async fn live_set_apply(app:tauri::AppHandle, request: super::presentation::Request)->EngineResult<super::presentation::Status> {
+    use tauri::Manager;
+    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().live.presentation_apply(request))
+        .await.map_err(|e|EngineError::Other(e.to_string()))?.map_err(EngineError::Other)
+}
+#[tauri::command]
+pub async fn live_set_return(state: State<'_, AppState>, lease: Option<String>)->EngineResult<super::presentation::Status> {state.live.presentation_return(lease).map_err(EngineError::Other)}
+
+#[tauri::command]
+pub async fn live_portrait_warm(app:tauri::AppHandle,request:super::presentation::Request)->EngineResult<()>{use tauri::Manager;tauri::async_runtime::spawn_blocking(move||app.state::<AppState>().live.portrait_warm(request)).await.map_err(|e|EngineError::Other(e.to_string()))?.map_err(EngineError::Other)}
+#[tauri::command]
+pub async fn live_portrait_apply(app:tauri::AppHandle,request:super::presentation::Request)->EngineResult<()>{use tauri::Manager;tauri::async_runtime::spawn_blocking(move||app.state::<AppState>().live.portrait_apply(request)).await.map_err(|e|EngineError::Other(e.to_string()))?.map_err(EngineError::Other)}
+#[tauri::command]
+pub async fn live_portrait_stop(state:State<'_,AppState>)->EngineResult<()>{state.live.portrait_stop().map_err(EngineError::Other)}
+#[tauri::command]
+pub async fn live_portrait_frame(state:State<'_,AppState>)->EngineResult<String>{state.live.portrait_frame().map_err(EngineError::Other)}
+
+#[tauri::command]
+pub async fn live_portrait_room(app:tauri::AppHandle)->EngineResult<serde_json::Value>{
+ #[cfg(have_engine)]{use tauri::Manager;tauri::async_runtime::spawn_blocking(move||app.state::<AppState>().live.portrait_room().and_then(|s|serde_json::to_value(s).map_err(|e|e.to_string()))).await.map_err(|e|EngineError::Other(e.to_string()))?.map_err(EngineError::Other)}
+ #[cfg(not(have_engine))]{let _=app;Err(EngineError::Other("Engine unavailable".into()))}
+}
+#[tauri::command]
+pub async fn live_portrait_state(app:tauri::AppHandle)->EngineResult<serde_json::Value>{
+ #[cfg(have_engine)]{use tauri::Manager;tauri::async_runtime::spawn_blocking(move||app.state::<AppState>().live.portrait_state().and_then(|s|serde_json::to_value(s).map_err(|e|e.to_string()))).await.map_err(|e|EngineError::Other(e.to_string()))?.map_err(EngineError::Other)}
+ #[cfg(not(have_engine))]{let _=app;Err(EngineError::Other("Engine unavailable".into()))}
+}
+#[tauri::command]
+pub async fn live_portrait_transform(app:tauri::AppHandle,id:String,patch:serde_json::Value)->EngineResult<serde_json::Value>{
+ #[cfg(have_engine)]{use tauri::Manager;let patch=serde_json::from_value(patch).map_err(|e|EngineError::Other(e.to_string()))?;tauri::async_runtime::spawn_blocking(move||app.state::<AppState>().live.portrait_transform(id,patch).and_then(|s|serde_json::to_value(s).map_err(|e|e.to_string()))).await.map_err(|e|EngineError::Other(e.to_string()))?.map_err(EngineError::Other)}
+ #[cfg(not(have_engine))]{let _=(app,id,patch);Err(EngineError::Other("Engine unavailable".into()))}
+}
+#[tauri::command]
+pub async fn live_portrait_preview(app:tauri::AppHandle,rect:Option<super::CutoutRect>)->EngineResult<bool>{
+ #[cfg(all(have_engine,target_os="macos"))]{use tauri::Manager;let window=app.get_webview_window("main").ok_or_else(||EngineError::Other("Main window unavailable".into()))?.ns_window().map_err(|e|EngineError::Other(e.to_string()))? as usize;let transparent=super::prepare_stage(window);let rect=rect.map(|r|super::engine::PreviewRect{x:r.x,y:r.y,w:r.w,h:r.h});tauri::async_runtime::spawn_blocking(move||app.state::<AppState>().live.portrait_preview(window,rect)).await.map_err(|e|EngineError::Other(e.to_string()))?.map_err(EngineError::Other)?;Ok(transparent)}
+ #[cfg(not(all(have_engine,target_os="macos")))]{let _=(app,rect);Err(EngineError::Other("Portrait preview is a Mac dev capability".into()))}
+}
+
+#[tauri::command]
+pub async fn live_select_output(app:tauri::AppHandle,portrait:bool)->EngineResult<()>{use tauri::Manager;tauri::async_runtime::spawn_blocking(move||app.state::<AppState>().live.select_output(portrait)).await.map_err(|e|EngineError::Other(e.to_string()))?.map_err(EngineError::Other)}
+
+#[tauri::command]
+pub async fn live_program_video_wanted(on:bool){
+ #[cfg(all(have_engine,target_os="macos"))]super::portrait::want_program(on);
+ #[cfg(not(all(have_engine,target_os="macos")))]let _=on;
+}
+#[tauri::command]
+pub async fn live_program_video_read()->tauri::ipc::Response {
+ #[cfg(all(have_engine,target_os="macos"))]return tauri::ipc::Response::new(super::portrait::program_frame());
+ #[cfg(not(all(have_engine,target_os="macos")))]tauri::ipc::Response::new(Vec::<u8>::new())
 }

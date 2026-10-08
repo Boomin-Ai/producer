@@ -56,10 +56,10 @@ unsafe fn current_canvas() -> (u32, i32) {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DestinationSpec {
     pub id: String,
-    /// "twitch" | "youtube" | "kick" | "custom"
+    /// Named platform preset or "custom".
     pub kind: String,
     pub credential_id: String,
-    /// Required for kick/custom: the ingest URL.
+    /// Required for platforms with a dashboard-issued ingest URL.
     #[serde(default)]
     pub server: Option<String>,
 }
@@ -227,11 +227,11 @@ unsafe fn create_service(
             );
             "rtmp_common"
         }
-        "kick" | "custom" => {
+        "kick" | "custom" | "facebook" | "instagram" | "rumble" | "tiktok" => {
             let raw = spec
                 .server
                 .as_deref()
-                .ok_or("kick/custom destination needs a server URL")?;
+                .ok_or("destination needs a server URL")?;
             let server = if spec.kind == "kick" {
                 normalize_kick_server(raw)?
             } else {
@@ -369,7 +369,7 @@ impl Session {
     /// Build services (resolving credentials from the keychain, §8), compute
     /// the D2 intersection, create the shared encoders, start every output.
     /// Engine thread only.
-    pub fn start(config: MultiConfig) -> Result<Session, MultiReport> {
+    pub fn start_video(config: MultiConfig, video:*mut ffi::video_t) -> Result<Session, MultiReport> {
         let mut report = MultiReport::failed(Vec::new());
         report.rate_control = "CBR".into();
         let (tx, rx) = std::sync::mpsc::channel::<Ev>();
@@ -474,7 +474,7 @@ impl Session {
                 *EVENT_TX.lock().unwrap() = None;
                 return Err(report);
             }
-            ffi::obs_encoder_set_video(venc, ffi::obs_get_video());
+            ffi::obs_encoder_set_video(venc, video);
             ffi::obs_encoder_set_audio(aenc, ffi::obs_get_audio());
 
             for (i, d) in dests.iter_mut().enumerate() {

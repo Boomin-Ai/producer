@@ -1,10 +1,8 @@
 // The account's flags, resolved once and shared. Every gated surface reads
 // this, so they can never disagree with each other about who you are.
 //
-// Resolution is async (it asks /auth/me), and the answer starts as "no flags"
-// — see lib/featureFlags.ts on failing closed. A brief flicker where a gated
-// panel is absent and then appears for a listed account is the right way
-// round: the wrong way shows a stranger the broken feature and takes it away.
+// Guests are always available. Resolution is async for Mods and Network,
+// which fail closed until /auth/me confirms the allowlist account.
 import { useEffect, useState } from "react";
 import { fetchMe } from "./access";
 import { flagsFor, type FeatureFlag } from "./featureFlags";
@@ -18,7 +16,7 @@ export interface FlagState {
   known: boolean;
 }
 
-const EMPTY: FlagState = { flags: new Set(), email: null, known: false };
+const EMPTY: FlagState = { flags: flagsFor(null), email: null, known: false };
 
 /** The last answer this machine got. NOT authority — /auth/me is, and it
  *  overwrites this the moment it answers. It exists so the FIRST PAINT matches
@@ -34,7 +32,7 @@ function cached(): FlagState {
     const raw = localStorage.getItem(CACHE);
     if (!raw) return EMPTY;
     const v = JSON.parse(raw) as { flags?: string[]; email?: string | null };
-    return { flags: new Set((v.flags ?? []) as FeatureFlag[]), email: v.email ?? null, known: false };
+    return { flags: new Set<FeatureFlag>(["guests", ...((v.flags ?? []) as FeatureFlag[])]), email: v.email ?? null, known: false };
   } catch {
     return EMPTY;
   }
@@ -55,10 +53,10 @@ export function useFeatureFlags(): FlagState {
     const read = () => {
       const ep = activeEndpointId();
       if (!ep) {
-        // No workspace at all (a self-hosted room, a fresh install): gated,
-        // and we KNOW it — this is an answer, not a pending state.
+        // No workspace: public Guests remain available; gated capabilities
+        // stay off. This is an answer, not a pending state.
         if (alive) {
-          const next = { flags: new Set<FeatureFlag>(), email: null, known: true };
+          const next = { flags: flagsFor(null), email: null, known: true };
           remember(next);
           setState(next);
         }
@@ -71,12 +69,10 @@ export function useFeatureFlags(): FlagState {
           remember(next);
           setState(next);
         })
-        // Unreachable = gated. Fail closed.
-        // Unreachable = gated. Fail closed — and remember that, so a machine
-        // that keeps failing does not keep flashing the features on.
+        // Unreachable: only public Guests remain available.
         .catch(() => {
           if (!alive) return;
-          const next = { flags: new Set<FeatureFlag>(), email: null, known: true };
+          const next = { flags: flagsFor(null), email: null, known: true };
           remember(next);
           setState(next);
         });

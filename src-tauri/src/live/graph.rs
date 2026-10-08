@@ -18,6 +18,17 @@ use serde::Serialize;
 
 use super::ffi;
 
+/// Remote voices reach the host's playback device and the program mix.
+/// Bus 1 is the stage return: keeping remotes off it prevents self-return.
+/// Admission starts muted; the existing stage/mixer controls make them audible.
+///
+/// Safety: `src` must be a live OBS source owned by the engine thread.
+pub(super) unsafe fn configure_remote_audio(src: *mut ffi::obs_source_t) {
+    ffi::obs_source_set_muted(src, true);
+    ffi::obs_source_set_audio_mixers(src, 1);
+    ffi::obs_source_set_monitoring_type(src, 2); // MONITOR_AND_OUTPUT
+}
+
 static AUDIO_CALLBACKS: AtomicU64 = AtomicU64::new(0);
 static AUDIO_FRAMES: AtomicU64 = AtomicU64::new(0);
 /// Peak absolute sample value across the probe window, in millionths.
@@ -358,6 +369,61 @@ pub struct SourcesState {
     pub items: Vec<ItemState>,
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct SceneChange {
+    pub id: String,
+    pub patch: TransformPatch,
+    pub muted: Option<bool>,
+}
+
+/// One engine-thread transaction: no restored item becomes active until the
+/// complete opening look has been applied. Queue acceptance is not completion.
+#[derive(Debug, serde::Deserialize)]
+pub struct RoomRestore {
+    pub keep_ids: Vec<String>,
+    pub extras: Vec<RestoreExtra>,
+    pub overlay_window: Option<u32>,
+    pub overlay_url: Option<String>,
+    pub changes: Vec<SceneChange>,
+}
+#[derive(Debug, serde::Deserialize)]
+pub struct RestoreExtra {
+    pub id: String,
+    pub label: String,
+    pub spec: ExtraSpec,
+}
+#[derive(Debug, serde::Serialize)]
+pub struct RoomRestoreResult {
+    pub sources: SourcesState,
+    pub warnings: Vec<String>,
+}
+
+fn complete_restore_plan(sources: &SourcesState, changes: Vec<SceneChange>) -> Vec<SceneChange> {
+    let mut plan: Vec<SceneChange> = sources.items.iter().map(|item| SceneChange {
+        id: item.id.clone(), patch: TransformPatch { visible: Some(false), ..Default::default() }, muted: Some(true),
+    }).collect();
+    for change in changes {
+        if let Some(existing) = plan.iter_mut().find(|existing| existing.id == change.id) { *existing = change; }
+    }
+    plan
+}
+
+/// obs_scene_add defaults to visible. Hide in the SAME scene lock so even
+/// the rendering thread cannot observe a full-frame intermediate source.
+unsafe fn add_scene_item(scene: *mut ffi::obs_scene_t, src: *mut ffi::obs_source_t, visible: bool) -> *mut ffi::obs_sceneitem_t {
+    struct Add { src: *mut ffi::obs_source_t, visible: bool, item: *mut ffi::obs_sceneitem_t }
+    extern "C" fn update(data: *mut c_void, scene: *mut ffi::obs_scene_t) {
+        let add = unsafe { &mut *(data as *mut Add) };
+        unsafe {
+            add.item = ffi::obs_scene_add(scene, add.src);
+            if !add.item.is_null() { ffi::obs_sceneitem_set_visible(add.item, add.visible); }
+        }
+    }
+    let mut add = Add { src, visible, item: ptr::null_mut() };
+    ffi::obs_scene_atomic_update(scene, update, &mut add as *mut _ as *mut _);
+    add.item
+}
+
 impl Default for SourcesState {
     fn default() -> Self {
         SourcesState {
@@ -473,7 +539,11 @@ fn parse_color(hex: &str) -> Option<i64> {
     let r = i64::from_str_radix(&h[0..2], 16).ok()?;
     let g = i64::from_str_radix(&h[2..4], 16).ok()?;
     let b = i64::from_str_radix(&h[4..6], 16).ok()?;
-    let a = if h.len() == 8 { i64::from_str_radix(&h[6..8], 16).ok()? } else { 0xFF };
+    let a = if h.len() == 8 {
+        i64::from_str_radix(&h[6..8], 16).ok()?
+    } else {
+        0xFF
+    };
     Some((a << 24) | (b << 16) | (g << 8) | r)
 }
 
@@ -484,6 +554,14 @@ fn parse_color(hex: &str) -> Option<i64> {
 /// thread only.
 pub struct SceneGraph {
     scene: *mut ffi::obs_scene_t,
+    presentation_generation: u64,
+    presentation: Option<super::presentation::Composition>,
+    presentation_pending: Option<super::presentation::Composition>,
+    presentation_spare:Option<super::presentation::Composition>,
+    presentation_retiring:Option<super::presentation::Composition>,
+    presentation_needs_prewarm:bool,
+    #[cfg(target_os="macos")]
+    portrait: Option<super::portrait::Portrait>,
     overlay: Option<(
         *mut ffi::obs_sceneitem_t,
         *mut ffi::obs_source_t,
@@ -691,9 +769,13 @@ impl SceneGraph {
             if scene.is_null() {
                 return Err("obs_scene_create failed".into());
             }
+            ffi::obs_source_set_audio_mixers(ffi::obs_scene_get_source(scene), 3);
             ffi::obs_set_output_source(0, ffi::obs_scene_get_source(scene));
             Ok(SceneGraph {
                 scene,
+                presentation_generation: 0, presentation: None, presentation_pending: None, presentation_spare:None,presentation_retiring:None,presentation_needs_prewarm:false,
+                #[cfg(target_os="macos")]
+                portrait: None,
                 overlay: None,
                 extras: Vec::new(),
                 thumb_rt: std::ptr::null_mut(),
@@ -776,7 +858,8 @@ impl SceneGraph {
                 id: id.into(),
                 kind: kind.into(),
                 label: label.into(),
-                visible: ffi::obs_sceneitem_visible(item),
+                visible: ffi::obs_sceneitem_visible(item)
+                    && (kind != "mod" || super::filters::mod_video_visible(src)),
                 x: pos.x,
                 y: pos.y,
                 w,
@@ -835,7 +918,55 @@ impl SceneGraph {
     }
 
     /// Apply a transform patch to one item (UI-P1). Engine thread only.
+    pub fn apply_scene(&mut self, changes: &[SceneChange]) -> Result<(), String> {
+        if changes.len() > 128 {
+            return Err("A scene has too many changes".into());
+        }
+        // Validate the entire plan before touching the graph. A missing source
+        // must not leave half a scene on air.
+        for change in changes {
+            if self.item_by_id(&change.id).is_none() {
+                return Err(format!("no item {}", change.id));
+            }
+            let p = &change.patch;
+            if [p.x, p.y, p.w, p.h, p.rot]
+                .into_iter()
+                .flatten()
+                .any(|v| !v.is_finite())
+            {
+                return Err("Scene geometry must be finite".into());
+            }
+            if change.muted.is_some() && self.source_by_id(&change.id).is_none() {
+                return Err(format!("no audio source {}", change.id));
+            }
+        }
+        self.return_presentation(None)?;
+        struct Apply<'a> {
+            graph: &'a mut SceneGraph,
+            changes: &'a [SceneChange],
+        }
+        extern "C" fn update(data: *mut std::os::raw::c_void, _: *mut ffi::obs_scene_t) {
+            let apply = unsafe { &mut *(data as *mut Apply<'_>) };
+            for change in apply.changes {
+                // Validated above; native scene locking prevents a render
+                // observing intermediate geometry or stacking.
+                let _ = apply.graph.set_transform(&change.id, &change.patch);
+                if let Some(muted) = change.muted {
+                    let _ = apply.graph.set_source_audio(&change.id, None, Some(muted));
+                }
+            }
+        }
+        let scene = self.scene;
+        let mut apply = Apply {
+            graph: self,
+            changes,
+        };
+        unsafe { ffi::obs_scene_atomic_update(scene, update, &mut apply as *mut _ as *mut _) };
+        Ok(())
+    }
+
     pub fn set_transform(&mut self, id: &str, t: &TransformPatch) -> Result<(), String> {
+        self.return_presentation(None)?;
         let item = self.item_by_id(id).ok_or_else(|| format!("no item {id}"))?;
         unsafe {
             if t.x.is_some() || t.y.is_some() {
@@ -879,7 +1010,17 @@ impl SceneGraph {
                 ffi::obs_sceneitem_set_order_position(item, z.max(0));
             }
             if let Some(v) = t.visible {
-                ffi::obs_sceneitem_set_visible(item, v);
+                let src = ffi::obs_sceneitem_get_source(item);
+                let is_mod = self
+                    .extras
+                    .iter()
+                    .any(|extra| extra.item == item && extra.kind == "mod");
+                if is_mod {
+                    super::filters::set_mod_video_visible(src, v)?;
+                    ffi::obs_sceneitem_set_visible(item, v || !ffi::obs_source_muted(src));
+                } else {
+                    ffi::obs_sceneitem_set_visible(item, v);
+                }
             }
         }
         Ok(())
@@ -890,6 +1031,10 @@ impl SceneGraph {
     /// native CEF (`browser_source`); fails truthfully on engines built
     /// without obs-browser. None clears.
     pub fn set_overlay(&mut self, spec: OverlaySpec) -> Result<(), String> {
+        self.set_overlay_visible(spec, true)
+    }
+
+    fn set_overlay_visible(&mut self, spec: OverlaySpec, visible: bool) -> Result<(), String> {
         unsafe {
             if let Some((item, src, _)) = self.overlay.take() {
                 ffi::obs_sceneitem_remove(item);
@@ -992,7 +1137,8 @@ impl SceneGraph {
                 ffi::obs_source_set_monitoring_type(src, 1);
                 eprintln!("[test] overlay forced to MONITOR_ONLY");
             }
-            let item = ffi::obs_scene_add(self.scene, src);
+            ffi::obs_source_set_muted(src, !visible);
+            let item = add_scene_item(self.scene, src, visible);
             if item.is_null() {
                 ffi::obs_source_release(src);
                 return Err("scene add failed for overlay".into());
@@ -1003,7 +1149,7 @@ impl SceneGraph {
             ffi::obs_sceneitem_set_bounds(item, &bounds);
             let pos = ffi::vec2 { x: 0.0, y: 0.0 };
             ffi::obs_sceneitem_set_pos(item, &pos);
-            ffi::obs_sceneitem_set_visible(item, true);
+            ffi::obs_sceneitem_set_visible(item, visible);
             self.overlay = Some((item, src, spec));
         }
         Ok(())
@@ -1110,6 +1256,7 @@ impl SceneGraph {
             ffi::obs_sceneitem_set_visible(item, true);
             // Above every real item — the whole point is to hide the cut.
             ffi::obs_sceneitem_set_order_position(item, 999);
+            ffi::obs_source_set_audio_mixers(src, 3);
             let dur = ffi::obs_source_media_get_duration(src);
             self.stinger = Some((item, src));
             Ok(dur.max(0))
@@ -1131,6 +1278,11 @@ impl SceneGraph {
     /// caller-chosen (the room document owns it, so a room can respawn its
     /// items with stable identity); duplicates are refused.
     pub fn add_extra(&mut self, id: &str, label: &str, spec: &ExtraSpec) -> Result<(), String> {
+        self.return_presentation(None)?;
+        self.add_extra_visible(id, label, spec, true)
+    }
+
+    fn add_extra_visible(&mut self, id: &str, label: &str, spec: &ExtraSpec, visible: bool) -> Result<(), String> {
         if id == "overlay" || self.extras.iter().any(|e| e.id == id) {
             return Err(format!("an item named {id} already exists"));
         }
@@ -1334,7 +1486,10 @@ impl SceneGraph {
                     "{type_id} creation failed — is its module in this engine?"
                 ));
             }
-            let item = ffi::obs_scene_add(self.scene, src);
+            let remote = matches!(spec, ExtraSpec::Guest { .. } | ExtraSpec::Mod { .. });
+            let born_visible = visible && !remote;
+            if !born_visible { ffi::obs_source_set_muted(src, true); }
+            let item = add_scene_item(self.scene, src, born_visible);
             if item.is_null() {
                 ffi::obs_source_release(src);
                 return Err("scene add failed".into());
@@ -1352,25 +1507,24 @@ impl SceneGraph {
                 let pos = ffi::vec2 { x: 80.0, y: 80.0 };
                 ffi::obs_sceneitem_set_pos(item, &pos);
             }
-            // Guests are created HIDDEN: being admitted puts someone in the
-            // room, not on the air. Every other kind appears immediately —
-            // you added it because you want to see it. Doing this here rather
-            // than with a follow-up transform removes a race where the hide
-            // could arrive before the item existed.
+            // Restored items and remotes are born hidden under the scene lock.
+            // Interactive additions alone appear immediately. A follow-up hide
+            // is too late: a render frame can happen between the two commands.
+            if remote {
+                configure_remote_audio(src);
+            } else {
+                ffi::obs_source_set_audio_mixers(src, 3);
+            }
             // Leak test: force this source monitor-only so a recording can be
             // inspected against a known loud signal. Env-gated, dev only.
             if std::env::var("PRODUCER_TEST_MONITOR").as_deref() == Ok("1") {
                 ffi::obs_source_set_monitoring_type(src, 1);
                 eprintln!("[test] {id} forced to MONITOR_ONLY");
             }
-            let born_visible = !matches!(spec, ExtraSpec::Guest { .. } | ExtraSpec::Mod { .. });
-            ffi::obs_sceneitem_set_visible(item, born_visible);
-            // A guest in the room is SEEN, NOT HEARD: they arrive muted and
-            // stay muted until put on screen. Preview is for judging whether
-            // someone is ready, not for putting their kitchen into the show.
-            if !born_visible {
-                ffi::obs_source_set_muted(src, true);
+            if kind == "mod" {
+                super::filters::set_mod_video_visible(src, false)?;
             }
+            ffi::obs_sceneitem_set_visible(item, born_visible);
             // Meter every audio-bearing extra the mixer shows a strip for.
             if metered(kind) {
                 peak_slot_register(src);
@@ -1388,8 +1542,87 @@ impl SceneGraph {
         Ok(())
     }
 
+    /// Rebinding a device/window/page must retain its current scene state.
+    /// Create hidden and dress it before visibility, including during a live show.
+    pub fn replace_extra(&mut self, id: &str, label: &str, spec: &ExtraSpec, initial: Option<SceneChange>) -> Result<SourcesState, String> {
+        let previous = self.state().items.into_iter().find(|item| item.id == id);
+        let change = previous.as_ref().map(|item| SceneChange {
+            id: id.into(), patch: TransformPatch {
+                x: Some(item.x), y: Some(item.y), w: Some(item.w), h: Some(item.h),
+                rot: Some(item.rot), crop_left: Some(item.crop_left), crop_top: Some(item.crop_top),
+                crop_right: Some(item.crop_right), crop_bottom: Some(item.crop_bottom),
+                z: Some(item.z), visible: Some(item.visible),
+            }, muted: Some(item.muted),
+        }).or(initial).unwrap_or_else(|| SceneChange {
+            id: id.into(), patch: TransformPatch { visible: Some(false), ..Default::default() }, muted: Some(true),
+        });
+        if change.id != id { return Err("Replacement source identity does not match".into()); }
+        if previous.is_some() { self.remove_extra(id)?; }
+        self.add_extra_visible(id, label, spec, false)?;
+        if let Some(item) = previous {
+            self.set_source_audio(id, Some(item.volume), None)?;
+            unsafe { ffi::obs_source_set_sync_offset(self.source_by_id(id).unwrap(), item.sync_ms * 1_000_000); }
+        }
+        self.apply_scene(&[change])?;
+        Ok(self.state())
+    }
+
+    pub fn restore_room(&mut self, restore: RoomRestore) -> Result<RoomRestoreResult, String> {
+        // Validate before teardown. A malformed document cannot partially go on air.
+        if restore.extras.len() > 128 || restore.changes.len() > 128 {
+            return Err("A room has too many sources".into());
+        }
+        self.return_presentation(None)?;
+        self.presentation_generation += 1;
+        self.stop_stinger();
+        let hide: Vec<SceneChange> = self.state().items.iter().map(|item| SceneChange {
+            id: item.id.clone(), patch: TransformPatch { visible: Some(false), ..Default::default() }, muted: Some(true),
+        }).collect();
+        self.apply_scene(&hide)?;
+        let remove: Vec<String> = self.extras.iter().filter(|extra| !restore.keep_ids.contains(&extra.id))
+            .map(|extra| extra.id.clone()).collect();
+        for id in remove { self.remove_extra(&id)?; }
+        let mut warnings = Vec::new();
+        for extra in restore.extras {
+            if let Err(error) = self.add_extra_visible(&extra.id, &extra.label, &extra.spec, false) {
+                warnings.push(format!("{}: {}", extra.label, error));
+            }
+        }
+        let overlay = if let Some(id) = restore.overlay_window {
+            OverlaySpec::Window { id, color_key: true }
+        } else if let Some(url) = restore.overlay_url {
+            OverlaySpec::Browser { url }
+        } else { OverlaySpec::None };
+        let same = match (self.overlay.as_ref().map(|(_, _, spec)| spec), &overlay) {
+            (Some(OverlaySpec::Window { id: a, .. }), OverlaySpec::Window { id: b, .. }) => a == b,
+            (Some(OverlaySpec::Browser { url: a }), OverlaySpec::Browser { url: b }) => a == b,
+            (None, OverlaySpec::None) => true,
+            _ => false,
+        };
+        if !same {
+            if let Err(error) = self.set_overlay_visible(overlay, false) { warnings.push(format!("Overlay: {error}")); }
+        }
+        // A failed device stays absent; every remaining item receives a plan.
+        // Never expose a source merely because it was created last.
+        let changes = complete_restore_plan(&self.state(), restore.changes);
+        self.apply_scene(&changes)?;
+        Ok(RoomRestoreResult { sources: self.state(), warnings })
+    }
+
     /// Remove one open-list item and release its source.
+    pub fn clear_room(&mut self) -> Result<(), String> {
+        self.return_presentation(None)?;
+        self.presentation_generation += 1;
+        self.set_overlay(OverlaySpec::None)?;
+        let ids: Vec<String> = self.extras.iter().map(|e| e.id.clone()).collect();
+        for id in ids {
+            self.remove_extra(&id)?;
+        }
+        Ok(())
+    }
+
     pub fn remove_extra(&mut self, id: &str) -> Result<(), String> {
+        self.return_presentation(None)?;
         let idx = self
             .extras
             .iter()
@@ -1496,6 +1729,7 @@ impl SceneGraph {
     /// Re-fit scene items after a video-settings change: the overlay's
     /// full-frame bounds derive from the base size.
     pub fn relayout(&mut self) {
+        let _ = self.return_presentation(None);
         if let Some((item, _, _)) = self.overlay {
             let (bw, bh) = Self::base_size();
             unsafe {
@@ -1531,13 +1765,26 @@ impl SceneGraph {
         let src = self
             .source_by_id(id)
             .ok_or_else(|| format!("{id} is not on the stage"))?;
+        let normal_monitoring = if self
+            .extras
+            .iter()
+            .any(|extra| extra.id == id && matches!(extra.kind, "guest" | "mod"))
+        {
+            2
+        } else {
+            0
+        };
         unsafe {
             // Cue implies audible: a muted source is silent everywhere,
             // monitoring included.
-            ffi::obs_source_set_muted(src, false);
-            ffi::obs_source_set_monitoring_type(src, if on { 1 } else { 0 });
+            // Mute before leaving cue so restoring program output cannot leak
+            // green-room audio between the monitoring and mute calls.
             if !on {
                 ffi::obs_source_set_muted(src, true);
+            }
+            ffi::obs_source_set_monitoring_type(src, if on { 1 } else { normal_monitoring });
+            if on {
+                ffi::obs_source_set_muted(src, false);
             }
         }
         Ok(())
@@ -1560,6 +1807,17 @@ impl SceneGraph {
             }
             if let Some(m) = muted {
                 ffi::obs_source_set_muted(src, m);
+                if let Some(extra) = self
+                    .extras
+                    .iter()
+                    .find(|extra| extra.src == src && extra.kind == "mod")
+                {
+                    // An audible moderator remains active even with its video hidden.
+                    ffi::obs_sceneitem_set_visible(
+                        extra.item,
+                        super::filters::mod_video_visible(src) || !m,
+                    );
+                }
             }
         }
         Ok(())
@@ -1601,6 +1859,7 @@ pub fn attach_capture_sources() -> Result<(), String> {
             return Err("mic source creation failed".into());
         }
         ffi::obs_set_output_source(0, screen);
+        ffi::obs_source_set_audio_mixers(mic, 3);
         ffi::obs_set_output_source(1, mic);
         ffi::obs_source_release(screen);
         ffi::obs_source_release(mic);
@@ -1697,6 +1956,7 @@ pub fn capture_probe(window: Duration) -> CaptureProbeReport {
 
     unsafe {
         ffi::obs_set_output_source(0, screen);
+        ffi::obs_source_set_audio_mixers(mic, 3);
         ffi::obs_set_output_source(1, mic);
         if !mic.is_null() {
             ffi::obs_source_add_audio_capture_callback(mic, audio_cb, ptr::null_mut());
@@ -1765,6 +2025,25 @@ pub fn capture_probe(window: Duration) -> CaptureProbeReport {
 
 impl SceneGraph {
     /// Cheap gate: does any metered extra exist at all?
+    /// Peek without draining the UI meters. Only microphone inputs duck DJ;
+    /// music, guest audio and browser chat must not duck themselves.
+    pub fn dj_speaking(&self) -> bool {
+        self.extras.iter().filter(|e| e.kind == "mic").any(|e| {
+            unsafe {
+                if ffi::obs_source_muted(e.src)
+                    || !ffi::obs_source_active(e.src)
+                    || ffi::obs_source_get_volume(e.src) <= 0.
+                {
+                    return false;
+                }
+            }
+            EXTRA_PEAKS.iter().any(|(src, peak)| {
+                src.load(Ordering::Relaxed) == e.src as usize
+                    && peak.load(Ordering::Relaxed) > 45000
+            })
+        })
+    }
+
     pub fn take_extra_peaks_ids_empty(&self) -> bool {
         !self.extras.iter().any(|e| metered(e.kind))
     }
@@ -1841,6 +2120,7 @@ pub struct ThumbHub {
     /// lib/monitorFeed.ts). Adds the `program` target — the output source
     /// itself — at PROGRAM_THUMB_FPS even with the guests panel hidden.
     pub program_wanted: std::sync::atomic::AtomicBool,
+    pub program_portrait: std::sync::atomic::AtomicBool,
     frame_no: std::sync::atomic::AtomicU32,
     rings: std::sync::Mutex<std::collections::HashMap<String, ThumbRing>>,
     pub slots: std::sync::Mutex<std::collections::HashMap<String, ThumbSlot>>,
@@ -1859,6 +2139,7 @@ impl ThumbHub {
             targets: std::sync::Mutex::new(Vec::new()),
             fps: std::sync::atomic::AtomicU32::new(0),
             program_wanted: std::sync::atomic::AtomicBool::new(false),
+            program_portrait: std::sync::atomic::AtomicBool::new(false),
             frame_no: std::sync::atomic::AtomicU32::new(0),
             rings: std::sync::Mutex::new(std::collections::HashMap::new()),
             slots: std::sync::Mutex::new(std::collections::HashMap::new()),
@@ -1899,6 +2180,9 @@ impl ThumbHub {
             .program_wanted
             .load(std::sync::atomic::Ordering::Relaxed)
         {
+            #[cfg(target_os="macos")]
+            if self.program_portrait.load(std::sync::atomic::Ordering::Relaxed){scene.portrait.as_ref().map(|p|unsafe{p.program_source()}).unwrap_or(std::ptr::null_mut())}else{unsafe{ffi::obs_get_output_source(0)}}
+            #[cfg(not(target_os="macos"))]
             unsafe { ffi::obs_get_output_source(0) }
         } else {
             std::ptr::null_mut()
@@ -2077,4 +2361,360 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
     }
     *hub.wake_flag.lock().unwrap() = true;
     hub.wake.notify_one();
+}
+
+#[cfg(test)]
+mod scene_restoration_tests {
+    use super::*;
+
+    fn change(id: &str, visible: bool) -> SceneChange {
+        SceneChange { id: id.into(), patch: TransformPatch { visible: Some(visible), ..Default::default() }, muted: Some(!visible) }
+    }
+    #[test]
+    fn restore_plan_hides_unmentioned_sources_and_ignores_failed_creations() {
+        let sources = SourcesState { items: ["camera", "media", "overlay", "mic"].into_iter()
+            .map(|id| ItemState { id: id.into(), visible: true, ..Default::default() }).collect(), ..Default::default() };
+        let plan = complete_restore_plan(&sources, vec![change("camera", true), change("failed-device", true)]);
+        assert_eq!(plan.len(), 4);
+        assert_eq!(plan.iter().filter(|change| change.patch.visible == Some(true)).map(|change| change.id.as_str()).collect::<Vec<_>>(), vec!["camera"]);
+        assert!(plan.iter().filter(|change| change.id != "camera").all(|change| change.muted == Some(true)));
+        assert!(complete_restore_plan(&sources, vec![]).iter().all(|change| change.patch.visible == Some(false) && change.muted == Some(true)));
+    }
+
+    /// Isolated real compositor test. No camera, microphone, room database,
+    /// network, virtual camera or recorder. Run separately from pure tests.
+    #[test]
+    #[ignore = "requires the bundled native engine and graphics device"]
+    fn native_scene_restore_never_renders_another_scenes_source() {
+        use std::sync::atomic::AtomicU32;
+        static FRAMES: AtomicU32 = AtomicU32::new(0);
+        static PIXEL: AtomicU32 = AtomicU32::new(0);
+        static RED_FRAMES: AtomicU32 = AtomicU32::new(0);
+        static BLACK_FRAMES: AtomicU32 = AtomicU32::new(0);
+        extern "C" fn frame(_: *mut c_void, data: *mut ffi::video_data) {
+            unsafe {
+                if data.is_null() || (*data).data[0].is_null() { return; }
+                let p = (*data).data[0];
+                let (b, g, r) = (*p as u32, *p.add(1) as u32, *p.add(2) as u32);
+                PIXEL.store((r << 16) | (g << 8) | b, Ordering::SeqCst);
+                if r == 0 && g == 0 && b == 0 { BLACK_FRAMES.fetch_add(1, Ordering::SeqCst); }
+                else { BLACK_FRAMES.store(0, Ordering::SeqCst); }
+                if r > 150 && g < 70 { RED_FRAMES.fetch_add(1, Ordering::SeqCst); }
+                FRAMES.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        #[repr(C)]
+        struct Scale { format: i32, width: u32, height: u32, range: i32, colorspace: i32 }
+        fn await_pixel(expected: u32) {
+            let start = Instant::now();
+            while start.elapsed() < Duration::from_secs(3) {
+                let pixel = PIXEL.load(Ordering::SeqCst);
+                if expected == 0 && pixel & 0xffffff == 0 { return; }
+                if expected == 0x00ff00 && (pixel >> 8) & 255 > 150 && (pixel >> 16) & 255 < 70 { return; }
+                if expected == 0xff0000 && (pixel >> 16) & 255 > 150 && (pixel >> 8) & 255 < 70 { return; }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            panic!("expected pixel {expected:x}, got {:x}", PIXEL.load(Ordering::SeqCst));
+        }
+        let temp = std::env::temp_dir().join(format!("producer-scene-proof-{}", std::process::id()));
+        let report = super::super::engine::bootstrap_with_config(&temp);
+        assert!(report.ok, "native bootstrap: {report:?}");
+        let mut graph = SceneGraph::create().unwrap();
+        let scale = Scale { format: 7, width: 1280, height: 720, range: 2, colorspace: 2 };
+        unsafe { ffi::obs_add_raw_video_callback(&scale as *const _ as *const c_void, frame, ptr::null_mut()); }
+        let green = ExtraSpec::Color { color: "#00ff00".into() };
+        let red = ExtraSpec::Color { color: "#ff0000".into() };
+        // Reproduce the old race on the real graph: normal additions are
+        // visible, and applying only the first known item leaves Scene 2 on top.
+        graph.add_extra("scene-1", "Scene 1 green", &green).unwrap();
+        graph.add_extra("scene-2", "Scene 2 red", &red).unwrap();
+        graph.apply_scene(&[change("scene-1", true)]).unwrap();
+        await_pixel(0xff0000);
+        assert!(RED_FRAMES.load(Ordering::SeqCst) > 0, "old startup must reproduce the leak");
+        graph.clear_room().unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+        await_pixel(0);
+        let drain = Instant::now();
+        while BLACK_FRAMES.load(Ordering::SeqCst) < 10 && drain.elapsed() < Duration::from_secs(3) {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(BLACK_FRAMES.load(Ordering::SeqCst) >= 10, "drain the old reproduction's video pipeline");
+        RED_FRAMES.store(0, Ordering::SeqCst);
+        // Deliberately let the renderer run between source creations. The old
+        // path displayed the LAST created source before/after an incomplete cut.
+        graph.add_extra_visible("scene-1", "Scene 1 green", &green, false).unwrap();
+        graph.add_extra_visible("scene-2", "Scene 2 red", &red, false).unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+        assert_eq!(RED_FRAMES.load(Ordering::SeqCst), 0);
+        assert!(graph.state().items.iter().all(|item| !item.visible && item.muted));
+        for round in 0..20 {
+            let keep_ids = if round % 2 == 0 { vec!["scene-1".into(), "scene-2".into()] } else { vec![] };
+            let extras = if keep_ids.is_empty() { vec![
+                RestoreExtra { id: "scene-1".into(), label: "Scene 1 green".into(), spec: green.clone() },
+                RestoreExtra { id: "scene-2".into(), label: "Scene 2 red".into(), spec: red.clone() },
+            ] } else { vec![] };
+            let result = graph.restore_room(RoomRestore { keep_ids, extras, overlay_window: None, overlay_url: None, changes: vec![change("scene-1", true)] }).unwrap();
+            assert!(result.warnings.is_empty());
+            assert_eq!(result.sources.items.iter().filter(|item| item.visible).map(|item| item.id.as_str()).collect::<Vec<_>>(), vec!["scene-1"]);
+            await_pixel(0x00ff00);
+            std::thread::sleep(Duration::from_millis(200));
+        }
+        // Device/page replacement of a source in another scene stays hidden.
+        for _ in 0..5 {
+            let replaced = graph.replace_extra("scene-2", "Replaced scene 2", &red, None).unwrap();
+            assert!(!replaced.items.iter().find(|item| item.id == "scene-2").unwrap().visible);
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        let result = graph.restore_room(RoomRestore { keep_ids: vec!["scene-1".into(), "scene-2".into()],
+            extras: vec![RestoreExtra { id: "bad-camera".into(), label: "Unavailable camera".into(), spec: ExtraSpec::Camera { device: Some("\0".into()) } }],
+            overlay_window: None, overlay_url: None, changes: vec![change("bad-camera", true)] }).unwrap();
+        assert_eq!(result.warnings.len(), 1);
+        assert!(result.sources.items.iter().all(|item| !item.visible && item.muted));
+        std::thread::sleep(Duration::from_millis(200));
+        await_pixel(0);
+        // Different room replaces the old catalog, not merely its label.
+        let result = graph.restore_room(RoomRestore { keep_ids: vec![], extras: vec![], overlay_window: None, overlay_url: None, changes: vec![] }).unwrap();
+        assert!(result.sources.items.is_empty());
+        assert!(FRAMES.load(Ordering::SeqCst) > 10, "the real compositor must have rendered");
+        assert_eq!(RED_FRAMES.load(Ordering::SeqCst), 0, "another scene leaked into program frames");
+        unsafe {
+            ffi::obs_remove_raw_video_callback(frame, ptr::null_mut());
+            ffi::obs_set_output_source(0, ptr::null_mut());
+            ffi::obs_scene_release(graph.scene);
+            ffi::obs_shutdown();
+        }
+        eprintln!("PASS: old startup leak reproduced; {} native program frames; 20 cold/hot restores, zero other-scene frames, empty scene, failed source and room replacement", FRAMES.load(Ordering::SeqCst));
+    }
+}
+
+impl SceneGraph {
+    #[cfg(target_os="macos")]
+    pub fn portrait_room(&mut self)->Result<SourcesState,String>{
+        if self.portrait.is_none(){self.portrait=Some(unsafe{super::portrait::Portrait::create()?});}
+        unsafe{self.portrait.as_mut().unwrap().room();}self.sync_portrait_room();Ok(self.portrait_state())
+    }
+    #[cfg(target_os="macos")]
+    pub fn sync_portrait_room(&mut self){
+        if self.portrait.is_none(){return;}
+        let states=self.state().items;let captures=states.iter().filter(|s|s.kind!="mic").filter_map(|s|self.source_by_id(&s.id).map(|src|(s.id.clone(),src))).collect();
+        let mut info=std::mem::MaybeUninit::<ffi::obs_video_info>::zeroed();unsafe{if ffi::obs_get_video_info(info.as_mut_ptr()){let info=info.assume_init();self.portrait.as_mut().unwrap().sync_room(states,captures,info.base_width as f32,info.base_height as f32);}}
+    }
+    #[cfg(target_os="macos")]
+    pub fn portrait_state(&self)->SourcesState{SourcesState{overlay_window:None,overlay_url:None,items:self.portrait.as_ref().map(|p|p.room_states()).unwrap_or_default()}}
+    #[cfg(target_os="macos")]
+    pub fn portrait_transform(&mut self,id:&str,t:TransformPatch)->Result<SourcesState,String>{self.portrait.as_mut().ok_or("Portrait room is not active")?.transform(id,t)?;self.sync_portrait_room();Ok(self.portrait_state())}
+    #[cfg(target_os="macos")]
+    pub fn portrait_canvas(&mut self)->Result<*mut super::portrait::Canvas,String>{if self.portrait.is_none(){self.portrait_room()?;}Ok(self.portrait.as_ref().unwrap().canvas)}
+    #[cfg(target_os="macos")]
+    pub fn portrait_warm(&mut self,request:super::presentation::Request)->Result<std::sync::Arc<super::presentation::Bridge>,String>{
+        if self.portrait.as_ref().is_some_and(|p|p.active.is_some()){return Err("A portrait set is already on output".into());}self.portrait_prepare(request)
+    }
+    #[cfg(target_os="macos")]
+    pub fn portrait_prepare(&mut self,request:super::presentation::Request)->Result<std::sync::Arc<super::presentation::Bridge>,String>{
+        if request.generation!=self.presentation_generation{return Err("Room changed during portrait preparation".into());}
+        let items=self.state().items;let mut captures=std::collections::HashMap::new();
+        for(slot,id)in &request.bindings{let item=items.iter().find(|i|&i.id==id).ok_or("Source left the room")?;if !item.visible||!item.has_frame||item.kind=="mic"{return Err("Portrait sources must be ready on the room scene".into());}captures.insert(slot.clone(),self.source_by_id(id).ok_or("Source unavailable")?);}
+        if self.portrait.is_none(){self.portrait=Some(unsafe{super::portrait::Portrait::create()?});}
+        unsafe{self.portrait.as_mut().unwrap().prepare(request,captures)}
+    }
+    #[cfg(target_os="macos")]
+    pub fn portrait_abort(&mut self,token:&str,revision:u64){if let Some(p)=self.portrait.as_mut(){if let Some(a)=p.active.as_mut(){a.abort_patch(token,revision);}if p.pending.as_ref().is_some_and(|s|s.bridge.token==token&&s.request.projection.revision==revision){p.pending=None;}}}
+    #[cfg(target_os="macos")]
+    pub fn portrait_commit(&mut self,token:&str,placements:Vec<super::presentation::Placement>)->Result<(),String>{
+        let portrait=self.portrait.as_ref().ok_or("Portrait preparation cancelled")?;
+        let pending=portrait.pending.as_ref().or_else(||portrait.active.as_ref().filter(|p|p.pending_patch.is_some())).ok_or("Portrait preparation cancelled")?;
+        for id in pending.request.bindings.values(){if !self.state().items.iter().any(|i|&i.id==id&&i.visible&&i.has_frame){return Err("Portrait source stopped during preparation".into());}}
+        unsafe{self.portrait.as_mut().unwrap().commit(token,placements,self.presentation_generation)}
+    }
+    #[cfg(target_os="macos")]
+    pub fn portrait_video(&mut self)->Result<*mut ffi::video_t,String>{self.portrait_canvas()?;Ok(unsafe{self.portrait.as_ref().unwrap().video()})}
+    #[cfg(target_os="macos")]
+    pub fn portrait_stop(&mut self){self.portrait=None;}
+    #[cfg(target_os="macos")]
+    pub fn portrait_frame(&self)->String{self.portrait.as_ref().map(|p|p.jpeg()).unwrap_or_default()}
+    pub fn presentation_status(&self)->super::presentation::Status {
+        super::presentation::Status {generation:self.presentation_generation,lease:self.presentation.as_ref().map(|p|p.request.lease.clone()),revision:self.presentation.as_ref().map_or(0,|p|p.request.projection.revision)}
+    }
+    pub fn warm_presentation(&mut self,request:super::presentation::Request)->Result<std::sync::Arc<super::presentation::Bridge>,String>{
+        if self.presentation.is_some(){return Err("A set is already on output".into());}self.prepare_presentation(request)
+    }
+    pub fn prepare_presentation(&mut self, mut request:super::presentation::Request)->Result<std::sync::Arc<super::presentation::Bridge>,String> {
+        if let Some(active)=self.presentation.as_ref().or(self.presentation_pending.as_ref()){super::presentation::hydrate(&mut request,&active.request);}
+        super::presentation::validate_cached(&request,self.presentation.as_ref().or(self.presentation_pending.as_ref()).map(|p|&p.request.projection.assets))?;
+        if request.generation!=self.presentation_generation {return Err("Room changed; prepare this set again".into());}
+        if let Some(active)=&self.presentation {
+            if active.request.lease!=request.lease || request.projection.revision<=active.pending_patch.as_ref().map_or(active.request.projection.revision,|p|p.projection.revision) {return Err("Set lease or revision is stale".into());}
+        }
+        let items=self.state().items;
+        let mut captures=std::collections::HashMap::new();
+        for (slot,id) in &request.bindings {
+            let item=items.iter().find(|i| &i.id==id).ok_or_else(||format!("Source for {slot} left the room"))?;
+            if !item.has_frame || item.kind=="mic" {return Err(format!("{} has no video frame yet. Start the camera or choose another video source",item.label));}
+            captures.insert(slot.clone(),self.source_by_id(id).ok_or("Source is unavailable")?);
+        }
+        if let Some(active)=self.presentation.as_mut(){if active.can_patch(&request,&captures){eprintln!("[set-perf] path=patch revision={}",request.projection.revision);let clock=request.projection.timeline.as_ref().map(|t|t.clock.clone());let bridge=active.patch(request);if let(Some(old),Some(clock))=(&mut self.presentation_retiring,clock){old.synchronize_retired_clock(&clock);}return Ok(bridge);}}
+        self.finish_presentation_transition(true);
+        let candidate=if let Some(mut spare)=self.presentation_pending.take().or(self.presentation_spare.take()).filter(|p|p.same_size(&request)){
+            if spare.can_promote(&request,&captures){eprintln!("[set-perf] path=promote revision={}",request.projection.revision);unsafe{spare.promote(request)?;}}
+            else{eprintln!("[set-perf] path=warm revision={}",request.projection.revision);unsafe{spare.reuse(request,captures);}}spare
+        }else{eprintln!("[set-perf] path=cold revision={}",request.projection.revision);unsafe {super::presentation::Composition::build(request,captures)?}};
+        let bridge=candidate.bridge.clone();self.presentation_pending=Some(candidate);Ok(bridge)
+    }
+    pub fn abort_presentation(&mut self, token:&str,revision:u64) {
+        if let Some(active)=self.presentation.as_mut(){active.abort_patch(token,revision);}
+        if self.presentation_pending.as_ref().is_some_and(|p|p.bridge.token==token&&p.request.projection.revision==revision) { self.presentation_pending=None; }
+    }
+    pub fn commit_presentation(
+        &mut self,
+        token: &str,
+        placements: Vec<super::presentation::Placement>,
+    ) -> Result<super::presentation::Status, String> {
+        if let Some(active)=self.presentation.as_mut(){if active.commit_patch(token,self.presentation_generation)?{self.presentation_needs_prewarm=true;return Ok(self.presentation_status());}}
+        if !self.presentation_pending.as_ref().is_some_and(|p| {
+            p.bridge.token == token && p.request.generation == self.presentation_generation
+        }) {
+            return Err("Set preparation was replaced or cancelled".into());
+        }
+        let mut candidate = self.presentation_pending.take().unwrap();
+        for (slot, id) in &candidate.request.bindings {
+            if !self
+                .state()
+                .items
+                .iter()
+                .any(|i| &i.id == id && i.visible && i.has_frame)
+                || self.source_by_id(id).is_none()
+            {
+                return Err(format!("Source for {slot} is no longer ready"));
+            }
+        }
+        unsafe {
+            candidate.finish_preparation(placements)?;
+        }
+        let fade=candidate.has_crossfade()&&self.presentation.is_some();
+        if fade{super::filters::set_opacity(unsafe{ffi::obs_scene_get_source(candidate.scene)},0.)?;}
+        struct Swap<'a> {
+            graph: &'a mut SceneGraph,
+            candidate: Option<super::presentation::Composition>,
+            failed: bool,
+            retired: Option<super::presentation::Composition>,
+            fade:bool,
+        }
+        extern "C" fn swap_graph(data: *mut c_void, _: *mut ffi::obs_scene_t) {
+            unsafe {
+                let swap = &mut *(data as *mut Swap<'_>);
+                let candidate = swap.candidate.as_mut().unwrap();
+                candidate.item = ffi::obs_scene_add(
+                    swap.graph.scene,
+                    ffi::obs_scene_get_source(candidate.scene),
+                );
+                if candidate.item.is_null() {
+                    swap.failed = true;
+                    return;
+                }
+                ffi::obs_sceneitem_set_order_position(candidate.item, i32::MAX);
+                // Every nested source is video-only; the original room scene and
+                // its single audio path remain untouched beneath the opaque backdrop.
+                swap.retired = swap.graph.presentation.take();
+                if !swap.fade{if let Some(old)=&swap.retired{ffi::obs_sceneitem_set_visible(old.item,false);}}
+                candidate.activate_animation(swap.fade);
+                swap.graph.presentation = swap.candidate.take();
+            }
+        }
+        let scene = self.scene;
+        let mut swap = Swap {
+            graph: self,
+            candidate: Some(candidate),
+            failed: false,
+            retired: None,
+            fade,
+        };
+        unsafe {
+            ffi::obs_scene_atomic_update(scene, swap_graph, &mut swap as *mut _ as *mut _);
+        }
+        // Destroy item render targets outside the scene's atomic lock. The
+        // graphics thread takes graphics -> scene locks; releasing targets
+        // while holding scene -> graphics locks can deadlock repeated cuts.
+        let failed=swap.failed;let retired=swap.retired.take();drop(swap);
+        if let Some(mut old)=retired{if fade{self.presentation_retiring=Some(old);}else{unsafe{if !old.item.is_null(){ffi::obs_sceneitem_remove(old.item);old.item=std::ptr::null_mut();}}self.presentation_spare=Some(old);}}
+        self.presentation_needs_prewarm=true;
+        #[cfg(debug_assertions)]
+        if std::env::var_os("PRODUCER_SET_OUTPUT_PROBE").is_some() {
+            unsafe {
+                if let Some(p) = &self.presentation {
+                    let mut pos=ffi::vec2{x:0.,y:0.};ffi::obs_sceneitem_get_pos(p.item,&mut pos);
+                    let current=ffi::obs_get_output_source(0);
+                    eprintln!("[set-probe] visible={} order={} pos={},{} size={}x{} program-is-room={}",ffi::obs_sceneitem_visible(p.item),ffi::obs_sceneitem_get_order_position(p.item),pos.x,pos.y,ffi::obs_source_get_width(ffi::obs_scene_get_source(p.scene)),ffi::obs_source_get_height(ffi::obs_scene_get_source(p.scene)),current==ffi::obs_scene_get_source(self.scene));
+                    if !current.is_null(){ffi::obs_source_release(current);}
+                }
+            }
+        }
+
+        if failed {
+            return Err("Set activation failed; room output was kept".into());
+        }
+        Ok(self.presentation_status())
+    }
+    pub fn warm_ready_buffers(&mut self){
+        self.finish_presentation_transition(false);
+        if self.presentation_needs_prewarm&&self.presentation_retiring.is_none(){self.presentation_needs_prewarm=false;self.prewarm_presentation();}
+        if let Some(spare)=self.presentation_spare.as_mut(){unsafe{spare.warm_proxies();}}
+        if self.presentation.is_none(){if let Some(pending)=self.presentation_pending.as_mut(){unsafe{pending.warm_proxies();}}}
+        #[cfg(target_os="macos")]
+        if let Some(portrait)=self.portrait.as_mut(){unsafe{portrait.prewarm();}if let Some(spare)=portrait.spare.as_mut(){unsafe{spare.warm_proxies();}}if portrait.active.is_none(){if let Some(pending)=portrait.pending.as_mut(){unsafe{pending.warm_proxies();}}}}
+    }
+    fn finish_presentation_transition(&mut self,force:bool){
+        if self.presentation_retiring.is_none()||!force&&self.presentation.as_ref().is_some_and(|p|!p.transition_finished()){return;}
+        if let Some(p)=&self.presentation{p.finish_transition();}
+        if let Some(mut old)=self.presentation_retiring.take(){unsafe{if !old.item.is_null(){ffi::obs_sceneitem_remove(old.item);old.item=std::ptr::null_mut();}}self.presentation_spare=Some(old);}
+    }
+    fn prewarm_presentation(&mut self){
+        let Some(request)=self.presentation.as_ref().and_then(|p|p.preload_request())else{return};
+        let mut captures=self.presentation.as_ref().unwrap().preload_captures();captures.retain(|id,_|request.bindings.contains_key(id));
+        if let Some(spare)=self.presentation_spare.as_mut(){if spare.same_size(&request){if !spare.can_promote(&request,&captures){unsafe{spare.reuse(request,captures);}}return;}}
+        self.presentation_spare=unsafe{super::presentation::Composition::build(request,captures)}.ok();
+    }
+    pub fn return_presentation(
+        &mut self,
+        lease: Option<&str>,
+    ) -> Result<super::presentation::Status, String> {
+        let active = self.presentation.as_ref().map(|p| p.request.lease.as_str());
+        let pending = self
+            .presentation_pending
+            .as_ref()
+            .map(|p| p.request.lease.as_str());
+        if lease.is_some() && lease != active && lease != pending {
+            return Ok(self.presentation_status());
+        }
+        let occupied=active.is_some() || pending.is_some();
+        #[cfg(target_os="macos")]
+        if let Some(p)=self.portrait.as_mut(){unsafe{p.room();}}
+        if occupied {
+            // Increment before teardown: a queued commit from this generation
+            // cannot resurrect a returned set or a room's previous composition.
+            self.presentation_generation += 1;
+            self.finish_presentation_transition(true);self.presentation_pending = None;self.presentation_spare=None;
+            struct Remove<'a> {
+                graph: &'a mut SceneGraph,
+                retired: Option<super::presentation::Composition>,
+            }
+            extern "C" fn remove_graph(data: *mut c_void, _: *mut ffi::obs_scene_t) {
+                unsafe {
+                    let remove = &mut *(data as *mut Remove<'_>);
+                    remove.retired = remove.graph.presentation.take();
+                    if let Some(old) = &remove.retired {
+                        ffi::obs_sceneitem_set_visible(old.item, false);
+                    }
+                }
+            }
+            let scene = self.scene;
+            let mut remove = Remove {
+                graph: self,
+                retired: None,
+            };
+            unsafe {
+                ffi::obs_scene_atomic_update(scene, remove_graph, &mut remove as *mut _ as *mut _);
+            }
+        }
+        Ok(self.presentation_status())
+    }
 }

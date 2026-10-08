@@ -38,7 +38,7 @@ fn init(conn: &Connection) -> EngineResult<()> {
         -- opaque keychain reference; the stream key itself NEVER lands here.
         CREATE TABLE IF NOT EXISTS live_destinations (
             id            TEXT PRIMARY KEY,
-            preset        TEXT NOT NULL CHECK (preset IN ('twitch', 'kick', 'youtube', 'custom')),
+            preset        TEXT NOT NULL CHECK (preset IN ('twitch', 'kick', 'youtube', 'facebook', 'instagram', 'rumble', 'tiktok', 'custom')),
             label         TEXT NOT NULL,
             server        TEXT,
             credential_id TEXT NOT NULL,
@@ -89,6 +89,36 @@ fn init(conn: &Connection) -> EngineResult<()> {
             key   TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS manager_cache (
+            endpoint_id TEXT NOT NULL REFERENCES endpoints(id) ON DELETE CASCADE,
+            session_scope TEXT NOT NULL,
+            resource TEXT NOT NULL,
+            value TEXT NOT NULL,
+            updated_at INTEGER NOT NULL,
+            expires_at INTEGER NOT NULL,
+            PRIMARY KEY(endpoint_id, session_scope, resource)
+        );
+
+        -- Capture catalog: paths are local; only provenance syncs to Boomin.
+        CREATE TABLE IF NOT EXISTS local_recordings (
+            id TEXT PRIMARY KEY,
+            endpoint_id TEXT,
+            room_id TEXT NOT NULL,
+            room_name TEXT NOT NULL,
+            source_room_id TEXT,
+            path TEXT NOT NULL UNIQUE,
+            started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+            started_ms INTEGER NOT NULL,
+            ended_at TEXT,
+            duration_ms INTEGER NOT NULL DEFAULT 0,
+            file_size INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'recording' CHECK (status IN ('recording','ready','interrupted')),
+            collection_id TEXT,
+            unit_id TEXT,
+            sync_error TEXT
+        );
+        CREATE INDEX IF NOT EXISTS local_recordings_endpoint_idx ON local_recordings(endpoint_id, started_at);
         "#,
     )?;
     // v2: connected endpoints carry the hosted workspace scope. A backend-
@@ -121,5 +151,90 @@ fn init(conn: &Connection) -> EngineResult<()> {
             [],
         )?;
     }
+    migrate_streaming_presets(conn)?;
     Ok(())
+}
+
+/// SQLite cannot expand a CHECK in place. Keep every destination and its
+/// keychain reference while rebuilding the old table atomically.
+fn migrate_streaming_presets(conn: &Connection) -> EngineResult<()> {
+    let schema: String = conn.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'live_destinations'",
+        [], |r| r.get(0),
+    )?;
+    if schema.contains("'facebook'") && schema.contains("'instagram'") && schema.contains("'rumble'") && schema.contains("'tiktok'") {
+        return Ok(());
+    }
+    let tx = conn.unchecked_transaction()?;
+    tx.execute_batch(r#"
+        CREATE TABLE live_destinations_expanded (
+            id TEXT PRIMARY KEY,
+            preset TEXT NOT NULL CHECK (preset IN ('twitch', 'kick', 'youtube', 'facebook', 'instagram', 'rumble', 'tiktok', 'custom')),
+            label TEXT NOT NULL,
+            server TEXT,
+            credential_id TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+            endpoint_id TEXT
+        );
+        INSERT INTO live_destinations_expanded
+            (id, preset, label, server, credential_id, enabled, created_at, endpoint_id)
+            SELECT id, preset, label, server, credential_id, enabled, created_at, endpoint_id
+            FROM live_destinations;
+        DROP TABLE live_destinations;
+        ALTER TABLE live_destinations_expanded RENAME TO live_destinations;
+    "#)?;
+    tx.commit()?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod streaming_preset_tests {
+    use super::*;
+
+    #[test]
+    fn upgrades_the_instagram_rumble_tiktok_schema_to_include_facebook() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(r#"
+            CREATE TABLE live_destinations (
+                id TEXT PRIMARY KEY,
+                preset TEXT NOT NULL CHECK (preset IN ('twitch', 'kick', 'youtube', 'instagram', 'rumble', 'tiktok', 'custom')),
+                label TEXT NOT NULL, server TEXT, credential_id TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT 'saved', endpoint_id TEXT
+            );
+            INSERT INTO live_destinations (id, preset, label, credential_id, endpoint_id)
+                VALUES ('ig', 'instagram', 'Instagram', 'existing-ref', 'workspace');
+        "#).unwrap();
+        migrate_streaming_presets(&conn).unwrap();
+        conn.execute("INSERT INTO live_destinations (id, preset, label, credential_id) VALUES ('fb', 'facebook', 'Facebook', 'new-ref')", []).unwrap();
+        let credential: String = conn.query_row("SELECT credential_id FROM live_destinations WHERE id = 'ig'", [], |r| r.get(0)).unwrap();
+        assert_eq!(credential, "existing-ref");
+    }
+
+    #[test]
+    fn upgrades_old_destinations_without_losing_credentials_or_workspace() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(r#"
+            CREATE TABLE live_destinations (
+                id TEXT PRIMARY KEY,
+                preset TEXT NOT NULL CHECK (preset IN ('twitch', 'kick', 'youtube', 'custom')),
+                label TEXT NOT NULL, server TEXT, credential_id TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL,
+                endpoint_id TEXT
+            );
+            INSERT INTO live_destinations VALUES
+                ('existing', 'custom', 'My stream', 'rtmps://example.com/live', 'opaque-key-ref', 0, '2026-09-29', 'workspace');
+        "#).unwrap();
+        migrate_streaming_presets(&conn).unwrap();
+        migrate_streaming_presets(&conn).unwrap();
+        let row: (String, String, i64, String, String) = conn.query_row(
+            "SELECT label, credential_id, enabled, created_at, endpoint_id FROM live_destinations WHERE id = 'existing'",
+            [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+        ).unwrap();
+        assert_eq!(row, ("My stream".into(), "opaque-key-ref".into(), 0, "2026-09-29".into(), "workspace".into()));
+        for preset in ["facebook", "instagram", "rumble", "tiktok"] {
+            conn.execute("INSERT INTO live_destinations (id, preset, label, credential_id) VALUES (?1, ?1, ?1, 'ref')", [preset]).unwrap();
+        }
+        assert!(conn.execute("INSERT INTO live_destinations (id, preset, label, credential_id) VALUES ('bad', 'invalid', 'bad', 'ref')", []).is_err());
+    }
 }

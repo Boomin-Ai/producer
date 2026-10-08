@@ -88,6 +88,10 @@ export class RoomState {
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/audience/snapshot") {
+      const now = Date.now();
+      return Response.json({ interactions: (await this.all()).filter(this.isLive).map((live) => project(live.doc, live.tally, "audience", now)) });
+    }
     try {
       if (request.method === "GET" && url.pathname.endsWith("/audience-ws")) {
         const client = await this.acceptAudience(request);
@@ -325,6 +329,7 @@ export class RoomState {
   }
 
   private sendAudience(interaction: Projected): void {
+    this.publishRoom("interaction:audience", interaction);
     const frame = JSON.stringify({ type: "interaction", interaction, server_now: interaction.server_now });
     for (const ws of this.state.getWebSockets()) {
       const a = ws.deserializeAttachment() as AudienceSocket | null;

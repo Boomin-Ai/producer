@@ -3,8 +3,20 @@
 //! stubs keep the app building and the IPC surface truthful about it.
 
 pub mod bridge;
+pub mod presentation;
+pub mod animation;
+pub mod shaders;
+#[cfg(all(have_engine,target_os="macos"))]
+mod portrait;
+#[cfg(all(have_engine, debug_assertions))]
+mod presentation_probe;
+#[cfg(have_engine)]
+pub mod program_audio;
 pub mod commands;
+pub mod presence;
 pub mod creds;
+#[cfg(have_engine)]
+pub mod dj;
 
 /// The virtual camera's label, identical on both platforms: macOS bakes it
 /// into the camera extension (build-camera-extension.sh), Windows patches it
@@ -81,6 +93,94 @@ pub struct Live {
 }
 
 impl Live {
+    pub fn select_output(&self,portrait:bool)->Result<(),String>{
+        #[cfg(have_engine)] {self.handle.as_ref().ok_or("live engine not running")?.select_output(portrait)}
+        #[cfg(not(have_engine))] {let _=portrait;Err("engine unavailable".into())}
+    }
+    pub fn replace_extra(&self, id: String, label: String, spec: serde_json::Value, initial: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
+        #[cfg(have_engine)] {
+            let spec = serde_json::from_value(spec).map_err(|e| format!("Invalid source: {e}"))?;
+            let initial = initial.map(serde_json::from_value).transpose().map_err(|e| format!("Invalid placement: {e}"))?;
+            let sources = self.handle.as_ref().ok_or("live engine not running")?.replace_extra(id, label, spec, initial)?;
+            serde_json::to_value(sources).map_err(|e| e.to_string())
+        }
+        #[cfg(not(have_engine))] { let _ = (id, label, spec, initial); Err("live engine not bundled in this build".into()) }
+    }
+    #[cfg(have_engine)]
+    pub fn portrait_room(&self)->Result<graph::SourcesState,String>{
+        #[cfg(have_engine)]{self.handle.as_ref().ok_or("live engine not running")?.portrait_room()}
+        #[cfg(not(have_engine))]{Err("engine unavailable".into())}
+    }
+    #[cfg(have_engine)]
+    pub fn portrait_state(&self)->Result<graph::SourcesState,String>{
+        #[cfg(have_engine)]{self.handle.as_ref().ok_or("live engine not running")?.portrait_state()}
+        #[cfg(not(have_engine))]{Err("engine unavailable".into())}
+    }
+    #[cfg(have_engine)]
+    pub fn portrait_transform(&self,id:String,patch:graph::TransformPatch)->Result<graph::SourcesState,String>{
+        #[cfg(have_engine)]{self.handle.as_ref().ok_or("live engine not running")?.portrait_transform(id,patch)}
+        #[cfg(not(have_engine))]{let _=(id,patch);Err("engine unavailable".into())}
+    }
+    #[cfg(have_engine)]
+    pub fn portrait_preview(&self,window:usize,rect:Option<engine::PreviewRect>)->Result<(),String>{
+        #[cfg(have_engine)]{self.handle.as_ref().ok_or("live engine not running")?.portrait_preview(window,rect)}
+        #[cfg(not(have_engine))]{let _=(window,rect);Err("engine unavailable".into())}
+    }
+    pub fn portrait_warm(&self,request:presentation::Request)->Result<(),String>{
+        #[cfg(have_engine)] {self.handle.as_ref().ok_or("live engine not running")?.portrait_warm(request)}
+        #[cfg(not(have_engine))] {let _=request;Err("Native engine unavailable".into())}
+    }
+    pub fn portrait_apply(&self,request:presentation::Request)->Result<(),String>{
+        #[cfg(have_engine)] {self.handle.as_ref().ok_or("live engine not running")?.portrait_apply(request)}
+        #[cfg(not(have_engine))] {let _=request;Err("Native engine unavailable".into())}
+    }
+    pub fn portrait_stop(&self)->Result<(),String>{
+        #[cfg(have_engine)] {self.handle.as_ref().ok_or("live engine not running")?.portrait_stop()}
+        #[cfg(not(have_engine))] {Ok(())}
+    }
+    pub fn portrait_frame(&self)->Result<String,String>{
+        #[cfg(have_engine)] {self.handle.as_ref().ok_or("live engine not running")?.portrait_frame()}
+        #[cfg(not(have_engine))] {Err("Native engine unavailable".into())}
+    }
+    pub fn presentation_status(&self)->Result<presentation::Status,String> {
+        #[cfg(have_engine)] {self.handle.as_ref().ok_or("live engine not running")?.presentation_status()}
+        #[cfg(not(have_engine))] {Err("Set output needs the native engine".into())}
+    }
+    pub fn presentation_warm(&self,request:presentation::Request)->Result<(),String>{
+        #[cfg(have_engine)] {self.handle.as_ref().ok_or("live engine not running")?.presentation_warm(request)}
+        #[cfg(not(have_engine))] {let _=request;Err("Set output needs the native engine".into())}
+    }
+    pub fn presentation_apply(&self,request:presentation::Request)->Result<presentation::Status,String> {
+        #[cfg(have_engine)] {self.handle.as_ref().ok_or("live engine not running")?.presentation_apply(request)}
+        #[cfg(not(have_engine))] {let _=request;Err("Set output needs the native engine".into())}
+    }
+    pub fn presentation_return(&self,lease:Option<String>)->Result<presentation::Status,String> {
+        #[cfg(have_engine)] {self.handle.as_ref().ok_or("live engine not running")?.presentation_return(lease)}
+        #[cfg(not(have_engine))] {let _=lease;Err("Set output needs the native engine".into())}
+    }
+    pub fn restore_room(&self, restore: serde_json::Value) -> Result<serde_json::Value, String> {
+        #[cfg(have_engine)] {
+            let restore = serde_json::from_value(restore).map_err(|e| format!("Invalid room: {e}"))?;
+            let result = self.handle.as_ref().ok_or("live engine not running")?.restore_room(restore)?;
+            serde_json::to_value(result).map_err(|e| e.to_string())
+        }
+        #[cfg(not(have_engine))] { let _ = restore; Err("live engine not bundled in this build".into()) }
+    }
+    pub fn apply_scene(&self, changes: serde_json::Value) -> Result<serde_json::Value, String> {
+        #[cfg(have_engine)] {
+            let changes = serde_json::from_value(changes).map_err(|e| format!("Invalid scene: {e}"))?;
+            let sources = self.handle.as_ref().ok_or("live engine not running")?.apply_scene(changes)?;
+            serde_json::to_value(sources).map_err(|e| e.to_string())
+        }
+        #[cfg(not(have_engine))] { let _ = changes; Err("live engine not bundled in this build".into()) }
+    }
+    pub fn clone_handle_for_dj(&self) -> Result<Box<dyn FnOnce(crate::dj::Action) -> Result<crate::dj::Status, String> + Send>, String> {
+        #[cfg(have_engine)] {
+            self.handle.as_ref().ok_or("The room audio engine is not running")?.dj_dispatch()
+        }
+        #[cfg(not(have_engine))] { Err("DJ needs a build with the native room engine".into()) }
+    }
+
     pub fn disabled() -> Self {
         Live {
             #[cfg(have_engine)]
@@ -243,6 +343,10 @@ impl Live {
         Err("live engine not bundled in this build".into())
     }
 
+    pub fn start_recording_mode(&self,stamp:String,dual:bool)->Result<String,String>{
+        #[cfg(have_engine)]{self.handle.as_ref().ok_or("live engine not running")?.start_recording_mode(stamp,dual)}
+        #[cfg(not(have_engine))]{let _=(stamp,dual);Err("engine unavailable".into())}
+    }
     #[cfg(have_engine)]
     pub fn start_recording(&self, stamp: String) -> Result<String, String> {
         self.handle
@@ -541,6 +645,18 @@ impl Live {
     #[cfg(not(have_engine))]
     pub fn detach_preview(&self) -> Result<(), String> {
         Ok(())
+    }
+
+    #[cfg(have_engine)]
+    pub fn release_idle_room(&self) -> Result<bool, String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .release_idle_room()
+    }
+    #[cfg(not(have_engine))]
+    pub fn release_idle_room(&self) -> Result<bool, String> {
+        Ok(true)
     }
 }
 
@@ -909,11 +1025,11 @@ pub fn legacy_harness_requested() -> bool {
 /// main thread, and this IS the main thread, so a plain block would deadlock
 /// against itself. Windows does no such marshalling, so it just waits.
 #[cfg(all(have_engine, target_os = "macos"))]
-fn idle_tick() {
+pub(crate) fn idle_tick() {
     unsafe { ffi::CFRunLoopRunInMode(ffi::kCFRunLoopDefaultMode, 0.05, false) };
 }
 #[cfg(all(have_engine, target_os = "windows"))]
-fn idle_tick() {
+pub(crate) fn idle_tick() {
     std::thread::sleep(std::time::Duration::from_millis(20));
 }
 

@@ -48,47 +48,6 @@ static NSVisualEffectView *find_vibrancy(NSView *content) {
     return nil;
 }
 
-// Real glass: the window's solid base coat becomes an NSVisualEffectView that
-// blurs whatever sits behind the window. The webview stops drawing its own
-// background so CSS decides, region by region, what is opaque and what shows
-// the glass. Idempotent; returns 1 when the effect view is in place.
-int producer_apply_window_vibrancy(void *ns_window) {
-    __block int ok = 0;
-    run_on_main(^{
-        NSWindow *win = (__bridge NSWindow *)ns_window;
-        if (!win) return;
-        NSView *content = win.contentView;
-        if (!content) return;
-        win.opaque = NO;
-        win.backgroundColor = [NSColor clearColor];
-        if (!find_vibrancy(content)) {
-            NSVisualEffectView *fx = [[NSVisualEffectView alloc] initWithFrame:content.bounds];
-            fx.material = NSVisualEffectMaterialHUDWindow;
-            fx.blendingMode = NSVisualEffectBlendingModeBehindWindow;
-            fx.state = NSVisualEffectStateActive;
-            // Obsidian: render the material in vibrant-dark so EVERY glass
-            // pixel is dark at the source — no CSS tint layer can cover the
-            // curve notches, and a tint that lives here never seams.
-            fx.appearance = [NSAppearance appearanceNamed:NSAppearanceNameVibrantDark];
-            fx.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-            [content addSubview:fx positioned:NSWindowBelow relativeTo:nil];
-        }
-        WKWebView *wk = (WKWebView *)find_webview(content);
-        if (wk) {
-            @try {
-                [wk setValue:@NO forKey:@"drawsBackground"];
-            } @catch (NSException *e) {
-                (void)e;
-            }
-            if (@available(macOS 12.0, *)) {
-                wk.underPageBackgroundColor = [NSColor clearColor];
-            }
-        }
-        ok = 1;
-    });
-    return ok;
-}
-
 int producer_preview_prepare_window(void *ns_window) {
     __block int ok = 0;
     run_on_main(^{
@@ -562,4 +521,11 @@ void producer_person_mask_register_native(void);
 
 void producer_person_mask_register(void) {
     producer_person_mask_register_native();
+}
+
+// Debug acceptance probes use the existing app window; no capture permission.
+void *producer_preview_probe_window(void) {
+    __block void *result = NULL;
+    run_on_main(^{ NSWindow *window = NSApp.mainWindow ?: NSApp.windows.firstObject; result = (__bridge void *)window; });
+    return result;
 }

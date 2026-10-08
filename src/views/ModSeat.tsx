@@ -15,6 +15,9 @@ import { ModBoard } from "./ModBoard";
 import { DEFAULT_MOD_BOARD, MOD_BOARD_PREF, normalizeModBoard, seatFeeds, throwUpState, type ModBoardLayout } from "../lib/modBoard";
 import { prefGet } from "../lib/prefs";
 import { EMPTY_MOD_STAGE, type ModStageState } from "../lib/stageTruth";
+import { type AudienceSnapshot, type AudienceHand } from "../components/AudiencePanel";
+
+import { PeoplePanel } from "../components/PeoplePanel";
 
 export function ModSeat({ link, onLeave }: { link: ModLink; onLeave: () => void }) {
   const [title, setTitle] = useState<string>("Room");
@@ -25,6 +28,8 @@ export function ModSeat({ link, onLeave }: { link: ModLink; onLeave: () => void 
   const [err, setErr] = useState<string | null>(null);
   const [online, setOnline] = useState(false);
   const [gone, setGone] = useState(false);
+  const [audience, setAudience] = useState<AudienceSnapshot>({});
+  const [hands, setHands] = useState<AudienceHand[]>([]);
   const controlRef = useRef<RoomControlLink | null>(null);
   /** The board's own layout (lib/modBoard.ts) — the same pref a Boomin seat saves. */
   const [boardLayout, setBoardLayout] = useState<ModBoardLayout>(DEFAULT_MOD_BOARD);
@@ -39,8 +44,22 @@ export function ModSeat({ link, onLeave }: { link: ModLink; onLeave: () => void 
   }, []);
   const rosterRef = useRef<RoomGuest[]>([]);
   rosterRef.current = roster;
+  const sourceProtocol = useRef(false);
+  const [pendingStage, setPendingStage] = useState<{ id: string; command: string; want: boolean; since: number } | null>(null);
+  const pendingStageRef = useRef(pendingStage); pendingStageRef.current = pendingStage;
   const stageRef = useRef<string[]>([]);
   stageRef.current = stage;
+
+  useEffect(() => {
+    if (!pendingStage) return;
+    const command = pendingStage.command;
+    const timer = window.setTimeout(() => {
+      if (pendingStageRef.current?.command !== command) return;
+      pendingStageRef.current = null; setPendingStage(null);
+      setErr("The host did not confirm this stage change. Reconnect and try again.");
+    }, 7000);
+    return () => window.clearTimeout(timer);
+  }, [pendingStage]);
 
   const fail = useCallback((e: unknown) => {
     const msg = String(e).replace(/^Error:\s*/, "");
@@ -68,7 +87,7 @@ export function ModSeat({ link, onLeave }: { link: ModLink; onLeave: () => void 
         const r = await modSeat.roster(link);
         if (!alive) return;
         setRoster(r.guests ?? []);
-        setStage(r.stage?.on_stage ?? []);
+        if (!sourceProtocol.current && !pendingStageRef.current) setStage(r.stage?.on_stage ?? []);
         setErr(null);
       } catch (e) {
         fail(e);
@@ -87,9 +106,32 @@ export function ModSeat({ link, onLeave }: { link: ModLink; onLeave: () => void 
     const c = new RoomControlLink({
       origin: link.origin,
       session: () => modSeat.session(link),
+      renewAfterMs: 105_000,
       onFrame: (f: ControlFrame) => {
-        if (f.type === "scene.state") setScenes(f as SceneStateFrame);
-        else if (f.type === "error") {
+        if (f.type.startsWith("audience.")) {
+          const frame=f as Record<string,unknown>;
+          if (f.type === "audience.snapshot") setAudience(previous=>({...previous,...frame}));
+          if (f.type === "audience.hands" && Array.isArray(frame.hands)) setHands(frame.hands as AudienceHand[]);
+          if (f.type === "audience.chat" && frame.message) setAudience(previous=>({...previous,chat:[...(previous.chat??[]).slice(-99),frame.message as NonNullable<AudienceSnapshot['chat']>[number]]}));
+          if (f.type === "audience.presence") setAudience(previous=>({...previous,online:Number(frame.online)}));
+          if (f.type === "audience.error") setErr(String(frame.code));
+          return;
+        }
+        if (f.type === "room.sources") {
+          sourceProtocol.current = f.command_protocol === 1;
+          if (Array.isArray(f.on_stage)) setStage(f.on_stage as string[]);
+        } else if (f.type === "room.action.command") {
+          const pending = pendingStageRef.current;
+          if (pending?.command === f.command_id && f.status !== "accepted") {
+            setPendingStage(null);
+            if (f.status !== "applied") setErr(String(f.error ?? "The host did not confirm this stage change."));
+          }
+        } else if (f.type === "scene.state") setScenes(f as SceneStateFrame);
+        else if (f.type === "scene.command") {
+          const c = f as unknown as { status: string; scene_id: string; error?: string };
+          if (c.status === "applied") setScenes((current) => current ? { ...current, active_scene_id: c.scene_id } : current);
+          if (c.status === "failed" || c.status === "expired") setErr(c.error ?? "Producer did not confirm the cut.");
+        } else if (f.type === "error") {
           const e = f as { code: string; status?: number };
           setErr(e.code === "forbidden" ? "This seat can't cut scenes." : e.code === "unknown_scene" ? "That scene is gone." : e.code);
           window.setTimeout(() => setErr(null), 3000);
@@ -131,16 +173,13 @@ export function ModSeat({ link, onLeave }: { link: ModLink; onLeave: () => void 
   });
 
   const stageToggle = async (guestId: string) => {
-    const cur = stageRef.current;
-    const next = cur.includes(guestId) ? cur.filter((x) => x !== guestId) : [...cur, guestId];
-    setStage(next);
-    try {
-      const r = await modSeat.setStage(link, next);
-      setStage(r.on_stage);
-    } catch (e) {
-      setStage(cur);
-      fail(e);
-    }
+    if (pendingStageRef.current) return;
+    if (!sourceProtocol.current) { setErr("The host needs the updated Producer build to confirm stage changes."); return; }
+    const want = !stageRef.current.includes(guestId);
+    const command = controlRef.current?.sourceAction("participant.stage", guestId, want);
+    if (!command) { setErr("Reconnect to the host first."); return; }
+    const pending = { id: guestId, command, want, since: Date.now() };
+    pendingStageRef.current = pending; setPendingStage(pending);
   };
   const order = async (guestId: string, dir: -1 | 1) => {
     const admitted = rosterRef.current
@@ -166,7 +205,7 @@ export function ModSeat({ link, onLeave }: { link: ModLink; onLeave: () => void 
 
   // The open server's stage list IS the truth here (no honest-staging
   // frames on this line yet): confirmed = the server's list, nothing pending.
-  const stageState: ModStageState = { ...EMPTY_MOD_STAGE, confirmed: stage };
+  const stageState: ModStageState = { ...EMPTY_MOD_STAGE, confirmed: stage, pending: pendingStage ? { guestId: pendingStage.id, want: pendingStage.want, version: 0, since: pendingStage.since } : null };
   // A mod link carries no media: the feed windows say so, the throw-up is off.
   return (
     <div className="modseat">
@@ -190,12 +229,18 @@ export function ModSeat({ link, onLeave }: { link: ModLink; onLeave: () => void 
         scenes={scenes ? { scenes: scenes.scenes, active_scene_id: scenes.active_scene_id } : null}
         onCut={cut}
         people={
+          <PeoplePanel guestCount={roster.filter(g => !!g.render_url).length} waitingCount={roster.filter(g => !g.render_url).length}
+            audience={{ state: audience, hands, host: false, hosted: false, canInvite: can("room.admit"), canModerate: can("room.remove"), canShare: false,
+              controls: can("room.admit") || can("room.remove"), send: frame => controlRef.current?.send(frame) ?? false, share: () => {},
+              invite: id => { if (!controlRef.current?.send({type:"audience.invite.request",id})) setErr("Reconnect to the room first."); }, error: err }}>
           <GuestPanel
             thumbs={{}}
             roster={roster}
             error={null}
             items={[]}
             role={can("room.admit") || can("room.stage") || can("room.remove") ? "mod" : "viewer"}
+            control={can("room.admit") || can("room.stage") || can("room.remove") || can("room.order")}
+            permissions={{admit:can("room.admit"),remove:can("room.remove"),stage:can("room.stage"),order:can("room.order")}}
             stage={stage}
             stageState={stageState}
             onAdmit={(id) => void modSeat.admit(link, id).catch(fail)}
@@ -205,6 +250,7 @@ export function ModSeat({ link, onLeave }: { link: ModLink; onLeave: () => void 
             onStageToggle={(id) => void stageToggle(id)}
             onOrder={(id, dir) => void order(id, dir)}
           />
+          </PeoplePanel>
         }
         grants={grants}
         feeds={seatFeeds(grants)}

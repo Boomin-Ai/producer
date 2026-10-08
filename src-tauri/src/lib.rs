@@ -1,4 +1,5 @@
 mod boomin;
+mod cache;
 mod chat;
 mod client;
 mod error;
@@ -6,9 +7,16 @@ mod firewall;
 mod ipc;
 mod live;
 mod outbox;
+mod recordings;
+mod storage;
+mod dj;
+mod set_library;
+mod set_media;
 mod store;
 mod submit;
 mod vault;
+#[cfg(target_os = "macos")]
+mod window;
 
 use std::sync::Mutex;
 
@@ -28,6 +36,14 @@ pub struct AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(all(have_engine, debug_assertions))]
+    if std::env::var_os("PRODUCER_PROGRAM_SELFTEST").is_some() {
+        live::program_audio::verification::run();
+    }
+    #[cfg(all(have_engine, debug_assertions))]
+    if std::env::var_os("PRODUCER_DJ_SELFTEST").is_some() {
+        live::dj::selftest_main();
+    }
     // Headless engine self-test (M-L1 acceptance harness): bootstrap libobs,
     // print the discovery report, exit — no window, no webview.
     if std::env::var("PRODUCER_LIVE_SELFTEST").is_ok() {
@@ -39,14 +55,20 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
-            // Real glass base coat (see shim.m): must run at startup so the
-            // home rail's gutter shows the desktop before any room attaches.
-            #[cfg(all(target_os = "macos", have_engine))]
+            set_media::init(app.handle()).map_err(std::io::Error::other)?;
+            #[cfg(debug_assertions)]
+            if std::env::var_os("PRODUCER_SET_OUTPUT_PROBE").is_some(){
+                if let Some(window)=app.get_webview_window("main"){
+                    window.navigate("http://localhost:1420/scripts/native-probe.html".parse().unwrap())?;
+                }
+            }
+            // The window glass belongs to the app shell, including builds
+            // without the live engine used for frontend development.
+            #[cfg(target_os = "macos")]
             {
-                use tauri::Manager;
                 if let Some(window) = app.get_webview_window("main") {
                     if let Ok(ns) = window.ns_window() {
-                        unsafe { live::ffi::producer_apply_window_vibrancy(ns) };
+                        window::apply_vibrancy(ns);
                     }
                 }
             }
@@ -54,6 +76,7 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             let conn = store::open(&data_dir.join("producer.db"))
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
+            recordings::recover(&conn).map_err(|e| std::io::Error::other(e.to_string()))?;
 
             // Live engine. Legacy evidence harnesses (--live-capture-probe /
             // --live-first-light) bootstrap on a bare thread; every other
@@ -84,11 +107,23 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            set_media::set_media_import,
+            set_media::set_media_resolve,
+            set_library::set_library_list,
+            set_library::set_library_read,
+            set_library::set_library_save,
             ipc::list_endpoints,
             ipc::add_endpoint,
             ipc::remove_endpoint,
+            cache::manager_cache_scope,
+            cache::manager_cache_get,
+            cache::manager_cache_set,
+            storage::producer_storage_usage,
             ipc::pref_get,
             ipc::pref_set,
+            recordings::recordings_list,
+            recordings::recordings_sync,
+            recordings::recording_by_path,
             ipc::endpoint_channels,
             ipc::boomin_request_otp,
             ipc::boomin_connect,
@@ -143,6 +178,8 @@ pub fn run() {
             ipc::room_interaction_transition,
             ipc::room_audience_link,
             live::bridge::overlay_bridge_start,
+            live::bridge::chat_overlay_start,
+            live::bridge::chat_overlay_update,
             live::bridge::overlay_bridge_set,
             ipc::network_connections,
             ipc::upload_media,
@@ -159,6 +196,7 @@ pub fn run() {
             live::commands::live_attach_preview,
             live::commands::live_move_preview,
             live::commands::live_detach_preview,
+            live::commands::live_release_idle_room,
             live::commands::live_permissions,
             live::commands::live_set_thumb_rate,
             live::commands::live_set_program_thumb,
@@ -173,6 +211,27 @@ pub fn run() {
             live::commands::firstlight_resume,
             live::commands::live_set_video,
             live::commands::live_set_transform,
+            live::commands::live_apply_scene,
+            live::commands::live_set_status,
+            live::commands::live_portrait_room,
+            live::commands::live_portrait_state,
+            live::commands::live_select_output,
+            live::commands::live_program_video_wanted,
+            live::commands::live_program_video_read,
+            live::commands::live_portrait_transform,
+            live::commands::live_portrait_preview,
+            live::commands::live_portrait_apply,
+            live::commands::live_portrait_warm,
+            live::commands::live_portrait_stop,
+            live::commands::live_portrait_frame,
+            live::commands::live_set_apply,
+            live::commands::live_set_warm,
+            live::commands::live_set_return,
+            live::commands::live_restore_room,
+            live::commands::live_replace_source,
+            live::commands::live_program_audio_start,
+            live::commands::live_program_audio_read,
+            live::commands::live_program_audio_stop,
             live::commands::live_set_selection,
             live::commands::live_preview_cutouts,
             live::commands::live_source_devices,
@@ -187,6 +246,13 @@ pub fn run() {
             live::commands::live_filters,
             live::commands::live_set_opacity,
             live::commands::live_set_source_audio,
+            dj::dj_library,
+            dj::dj_import,
+            dj::dj_save_playlist,
+            dj::dj_update_track,
+            dj::dj_analyze,
+            dj::dj_match_tempo,
+            dj::dj_control,
             live::commands::live_set_sync_offset,
             live::commands::live_start_recording,
             live::commands::live_stop_recording,

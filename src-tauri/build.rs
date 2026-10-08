@@ -2,14 +2,33 @@ use std::path::PathBuf;
 
 fn main() {
     println!("cargo:rustc-check-cfg=cfg(have_engine)");
+    link_window_vibrancy_macos();
     link_live_engine();
     tauri_build::build()
+}
+
+/// Window glass is part of the app shell, even when the OBS engine artifact
+/// is unavailable for a frontend-only development build.
+fn link_window_vibrancy_macos() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
+        return;
+    }
+    println!("cargo:rerun-if-changed=src/window_vibrancy.m");
+    cc::Build::new()
+        .file("src/window_vibrancy.m")
+        .flag("-fobjc-arc")
+        .flag("-fmodules")
+        .compile("producer_window_vibrancy");
+    println!("cargo:rustc-link-lib=framework=AppKit");
+    println!("cargo:rustc-link-lib=framework=WebKit");
 }
 
 /// Link the Producer engine artifact (libobs + plugin allowlist; see
 /// engine/obs.lock and LIVE-REVIEW.md). When no artifact is present the app
 /// still builds — live features compile to stubs.
 fn link_live_engine() {
+    println!("cargo:rerun-if-changed=src/live/source_appearance.c");
+    println!("cargo:rerun-if-changed=src/live/source_appearance.effect.h");
     // The one seam that decides whether this is a live build. Each supported OS
     // resolves its own artifact and emits its own link flags; anything else
     // returns and the ~50 cfg(have_engine) sites compile to stubs.
@@ -48,13 +67,16 @@ fn link_live_engine_macos() {
 
     // AppKit/AVFoundation shim (M-L6 preview + TCC + device lookup).
     println!("cargo:rerun-if-changed=src/live/shim.m");
+    println!("cargo:rerun-if-changed=src/live/capture_guard.m");
     // Cutout: the Vision person-mask filter (registered through shim.m).
     println!("cargo:rerun-if-changed=src/live/person_mask.m");
     println!("cargo:rerun-if-changed=src/live/person_mask.effect.h");
     println!("cargo:rerun-if-changed=src/live/obs_min.h");
     cc::Build::new()
         .file("src/live/shim.m")
+        .file("src/live/capture_guard.m")
         .file("src/live/person_mask.m")
+        .file("src/live/source_appearance.c")
         .flag("-fobjc-arc")
         .flag("-fmodules")
         .compile("producer_live_shim");
@@ -181,6 +203,7 @@ fn link_live_engine_windows() {
     println!("cargo:rerun-if-changed=src/live/obs_min.h");
     cc::Build::new()
         .file("src/live/shim_win.c")
+        .file("src/live/source_appearance.c")
         .compile("producer_live_shim");
     // User32/Gdi32: the preview child HWND. Ole32: COM init for the DirectShow
     // device enumeration the camera picker uses.
