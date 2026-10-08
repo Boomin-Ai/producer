@@ -1,0 +1,2927 @@
+{
+  "schema": "producer.presentation/1",
+  "id": "camera-atlas",
+  "version": "0.1.0",
+  "name": "Camera Atlas \u00b7 16 Looks",
+  "set": {
+    "initialLayout": "orbit",
+    "values": {
+      "title": {
+        "type": "text",
+        "default": "Make it yours.",
+        "maxLength": 24
+      },
+      "eyebrow": {
+        "type": "text",
+        "default": "A STUDY IN PRESENCE",
+        "maxLength": 50
+      },
+      "caption": {
+        "type": "text",
+        "default": "One camera. Sixteen ways to see it.",
+        "maxLength": 90
+      }
+    },
+    "feeds": {},
+    "slots": [
+      {
+        "id": "camera",
+        "label": "Your camera"
+      }
+    ],
+    "components": {},
+    "layouts": [
+      {
+        "id": "orbit",
+        "label": "01 Orbit",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "orbit-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#080a12"
+          },
+          "children": [
+            {
+              "id": "top-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 56,
+                "top": 48,
+                "width": 1168,
+                "height": 1,
+                "background": "#f4f1ec",
+                "opacity": 0.13
+              },
+              "children": []
+            },
+            {
+              "id": "ambient",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 630,
+                "top": 30,
+                "width": 640,
+                "height": 640,
+                "borderRadius": "50%",
+                "background": "radial-gradient(circle,#b5a2ff22,transparent 70%)"
+              },
+              "children": []
+            },
+            {
+              "id": "camera-glow",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 701,
+                "top": 154,
+                "width": 512,
+                "height": 412,
+                "borderRadius": "37px",
+                "boxShadow": "0 0 35px #b5a2ff40, 0 0 80px #b5a2ff20",
+                "border": "1px solid #b5a2ff70"
+              },
+              "children": [],
+              "motion": {
+                "property": "opacity",
+                "from": 0.35,
+                "to": 1,
+                "durationMs": 5000
+              }
+            },
+            {
+              "id": "camera-video",
+              "type": "slot",
+              "slotId": "camera",
+              "styles": {
+                "position": "absolute",
+                "left": 706,
+                "top": 159,
+                "width": 502,
+                "height": 402
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 32,
+                "outlineWidth": 2,
+                "outlineColor": "#b5a2ff"
+              }
+            },
+            {
+              "id": "eyebrow",
+              "type": "text",
+              "text": {
+                "get": "values.eyebrow"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 159,
+                "width": 535,
+                "height": 35,
+                "color": "#b5a2ff",
+                "fontSize": "13px",
+                "letterSpacing": ".2em"
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 232,
+                "width": 535,
+                "height": 220,
+                "color": "#f4f1ec",
+                "fontSize": "87px",
+                "fontWeight": 850,
+                "letterSpacing": "-.06em",
+                "lineHeight": "1.02"
+              }
+            },
+            {
+              "id": "caption",
+              "type": "text",
+              "text": {
+                "get": "values.caption"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 59,
+                "top": 496,
+                "width": 525,
+                "height": 100,
+                "color": "#f4f1ec",
+                "fontSize": "19px",
+                "lineHeight": "1.5",
+                "opacity": 0.6
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "01 / ORBIT",
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 670,
+                "width": 600,
+                "height": 26,
+                "color": "#b5a2ff",
+                "fontSize": "12px",
+                "letterSpacing": ".18em"
+              }
+            },
+            {
+              "id": "signature",
+              "type": "text",
+              "text": "CAMERA ATLAS",
+              "styles": {
+                "position": "absolute",
+                "left": 938,
+                "top": 670,
+                "width": 282,
+                "height": 26,
+                "color": "#f4f1ec",
+                "opacity": 0.4,
+                "fontSize": "12px",
+                "textAlign": "right",
+                "letterSpacing": ".18em"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "portrait",
+        "label": "02 Portrait",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "portrait-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#101e1c"
+          },
+          "children": [
+            {
+              "id": "top-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 56,
+                "top": 48,
+                "width": 1168,
+                "height": 1,
+                "background": "#f4f1ec",
+                "opacity": 0.13
+              },
+              "children": []
+            },
+            {
+              "id": "ambient",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 630,
+                "top": 30,
+                "width": 640,
+                "height": 640,
+                "borderRadius": "50%",
+                "background": "radial-gradient(circle,#94dbad22,transparent 70%)"
+              },
+              "children": []
+            },
+            {
+              "id": "camera-glow",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 765,
+                "top": 60,
+                "width": 400,
+                "height": 592,
+                "borderRadius": "49px",
+                "boxShadow": "0 0 35px #94dbad40, 0 0 80px #94dbad20",
+                "border": "1px solid #94dbad70"
+              },
+              "children": [],
+              "motion": {
+                "property": "opacity",
+                "from": 0.35,
+                "to": 1,
+                "durationMs": 5300
+              }
+            },
+            {
+              "id": "camera-video",
+              "type": "slot",
+              "slotId": "camera",
+              "styles": {
+                "position": "absolute",
+                "left": 770,
+                "top": 65,
+                "width": 390,
+                "height": 582
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 44,
+                "outlineWidth": 2,
+                "outlineColor": "#94dbad"
+              }
+            },
+            {
+              "id": "eyebrow",
+              "type": "text",
+              "text": {
+                "get": "values.eyebrow"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 159,
+                "width": 535,
+                "height": 35,
+                "color": "#94dbad",
+                "fontSize": "13px",
+                "letterSpacing": ".2em"
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 232,
+                "width": 535,
+                "height": 220,
+                "color": "#f4f1ec",
+                "fontSize": "87px",
+                "fontWeight": 850,
+                "letterSpacing": "-.06em",
+                "lineHeight": "1.02"
+              }
+            },
+            {
+              "id": "caption",
+              "type": "text",
+              "text": {
+                "get": "values.caption"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 59,
+                "top": 496,
+                "width": 525,
+                "height": 100,
+                "color": "#f4f1ec",
+                "fontSize": "19px",
+                "lineHeight": "1.5",
+                "opacity": 0.6
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "02 / PORTRAIT",
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 670,
+                "width": 600,
+                "height": 26,
+                "color": "#94dbad",
+                "fontSize": "12px",
+                "letterSpacing": ".18em"
+              }
+            },
+            {
+              "id": "signature",
+              "type": "text",
+              "text": "CAMERA ATLAS",
+              "styles": {
+                "position": "absolute",
+                "left": 938,
+                "top": 670,
+                "width": 282,
+                "height": 26,
+                "color": "#f4f1ec",
+                "opacity": 0.4,
+                "fontSize": "12px",
+                "textAlign": "right",
+                "letterSpacing": ".18em"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "cinema",
+        "label": "03 Cinema",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "cinema-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#090b10"
+          },
+          "children": [
+            {
+              "id": "top-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 56,
+                "top": 48,
+                "width": 1168,
+                "height": 1,
+                "background": "#f4f1ec",
+                "opacity": 0.13
+              },
+              "children": []
+            },
+            {
+              "id": "ambient",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 630,
+                "top": 30,
+                "width": 640,
+                "height": 640,
+                "borderRadius": "50%",
+                "background": "radial-gradient(circle,#e8c99222,transparent 70%)"
+              },
+              "children": []
+            },
+            {
+              "id": "camera-glow",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 163,
+                "width": 1180,
+                "height": 415,
+                "borderRadius": "27px",
+                "boxShadow": "0 0 35px #e8c99240, 0 0 80px #e8c99220",
+                "border": "1px solid #e8c99270"
+              },
+              "children": [],
+              "motion": {
+                "property": "opacity",
+                "from": 0.35,
+                "to": 1,
+                "durationMs": 5600
+              }
+            },
+            {
+              "id": "camera-video",
+              "type": "slot",
+              "slotId": "camera",
+              "styles": {
+                "position": "absolute",
+                "left": 55,
+                "top": 168,
+                "width": 1170,
+                "height": 405
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 22,
+                "outlineWidth": 2,
+                "outlineColor": "#e8c992"
+              }
+            },
+            {
+              "id": "eyebrow",
+              "type": "text",
+              "text": {
+                "get": "values.eyebrow"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 55,
+                "top": 25,
+                "width": 820,
+                "height": 24,
+                "color": "#e8c992",
+                "fontSize": "12px",
+                "letterSpacing": ".2em"
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 56,
+                "width": 1140,
+                "height": 83,
+                "color": "#f4f1ec",
+                "fontSize": "64px",
+                "fontWeight": 800,
+                "letterSpacing": "-.05em"
+              }
+            },
+            {
+              "id": "caption",
+              "type": "text",
+              "text": {
+                "get": "values.caption"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 56,
+                "top": 648,
+                "width": 1150,
+                "height": 36,
+                "color": "#f4f1ec",
+                "fontSize": "18px",
+                "opacity": 0.6
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "03 / CINEMA",
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 670,
+                "width": 600,
+                "height": 26,
+                "color": "#e8c992",
+                "fontSize": "12px",
+                "letterSpacing": ".18em"
+              }
+            },
+            {
+              "id": "signature",
+              "type": "text",
+              "text": "CAMERA ATLAS",
+              "styles": {
+                "position": "absolute",
+                "left": 938,
+                "top": 670,
+                "width": 282,
+                "height": 26,
+                "color": "#f4f1ec",
+                "opacity": 0.4,
+                "fontSize": "12px",
+                "textAlign": "right",
+                "letterSpacing": ".18em"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "circle",
+        "label": "04 Circle",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "circle-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#170e24"
+          },
+          "children": [
+            {
+              "id": "top-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 56,
+                "top": 48,
+                "width": 1168,
+                "height": 1,
+                "background": "#f4f1ec",
+                "opacity": 0.13
+              },
+              "children": []
+            },
+            {
+              "id": "ambient",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 630,
+                "top": 30,
+                "width": 640,
+                "height": 640,
+                "borderRadius": "50%",
+                "background": "radial-gradient(circle,#d2a1ff22,transparent 70%)"
+              },
+              "children": []
+            },
+            {
+              "id": "camera-glow",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 680,
+                "top": 104,
+                "width": 510,
+                "height": 510,
+                "borderRadius": "50%",
+                "boxShadow": "0 0 35px #d2a1ff40, 0 0 80px #d2a1ff20",
+                "border": "1px solid #d2a1ff70"
+              },
+              "children": [],
+              "motion": {
+                "property": "opacity",
+                "from": 0.35,
+                "to": 1,
+                "durationMs": 5900
+              }
+            },
+            {
+              "id": "camera-video",
+              "type": "slot",
+              "slotId": "camera",
+              "styles": {
+                "position": "absolute",
+                "left": 685,
+                "top": 109,
+                "width": 500,
+                "height": 500
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#d2a1ff"
+              }
+            },
+            {
+              "id": "eyebrow",
+              "type": "text",
+              "text": {
+                "get": "values.eyebrow"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 159,
+                "width": 535,
+                "height": 35,
+                "color": "#d2a1ff",
+                "fontSize": "13px",
+                "letterSpacing": ".2em"
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 232,
+                "width": 535,
+                "height": 220,
+                "color": "#f4f1ec",
+                "fontSize": "87px",
+                "fontWeight": 850,
+                "letterSpacing": "-.06em",
+                "lineHeight": "1.02"
+              }
+            },
+            {
+              "id": "caption",
+              "type": "text",
+              "text": {
+                "get": "values.caption"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 59,
+                "top": 496,
+                "width": 525,
+                "height": 100,
+                "color": "#f4f1ec",
+                "fontSize": "19px",
+                "lineHeight": "1.5",
+                "opacity": 0.6
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "04 / CIRCLE",
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 670,
+                "width": 600,
+                "height": 26,
+                "color": "#d2a1ff",
+                "fontSize": "12px",
+                "letterSpacing": ".18em"
+              }
+            },
+            {
+              "id": "signature",
+              "type": "text",
+              "text": "CAMERA ATLAS",
+              "styles": {
+                "position": "absolute",
+                "left": 938,
+                "top": 670,
+                "width": 282,
+                "height": 26,
+                "color": "#f4f1ec",
+                "opacity": 0.4,
+                "fontSize": "12px",
+                "textAlign": "right",
+                "letterSpacing": ".18em"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "editorial",
+        "label": "05 Editorial",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "editorial-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#eee9df"
+          },
+          "children": [
+            {
+              "id": "top-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 56,
+                "top": 48,
+                "width": 1168,
+                "height": 1,
+                "background": "#1c232a",
+                "opacity": 0.13
+              },
+              "children": []
+            },
+            {
+              "id": "ambient",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 630,
+                "top": 30,
+                "width": 640,
+                "height": 640,
+                "borderRadius": "50%",
+                "background": "radial-gradient(circle,#234acb22,transparent 70%)"
+              },
+              "children": []
+            },
+            {
+              "id": "camera-glow",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 175,
+                "width": 710,
+                "height": 460,
+                "borderRadius": "13px",
+                "boxShadow": "0 0 35px #234acb40, 0 0 80px #234acb20",
+                "border": "1px solid #234acb70"
+              },
+              "children": [],
+              "motion": {
+                "property": "opacity",
+                "from": 0.35,
+                "to": 1,
+                "durationMs": 6200
+              }
+            },
+            {
+              "id": "camera-video",
+              "type": "slot",
+              "slotId": "camera",
+              "styles": {
+                "position": "absolute",
+                "left": 63,
+                "top": 180,
+                "width": 700,
+                "height": 450
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 8,
+                "outlineWidth": 2,
+                "outlineColor": "#234acb"
+              }
+            },
+            {
+              "id": "eyebrow",
+              "type": "text",
+              "text": {
+                "get": "values.eyebrow"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 825,
+                "top": 193,
+                "width": 380,
+                "height": 35,
+                "color": "#234acb",
+                "fontSize": "12px",
+                "letterSpacing": ".19em"
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 825,
+                "top": 251,
+                "width": 380,
+                "height": 195,
+                "color": "#1c232a",
+                "fontSize": "65px",
+                "fontWeight": 800,
+                "lineHeight": "1.02",
+                "letterSpacing": "-.05em"
+              }
+            },
+            {
+              "id": "caption",
+              "type": "text",
+              "text": {
+                "get": "values.caption"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 825,
+                "top": 495,
+                "width": 380,
+                "height": 105,
+                "color": "#1c232a",
+                "fontSize": "19px",
+                "lineHeight": "1.5",
+                "opacity": 0.6
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "05 / EDITORIAL",
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 670,
+                "width": 600,
+                "height": 26,
+                "color": "#234acb",
+                "fontSize": "12px",
+                "letterSpacing": ".18em"
+              }
+            },
+            {
+              "id": "signature",
+              "type": "text",
+              "text": "CAMERA ATLAS",
+              "styles": {
+                "position": "absolute",
+                "left": 938,
+                "top": 670,
+                "width": 282,
+                "height": 26,
+                "color": "#1c232a",
+                "opacity": 0.4,
+                "fontSize": "12px",
+                "textAlign": "right",
+                "letterSpacing": ".18em"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "neon",
+        "label": "06 Neon",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "neon-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#071418"
+          },
+          "children": [
+            {
+              "id": "top-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 56,
+                "top": 48,
+                "width": 1168,
+                "height": 1,
+                "background": "#f4f1ec",
+                "opacity": 0.13
+              },
+              "children": []
+            },
+            {
+              "id": "ambient",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 630,
+                "top": 30,
+                "width": 640,
+                "height": 640,
+                "borderRadius": "50%",
+                "background": "radial-gradient(circle,#6effd522,transparent 70%)"
+              },
+              "children": []
+            },
+            {
+              "id": "camera-glow",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 321,
+                "top": 151,
+                "width": 638,
+                "height": 420,
+                "borderRadius": "45px",
+                "boxShadow": "0 0 35px #6effd540, 0 0 80px #6effd520",
+                "border": "1px solid #6effd570"
+              },
+              "children": [],
+              "motion": {
+                "property": "opacity",
+                "from": 0.35,
+                "to": 1,
+                "durationMs": 6500
+              }
+            },
+            {
+              "id": "camera-video",
+              "type": "slot",
+              "slotId": "camera",
+              "styles": {
+                "position": "absolute",
+                "left": 326,
+                "top": 156,
+                "width": 628,
+                "height": 410
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 40,
+                "outlineWidth": 2,
+                "outlineColor": "#6effd5"
+              }
+            },
+            {
+              "id": "eyebrow",
+              "type": "text",
+              "text": {
+                "get": "values.eyebrow"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 55,
+                "top": 25,
+                "width": 820,
+                "height": 24,
+                "color": "#6effd5",
+                "fontSize": "12px",
+                "letterSpacing": ".2em"
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 56,
+                "width": 1140,
+                "height": 83,
+                "color": "#f4f1ec",
+                "fontSize": "64px",
+                "fontWeight": 800,
+                "letterSpacing": "-.05em"
+              }
+            },
+            {
+              "id": "caption",
+              "type": "text",
+              "text": {
+                "get": "values.caption"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 56,
+                "top": 648,
+                "width": 1150,
+                "height": 36,
+                "color": "#f4f1ec",
+                "fontSize": "18px",
+                "opacity": 0.6
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "06 / NEON",
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 670,
+                "width": 600,
+                "height": 26,
+                "color": "#6effd5",
+                "fontSize": "12px",
+                "letterSpacing": ".18em"
+              }
+            },
+            {
+              "id": "signature",
+              "type": "text",
+              "text": "CAMERA ATLAS",
+              "styles": {
+                "position": "absolute",
+                "left": 938,
+                "top": 670,
+                "width": 282,
+                "height": 26,
+                "color": "#f4f1ec",
+                "opacity": 0.4,
+                "fontSize": "12px",
+                "textAlign": "right",
+                "letterSpacing": ".18em"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "polaroid",
+        "label": "07 Polaroid",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "polaroid-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#ead9be"
+          },
+          "children": [
+            {
+              "id": "top-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 56,
+                "top": 48,
+                "width": 1168,
+                "height": 1,
+                "background": "#1c232a",
+                "opacity": 0.13
+              },
+              "children": []
+            },
+            {
+              "id": "ambient",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 630,
+                "top": 30,
+                "width": 640,
+                "height": 640,
+                "borderRadius": "50%",
+                "background": "radial-gradient(circle,#83422c22,transparent 70%)"
+              },
+              "children": []
+            },
+            {
+              "id": "paper",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 684,
+                "top": 65,
+                "width": 524,
+                "height": 576,
+                "background": "#fffaf0",
+                "boxShadow": "0 18px 40px #382b2d38"
+              },
+              "children": [
+                {
+                  "id": "photo-note",
+                  "type": "text",
+                  "text": "THE EVERYDAY / IN FRAME",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 517,
+                    "width": 484,
+                    "height": 30,
+                    "fontSize": "17px",
+                    "color": "#44382e",
+                    "letterSpacing": ".12em"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "camera-video",
+              "type": "slot",
+              "slotId": "camera",
+              "styles": {
+                "position": "absolute",
+                "left": 704,
+                "top": 85,
+                "width": 484,
+                "height": 486
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 5,
+                "outlineWidth": 0,
+                "outlineColor": "#83422c"
+              }
+            },
+            {
+              "id": "eyebrow",
+              "type": "text",
+              "text": {
+                "get": "values.eyebrow"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 159,
+                "width": 535,
+                "height": 35,
+                "color": "#83422c",
+                "fontSize": "13px",
+                "letterSpacing": ".2em"
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 232,
+                "width": 535,
+                "height": 220,
+                "color": "#1c232a",
+                "fontSize": "87px",
+                "fontWeight": 850,
+                "letterSpacing": "-.06em",
+                "lineHeight": "1.02"
+              }
+            },
+            {
+              "id": "caption",
+              "type": "text",
+              "text": {
+                "get": "values.caption"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 59,
+                "top": 496,
+                "width": 525,
+                "height": 100,
+                "color": "#1c232a",
+                "fontSize": "19px",
+                "lineHeight": "1.5",
+                "opacity": 0.6
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "07 / POLAROID",
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 670,
+                "width": 600,
+                "height": 26,
+                "color": "#83422c",
+                "fontSize": "12px",
+                "letterSpacing": ".18em"
+              }
+            },
+            {
+              "id": "signature",
+              "type": "text",
+              "text": "CAMERA ATLAS",
+              "styles": {
+                "position": "absolute",
+                "left": 938,
+                "top": 670,
+                "width": 282,
+                "height": 26,
+                "color": "#1c232a",
+                "opacity": 0.4,
+                "fontSize": "12px",
+                "textAlign": "right",
+                "letterSpacing": ".18em"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "capsule",
+        "label": "08 Capsule",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "capsule-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#161327"
+          },
+          "children": [
+            {
+              "id": "top-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 56,
+                "top": 48,
+                "width": 1168,
+                "height": 1,
+                "background": "#f4f1ec",
+                "opacity": 0.13
+              },
+              "children": []
+            },
+            {
+              "id": "ambient",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 630,
+                "top": 30,
+                "width": 640,
+                "height": 640,
+                "borderRadius": "50%",
+                "background": "radial-gradient(circle,#f5a3ce22,transparent 70%)"
+              },
+              "children": []
+            },
+            {
+              "id": "camera-glow",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 813,
+                "top": 67,
+                "width": 320,
+                "height": 584,
+                "borderRadius": "160px",
+                "boxShadow": "0 0 35px #f5a3ce40, 0 0 80px #f5a3ce20",
+                "border": "1px solid #f5a3ce70"
+              },
+              "children": [],
+              "motion": {
+                "property": "opacity",
+                "from": 0.35,
+                "to": 1,
+                "durationMs": 7100
+              }
+            },
+            {
+              "id": "camera-video",
+              "type": "slot",
+              "slotId": "camera",
+              "styles": {
+                "position": "absolute",
+                "left": 818,
+                "top": 72,
+                "width": 310,
+                "height": 574
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 155,
+                "outlineWidth": 2,
+                "outlineColor": "#f5a3ce"
+              }
+            },
+            {
+              "id": "eyebrow",
+              "type": "text",
+              "text": {
+                "get": "values.eyebrow"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 159,
+                "width": 535,
+                "height": 35,
+                "color": "#f5a3ce",
+                "fontSize": "13px",
+                "letterSpacing": ".2em"
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 232,
+                "width": 535,
+                "height": 220,
+                "color": "#f4f1ec",
+                "fontSize": "87px",
+                "fontWeight": 850,
+                "letterSpacing": "-.06em",
+                "lineHeight": "1.02"
+              }
+            },
+            {
+              "id": "caption",
+              "type": "text",
+              "text": {
+                "get": "values.caption"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 59,
+                "top": 496,
+                "width": 525,
+                "height": 100,
+                "color": "#f4f1ec",
+                "fontSize": "19px",
+                "lineHeight": "1.5",
+                "opacity": 0.6
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "08 / CAPSULE",
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 670,
+                "width": 600,
+                "height": 26,
+                "color": "#f5a3ce",
+                "fontSize": "12px",
+                "letterSpacing": ".18em"
+              }
+            },
+            {
+              "id": "signature",
+              "type": "text",
+              "text": "CAMERA ATLAS",
+              "styles": {
+                "position": "absolute",
+                "left": 938,
+                "top": 670,
+                "width": 282,
+                "height": 26,
+                "color": "#f4f1ec",
+                "opacity": 0.4,
+                "fontSize": "12px",
+                "textAlign": "right",
+                "letterSpacing": ".18em"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "horizon",
+        "label": "09 Horizon",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "horizon-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#0a1824"
+          },
+          "children": [
+            {
+              "id": "ambient",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 630,
+                "top": 30,
+                "width": 640,
+                "height": 640,
+                "borderRadius": "50%",
+                "background": "radial-gradient(circle,#80c4f422,transparent 70%)"
+              },
+              "children": []
+            },
+            {
+              "id": "camera-video",
+              "type": "slot",
+              "slotId": "camera",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 260,
+                "width": 1280,
+                "height": 380
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 0,
+                "outlineWidth": 0,
+                "outlineColor": "#80c4f4"
+              }
+            },
+            {
+              "id": "shade",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720,
+                "background": "linear-gradient(180deg,#03081288,transparent 35%,#030812cc)"
+              },
+              "children": []
+            },
+            {
+              "id": "eyebrow",
+              "type": "text",
+              "text": {
+                "get": "values.eyebrow"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 64,
+                "width": 700,
+                "height": 25,
+                "color": "#80c4f4",
+                "fontSize": "13px",
+                "letterSpacing": ".2em"
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 116,
+                "width": 1140,
+                "height": 125,
+                "color": "#f4f1ec",
+                "fontSize": "92px",
+                "fontWeight": 850,
+                "letterSpacing": "-.06em"
+              }
+            },
+            {
+              "id": "caption",
+              "type": "text",
+              "text": {
+                "get": "values.caption"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 59,
+                "top": 656,
+                "width": 1150,
+                "height": 35,
+                "color": "#f4f1ec",
+                "fontSize": "19px",
+                "opacity": 0.7
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "postcard",
+        "label": "10 Postcard",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "postcard-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#f4ecd9"
+          },
+          "children": [
+            {
+              "id": "top-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 56,
+                "top": 48,
+                "width": 1168,
+                "height": 1,
+                "background": "#1c232a",
+                "opacity": 0.13
+              },
+              "children": []
+            },
+            {
+              "id": "ambient",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 630,
+                "top": 30,
+                "width": 640,
+                "height": 640,
+                "borderRadius": "50%",
+                "background": "radial-gradient(circle,#9e492822,transparent 70%)"
+              },
+              "children": []
+            },
+            {
+              "id": "camera-glow",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 75,
+                "top": 63,
+                "width": 520,
+                "height": 584,
+                "borderRadius": "33px",
+                "boxShadow": "0 0 35px #9e492840, 0 0 80px #9e492820",
+                "border": "1px solid #9e492870"
+              },
+              "children": [],
+              "motion": {
+                "property": "opacity",
+                "from": 0.35,
+                "to": 1,
+                "durationMs": 7700
+              }
+            },
+            {
+              "id": "camera-video",
+              "type": "slot",
+              "slotId": "camera",
+              "styles": {
+                "position": "absolute",
+                "left": 80,
+                "top": 68,
+                "width": 510,
+                "height": 574
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 28,
+                "outlineWidth": 2,
+                "outlineColor": "#9e4928"
+              }
+            },
+            {
+              "id": "eyebrow",
+              "type": "text",
+              "text": {
+                "get": "values.eyebrow"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 659,
+                "top": 193,
+                "width": 555,
+                "height": 35,
+                "color": "#9e4928",
+                "fontSize": "12px",
+                "letterSpacing": ".19em"
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 659,
+                "top": 251,
+                "width": 555,
+                "height": 195,
+                "color": "#1c232a",
+                "fontSize": "65px",
+                "fontWeight": 800,
+                "lineHeight": "1.02",
+                "letterSpacing": "-.05em"
+              }
+            },
+            {
+              "id": "caption",
+              "type": "text",
+              "text": {
+                "get": "values.caption"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 659,
+                "top": 495,
+                "width": 555,
+                "height": 105,
+                "color": "#1c232a",
+                "fontSize": "19px",
+                "lineHeight": "1.5",
+                "opacity": 0.6
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "10 / POSTCARD",
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 670,
+                "width": 600,
+                "height": 26,
+                "color": "#9e4928",
+                "fontSize": "12px",
+                "letterSpacing": ".18em"
+              }
+            },
+            {
+              "id": "signature",
+              "type": "text",
+              "text": "CAMERA ATLAS",
+              "styles": {
+                "position": "absolute",
+                "left": 938,
+                "top": 670,
+                "width": 282,
+                "height": 26,
+                "color": "#1c232a",
+                "opacity": 0.4,
+                "fontSize": "12px",
+                "textAlign": "right",
+                "letterSpacing": ".18em"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "studio",
+        "label": "11 Studio",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "studio-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#0b0d11"
+          },
+          "children": [
+            {
+              "id": "top-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 56,
+                "top": 48,
+                "width": 1168,
+                "height": 1,
+                "background": "#f4f1ec",
+                "opacity": 0.13
+              },
+              "children": []
+            },
+            {
+              "id": "ambient",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 630,
+                "top": 30,
+                "width": 640,
+                "height": 640,
+                "borderRadius": "50%",
+                "background": "radial-gradient(circle,#f08d6022,transparent 70%)"
+              },
+              "children": []
+            },
+            {
+              "id": "camera-glow",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 613,
+                "top": 89,
+                "width": 600,
+                "height": 524,
+                "borderRadius": "29px",
+                "boxShadow": "0 0 35px #f08d6040, 0 0 80px #f08d6020",
+                "border": "1px solid #f08d6070"
+              },
+              "children": [],
+              "motion": {
+                "property": "opacity",
+                "from": 0.35,
+                "to": 1,
+                "durationMs": 8000
+              }
+            },
+            {
+              "id": "camera-video",
+              "type": "slot",
+              "slotId": "camera",
+              "styles": {
+                "position": "absolute",
+                "left": 618,
+                "top": 94,
+                "width": 590,
+                "height": 514
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 24,
+                "outlineWidth": 2,
+                "outlineColor": "#f08d60"
+              }
+            },
+            {
+              "id": "eyebrow",
+              "type": "text",
+              "text": {
+                "get": "values.eyebrow"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 159,
+                "width": 535,
+                "height": 35,
+                "color": "#f08d60",
+                "fontSize": "13px",
+                "letterSpacing": ".2em"
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 232,
+                "width": 535,
+                "height": 220,
+                "color": "#f4f1ec",
+                "fontSize": "87px",
+                "fontWeight": 850,
+                "letterSpacing": "-.06em",
+                "lineHeight": "1.02"
+              }
+            },
+            {
+              "id": "caption",
+              "type": "text",
+              "text": {
+                "get": "values.caption"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 59,
+                "top": 496,
+                "width": 525,
+                "height": 100,
+                "color": "#f4f1ec",
+                "fontSize": "19px",
+                "lineHeight": "1.5",
+                "opacity": 0.6
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "11 / STUDIO",
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 670,
+                "width": 600,
+                "height": 26,
+                "color": "#f08d60",
+                "fontSize": "12px",
+                "letterSpacing": ".18em"
+              }
+            },
+            {
+              "id": "signature",
+              "type": "text",
+              "text": "CAMERA ATLAS",
+              "styles": {
+                "position": "absolute",
+                "left": 938,
+                "top": 670,
+                "width": 282,
+                "height": 26,
+                "color": "#f4f1ec",
+                "opacity": 0.4,
+                "fontSize": "12px",
+                "textAlign": "right",
+                "letterSpacing": ".18em"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "spotlight",
+        "label": "12 Spotlight",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "spotlight-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#071b20"
+          },
+          "children": [
+            {
+              "id": "top-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 56,
+                "top": 48,
+                "width": 1168,
+                "height": 1,
+                "background": "#f4f1ec",
+                "opacity": 0.13
+              },
+              "children": []
+            },
+            {
+              "id": "ambient",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 630,
+                "top": 30,
+                "width": 640,
+                "height": 640,
+                "borderRadius": "50%",
+                "background": "radial-gradient(circle,#d3e5a122,transparent 70%)"
+              },
+              "children": []
+            },
+            {
+              "id": "camera-glow",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 364,
+                "top": 110,
+                "width": 552,
+                "height": 552,
+                "borderRadius": "50%",
+                "boxShadow": "0 0 35px #d3e5a140, 0 0 80px #d3e5a120",
+                "border": "1px solid #d3e5a170"
+              },
+              "children": [],
+              "motion": {
+                "property": "opacity",
+                "from": 0.35,
+                "to": 1,
+                "durationMs": 8300
+              }
+            },
+            {
+              "id": "camera-video",
+              "type": "slot",
+              "slotId": "camera",
+              "styles": {
+                "position": "absolute",
+                "left": 369,
+                "top": 115,
+                "width": 542,
+                "height": 542
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#d3e5a1"
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 29,
+                "width": 1176,
+                "height": 70,
+                "textAlign": "center",
+                "color": "#f4f1ec",
+                "fontSize": "55px",
+                "fontWeight": 800,
+                "letterSpacing": "-.04em"
+              }
+            },
+            {
+              "id": "side-note",
+              "type": "text",
+              "text": "ONE VOICE.\nFULL PRESENCE.",
+              "styles": {
+                "position": "absolute",
+                "left": 46,
+                "top": 320,
+                "width": 260,
+                "height": 100,
+                "color": "#d3e5a1",
+                "fontSize": "19px",
+                "letterSpacing": ".15em",
+                "lineHeight": "1.6"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "12 / SPOTLIGHT",
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 670,
+                "width": 600,
+                "height": 26,
+                "color": "#d3e5a1",
+                "fontSize": "12px",
+                "letterSpacing": ".18em"
+              }
+            },
+            {
+              "id": "signature",
+              "type": "text",
+              "text": "CAMERA ATLAS",
+              "styles": {
+                "position": "absolute",
+                "left": 938,
+                "top": 670,
+                "width": 282,
+                "height": 26,
+                "color": "#f4f1ec",
+                "opacity": 0.4,
+                "fontSize": "12px",
+                "textAlign": "right",
+                "letterSpacing": ".18em"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "gallery",
+        "label": "13 Gallery",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "gallery-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#e9e6e1"
+          },
+          "children": [
+            {
+              "id": "top-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 56,
+                "top": 48,
+                "width": 1168,
+                "height": 1,
+                "background": "#1c232a",
+                "opacity": 0.13
+              },
+              "children": []
+            },
+            {
+              "id": "ambient",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 630,
+                "top": 30,
+                "width": 640,
+                "height": 640,
+                "borderRadius": "50%",
+                "background": "radial-gradient(circle,#463b8a22,transparent 70%)"
+              },
+              "children": []
+            },
+            {
+              "id": "mat",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 222,
+                "top": 70,
+                "width": 836,
+                "height": 539,
+                "background": "#fffdf9",
+                "boxShadow": "0 12px 40px #23202d25"
+              },
+              "children": []
+            },
+            {
+              "id": "camera-video",
+              "type": "slot",
+              "slotId": "camera",
+              "styles": {
+                "position": "absolute",
+                "left": 244,
+                "top": 92,
+                "width": 792,
+                "height": 495
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 10,
+                "outlineWidth": 0,
+                "outlineColor": "#463b8a"
+              }
+            },
+            {
+              "id": "eyebrow",
+              "type": "text",
+              "text": {
+                "get": "values.eyebrow"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 55,
+                "top": 25,
+                "width": 820,
+                "height": 24,
+                "color": "#463b8a",
+                "fontSize": "12px",
+                "letterSpacing": ".2em"
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 56,
+                "width": 1140,
+                "height": 83,
+                "color": "#1c232a",
+                "fontSize": "64px",
+                "fontWeight": 800,
+                "letterSpacing": "-.05em"
+              }
+            },
+            {
+              "id": "caption",
+              "type": "text",
+              "text": {
+                "get": "values.caption"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 56,
+                "top": 648,
+                "width": 1150,
+                "height": 36,
+                "color": "#1c232a",
+                "fontSize": "18px",
+                "opacity": 0.6
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "13 / GALLERY",
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 670,
+                "width": 600,
+                "height": 26,
+                "color": "#463b8a",
+                "fontSize": "12px",
+                "letterSpacing": ".18em"
+              }
+            },
+            {
+              "id": "signature",
+              "type": "text",
+              "text": "CAMERA ATLAS",
+              "styles": {
+                "position": "absolute",
+                "left": 938,
+                "top": 670,
+                "width": 282,
+                "height": 26,
+                "color": "#1c232a",
+                "opacity": 0.4,
+                "fontSize": "12px",
+                "textAlign": "right",
+                "letterSpacing": ".18em"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "terminal",
+        "label": "14 Terminal",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "terminal-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#070e0b"
+          },
+          "children": [
+            {
+              "id": "top-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 56,
+                "top": 48,
+                "width": 1168,
+                "height": 1,
+                "background": "#f4f1ec",
+                "opacity": 0.13
+              },
+              "children": []
+            },
+            {
+              "id": "ambient",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 630,
+                "top": 30,
+                "width": 640,
+                "height": 640,
+                "borderRadius": "50%",
+                "background": "radial-gradient(circle,#99e6a722,transparent 70%)"
+              },
+              "children": []
+            },
+            {
+              "id": "terminal-frame",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 653,
+                "top": 69,
+                "width": 564,
+                "height": 554,
+                "border": "1px solid #99e6a755",
+                "borderRadius": "18px"
+              },
+              "children": [
+                {
+                  "id": "terminal-title",
+                  "type": "text",
+                  "text": "\u25cf  \u25cf  \u25cf    CAMERA / CONNECTED",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 16,
+                    "top": 8,
+                    "width": 528,
+                    "height": 20,
+                    "fontSize": "12px",
+                    "color": "#99e6a7",
+                    "letterSpacing": ".14em"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "camera-glow",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 656,
+                "top": 99,
+                "width": 558,
+                "height": 520,
+                "borderRadius": "21px",
+                "boxShadow": "0 0 35px #99e6a740, 0 0 80px #99e6a720",
+                "border": "1px solid #99e6a770"
+              },
+              "children": [],
+              "motion": {
+                "property": "opacity",
+                "from": 0.35,
+                "to": 1,
+                "durationMs": 8900
+              }
+            },
+            {
+              "id": "camera-video",
+              "type": "slot",
+              "slotId": "camera",
+              "styles": {
+                "position": "absolute",
+                "left": 661,
+                "top": 104,
+                "width": 548,
+                "height": 510
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 16,
+                "outlineWidth": 2,
+                "outlineColor": "#99e6a7"
+              }
+            },
+            {
+              "id": "eyebrow",
+              "type": "text",
+              "text": {
+                "get": "values.eyebrow"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 159,
+                "width": 535,
+                "height": 35,
+                "color": "#99e6a7",
+                "fontSize": "13px",
+                "letterSpacing": ".2em"
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 232,
+                "width": 535,
+                "height": 220,
+                "color": "#f4f1ec",
+                "fontSize": "87px",
+                "fontWeight": 850,
+                "letterSpacing": "-.06em",
+                "lineHeight": "1.02"
+              }
+            },
+            {
+              "id": "caption",
+              "type": "text",
+              "text": {
+                "get": "values.caption"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 59,
+                "top": 496,
+                "width": 525,
+                "height": 100,
+                "color": "#f4f1ec",
+                "fontSize": "19px",
+                "lineHeight": "1.5",
+                "opacity": 0.6
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "14 / TERMINAL",
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 670,
+                "width": 600,
+                "height": 26,
+                "color": "#99e6a7",
+                "fontSize": "12px",
+                "letterSpacing": ".18em"
+              }
+            },
+            {
+              "id": "signature",
+              "type": "text",
+              "text": "CAMERA ATLAS",
+              "styles": {
+                "position": "absolute",
+                "left": 938,
+                "top": 670,
+                "width": 282,
+                "height": 26,
+                "color": "#f4f1ec",
+                "opacity": 0.4,
+                "fontSize": "12px",
+                "textAlign": "right",
+                "letterSpacing": ".18em"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "sunset",
+        "label": "15 Sunset",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "sunset-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#32152b"
+          },
+          "children": [
+            {
+              "id": "top-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 56,
+                "top": 48,
+                "width": 1168,
+                "height": 1,
+                "background": "#f4f1ec",
+                "opacity": 0.13
+              },
+              "children": []
+            },
+            {
+              "id": "ambient",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 630,
+                "top": 30,
+                "width": 640,
+                "height": 640,
+                "borderRadius": "50%",
+                "background": "radial-gradient(circle,#ffba8b22,transparent 70%)"
+              },
+              "children": []
+            },
+            {
+              "id": "camera-glow",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 692,
+                "top": 136,
+                "width": 520,
+                "height": 456,
+                "borderRadius": "75px",
+                "boxShadow": "0 0 35px #ffba8b40, 0 0 80px #ffba8b20",
+                "border": "1px solid #ffba8b70"
+              },
+              "children": [],
+              "motion": {
+                "property": "opacity",
+                "from": 0.35,
+                "to": 1,
+                "durationMs": 9200
+              }
+            },
+            {
+              "id": "camera-video",
+              "type": "slot",
+              "slotId": "camera",
+              "styles": {
+                "position": "absolute",
+                "left": 697,
+                "top": 141,
+                "width": 510,
+                "height": 446
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 70,
+                "outlineWidth": 2,
+                "outlineColor": "#ffba8b"
+              }
+            },
+            {
+              "id": "eyebrow",
+              "type": "text",
+              "text": {
+                "get": "values.eyebrow"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 159,
+                "width": 535,
+                "height": 35,
+                "color": "#ffba8b",
+                "fontSize": "13px",
+                "letterSpacing": ".2em"
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 232,
+                "width": 535,
+                "height": 220,
+                "color": "#f4f1ec",
+                "fontSize": "87px",
+                "fontWeight": 850,
+                "letterSpacing": "-.06em",
+                "lineHeight": "1.02"
+              }
+            },
+            {
+              "id": "caption",
+              "type": "text",
+              "text": {
+                "get": "values.caption"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 59,
+                "top": 496,
+                "width": 525,
+                "height": 100,
+                "color": "#f4f1ec",
+                "fontSize": "19px",
+                "lineHeight": "1.5",
+                "opacity": 0.6
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "15 / SUNSET",
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 670,
+                "width": 600,
+                "height": 26,
+                "color": "#ffba8b",
+                "fontSize": "12px",
+                "letterSpacing": ".18em"
+              }
+            },
+            {
+              "id": "signature",
+              "type": "text",
+              "text": "CAMERA ATLAS",
+              "styles": {
+                "position": "absolute",
+                "left": 938,
+                "top": 670,
+                "width": 282,
+                "height": 26,
+                "color": "#f4f1ec",
+                "opacity": 0.4,
+                "fontSize": "12px",
+                "textAlign": "right",
+                "letterSpacing": ".18em"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "hero",
+        "label": "16 Hero",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "hero-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#06080e"
+          },
+          "children": [
+            {
+              "id": "ambient",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 630,
+                "top": 30,
+                "width": 640,
+                "height": 640,
+                "borderRadius": "50%",
+                "background": "radial-gradient(circle,#b8ceff22,transparent 70%)"
+              },
+              "children": []
+            },
+            {
+              "id": "camera-video",
+              "type": "slot",
+              "slotId": "camera",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 0,
+                "outlineWidth": 0,
+                "outlineColor": "#b8ceff"
+              }
+            },
+            {
+              "id": "shade",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720,
+                "background": "linear-gradient(180deg,#03081288,transparent 35%,#030812cc)"
+              },
+              "children": []
+            },
+            {
+              "id": "eyebrow",
+              "type": "text",
+              "text": {
+                "get": "values.eyebrow"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 64,
+                "width": 700,
+                "height": 25,
+                "color": "#b8ceff",
+                "fontSize": "13px",
+                "letterSpacing": ".2em"
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 485,
+                "width": 1140,
+                "height": 125,
+                "color": "#f4f1ec",
+                "fontSize": "92px",
+                "fontWeight": 850,
+                "letterSpacing": "-.06em"
+              }
+            },
+            {
+              "id": "caption",
+              "type": "text",
+              "text": {
+                "get": "values.caption"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 59,
+                "top": 656,
+                "width": 1150,
+                "height": 35,
+                "color": "#f4f1ec",
+                "fontSize": "19px",
+                "opacity": 0.7
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "controls": [
+      {
+        "id": "orbit-button",
+        "type": "button",
+        "label": "01 Orbit",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "orbit"
+        }
+      },
+      {
+        "id": "portrait-button",
+        "type": "button",
+        "label": "02 Portrait",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "portrait"
+        }
+      },
+      {
+        "id": "cinema-button",
+        "type": "button",
+        "label": "03 Cinema",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "cinema"
+        }
+      },
+      {
+        "id": "circle-button",
+        "type": "button",
+        "label": "04 Circle",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "circle"
+        }
+      },
+      {
+        "id": "editorial-button",
+        "type": "button",
+        "label": "05 Editorial",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "editorial"
+        }
+      },
+      {
+        "id": "neon-button",
+        "type": "button",
+        "label": "06 Neon",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "neon"
+        }
+      },
+      {
+        "id": "polaroid-button",
+        "type": "button",
+        "label": "07 Polaroid",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "polaroid"
+        }
+      },
+      {
+        "id": "capsule-button",
+        "type": "button",
+        "label": "08 Capsule",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "capsule"
+        }
+      },
+      {
+        "id": "horizon-button",
+        "type": "button",
+        "label": "09 Horizon",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "horizon"
+        }
+      },
+      {
+        "id": "postcard-button",
+        "type": "button",
+        "label": "10 Postcard",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "postcard"
+        }
+      },
+      {
+        "id": "studio-button",
+        "type": "button",
+        "label": "11 Studio",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "studio"
+        }
+      },
+      {
+        "id": "spotlight-button",
+        "type": "button",
+        "label": "12 Spotlight",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "spotlight"
+        }
+      },
+      {
+        "id": "gallery-button",
+        "type": "button",
+        "label": "13 Gallery",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "gallery"
+        }
+      },
+      {
+        "id": "terminal-button",
+        "type": "button",
+        "label": "14 Terminal",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "terminal"
+        }
+      },
+      {
+        "id": "sunset-button",
+        "type": "button",
+        "label": "15 Sunset",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "sunset"
+        }
+      },
+      {
+        "id": "hero-button",
+        "type": "button",
+        "label": "16 Hero",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "hero"
+        }
+      },
+      {
+        "id": "title-field",
+        "type": "text",
+        "label": "Title",
+        "key": "title"
+      },
+      {
+        "id": "eyebrow-field",
+        "type": "text",
+        "label": "Eyebrow",
+        "key": "eyebrow"
+      },
+      {
+        "id": "caption-field",
+        "type": "text",
+        "label": "Caption",
+        "key": "caption"
+      }
+    ]
+  }
+}

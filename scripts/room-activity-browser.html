@@ -1,0 +1,4 @@
+<!doctype html><link rel="stylesheet" href="/src/App.css"><div id="root"></div><script type="module">
+import React from 'react';import {createRoot} from 'react-dom/client';import {NoticeHost} from '/src/components/Notice.tsx';import {notify} from '/src/lib/notices.ts';
+window.opened=0;createRoot(document.getElementById('root')).render(React.createElement(NoticeHost,{action:{noticeKey:'recording-saved',label:'View in Manager',onClick:()=>window.opened++}}));setTimeout(()=>{notify('Saved recording.mp4',{key:'recording-saved',tone:'success'});notify('Room connected',{tone:'info'});},100);
+</script>

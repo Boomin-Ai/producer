@@ -1,0 +1,18 @@
+import fs from 'node:fs';import assert from 'node:assert/strict';
+import {loadRuntime} from './presentation-proof/runtime.mjs';
+const {RehearsalSession}=await loadRuntime();
+const doc=JSON.parse(fs.readFileSync('docs/shows/own-your-distribution.show.json'));
+assert.equal(doc.show.phases.length,2);assert.equal(doc.set.slots.length,1);
+const diagram=doc.set.layouts.filter(l=>l.id.startsWith('diagram-'));assert.equal(diagram.length,4);for(const l of diagram){assert.equal(l.animation.transition.type,'morph');assert(l.animation.tracks.length<=32);assert(l.animation.tracks.some(t=>['x','y'].includes(t.property)&&new Set(t.keyframes.map(f=>f.value)).size>1),'Diagram must move, not only fade');}const leave=diagram.find(l=>l.id.includes('leave'));assert(leave.animation.tracks.some(t=>t.target==='uplink'&&t.property==='opacity'&&t.keyframes.at(-1).value===0));const owned=diagram.find(l=>l.id.includes('owned'));assert.equal(owned.animation.tracks.filter(t=>t.target.startsWith('person-')&&t.property==='y').length,8);
+
+const session=new RehearsalSession(doc);session.send({type:'control',action:{type:'show.start'}});
+for(const layout of doc.set.layouts){if(layout.id==='diagram-locked-portrait')assert.equal(session.send({type:'control',action:{type:'show.next'}}),true);assert.equal(layout.width,1080);assert.equal(layout.height,1920);assert.equal(session.send({type:'control',action:{type:'layout.select',layoutId:layout.id}}),true);assert.equal(session.snapshot().show.phase,layout.id.startsWith('diagram-')?'diagram':'distribution');const host=layout.root.children.find(n=>n.slotId==='host');assert.deepEqual([host.styles.left,host.styles.top,host.styles.width,host.styles.height],[64,1080,856,560]);}
+const {webkit}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??'playwright');const browser=await webkit.launch();
+try{
+ const page=await browser.newPage({viewport:{width:1200,height:1500}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/docs/shows/json-ui-test.show.json',r=>r.fulfill({json:doc}));await page.goto('http://127.0.0.1:1420/scripts/json-ui-test.html');await page.getByRole('button',{name:'Start show',exact:true}).first().click();
+ const frame=page.frameLocator('iframe').first();
+ fs.mkdirSync('docs/previews/distribution',{recursive:true});
+ for(const layout of doc.set.layouts){if(layout.id==='diagram-locked-portrait')await page.getByRole('button',{name:'Next',exact:true}).first().click();await page.getByRole('button',{name:layout.label,exact:true}).click();await page.waitForTimeout(layout.id.startsWith('diagram-')?2100:700);assert.equal(await page.getByTestId('phase').textContent(),layout.id.startsWith('diagram-')?'diagram':'distribution');const heading=await frame.locator('[data-node$="/headline"]').boundingBox(),subhead=await frame.locator('[data-node$="/subhead"]').boundingBox();assert.ok(heading.y+heading.height<=subhead.y+1,`${layout.id}: headline overlaps subhead`);const images=frame.locator('img');assert.ok(await images.count()>0);assert.ok(await images.evaluateAll(imgs=>imgs.every(i=>i.complete&&i.naturalWidth>0)),'All embedded logos decode');assert.equal(await frame.locator('[data-node$="/host-camera"]').count(),1);assert.equal(await frame.locator('canvas[data-effect="borderFlare"]').count(),1);assert.equal(await page.getByRole('alert').count(),0);await page.locator('.set-preview').first().screenshot({path:'docs/previews/distribution/'+layout.id+'.png'});}
+ assert.deepEqual(errors,[]);console.log('PASS ten vertical visuals across two segments with four animated diagram states, fixed large host, embedded SVGL logos and camera flare.');
+}finally{await browser.close()}

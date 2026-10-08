@@ -1,0 +1,1047 @@
+{
+  "schema": "producer.presentation/1",
+  "id": "djayla-open-book",
+  "version": "0.1.1",
+  "name": "Djayla \u2014 An Open Book",
+  "set": {
+    "initialLayout": "catch-up",
+    "values": {
+      "episode": {
+        "type": "text",
+        "default": "EPISODE 01",
+        "maxLength": 25
+      },
+      "opening": {
+        "type": "text",
+        "default": "Life is a lot. Let\u2019s talk.",
+        "maxLength": 65
+      },
+      "topic": {
+        "type": "text",
+        "default": "Being 30, building a family, and figuring out who I am along the way.",
+        "maxLength": 110
+      },
+      "storyTitle": {
+        "type": "text",
+        "default": "The part I don\u2019t always say out loud.",
+        "maxLength": 65
+      },
+      "storyNote": {
+        "type": "text",
+        "default": "Share what happened, how it felt, and what you wish someone had told you.",
+        "maxLength": 120
+      },
+      "lesson": {
+        "type": "text",
+        "default": "What I\u2019m learning as I go.",
+        "maxLength": 65
+      },
+      "reminder": {
+        "type": "text",
+        "default": "You can love your people and still make room for yourself.",
+        "maxLength": 105
+      },
+      "checkIn": {
+        "type": "text",
+        "default": "What do you need a little more of this week?",
+        "maxLength": 100
+      }
+    },
+    "feeds": {},
+    "slots": [
+      {
+        "id": "djayla",
+        "label": "Djayla camera"
+      }
+    ],
+    "components": {},
+    "layouts": [
+      {
+        "id": "catch-up",
+        "label": "01 Hey, Girlfriend",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "catch-up-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#f0ded6"
+          },
+          "children": [
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "Djayla",
+              "styles": {
+                "position": "absolute",
+                "left": 54,
+                "top": 28,
+                "width": 500,
+                "height": 75,
+                "fontSize": "62px",
+                "fontWeight": 800,
+                "letterSpacing": "-.055em",
+                "color": "#573d3f"
+              }
+            },
+            {
+              "id": "brand-line",
+              "type": "text",
+              "text": "AN OPEN BOOK",
+              "styles": {
+                "position": "absolute",
+                "left": 59,
+                "top": 104,
+                "width": 570,
+                "height": 22,
+                "fontSize": "12px",
+                "letterSpacing": ".23em",
+                "color": "#9a6b67"
+              }
+            },
+            {
+              "id": "segment-label",
+              "type": "text",
+              "text": "01 HEY, GIRLFRIEND",
+              "styles": {
+                "position": "absolute",
+                "left": 895,
+                "top": 61,
+                "width": 325,
+                "height": 30,
+                "fontSize": "12px",
+                "letterSpacing": ".14em",
+                "textAlign": "right",
+                "color": "#9a6b67"
+              }
+            },
+            {
+              "id": "rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 55,
+                "top": 145,
+                "width": 1170,
+                "height": 1,
+                "background": "#573d3f22"
+              },
+              "children": []
+            },
+            {
+              "id": "footer",
+              "type": "text",
+              "text": "REAL LIFE. HONEST CONVERSATIONS.",
+              "styles": {
+                "position": "absolute",
+                "left": 57,
+                "top": 678,
+                "width": 890,
+                "height": 24,
+                "fontSize": "11px",
+                "letterSpacing": ".18em",
+                "color": "#9a6b67"
+              }
+            },
+            {
+              "id": "episode",
+              "type": "text",
+              "text": {
+                "get": "values.episode"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 1030,
+                "top": 678,
+                "width": 194,
+                "height": 24,
+                "fontSize": "11px",
+                "letterSpacing": ".12em",
+                "textAlign": "right",
+                "color": "#9a6b67"
+              }
+            },
+            {
+              "id": "camera-mat",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 673,
+                "top": 180,
+                "width": 541,
+                "height": 455,
+                "borderRadius": "40px",
+                "boxShadow": "0 14px 45px #512e3022",
+                "background": "transparent",
+                "border": "12px solid #fff8ed"
+              },
+              "children": []
+            },
+            {
+              "id": "djayla-video",
+              "type": "slot",
+              "slotId": "djayla",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 30,
+                "outlineWidth": 0,
+                "outlineColor": "#fff8ed"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 685,
+                "top": 192,
+                "width": 517,
+                "height": 431
+              }
+            },
+            {
+              "id": "hello",
+              "type": "text",
+              "text": "HEY, GIRLFRIEND.",
+              "styles": {
+                "position": "absolute",
+                "left": 57,
+                "top": 214,
+                "width": 565,
+                "height": 26,
+                "fontSize": "13px",
+                "letterSpacing": ".18em",
+                "color": "#9a6b67"
+              }
+            },
+            {
+              "id": "opening",
+              "type": "text",
+              "text": {
+                "get": "values.opening"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 265,
+                "width": 570,
+                "height": 171,
+                "fontSize": "63px",
+                "fontWeight": 750,
+                "letterSpacing": "-.05em",
+                "lineHeight": "1.08",
+                "color": "#573d3f"
+              }
+            },
+            {
+              "id": "topic",
+              "type": "text",
+              "text": {
+                "get": "values.topic"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 463,
+                "width": 542,
+                "height": 90,
+                "fontSize": "23px",
+                "lineHeight": "1.5",
+                "color": "#805d5d"
+              }
+            },
+            {
+              "id": "invitation",
+              "type": "text",
+              "text": "Come as you are. Let\u2019s talk.",
+              "styles": {
+                "position": "absolute",
+                "left": 58,
+                "top": 583,
+                "width": 570,
+                "height": 32,
+                "fontSize": "18px",
+                "color": "#9a6b67"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "my-story",
+        "label": "02 An Open Book",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "my-story-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#f4e9df"
+          },
+          "children": [
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "Djayla",
+              "styles": {
+                "position": "absolute",
+                "left": 54,
+                "top": 28,
+                "width": 500,
+                "height": 75,
+                "fontSize": "62px",
+                "fontWeight": 800,
+                "letterSpacing": "-.055em",
+                "color": "#573d3f"
+              }
+            },
+            {
+              "id": "brand-line",
+              "type": "text",
+              "text": "AN OPEN BOOK",
+              "styles": {
+                "position": "absolute",
+                "left": 59,
+                "top": 104,
+                "width": 570,
+                "height": 22,
+                "fontSize": "12px",
+                "letterSpacing": ".23em",
+                "color": "#9a6b67"
+              }
+            },
+            {
+              "id": "segment-label",
+              "type": "text",
+              "text": "02 AN OPEN BOOK",
+              "styles": {
+                "position": "absolute",
+                "left": 895,
+                "top": 61,
+                "width": 325,
+                "height": 30,
+                "fontSize": "12px",
+                "letterSpacing": ".14em",
+                "textAlign": "right",
+                "color": "#9a6b67"
+              }
+            },
+            {
+              "id": "rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 55,
+                "top": 145,
+                "width": 1170,
+                "height": 1,
+                "background": "#573d3f22"
+              },
+              "children": []
+            },
+            {
+              "id": "footer",
+              "type": "text",
+              "text": "REAL LIFE. HONEST CONVERSATIONS.",
+              "styles": {
+                "position": "absolute",
+                "left": 57,
+                "top": 678,
+                "width": 890,
+                "height": 24,
+                "fontSize": "11px",
+                "letterSpacing": ".18em",
+                "color": "#9a6b67"
+              }
+            },
+            {
+              "id": "episode",
+              "type": "text",
+              "text": {
+                "get": "values.episode"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 1030,
+                "top": 678,
+                "width": 194,
+                "height": 24,
+                "fontSize": "11px",
+                "letterSpacing": ".12em",
+                "textAlign": "right",
+                "color": "#9a6b67"
+              }
+            },
+            {
+              "id": "camera-mat",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 195,
+                "width": 740,
+                "height": 440,
+                "borderRadius": "40px",
+                "boxShadow": "0 14px 45px #512e3022",
+                "background": "transparent",
+                "border": "12px solid #fff8ed"
+              },
+              "children": []
+            },
+            {
+              "id": "djayla-video",
+              "type": "slot",
+              "slotId": "djayla",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 30,
+                "outlineWidth": 0,
+                "outlineColor": "#fff8ed"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 72,
+                "top": 207,
+                "width": 716,
+                "height": 416
+              }
+            },
+            {
+              "id": "story-kicker",
+              "type": "text",
+              "text": "FROM MY SIDE OF THE TABLE",
+              "styles": {
+                "position": "absolute",
+                "left": 842,
+                "top": 209,
+                "width": 365,
+                "height": 46,
+                "fontSize": "12px",
+                "letterSpacing": ".14em",
+                "lineHeight": "1.6",
+                "color": "#9a6b67"
+              }
+            },
+            {
+              "id": "story-title",
+              "type": "text",
+              "text": {
+                "get": "values.storyTitle"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 836,
+                "top": 283,
+                "width": 370,
+                "height": 154,
+                "fontSize": "43px",
+                "fontWeight": 750,
+                "letterSpacing": "-.04em",
+                "lineHeight": "1.1",
+                "color": "#573d3f"
+              }
+            },
+            {
+              "id": "story-note",
+              "type": "text",
+              "text": {
+                "get": "values.storyNote"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 842,
+                "top": 478,
+                "width": 365,
+                "height": 110,
+                "fontSize": "21px",
+                "lineHeight": "1.5",
+                "color": "#805d5d"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "takeaway",
+        "label": "03 What I\u2019m Learning",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "takeaway-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#e4e8dd"
+          },
+          "children": [
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "Djayla",
+              "styles": {
+                "position": "absolute",
+                "left": 54,
+                "top": 28,
+                "width": 500,
+                "height": 75,
+                "fontSize": "62px",
+                "fontWeight": 800,
+                "letterSpacing": "-.055em",
+                "color": "#573d3f"
+              }
+            },
+            {
+              "id": "brand-line",
+              "type": "text",
+              "text": "AN OPEN BOOK",
+              "styles": {
+                "position": "absolute",
+                "left": 59,
+                "top": 104,
+                "width": 570,
+                "height": 22,
+                "fontSize": "12px",
+                "letterSpacing": ".23em",
+                "color": "#9a6b67"
+              }
+            },
+            {
+              "id": "segment-label",
+              "type": "text",
+              "text": "03 WHAT I\u2019M LEARNING",
+              "styles": {
+                "position": "absolute",
+                "left": 895,
+                "top": 61,
+                "width": 325,
+                "height": 30,
+                "fontSize": "12px",
+                "letterSpacing": ".14em",
+                "textAlign": "right",
+                "color": "#9a6b67"
+              }
+            },
+            {
+              "id": "rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 55,
+                "top": 145,
+                "width": 1170,
+                "height": 1,
+                "background": "#573d3f22"
+              },
+              "children": []
+            },
+            {
+              "id": "footer",
+              "type": "text",
+              "text": "REAL LIFE. HONEST CONVERSATIONS.",
+              "styles": {
+                "position": "absolute",
+                "left": 57,
+                "top": 678,
+                "width": 890,
+                "height": 24,
+                "fontSize": "11px",
+                "letterSpacing": ".18em",
+                "color": "#9a6b67"
+              }
+            },
+            {
+              "id": "episode",
+              "type": "text",
+              "text": {
+                "get": "values.episode"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 1030,
+                "top": 678,
+                "width": 194,
+                "height": 24,
+                "fontSize": "11px",
+                "letterSpacing": ".12em",
+                "textAlign": "right",
+                "color": "#9a6b67"
+              }
+            },
+            {
+              "id": "camera-mat",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 195,
+                "width": 511,
+                "height": 440,
+                "borderRadius": "40px",
+                "boxShadow": "0 14px 45px #512e3022",
+                "background": "transparent",
+                "border": "12px solid #fff8ed"
+              },
+              "children": []
+            },
+            {
+              "id": "djayla-video",
+              "type": "slot",
+              "slotId": "djayla",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 30,
+                "outlineWidth": 0,
+                "outlineColor": "#fff8ed"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 72,
+                "top": 207,
+                "width": 487,
+                "height": 416
+              }
+            },
+            {
+              "id": "learning-kicker",
+              "type": "text",
+              "text": "WHAT I\u2019M LEARNING",
+              "styles": {
+                "position": "absolute",
+                "left": 626,
+                "top": 201,
+                "width": 575,
+                "height": 28,
+                "fontSize": "12px",
+                "letterSpacing": ".18em",
+                "color": "#6d7c61"
+              }
+            },
+            {
+              "id": "learning-title",
+              "type": "text",
+              "text": {
+                "get": "values.lesson"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 620,
+                "top": 257,
+                "width": 585,
+                "height": 154,
+                "fontSize": "47px",
+                "fontWeight": 750,
+                "letterSpacing": "-.04em",
+                "lineHeight": "1.12",
+                "color": "#435341"
+              }
+            },
+            {
+              "id": "gentle-card",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 624,
+                "top": 449,
+                "width": 578,
+                "height": 143,
+                "background": "#faf7ee",
+                "borderRadius": "22px",
+                "padding": "23px 25px"
+              },
+              "children": [
+                {
+                  "id": "reminder-label",
+                  "type": "text",
+                  "text": "A GENTLE REMINDER",
+                  "styles": {
+                    "fontSize": "11px",
+                    "letterSpacing": ".16em",
+                    "color": "#6d7c61"
+                  }
+                },
+                {
+                  "id": "reminder",
+                  "type": "text",
+                  "text": {
+                    "get": "values.reminder"
+                  },
+                  "styles": {
+                    "fontSize": "22px",
+                    "lineHeight": "1.45",
+                    "color": "#435341",
+                    "padding": "14px 0"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "girlfriend-check-in",
+        "label": "04 Before You Go",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "girlfriend-check-in-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#eddfd9"
+          },
+          "children": [
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "Djayla",
+              "styles": {
+                "position": "absolute",
+                "left": 54,
+                "top": 28,
+                "width": 500,
+                "height": 75,
+                "fontSize": "62px",
+                "fontWeight": 800,
+                "letterSpacing": "-.055em",
+                "color": "#573d3f"
+              }
+            },
+            {
+              "id": "brand-line",
+              "type": "text",
+              "text": "AN OPEN BOOK",
+              "styles": {
+                "position": "absolute",
+                "left": 59,
+                "top": 104,
+                "width": 570,
+                "height": 22,
+                "fontSize": "12px",
+                "letterSpacing": ".23em",
+                "color": "#9a6b67"
+              }
+            },
+            {
+              "id": "segment-label",
+              "type": "text",
+              "text": "04 BEFORE YOU GO",
+              "styles": {
+                "position": "absolute",
+                "left": 895,
+                "top": 61,
+                "width": 325,
+                "height": 30,
+                "fontSize": "12px",
+                "letterSpacing": ".14em",
+                "textAlign": "right",
+                "color": "#9a6b67"
+              }
+            },
+            {
+              "id": "rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 55,
+                "top": 145,
+                "width": 1170,
+                "height": 1,
+                "background": "#573d3f22"
+              },
+              "children": []
+            },
+            {
+              "id": "footer",
+              "type": "text",
+              "text": "REAL LIFE. HONEST CONVERSATIONS.",
+              "styles": {
+                "position": "absolute",
+                "left": 57,
+                "top": 678,
+                "width": 890,
+                "height": 24,
+                "fontSize": "11px",
+                "letterSpacing": ".18em",
+                "color": "#9a6b67"
+              }
+            },
+            {
+              "id": "episode",
+              "type": "text",
+              "text": {
+                "get": "values.episode"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 1030,
+                "top": 678,
+                "width": 194,
+                "height": 24,
+                "fontSize": "11px",
+                "letterSpacing": ".12em",
+                "textAlign": "right",
+                "color": "#9a6b67"
+              }
+            },
+            {
+              "id": "camera-mat",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 407,
+                "top": 177,
+                "width": 466,
+                "height": 376,
+                "borderRadius": "40px",
+                "boxShadow": "0 14px 45px #512e3022",
+                "background": "transparent",
+                "border": "12px solid #fff8ed"
+              },
+              "children": []
+            },
+            {
+              "id": "djayla-video",
+              "type": "slot",
+              "slotId": "djayla",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 30,
+                "outlineWidth": 0,
+                "outlineColor": "#fff8ed"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 419,
+                "top": 189,
+                "width": 442,
+                "height": 352
+              }
+            },
+            {
+              "id": "left-note",
+              "type": "text",
+              "text": "FAMILY.\nMARRIAGE.\nKIDS.\nCAREER.\nYOU.",
+              "styles": {
+                "position": "absolute",
+                "left": 59,
+                "top": 260,
+                "width": 298,
+                "height": 203,
+                "fontSize": "24px",
+                "lineHeight": "1.6",
+                "letterSpacing": ".05em",
+                "color": "#9a6b67"
+              }
+            },
+            {
+              "id": "right-note",
+              "type": "text",
+              "text": "No perfect answers.\nJust an honest conversation.",
+              "styles": {
+                "position": "absolute",
+                "left": 931,
+                "top": 278,
+                "width": 283,
+                "height": 154,
+                "fontSize": "26px",
+                "lineHeight": "1.4",
+                "color": "#805d5d"
+              }
+            },
+            {
+              "id": "question",
+              "type": "text",
+              "text": {
+                "get": "values.checkIn"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 129,
+                "top": 572,
+                "width": 1022,
+                "height": 64,
+                "fontSize": "31px",
+                "fontWeight": 650,
+                "textAlign": "center",
+                "lineHeight": "1.2",
+                "color": "#573d3f"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "controls": [
+      {
+        "id": "catch-up-button",
+        "type": "button",
+        "label": "01 Hey, Girlfriend",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "catch-up"
+        }
+      },
+      {
+        "id": "my-story-button",
+        "type": "button",
+        "label": "02 An Open Book",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "my-story"
+        }
+      },
+      {
+        "id": "takeaway-button",
+        "type": "button",
+        "label": "03 What I\u2019m Learning",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "takeaway"
+        }
+      },
+      {
+        "id": "girlfriend-check-in-button",
+        "type": "button",
+        "label": "04 Before You Go",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "girlfriend-check-in"
+        }
+      },
+      {
+        "id": "episode-field",
+        "type": "text",
+        "key": "episode",
+        "label": "Episode"
+      },
+      {
+        "id": "opening-field",
+        "type": "text",
+        "key": "opening",
+        "label": "Welcome headline"
+      },
+      {
+        "id": "topic-field",
+        "type": "text",
+        "key": "topic",
+        "label": "Today\u2019s topic"
+      },
+      {
+        "id": "storyTitle-field",
+        "type": "text",
+        "key": "storyTitle",
+        "label": "My story title"
+      },
+      {
+        "id": "storyNote-field",
+        "type": "text",
+        "key": "storyNote",
+        "label": "Story prompt"
+      },
+      {
+        "id": "lesson-field",
+        "type": "text",
+        "key": "lesson",
+        "label": "Lesson headline"
+      },
+      {
+        "id": "reminder-field",
+        "type": "text",
+        "key": "reminder",
+        "label": "Gentle reminder"
+      },
+      {
+        "id": "checkIn-field",
+        "type": "text",
+        "key": "checkIn",
+        "label": "Closing question"
+      },
+      {
+        "id": "start",
+        "type": "button",
+        "label": "Start show",
+        "action": {
+          "type": "show.start"
+        }
+      },
+      {
+        "id": "next",
+        "type": "button",
+        "label": "Next",
+        "action": {
+          "type": "show.next"
+        }
+      }
+    ]
+  },
+  "show": {
+    "id": "djayla-open-book",
+    "version": "0.1.0",
+    "initialPhase": "catch-up",
+    "phases": [
+      {
+        "id": "catch-up",
+        "label": "Hey, Girlfriend",
+        "layoutId": "catch-up",
+        "next": "my-story"
+      },
+      {
+        "id": "my-story",
+        "label": "An Open Book",
+        "layoutId": "my-story",
+        "next": "takeaway"
+      },
+      {
+        "id": "takeaway",
+        "label": "What I\u2019m Learning",
+        "layoutId": "takeaway",
+        "next": "girlfriend-check-in"
+      },
+      {
+        "id": "girlfriend-check-in",
+        "label": "Before You Go",
+        "layoutId": "girlfriend-check-in"
+      }
+    ],
+    "choices": [
+      {
+        "id": "yes",
+        "label": "Yes"
+      },
+      {
+        "id": "not-yet",
+        "label": "Not yet"
+      }
+    ]
+  }
+}

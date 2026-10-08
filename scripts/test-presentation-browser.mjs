@@ -1,0 +1,347 @@
+import assert from 'node:assert/strict';
+import { readFile, mkdir } from 'node:fs/promises';
+const { chromium, webkit } = await import(process.env.PRODUCER_PLAYWRIGHT_MODULE ?? '/private/tmp/rene-browser/node_modules/playwright/index.mjs');
+const origin = process.env.PRODUCER_PREVIEW_ORIGIN ?? 'http://127.0.0.1:1420';
+const output = process.env.PRODUCER_SCREENSHOT_DIR ?? '/private/tmp/producer-presentation-browser';
+await mkdir(output, { recursive: true });
+
+for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome' }], ['webkit', webkit, {}]]) {
+  const browser = await engine.launch({ headless: true, ...options });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1080, height: 1100 } });
+    const errors = []; const requests = [];
+    page.on('pageerror', e => errors.push(e.message));
+    page.on('request', request => { if (request.frame().parentFrame()) requests.push(request.url()); });
+    await page.goto(`${origin}/scripts/presentation-browser.html?constrained`);
+    const preview = () => page.frameLocator('iframe');
+    const openPreview = async () => { if(!await page.getByRole('dialog').count())await page.getByRole('button', { name: 'Set edit', exact: true }).click(); await page.waitForFunction(()=>document.querySelector('dialog')?.open); };
+    const closePreview = () => page.getByRole('button', { name: 'Close preview', exact: true }).click();
+    const fillHost = async value => { await openPreview(); await page.getByLabel('Host name',{exact:true}).fill(value); await closePreview(); };
+    const readHost = async () => { await openPreview(); const value=await page.getByLabel('Host name',{exact:true}).inputValue(); await closePreview(); return value; };
+    const more = async () => { if (!await page.locator('.set-menu').evaluate(el => el.matches(':popover-open'))) await page.getByRole('button', { name:'Set settings', exact:true }).click(); };
+    const run = () => page.getByRole('region', { name: 'Run', exact: true });
+    await more();
+    assert.equal(await page.locator('.set-menu').evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(20, 28, 40)', 'Set settings has an opaque background');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('.set-controls .set-more').count(), 0, 'File controls are absent from Set controls');
+    assert.equal(await page.locator('.set-controls').getByRole('button', { name:'Edit set with agent', exact:true }).count(), 0);
+    assert.equal(await page.locator('iframe').count(), 0, 'Preview is collapsed by default');
+    await openPreview();
+    await preview().getByText('AFTER HOURS', { exact: true }).waitFor();
+    assert.equal(await page.getByText('Opening preview…').count(), 0, 'StrictMode handshake must finish');
+    await closePreview();
+    await fillHost('<script>literal</script>');
+    await openPreview();
+    await preview().getByText('<script>literal</script>', { exact: true }).waitFor();
+    assert.equal(await preview().locator('script').count(), 1, 'Text remains text, without creating an executable element');
+    await closePreview();
+    await page.getByRole('button', { name: 'Solo', exact: true }).click();
+    await openPreview();
+    await preview().getByText('AFTER HOURS', { exact: true }).waitFor();
+    assert.equal(await preview().getByText('Guest · simulated source', { exact: true }).count(), 0);
+    await closePreview();
+    await page.getByRole('button', { name: 'Conversation', exact: true }).click();
+    await openPreview();
+    await preview().getByText('Guest · simulated source', { exact: true }).waitFor();
+    await closePreview();
+    assert.equal(await page.locator('.set-controls .set-sample-data').count(), 0);
+    assert.equal(await page.locator('.set-controls').getByRole('button', { name: 'Add show with agent', exact: true }).count(), 0);
+    await more(); await page.getByText('Test data', { exact: true }).click();
+    assert.equal(await page.getByRole('textbox', { name: 'Test headline', exact: true }).isDisabled(), true);
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Rehearse', exact: true }).click();
+    await more();
+    await page.getByRole('textbox', { name: 'Test headline', exact: true }).fill('REHEARSAL INPUT');
+    await page.keyboard.press('Escape');
+    await openPreview();
+    await preview().getByText('REHEARSAL INPUT', { exact: true }).waitFor();
+
+    const frame = page.frames().find(f => f.parentFrame());
+    const isolation = await frame.evaluate(async () => {
+      let parentBlocked = false, fetchBlocked = false;
+      try { void parent.document.body; } catch { parentBlocked = true; }
+      try { await fetch('http://127.0.0.1:1420/'); } catch { fetchBlocked = true; }
+      return { parentBlocked, fetchBlocked, bridge: typeof window.__TAURI_INTERNALS__, origin: location.origin };
+    });
+    assert.deepEqual(isolation, { parentBlocked: true, fetchBlocked: true, bridge: 'undefined', origin: 'null' });
+    assert.equal(requests.length, 0, 'Output frame must not initiate resource or network requests');
+    await page.evaluate(() => window.postMessage('presentation.ready', '*'));
+    await preview().getByText('REHEARSAL INPUT', { exact: true }).waitFor();
+
+    await closePreview();
+    // Invalid import preserves the current session and leaves trusted controls usable.
+    const bad = JSON.parse(await readFile('docs/shows/fixtures/after-hours.set.json', 'utf8'));
+    bad.set.controls[0].action = { type: 'stream.start' };
+    await page.getByLabel('Import set package').setInputFiles({ name: 'unsafe.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(bad)) });
+    await page.getByRole('alert').waitFor();
+    await page.keyboard.press('Escape');
+    await openPreview();
+    await preview().getByText('REHEARSAL INPUT', { exact: true }).waitFor();
+
+    await closePreview();
+    // Appearance uses the unchanged placement rectangle, with an inscribed
+    // circle. Grayscale affects video fill, while the outline keeps its color.
+    const styled = JSON.parse(await readFile('docs/shows/fixtures/after-hours.set.json', 'utf8'));
+    for (const layout of styled.set.layouts) for (const node of layout.root.children)
+      if (node.type === 'slot') node.appearance = { shape: 'circle', outlineWidth: 8, outlineColor: '#ff0000', grayscale: 1, opacity: 0.5 };
+    await page.getByLabel('Import set package').setInputFiles({ name: 'circle.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(styled)) });
+    await openPreview();
+    await preview().getByText('Guest · simulated source', { exact: true }).waitFor();
+    const circle = preview().locator('[data-slot="host"] > div');
+    await circle.waitFor();
+    const styledFrame = page.frames().find(f => f.parentFrame());
+    await styledFrame.waitForFunction(() => !!document.querySelector('[data-slot="host"] > div')?.style.width);
+    const shape = await circle.evaluate(el => {
+      const b = el.getBoundingClientRect(), p = el.parentElement.getBoundingClientRect(), s = getComputedStyle(el);
+      return { w: b.width, h: b.height, pw: p.width, ph: p.height, opacity: s.opacity, outline: s.borderTopColor, gray: getComputedStyle(el.firstElementChild).filter };
+    });
+    assert.ok(shape.w > 0 && Math.abs(shape.w - shape.h) < 0.1 && Math.abs(shape.w - Math.min(shape.pw, shape.ph)) < 0.1, 'Circle must be inscribed, not elliptical');
+    assert.equal(shape.opacity, '0.5'); assert.equal(shape.outline, 'rgb(255, 0, 0)'); assert.equal(shape.gray, 'grayscale(1)');
+
+    await closePreview();
+    await more(); await page.getByLabel('Choose set').selectOption('head-to-head');
+    await openPreview();
+    await preview().locator('[data-node$="-title"]').waitFor();
+    await closePreview();
+    await fillHost('Prepared host');
+    assert.equal(await page.getByRole('button', { name: 'Start show', exact: true }).count(), 0);
+    assert.equal(await run().getByRole('region', { name: 'Show segments' }).count(), 1, 'Prepared show and rehearsal share the Show run section');
+    assert.equal(await page.locator('.set-reference .set-segments').count(), 0, 'The rundown belongs to Show run, not reference controls');
+    await page.getByRole('button', { name: 'Rehearse', exact: true }).click();
+    assert.equal(await page.locator('.set-nav-controls > button').count(), 2, 'Set control retains just the main action and attached settings gear');
+    await page.getByRole('button', { name: 'Exit rehearsal from top bar', exact:true }).click();
+    await page.getByRole('button', { name:'Open set controls', exact:true }).waitFor();
+    await page.getByRole('button', { name:'Rehearse', exact:true }).click();
+    const rundown = run().getByRole('region', { name: 'Show segments' });
+    await run().getByText('1:00 timed + manual steps', { exact: true }).waitFor();
+    await run().getByText('Elapsed 0:00 · Simulated clock', { exact: true }).waitFor();
+    assert.deepEqual(await rundown.locator('li').evaluateAll(items => items.map(el => el.textContent)),
+      ['1IntroductionManual', '2Audience vote1:00 vote', '3Winner revealManual']);
+    await page.locator('.set-sections').evaluate(el => { el.scrollTop = 0; });
+    const start = page.getByRole('button', { name: 'Start show', exact: true });
+    const startBox = await start.boundingBox(), bodyBox = await page.locator('.rm-panel-body').boundingBox();
+    assert.ok(startBox.y >= bodyBox.y && startBox.y + startBox.height <= bodyBox.y + bodyBox.height, 'Show controls must be visible without scrolling past the setup fields');
+    assert.equal(await page.getByRole('tab').count(), 0, 'Operation and sample participation share one view');
+    await page.getByRole('region', { name: 'Participation', exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: /^Vote / }).count(), 0, 'Introduction has no voting controls');
+    assert.equal(await page.getByLabel('Simulated player').count(), 0, 'Participant simulator appears only in input segments');
+    assert.equal(await page.getByRole('button', { name: 'React 🔥', exact: true }).count(), 0);
+    assert.equal(await page.getByRole('button', { name: 'Reveal winner', exact: true }).count(), 0);
+    await page.locator('.set-sections').evaluate(el => { el.scrollTop = 0; });
+    await page.screenshot({ path: `${output}/${name}-rundown-side.png`, fullPage: true });
+    await page.getByRole('button', { name: 'Start show', exact: true }).click();
+    await run().getByRole('status').getByText('Introduction', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await run().getByRole('status').getByText('Audience vote', { exact: true }).waitFor();
+    assert.equal(await rundown.locator('[aria-current=step]').textContent(), '2Audience vote1:00 vote');
+    await page.getByText('Up next: Winner reveal', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Next', exact: true }).count(), 0, 'Progression is absent until voting closes and results are revealed');
+    await page.getByRole('button', { name: 'Pause', exact: true }).click();
+    assert.equal(await page.getByRole('button', { name: 'Vote Contestant A', exact: true }).isDisabled(), true, 'Pause temporarily disables relevant inputs');
+    await page.getByRole('button', { name: 'Resume', exact: true }).click();
+    await page.getByRole('button', { name: 'Vote Contestant A', exact: true }).click();
+    await page.getByRole('button', { name: 'Vote Contestant B', exact: true }).click();
+    await page.getByRole('status').getByText(/already answered/).waitFor();
+    await page.getByRole('button', { name: 'New participant', exact: true }).click();
+    assert.equal(await page.getByLabel('Simulated player').inputValue(), 'player-2');
+    await page.getByRole('button', { name: 'Vote Contestant A', exact: true }).click();
+    await page.getByRole('status').getByText(/2 votes/).waitFor();
+    await page.getByRole('button', { name: 'React 🔥', exact: true }).click();
+    await page.getByRole('button', { name: 'Close voting', exact: true }).click();
+    assert.equal(await run().getByRole('button', { name: 'Reveal winner', exact: true }).count(), 0, 'Reveal belongs to the segment, not global run controls');
+    assert.equal(await page.getByRole('region', { name: 'Participation', exact: true }).getByRole('button', { name: 'Reveal winner', exact: true }).count(), 1);
+    assert.equal(await page.getByRole('button', { name: /^Vote / }).count(), 0, 'Closed voting replaces input controls with results');
+    assert.equal(await page.getByRole('button', { name: 'Advance 10s', exact: true }).count(), 0);
+    await openPreview();
+    await preview().locator('[data-node$="-title"]').waitFor();
+    assert.equal(await preview().getByText('WINNER · Contestant A', { exact: true }).count(), 0);
+    await closePreview();
+    await page.getByRole('button', { name: 'Reveal winner', exact: true }).click();
+    // Reopen the room overlay without resetting the run. Native dialog
+    // provides focus containment and Escape; previews remain opaque children.
+    await openPreview();
+    const dialog = page.getByRole('dialog', { name: 'Head to Head rehearsal preview' });
+    await dialog.waitFor();
+    await dialog.frameLocator('iframe').getByText('WINNER · Contestant A', { exact: true }).waitFor();
+    assert.equal(await page.locator('iframe').count(), 1, 'Only one output frame is mounted when expanded');
+    await page.screenshot({ path: `${output}/${name}-expanded.png`, fullPage: true });
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'detached' });
+    assert.equal(await page.getByRole('button', { name: 'Set edit', exact: true }).evaluate(el => el === document.activeElement), true, 'Closing restores focus to the preview trigger');
+    assert.equal(await page.locator('iframe').count(), 0, 'Closing unmounts the preview');
+    await openPreview();
+    await dialog.waitFor();
+    await page.keyboard.press('Tab');
+    assert.equal(await dialog.evaluate(el => el.contains(document.activeElement)), true, 'Keyboard focus stays in the preview popup');
+    await dialog.getByRole('button', { name: 'Close preview', exact: true }).click();
+    await dialog.waitFor({ state: 'detached' });
+    assert.equal(await page.locator('iframe').count(), 0);
+    await openPreview();
+    await preview().getByText('WINNER · Contestant A', { exact: true }).waitFor();
+    await closePreview();
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await run().getByRole('status').getByText('Winner reveal', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Reveal winner', exact: true }).count(), 0, 'Result segment has no redundant reveal action');
+    assert.equal(await page.getByRole('button', { name: /^Vote / }).count(), 0);
+    await page.getByRole('button', { name: 'Stop run', exact: true }).click();
+    await run().getByText('Run stopped', { exact: true }).waitFor();
+    await run().getByText('Up next: Audience vote', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Exit rehearsal', exact: true }).click();
+    assert.equal(await page.getByRole('region', { name: 'Participation', exact: true }).count(), 0);
+    assert.equal(await readHost(), 'Prepared host');
+    await openPreview();
+    const preparedPreview = page.getByRole('dialog', { name: 'Head to Head set preview' });
+    await preparedPreview.frameLocator('iframe').getByText('Prepared host', { exact: true }).waitFor();
+    assert.equal(await preview().getByText('WINNER · Contestant A', { exact: true }).count(), 0);
+    await preparedPreview.getByRole('button', { name: 'Close preview', exact: true }).click();
+
+    // Enter, reset and exit while voting: none may retain old results or commit
+    // practice edits into preparation. Setup stays available without switching views.
+    await page.getByRole('button', { name: 'Rehearse', exact: true }).click();
+    assert.equal(await page.getByLabel('Host name',{exact:true}).count(),0,'Content editing stays outside the operating dock');
+    await fillHost('Practice-only host');
+    await page.getByRole('button', { name: 'Start show', exact: true }).click();
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await page.getByRole('button', { name: 'Vote Contestant A', exact: true }).click();
+    await page.getByRole('button', { name: 'Reset', exact: true }).click();
+    await run().getByText('Ready to rehearse', { exact: true }).waitFor();
+    assert.equal(await readHost(), 'Prepared host');
+    await page.getByRole('button', { name: 'Start show', exact: true }).click();
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await page.getByRole('button', { name: 'Exit rehearsal', exact: true }).click();
+    assert.equal(await page.getByRole('button', { name: 'Close voting', exact: true }).count(), 0);
+    await page.getByRole('button', { name: 'Rehearse', exact: true }).click();
+    assert.equal(await page.getByRole('button', { name: /^Vote / }).count(), 0, 'Reentering starts with introduction controls');
+    await run().getByText('Ready to rehearse', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Exit rehearsal', exact: true }).click();
+
+    await more(); await page.getByLabel('Choose set').selectOption('after-hours');
+    await openPreview();
+    await preview().getByText('AFTER HOURS', { exact: true }).waitFor();
+    await closePreview();
+    await page.screenshot({ path: `${output}/${name}-side.png`, fullPage: true });
+    await page.setViewportSize({ width: 360, height: 900 });
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Narrow panel must not overflow horizontally');
+    await page.screenshot({ path: `${output}/${name}-narrow.png`, fullPage: true });
+    // Authoring exposes the real configured JSON and rejects bad updates
+    // without replacing preparation. Adding a show is an explicit import flow.
+    await fillHost('My configured host');
+    await more();
+    await page.getByRole('button', { name: 'Add show with agent', exact: true }).click();
+    const authoring = page.getByRole('dialog', { name: 'Add show', exact: true });
+    await authoring.getByText('Configured package JSON', { exact: true }).click();
+    assert.equal(JSON.parse(await authoring.getByLabel('Configured package JSON').inputValue()).set.values.hostName.default, 'My configured host');
+    await authoring.getByLabel('Updated package JSON').fill('{}');
+    await authoring.getByRole('button', { name: 'Validate and load', exact: true }).click();
+    await authoring.getByRole('status').waitFor();
+    assert.equal(JSON.parse(await authoring.getByLabel('Configured package JSON').inputValue()).set.values.hostName.default, 'My configured host');
+    await authoring.getByLabel('Updated package JSON').fill(await readFile('docs/shows/fixtures/after-hours.set.json', 'utf8'));
+    await authoring.getByRole('button', { name: 'Validate and load', exact: true }).click();
+    await authoring.getByText(/has no show attached/).waitFor();
+    await authoring.getByLabel('Updated package JSON').fill(JSON.stringify(JSON.parse(await readFile('docs/shows/fixtures/head-to-head.presentation.json', 'utf8'))));
+    await authoring.getByRole('button', { name: 'Validate and load', exact: true }).click();
+    await authoring.waitFor({ state: 'detached' });
+    await page.getByText('Show attached', { exact: true }).waitFor();
+    await more(); await page.getByRole('button', { name: 'Edit set with agent', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Edit set with agent', exact: true }).waitFor();
+    await page.keyboard.press('Escape');
+    await more();
+    await more(); await page.getByRole('button', { name: 'Edit set with agent', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Edit set with agent', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await more(); await page.getByRole('button', { name: 'Export package', exact: true }).click();
+    const exporting = page.getByRole('dialog', { name: 'Export set package', exact: true });
+    await exporting.getByRole('button', { name: 'Copy package JSON', exact: true }).click();
+    await exporting.getByText('Package JSON copied.', { exact: true }).waitFor();
+    await exporting.getByRole('button', { name: 'Copy agent brief', exact: true }).click();
+    await exporting.getByText('Agent brief copied.', { exact: true }).waitFor();
+    await page.keyboard.press('Escape');
+    await page.goto(`${origin}/scripts/presentation-browser.html?dock=bottom&constrained`);
+    await page.setViewportSize({ width: 1200, height: 500 });
+    assert.equal(await page.locator('iframe').count(), 0);
+    await more(); await page.getByLabel('Choose set').selectOption('head-to-head');
+    await page.getByRole('button', { name: 'Rehearse', exact: true }).click();
+    assert.ok(await page.locator('.set-sections').evaluate(el => el.scrollHeight <= el.clientHeight), 'Run and participation share the 220px dock without scrolling');
+    for (const width of [620, 700, 850, 899, 900]) {
+      await page.locator('.rm-panel-setControls').evaluate((el, w) => { el.style.width = `${w}px`; }, width);
+      assert.ok(await page.locator('.set-sections').evaluate(el => {
+        const run = el.querySelector('.set-run').getBoundingClientRect();
+        const controls = el.querySelector('.set-participation').getBoundingClientRect();
+        return Math.abs(run.top - controls.top) < 1 && el.scrollWidth <= el.clientWidth ;
+      }), `Run and segment controls stay in one row without clipping at ${width}px`);
+    }
+    await page.locator('.rm-panel-setControls').evaluate(el => { el.style.width = '100%'; });
+    await page.screenshot({ path: `${output}/${name}-compact-bottom.png`, fullPage: true });
+    const shortSegments = run().getByRole('region', { name: 'Show segments' });
+    const fixedStart = await page.getByRole('button', { name: 'Start show', exact: true }).boundingBox();
+    await shortSegments.locator('li').last().scrollIntoViewIfNeeded();
+    assert.deepEqual(await page.getByRole('button', { name: 'Start show', exact: true }).boundingBox(), fixedStart, 'Start remains fixed when segment list scrolls');
+    const runColumns = await run().evaluate(el => { const transport = el.querySelector('.set-run-transport').getBoundingClientRect(), segments = el.querySelector('.set-segments').getBoundingClientRect(); return segments.left >= transport.right && segments.top <= transport.top; });
+    assert.ok(runColumns, 'Show run and Segments sit beside one another in the bottom dock');
+    await page.getByRole('button', { name: 'Start show', exact: true }).click();
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    assert.ok(await page.locator('.set-sections').evaluate(el => el.scrollHeight <= el.clientHeight), 'Sample inputs and run controls still fit when voting starts');
+    await page.getByRole('button', { name: 'Vote Contestant A', exact: true }).click();
+    await page.getByRole('button', { name: 'Close voting', exact: true }).click();
+    await page.getByRole('button', { name: 'Reveal winner', exact: true }).click();
+    const transportBeforeScroll = await page.getByRole('button', { name: 'Stop run', exact: true }).boundingBox();
+    // Recover without resetting the show: the same ballot preserves identities,
+    // a tie-break resets only its ballot, and a draw permits normal progression.
+    const restartRound = async () => {
+      await page.getByRole('button', { name:'Stop run', exact:true }).click();
+      await page.getByRole('button', { name:'Start show', exact:true }).click();
+      await page.getByRole('button', { name:'Next', exact:true }).click();
+    };
+    await restartRound();
+    await page.getByRole('button', { name:'Vote Contestant A', exact:true }).click();
+    await page.getByRole('button', { name:'Close voting', exact:true }).click();
+    await page.getByRole('button', { name:'Reopen voting', exact:true }).click();
+    await page.getByRole('button', { name:'Vote Contestant B', exact:true }).click();
+    await page.getByRole('status').getByText(/already answered/).waitFor();
+    await page.getByRole('button', { name:'New participant', exact:true }).click();
+    await page.getByRole('button', { name:'Vote Contestant B', exact:true }).click();
+    await page.getByRole('button', { name:'Close voting', exact:true }).click();
+    assert.equal(await page.getByRole('button', { name:'Reveal winner', exact:true }).count(),0,'Tied ballot offers explicit decisions instead of a failing Reveal winner');
+    await page.screenshot({path:`${output}/${name}-tie-decisions.png`,fullPage:true});
+    await page.getByRole('button', { name:'Start tie-break', exact:true }).click();
+    await page.getByRole('status').getByText('Tie-break 1 · 0 votes · heat 0%', {exact:true}).waitFor();
+    await page.getByRole('button', { name:'Vote Contestant B', exact:true }).click();
+    await page.getByRole('button', { name:'Close voting', exact:true }).click();
+    await page.getByRole('button', { name:'Reveal winner', exact:true }).click();
+    await openPreview(); await preview().getByText('WINNER · Contestant B', {exact:true}).waitFor(); await closePreview();
+    await restartRound();
+    await page.getByRole('button', { name:'Vote Contestant A', exact:true }).click();
+    await page.getByRole('button', { name:'New participant', exact:true }).click();
+    await page.getByRole('button', { name:'Vote Contestant B', exact:true }).click();
+    await page.getByRole('button', { name:'Close voting', exact:true }).click();
+    await page.getByRole('button', { name:'Reveal draw', exact:true }).click();
+    await openPreview(); await preview().getByText('DRAW', {exact:true}).waitFor();
+    assert.equal(await preview().getByText(/^WINNER ·/).count(),0,'Draw output must not call either contestant the winner'); await closePreview();
+    await page.getByRole('button', { name:'Next', exact:true }).click();
+    await page.getByRole('region', {name:'Participation',exact:true}).getByText('Draw · No winner awarded', {exact:true}).waitFor();
+    await restartRound();
+    await page.getByRole('button', { name:'Vote Contestant A', exact:true }).click();
+    await page.getByRole('button', { name:'Close voting', exact:true }).click();
+    await page.getByRole('button', { name:'Reveal winner', exact:true }).click();
+    const rowRundown = page.getByRole('region', { name: 'Show segments' });
+    await rowRundown.getByText('Winner reveal', { exact: true }).waitFor();
+    assert.ok(await page.locator('.set-sections').evaluate(el => el.scrollHeight <= el.clientHeight), 'Always-visible Segments does not expand the dock');
+    await rowRundown.getByText('Winner reveal', { exact: true }).scrollIntoViewIfNeeded();
+    assert.ok(await run().evaluate(el => {
+      const row = el.querySelector('.set-segments li:last-child').getBoundingClientRect();
+      const bounds = el.querySelector('.set-segments-scroll').getBoundingClientRect();
+      return row.top >= bounds.top && row.bottom <= bounds.bottom + 1;
+    }), 'Expanded rundown steps must be reachable inside Show run');
+    await page.getByRole('button', { name: 'Stop run', exact: true }).scrollIntoViewIfNeeded();
+    assert.equal((await page.getByRole('button', { name: 'Stop run', exact: true }).boundingBox()).height, transportBeforeScroll.height, 'Run controls remain reachable in the scrolling dock');
+    await page.screenshot({ path: `${output}/${name}-compact-rundown.png`, fullPage: true });
+    await openPreview();
+    await preview().getByText('WINNER · Contestant A', { exact: true }).waitFor();
+    assert.ok(await page.locator('.rm-panel-body').evaluate(el => el.scrollWidth <= el.clientWidth), 'Bottom dock controls must fit horizontally');
+    await closePreview();
+    await page.locator('.set-sections').evaluate(el => { el.scrollTop = 0; });
+    await page.screenshot({ path: `${output}/${name}-bottom.png`, fullPage: true });
+    assert.deepEqual(errors, [], 'No React or preview errors');
+    console.log(`PASS: ${name} section workflow, prepare/enter/exit/reset, restored configuration, simultaneous run/participation, agent handoff/import/export, preview focus/isolation and 220px dock.`);
+  } finally { await browser.close(); }
+}

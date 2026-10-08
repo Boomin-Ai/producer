@@ -1,0 +1,40 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Notice hover regression</title></head><body>
+<div id="root" style="position:relative;width:300px;height:60px"></div><output id="result">Running</output>
+<script type="module">
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import {NoticeHost} from '/src/components/Notice.tsx';
+import {notify} from '/src/lib/notices.ts';
+import '/src/App.css';
+const check=(value,message)=>{if(!value)throw Error(message)};
+const pause=()=>new Promise(resolve=>setTimeout(resolve,20));
+async function until(fn){for(let n=0;n<100;n++){if(fn())return;await pause();}throw Error('timeout');}
+try {
+  let opened = 0;
+  createRoot(document.getElementById('root')).render(React.createElement(NoticeHost, {action: {noticeKey: 'hover-test', label: 'View in Manager', onClick: () => opened++}}));
+  await pause();
+  check(!document.querySelector('.rm-notice-action'), 'orphan Manager action before notice');
+  const text='https://boomin.ai/connect/'+ 'long-url-path'.repeat(20);
+  notify(text,{key:'hover-test',sticky:true});
+  await until(()=>document.querySelector('.rm-notice.clipped'));
+  const pill=document.querySelector('.rm-notice');
+  const before=pill.getBoundingClientRect().width;
+  pill.dispatchEvent(new MouseEvent('mouseover',{bubbles:true}));
+  await until(()=>document.querySelector('[role=tooltip]'));
+  const tooltip=document.querySelector('[role=tooltip]');
+  check(tooltip.parentElement===document.body,'tooltip remained inside clipped toolbar');
+  check(tooltip.textContent===text,'full notice missing');
+  check(getComputedStyle(pill.querySelector('.rm-notice-text')).opacity==='1','pill text hidden');
+  check(Math.abs(pill.getBoundingClientRect().width-before)<1,'pill changed width');
+  const bounds=tooltip.getBoundingClientRect();
+  check(bounds.left>=0&&bounds.right<=innerWidth,'tooltip exceeds viewport');
+  check(getComputedStyle(tooltip).overflowWrap==='anywhere','long URL cannot wrap');
+  document.querySelector('.rm-notice-action').click();
+  check(opened===1 && document.querySelector('.rm-notice'), 'Manager action dismissed saved notice');
+  pill.click();
+  await until(()=>!document.querySelector('[role=tooltip]'));
+  check(!document.querySelector('.rm-notice-action'), 'Manager button remained after dismiss');
+  check(!document.querySelector('[role=dialog]'), 'recording action opened a popup');
+  document.getElementById('result').textContent='PASS: Manager action without a modal, full portaled hover text, stable readable pill, viewport bounds, URL wrapping, and dismiss removes the Manager button.';
+} catch(error) { document.getElementById('result').textContent='FAIL: '+error.message; }
+</script></body></html>

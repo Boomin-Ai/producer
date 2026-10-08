@@ -1,0 +1,2833 @@
+{
+  "schema": "producer.presentation/1",
+  "id": "head-to-head",
+  "version": "0.2.0",
+  "name": "Head to Head",
+  "set": {
+    "initialLayout": "conversation",
+    "values": {
+      "hostName": {
+        "type": "text",
+        "default": "Host",
+        "maxLength": 40
+      },
+      "guestName": {
+        "type": "text",
+        "default": "Guest",
+        "maxLength": 40
+      },
+      "topic": {
+        "type": "text",
+        "default": "Who takes the round?",
+        "maxLength": 100
+      }
+    },
+    "feeds": {},
+    "slots": [
+      {
+        "id": "host",
+        "label": "Host"
+      },
+      {
+        "id": "guest",
+        "label": "Guest"
+      }
+    ],
+    "components": {},
+    "layouts": [
+      {
+        "id": "conversation",
+        "label": "Two Up",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "conversation-arena",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "radial-gradient(ellipse at 0% 70%,#133451 0%,transparent 60%), radial-gradient(ellipse at 100% 60%,#463716 0%,transparent 55%), linear-gradient(180deg,#060b13,#080e16 70%,#0f1c2c)"
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "arena-spark-27",
+              "styles": {
+                "position": "absolute",
+                "left": 118,
+                "top": 128,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.22
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-26",
+              "styles": {
+                "position": "absolute",
+                "left": 1205,
+                "top": 55,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.16999999999999998
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-25",
+              "styles": {
+                "position": "absolute",
+                "left": 1012,
+                "top": 292,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.12
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-24",
+              "styles": {
+                "position": "absolute",
+                "left": 819,
+                "top": 219,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.32
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-23",
+              "styles": {
+                "position": "absolute",
+                "left": 626,
+                "top": 146,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.27
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-22",
+              "styles": {
+                "position": "absolute",
+                "left": 433,
+                "top": 73,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.22
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-21",
+              "styles": {
+                "position": "absolute",
+                "left": 240,
+                "top": 0,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.16999999999999998
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-20",
+              "styles": {
+                "position": "absolute",
+                "left": 47,
+                "top": 237,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.12
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-19",
+              "styles": {
+                "position": "absolute",
+                "left": 1134,
+                "top": 164,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.32
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-18",
+              "styles": {
+                "position": "absolute",
+                "left": 941,
+                "top": 91,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.27
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-17",
+              "styles": {
+                "position": "absolute",
+                "left": 748,
+                "top": 18,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.22
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-16",
+              "styles": {
+                "position": "absolute",
+                "left": 555,
+                "top": 255,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.16999999999999998
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-15",
+              "styles": {
+                "position": "absolute",
+                "left": 362,
+                "top": 182,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.12
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-14",
+              "styles": {
+                "position": "absolute",
+                "left": 169,
+                "top": 109,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.32
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-13",
+              "styles": {
+                "position": "absolute",
+                "left": 1256,
+                "top": 36,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.27
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-12",
+              "styles": {
+                "position": "absolute",
+                "left": 1063,
+                "top": 273,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.22
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-11",
+              "styles": {
+                "position": "absolute",
+                "left": 870,
+                "top": 200,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.16999999999999998
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-10",
+              "styles": {
+                "position": "absolute",
+                "left": 677,
+                "top": 127,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.12
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-9",
+              "styles": {
+                "position": "absolute",
+                "left": 484,
+                "top": 54,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.32
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-8",
+              "styles": {
+                "position": "absolute",
+                "left": 291,
+                "top": 291,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.27
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-7",
+              "styles": {
+                "position": "absolute",
+                "left": 98,
+                "top": 218,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.22
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-6",
+              "styles": {
+                "position": "absolute",
+                "left": 1185,
+                "top": 145,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.16999999999999998
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-5",
+              "styles": {
+                "position": "absolute",
+                "left": 992,
+                "top": 72,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.12
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-4",
+              "styles": {
+                "position": "absolute",
+                "left": 799,
+                "top": 309,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.32
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-3",
+              "styles": {
+                "position": "absolute",
+                "left": 606,
+                "top": 236,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.27
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-2",
+              "styles": {
+                "position": "absolute",
+                "left": 413,
+                "top": 163,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.22
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-1",
+              "styles": {
+                "position": "absolute",
+                "left": 220,
+                "top": 90,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.16999999999999998
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-0",
+              "styles": {
+                "position": "absolute",
+                "left": 27,
+                "top": 17,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.12
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "conversation-crown",
+              "styles": {
+                "position": "absolute",
+                "left": 589,
+                "top": 37,
+                "width": 102,
+                "height": 54
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "crown-point-0",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 0,
+                    "top": 21,
+                    "width": 14,
+                    "height": 27,
+                    "background": "linear-gradient(180deg,#ffe4a0,#d2a443)",
+                    "transform": "rotate(-20deg)"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-pearl-0",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 2,
+                    "top": 17,
+                    "width": 10,
+                    "height": 10,
+                    "background": "#efcb6b",
+                    "borderRadius": "50%"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-point-1",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 20,
+                    "top": 9,
+                    "width": 14,
+                    "height": 37,
+                    "background": "linear-gradient(180deg,#ffe4a0,#d2a443)",
+                    "transform": "rotate(-10deg)"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-pearl-1",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 22,
+                    "top": 5,
+                    "width": 10,
+                    "height": 10,
+                    "background": "#efcb6b",
+                    "borderRadius": "50%"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-point-2",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 43,
+                    "top": 0,
+                    "width": 14,
+                    "height": 45,
+                    "background": "linear-gradient(180deg,#ffe4a0,#d2a443)",
+                    "transform": "rotate(0deg)"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-pearl-2",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 45,
+                    "top": -4,
+                    "width": 10,
+                    "height": 10,
+                    "background": "#efcb6b",
+                    "borderRadius": "50%"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-point-3",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 67,
+                    "top": 9,
+                    "width": 14,
+                    "height": 37,
+                    "background": "linear-gradient(180deg,#ffe4a0,#d2a443)",
+                    "transform": "rotate(10deg)"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-pearl-3",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 69,
+                    "top": 5,
+                    "width": 10,
+                    "height": 10,
+                    "background": "#efcb6b",
+                    "borderRadius": "50%"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-point-4",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 88,
+                    "top": 21,
+                    "width": 14,
+                    "height": 27,
+                    "background": "linear-gradient(180deg,#ffe4a0,#d2a443)",
+                    "transform": "rotate(20deg)"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-pearl-4",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 90,
+                    "top": 17,
+                    "width": 10,
+                    "height": 10,
+                    "background": "#efcb6b",
+                    "borderRadius": "50%"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-base",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 6,
+                    "bottom": 0,
+                    "width": 90,
+                    "height": 10,
+                    "background": "#efcb6b",
+                    "borderRadius": "2px"
+                  },
+                  "type": "box",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "id": "conversation-title",
+              "styles": {
+                "position": "absolute",
+                "left": 110,
+                "top": 109,
+                "width": 1060,
+                "height": 118,
+                "display": "flex",
+                "alignItems": "center",
+                "justifyContent": "center",
+                "gap": "18px"
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "conversation-head-left",
+                  "styles": {
+                    "fontSize": "114px",
+                    "fontWeight": 950,
+                    "letterSpacing": "-.07em",
+                    "color": "#f9f6ec",
+                    "transform": "scaleX(.86)"
+                  },
+                  "type": "text",
+                  "text": "HEAD"
+                },
+                {
+                  "id": "conversation-to",
+                  "styles": {
+                    "fontSize": "70px",
+                    "fontWeight": 900,
+                    "color": "#efcb6b"
+                  },
+                  "type": "text",
+                  "text": "TO"
+                },
+                {
+                  "id": "conversation-head-right",
+                  "styles": {
+                    "fontSize": "114px",
+                    "fontWeight": 950,
+                    "letterSpacing": "-.07em",
+                    "color": "#f9f6ec",
+                    "transform": "scaleX(.86)"
+                  },
+                  "type": "text",
+                  "text": "HEAD"
+                }
+              ]
+            },
+            {
+              "id": "conversation-tagline",
+              "styles": {
+                "position": "absolute",
+                "left": 230,
+                "top": 235,
+                "width": 820,
+                "height": 35,
+                "textAlign": "center",
+                "fontSize": "21px",
+                "letterSpacing": ".32em",
+                "color": "#d5d9e0"
+              },
+              "type": "text",
+              "text": "TWO PLAYERS. ONE WINNER."
+            },
+            {
+              "id": "conversation-floor",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 638,
+                "width": 1280,
+                "height": 82,
+                "background": "repeating-linear-gradient(170deg,#749dd211 0px,transparent 1px,transparent 28px), linear-gradient(180deg,#101d2b00,#1b2b4077)",
+                "border": "1px solid #52678833"
+              },
+              "motion": {
+                "durationMs": 6000,
+                "property": "opacity",
+                "from": 0.6,
+                "to": 1
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "conversation-topic",
+              "styles": {
+                "position": "absolute",
+                "left": 170,
+                "top": 665,
+                "width": 940,
+                "height": 32,
+                "textAlign": "center",
+                "fontSize": "18px",
+                "color": "#b8c4d4"
+              },
+              "type": "text",
+              "text": {
+                "get": "values.topic"
+              }
+            },
+            {
+              "id": "conversation-winner",
+              "styles": {
+                "position": "absolute",
+                "left": 250,
+                "top": 272,
+                "width": 780,
+                "height": 34,
+                "textAlign": "center",
+                "color": "#efcb6b",
+                "fontSize": "28px",
+                "fontWeight": 800
+              },
+              "when": {
+                "get": "show.revealed"
+              },
+              "type": "text",
+              "text": {
+                "op": "if",
+                "args": [
+                  {
+                    "op": "eq",
+                    "args": [
+                      {
+                        "get": "show.result"
+                      },
+                      "draw"
+                    ]
+                  },
+                  "DRAW",
+                  {
+                    "op": "concat",
+                    "args": [
+                      "WINNER · ",
+                      {
+                        "get": "show.winner"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "host-rim",
+              "styles": {
+                "position": "absolute",
+                "left": 88,
+                "top": 334,
+                "width": 460,
+                "height": 292,
+                "border": "3px solid #69a9ff",
+                "borderRadius": "9px",
+                "boxShadow": "0 0 7px #69a9ff, 0 0 24px #69a9ff55"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "host-video",
+              "styles": {
+                "position": "absolute",
+                "left": 91,
+                "top": 337,
+                "width": 454,
+                "height": 286
+              },
+              "type": "slot",
+              "slotId": "host",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 6
+              }
+            },
+            {
+              "id": "host-nameplate",
+              "styles": {
+                "position": "absolute",
+                "left": 91,
+                "top": 562,
+                "width": 454,
+                "height": 61,
+                "background": "linear-gradient(90deg,#071323f5,#071323d9)",
+                "borderRadius": "0 0 6px 6px",
+                "display": "flex",
+                "alignItems": "center",
+                "justifyContent": "space-between",
+                "padding": "0 20px"
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "host-name",
+                  "styles": {
+                    "color": "#fffaf0",
+                    "fontSize": "28px",
+                    "fontWeight": 700
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "values.hostName"
+                  }
+                },
+                {
+                  "id": "host-role",
+                  "styles": {
+                    "fontSize": "15px",
+                    "letterSpacing": ".1em",
+                    "color": "#69a9ff",
+                    "background": "#69a9ff22",
+                    "borderRadius": "6px",
+                    "padding": "9px 12px"
+                  },
+                  "type": "text",
+                  "text": "HOST"
+                }
+              ]
+            },
+            {
+              "id": "guest-rim",
+              "styles": {
+                "position": "absolute",
+                "left": 732,
+                "top": 334,
+                "width": 460,
+                "height": 292,
+                "border": "3px solid #efcb6b",
+                "borderRadius": "9px",
+                "boxShadow": "0 0 7px #efcb6b, 0 0 24px #efcb6b55"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "guest-video",
+              "styles": {
+                "position": "absolute",
+                "left": 735,
+                "top": 337,
+                "width": 454,
+                "height": 286
+              },
+              "type": "slot",
+              "slotId": "guest",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 6
+              }
+            },
+            {
+              "id": "guest-nameplate",
+              "styles": {
+                "position": "absolute",
+                "left": 735,
+                "top": 562,
+                "width": 454,
+                "height": 61,
+                "background": "linear-gradient(90deg,#071323f5,#071323d9)",
+                "borderRadius": "0 0 6px 6px",
+                "display": "flex",
+                "alignItems": "center",
+                "justifyContent": "space-between",
+                "padding": "0 20px"
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "guest-name",
+                  "styles": {
+                    "color": "#fffaf0",
+                    "fontSize": "28px",
+                    "fontWeight": 700
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "values.guestName"
+                  }
+                },
+                {
+                  "id": "guest-role",
+                  "styles": {
+                    "fontSize": "15px",
+                    "letterSpacing": ".1em",
+                    "color": "#efcb6b",
+                    "background": "#efcb6b22",
+                    "borderRadius": "6px",
+                    "padding": "9px 12px"
+                  },
+                  "type": "text",
+                  "text": "GUEST"
+                }
+              ]
+            },
+            {
+              "id": "conversation-divider",
+              "styles": {
+                "position": "absolute",
+                "left": 638,
+                "top": 351,
+                "width": 3,
+                "height": 255,
+                "background": "linear-gradient(180deg,#efcb6b00,#ffe8a5,#efcb6b00)",
+                "transform": "rotate(12deg)",
+                "boxShadow": "0 0 19px #f7ca7c"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "conversation-versus",
+              "styles": {
+                "position": "absolute",
+                "left": 564,
+                "top": 436,
+                "width": 150,
+                "height": 83,
+                "textAlign": "center",
+                "fontSize": "64px",
+                "fontWeight": 900,
+                "color": "#efcb6b"
+              },
+              "type": "text",
+              "text": "VS"
+            }
+          ]
+        }
+      },
+      {
+        "id": "host-focus",
+        "label": "Host Focus",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "host-focus-arena",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "radial-gradient(ellipse at 0% 70%,#133451 0%,transparent 60%), radial-gradient(ellipse at 100% 60%,#463716 0%,transparent 55%), linear-gradient(180deg,#060b13,#080e16 70%,#0f1c2c)"
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "arena-spark-27",
+              "styles": {
+                "position": "absolute",
+                "left": 118,
+                "top": 128,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.22
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-26",
+              "styles": {
+                "position": "absolute",
+                "left": 1205,
+                "top": 55,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.16999999999999998
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-25",
+              "styles": {
+                "position": "absolute",
+                "left": 1012,
+                "top": 292,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.12
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-24",
+              "styles": {
+                "position": "absolute",
+                "left": 819,
+                "top": 219,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.32
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-23",
+              "styles": {
+                "position": "absolute",
+                "left": 626,
+                "top": 146,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.27
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-22",
+              "styles": {
+                "position": "absolute",
+                "left": 433,
+                "top": 73,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.22
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-21",
+              "styles": {
+                "position": "absolute",
+                "left": 240,
+                "top": 0,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.16999999999999998
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-20",
+              "styles": {
+                "position": "absolute",
+                "left": 47,
+                "top": 237,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.12
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-19",
+              "styles": {
+                "position": "absolute",
+                "left": 1134,
+                "top": 164,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.32
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-18",
+              "styles": {
+                "position": "absolute",
+                "left": 941,
+                "top": 91,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.27
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-17",
+              "styles": {
+                "position": "absolute",
+                "left": 748,
+                "top": 18,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.22
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-16",
+              "styles": {
+                "position": "absolute",
+                "left": 555,
+                "top": 255,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.16999999999999998
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-15",
+              "styles": {
+                "position": "absolute",
+                "left": 362,
+                "top": 182,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.12
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-14",
+              "styles": {
+                "position": "absolute",
+                "left": 169,
+                "top": 109,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.32
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-13",
+              "styles": {
+                "position": "absolute",
+                "left": 1256,
+                "top": 36,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.27
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-12",
+              "styles": {
+                "position": "absolute",
+                "left": 1063,
+                "top": 273,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.22
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-11",
+              "styles": {
+                "position": "absolute",
+                "left": 870,
+                "top": 200,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.16999999999999998
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-10",
+              "styles": {
+                "position": "absolute",
+                "left": 677,
+                "top": 127,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.12
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-9",
+              "styles": {
+                "position": "absolute",
+                "left": 484,
+                "top": 54,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.32
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-8",
+              "styles": {
+                "position": "absolute",
+                "left": 291,
+                "top": 291,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.27
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-7",
+              "styles": {
+                "position": "absolute",
+                "left": 98,
+                "top": 218,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.22
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-6",
+              "styles": {
+                "position": "absolute",
+                "left": 1185,
+                "top": 145,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.16999999999999998
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-5",
+              "styles": {
+                "position": "absolute",
+                "left": 992,
+                "top": 72,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.12
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-4",
+              "styles": {
+                "position": "absolute",
+                "left": 799,
+                "top": 309,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.32
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-3",
+              "styles": {
+                "position": "absolute",
+                "left": 606,
+                "top": 236,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.27
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-2",
+              "styles": {
+                "position": "absolute",
+                "left": 413,
+                "top": 163,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.22
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-1",
+              "styles": {
+                "position": "absolute",
+                "left": 220,
+                "top": 90,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.16999999999999998
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-0",
+              "styles": {
+                "position": "absolute",
+                "left": 27,
+                "top": 17,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.12
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "host-focus-crown",
+              "styles": {
+                "position": "absolute",
+                "left": 589,
+                "top": 37,
+                "width": 102,
+                "height": 54
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "crown-point-0",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 0,
+                    "top": 21,
+                    "width": 14,
+                    "height": 27,
+                    "background": "linear-gradient(180deg,#ffe4a0,#d2a443)",
+                    "transform": "rotate(-20deg)"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-pearl-0",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 2,
+                    "top": 17,
+                    "width": 10,
+                    "height": 10,
+                    "background": "#efcb6b",
+                    "borderRadius": "50%"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-point-1",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 20,
+                    "top": 9,
+                    "width": 14,
+                    "height": 37,
+                    "background": "linear-gradient(180deg,#ffe4a0,#d2a443)",
+                    "transform": "rotate(-10deg)"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-pearl-1",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 22,
+                    "top": 5,
+                    "width": 10,
+                    "height": 10,
+                    "background": "#efcb6b",
+                    "borderRadius": "50%"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-point-2",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 43,
+                    "top": 0,
+                    "width": 14,
+                    "height": 45,
+                    "background": "linear-gradient(180deg,#ffe4a0,#d2a443)",
+                    "transform": "rotate(0deg)"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-pearl-2",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 45,
+                    "top": -4,
+                    "width": 10,
+                    "height": 10,
+                    "background": "#efcb6b",
+                    "borderRadius": "50%"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-point-3",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 67,
+                    "top": 9,
+                    "width": 14,
+                    "height": 37,
+                    "background": "linear-gradient(180deg,#ffe4a0,#d2a443)",
+                    "transform": "rotate(10deg)"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-pearl-3",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 69,
+                    "top": 5,
+                    "width": 10,
+                    "height": 10,
+                    "background": "#efcb6b",
+                    "borderRadius": "50%"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-point-4",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 88,
+                    "top": 21,
+                    "width": 14,
+                    "height": 27,
+                    "background": "linear-gradient(180deg,#ffe4a0,#d2a443)",
+                    "transform": "rotate(20deg)"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-pearl-4",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 90,
+                    "top": 17,
+                    "width": 10,
+                    "height": 10,
+                    "background": "#efcb6b",
+                    "borderRadius": "50%"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-base",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 6,
+                    "bottom": 0,
+                    "width": 90,
+                    "height": 10,
+                    "background": "#efcb6b",
+                    "borderRadius": "2px"
+                  },
+                  "type": "box",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "id": "host-focus-title",
+              "styles": {
+                "position": "absolute",
+                "left": 110,
+                "top": 109,
+                "width": 1060,
+                "height": 118,
+                "display": "flex",
+                "alignItems": "center",
+                "justifyContent": "center",
+                "gap": "18px"
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "host-focus-head-left",
+                  "styles": {
+                    "fontSize": "114px",
+                    "fontWeight": 950,
+                    "letterSpacing": "-.07em",
+                    "color": "#f9f6ec",
+                    "transform": "scaleX(.86)"
+                  },
+                  "type": "text",
+                  "text": "HEAD"
+                },
+                {
+                  "id": "host-focus-to",
+                  "styles": {
+                    "fontSize": "70px",
+                    "fontWeight": 900,
+                    "color": "#efcb6b"
+                  },
+                  "type": "text",
+                  "text": "TO"
+                },
+                {
+                  "id": "host-focus-head-right",
+                  "styles": {
+                    "fontSize": "114px",
+                    "fontWeight": 950,
+                    "letterSpacing": "-.07em",
+                    "color": "#f9f6ec",
+                    "transform": "scaleX(.86)"
+                  },
+                  "type": "text",
+                  "text": "HEAD"
+                }
+              ]
+            },
+            {
+              "id": "host-focus-tagline",
+              "styles": {
+                "position": "absolute",
+                "left": 230,
+                "top": 235,
+                "width": 820,
+                "height": 35,
+                "textAlign": "center",
+                "fontSize": "21px",
+                "letterSpacing": ".32em",
+                "color": "#d5d9e0"
+              },
+              "type": "text",
+              "text": "TWO PLAYERS. ONE WINNER."
+            },
+            {
+              "id": "host-focus-floor",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 638,
+                "width": 1280,
+                "height": 82,
+                "background": "repeating-linear-gradient(170deg,#749dd211 0px,transparent 1px,transparent 28px), linear-gradient(180deg,#101d2b00,#1b2b4077)",
+                "border": "1px solid #52678833"
+              },
+              "motion": {
+                "durationMs": 6000,
+                "property": "opacity",
+                "from": 0.6,
+                "to": 1
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "host-focus-topic",
+              "styles": {
+                "position": "absolute",
+                "left": 170,
+                "top": 665,
+                "width": 940,
+                "height": 32,
+                "textAlign": "center",
+                "fontSize": "18px",
+                "color": "#b8c4d4"
+              },
+              "type": "text",
+              "text": {
+                "get": "values.topic"
+              }
+            },
+            {
+              "id": "host-focus-winner",
+              "styles": {
+                "position": "absolute",
+                "left": 250,
+                "top": 272,
+                "width": 780,
+                "height": 34,
+                "textAlign": "center",
+                "color": "#efcb6b",
+                "fontSize": "28px",
+                "fontWeight": 800
+              },
+              "when": {
+                "get": "show.revealed"
+              },
+              "type": "text",
+              "text": {
+                "op": "if",
+                "args": [
+                  {
+                    "op": "eq",
+                    "args": [
+                      {
+                        "get": "show.result"
+                      },
+                      "draw"
+                    ]
+                  },
+                  "DRAW",
+                  {
+                    "op": "concat",
+                    "args": [
+                      "WINNER · ",
+                      {
+                        "get": "show.winner"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "host-rim",
+              "styles": {
+                "position": "absolute",
+                "left": 93,
+                "top": 330,
+                "width": 690,
+                "height": 312,
+                "border": "3px solid #69a9ff",
+                "borderRadius": "9px",
+                "boxShadow": "0 0 7px #69a9ff, 0 0 24px #69a9ff55"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "host-video",
+              "styles": {
+                "position": "absolute",
+                "left": 96,
+                "top": 333,
+                "width": 684,
+                "height": 306
+              },
+              "type": "slot",
+              "slotId": "host",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 6
+              }
+            },
+            {
+              "id": "host-nameplate",
+              "styles": {
+                "position": "absolute",
+                "left": 96,
+                "top": 578,
+                "width": 684,
+                "height": 61,
+                "background": "linear-gradient(90deg,#071323f5,#071323d9)",
+                "borderRadius": "0 0 6px 6px",
+                "display": "flex",
+                "alignItems": "center",
+                "justifyContent": "space-between",
+                "padding": "0 20px"
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "host-name",
+                  "styles": {
+                    "color": "#fffaf0",
+                    "fontSize": "28px",
+                    "fontWeight": 700
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "values.hostName"
+                  }
+                },
+                {
+                  "id": "host-role",
+                  "styles": {
+                    "fontSize": "15px",
+                    "letterSpacing": ".1em",
+                    "color": "#69a9ff",
+                    "background": "#69a9ff22",
+                    "borderRadius": "6px",
+                    "padding": "9px 12px"
+                  },
+                  "type": "text",
+                  "text": "HOST"
+                }
+              ]
+            },
+            {
+              "id": "guest-rim",
+              "styles": {
+                "position": "absolute",
+                "left": 833,
+                "top": 361,
+                "width": 360,
+                "height": 253,
+                "border": "3px solid #efcb6b",
+                "borderRadius": "9px",
+                "boxShadow": "0 0 7px #efcb6b, 0 0 24px #efcb6b55"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "guest-video",
+              "styles": {
+                "position": "absolute",
+                "left": 836,
+                "top": 364,
+                "width": 354,
+                "height": 247
+              },
+              "type": "slot",
+              "slotId": "guest",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 6
+              }
+            },
+            {
+              "id": "guest-nameplate",
+              "styles": {
+                "position": "absolute",
+                "left": 836,
+                "top": 550,
+                "width": 354,
+                "height": 61,
+                "background": "linear-gradient(90deg,#071323f5,#071323d9)",
+                "borderRadius": "0 0 6px 6px",
+                "display": "flex",
+                "alignItems": "center",
+                "justifyContent": "space-between",
+                "padding": "0 20px"
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "guest-name",
+                  "styles": {
+                    "color": "#fffaf0",
+                    "fontSize": "28px",
+                    "fontWeight": 700
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "values.guestName"
+                  }
+                },
+                {
+                  "id": "guest-role",
+                  "styles": {
+                    "fontSize": "15px",
+                    "letterSpacing": ".1em",
+                    "color": "#efcb6b",
+                    "background": "#efcb6b22",
+                    "borderRadius": "6px",
+                    "padding": "9px 12px"
+                  },
+                  "type": "text",
+                  "text": "GUEST"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "solo",
+        "label": "Solo",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "solo-arena",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "radial-gradient(ellipse at 0% 70%,#133451 0%,transparent 60%), radial-gradient(ellipse at 100% 60%,#463716 0%,transparent 55%), linear-gradient(180deg,#060b13,#080e16 70%,#0f1c2c)"
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "arena-spark-27",
+              "styles": {
+                "position": "absolute",
+                "left": 118,
+                "top": 128,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.22
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-26",
+              "styles": {
+                "position": "absolute",
+                "left": 1205,
+                "top": 55,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.16999999999999998
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-25",
+              "styles": {
+                "position": "absolute",
+                "left": 1012,
+                "top": 292,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.12
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-24",
+              "styles": {
+                "position": "absolute",
+                "left": 819,
+                "top": 219,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.32
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-23",
+              "styles": {
+                "position": "absolute",
+                "left": 626,
+                "top": 146,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.27
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-22",
+              "styles": {
+                "position": "absolute",
+                "left": 433,
+                "top": 73,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.22
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-21",
+              "styles": {
+                "position": "absolute",
+                "left": 240,
+                "top": 0,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.16999999999999998
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-20",
+              "styles": {
+                "position": "absolute",
+                "left": 47,
+                "top": 237,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.12
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-19",
+              "styles": {
+                "position": "absolute",
+                "left": 1134,
+                "top": 164,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.32
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-18",
+              "styles": {
+                "position": "absolute",
+                "left": 941,
+                "top": 91,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.27
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-17",
+              "styles": {
+                "position": "absolute",
+                "left": 748,
+                "top": 18,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.22
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-16",
+              "styles": {
+                "position": "absolute",
+                "left": 555,
+                "top": 255,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.16999999999999998
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-15",
+              "styles": {
+                "position": "absolute",
+                "left": 362,
+                "top": 182,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.12
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-14",
+              "styles": {
+                "position": "absolute",
+                "left": 169,
+                "top": 109,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.32
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-13",
+              "styles": {
+                "position": "absolute",
+                "left": 1256,
+                "top": 36,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.27
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-12",
+              "styles": {
+                "position": "absolute",
+                "left": 1063,
+                "top": 273,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.22
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-11",
+              "styles": {
+                "position": "absolute",
+                "left": 870,
+                "top": 200,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.16999999999999998
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-10",
+              "styles": {
+                "position": "absolute",
+                "left": 677,
+                "top": 127,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.12
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-9",
+              "styles": {
+                "position": "absolute",
+                "left": 484,
+                "top": 54,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.32
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-8",
+              "styles": {
+                "position": "absolute",
+                "left": 291,
+                "top": 291,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.27
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-7",
+              "styles": {
+                "position": "absolute",
+                "left": 98,
+                "top": 218,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.22
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-6",
+              "styles": {
+                "position": "absolute",
+                "left": 1185,
+                "top": 145,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.16999999999999998
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-5",
+              "styles": {
+                "position": "absolute",
+                "left": 992,
+                "top": 72,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.12
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-4",
+              "styles": {
+                "position": "absolute",
+                "left": 799,
+                "top": 309,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#dfc881",
+                "opacity": 0.32
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-3",
+              "styles": {
+                "position": "absolute",
+                "left": 606,
+                "top": 236,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.27
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-2",
+              "styles": {
+                "position": "absolute",
+                "left": 413,
+                "top": 163,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.22
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-1",
+              "styles": {
+                "position": "absolute",
+                "left": 220,
+                "top": 90,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.16999999999999998
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "arena-spark-0",
+              "styles": {
+                "position": "absolute",
+                "left": 27,
+                "top": 17,
+                "width": 2,
+                "height": 2,
+                "borderRadius": "50%",
+                "background": "#6ab4ed",
+                "opacity": 0.12
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "solo-crown",
+              "styles": {
+                "position": "absolute",
+                "left": 589,
+                "top": 37,
+                "width": 102,
+                "height": 54
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "crown-point-0",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 0,
+                    "top": 21,
+                    "width": 14,
+                    "height": 27,
+                    "background": "linear-gradient(180deg,#ffe4a0,#d2a443)",
+                    "transform": "rotate(-20deg)"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-pearl-0",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 2,
+                    "top": 17,
+                    "width": 10,
+                    "height": 10,
+                    "background": "#efcb6b",
+                    "borderRadius": "50%"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-point-1",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 20,
+                    "top": 9,
+                    "width": 14,
+                    "height": 37,
+                    "background": "linear-gradient(180deg,#ffe4a0,#d2a443)",
+                    "transform": "rotate(-10deg)"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-pearl-1",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 22,
+                    "top": 5,
+                    "width": 10,
+                    "height": 10,
+                    "background": "#efcb6b",
+                    "borderRadius": "50%"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-point-2",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 43,
+                    "top": 0,
+                    "width": 14,
+                    "height": 45,
+                    "background": "linear-gradient(180deg,#ffe4a0,#d2a443)",
+                    "transform": "rotate(0deg)"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-pearl-2",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 45,
+                    "top": -4,
+                    "width": 10,
+                    "height": 10,
+                    "background": "#efcb6b",
+                    "borderRadius": "50%"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-point-3",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 67,
+                    "top": 9,
+                    "width": 14,
+                    "height": 37,
+                    "background": "linear-gradient(180deg,#ffe4a0,#d2a443)",
+                    "transform": "rotate(10deg)"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-pearl-3",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 69,
+                    "top": 5,
+                    "width": 10,
+                    "height": 10,
+                    "background": "#efcb6b",
+                    "borderRadius": "50%"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-point-4",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 88,
+                    "top": 21,
+                    "width": 14,
+                    "height": 27,
+                    "background": "linear-gradient(180deg,#ffe4a0,#d2a443)",
+                    "transform": "rotate(20deg)"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-pearl-4",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 90,
+                    "top": 17,
+                    "width": 10,
+                    "height": 10,
+                    "background": "#efcb6b",
+                    "borderRadius": "50%"
+                  },
+                  "type": "box",
+                  "children": []
+                },
+                {
+                  "id": "crown-base",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 6,
+                    "bottom": 0,
+                    "width": 90,
+                    "height": 10,
+                    "background": "#efcb6b",
+                    "borderRadius": "2px"
+                  },
+                  "type": "box",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "id": "solo-title",
+              "styles": {
+                "position": "absolute",
+                "left": 110,
+                "top": 109,
+                "width": 1060,
+                "height": 118,
+                "display": "flex",
+                "alignItems": "center",
+                "justifyContent": "center",
+                "gap": "18px"
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "solo-head-left",
+                  "styles": {
+                    "fontSize": "114px",
+                    "fontWeight": 950,
+                    "letterSpacing": "-.07em",
+                    "color": "#f9f6ec",
+                    "transform": "scaleX(.86)"
+                  },
+                  "type": "text",
+                  "text": "HEAD"
+                },
+                {
+                  "id": "solo-to",
+                  "styles": {
+                    "fontSize": "70px",
+                    "fontWeight": 900,
+                    "color": "#efcb6b"
+                  },
+                  "type": "text",
+                  "text": "TO"
+                },
+                {
+                  "id": "solo-head-right",
+                  "styles": {
+                    "fontSize": "114px",
+                    "fontWeight": 950,
+                    "letterSpacing": "-.07em",
+                    "color": "#f9f6ec",
+                    "transform": "scaleX(.86)"
+                  },
+                  "type": "text",
+                  "text": "HEAD"
+                }
+              ]
+            },
+            {
+              "id": "solo-tagline",
+              "styles": {
+                "position": "absolute",
+                "left": 230,
+                "top": 235,
+                "width": 820,
+                "height": 35,
+                "textAlign": "center",
+                "fontSize": "21px",
+                "letterSpacing": ".32em",
+                "color": "#d5d9e0"
+              },
+              "type": "text",
+              "text": "TWO PLAYERS. ONE WINNER."
+            },
+            {
+              "id": "solo-floor",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 638,
+                "width": 1280,
+                "height": 82,
+                "background": "repeating-linear-gradient(170deg,#749dd211 0px,transparent 1px,transparent 28px), linear-gradient(180deg,#101d2b00,#1b2b4077)",
+                "border": "1px solid #52678833"
+              },
+              "motion": {
+                "durationMs": 6000,
+                "property": "opacity",
+                "from": 0.6,
+                "to": 1
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "solo-topic",
+              "styles": {
+                "position": "absolute",
+                "left": 170,
+                "top": 665,
+                "width": 940,
+                "height": 32,
+                "textAlign": "center",
+                "fontSize": "18px",
+                "color": "#b8c4d4"
+              },
+              "type": "text",
+              "text": {
+                "get": "values.topic"
+              }
+            },
+            {
+              "id": "solo-winner",
+              "styles": {
+                "position": "absolute",
+                "left": 250,
+                "top": 272,
+                "width": 780,
+                "height": 34,
+                "textAlign": "center",
+                "color": "#efcb6b",
+                "fontSize": "28px",
+                "fontWeight": 800
+              },
+              "when": {
+                "get": "show.revealed"
+              },
+              "type": "text",
+              "text": {
+                "op": "if",
+                "args": [
+                  {
+                    "op": "eq",
+                    "args": [
+                      {
+                        "get": "show.result"
+                      },
+                      "draw"
+                    ]
+                  },
+                  "DRAW",
+                  {
+                    "op": "concat",
+                    "args": [
+                      "WINNER · ",
+                      {
+                        "get": "show.winner"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "host-rim",
+              "styles": {
+                "position": "absolute",
+                "left": 283,
+                "top": 321,
+                "width": 714,
+                "height": 332,
+                "border": "3px solid #69a9ff",
+                "borderRadius": "9px",
+                "boxShadow": "0 0 7px #69a9ff, 0 0 24px #69a9ff55"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "host-video",
+              "styles": {
+                "position": "absolute",
+                "left": 286,
+                "top": 324,
+                "width": 708,
+                "height": 326
+              },
+              "type": "slot",
+              "slotId": "host",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 6
+              }
+            },
+            {
+              "id": "host-nameplate",
+              "styles": {
+                "position": "absolute",
+                "left": 286,
+                "top": 589,
+                "width": 708,
+                "height": 61,
+                "background": "linear-gradient(90deg,#071323f5,#071323d9)",
+                "borderRadius": "0 0 6px 6px",
+                "display": "flex",
+                "alignItems": "center",
+                "justifyContent": "space-between",
+                "padding": "0 20px"
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "host-name",
+                  "styles": {
+                    "color": "#fffaf0",
+                    "fontSize": "28px",
+                    "fontWeight": 700
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "values.hostName"
+                  }
+                },
+                {
+                  "id": "host-role",
+                  "styles": {
+                    "fontSize": "15px",
+                    "letterSpacing": ".1em",
+                    "color": "#69a9ff",
+                    "background": "#69a9ff22",
+                    "borderRadius": "6px",
+                    "padding": "9px 12px"
+                  },
+                  "type": "text",
+                  "text": "HOST"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "controls": [
+      {
+        "id": "conversation-button",
+        "type": "button",
+        "label": "Two Up",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "conversation"
+        }
+      },
+      {
+        "id": "host-focus-button",
+        "type": "button",
+        "label": "Host Focus",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "host-focus"
+        }
+      },
+      {
+        "id": "solo-button",
+        "type": "button",
+        "label": "Solo",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "solo"
+        }
+      },
+      {
+        "id": "host-name",
+        "type": "text",
+        "label": "Host name",
+        "key": "hostName"
+      },
+      {
+        "id": "guest-name",
+        "type": "text",
+        "label": "Guest name",
+        "key": "guestName"
+      },
+      {
+        "id": "topic-field",
+        "type": "text",
+        "label": "Topic",
+        "key": "topic"
+      },
+      {
+        "id": "start-show",
+        "type": "button",
+        "label": "Start show",
+        "action": {
+          "type": "show.start"
+        }
+      },
+      {
+        "id": "next-phase",
+        "type": "button",
+        "label": "Next",
+        "action": {
+          "type": "show.next"
+        }
+      },
+      {
+        "id": "reveal-winner",
+        "type": "button",
+        "label": "Reveal winner",
+        "action": {
+          "type": "show.reveal"
+        }
+      }
+    ]
+  },
+  "show": {
+    "id": "head-to-head",
+    "version": "0.1.0",
+    "initialPhase": "intro",
+    "phases": [
+      {
+        "id": "intro",
+        "label": "Introduction",
+        "layoutId": "conversation",
+        "next": "round"
+      },
+      {
+        "id": "round",
+        "label": "Audience vote",
+        "layoutId": "conversation",
+        "next": "outro",
+        "collectMs": 60000
+      },
+      {
+        "id": "outro",
+        "label": "Winner reveal",
+        "layoutId": "conversation"
+      }
+    ],
+    "choices": [
+      {
+        "id": "a",
+        "label": "Contestant A"
+      },
+      {
+        "id": "b",
+        "label": "Contestant B"
+      }
+    ]
+  }
+}

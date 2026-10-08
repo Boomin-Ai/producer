@@ -1,0 +1,1930 @@
+{
+  "schema": "producer.presentation/1",
+  "id": "four-host-grid-v2",
+  "version": "2.0.0",
+  "name": "Four Host Grid \u2014 Guest Focus (v2)",
+  "set": {
+    "tokens": {
+      "ink": "#eef6ff",
+      "accent": "#6bd6ad",
+      "muted": "#9bb2c4",
+      "displayFont": "Avenir Next, sans-serif",
+      "bodyFont": "Helvetica Neue, sans-serif"
+    },
+    "styles": {
+      "display": {
+        "fontFamily": "Avenir Next, sans-serif",
+        "fontWeight": 800
+      },
+      "body": {
+        "fontFamily": "Helvetica Neue, sans-serif"
+      }
+    },
+    "initialLayout": "four-grid-equal-1",
+    "values": {
+      "guest": {
+        "type": "text",
+        "default": "host-1",
+        "maxLength": 20
+      },
+      "guestSize": {
+        "type": "text",
+        "default": "equal",
+        "maxLength": 12
+      }
+    },
+    "feeds": {},
+    "slots": [
+      {
+        "id": "host-1",
+        "label": "Host 1 camera"
+      },
+      {
+        "id": "host-2",
+        "label": "Host 2 camera"
+      },
+      {
+        "id": "host-3",
+        "label": "Host 3 camera"
+      },
+      {
+        "id": "host-4",
+        "label": "Host 4 camera"
+      }
+    ],
+    "components": {},
+    "assets": {},
+    "layouts": [
+      {
+        "id": "four-grid-equal-1",
+        "label": "Four-up grid \u00b7 equal \u00b7 Guest 1",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "type": "box",
+          "id": "root",
+          "styles": {
+            "position": "relative",
+            "width": 1280,
+            "height": 720,
+            "background": "#08131d"
+          },
+          "children": [
+            {
+              "id": "wash",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720
+              },
+              "shader": {
+                "effect": "aurora",
+                "colors": [
+                  "#071321",
+                  "#174d86",
+                  "#5fd6bd"
+                ],
+                "speed": 0.35,
+                "intensity": 0.5,
+                "scale": 1.2,
+                "opacity": 0.7,
+                "radius": 80,
+                "quality": "low",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "masthead",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 30,
+                "width": 700,
+                "fontSize": 20,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "FOUR-UP / LIVE CONVERSATION"
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 62,
+                "width": 700,
+                "fontSize": 52,
+                "lineHeight": 1.1,
+                "color": "#ffffff"
+              },
+              "text": "THE BUILD ROOM"
+            },
+            {
+              "id": "camera-host-1",
+              "type": "slot",
+              "slotId": "host-1",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 4,
+                "outlineColor": "#8ee8c5",
+                "opacity": 1
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 160,
+                "width": 580,
+                "height": 270
+              }
+            },
+            {
+              "id": "camera-host-2",
+              "type": "slot",
+              "slotId": "host-2",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 1
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 656,
+                "top": 160,
+                "width": 580,
+                "height": 270
+              }
+            },
+            {
+              "id": "camera-host-3",
+              "type": "slot",
+              "slotId": "host-3",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 1
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 450,
+                "width": 580,
+                "height": 270
+              }
+            },
+            {
+              "id": "camera-host-4",
+              "type": "slot",
+              "slotId": "host-4",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 1
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 656,
+                "top": 450,
+                "width": 580,
+                "height": 270
+              }
+            },
+            {
+              "id": "label-1",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 410,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 1"
+            },
+            {
+              "id": "label-2",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 672,
+                "top": 410,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 2"
+            },
+            {
+              "id": "label-3",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 700,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 3"
+            },
+            {
+              "id": "label-4",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 672,
+                "top": 700,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 4"
+            }
+          ]
+        }
+      },
+      {
+        "id": "four-grid-focus-1",
+        "label": "Four-up grid \u00b7 focus \u00b7 Guest 1",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "type": "box",
+          "id": "root",
+          "styles": {
+            "position": "relative",
+            "width": 1280,
+            "height": 720,
+            "background": "#08131d"
+          },
+          "children": [
+            {
+              "id": "wash",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720
+              },
+              "shader": {
+                "effect": "aurora",
+                "colors": [
+                  "#071321",
+                  "#174d86",
+                  "#5fd6bd"
+                ],
+                "speed": 0.35,
+                "intensity": 0.5,
+                "scale": 1.2,
+                "opacity": 0.7,
+                "radius": 80,
+                "quality": "low",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "masthead",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 30,
+                "width": 700,
+                "fontSize": 20,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "FOUR-UP / LIVE CONVERSATION"
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 62,
+                "width": 700,
+                "fontSize": 52,
+                "lineHeight": 1.1,
+                "color": "#ffffff"
+              },
+              "text": "THE BUILD ROOM"
+            },
+            {
+              "id": "camera-host-1",
+              "type": "slot",
+              "slotId": "host-1",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 4,
+                "outlineColor": "#8ee8c5",
+                "opacity": 1
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 120,
+                "top": 150,
+                "width": 1040,
+                "height": 470
+              }
+            },
+            {
+              "id": "camera-host-2",
+              "type": "slot",
+              "slotId": "host-2",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 0
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 656,
+                "top": 160,
+                "width": 1,
+                "height": 1
+              }
+            },
+            {
+              "id": "camera-host-3",
+              "type": "slot",
+              "slotId": "host-3",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 0
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 450,
+                "width": 1,
+                "height": 1
+              }
+            },
+            {
+              "id": "camera-host-4",
+              "type": "slot",
+              "slotId": "host-4",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 0
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 656,
+                "top": 450,
+                "width": 1,
+                "height": 1
+              }
+            },
+            {
+              "id": "label-1",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 410,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 1"
+            },
+            {
+              "id": "label-2",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 672,
+                "top": 410,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 2"
+            },
+            {
+              "id": "label-3",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 700,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 3"
+            },
+            {
+              "id": "label-4",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 672,
+                "top": 700,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 4"
+            }
+          ]
+        }
+      },
+      {
+        "id": "four-grid-equal-2",
+        "label": "Four-up grid \u00b7 equal \u00b7 Guest 2",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "type": "box",
+          "id": "root",
+          "styles": {
+            "position": "relative",
+            "width": 1280,
+            "height": 720,
+            "background": "#08131d"
+          },
+          "children": [
+            {
+              "id": "wash",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720
+              },
+              "shader": {
+                "effect": "aurora",
+                "colors": [
+                  "#071321",
+                  "#174d86",
+                  "#5fd6bd"
+                ],
+                "speed": 0.35,
+                "intensity": 0.5,
+                "scale": 1.2,
+                "opacity": 0.7,
+                "radius": 80,
+                "quality": "low",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "masthead",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 30,
+                "width": 700,
+                "fontSize": 20,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "FOUR-UP / LIVE CONVERSATION"
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 62,
+                "width": 700,
+                "fontSize": 52,
+                "lineHeight": 1.1,
+                "color": "#ffffff"
+              },
+              "text": "THE BUILD ROOM"
+            },
+            {
+              "id": "camera-host-1",
+              "type": "slot",
+              "slotId": "host-1",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 1
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 160,
+                "width": 580,
+                "height": 270
+              }
+            },
+            {
+              "id": "camera-host-2",
+              "type": "slot",
+              "slotId": "host-2",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 4,
+                "outlineColor": "#8ee8c5",
+                "opacity": 1
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 656,
+                "top": 160,
+                "width": 580,
+                "height": 270
+              }
+            },
+            {
+              "id": "camera-host-3",
+              "type": "slot",
+              "slotId": "host-3",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 1
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 450,
+                "width": 580,
+                "height": 270
+              }
+            },
+            {
+              "id": "camera-host-4",
+              "type": "slot",
+              "slotId": "host-4",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 1
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 656,
+                "top": 450,
+                "width": 580,
+                "height": 270
+              }
+            },
+            {
+              "id": "label-1",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 410,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 1"
+            },
+            {
+              "id": "label-2",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 672,
+                "top": 410,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 2"
+            },
+            {
+              "id": "label-3",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 700,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 3"
+            },
+            {
+              "id": "label-4",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 672,
+                "top": 700,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 4"
+            }
+          ]
+        }
+      },
+      {
+        "id": "four-grid-focus-2",
+        "label": "Four-up grid \u00b7 focus \u00b7 Guest 2",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "type": "box",
+          "id": "root",
+          "styles": {
+            "position": "relative",
+            "width": 1280,
+            "height": 720,
+            "background": "#08131d"
+          },
+          "children": [
+            {
+              "id": "wash",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720
+              },
+              "shader": {
+                "effect": "aurora",
+                "colors": [
+                  "#071321",
+                  "#174d86",
+                  "#5fd6bd"
+                ],
+                "speed": 0.35,
+                "intensity": 0.5,
+                "scale": 1.2,
+                "opacity": 0.7,
+                "radius": 80,
+                "quality": "low",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "masthead",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 30,
+                "width": 700,
+                "fontSize": 20,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "FOUR-UP / LIVE CONVERSATION"
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 62,
+                "width": 700,
+                "fontSize": 52,
+                "lineHeight": 1.1,
+                "color": "#ffffff"
+              },
+              "text": "THE BUILD ROOM"
+            },
+            {
+              "id": "camera-host-1",
+              "type": "slot",
+              "slotId": "host-1",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 0
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 160,
+                "width": 1,
+                "height": 1
+              }
+            },
+            {
+              "id": "camera-host-2",
+              "type": "slot",
+              "slotId": "host-2",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 4,
+                "outlineColor": "#8ee8c5",
+                "opacity": 1
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 120,
+                "top": 150,
+                "width": 1040,
+                "height": 470
+              }
+            },
+            {
+              "id": "camera-host-3",
+              "type": "slot",
+              "slotId": "host-3",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 0
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 450,
+                "width": 1,
+                "height": 1
+              }
+            },
+            {
+              "id": "camera-host-4",
+              "type": "slot",
+              "slotId": "host-4",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 0
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 656,
+                "top": 450,
+                "width": 1,
+                "height": 1
+              }
+            },
+            {
+              "id": "label-1",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 410,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 1"
+            },
+            {
+              "id": "label-2",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 672,
+                "top": 410,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 2"
+            },
+            {
+              "id": "label-3",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 700,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 3"
+            },
+            {
+              "id": "label-4",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 672,
+                "top": 700,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 4"
+            }
+          ]
+        }
+      },
+      {
+        "id": "four-grid-equal-3",
+        "label": "Four-up grid \u00b7 equal \u00b7 Guest 3",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "type": "box",
+          "id": "root",
+          "styles": {
+            "position": "relative",
+            "width": 1280,
+            "height": 720,
+            "background": "#08131d"
+          },
+          "children": [
+            {
+              "id": "wash",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720
+              },
+              "shader": {
+                "effect": "aurora",
+                "colors": [
+                  "#071321",
+                  "#174d86",
+                  "#5fd6bd"
+                ],
+                "speed": 0.35,
+                "intensity": 0.5,
+                "scale": 1.2,
+                "opacity": 0.7,
+                "radius": 80,
+                "quality": "low",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "masthead",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 30,
+                "width": 700,
+                "fontSize": 20,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "FOUR-UP / LIVE CONVERSATION"
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 62,
+                "width": 700,
+                "fontSize": 52,
+                "lineHeight": 1.1,
+                "color": "#ffffff"
+              },
+              "text": "THE BUILD ROOM"
+            },
+            {
+              "id": "camera-host-1",
+              "type": "slot",
+              "slotId": "host-1",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 1
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 160,
+                "width": 580,
+                "height": 270
+              }
+            },
+            {
+              "id": "camera-host-2",
+              "type": "slot",
+              "slotId": "host-2",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 1
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 656,
+                "top": 160,
+                "width": 580,
+                "height": 270
+              }
+            },
+            {
+              "id": "camera-host-3",
+              "type": "slot",
+              "slotId": "host-3",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 4,
+                "outlineColor": "#8ee8c5",
+                "opacity": 1
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 450,
+                "width": 580,
+                "height": 270
+              }
+            },
+            {
+              "id": "camera-host-4",
+              "type": "slot",
+              "slotId": "host-4",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 1
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 656,
+                "top": 450,
+                "width": 580,
+                "height": 270
+              }
+            },
+            {
+              "id": "label-1",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 410,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 1"
+            },
+            {
+              "id": "label-2",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 672,
+                "top": 410,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 2"
+            },
+            {
+              "id": "label-3",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 700,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 3"
+            },
+            {
+              "id": "label-4",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 672,
+                "top": 700,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 4"
+            }
+          ]
+        }
+      },
+      {
+        "id": "four-grid-focus-3",
+        "label": "Four-up grid \u00b7 focus \u00b7 Guest 3",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "type": "box",
+          "id": "root",
+          "styles": {
+            "position": "relative",
+            "width": 1280,
+            "height": 720,
+            "background": "#08131d"
+          },
+          "children": [
+            {
+              "id": "wash",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720
+              },
+              "shader": {
+                "effect": "aurora",
+                "colors": [
+                  "#071321",
+                  "#174d86",
+                  "#5fd6bd"
+                ],
+                "speed": 0.35,
+                "intensity": 0.5,
+                "scale": 1.2,
+                "opacity": 0.7,
+                "radius": 80,
+                "quality": "low",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "masthead",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 30,
+                "width": 700,
+                "fontSize": 20,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "FOUR-UP / LIVE CONVERSATION"
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 62,
+                "width": 700,
+                "fontSize": 52,
+                "lineHeight": 1.1,
+                "color": "#ffffff"
+              },
+              "text": "THE BUILD ROOM"
+            },
+            {
+              "id": "camera-host-1",
+              "type": "slot",
+              "slotId": "host-1",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 0
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 160,
+                "width": 1,
+                "height": 1
+              }
+            },
+            {
+              "id": "camera-host-2",
+              "type": "slot",
+              "slotId": "host-2",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 0
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 656,
+                "top": 160,
+                "width": 1,
+                "height": 1
+              }
+            },
+            {
+              "id": "camera-host-3",
+              "type": "slot",
+              "slotId": "host-3",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 4,
+                "outlineColor": "#8ee8c5",
+                "opacity": 1
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 120,
+                "top": 150,
+                "width": 1040,
+                "height": 470
+              }
+            },
+            {
+              "id": "camera-host-4",
+              "type": "slot",
+              "slotId": "host-4",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 0
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 656,
+                "top": 450,
+                "width": 1,
+                "height": 1
+              }
+            },
+            {
+              "id": "label-1",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 410,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 1"
+            },
+            {
+              "id": "label-2",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 672,
+                "top": 410,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 2"
+            },
+            {
+              "id": "label-3",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 700,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 3"
+            },
+            {
+              "id": "label-4",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 672,
+                "top": 700,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 4"
+            }
+          ]
+        }
+      },
+      {
+        "id": "four-grid-equal-4",
+        "label": "Four-up grid \u00b7 equal \u00b7 Guest 4",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "type": "box",
+          "id": "root",
+          "styles": {
+            "position": "relative",
+            "width": 1280,
+            "height": 720,
+            "background": "#08131d"
+          },
+          "children": [
+            {
+              "id": "wash",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720
+              },
+              "shader": {
+                "effect": "aurora",
+                "colors": [
+                  "#071321",
+                  "#174d86",
+                  "#5fd6bd"
+                ],
+                "speed": 0.35,
+                "intensity": 0.5,
+                "scale": 1.2,
+                "opacity": 0.7,
+                "radius": 80,
+                "quality": "low",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "masthead",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 30,
+                "width": 700,
+                "fontSize": 20,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "FOUR-UP / LIVE CONVERSATION"
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 62,
+                "width": 700,
+                "fontSize": 52,
+                "lineHeight": 1.1,
+                "color": "#ffffff"
+              },
+              "text": "THE BUILD ROOM"
+            },
+            {
+              "id": "camera-host-1",
+              "type": "slot",
+              "slotId": "host-1",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 1
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 160,
+                "width": 580,
+                "height": 270
+              }
+            },
+            {
+              "id": "camera-host-2",
+              "type": "slot",
+              "slotId": "host-2",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 1
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 656,
+                "top": 160,
+                "width": 580,
+                "height": 270
+              }
+            },
+            {
+              "id": "camera-host-3",
+              "type": "slot",
+              "slotId": "host-3",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 1
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 450,
+                "width": 580,
+                "height": 270
+              }
+            },
+            {
+              "id": "camera-host-4",
+              "type": "slot",
+              "slotId": "host-4",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 4,
+                "outlineColor": "#8ee8c5",
+                "opacity": 1
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 656,
+                "top": 450,
+                "width": 580,
+                "height": 270
+              }
+            },
+            {
+              "id": "label-1",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 410,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 1"
+            },
+            {
+              "id": "label-2",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 672,
+                "top": 410,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 2"
+            },
+            {
+              "id": "label-3",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 700,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 3"
+            },
+            {
+              "id": "label-4",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 672,
+                "top": 700,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 4"
+            }
+          ]
+        }
+      },
+      {
+        "id": "four-grid-focus-4",
+        "label": "Four-up grid \u00b7 focus \u00b7 Guest 4",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "type": "box",
+          "id": "root",
+          "styles": {
+            "position": "relative",
+            "width": 1280,
+            "height": 720,
+            "background": "#08131d"
+          },
+          "children": [
+            {
+              "id": "wash",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720
+              },
+              "shader": {
+                "effect": "aurora",
+                "colors": [
+                  "#071321",
+                  "#174d86",
+                  "#5fd6bd"
+                ],
+                "speed": 0.35,
+                "intensity": 0.5,
+                "scale": 1.2,
+                "opacity": 0.7,
+                "radius": 80,
+                "quality": "low",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "masthead",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 30,
+                "width": 700,
+                "fontSize": 20,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "FOUR-UP / LIVE CONVERSATION"
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 62,
+                "width": 700,
+                "fontSize": 52,
+                "lineHeight": 1.1,
+                "color": "#ffffff"
+              },
+              "text": "THE BUILD ROOM"
+            },
+            {
+              "id": "camera-host-1",
+              "type": "slot",
+              "slotId": "host-1",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 0
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 160,
+                "width": 1,
+                "height": 1
+              }
+            },
+            {
+              "id": "camera-host-2",
+              "type": "slot",
+              "slotId": "host-2",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 0
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 656,
+                "top": 160,
+                "width": 1,
+                "height": 1
+              }
+            },
+            {
+              "id": "camera-host-3",
+              "type": "slot",
+              "slotId": "host-3",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#304555",
+                "opacity": 0
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 44,
+                "top": 450,
+                "width": 1,
+                "height": 1
+              }
+            },
+            {
+              "id": "camera-host-4",
+              "type": "slot",
+              "slotId": "host-4",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 4,
+                "outlineColor": "#8ee8c5",
+                "opacity": 1
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 120,
+                "top": 150,
+                "width": 1040,
+                "height": 470
+              }
+            },
+            {
+              "id": "label-1",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 410,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 1"
+            },
+            {
+              "id": "label-2",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 672,
+                "top": 410,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 2"
+            },
+            {
+              "id": "label-3",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 700,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 3"
+            },
+            {
+              "id": "label-4",
+              "type": "text",
+              "styles": {
+                "position": "absolute",
+                "left": 672,
+                "top": 700,
+                "width": 200,
+                "fontSize": 16,
+                "lineHeight": 1.1,
+                "color": "#8ee8c5"
+              },
+              "text": "HOST 4"
+            }
+          ]
+        }
+      }
+    ],
+    "controls": [
+      {
+        "id": "guest-1",
+        "type": "button",
+        "label": "Guest 1",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "four-grid-focus-1"
+        }
+      },
+      {
+        "id": "guest-2",
+        "type": "button",
+        "label": "Guest 2",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "four-grid-focus-2"
+        }
+      },
+      {
+        "id": "guest-3",
+        "type": "button",
+        "label": "Guest 3",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "four-grid-focus-3"
+        }
+      },
+      {
+        "id": "guest-4",
+        "type": "button",
+        "label": "Guest 4",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "four-grid-focus-4"
+        }
+      },
+      {
+        "id": "size-equal",
+        "type": "button",
+        "label": "Equal grid",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "four-grid-equal-1"
+        }
+      },
+      {
+        "id": "size-focus",
+        "type": "button",
+        "label": "Focus guest",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "four-grid-focus-1"
+        }
+      }
+    ]
+  },
+  "show": {
+    "id": "four-host-grid-v2-show",
+    "version": "2.0.0",
+    "initialPhase": "grid",
+    "phases": [
+      {
+        "id": "grid",
+        "label": "Four-up conversation",
+        "layoutId": "four-grid-equal-1"
+      }
+    ],
+    "choices": [
+      {
+        "id": "guest-focus",
+        "label": "Guest focus"
+      },
+      {
+        "id": "open-floor",
+        "label": "Open floor"
+      }
+    ]
+  }
+}

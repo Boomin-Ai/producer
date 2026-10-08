@@ -1,0 +1,805 @@
+{
+  "schema": "producer.presentation/1",
+  "id": "signal-desk",
+  "version": "0.1.2",
+  "name": "Signal Desk",
+  "set": {
+    "initialLayout": "duo",
+    "values": {
+      "hostName": {
+        "type": "text",
+        "default": "Host",
+        "maxLength": 40
+      },
+      "guestName": {
+        "type": "text",
+        "default": "Guest",
+        "maxLength": 40
+      },
+      "topic": {
+        "type": "text",
+        "default": "A different point of view.",
+        "maxLength": 100
+      }
+    },
+    "feeds": {
+      "headline": {
+        "type": "text",
+        "default": "IN CONVERSATION",
+        "maxLength": 80
+      },
+      "energy": {
+        "type": "number",
+        "default": 0.4,
+        "min": 0,
+        "max": 1
+      }
+    },
+    "slots": [
+      {
+        "id": "host",
+        "label": "Host"
+      },
+      {
+        "id": "guest",
+        "label": "Guest"
+      }
+    ],
+    "components": {},
+    "layouts": [
+      {
+        "id": "duo",
+        "label": "Two up",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "duo-root",
+          "type": "box",
+          "styles": {
+            "position": "absolute",
+            "inset": 0,
+            "background": "#f2f0e8"
+          },
+          "children": [
+            {
+              "id": "duo-rail",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": "0px",
+                "top": "0px",
+                "width": "1280px",
+                "height": "12px",
+                "background": "#284df2"
+              },
+              "children": []
+            },
+            {
+              "id": "duo-brand",
+              "type": "text",
+              "text": "SIGNAL DESK",
+              "styles": {
+                "position": "absolute",
+                "left": "40px",
+                "top": "30px",
+                "fontSize": "46px",
+                "color": "#111c35",
+                "fontWeight": 800,
+                "letterSpacing": "-.04em"
+              }
+            },
+            {
+              "id": "duo-edition",
+              "type": "text",
+              "text": "OPEN CHANNEL / 01",
+              "styles": {
+                "position": "absolute",
+                "left": "970px",
+                "top": "45px",
+                "fontSize": "16px",
+                "color": "#111c35",
+                "letterSpacing": ".08em"
+              }
+            },
+            {
+              "id": "duo-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": "40px",
+                "top": "104px",
+                "width": "1200px",
+                "height": "2px",
+                "background": "#111c35"
+              },
+              "children": []
+            },
+            {
+              "id": "duo-headline",
+              "type": "text",
+              "text": {
+                "get": "feeds.headline"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": "40px",
+                "top": "122px",
+                "fontSize": "13px",
+                "color": "#284df2",
+                "letterSpacing": ".16em",
+                "fontWeight": 700
+              }
+            },
+            {
+              "id": "duo-back-host",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": "40px",
+                "top": "184px",
+                "width": "588px",
+                "height": "336px",
+                "background": "transparent",
+                "border": "6px solid #111c35"
+              },
+              "children": []
+            },
+            {
+              "id": "duo-video-host",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": "46px",
+                "top": "190px",
+                "width": "576px",
+                "height": "324px"
+              },
+              "appearance": {
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#284df2"
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              }
+            },
+            {
+              "id": "duo-name-host",
+              "type": "text",
+              "text": {
+                "get": "values.hostName"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": "46px",
+                "top": "526px",
+                "fontSize": "24px",
+                "color": "#111c35",
+                "fontWeight": 700
+              }
+            },
+            {
+              "id": "duo-role-host",
+              "type": "text",
+              "text": "01 / HOST",
+              "styles": {
+                "position": "absolute",
+                "left": "46px",
+                "top": "561px",
+                "fontSize": "12px",
+                "color": "#53627c",
+                "letterSpacing": ".12em"
+              }
+            },
+            {
+              "id": "duo-back-guest",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": "652px",
+                "top": "184px",
+                "width": "588px",
+                "height": "336px",
+                "background": "transparent",
+                "border": "6px solid #111c35"
+              },
+              "children": []
+            },
+            {
+              "id": "duo-video-guest",
+              "type": "slot",
+              "slotId": "guest",
+              "styles": {
+                "position": "absolute",
+                "left": "658px",
+                "top": "190px",
+                "width": "576px",
+                "height": "324px"
+              },
+              "appearance": {
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#284df2"
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              }
+            },
+            {
+              "id": "duo-name-guest",
+              "type": "text",
+              "text": {
+                "get": "values.guestName"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": "658px",
+                "top": "526px",
+                "fontSize": "24px",
+                "color": "#111c35",
+                "fontWeight": 700
+              }
+            },
+            {
+              "id": "duo-role-guest",
+              "type": "text",
+              "text": "02 / GUEST",
+              "styles": {
+                "position": "absolute",
+                "left": "658px",
+                "top": "561px",
+                "fontSize": "12px",
+                "color": "#53627c",
+                "letterSpacing": ".12em"
+              }
+            },
+            {
+              "id": "duo-footer",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": "0px",
+                "top": "628px",
+                "width": "1280px",
+                "height": "92px",
+                "background": "#284df2"
+              },
+              "children": []
+            },
+            {
+              "id": "duo-topic",
+              "type": "text",
+              "text": {
+                "get": "values.topic"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": "40px",
+                "top": "650px",
+                "fontSize": "27px",
+                "color": "#ffffff",
+                "fontWeight": 600,
+                "maxWidth": "1040px"
+              }
+            },
+            {
+              "id": "duo-footer-mark",
+              "type": "text",
+              "text": "SD",
+              "styles": {
+                "position": "absolute",
+                "left": "1180px",
+                "top": "646px",
+                "fontSize": "38px",
+                "color": "#b8c6ff",
+                "fontWeight": 800
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "host-focus",
+        "label": "Host focus",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "host-focus-root",
+          "type": "box",
+          "styles": {
+            "position": "absolute",
+            "inset": 0,
+            "background": "#f2f0e8"
+          },
+          "children": [
+            {
+              "id": "host-focus-rail",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": "0px",
+                "top": "0px",
+                "width": "1280px",
+                "height": "12px",
+                "background": "#284df2"
+              },
+              "children": []
+            },
+            {
+              "id": "host-focus-brand",
+              "type": "text",
+              "text": "SIGNAL DESK",
+              "styles": {
+                "position": "absolute",
+                "left": "40px",
+                "top": "30px",
+                "fontSize": "46px",
+                "color": "#111c35",
+                "fontWeight": 800,
+                "letterSpacing": "-.04em"
+              }
+            },
+            {
+              "id": "host-focus-edition",
+              "type": "text",
+              "text": "OPEN CHANNEL / 01",
+              "styles": {
+                "position": "absolute",
+                "left": "970px",
+                "top": "45px",
+                "fontSize": "16px",
+                "color": "#111c35",
+                "letterSpacing": ".08em"
+              }
+            },
+            {
+              "id": "host-focus-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": "40px",
+                "top": "104px",
+                "width": "1200px",
+                "height": "2px",
+                "background": "#111c35"
+              },
+              "children": []
+            },
+            {
+              "id": "host-focus-headline",
+              "type": "text",
+              "text": {
+                "get": "feeds.headline"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": "40px",
+                "top": "122px",
+                "fontSize": "13px",
+                "color": "#284df2",
+                "letterSpacing": ".16em",
+                "fontWeight": 700
+              }
+            },
+            {
+              "id": "host-focus-back-host",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": "40px",
+                "top": "168px",
+                "width": "812px",
+                "height": "462px",
+                "background": "transparent",
+                "border": "6px solid #111c35"
+              },
+              "children": []
+            },
+            {
+              "id": "host-focus-video-host",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": "46px",
+                "top": "174px",
+                "width": "800px",
+                "height": "450px"
+              },
+              "appearance": {
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#284df2"
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              }
+            },
+            {
+              "id": "host-focus-back-guest",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": "894px",
+                "top": "238px",
+                "width": "346px",
+                "height": "200px",
+                "background": "transparent",
+                "border": "6px solid #111c35"
+              },
+              "children": []
+            },
+            {
+              "id": "host-focus-video-guest",
+              "type": "slot",
+              "slotId": "guest",
+              "styles": {
+                "position": "absolute",
+                "left": "900px",
+                "top": "244px",
+                "width": "334px",
+                "height": "188px"
+              },
+              "appearance": {
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#284df2"
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              }
+            },
+            {
+              "id": "host-focus-name-guest",
+              "type": "text",
+              "text": {
+                "get": "values.guestName"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": "900px",
+                "top": "444px",
+                "fontSize": "24px",
+                "color": "#111c35",
+                "fontWeight": 700
+              }
+            },
+            {
+              "id": "host-focus-role-guest",
+              "type": "text",
+              "text": "02 / GUEST",
+              "styles": {
+                "position": "absolute",
+                "left": "900px",
+                "top": "479px",
+                "fontSize": "12px",
+                "color": "#53627c",
+                "letterSpacing": ".12em"
+              }
+            },
+            {
+              "id": "host-focus-host-label",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": "46px",
+                "top": "576px",
+                "width": "800px",
+                "height": "48px",
+                "background": "#111c35"
+              },
+              "children": [
+                {
+                  "id": "host-focus-host-label-text",
+                  "type": "text",
+                  "text": {
+                    "get": "values.hostName"
+                  },
+                  "styles": {
+                    "position": "absolute",
+                    "left": "16px",
+                    "top": "8px",
+                    "fontSize": "24px",
+                    "color": "#ffffff",
+                    "fontWeight": 700
+                  }
+                }
+              ]
+            },
+            {
+              "id": "host-focus-footer",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": "0px",
+                "top": "628px",
+                "width": "1280px",
+                "height": "92px",
+                "background": "#284df2"
+              },
+              "children": []
+            },
+            {
+              "id": "host-focus-topic",
+              "type": "text",
+              "text": {
+                "get": "values.topic"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": "40px",
+                "top": "650px",
+                "fontSize": "27px",
+                "color": "#ffffff",
+                "fontWeight": 600,
+                "maxWidth": "1040px"
+              }
+            },
+            {
+              "id": "host-focus-footer-mark",
+              "type": "text",
+              "text": "SD",
+              "styles": {
+                "position": "absolute",
+                "left": "1180px",
+                "top": "646px",
+                "fontSize": "38px",
+                "color": "#b8c6ff",
+                "fontWeight": 800
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "solo",
+        "label": "Solo",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "solo-root",
+          "type": "box",
+          "styles": {
+            "position": "absolute",
+            "inset": 0,
+            "background": "#f2f0e8"
+          },
+          "children": [
+            {
+              "id": "solo-rail",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": "0px",
+                "top": "0px",
+                "width": "1280px",
+                "height": "12px",
+                "background": "#284df2"
+              },
+              "children": []
+            },
+            {
+              "id": "solo-brand",
+              "type": "text",
+              "text": "SIGNAL DESK",
+              "styles": {
+                "position": "absolute",
+                "left": "40px",
+                "top": "30px",
+                "fontSize": "46px",
+                "color": "#111c35",
+                "fontWeight": 800,
+                "letterSpacing": "-.04em"
+              }
+            },
+            {
+              "id": "solo-edition",
+              "type": "text",
+              "text": "OPEN CHANNEL / 01",
+              "styles": {
+                "position": "absolute",
+                "left": "970px",
+                "top": "45px",
+                "fontSize": "16px",
+                "color": "#111c35",
+                "letterSpacing": ".08em"
+              }
+            },
+            {
+              "id": "solo-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": "40px",
+                "top": "104px",
+                "width": "1200px",
+                "height": "2px",
+                "background": "#111c35"
+              },
+              "children": []
+            },
+            {
+              "id": "solo-headline",
+              "type": "text",
+              "text": {
+                "get": "feeds.headline"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": "40px",
+                "top": "122px",
+                "fontSize": "13px",
+                "color": "#284df2",
+                "letterSpacing": ".16em",
+                "fontWeight": 700
+              }
+            },
+            {
+              "id": "solo-back-host",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": "254px",
+                "top": "168px",
+                "width": "772px",
+                "height": "440px",
+                "background": "transparent",
+                "border": "6px solid #111c35"
+              },
+              "children": []
+            },
+            {
+              "id": "solo-video-host",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": "260px",
+                "top": "174px",
+                "width": "760px",
+                "height": "428px"
+              },
+              "appearance": {
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#284df2"
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              }
+            },
+            {
+              "id": "solo-host-label",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": "260px",
+                "top": "554px",
+                "width": "760px",
+                "height": "48px",
+                "background": "#111c35"
+              },
+              "children": [
+                {
+                  "id": "solo-host-label-text",
+                  "type": "text",
+                  "text": {
+                    "get": "values.hostName"
+                  },
+                  "styles": {
+                    "position": "absolute",
+                    "left": "16px",
+                    "top": "8px",
+                    "fontSize": "24px",
+                    "color": "#ffffff",
+                    "fontWeight": 700
+                  }
+                }
+              ]
+            },
+            {
+              "id": "solo-footer",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": "0px",
+                "top": "628px",
+                "width": "1280px",
+                "height": "92px",
+                "background": "#284df2"
+              },
+              "children": []
+            },
+            {
+              "id": "solo-topic",
+              "type": "text",
+              "text": {
+                "get": "values.topic"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": "40px",
+                "top": "650px",
+                "fontSize": "27px",
+                "color": "#ffffff",
+                "fontWeight": 600,
+                "maxWidth": "1040px"
+              }
+            },
+            {
+              "id": "solo-footer-mark",
+              "type": "text",
+              "text": "SD",
+              "styles": {
+                "position": "absolute",
+                "left": "1180px",
+                "top": "646px",
+                "fontSize": "38px",
+                "color": "#b8c6ff",
+                "fontWeight": 800
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "controls": [
+      {
+        "id": "duo-button",
+        "type": "button",
+        "label": "Two up",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "duo"
+        }
+      },
+      {
+        "id": "host-focus-button",
+        "type": "button",
+        "label": "Host focus",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "host-focus"
+        }
+      },
+      {
+        "id": "solo-button",
+        "type": "button",
+        "label": "Solo",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "solo"
+        }
+      },
+      {
+        "id": "host-name",
+        "type": "text",
+        "label": "Host name",
+        "key": "hostName"
+      },
+      {
+        "id": "guest-name",
+        "type": "text",
+        "label": "Guest name",
+        "key": "guestName"
+      },
+      {
+        "id": "topic-field",
+        "type": "text",
+        "label": "Topic",
+        "key": "topic"
+      }
+    ]
+  }
+}

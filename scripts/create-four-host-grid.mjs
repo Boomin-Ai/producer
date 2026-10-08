@@ -1,0 +1,13 @@
+import fs from 'node:fs';
+const W=1280,H=720;
+const slot=(id,label,left,top)=>({id:`camera-${id}`,type:'slot',slotId:id,framing:{mode:'fill',x:.5,y:.5},appearance:{shape:'rectangle',cornerRadius:18,outlineWidth:2,outlineColor:'#6bd6ad',opacity:1,grayscale:0},styles:{position:'absolute',left,top,width:580,height:270}});
+const text=(id,content,left,top,width,fontSize=18,color='#eef6ff')=>({id,type:'text',content,styles:{position:'absolute',left,top,width,fontSize,lineHeight:1.1,color}});
+const root={type:'box',id:'root',styles:{position:'absolute',left:0,top:0,width:W,height:H,background:'#08131d'},children:[
+ {id:'wash',type:'shader',effect:'aurora',colors:['#071321','#174d86','#5fd6bd'],speed:.35,intensity:.5,scale:1.2,opacity:.7,radius:80,quality:'low',clock:'show',styles:{position:'absolute',left:0,top:0,width:W,height:H}},
+ text('masthead','FOUR-UP / LIVE CONVERSATION',44,30,700,20,'#8ee8c5'),text('title','THE BUILD ROOM',44,62,700,52,'#ffffff'),
+ slot('host-1','Host 1',44,160),slot('host-2','Host 2',656,160),slot('host-3','Host 3',44,450),slot('host-4','Host 4',656,450),
+ text('label-1','HOST 1',60,410,200,16,'#8ee8c5'),text('label-2','HOST 2',672,410,200,16,'#8ee8c5'),text('label-3','HOST 3',60,700,200,16,'#8ee8c5'),text('label-4','HOST 4',672,700,200,16,'#8ee8c5') ]};
+const set={tokens:{ink:'#eef6ff',accent:'#6bd6ad',muted:'#9bb2c4',displayFont:'Avenir Next, sans-serif',bodyFont:'Helvetica Neue, sans-serif'},styles:{display:{fontFamily:'Avenir Next, sans-serif',fontWeight:800},body:{fontFamily:'Helvetica Neue, sans-serif'}},initialLayout:'four-grid-landscape',values:{guest:{type:'text',default:'host-1',maxLength:20},guestSize:{type:'text',default:'equal',maxLength:12}},feeds:{},slots:[1,2,3,4].map(i=>({id:`host-${i}`,label:`Host ${i} camera`})),components:{},assets:{},layouts:[{id:'four-grid-landscape',label:'Four-up grid · landscape',width:W,height:H,root}],controls:[1,2,3,4].map(i=>({id:`guest-${i}`,type:'button',label:`Guest ${i}`,action:{type:'value.set',key:'guest',value:`host-${i}`}})).concat([{id:'size-equal',type:'button',label:'Equal grid',action:{type:'value.set',key:'guestSize',value:'equal'}},{id:'size-focus',type:'button',label:'Focus guest',action:{type:'value.set',key:'guestSize',value:'focus'}}])};
+const doc={schema:'producer.presentation/1',id:'four-host-grid',version:'1.0.0',name:'Four Host Grid — Guest Focus',set,show:{id:'four-host-grid-show',version:'1.0.0',initialPhase:'grid',phases:[{id:'grid',label:'Four-up conversation',layoutId:'four-grid-landscape'}],choices:[]}};
+fs.writeFileSync('docs/shows/four-host-grid.show.json',JSON.stringify(doc,null,2)+'\n');
+console.log('wrote docs/shows/four-host-grid.show.json');

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Boomin interactive room cost model</title>
+  <style>
+    :root { color-scheme: dark; font: 16px/1.55 system-ui, sans-serif; background: #111315; color: #f1f3f4; }
+    * { box-sizing: border-box; }
+    body { max-width: 1060px; margin: auto; padding: 40px 24px; }
+    h1 { font-size: clamp(28px, 5vw, 44px); line-height: 1.15; }
+    h2 { font-size: 20px; }
+    p { color: #b4bcc5; }
+    a { color: #ffba70; }
+    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+    .panel { border: 1px solid #393e44; border-radius: 20px; padding: 24px; background: #1c2024; }
+    label { display: block; margin-bottom: 24px; }
+    label:last-child { margin-bottom: 0; }
+    input[type=range] { width: 100%; accent-color: #ffb468; margin-top: 10px; }
+    output { float: right; color: #ffba70; }
+    .big { font-size: 48px; font-weight: 700; color: #ffba70; line-height: 1.2; }
+    .number { font-size: 28px; font-weight: 650; }
+    .small { font-size: 14px; }
+    .bar { height: 28px; border-radius: 8px; margin: 8px 0 20px; background: #ffb468; min-width: 2px; }
+    .bar.direct { background: #7f94ac; }
+    .metric { padding: 14px 0; border-bottom: 1px solid #393e44; }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } body { padding: 24px 16px; } }
+  </style>
+</head>
+<body>
+  <p class="small">Architecture planning · October 2, 2026 · Proposed SFU layout</p>
+  <h1>Keep production local.<br>Let the relay carry the audience.</h1>
+  <p>This model changes the audience size without adding camera decoders to Producer. Rates and bitrates are planning assumptions; this is not a measured invoice or capacity test.</p>
+  <div class="grid">
+    <section class="panel" aria-label="Model inputs">
+      <label for="people">Total people, including host <output id="peopleValue" for="people"></output><input id="people" type="range" min="5" max="100" value="100"></label>
+      <label for="stage">Remote stage cameras <output id="stageValue" for="stage"></output><input id="stage" type="range" min="0" max="4" value="4"></label>
+      <label for="bitrate">Program video Mbps <output id="bitrateValue" for="bitrate"></output><input id="bitrate" type="range" min="0.4" max="4" step="0.1" value="1.2"></label>
+      <label for="hours">Full-occupancy hours <output id="hoursValue" for="hours"></output><input id="hours" type="range" min="1" max="100" value="1"></label>
+      <label for="destinations">Direct external RTMP destinations <output id="destinationsValue" for="destinations"></output><input id="destinations" type="range" min="0" max="4" value="3"></label>
+    </section>
+    <section class="panel" aria-label="Cost results">
+      <h2>Estimated SFU media charge</h2>
+      <div class="big" id="cost" aria-live="polite"></div>
+      <p id="hourly"></p>
+      <div class="metric"><span id="gb" class="number"></span><br>GB delivered by the relay</div>
+      <div class="metric"><span id="viewers" class="number"></span><br>Receive-only audience members</div>
+      <p class="small">Paid rate before the shared account allowance. API, database, room control, recording, protocol overhead, retransmissions, and taxes are excluded.</p>
+    </section>
+  </div>
+  <section class="panel" style="margin-top:20px">
+    <h2>Program upload from the host</h2>
+    <p>These bars compare only the composed video/full-audio feed. Stage return audio, guest ingest, and external outputs are separate.</p>
+    <div>One publication to SFU: <strong id="oneMbps"></strong></div><div class="bar" id="oneBar"></div>
+    <div>Separate copies to everyone: <strong id="directMbps"></strong></div><div class="bar direct" id="directBar"></div>
+    <p id="hostUpload"></p>
+    <p class="small">Producer still encodes its outputs and decodes its stage cameras. The SFU scales delivery. If the host sleeps or loses connectivity, local production stops.</p>
+  </section>
+  <section class="panel" style="margin-top:20px">
+    <h2>Published alternatives</h2>
+    <p id="alternatives"></p>
+    <p class="small">These are different service scopes: Stream delivery still needs guest transport; RealtimeKit participant charges exclude export. The SFU estimate above includes the modeled stage media. They are not equivalent finished products.</p>
+  </section>
+  <h2>Assumptions and sources</h2>
+  <p class="small">All remote people subscribe to program video. Each stage camera sends 1.2 Mbps to Producer; stage microphones are 32 kbps. Viewers receive 96 kbps full mixed audio. Stage guests receive a 64 kbps host/media bus and other guests' microphones, excluding their own. One host, no extra screen shares or backstage feeds. Decimal GB/hour = aggregate Mbps × 0.45. Interactive host upload includes the full audio track and, when stage guests exist, the host/media bus. Direct RTMP outputs each use the current 4.5 Mbps video + 160 kbps audio profile.</p>
+  <p class="small"><a href="https://developers.cloudflare.com/realtime/sfu/platform/pricing/">Cloudflare SFU pricing</a>: $0.05/GB egress; account-wide 1,000 GB/month shared with TURN, excluded from this estimate. <a href="https://developers.cloudflare.com/stream/pricing/">Stream pricing</a>: $1/1,000 delivery minutes; WebRTC billing starts October 15, 2026. <a href="https://developers.cloudflare.com/realtime/realtimekit/pricing/">RealtimeKit pricing</a>: $0.002 per audio/video participant-minute. Bitrates do not guarantee picture quality.</p>
+  <p><a href="../INTERACTIVE-ROOMS-ARCHITECTURE.md">Read the architecture review</a></p>
+  <script>
+    function roomModel(people, stage, videoMbps, hours, destinations) {
+      const remote = people - 1;
+      const viewers = remote - stage;
+      const stageEgress = stage * 1.2 + stage * .032 + stage * .064 + stage * Math.max(0, stage - 1) * .032;
+      const aggregateMbps = remote * videoMbps + viewers * .096 + stageEgress;
+      const gb = aggregateMbps * .45 * hours;
+      const programMbps = videoMbps + .096;
+      return { viewers, gb, cost: gb * .05, hourly: aggregateMbps * .45 * .05,
+        programMbps, directMbps: remote * programMbps,
+        hostUpload: programMbps + (stage > 0 ? .064 : 0) + destinations * 4.66,
+        stream: remote * hours * 60 * .001, realtimeKit: people * hours * 60 * .002 };
+    }
+    const ids = ['people', 'stage', 'bitrate', 'hours', 'destinations'];
+    const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+    const number = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
+    const node = id => document.getElementById(id);
+    function render() {
+      const values = Object.fromEntries(ids.map(id => [id, Number(node(id).value)]));
+      for (const id of ids) node(id + 'Value').value = values[id];
+      const m = roomModel(values.people, values.stage, values.bitrate, values.hours, values.destinations);
+      node('cost').textContent = money.format(m.cost);
+      node('hourly').textContent = `${money.format(m.hourly)} per full room-hour`;
+      node('gb').textContent = number.format(m.gb);
+      node('viewers').textContent = m.viewers;
+      node('oneMbps').textContent = number.format(m.programMbps) + ' Mbps';
+      node('directMbps').textContent = number.format(m.directMbps) + ' Mbps';
+      node('oneBar').style.width = `${100 / (values.people - 1)}%`;
+      node('directBar').style.width = '100%';
+      node('hostUpload').textContent = `Estimated host upload with stage return audio and ${values.destinations} external outputs: ${number.format(m.hostUpload)} Mbps, before overhead. Allow sustained headroom.`;
+      node('alternatives').textContent = `For the same full-occupancy duration: Stream delivery to ${values.people - 1} remote people = ${money.format(m.stream)}; RealtimeKit for ${values.people} audio/video participants = ${money.format(m.realtimeKit)}.`;
+    }
+    for (const id of ids) node(id).addEventListener('input', render);
+    render();
+  </script>
+</body>
+</html>

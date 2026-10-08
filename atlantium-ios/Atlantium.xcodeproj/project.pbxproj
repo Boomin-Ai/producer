@@ -1,0 +1,701 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0ACCA0B7EEC45C406EA21F7A /* Onboarding.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7128FF3254A2BA485101B56 /* Onboarding.swift */; };
+		1FE97075D45C08481DE1403F /* PushDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3D373DCE856EA0B65D058F3 /* PushDestination.swift */; };
+		230AA940B93EA3F762E6B69C /* MemberQuestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51EFF246C3D51215BB2B896B /* MemberQuestion.swift */; };
+		29416DD45695D02366AF260E /* OneSignalFramework in Frameworks */ = {isa = PBXBuildFile; productRef = FE3FB5E729DF5CDB88885F7E /* OneSignalFramework */; };
+		33A62EA802125A33D76A6156 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BBB76087A6A0034DF563BFD /* NotificationService.swift */; };
+		36105FC7552E53D34A9DE7E1 /* Network.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8E7E23CB69C1E73B99C1991 /* Network.swift */; };
+		468460398422F4691929F704 /* PeerCall.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02113CD6930ADB888A2E1ECD /* PeerCall.swift */; };
+		6E9314F153764C767D556EC6 /* AtlantiumNotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 93DC4E0F0BCABFD478233684 /* AtlantiumNotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		730E22C3206A6727A8F05306 /* CallInvitation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BE668410D8C520EF690FAD3 /* CallInvitation.swift */; };
+		73585D7CF328D0FB9E60F623 /* LiveKit in Frameworks */ = {isa = PBXBuildFile; productRef = 2740A01909BEE9DE0F0CC1D1 /* LiveKit */; };
+		7B5AB5F74A10F089A1949E23 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1D2A2A89B89A8D22C43712AB /* Assets.xcassets */; };
+		8272231221F1126B38DB8AE6 /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34337184C4111835B5E69D8F /* API.swift */; };
+		882B625899A2745274A03A52 /* CookieSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07C1629E12D82E0812F43AF4 /* CookieSnapshot.swift */; };
+		95C184021433D25049FB5652 /* OneSignalInAppMessages in Frameworks */ = {isa = PBXBuildFile; productRef = E113609C8056638D816B0A9D /* OneSignalInAppMessages */; };
+		A31FB321E89DE1E928F3618E /* PushViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF5DB0A96C3128E71DF75148 /* PushViews.swift */; };
+		AA9E22E54712FC9D0E064122 /* Frontier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14022E189154A6D9FEA108D5 /* Frontier.swift */; };
+		AF86ADB51867F254A6EA3CE3 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5154D9471EC8BBFB8A5BCB09 /* App.swift */; };
+		B065D78703BA285E83075A2A /* APIValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86754C4F7614881CA93560DD /* APIValue.swift */; };
+		B46FA392F406B8331AE3A15A /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 7FC8DA4040D98F4C203622C2 /* PrivacyInfo.xcprivacy */; };
+		B81FA4B594C030463670AED2 /* GuestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BA9242684368E1E7061FE77 /* GuestTests.swift */; };
+		BEBFCE9DE214039B416C4C55 /* Events.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6995ABA9EFAD0176CDC3D8A /* Events.swift */; };
+		D2EE714EEC7960FDEAEFBD1E /* OneSignalLocation in Frameworks */ = {isa = PBXBuildFile; productRef = D565E5D69BD5C1D8DF09AA5C /* OneSignalLocation */; };
+		D6A2706761331CF53D75C61F /* PushRegistration.swift in Sources */ = {isa = PBXBuildFile; fileRef = B629D509AF3861C2F52C191E /* PushRegistration.swift */; };
+		EE3947193B814A2B67E5909D /* OneSignalExtension in Frameworks */ = {isa = PBXBuildFile; productRef = 1BE77921624AF538B7AB7BB1 /* OneSignalExtension */; };
+		EF3B8EA600402548DAFF314A /* AppEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6071A04EAC7AFCCEEE63CD1A /* AppEntry.swift */; };
+		F535DD97BF0DE68945661C9F /* Rene.swift in Sources */ = {isa = PBXBuildFile; fileRef = 365EE41A11DF64781B142788 /* Rene.swift */; };
+		FF508B83EDBBDFD58FB22D5E /* OneSignalManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D8276EF0D421194B74394B2 /* OneSignalManager.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		1378B77CF07BE44FDBE75BB0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7491992EA5C531DBFEC28389 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 30367D8A02140C821CD8F96B;
+			remoteInfo = AtlantiumNotificationService;
+		};
+		5AB7D76707CBC4292A0C2CA1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7491992EA5C531DBFEC28389 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FD91F181C72CCF8318D16B26;
+			remoteInfo = Atlantium;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		CEB171429FEB82C017DE9F4A /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				6E9314F153764C767D556EC6 /* AtlantiumNotificationService.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		02113CD6930ADB888A2E1ECD /* PeerCall.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeerCall.swift; sourceTree = "<group>"; };
+		07C1629E12D82E0812F43AF4 /* CookieSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieSnapshot.swift; sourceTree = "<group>"; };
+		0D8276EF0D421194B74394B2 /* OneSignalManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OneSignalManager.swift; sourceTree = "<group>"; };
+		14022E189154A6D9FEA108D5 /* Frontier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Frontier.swift; sourceTree = "<group>"; };
+		1D2A2A89B89A8D22C43712AB /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		2BBB76087A6A0034DF563BFD /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		34337184C4111835B5E69D8F /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
+		365EE41A11DF64781B142788 /* Rene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rene.swift; sourceTree = "<group>"; };
+		3BA9242684368E1E7061FE77 /* GuestTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuestTests.swift; sourceTree = "<group>"; };
+		4BE668410D8C520EF690FAD3 /* CallInvitation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallInvitation.swift; sourceTree = "<group>"; };
+		4EB5A68D760F5F2A63EF3462 /* Atlantium.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Atlantium.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5154D9471EC8BBFB8A5BCB09 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
+		51EFF246C3D51215BB2B896B /* MemberQuestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberQuestion.swift; sourceTree = "<group>"; };
+		6071A04EAC7AFCCEEE63CD1A /* AppEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEntry.swift; sourceTree = "<group>"; };
+		6082BF04904978DB28FF0E6E /* AtlantiumUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = AtlantiumUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		7FC8DA4040D98F4C203622C2 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		86754C4F7614881CA93560DD /* APIValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIValue.swift; sourceTree = "<group>"; };
+		93DC4E0F0BCABFD478233684 /* AtlantiumNotificationService.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = AtlantiumNotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A3D373DCE856EA0B65D058F3 /* PushDestination.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushDestination.swift; sourceTree = "<group>"; };
+		B629D509AF3861C2F52C191E /* PushRegistration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushRegistration.swift; sourceTree = "<group>"; };
+		C7128FF3254A2BA485101B56 /* Onboarding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Onboarding.swift; sourceTree = "<group>"; };
+		CF5DB0A96C3128E71DF75148 /* PushViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushViews.swift; sourceTree = "<group>"; };
+		D8E7E23CB69C1E73B99C1991 /* Network.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Network.swift; sourceTree = "<group>"; };
+		F6995ABA9EFAD0176CDC3D8A /* Events.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Events.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		87CA62C4AA19F880B5692155 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				73585D7CF328D0FB9E60F623 /* LiveKit in Frameworks */,
+				29416DD45695D02366AF260E /* OneSignalFramework in Frameworks */,
+				95C184021433D25049FB5652 /* OneSignalInAppMessages in Frameworks */,
+				D2EE714EEC7960FDEAEFBD1E /* OneSignalLocation in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C03338759745A3CF54DB8E3C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EE3947193B814A2B67E5909D /* OneSignalExtension in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		046DEB527A2652113B56302C /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				86754C4F7614881CA93560DD /* APIValue.swift */,
+				4BE668410D8C520EF690FAD3 /* CallInvitation.swift */,
+				07C1629E12D82E0812F43AF4 /* CookieSnapshot.swift */,
+				51EFF246C3D51215BB2B896B /* MemberQuestion.swift */,
+				A3D373DCE856EA0B65D058F3 /* PushDestination.swift */,
+				B629D509AF3861C2F52C191E /* PushRegistration.swift */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		3E6A6100AA3657F5D60632EF = {
+			isa = PBXGroup;
+			children = (
+				1D2A2A89B89A8D22C43712AB /* Assets.xcassets */,
+				046DEB527A2652113B56302C /* Core */,
+				9696EDC68737F078C9EE3D13 /* Extension */,
+				CD6A7FC59194E9275E32D94D /* Sources */,
+				5AF2B93940874AEAC0B31541 /* UITests */,
+				90D9F6E5DC1C748654C9668F /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		5AF2B93940874AEAC0B31541 /* UITests */ = {
+			isa = PBXGroup;
+			children = (
+				3BA9242684368E1E7061FE77 /* GuestTests.swift */,
+			);
+			path = UITests;
+			sourceTree = "<group>";
+		};
+		90D9F6E5DC1C748654C9668F /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				4EB5A68D760F5F2A63EF3462 /* Atlantium.app */,
+				93DC4E0F0BCABFD478233684 /* AtlantiumNotificationService.appex */,
+				6082BF04904978DB28FF0E6E /* AtlantiumUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		9696EDC68737F078C9EE3D13 /* Extension */ = {
+			isa = PBXGroup;
+			children = (
+				2BBB76087A6A0034DF563BFD /* NotificationService.swift */,
+			);
+			path = Extension;
+			sourceTree = "<group>";
+		};
+		CD6A7FC59194E9275E32D94D /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				34337184C4111835B5E69D8F /* API.swift */,
+				5154D9471EC8BBFB8A5BCB09 /* App.swift */,
+				6071A04EAC7AFCCEEE63CD1A /* AppEntry.swift */,
+				F6995ABA9EFAD0176CDC3D8A /* Events.swift */,
+				14022E189154A6D9FEA108D5 /* Frontier.swift */,
+				D8E7E23CB69C1E73B99C1991 /* Network.swift */,
+				C7128FF3254A2BA485101B56 /* Onboarding.swift */,
+				0D8276EF0D421194B74394B2 /* OneSignalManager.swift */,
+				02113CD6930ADB888A2E1ECD /* PeerCall.swift */,
+				7FC8DA4040D98F4C203622C2 /* PrivacyInfo.xcprivacy */,
+				CF5DB0A96C3128E71DF75148 /* PushViews.swift */,
+				365EE41A11DF64781B142788 /* Rene.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		00C7FB8B29D896B3EA32DF4F /* AtlantiumUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1F9B29CDF3F499C9B464B8C6 /* Build configuration list for PBXNativeTarget "AtlantiumUITests" */;
+			buildPhases = (
+				6477AFB2F3C077E2A5238B48 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B471ED04437E68A7DD7409A7 /* PBXTargetDependency */,
+			);
+			name = AtlantiumUITests;
+			packageProductDependencies = (
+			);
+			productName = AtlantiumUITests;
+			productReference = 6082BF04904978DB28FF0E6E /* AtlantiumUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		30367D8A02140C821CD8F96B /* AtlantiumNotificationService */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AFB920D8BDDA704C805732C9 /* Build configuration list for PBXNativeTarget "AtlantiumNotificationService" */;
+			buildPhases = (
+				6F8EA0DFF5629E1B23400428 /* Sources */,
+				C03338759745A3CF54DB8E3C /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AtlantiumNotificationService;
+			packageProductDependencies = (
+				1BE77921624AF538B7AB7BB1 /* OneSignalExtension */,
+			);
+			productName = AtlantiumNotificationService;
+			productReference = 93DC4E0F0BCABFD478233684 /* AtlantiumNotificationService.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		FD91F181C72CCF8318D16B26 /* Atlantium */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 15F6C5D13101365C5BD81859 /* Build configuration list for PBXNativeTarget "Atlantium" */;
+			buildPhases = (
+				C22C92A4EC6A8F0104FF9713 /* Sources */,
+				7DA6B5A3E353C0E9BDF409F7 /* Resources */,
+				87CA62C4AA19F880B5692155 /* Frameworks */,
+				CEB171429FEB82C017DE9F4A /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				47016A7FED427FABB2561B5F /* PBXTargetDependency */,
+			);
+			name = Atlantium;
+			packageProductDependencies = (
+				2740A01909BEE9DE0F0CC1D1 /* LiveKit */,
+				FE3FB5E729DF5CDB88885F7E /* OneSignalFramework */,
+				E113609C8056638D816B0A9D /* OneSignalInAppMessages */,
+				D565E5D69BD5C1D8DF09AA5C /* OneSignalLocation */,
+			);
+			productName = Atlantium;
+			productReference = 4EB5A68D760F5F2A63EF3462 /* Atlantium.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		7491992EA5C531DBFEC28389 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					00C7FB8B29D896B3EA32DF4F = {
+						DevelopmentTeam = 9936A69867;
+						ProvisioningStyle = Automatic;
+						TestTargetID = FD91F181C72CCF8318D16B26;
+					};
+					30367D8A02140C821CD8F96B = {
+						DevelopmentTeam = 9936A69867;
+						ProvisioningStyle = Automatic;
+					};
+					FD91F181C72CCF8318D16B26 = {
+						DevelopmentTeam = 9936A69867;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = F69680E9323A0F62A13D86C2 /* Build configuration list for PBXProject "Atlantium" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 3E6A6100AA3657F5D60632EF;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				298F30BC1836413FC9569069 /* XCRemoteSwiftPackageReference "client-sdk-swift" */,
+				645074205FF42C34802F38AC /* XCRemoteSwiftPackageReference "OneSignal-XCFramework" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 90D9F6E5DC1C748654C9668F /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				FD91F181C72CCF8318D16B26 /* Atlantium */,
+				30367D8A02140C821CD8F96B /* AtlantiumNotificationService */,
+				00C7FB8B29D896B3EA32DF4F /* AtlantiumUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		7DA6B5A3E353C0E9BDF409F7 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7B5AB5F74A10F089A1949E23 /* Assets.xcassets in Resources */,
+				B46FA392F406B8331AE3A15A /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		6477AFB2F3C077E2A5238B48 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B81FA4B594C030463670AED2 /* GuestTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6F8EA0DFF5629E1B23400428 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				33A62EA802125A33D76A6156 /* NotificationService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C22C92A4EC6A8F0104FF9713 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8272231221F1126B38DB8AE6 /* API.swift in Sources */,
+				B065D78703BA285E83075A2A /* APIValue.swift in Sources */,
+				AF86ADB51867F254A6EA3CE3 /* App.swift in Sources */,
+				EF3B8EA600402548DAFF314A /* AppEntry.swift in Sources */,
+				730E22C3206A6727A8F05306 /* CallInvitation.swift in Sources */,
+				882B625899A2745274A03A52 /* CookieSnapshot.swift in Sources */,
+				BEBFCE9DE214039B416C4C55 /* Events.swift in Sources */,
+				AA9E22E54712FC9D0E064122 /* Frontier.swift in Sources */,
+				230AA940B93EA3F762E6B69C /* MemberQuestion.swift in Sources */,
+				36105FC7552E53D34A9DE7E1 /* Network.swift in Sources */,
+				0ACCA0B7EEC45C406EA21F7A /* Onboarding.swift in Sources */,
+				FF508B83EDBBDFD58FB22D5E /* OneSignalManager.swift in Sources */,
+				468460398422F4691929F704 /* PeerCall.swift in Sources */,
+				1FE97075D45C08481DE1403F /* PushDestination.swift in Sources */,
+				D6A2706761331CF53D75C61F /* PushRegistration.swift in Sources */,
+				A31FB321E89DE1E928F3618E /* PushViews.swift in Sources */,
+				F535DD97BF0DE68945661C9F /* Rene.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		47016A7FED427FABB2561B5F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 30367D8A02140C821CD8F96B /* AtlantiumNotificationService */;
+			targetProxy = 1378B77CF07BE44FDBE75BB0 /* PBXContainerItemProxy */;
+		};
+		B471ED04437E68A7DD7409A7 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FD91F181C72CCF8318D16B26 /* Atlantium */;
+			targetProxy = 5AB7D76707CBC4292A0C2CA1 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		07BD6D8228C2F61151C23C7E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APNS_ENVIRONMENT = production;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Config/Atlantium.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = Config/Info.plist;
+				INFOPLIST_KEY_UIBackgroundModes = "remote-notification";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.atlantium.app;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		48FC0CFF21C74C44869FF907 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.atlantium.app.UITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Atlantium;
+			};
+			name = Debug;
+		};
+		4FB6791564E69EDF549CB3E7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 5;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 9936A69867;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 2.0.1;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		5FD5771B053B83C77749BAF1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APNS_ENVIRONMENT = development;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Config/Atlantium.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = Config/Info.plist;
+				INFOPLIST_KEY_UIBackgroundModes = "remote-notification";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.atlantium.app;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A801B9691DB2091A3CA50107 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Config/NotificationService.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = Config/Extension.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.atlantium.app.OneSignalNotificationServiceExtension;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		ACDC7A08DF7AA3F88704A965 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Config/NotificationService.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = Config/Extension.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.atlantium.app.OneSignalNotificationServiceExtension;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		BA2EDAF3EC1BEF55D87D1AFF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 5;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 9936A69867;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 2.0.1;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		C4D9A6BEC18FB48566BC6D53 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.atlantium.app.UITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Atlantium;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		15F6C5D13101365C5BD81859 /* Build configuration list for PBXNativeTarget "Atlantium" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5FD5771B053B83C77749BAF1 /* Debug */,
+				07BD6D8228C2F61151C23C7E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		1F9B29CDF3F499C9B464B8C6 /* Build configuration list for PBXNativeTarget "AtlantiumUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				48FC0CFF21C74C44869FF907 /* Debug */,
+				C4D9A6BEC18FB48566BC6D53 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		AFB920D8BDDA704C805732C9 /* Build configuration list for PBXNativeTarget "AtlantiumNotificationService" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A801B9691DB2091A3CA50107 /* Debug */,
+				ACDC7A08DF7AA3F88704A965 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F69680E9323A0F62A13D86C2 /* Build configuration list for PBXProject "Atlantium" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4FB6791564E69EDF549CB3E7 /* Debug */,
+				BA2EDAF3EC1BEF55D87D1AFF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		298F30BC1836413FC9569069 /* XCRemoteSwiftPackageReference "client-sdk-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/livekit/client-sdk-swift";
+			requirement = {
+				kind = exactVersion;
+				version = 2.9.0;
+			};
+		};
+		645074205FF42C34802F38AC /* XCRemoteSwiftPackageReference "OneSignal-XCFramework" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/OneSignal/OneSignal-XCFramework";
+			requirement = {
+				kind = exactVersion;
+				version = 5.5.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		1BE77921624AF538B7AB7BB1 /* OneSignalExtension */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 645074205FF42C34802F38AC /* XCRemoteSwiftPackageReference "OneSignal-XCFramework" */;
+			productName = OneSignalExtension;
+		};
+		2740A01909BEE9DE0F0CC1D1 /* LiveKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 298F30BC1836413FC9569069 /* XCRemoteSwiftPackageReference "client-sdk-swift" */;
+			productName = LiveKit;
+		};
+		D565E5D69BD5C1D8DF09AA5C /* OneSignalLocation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 645074205FF42C34802F38AC /* XCRemoteSwiftPackageReference "OneSignal-XCFramework" */;
+			productName = OneSignalLocation;
+		};
+		E113609C8056638D816B0A9D /* OneSignalInAppMessages */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 645074205FF42C34802F38AC /* XCRemoteSwiftPackageReference "OneSignal-XCFramework" */;
+			productName = OneSignalInAppMessages;
+		};
+		FE3FB5E729DF5CDB88885F7E /* OneSignalFramework */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 645074205FF42C34802F38AC /* XCRemoteSwiftPackageReference "OneSignal-XCFramework" */;
+			productName = OneSignalFramework;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 7491992EA5C531DBFEC28389 /* Project object */;
+}

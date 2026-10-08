@@ -1,0 +1,121 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Manager cache regression</title><style>body{margin:0}#result{position:fixed;z-index:100;top:0;right:0}</style></head><body><div id="root"></div><output id="result">Running</output><script type="module">
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { HostedManager } from "/src/features/manager/HostedManager.tsx";
+import { peekManagerSession } from "/src/features/manager/cache.ts";
+const reads = new Map(), disk = new Map();
+let failRefresh = false, denyAccess = false, failComments = false, localRecordings = [];
+const units = Array.from({length:40}, (_,i) => ({id:"unit-"+i,collection_id:"collection",title:"Unit "+i,type:"short-video",stage:"draft",caption:"",scheduled_at:null,published_at:null,distributions:[]}));
+units.push({id:"published-unit",collection_id:null,title:"Published unit",type:"image",stage:"published",caption:"Shared caption",published_at:"2026-09-28T12:00:00Z",distributions:[]});
+const posts=["instagram","threads"].map((platform,i)=>({id:"post-"+i,unit_id:"published-unit",channel_id:"channel-"+i,platform,media_id:"media-"+i,post_type:"image",caption:"Destination "+i,status:"published",posted_at:"2026-09-28T12:00:00Z",created_at:"2026-09-28T12:00:00Z",platform_permalink:"https://example.test/post/"+i,thumbnail_url:"",media_url:"",metrics:{comments:i+1}}));
+window.__TAURI_INTERNALS__ = {convertFileSrc:()=>"asset://mocked/capture.mp4",invoke:async (command,args) => {
+  if(command === "manager_cache_scope") return "browser-session";
+  const cacheKey = args.endpointId+":"+args.resource;
+  if(command === "manager_cache_get") return disk.get(cacheKey) ?? null;
+  if(command === "manager_cache_set") {disk.set(cacheKey,args.value);return;}
+  if(command === "pref_get") return null;
+  if(command === "pref_set" || command === "recordings_sync") return;
+  if(command === "recordings_list") {if(localRecordings.length) await new Promise(resolve=>setTimeout(resolve,50));return localRecordings;}
+  if(command === "endpoint_channels") return {channels:[]};
+  if(command === "endpoint_request") {
+    reads.set(args.path,(reads.get(args.path)??0)+1);
+    if(denyAccess && args.path === "/v1/app/content/units") return {available:true,status:403,body:{}};
+    if(failRefresh && args.path === "/v1/app/content/units") return {available:true,status:500,body:{}};
+    if(failComments && args.path === "/v1/app/content/post/comments?social_post_id=post-1") return {available:true,status:500,body:{}};
+    let body;
+    if(args.path === "/v1/app/content/collections") body={collections:[{id:"collection",name:"Series",kind:"series"}]};
+    else if(args.path === "/v1/app/content/units") body={units};
+    else if(args.path === "/v1/app/content/social-posts") body={posts};
+    else if(args.path === "/v1/app/content/recordings") body={recordings:[]};
+    else if(args.path.startsWith("/v1/app/content/post/comments?")) {
+      const postId=new URLSearchParams(args.path.split("?")[1]).get("social_post_id");
+      body={comments:[{id:"event-"+postId,comment_id:"same-platform-id",social_post_id:postId,username:"viewer-"+postId,text:"Comment from "+postId,created_at:"2026-09-28T12:00:00Z"}]};
+    }
+    else if(args.path.startsWith("/v1/app/content/units/")) body={distribution_folder_id:"folder"};
+    else if(args.path.startsWith("/v1/app/files/list")) body={files:[]};
+    else throw Error("Unexpected request "+args.path);
+    return {available:true,status:200,body};
+  }
+  throw Error("Unexpected native command "+command);
+}};
+const root=createRoot(document.getElementById("root"));
+const endpoint={id:"browser",name:"Cache test",kind:"connected",base_url:"https://example.test",brand_slug:"test",created_at:""};
+const mount=(initialRecordingId) => root.render(React.createElement(HostedManager,{endpoint,channels:[],onCompose:()=>{},initialRecordingId}));
+const pause=() => new Promise(resolve=>setTimeout(resolve,20));
+const check=(value,message) => {if(!value) throw Error(message);};
+async function until(predicate,message){for(let n=0;n<300;n++){if(predicate())return;await pause();}throw Error("Timeout: "+message);}
+const total=() => [...reads.values()].reduce((a,b)=>a+b,0);
+try {
+  mount(); await until(()=>document.querySelector(".pm-nav-row"),"initial inventory");
+  document.querySelector(".pm-nav-row").click();
+  await until(()=>document.querySelector(".pm-stage-card"),"stages");
+  let main=document.querySelector(".pm-main"); main.scrollTop=240;main.dispatchEvent(new Event("scroll"));
+  await pause(); const beforeReturn=total();
+  root.render(React.createElement("p",null,"Outside Producer")); await pause();mount();
+  await until(()=>document.querySelector(".pm-stage-card"),"restored stages");
+  check(total()===beforeReturn,"tab return fetched inventory again");
+  check(document.querySelector(".pm-main").scrollTop>=200,"stage scroll position was not restored");
+  document.querySelector(".pm-tree-name").click();
+  await until(()=>document.querySelector(".pm-collection-unit-row"),"collection");
+  document.querySelector(".pm-collection-unit-row").click();
+  await until(()=>document.querySelector("#pm-unit-tab-comments"),"unit detail");
+  document.querySelector("#pm-unit-tab-comments").click();await pause();
+  await until(()=>reads.has("/v1/app/files/list?folder_id=folder"),"media read");
+  const beforeUnitReturn=total();
+  document.querySelector(".pm-unit-back").click();await pause();document.querySelector(".pm-collection-unit-row").click();
+  await until(()=>document.querySelector("#pm-unit-tab-comments")?.getAttribute("aria-selected")==="true","restored unit tab");
+  await pause(); check(total()===beforeUnitReturn,"reopening unit fetched fresh media again");
+  const shell=document.querySelector(".pm");
+  failRefresh=true;void peekManagerSession(endpoint).client.invalidateQueries({queryKey:["manager"]});
+  await until(()=>document.querySelector(".pm-live-cache-status"),"background failure");
+  check(document.querySelector(".pm")===shell,"refresh failure unmounted the page");
+  check(document.querySelector("#pm-unit-tab-comments").getAttribute("aria-selected")==="true","refresh reset selected tab");
+  failRefresh=false;document.querySelector(".pm-live-cache-status button").click();
+  await until(()=>!document.querySelector(".pm-live-cache-status"),"refresh recovery");
+  check(document.querySelector(".pm")===shell,"successful refresh unmounted the page");
+  denyAccess=true;void peekManagerSession(endpoint).client.invalidateQueries({queryKey:["manager"]});
+  await until(()=>document.querySelector(".pm-live-message[role=alert]"),"access denial");
+  check(!document.querySelector(".pm"),"access denial still displayed private cached content");
+  const deniedCount=total();await pause();await pause();check(total()===deniedCount,"access denial caused a refetch loop");
+  denyAccess=false;document.querySelector(".pm-live-message button").click();
+  await until(()=>document.querySelector("#pm-unit-tab-comments"),"access recovery");
+  document.querySelector('.pm-overview-switch-button[aria-label="Overview"]').click();
+  await until(()=>document.querySelector(".pm-post-row"),"published history");
+  document.querySelector(".pm-post-row").click();
+  await until(()=>document.querySelector("#pm-unit-tab-overview"),"published unit tabs");
+  check(document.querySelectorAll(".pm-unit-post-result button").length===2,"published unit lost individual destinations");
+  document.querySelector("#pm-unit-tab-insights").click();await pause();
+  check(!!document.querySelector(".pm-insight-grid"),"published insights showed an unpublished empty state");
+  document.querySelector("#pm-unit-tab-comments").click();await pause();
+  await until(()=>document.querySelectorAll(".pm-comment").length===2,"comments from both destinations");
+  check(document.querySelector(".pm-unit-tab-panel").textContent.includes("Comment from post-1"),"published comment text is missing");
+  check(!document.querySelector(".pm-unit-tab-panel .pm-inline-row"),"comments still navigate to a different post page");
+  const beforeCommentsReturn=total();
+  document.querySelector("#pm-unit-tab-overview").click();await pause();
+  document.querySelector("#pm-unit-tab-comments").click();await pause();
+  check(total()===beforeCommentsReturn,"switching tabs reloaded fresh comments");
+  failComments=true;document.querySelector(".pm-comments-header button").click();
+  await until(()=>document.querySelector(".pm-comments [role=alert]"),"comment refresh failure");
+  check(document.querySelectorAll(".pm-comment").length===2,"failed comment refresh removed cached threads");
+  failComments=false;document.querySelector(".pm-comments [role=alert] button").click();
+  await until(()=>!document.querySelector(".pm-comments [role=alert]"),"comment retry recovery");
+  document.querySelector("#pm-unit-tab-overview").click();await pause();
+  document.querySelectorAll(".pm-unit-post-result button")[1].click();
+  await until(()=>document.querySelector(".pm-main").textContent.includes("Media ID: media-1"),"individual publication details");
+  document.querySelector(".pm-unit-back").click();
+  await until(()=>document.querySelector("#pm-unit-tab-overview"),"return from individual post");
+  document.querySelector('.pm-overview-switch-button[aria-label="Monitor"]').click();
+  await until(()=>document.querySelector(".pm-monitor-list button"),"monitor posts");
+  document.querySelector(".pm-monitor-list button").click();
+  await until(()=>document.querySelector("#pm-unit-tab-comments"),"monitor unit tabs");
+  root.render(React.createElement("p",null,"Outside Producer"));await pause();
+  const session=peekManagerSession(endpoint);
+  session.saveNavigation({...session.navigation,location:{view:"post",socialPostId:"post-0",returnTo:{view:"overview"}}});
+  mount();await until(()=>document.querySelector("#pm-unit-tab-overview"),"legacy published navigation restored to unit");
+  root.render(React.createElement("p",null,"Outside Producer"));await pause();
+  localRecordings=[{id:"capture",unit_id:"unit-1",collection_id:"collection",endpoint_id:"browser",room_id:"room",room_name:"Room",status:"ready",started_at:"2026-09-28T12:00:00Z",duration_ms:6000,path:"/tmp/mock.mp4"}];
+  mount("capture");await until(()=>document.querySelector(".pm-preview-caption")?.textContent==="Unit 1","explicit recording target");
+  document.getElementById("result").textContent="PASS: cache, published history and Monitor tabs, individual destinations, legacy navigation and recording target";
+  document.documentElement.dataset.testResult="pass";
+}catch(error){document.getElementById("result").textContent="FAIL: "+error.message;document.documentElement.dataset.testResult="fail";}
+</script></body></html>

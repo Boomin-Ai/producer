@@ -1,0 +1,64 @@
+.aud-panel { display: grid; gap: 8px; min-width: 0; padding: 6px; color: var(--fg-1); font-size: 12px; }
+.aud-controls { display: grid; grid-template-columns:minmax(0,1fr); align-content: start; gap: 6px; min-width: 0; }
+.aud-controls[popover] { width: min(340px, calc(100vw - 24px)); max-height: min(560px, calc(100vh - 24px)); overflow: auto; margin: auto; padding: 12px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--bg); color: var(--fg-1); font-size: 12px; box-shadow: 0 12px 40px #0008; }
+.aud-controls[popover]:not(:popover-open) { display: none; }
+.aud-panel .aud-config-toggle { display: flex; align-items: center; gap: 6px; text-align: left; font-weight: 600; }
+.aud-config-toggle span { font-size: 10px; font-weight: 400; color: var(--fg-2); }
+.aud-header, .aud-toolbar, .aud-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.aud-header { flex-wrap:wrap; }
+.aud-header > strong { font-size: 15px; }
+.aud-count { color: var(--fg-2); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; padding: 3px 6px; border-radius: 5px; background: var(--surface-1); }
+.aud-panel button, .aud-panel select, .aud-actions summary { min-height: 32px; padding: 5px 10px; border: 1px solid var(--line-1); border-radius: 8px; background: var(--surface-1); color: var(--fg-1); font: inherit; cursor: pointer; }
+.aud-panel button:disabled { opacity: .45; cursor: default; }
+.aud-panel button:hover:not(:disabled), .aud-actions summary:hover { background: var(--surface-2); }
+.aud-panel button:focus-visible, .aud-panel summary:focus-visible, .aud-panel select:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.aud-access { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.aud-access input { accent-color: var(--primary); }
+.aud-access input { width: 14px; height: 14px; margin: 0; flex-shrink: 0; }
+.aud-access strong { font-size: 14px; letter-spacing: -.02em; }
+.aud-access-group { display: flex; align-items: center; gap: 5px; flex-shrink:0; }
+.aud-panel .aud-help { display: grid; place-items: center; width: 20px; height: 20px; min-height: 20px; flex: 0 0 auto; padding: 0; border-radius: 50%; font-size: 11px; color: var(--fg-2); }
+.aud-help-text { margin: 0; padding: 8px; border: 1px solid var(--line-1); border-radius: 8px; background: var(--surface-1); color: var(--fg-2); font-size: 11px; line-height: 1.5; }
+.aud-help-text p { margin: 0; }
+.aud-help-text p + p, .aud-help-text nav + p { margin-top: 8px; }
+.aud-social-links { display: grid; grid-template-columns: repeat(auto-fit,minmax(80px,1fr)); gap: 4px; margin: 6px 0; }
+.aud-social-links a { display: flex; justify-content: space-between; align-items: center; gap: 6px; color: var(--fg-1); text-decoration: none; padding: 6px; border-radius: 5px; background: var(--surface-2); font-size: 11px; }
+.aud-social-links a span { color: var(--fg-3); }
+.aud-social-links a:hover { color: var(--primary); }
+.aud-social-links a:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 2px; }
+.aud-share-actions { display: grid; grid-template-columns: minmax(0,1fr) 32px; gap: 1px; min-width: 0; border: 1px solid var(--line-1); border-radius: 7px; background: var(--line-1); overflow: hidden; }
+.aud-panel .aud-share-actions button { display: flex; align-items: center; justify-content: center; gap: 5px; min-width: 0; min-height: 28px; padding: 4px 6px; border: 0; border-radius: 0; background: var(--surface-1); font-size: 11px; white-space: nowrap; }
+.aud-share-actions svg { width: 13px; height: 13px; flex-shrink: 0; }
+.aud-share-actions .aud-share-icon svg { width: 16px; height: 16px; }
+.aud-share-menu { padding: 8px; border: 1px solid var(--line-1); border-radius: 8px; background: var(--surface-1); }
+.aud-share-menu p { margin: 0; font-size: 11px; color: var(--fg-2); }
+.aud-share-menu .aud-social-links { margin-bottom: 0; }
+.aud-settings { border-bottom: 1px solid var(--line-1); padding: 4px 0; }
+.aud-settings > summary { display:flex; flex-wrap:wrap; align-items:center; gap:4px; cursor: pointer; color: var(--fg-2); font-size: 11px; }
+.aud-settings > summary::-webkit-details-marker { display:none; }
+.aud-settings > summary::before { content:'›'; flex-shrink:0; }
+.aud-settings[open] > summary::before { transform:rotate(90deg); }
+.aud-settings > summary span { margin-left:auto; color: var(--fg-3); white-space:nowrap; }
+.aud-settings-body { display: grid; gap: 6px; padding-top: 6px; }
+.aud-settings-body label { display: flex; flex-wrap:wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.aud-settings-body label > span { flex:1; min-width:70px; }
+.aud-settings-body p, .aud-empty, .aud-fine { margin: 0; color: var(--fg-3); font-size: 11px; line-height: 1.5; }
+.aud-error { display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid var(--line-1); border-radius: 8px; color: var(--fg-2); }
+.aud-error span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.aud-error button { flex: 0 0 auto; }
+.aud-section-head { font-size: 11px; color: var(--fg-2); margin-bottom: 4px; }
+.aud-section-head > span { color: var(--fg-3); }
+.aud-hands { max-height: 180px; overflow-y: auto; }
+.aud-hand { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 0; }
+.aud-hand-name { flex: 1; min-width: 60px; overflow-wrap: anywhere; }
+.aud-panel .aud-invite { background: var(--primary); color: #08110c; border-color: transparent; font-weight: 600; }
+.aud-actions { flex: 0 0 auto; font-size: 10px; }
+.aud-panel .aud-actions summary { min-height: 24px; padding: 2px 6px; color: var(--fg-3); list-style: none; text-align: right; }
+.aud-actions summary::-webkit-details-marker { display: none; }
+.aud-actions[open] { max-width: 150px; }
+.aud-actions > div { display: grid; gap: 4px; padding: 4px 0; }
+.aud-actions button { text-align: left; }
+
+.aud-link-description { margin: 0; color: var(--fg-2); font-size: 11px; line-height: 1.45; }
+
+.aud-access-state { font-size:10px; color:var(--fg-3); }

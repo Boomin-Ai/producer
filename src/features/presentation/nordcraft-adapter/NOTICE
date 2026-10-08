@@ -1,0 +1,12 @@
+Producer's motion.ts contains a modified, bounded adaptation of the keyframe
+emission section of getNodeStyles in:
+  Nordcraft packages/core/src/styling/style.css.ts
+  https://github.com/nordcraftengine/nordcraft
+  commit e4ebe92c42f6c4226ad7d0bb33a70ff7206178c8
+
+Nordcraft Engine, licensed under the Apache License, Version 2.0.
+The upstream LICENSE is retained alongside this notice. The inspected checkout
+contains no root NOTICE file. No builder, workflow evaluator or arbitrary-code
+module is included. Producer modifications validate and bound CSS inputs, scope
+animation names, sample an optional simulation clock and respect reduced-motion
+preferences.

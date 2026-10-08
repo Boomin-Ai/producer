@@ -1,0 +1,6 @@
+{
+  "build": {
+    "beforeDevCommand": "VITE_MANAGER_PREVIEW=1 npm run dev",
+    "devUrl": "http://localhost:1420"
+  }
+}

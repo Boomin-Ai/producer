@@ -1,0 +1,69 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Guest return regression</title>
+<video id="program" autoplay playsinline muted></video>
+<script type="module">
+import { GuestReturnFeed, ProgramRequest } from '/server/guest/src/guestReturnFeed.ts';
+window.runReturnTest = async () => {
+  const host = new RTCPeerConnection({ iceServers: [] });
+  const guest = new RTCPeerConnection({ iceServers: [] });
+  const canvas = document.createElement('canvas');
+  canvas.width = 320; canvas.height = 180;
+  const ctx = canvas.getContext('2d');
+  let frame = 0;
+  const draw = setInterval(() => { ctx.fillStyle = ++frame % 2 ? '#77ddaa' : '#223344'; ctx.fillRect(0, 0, 320, 180); }, 66);
+  const stream = canvas.captureStream(15);
+  const media = navigator.mediaDevices;
+  const originalCapture = media.getUserMedia.bind(media);
+  const originalEnumerate = media.enumerateDevices.bind(media);
+  let captureCalls = 0;
+  media.enumerateDevices = async () => [{ kind: 'videoinput', label: 'Producer Virtual Camera', deviceId: 'program-test' }];
+  media.getUserMedia = async (constraints) => {
+    if (constraints.audio) throw new DOMException('Microphone denied', 'NotAllowedError');
+    captureCalls++;
+    return stream;
+  };
+  const feed = new GuestReturnFeed({ pc: host, programLabel: 'Producer Virtual Camera', micLabel: null, enabled: true });
+  let requests = 0;
+  const requester = new ProgramRequest(guest, () => { requests++; feed.request(); });
+  const element = document.getElementById('program');
+  let makingOffer = false;
+  let hostQueue = Promise.resolve(), guestQueue = Promise.resolve();
+  // Ordered local signaling; host is impolite, guest is polite.
+  const toGuest = async (description) => {
+    await guest.setRemoteDescription(description);
+    if (description.type === 'offer') {
+      await guest.setLocalDescription();
+      hostQueue = hostQueue.then(() => host.setRemoteDescription(guest.localDescription));
+    }
+  };
+  host.onnegotiationneeded = async () => {
+    if (makingOffer) return;
+    makingOffer = true;
+    try {
+      await host.setLocalDescription();
+      guestQueue = guestQueue.then(() => toGuest(host.localDescription));
+    } finally { makingOffer = false; }
+  };
+  host.onicecandidate = ({candidate}) => { if (candidate) guestQueue = guestQueue.then(() => guest.addIceCandidate(candidate)); };
+  guest.onicecandidate = ({candidate}) => { if (candidate) hostQueue = hostQueue.then(() => host.addIceCandidate(candidate)); };
+  guest.onconnectionstatechange = () => { if (guest.connectionState === 'connected') requester.connected(); };
+  guest.ontrack = ({ streams }) => { element.srcObject = streams[0]; void element.play(); };
+  host.createDataChannel('room'); // Connect before program capture is requested.
+  try {
+    const started = Date.now();
+    let decoded = 0;
+    while (Date.now() - started < 15000) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const stats = await guest.getStats();
+      stats.forEach((r) => { if (r.type === 'inbound-rtp' && (r.kind === 'video' || r.mediaType === 'video')) decoded = Math.max(decoded, Number(r.framesDecoded || 0)); });
+      if (decoded > 3 && element.videoWidth > 0) break;
+    }
+    return { decoded, width: element.videoWidth, captureCalls, requests, host: host.connectionState, guest: guest.connectionState };
+  } finally {
+    requester.close(); feed.close(); host.close(); guest.close(); clearInterval(draw);
+    media.getUserMedia = originalCapture; media.enumerateDevices = originalEnumerate;
+    element.srcObject = null;
+  }
+};
+</script>

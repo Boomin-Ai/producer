@@ -1,0 +1,2 @@
+Version 2.0.0 (build 3) submitted to Apple on October 6, 2026 at 12:52 PM as displayed by App Store Connect. Confirmed status: Waiting for Review. Submission ID: 80d33fd7-9e09-4f59-b5ff-8ab05be9476a. Automatic release after approval remains selected. iPhone-only build passed listing validation. Optional campaign header was removed because its upload blocked submission; artwork is preserved locally.
+https://appstoreconnect.apple.com/apps/6757367750/distribution/reviewsubmissions/details/80d33fd7-9e09-4f59-b5ff-8ab05be9476a

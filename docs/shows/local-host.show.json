@@ -1,0 +1,3874 @@
+{
+  "schema": "producer.presentation/1",
+  "id": "local-host",
+  "version": "3.0.0",
+  "name": "Local Host — Atlantium",
+  "set": {
+    "styles": {
+      "display": {
+        "fontFamily": {
+          "get": "tokens.displayFont"
+        },
+        "fontWeight": 800,
+        "letterSpacing": -2,
+        "lineHeight": 1.03,
+        "textShadow": "0px 2px 24px rgba(0,0,0,0.2)"
+      },
+      "body": {
+        "fontFamily": {
+          "get": "tokens.bodyFont"
+        },
+        "fontWeight": 400,
+        "lineHeight": 1.4
+      },
+      "name": {
+        "fontFamily": {
+          "get": "tokens.displayFont"
+        },
+        "fontWeight": 600,
+        "lineHeight": 1.2
+      },
+      "label": {
+        "fontFamily": {
+          "get": "tokens.bodyFont"
+        },
+        "fontWeight": 600,
+        "letterSpacing": 1.2,
+        "lineHeight": 1.2,
+        "textTransform": "uppercase"
+      }
+    },
+    "tokens": {
+      "ink": "#f6f0e8",
+      "accent": "#edd0a6",
+      "muted": "#b4aab6",
+      "displayFont": "Avenir Next, Avenir, Helvetica Neue, sans-serif",
+      "bodyFont": "Helvetica Neue, Arial, sans-serif"
+    },
+    "assets": {},
+    "initialLayout": "local-0-landscape",
+    "values": {
+      "hostName": {
+        "type": "text",
+        "default": "Kleveland Bishop",
+        "maxLength": 48
+      },
+      "projectName": {
+        "type": "text",
+        "default": "Producer",
+        "maxLength": 24
+      },
+      "question": {
+        "type": "text",
+        "default": "What should we build next?",
+        "maxLength": 60
+      }
+    },
+    "feeds": {},
+    "slots": [
+      {
+        "id": "host",
+        "label": "Host camera"
+      },
+      {
+        "id": "demo",
+        "label": "Project screen / demo"
+      }
+    ],
+    "components": {},
+    "layouts": [
+      {
+        "id": "local-0-landscape",
+        "label": "Opening · Landscape",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "root-0-l",
+          "styles": {
+            "position": "relative",
+            "width": 1280,
+            "height": 720,
+            "background": "#111019",
+            "overflow": "hidden"
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "atmosphere",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "aurora",
+                "colors": [
+                  "#111019",
+                  "#302433",
+                  "#735547"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 0.25,
+                "opacity": 1,
+                "radius": 0,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "veil",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720,
+                "background": "linear-gradient(180deg, rgba(14,14,21,0.25), rgba(14,14,21,0.8))",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "network",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 30,
+                "width": 640,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "ATLANTIUM ORIGINAL / OPEN SOURCE"
+            },
+            {
+              "id": "edition",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 1070,
+                "top": 30,
+                "width": 170,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "01 / LOCAL HOST"
+            },
+            {
+              "id": "masthead-rule",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 66,
+                "width": 1200,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer-rule",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 666,
+                "width": 1200,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 687,
+                "width": 750,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "GOOD IDEAS DESERVE A CONVERSATION."
+            },
+            {
+              "id": "domain",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 1080,
+                "top": 687,
+                "width": 160,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "ATLANTIUM.AI"
+            },
+            {
+              "id": "host-halo",
+              "styles": {
+                "position": "absolute",
+                "left": 20,
+                "top": 92,
+                "width": 778,
+                "height": 512
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "edgeGlow",
+                "colors": [
+                  "#211825",
+                  "#b97860",
+                  "#eacba0"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 3,
+                "opacity": 0.7,
+                "radius": 44,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "host-rim",
+              "styles": {
+                "position": "absolute",
+                "left": 35,
+                "top": 107,
+                "width": 748,
+                "height": 482
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "edgeGlow",
+                "colors": [
+                  "#282337",
+                  "#b7a4d9",
+                  "#f1d5a6"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 1.15,
+                "opacity": 1,
+                "radius": 29,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "host-camera",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 112,
+                "width": 738,
+                "height": 472
+              },
+              "type": "slot",
+              "slotId": "host",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 24,
+                "outlineWidth": 1,
+                "outlineColor": "#dcc5a2",
+                "opacity": 1,
+                "grayscale": 0
+              }
+            },
+            {
+              "id": "host-name",
+              "styleId": "name",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 614,
+                "width": 738,
+                "fontSize": 23,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": {
+                "get": "values.hostName"
+              }
+            },
+            {
+              "id": "host-role",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 650,
+                "width": 738,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "HOST / BUILDER / OPEN SOURCE"
+            },
+            {
+              "id": "opening-kicker",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 832,
+                "top": 124,
+                "width": 404,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "BUILT IN THE OPEN."
+            },
+            {
+              "id": "title",
+              "styleId": "display",
+              "styles": {
+                "position": "absolute",
+                "left": 826,
+                "top": 176,
+                "width": 414,
+                "fontSize": 96,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": "LOCAL"
+            },
+            {
+              "id": "title-accent",
+              "styleId": "display",
+              "styles": {
+                "position": "absolute",
+                "left": 826,
+                "top": 270,
+                "width": 414,
+                "fontSize": 96,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "HOST."
+            },
+            {
+              "id": "opening-deck",
+              "styleId": "body",
+              "styles": {
+                "position": "absolute",
+                "left": 832,
+                "top": 396,
+                "width": 360,
+                "fontSize": 28,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": "Meet the people making what comes next."
+            },
+            {
+              "id": "topic-rule",
+              "styles": {
+                "position": "absolute",
+                "left": 832,
+                "top": 524,
+                "width": 408,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "topic-label",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 832,
+                "top": 548,
+                "width": 408,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "IN THE ROOM TODAY"
+            },
+            {
+              "id": "topic",
+              "styleId": "display",
+              "styles": {
+                "position": "absolute",
+                "left": 832,
+                "top": 580,
+                "width": 408,
+                "fontSize": 38,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": {
+                "get": "values.projectName"
+              }
+            }
+          ]
+        },
+        "animation": {
+          "tracks": [
+            {
+              "target": "host-rim",
+              "property": "shader.intensity",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 0.85
+                },
+                {
+                  "atMs": 5200,
+                  "value": 1.35
+                }
+              ],
+              "easing": "easeInOut",
+              "loop": "pingpong"
+            },
+            {
+              "target": "host-halo",
+              "property": "shader.intensity",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 0.65
+                },
+                {
+                  "atMs": 7400,
+                  "value": 1.1
+                }
+              ],
+              "easing": "easeInOut",
+              "loop": "pingpong"
+            },
+            {
+              "target": "title",
+              "property": "x",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 814
+                },
+                {
+                  "atMs": 750,
+                  "value": 826
+                }
+              ],
+              "easing": "easeOut"
+            }
+          ],
+          "transition": {
+            "type": "crossfade",
+            "durationMs": 700
+          }
+        }
+      },
+      {
+        "id": "local-0-portrait",
+        "label": "Opening · Portrait",
+        "width": 720,
+        "height": 1280,
+        "root": {
+          "id": "root-0-p",
+          "styles": {
+            "position": "relative",
+            "width": 720,
+            "height": 1280,
+            "background": "#111019",
+            "overflow": "hidden"
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "atmosphere",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 720,
+                "height": 1280
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "aurora",
+                "colors": [
+                  "#111019",
+                  "#302433",
+                  "#735547"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 0.25,
+                "opacity": 1,
+                "radius": 0,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "veil",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 720,
+                "height": 1280,
+                "background": "linear-gradient(180deg, rgba(14,14,21,0.25), rgba(14,14,21,0.8))",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "network",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 30,
+                "width": 400,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "ATLANTIUM ORIGINAL / OPEN SOURCE"
+            },
+            {
+              "id": "edition",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 520,
+                "top": 30,
+                "width": 160,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "01 / LOCAL HOST"
+            },
+            {
+              "id": "masthead-rule",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 66,
+                "width": 640,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer-rule",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 1226,
+                "width": 640,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 1247,
+                "width": 400,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "GOOD IDEAS DESERVE A CONVERSATION."
+            },
+            {
+              "id": "domain",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 520,
+                "top": 1247,
+                "width": 160,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "ATLANTIUM.AI"
+            },
+            {
+              "id": "title",
+              "styleId": "display",
+              "styles": {
+                "position": "absolute",
+                "left": 36,
+                "top": 94,
+                "width": 648,
+                "fontSize": 80,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": "LOCAL HOST"
+            },
+            {
+              "id": "opening-deck",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 198,
+                "width": 640,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "THE PEOPLE. THE PROJECTS. THE POSSIBILITY."
+            },
+            {
+              "id": "host-halo",
+              "styles": {
+                "position": "absolute",
+                "left": 20,
+                "top": 242,
+                "width": 680,
+                "height": 732
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "edgeGlow",
+                "colors": [
+                  "#211825",
+                  "#b97860",
+                  "#eacba0"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 3,
+                "opacity": 0.7,
+                "radius": 44,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "host-rim",
+              "styles": {
+                "position": "absolute",
+                "left": 35,
+                "top": 257,
+                "width": 650,
+                "height": 702
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "edgeGlow",
+                "colors": [
+                  "#282337",
+                  "#b7a4d9",
+                  "#f1d5a6"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 1.15,
+                "opacity": 1,
+                "radius": 29,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "host-camera",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 262,
+                "width": 640,
+                "height": 692
+              },
+              "type": "slot",
+              "slotId": "host",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 24,
+                "outlineWidth": 1,
+                "outlineColor": "#dcc5a2",
+                "opacity": 1,
+                "grayscale": 0
+              }
+            },
+            {
+              "id": "host-name",
+              "styleId": "name",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 984,
+                "width": 640,
+                "fontSize": 23,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": {
+                "get": "values.hostName"
+              }
+            },
+            {
+              "id": "host-role",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 1020,
+                "width": 640,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "HOST / BUILDER / OPEN SOURCE"
+            },
+            {
+              "id": "intro-rule",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 1068,
+                "width": 640,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "topic-label",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 1090,
+                "width": 640,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "IN THE ROOM TODAY"
+            },
+            {
+              "id": "topic",
+              "styleId": "display",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 1122,
+                "width": 640,
+                "fontSize": 40,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": {
+                "get": "values.projectName"
+              }
+            }
+          ]
+        },
+        "animation": {
+          "tracks": [
+            {
+              "target": "host-rim",
+              "property": "shader.intensity",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 0.85
+                },
+                {
+                  "atMs": 5200,
+                  "value": 1.35
+                }
+              ],
+              "easing": "easeInOut",
+              "loop": "pingpong"
+            },
+            {
+              "target": "host-halo",
+              "property": "shader.intensity",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 0.65
+                },
+                {
+                  "atMs": 7400,
+                  "value": 1.1
+                }
+              ],
+              "easing": "easeInOut",
+              "loop": "pingpong"
+            },
+            {
+              "target": "title",
+              "property": "x",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 24
+                },
+                {
+                  "atMs": 750,
+                  "value": 36
+                }
+              ],
+              "easing": "easeOut"
+            }
+          ],
+          "transition": {
+            "type": "crossfade",
+            "durationMs": 700
+          }
+        }
+      },
+      {
+        "id": "local-1-landscape",
+        "label": "The project · Landscape",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "root-1-l",
+          "styles": {
+            "position": "relative",
+            "width": 1280,
+            "height": 720,
+            "background": "#111019",
+            "overflow": "hidden"
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "atmosphere",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "aurora",
+                "colors": [
+                  "#10141b",
+                  "#20363b",
+                  "#66584b"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 0.25,
+                "opacity": 1,
+                "radius": 0,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "veil",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720,
+                "background": "linear-gradient(180deg, rgba(14,14,21,0.25), rgba(14,14,21,0.8))",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "network",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 30,
+                "width": 640,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "ATLANTIUM ORIGINAL / OPEN SOURCE"
+            },
+            {
+              "id": "edition",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 1070,
+                "top": 30,
+                "width": 170,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "02 / LOCAL HOST"
+            },
+            {
+              "id": "masthead-rule",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 66,
+                "width": 1200,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer-rule",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 666,
+                "width": 1200,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 687,
+                "width": 750,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "GOOD IDEAS DESERVE A CONVERSATION."
+            },
+            {
+              "id": "domain",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 1080,
+                "top": 687,
+                "width": 160,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "ATLANTIUM.AI"
+            },
+            {
+              "id": "spotlight-kicker",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 96,
+                "width": 790,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "01 / PROJECT SPOTLIGHT"
+            },
+            {
+              "id": "title",
+              "styleId": "display",
+              "styles": {
+                "position": "absolute",
+                "left": 36,
+                "top": 130,
+                "width": 810,
+                "fontSize": 76,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": {
+                "get": "values.projectName"
+              }
+            },
+            {
+              "id": "project-deck",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 900,
+                "top": 108,
+                "width": 340,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "THE PRODUCT / THE PEOPLE"
+            },
+            {
+              "id": "screen-bed",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 244,
+                "width": 812,
+                "height": 400,
+                "background": "linear-gradient(145deg, #293138, #161922)",
+                "borderRadius": 24
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "screen-placeholder",
+              "styleId": "display",
+              "styles": {
+                "position": "absolute",
+                "left": 70,
+                "top": 384,
+                "width": 752,
+                "fontSize": 58,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": {
+                "get": "values.projectName"
+              }
+            },
+            {
+              "id": "screen-hint",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 70,
+                "top": 504,
+                "width": 752,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "PROJECT SCREEN / LIVE DEMO"
+            },
+            {
+              "id": "project-screen",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 244,
+                "width": 812,
+                "height": 400
+              },
+              "type": "slot",
+              "slotId": "demo",
+              "framing": {
+                "mode": "fit",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 24,
+                "outlineWidth": 1,
+                "outlineColor": "#dcc5a2",
+                "opacity": 1,
+                "grayscale": 0
+              }
+            },
+            {
+              "id": "host-halo",
+              "styles": {
+                "position": "absolute",
+                "left": 876,
+                "top": 160,
+                "width": 384,
+                "height": 430
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "edgeGlow",
+                "colors": [
+                  "#211825",
+                  "#b97860",
+                  "#eacba0"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 3,
+                "opacity": 0.7,
+                "radius": 44,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "host-rim",
+              "styles": {
+                "position": "absolute",
+                "left": 891,
+                "top": 175,
+                "width": 354,
+                "height": 400
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "edgeGlow",
+                "colors": [
+                  "#282337",
+                  "#b7a4d9",
+                  "#f1d5a6"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 1.15,
+                "opacity": 1,
+                "radius": 29,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "host-camera",
+              "styles": {
+                "position": "absolute",
+                "left": 896,
+                "top": 180,
+                "width": 344,
+                "height": 390
+              },
+              "type": "slot",
+              "slotId": "host",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 24,
+                "outlineWidth": 1,
+                "outlineColor": "#dcc5a2",
+                "opacity": 1,
+                "grayscale": 0
+              }
+            },
+            {
+              "id": "host-name",
+              "styleId": "name",
+              "styles": {
+                "position": "absolute",
+                "left": 896,
+                "top": 602,
+                "width": 344,
+                "fontSize": 23,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": {
+                "get": "values.hostName"
+              }
+            },
+            {
+              "id": "host-role",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 896,
+                "top": 638,
+                "width": 344,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "HOST / BUILDER / OPEN SOURCE"
+            },
+            {
+              "id": "deck",
+              "styleId": "body",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 210,
+                "width": 810,
+                "fontSize": 20,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "A studio for the way we create now."
+            }
+          ]
+        },
+        "animation": {
+          "tracks": [
+            {
+              "target": "host-rim",
+              "property": "shader.intensity",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 0.85
+                },
+                {
+                  "atMs": 5200,
+                  "value": 1.35
+                }
+              ],
+              "easing": "easeInOut",
+              "loop": "pingpong"
+            },
+            {
+              "target": "host-halo",
+              "property": "shader.intensity",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 0.65
+                },
+                {
+                  "atMs": 7400,
+                  "value": 1.1
+                }
+              ],
+              "easing": "easeInOut",
+              "loop": "pingpong"
+            },
+            {
+              "target": "title",
+              "property": "x",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 24
+                },
+                {
+                  "atMs": 750,
+                  "value": 36
+                }
+              ],
+              "easing": "easeOut"
+            }
+          ],
+          "transition": {
+            "type": "crossfade",
+            "durationMs": 700
+          }
+        }
+      },
+      {
+        "id": "local-1-portrait",
+        "label": "The project · Portrait",
+        "width": 720,
+        "height": 1280,
+        "root": {
+          "id": "root-1-p",
+          "styles": {
+            "position": "relative",
+            "width": 720,
+            "height": 1280,
+            "background": "#111019",
+            "overflow": "hidden"
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "atmosphere",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 720,
+                "height": 1280
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "aurora",
+                "colors": [
+                  "#10141b",
+                  "#20363b",
+                  "#66584b"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 0.25,
+                "opacity": 1,
+                "radius": 0,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "veil",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 720,
+                "height": 1280,
+                "background": "linear-gradient(180deg, rgba(14,14,21,0.25), rgba(14,14,21,0.8))",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "network",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 30,
+                "width": 400,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "ATLANTIUM ORIGINAL / OPEN SOURCE"
+            },
+            {
+              "id": "edition",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 520,
+                "top": 30,
+                "width": 160,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "02 / LOCAL HOST"
+            },
+            {
+              "id": "masthead-rule",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 66,
+                "width": 640,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer-rule",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 1226,
+                "width": 640,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 1247,
+                "width": 400,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "GOOD IDEAS DESERVE A CONVERSATION."
+            },
+            {
+              "id": "domain",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 520,
+                "top": 1247,
+                "width": 160,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "ATLANTIUM.AI"
+            },
+            {
+              "id": "spotlight-kicker",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 96,
+                "width": 640,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "01 / PROJECT SPOTLIGHT"
+            },
+            {
+              "id": "title",
+              "styleId": "display",
+              "styles": {
+                "position": "absolute",
+                "left": 36,
+                "top": 132,
+                "width": 648,
+                "fontSize": 76,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": {
+                "get": "values.projectName"
+              }
+            },
+            {
+              "id": "deck",
+              "styleId": "body",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 232,
+                "width": 640,
+                "fontSize": 27,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": "A studio for the way we create now."
+            },
+            {
+              "id": "screen-bed",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 314,
+                "width": 640,
+                "height": 360,
+                "background": "linear-gradient(145deg, #293138, #161922)",
+                "borderRadius": 24
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "screen-placeholder",
+              "styleId": "display",
+              "styles": {
+                "position": "absolute",
+                "left": 70,
+                "top": 440,
+                "width": 580,
+                "fontSize": 44,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": {
+                "get": "values.projectName"
+              }
+            },
+            {
+              "id": "screen-hint",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 70,
+                "top": 548,
+                "width": 580,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "PROJECT SCREEN / LIVE DEMO"
+            },
+            {
+              "id": "project-screen",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 314,
+                "width": 640,
+                "height": 360
+              },
+              "type": "slot",
+              "slotId": "demo",
+              "framing": {
+                "mode": "fit",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 24,
+                "outlineWidth": 1,
+                "outlineColor": "#dcc5a2",
+                "opacity": 1,
+                "grayscale": 0
+              }
+            },
+            {
+              "id": "demo-label",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 695,
+                "width": 640,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "THE PRODUCT / INSIDE THE ROOM"
+            },
+            {
+              "id": "host-halo",
+              "styles": {
+                "position": "absolute",
+                "left": 20,
+                "top": 736,
+                "width": 326,
+                "height": 368
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "edgeGlow",
+                "colors": [
+                  "#211825",
+                  "#b97860",
+                  "#eacba0"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 3,
+                "opacity": 0.7,
+                "radius": 44,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "host-rim",
+              "styles": {
+                "position": "absolute",
+                "left": 35,
+                "top": 751,
+                "width": 296,
+                "height": 338
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "edgeGlow",
+                "colors": [
+                  "#282337",
+                  "#b7a4d9",
+                  "#f1d5a6"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 1.15,
+                "opacity": 1,
+                "radius": 29,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "host-camera",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 756,
+                "width": 286,
+                "height": 328
+              },
+              "type": "slot",
+              "slotId": "host",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 24,
+                "outlineWidth": 1,
+                "outlineColor": "#dcc5a2",
+                "opacity": 1,
+                "grayscale": 0
+              }
+            },
+            {
+              "id": "host-name",
+              "styleId": "name",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 1108,
+                "width": 640,
+                "fontSize": 23,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": {
+                "get": "values.hostName"
+              }
+            },
+            {
+              "id": "host-role",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 1144,
+                "width": 640,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "HOST / BUILDER / OPEN SOURCE"
+            },
+            {
+              "id": "project-note",
+              "styleId": "display",
+              "styles": {
+                "position": "absolute",
+                "left": 364,
+                "top": 776,
+                "width": 312,
+                "fontSize": 39,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "ONE ROOM.\nEVERY PART OF THE SHOW."
+            },
+            {
+              "id": "project-detail",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 364,
+                "top": 1020,
+                "width": 312,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "CREATE / CONNECT / BROADCAST"
+            }
+          ]
+        },
+        "animation": {
+          "tracks": [
+            {
+              "target": "host-rim",
+              "property": "shader.intensity",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 0.85
+                },
+                {
+                  "atMs": 5200,
+                  "value": 1.35
+                }
+              ],
+              "easing": "easeInOut",
+              "loop": "pingpong"
+            },
+            {
+              "target": "host-halo",
+              "property": "shader.intensity",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 0.65
+                },
+                {
+                  "atMs": 7400,
+                  "value": 1.1
+                }
+              ],
+              "easing": "easeInOut",
+              "loop": "pingpong"
+            },
+            {
+              "target": "title",
+              "property": "x",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 24
+                },
+                {
+                  "atMs": 750,
+                  "value": 36
+                }
+              ],
+              "easing": "easeOut"
+            }
+          ],
+          "transition": {
+            "type": "crossfade",
+            "durationMs": 700
+          }
+        }
+      },
+      {
+        "id": "local-2-landscape",
+        "label": "The workflow · Landscape",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "root-2-l",
+          "styles": {
+            "position": "relative",
+            "width": 1280,
+            "height": 720,
+            "background": "#111019",
+            "overflow": "hidden"
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "atmosphere",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "aurora",
+                "colors": [
+                  "#14121b",
+                  "#383047",
+                  "#60534b"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 0.25,
+                "opacity": 1,
+                "radius": 0,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "veil",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720,
+                "background": "linear-gradient(180deg, rgba(14,14,21,0.25), rgba(14,14,21,0.8))",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "network",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 30,
+                "width": 640,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "ATLANTIUM ORIGINAL / OPEN SOURCE"
+            },
+            {
+              "id": "edition",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 1070,
+                "top": 30,
+                "width": 170,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "03 / LOCAL HOST"
+            },
+            {
+              "id": "masthead-rule",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 66,
+                "width": 1200,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer-rule",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 666,
+                "width": 1200,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 687,
+                "width": 750,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "GOOD IDEAS DESERVE A CONVERSATION."
+            },
+            {
+              "id": "domain",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 1080,
+                "top": 687,
+                "width": 160,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "ATLANTIUM.AI"
+            },
+            {
+              "id": "host-halo",
+              "styles": {
+                "position": "absolute",
+                "left": 20,
+                "top": 92,
+                "width": 558,
+                "height": 520
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "edgeGlow",
+                "colors": [
+                  "#211825",
+                  "#b97860",
+                  "#eacba0"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 3,
+                "opacity": 0.7,
+                "radius": 44,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "host-rim",
+              "styles": {
+                "position": "absolute",
+                "left": 35,
+                "top": 107,
+                "width": 528,
+                "height": 490
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "edgeGlow",
+                "colors": [
+                  "#282337",
+                  "#b7a4d9",
+                  "#f1d5a6"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 1.15,
+                "opacity": 1,
+                "radius": 29,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "host-camera",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 112,
+                "width": 518,
+                "height": 480
+              },
+              "type": "slot",
+              "slotId": "host",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 24,
+                "outlineWidth": 1,
+                "outlineColor": "#dcc5a2",
+                "opacity": 1,
+                "grayscale": 0
+              }
+            },
+            {
+              "id": "host-name",
+              "styleId": "name",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 614,
+                "width": 518,
+                "fontSize": 23,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": {
+                "get": "values.hostName"
+              }
+            },
+            {
+              "id": "host-role",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 650,
+                "width": 518,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "HOST / BUILDER / OPEN SOURCE"
+            },
+            {
+              "id": "workflow-kicker",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 620,
+                "top": 112,
+                "width": 620,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "02 / FROM IDEA TO ON AIR"
+            },
+            {
+              "id": "title",
+              "styleId": "display",
+              "styles": {
+                "position": "absolute",
+                "left": 614,
+                "top": 148,
+                "width": 626,
+                "fontSize": 55,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": "MAKE IT. SHOW IT."
+            },
+            {
+              "id": "screen-bed",
+              "styles": {
+                "position": "absolute",
+                "left": 620,
+                "top": 240,
+                "width": 620,
+                "height": 260,
+                "background": "linear-gradient(145deg, #293138, #161922)",
+                "borderRadius": 24
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "screen-placeholder",
+              "styleId": "display",
+              "styles": {
+                "position": "absolute",
+                "left": 650,
+                "top": 331,
+                "width": 560,
+                "fontSize": 58,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": {
+                "get": "values.projectName"
+              }
+            },
+            {
+              "id": "screen-hint",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 650,
+                "top": 409,
+                "width": 560,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "PROJECT SCREEN / LIVE DEMO"
+            },
+            {
+              "id": "project-screen",
+              "styles": {
+                "position": "absolute",
+                "left": 620,
+                "top": 240,
+                "width": 620,
+                "height": 260
+              },
+              "type": "slot",
+              "slotId": "demo",
+              "framing": {
+                "mode": "fit",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 24,
+                "outlineWidth": 1,
+                "outlineColor": "#dcc5a2",
+                "opacity": 1,
+                "grayscale": 0
+              }
+            },
+            {
+              "id": "step-number-0",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 620,
+                "top": 528,
+                "width": 190,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "01"
+            },
+            {
+              "id": "step-title-0",
+              "styleId": "name",
+              "styles": {
+                "position": "absolute",
+                "left": 620,
+                "top": 562,
+                "width": 190,
+                "fontSize": 22,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": "PREPARE"
+            },
+            {
+              "id": "step-copy-0",
+              "styleId": "body",
+              "styles": {
+                "position": "absolute",
+                "left": 620,
+                "top": 601,
+                "width": 188,
+                "fontSize": 20,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": "A room for the idea."
+            },
+            {
+              "id": "step-number-1",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 830,
+                "top": 528,
+                "width": 190,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "02"
+            },
+            {
+              "id": "step-title-1",
+              "styleId": "name",
+              "styles": {
+                "position": "absolute",
+                "left": 830,
+                "top": 562,
+                "width": 190,
+                "fontSize": 22,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": "CONNECT"
+            },
+            {
+              "id": "step-copy-1",
+              "styleId": "body",
+              "styles": {
+                "position": "absolute",
+                "left": 830,
+                "top": 601,
+                "width": 188,
+                "fontSize": 20,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": "People make it real."
+            },
+            {
+              "id": "step-number-2",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 1040,
+                "top": 528,
+                "width": 190,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "03"
+            },
+            {
+              "id": "step-title-2",
+              "styleId": "name",
+              "styles": {
+                "position": "absolute",
+                "left": 1040,
+                "top": 562,
+                "width": 190,
+                "fontSize": 22,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": "GO LIVE"
+            },
+            {
+              "id": "step-copy-2",
+              "styleId": "body",
+              "styles": {
+                "position": "absolute",
+                "left": 1040,
+                "top": 601,
+                "width": 188,
+                "fontSize": 20,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": "Let the world in."
+            }
+          ]
+        },
+        "animation": {
+          "tracks": [
+            {
+              "target": "host-rim",
+              "property": "shader.intensity",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 0.85
+                },
+                {
+                  "atMs": 5200,
+                  "value": 1.35
+                }
+              ],
+              "easing": "easeInOut",
+              "loop": "pingpong"
+            },
+            {
+              "target": "host-halo",
+              "property": "shader.intensity",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 0.65
+                },
+                {
+                  "atMs": 7400,
+                  "value": 1.1
+                }
+              ],
+              "easing": "easeInOut",
+              "loop": "pingpong"
+            },
+            {
+              "target": "title",
+              "property": "x",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 602
+                },
+                {
+                  "atMs": 750,
+                  "value": 614
+                }
+              ],
+              "easing": "easeOut"
+            }
+          ],
+          "transition": {
+            "type": "crossfade",
+            "durationMs": 700
+          }
+        }
+      },
+      {
+        "id": "local-2-portrait",
+        "label": "The workflow · Portrait",
+        "width": 720,
+        "height": 1280,
+        "root": {
+          "id": "root-2-p",
+          "styles": {
+            "position": "relative",
+            "width": 720,
+            "height": 1280,
+            "background": "#111019",
+            "overflow": "hidden"
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "atmosphere",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 720,
+                "height": 1280
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "aurora",
+                "colors": [
+                  "#14121b",
+                  "#383047",
+                  "#60534b"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 0.25,
+                "opacity": 1,
+                "radius": 0,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "veil",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 720,
+                "height": 1280,
+                "background": "linear-gradient(180deg, rgba(14,14,21,0.25), rgba(14,14,21,0.8))",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "network",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 30,
+                "width": 400,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "ATLANTIUM ORIGINAL / OPEN SOURCE"
+            },
+            {
+              "id": "edition",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 520,
+                "top": 30,
+                "width": 160,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "03 / LOCAL HOST"
+            },
+            {
+              "id": "masthead-rule",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 66,
+                "width": 640,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer-rule",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 1226,
+                "width": 640,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 1247,
+                "width": 400,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "GOOD IDEAS DESERVE A CONVERSATION."
+            },
+            {
+              "id": "domain",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 520,
+                "top": 1247,
+                "width": 160,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "ATLANTIUM.AI"
+            },
+            {
+              "id": "workflow-kicker",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 96,
+                "width": 640,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "02 / FROM IDEA TO ON AIR"
+            },
+            {
+              "id": "title",
+              "styleId": "display",
+              "styles": {
+                "position": "absolute",
+                "left": 36,
+                "top": 130,
+                "width": 648,
+                "fontSize": 62,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": "MAKE SOMETHING."
+            },
+            {
+              "id": "title-accent",
+              "styleId": "display",
+              "styles": {
+                "position": "absolute",
+                "left": 36,
+                "top": 198,
+                "width": 648,
+                "fontSize": 62,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "SHOW EVERYONE."
+            },
+            {
+              "id": "screen-bed",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 300,
+                "width": 640,
+                "height": 360,
+                "background": "linear-gradient(145deg, #293138, #161922)",
+                "borderRadius": 24
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "screen-placeholder",
+              "styleId": "display",
+              "styles": {
+                "position": "absolute",
+                "left": 70,
+                "top": 426,
+                "width": 580,
+                "fontSize": 44,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": {
+                "get": "values.projectName"
+              }
+            },
+            {
+              "id": "screen-hint",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 70,
+                "top": 534,
+                "width": 580,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "PROJECT SCREEN / LIVE DEMO"
+            },
+            {
+              "id": "project-screen",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 300,
+                "width": 640,
+                "height": 360
+              },
+              "type": "slot",
+              "slotId": "demo",
+              "framing": {
+                "mode": "fit",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 24,
+                "outlineWidth": 1,
+                "outlineColor": "#dcc5a2",
+                "opacity": 1,
+                "grayscale": 0
+              }
+            },
+            {
+              "id": "host-halo",
+              "styles": {
+                "position": "absolute",
+                "left": 20,
+                "top": 700,
+                "width": 294,
+                "height": 392
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "edgeGlow",
+                "colors": [
+                  "#211825",
+                  "#b97860",
+                  "#eacba0"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 3,
+                "opacity": 0.7,
+                "radius": 44,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "host-rim",
+              "styles": {
+                "position": "absolute",
+                "left": 35,
+                "top": 715,
+                "width": 264,
+                "height": 362
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "edgeGlow",
+                "colors": [
+                  "#282337",
+                  "#b7a4d9",
+                  "#f1d5a6"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 1.15,
+                "opacity": 1,
+                "radius": 29,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "host-camera",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 720,
+                "width": 254,
+                "height": 352
+              },
+              "type": "slot",
+              "slotId": "host",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 24,
+                "outlineWidth": 1,
+                "outlineColor": "#dcc5a2",
+                "opacity": 1,
+                "grayscale": 0
+              }
+            },
+            {
+              "id": "host-name",
+              "styleId": "name",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 1104,
+                "width": 640,
+                "fontSize": 23,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": {
+                "get": "values.hostName"
+              }
+            },
+            {
+              "id": "host-role",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 1140,
+                "width": 640,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "HOST / BUILDER / OPEN SOURCE"
+            },
+            {
+              "id": "step-number-0",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 334,
+                "top": 730,
+                "width": 60,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "01"
+            },
+            {
+              "id": "step-title-0",
+              "styleId": "name",
+              "styles": {
+                "position": "absolute",
+                "left": 396,
+                "top": 726,
+                "width": 284,
+                "fontSize": 23,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": "PREPARE"
+            },
+            {
+              "id": "step-copy-0",
+              "styleId": "body",
+              "styles": {
+                "position": "absolute",
+                "left": 334,
+                "top": 768,
+                "width": 346,
+                "fontSize": 24,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": "Give the idea a room."
+            },
+            {
+              "id": "step-rule-0",
+              "styles": {
+                "position": "absolute",
+                "left": 334,
+                "top": 830,
+                "width": 346,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "step-number-1",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 334,
+                "top": 865,
+                "width": 60,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "02"
+            },
+            {
+              "id": "step-title-1",
+              "styleId": "name",
+              "styles": {
+                "position": "absolute",
+                "left": 396,
+                "top": 861,
+                "width": 284,
+                "fontSize": 23,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": "CONNECT"
+            },
+            {
+              "id": "step-copy-1",
+              "styleId": "body",
+              "styles": {
+                "position": "absolute",
+                "left": 334,
+                "top": 903,
+                "width": 346,
+                "fontSize": 24,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": "Bring people into it."
+            },
+            {
+              "id": "step-rule-1",
+              "styles": {
+                "position": "absolute",
+                "left": 334,
+                "top": 965,
+                "width": 346,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "step-number-2",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 334,
+                "top": 1000,
+                "width": 60,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "03"
+            },
+            {
+              "id": "step-title-2",
+              "styleId": "name",
+              "styles": {
+                "position": "absolute",
+                "left": 396,
+                "top": 996,
+                "width": 284,
+                "fontSize": 23,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": "GO LIVE"
+            },
+            {
+              "id": "step-copy-2",
+              "styleId": "body",
+              "styles": {
+                "position": "absolute",
+                "left": 334,
+                "top": 1038,
+                "width": 346,
+                "fontSize": 24,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": "Share the work."
+            },
+            {
+              "id": "step-rule-2",
+              "styles": {
+                "position": "absolute",
+                "left": 334,
+                "top": 1100,
+                "width": 346,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            }
+          ]
+        },
+        "animation": {
+          "tracks": [
+            {
+              "target": "host-rim",
+              "property": "shader.intensity",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 0.85
+                },
+                {
+                  "atMs": 5200,
+                  "value": 1.35
+                }
+              ],
+              "easing": "easeInOut",
+              "loop": "pingpong"
+            },
+            {
+              "target": "host-halo",
+              "property": "shader.intensity",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 0.65
+                },
+                {
+                  "atMs": 7400,
+                  "value": 1.1
+                }
+              ],
+              "easing": "easeInOut",
+              "loop": "pingpong"
+            },
+            {
+              "target": "title",
+              "property": "x",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 24
+                },
+                {
+                  "atMs": 750,
+                  "value": 36
+                }
+              ],
+              "easing": "easeOut"
+            }
+          ],
+          "transition": {
+            "type": "crossfade",
+            "durationMs": 700
+          }
+        }
+      },
+      {
+        "id": "local-3-landscape",
+        "label": "Open floor · Landscape",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "root-3-l",
+          "styles": {
+            "position": "relative",
+            "width": 1280,
+            "height": 720,
+            "background": "#111019",
+            "overflow": "hidden"
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "atmosphere",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "aurora",
+                "colors": [
+                  "#10191a",
+                  "#263d3b",
+                  "#71604d"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 0.25,
+                "opacity": 1,
+                "radius": 0,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "veil",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720,
+                "background": "linear-gradient(180deg, rgba(14,14,21,0.25), rgba(14,14,21,0.8))",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "network",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 30,
+                "width": 640,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "ATLANTIUM ORIGINAL / OPEN SOURCE"
+            },
+            {
+              "id": "edition",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 1070,
+                "top": 30,
+                "width": 170,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "04 / LOCAL HOST"
+            },
+            {
+              "id": "masthead-rule",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 66,
+                "width": 1200,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer-rule",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 666,
+                "width": 1200,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 687,
+                "width": 750,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "GOOD IDEAS DESERVE A CONVERSATION."
+            },
+            {
+              "id": "domain",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 1080,
+                "top": 687,
+                "width": 160,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "ATLANTIUM.AI"
+            },
+            {
+              "id": "host-halo",
+              "styles": {
+                "position": "absolute",
+                "left": 20,
+                "top": 92,
+                "width": 688,
+                "height": 520
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "edgeGlow",
+                "colors": [
+                  "#211825",
+                  "#b97860",
+                  "#eacba0"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 3,
+                "opacity": 0.7,
+                "radius": 44,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "host-rim",
+              "styles": {
+                "position": "absolute",
+                "left": 35,
+                "top": 107,
+                "width": 658,
+                "height": 490
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "edgeGlow",
+                "colors": [
+                  "#282337",
+                  "#b7a4d9",
+                  "#f1d5a6"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 1.15,
+                "opacity": 1,
+                "radius": 29,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "host-camera",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 112,
+                "width": 648,
+                "height": 480
+              },
+              "type": "slot",
+              "slotId": "host",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 24,
+                "outlineWidth": 1,
+                "outlineColor": "#dcc5a2",
+                "opacity": 1,
+                "grayscale": 0
+              }
+            },
+            {
+              "id": "host-name",
+              "styleId": "name",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 614,
+                "width": 648,
+                "fontSize": 23,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": {
+                "get": "values.hostName"
+              }
+            },
+            {
+              "id": "host-role",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 650,
+                "width": 648,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "HOST / BUILDER / OPEN SOURCE"
+            },
+            {
+              "id": "floor-kicker",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 746,
+                "top": 124,
+                "width": 494,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "03 / OPEN FLOOR"
+            },
+            {
+              "id": "quote",
+              "styleId": "display",
+              "styles": {
+                "position": "absolute",
+                "left": 734,
+                "top": 166,
+                "width": 170,
+                "fontSize": 120,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "“"
+            },
+            {
+              "id": "question",
+              "styleId": "display",
+              "styles": {
+                "position": "absolute",
+                "left": 740,
+                "top": 282,
+                "width": 494,
+                "fontSize": 58,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": {
+                "get": "values.question"
+              }
+            },
+            {
+              "id": "question-rule",
+              "styles": {
+                "position": "absolute",
+                "left": 746,
+                "top": 546,
+                "width": 494,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "floor-deck",
+              "styleId": "body",
+              "styles": {
+                "position": "absolute",
+                "left": 746,
+                "top": 576,
+                "width": 470,
+                "fontSize": 25,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "Ideas. Contributions. The next release."
+            }
+          ]
+        },
+        "animation": {
+          "tracks": [
+            {
+              "target": "host-rim",
+              "property": "shader.intensity",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 0.85
+                },
+                {
+                  "atMs": 5200,
+                  "value": 1.35
+                }
+              ],
+              "easing": "easeInOut",
+              "loop": "pingpong"
+            },
+            {
+              "target": "host-halo",
+              "property": "shader.intensity",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 0.65
+                },
+                {
+                  "atMs": 7400,
+                  "value": 1.1
+                }
+              ],
+              "easing": "easeInOut",
+              "loop": "pingpong"
+            },
+            {
+              "target": "question",
+              "property": "x",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 728
+                },
+                {
+                  "atMs": 750,
+                  "value": 740
+                }
+              ],
+              "easing": "easeOut"
+            }
+          ],
+          "transition": {
+            "type": "crossfade",
+            "durationMs": 700
+          }
+        }
+      },
+      {
+        "id": "local-3-portrait",
+        "label": "Open floor · Portrait",
+        "width": 720,
+        "height": 1280,
+        "root": {
+          "id": "root-3-p",
+          "styles": {
+            "position": "relative",
+            "width": 720,
+            "height": 1280,
+            "background": "#111019",
+            "overflow": "hidden"
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "atmosphere",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 720,
+                "height": 1280
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "aurora",
+                "colors": [
+                  "#10191a",
+                  "#263d3b",
+                  "#71604d"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 0.25,
+                "opacity": 1,
+                "radius": 0,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "veil",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 720,
+                "height": 1280,
+                "background": "linear-gradient(180deg, rgba(14,14,21,0.25), rgba(14,14,21,0.8))",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "network",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 30,
+                "width": 400,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "ATLANTIUM ORIGINAL / OPEN SOURCE"
+            },
+            {
+              "id": "edition",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 520,
+                "top": 30,
+                "width": 160,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "04 / LOCAL HOST"
+            },
+            {
+              "id": "masthead-rule",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 66,
+                "width": 640,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer-rule",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 1226,
+                "width": 640,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 1247,
+                "width": 400,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "GOOD IDEAS DESERVE A CONVERSATION."
+            },
+            {
+              "id": "domain",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 520,
+                "top": 1247,
+                "width": 160,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "ATLANTIUM.AI"
+            },
+            {
+              "id": "floor-kicker",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 98,
+                "width": 640,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "03 / OPEN FLOOR"
+            },
+            {
+              "id": "host-halo",
+              "styles": {
+                "position": "absolute",
+                "left": 20,
+                "top": 148,
+                "width": 680,
+                "height": 728
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "edgeGlow",
+                "colors": [
+                  "#211825",
+                  "#b97860",
+                  "#eacba0"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 3,
+                "opacity": 0.7,
+                "radius": 44,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "host-rim",
+              "styles": {
+                "position": "absolute",
+                "left": 35,
+                "top": 163,
+                "width": 650,
+                "height": 698
+              },
+              "type": "shader",
+              "shader": {
+                "effect": "edgeGlow",
+                "colors": [
+                  "#282337",
+                  "#b7a4d9",
+                  "#f1d5a6"
+                ],
+                "speed": 0.18,
+                "intensity": 0.8,
+                "scale": 1.15,
+                "opacity": 1,
+                "radius": 29,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "host-camera",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 168,
+                "width": 640,
+                "height": 688
+              },
+              "type": "slot",
+              "slotId": "host",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 24,
+                "outlineWidth": 1,
+                "outlineColor": "#dcc5a2",
+                "opacity": 1,
+                "grayscale": 0
+              }
+            },
+            {
+              "id": "host-name",
+              "styleId": "name",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 888,
+                "width": 640,
+                "fontSize": 23,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": {
+                "get": "values.hostName"
+              }
+            },
+            {
+              "id": "host-role",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 924,
+                "width": 640,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.muted"
+                }
+              },
+              "type": "text",
+              "text": "HOST / BUILDER / OPEN SOURCE"
+            },
+            {
+              "id": "question-rule",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 970,
+                "width": 640,
+                "height": 1,
+                "background": "rgba(244,222,187,0.22)",
+                "borderRadius": 0
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "question-kicker",
+              "styleId": "label",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 994,
+                "width": 640,
+                "fontSize": 13,
+                "color": {
+                  "get": "tokens.accent"
+                }
+              },
+              "type": "text",
+              "text": "YOUR IDEAS BELONG HERE."
+            },
+            {
+              "id": "question",
+              "styleId": "display",
+              "styles": {
+                "position": "absolute",
+                "left": 36,
+                "top": 1040,
+                "width": 648,
+                "fontSize": 44,
+                "color": {
+                  "get": "tokens.ink"
+                }
+              },
+              "type": "text",
+              "text": {
+                "get": "values.question"
+              }
+            }
+          ]
+        },
+        "animation": {
+          "tracks": [
+            {
+              "target": "host-rim",
+              "property": "shader.intensity",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 0.85
+                },
+                {
+                  "atMs": 5200,
+                  "value": 1.35
+                }
+              ],
+              "easing": "easeInOut",
+              "loop": "pingpong"
+            },
+            {
+              "target": "host-halo",
+              "property": "shader.intensity",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 0.65
+                },
+                {
+                  "atMs": 7400,
+                  "value": 1.1
+                }
+              ],
+              "easing": "easeInOut",
+              "loop": "pingpong"
+            },
+            {
+              "target": "question",
+              "property": "x",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 24
+                },
+                {
+                  "atMs": 750,
+                  "value": 36
+                }
+              ],
+              "easing": "easeOut"
+            }
+          ],
+          "transition": {
+            "type": "crossfade",
+            "durationMs": 700
+          }
+        }
+      }
+    ],
+    "controls": [
+      {
+        "id": "edit-project",
+        "type": "text",
+        "label": "Project name",
+        "key": "projectName"
+      },
+      {
+        "id": "edit-question",
+        "type": "text",
+        "label": "Discussion question",
+        "key": "question"
+      }
+    ]
+  },
+  "show": {
+    "id": "local-host-show",
+    "version": "3.0.0",
+    "initialPhase": "segment-0",
+    "phases": [
+      {
+        "id": "segment-0",
+        "label": "Opening",
+        "layoutId": "local-0-landscape",
+        "next": "segment-1"
+      },
+      {
+        "id": "segment-1",
+        "label": "The project",
+        "layoutId": "local-1-landscape",
+        "next": "segment-2"
+      },
+      {
+        "id": "segment-2",
+        "label": "The workflow",
+        "layoutId": "local-2-landscape",
+        "next": "segment-3"
+      },
+      {
+        "id": "segment-3",
+        "label": "Open floor",
+        "layoutId": "local-3-landscape"
+      }
+    ],
+    "choices": [
+      {
+        "id": "a",
+        "label": "A"
+      },
+      {
+        "id": "b",
+        "label": "B"
+      }
+    ]
+  }
+}

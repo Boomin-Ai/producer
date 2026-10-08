@@ -1,0 +1,6 @@
+<!doctype html><html><head><meta charset="utf-8"><title>DJ slider checks</title></head><body><div id="root"></div><script type="module">
+import React from 'react';import {createRoot} from 'react-dom/client';import {DJSlider} from '/src/components/DJSlider.tsx';import '/src/App.css';import '/src/components/DJPanel.css';
+window.levels=[];window.seeks=[];
+function Harness(){const [level,setLevel]=React.useState(.65);const [position,setPosition]=React.useState(17000);const [,poll]=React.useState(0);React.useEffect(()=>{const t=setInterval(()=>poll(n=>n+1),80);return()=>clearInterval(t);},[]);return React.createElement('div',{className:'dj-panel',style:{width:300,height:200}},React.createElement('label',{className:'dj-mini-volume',style:{width:100}},'♫',React.createElement(DJSlider,{label:'Level',max:1,step:.01,value:level,live:true,onValue:v=>{window.levels.push(v);setTimeout(()=>setLevel(v),250);}})),React.createElement(DJSlider,{label:'Seek',max:250000,value:position,onValue:v=>{window.seeks.push(v);setTimeout(()=>setPosition(v),250);}}));}
+createRoot(document.getElementById('root')).render(React.createElement(Harness));
+</script></body></html>
