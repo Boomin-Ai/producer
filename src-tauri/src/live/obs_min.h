@@ -225,6 +225,9 @@ OBS_IMPORT void obs_leave_graphics(void);
 OBS_IMPORT gs_effect_t *obs_get_base_effect(enum obs_base_effect effect);
 
 OBS_IMPORT const char *obs_data_get_string(obs_data_t *data, const char *name);
+OBS_IMPORT obs_data_t *obs_data_create_from_json(const char *json_string);
+OBS_IMPORT void obs_data_set_string(obs_data_t *data, const char *name, const char *val);
+OBS_IMPORT void obs_data_release(obs_data_t *data);
 OBS_IMPORT double obs_data_get_double(obs_data_t *data, const char *name);
 OBS_IMPORT void obs_data_set_default_string(obs_data_t *data, const char *name, const char *val);
 OBS_IMPORT void obs_data_set_default_double(obs_data_t *data, const char *name, double val);
@@ -245,6 +248,7 @@ OBS_IMPORT void gs_effect_set_texture(gs_eparam_t *param, gs_texture_t *val);
 OBS_IMPORT void gs_effect_set_texture_srgb(gs_eparam_t *param, gs_texture_t *val);
 OBS_IMPORT void gs_effect_set_float(gs_eparam_t *param, float val);
 OBS_IMPORT void gs_effect_set_vec2(gs_eparam_t *param, const struct vec2 *val);
+OBS_IMPORT void gs_effect_set_vec4(gs_eparam_t *param, const struct vec4 *val);
 OBS_IMPORT size_t gs_technique_begin(gs_technique_t *technique);
 OBS_IMPORT void gs_technique_end(gs_technique_t *technique);
 OBS_IMPORT bool gs_technique_begin_pass(gs_technique_t *technique, size_t pass);

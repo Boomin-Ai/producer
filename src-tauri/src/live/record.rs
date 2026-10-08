@@ -50,6 +50,13 @@ impl Recorder {
     /// Start recording to a new file. `stamp` is passed in so the engine
     /// never has to know the wall clock.
     pub fn start(stamp: &str, bitrate: i64) -> Result<Recorder, String> {
+        unsafe { Self::start_video(stamp, bitrate, ffi::obs_get_video()) }
+    }
+    pub unsafe fn start_video(
+        stamp: &str,
+        bitrate: i64,
+        video: *mut ffi::video_t,
+    ) -> Result<Recorder, String> {
         let path = recordings_dir().join(filename(stamp));
         unsafe {
             // Quality-first: high CBR, 2s keyframes for scrubbing, on the
@@ -79,7 +86,7 @@ impl Recorder {
                 }
                 return Err("couldn't create the recording encoders".into());
             }
-            ffi::obs_encoder_set_video(venc, ffi::obs_get_video());
+            ffi::obs_encoder_set_video(venc, video);
             ffi::obs_encoder_set_audio(aenc, ffi::obs_get_audio());
 
             let settings = ffi::obs_data_create();
@@ -97,6 +104,7 @@ impl Recorder {
                 ffi::obs_encoder_release(aenc);
                 return Err("recording needs the obs-ffmpeg engine (rev 3 or newer)".into());
             }
+            ffi::obs_output_set_media(output, video, ffi::obs_get_audio());
             ffi::obs_output_set_video_encoder(output, venc);
             ffi::obs_output_set_audio_encoder(output, aenc, 0);
             if !ffi::obs_output_start(output) {

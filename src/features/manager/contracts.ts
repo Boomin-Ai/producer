@@ -23,7 +23,7 @@ export interface ContentUnit {
   distributions?: UnitDistribution[];
   scheduledAt?: string;
   publishedAt?: string;
-  recording?: { id: string; started_at: string; duration_ms: number; localAvailable?: boolean; storageStatus?: "local" | "synced" };
+  recording?: { id: string; started_at: string; duration_ms: number; localAvailable?: boolean; localPath?: string; storageStatus?: "local" | "synced" };
 }
 
 export interface UnitDistribution {

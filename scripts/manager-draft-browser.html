@@ -1,0 +1,66 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Manager draft persistence regression</title></head><body><div id="root"></div><output id="result">Running</output><script type="module">
+import React from 'react';import {createRoot} from 'react-dom/client';
+import {HostedManager} from '/src/features/manager/HostedManager.tsx';
+import {peekManagerSession} from '/src/features/manager/cache.ts';
+const writes=[],units=[{id:'draft',collection_id:'collection',title:'Draft unit',type:'image',stage:'draft',caption:'Original caption',scheduled_at:null,published_at:null,distributions:[]}];
+let failure=0,delay=20;const channels=[{id:'ig',platform:'instagram',display_name:'Test',external_handle:'test',status:'active',endpoint_id:'test',endpoint_kind:'connected'}];
+const endpoint={id:'test',name:'Test workspace',kind:'connected',base_url:'https://example.test',brand_slug:'test',created_at:''};
+window.__TAURI_INTERNALS__={convertFileSrc:()=>'',invoke:async(command,args)=>{
+ if(command==='manager_cache_scope')return 'draft-test';if(command==='manager_cache_get'||command==='pref_get')return null;
+ if(command==='manager_cache_set'||command==='pref_set')return;if(command==='recordings_list')return [];
+ if(command==='endpoint_channels')return {channels};
+ if(command==='endpoint_request'){
+  if(args.method==='PATCH'){
+   writes.push(structuredClone(args));await new Promise(r=>setTimeout(r,delay));
+   if(failure)return {available:true,status:failure,body:{}};
+   const row=units.find(u=>u.id===args.path.split('/').pop());
+   if(args.body.caption!==undefined)row.caption=args.body.caption.trim();
+   const collectionId=args.body.collection_id ?? args.body.production_id;if(collectionId!==undefined)row.collection_id=collectionId;
+   if(args.body.distributions!==undefined)row.distributions=args.body.distributions.map((d,i)=>({...d,id:'distribution-'+i,platform:'instagram',status:'planned',published_social_post_id:null}));
+   return {available:true,status:200,body:{unit:structuredClone(row)}};
+  }
+  const path=args.path;
+  const body=path==='/v1/app/content/collections'?{collections:[{id:'collection',name:'Yo',kind:'series'},{id:'other',name:'Other',kind:'series'}]}:
+   path==='/v1/app/content/units'?{units:structuredClone(units)}:path.includes('social-posts')?{posts:[]}:path.includes('recordings')?{recordings:[]}:
+   path.includes('/content/units/')?{distribution_folder_id:'folder'}:path.includes('files/list')?{files:[]}:null;
+  if(!body)throw Error('Unexpected read '+path);return {available:true,status:200,body};
+ }
+ throw Error('Unexpected command '+command);
+}};
+const root=createRoot(document.getElementById('root'));const pause=()=>new Promise(r=>setTimeout(r,20));
+async function until(predicate,message){for(let i=0;i<300;i++){if(predicate())return;await pause();}throw Error('Timeout: '+message);}
+const check=(v,m)=>{if(!v)throw Error(m);};
+const mount=()=>root.render(React.createElement(HostedManager,{endpoint,channels,onCompose:()=>{}}));
+const caption=()=>document.querySelector('[aria-label="Unit caption"]');
+function value(selector,text){const input=document.querySelector(selector);Object.getOwnPropertyDescriptor(input instanceof HTMLSelectElement?HTMLSelectElement.prototype:input instanceof HTMLInputElement?HTMLInputElement.prototype:HTMLTextAreaElement.prototype,'value').set.call(input,text);input.dispatchEvent(new Event(input instanceof HTMLSelectElement?'change':'input',{bubbles:true}));}
+async function refresh(){const session=peekManagerSession(endpoint);await session.client.invalidateQueries({queryKey:['manager','units']});await pause();}
+try{
+ mount();await until(()=>document.querySelector('.pm-tree-name'),'inventory');document.querySelector('.pm-tree-name').click();
+ await until(()=>document.querySelector('.pm-collection-unit-row'),'collection');document.querySelector('.pm-collection-unit-row').click();
+ await until(()=>caption(),'editable draft');check(!document.querySelector('.pm-meta-lock'),'draft still locked');
+ value('[aria-label="Unit caption"]','  Saved draft caption\nSecond line  ');await pause();
+ document.querySelector('[aria-label="Choose distribution channels"]').click();await pause();document.querySelector('.pm-new-post-channel-option input').click();await pause();
+ value('[aria-label="Collection"]','other');await pause();
+ const switches=()=>document.querySelectorAll('[role="switch"]');await until(()=>switches().length,'post settings');switches()[0].click();await pause();
+ value('.acc-caption','Destination ');await pause();check(document.querySelector('.acc-caption').value==='Destination ','custom caption trimmed spaces while typing');value('.acc-caption','Destination caption');await pause();switches()[1].click();await pause();
+ check(writes.length===0,'typing unexpectedly wrote or published');
+ document.querySelector('.pm-unit-save').click();document.querySelector('.pm-unit-save').click();await until(()=>document.querySelector('.pm-unit-save-row')?.textContent.includes('Draft saved'),'saved');
+ check(writes.length===1,'duplicate save');check(writes[0].endpointId==='test','incorrect workspace');
+ check(writes[0].body.caption.includes('Second line'),'global caption missing');
+ const distribution=writes[0].body.distributions[0];check(distribution.channel_id==='ig'&&distribution.caption_override==='Destination caption'&&distribution.presets.feed===false,'per-channel caption or presets not serialized');
+ check(!('metadata' in writes[0].body)&&!('stage' in writes[0].body),'save overwrote unrelated fields');
+ await refresh();check(caption().value==='Saved draft caption\nSecond line','caption did not survive server refetch');
+ root.render(React.createElement('p',null,'Outside'));await pause();mount();await until(()=>caption(),'reopened draft');check(caption().value.includes('Second line'),'caption lost on reopening');
+ check(document.querySelector('[aria-label="Collection"]').value==='other','collection move not persisted');check(document.querySelector('.acc-caption').value==='Destination caption','channel override lost on reopening');
+ failure=500;value('[aria-label="Unit caption"]','Retry me');await pause();document.querySelector('.pm-unit-save').click();await until(()=>document.querySelector('.pm-unit-save-error'),'failed save');
+ check(caption().value==='Retry me'&&units[0].caption!=='Retry me','failed save discarded edit or mutated server');check(!document.querySelector('.pm-unit-save-row').textContent.includes('Draft saved'),'failed save said saved');
+ failure=403;document.querySelector('.pm-unit-save').click();await until(()=>document.querySelector('.pm-unit-save-error')?.textContent.includes('permission'),'permission denial');check(caption().value==='Retry me','denied save discarded edit');
+ failure=0;document.querySelector('.pm-unit-save').click();await until(()=>document.querySelector('.pm-unit-save-row').textContent.includes('Draft saved'),'retry');await refresh();check(caption().value==='Retry me','retry not persisted');
+ value('[aria-label="Collection"]','');await pause();document.querySelector('.pm-unit-save').click();await until(()=>document.querySelector('.pm-unit-save-row').textContent.includes('Draft saved'),'unfile');await refresh();check(units[0].collection_id===null,'unfiling was ignored');
+ const clear=writes[writes.length-1].body;check(clear.collection_id===null&&clear.production_id===null,'collection clear alias missing');
+ document.querySelector('[role="switch"]').click();await pause();document.querySelector('.pm-unit-save').click();await until(()=>document.querySelector('.pm-unit-save-row').textContent.includes('Draft saved'),'clear override');await refresh();check(units[0].distributions[0].caption_override===null&&!document.querySelector('.acc-caption'),'cleared override still persisted');
+ for(const stage of ['processing','published','schedule','review','partial']){units[0].stage=stage;await refresh();check(!caption()&&!document.querySelector('.pm-unit-save'),'immutable stage editable: '+stage);}
+ check(writes.every(w=>w.method==='PATCH'&&w.path==='/v1/app/content/units/draft'),'unexpected mutation or publishing');
+ document.getElementById('result').textContent='PASS: draft saves, reload persistence, collection movement, global and per-channel captions, presets, duplicate prevention, permission/network errors and immutable stages';
+}catch(error){document.getElementById('result').textContent='FAIL: '+error.message+' '+error.stack;console.error(error);}
+</script></body></html>

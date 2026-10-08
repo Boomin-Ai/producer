@@ -4,7 +4,7 @@ import { QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-q
 import { ipc, recording, type Channel, type EndpointInfo } from "../../lib/ipc";
 import { ManagerShell } from "./ManagerShell";
 import type { Collection, ContentUnit } from "./contracts";
-import { assembleHostedManager, createHostedCollectionUnit, createHostedLibraryEntry, loadHostedCollections, loadHostedPosts, loadHostedRecordings, loadHostedUnitMedia, loadHostedUnits, mergeLocalRecordings, renameHostedCollection } from "./hosted";
+import { assembleHostedManager, createHostedCollectionUnit, createHostedLibraryEntry, loadHostedCollections, loadHostedPosts, loadHostedRecordings, loadHostedUnitMedia, loadHostedUnits, mergeLocalRecordings, renameHostedCollection, updateHostedUnit } from "./hosted";
 import { PublishComposer } from "./PublishComposer";
 import { OVERVIEW } from "./navigation";
 import { CACHE_EVENT, managerKeys as keys, openManagerSession, peekManagerSession, type ManagerSession } from "./cache";
@@ -31,7 +31,9 @@ export function HostedManager(props: Props) {
     window.addEventListener(CACHE_EVENT, changed);
     return () => { alive = false; window.removeEventListener(CACHE_EVENT, changed); };
   }, [props.endpoint.id, props.endpoint.base_url, props.endpoint.brand_slug, attempt]);
-  if (!session) return <div className="pm-live"><div className="pm-live-message" role={error ? "alert" : "status"}>{error ?? "Opening Producer…"}{error && <button type="button" onClick={() => setAttempt((n) => n + 1)}>Retry</button>}</div></div>;
+  // A changed endpoint must never render or edit the previous workspace's cache
+  // while its asynchronous session lookup is still resolving.
+  if (!session || session.endpointIdentity !== JSON.stringify([props.endpoint.id, props.endpoint.base_url, props.endpoint.brand_slug ?? null])) return <div className="pm-live"><div className="pm-live-message" role={error ? "alert" : "status"}>{error ?? "Opening Producer…"}{error && <button type="button" onClick={() => setAttempt((n) => n + 1)}>Retry</button>}</div></div>;
   return <QueryClientProvider client={session.client}><CachedManager key={session.scope} {...props} session={session} /></QueryClientProvider>;
 }
 
@@ -102,6 +104,12 @@ function CachedManager({ endpoint, channels: initialChannels, onCompose, initial
     await client.cancelQueries({ queryKey: keys.collections });
     client.setQueryData<Collection[]>(keys.collections, (rows = []) => rows.map((row) => row.id === collectionId ? { ...row, name } : row));
   }, [endpoint.id, client]);
+  const updateUnit = useCallback(async (unitId: string, changes: Partial<ContentUnit>) => {
+    const unit = await updateHostedUnit(endpoint.id, unitId, changes);
+    await client.cancelQueries({ queryKey: keys.units });
+    client.setQueryData<ContentUnit[]>(keys.units, (rows = []) => rows.map((row) => row.id === unitId ? unit : row));
+    return unit;
+  }, [endpoint.id, client]);
 
   const resources = [collections, units, posts, captures, channels];
   const error = resources.find((query) => query.error)?.error;
@@ -117,12 +125,12 @@ function CachedManager({ endpoint, channels: initialChannels, onCompose, initial
   const initialUnit = initialRecordingId ? data?.units.find((unit) => unit.recording?.id === initialRecordingId) : undefined;
   // Room recordings can arrive from local IPC after a warm inventory is ready.
   // Resolve the explicit target before mounting a shell with a saved location.
-  const resolvingRecording = !!initialRecordingId && !initialUnit && local.isPending;
+  const resolvingRecording = !!initialRecordingId && !initialUnit && (local.isPending || local.isFetching || captures.isPending || captures.isFetching);
   return <div className="pm-live">
     {accessError || denied || !data || resolvingRecording ? <div className="pm-live-message" role={error || accessError ? "alert" : "status"}>{error || accessError ? <><h2>Couldn’t load your Boomin content</h2><p>{accessError ?? String(error)}</p><button type="button" onClick={refresh}>Retry</button></> : resolvingRecording ? "Opening recording…" : "Loading collections and posts…"}</div> : <>
       {error && <div className="pm-live-cache-status" role="status">Couldn’t refresh. Showing your last loaded content. <button type="button" onClick={refresh}>Retry</button></div>}
       {media.error && selectedUnitId && <div className="pm-live-cache-status" role="status">Couldn’t refresh this unit’s media. <button type="button" onClick={() => void media.refetch()}>Retry</button></div>}
-      <ManagerShell renderOriginalMedia={(post) => <OriginalMediaPanel key={endpoint.id + post.id} endpointId={endpoint.id} post={post} onRestored={() => client.invalidateQueries({ queryKey: ["manager"], refetchType: "active" })} />} headerActions={<button type="button" className="pm-header-refresh" disabled={updating} onClick={refresh}>{updating ? "Updating…" : "Refresh"}</button>} key={composing ? "compose" : "browse"} data={data} channels={channels.data ?? initialChannels} native readOnly onCompose={onCompose} onUnitSelected={setSelectedUnitId} onCreateLibrary={createLibrary} onCreateUnit={createUnit} onRenameCollection={renameCollection}
+      <ManagerShell renderOriginalMedia={(post) => <OriginalMediaPanel key={endpoint.id + post.id} endpointId={endpoint.id} post={post} onRestored={() => client.invalidateQueries({ queryKey: ["manager"], refetchType: "active" })} />} headerActions={<button type="button" className="pm-header-refresh" disabled={updating} onClick={refresh}>{updating ? "Updating…" : "Refresh"}</button>} key={composing ? "compose" : `browse-${initialRecordingId ?? "library"}`} data={data} channels={channels.data ?? initialChannels} native onCompose={onCompose} onUnitSelected={setSelectedUnitId} onCreateLibrary={createLibrary} onCreateUnit={createUnit} onRenameCollection={renameCollection} onUpdateUnit={updateUnit}
         onLocationChange={(location) => { if (composing && location.view !== "compose") onComposeClosed?.(); }}
         renderComposer={(onBack) => <PublishComposer endpointId={endpoint.id} channels={channels.data ?? initialChannels} onBack={onBack} onSubmitted={() => { onSubmitted?.(); onBack(); void client.invalidateQueries({ queryKey: ["manager"], refetchType: "active" }); }} />}
         cacheSession={session} initialLocation={composing ? { view: "compose" } : initialUnit ? { view: "unit", unitId: initialUnit.id, returnTo: OVERVIEW } : session.navigation?.location ?? OVERVIEW} />

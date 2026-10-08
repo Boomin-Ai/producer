@@ -67,12 +67,14 @@ fn link_live_engine_macos() {
 
     // AppKit/AVFoundation shim (M-L6 preview + TCC + device lookup).
     println!("cargo:rerun-if-changed=src/live/shim.m");
+    println!("cargo:rerun-if-changed=src/live/capture_guard.m");
     // Cutout: the Vision person-mask filter (registered through shim.m).
     println!("cargo:rerun-if-changed=src/live/person_mask.m");
     println!("cargo:rerun-if-changed=src/live/person_mask.effect.h");
     println!("cargo:rerun-if-changed=src/live/obs_min.h");
     cc::Build::new()
         .file("src/live/shim.m")
+        .file("src/live/capture_guard.m")
         .file("src/live/person_mask.m")
         .file("src/live/source_appearance.c")
         .flag("-fobjc-arc")

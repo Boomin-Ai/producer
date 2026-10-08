@@ -1,0 +1,964 @@
+{
+  "schema": "producer.presentation/1",
+  "id": "saasy-tech-news",
+  "version": "0.1.0",
+  "name": "Saasy Tech News",
+  "set": {
+    "initialLayout": "headlines",
+    "values": {
+      "presenterName": {
+        "type": "text",
+        "default": "Your name",
+        "maxLength": 40
+      },
+      "headline": {
+        "type": "text",
+        "default": "The next wave is already here.",
+        "maxLength": 80
+      },
+      "summary": {
+        "type": "text",
+        "default": "Your daily dose of tech, products and the business behind them.",
+        "maxLength": 130
+      },
+      "deepDiveTitle": {
+        "type": "text",
+        "default": "Beyond the launch-day hype.",
+        "maxLength": 70
+      },
+      "takeawayOne": {
+        "type": "text",
+        "default": "What changed \u2014 and why it matters.",
+        "maxLength": 70
+      },
+      "takeawayTwo": {
+        "type": "text",
+        "default": "Who wins, who pays, and what comes next.",
+        "maxLength": 70
+      },
+      "quickOne": {
+        "type": "text",
+        "default": "The launch worth watching.",
+        "maxLength": 65
+      },
+      "quickTwo": {
+        "type": "text",
+        "default": "The claim that needs receipts.",
+        "maxLength": 65
+      },
+      "quickThree": {
+        "type": "text",
+        "default": "One thing to try before tomorrow.",
+        "maxLength": 65
+      }
+    },
+    "feeds": {},
+    "slots": [
+      {
+        "id": "presenter",
+        "label": "Presenter camera"
+      }
+    ],
+    "components": {},
+    "layouts": [
+      {
+        "id": "headlines",
+        "label": "01 The Download",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "headlines-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#141024"
+          },
+          "children": [
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "saasy.",
+              "styles": {
+                "position": "absolute",
+                "left": 48,
+                "top": 29,
+                "width": 350,
+                "height": 71,
+                "fontSize": "58px",
+                "fontWeight": 850,
+                "letterSpacing": "-.075em",
+                "color": "#f9f6ef"
+              }
+            },
+            {
+              "id": "brand-sub",
+              "type": "text",
+              "text": "TECH NEWS, WITH A LITTLE ATTITUDE.",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 102,
+                "width": 720,
+                "height": 24,
+                "fontSize": "11px",
+                "letterSpacing": ".2em",
+                "color": "#c4a1ff"
+              }
+            },
+            {
+              "id": "segment-label",
+              "type": "text",
+              "text": "01 THE DOWNLOAD",
+              "styles": {
+                "position": "absolute",
+                "left": 890,
+                "top": 62,
+                "width": 337,
+                "height": 26,
+                "fontSize": "12px",
+                "letterSpacing": ".2em",
+                "textAlign": "right",
+                "color": "#c4a1ff"
+              }
+            },
+            {
+              "id": "rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 48,
+                "top": 145,
+                "width": 1184,
+                "height": 1,
+                "background": "#ffffff22"
+              },
+              "children": []
+            },
+            {
+              "id": "footer",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 48,
+                "top": 651,
+                "width": 1184,
+                "height": 38,
+                "display": "flex",
+                "alignItems": "center",
+                "justifyContent": "space-between"
+              },
+              "children": [
+                {
+                  "id": "host",
+                  "type": "text",
+                  "text": {
+                    "get": "values.presenterName"
+                  },
+                  "styles": {
+                    "fontSize": "16px",
+                    "fontWeight": 700,
+                    "color": "#f9f6ef"
+                  }
+                },
+                {
+                  "id": "tag",
+                  "type": "text",
+                  "text": "LESS HYPE. MORE SIGNAL.",
+                  "styles": {
+                    "fontSize": "11px",
+                    "letterSpacing": ".19em",
+                    "color": "#c4a1ff"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "camera-rim",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 753,
+                "top": 186,
+                "width": 458,
+                "height": 414,
+                "borderRadius": "28px",
+                "border": "1px solid #c4a1ff77",
+                "boxShadow": "0 0 35px #c4a1ff33"
+              },
+              "children": []
+            },
+            {
+              "id": "camera",
+              "type": "slot",
+              "slotId": "presenter",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 24,
+                "outlineWidth": 1,
+                "outlineColor": "#c4a1ff"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 757,
+                "top": 190,
+                "width": 450,
+                "height": 406
+              }
+            },
+            {
+              "id": "kicker",
+              "type": "text",
+              "text": "THE DOWNLOAD",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 201,
+                "width": 650,
+                "height": 27,
+                "fontSize": "14px",
+                "letterSpacing": ".2em",
+                "color": "#c4a1ff"
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": {
+                "get": "values.headline"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 45,
+                "top": 251,
+                "width": 652,
+                "height": 185,
+                "fontSize": "66px",
+                "lineHeight": "1.04",
+                "fontWeight": 850,
+                "letterSpacing": "-.055em",
+                "color": "#f9f6ef"
+              }
+            },
+            {
+              "id": "deck",
+              "type": "text",
+              "text": {
+                "get": "values.summary"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 457,
+                "width": 620,
+                "height": 100,
+                "fontSize": "22px",
+                "lineHeight": "1.5",
+                "color": "#bdb3ce"
+              }
+            },
+            {
+              "id": "badge",
+              "type": "text",
+              "text": "01 / WHAT MATTERS TODAY",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 590,
+                "width": 620,
+                "height": 24,
+                "fontSize": "12px",
+                "letterSpacing": ".15em",
+                "color": "#c4a1ff"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "deep-dive",
+        "label": "02 Under the Hood",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "deep-dive-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#09201e"
+          },
+          "children": [
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "saasy.",
+              "styles": {
+                "position": "absolute",
+                "left": 48,
+                "top": 29,
+                "width": 350,
+                "height": 71,
+                "fontSize": "58px",
+                "fontWeight": 850,
+                "letterSpacing": "-.075em",
+                "color": "#f9f6ef"
+              }
+            },
+            {
+              "id": "brand-sub",
+              "type": "text",
+              "text": "TECH NEWS, WITH A LITTLE ATTITUDE.",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 102,
+                "width": 720,
+                "height": 24,
+                "fontSize": "11px",
+                "letterSpacing": ".2em",
+                "color": "#97e4cb"
+              }
+            },
+            {
+              "id": "segment-label",
+              "type": "text",
+              "text": "02 UNDER THE HOOD",
+              "styles": {
+                "position": "absolute",
+                "left": 890,
+                "top": 62,
+                "width": 337,
+                "height": 26,
+                "fontSize": "12px",
+                "letterSpacing": ".2em",
+                "textAlign": "right",
+                "color": "#97e4cb"
+              }
+            },
+            {
+              "id": "rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 48,
+                "top": 145,
+                "width": 1184,
+                "height": 1,
+                "background": "#ffffff22"
+              },
+              "children": []
+            },
+            {
+              "id": "footer",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 48,
+                "top": 651,
+                "width": 1184,
+                "height": 38,
+                "display": "flex",
+                "alignItems": "center",
+                "justifyContent": "space-between"
+              },
+              "children": [
+                {
+                  "id": "host",
+                  "type": "text",
+                  "text": {
+                    "get": "values.presenterName"
+                  },
+                  "styles": {
+                    "fontSize": "16px",
+                    "fontWeight": 700,
+                    "color": "#f9f6ef"
+                  }
+                },
+                {
+                  "id": "tag",
+                  "type": "text",
+                  "text": "LESS HYPE. MORE SIGNAL.",
+                  "styles": {
+                    "fontSize": "11px",
+                    "letterSpacing": ".19em",
+                    "color": "#97e4cb"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "camera-rim",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 47,
+                "top": 186,
+                "width": 555,
+                "height": 414,
+                "borderRadius": "28px",
+                "border": "1px solid #97e4cb77",
+                "boxShadow": "0 0 35px #97e4cb33"
+              },
+              "children": []
+            },
+            {
+              "id": "camera",
+              "type": "slot",
+              "slotId": "presenter",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 24,
+                "outlineWidth": 1,
+                "outlineColor": "#97e4cb"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 51,
+                "top": 190,
+                "width": 547,
+                "height": 406
+              }
+            },
+            {
+              "id": "kicker",
+              "type": "text",
+              "text": "UNDER THE HOOD",
+              "styles": {
+                "position": "absolute",
+                "left": 658,
+                "top": 194,
+                "width": 550,
+                "height": 27,
+                "fontSize": "14px",
+                "letterSpacing": ".2em",
+                "color": "#97e4cb"
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": {
+                "get": "values.deepDiveTitle"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 653,
+                "top": 242,
+                "width": 570,
+                "height": 130,
+                "fontSize": "51px",
+                "lineHeight": "1.06",
+                "fontWeight": 850,
+                "letterSpacing": "-.04em",
+                "color": "#f9f6ef"
+              }
+            },
+            {
+              "id": "point-one",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 658,
+                "top": 405,
+                "width": 550,
+                "height": 76,
+                "background": "#ffffff08",
+                "border": "1px solid #97e4cb33",
+                "borderRadius": "14px",
+                "padding": "17px 20px"
+              },
+              "children": [
+                {
+                  "id": "point-one-text",
+                  "type": "text",
+                  "text": {
+                    "get": "values.takeawayOne"
+                  },
+                  "styles": {
+                    "fontSize": "21px",
+                    "color": "#e4f5ee"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "point-two",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 658,
+                "top": 499,
+                "width": 550,
+                "height": 76,
+                "background": "#ffffff08",
+                "border": "1px solid #97e4cb33",
+                "borderRadius": "14px",
+                "padding": "17px 20px"
+              },
+              "children": [
+                {
+                  "id": "point-two-text",
+                  "type": "text",
+                  "text": {
+                    "get": "values.takeawayTwo"
+                  },
+                  "styles": {
+                    "fontSize": "21px",
+                    "color": "#e4f5ee"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "quick-takes",
+        "label": "03 Hot Takes",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "quick-takes-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#261711"
+          },
+          "children": [
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "saasy.",
+              "styles": {
+                "position": "absolute",
+                "left": 48,
+                "top": 29,
+                "width": 350,
+                "height": 71,
+                "fontSize": "58px",
+                "fontWeight": 850,
+                "letterSpacing": "-.075em",
+                "color": "#f9f6ef"
+              }
+            },
+            {
+              "id": "brand-sub",
+              "type": "text",
+              "text": "TECH NEWS, WITH A LITTLE ATTITUDE.",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 102,
+                "width": 720,
+                "height": 24,
+                "fontSize": "11px",
+                "letterSpacing": ".2em",
+                "color": "#ffc69c"
+              }
+            },
+            {
+              "id": "segment-label",
+              "type": "text",
+              "text": "03 HOT TAKES",
+              "styles": {
+                "position": "absolute",
+                "left": 890,
+                "top": 62,
+                "width": 337,
+                "height": 26,
+                "fontSize": "12px",
+                "letterSpacing": ".2em",
+                "textAlign": "right",
+                "color": "#ffc69c"
+              }
+            },
+            {
+              "id": "rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 48,
+                "top": 145,
+                "width": 1184,
+                "height": 1,
+                "background": "#ffffff22"
+              },
+              "children": []
+            },
+            {
+              "id": "footer",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 48,
+                "top": 651,
+                "width": 1184,
+                "height": 38,
+                "display": "flex",
+                "alignItems": "center",
+                "justifyContent": "space-between"
+              },
+              "children": [
+                {
+                  "id": "host",
+                  "type": "text",
+                  "text": {
+                    "get": "values.presenterName"
+                  },
+                  "styles": {
+                    "fontSize": "16px",
+                    "fontWeight": 700,
+                    "color": "#f9f6ef"
+                  }
+                },
+                {
+                  "id": "tag",
+                  "type": "text",
+                  "text": "LESS HYPE. MORE SIGNAL.",
+                  "styles": {
+                    "fontSize": "11px",
+                    "letterSpacing": ".19em",
+                    "color": "#ffc69c"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "camera-rim",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 811,
+                "top": 225,
+                "width": 399,
+                "height": 399,
+                "borderRadius": "28px",
+                "border": "1px solid #ffc69c77",
+                "boxShadow": "0 0 35px #ffc69c33"
+              },
+              "children": []
+            },
+            {
+              "id": "camera",
+              "type": "slot",
+              "slotId": "presenter",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 24,
+                "outlineWidth": 1,
+                "outlineColor": "#ffc69c"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 815,
+                "top": 229,
+                "width": 391,
+                "height": 391
+              }
+            },
+            {
+              "id": "kicker",
+              "type": "text",
+              "text": "THREE STORIES. NO FLUFF.",
+              "styles": {
+                "position": "absolute",
+                "left": 51,
+                "top": 182,
+                "width": 700,
+                "height": 24,
+                "fontSize": "14px",
+                "letterSpacing": ".17em",
+                "color": "#ffc69c"
+              }
+            },
+            {
+              "id": "quick-card-0",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 49,
+                "top": 221,
+                "width": 695,
+                "height": 104,
+                "background": "#ffffff08",
+                "border": "1px solid #ffc69c33",
+                "borderRadius": "16px",
+                "display": "flex",
+                "alignItems": "center",
+                "gap": "24px",
+                "padding": "18px 24px"
+              },
+              "children": [
+                {
+                  "id": "number-0",
+                  "type": "text",
+                  "text": "01",
+                  "styles": {
+                    "color": "#ffc69c",
+                    "fontSize": "32px",
+                    "fontWeight": 800
+                  }
+                },
+                {
+                  "id": "story-0",
+                  "type": "text",
+                  "text": {
+                    "get": "values.quickOne"
+                  },
+                  "styles": {
+                    "color": "#faf1e9",
+                    "fontSize": "24px",
+                    "lineHeight": "1.25",
+                    "maxWidth": "550px"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "quick-card-1",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 49,
+                "top": 345,
+                "width": 695,
+                "height": 104,
+                "background": "#ffffff08",
+                "border": "1px solid #ffc69c33",
+                "borderRadius": "16px",
+                "display": "flex",
+                "alignItems": "center",
+                "gap": "24px",
+                "padding": "18px 24px"
+              },
+              "children": [
+                {
+                  "id": "number-1",
+                  "type": "text",
+                  "text": "02",
+                  "styles": {
+                    "color": "#ffc69c",
+                    "fontSize": "32px",
+                    "fontWeight": 800
+                  }
+                },
+                {
+                  "id": "story-1",
+                  "type": "text",
+                  "text": {
+                    "get": "values.quickTwo"
+                  },
+                  "styles": {
+                    "color": "#faf1e9",
+                    "fontSize": "24px",
+                    "lineHeight": "1.25",
+                    "maxWidth": "550px"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "quick-card-2",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 49,
+                "top": 469,
+                "width": 695,
+                "height": 104,
+                "background": "#ffffff08",
+                "border": "1px solid #ffc69c33",
+                "borderRadius": "16px",
+                "display": "flex",
+                "alignItems": "center",
+                "gap": "24px",
+                "padding": "18px 24px"
+              },
+              "children": [
+                {
+                  "id": "number-2",
+                  "type": "text",
+                  "text": "03",
+                  "styles": {
+                    "color": "#ffc69c",
+                    "fontSize": "32px",
+                    "fontWeight": 800
+                  }
+                },
+                {
+                  "id": "story-2",
+                  "type": "text",
+                  "text": {
+                    "get": "values.quickThree"
+                  },
+                  "styles": {
+                    "color": "#faf1e9",
+                    "fontSize": "24px",
+                    "lineHeight": "1.25",
+                    "maxWidth": "550px"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "controls": [
+      {
+        "id": "headlines-button",
+        "type": "button",
+        "label": "01 The Download",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "headlines"
+        }
+      },
+      {
+        "id": "deep-dive-button",
+        "type": "button",
+        "label": "02 Under the Hood",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "deep-dive"
+        }
+      },
+      {
+        "id": "quick-takes-button",
+        "type": "button",
+        "label": "03 Hot Takes",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "quick-takes"
+        }
+      },
+      {
+        "id": "presenterName-field",
+        "type": "text",
+        "key": "presenterName",
+        "label": "Presenter"
+      },
+      {
+        "id": "headline-field",
+        "type": "text",
+        "key": "headline",
+        "label": "Opening headline"
+      },
+      {
+        "id": "summary-field",
+        "type": "text",
+        "key": "summary",
+        "label": "Opening summary"
+      },
+      {
+        "id": "deepDiveTitle-field",
+        "type": "text",
+        "key": "deepDiveTitle",
+        "label": "Deep-dive title"
+      },
+      {
+        "id": "takeawayOne-field",
+        "type": "text",
+        "key": "takeawayOne",
+        "label": "Takeaway 1"
+      },
+      {
+        "id": "takeawayTwo-field",
+        "type": "text",
+        "key": "takeawayTwo",
+        "label": "Takeaway 2"
+      },
+      {
+        "id": "quickOne-field",
+        "type": "text",
+        "key": "quickOne",
+        "label": "Quick take 1"
+      },
+      {
+        "id": "quickTwo-field",
+        "type": "text",
+        "key": "quickTwo",
+        "label": "Quick take 2"
+      },
+      {
+        "id": "quickThree-field",
+        "type": "text",
+        "key": "quickThree",
+        "label": "Quick take 3"
+      },
+      {
+        "id": "start",
+        "type": "button",
+        "label": "Start show",
+        "action": {
+          "type": "show.start"
+        }
+      },
+      {
+        "id": "next",
+        "type": "button",
+        "label": "Next",
+        "action": {
+          "type": "show.next"
+        }
+      }
+    ]
+  },
+  "show": {
+    "id": "saasy-tech-news",
+    "version": "0.1.0",
+    "initialPhase": "download",
+    "phases": [
+      {
+        "id": "download",
+        "label": "The Download",
+        "layoutId": "headlines",
+        "next": "under-hood"
+      },
+      {
+        "id": "under-hood",
+        "label": "Under the Hood",
+        "layoutId": "deep-dive",
+        "next": "hot-takes"
+      },
+      {
+        "id": "hot-takes",
+        "label": "Hot Takes",
+        "layoutId": "quick-takes"
+      }
+    ],
+    "choices": [
+      {
+        "id": "agree",
+        "label": "Agree"
+      },
+      {
+        "id": "disagree",
+        "label": "Disagree"
+      }
+    ]
+  }
+}

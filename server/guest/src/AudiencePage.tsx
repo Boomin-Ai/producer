@@ -41,6 +41,7 @@ export default function AudiencePage({ code }: { code: string }) {
   const [invitation, setInvitation] = useState<string | null>(null);
   const [watching, setWatching] = useState(false);
   const [muted, setMuted] = useState(true);
+  const [programAspect,setProgramAspect]=useState(16/9);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const receiverRef = useRef<ProgramReceiver | null>(null);
@@ -222,7 +223,7 @@ export default function AudiencePage({ code }: { code: string }) {
     <div style={S.shell}>
       <div style={S.card}>
         <p style={S.eyebrow}><span style={{ ...S.dot, background: online ? "#34c759" : "#8b8b93" }} />{title || "The show"}</p>
-        <video ref={videoRef} autoPlay playsInline controls muted={muted} style={{width:'100%',aspectRatio:'16/9',background:'#151517',borderRadius:12}} aria-label="Live program" />
+        <video ref={videoRef} onLoadedMetadata={e=>{const v=e.currentTarget;if(v.videoWidth&&v.videoHeight)setProgramAspect(v.videoWidth/v.videoHeight);}} onResize={e=>{const v=e.currentTarget;if(v.videoWidth&&v.videoHeight)setProgramAspect(v.videoWidth/v.videoHeight);}} autoPlay playsInline controls muted={muted} style={{width:`min(100%, ${programAspect*90}svh)`,display:'block',margin:'0 auto',aspectRatio:String(programAspect),maxHeight:'90svh',objectFit:'contain',background:'#151517',borderRadius:12}} aria-label="Live program" />
         <div style={{display:'flex',gap:8}}><button style={S.ghost} disabled={!online||!roomState.enabled} onClick={()=>{wantsVideoRef.current=true;watchRequestedRef.current=true;send({type:'audience.watch'});}}>{watching?'Reconnect video':'Watch the show'}</button><button style={S.ghost} onClick={()=>{setMuted(!muted);void videoRef.current?.play();}}>{muted?'Enable sound':'Mute'}</button></div>
         <p style={S.sub}>{roomState.online??0} in the room</p>
         {active ? (

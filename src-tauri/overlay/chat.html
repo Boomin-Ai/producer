@@ -27,7 +27,7 @@ function render() {
     if (!node) { node = document.createElement('div'); node.className='message'; nodes.set(key,node); root.appendChild(node); }
     if (node.dataset.content !== fingerprint) {
       node.replaceChildren();
-      const platform = document.createElement('span'); platform.className='platform'; platform.textContent=({twitch:'TW',kick:'K',youtube:'YT'})[m.platform] || m.platform;
+      const platform = document.createElement('span'); platform.className='platform'; platform.textContent=({twitch:'TW',kick:'K',youtube:'YT',boomin:'Boomin'})[m.platform] || m.platform;
       const user = document.createElement('span'); user.className='user'; user.textContent=m.user+': ';
       user.style.color=/^#[0-9a-f]{6}$/i.test(m.color || '') ? m.color : '#77dfbd';
       node.append(platform,user);
@@ -38,6 +38,7 @@ function render() {
       }
       node.dataset.content=fingerprint;
     }
+    root.appendChild(node); // Snapshot order can change when filters or room history change.
   }
   for (const [key,node] of nodes) if (!keep.has(key)) { node.remove(); nodes.delete(key); }
 }

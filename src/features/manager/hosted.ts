@@ -49,7 +49,7 @@ interface RecordingDto {
   storage_status: "local" | "synced";
 }
 
-/** Credentials and brand scope stay in Rust. This facade only performs CMS reads. */
+/** Credentials and brand scope stay in Rust. */
 async function read<T>(endpointId: string, path: string, signal?: AbortSignal): Promise<T> {
   const response = await guests.request(endpointId, "GET", `/v1/app/${path}`);
   signal?.throwIfAborted();
@@ -182,6 +182,31 @@ export async function createHostedCollectionUnit(endpointId: string, collectionI
   return mapUnit(result.unit);
 }
 
+/** Only explicitly edited draft fields are sent; metadata and publishing state stay intact. */
+export async function updateHostedUnit(endpointId: string, unitId: string, changes: Partial<ContentUnit>): Promise<ContentUnit> {
+  const body: Record<string, unknown> = {};
+  if (changes.caption !== undefined) body.caption = changes.caption;
+  if (changes.collectionId !== undefined) {
+    body.collection_id = changes.collectionId;
+    // CMS resolves collection_id ?? production_id. Explicitly clear both aliases
+    // so unfiling yields null rather than an omitted (unchanged) assignment.
+    if (changes.collectionId === null) body.production_id = null;
+  }
+  if (changes.distributions !== undefined) body.distributions = changes.distributions.map((distribution) => {
+    const { caption, ...presets } = distribution.presets;
+    return { channel_id: distribution.channelId, handle: distribution.handle, presets,
+      caption_override: typeof caption === "string" ? caption : null };
+  });
+  const response = await guests.request(endpointId, "PATCH", `/v1/app/content/units/${encodeURIComponent(unitId)}`, body);
+  const result = response.body as { unit?: UnitDto } | undefined;
+  if (!response.available || response.status < 200 || response.status >= 300 || result?.unit?.id !== unitId) {
+    throw new Error(response.status === 403 ? "You don’t have permission to edit this unit. Your changes haven’t been saved."
+      : response.status === 401 ? "Sign in again to save this draft. Your changes haven’t been saved."
+      : `Couldn’t save this draft (HTTP ${response.status}). Your changes are still here; try again.`);
+  }
+  return mapUnit(result.unit);
+}
+
 export async function renameHostedCollection(endpointId: string, collectionId: string, name: string): Promise<void> {
   // This existing collection-backed writer only updates supplied fields. The
   // older content PATCH schema defaults omitted metadata to {}, so use the
@@ -200,7 +225,7 @@ export function mergeLocalRecordings(snapshot: ManagerSnapshot, recordings: Loca
     const unitId = capture.unit_id ?? `local-recording-${capture.id}`;
     if (!collections.some((collection) => collection.id === collectionId)) collections.push({ id: collectionId, name: `${capture.room_name} recordings`, kind: "recordings" });
     const index = units.findIndex((unit) => unit.id === unitId);
-    const recording = { ...capture, localAvailable: true, storageStatus: "local" as const };
+    const recording = { ...capture, localPath: capture.path, localAvailable: true, storageStatus: "local" as const };
     if (index >= 0) units[index] = { ...units[index], recording };
     else units.push({ id: unitId, collectionId, title: `${capture.room_name} · ${new Date(capture.started_at).toLocaleString()}`, type: "long-video", stage: "studio", caption: "", postIds: [], partIds: [], recording });
     mediaFiles.push({ id: `capture-file-${capture.id}`, unitId, index: 0, name: capture.room_name, type: "video", url: convertFileSrc(capture.path) });

@@ -84,7 +84,7 @@ export interface RoomSources {
 }
 
 export interface RoomConfig {
-  presentation?: {package:PresentationPackage;bindings:Record<string,string>;framing?:Record<string,import('../features/presentation/schema').SlotFraming>};
+  presentation?: {manualNameKeys?:string[];package:PresentationPackage;bindings:Record<string,string>;framing?:Record<string,import('../features/presentation/schema').SlotFraming>};
   sources: RoomSources;
   layout: Layout;
   scenes: RoomScene[];
@@ -232,13 +232,13 @@ export function parseConfig(raw: string | null | undefined): RoomConfig {
   }
   if (v.presentation && typeof v.presentation === 'object') {
     try {
-      const p=v.presentation as {package:unknown;bindings?:Record<string,unknown>;framing?:Record<string,unknown>};
+      const p=v.presentation as {package:unknown;manualNameKeys?:unknown;bindings?:Record<string,unknown>;framing?:Record<string,unknown>};
       const doc=parsePackage(p.package);
       const slots=new Set(doc.set.slots.map(slot=>slot.id));
       const bindings=Object.fromEntries(Object.entries(p.bindings ?? {}).filter(([k,val])=>slots.has(k) && typeof val==='string' && val.length<=128));
       const framing:Record<string,import('../features/presentation/schema').SlotFraming>={};
       for(const [key,value] of Object.entries(p.framing ?? {})){const f=value as {mode:string;x:number;y:number};if(slots.has(key)&&f&&['fill','fit'].includes(f.mode)&&Number.isFinite(f.x)&&f.x>=0&&f.x<=1&&Number.isFinite(f.y)&&f.y>=0&&f.y<=1)framing[key]={mode:f.mode as 'fill'|'fit',x:f.x,y:f.y};}
-      base.presentation={package:doc,bindings:bindings as Record<string,string>,framing};
+      base.presentation={package:doc,bindings:bindings as Record<string,string>,framing,manualNameKeys:Array.isArray(p.manualNameKeys)?p.manualNameKeys.filter((key):key is string=>typeof key==='string' && !!doc.set.values[key]).slice(0,100):[]};
     } catch { /* An invalid set cannot prevent the room from opening. */ }
   }
   if (typeof v.studio_output === "boolean") base.studio_output = v.studio_output;

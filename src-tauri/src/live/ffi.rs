@@ -223,13 +223,13 @@ extern "C" {
         param: *mut c_void,
     );
     pub fn obs_remove_main_render_callback(
-        cb: extern "C" fn(*mut c_void, u32, u32),
+        callback: extern "C" fn(*mut c_void, u32, u32),
         param: *mut c_void,
     );
     pub fn obs_source_get_ref(source: *mut obs_source_t) -> *mut obs_source_t;
+    pub fn obs_source_inc_showing(source: *mut obs_source_t);
     pub fn obs_source_inc_active(source: *mut obs_source_t);
     pub fn obs_source_dec_active(source: *mut obs_source_t);
-    pub fn obs_source_inc_showing(source: *mut obs_source_t);
     pub fn obs_source_dec_showing(source: *mut obs_source_t);
     pub fn gs_blend_state_push();
     pub fn gs_blend_state_pop();
@@ -340,6 +340,7 @@ pub const GS_BLEND_ONE: c_int = 1;
 pub const GS_BLEND_INVSRCALPHA: c_int = 5;
 pub const GS_ZS_NONE: c_int = 0;
 // obs.h enum obs_bounds_type
+pub const OBS_BOUNDS_STRETCH: c_int = 1;
 pub const OBS_BOUNDS_SCALE_INNER: c_int = 2;
 
 /// graphics/graphics.h struct gs_window (macOS arm: a single NSView* slot)
@@ -431,6 +432,7 @@ extern "C" {
     pub fn gs_ortho(left: f32, right: f32, top: f32, bottom: f32, znear: f32, zfar: f32);
 
     pub fn obs_scene_create(name: *const c_char) -> *mut obs_scene_t;
+    pub fn obs_scene_create_private(name: *const c_char) -> *mut obs_scene_t;
     pub fn obs_scene_release(scene: *mut obs_scene_t);
     pub fn obs_scene_get_source(scene: *const obs_scene_t) -> *mut obs_source_t;
     pub fn obs_scene_add(
@@ -493,6 +495,8 @@ extern "C" {
     /// `title:class:exe`, so the engine builds that string from the title.
     pub fn producer_window_id(ns_window: *mut c_void) -> u32;
     pub fn producer_default_camera_id(buf: *mut c_char, buflen: c_int) -> c_int;
+    #[cfg(target_os = "macos")]
+    pub fn producer_capture_guard_install() -> c_int;
     pub fn producer_list_windows(buf: *mut c_char, buflen: c_int) -> c_int;
     pub fn producer_drag_chip_show();
     pub fn producer_drag_chip_hide();
@@ -502,6 +506,18 @@ extern "C" {
     /// after obs_startup and before any source is created.
     pub fn producer_person_mask_register();
     pub fn producer_source_appearance_register();
+    pub fn producer_shader_create(
+        settings: *const c_char,
+        effect: *const c_char,
+    ) -> *mut obs_source_t;
+    pub fn producer_shader_extent(source: *mut obs_source_t, width: f32, height: f32);
+    pub fn producer_shader_frame(
+        source: *mut obs_source_t,
+        time: f32,
+        intensity: f32,
+        scale: f32,
+        opacity: f32,
+    );
     /// Video-only private placement; owner thread after readiness/grant checks.
     /// Caller owns the returned reference. Capture is retained, never cloned.
     pub fn producer_source_placement_create(capture: *mut obs_source_t) -> *mut obs_source_t;

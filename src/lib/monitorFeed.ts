@@ -797,11 +797,13 @@ export class MonitorSender {
           });
         }).catch(() => {});
       }, 6000);
-      lease.video.addEventListener("ended", () => {
-        if (this.lease !== lease) return;
-        lease.release(); this.lease = null; this.program = null;
-        this.scheduleAttach(pc, gen, 0);
-      }, { once: true });
+      lease.onVideo(async track=>{
+        if(this.lease!==lease||this.pc!==pc)return;
+        const sender=this.senders.find(sender=>sender.track?.kind==='video');
+        if(sender)await sender.replaceTrack(track);
+        for(const old of stream.getVideoTracks())stream.removeTrack(old);
+        stream.addTrack(track);
+      });
     } catch (e) {
       // No program is degraded, not broken: keep looking.
       this.setState("no-device", String(e));

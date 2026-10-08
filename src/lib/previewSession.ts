@@ -11,10 +11,10 @@ export function previewSession(driver: Driver, stage: (transparent: boolean) => 
   let last: PreviewBounds | undefined;
   const same = (r: PreviewBounds) => last && Math.abs(last.x-r.x)<.5 && Math.abs(last.y-r.y)<.5 && Math.abs(last.width-r.width)<.5 && Math.abs(last.height-r.height)<.5;
   return {
-    async sync(measure: () => PreviewBounds | undefined) {
+    async sync(measure: () => PreviewBounds | undefined, refresh = false) {
       if (!alive || busy || Date.now() < retryAt) return;
       const r = measure();
-      if (!r || !Object.values(r).every(Number.isFinite) || r.width < 10 || r.height < 10 || (attached && same(r))) return;
+      if (!r || !Object.values(r).every(Number.isFinite) || r.width < 10 || r.height < 10 || (attached && same(r) && !refresh)) return;
       busy = true;
       try {
         await enqueue(async () => {
@@ -42,4 +42,12 @@ export function previewSession(driver: Driver, stage: (transparent: boolean) => 
       return enqueue(() => driver.detach()).catch(() => {});
     },
   };
+}
+
+// Both native displays sit under the same webview. Detaching one must not
+// make the remaining display's transparent viewing area opaque.
+const transparentDisplays=new Set<string>();
+export function setPreviewTransparency(id:string,on:boolean){
+ if(on)transparentDisplays.add(id);else transparentDisplays.delete(id);
+ document.documentElement.dataset.stage=transparentDisplays.size?'transparent':'opaque';
 }

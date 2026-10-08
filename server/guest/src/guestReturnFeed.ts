@@ -105,7 +105,7 @@ export class GuestReturnFeed {
       if (!this.alive()) return;
       const device = pick(devices);
       if (!device) { this.schedule(); return; }
-      const stream = await this.capture({ video: { deviceId: { exact: device.deviceId }, width: 640, height: 360, frameRate: 15 }, audio: false });
+      const stream = await this.capture({ video: { deviceId: { exact: device.deviceId }, frameRate: { ideal: 30 } }, audio: false });
       if (!stream || !this.alive()) { this.schedule(); return; }
       const track = stream.getVideoTracks()[0];
       if (!track) { this.release(stream); this.schedule(); return; }

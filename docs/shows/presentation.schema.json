@@ -21,6 +21,214 @@
     "set": {
       "type": "object",
       "properties": {
+        "styles": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "get": {
+                      "type": "string",
+                      "maxLength": 128,
+                      "pattern": "^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                    }
+                  },
+                  "required": [
+                    "get"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "op": {
+                      "anyOf": [
+                        {
+                          "const": "eq"
+                        },
+                        {
+                          "const": "if"
+                        },
+                        {
+                          "const": "concat"
+                        }
+                      ]
+                    },
+                    "args": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/$defs/binding"
+                      },
+                      "maxItems": 8
+                    }
+                  },
+                  "required": [
+                    "op",
+                    "args"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "maxProperties": 41,
+            "propertyNames": {
+              "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+              "not": {
+                "enum": [
+                  "constructor",
+                  "prototype",
+                  "__proto__"
+                ]
+              }
+            }
+          },
+          "maxProperties": 32,
+          "propertyNames": {
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+            "not": {
+              "enum": [
+                "constructor",
+                "prototype",
+                "__proto__"
+              ]
+            }
+          }
+        },
+        "tokens": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 240
+              },
+              {
+                "type": "number",
+                "minimum": -10000,
+                "maximum": 10000
+              }
+            ]
+          },
+          "maxProperties": 64,
+          "propertyNames": {
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+            "not": {
+              "enum": [
+                "constructor",
+                "prototype",
+                "__proto__"
+              ]
+            }
+          }
+        },
+        "assets": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "maxLength": 160
+              },
+              "mime": {
+                "type": "string",
+                "maxLength": 40
+              },
+              "data": {
+                "type": "string",
+                "maxLength": 16777316
+              },
+              "playback": {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "anyOf": [
+                      {
+                        "const": "entry"
+                      },
+                      {
+                        "const": "manual"
+                      }
+                    ]
+                  },
+                  "loop": {
+                    "type": "boolean"
+                  },
+                  "exit": {
+                    "anyOf": [
+                      {
+                        "const": "reset"
+                      },
+                      {
+                        "const": "pause"
+                      },
+                      {
+                        "const": "continue"
+                      }
+                    ]
+                  },
+                  "return": {
+                    "anyOf": [
+                      {
+                        "const": "restart"
+                      },
+                      {
+                        "const": "resume"
+                      }
+                    ]
+                  },
+                  "hostControls": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "start",
+                  "loop",
+                  "exit",
+                  "return",
+                  "hostControls"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "name",
+              "mime",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          "maxProperties": 24,
+          "propertyNames": {
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+            "not": {
+              "enum": [
+                "constructor",
+                "prototype",
+                "__proto__"
+              ]
+            }
+          }
+        },
         "initialLayout": {
           "type": "string",
           "maxLength": 64,
@@ -306,6 +514,162 @@
               },
               "root": {
                 "$ref": "#/$defs/node"
+              },
+              "animation": {
+                "type": "object",
+                "properties": {
+                  "tracks": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "target": {
+                          "type": "string",
+                          "maxLength": 64,
+                          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+                        },
+                        "property": {
+                          "anyOf": [
+                            {
+                              "const": "x"
+                            },
+                            {
+                              "const": "y"
+                            },
+                            {
+                              "const": "width"
+                            },
+                            {
+                              "const": "height"
+                            },
+                            {
+                              "const": "opacity"
+                            },
+                            {
+                              "const": "scale"
+                            },
+                            {
+                              "const": "rotation"
+                            },
+                            {
+                              "const": "shader.intensity"
+                            },
+                            {
+                              "const": "shader.scale"
+                            }
+                          ]
+                        },
+                        "keyframes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "atMs": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 60000
+                              },
+                              "value": {
+                                "type": "number",
+                                "minimum": -3840,
+                                "maximum": 3840
+                              }
+                            },
+                            "required": [
+                              "atMs",
+                              "value"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 16
+                        },
+                        "easing": {
+                          "anyOf": [
+                            {
+                              "const": "linear"
+                            },
+                            {
+                              "const": "easeIn"
+                            },
+                            {
+                              "const": "easeOut"
+                            },
+                            {
+                              "const": "easeInOut"
+                            }
+                          ]
+                        },
+                        "clock": {
+                          "anyOf": [
+                            {
+                              "const": "show"
+                            },
+                            {
+                              "const": "segment"
+                            }
+                          ]
+                        },
+                        "delayMs": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 60000
+                        },
+                        "loop": {
+                          "anyOf": [
+                            {
+                              "const": "none"
+                            },
+                            {
+                              "const": "repeat"
+                            },
+                            {
+                              "const": "pingpong"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "target",
+                        "property",
+                        "keyframes"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 32
+                  },
+                  "transition": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "anyOf": [
+                          {
+                            "const": "cut"
+                          },
+                          {
+                            "const": "crossfade"
+                          },
+                          {
+                            "const": "morph"
+                          }
+                        ]
+                      },
+                      "durationMs": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 2000
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "durationMs"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "tracks"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [
@@ -317,7 +681,7 @@
             ],
             "additionalProperties": false
           },
-          "maxItems": 16
+          "maxItems": 32
         },
         "controls": {
           "type": "array",
@@ -421,6 +785,18 @@
                         "type": "object",
                         "properties": {
                           "type": {
+                            "const": "show.previous"
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
                             "const": "show.vote"
                           },
                           "choiceId": {
@@ -509,7 +885,7 @@
                           "get": {
                             "type": "string",
                             "maxLength": 128,
-                            "pattern": "^(values|feeds|props|show)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                            "pattern": "^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
                           }
                         },
                         "required": [
@@ -573,7 +949,7 @@
                           "get": {
                             "type": "string",
                             "maxLength": 128,
-                            "pattern": "^(values|feeds|props|show)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                            "pattern": "^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
                           }
                         },
                         "required": [
@@ -666,7 +1042,7 @@
                           "get": {
                             "type": "string",
                             "maxLength": 128,
-                            "pattern": "^(values|feeds|props|show)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                            "pattern": "^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
                           }
                         },
                         "required": [
@@ -759,7 +1135,7 @@
                           "get": {
                             "type": "string",
                             "maxLength": 128,
-                            "pattern": "^(values|feeds|props|show)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                            "pattern": "^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
                           }
                         },
                         "required": [
@@ -947,7 +1323,7 @@
             "get": {
               "type": "string",
               "maxLength": 128,
-              "pattern": "^(values|feeds|props|show)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+              "pattern": "^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
             }
           },
           "required": [
@@ -997,6 +1373,11 @@
               "maxLength": 64,
               "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
             },
+            "styleId": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+            },
             "styles": {
               "type": "object",
               "additionalProperties": {
@@ -1023,7 +1404,7 @@
                       "get": {
                         "type": "string",
                         "maxLength": 128,
-                        "pattern": "^(values|feeds|props|show)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        "pattern": "^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
                       }
                     },
                     "required": [
@@ -1063,7 +1444,7 @@
                   }
                 ]
               },
-              "maxProperties": 29,
+              "maxProperties": 41,
               "propertyNames": {
                 "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
                 "not": {
@@ -1099,7 +1480,7 @@
                     "get": {
                       "type": "string",
                       "maxLength": 128,
-                      "pattern": "^(values|feeds|props|show)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                      "pattern": "^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
                     }
                   },
                   "required": [
@@ -1224,6 +1605,11 @@
               "maxLength": 64,
               "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
             },
+            "styleId": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+            },
             "styles": {
               "type": "object",
               "additionalProperties": {
@@ -1250,7 +1636,7 @@
                       "get": {
                         "type": "string",
                         "maxLength": 128,
-                        "pattern": "^(values|feeds|props|show)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        "pattern": "^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
                       }
                     },
                     "required": [
@@ -1290,7 +1676,7 @@
                   }
                 ]
               },
-              "maxProperties": 29,
+              "maxProperties": 41,
               "propertyNames": {
                 "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
                 "not": {
@@ -1326,7 +1712,7 @@
                     "get": {
                       "type": "string",
                       "maxLength": 128,
-                      "pattern": "^(values|feeds|props|show)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                      "pattern": "^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
                     }
                   },
                   "required": [
@@ -1452,7 +1838,7 @@
                     "get": {
                       "type": "string",
                       "maxLength": 128,
-                      "pattern": "^(values|feeds|props|show)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                      "pattern": "^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
                     }
                   },
                   "required": [
@@ -1508,6 +1894,11 @@
               "maxLength": 64,
               "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
             },
+            "styleId": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+            },
             "styles": {
               "type": "object",
               "additionalProperties": {
@@ -1534,7 +1925,7 @@
                       "get": {
                         "type": "string",
                         "maxLength": 128,
-                        "pattern": "^(values|feeds|props|show)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        "pattern": "^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
                       }
                     },
                     "required": [
@@ -1574,7 +1965,7 @@
                   }
                 ]
               },
-              "maxProperties": 29,
+              "maxProperties": 41,
               "propertyNames": {
                 "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
                 "not": {
@@ -1610,7 +2001,7 @@
                     "get": {
                       "type": "string",
                       "maxLength": 128,
-                      "pattern": "^(values|feeds|props|show)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                      "pattern": "^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
                     }
                   },
                   "required": [
@@ -1884,6 +2275,11 @@
               "maxLength": 64,
               "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
             },
+            "styleId": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+            },
             "styles": {
               "type": "object",
               "additionalProperties": {
@@ -1910,7 +2306,7 @@
                       "get": {
                         "type": "string",
                         "maxLength": 128,
-                        "pattern": "^(values|feeds|props|show)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        "pattern": "^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
                       }
                     },
                     "required": [
@@ -1950,7 +2346,7 @@
                   }
                 ]
               },
-              "maxProperties": 29,
+              "maxProperties": 41,
               "propertyNames": {
                 "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
                 "not": {
@@ -1986,7 +2382,585 @@
                     "get": {
                       "type": "string",
                       "maxLength": 128,
-                      "pattern": "^(values|feeds|props|show)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                      "pattern": "^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                    }
+                  },
+                  "required": [
+                    "get"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "op": {
+                      "anyOf": [
+                        {
+                          "const": "eq"
+                        },
+                        {
+                          "const": "if"
+                        },
+                        {
+                          "const": "concat"
+                        }
+                      ]
+                    },
+                    "args": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/$defs/binding"
+                      },
+                      "maxItems": 8
+                    }
+                  },
+                  "required": [
+                    "op",
+                    "args"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "motion": {
+              "type": "object",
+              "properties": {
+                "durationMs": {
+                  "type": "number",
+                  "minimum": 200,
+                  "maximum": 30000
+                },
+                "property": {
+                  "anyOf": [
+                    {
+                      "const": "opacity"
+                    },
+                    {
+                      "const": "transform"
+                    }
+                  ]
+                },
+                "from": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                },
+                "to": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "durationMs",
+                "property",
+                "from",
+                "to"
+              ],
+              "additionalProperties": false
+            },
+            "type": {
+              "const": "shader"
+            },
+            "shader": {
+              "type": "object",
+              "properties": {
+                "effect": {
+                  "anyOf": [
+                    {
+                      "const": "aurora"
+                    },
+                    {
+                      "const": "edgeGlow"
+                    },
+                    {
+                      "const": "lightSweep"
+                    },
+                    {
+                      "const": "plasma"
+                    },
+                    {
+                      "const": "silk"
+                    },
+                    {
+                      "const": "rings"
+                    },
+                    {
+                      "const": "grid"
+                    },
+                    {
+                      "const": "stars"
+                    },
+                    {
+                      "const": "petals"
+                    },
+                    {
+                      "const": "contours"
+                    },
+                    {
+                      "const": "prism"
+                    }
+                  ]
+                },
+                "colors": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 7
+                  },
+                  "maxItems": 3
+                },
+                "speed": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 4
+                },
+                "intensity": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 2
+                },
+                "scale": {
+                  "type": "number",
+                  "minimum": 0.25,
+                  "maximum": 4
+                },
+                "opacity": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "radius": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 960
+                },
+                "quality": {
+                  "anyOf": [
+                    {
+                      "const": "low"
+                    },
+                    {
+                      "const": "medium"
+                    }
+                  ]
+                },
+                "clock": {
+                  "anyOf": [
+                    {
+                      "const": "show"
+                    },
+                    {
+                      "const": "segment"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "effect",
+                "colors",
+                "speed",
+                "intensity",
+                "scale",
+                "opacity",
+                "radius",
+                "quality",
+                "clock"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "shader"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+            },
+            "styleId": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+            },
+            "styles": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 512
+                      },
+                      {
+                        "type": "number",
+                        "minimum": -1000000,
+                        "maximum": 1000000
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "get": {
+                        "type": "string",
+                        "maxLength": 128,
+                        "pattern": "^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                      }
+                    },
+                    "required": [
+                      "get"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "op": {
+                        "anyOf": [
+                          {
+                            "const": "eq"
+                          },
+                          {
+                            "const": "if"
+                          },
+                          {
+                            "const": "concat"
+                          }
+                        ]
+                      },
+                      "args": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/$defs/binding"
+                        },
+                        "maxItems": 8
+                      }
+                    },
+                    "required": [
+                      "op",
+                      "args"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "maxProperties": 41,
+              "propertyNames": {
+                "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+                "not": {
+                  "enum": [
+                    "constructor",
+                    "prototype",
+                    "__proto__"
+                  ]
+                }
+              }
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "get": {
+                      "type": "string",
+                      "maxLength": 128,
+                      "pattern": "^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                    }
+                  },
+                  "required": [
+                    "get"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "op": {
+                      "anyOf": [
+                        {
+                          "const": "eq"
+                        },
+                        {
+                          "const": "if"
+                        },
+                        {
+                          "const": "concat"
+                        }
+                      ]
+                    },
+                    "args": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/$defs/binding"
+                      },
+                      "maxItems": 8
+                    }
+                  },
+                  "required": [
+                    "op",
+                    "args"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "motion": {
+              "type": "object",
+              "properties": {
+                "durationMs": {
+                  "type": "number",
+                  "minimum": 200,
+                  "maximum": 30000
+                },
+                "property": {
+                  "anyOf": [
+                    {
+                      "const": "opacity"
+                    },
+                    {
+                      "const": "transform"
+                    }
+                  ]
+                },
+                "from": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                },
+                "to": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "durationMs",
+                "property",
+                "from",
+                "to"
+              ],
+              "additionalProperties": false
+            },
+            "type": {
+              "const": "media"
+            },
+            "assetId": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+            },
+            "fit": {
+              "anyOf": [
+                {
+                  "const": "contain"
+                },
+                {
+                  "const": "cover"
+                }
+              ]
+            },
+            "loop": {
+              "type": "boolean"
+            },
+            "autoplay": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "assetId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+            },
+            "styleId": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+            },
+            "styles": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 512
+                      },
+                      {
+                        "type": "number",
+                        "minimum": -1000000,
+                        "maximum": 1000000
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "get": {
+                        "type": "string",
+                        "maxLength": 128,
+                        "pattern": "^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                      }
+                    },
+                    "required": [
+                      "get"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "op": {
+                        "anyOf": [
+                          {
+                            "const": "eq"
+                          },
+                          {
+                            "const": "if"
+                          },
+                          {
+                            "const": "concat"
+                          }
+                        ]
+                      },
+                      "args": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/$defs/binding"
+                        },
+                        "maxItems": 8
+                      }
+                    },
+                    "required": [
+                      "op",
+                      "args"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "maxProperties": 41,
+              "propertyNames": {
+                "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+                "not": {
+                  "enum": [
+                    "constructor",
+                    "prototype",
+                    "__proto__"
+                  ]
+                }
+              }
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "get": {
+                      "type": "string",
+                      "maxLength": 128,
+                      "pattern": "^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
                     }
                   },
                   "required": [
@@ -2119,7 +3093,7 @@
                       "get": {
                         "type": "string",
                         "maxLength": 128,
-                        "pattern": "^(values|feeds|props|show)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        "pattern": "^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
                       }
                     },
                     "required": [

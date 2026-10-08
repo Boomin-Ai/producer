@@ -21,6 +21,7 @@ import { AudienceRoom } from "./audienceRoom";
 import type { Env } from "./env";
 import { RoomCommands, RoomCommandError, type SceneCommand } from "./roomCommands";
 import { EMPTY_SCENES, parseScenePublish, validateSceneCut, type SceneState } from "./scenes";
+import { RoomActions, RoomActionError, type RoomSource, type RoomAction } from "./roomActions";
 import { RoomMutations } from "./roomMutations";
 import { ApiError, errorBody } from "./errors";
 
@@ -77,15 +78,19 @@ type ClientMessage =
   // Scene cuts by mods (#47) — see scenes.ts for the frames.
   | { type: "scene.publish"; scenes: unknown; active_scene_id?: unknown; command_protocol?: number }
   | { type: "scene.cut"; scene_id: unknown; transition?: unknown; command_id?: string }
+  | { type: "room.sources.publish"; sources: RoomSource[]; participants: string[]; on_stage: string[] }
+  | ({ type: "room.action" } & Pick<RoomAction, "command_id" | "kind" | "target" | "on" | "expected_revision">)
+  | { type: "room.action.ack"; command_id: string; status: "applied" | "failed"; error?: string; sources: RoomSource[]; participants: string[]; on_stage: string[] }
   | { type: "scene.ack"; command_id: string; status: "applied" | "failed"; error?: string };
 type PublishBody = { channels: string[]; action: string; payload: unknown };
 
 export class RealtimeHub {
   private readonly mutations = new RoomMutations();
   private readonly publisherMessages = new RoomMutations();
+  private readonly actions: RoomActions;
   private readonly commands: RoomCommands;
   private readonly audience: AudienceRoom;
-  constructor(private readonly state: DurableObjectState, private readonly env: Env) { this.commands = new RoomCommands(state.storage); this.audience = new AudienceRoom(state.storage, () => state.getWebSockets().filter(ws => ws.readyState === 1), (url) => state.getWebSockets().some((ws) => (ws.deserializeAttachment() as SocketState | null)?.inviteOrigin === url.origin)); }
+  constructor(private readonly state: DurableObjectState, private readonly env: Env) { this.actions = new RoomActions(state.storage); this.commands = new RoomCommands(state.storage); this.audience = new AudienceRoom(state.storage, () => state.getWebSockets().filter(ws => ws.readyState === 1), (url) => state.getWebSockets().some((ws) => (ws.deserializeAttachment() as SocketState | null)?.inviteOrigin === url.origin)); }
 
 
   async fetch(request: Request): Promise<Response> {
@@ -142,6 +147,8 @@ export class RealtimeHub {
     if (role === "control" || role === "host") {
       const scenes = await this.sceneState();
       if (scenes.version > 0) server.send(JSON.stringify({ type: "scene.state", ...scenes, server_now: Date.now() }));
+      const catalog = await this.actions.snapshot();
+      server.send(JSON.stringify({ type: "room.sources", sources: catalog.sources, on_stage: catalog.on_stage, epoch: catalog.epoch, command_protocol: catalog.publisher ? 1 : 0 }));
     }
     if (role === "audience") await this.audience.admit(server);
     else if (role === "host" || role === "control") await this.audience.snapshot(server);
@@ -161,7 +168,7 @@ export class RealtimeHub {
       return;
     }
     // Preserve wire order across storage awaits: configure follows publication.
-    if (["scene.publish", "scene.ack", "scene.cut", "audience.configure"].includes(msg.type)) {
+    if (["scene.publish", "scene.ack", "scene.cut", "audience.configure", "room.sources.publish", "room.action", "room.action.ack"].includes(msg.type)) {
       try { await this.publisherMessages.run(() => this.handleClientMessage(ws, msg)); }
       catch (error) { ws.send(JSON.stringify({type:"error",code:error instanceof ApiError ? error.code : "room_control_unavailable"})); }
       return;
@@ -195,6 +202,9 @@ export class RealtimeHub {
     if (state.role === "audience") {
       if (msg.type === "subscribe" && msg.channel === "interaction:audience") { state.channels = [msg.channel]; ws.serializeAttachment(state); }
       return;
+    }
+    if (msg.type === "room.action" || msg.type === "room.sources.publish" || msg.type === "room.action.ack") {
+      await this.sourceAction(ws, state, msg); return;
     }
     if (msg.type === "subscribe" && msg.channel) {
       // Per-role projections ride per-role channels: a guest socket may not
@@ -274,6 +284,37 @@ export class RealtimeHub {
     }
   }
 
+  private async sourceAction(ws: WebSocket, state: SocketState, msg: Extract<ClientMessage, { type: "room.action" | "room.sources.publish" | "room.action.ack" }>): Promise<void> {
+    try {
+      if (!state.roomControl || !["host", "control"].includes(state.role ?? "guest")) throw new RoomActionError("forbidden", 403);
+      const authority = await this.commands.snapshot();
+      const host = this.state.getWebSockets().find(other => other.readyState === 1 && (other.deserializeAttachment() as SocketState | null)?.publisherId === authority.publisher);
+      if (!host) throw new RoomActionError("host_unavailable", 503);
+      if (msg.type === "room.action") {
+        if (state.role !== "host" && !(state.grants ?? []).includes(msg.kind === "source.visibility" ? "room.scene" : "room.stage")) throw new RoomActionError("forbidden", 403);
+        const catalog = await this.actions.snapshot();
+        if (catalog.publisher !== authority.publisher || catalog.epoch !== authority.epoch) throw new RoomActionError("host_sources_unavailable", 503);
+        const command = await this.actions.submit({ command_id: msg.command_id, kind: msg.kind, target: msg.target, on: msg.on, expected_revision: msg.expected_revision, from: state.userId }, Date.now());
+        if (command.status === "accepted") host.send(JSON.stringify({ type: "room.action", ...command, server_now: Date.now() }));
+        this.sendToRoles(["host", "control"], { type: "room.action.command", ...command });
+      } else {
+        if (state.role !== "host" || state.publisherId !== authority.publisher) throw new RoomActionError("stale_publisher", 403);
+        if (!Array.isArray(msg.sources) || !Array.isArray(msg.participants) || !Array.isArray(msg.on_stage)) throw new RoomActionError("invalid_source_catalog", 400);
+        const catalog = await this.actions.publish(state.publisherId, authority.epoch, msg.sources, msg.participants, msg.on_stage);
+        this.sendToRoles(["host", "control"], { type: "room.sources", sources: catalog.sources, on_stage: catalog.on_stage, epoch: catalog.epoch, command_protocol: 1 });
+        if (msg.type === "room.action.ack") {
+          if (msg.status !== "applied" && msg.status !== "failed") throw new RoomActionError("invalid_command", 400);
+          const result = await this.actions.acknowledge(state.publisherId, authority.epoch, msg.command_id, msg.status, Date.now(), msg.error);
+          this.sendToRoles(["host", "control"], { type: "room.action.command", ...result });
+        }
+      }
+      await this.rearm();
+    } catch (error) {
+      ws.send(JSON.stringify({ type: "error", command_id: "command_id" in msg ? msg.command_id : undefined,
+        code: error instanceof RoomActionError ? error.code : "room_control_unavailable" }));
+    }
+  }
+
   private commandError(ws: WebSocket, error: unknown): void {
     ws.send(JSON.stringify({ type: "error", code: error instanceof RoomCommandError ? error.code : "room_control_unavailable", status: error instanceof RoomCommandError ? error.status : 503 }));
   }
@@ -281,12 +322,13 @@ export class RealtimeHub {
     this.sendToRoles(["control", "host"], { type: "scene.command", ...command });
   }
   private async rearm(): Promise<void> {
-    const pending = (await this.commands.snapshot()).commands.filter((c) => c.status === "accepted");
+    const pending = [...(await this.commands.snapshot()).commands, ...(await this.actions.snapshot()).commands].filter((c) => c.status === "accepted");
     if (pending.length) await this.state.storage.setAlarm(Math.min(...pending.map((c) => c.expires_at)));
     else await this.state.storage.deleteAlarm();
   }
   async alarm(): Promise<void> {
     for (const expired of await this.commands.expire(Date.now())) this.commandResult(expired);
+    for (const expired of await this.actions.expire(Date.now())) this.sendToRoles(["host", "control"], { type: "room.action.command", ...expired });
     await this.rearm();
   }
 

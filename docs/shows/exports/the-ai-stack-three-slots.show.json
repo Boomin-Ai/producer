@@ -1,0 +1,3125 @@
+{
+  "schema": "producer.presentation/1",
+  "id": "the-ai-stack",
+  "version": "0.1.0",
+  "name": "The AI Stack \u2014 From Power to Products",
+  "set": {
+    "initialLayout": "overview",
+    "values": {
+      "hostName": {
+        "type": "text",
+        "default": "Host",
+        "maxLength": 40
+      },
+      "analystOneName": {
+        "type": "text",
+        "default": "Analyst 1",
+        "maxLength": 40
+      },
+      "analystTwoName": {
+        "type": "text",
+        "default": "Analyst 2",
+        "maxLength": 40
+      },
+      "openingQuestion": {
+        "type": "text",
+        "default": "Where does an AI product actually get its capabilities?",
+        "maxLength": 115
+      },
+      "energyPrompt": {
+        "type": "text",
+        "default": "What happens when demand grows faster than power capacity?",
+        "maxLength": 115
+      },
+      "chipsPrompt": {
+        "type": "text",
+        "default": "What limits performance: compute, memory, or moving data?",
+        "maxLength": 115
+      },
+      "infrastructurePrompt": {
+        "type": "text",
+        "default": "How do we turn individual machines into a reliable service?",
+        "maxLength": 115
+      },
+      "modelsPrompt": {
+        "type": "text",
+        "default": "What makes a model useful for the task, beyond its benchmark score?",
+        "maxLength": 115
+      },
+      "applicationsPrompt": {
+        "type": "text",
+        "default": "What useful outcome does the product deliver for the person using it?",
+        "maxLength": 115
+      },
+      "panelQuestion": {
+        "type": "text",
+        "default": "Which layer is the bottleneck \u2014 and where would you build next?",
+        "maxLength": 115
+      }
+    },
+    "feeds": {},
+    "slots": [
+      {
+        "id": "host",
+        "label": "Host camera"
+      },
+      {
+        "id": "analystOne",
+        "label": "Analyst 1 source"
+      },
+      {
+        "id": "analystTwo",
+        "label": "Analyst 2 source"
+      }
+    ],
+    "components": {},
+    "layouts": [
+      {
+        "id": "overview",
+        "label": "01 The Big Picture",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "overview-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "radial-gradient(ellipse at 95% 5%,#172b3c,transparent 60%),linear-gradient(135deg,#080f18,#0c1620)"
+          },
+          "children": [
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "THE AI STACK",
+              "styles": {
+                "position": "absolute",
+                "left": 49,
+                "top": 23,
+                "width": 820,
+                "height": 59,
+                "fontSize": "43px",
+                "color": "#f3f5f7",
+                "fontWeight": 850,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "episode",
+              "type": "text",
+              "text": "ENERGY \u2192 CHIPS \u2192 INFRASTRUCTURE \u2192 MODELS \u2192 APPLICATIONS",
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 91,
+                "width": 1150,
+                "height": 25,
+                "fontSize": "12px",
+                "color": "#8297ac",
+                "fontWeight": 600,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "segment-label",
+              "type": "text",
+              "text": "01 THE BIG PICTURE",
+              "styles": {
+                "position": "absolute",
+                "left": 874,
+                "top": 45,
+                "width": 350,
+                "height": 23,
+                "fontSize": "12px",
+                "color": "#9ae1b0",
+                "fontWeight": 700,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 137,
+                "width": 1178,
+                "height": 2,
+                "background": "linear-gradient(90deg,#9ae1b0,#ffffff08)"
+              },
+              "children": [],
+              "motion": {
+                "property": "opacity",
+                "from": 0.45,
+                "to": 1,
+                "durationMs": 6500
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": "AI is an entire stack.",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 162,
+                "width": 1170,
+                "height": 60,
+                "fontSize": "38px",
+                "color": "#f3f5f7",
+                "fontWeight": 800,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "subtitle",
+              "type": "text",
+              "text": "Jensen Huang\u2019s five-layer framework: start at power, end at products.",
+              "styles": {
+                "position": "absolute",
+                "left": 53,
+                "top": 226,
+                "width": 1160,
+                "height": 38,
+                "fontSize": "17px",
+                "color": "#9fb0c1",
+                "fontWeight": 500,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "footer",
+              "type": "text",
+              "text": "THE FULL SYSTEM, NOT JUST THE MODEL.",
+              "styles": {
+                "position": "absolute",
+                "left": 53,
+                "top": 692,
+                "width": 1000,
+                "height": 20,
+                "fontSize": "11px",
+                "color": "#8297ac",
+                "fontWeight": 500,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "stack-applications",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 63,
+                "top": 294,
+                "width": 392,
+                "height": 59,
+                "background": "#9ae1b018",
+                "border": "1px solid #9ae1b088",
+                "borderRadius": "10px",
+                "padding": "12px 16px"
+              },
+              "children": [
+                {
+                  "id": "layer-label-applications",
+                  "type": "text",
+                  "text": "APPLICATIONS",
+                  "styles": {
+                    "fontSize": "15px",
+                    "fontWeight": 700,
+                    "letterSpacing": ".08em",
+                    "color": "#9ae1b0"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "stack-models",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 63,
+                "top": 362,
+                "width": 392,
+                "height": 59,
+                "background": "#efa5d518",
+                "border": "1px solid #efa5d588",
+                "borderRadius": "10px",
+                "padding": "12px 16px"
+              },
+              "children": [
+                {
+                  "id": "layer-label-models",
+                  "type": "text",
+                  "text": "MODELS",
+                  "styles": {
+                    "fontSize": "15px",
+                    "fontWeight": 700,
+                    "letterSpacing": ".08em",
+                    "color": "#efa5d5"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "stack-infrastructure",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 63,
+                "top": 430,
+                "width": 392,
+                "height": 59,
+                "background": "#7ccddd18",
+                "border": "1px solid #7ccddd88",
+                "borderRadius": "10px",
+                "padding": "12px 16px"
+              },
+              "children": [
+                {
+                  "id": "layer-label-infrastructure",
+                  "type": "text",
+                  "text": "INFRASTRUCTURE",
+                  "styles": {
+                    "fontSize": "15px",
+                    "fontWeight": 700,
+                    "letterSpacing": ".08em",
+                    "color": "#7ccddd"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "stack-chips",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 63,
+                "top": 498,
+                "width": 392,
+                "height": 59,
+                "background": "#a9a8ff18",
+                "border": "1px solid #a9a8ff88",
+                "borderRadius": "10px",
+                "padding": "12px 16px"
+              },
+              "children": [
+                {
+                  "id": "layer-label-chips",
+                  "type": "text",
+                  "text": "CHIPS",
+                  "styles": {
+                    "fontSize": "15px",
+                    "fontWeight": 700,
+                    "letterSpacing": ".08em",
+                    "color": "#a9a8ff"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "stack-energy",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 63,
+                "top": 566,
+                "width": 392,
+                "height": 59,
+                "background": "#ffd17c18",
+                "border": "1px solid #ffd17c88",
+                "borderRadius": "10px",
+                "padding": "12px 16px"
+              },
+              "children": [
+                {
+                  "id": "layer-label-energy",
+                  "type": "text",
+                  "text": "ENERGY",
+                  "styles": {
+                    "fontSize": "15px",
+                    "fontWeight": 700,
+                    "letterSpacing": ".08em",
+                    "color": "#ffd17c"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "overview-question",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 493,
+                "top": 294,
+                "width": 326,
+                "height": 302,
+                "background": "#111e2bea",
+                "border": "1px solid #9ae1b044",
+                "borderRadius": "16px",
+                "padding": "18px 20px"
+              },
+              "children": [
+                {
+                  "id": "overview-question-title",
+                  "type": "text",
+                  "text": "THE QUESTION",
+                  "styles": {
+                    "fontSize": "16px",
+                    "fontWeight": 750,
+                    "color": "#9ae1b0"
+                  }
+                },
+                {
+                  "id": "overview-question-body",
+                  "type": "text",
+                  "text": {
+                    "get": "values.openingQuestion"
+                  },
+                  "styles": {
+                    "fontSize": "18px",
+                    "lineHeight": "1.4",
+                    "color": "#ced9e4",
+                    "padding": "12px 0"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "host-rim",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 858,
+                "top": 294,
+                "width": 350,
+                "height": 310,
+                "borderRadius": "22px",
+                "border": "1px solid #9ae1b088",
+                "boxShadow": "0 0 26px #9ae1b022"
+              },
+              "children": []
+            },
+            {
+              "id": "host-video",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 862,
+                "top": 298,
+                "width": 342,
+                "height": 302
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#9ae1b0"
+              }
+            },
+            {
+              "id": "host-name",
+              "type": "text",
+              "text": {
+                "get": "values.hostName"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 862,
+                "top": 612,
+                "width": 342,
+                "height": 25,
+                "fontSize": "15px",
+                "color": "#9ae1b0",
+                "fontWeight": 650,
+                "lineHeight": "1.25"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "energy",
+        "label": "02 Energy",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "energy-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "radial-gradient(ellipse at 95% 5%,#172b3c,transparent 60%),linear-gradient(135deg,#080f18,#0c1620)"
+          },
+          "children": [
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "THE AI STACK",
+              "styles": {
+                "position": "absolute",
+                "left": 49,
+                "top": 23,
+                "width": 820,
+                "height": 59,
+                "fontSize": "43px",
+                "color": "#f3f5f7",
+                "fontWeight": 850,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "episode",
+              "type": "text",
+              "text": "ENERGY \u2192 CHIPS \u2192 INFRASTRUCTURE \u2192 MODELS \u2192 APPLICATIONS",
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 91,
+                "width": 1150,
+                "height": 25,
+                "fontSize": "12px",
+                "color": "#8297ac",
+                "fontWeight": 600,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "segment-label",
+              "type": "text",
+              "text": "02 ENERGY",
+              "styles": {
+                "position": "absolute",
+                "left": 874,
+                "top": 45,
+                "width": 350,
+                "height": 23,
+                "fontSize": "12px",
+                "color": "#ffd17c",
+                "fontWeight": 700,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 137,
+                "width": 1178,
+                "height": 2,
+                "background": "linear-gradient(90deg,#ffd17c,#ffffff08)"
+              },
+              "children": [],
+              "motion": {
+                "property": "opacity",
+                "from": 0.45,
+                "to": 1,
+                "durationMs": 6500
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": "Before intelligence: electricity.",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 162,
+                "width": 1170,
+                "height": 60,
+                "fontSize": "38px",
+                "color": "#f3f5f7",
+                "fontWeight": 800,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "subtitle",
+              "type": "text",
+              "text": "Layer 1 \u00b7 Power availability and cooling are physical constraints.",
+              "styles": {
+                "position": "absolute",
+                "left": 53,
+                "top": 226,
+                "width": 1160,
+                "height": 38,
+                "fontSize": "17px",
+                "color": "#9fb0c1",
+                "fontWeight": 500,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "footer",
+              "type": "text",
+              "text": "THE FULL SYSTEM, NOT JUST THE MODEL.",
+              "styles": {
+                "position": "absolute",
+                "left": 53,
+                "top": 692,
+                "width": 1000,
+                "height": 20,
+                "fontSize": "11px",
+                "color": "#8297ac",
+                "fontWeight": 500,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "host-rim",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 62,
+                "top": 295,
+                "width": 392,
+                "height": 318,
+                "borderRadius": "22px",
+                "border": "1px solid #ffd17c88",
+                "boxShadow": "0 0 26px #ffd17c22"
+              },
+              "children": []
+            },
+            {
+              "id": "host-video",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 66,
+                "top": 299,
+                "width": 384,
+                "height": 310
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#ffd17c"
+              }
+            },
+            {
+              "id": "host-name",
+              "type": "text",
+              "text": {
+                "get": "values.hostName"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 66,
+                "top": 621,
+                "width": 384,
+                "height": 25,
+                "fontSize": "15px",
+                "color": "#ffd17c",
+                "fontWeight": 650,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "power",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 510,
+                "top": 292,
+                "width": 330,
+                "height": 122,
+                "background": "#111e2bea",
+                "border": "1px solid #ffd17c44",
+                "borderRadius": "16px",
+                "padding": "18px 20px"
+              },
+              "children": [
+                {
+                  "id": "power-title",
+                  "type": "text",
+                  "text": "POWER",
+                  "styles": {
+                    "fontSize": "16px",
+                    "fontWeight": 750,
+                    "color": "#ffd17c"
+                  }
+                },
+                {
+                  "id": "power-body",
+                  "type": "text",
+                  "text": "Generation, grid access and dependable supply.",
+                  "styles": {
+                    "fontSize": "18px",
+                    "lineHeight": "1.4",
+                    "color": "#ced9e4",
+                    "padding": "12px 0"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "thermal",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 864,
+                "top": 292,
+                "width": 340,
+                "height": 122,
+                "background": "#111e2bea",
+                "border": "1px solid #ffd17c44",
+                "borderRadius": "16px",
+                "padding": "18px 20px"
+              },
+              "children": [
+                {
+                  "id": "thermal-title",
+                  "type": "text",
+                  "text": "HEAT",
+                  "styles": {
+                    "fontSize": "16px",
+                    "fontWeight": 750,
+                    "color": "#ffd17c"
+                  }
+                },
+                {
+                  "id": "thermal-body",
+                  "type": "text",
+                  "text": "Cooling and facility efficiency shape capacity.",
+                  "styles": {
+                    "fontSize": "18px",
+                    "lineHeight": "1.4",
+                    "color": "#ced9e4",
+                    "padding": "12px 0"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "energy-take",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 510,
+                "top": 445,
+                "width": 694,
+                "height": 139,
+                "background": "#111e2bea",
+                "border": "1px solid #ffd17c44",
+                "borderRadius": "16px",
+                "padding": "18px 20px"
+              },
+              "children": [
+                {
+                  "id": "energy-take-title",
+                  "type": "text",
+                  "text": "DISCUSS",
+                  "styles": {
+                    "fontSize": "16px",
+                    "fontWeight": 750,
+                    "color": "#ffd17c"
+                  }
+                },
+                {
+                  "id": "energy-take-body",
+                  "type": "text",
+                  "text": {
+                    "get": "values.energyPrompt"
+                  },
+                  "styles": {
+                    "fontSize": "18px",
+                    "lineHeight": "1.4",
+                    "color": "#ced9e4",
+                    "padding": "12px 0"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "energy-meter-0",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 515,
+                "top": 627,
+                "width": 40,
+                "height": 27,
+                "background": "#ffd17c",
+                "opacity": 0.15,
+                "borderRadius": "4px"
+              },
+              "children": []
+            },
+            {
+              "id": "energy-meter-1",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 571,
+                "top": 627,
+                "width": 40,
+                "height": 27,
+                "background": "#ffd17c",
+                "opacity": 0.21,
+                "borderRadius": "4px"
+              },
+              "children": []
+            },
+            {
+              "id": "energy-meter-2",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 627,
+                "top": 627,
+                "width": 40,
+                "height": 27,
+                "background": "#ffd17c",
+                "opacity": 0.27,
+                "borderRadius": "4px"
+              },
+              "children": []
+            },
+            {
+              "id": "energy-meter-3",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 683,
+                "top": 627,
+                "width": 40,
+                "height": 27,
+                "background": "#ffd17c",
+                "opacity": 0.32999999999999996,
+                "borderRadius": "4px"
+              },
+              "children": []
+            },
+            {
+              "id": "energy-meter-4",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 739,
+                "top": 627,
+                "width": 40,
+                "height": 27,
+                "background": "#ffd17c",
+                "opacity": 0.39,
+                "borderRadius": "4px"
+              },
+              "children": []
+            },
+            {
+              "id": "energy-meter-5",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 795,
+                "top": 627,
+                "width": 40,
+                "height": 27,
+                "background": "#ffd17c",
+                "opacity": 0.44999999999999996,
+                "borderRadius": "4px"
+              },
+              "children": []
+            },
+            {
+              "id": "energy-meter-6",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 851,
+                "top": 627,
+                "width": 40,
+                "height": 27,
+                "background": "#ffd17c",
+                "opacity": 0.51,
+                "borderRadius": "4px"
+              },
+              "children": []
+            },
+            {
+              "id": "energy-meter-7",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 907,
+                "top": 627,
+                "width": 40,
+                "height": 27,
+                "background": "#ffd17c",
+                "opacity": 0.57,
+                "borderRadius": "4px"
+              },
+              "children": []
+            },
+            {
+              "id": "energy-meter-8",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 963,
+                "top": 627,
+                "width": 40,
+                "height": 27,
+                "background": "#ffd17c",
+                "opacity": 0.63,
+                "borderRadius": "4px"
+              },
+              "children": []
+            },
+            {
+              "id": "energy-meter-9",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 1019,
+                "top": 627,
+                "width": 40,
+                "height": 27,
+                "background": "#ffd17c",
+                "opacity": 0.6900000000000001,
+                "borderRadius": "4px"
+              },
+              "children": []
+            },
+            {
+              "id": "energy-meter-10",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 1075,
+                "top": 627,
+                "width": 40,
+                "height": 27,
+                "background": "#ffd17c",
+                "opacity": 0.75,
+                "borderRadius": "4px"
+              },
+              "children": []
+            },
+            {
+              "id": "energy-meter-11",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 1131,
+                "top": 627,
+                "width": 40,
+                "height": 27,
+                "background": "#ffd17c",
+                "opacity": 0.8099999999999999,
+                "borderRadius": "4px"
+              },
+              "children": []
+            }
+          ]
+        }
+      },
+      {
+        "id": "chips",
+        "label": "03 Chips",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "chips-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "radial-gradient(ellipse at 95% 5%,#172b3c,transparent 60%),linear-gradient(135deg,#080f18,#0c1620)"
+          },
+          "children": [
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "THE AI STACK",
+              "styles": {
+                "position": "absolute",
+                "left": 49,
+                "top": 23,
+                "width": 820,
+                "height": 59,
+                "fontSize": "43px",
+                "color": "#f3f5f7",
+                "fontWeight": 850,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "episode",
+              "type": "text",
+              "text": "ENERGY \u2192 CHIPS \u2192 INFRASTRUCTURE \u2192 MODELS \u2192 APPLICATIONS",
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 91,
+                "width": 1150,
+                "height": 25,
+                "fontSize": "12px",
+                "color": "#8297ac",
+                "fontWeight": 600,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "segment-label",
+              "type": "text",
+              "text": "03 CHIPS",
+              "styles": {
+                "position": "absolute",
+                "left": 874,
+                "top": 45,
+                "width": 350,
+                "height": 23,
+                "fontSize": "12px",
+                "color": "#a9a8ff",
+                "fontWeight": 700,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 137,
+                "width": 1178,
+                "height": 2,
+                "background": "linear-gradient(90deg,#a9a8ff,#ffffff08)"
+              },
+              "children": [],
+              "motion": {
+                "property": "opacity",
+                "from": 0.45,
+                "to": 1,
+                "durationMs": 6500
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": "The machinery of intelligence.",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 162,
+                "width": 1170,
+                "height": 60,
+                "fontSize": "38px",
+                "color": "#f3f5f7",
+                "fontWeight": 800,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "subtitle",
+              "type": "text",
+              "text": "Layer 2 \u00b7 Processing, memory and interconnects work as a system.",
+              "styles": {
+                "position": "absolute",
+                "left": 53,
+                "top": 226,
+                "width": 1160,
+                "height": 38,
+                "fontSize": "17px",
+                "color": "#9fb0c1",
+                "fontWeight": 500,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "footer",
+              "type": "text",
+              "text": "THE FULL SYSTEM, NOT JUST THE MODEL.",
+              "styles": {
+                "position": "absolute",
+                "left": 53,
+                "top": 692,
+                "width": 1000,
+                "height": 20,
+                "fontSize": "11px",
+                "color": "#8297ac",
+                "fontWeight": 500,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "processor",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 77,
+                "top": 299,
+                "width": 277,
+                "height": 271,
+                "background": "#151529",
+                "border": "2px solid #a9a8ff",
+                "borderRadius": "20px",
+                "boxShadow": "0 0 35px #a9a8ff22"
+              },
+              "children": [
+                {
+                  "id": "chip-name",
+                  "type": "text",
+                  "text": "COMPUTE",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 30,
+                    "top": 93,
+                    "width": 216,
+                    "height": 52,
+                    "fontSize": "32px",
+                    "color": "#a9a8ff",
+                    "fontWeight": 800,
+                    "lineHeight": "1.25"
+                  }
+                },
+                {
+                  "id": "chip-sub",
+                  "type": "text",
+                  "text": "GPUs \u00b7 accelerators",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 28,
+                    "top": 156,
+                    "width": 235,
+                    "height": 42,
+                    "fontSize": "16px",
+                    "color": "#cbd1e4",
+                    "fontWeight": 500,
+                    "lineHeight": "1.25"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "memory",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 403,
+                "top": 297,
+                "width": 379,
+                "height": 139,
+                "background": "#111e2bea",
+                "border": "1px solid #a9a8ff44",
+                "borderRadius": "16px",
+                "padding": "18px 20px"
+              },
+              "children": [
+                {
+                  "id": "memory-title",
+                  "type": "text",
+                  "text": "MEMORY & DATA MOVEMENT",
+                  "styles": {
+                    "fontSize": "16px",
+                    "fontWeight": 750,
+                    "color": "#a9a8ff"
+                  }
+                },
+                {
+                  "id": "memory-body",
+                  "type": "text",
+                  "text": "Bandwidth matters alongside raw compute.",
+                  "styles": {
+                    "fontSize": "18px",
+                    "lineHeight": "1.4",
+                    "color": "#ced9e4",
+                    "padding": "12px 0"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "chip-prompt",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 403,
+                "top": 461,
+                "width": 379,
+                "height": 139,
+                "background": "#111e2bea",
+                "border": "1px solid #a9a8ff44",
+                "borderRadius": "16px",
+                "padding": "18px 20px"
+              },
+              "children": [
+                {
+                  "id": "chip-prompt-title",
+                  "type": "text",
+                  "text": "DISCUSS",
+                  "styles": {
+                    "fontSize": "16px",
+                    "fontWeight": 750,
+                    "color": "#a9a8ff"
+                  }
+                },
+                {
+                  "id": "chip-prompt-body",
+                  "type": "text",
+                  "text": {
+                    "get": "values.chipsPrompt"
+                  },
+                  "styles": {
+                    "fontSize": "18px",
+                    "lineHeight": "1.4",
+                    "color": "#ced9e4",
+                    "padding": "12px 0"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "pin-0",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 101,
+                "top": 583,
+                "width": 16,
+                "height": 28,
+                "background": "#a9a8ff77",
+                "borderRadius": "3px"
+              },
+              "children": []
+            },
+            {
+              "id": "pin-1",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 135,
+                "top": 583,
+                "width": 16,
+                "height": 28,
+                "background": "#a9a8ff77",
+                "borderRadius": "3px"
+              },
+              "children": []
+            },
+            {
+              "id": "pin-2",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 169,
+                "top": 583,
+                "width": 16,
+                "height": 28,
+                "background": "#a9a8ff77",
+                "borderRadius": "3px"
+              },
+              "children": []
+            },
+            {
+              "id": "pin-3",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 203,
+                "top": 583,
+                "width": 16,
+                "height": 28,
+                "background": "#a9a8ff77",
+                "borderRadius": "3px"
+              },
+              "children": []
+            },
+            {
+              "id": "pin-4",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 237,
+                "top": 583,
+                "width": 16,
+                "height": 28,
+                "background": "#a9a8ff77",
+                "borderRadius": "3px"
+              },
+              "children": []
+            },
+            {
+              "id": "pin-5",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 271,
+                "top": 583,
+                "width": 16,
+                "height": 28,
+                "background": "#a9a8ff77",
+                "borderRadius": "3px"
+              },
+              "children": []
+            },
+            {
+              "id": "pin-6",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 305,
+                "top": 583,
+                "width": 16,
+                "height": 28,
+                "background": "#a9a8ff77",
+                "borderRadius": "3px"
+              },
+              "children": []
+            },
+            {
+              "id": "host-rim",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 827,
+                "top": 296,
+                "width": 382,
+                "height": 318,
+                "borderRadius": "22px",
+                "border": "1px solid #a9a8ff88",
+                "boxShadow": "0 0 26px #a9a8ff22"
+              },
+              "children": []
+            },
+            {
+              "id": "host-video",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 831,
+                "top": 300,
+                "width": 374,
+                "height": 310
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#a9a8ff"
+              }
+            },
+            {
+              "id": "host-name",
+              "type": "text",
+              "text": {
+                "get": "values.hostName"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 831,
+                "top": 622,
+                "width": 374,
+                "height": 25,
+                "fontSize": "15px",
+                "color": "#a9a8ff",
+                "fontWeight": 650,
+                "lineHeight": "1.25"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "infrastructure",
+        "label": "04 Infrastructure",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "infrastructure-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "radial-gradient(ellipse at 95% 5%,#172b3c,transparent 60%),linear-gradient(135deg,#080f18,#0c1620)"
+          },
+          "children": [
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "THE AI STACK",
+              "styles": {
+                "position": "absolute",
+                "left": 49,
+                "top": 23,
+                "width": 820,
+                "height": 59,
+                "fontSize": "43px",
+                "color": "#f3f5f7",
+                "fontWeight": 850,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "episode",
+              "type": "text",
+              "text": "ENERGY \u2192 CHIPS \u2192 INFRASTRUCTURE \u2192 MODELS \u2192 APPLICATIONS",
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 91,
+                "width": 1150,
+                "height": 25,
+                "fontSize": "12px",
+                "color": "#8297ac",
+                "fontWeight": 600,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "segment-label",
+              "type": "text",
+              "text": "04 INFRASTRUCTURE",
+              "styles": {
+                "position": "absolute",
+                "left": 874,
+                "top": 45,
+                "width": 350,
+                "height": 23,
+                "fontSize": "12px",
+                "color": "#7ccddd",
+                "fontWeight": 700,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 137,
+                "width": 1178,
+                "height": 2,
+                "background": "linear-gradient(90deg,#7ccddd,#ffffff08)"
+              },
+              "children": [],
+              "motion": {
+                "property": "opacity",
+                "from": 0.45,
+                "to": 1,
+                "durationMs": 6500
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": "From a chip to an AI factory.",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 162,
+                "width": 1170,
+                "height": 60,
+                "fontSize": "38px",
+                "color": "#f3f5f7",
+                "fontWeight": 800,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "subtitle",
+              "type": "text",
+              "text": "Layer 3 \u00b7 Connect, operate and serve the fleet.",
+              "styles": {
+                "position": "absolute",
+                "left": 53,
+                "top": 226,
+                "width": 1160,
+                "height": 38,
+                "fontSize": "17px",
+                "color": "#9fb0c1",
+                "fontWeight": 500,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "footer",
+              "type": "text",
+              "text": "THE FULL SYSTEM, NOT JUST THE MODEL.",
+              "styles": {
+                "position": "absolute",
+                "left": 53,
+                "top": 692,
+                "width": 1000,
+                "height": 20,
+                "fontSize": "11px",
+                "color": "#8297ac",
+                "fontWeight": 500,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "rack-0",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 66,
+                "top": 293,
+                "width": 245,
+                "height": 221,
+                "background": "#111e2bea",
+                "border": "1px solid #7ccddd44",
+                "borderRadius": "16px",
+                "padding": "18px 20px"
+              },
+              "children": [
+                {
+                  "id": "rack-0-title",
+                  "type": "text",
+                  "text": "SERVERS",
+                  "styles": {
+                    "fontSize": "16px",
+                    "fontWeight": 750,
+                    "color": "#7ccddd"
+                  }
+                },
+                {
+                  "id": "rack-0-body",
+                  "type": "text",
+                  "text": "Compute nodes",
+                  "styles": {
+                    "fontSize": "18px",
+                    "lineHeight": "1.4",
+                    "color": "#ced9e4",
+                    "padding": "12px 0"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "rack-light-0-0",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 87,
+                "top": 403,
+                "width": 200,
+                "height": 14,
+                "background": "#7ccddd11",
+                "border": "1px solid #7ccddd33",
+                "borderRadius": "3px"
+              },
+              "children": []
+            },
+            {
+              "id": "rack-light-0-1",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 87,
+                "top": 431,
+                "width": 200,
+                "height": 14,
+                "background": "#7ccddd11",
+                "border": "1px solid #7ccddd33",
+                "borderRadius": "3px"
+              },
+              "children": []
+            },
+            {
+              "id": "rack-light-0-2",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 87,
+                "top": 459,
+                "width": 200,
+                "height": 14,
+                "background": "#7ccddd11",
+                "border": "1px solid #7ccddd33",
+                "borderRadius": "3px"
+              },
+              "children": []
+            },
+            {
+              "id": "rack-1",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 337,
+                "top": 293,
+                "width": 245,
+                "height": 221,
+                "background": "#111e2bea",
+                "border": "1px solid #7ccddd44",
+                "borderRadius": "16px",
+                "padding": "18px 20px"
+              },
+              "children": [
+                {
+                  "id": "rack-1-title",
+                  "type": "text",
+                  "text": "NETWORKS",
+                  "styles": {
+                    "fontSize": "16px",
+                    "fontWeight": 750,
+                    "color": "#7ccddd"
+                  }
+                },
+                {
+                  "id": "rack-1-body",
+                  "type": "text",
+                  "text": "Connections",
+                  "styles": {
+                    "fontSize": "18px",
+                    "lineHeight": "1.4",
+                    "color": "#ced9e4",
+                    "padding": "12px 0"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "rack-light-1-0",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 358,
+                "top": 403,
+                "width": 200,
+                "height": 14,
+                "background": "#7ccddd11",
+                "border": "1px solid #7ccddd33",
+                "borderRadius": "3px"
+              },
+              "children": []
+            },
+            {
+              "id": "rack-light-1-1",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 358,
+                "top": 431,
+                "width": 200,
+                "height": 14,
+                "background": "#7ccddd11",
+                "border": "1px solid #7ccddd33",
+                "borderRadius": "3px"
+              },
+              "children": []
+            },
+            {
+              "id": "rack-light-1-2",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 358,
+                "top": 459,
+                "width": 200,
+                "height": 14,
+                "background": "#7ccddd11",
+                "border": "1px solid #7ccddd33",
+                "borderRadius": "3px"
+              },
+              "children": []
+            },
+            {
+              "id": "rack-2",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 608,
+                "top": 293,
+                "width": 245,
+                "height": 221,
+                "background": "#111e2bea",
+                "border": "1px solid #7ccddd44",
+                "borderRadius": "16px",
+                "padding": "18px 20px"
+              },
+              "children": [
+                {
+                  "id": "rack-2-title",
+                  "type": "text",
+                  "text": "STORAGE",
+                  "styles": {
+                    "fontSize": "16px",
+                    "fontWeight": 750,
+                    "color": "#7ccddd"
+                  }
+                },
+                {
+                  "id": "rack-2-body",
+                  "type": "text",
+                  "text": "Data access",
+                  "styles": {
+                    "fontSize": "18px",
+                    "lineHeight": "1.4",
+                    "color": "#ced9e4",
+                    "padding": "12px 0"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "rack-light-2-0",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 629,
+                "top": 403,
+                "width": 200,
+                "height": 14,
+                "background": "#7ccddd11",
+                "border": "1px solid #7ccddd33",
+                "borderRadius": "3px"
+              },
+              "children": []
+            },
+            {
+              "id": "rack-light-2-1",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 629,
+                "top": 431,
+                "width": 200,
+                "height": 14,
+                "background": "#7ccddd11",
+                "border": "1px solid #7ccddd33",
+                "borderRadius": "3px"
+              },
+              "children": []
+            },
+            {
+              "id": "rack-light-2-2",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 629,
+                "top": 459,
+                "width": 200,
+                "height": 14,
+                "background": "#7ccddd11",
+                "border": "1px solid #7ccddd33",
+                "borderRadius": "3px"
+              },
+              "children": []
+            },
+            {
+              "id": "infrastructure-prompt",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 66,
+                "top": 546,
+                "width": 786,
+                "height": 104,
+                "background": "#111e2bea",
+                "border": "1px solid #7ccddd44",
+                "borderRadius": "16px",
+                "padding": "18px 20px"
+              },
+              "children": [
+                {
+                  "id": "infrastructure-prompt-title",
+                  "type": "text",
+                  "text": "DISCUSS",
+                  "styles": {
+                    "fontSize": "16px",
+                    "fontWeight": 750,
+                    "color": "#7ccddd"
+                  }
+                },
+                {
+                  "id": "infrastructure-prompt-body",
+                  "type": "text",
+                  "text": {
+                    "get": "values.infrastructurePrompt"
+                  },
+                  "styles": {
+                    "fontSize": "18px",
+                    "lineHeight": "1.4",
+                    "color": "#ced9e4",
+                    "padding": "12px 0"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "host-rim",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 925,
+                "top": 399,
+                "width": 284,
+                "height": 232,
+                "borderRadius": "22px",
+                "border": "1px solid #7ccddd88",
+                "boxShadow": "0 0 26px #7ccddd22"
+              },
+              "children": []
+            },
+            {
+              "id": "host-video",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 929,
+                "top": 403,
+                "width": 276,
+                "height": 224
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#7ccddd"
+              }
+            },
+            {
+              "id": "host-name",
+              "type": "text",
+              "text": {
+                "get": "values.hostName"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 929,
+                "top": 639,
+                "width": 276,
+                "height": 25,
+                "fontSize": "15px",
+                "color": "#7ccddd",
+                "fontWeight": 650,
+                "lineHeight": "1.25"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "models",
+        "label": "05 Models",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "models-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "radial-gradient(ellipse at 95% 5%,#172b3c,transparent 60%),linear-gradient(135deg,#080f18,#0c1620)"
+          },
+          "children": [
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "THE AI STACK",
+              "styles": {
+                "position": "absolute",
+                "left": 49,
+                "top": 23,
+                "width": 820,
+                "height": 59,
+                "fontSize": "43px",
+                "color": "#f3f5f7",
+                "fontWeight": 850,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "episode",
+              "type": "text",
+              "text": "ENERGY \u2192 CHIPS \u2192 INFRASTRUCTURE \u2192 MODELS \u2192 APPLICATIONS",
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 91,
+                "width": 1150,
+                "height": 25,
+                "fontSize": "12px",
+                "color": "#8297ac",
+                "fontWeight": 600,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "segment-label",
+              "type": "text",
+              "text": "05 MODELS",
+              "styles": {
+                "position": "absolute",
+                "left": 874,
+                "top": 45,
+                "width": 350,
+                "height": 23,
+                "fontSize": "12px",
+                "color": "#efa5d5",
+                "fontWeight": 700,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 137,
+                "width": 1178,
+                "height": 2,
+                "background": "linear-gradient(90deg,#efa5d5,#ffffff08)"
+              },
+              "children": [],
+              "motion": {
+                "property": "opacity",
+                "from": 0.45,
+                "to": 1,
+                "durationMs": 6500
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": "The learned layer.",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 162,
+                "width": 1170,
+                "height": 60,
+                "fontSize": "38px",
+                "color": "#f3f5f7",
+                "fontWeight": 800,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "subtitle",
+              "type": "text",
+              "text": "Layer 4 \u00b7 Language, vision and other capabilities sit on the layers below.",
+              "styles": {
+                "position": "absolute",
+                "left": 53,
+                "top": 226,
+                "width": 1160,
+                "height": 38,
+                "fontSize": "17px",
+                "color": "#9fb0c1",
+                "fontWeight": 500,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "footer",
+              "type": "text",
+              "text": "THE FULL SYSTEM, NOT JUST THE MODEL.",
+              "styles": {
+                "position": "absolute",
+                "left": 53,
+                "top": 692,
+                "width": 1000,
+                "height": 20,
+                "fontSize": "11px",
+                "color": "#8297ac",
+                "fontWeight": 500,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "host-rim",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 66,
+                "top": 299,
+                "width": 399,
+                "height": 321,
+                "borderRadius": "22px",
+                "border": "1px solid #efa5d588",
+                "boxShadow": "0 0 26px #efa5d522"
+              },
+              "children": []
+            },
+            {
+              "id": "host-video",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 70,
+                "top": 303,
+                "width": 391,
+                "height": 313
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#efa5d5"
+              }
+            },
+            {
+              "id": "host-name",
+              "type": "text",
+              "text": {
+                "get": "values.hostName"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 70,
+                "top": 628,
+                "width": 391,
+                "height": 25,
+                "fontSize": "15px",
+                "color": "#efa5d5",
+                "fontWeight": 650,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "training",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 535,
+                "top": 293,
+                "width": 318,
+                "height": 129,
+                "background": "#111e2bea",
+                "border": "1px solid #efa5d544",
+                "borderRadius": "16px",
+                "padding": "18px 20px"
+              },
+              "children": [
+                {
+                  "id": "training-title",
+                  "type": "text",
+                  "text": "TRAINING",
+                  "styles": {
+                    "fontSize": "16px",
+                    "fontWeight": 750,
+                    "color": "#efa5d5"
+                  }
+                },
+                {
+                  "id": "training-body",
+                  "type": "text",
+                  "text": "Learn from data and feedback.",
+                  "styles": {
+                    "fontSize": "18px",
+                    "lineHeight": "1.4",
+                    "color": "#ced9e4",
+                    "padding": "12px 0"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "inference",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 879,
+                "top": 293,
+                "width": 326,
+                "height": 129,
+                "background": "#111e2bea",
+                "border": "1px solid #efa5d544",
+                "borderRadius": "16px",
+                "padding": "18px 20px"
+              },
+              "children": [
+                {
+                  "id": "inference-title",
+                  "type": "text",
+                  "text": "INFERENCE",
+                  "styles": {
+                    "fontSize": "16px",
+                    "fontWeight": 750,
+                    "color": "#efa5d5"
+                  }
+                },
+                {
+                  "id": "inference-body",
+                  "type": "text",
+                  "text": "Use learned capabilities on new inputs.",
+                  "styles": {
+                    "fontSize": "18px",
+                    "lineHeight": "1.4",
+                    "color": "#ced9e4",
+                    "padding": "12px 0"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "model-prompt",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 535,
+                "top": 454,
+                "width": 670,
+                "height": 159,
+                "background": "#111e2bea",
+                "border": "1px solid #efa5d544",
+                "borderRadius": "16px",
+                "padding": "18px 20px"
+              },
+              "children": [
+                {
+                  "id": "model-prompt-title",
+                  "type": "text",
+                  "text": "DISCUSS",
+                  "styles": {
+                    "fontSize": "16px",
+                    "fontWeight": 750,
+                    "color": "#efa5d5"
+                  }
+                },
+                {
+                  "id": "model-prompt-body",
+                  "type": "text",
+                  "text": {
+                    "get": "values.modelsPrompt"
+                  },
+                  "styles": {
+                    "fontSize": "18px",
+                    "lineHeight": "1.4",
+                    "color": "#ced9e4",
+                    "padding": "12px 0"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "applications",
+        "label": "06 Applications",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "applications-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "radial-gradient(ellipse at 95% 5%,#172b3c,transparent 60%),linear-gradient(135deg,#080f18,#0c1620)"
+          },
+          "children": [
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "THE AI STACK",
+              "styles": {
+                "position": "absolute",
+                "left": 49,
+                "top": 23,
+                "width": 820,
+                "height": 59,
+                "fontSize": "43px",
+                "color": "#f3f5f7",
+                "fontWeight": 850,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "episode",
+              "type": "text",
+              "text": "ENERGY \u2192 CHIPS \u2192 INFRASTRUCTURE \u2192 MODELS \u2192 APPLICATIONS",
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 91,
+                "width": 1150,
+                "height": 25,
+                "fontSize": "12px",
+                "color": "#8297ac",
+                "fontWeight": 600,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "segment-label",
+              "type": "text",
+              "text": "06 APPLICATIONS",
+              "styles": {
+                "position": "absolute",
+                "left": 874,
+                "top": 45,
+                "width": 350,
+                "height": 23,
+                "fontSize": "12px",
+                "color": "#9ae1b0",
+                "fontWeight": 700,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 137,
+                "width": 1178,
+                "height": 2,
+                "background": "linear-gradient(90deg,#9ae1b0,#ffffff08)"
+              },
+              "children": [],
+              "motion": {
+                "property": "opacity",
+                "from": 0.45,
+                "to": 1,
+                "durationMs": 6500
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": "Where people feel the value.",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 162,
+                "width": 1170,
+                "height": 60,
+                "fontSize": "38px",
+                "color": "#f3f5f7",
+                "fontWeight": 800,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "subtitle",
+              "type": "text",
+              "text": "Layer 5 \u00b7 Products turn model capabilities into useful experiences.",
+              "styles": {
+                "position": "absolute",
+                "left": 53,
+                "top": 226,
+                "width": 1160,
+                "height": 38,
+                "fontSize": "17px",
+                "color": "#9fb0c1",
+                "fontWeight": 500,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "footer",
+              "type": "text",
+              "text": "THE FULL SYSTEM, NOT JUST THE MODEL.",
+              "styles": {
+                "position": "absolute",
+                "left": 53,
+                "top": 692,
+                "width": 1000,
+                "height": 20,
+                "fontSize": "11px",
+                "color": "#8297ac",
+                "fontWeight": 500,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "app-assistant",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 65,
+                "top": 297,
+                "width": 386,
+                "height": 126,
+                "background": "#111e2bea",
+                "border": "1px solid #9ae1b044",
+                "borderRadius": "16px",
+                "padding": "18px 20px"
+              },
+              "children": [
+                {
+                  "id": "app-assistant-title",
+                  "type": "text",
+                  "text": "ASSISTANTS",
+                  "styles": {
+                    "fontSize": "16px",
+                    "fontWeight": 750,
+                    "color": "#9ae1b0"
+                  }
+                },
+                {
+                  "id": "app-assistant-body",
+                  "type": "text",
+                  "text": "Help people think, create and work.",
+                  "styles": {
+                    "fontSize": "18px",
+                    "lineHeight": "1.4",
+                    "color": "#ced9e4",
+                    "padding": "12px 0"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "app-workflow",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 480,
+                "top": 297,
+                "width": 390,
+                "height": 126,
+                "background": "#111e2bea",
+                "border": "1px solid #9ae1b044",
+                "borderRadius": "16px",
+                "padding": "18px 20px"
+              },
+              "children": [
+                {
+                  "id": "app-workflow-title",
+                  "type": "text",
+                  "text": "WORKFLOWS",
+                  "styles": {
+                    "fontSize": "16px",
+                    "fontWeight": 750,
+                    "color": "#9ae1b0"
+                  }
+                },
+                {
+                  "id": "app-workflow-body",
+                  "type": "text",
+                  "text": "Connect intelligence to tasks and tools.",
+                  "styles": {
+                    "fontSize": "18px",
+                    "lineHeight": "1.4",
+                    "color": "#ced9e4",
+                    "padding": "12px 0"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "app-value",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 65,
+                "top": 462,
+                "width": 805,
+                "height": 167,
+                "background": "#111e2bea",
+                "border": "1px solid #9ae1b044",
+                "borderRadius": "16px",
+                "padding": "18px 20px"
+              },
+              "children": [
+                {
+                  "id": "app-value-title",
+                  "type": "text",
+                  "text": "THE VALUE TEST",
+                  "styles": {
+                    "fontSize": "16px",
+                    "fontWeight": 750,
+                    "color": "#9ae1b0"
+                  }
+                },
+                {
+                  "id": "app-value-body",
+                  "type": "text",
+                  "text": {
+                    "get": "values.applicationsPrompt"
+                  },
+                  "styles": {
+                    "fontSize": "18px",
+                    "lineHeight": "1.4",
+                    "color": "#ced9e4",
+                    "padding": "12px 0"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "host-rim",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 941,
+                "top": 427,
+                "width": 260,
+                "height": 260,
+                "borderRadius": "50%",
+                "border": "1px solid #9ae1b088",
+                "boxShadow": "0 0 26px #9ae1b022"
+              },
+              "children": []
+            },
+            {
+              "id": "host-video",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 945,
+                "top": 431,
+                "width": 252,
+                "height": 252
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 1,
+                "outlineColor": "#9ae1b0"
+              }
+            },
+            {
+              "id": "host-name",
+              "type": "text",
+              "text": {
+                "get": "values.hostName"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 945,
+                "top": 695,
+                "width": 252,
+                "height": 25,
+                "fontSize": "15px",
+                "color": "#9ae1b0",
+                "fontWeight": 650,
+                "lineHeight": "1.25"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "tech-panel",
+        "label": "07 The Stack \u00b7 Tech Panel",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "tech-panel-canvas",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "radial-gradient(ellipse at 95% 5%,#172b3c,transparent 60%),linear-gradient(135deg,#080f18,#0c1620)"
+          },
+          "children": [
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "THE AI STACK",
+              "styles": {
+                "position": "absolute",
+                "left": 49,
+                "top": 23,
+                "width": 820,
+                "height": 59,
+                "fontSize": "43px",
+                "color": "#f3f5f7",
+                "fontWeight": 850,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "episode",
+              "type": "text",
+              "text": "ENERGY \u2192 CHIPS \u2192 INFRASTRUCTURE \u2192 MODELS \u2192 APPLICATIONS",
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 91,
+                "width": 1150,
+                "height": 25,
+                "fontSize": "12px",
+                "color": "#8297ac",
+                "fontWeight": 600,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "segment-label",
+              "type": "text",
+              "text": "07 THE STACK \u00b7 TECH PANEL",
+              "styles": {
+                "position": "absolute",
+                "left": 874,
+                "top": 45,
+                "width": 350,
+                "height": 23,
+                "fontSize": "12px",
+                "color": "#9ae1b0",
+                "fontWeight": 700,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 137,
+                "width": 1178,
+                "height": 2,
+                "background": "linear-gradient(90deg,#9ae1b0,#ffffff08)"
+              },
+              "children": [],
+              "motion": {
+                "property": "opacity",
+                "from": 0.45,
+                "to": 1,
+                "durationMs": 6500
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": "Three perspectives. One connected system.",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 162,
+                "width": 1170,
+                "height": 60,
+                "fontSize": "38px",
+                "color": "#f3f5f7",
+                "fontWeight": 800,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "subtitle",
+              "type": "text",
+              "text": "Bring the layers together: bottlenecks, economics and what builders should watch.",
+              "styles": {
+                "position": "absolute",
+                "left": 53,
+                "top": 226,
+                "width": 1160,
+                "height": 38,
+                "fontSize": "17px",
+                "color": "#9fb0c1",
+                "fontWeight": 500,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "footer",
+              "type": "text",
+              "text": "THE FULL SYSTEM, NOT JUST THE MODEL.",
+              "styles": {
+                "position": "absolute",
+                "left": 53,
+                "top": 692,
+                "width": 1000,
+                "height": 20,
+                "fontSize": "11px",
+                "color": "#8297ac",
+                "fontWeight": 500,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "host-rim",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 61,
+                "top": 318,
+                "width": 366,
+                "height": 240,
+                "borderRadius": "22px",
+                "border": "1px solid #9ae1b088",
+                "boxShadow": "0 0 26px #9ae1b022"
+              },
+              "children": []
+            },
+            {
+              "id": "host-video",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 65,
+                "top": 322,
+                "width": 358,
+                "height": 232
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#9ae1b0"
+              }
+            },
+            {
+              "id": "host-name",
+              "type": "text",
+              "text": {
+                "get": "values.hostName"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 65,
+                "top": 566,
+                "width": 358,
+                "height": 25,
+                "fontSize": "15px",
+                "color": "#9ae1b0",
+                "fontWeight": 650,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "analystOne-rim",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 457,
+                "top": 318,
+                "width": 366,
+                "height": 240,
+                "borderRadius": "22px",
+                "border": "1px solid #a9a8ff88",
+                "boxShadow": "0 0 26px #a9a8ff22"
+              },
+              "children": []
+            },
+            {
+              "id": "analystOne-video",
+              "type": "slot",
+              "slotId": "analystOne",
+              "styles": {
+                "position": "absolute",
+                "left": 461,
+                "top": 322,
+                "width": 358,
+                "height": 232
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#a9a8ff"
+              }
+            },
+            {
+              "id": "analystOne-name",
+              "type": "text",
+              "text": {
+                "get": "values.analystOneName"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 461,
+                "top": 566,
+                "width": 358,
+                "height": 25,
+                "fontSize": "15px",
+                "color": "#a9a8ff",
+                "fontWeight": 650,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "analystTwo-rim",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 853,
+                "top": 318,
+                "width": 366,
+                "height": 240,
+                "borderRadius": "22px",
+                "border": "1px solid #7ccddd88",
+                "boxShadow": "0 0 26px #7ccddd22"
+              },
+              "children": []
+            },
+            {
+              "id": "analystTwo-video",
+              "type": "slot",
+              "slotId": "analystTwo",
+              "styles": {
+                "position": "absolute",
+                "left": 857,
+                "top": 322,
+                "width": 358,
+                "height": 232
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 18,
+                "outlineWidth": 1,
+                "outlineColor": "#7ccddd"
+              }
+            },
+            {
+              "id": "analystTwo-name",
+              "type": "text",
+              "text": {
+                "get": "values.analystTwoName"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 857,
+                "top": 566,
+                "width": 358,
+                "height": 25,
+                "fontSize": "15px",
+                "color": "#7ccddd",
+                "fontWeight": 650,
+                "lineHeight": "1.25"
+              }
+            },
+            {
+              "id": "panel-layer-energy",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 65,
+                "top": 280,
+                "width": 220,
+                "height": 26,
+                "background": "#ffd17c15",
+                "border": "1px solid #ffd17c55",
+                "borderRadius": "6px"
+              },
+              "children": [
+                {
+                  "id": "panel-label-energy",
+                  "type": "text",
+                  "text": "ENERGY",
+                  "styles": {
+                    "fontSize": "11px",
+                    "textAlign": "center",
+                    "color": "#ffd17c",
+                    "padding": "5px 0",
+                    "fontWeight": 700
+                  }
+                }
+              ]
+            },
+            {
+              "id": "panel-layer-chips",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 296,
+                "top": 280,
+                "width": 220,
+                "height": 26,
+                "background": "#a9a8ff15",
+                "border": "1px solid #a9a8ff55",
+                "borderRadius": "6px"
+              },
+              "children": [
+                {
+                  "id": "panel-label-chips",
+                  "type": "text",
+                  "text": "CHIPS",
+                  "styles": {
+                    "fontSize": "11px",
+                    "textAlign": "center",
+                    "color": "#a9a8ff",
+                    "padding": "5px 0",
+                    "fontWeight": 700
+                  }
+                }
+              ]
+            },
+            {
+              "id": "panel-layer-infrastructure",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 527,
+                "top": 280,
+                "width": 220,
+                "height": 26,
+                "background": "#7ccddd15",
+                "border": "1px solid #7ccddd55",
+                "borderRadius": "6px"
+              },
+              "children": [
+                {
+                  "id": "panel-label-infrastructure",
+                  "type": "text",
+                  "text": "INFRASTRUCTURE",
+                  "styles": {
+                    "fontSize": "11px",
+                    "textAlign": "center",
+                    "color": "#7ccddd",
+                    "padding": "5px 0",
+                    "fontWeight": 700
+                  }
+                }
+              ]
+            },
+            {
+              "id": "panel-layer-models",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 758,
+                "top": 280,
+                "width": 220,
+                "height": 26,
+                "background": "#efa5d515",
+                "border": "1px solid #efa5d555",
+                "borderRadius": "6px"
+              },
+              "children": [
+                {
+                  "id": "panel-label-models",
+                  "type": "text",
+                  "text": "MODELS",
+                  "styles": {
+                    "fontSize": "11px",
+                    "textAlign": "center",
+                    "color": "#efa5d5",
+                    "padding": "5px 0",
+                    "fontWeight": 700
+                  }
+                }
+              ]
+            },
+            {
+              "id": "panel-layer-applications",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 989,
+                "top": 280,
+                "width": 220,
+                "height": 26,
+                "background": "#9ae1b015",
+                "border": "1px solid #9ae1b055",
+                "borderRadius": "6px"
+              },
+              "children": [
+                {
+                  "id": "panel-label-applications",
+                  "type": "text",
+                  "text": "APPLICATIONS",
+                  "styles": {
+                    "fontSize": "11px",
+                    "textAlign": "center",
+                    "color": "#9ae1b0",
+                    "padding": "5px 0",
+                    "fontWeight": 700
+                  }
+                }
+              ]
+            },
+            {
+              "id": "panel-prompt",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 65,
+                "top": 600,
+                "width": 1150,
+                "height": 73,
+                "background": "#111e2bea",
+                "border": "1px solid #9ae1b044",
+                "borderRadius": "16px",
+                "padding": "14px 20px",
+                "display": "flex",
+                "alignItems": "center",
+                "gap": "24px"
+              },
+              "children": [
+                {
+                  "id": "panel-prompt-title",
+                  "type": "text",
+                  "text": "TECH PANEL",
+                  "styles": {
+                    "fontSize": "12px",
+                    "fontWeight": 750,
+                    "color": "#9ae1b0"
+                  }
+                },
+                {
+                  "id": "panel-prompt-body",
+                  "type": "text",
+                  "text": {
+                    "get": "values.panelQuestion"
+                  },
+                  "styles": {
+                    "fontSize": "19px",
+                    "lineHeight": "1.4",
+                    "color": "#ced9e4",
+                    "padding": "0"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "controls": [
+      {
+        "id": "overview-button",
+        "type": "button",
+        "label": "01 The Big Picture",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "overview"
+        }
+      },
+      {
+        "id": "energy-button",
+        "type": "button",
+        "label": "02 Energy",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "energy"
+        }
+      },
+      {
+        "id": "chips-button",
+        "type": "button",
+        "label": "03 Chips",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "chips"
+        }
+      },
+      {
+        "id": "infrastructure-button",
+        "type": "button",
+        "label": "04 Infrastructure",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "infrastructure"
+        }
+      },
+      {
+        "id": "models-button",
+        "type": "button",
+        "label": "05 Models",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "models"
+        }
+      },
+      {
+        "id": "applications-button",
+        "type": "button",
+        "label": "06 Applications",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "applications"
+        }
+      },
+      {
+        "id": "tech-panel-button",
+        "type": "button",
+        "label": "07 The Stack \u00b7 Tech Panel",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "tech-panel"
+        }
+      },
+      {
+        "id": "hostName-field",
+        "type": "text",
+        "label": "Host name",
+        "key": "hostName"
+      },
+      {
+        "id": "analystOneName-field",
+        "type": "text",
+        "label": "Analyst 1 name",
+        "key": "analystOneName"
+      },
+      {
+        "id": "analystTwoName-field",
+        "type": "text",
+        "label": "Analyst 2 name",
+        "key": "analystTwoName"
+      },
+      {
+        "id": "openingQuestion-field",
+        "type": "text",
+        "label": "Opening question",
+        "key": "openingQuestion"
+      },
+      {
+        "id": "energyPrompt-field",
+        "type": "text",
+        "label": "Energy discussion",
+        "key": "energyPrompt"
+      },
+      {
+        "id": "chipsPrompt-field",
+        "type": "text",
+        "label": "Chips discussion",
+        "key": "chipsPrompt"
+      },
+      {
+        "id": "infrastructurePrompt-field",
+        "type": "text",
+        "label": "Infrastructure discussion",
+        "key": "infrastructurePrompt"
+      },
+      {
+        "id": "modelsPrompt-field",
+        "type": "text",
+        "label": "Models discussion",
+        "key": "modelsPrompt"
+      },
+      {
+        "id": "applicationsPrompt-field",
+        "type": "text",
+        "label": "Applications discussion",
+        "key": "applicationsPrompt"
+      },
+      {
+        "id": "panelQuestion-field",
+        "type": "text",
+        "label": "Tech panel question",
+        "key": "panelQuestion"
+      },
+      {
+        "id": "start",
+        "type": "button",
+        "label": "Start show",
+        "action": {
+          "type": "show.start"
+        }
+      },
+      {
+        "id": "next",
+        "type": "button",
+        "label": "Next",
+        "action": {
+          "type": "show.next"
+        }
+      }
+    ]
+  },
+  "show": {
+    "id": "the-ai-stack",
+    "version": "0.1.0",
+    "initialPhase": "overview",
+    "phases": [
+      {
+        "id": "overview",
+        "label": "The Big Picture",
+        "layoutId": "overview",
+        "next": "energy"
+      },
+      {
+        "id": "energy",
+        "label": "Energy",
+        "layoutId": "energy",
+        "next": "chips"
+      },
+      {
+        "id": "chips",
+        "label": "Chips",
+        "layoutId": "chips",
+        "next": "infrastructure"
+      },
+      {
+        "id": "infrastructure",
+        "label": "Infrastructure",
+        "layoutId": "infrastructure",
+        "next": "models"
+      },
+      {
+        "id": "models",
+        "label": "Models",
+        "layoutId": "models",
+        "next": "applications"
+      },
+      {
+        "id": "applications",
+        "label": "Applications",
+        "layoutId": "applications",
+        "next": "tech-panel"
+      },
+      {
+        "id": "tech-panel",
+        "label": "The Stack \u00b7 Tech Panel",
+        "layoutId": "tech-panel"
+      }
+    ],
+    "choices": [
+      {
+        "id": "build",
+        "label": "Build"
+      },
+      {
+        "id": "watch",
+        "label": "Watch"
+      }
+    ]
+  }
+}

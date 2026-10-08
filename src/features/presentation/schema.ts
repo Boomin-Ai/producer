@@ -1,6 +1,7 @@
+import {validateAsset,ASSET_BYTES,PACKAGE_BYTES} from './assets';
 import { parseSourceAppearance, sourceAppearanceSchema, type SourceAppearance } from '../../lib/sourceAppearance';
 /** One codec describes the import shape, TypeScript type and exported JSON schema.
- * Bounded P0 subset: no network/assets/scripts, live effects or private game keys.
+ * Bounded P0 subset: embedded media, no network/scripts, live effects or private game keys.
  */
 type JsonSchema = Record<string, unknown>;
 export interface Codec<T> {
@@ -90,23 +91,29 @@ const id = string(64, '^[a-zA-Z][a-zA-Z0-9_-]{0,63}$');
 export type Scalar = string | number | boolean;
 const scalar = union(string(512), number(-1e6, 1e6), boolean);
 export type Binding = Scalar | { get: string } | { op: 'eq' | 'if' | 'concat'; args: Binding[] };
-const binding: Codec<Binding> = union(scalar, object({ get: string(128, '^(values|feeds|props|show)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$') }),
+const binding: Codec<Binding> = union(scalar, object({ get: string(128, '^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$') }),
   object({ op: union(literal('eq'), literal('if'), literal('concat')), args: array(ref('binding', () => binding), 8) }));
 export const STYLE_KEYS = ['position', 'inset', 'left', 'top', 'right', 'bottom', 'width', 'height', 'display', 'gap', 'padding',
   'background', 'color', 'border', 'borderRadius', 'boxShadow', 'fontSize', 'fontWeight', 'letterSpacing', 'textAlign', 'lineHeight',
-  'alignItems', 'justifyContent', 'gridTemplateColumns', 'opacity', 'overflow', 'transform', 'minHeight', 'maxWidth'] as const;
+  'alignItems', 'justifyContent', 'gridTemplateColumns', 'opacity', 'overflow', 'transform', 'minHeight', 'maxWidth', 'fontFamily', 'fontStyle', 'textTransform', 'textShadow', 'whiteSpace', 'wordSpacing', 'backgroundSize', 'backgroundPosition', 'filter', 'mixBlendMode', 'clipPath', 'isolation'] as const;
 const styles = dictionary(binding, STYLE_KEYS.length);
 const motion = object({ durationMs: number(200, 30_000), property: union(literal('opacity'), literal('transform')),
   from: scalar, to: scalar });
+const shader=object({effect:union(literal('aurora'),literal('edgeGlow'),literal('lightSweep'),literal('plasma'),literal('silk'),literal('rings'),literal('grid'),literal('stars'),literal('petals'),literal('contours'),literal('prism'),literal('borderFlare')),colors:array(string(7),3),speed:number(0,4),intensity:number(0,2),scale:number(.25,4),opacity:number(0,1),radius:number(0,960),quality:union(literal('low'),literal('medium')),clock:union(literal('show'),literal('segment'))});
+const animation=object({tracks:array(object({target:id,property:union(literal('x'),literal('y'),literal('width'),literal('height'),literal('opacity'),literal('scale'),literal('rotation'),literal('shader.intensity'),literal('shader.scale')),
+  keyframes:array(object({atMs:number(0,60_000),value:number(-3840,3840)}),16),easing:optional(union(literal('linear'),literal('easeIn'),literal('easeOut'),literal('easeInOut'))),
+  clock:optional(union(literal('show'),literal('segment'))),delayMs:optional(number(0,60_000)),loop:optional(union(literal('none'),literal('repeat'),literal('pingpong')))}),32),transition:optional(object({type:union(literal('cut'),literal('crossfade'),literal('morph')),durationMs:number(0,2000)}))});
 export interface SlotFraming { mode:'fill'|'fit'; x:number; y:number }
 const framing = object({mode:union(literal('fill'),literal('fit')),x:number(0,1),y:number(0,1)});
 export interface PresentationNode {
-  id: string; type: 'box' | 'text' | 'slot' | 'component';
-  styles?: Record<string, Binding>; text?: Binding; children?: PresentationNode[];
+  id: string; type: 'box' | 'text' | 'slot' | 'component' | 'media' | 'shader';
+  shader?:import('./shaders').ShaderEffect;
+  styleId?: string; styles?: Record<string, Binding>; text?: Binding; children?: PresentationNode[];
+  assetId?:string;fit?:'contain'|'cover';loop?:boolean;autoplay?:boolean;
   slotId?: string; framing?:SlotFraming; appearance?: Partial<Record<keyof SourceAppearance, Binding>>; component?: string; props?: Record<string, Binding>; when?: Binding;
   motion?: Type<typeof motion>;
 }
-const common = { id, styles: optional(styles), when: optional(binding), motion: optional(motion) };
+const common = { id, styleId:optional(id), styles: optional(styles), when: optional(binding), motion: optional(motion) };
 const appearance: Codec<Partial<Record<keyof SourceAppearance, Binding>>> = {
   json: { ...sourceAppearanceSchema, properties: Object.fromEntries(Object.entries(sourceAppearanceSchema.properties).map(([k,s]) =>
     [k, { anyOf: [s, { allOf: [{ type: 'object' }, { $ref: '#/$defs/binding' }] }] }])) },
@@ -129,6 +136,8 @@ const node: Codec<PresentationNode> = union(
   object({ ...common, type: literal('box'), children: array(ref('node', () => node), 100) }),
   object({ ...common, type: literal('text'), text: binding }),
   object({ ...common, type: literal('slot'), slotId: id, framing: optional(framing), appearance: optional(appearance) }),
+  object({ ...common, type: literal('shader'),shader:shader }),
+  object({ ...common, type: literal('media'),assetId:id,fit:optional(union(literal('contain'),literal('cover'))),loop:optional(boolean),autoplay:optional(boolean) }),
   object({ ...common, type: literal('component'), component: id, props: dictionary(binding) }),
 );
 const valueDefinition = union(
@@ -138,7 +147,7 @@ const valueDefinition = union(
 );
 const action = union(object({ type: literal('layout.select'), layoutId: id }),
   object({ type: literal('value.set'), key: id, value: scalar }),
-  object({ type: literal('show.start') }), object({ type: literal('show.next') }),
+  object({ type: literal('show.start') }), object({ type: literal('show.next') }), object({ type: literal('show.previous') }),
   object({ type: literal('show.vote'), choiceId: id }), object({ type: literal('show.reveal') }),
   object({ type: literal('show.reopen') }), object({ type: literal('show.tiebreak') }), object({ type: literal('show.draw') }));
 export type RehearsalAction = Type<typeof action>;
@@ -154,10 +163,10 @@ const show = object({ id, version: string(32), initialPhase: id,
 });
 const codec = object({
   schema: literal('producer.presentation/1'), id, version: string(32), name: string(80),
-  set: object({ initialLayout: id, values: dictionary(valueDefinition),
+  set: object({ styles:optional(dictionary(styles,32)), tokens:optional(dictionary(union(string(240),number(-10000,10000)),64)), assets:optional(dictionary(object({name:string(160),mime:string(40),data:string(ASSET_BYTES*4/3+100),playback:optional(object({start:union(literal('entry'),literal('manual')),loop:boolean,exit:union(literal('reset'),literal('pause'),literal('continue')),return:union(literal('restart'),literal('resume')),hostControls:boolean}))}),24)),initialLayout: id, values: dictionary(valueDefinition),
     feeds: dictionary(valueDefinition), slots: array(object({ id, label: string(80) }), 8),
     components: dictionary(object({ props: dictionary(scalar), root: ref('node', () => node) }), 16),
-    layouts: array(object({ id, label: string(80), width: number(320, 1920), height: number(320, 1920), root: ref('node', () => node) }), 16),
+    layouts: array(object({ id, label: string(80), width: number(320, 1920), height: number(320, 1920), root: ref('node', () => node),animation:optional(animation) }), 32),
     controls: array(control, 40),
   }), show: optional(show),
 });
@@ -168,7 +177,10 @@ export const presentationJsonSchema = { $schema: 'https://json-schema.org/draft/
 
 export function parsePackage(value: unknown): PresentationPackage {
   const doc = codec.read(value, '$', 0);
-  if (JSON.stringify(doc).length > 128_000) fail('$', 'Set package exceeds 128 KB.');
+  const decorative = new Set(['background','color','border','borderRadius','boxShadow','fontSize','fontWeight','letterSpacing','textAlign','lineHeight','fontFamily','fontStyle','textTransform','textShadow','whiteSpace','wordSpacing','backgroundSize','backgroundPosition']);
+  for(const preset of Object.values(doc.set.styles??{})) for(const key of Object.keys(preset)) if(!decorative.has(key)) fail('$.set.styles',`Style presets cannot change geometry or compositing: ${key}.`);
+  if (new TextEncoder().encode(JSON.stringify(doc)).length > PACKAGE_BYTES) fail('$','Set package exceeds 40 MB.');
+  for(const asset of Object.values(doc.set.assets??{})){try{validateAsset(asset);}catch(e){fail('$.set.assets',String(e));}}
   const layouts = new Set<string>();
   let expanded = 0;
   const checkBinding = (b: Binding, scope: Set<string>) => {
@@ -176,7 +188,7 @@ export function parsePackage(value: unknown): PresentationPackage {
     if ('get' in b) {
       const [root, key, ...rest] = b.get.split('.');
       if (rest.length || unsafeKey(key) || (root === 'props' ? !scope.has(key) : root === 'values' ? !hasOwn(doc.set.values, key)
-        : root === 'feeds' ? !hasOwn(doc.set.feeds, key) : !doc.show || !['phase', 'collecting', 'revealed', 'winner', 'result', 'ballot', 'heat', 'remainingMs', 'total'].includes(key))) fail('$', `Unknown binding ${b.get}.`);
+        : root === 'feeds' ? !hasOwn(doc.set.feeds, key) : root === 'tokens' ? !hasOwn(doc.set.tokens??{},key) : !doc.show || !['layoutId', 'phase', 'collecting', 'revealed', 'winner', 'result', 'ballot', 'heat', 'remainingMs', 'total'].includes(key))) fail('$', `Unknown binding ${b.get}.`);
     } else {
       if (b.op === 'eq' && b.args.length !== 2 || b.op === 'if' && b.args.length !== 3) fail('$', 'Wrong binding argument count.');
       b.args.forEach(x => checkBinding(x, scope));
@@ -187,7 +199,8 @@ export function parsePackage(value: unknown): PresentationPackage {
     if ('get' in b) {
       const [root, key] = b.get.split('.');
       if (root === 'props') return typeof props[key];
-      if (root === 'show') return ['phase', 'winner', 'result'].includes(key) ? 'string' : ['collecting', 'revealed'].includes(key) ? 'boolean' : 'number';
+      if (root === 'tokens') return typeof doc.set.tokens?.[key];
+      if (root === 'show') return ['layoutId', 'phase', 'winner', 'result'].includes(key) ? 'string' : ['collecting', 'revealed'].includes(key) ? 'boolean' : 'number';
       const def = (root === 'values' ? doc.set.values : doc.set.feeds)[key];
       return def?.type === 'text' ? 'string' : def?.type ?? 'undefined';
     }
@@ -201,9 +214,13 @@ export function parsePackage(value: unknown): PresentationPackage {
   const booleanBinding = (b: Binding, props: Record<string, Scalar> = {}) => {
     if (bindingType(b, props) !== 'boolean') fail('$', 'Visibility/enabled binding must be boolean.');
   };
+  for(const preset of Object.values(doc.set.styles??{}))for(const [key,value] of Object.entries(preset)){checkBinding(value,new Set());if(bindingType(value)==='boolean')fail('$.set.styles','Styles must be text or numbers.');if(typeof value!=='object')safeStyle(key,value);}
   const slots = new Set<string>();
   doc.set.slots.forEach(s => { if (slots.has(s.id)) fail('$.set.slots', 'Duplicate slot ID.'); slots.add(s.id); });
   const walk = (n: PresentationNode, props: Record<string, Scalar>, stack: string[], ids: Set<string>) => {
+    if(n.styleId){const preset=doc.set.styles?.[n.styleId];if(!preset)fail('$.set',`Unknown style preset ${n.styleId}.`);n={...n,styles:{...preset,...n.styles}};}
+    const hasNative=(node:PresentationNode,seen=new Set<string>()):boolean=>node.type==='slot'||node.type==='shader'||!!node.children?.some(c=>hasNative(c,seen))||(node.type==='component'&&!seen.has(node.component!)&&(seen.add(node.component!),hasNative(doc.set.components[node.component!]?.root??{id:'empty',type:'box'},seen)));
+    if(['filter','mixBlendMode','clipPath'].some(k=>n.styles?.[k]!==undefined)&&hasNative(n))fail('$.set','Graphic compositing effects cannot wrap native video or shader layers.');
     const scope = new Set(Object.keys(props));
     if (++expanded > 600) fail('$.set', 'Expanded output exceeds 600 nodes.');
     if (ids.has(n.id)) fail('$.set', `Duplicate node ID ${n.id}.`); ids.add(n.id);
@@ -218,6 +235,12 @@ export function parsePackage(value: unknown): PresentationPackage {
     }
     if (n.motion) { safeStyle(n.motion.property, n.motion.from); safeStyle(n.motion.property, n.motion.to); }
     if (n.type === 'text') { checkBinding(n.text!, scope); bindingType(n.text!, props); }
+    if(n.type==='media'&&!doc.set.assets?.[n.assetId!])fail('$.set','Missing media asset.');
+    if(n.type==='shader'){
+      if(n.shader!.colors.length!==3||n.shader!.colors.some(c=>!/^#[0-9a-f]{6}$/i.test(c)))fail('$.set','Shader colors require three hex colors.');
+      if(n.styles?.position!=='absolute'||['left','top','width','height'].some(k=>typeof n.styles?.[k]!=='number'))fail('$.set','Shader layers require numeric absolute geometry.');
+      if(Object.keys(n.styles??{}).some(k=>!['position','left','top','width','height'].includes(k)))fail('$.set','Use shader opacity and radius rather than CSS effects.');
+    }
     if (n.type === 'slot' && !slots.has(n.slotId!)) fail('$.set', 'Unknown media slot.');
     for (const [key, value] of Object.entries(n.appearance ?? {})) {
       checkBinding(value,scope);
@@ -240,9 +263,27 @@ export function parsePackage(value: unknown): PresentationPackage {
     if (layouts.has(layout.id)) fail('$.set.layouts', 'Duplicate layout ID.'); layouts.add(layout.id);
     if (!Number.isInteger(layout.width) || !Number.isInteger(layout.height)) fail('$.set.layouts', 'Output dimensions must be integer pixels.');
     walk(layout.root, {}, [], new Set());
+    const nodes=new Map<string,PresentationNode>();const collect=(n:PresentationNode)=>{nodes.set(n.id,n);n.children?.forEach(collect);};collect(layout.root);
+    const shaderNodes=[...nodes.values()].filter(n=>n.type==='shader');
+    if(shaderNodes.length>4||shaderNodes.some(n=>!layout.root.children?.includes(n)))fail('$.set.layouts','Up to four shader layers belong directly under the layout root.');
+    if(shaderNodes.length&&(layout.root.styles?.position!=='relative'||layout.root.styles?.transform!==undefined||layout.root.styles?.opacity!==undefined&&layout.root.styles.opacity!==1||layout.root.motion))fail('$.set.layouts','Shader layouts require a plain relative root.');
+    if(shaderNodes.length&&(layout.root.styles?.width!==layout.width||layout.root.styles?.height!==layout.height||Object.keys(layout.root.styles??{}).some(k=>!['position','width','height','background','overflow'].includes(k))))fail('$.set.layouts','Shader roots must match the canvas without padding or CSS transforms.');
+    for(const n of shaderNodes){const s=n.styles!;if(Number(s.left)<0||Number(s.top)<0||Number(s.width)<1||Number(s.height)<1||Number(s.left)+Number(s.width)>layout.width||Number(s.top)+Number(s.height)>layout.height)fail('$.set.layouts','Shader geometry must fit inside the canvas.');}
+    const animated=new Set<string>();
+    for(const track of layout.animation?.tracks??[]){
+      const target=nodes.get(track.target);if(!target)fail('$.set.layouts.animation','Animation target must belong to the layout.');
+      const key=`${track.target}:${track.property}`;if(animated.has(key))fail('$.set.layouts.animation','Duplicate animation property.');animated.add(key);
+      if(track.keyframes.length<2||track.keyframes[0].atMs!==0||track.keyframes.some((f,i)=>i>0&&f.atMs<=track.keyframes[i-1].atMs))fail('$.set.layouts.animation','Keyframes must start at zero and increase.');
+      for(const f of track.keyframes)if(track.property==='opacity'&&(f.value<0||f.value>1)||track.property==='scale'&&(f.value<.05||f.value>8)||['width','height'].includes(track.property)&&f.value<1)fail('$.set.layouts.animation','Animation value is outside its property range.');
+      if(track.property.startsWith('shader.')&&(target!.type!=='shader'||track.keyframes.some(f=>track.property==='shader.intensity'?(f.value<0||f.value>2):(f.value<.25||f.value>4))))fail('$.set.layouts.animation','Shader tracks require a shader target and bounded values.');
+      const hasSlot=(n:PresentationNode):boolean=>n.type==='slot'||n.type==='shader'||!!n.children?.some(hasSlot)||n.type==='component';
+      if(!['slot','shader'].includes(target!.type)&&hasSlot(target!))fail('$.set.layouts.animation','Animate native layers directly; animated ancestors are unsupported.');
+      if(['x','y','width','height'].includes(track.property)&&target!.styles?.position!=='absolute')fail('$.set.layouts.animation','Geometry tracks require an absolute element.');
+      if(target!.type==='slot'&&['x','y'].includes(track.property)&&typeof target!.styles?.[track.property==='x'?'left':'top']!=='number')fail('$.set.layouts.animation','Source position tracks require numeric left and top.');
+    }
   }
   // Unused component definitions are checked too, rather than hiding unsafe nodes.
-  for (const [name, def] of Object.entries(doc.set.components)) walk(def.root, def.props, [name], new Set());
+  for (const [name, def] of Object.entries(doc.set.components)){const hasShader=(n:PresentationNode):boolean=>n.type==='shader'||!!n.children?.some(hasShader);if(hasShader(def.root))fail('$.set.components','Shader layers belong directly under a layout root.');walk(def.root, def.props, [name], new Set());}
   if (!layouts.has(doc.set.initialLayout)) fail('$.set.initialLayout', 'Unknown layout.');
   for (const [key, def] of [...Object.entries(doc.set.values), ...Object.entries(doc.set.feeds)]) validateValue(def, def.default, key);
   const controls = new Set<string>();

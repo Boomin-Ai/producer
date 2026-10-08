@@ -42,3 +42,55 @@ The display domain does not change Boomin network membership, backend room ident
 ## Implementation boundary
 
 The current room, media, audience interaction, and stage infrastructure is the foundation. Importable show packages, timelines, show-specific host mode, formal scoring, and guest rebroadcasting remain future work. The immediate implementation is the branded domain/link capability.
+
+## UI engine direction — 2026-10-04
+
+Show design must be highly flexible and agent-authored through JSON. Prioritize a
+reusable document interpreter supporting HTML/SVG layouts, components, formulas,
+live data bindings and animation before building a guided editor. Audience events
+can drive heat, failure, scores and reveal effects. Ordinary show documents should
+load without a separate compilation/build pipeline.
+
+Nordcraft's open core/runtime contains relevant mechanisms, including JSON
+keyframes converted into CSS. Research, verified capabilities, integration limits
+and the proposed adapter are recorded in [NORDCRAFT-SHOW-ENGINE-REVIEW.md](NORDCRAFT-SHOW-ENGINE-REVIEW.md).
+
+## Room and show workspace — 2026-10-04
+
+Show opens from the room's top bar. An empty room offers import/selection; a loaded
+show offers preview and source assignments before Start show creates an episode.
+Show mode can fill the Producer workspace with the JSON-defined host interface.
+Existing draggable production docks remain accessible through Studio/tools.
+
+The show document defines coordinated program and host-control views, sharing
+components and state. The program view enters the native compositor and recording;
+the host view provides interactive controls. Producer owns a persistent Stop show
+control independently of the imported design. Stop show ends the episode, finalizes
+its automatic recording and returns to the room workspace. Opening Studio tools
+during an episode does not itself end the episode.
+
+Show runs should automatically record to the host's local device by default, with
+the preference visible in show settings. Track whether the show started a recording
+or reused an existing one; ending a show must not inadvertently stop a pre-existing
+manual recording. Surface recording failures explicitly. This is proposed behavior,
+not an implemented feature.
+
+## Output formats
+
+Portrait/vertical (for example 9:16), landscape (16:9), or both are show-package
+capabilities. A show keeps one episode state, clock, participant roster, score and
+vote history. Its program layouts adapt or explicitly differ per aspect ratio;
+agents design these variants and preview them independently. Cropping a completed
+landscape program is insufficient as the default portrait experience.
+
+The host selects active output formats before starting. Each active format has
+its own composition/layout and destination mapping, reusing source captures and
+guest connections. Both formats require additional rendering/encoding work on
+host hardware. Produce only active formats and validate simultaneous operation
+on the actual engine before advertising it as supported.
+
+The host-control workspace adapts to its window independently of the broadcast
+aspect ratio. Audience playback can choose a suitable available output while
+sharing the same interactions. Automatic local recording covers active outputs
+as separate files associated with one episode. Multi-format output/routing and
+recording are proposed features, not confirmed shipped capabilities.

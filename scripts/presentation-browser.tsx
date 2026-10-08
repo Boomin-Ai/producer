@@ -1,13 +1,13 @@
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { AFTER_HOURS } from '../src/features/presentation/fixtures';
+import { AFTER_HOURS, HEAD_TO_HEAD } from '../src/features/presentation/fixtures';
 import { RehearsalSession } from '../src/features/presentation/rehearsal';
 import { SetControlsPanel } from '../src/features/presentation/SetControlsPanel';
 import { SetMenu } from '../src/features/presentation/SetMenu';
 import '../src/App.css';
 
 function Preview() {
-  const [session, setSession] = useState(() => new RehearsalSession(AFTER_HOURS, undefined, 'prepare'));
+  const [session, setSession] = useState(() => new RehearsalSession(new URLSearchParams(location.search).has('fallback')?{...HEAD_TO_HEAD,set:{...HEAD_TO_HEAD.set,controls:HEAD_TO_HEAD.set.controls.filter(c=>c.type!=='button'||!['show.start','show.next'].includes(c.action.type))}}:AFTER_HOURS, undefined, 'prepare'));
   const dock = new URLSearchParams(location.search).get('dock') ?? 'right';
   const constrained = new URLSearchParams(location.search).has('constrained');
   return <main className="room" style={{ width: '100%', height: '100vh', overflow: 'auto', display: 'block', padding: 8 }}>

@@ -5,7 +5,7 @@ import type { Collection, ContentUnit, ManagerSnapshot, SocialPost, UnitDistribu
 import { ChannelPostSettings, DEFAULT_CHANNEL_PARAMS, buildChannelOverrides, channelParamsFromPresets, updateChannelPresets, type ChannelParams } from "../../components/ChannelPostSettings";
 import { managerFixture } from "./fixtures";
 import { OVERVIEW, STAGE_TABS, type ManagerLocation, type ParentLocation, type StageTab, type UnitLocation } from "./navigation";
-import { hasTauri, type Channel } from "../../lib/ipc";
+import { hasTauri, recording as recordingIpc, type Channel } from "../../lib/ipc";
 import { prefGet, prefSet } from "../../lib/prefs";
 import "./manager.css";
 
@@ -53,7 +53,7 @@ function SidebarIcon({ kind }: { kind: "overview" | "stages" | "film" | "parts" 
 }
 
 /** Manager presentation shared by the explicit fixture preview and hosted inventory. */
-export function ManagerShell({ data: sourceData = managerFixture, channels = [], native = false, initialLocation = OVERVIEW, readOnly = false, onCompose, onUnitSelected, onCreateLibrary, onCreateUnit, onRenameCollection, cacheSession, renderComposer, onLocationChange, headerActions, renderOriginalMedia }: {
+export function ManagerShell({ data: sourceData = managerFixture, channels = [], native = false, initialLocation = OVERVIEW, readOnly = false, onCompose, onUnitSelected, onCreateLibrary, onCreateUnit, onRenameCollection, onUpdateUnit, cacheSession, renderComposer, onLocationChange, headerActions, renderOriginalMedia }: {
   renderOriginalMedia?: (post: SocialPost) => React.ReactNode;
   data?: ManagerSnapshot;
   channels?: Channel[];
@@ -69,6 +69,7 @@ export function ManagerShell({ data: sourceData = managerFixture, channels = [],
   onCreateLibrary?: (kind: "series" | "featured", name: string, requestId: string) => Promise<{ collectionId: string; unitId?: string }>;
   onCreateUnit?: (collectionId: string) => Promise<string>;
   onRenameCollection?: (collectionId: string, name: string) => Promise<void>;
+  onUpdateUnit?: (unitId: string, changes: Partial<ContentUnit>) => Promise<ContentUnit>;
 }) {
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [createKind, setCreateKind] = useState<"series" | "featured" | null>(null);
@@ -94,6 +95,21 @@ export function ManagerShell({ data: sourceData = managerFixture, channels = [],
     }
     return initialLocation;
   });
+  // Provenance sync replaces temporary local unit IDs with hosted IDs.
+  // Keep navigation attached to the recording identity through that change.
+  const recordingIds = useRef(new Map(sourceData.units.filter(u => u.recording).map(u => [u.id, u.recording!.id])));
+  useLayoutEffect(() => {
+    if ((location.view === "unit" || location.view === "part") && !data.units.some(u => u.id === location.unitId)) {
+      const recordingId = recordingIds.current.get(location.unitId);
+      const replacement = recordingId && data.units.find(u => u.recording?.id === recordingId);
+      if (replacement) {
+        setLocation({ ...location, unitId: replacement.id });
+        setExpandedUnitId(replacement.id);
+        setExpandedCollectionId(replacement.collectionId);
+      }
+    }
+    for (const unit of data.units) if (unit.recording) recordingIds.current.set(unit.id, unit.recording.id);
+  }, [data.units, location]);
   const rootRef = useRef<HTMLElement>(null);
   // Notify the outer app after the layout effect has saved this navigation.
   useEffect(() => { onLocationChange?.(location); }, [location, onLocationChange]);
@@ -455,7 +471,7 @@ export function ManagerShell({ data: sourceData = managerFixture, channels = [],
         {location.view === "compose" && (renderComposer ? renderComposer(() => setLocation(OVERVIEW)) : <NewPostView data={data} channels={channels} onBack={() => setLocation(OVERVIEW)} onCreate={createPreviewDraft} />)}
         {location.view === "stages" && <Stages data={data} staged={staged} tab={currentTab} onTab={(tab) => setLocation({ view: "stages", tab })} onOpenUnit={(id) => openUnit(id, { view: "stages", tab: currentTab })} />}
         {location.view === "collection" && (selectedCollection ? <CollectionView key={selectedCollection.id} collection={selectedCollection} data={data} onUnit={(id) => openUnit(id, location)} onCreateUnit={onCreateUnit} onRenameCollection={onRenameCollection} /> : <Missing onBack={() => setLocation(OVERVIEW)} />)}
-        {(location.view === "unit" || location.view === "part") && (selectedUnit ? <UnitView renderOriginalMedia={renderOriginalMedia} commentsEndpointId={cacheSession?.endpointId} savedTab={unitTabs[selectedUnit.id]} onTab={(tab) => setUnitTabs((previous) => Object.fromEntries([...Object.entries(previous).filter(([id]) => id !== selectedUnit.id), [selectedUnit.id, tab]].slice(-100)))} readOnly={readOnly} unit={selectedUnit} data={data} channels={channels} selectedPart={location.view === "part" ? data.parts.find((part) => part.id === location.partId) : undefined} onUpdate={updatePreviewUnit} onUpdatePart={updatePreviewPart} onCreatePart={() => createPreviewPart(selectedUnit)} onClosePart={() => setLocation({ view: "unit", unitId: selectedUnit.id, returnTo: location.returnTo })} onBack={() => setLocation(location.returnTo)} onPart={openPart} onPost={(post) => openPost(post, { view: "unit", unitId: selectedUnit.id, returnTo: location.returnTo })} /> : <Missing onBack={() => setLocation(OVERVIEW)} />)}
+        {(location.view === "unit" || location.view === "part") && (selectedUnit ? <UnitView key={selectedUnit.id} renderOriginalMedia={renderOriginalMedia} commentsEndpointId={cacheSession?.endpointId} savedTab={unitTabs[selectedUnit.id]} onTab={(tab) => setUnitTabs((previous) => Object.fromEntries([...Object.entries(previous).filter(([id]) => id !== selectedUnit.id), [selectedUnit.id, tab]].slice(-100)))} readOnly={readOnly || (data.source === "hosted" && !onUpdateUnit)} unit={selectedUnit} data={data} channels={channels} selectedPart={location.view === "part" ? data.parts.find((part) => part.id === location.partId) : undefined} onUpdate={onUpdateUnit ?? updatePreviewUnit} onUpdatePart={updatePreviewPart} onCreatePart={() => createPreviewPart(selectedUnit)} onClosePart={() => setLocation({ view: "unit", unitId: selectedUnit.id, returnTo: location.returnTo })} onBack={() => setLocation(location.returnTo)} onPart={openPart} onPost={(post) => openPost(post, { view: "unit", unitId: selectedUnit.id, returnTo: location.returnTo })} /> : <Missing onBack={() => setLocation(OVERVIEW)} />)}
         {location.view === "post" && (selectedPost ? <PostView post={selectedPost} data={data} onBack={() => setLocation(location.returnTo)} onUnit={(id) => openUnit(id, location.returnTo.view === "unit" ? location.returnTo.returnTo : location.returnTo)} /> : <Missing onBack={() => setLocation(OVERVIEW)} />)}
       </main>
       {createKind && <div className="pm-create-layer"><button type="button" className="pm-create-scrim" disabled={createBusy} onClick={() => setCreateKind(null)} aria-label="Cancel creation" /><form className="pm-create-dialog" role="dialog" aria-modal="true" aria-labelledby="pm-create-title" onSubmit={(event) => { event.preventDefault(); void createLibrary(); }}><h2 id="pm-create-title">{createKind === "series" ? "New series" : "New featured unit"}</h2><label htmlFor="pm-create-name">Name</label><input id="pm-create-name" autoFocus required maxLength={200} disabled={createBusy} value={createName} onChange={(event) => setCreateName(event.target.value)} placeholder={createKind === "series" ? "Name your series" : "Name your featured unit"} />{createError && <p role="alert">{createError}</p>}<footer><button type="button" disabled={createBusy} onClick={() => setCreateKind(null)}>Cancel</button><button type="submit" disabled={createBusy || !createName.trim()}>{createBusy ? "Creating…" : "Create"}</button></footer></form></div>}
@@ -724,7 +740,7 @@ function NewPostView({ data, channels, onBack, onCreate }: {
   </form>;
 }
 
-function UnitView({ renderOriginalMedia, commentsEndpointId, readOnly = false, unit, data, channels, savedTab, onTab, selectedPart, onUpdate, onUpdatePart, onCreatePart, onClosePart, onBack, onPart, onPost }: {
+function UnitView({ renderOriginalMedia, commentsEndpointId, readOnly = false, unit: savedUnit, data, channels, savedTab, onTab, selectedPart, onUpdate, onUpdatePart, onCreatePart, onClosePart, onBack, onPart, onPost }: {
   unit: ContentUnit;
   data: ManagerSnapshot;
   channels: Channel[];
@@ -734,7 +750,7 @@ function UnitView({ renderOriginalMedia, commentsEndpointId, readOnly = false, u
   savedTab?: "overview" | "insights" | "comments";
   onTab?: (tab: "overview" | "insights" | "comments") => void;
   selectedPart?: UnitPart;
-  onUpdate: (unitId: string, changes: Partial<ContentUnit>) => void;
+  onUpdate: (unitId: string, changes: Partial<ContentUnit>) => Promise<ContentUnit> | void;
   onUpdatePart: (partId: string, changes: Partial<UnitPart>) => void;
   onCreatePart: () => void;
   onClosePart: () => void;
@@ -742,6 +758,26 @@ function UnitView({ renderOriginalMedia, commentsEndpointId, readOnly = false, u
   onPart: (part: UnitPart) => void;
   onPost: (post: SocialPost) => void;
 }) {
+  const [draft, setDraft] = useState<Partial<ContentUnit>>({});
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const unit = { ...savedUnit, ...draft };
+  const dirty = Object.keys(draft).length > 0;
+  function edit(changes: Partial<ContentUnit>) {
+    setDraft((previous) => ({ ...previous, ...changes }));
+    setSaved(false); setSaveError(null);
+  }
+  async function save() {
+    if (savingRef.current || !dirty || isLocked) return;
+    savingRef.current = true; setSaving(true); setSaveError(null);
+    try {
+      await onUpdate(savedUnit.id, draft);
+      setDraft({}); setSaved(true);
+    } catch (error) { setSaveError(error instanceof Error ? error.message : "Couldn’t save. Your changes are still here; try again."); }
+    finally { savingRef.current = false; setSaving(false); }
+  }
   const [localTab, setLocalTab] = useState<"overview" | "insights" | "comments">("overview");
   const tab = savedTab ?? localTab;
   const setTab = (value: typeof tab) => { setLocalTab(value); onTab?.(value); };
@@ -782,7 +818,7 @@ function UnitView({ renderOriginalMedia, commentsEndpointId, readOnly = false, u
     const existing = distributions.find((item) => item.channelId === channel.id);
     const params = { ...channelParamsFromPresets(existing?.presets), ...patch };
     const next: UnitDistribution = { channelId: channel.id, platform: channel.platform, handle: channel.external_handle ? "@" + channel.external_handle.replace(/^@/, "") : channel.display_name, presets: updateChannelPresets(existing?.presets, params, channel.platform) };
-    onUpdate(unit.id, { distributions: [...distributions.filter((item) => item.channelId !== channel.id), next] });
+    edit({ distributions: [...distributions.filter((item) => item.channelId !== channel.id), next] });
   }
   function toggleDistribution(id: string) {
     const nextIds = selectedIds.includes(id) ? selectedIds.filter((item) => item !== id) : [...selectedIds, id];
@@ -790,7 +826,7 @@ function UnitView({ renderOriginalMedia, commentsEndpointId, readOnly = false, u
       const channel = channelOptions.find((candidate) => candidate.id === item);
       return { channelId: item, platform: channel?.platform ?? "channel", handle: channel?.external_handle ? "@" + channel.external_handle.replace(/^@/, "") : channel?.display_name ?? "Connected channel", presets: {} };
     })());
-    onUpdate(unit.id, { selectedChannelIds: nextIds, distributions: nextDistributions });
+    edit({ selectedChannelIds: nextIds, distributions: nextDistributions });
   }
   useEffect(() => {
     if (!channelsOpen) return;
@@ -801,6 +837,7 @@ function UnitView({ renderOriginalMedia, commentsEndpointId, readOnly = false, u
     return () => { window.removeEventListener("pointerdown", dismiss); window.removeEventListener("keydown", dismissOnEscape); };
   }, [channelsOpen]);
   const stageDate = unit.stage === "scheduled" && unit.scheduledAt ? dateTimeLabel(unit.scheduledAt) : unit.stage === "published" && unit.publishedAt ? dateLabel(unit.publishedAt) : null;
+  const [locationError,setLocationError]=useState("");
   const mediaUrl = selectedMedia?.url ?? publishedPosts.find((post) => post.previewUrl)?.previewUrl ?? parts.find((part) => part.mediaUrl)?.mediaUrl;
   const assetsOpen = assetMenuOpen || !!selectedPart;
   function closeAssets() {
@@ -815,17 +852,19 @@ function UnitView({ renderOriginalMedia, commentsEndpointId, readOnly = false, u
 
   return <div className="pm-unit">
     <header className={"pm-unit-meta-bar" + (CLIPS_ENABLED ? " pm-unit-with-assets" : "")}>
-      <button type="button" className="pm-unit-back" onClick={onBack} title={"Back to " + (collection?.name ?? "Overview")} aria-label={"Back to " + (collection?.name ?? "Overview")}><span aria-hidden="true">←</span></button>
+      <button type="button" className="pm-unit-back" disabled={saving} onClick={() => { if (!dirty || window.confirm("Leave without saving this draft?")) onBack(); }} title={"Back to " + (collection?.name ?? "Overview")} aria-label={"Back to " + (collection?.name ?? "Overview")}><span aria-hidden="true">←</span></button>
       <div className="pm-unit-meta-field">
         <strong>{unit.recording ? "Recording" : unit.type}</strong>
-        {isLocked ? <small title={collection?.name ?? "Unfiled"}>{collection?.name ?? "Unfiled"}</small> : <select className="pm-unit-collection-select" value={unit.collectionId ?? ""} onChange={(event) => onUpdate(unit.id, { collectionId: event.target.value || null })} aria-label="Collection"><option value="">Unfiled</option>{data.collections.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}
+        {isLocked ? <small title={collection?.name ?? "Unfiled"}>{collection?.name ?? "Unfiled"}</small> : <select className="pm-unit-collection-select" disabled={saving} value={unit.collectionId ?? ""} onChange={(event) => edit({ collectionId: event.target.value || null })} aria-label="Collection"><option value="">Unfiled</option>{data.collections.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}
+        {unit.recording?.localPath && <button type="button" className="pm-recording-location" onClick={()=>{setLocationError('');void recordingIpc.reveal(unit.recording!.localPath!).catch(e=>setLocationError(String(e)));}}>Open location ↗</button>}
+        {locationError && <small role="alert">{locationError}</small>}
         {isLocked && <span className="pm-meta-lock">Locked</span>}
       </div>
       {CLIPS_ENABLED && <div className="pm-unit-meta-field pm-unit-assets-field"><span>CLIPS</span><button type="button" className="pm-unit-assets-trigger" onClick={() => assetsOpen ? closeAssets() : setAssetMenuOpen(true)} aria-expanded={assetsOpen} aria-haspopup="dialog"><strong>{parts.length} {parts.length === 1 ? "clip" : "clips"}</strong><span aria-hidden="true">⌄</span></button></div>}
       <div className="pm-unit-meta-field pm-unit-distribution" ref={channelPickerRef}>
         <span>{hasPublishedPosts ? "DISTRIBUTED ON" : "DISTRIBUTION"}</span>
-        {isLocked ? (channelRows.length ? <div className="pm-unit-channel-list">{channelRows.slice(0, 2).map((channel) => <span className="pm-unit-channel" key={channel.id}><ChannelAvatar label={channel.label} url={channel.avatarUrl} /><span title={channel.label}>{channel.label}</span></span>)}{channelRows.length > 2 && <span className="pm-channel-more">+{channelRows.length - 2}</span>}</div> : <strong className="pm-muted">No channels selected</strong>) : <button type="button" className="pm-new-post-channel-trigger" onClick={() => setChannelsOpen((open) => !open)} aria-haspopup="dialog" aria-expanded={channelsOpen} aria-label="Choose distribution channels"><span className="pm-channel-trigger-content">{channelRows.length ? <><ChannelAvatar label={channelRows[0].label} url={channelRows[0].avatarUrl} /><span className="pm-channel-trigger-name">{channelRows[0].label}</span>{channelRows.length > 1 && <span className="pm-channel-more">+{channelRows.length - 1}</span>}</> : <span>Choose channels</span>}</span><span className="pm-channel-caret" aria-hidden="true">⌄</span></button>}
-        {channelsOpen && !isLocked && <div className="pm-new-post-channel-menu" role="dialog" aria-label="Distribution channels"><div className="pm-new-post-channel-menu-head">CHANNELS</div>{channelOptions.length ? channelOptions.map((channel) => <label key={channel.id} className="pm-new-post-channel-option"><input type="checkbox" checked={selectedIds.includes(channel.id)} onChange={() => toggleDistribution(channel.id)} /><ChannelAvatar label={channel.display_name} url={channel.avatar_url} /><span><strong>{channel.external_handle ? "@" + channel.external_handle.replace(/^@/, "") : channel.display_name}</strong></span></label>) : <p>No connected channels in this workspace.</p>}</div>}
+        {isLocked ? (channelRows.length ? <div className="pm-unit-channel-list">{channelRows.slice(0, 2).map((channel) => <span className="pm-unit-channel" key={channel.id}><ChannelAvatar label={channel.label} url={channel.avatarUrl} /><span title={channel.label}>{channel.label}</span></span>)}{channelRows.length > 2 && <span className="pm-channel-more">+{channelRows.length - 2}</span>}</div> : <strong className="pm-muted">No channels selected</strong>) : <button type="button" className="pm-new-post-channel-trigger" disabled={saving} onClick={() => setChannelsOpen((open) => !open)} aria-haspopup="dialog" aria-expanded={channelsOpen} aria-label="Choose distribution channels"><span className="pm-channel-trigger-content">{channelRows.length ? <><ChannelAvatar label={channelRows[0].label} url={channelRows[0].avatarUrl} /><span className="pm-channel-trigger-name">{channelRows[0].label}</span>{channelRows.length > 1 && <span className="pm-channel-more">+{channelRows.length - 1}</span>}</> : <span>Choose channels</span>}</span><span className="pm-channel-caret" aria-hidden="true">⌄</span></button>}
+        {channelsOpen && !isLocked && <div className="pm-new-post-channel-menu" role="dialog" aria-label="Distribution channels"><div className="pm-new-post-channel-menu-head">CHANNELS</div>{channelOptions.length ? channelOptions.map((channel) => <label key={channel.id} className="pm-new-post-channel-option"><input type="checkbox" checked={selectedIds.includes(channel.id)} disabled={saving} onChange={() => toggleDistribution(channel.id)} /><ChannelAvatar label={channel.display_name} url={channel.avatar_url} /><span><strong>{channel.external_handle ? "@" + channel.external_handle.replace(/^@/, "") : channel.display_name}</strong></span></label>) : <p>No connected channels in this workspace.</p>}</div>}
         {isLocked && <span className="pm-meta-lock">Locked</span>}
       </div>
       <div className="pm-unit-meta-field">
@@ -849,16 +888,18 @@ function UnitView({ renderOriginalMedia, commentsEndpointId, readOnly = false, u
         <div className="pm-pill-tabs" role="tablist" aria-label="Unit details">
           {tabs.map((item) => <button key={item.id} id={"pm-unit-tab-" + item.id} type="button" role="tab" aria-selected={tab === item.id} aria-controls={"pm-unit-panel-" + item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>{item.label}</button>)}
         </div>
+        {!isLocked && <div className="pm-unit-save-row"><span role="status">{saving ? "Saving…" : dirty ? "Unsaved changes" : saved ? "Draft saved" : ""}</span><button type="button" disabled={saving || !dirty} onClick={() => { setDraft({}); setSaved(false); setSaveError(null); }}>Discard changes</button><button type="button" className="pm-unit-save" disabled={saving || !dirty} onClick={() => void save()}>{saving ? "Saving…" : "Save draft"}</button></div>}
+        {saveError && <p className="pm-unit-save-error" role="alert">{saveError}</p>}
         <div id={"pm-unit-panel-" + tab} role="tabpanel" aria-labelledby={"pm-unit-tab-" + tab} className="pm-unit-tab-panel">
           {tab === "overview" && <>
             {unit.recording && <section className="pm-info-card"><h2>RECORDING</h2><p>{new Date(unit.recording.started_at).toLocaleString()} · {Math.floor(unit.recording.duration_ms / 60000)}:{String(Math.floor(unit.recording.duration_ms / 1000) % 60).padStart(2, "0")} · {unit.recording.localAvailable ? "Local" : unit.recording.storageStatus === "synced" ? "Synced" : "Local on the recording device"}</p></section>}
-            <section className="pm-info-card"><h2>CAPTION</h2><p>{unit.caption || "No caption saved for this unit."}</p></section>
+            <section className="pm-info-card"><h2>CAPTION</h2>{isLocked ? <p>{savedUnit.caption || "No caption saved for this unit."}</p> : <textarea className="pm-unit-caption-input" aria-label="Unit caption" rows={5} disabled={saving} value={unit.caption} onChange={(event) => edit({ caption: event.target.value })} placeholder="Write a caption for this unit…" />}</section>
             <section className="pm-info-card pm-unit-post-settings"><h2>INDIVIDUAL POSTS <small>{postTargets.length} {postTargets.length === 1 ? "destination" : "destinations"}</small></h2>
               {postTargets.length ? <div className="channel-cards">{postTargets.map(({ key, channel, post }) => {
                 const distribution = distributions.find((item) => item.channelId === channel.id);
                 const presets = { ...(post?.presets ?? distribution?.presets) };
                 if (post && post.caption !== unit.caption && !("caption" in presets)) presets.caption = post.caption;
-                return <div key={key} className="pm-unit-post-target">{post && <div className="pm-unit-post-result"><Badge tone={post.status === "published" ? "success" : post.status === "failed" ? "danger" : "neutral"}>{post.status}</Badge><button type="button" onClick={() => onPost(post)}>View post →</button></div>}<ChannelPostSettings channel={channel} params={channelParamsFromPresets(presets)} expanded={expandedPostIds.has(key)} onToggle={() => setExpandedPostIds((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; })} onPatch={(patch) => updateChannelSettings(channel, patch)} readOnly={isLocked || post?.status === "published"} /></div>;
+                return <div key={key} className="pm-unit-post-target">{post && <div className="pm-unit-post-result"><Badge tone={post.status === "published" ? "success" : post.status === "failed" ? "danger" : "neutral"}>{post.status}</Badge><button type="button" onClick={() => onPost(post)}>View post →</button></div>}<ChannelPostSettings channel={channel} params={channelParamsFromPresets(presets)} expanded={expandedPostIds.has(key)} onToggle={() => setExpandedPostIds((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; })} onPatch={(patch) => updateChannelSettings(channel, patch)} readOnly={isLocked || saving || post?.status === "published"} /></div>;
               })}</div> : <p>Choose a channel in the Distribution bar to configure each post.</p>}
             </section>
           </>}

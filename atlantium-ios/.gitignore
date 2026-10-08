@@ -1,0 +1,8 @@
+.build/
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+*.p8
+*.p12
+ReleaseDerivedData/

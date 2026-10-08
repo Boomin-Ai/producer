@@ -38,6 +38,7 @@ export function StageEditor({
   onLive,
   onCommit,
   selectId,
+  nativeTransforms = true,
 }: {
   items: LiveItem[];
   baseW: number;
@@ -54,14 +55,15 @@ export function StageEditor({
   onCommit?: (id: string, patch: LiveTransformPatch) => void;
   /** Selection driven from OUTSIDE (a rail row click): lights the item up. */
   selectId?: string | null;
+  nativeTransforms?: boolean;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [selected, setSelectedRaw] = useState<string | null>(null);
   // Windows float mode: the native preview covers the stage, so the engine
   // draws the selection outline itself. Harmless elsewhere.
   useEffect(() => {
-    ipc.liveSetSelection(selected).catch(() => {});
-  }, [selected]);
+    if(nativeTransforms)ipc.liveSetSelection(selected).catch(() => {});
+  }, [selected,nativeTransforms]);
   const setSelected = (id: string | null) => {
     setSelectedRaw(id);
     onSelect?.(id);
@@ -115,11 +117,11 @@ export function StageEditor({
       const p = pending.current;
       pending.current = null;
       if (p) {
-        ipc.liveSetTransform(id, p, false).catch(() => {});
+        if(nativeTransforms)ipc.liveSetTransform(id, p, false).catch(() => {});
         onLive?.(id, p);
       }
     });
-  }, [onLive]);
+  }, [onLive,nativeTransforms]);
 
   const commit = useCallback((id: string, patch: LiveTransformPatch) => {
     if (raf.current) {
@@ -127,9 +129,9 @@ export function StageEditor({
       raf.current = 0;
       pending.current = null;
     }
-    ipc.liveSetTransform(id, patch, true).catch(() => {});
+    if(nativeTransforms)ipc.liveSetTransform(id, patch, true).catch(() => {});
     onCommit?.(id, patch);
-  }, [onCommit]);
+  }, [onCommit,nativeTransforms]);
 
   /** Where an item's picture ACTUALLY lands on the canvas. The box the
    * engine reports is the bounds; the cropped source is fitted inside it and

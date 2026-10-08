@@ -62,3 +62,43 @@ for(let renewal=0;renewal<3;renewal++){
 assert.equal(ticketCalls,4);
 renewed.stop();assert.equal(timers.size,0);
 console.log('PASS: three acknowledged permission renewals preserve the publisher connection and cancel each renewal timeout.');
+
+// A socket can reach OPEN before its open event is dispatched. Source updates
+// from React/IPC must not get ahead of the host's scene registration, including
+// on reconnect. Keep only the latest complete source catalog while waiting.
+const startup=new RoomControlLink({origin:'https://room.test',session:async()=>session,onFrame:()=>{},onOpen:()=>startup.publishScenes([{id:'one',name:'One'}],'one')});
+startup.start();await tick();
+const firstPublisher=sockets.at(-1);
+startup.publishSources([],['old'],[]);
+startup.publishSources([],['latest'],[]);
+assert.deepEqual(firstPublisher.sent,[],'Source truth must wait for publisher registration even when the transport is OPEN');
+firstPublisher.onopen();
+assert.deepEqual(firstPublisher.sent.map(frame=>frame.type),['scene.publish','room.sources.publish']);
+assert.deepEqual(firstPublisher.sent.at(-1).participants,['latest']);
+firstPublisher.readyState=3;firstPublisher.onclose();await runTimer(1000);
+const replacement=sockets.at(-1);
+startup.publishSources([],['reconnected'],[]);
+assert.deepEqual(replacement.sent,[],'Replacement sockets must register before publishing sources');
+replacement.onopen();
+assert.deepEqual(replacement.sent.map(frame=>frame.type),['scene.publish','room.sources.publish']);
+replacement.readyState=0;startup.publishSources([],['discard'],[]);
+startup.stop();startup.start();await tick();
+const restarted=sockets.at(-1);restarted.onopen();
+assert.deepEqual(restarted.sent.map(frame=>frame.type),['scene.publish'],'Stopped sessions must discard queued source catalogs');
+startup.stop();assert.equal(timers.size,0);
+console.log('PASS: startup and reconnect publish scenes before the latest source catalog; stopped sessions discard queued work.');
+
+const recovery=new RoomControlLink({origin:'https://room.test',session:async()=>session,onFrame:()=>{},onOpen:()=>recovery.publishScenes([{id:'one',name:'One'}],'one')});
+recovery.start();await tick();const waiting=sockets.at(-1);waiting.onopen();
+waiting.onmessage({data:JSON.stringify({type:'error',code:'publisher_busy'})});
+waiting.onmessage({data:JSON.stringify({type:'error',code:'stale_publisher'})});
+assert.equal(waiting.sent.length,1,'An active host conflict must not cause registration retries');
+waiting.onmessage({data:JSON.stringify({type:'error',code:'host_unavailable'})});
+assert.equal(waiting.sent.length,2,'Register again when the former owner is gone');
+waiting.onmessage({data:JSON.stringify({type:'error',code:'host_unavailable'})});
+assert.equal(waiting.sent.length,2,'Repeated source errors must not flood registrations');
+const clockNow=Date.now;Date.now=()=>clockNow()+5001;
+waiting.onmessage({data:JSON.stringify({type:'error',code:'host_unavailable'})});
+Date.now=clockNow;assert.equal(waiting.sent.length,3);
+recovery.stop();assert.equal(timers.size,0);
+console.log('PASS: owner disappearance triggers bounded re-registration; active host conflicts do not.');

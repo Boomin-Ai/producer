@@ -1,0 +1,6 @@
+{
+  "provider": "Atlas Cloud",
+  "model": "black-forest-labs/flux-2-pro/text-to-image",
+  "prompt": "Premium editorial campaign photograph for a future-focused technology community app. Four ambitious young adult technology builders, a Black woman with natural curls, a Black man, a white man, a Latina woman, in candid thoughtful collaboration around a laptop at a sleek dark coworking studio wearing contemporary casual black and navy clothing, one person gesturing while the others naturally engage, not posed shoulder-to-shoulder in matching shirts. Close intimate composition, people fill the lower right two thirds, understated warm skin highlights against sophisticated midnight navy and subtle cyan edge light, authentic faces and hands, aspirational welcoming human community, quietly futuristic, cinematic realistic photography. Upper left third deep blue black negative space for later typesetting. Minimal background, no clutter, no neon cyberpunk costumes. No text, no letters, no logos, no fake app interface, no watermark. Landscape 16:9 campaign artwork, refined magazine quality.",
+  "use": "App Store campaign artwork; not an app screenshot"
+}

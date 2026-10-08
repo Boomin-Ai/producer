@@ -22,6 +22,10 @@ PRODUCER_ENGINE_DIR="$ENGINE_APP/Contents" cargo build --manifest-path src-tauri
 mkdir -p "$(dirname "$DEV_APP")"
 ditto "$ENGINE_APP" "$DEV_APP"
 cp src-tauri/target/debug/producer "$DEV_APP/Contents/MacOS/producer"
+if [[ -f engine/virtualcam-plugin/mac-virtualcam.plugin/Contents/MacOS/mac-virtualcam ]]; then
+  ditto engine/virtualcam-plugin/mac-virtualcam.plugin "$DEV_APP/Contents/PlugIns/mac-virtualcam.plugin"
+  codesign --force --sign - "$DEV_APP/Contents/PlugIns/mac-virtualcam.plugin"
+fi
 
 # Keep the existing capture permission identity when available.
 DEV_IDENT="$(security find-identity -v -p codesigning | awk -F'"' '/Developer ID Application/{print $2; exit}')"
@@ -32,4 +36,8 @@ else
   codesign --force --sign - "$DEV_APP"
 fi
 codesign --verify --deep --strict "$DEV_APP"
-open -n "$DEV_APP"
+if [[ "${1:-}" != "--prepare" ]]; then
+  open -n --env "PRODUCER_DEV_MODULE_CONFIG_DIR=$PWD/src-tauri/target/dev-room/module-config" "$DEV_APP"
+else
+  echo "Prepared signed preview: $DEV_APP"
+fi

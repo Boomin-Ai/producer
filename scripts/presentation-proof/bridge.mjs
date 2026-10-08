@@ -3,10 +3,11 @@ import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
+const lottie=await readFile(new URL('../../src/features/presentation/vendor/lottie-light.js',import.meta.url),'utf8');
 const renderer = await readFile(new URL('../../src/features/presentation/frame.js', import.meta.url), 'utf8');
 const scriptSafe = text => text.replace(/</g, '\\u003c');
 function page(surface, nonce) {
-  const frame = `<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;font-family:system-ui,sans-serif}*{box-sizing:border-box}#canvas{position:absolute;transform-origin:top left;overflow:hidden}</style><style id="motion"></style><div id="canvas"></div><script nonce="${nonce}">${renderer}</script>`;
+  const frame = `<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'none'; img-src data:; media-src data:; object-src 'none'; base-uri 'none'; form-action 'none'"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;font-family:system-ui,sans-serif}*{box-sizing:border-box}#canvas{position:absolute;transform-origin:top left;overflow:hidden}</style><style id="motion"></style><div id="canvas"></div><script nonce="${nonce}">${lottie}\n${renderer}</script>`;
   return `<!doctype html><html><head><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}iframe{border:0;width:100%;height:100%}</style></head><body><iframe sandbox="allow-scripts" allow="camera 'none'; microphone 'none'; display-capture 'none'" title="Read-only set output"></iframe><script nonce="${nonce}">
   const frame=document.querySelector('iframe'); let port, stopped=false, revision=-1, pending;
   // Diagnostics are visual preparation only. They grant no mutation authority.
@@ -39,7 +40,7 @@ export async function startProofBridge(initial) {
     res.setHeader('Cache-Control', 'no-store'); res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), display-capture=()');
-    res.setHeader('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'self'; frame-src 'self' about:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`);
+    res.setHeader('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'self'; img-src data:; media-src data:; frame-src 'self' about:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`);
     const deny = code => { res.writeHead(code); res.end(); };
     if (!active || req.headers.host !== `127.0.0.1:${server.address().port}`) return deny(404);
     if (req.headers.origin && req.headers.origin !== origin) return deny(403);
@@ -62,7 +63,7 @@ export async function startProofBridge(initial) {
       if (!active) throw new Error('Output revoked');
       if (next.revision <= projection.revision) throw new Error('Stale projection');
       const encoded = JSON.stringify(next);
-      if (Buffer.byteLength(encoded) > 512 * 1024) throw new Error('Projection budget exceeded');
+      if (Buffer.byteLength(encoded) > 40 * 1024 * 1024) throw new Error('Projection budget exceeded');
       projection = JSON.parse(encoded);
     },
     revoke() { active = false; },

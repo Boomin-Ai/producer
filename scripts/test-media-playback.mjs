@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {loadRuntime} from './presentation-proof/runtime.mjs';
+const {parsePackage,RehearsalSession,outputProjection}=await loadRuntime();
+const doc=JSON.parse(fs.readFileSync('/private/tmp/producer-media-demo.json'));
+const primary=doc.set.layouts[0];primary.id='demo-landscape';doc.set.initialLayout=primary.id;
+doc.set.layouts.push({...structuredClone(primary),id:'demo-portrait',width:720,height:1280});
+doc.set.layouts.push({id:'empty',label:'Empty',width:1280,height:720,root:{id:'empty',type:'box',styles:{},children:[]}});
+doc.set.controls=[{id:'demo',type:'button',label:'Demo',action:{type:'layout.select',layoutId:'demo-landscape'}},{id:'empty',type:'button',label:'Empty',action:{type:'layout.select',layoutId:'empty'}}];
+doc.set.values.note={type:'text',default:'Original',maxLength:40};
+const config={start:'manual',loop:false,exit:'pause',return:'resume',hostControls:true};doc.set.assets.video.playback=config;
+let now=100000;const realNow=Date.now;Date.now=()=>now;
+const session=new RehearsalSession(parsePackage(doc),undefined,'prepare');assert.equal(session.snapshot().media.video.playing,false);
+session.mediaCommand('video','play');now+=1200;
+session.send({type:'field',key:'note',value:'Updated'});assert.equal(session.snapshot().media.video.anchorMs,100000,'content edits must preserve anchor');
+session.mediaCommand('video','pause');assert.equal(session.snapshot().media.video.positionMs,1200);
+now+=1000;session.mediaCommand('video','play');session.send({type:'control',action:{type:'layout.select',layoutId:'empty'}});assert.equal(session.snapshot().media.video.playing,false);
+now+=1000;session.send({type:'control',action:{type:'layout.select',layoutId:'demo-landscape'}});assert.equal(session.snapshot().media.video.positionMs,1200);
+session.mediaCommand('video','restart');assert.equal(session.snapshot().media.video.positionMs,0);assert.equal(session.snapshot().media.video.playing,true);
+const landscape=outputProjection(session.package,session.snapshot());const portrait=outputProjection(session.package,{...session.snapshot(),layoutId:'demo-portrait'});
+assert.deepEqual(landscape.root.children.find(n=>n.assetId==='video').playback,portrait.root.children.find(n=>n.assetId==='video').playback);
+session.configureMedia('video',{...config,start:'entry',exit:'continue'});now+=500;session.send({type:'control',action:{type:'layout.select',layoutId:'empty'}});now+=500;session.send({type:'control',action:{type:'layout.select',layoutId:'demo-landscape'}});assert.equal(session.snapshot().media.video.positionMs,1000);
+assert.equal(session.exportPreparedPackage().set.assets.video.playback.exit,'continue');assert.ok(!JSON.stringify(session.exportPreparedPackage()).includes('anchorMs'));
+session.enterRehearsal();session.mediaCommand('video','pause');session.exitRehearsal();assert.equal(session.snapshot().media.video.playing,true);
+Date.now=realNow;
+fs.writeFileSync('/private/tmp/producer-media-playback.json',JSON.stringify(doc));
+console.log('PASS media lifecycle, manual transport, paired clock, portable configuration and rehearsal reset');
+const {chromium,webkit}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??'playwright');
+for(const engine of [chromium,webkit]){
+ const b=await engine.launch(engine===chromium?{channel:'chrome'}:{});const page=await b.newPage();await page.goto('http://localhost:1420/scripts/media-browser.html');await page.getByLabel('Import set package').setInputFiles('/private/tmp/producer-media-playback.json');await page.bringToFront();
+ const video=page.frameLocator('iframe').first().locator('video');await video.waitFor();await page.waitForTimeout(600);assert.equal(await video.evaluate(v=>v.paused),true);
+ const host=page.locator('.set-participation .set-media-transport');await host.getByRole('button',{name:'Play media',exact:true}).click();await page.waitForTimeout(700);assert.equal(await video.evaluate(v=>v.paused),false);
+ await host.getByRole('button',{name:'Pause media',exact:true}).click();await page.waitForTimeout(200);const paused=await video.evaluate(v=>v.currentTime);await page.waitForTimeout(400);assert.ok(Math.abs(await video.evaluate(v=>v.currentTime)-paused)<.12);
+ await page.getByRole('button',{name:'Set edit',exact:true}).click();const editor=page.locator('.set-media-config .set-media-item').filter({hasText:'clip.mp4'});await editor.getByLabel('Playback',{exact:true}).selectOption('true');await editor.getByLabel('Show host controls').uncheck();assert.equal(await host.count(),0);
+ await page.getByRole('button',{name:'Close preview'}).click();await page.getByRole('button',{name:'Set edit',exact:true}).click();await editor.getByLabel('Show host controls').check();await page.getByRole('button',{name:'Close preview'}).click();await host.getByRole('button',{name:'Restart',exact:true}).click();await page.waitForTimeout(350);assert.ok(await video.evaluate(v=>v.currentTime)<1);
+ await b.close();console.log('PASS browser play/pause/restart, editor configuration and host control visibility: '+engine.name());
+}

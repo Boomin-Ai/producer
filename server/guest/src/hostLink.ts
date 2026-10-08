@@ -35,6 +35,7 @@ type SignalPayload = {
   peer?: unknown;
   description?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidateInit;
+  on_stage?: string[]; audible?: string[]; version?: number;
 };
 
 type PeerState = {
@@ -280,6 +281,7 @@ export class HostLink {
     try { frame = JSON.parse(String(event.data)); } catch { return; }
     if (frame.type !== "signal" || !frame.payload) return;
     const msg = frame.payload;
+    if (msg.kind === "stage" && Array.isArray(msg.on_stage) && typeof msg.version === "number") { this.opts.onData?.(msg); return; }
     const name = peerOf(msg);
     if (name === "program") {
       if (!this.opts.returnFeed) return;

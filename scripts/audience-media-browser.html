@@ -18,6 +18,8 @@ window.runAudienceTest = async () => {
   media.enumerateDevices=async()=>[{kind:'videoinput',deviceId:'program-test',label:'Producer Virtual Camera'}];
   media.getUserMedia=async constraints=>{if(constraints.audio)throw new Error('Raw microphone must never be captured');captures++;return program;};
   window.__TAURI_INTERNALS__={invoke:async command=>{
+    if(command==='live_program_video_wanted')return;
+    if(command==='live_program_video_read')return (await fetch(new URLSearchParams(location.search).get('portraitFrame'))).arrayBuffer();
     if(command==='live_program_audio_start'){starts++;return;}
     if(command==='live_program_audio_stop'){stops++;return;}
     if(command==='live_program_audio_read'){
@@ -29,6 +31,7 @@ window.runAudienceTest = async () => {
     throw new Error(`Unexpected IPC ${command}`);
   }};
   const legs=[];
+  sharedProgramCapture.setPortrait(new URLSearchParams(location.search).has('portraitFrame'));
   try {
     for(const name of ['one','two']){
       let sender;const receiver=new ProgramReceiver([],signal=>sender.signal(signal),event=>{document.getElementById(name).srcObject=event.streams[0];void document.getElementById(name).play().catch(()=>{});});
@@ -39,11 +42,18 @@ window.runAudienceTest = async () => {
       for(let i=0;i<legs.length;i++){const pc=legs[i].receiver.pc;if(!pc)continue;const stats=await pc.getStats();stats.forEach(r=>{if(r.type==='inbound-rtp'&&r.kind==='video')decoded[i]=r.framesDecoded||0;if(r.type==='inbound-rtp'&&r.kind==='audio')energies[i]=r.totalAudioEnergy||0;});}
       if(decoded.every(n=>n>5)&&energies.every(n=>n>0.001))break;
     }
+    const outputSizes=['one','two'].map(id=>{const v=document.getElementById(id);return [v.videoWidth,v.videoHeight];});
+    const switches=[];
+    if(new URLSearchParams(location.search).has('portraitFrame'))for(const portrait of [false,true,false,true]){
+      sharedProgramCapture.setPortrait(portrait);
+      await new Promise(resolve=>setTimeout(resolve,1800));
+      switches.push(['one','two'].map(id=>{const v=document.getElementById(id);return [v.videoWidth,v.videoHeight,v.currentTime];}));
+    }
     legs[0].sender.stop();legs[0].receiver.close();
     const firstReleasedStillLive=program.getVideoTracks()[0].readyState==='live';
     legs[1].sender.stop();legs[1].receiver.close();
     await new Promise(resolve=>setTimeout(resolve,30));
-    return {decoded,energies,captures,starts,stops,failures,contextState:sharedProgramCapture.context?.state,peers:legs.map(leg=>({sender:leg.sender.pc.connectionState,receiver:leg.receiver.pc?.connectionState,senderSdp:leg.sender.pc.localDescription?.type})),firstReleasedStillLive,lastReleasedEnded:program.getVideoTracks()[0].readyState==='ended'};
+    return {switches,decoded,energies,outputSizes,captures,starts,stops,failures,contextState:sharedProgramCapture.context?.state,peers:legs.map(leg=>({sender:leg.sender.pc.connectionState,receiver:leg.receiver.pc?.connectionState,senderSdp:leg.sender.pc.localDescription?.type})),firstReleasedStillLive,lastReleasedEnded:program.getVideoTracks()[0].readyState==='ended'};
   } finally {
     legs.forEach(({sender,receiver})=>{sender.stop();receiver.close();});sharedProgramCapture.stop();clearInterval(draw);program.getTracks().forEach(t=>t.stop());
     media.getUserMedia=originalCapture;media.enumerateDevices=originalEnumerate;window.__TAURI_INTERNALS__=originalTauri;
@@ -66,5 +76,5 @@ window.runMeshTest = async () => {
     return {connected,suspended,sourcePreserved,resumed};
   } finally {one.close();two.close();destination.stream.getTracks().forEach(t=>t.stop());oscillator.stop();await context.close();}
 };
-document.getElementById('run').onclick=()=>{window.resultPromise=window.runAudienceTest().then(async audience=>({...audience,mesh:await window.runMeshTest()}));};
+document.getElementById('run').onclick=()=>{window.resultPromise=Promise.all([window.runAudienceTest(),window.runMeshTest()]).then(([audience,mesh])=>({...audience,mesh}));};
 </script>

@@ -53,7 +53,9 @@ export function buildChannelOverrides(params: ChannelParams | undefined, platfor
 
 export function updateChannelPresets(existing: Record<string, boolean | string | string[]> | undefined, params: ChannelParams, platform: string): Record<string, boolean | string | string[]> {
   const known = new Set(["caption", "feed", "location", "userTags", "collaborators", "cover_url", "trial_post", "reply_control", "topic_tag", "link_attachment"]);
-  return { ...Object.fromEntries(Object.entries(existing ?? {}).filter(([key]) => !known.has(key))), ...buildChannelOverrides(params, platform) };
+  // Editing must retain an enabled, empty custom caption and trailing spaces.
+  // Publish-time normalization belongs to buildChannelOverrides, not keystrokes.
+  return { ...Object.fromEntries(Object.entries(existing ?? {}).filter(([key]) => !known.has(key))), ...buildChannelOverrides(params, platform), ...(params.useCaption ? { caption: params.caption } : {}) };
 }
 
 export function channelParamsFromPresets(presets?: Record<string, boolean | string | string[]>): ChannelParams {

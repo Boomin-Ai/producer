@@ -1,0 +1,1165 @@
+{
+  "schema": "producer.show/1",
+  "id": "producer.two-contestant-test",
+  "version": "0.1.0",
+  "engineRange": ">=0.1.0 <0.2.0",
+  "name": "Head to Head",
+  "brief": "Two contestants get a timed round. Everyone with voting rights, including guests, can choose a winner. Reactions heat the visuals. The host resolves ties.",
+  "assets": [],
+  "components": {},
+  "supportedAspects": [
+    "landscape"
+  ],
+  "recording": {
+    "default": "local-auto",
+    "existingManual": "reuse-with-episode-interval"
+  },
+  "slots": [
+    {
+      "id": "left",
+      "purpose": "Contestant A camera",
+      "required": true,
+      "media": "video"
+    },
+    {
+      "id": "right",
+      "purpose": "Contestant B camera",
+      "required": true,
+      "media": "video"
+    }
+  ],
+  "participantInteractions": [
+    {
+      "id": "round-vote",
+      "widget": "choices",
+      "label": "Who wins this round?",
+      "action": "vote.submit",
+      "roles": [
+        "audience",
+        "guest"
+      ],
+      "segmentIds": [
+        "round"
+      ],
+      "choices": [
+        {
+          "id": "left",
+          "label": "Contestant A"
+        },
+        {
+          "id": "right",
+          "label": "Contestant B"
+        }
+      ]
+    }
+  ],
+  "rules": {
+    "vote": {
+      "choices": [
+        "left",
+        "right"
+      ],
+      "oncePerParticipant": true,
+      "allowContestantVotes": true,
+      "tie": "host-decides",
+      "zeroVotes": "host-decides"
+    },
+    "heat": {
+      "source": "accepted-reactions",
+      "windowMs": 10000,
+      "maxPerPrincipalPerSecond": 1,
+      "hotAt": 10,
+      "decay": "window-expiry"
+    },
+    "elimination": "backstage"
+  },
+  "initialSegment": "intro",
+  "segments": [
+    {
+      "id": "intro",
+      "title": "Meet the contestants",
+      "durationMs": null,
+      "clock": "episode-elapsed",
+      "layouts": {
+        "landscape": "duel"
+      },
+      "next": "round",
+      "advance": "host",
+      "enter": [],
+      "exit": []
+    },
+    {
+      "id": "round",
+      "title": "Audience round",
+      "durationMs": 60000,
+      "clock": "episode-elapsed",
+      "layouts": {
+        "landscape": "duel"
+      },
+      "next": "reveal",
+      "advance": "timer",
+      "enter": [
+        "open-round-vote"
+      ],
+      "exit": [
+        "close-round-vote"
+      ]
+    },
+    {
+      "id": "reveal",
+      "title": "Winner",
+      "durationMs": null,
+      "clock": "episode-elapsed",
+      "layouts": {
+        "landscape": "winner"
+      },
+      "next": "outro",
+      "advance": "host",
+      "enter": [
+        "reveal-result",
+        "backstage-non-winners"
+      ],
+      "exit": []
+    },
+    {
+      "id": "outro",
+      "title": "Thanks for watching",
+      "durationMs": null,
+      "clock": "episode-elapsed",
+      "layouts": {
+        "landscape": "winner"
+      },
+      "next": null,
+      "advance": "host",
+      "enter": [],
+      "exit": []
+    }
+  ],
+  "surfaces": {
+    "host": {
+      "id": "host-desk",
+      "kind": "element",
+      "tag": "main",
+      "styles": {
+        "display": "grid",
+        "gap": "16px",
+        "padding": "24px",
+        "background": "#07121a",
+        "color": "#ffffff"
+      },
+      "children": [
+        {
+          "id": "host-title",
+          "kind": "text",
+          "text": "Head to Head — Control desk"
+        },
+        {
+          "id": "host-clock",
+          "kind": "text",
+          "text": {
+            "op": "call",
+            "fn": "formatClock",
+            "args": [
+              {
+                "op": "get",
+                "path": [
+                  "derived",
+                  "segmentRemainingMs"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "begin-round",
+          "kind": "element",
+          "tag": "button",
+          "attributes": {
+            "type": "button",
+            "disabled": {
+              "op": "call",
+              "fn": "not",
+              "args": [
+                {
+                  "op": "get",
+                  "path": [
+                    "capabilities",
+                    "actions",
+                    "segment.advance"
+                  ]
+                }
+              ]
+            }
+          },
+          "styles": {
+            "padding": "12px 18px",
+            "borderRadius": "12px",
+            "background": "#a8ffce",
+            "color": "#07121a",
+            "fontWeight": 700
+          },
+          "events": {
+            "click": {
+              "action": "segment.advance",
+              "payload": {
+                "segmentId": "round"
+              }
+            }
+          },
+          "children": [
+            {
+              "id": "begin-round-label",
+              "kind": "text",
+              "text": "Start audience round"
+            }
+          ],
+          "when": {
+            "op": "call",
+            "fn": "eq",
+            "args": [
+              {
+                "op": "get",
+                "path": [
+                  "episode",
+                  "segmentId"
+                ]
+              },
+              {
+                "op": "literal",
+                "value": "intro"
+              }
+            ]
+          }
+        },
+        {
+          "id": "pause",
+          "kind": "element",
+          "tag": "button",
+          "attributes": {
+            "type": "button",
+            "disabled": {
+              "op": "call",
+              "fn": "not",
+              "args": [
+                {
+                  "op": "get",
+                  "path": [
+                    "capabilities",
+                    "actions",
+                    "episode.pause"
+                  ]
+                }
+              ]
+            }
+          },
+          "styles": {
+            "padding": "12px 18px",
+            "borderRadius": "12px",
+            "background": "#a8ffce",
+            "color": "#07121a",
+            "fontWeight": 700
+          },
+          "events": {
+            "click": {
+              "action": "episode.pause"
+            }
+          },
+          "children": [
+            {
+              "id": "pause-label",
+              "kind": "text",
+              "text": "Pause"
+            }
+          ],
+          "when": {
+            "op": "call",
+            "fn": "eq",
+            "args": [
+              {
+                "op": "get",
+                "path": [
+                  "episode",
+                  "status"
+                ]
+              },
+              {
+                "op": "literal",
+                "value": "running"
+              }
+            ]
+          }
+        },
+        {
+          "id": "resume",
+          "kind": "element",
+          "tag": "button",
+          "attributes": {
+            "type": "button",
+            "disabled": {
+              "op": "call",
+              "fn": "not",
+              "args": [
+                {
+                  "op": "get",
+                  "path": [
+                    "capabilities",
+                    "actions",
+                    "episode.resume"
+                  ]
+                }
+              ]
+            }
+          },
+          "styles": {
+            "padding": "12px 18px",
+            "borderRadius": "12px",
+            "background": "#a8ffce",
+            "color": "#07121a",
+            "fontWeight": 700
+          },
+          "events": {
+            "click": {
+              "action": "episode.resume"
+            }
+          },
+          "children": [
+            {
+              "id": "resume-label",
+              "kind": "text",
+              "text": "Resume"
+            }
+          ],
+          "when": {
+            "op": "call",
+            "fn": "eq",
+            "args": [
+              {
+                "op": "get",
+                "path": [
+                  "episode",
+                  "status"
+                ]
+              },
+              {
+                "op": "literal",
+                "value": "paused"
+              }
+            ]
+          }
+        },
+        {
+          "id": "resolve-left",
+          "kind": "element",
+          "tag": "button",
+          "attributes": {
+            "type": "button",
+            "disabled": {
+              "op": "call",
+              "fn": "not",
+              "args": [
+                {
+                  "op": "get",
+                  "path": [
+                    "capabilities",
+                    "actions",
+                    "result.resolve"
+                  ]
+                }
+              ]
+            }
+          },
+          "styles": {
+            "padding": "12px 18px",
+            "borderRadius": "12px",
+            "background": "#a8ffce",
+            "color": "#07121a",
+            "fontWeight": 700
+          },
+          "events": {
+            "click": {
+              "action": "result.resolve",
+              "payload": {
+                "winnerSlotId": "left",
+                "reason": "Host resolves tie or no votes"
+              }
+            }
+          },
+          "children": [
+            {
+              "id": "resolve-left-label",
+              "kind": "text",
+              "text": "Choose contestant A"
+            }
+          ],
+          "when": {
+            "op": "get",
+            "path": [
+              "derived",
+              "needsWinnerDecision"
+            ]
+          }
+        },
+        {
+          "id": "resolve-right",
+          "kind": "element",
+          "tag": "button",
+          "attributes": {
+            "type": "button",
+            "disabled": {
+              "op": "call",
+              "fn": "not",
+              "args": [
+                {
+                  "op": "get",
+                  "path": [
+                    "capabilities",
+                    "actions",
+                    "result.resolve"
+                  ]
+                }
+              ]
+            }
+          },
+          "styles": {
+            "padding": "12px 18px",
+            "borderRadius": "12px",
+            "background": "#a8ffce",
+            "color": "#07121a",
+            "fontWeight": 700
+          },
+          "events": {
+            "click": {
+              "action": "result.resolve",
+              "payload": {
+                "winnerSlotId": "right",
+                "reason": "Host resolves tie or no votes"
+              }
+            }
+          },
+          "children": [
+            {
+              "id": "resolve-right-label",
+              "kind": "text",
+              "text": "Choose contestant B"
+            }
+          ],
+          "when": {
+            "op": "get",
+            "path": [
+              "derived",
+              "needsWinnerDecision"
+            ]
+          }
+        },
+        {
+          "id": "outro",
+          "kind": "element",
+          "tag": "button",
+          "attributes": {
+            "type": "button",
+            "disabled": {
+              "op": "call",
+              "fn": "not",
+              "args": [
+                {
+                  "op": "get",
+                  "path": [
+                    "capabilities",
+                    "actions",
+                    "segment.advance"
+                  ]
+                }
+              ]
+            }
+          },
+          "styles": {
+            "padding": "12px 18px",
+            "borderRadius": "12px",
+            "background": "#a8ffce",
+            "color": "#07121a",
+            "fontWeight": 700
+          },
+          "events": {
+            "click": {
+              "action": "segment.advance",
+              "payload": {
+                "segmentId": "outro"
+              }
+            }
+          },
+          "children": [
+            {
+              "id": "outro-label",
+              "kind": "text",
+              "text": "Finish reveal"
+            }
+          ],
+          "when": {
+            "op": "call",
+            "fn": "eq",
+            "args": [
+              {
+                "op": "get",
+                "path": [
+                  "episode",
+                  "segmentId"
+                ]
+              },
+              {
+                "op": "literal",
+                "value": "reveal"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "moderator": {
+      "id": "mod-desk",
+      "kind": "element",
+      "tag": "main",
+      "styles": {
+        "padding": "20px",
+        "background": "#07121a",
+        "color": "#ffffff"
+      },
+      "children": [
+        {
+          "id": "mod-title",
+          "kind": "text",
+          "text": "Head to Head — Moderator desk"
+        },
+        {
+          "id": "mod-status",
+          "kind": "text",
+          "text": {
+            "op": "get",
+            "path": [
+              "episode",
+              "segmentId"
+            ]
+          }
+        },
+        {
+          "id": "mod-pause",
+          "kind": "element",
+          "tag": "button",
+          "attributes": {
+            "type": "button",
+            "disabled": {
+              "op": "call",
+              "fn": "not",
+              "args": [
+                {
+                  "op": "get",
+                  "path": [
+                    "capabilities",
+                    "actions",
+                    "episode.pause"
+                  ]
+                }
+              ]
+            }
+          },
+          "styles": {
+            "padding": "12px 18px",
+            "borderRadius": "12px",
+            "background": "#a8ffce",
+            "color": "#07121a",
+            "fontWeight": 700
+          },
+          "events": {
+            "click": {
+              "action": "episode.pause"
+            }
+          },
+          "children": [
+            {
+              "id": "mod-pause-label",
+              "kind": "text",
+              "text": "Pause round"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "layouts": [
+    {
+      "id": "duel",
+      "aspect": "landscape",
+      "width": 1280,
+      "height": 720,
+      "slots": [
+        {
+          "slotId": "left",
+          "rect": {
+            "x": 0.04,
+            "y": 0.19,
+            "width": 0.44,
+            "height": 0.65
+          },
+          "z": 10,
+          "visible": true,
+          "fit": "contain"
+        },
+        {
+          "slotId": "right",
+          "rect": {
+            "x": 0.52,
+            "y": 0.19,
+            "width": 0.44,
+            "height": 0.65
+          },
+          "z": 11,
+          "visible": true,
+          "fit": "contain"
+        }
+      ],
+      "background": {
+        "id": "duel-background",
+        "kind": "element",
+        "tag": "div",
+        "styles": {
+          "position": "absolute",
+          "inset": 0,
+          "background": "radial-gradient(ellipse at top, #21396b, #07121a 75%)"
+        }
+      },
+      "foreground": {
+        "id": "duel-foreground",
+        "kind": "element",
+        "tag": "div",
+        "styles": {
+          "position": "absolute",
+          "inset": 0,
+          "color": "#ffffff",
+          "fontFamily": "sans-serif"
+        },
+        "children": [
+          {
+            "id": "duel-title",
+            "kind": "element",
+            "tag": "h1",
+            "styles": {
+              "position": "absolute",
+              "left": "4%",
+              "top": "2%",
+              "margin": 0,
+              "fontSize": "48px"
+            },
+            "children": [
+              {
+                "id": "duel-title-text",
+                "kind": "text",
+                "text": "HEAD TO HEAD"
+              }
+            ]
+          },
+          {
+            "id": "duel-clock",
+            "kind": "element",
+            "tag": "div",
+            "when": {
+              "op": "call",
+              "fn": "eq",
+              "args": [
+                {
+                  "op": "get",
+                  "path": [
+                    "episode",
+                    "segmentId"
+                  ]
+                },
+                {
+                  "op": "literal",
+                  "value": "round"
+                }
+              ]
+            },
+            "styles": {
+              "position": "absolute",
+              "right": "4%",
+              "top": "4%",
+              "fontSize": "42px",
+              "fontVariantNumeric": "tabular-nums"
+            },
+            "children": [
+              {
+                "id": "duel-clock-text",
+                "kind": "text",
+                "text": {
+                  "op": "call",
+                  "fn": "formatClock",
+                  "args": [
+                    {
+                      "op": "get",
+                      "path": [
+                        "derived",
+                        "segmentRemainingMs"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "duel-heat",
+            "kind": "element",
+            "tag": "div",
+            "when": {
+              "op": "get",
+              "path": [
+                "derived",
+                "hot"
+              ]
+            },
+            "styles": {
+              "position": "absolute",
+              "inset": "1%",
+              "border": "8px solid #ff793e",
+              "borderRadius": "24px",
+              "boxShadow": "0 0 40px #ff793e"
+            },
+            "animations": [
+              {
+                "id": "duel-pulse",
+                "durationMs": 800,
+                "iterations": "infinite",
+                "easing": "ease-in-out",
+                "clock": "cosmetic-local",
+                "keyframes": [
+                  {
+                    "offset": 0,
+                    "styles": {
+                      "opacity": 0.45
+                    }
+                  },
+                  {
+                    "offset": 0.5,
+                    "styles": {
+                      "opacity": 1
+                    }
+                  },
+                  {
+                    "offset": 1,
+                    "styles": {
+                      "opacity": 0.45
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "duel-result",
+            "kind": "element",
+            "tag": "div",
+            "when": {
+              "op": "call",
+              "fn": "or",
+              "args": [
+                {
+                  "op": "call",
+                  "fn": "eq",
+                  "args": [
+                    {
+                      "op": "get",
+                      "path": [
+                        "episode",
+                        "segmentId"
+                      ]
+                    },
+                    {
+                      "op": "literal",
+                      "value": "reveal"
+                    }
+                  ]
+                },
+                {
+                  "op": "call",
+                  "fn": "eq",
+                  "args": [
+                    {
+                      "op": "get",
+                      "path": [
+                        "episode",
+                        "segmentId"
+                      ]
+                    },
+                    {
+                      "op": "literal",
+                      "value": "outro"
+                    }
+                  ]
+                }
+              ]
+            },
+            "styles": {
+              "position": "absolute",
+              "bottom": "5%",
+              "left": "4%",
+              "fontSize": "48px",
+              "fontWeight": 800
+            },
+            "children": [
+              {
+                "id": "duel-winner-name",
+                "kind": "text",
+                "text": {
+                  "op": "call",
+                  "fn": "concat",
+                  "args": [
+                    {
+                      "op": "literal",
+                      "value": "WINNER: "
+                    },
+                    {
+                      "op": "get",
+                      "path": [
+                        "derived",
+                        "winnerDisplayName"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "animations": [
+              {
+                "id": "duel-reveal",
+                "durationMs": 900,
+                "iterations": 1,
+                "easing": "ease-out",
+                "clock": "episode",
+                "anchor": "segment-entry",
+                "keyframes": [
+                  {
+                    "offset": 0,
+                    "styles": {
+                      "opacity": 0,
+                      "transform": "translateY(30px)"
+                    }
+                  },
+                  {
+                    "offset": 1,
+                    "styles": {
+                      "opacity": 1,
+                      "transform": "translateY(0px)"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "winner",
+      "aspect": "landscape",
+      "width": 1280,
+      "height": 720,
+      "slots": [
+        {
+          "slotId": "left",
+          "rect": {
+            "x": 0.22,
+            "y": 0.19,
+            "width": 0.56,
+            "height": 0.65
+          },
+          "z": 10,
+          "visible": {
+            "op": "call",
+            "fn": "eq",
+            "args": [
+              {
+                "op": "get",
+                "path": [
+                  "episode",
+                  "result",
+                  "winnerSlotId"
+                ]
+              },
+              {
+                "op": "literal",
+                "value": "left"
+              }
+            ]
+          },
+          "fit": "contain"
+        },
+        {
+          "slotId": "right",
+          "rect": {
+            "x": 0.22,
+            "y": 0.19,
+            "width": 0.56,
+            "height": 0.65
+          },
+          "z": 10,
+          "visible": {
+            "op": "call",
+            "fn": "eq",
+            "args": [
+              {
+                "op": "get",
+                "path": [
+                  "episode",
+                  "result",
+                  "winnerSlotId"
+                ]
+              },
+              {
+                "op": "literal",
+                "value": "right"
+              }
+            ]
+          },
+          "fit": "contain"
+        }
+      ],
+      "background": {
+        "id": "winner-background",
+        "kind": "element",
+        "tag": "div",
+        "styles": {
+          "position": "absolute",
+          "inset": 0,
+          "background": "radial-gradient(ellipse at top, #21396b, #07121a 75%)"
+        }
+      },
+      "foreground": {
+        "id": "winner-foreground",
+        "kind": "element",
+        "tag": "div",
+        "styles": {
+          "position": "absolute",
+          "inset": 0,
+          "color": "#ffffff",
+          "fontFamily": "sans-serif"
+        },
+        "children": [
+          {
+            "id": "winner-title",
+            "kind": "element",
+            "tag": "h1",
+            "styles": {
+              "position": "absolute",
+              "left": "4%",
+              "top": "2%",
+              "margin": 0,
+              "fontSize": "48px"
+            },
+            "children": [
+              {
+                "id": "winner-title-text",
+                "kind": "text",
+                "text": "HEAD TO HEAD"
+              }
+            ]
+          },
+          {
+            "id": "winner-clock",
+            "kind": "element",
+            "tag": "div",
+            "when": {
+              "op": "call",
+              "fn": "eq",
+              "args": [
+                {
+                  "op": "get",
+                  "path": [
+                    "episode",
+                    "segmentId"
+                  ]
+                },
+                {
+                  "op": "literal",
+                  "value": "round"
+                }
+              ]
+            },
+            "styles": {
+              "position": "absolute",
+              "right": "4%",
+              "top": "4%",
+              "fontSize": "42px",
+              "fontVariantNumeric": "tabular-nums"
+            },
+            "children": [
+              {
+                "id": "winner-clock-text",
+                "kind": "text",
+                "text": {
+                  "op": "call",
+                  "fn": "formatClock",
+                  "args": [
+                    {
+                      "op": "get",
+                      "path": [
+                        "derived",
+                        "segmentRemainingMs"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "winner-heat",
+            "kind": "element",
+            "tag": "div",
+            "when": {
+              "op": "get",
+              "path": [
+                "derived",
+                "hot"
+              ]
+            },
+            "styles": {
+              "position": "absolute",
+              "inset": "1%",
+              "border": "8px solid #ff793e",
+              "borderRadius": "24px",
+              "boxShadow": "0 0 40px #ff793e"
+            },
+            "animations": [
+              {
+                "id": "winner-pulse",
+                "durationMs": 800,
+                "iterations": "infinite",
+                "easing": "ease-in-out",
+                "clock": "cosmetic-local",
+                "keyframes": [
+                  {
+                    "offset": 0,
+                    "styles": {
+                      "opacity": 0.45
+                    }
+                  },
+                  {
+                    "offset": 0.5,
+                    "styles": {
+                      "opacity": 1
+                    }
+                  },
+                  {
+                    "offset": 1,
+                    "styles": {
+                      "opacity": 0.45
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "winner-result",
+            "kind": "element",
+            "tag": "div",
+            "when": {
+              "op": "call",
+              "fn": "or",
+              "args": [
+                {
+                  "op": "call",
+                  "fn": "eq",
+                  "args": [
+                    {
+                      "op": "get",
+                      "path": [
+                        "episode",
+                        "segmentId"
+                      ]
+                    },
+                    {
+                      "op": "literal",
+                      "value": "reveal"
+                    }
+                  ]
+                },
+                {
+                  "op": "call",
+                  "fn": "eq",
+                  "args": [
+                    {
+                      "op": "get",
+                      "path": [
+                        "episode",
+                        "segmentId"
+                      ]
+                    },
+                    {
+                      "op": "literal",
+                      "value": "outro"
+                    }
+                  ]
+                }
+              ]
+            },
+            "styles": {
+              "position": "absolute",
+              "bottom": "5%",
+              "left": "4%",
+              "fontSize": "48px",
+              "fontWeight": 800
+            },
+            "children": [
+              {
+                "id": "winner-winner-name",
+                "kind": "text",
+                "text": {
+                  "op": "call",
+                  "fn": "concat",
+                  "args": [
+                    {
+                      "op": "literal",
+                      "value": "WINNER: "
+                    },
+                    {
+                      "op": "get",
+                      "path": [
+                        "derived",
+                        "winnerDisplayName"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "animations": [
+              {
+                "id": "winner-reveal",
+                "durationMs": 900,
+                "iterations": 1,
+                "easing": "ease-out",
+                "clock": "episode",
+                "anchor": "segment-entry",
+                "keyframes": [
+                  {
+                    "offset": 0,
+                    "styles": {
+                      "opacity": 0,
+                      "transform": "translateY(30px)"
+                    }
+                  },
+                  {
+                    "offset": 1,
+                    "styles": {
+                      "opacity": 1,
+                      "transform": "translateY(0px)"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

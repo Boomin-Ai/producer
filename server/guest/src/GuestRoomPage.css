@@ -16,3 +16,6 @@
  .guest-room-stage { max-height:calc(100svh - 100px); }
  .guest-room-stage > video:first-child { object-fit:contain !important; }
 }
+
+.guest-room-card.is-fullscreen > p, .guest-room-card.is-fullscreen > h1 { display:none !important; }
+.guest-room-card.is-fullscreen .guest-room-stage { width:100% !important; max-height:none !important; margin:0 !important; min-height:0; }

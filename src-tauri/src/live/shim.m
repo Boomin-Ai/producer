@@ -522,3 +522,10 @@ void producer_person_mask_register_native(void);
 void producer_person_mask_register(void) {
     producer_person_mask_register_native();
 }
+
+// Debug acceptance probes use the existing app window; no capture permission.
+void *producer_preview_probe_window(void) {
+    __block void *result = NULL;
+    run_on_main(^{ NSWindow *window = NSApp.mainWindow ?: NSApp.windows.firstObject; result = (__bridge void *)window; });
+    return result;
+}

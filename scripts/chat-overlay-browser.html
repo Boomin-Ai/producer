@@ -24,7 +24,20 @@ frame.onload=()=>{
     check(d.querySelectorAll('.message').length===8,'visible message count grew');
     check(d.querySelector('.message .platform').textContent==='YT','oldest message was not pushed out');
     check(d.querySelector('.message:last-child').textContent.includes('new arrival'),'new message not at bottom');
-    document.getElementById('result').textContent='PASS: transparent combined chat, safe text, emotes, persistent messages and new arrivals pushing older messages upward.';
+    // Native projection supplies the selected-channel snapshot. Switching
+    // channels and deleting room messages must also remove old output nodes.
+    data.messages=[{id:'room:1',platform:'boomin',user:'Host',text:'Room reply <script>literal<\/script>',received_at:now+1},data.messages.at(-1)];
+    w.eval('snapshot='+JSON.stringify(data)+';render()');
+    check(d.querySelectorAll('.message').length===2,'filtered snapshot retained old channels');
+    check(d.querySelector('.platform').textContent==='Boomin','Boomin label missing');
+    check(d.querySelector('.message').textContent.includes('<script>literal<\/script>'),'room text interpreted as HTML');
+    data.messages.reverse();w.eval('snapshot='+JSON.stringify(data)+';render()');
+    check(d.querySelector('.message:last-child .platform').textContent==='Boomin','snapshot reorder not reflected');
+    data.messages=data.messages.filter(m=>m.platform!=='boomin');w.eval('snapshot='+JSON.stringify(data)+';render()');
+    check(d.querySelectorAll('.message').length===1,'deleted room message stayed visible');
+    data.messages=[];w.eval('snapshot='+JSON.stringify(data)+';render()');
+    check(d.querySelectorAll('.message').length===0,'empty selected channels did not clear output');
+    document.getElementById('result').textContent='PASS: transparent combined chat, safe room text, emotes, persistent history, Boomin labels, filtered replacement, reorder and deletion.';
   } catch(e) {document.getElementById('result').textContent='FAIL: '+e.message;}
 };
 </script></body></html>

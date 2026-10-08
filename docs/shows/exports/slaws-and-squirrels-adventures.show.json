@@ -1,0 +1,890 @@
+{
+  "schema": "producer.presentation/1",
+  "id": "slaws-squirrels-adventures",
+  "version": "0.1.0",
+  "name": "Slaws and Squirrels Adventures",
+  "set": {
+    "initialLayout": "trailhead",
+    "values": {
+      "slawsName": {
+        "type": "text",
+        "default": "Slaws",
+        "maxLength": 40
+      },
+      "squirrelsName": {
+        "type": "text",
+        "default": "Squirrels",
+        "maxLength": 40
+      },
+      "episode": {
+        "type": "text",
+        "default": "EPISODE 01 \u00b7 THE PATH LESS ORDINARY",
+        "maxLength": 90
+      },
+      "opening": {
+        "type": "text",
+        "default": "Two adventurers. One very questionable plan.",
+        "maxLength": 95
+      },
+      "mission": {
+        "type": "text",
+        "default": "Let\u2019s see what\u2019s out there.",
+        "maxLength": 65
+      },
+      "discovery": {
+        "type": "text",
+        "default": "Small trails. Big stories.",
+        "maxLength": 65
+      },
+      "closing": {
+        "type": "text",
+        "default": "Same time, next adventure.",
+        "maxLength": 90
+      }
+    },
+    "feeds": {},
+    "slots": [
+      {
+        "id": "slaws",
+        "label": "Slaws source"
+      },
+      {
+        "id": "squirrels",
+        "label": "Squirrels source"
+      }
+    ],
+    "components": {},
+    "layouts": [
+      {
+        "id": "trailhead",
+        "label": "01 The Trailhead",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "trailhead-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "radial-gradient(ellipse at 80% 15%,#314734,transparent 65%),linear-gradient(140deg,#14271f,#111c18)"
+          },
+          "children": [
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "SLAWS & SQUIRRELS",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 29,
+                "width": 970,
+                "height": 70,
+                "fontSize": "49px",
+                "fontWeight": 850,
+                "letterSpacing": "-.04em",
+                "color": "#f7efdc"
+              }
+            },
+            {
+              "id": "subtitle",
+              "type": "text",
+              "text": "A D V E N T U R E S",
+              "styles": {
+                "position": "absolute",
+                "left": 54,
+                "top": 104,
+                "width": 790,
+                "height": 26,
+                "fontSize": "15px",
+                "color": "#c4d8b8"
+              }
+            },
+            {
+              "id": "segment-tag",
+              "type": "text",
+              "text": "01 THE TRAILHEAD",
+              "styles": {
+                "position": "absolute",
+                "left": 900,
+                "top": 103,
+                "width": 327,
+                "height": 30,
+                "fontSize": "12px",
+                "textAlign": "right",
+                "letterSpacing": ".12em",
+                "color": "#dfb778"
+              }
+            },
+            {
+              "id": "line",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 151,
+                "width": 1180,
+                "height": 1,
+                "background": "#b2c7a833"
+              },
+              "children": []
+            },
+            {
+              "id": "footer",
+              "type": "text",
+              "text": {
+                "get": "values.episode"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 675,
+                "width": 1176,
+                "height": 26,
+                "fontSize": "14px",
+                "color": "#aec5af",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "slaws-rim",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 217,
+                "width": 524,
+                "height": 364,
+                "borderRadius": "28px",
+                "border": "2px solid #dfb778",
+                "boxShadow": "0 0 30px #dfb77833"
+              },
+              "children": []
+            },
+            {
+              "id": "slaws-video",
+              "type": "slot",
+              "slotId": "slaws",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 24,
+                "outlineWidth": 0,
+                "outlineColor": "#dfb778"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 221,
+                "width": 516,
+                "height": 356
+              }
+            },
+            {
+              "id": "slaws-label",
+              "type": "text",
+              "text": {
+                "get": "values.slawsName"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 593,
+                "width": 516,
+                "height": 28,
+                "fontSize": "20px",
+                "fontWeight": 700,
+                "textAlign": "center",
+                "color": "#dfb778"
+              }
+            },
+            {
+              "id": "squirrels-rim",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 696,
+                "top": 217,
+                "width": 524,
+                "height": 364,
+                "borderRadius": "28px",
+                "border": "2px solid #9eccaa",
+                "boxShadow": "0 0 30px #9eccaa33"
+              },
+              "children": []
+            },
+            {
+              "id": "squirrels-video",
+              "type": "slot",
+              "slotId": "squirrels",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 24,
+                "outlineWidth": 0,
+                "outlineColor": "#9eccaa"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 700,
+                "top": 221,
+                "width": 516,
+                "height": 356
+              }
+            },
+            {
+              "id": "squirrels-label",
+              "type": "text",
+              "text": {
+                "get": "values.squirrelsName"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 700,
+                "top": 593,
+                "width": 516,
+                "height": 28,
+                "fontSize": "20px",
+                "fontWeight": 700,
+                "textAlign": "center",
+                "color": "#9eccaa"
+              }
+            },
+            {
+              "id": "trail-title",
+              "type": "text",
+              "text": {
+                "get": "values.opening"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 62,
+                "top": 170,
+                "width": 1156,
+                "height": 33,
+                "fontSize": "23px",
+                "color": "#ead8b5",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "explore",
+        "label": "02 Into the Wild",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "explore-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "radial-gradient(ellipse at 80% 15%,#314734,transparent 65%),linear-gradient(140deg,#14271f,#111c18)"
+          },
+          "children": [
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "SLAWS & SQUIRRELS",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 29,
+                "width": 970,
+                "height": 70,
+                "fontSize": "49px",
+                "fontWeight": 850,
+                "letterSpacing": "-.04em",
+                "color": "#f7efdc"
+              }
+            },
+            {
+              "id": "subtitle",
+              "type": "text",
+              "text": "A D V E N T U R E S",
+              "styles": {
+                "position": "absolute",
+                "left": 54,
+                "top": 104,
+                "width": 790,
+                "height": 26,
+                "fontSize": "15px",
+                "color": "#c4d8b8"
+              }
+            },
+            {
+              "id": "segment-tag",
+              "type": "text",
+              "text": "02 INTO THE WILD",
+              "styles": {
+                "position": "absolute",
+                "left": 900,
+                "top": 103,
+                "width": 327,
+                "height": 30,
+                "fontSize": "12px",
+                "textAlign": "right",
+                "letterSpacing": ".12em",
+                "color": "#dfb778"
+              }
+            },
+            {
+              "id": "line",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 151,
+                "width": 1180,
+                "height": 1,
+                "background": "#b2c7a833"
+              },
+              "children": []
+            },
+            {
+              "id": "footer",
+              "type": "text",
+              "text": {
+                "get": "values.episode"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 675,
+                "width": 1176,
+                "height": 26,
+                "fontSize": "14px",
+                "color": "#aec5af",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "slaws-rim",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 59,
+                "top": 207,
+                "width": 786,
+                "height": 398,
+                "borderRadius": "28px",
+                "border": "2px solid #dfb778",
+                "boxShadow": "0 0 30px #dfb77833"
+              },
+              "children": []
+            },
+            {
+              "id": "slaws-video",
+              "type": "slot",
+              "slotId": "slaws",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 24,
+                "outlineWidth": 0,
+                "outlineColor": "#dfb778"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 63,
+                "top": 211,
+                "width": 778,
+                "height": 390
+              }
+            },
+            {
+              "id": "slaws-label",
+              "type": "text",
+              "text": {
+                "get": "values.slawsName"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 63,
+                "top": 617,
+                "width": 778,
+                "height": 28,
+                "fontSize": "20px",
+                "fontWeight": 700,
+                "textAlign": "center",
+                "color": "#dfb778"
+              }
+            },
+            {
+              "id": "squirrels-rim",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 913,
+                "top": 296,
+                "width": 266,
+                "height": 266,
+                "borderRadius": "50%",
+                "border": "2px solid #9eccaa",
+                "boxShadow": "0 0 30px #9eccaa33"
+              },
+              "children": []
+            },
+            {
+              "id": "squirrels-video",
+              "type": "slot",
+              "slotId": "squirrels",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 0,
+                "outlineColor": "#9eccaa"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 917,
+                "top": 300,
+                "width": 258,
+                "height": 258
+              }
+            },
+            {
+              "id": "squirrels-label",
+              "type": "text",
+              "text": {
+                "get": "values.squirrelsName"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 917,
+                "top": 574,
+                "width": 258,
+                "height": 28,
+                "fontSize": "20px",
+                "fontWeight": 700,
+                "textAlign": "center",
+                "color": "#9eccaa"
+              }
+            },
+            {
+              "id": "mission",
+              "type": "text",
+              "text": {
+                "get": "values.mission"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 890,
+                "top": 181,
+                "width": 321,
+                "height": 84,
+                "fontSize": "27px",
+                "fontWeight": 750,
+                "lineHeight": "1.15",
+                "color": "#ead8b5"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "campfire",
+        "label": "03 Campfire Stories",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "campfire-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "radial-gradient(ellipse at 80% 15%,#314734,transparent 65%),linear-gradient(140deg,#14271f,#111c18)"
+          },
+          "children": [
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "SLAWS & SQUIRRELS",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 29,
+                "width": 970,
+                "height": 70,
+                "fontSize": "49px",
+                "fontWeight": 850,
+                "letterSpacing": "-.04em",
+                "color": "#f7efdc"
+              }
+            },
+            {
+              "id": "subtitle",
+              "type": "text",
+              "text": "A D V E N T U R E S",
+              "styles": {
+                "position": "absolute",
+                "left": 54,
+                "top": 104,
+                "width": 790,
+                "height": 26,
+                "fontSize": "15px",
+                "color": "#c4d8b8"
+              }
+            },
+            {
+              "id": "segment-tag",
+              "type": "text",
+              "text": "03 CAMPFIRE STORIES",
+              "styles": {
+                "position": "absolute",
+                "left": 900,
+                "top": 103,
+                "width": 327,
+                "height": 30,
+                "fontSize": "12px",
+                "textAlign": "right",
+                "letterSpacing": ".12em",
+                "color": "#dfb778"
+              }
+            },
+            {
+              "id": "line",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 50,
+                "top": 151,
+                "width": 1180,
+                "height": 1,
+                "background": "#b2c7a833"
+              },
+              "children": []
+            },
+            {
+              "id": "footer",
+              "type": "text",
+              "text": {
+                "get": "values.episode"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 52,
+                "top": 675,
+                "width": 1176,
+                "height": 26,
+                "fontSize": "14px",
+                "color": "#aec5af",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "slaws-rim",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 109,
+                "top": 256,
+                "width": 342,
+                "height": 342,
+                "borderRadius": "50%",
+                "border": "2px solid #dfb778",
+                "boxShadow": "0 0 30px #dfb77833"
+              },
+              "children": []
+            },
+            {
+              "id": "slaws-video",
+              "type": "slot",
+              "slotId": "slaws",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 0,
+                "outlineColor": "#dfb778"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 113,
+                "top": 260,
+                "width": 334,
+                "height": 334
+              }
+            },
+            {
+              "id": "slaws-label",
+              "type": "text",
+              "text": {
+                "get": "values.slawsName"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 113,
+                "top": 610,
+                "width": 334,
+                "height": 28,
+                "fontSize": "20px",
+                "fontWeight": 700,
+                "textAlign": "center",
+                "color": "#dfb778"
+              }
+            },
+            {
+              "id": "squirrels-rim",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 829,
+                "top": 256,
+                "width": 342,
+                "height": 342,
+                "borderRadius": "50%",
+                "border": "2px solid #9eccaa",
+                "boxShadow": "0 0 30px #9eccaa33"
+              },
+              "children": []
+            },
+            {
+              "id": "squirrels-video",
+              "type": "slot",
+              "slotId": "squirrels",
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 0,
+                "outlineColor": "#9eccaa"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 833,
+                "top": 260,
+                "width": 334,
+                "height": 334
+              }
+            },
+            {
+              "id": "squirrels-label",
+              "type": "text",
+              "text": {
+                "get": "values.squirrelsName"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 833,
+                "top": 610,
+                "width": 334,
+                "height": 28,
+                "fontSize": "20px",
+                "fontWeight": 700,
+                "textAlign": "center",
+                "color": "#9eccaa"
+              }
+            },
+            {
+              "id": "campfire-card",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 496,
+                "top": 217,
+                "width": 288,
+                "height": 405,
+                "background": "#101a15b8",
+                "border": "1px solid #dfb77855",
+                "borderRadius": "24px",
+                "padding": "28px 22px"
+              },
+              "children": [
+                {
+                  "id": "card-title",
+                  "type": "text",
+                  "text": "THE DAY\u2019S FIND",
+                  "styles": {
+                    "fontSize": "13px",
+                    "letterSpacing": ".1em",
+                    "color": "#dfb778"
+                  }
+                },
+                {
+                  "id": "discovery",
+                  "type": "text",
+                  "text": {
+                    "get": "values.discovery"
+                  },
+                  "styles": {
+                    "fontSize": "30px",
+                    "fontWeight": 750,
+                    "lineHeight": "1.25",
+                    "color": "#f7efdc",
+                    "padding": "28px 0"
+                  }
+                },
+                {
+                  "id": "closing",
+                  "type": "text",
+                  "text": {
+                    "get": "values.closing"
+                  },
+                  "styles": {
+                    "fontSize": "18px",
+                    "lineHeight": "1.5",
+                    "color": "#aec5af"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "controls": [
+      {
+        "id": "trailhead-button",
+        "type": "button",
+        "label": "01 The Trailhead",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "trailhead"
+        }
+      },
+      {
+        "id": "explore-button",
+        "type": "button",
+        "label": "02 Into the Wild",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "explore"
+        }
+      },
+      {
+        "id": "campfire-button",
+        "type": "button",
+        "label": "03 Campfire Stories",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "campfire"
+        }
+      },
+      {
+        "id": "slawsName-field",
+        "type": "text",
+        "label": "Slaws name",
+        "key": "slawsName"
+      },
+      {
+        "id": "squirrelsName-field",
+        "type": "text",
+        "label": "Squirrels name",
+        "key": "squirrelsName"
+      },
+      {
+        "id": "episode-field",
+        "type": "text",
+        "label": "Episode title",
+        "key": "episode"
+      },
+      {
+        "id": "opening-field",
+        "type": "text",
+        "label": "Opening line",
+        "key": "opening"
+      },
+      {
+        "id": "mission-field",
+        "type": "text",
+        "label": "Mission",
+        "key": "mission"
+      },
+      {
+        "id": "discovery-field",
+        "type": "text",
+        "label": "Discovery",
+        "key": "discovery"
+      },
+      {
+        "id": "closing-field",
+        "type": "text",
+        "label": "Closing line",
+        "key": "closing"
+      },
+      {
+        "id": "start",
+        "type": "button",
+        "label": "Start show",
+        "action": {
+          "type": "show.start"
+        }
+      },
+      {
+        "id": "next",
+        "type": "button",
+        "label": "Next",
+        "action": {
+          "type": "show.next"
+        }
+      }
+    ]
+  },
+  "show": {
+    "id": "slaws-squirrels-adventures",
+    "version": "0.1.0",
+    "initialPhase": "trailhead",
+    "phases": [
+      {
+        "id": "trailhead",
+        "label": "The Trailhead",
+        "layoutId": "trailhead",
+        "next": "explore"
+      },
+      {
+        "id": "explore",
+        "label": "Into the Wild",
+        "layoutId": "explore",
+        "next": "campfire"
+      },
+      {
+        "id": "campfire",
+        "label": "Campfire Stories",
+        "layoutId": "campfire"
+      }
+    ],
+    "choices": [
+      {
+        "id": "trail-a",
+        "label": "Trail A"
+      },
+      {
+        "id": "trail-b",
+        "label": "Trail B"
+      }
+    ]
+  }
+}

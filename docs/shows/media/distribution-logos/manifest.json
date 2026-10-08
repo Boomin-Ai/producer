@@ -1,0 +1,243 @@
+{
+  "library": "https://svgl.app",
+  "assets": [
+    {
+      "title": "PayPal",
+      "source": "https://svgl.app/library/paypal.svg",
+      "file": "paypal.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/paypal.svg",
+      "bytes": 692
+    },
+    {
+      "title": "Discord",
+      "source": "https://svgl.app/library/discord.svg",
+      "file": "discord.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/discord.svg",
+      "bytes": 1035
+    },
+    {
+      "title": "Facebook",
+      "source": "https://svgl.app/library/facebook-icon.svg",
+      "file": "facebook-icon.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/facebook-icon.svg",
+      "bytes": 1117
+    },
+    {
+      "title": "Twitter",
+      "source": "https://svgl.app/library/twitter.svg",
+      "file": "twitter.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/twitter.svg",
+      "bytes": 852
+    },
+    {
+      "title": "YouTube",
+      "source": "https://svgl.app/library/youtube.svg",
+      "file": "youtube.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/youtube.svg",
+      "bytes": 516
+    },
+    {
+      "title": "LinkedIn",
+      "source": "https://svgl.app/library/linkedin.svg",
+      "file": "linkedin.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/linkedin.svg",
+      "bytes": 768
+    },
+    {
+      "title": "Telegram",
+      "source": "https://svgl.app/library/telegram.svg",
+      "file": "telegram.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/telegram.svg",
+      "bytes": 1199
+    },
+    {
+      "title": "Matrix",
+      "source": "https://svgl.app/library/matrix-dark.svg",
+      "file": "matrix-dark.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/matrix-dark.svg",
+      "bytes": 720
+    },
+    {
+      "title": "WhatsApp",
+      "source": "https://svgl.app/library/whatsapp-icon.svg",
+      "file": "whatsapp-icon.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/whatsapp-icon.svg",
+      "bytes": 1590
+    },
+    {
+      "title": "Arc",
+      "source": "https://svgl.app/library/arc_dark.svg",
+      "file": "arc_dark.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/arc_dark.svg",
+      "bytes": 1024
+    },
+    {
+      "title": "Twitch",
+      "source": "https://svgl.app/library/twitch.svg",
+      "file": "twitch.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/twitch.svg",
+      "bytes": 364
+    },
+    {
+      "title": "Mastodon",
+      "source": "https://svgl.app/library/mastodon.svg",
+      "file": "mastodon.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/mastodon.svg",
+      "bytes": 1528
+    },
+    {
+      "title": "Messenger",
+      "source": "https://svgl.app/library/messenger.svg",
+      "file": "messenger.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/messenger.svg",
+      "bytes": 1029
+    },
+    {
+      "title": "Kick",
+      "source": "https://svgl.app/library/kick-dark.svg",
+      "file": "kick-dark.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/kick-dark.svg",
+      "bytes": 901
+    },
+    {
+      "title": "Infojobs",
+      "source": "https://svgl.app/library/infojobs-logo.svg",
+      "file": "infojobs-logo.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/infojobs-logo.svg",
+      "bytes": 747
+    },
+    {
+      "title": "Skype",
+      "source": "https://svgl.app/library/skype.svg",
+      "file": "skype.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/skype.svg",
+      "bytes": 3802
+    },
+    {
+      "title": "Threads",
+      "source": "https://svgl.app/library/threads_dark.svg",
+      "file": "threads_dark.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/threads_dark.svg",
+      "bytes": 1537
+    },
+    {
+      "title": "Instagram",
+      "source": "https://svgl.app/library/instagram-icon.svg",
+      "file": "instagram-icon.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/instagram-icon.svg",
+      "bytes": 7047
+    },
+    {
+      "title": "X (formerly Twitter)",
+      "source": "https://svgl.app/library/x_dark.svg",
+      "file": "x_dark.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/x_dark.svg",
+      "bytes": 417
+    },
+    {
+      "title": "VK",
+      "source": "https://svgl.app/library/vk.svg",
+      "file": "vk.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/vk.svg",
+      "bytes": 941
+    },
+    {
+      "title": "Hashnode",
+      "source": "https://svgl.app/library/hashnode.svg",
+      "file": "hashnode.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/hashnode.svg",
+      "bytes": 556
+    },
+    {
+      "title": "Patreon",
+      "source": "https://svgl.app/library/patreon_dark.svg",
+      "file": "patreon_dark.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/patreon_dark.svg",
+      "bytes": 2862
+    },
+    {
+      "title": "Peerlist",
+      "source": "https://svgl.app/library/peerlist.svg",
+      "file": "peerlist.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/peerlist.svg",
+      "bytes": 1917
+    },
+    {
+      "title": "Pinterest",
+      "source": "https://svgl.app/library/pinterest.svg",
+      "file": "pinterest.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/pinterest.svg",
+      "bytes": 1072
+    },
+    {
+      "title": "Reddit",
+      "source": "https://svgl.app/library/reddit.svg",
+      "file": "reddit.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/reddit.svg",
+      "bytes": 9827
+    },
+    {
+      "title": "Meta",
+      "source": "https://svgl.app/library/meta.svg",
+      "file": "meta.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/meta.svg",
+      "bytes": 2199
+    },
+    {
+      "title": "TikTok",
+      "source": "https://svgl.app/library/tiktok-icon-dark.svg",
+      "file": "tiktok-icon-dark.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/tiktok-icon-dark.svg",
+      "bytes": 1865
+    },
+    {
+      "title": "Behance",
+      "source": "https://svgl.app/library/behance.svg",
+      "file": "behance.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/behance.svg",
+      "bytes": 4566
+    },
+    {
+      "title": "Carrd",
+      "source": "https://svgl.app/library/carrd.svg",
+      "file": "carrd.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/carrd.svg",
+      "bytes": 1653
+    },
+    {
+      "title": "Bluesky",
+      "source": "https://svgl.app/library/bluesky.svg",
+      "file": "bluesky.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/bluesky.svg",
+      "bytes": 687
+    },
+    {
+      "title": "daily.dev",
+      "source": "https://svgl.app/library/daily-dev-dark.svg",
+      "file": "daily-dev-dark.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/daily-dev-dark.svg",
+      "bytes": 569
+    },
+    {
+      "title": "GitHub",
+      "source": "https://svgl.app/library/github_dark.svg",
+      "file": "github_dark.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/github_dark.svg",
+      "bytes": 939
+    },
+    {
+      "title": "Zulip",
+      "source": "https://svgl.app/library/zulip.svg",
+      "file": "zulip.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/zulip.svg",
+      "bytes": 768
+    },
+    {
+      "title": "Stripe",
+      "source": "https://svgl.app/library/stripe.svg",
+      "file": "stripe.svg",
+      "fetchedFrom": "https://raw.githubusercontent.com/pheralb/svgl/main/static/library/stripe.svg",
+      "bytes": 212
+    }
+  ]
+}

@@ -9,6 +9,8 @@ mod ipc;
 mod live;
 mod outbox;
 mod recordings;
+mod set_library;
+mod set_media;
 mod storage;
 mod store;
 mod submit;
@@ -53,6 +55,17 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            set_media::init(app.handle()).map_err(std::io::Error::other)?;
+            #[cfg(debug_assertions)]
+            if std::env::var_os("PRODUCER_SET_OUTPUT_PROBE").is_some() {
+                if let Some(window) = app.get_webview_window("main") {
+                    window.navigate(
+                        "http://localhost:1420/scripts/native-probe.html"
+                            .parse()
+                            .unwrap(),
+                    )?;
+                }
+            }
             // The window glass belongs to the app shell, including builds
             // without the live engine used for frontend development.
             #[cfg(target_os = "macos")]
@@ -98,6 +111,11 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            set_media::set_media_import,
+            set_media::set_media_resolve,
+            set_library::set_library_list,
+            set_library::set_library_read,
+            set_library::set_library_save,
             ipc::list_endpoints,
             ipc::add_endpoint,
             ipc::remove_endpoint,
@@ -199,7 +217,19 @@ pub fn run() {
             live::commands::live_set_transform,
             live::commands::live_apply_scene,
             live::commands::live_set_status,
+            live::commands::live_portrait_room,
+            live::commands::live_portrait_state,
+            live::commands::live_select_output,
+            live::commands::live_program_video_wanted,
+            live::commands::live_program_video_read,
+            live::commands::live_portrait_transform,
+            live::commands::live_portrait_preview,
+            live::commands::live_portrait_apply,
+            live::commands::live_portrait_warm,
+            live::commands::live_portrait_stop,
+            live::commands::live_portrait_frame,
             live::commands::live_set_apply,
+            live::commands::live_set_warm,
             live::commands::live_set_return,
             live::commands::live_restore_room,
             live::commands::live_replace_source,

@@ -16,8 +16,9 @@ export class AudienceSender {
   }
   private async start(): Promise<void> {
     try{const lease=await sharedProgramCapture.acquire(0);if(this.closed){lease.release();return;}this.lease=lease;const stream=new MediaStream([lease.video,lease.audio]);stream.getTracks().forEach(t=>this.pc.addTrack(t,stream));
-      for(const sender of this.pc.getSenders()){const p=sender.getParameters();if(p.encodings?.length){p.encodings[0].maxBitrate=sender.track?.kind==='video'?800000:64000;await sender.setParameters(p);}}
-    }catch{if(!this.closed){this.fail();this.stop();}}
+      lease.onVideo(async track=>{const sender=this.pc.getSenders().find(s=>s.track?.kind==='video');if(sender&&!this.closed)await sender.replaceTrack(track);});
+      for(const sender of this.pc.getSenders()){const p=sender.getParameters();if(p.encodings?.length){p.encodings[0].maxBitrate=sender.track?.kind==='video'?800000:64000;await sender.setParameters(p).catch(()=>{});}}
+    }catch(error){console.warn("Program sender failed",error);if(!this.closed){this.fail();this.stop();}}
   }
   signal(payload: MediaSignal): void { this.queue=this.queue.catch(()=>{}).then(async()=>{
     if(this.closed)return;

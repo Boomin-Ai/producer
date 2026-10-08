@@ -1,0 +1,44 @@
+[
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "00008110-0012112101F3A01E",
+        "deviceName" : "User’s iPhone",
+        "exportedFileName" : "6FFAB831-DBE4-49D1-ABC2-D9FE7EAC5EE7.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Events_0_B90F8668-7F8A-486C-8580-B4B88BCB7069.png",
+        "timestamp" : 1791122472.226
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "00008110-0012112101F3A01E",
+        "deviceName" : "User’s iPhone",
+        "exportedFileName" : "6981C290-9805-413B-840C-60DFAC3C8888.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Rene_0_A25CD12D-F658-4E6B-A41D-6812AB05B338.png",
+        "timestamp" : 1791122466.281
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "00008110-0012112101F3A01E",
+        "deviceName" : "User’s iPhone",
+        "exportedFileName" : "D41A0604-40DC-4932-9EEE-042AAEB0425F.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Directory_0_6D668A4C-D90E-49C1-84F2-E84CADAB53D7.png",
+        "timestamp" : 1791122458.558
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "00008110-0012112101F3A01E",
+        "deviceName" : "User’s iPhone",
+        "exportedFileName" : "D880154A-EC62-4999-A5BE-622103A0B0B0.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Jobs_0_DE726937-4D34-40B2-991C-4764A668D8DF.png",
+        "timestamp" : 1791122439.762
+      }
+    ],
+    "testIdentifier" : "GuestTests/testPublicNavigationAndGuestRene()",
+    "testIdentifierURL" : "test://com.apple.xcode/Atlantium/AtlantiumUITests/GuestTests/testPublicNavigationAndGuestRene"
+  }
+]

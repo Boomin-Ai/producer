@@ -1,0 +1,6 @@
+Framework: Jensen Huang, AI Is a 5-Layer Cake, NVIDIA, March 10, 2026.
+https://blogs.nvidia.com/blog/ai-5-layer-cake/
+
+The layer order is Energy, Chips, Infrastructure, Models, Applications. Explanatory captions and discussion prompts are paraphrases/editorial prompts, not quotations. This is one framework, not a claim that every AI leader uses the same taxonomy.
+
+Assign Host camera, Analyst 1 source and Analyst 2 source. Solo segments use the Host source; the final panel uses all three. Camera placement changes on segment/layout cuts; there is no animated native camera travel. Show execution is rehearsal-only in v0.4.63; prepared layouts can be applied to production output.

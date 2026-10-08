@@ -52,3 +52,31 @@ Verification: TypeScript/Vite build and the mocked native transport browser chec
 in `scripts/publish-composer-browser.html`. No real post was submitted by the test.
 The user will test @kleveland in the running native dev app before release work.
 Production routing, self-hosted routing, and Apple signing are unchanged.
+
+## Existing draft edits
+
+Hosted draft units now use the CMS `PATCH /v1/app/content/units/:id` writer.
+Caption, collection assignment, destination selection and per-destination settings
+are staged together and persisted by **Save draft**. The server response replaces
+the unit in the workspace cache after stale reads are cancelled. Failed or denied
+saves retain the editable draft and show an error rather than claiming success.
+Published, scheduled, reviewing, processing and partially published units retain
+their locks. Editing does not publish or schedule anything.
+
+Custom caption editing preserves empty enabled fields and spaces while typing;
+the CMS receives `caption_override` separately from destination presets. Unfiling
+explicitly clears both collection aliases used by the existing CMS contract.
+Workspace changes hide the previous session while the new cache opens.
+
+Verification: `npm run build`, `npm run test:manager-cache`, and Chrome/WebKit
+browser regressions for draft persistence, collection movement/unfiling, caption
+overrides, destination presets, retry/permission failures, duplicate prevention,
+stage locks, existing publishing composer and cached navigation. Run Vite, then
+`npm run test:manager-ui` with Playwright installed (or `PLAYWRIGHT_MODULE` pointing
+to its module). Browser tests mock the native transport and never post to social
+accounts; the composer still uses its existing native outbox for real publishing.
+
+Live verification on 2026-10-04: Kleveland’s empty Yo draft accepted a temporary
+caption via PATCH; a fresh unit inventory GET returned that caption with its draft
+stage and collection unchanged. The original empty caption was restored and
+verified with another GET. No publish or schedule route was called.

@@ -66,14 +66,14 @@ try {
   await until(()=>document.querySelector("#pm-unit-tab-comments")?.getAttribute("aria-selected")==="true","restored unit tab");
   await pause(); check(total()===beforeUnitReturn,"reopening unit fetched fresh media again");
   const shell=document.querySelector(".pm");
-  failRefresh=true;document.querySelector(".pm-live-toolbar button").click();
+  failRefresh=true;void peekManagerSession(endpoint).client.invalidateQueries({queryKey:["manager"]});
   await until(()=>document.querySelector(".pm-live-cache-status"),"background failure");
   check(document.querySelector(".pm")===shell,"refresh failure unmounted the page");
   check(document.querySelector("#pm-unit-tab-comments").getAttribute("aria-selected")==="true","refresh reset selected tab");
   failRefresh=false;document.querySelector(".pm-live-cache-status button").click();
   await until(()=>!document.querySelector(".pm-live-cache-status"),"refresh recovery");
   check(document.querySelector(".pm")===shell,"successful refresh unmounted the page");
-  denyAccess=true;document.querySelector(".pm-live-toolbar button").click();
+  denyAccess=true;void peekManagerSession(endpoint).client.invalidateQueries({queryKey:["manager"]});
   await until(()=>document.querySelector(".pm-live-message[role=alert]"),"access denial");
   check(!document.querySelector(".pm"),"access denial still displayed private cached content");
   const deniedCount=total();await pause();await pause();check(total()===deniedCount,"access denial caused a refetch loop");

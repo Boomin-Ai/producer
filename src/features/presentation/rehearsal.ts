@@ -1,3 +1,7 @@
+import {enterMedia,mediaPosition,layoutMedia,playable,type MediaTransport,type PlaybackConfig} from './playback';
+import {outputProjection} from './projection';
+import {layoutTransition} from './layoutTransition';
+import {clockPosition,type AnimationTrack,type AnimationClock} from './animation';
 import { parsePackage, validateValue, type Binding, type PresentationPackage, type RehearsalAction, type Scalar } from './schema';
 
 function freeze<T>(value: T): T {
@@ -8,6 +12,10 @@ function freeze<T>(value: T): T {
 }
 
 export interface RehearsalState {
+  media?:Record<string,MediaTransport>;
+  animationClock?:AnimationClock;
+  layoutMotion?:AnimationTrack[];
+  layoutMotionId?:string;
   mode: 'rehearsal'; sandboxId: string; revision: number; elapsedMs: number;
   workspaceMode: 'prepare' | 'rehearsal';
   running: boolean; paused: boolean; layoutId: string;
@@ -22,22 +30,24 @@ export type SimulationEvent =
   | { type: 'field'; key: string; value: Scalar }
   | { type: 'feed'; key: string; value: Scalar }
   | { type: 'tick'; milliseconds: number }
+  | { type: 'seek'; milliseconds:number }
   | { type: 'pause'; paused: boolean }
   | { type: 'vote'; playerId: string; choiceId: string }
   | { type: 'reaction'; playerId: string }
   | { type: 'reset' } | { type: 'stop' };
 
-export function evaluate(binding: Binding, state: RehearsalState, props: Record<string, Scalar> = {}, budget = 64): Scalar {
+export function evaluate(binding: Binding, state: RehearsalState, props: Record<string, Scalar> = {}, budget = 64, tokens: Record<string, Scalar> = {}): Scalar {
   if (budget <= 0) throw new Error('Binding budget exceeded.');
   if (typeof binding !== 'object') return binding;
   if ('get' in binding) {
+    if(binding.get==='show.layoutId')return state.layoutId;
     const [scope, key] = binding.get.split('.');
-    const data = scope === 'props' ? props : scope === 'values' ? state.values : scope === 'feeds' ? state.feeds : state.show;
+    const data = scope === 'tokens' ? tokens : scope === 'props' ? props : scope === 'values' ? state.values : scope === 'feeds' ? state.feeds : state.show;
     const v = (data as Record<string, Scalar>)[key];
     if (!Object.prototype.hasOwnProperty.call(data, key)) throw new Error(`Missing binding ${binding.get}.`);
     return v;
   }
-  const next = (b: Binding) => evaluate(b, state, props, budget - 1);
+  const next = (b: Binding) => evaluate(b, state, props, budget - 1, tokens);
   if (binding.op === 'eq') return next(binding.args[0]) === next(binding.args[1]);
   if (binding.op === 'if') {
     const condition = next(binding.args[0]);
@@ -53,7 +63,7 @@ export function evaluate(binding: Binding, state: RehearsalState, props: Record<
  * cannot change that; unknown event/action types are refused at this boundary.
  */
 export class RehearsalSession {
-  readonly package: PresentationPackage;
+  package: PresentationPackage;
   private state: RehearsalState;
   private voters = new Map<string, string>();
   private listeners = new Set<() => void>();
@@ -67,7 +77,8 @@ export class RehearsalSession {
     this.package = freeze(parsePackage(doc)); this.sandboxId = sandboxId; this.state = freeze(this.initial());
   }
   private initial(): RehearsalState {
-    return { mode: 'rehearsal', workspaceMode: this.workspaceMode, sandboxId: this.sandboxId, revision: 0, elapsedMs: 0, running: false, paused: false,
+    const media:Record<string,MediaTransport>={};enterMedia(this.package,undefined,this.preparation?.layoutId??this.package.set.initialLayout,media);
+    return { media,...(this.package.set.layouts.some(l=>l.animation||l.root.children?.some(n=>n.type==='shader'))?{animationClock:{running:false,positionMs:0,segmentMs:0,anchorMs:Date.now()}}:{}), mode: 'rehearsal', workspaceMode: this.workspaceMode, sandboxId: this.sandboxId, revision: 0, elapsedMs: 0, running: false, paused: false,
       layoutId: this.package.set.initialLayout,
       values: Object.fromEntries(Object.entries(this.package.set.values).map(([k, v]) => [k, v.default])),
       feeds: Object.fromEntries(Object.entries(this.package.set.feeds).map(([k, v]) => [k, v.default])),
@@ -104,6 +115,23 @@ export class RehearsalSession {
     }
     return parsePackage(doc);
   };
+  configureMedia = (id:string,config:PlaybackConfig) => {
+    const doc=structuredClone(this.package);if(!doc.set.assets?.[id])throw new Error('Unknown asset.');
+    doc.set.assets[id].playback=config;this.package=freeze(parsePackage(doc));
+    this.state=freeze({...this.state,revision:this.state.revision+1});this.emit();
+  };
+  replaceMedia = (id:string,asset:import('./assets').MediaAsset) => {
+    const doc=structuredClone(this.package);if(!doc.set.assets?.[id])throw new Error('Unknown asset.');
+    doc.set.assets[id]={...asset,playback:doc.set.assets[id].playback};this.package=freeze(parsePackage(doc));
+    const media={...this.state.media,[id]:{playing:false,positionMs:0,anchorMs:Date.now()}};
+    this.state=freeze({...this.state,media,revision:this.state.revision+1});this.emit();
+  };
+  mediaCommand = (id:string,command:'play'|'pause'|'restart'|'stop') => {
+    if(!layoutMedia(this.package,this.state.layoutId,true,this.state).has(id)||!playable(this.package.set.assets?.[id]?.mime??''))return false;
+    const now=Date.now(),media=structuredClone(this.state.media??{}),t=media[id]??{playing:false,positionMs:0,anchorMs:now};
+    media[id]={playing:command!=='pause'&&command!=='stop',positionMs:command==='restart'||command==='stop'?0:mediaPosition(t,now),anchorMs:now};
+    this.state=freeze({...this.state,media,revision:this.state.revision+1});this.emit();return true;
+  };
   subscribe = (fn: () => void) => { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; };
   send(event: SimulationEvent): boolean {
     const next = structuredClone(this.state);
@@ -111,9 +139,10 @@ export class RehearsalSession {
     try {
       if (!event || typeof event !== 'object') throw new Error('Invalid rehearsal event.');
       if (this.workspaceMode === 'prepare' &&
-        (['pause', 'tick', 'vote', 'reaction', 'stop'].includes(event.type) || event.type === 'control' && event.action.type.startsWith('show.')))
+        (['pause', 'tick', 'seek', 'vote', 'reaction', 'stop'].includes(event.type) || event.type === 'control' && event.action.type.startsWith('show.')))
         throw new Error('Enter rehearsal before running the show or sending practice inputs.');
       switch (event.type) {
+        case 'seek': if(!Number.isFinite(event.milliseconds)||event.milliseconds<0||event.milliseconds>60_000)throw new Error('Invalid segment animation time.');break;
         case 'reset':
           this.voters.clear(); this.reactionTimes.clear(); this.heatEvents = [];
           this.state = freeze(this.initial()); this.emit(); return true;
@@ -154,12 +183,15 @@ export class RehearsalSession {
               next.show.remainingMs = phase.collectMs ?? 0; next.show.collecting = !!phase.collectMs;
               log('Show started in rehearsal.'); break;
             }
+            case 'show.previous':
             case 'show.next': {
               if (!this.package.show || !next.running || next.paused) throw new Error('Cannot advance.');
               const phase = this.package.show.phases.find(p => p.id === next.show.phase)!;
-              if (!phase.next) throw new Error('This is the final phase.');
+              const previous = this.package.show.phases.find(p => p.next === phase.id);
+              if (a.type==='show.next'&&!phase.next) throw new Error('This is the final phase.');
+              if (a.type==='show.previous'&&!previous) throw new Error('This is the first phase.');
               if (next.show.collecting || phase.collectMs && !next.show.revealed) throw new Error('Close and reveal the round first.');
-              const target = this.package.show.phases.find(p => p.id === phase.next)!;
+              const target = a.type==='show.previous'?previous!:this.package.show.phases.find(p => p.id === phase.next)!;
               next.show.phase = target.id; next.layoutId = target.layoutId;
               next.show.remainingMs = target.collectMs ?? 0; next.show.collecting = !!target.collectMs;
               if (target.collectMs) { this.voters.clear(); next.ballotChoiceIds = this.package.show.choices.map(c => c.id); next.ballotHistory = []; next.show.ballot = 1; next.show.result = ''; next.show.total = 0; next.show.revealed = false; next.show.winner = ''; Object.keys(next.counts).forEach(k => next.counts[k] = 0); }
@@ -200,6 +232,32 @@ export class RehearsalSession {
           break;
         }
         default: throw new Error('Unregistered rehearsal event.');
+      }
+      next.media??={};
+      const animationNow=Date.now(),oldClock=this.state.animationClock??{running:false,positionMs:this.state.elapsedMs,segmentMs:0,anchorMs:animationNow};
+      const position=clockPosition(oldClock,animationNow);
+      if(event.type==='control'&&event.action.type==='show.start'){position.positionMs=0;position.segmentMs=0;}
+      else if(next.layoutId!==this.state.layoutId||next.show.phase!==this.state.show.phase)position.segmentMs=0;
+      else if(event.type==='tick'){position.positionMs+=event.milliseconds;position.segmentMs+=event.milliseconds;}
+      else if(event.type==='seek'){position.positionMs+=event.milliseconds-position.segmentMs;position.segmentMs=event.milliseconds;for(const [id,t]of Object.entries(next.media))next.media[id]={...t,positionMs:event.milliseconds,anchorMs:animationNow};}
+      // Control edges update the anchor. Ordinary content edits retain it, so
+      // editing a title never restarts an animation.
+      if(this.state.animationClock&&(['pause','stop','tick','seek'].includes(event.type)||event.type==='control'&&(['show.start','show.next','show.previous','layout.select'].includes(event.action.type))))next.animationClock={...position,positionMs:Math.max(0,position.positionMs),running:next.running&&!next.paused,anchorMs:animationNow};
+      if(next.layoutId!==this.state.layoutId){
+        delete next.layoutMotion;delete next.layoutMotionId;
+        const transition=this.package.set.layouts.find(l=>l.id===next.layoutId)?.animation?.transition;
+        if(transition?.type==='morph'&&transition.durationMs>0&&next.running&&!next.paused){
+          next.layoutMotionId=next.layoutId;next.layoutMotion=layoutTransition(outputProjection(this.package,this.state),outputProjection(this.package,next),transition.durationMs,animationNow);
+        }
+      }
+      if(event.type==='stop'){delete next.layoutMotion;delete next.layoutMotionId;}
+      if(event.type==='control'&&event.action.type==='show.start')enterMedia(this.package,undefined,next.layoutId,next.media);
+      else enterMedia(this.package,this.state.layoutId,next.layoutId,next.media,Date.now(),this.state,next);
+      if(event.type==='pause'||event.type==='stop'){
+        const now=Date.now();for(const [id,t]of Object.entries(next.media)){
+          if(event.type==='pause'&&!event.paused){if(t.resumeAfterPause)next.media[id]={playing:true,positionMs:t.positionMs,anchorMs:now};}
+          else next.media[id]={playing:false,positionMs:mediaPosition(t,now),anchorMs:now,resumeAfterPause:event.type==='pause'&&t.playing};
+        }
       }
       next.revision++; this.state = freeze(next); this.emit(); return true;
     } catch (e) {

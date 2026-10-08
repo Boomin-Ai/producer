@@ -1,0 +1,10 @@
+<!doctype html><div id="root"></div><output id="result">Running</output><script type="module">
+import React from 'react';import {createRoot} from 'react-dom/client';import {ManagerShell} from '/src/features/manager/ManagerShell.tsx';
+import {managerFixture} from '/src/features/manager/fixtures.ts';
+let revealed=null;window.__TAURI_INTERNALS__={invoke:async(command,args)=>{if(command==='live_reveal_file'){revealed=args.path;return;}if(command==='pref_get')return null;if(command==='pref_set')return;throw Error(command);}};
+const root=createRoot(document.getElementById('root'));
+const unit=(id,collectionId)=>({id,collectionId,title:'Recorded show',type:'long-video',stage:'studio',caption:'',postIds:[],partIds:[],recording:{id:'capture-1',started_at:'2026-10-07T12:00:00Z',duration_ms:5000,localAvailable:true,localPath:'/tmp/test-recording.mp4'}});
+const data=u=>({...managerFixture,source:'hosted',workspaceName:'Test',collections:[{id:u.collectionId,name:'Recordings',kind:'recordings'}],units:[u],posts:[],parts:[],mediaFiles:[]});
+const render=u=>root.render(React.createElement(ManagerShell,{data:data(u),initialLocation:{view:'unit',unitId:'local-recording-capture-1',returnTo:{view:'overview'}}}));
+try{render(unit('local-recording-capture-1','local-collection'));await new Promise(r=>setTimeout(r,250));render(unit('hosted-unit','hosted-collection'));await new Promise(r=>setTimeout(r,250));if(document.body.textContent.includes('no longer in this workspace'))throw Error('Recording selection lost after provenance sync');if(!document.querySelector('.pm-preview-caption')?.textContent.includes('Recorded show'))throw Error('Recording did not stay open');document.querySelector('.pm-recording-location').click();await new Promise(r=>setTimeout(r,30));if(revealed!=='/tmp/test-recording.mp4')throw Error('Open location did not reveal the recording');document.getElementById('result').textContent='PASS: recording navigation survives local-to-hosted ID migration';}catch(e){document.getElementById('result').textContent='FAIL: '+e.message;}
+</script>

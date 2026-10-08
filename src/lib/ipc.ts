@@ -66,6 +66,9 @@ function cacheChanged(endpointId?: string, clear = false) {
 }
 
 export const ipc = {
+  setLibraryList:()=>invoke<Array<{file:string;id:string;name:string}>>("set_library_list"),
+  setLibraryRead:(file:string)=>invoke<string>("set_library_read",{file}),
+  setLibrarySave:(text:string)=>invoke<void>("set_library_save",{text}),
   listEndpoints: () => invoke<EndpointInfo[]>("list_endpoints"),
   removeEndpoint: async (endpointId: string) => {
     await invoke("remove_endpoint", { endpointId }); cacheChanged(endpointId, true);
@@ -210,8 +213,18 @@ export const ipc = {
     overlay_url: string | null;
     changes: { id: string; patch: LiveTransformPatch; muted?: boolean }[];
   }) => invoke<{ sources: LiveSources; warnings: string[] }>("live_restore_room", { restore }),
+  livePortraitRoom: ()=>invoke<LiveSources>('live_portrait_room'),
+  liveSelectOutput: (portrait:boolean)=>invoke<void>('live_select_output',{portrait}),
+  livePortraitState: ()=>invoke<LiveSources>('live_portrait_state'),
+  livePortraitTransform: (id:string,patch:LiveTransformPatch)=>invoke<LiveSources>('live_portrait_transform',{id,patch}),
+  livePortraitPreview: (rect:{x:number;y:number;w:number;h:number}|null)=>invoke<boolean>('live_portrait_preview',{rect}),
+  livePortraitWarm:(request:{assetIds?:string[];preload?:import('../features/presentation/projection').OutputProjection;generation:number;lease:string;projection:import('../features/presentation/projection').OutputProjection;bindings:Record<string,string>})=>invoke<void>('live_portrait_warm',{request}),
+  livePortraitApply: (request:{assetIds?:string[];preload?:import('../features/presentation/projection').OutputProjection;generation:number;lease:string;projection:import('../features/presentation/projection').OutputProjection;bindings:Record<string,string>})=>invoke<void>('live_portrait_apply',{request}),
+  livePortraitStop: ()=>invoke<void>('live_portrait_stop'),
+  livePortraitFrame: ()=>invoke<string>('live_portrait_frame'),
   liveSetStatus: () => invoke<import('../features/presentation/useSetOutput').SetOutputStatus>("live_set_status"),
-  liveSetApply: (request: {generation:number;lease:string;projection:import('../features/presentation/projection').OutputProjection;bindings:Record<string,string>}) =>
+  liveSetWarm:(request:{assetIds?:string[];preload?:import('../features/presentation/projection').OutputProjection;generation:number;lease:string;projection:import('../features/presentation/projection').OutputProjection;bindings:Record<string,string>})=>invoke<void>('live_set_warm',{request}),
+  liveSetApply: (request: {assetIds?:string[];preload?:import('../features/presentation/projection').OutputProjection;generation:number;lease:string;projection:import('../features/presentation/projection').OutputProjection;bindings:Record<string,string>}) =>
     invoke<import('../features/presentation/useSetOutput').SetOutputStatus>("live_set_apply", {request}),
   liveSetReturn: (lease:string) => invoke<import('../features/presentation/useSetOutput').SetOutputStatus>("live_set_return", {lease}),
   liveApplyScene: (changes: { id: string; patch: LiveTransformPatch; muted?: boolean }[]) =>
@@ -460,7 +473,7 @@ export const stinger = {
 
 export const recording = {
   /** stamp names the file; resolves the path being written. */
-  start: (stamp: string, roomId?: string) => invoke<string>("live_start_recording", { stamp, roomId: roomId ?? null }),
+  start: (stamp: string, roomId?: string, dual=false) => invoke<string>("live_start_recording", { stamp, roomId: roomId ?? null,dual }),
   stop: () => invoke<string | null>("live_stop_recording"),
   reveal: (path: string) => invoke("live_reveal_file", { path }),
   list: (endpointId: string) => invoke<LocalRecording[]>("recordings_list", { endpointId }),

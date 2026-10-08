@@ -1,0 +1,17 @@
+[
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "00008110-0012112101F3A01E",
+        "deviceName" : "User’s iPhone",
+        "exportedFileName" : "C31A4584-B4B8-417F-AC41-00EC2AE09458.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Jobs_0_53B7A125-65C9-43ED-BF21-36EC360C7126.png",
+        "timestamp" : 1791123326.701
+      }
+    ],
+    "testIdentifier" : "GuestTests/testPublicNavigationAndGuestRene()",
+    "testIdentifierURL" : "test://com.apple.xcode/Atlantium/AtlantiumUITests/GuestTests/testPublicNavigationAndGuestRene"
+  }
+]

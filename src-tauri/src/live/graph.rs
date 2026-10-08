@@ -582,6 +582,11 @@ pub struct SceneGraph {
     presentation_generation: u64,
     presentation: Option<super::presentation::Composition>,
     presentation_pending: Option<super::presentation::Composition>,
+    presentation_spare: Option<super::presentation::Composition>,
+    presentation_retiring: Option<super::presentation::Composition>,
+    presentation_needs_prewarm: bool,
+    #[cfg(target_os = "macos")]
+    portrait: Option<super::portrait::Portrait>,
     overlay: Option<(
         *mut ffi::obs_sceneitem_t,
         *mut ffi::obs_source_t,
@@ -796,6 +801,11 @@ impl SceneGraph {
                 presentation_generation: 0,
                 presentation: None,
                 presentation_pending: None,
+                presentation_spare: None,
+                presentation_retiring: None,
+                presentation_needs_prewarm: false,
+                #[cfg(target_os = "macos")]
+                portrait: None,
                 overlay: None,
                 extras: Vec::new(),
                 thumb_rt: std::ptr::null_mut(),
@@ -2208,6 +2218,7 @@ pub struct ThumbHub {
     /// lib/monitorFeed.ts). Adds the `program` target — the output source
     /// itself — at PROGRAM_THUMB_FPS even with the guests panel hidden.
     pub program_wanted: std::sync::atomic::AtomicBool,
+    pub program_portrait: std::sync::atomic::AtomicBool,
     frame_no: std::sync::atomic::AtomicU32,
     rings: std::sync::Mutex<std::collections::HashMap<String, ThumbRing>>,
     pub slots: std::sync::Mutex<std::collections::HashMap<String, ThumbSlot>>,
@@ -2226,6 +2237,7 @@ impl ThumbHub {
             targets: std::sync::Mutex::new(Vec::new()),
             fps: std::sync::atomic::AtomicU32::new(0),
             program_wanted: std::sync::atomic::AtomicBool::new(false),
+            program_portrait: std::sync::atomic::AtomicBool::new(false),
             frame_no: std::sync::atomic::AtomicU32::new(0),
             rings: std::sync::Mutex::new(std::collections::HashMap::new()),
             slots: std::sync::Mutex::new(std::collections::HashMap::new()),
@@ -2266,7 +2278,23 @@ impl ThumbHub {
             .program_wanted
             .load(std::sync::atomic::Ordering::Relaxed)
         {
-            unsafe { ffi::obs_get_output_source(0) }
+            #[cfg(target_os = "macos")]
+            if self
+                .program_portrait
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
+                scene
+                    .portrait
+                    .as_ref()
+                    .map(|p| unsafe { p.program_source() })
+                    .unwrap_or(std::ptr::null_mut())
+            } else {
+                unsafe { ffi::obs_get_output_source(0) }
+            }
+            #[cfg(not(target_os = "macos"))]
+            unsafe {
+                ffi::obs_get_output_source(0)
+            }
         } else {
             std::ptr::null_mut()
         };
@@ -2727,6 +2755,174 @@ mod scene_restoration_tests {
 }
 
 impl SceneGraph {
+    #[cfg(target_os = "macos")]
+    pub fn portrait_room(&mut self) -> Result<SourcesState, String> {
+        if self.portrait.is_none() {
+            self.portrait = Some(unsafe { super::portrait::Portrait::create()? });
+        }
+        unsafe {
+            self.portrait.as_mut().unwrap().room();
+        }
+        self.sync_portrait_room();
+        Ok(self.portrait_state())
+    }
+    #[cfg(target_os = "macos")]
+    pub fn sync_portrait_room(&mut self) {
+        if self.portrait.is_none() {
+            return;
+        }
+        let states = self.state().items;
+        let captures = states
+            .iter()
+            .filter(|s| s.kind != "mic")
+            .filter_map(|s| self.source_by_id(&s.id).map(|src| (s.id.clone(), src)))
+            .collect();
+        let mut info = std::mem::MaybeUninit::<ffi::obs_video_info>::zeroed();
+        unsafe {
+            if ffi::obs_get_video_info(info.as_mut_ptr()) {
+                let info = info.assume_init();
+                self.portrait.as_mut().unwrap().sync_room(
+                    states,
+                    captures,
+                    info.base_width as f32,
+                    info.base_height as f32,
+                );
+            }
+        }
+    }
+    #[cfg(target_os = "macos")]
+    pub fn portrait_state(&self) -> SourcesState {
+        SourcesState {
+            overlay_window: None,
+            overlay_url: None,
+            items: self
+                .portrait
+                .as_ref()
+                .map(|p| p.room_states())
+                .unwrap_or_default(),
+        }
+    }
+    #[cfg(target_os = "macos")]
+    pub fn portrait_transform(
+        &mut self,
+        id: &str,
+        t: TransformPatch,
+    ) -> Result<SourcesState, String> {
+        self.portrait
+            .as_mut()
+            .ok_or("Portrait room is not active")?
+            .transform(id, t)?;
+        self.sync_portrait_room();
+        Ok(self.portrait_state())
+    }
+    #[cfg(target_os = "macos")]
+    pub fn portrait_canvas(&mut self) -> Result<*mut super::portrait::Canvas, String> {
+        if self.portrait.is_none() {
+            self.portrait_room()?;
+        }
+        Ok(self.portrait.as_ref().unwrap().canvas)
+    }
+    #[cfg(target_os = "macos")]
+    pub fn portrait_warm(
+        &mut self,
+        request: super::presentation::Request,
+    ) -> Result<std::sync::Arc<super::presentation::Bridge>, String> {
+        if self.portrait.as_ref().is_some_and(|p| p.active.is_some()) {
+            return Err("A portrait set is already on output".into());
+        }
+        self.portrait_prepare(request)
+    }
+    #[cfg(target_os = "macos")]
+    pub fn portrait_prepare(
+        &mut self,
+        request: super::presentation::Request,
+    ) -> Result<std::sync::Arc<super::presentation::Bridge>, String> {
+        if request.generation != self.presentation_generation {
+            return Err("Room changed during portrait preparation".into());
+        }
+        let items = self.state().items;
+        let mut captures = std::collections::HashMap::new();
+        for (slot, id) in &request.bindings {
+            let item = items
+                .iter()
+                .find(|i| &i.id == id)
+                .ok_or("Source left the room")?;
+            if !item.visible || !item.has_frame || item.kind == "mic" {
+                return Err("Portrait sources must be ready on the room scene".into());
+            }
+            captures.insert(
+                slot.clone(),
+                self.source_by_id(id).ok_or("Source unavailable")?,
+            );
+        }
+        if self.portrait.is_none() {
+            self.portrait = Some(unsafe { super::portrait::Portrait::create()? });
+        }
+        unsafe { self.portrait.as_mut().unwrap().prepare(request, captures) }
+    }
+    #[cfg(target_os = "macos")]
+    pub fn portrait_abort(&mut self, token: &str, revision: u64) {
+        if let Some(p) = self.portrait.as_mut() {
+            if let Some(a) = p.active.as_mut() {
+                a.abort_patch(token, revision);
+            }
+            if p.pending.as_ref().is_some_and(|s| {
+                s.bridge.token == token && s.request.projection.revision == revision
+            }) {
+                p.pending = None;
+            }
+        }
+    }
+    #[cfg(target_os = "macos")]
+    pub fn portrait_commit(
+        &mut self,
+        token: &str,
+        placements: Vec<super::presentation::Placement>,
+    ) -> Result<(), String> {
+        let portrait = self
+            .portrait
+            .as_ref()
+            .ok_or("Portrait preparation cancelled")?;
+        let pending = portrait
+            .pending
+            .as_ref()
+            .or_else(|| {
+                portrait
+                    .active
+                    .as_ref()
+                    .filter(|p| p.pending_patch.is_some())
+            })
+            .ok_or("Portrait preparation cancelled")?;
+        for id in pending.request.bindings.values() {
+            if !self
+                .state()
+                .items
+                .iter()
+                .any(|i| &i.id == id && i.visible && i.has_frame)
+            {
+                return Err("Portrait source stopped during preparation".into());
+            }
+        }
+        unsafe {
+            self.portrait
+                .as_mut()
+                .unwrap()
+                .commit(token, placements, self.presentation_generation)
+        }
+    }
+    #[cfg(target_os = "macos")]
+    pub fn portrait_video(&mut self) -> Result<*mut ffi::video_t, String> {
+        self.portrait_canvas()?;
+        Ok(unsafe { self.portrait.as_ref().unwrap().video() })
+    }
+    #[cfg(target_os = "macos")]
+    pub fn portrait_stop(&mut self) {
+        self.portrait = None;
+    }
+    #[cfg(target_os = "macos")]
+    pub fn portrait_frame(&self) -> String {
+        self.portrait.as_ref().map(|p| p.jpeg()).unwrap_or_default()
+    }
     pub fn presentation_status(&self) -> super::presentation::Status {
         super::presentation::Status {
             generation: self.presentation_generation,
@@ -2737,17 +2933,45 @@ impl SceneGraph {
                 .map_or(0, |p| p.request.projection.revision),
         }
     }
-    pub fn prepare_presentation(
+    pub fn warm_presentation(
         &mut self,
         request: super::presentation::Request,
     ) -> Result<std::sync::Arc<super::presentation::Bridge>, String> {
-        super::presentation::validate(&request)?;
+        if self.presentation.is_some() {
+            return Err("A set is already on output".into());
+        }
+        self.prepare_presentation(request)
+    }
+    pub fn prepare_presentation(
+        &mut self,
+        mut request: super::presentation::Request,
+    ) -> Result<std::sync::Arc<super::presentation::Bridge>, String> {
+        if let Some(active) = self
+            .presentation
+            .as_ref()
+            .or(self.presentation_pending.as_ref())
+        {
+            super::presentation::hydrate(&mut request, &active.request);
+        }
+        super::presentation::validate_cached(
+            &request,
+            self.presentation
+                .as_ref()
+                .or(self.presentation_pending.as_ref())
+                .map(|p| &p.request.projection.assets),
+        )?;
         if request.generation != self.presentation_generation {
             return Err("Room changed; prepare this set again".into());
         }
         if let Some(active) = &self.presentation {
             if active.request.lease != request.lease
-                || request.projection.revision <= active.request.projection.revision
+                || request.projection.revision
+                    <= active
+                        .pending_patch
+                        .as_ref()
+                        .map_or(active.request.projection.revision, |p| {
+                            p.projection.revision
+                        })
             {
                 return Err("Set lease or revision is stale".into());
             }
@@ -2759,9 +2983,9 @@ impl SceneGraph {
                 .iter()
                 .find(|i| &i.id == id)
                 .ok_or_else(|| format!("Source for {slot} left the room"))?;
-            if !item.visible || !item.has_frame || item.kind == "mic" {
+            if !item.has_frame || item.kind == "mic" {
                 return Err(format!(
-                    "{} must be on the room output before assigning it",
+                    "{} has no video frame yet. Start the camera or choose another video source",
                     item.label
                 ));
             }
@@ -2770,16 +2994,68 @@ impl SceneGraph {
                 self.source_by_id(id).ok_or("Source is unavailable")?,
             );
         }
-        let candidate = unsafe { super::presentation::Composition::build(request, captures)? };
+        if let Some(active) = self.presentation.as_mut() {
+            if active.can_patch(&request, &captures) {
+                eprintln!(
+                    "[set-perf] path=patch revision={}",
+                    request.projection.revision
+                );
+                let clock = request
+                    .projection
+                    .timeline
+                    .as_ref()
+                    .map(|t| t.clock.clone());
+                let bridge = active.patch(request);
+                if let (Some(old), Some(clock)) = (&mut self.presentation_retiring, clock) {
+                    old.synchronize_retired_clock(&clock);
+                }
+                return Ok(bridge);
+            }
+        }
+        self.finish_presentation_transition(true);
+        let candidate = if let Some(mut spare) = self
+            .presentation_pending
+            .take()
+            .or(self.presentation_spare.take())
+            .filter(|p| p.same_size(&request))
+        {
+            if spare.can_promote(&request, &captures) {
+                eprintln!(
+                    "[set-perf] path=promote revision={}",
+                    request.projection.revision
+                );
+                unsafe {
+                    spare.promote(request)?;
+                }
+            } else {
+                eprintln!(
+                    "[set-perf] path=warm revision={}",
+                    request.projection.revision
+                );
+                unsafe {
+                    spare.reuse(request, captures);
+                }
+            }
+            spare
+        } else {
+            eprintln!(
+                "[set-perf] path=cold revision={}",
+                request.projection.revision
+            );
+            unsafe { super::presentation::Composition::build(request, captures)? }
+        };
         let bridge = candidate.bridge.clone();
         self.presentation_pending = Some(candidate);
         Ok(bridge)
     }
-    pub fn abort_presentation(&mut self, token: &str) {
+    pub fn abort_presentation(&mut self, token: &str, revision: u64) {
+        if let Some(active) = self.presentation.as_mut() {
+            active.abort_patch(token, revision);
+        }
         if self
             .presentation_pending
             .as_ref()
-            .is_some_and(|p| p.bridge.token == token)
+            .is_some_and(|p| p.bridge.token == token && p.request.projection.revision == revision)
         {
             self.presentation_pending = None;
         }
@@ -2789,6 +3065,12 @@ impl SceneGraph {
         token: &str,
         placements: Vec<super::presentation::Placement>,
     ) -> Result<super::presentation::Status, String> {
+        if let Some(active) = self.presentation.as_mut() {
+            if active.commit_patch(token, self.presentation_generation)? {
+                self.presentation_needs_prewarm = true;
+                return Ok(self.presentation_status());
+            }
+        }
         if !self.presentation_pending.as_ref().is_some_and(|p| {
             p.bridge.token == token && p.request.generation == self.presentation_generation
         }) {
@@ -2807,13 +3089,18 @@ impl SceneGraph {
             }
         }
         unsafe {
-            candidate.dress(placements)?;
+            candidate.finish_preparation(placements)?;
+        }
+        let fade = candidate.has_crossfade() && self.presentation.is_some();
+        if fade {
+            super::filters::set_opacity(unsafe { ffi::obs_scene_get_source(candidate.scene) }, 0.)?;
         }
         struct Swap<'a> {
             graph: &'a mut SceneGraph,
             candidate: Option<super::presentation::Composition>,
             failed: bool,
             retired: Option<super::presentation::Composition>,
+            fade: bool,
         }
         extern "C" fn swap_graph(data: *mut c_void, _: *mut ffi::obs_scene_t) {
             unsafe {
@@ -2831,9 +3118,12 @@ impl SceneGraph {
                 // Every nested source is video-only; the original room scene and
                 // its single audio path remain untouched beneath the opaque backdrop.
                 swap.retired = swap.graph.presentation.take();
-                if let Some(old) = &swap.retired {
-                    ffi::obs_sceneitem_set_visible(old.item, false);
+                if !swap.fade {
+                    if let Some(old) = &swap.retired {
+                        ffi::obs_sceneitem_set_visible(old.item, false);
+                    }
                 }
+                candidate.activate_animation(swap.fade);
                 swap.graph.presentation = swap.candidate.take();
             }
         }
@@ -2843,6 +3133,7 @@ impl SceneGraph {
             candidate: Some(candidate),
             failed: false,
             retired: None,
+            fade,
         };
         unsafe {
             ffi::obs_scene_atomic_update(scene, swap_graph, &mut swap as *mut _ as *mut _);
@@ -2850,11 +3141,130 @@ impl SceneGraph {
         // Destroy item render targets outside the scene's atomic lock. The
         // graphics thread takes graphics -> scene locks; releasing targets
         // while holding scene -> graphics locks can deadlock repeated cuts.
-        drop(swap.retired.take());
-        if swap.failed {
+        let failed = swap.failed;
+        let retired = swap.retired.take();
+        drop(swap);
+        if let Some(mut old) = retired {
+            if fade {
+                self.presentation_retiring = Some(old);
+            } else {
+                unsafe {
+                    if !old.item.is_null() {
+                        ffi::obs_sceneitem_remove(old.item);
+                        old.item = std::ptr::null_mut();
+                    }
+                }
+                self.presentation_spare = Some(old);
+            }
+        }
+        self.presentation_needs_prewarm = true;
+        #[cfg(debug_assertions)]
+        if std::env::var_os("PRODUCER_SET_OUTPUT_PROBE").is_some() {
+            unsafe {
+                if let Some(p) = &self.presentation {
+                    let mut pos = ffi::vec2 { x: 0., y: 0. };
+                    ffi::obs_sceneitem_get_pos(p.item, &mut pos);
+                    let current = ffi::obs_get_output_source(0);
+                    eprintln!(
+                        "[set-probe] visible={} order={} pos={},{} size={}x{} program-is-room={}",
+                        ffi::obs_sceneitem_visible(p.item),
+                        ffi::obs_sceneitem_get_order_position(p.item),
+                        pos.x,
+                        pos.y,
+                        ffi::obs_source_get_width(ffi::obs_scene_get_source(p.scene)),
+                        ffi::obs_source_get_height(ffi::obs_scene_get_source(p.scene)),
+                        current == ffi::obs_scene_get_source(self.scene)
+                    );
+                    if !current.is_null() {
+                        ffi::obs_source_release(current);
+                    }
+                }
+            }
+        }
+
+        if failed {
             return Err("Set activation failed; room output was kept".into());
         }
         Ok(self.presentation_status())
+    }
+    pub fn warm_ready_buffers(&mut self) {
+        self.finish_presentation_transition(false);
+        if self.presentation_needs_prewarm && self.presentation_retiring.is_none() {
+            self.presentation_needs_prewarm = false;
+            self.prewarm_presentation();
+        }
+        if let Some(spare) = self.presentation_spare.as_mut() {
+            unsafe {
+                spare.warm_proxies();
+            }
+        }
+        if self.presentation.is_none() {
+            if let Some(pending) = self.presentation_pending.as_mut() {
+                unsafe {
+                    pending.warm_proxies();
+                }
+            }
+        }
+        #[cfg(target_os = "macos")]
+        if let Some(portrait) = self.portrait.as_mut() {
+            unsafe {
+                portrait.prewarm();
+            }
+            if let Some(spare) = portrait.spare.as_mut() {
+                unsafe {
+                    spare.warm_proxies();
+                }
+            }
+            if portrait.active.is_none() {
+                if let Some(pending) = portrait.pending.as_mut() {
+                    unsafe {
+                        pending.warm_proxies();
+                    }
+                }
+            }
+        }
+    }
+    fn finish_presentation_transition(&mut self, force: bool) {
+        if self.presentation_retiring.is_none()
+            || !force
+                && self
+                    .presentation
+                    .as_ref()
+                    .is_some_and(|p| !p.transition_finished())
+        {
+            return;
+        }
+        if let Some(p) = &self.presentation {
+            p.finish_transition();
+        }
+        if let Some(mut old) = self.presentation_retiring.take() {
+            unsafe {
+                if !old.item.is_null() {
+                    ffi::obs_sceneitem_remove(old.item);
+                    old.item = std::ptr::null_mut();
+                }
+            }
+            self.presentation_spare = Some(old);
+        }
+    }
+    fn prewarm_presentation(&mut self) {
+        let Some(request) = self.presentation.as_ref().and_then(|p| p.preload_request()) else {
+            return;
+        };
+        let mut captures = self.presentation.as_ref().unwrap().preload_captures();
+        captures.retain(|id, _| request.bindings.contains_key(id));
+        if let Some(spare) = self.presentation_spare.as_mut() {
+            if spare.same_size(&request) {
+                if !spare.can_promote(&request, &captures) {
+                    unsafe {
+                        spare.reuse(request, captures);
+                    }
+                }
+                return;
+            }
+        }
+        self.presentation_spare =
+            unsafe { super::presentation::Composition::build(request, captures) }.ok();
     }
     pub fn return_presentation(
         &mut self,
@@ -2868,11 +3278,20 @@ impl SceneGraph {
         if lease.is_some() && lease != active && lease != pending {
             return Ok(self.presentation_status());
         }
-        if active.is_some() || pending.is_some() {
+        let occupied = active.is_some() || pending.is_some();
+        #[cfg(target_os = "macos")]
+        if let Some(p) = self.portrait.as_mut() {
+            unsafe {
+                p.room();
+            }
+        }
+        if occupied {
             // Increment before teardown: a queued commit from this generation
             // cannot resurrect a returned set or a room's previous composition.
             self.presentation_generation += 1;
+            self.finish_presentation_transition(true);
             self.presentation_pending = None;
+            self.presentation_spare = None;
             struct Remove<'a> {
                 graph: &'a mut SceneGraph,
                 retired: Option<super::presentation::Composition>,

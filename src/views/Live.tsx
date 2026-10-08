@@ -1,12 +1,16 @@
+import {PortraitCanvas} from '../features/presentation/PortraitCanvas';
+import { OutputSettings, RoomOutputView, type OutputView, type PortraitMonitor } from '../features/presentation/OutputSettings';
+import { fetchMe } from '../lib/access';
 import type { RoomSource, RoomAction } from "../../server/src/roomActions";
 import { formatGuestLink, hostedAudienceLink } from "../lib/hostedShare";
-import { previewSession } from "../lib/previewSession";
+import { previewSession, setPreviewTransparency } from "../lib/previewSession";
 import { useSetOutput } from "../features/presentation/useSetOutput";
 import { SetMenu } from "../features/presentation/SetMenu";
 import { SetControlsPanel } from "../features/presentation/SetControlsPanel";
 import { AFTER_HOURS } from "../features/presentation/fixtures";
 import { RehearsalSession } from "../features/presentation/rehearsal";
 import { roomSession } from "../lib/roomSession";
+import { sharedProgramCapture } from "../lib/programCapture";
 import { openingScene, scenePlan } from "../lib/scenePlan";
 import { DJPanel } from "../components/DJPanel";
 import { DJSlider } from "../components/DJSlider";
@@ -245,8 +249,6 @@ function isChatOverlay(spec: ExtraSpec): boolean {
     return url.hostname === "127.0.0.1" && url.pathname === "/chat";
   } catch { return false; }
 }
-
-
 
 /** Which channels this machine reads chat from. Not a credential — a name. */
 export interface ChatNames {
@@ -1728,7 +1730,7 @@ function PreviewPanel({ children }: { children?: ReactNode }) {
       attach: (r) => ipc.liveAttachPreview(r.x, r.y, r.width, r.height),
       move: (r) => ipc.liveMovePreview(r.x, r.y, r.width, r.height),
       detach: () => ipc.liveDetachPreview(),
-    }, (transparent) => { document.documentElement.dataset.stage = transparent ? "transparent" : "opaque"; });
+    }, (transparent) => { setPreviewTransparency("landscape",transparent); });
     const measure = () => {
       const r = ref.current?.getBoundingClientRect();
       return r ? { x: r.x, y: r.y, width: r.width, height: r.height } : undefined;
@@ -2618,6 +2620,7 @@ export function LiveView({
     return () => {
       void session.close(async () => {
         if (await ipc.liveReleaseIdleRoom()) {
+          sharedProgramCapture.setPortrait(false);
           engineHeldRoom = null;
           roomApplied.current = false;
           localSetSkipped.current = false;
@@ -3086,6 +3089,9 @@ export function LiveView({
    * panel, never a popout over the stage. */
   const [overlayInline, setOverlayInline] = useState(false);
   /** The stage's selected item — mirrored into the Sources rail highlight. */
+  const [portraitSelected,setPortraitSelected]=useState<string|null>(null);
+  const [outputView,setOutputView]=useState<OutputView>('landscape');
+  const [portraitMonitor,setPortraitMonitor]=useState<PortraitMonitor>({busy:false,error:''});
   const [stageSel, setStageSel] = useState<string | null>(null);
   /** Delete on the stage keymap: same effect as the row's ✕, per kind. */
   const deleteStageItem = (id: string) => {
@@ -3285,8 +3291,9 @@ export function LiveView({
     const pad = (n: number) => String(n).padStart(2, "0");
     const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}.${pad(d.getMinutes())}.${pad(d.getSeconds())}`;
     try {
-      const path = await recIpc.start(stamp, room?.id);
+      const path = await recIpc.start(stamp, room?.id,outputView==='both');
       setRecPath(path);
+      if(outputView==='both')notify("Recording landscape and portrait to separate files",{key:"banner",tone:"info"});
       setRecSince(Date.now());
       setRecTick(0);
     } catch (e) {
@@ -4342,18 +4349,37 @@ export function LiveView({
    * NOT applied and the engine cleared, once per room open. */
   const localSetSkipped = useRef(false);
   const roomId = room?.id ?? null;
-  const setOutput=useSetOutput(setRehearsal,roomId,sources,docApplied && isHost,cfg.presentation?.bindings ?? {},bindings=>writeCfg({...cfgRef.current,presentation:{package:setRehearsal.exportPreparedPackage(),bindings,framing:cfgRef.current.presentation?.framing}}),cfg.presentation?.framing ?? {},framing=>writeCfg({...cfgRef.current,presentation:{package:setRehearsal.exportPreparedPackage(),bindings:cfgRef.current.presentation?.bindings ?? {},framing}}));
+  const setOutput=useSetOutput(setRehearsal,roomId,sources,docApplied && isHost,cfg.presentation?.bindings ?? {},bindings=>writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.exportPreparedPackage(),bindings,framing:cfgRef.current.presentation?.framing}}),cfg.presentation?.framing ?? {},framing=>writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.exportPreparedPackage(),bindings:cfgRef.current.presentation?.bindings ?? {},framing}}));
   const changeSet=async (doc:import('../features/presentation/schema').PresentationPackage)=> {
     if(!await setOutput.returnToRoom())return;
     setSetRehearsal(new RehearsalSession(doc,undefined,'prepare'));
     writeCfg({...cfgRef.current,presentation:{package:doc,bindings:setOutput.bindings,framing:setOutput.framing}});
   };
   const setWorkspaceState=useSyncExternalStore(setRehearsal.subscribe,setRehearsal.snapshot);
+  const [setHostName,setSetHostName]=useState('');
+  useEffect(()=>{let cancelled=false;setSetHostName('');const endpoint=endpointRef.current ?? activeEndpointId();if(isHost&&endpoint)void fetchMe(endpoint).then(me=>{if(!cancelled)setSetHostName(me.name?.trim() ?? '');}).catch(()=>{});return()=>{cancelled=true;};},[roomId,isHost]);
+  const setSourceNames:Record<string,string>={};
+  for(const row of [...roster,...seatRows]) { if(!row.display_name?.trim())continue;const ids=isMonitor(row)?modSourceIdsFor(row.id,row.producer_ref):sourceIdsFor(row.id);setSourceNames[ids.camera]=row.display_name;setSourceNames[ids.screen]=row.display_name; }
+  for(const item of sources.items ?? [])if(item.kind==='camera' && !setSourceNames[item.id] && setHostName)setSourceNames[item.id]=setHostName;
+  const setNameOverrides=cfg.presentation?.manualNameKeys ?? [];
+  const setNamesSignature=JSON.stringify(setSourceNames);
+  useEffect(()=>{
+    const normalize=(value:string)=>value.toLowerCase().replace(/[^a-z0-9]/g,'').replace(/(camera|source|name)$/,'');
+    for(const [key,definition] of Object.entries(setRehearsal.package.set.values)) {
+      if(definition.type!=='text'||!key.toLowerCase().endsWith('name')||setNameOverrides.includes(key))continue;
+      const slot=setRehearsal.package.set.slots.find(slot=>normalize(slot.id)===normalize(key)||normalize(slot.label)===normalize(key));
+      const name=slot?setSourceNames[setOutput.bindings[slot.id]]:undefined;
+      const resolved=name || (normalize(key)==='host'?setHostName:'');
+      if(resolved && setWorkspaceState.values[key]!==resolved.slice(0,definition.maxLength))setRehearsal.send({type:'field',key,value:resolved.slice(0,definition.maxLength)});
+    }
+  },[setRehearsal,setWorkspaceState,setNamesSignature,setHostName,setOutput.bindings,JSON.stringify(setNameOverrides)]);
+  const editSetField=(key:string)=>{if(!key.toLowerCase().endsWith('name'))return;writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.exportPreparedPackage(),bindings:setOutput.bindings,manualNameKeys:[...new Set([...(cfgRef.current.presentation?.manualNameKeys??[]),key])]}});};
+
   useEffect(()=> {
     if(!docApplied)return;
     const timer=setTimeout(()=> {
       const prepared=setRehearsal.exportPreparedPackage();
-      if(JSON.stringify(prepared)!==JSON.stringify(cfgRef.current.presentation?.package))writeCfg({...cfgRef.current,presentation:{package:prepared,bindings:cfgRef.current.presentation?.bindings ?? {},framing:cfgRef.current.presentation?.framing}});
+      if(JSON.stringify(prepared)!==JSON.stringify(cfgRef.current.presentation?.package))writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:prepared,bindings:cfgRef.current.presentation?.bindings ?? {},framing:cfgRef.current.presentation?.framing}});
     },500);
     return()=>clearTimeout(timer);
   },[setRehearsal,setWorkspaceState,docApplied, setOutput.bindings]);
@@ -4578,6 +4604,7 @@ export function LiveView({
           ipc.liveUpdateRoom(roomId, { config: serializeConfig(next) }).catch(() => {});
         }
       } else if (ev.type === "video_changed") {
+        window.dispatchEvent(new Event("producer.video-changed"));
         setSnapshot((s) => (s ? { ...s, video_height: ev.height, video_fps: ev.fps } : s));
       } else if (ev.type === "levels") {
         // peak → dB → 0..1 over a 50dB window, with a falling ballistic.
@@ -4683,6 +4710,26 @@ export function LiveView({
       : 0;
 
   const engineOk = snapshot?.engine_ready && snapshot?.bootstrap_ok;
+  // First-frame readiness changes without a source mutation event. Keep that
+  // metadata fresh for source assignment without overwriting in-flight geometry.
+  useEffect(()=>{
+    if(!engineOk)return;
+    let alive=true,busy=false;
+    const refresh=async()=>{
+      if(busy)return;busy=true;
+      try{const snapshot=await ipc.liveEngineStatus();if(!alive)return;
+        const fresh=new Map((snapshot.sources?.items??[]).map(item=>[item.id,item]));
+        setSources(previous=>{let changed=false;const items=previous.items?.map(item=>{
+          const next=fresh.get(item.id);if(!next)return item;
+          if(item.has_frame===next.has_frame&&item.src_w===next.src_w&&item.src_h===next.src_h)return item;
+          changed=true;return {...item,has_frame:next.has_frame,src_w:next.src_w,src_h:next.src_h};
+        });return changed?{...previous,items}:previous;});
+      }catch{/* Engine lifecycle retries on the next tick. */}finally{busy=false;}
+    };
+    void refresh();const timer=setInterval(()=>void refresh(),500);return()=>{alive=false;clearInterval(timer);};
+  },[engineOk]);
+
+
   useEffect(() => {
     const t = window.setInterval(() => {
       const now = snapRef.current;
@@ -5876,8 +5923,6 @@ export function LiveView({
     }
   };
 
-
-
   // ── The contribution ledger (#50) ──────────────────────────────────────
   // Presence is the server's (it follows the stage list we publish). Two
   // things only this Producer knows are published from here: an OVERLAY
@@ -6598,7 +6643,7 @@ export function LiveView({
   const panelBody = (id: PanelId) => {
     switch (id) {
       case "setControls":
-        return <SetControlsPanel session={setRehearsal} output={setOutput} blocked={!docApplied}
+        return <SetControlsPanel sourceNames={setSourceNames} onFieldEdit={editSetField} session={setRehearsal} output={setOutput} blocked={!docApplied}
           blockedReason={!docApplied ? "Waiting for the room to finish loading." : undefined}
           onChange={changeSet} />;
       case "dj":
@@ -6923,7 +6968,7 @@ export function LiveView({
                       className={`rm-row${hidden ? " off" : ""}${srcDrag?.key === t.key ? " dragging" : ""}${stageSel === itemIdFor(t.key) ? " sel" : ""}${dropCls}`}
                       // Clicking a row lights its output on the stage — selection
                       // is shared state in both directions.
-                      onClick={() => item && setStageSel(stageSel === item.id ? null : item.id)}
+                      onClick={() => {if(!item)return;if(outputView==='portrait'){setPortraitSelected(portraitSelected===item.id?null:item.id);setStageSel(null);}else{setStageSel(stageSel===item.id?null:item.id);setPortraitSelected(null);}}}
                     >
                       {item && (
                         <span
@@ -8037,7 +8082,8 @@ export function LiveView({
       )}
       {anyPop && <div className="rm-pop-backdrop" onClick={closePops} />}
 
-      <header className="rm-top" data-tauri-drag-region>
+      <header className={`rm-top${layoutEdit?" is-editing":""}`} data-tauri-drag-region>
+        <div className="rm-window-drag-handle" data-tauri-drag-region title="Drag to move Producer" aria-label="Drag to move Producer" />
         <div className="rm-top-left" data-tauri-drag-region>
           {/* What you are here — the same card a mod seat and a self-hosted
             * room show (views/RoleCard.tsx). The host's own room says so
@@ -8066,7 +8112,7 @@ export function LiveView({
             }}
             title={layoutEdit ? "Done editing layout (⌘E)" : "Edit layout (⌘E)"}
           >
-            {ic.layout}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m15 4 5 5-10 10-6 1 1-6zM13 6l5 5"/></svg>
           </button>
         )}
 
@@ -8080,6 +8126,64 @@ export function LiveView({
           } : undefined} />
         </div>
 
+      {layoutEdit && (
+        <div className="rm-editbar">
+          <span className="rm-editbar-dot" />
+          <div className="rm-pop-anchor">
+            <button
+              className="rm-editbar-btn"
+              onClick={(e) => {
+                setPopAnchor(e.currentTarget);
+                setLayoutMenu((o) => !o);
+              }}
+            >
+              Presets
+              {ic.chev}
+            </button>
+            {layoutMenu && (
+              <Pop anchor={popAnchor} align="right" className="rm-pop-layout">
+                {LAYOUT_PRESETS.map((p) => (
+                  <button
+                    key={p.key}
+                    className="rm-preset"
+                    onClick={() => {
+                      setLayout({
+                        top: [...p.layout.top],
+                        left: [...p.layout.left],
+                        right: [...p.layout.right],
+                        bottom: [...p.layout.bottom],
+                        hidden: [...p.layout.hidden],
+                      });
+                      setLayoutMenu(false);
+                    }}
+                  >
+                    <span className="rm-preset-name">{p.label}</span>
+                    <span className="rm-preset-note">{p.note}</span>
+                  </button>
+                ))}
+              </Pop>
+            )}
+          </div>
+          {panelsMenu()}
+          <button className="rm-editbar-done" onClick={() => setLayoutEdit(false)}>
+            Done
+          </button>
+          {/* Where the stage's quick controls float — an edge of the canvas.
+            * One placement button: shows the edge, click opens the menu. */}
+          <span className="rm-editbar-ctl" title="Quick controls position">
+            <span className="rm-editbar-ctl-label">Controls</span>
+            <PlacementButton
+              value={cfg.stage_bar ?? "bottom"}
+              order={PLACEMENTS}
+              labelFor={(p) => `Controls at the ${p}`}
+              onChange={(pos) => writeCfg({ ...cfgRef.current, stage_bar: pos })}
+            />
+          </span>
+          <span className="rm-editbar-text">
+            Editing layout — drag a panel by its grip, move it with its placement button, or + to add one to a dock
+          </span>
+        </div>
+      )}
         <div className="rm-top-right">
           {/* HOST-ONLY TRANSPORT. A mod or manager on Boomin holds a control
             * seat, not the show: no guest link to hand out, no channels, no
@@ -8282,7 +8386,7 @@ export function LiveView({
             <Pop anchor={popAnchor} align="right" className="rm-pop-quality">
               <div className="rm-pop-title">VIDEO {streaming && <span className="rm-card-sub">locked while live</span>}</div>
               <div className="rm-ctrl-row">
-                <span className="rm-ctrl-label">Resolution</span>
+                <span className="rm-ctrl-label">Canvas resolution</span>
                 <span className="rm-quality-set">
                   {[720, 1080, 2160].map((h) => {
                     const gated = h === 2160 && !hwEncoder;
@@ -8290,7 +8394,7 @@ export function LiveView({
                       <button
                         key={h}
                         className={`rm-q${vh === h ? " on" : ""}`}
-                        disabled={streaming || !engineOk || gated}
+                        disabled={streaming || !!recPath || !engineOk || gated}
                         title={gated ? "4K needs a hardware encoder (VideoToolbox, NVENC, QSV, or AMF)" : undefined}
                         onClick={() => setVideoCfg(h, h === 2160 && !hw4k60 ? 30 : vf)}
                       >
@@ -8300,6 +8404,7 @@ export function LiveView({
                   })}
                 </span>
               </div>
+              <p className="rm-card-sub" role="status">{outputView==='portrait'?`${vh} × ${Math.round(vh*16/9)} · Portrait 9:16`:outputView==='both'?`${Math.round(vh*16/9)} × ${vh} + ${vh} × ${Math.round(vh*16/9)}`:`${Math.round(vh*16/9)} × ${vh} · Landscape 16:9`}</p>
               <div className="rm-ctrl-row">
                 <span className="rm-ctrl-label">Frame rate</span>
                 <span className="rm-quality-set">
@@ -8309,7 +8414,7 @@ export function LiveView({
                       <button
                         key={f}
                         className={`rm-q${vf === f ? " on" : ""}`}
-                        disabled={streaming || !engineOk || gated}
+                        disabled={streaming || !!recPath || !engineOk || gated}
                         title={
                           gated
                             ? hwEncoder
@@ -8378,64 +8483,7 @@ export function LiveView({
         />
       ) : (
       <>
-      {layoutEdit && (
-        <div className="rm-editbar">
-          <span className="rm-editbar-dot" />
-          <div className="rm-pop-anchor">
-            <button
-              className="rm-editbar-btn"
-              onClick={(e) => {
-                setPopAnchor(e.currentTarget);
-                setLayoutMenu((o) => !o);
-              }}
-            >
-              Presets
-              {ic.chev}
-            </button>
-            {layoutMenu && (
-              <Pop anchor={popAnchor} align="right" className="rm-pop-layout">
-                {LAYOUT_PRESETS.map((p) => (
-                  <button
-                    key={p.key}
-                    className="rm-preset"
-                    onClick={() => {
-                      setLayout({
-                        top: [...p.layout.top],
-                        left: [...p.layout.left],
-                        right: [...p.layout.right],
-                        bottom: [...p.layout.bottom],
-                        hidden: [...p.layout.hidden],
-                      });
-                      setLayoutMenu(false);
-                    }}
-                  >
-                    <span className="rm-preset-name">{p.label}</span>
-                    <span className="rm-preset-note">{p.note}</span>
-                  </button>
-                ))}
-              </Pop>
-            )}
-          </div>
-          {panelsMenu()}
-          <button className="rm-editbar-done" onClick={() => setLayoutEdit(false)}>
-            Done
-          </button>
-          {/* Where the stage's quick controls float — an edge of the canvas.
-            * One placement button: shows the edge, click opens the menu. */}
-          <span className="rm-editbar-ctl" title="Quick controls position">
-            <span className="rm-editbar-ctl-label">Controls</span>
-            <PlacementButton
-              value={cfg.stage_bar ?? "bottom"}
-              order={PLACEMENTS}
-              labelFor={(p) => `Controls at the ${p}`}
-              onChange={(pos) => writeCfg({ ...cfgRef.current, stage_bar: pos })}
-            />
-          </span>
-          <span className="rm-editbar-text">
-            Editing layout — drag a panel by its grip, move it with its placement button, or + to add one to a dock
-          </span>
-        </div>
-      )}
+
 
       {/* The TOP DOCK: a real dock — drag any panel up here (Controller
         * belongs; chat while chatting; whatever the show needs). Renders only
@@ -8509,7 +8557,7 @@ export function LiveView({
           splitter("left", undefined, undefined, { open: leftOpen, onToggle: () => setLeftOpen((o) => !o) })}
 
         <div className="rm-center">
-          <div className="rm-canvas">
+          <RoomOutputView view={engineOk&&isHost?outputView:'landscape'} portrait={portraitMonitor} portraitContent={<PortraitCanvas canvasWidth={vh} selected={portraitSelected} onSelect={id=>{setPortraitSelected(id);setStageSel(null);}} monitor={portraitMonitor} onSources={sources=>setPortraitMonitor(previous=>({...previous,sources}))}/>}>
             {/* Off-host the stage is a PROGRAM MONITOR, not an editor: the
               * native preview is never attached (there is no local set to
               * show — see localSetDecision) and the picture is the host's,
@@ -8519,8 +8567,8 @@ export function LiveView({
             {engineOk && !isHost && (
               <ProgramMonitorStage seat={monitorSeat} pending={accessPending} boomin={boominRoom} />
             )}
-            {engineOk && isHost && (
-              <PreviewPanel>
+            {engineOk && isHost && outputView!=='portrait' && (
+              <div className="rm-landscape-monitor"><PreviewPanel>
                 <StageEditor
                   // A mic has no picture: never a box on the stage.
                   items={(sources.items ?? []).filter((i) => i.kind !== "mic")}
@@ -8546,7 +8594,7 @@ export function LiveView({
                     }
                     captureActiveLook();
                   }}
-                  onSelect={setStageSel}
+                  onSelect={id=>{setStageSel(id);setPortraitSelected(null);}}
                   selectId={stageSel}
                   onDelete={(id) => {
                     deleteStageItem(id);
@@ -8560,7 +8608,7 @@ export function LiveView({
                     if (!id.startsWith("guest-") && !isSlotId(id)) captureActiveLook();
                   }}
                 />
-              </PreviewPanel>
+              </PreviewPanel></div>
             )}
             {!engineOk && snapshot && (
               <div className="rm-canvas-msg">
@@ -8571,7 +8619,7 @@ export function LiveView({
                     : "Warming up the engine…"}
               </div>
             )}
-          </div>
+          </RoomOutputView>
 
           {/* Mic / camera / screen / record act on OUR engine — host only. */}
           {engineOk && isHost && (
@@ -8616,6 +8664,7 @@ export function LiveView({
                   </button>
                 ) : null;
               })()}
+              <OutputSettings icon={ic.gear} session={setRehearsal} output={setOutput} sourceNames={setSourceNames} view={outputView} onViewChange={setOutputView} onMonitor={setPortraitMonitor} />
               <button
                 className={`stg-btn${recPath ? " rec" : ""}`}
                 title={recPath ? "Stop recording" : "Record"}

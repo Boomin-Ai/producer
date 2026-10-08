@@ -369,7 +369,10 @@ impl Session {
     /// Build services (resolving credentials from the keychain, §8), compute
     /// the D2 intersection, create the shared encoders, start every output.
     /// Engine thread only.
-    pub fn start(config: MultiConfig) -> Result<Session, MultiReport> {
+    pub fn start_video(
+        config: MultiConfig,
+        video: *mut ffi::video_t,
+    ) -> Result<Session, MultiReport> {
         let mut report = MultiReport::failed(Vec::new());
         report.rate_control = "CBR".into();
         let (tx, rx) = std::sync::mpsc::channel::<Ev>();
@@ -474,7 +477,7 @@ impl Session {
                 *EVENT_TX.lock().unwrap() = None;
                 return Err(report);
             }
-            ffi::obs_encoder_set_video(venc, ffi::obs_get_video());
+            ffi::obs_encoder_set_video(venc, video);
             ffi::obs_encoder_set_audio(aenc, ffi::obs_get_audio());
 
             for (i, d) in dests.iter_mut().enumerate() {

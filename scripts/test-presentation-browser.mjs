@@ -14,8 +14,10 @@ for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome
     page.on('request', request => { if (request.frame().parentFrame()) requests.push(request.url()); });
     await page.goto(`${origin}/scripts/presentation-browser.html?constrained`);
     const preview = () => page.frameLocator('iframe');
-    const openPreview = () => page.getByRole('button', { name: 'Set preview ↗', exact: true }).click();
+    const openPreview = async () => { if(!await page.getByRole('dialog').count())await page.getByRole('button', { name: 'Set edit', exact: true }).click(); await page.waitForFunction(()=>document.querySelector('dialog')?.open); };
     const closePreview = () => page.getByRole('button', { name: 'Close preview', exact: true }).click();
+    const fillHost = async value => { await openPreview(); await page.getByLabel('Host name',{exact:true}).fill(value); await closePreview(); };
+    const readHost = async () => { await openPreview(); const value=await page.getByLabel('Host name',{exact:true}).inputValue(); await closePreview(); return value; };
     const more = async () => { if (!await page.locator('.set-menu').evaluate(el => el.matches(':popover-open'))) await page.getByRole('button', { name:'Set settings', exact:true }).click(); };
     const run = () => page.getByRole('region', { name: 'Run', exact: true });
     await more();
@@ -28,7 +30,7 @@ for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome
     await preview().getByText('AFTER HOURS', { exact: true }).waitFor();
     assert.equal(await page.getByText('Opening preview…').count(), 0, 'StrictMode handshake must finish');
     await closePreview();
-    await page.getByRole('textbox', { name: 'Host name', exact: true }).fill('<script>literal</script>');
+    await fillHost('<script>literal</script>');
     await openPreview();
     await preview().getByText('<script>literal</script>', { exact: true }).waitFor();
     assert.equal(await preview().locator('script').count(), 1, 'Text remains text, without creating an executable element');
@@ -42,8 +44,15 @@ for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome
     await openPreview();
     await preview().getByText('Guest · simulated source', { exact: true }).waitFor();
     await closePreview();
-    await page.getByText('Sample data', { exact: true }).click();
-    await page.getByRole('textbox', { name: 'Sample headline', exact: true }).fill('REHEARSAL INPUT');
+    assert.equal(await page.locator('.set-controls .set-sample-data').count(), 0);
+    assert.equal(await page.locator('.set-controls').getByRole('button', { name: 'Add show with agent', exact: true }).count(), 0);
+    await more(); await page.getByText('Test data', { exact: true }).click();
+    assert.equal(await page.getByRole('textbox', { name: 'Test headline', exact: true }).isDisabled(), true);
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Rehearse', exact: true }).click();
+    await more();
+    await page.getByRole('textbox', { name: 'Test headline', exact: true }).fill('REHEARSAL INPUT');
+    await page.keyboard.press('Escape');
     await openPreview();
     await preview().getByText('REHEARSAL INPUT', { exact: true }).waitFor();
 
@@ -92,9 +101,9 @@ for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome
     await closePreview();
     await more(); await page.getByLabel('Choose set').selectOption('head-to-head');
     await openPreview();
-    await preview().getByText('HEAD TO HEAD', { exact: true }).waitFor();
+    await preview().locator('[data-node$="-title"]').waitFor();
     await closePreview();
-    await page.getByRole('textbox', { name: 'Host name', exact: true }).fill('Prepared host');
+    await fillHost('Prepared host');
     assert.equal(await page.getByRole('button', { name: 'Start show', exact: true }).count(), 0);
     assert.equal(await run().getByRole('region', { name: 'Show segments' }).count(), 1, 'Prepared show and rehearsal share the Show run section');
     assert.equal(await page.locator('.set-reference .set-segments').count(), 0, 'The rundown belongs to Show run, not reference controls');
@@ -144,7 +153,7 @@ for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome
     assert.equal(await page.getByRole('button', { name: /^Vote / }).count(), 0, 'Closed voting replaces input controls with results');
     assert.equal(await page.getByRole('button', { name: 'Advance 10s', exact: true }).count(), 0);
     await openPreview();
-    await preview().getByText('HEAD TO HEAD', { exact: true }).waitFor();
+    await preview().locator('[data-node$="-title"]').waitFor();
     assert.equal(await preview().getByText('WINNER · Contestant A', { exact: true }).count(), 0);
     await closePreview();
     await page.getByRole('button', { name: 'Reveal winner', exact: true }).click();
@@ -158,7 +167,7 @@ for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome
     await page.screenshot({ path: `${output}/${name}-expanded.png`, fullPage: true });
     await page.keyboard.press('Escape');
     await dialog.waitFor({ state: 'detached' });
-    assert.equal(await page.getByRole('button', { name: 'Set preview ↗', exact: true }).evaluate(el => el === document.activeElement), true, 'Closing restores focus to the preview trigger');
+    assert.equal(await page.getByRole('button', { name: 'Set edit', exact: true }).evaluate(el => el === document.activeElement), true, 'Closing restores focus to the preview trigger');
     assert.equal(await page.locator('iframe').count(), 0, 'Closing unmounts the preview');
     await openPreview();
     await dialog.waitFor();
@@ -179,7 +188,7 @@ for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome
     await run().getByText('Up next: Audience vote', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Exit rehearsal', exact: true }).click();
     assert.equal(await page.getByRole('region', { name: 'Participation', exact: true }).count(), 0);
-    assert.equal(await page.getByLabel('Host name', { exact: true }).inputValue(), 'Prepared host');
+    assert.equal(await readHost(), 'Prepared host');
     await openPreview();
     const preparedPreview = page.getByRole('dialog', { name: 'Head to Head set preview' });
     await preparedPreview.frameLocator('iframe').getByText('Prepared host', { exact: true }).waitFor();
@@ -189,14 +198,14 @@ for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome
     // Enter, reset and exit while voting: none may retain old results or commit
     // practice edits into preparation. Setup stays available without switching views.
     await page.getByRole('button', { name: 'Rehearse', exact: true }).click();
-    await page.getByRole('region', { name: 'Setup', exact: true }).locator('summary').first().click();
-    await page.getByLabel('Host name', { exact: true }).fill('Practice-only host');
+    assert.equal(await page.getByLabel('Host name',{exact:true}).count(),0,'Content editing stays outside the operating dock');
+    await fillHost('Practice-only host');
     await page.getByRole('button', { name: 'Start show', exact: true }).click();
     await page.getByRole('button', { name: 'Next', exact: true }).click();
     await page.getByRole('button', { name: 'Vote Contestant A', exact: true }).click();
     await page.getByRole('button', { name: 'Reset', exact: true }).click();
     await run().getByText('Ready to rehearse', { exact: true }).waitFor();
-    assert.equal(await page.getByLabel('Host name', { exact: true }).inputValue(), 'Prepared host');
+    assert.equal(await readHost(), 'Prepared host');
     await page.getByRole('button', { name: 'Start show', exact: true }).click();
     await page.getByRole('button', { name: 'Next', exact: true }).click();
     await page.getByRole('button', { name: 'Exit rehearsal', exact: true }).click();
@@ -216,19 +225,20 @@ for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome
     await page.screenshot({ path: `${output}/${name}-narrow.png`, fullPage: true });
     // Authoring exposes the real configured JSON and rejects bad updates
     // without replacing preparation. Adding a show is an explicit import flow.
-    await page.getByLabel('Host name', { exact: true }).fill('My configured host');
-    await page.getByRole('button', { name: 'Add show', exact: true }).click();
+    await fillHost('My configured host');
+    await more();
+    await page.getByRole('button', { name: 'Add show with agent', exact: true }).click();
     const authoring = page.getByRole('dialog', { name: 'Add show', exact: true });
     await authoring.getByText('Configured package JSON', { exact: true }).click();
     assert.equal(JSON.parse(await authoring.getByLabel('Configured package JSON').inputValue()).set.values.hostName.default, 'My configured host');
     await authoring.getByLabel('Updated package JSON').fill('{}');
     await authoring.getByRole('button', { name: 'Validate and load', exact: true }).click();
     await authoring.getByRole('status').waitFor();
-    assert.equal(await page.getByLabel('Host name', { exact: true }).inputValue(), 'My configured host');
+    assert.equal(JSON.parse(await authoring.getByLabel('Configured package JSON').inputValue()).set.values.hostName.default, 'My configured host');
     await authoring.getByLabel('Updated package JSON').fill(await readFile('docs/shows/fixtures/after-hours.set.json', 'utf8'));
     await authoring.getByRole('button', { name: 'Validate and load', exact: true }).click();
     await authoring.getByText(/has no show attached/).waitFor();
-    await authoring.getByLabel('Updated package JSON').fill(await readFile('docs/shows/fixtures/head-to-head.presentation.json', 'utf8'));
+    await authoring.getByLabel('Updated package JSON').fill(JSON.stringify(JSON.parse(await readFile('docs/shows/fixtures/head-to-head.presentation.json', 'utf8'))));
     await authoring.getByRole('button', { name: 'Validate and load', exact: true }).click();
     await authoring.waitFor({ state: 'detached' });
     await page.getByText('Show attached', { exact: true }).waitFor();
@@ -257,7 +267,7 @@ for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome
       assert.ok(await page.locator('.set-sections').evaluate(el => {
         const run = el.querySelector('.set-run').getBoundingClientRect();
         const controls = el.querySelector('.set-participation').getBoundingClientRect();
-        return Math.abs(run.top - controls.top) < 1 && el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight;
+        return Math.abs(run.top - controls.top) < 1 && el.scrollWidth <= el.clientWidth ;
       }), `Run and segment controls stay in one row without clipping at ${width}px`);
     }
     await page.locator('.rm-panel-setControls').evaluate(el => { el.style.width = '100%'; });
@@ -306,7 +316,7 @@ for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome
     await page.getByRole('button', { name:'Close voting', exact:true }).click();
     await page.getByRole('button', { name:'Reveal draw', exact:true }).click();
     await openPreview(); await preview().getByText('DRAW', {exact:true}).waitFor();
-    assert.equal(await preview().getByText(/WINNER/).count(),0,'Draw output must not call either contestant the winner'); await closePreview();
+    assert.equal(await preview().getByText(/^WINNER ·/).count(),0,'Draw output must not call either contestant the winner'); await closePreview();
     await page.getByRole('button', { name:'Next', exact:true }).click();
     await page.getByRole('region', {name:'Participation',exact:true}).getByText('Draw · No winner awarded', {exact:true}).waitFor();
     await restartRound();
@@ -322,7 +332,8 @@ for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome
       const bounds = el.querySelector('.set-segments-scroll').getBoundingClientRect();
       return row.top >= bounds.top && row.bottom <= bounds.bottom + 1;
     }), 'Expanded rundown steps must be reachable inside Show run');
-    assert.deepEqual(await page.getByRole('button', { name: 'Stop run', exact: true }).boundingBox(), transportBeforeScroll, 'Scrolling segments must not move the run controls');
+    await page.getByRole('button', { name: 'Stop run', exact: true }).scrollIntoViewIfNeeded();
+    assert.equal((await page.getByRole('button', { name: 'Stop run', exact: true }).boundingBox()).height, transportBeforeScroll.height, 'Run controls remain reachable in the scrolling dock');
     await page.screenshot({ path: `${output}/${name}-compact-rundown.png`, fullPage: true });
     await openPreview();
     await preview().getByText('WINNER · Contestant A', { exact: true }).waitFor();

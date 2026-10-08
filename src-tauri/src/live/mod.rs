@@ -2,17 +2,21 @@
 //! artifact when present (`have_engine` cfg set by build.rs); otherwise the
 //! stubs keep the app building and the IPC surface truthful about it.
 
+pub mod animation;
 pub mod bridge;
 pub mod commands;
 pub mod creds;
 #[cfg(have_engine)]
 pub mod dj;
+#[cfg(all(have_engine, target_os = "macos"))]
+mod portrait;
 pub mod presence;
 pub mod presentation;
 #[cfg(all(have_engine, debug_assertions))]
 mod presentation_probe;
 #[cfg(have_engine)]
 pub mod program_audio;
+pub mod shaders;
 
 /// The virtual camera's label, identical on both platforms: macOS bakes it
 /// into the camera extension (build-camera-extension.sh), Windows patches it
@@ -89,6 +93,20 @@ pub struct Live {
 }
 
 impl Live {
+    pub fn select_output(&self, portrait: bool) -> Result<(), String> {
+        #[cfg(have_engine)]
+        {
+            self.handle
+                .as_ref()
+                .ok_or("live engine not running")?
+                .select_output(portrait)
+        }
+        #[cfg(not(have_engine))]
+        {
+            let _ = portrait;
+            Err("engine unavailable".into())
+        }
+    }
     pub fn replace_extra(
         &self,
         id: String,
@@ -116,6 +134,126 @@ impl Live {
             Err("live engine not bundled in this build".into())
         }
     }
+    #[cfg(have_engine)]
+    pub fn portrait_room(&self) -> Result<graph::SourcesState, String> {
+        #[cfg(have_engine)]
+        {
+            self.handle
+                .as_ref()
+                .ok_or("live engine not running")?
+                .portrait_room()
+        }
+        #[cfg(not(have_engine))]
+        {
+            Err("engine unavailable".into())
+        }
+    }
+    #[cfg(have_engine)]
+    pub fn portrait_state(&self) -> Result<graph::SourcesState, String> {
+        #[cfg(have_engine)]
+        {
+            self.handle
+                .as_ref()
+                .ok_or("live engine not running")?
+                .portrait_state()
+        }
+        #[cfg(not(have_engine))]
+        {
+            Err("engine unavailable".into())
+        }
+    }
+    #[cfg(have_engine)]
+    pub fn portrait_transform(
+        &self,
+        id: String,
+        patch: graph::TransformPatch,
+    ) -> Result<graph::SourcesState, String> {
+        #[cfg(have_engine)]
+        {
+            self.handle
+                .as_ref()
+                .ok_or("live engine not running")?
+                .portrait_transform(id, patch)
+        }
+        #[cfg(not(have_engine))]
+        {
+            let _ = (id, patch);
+            Err("engine unavailable".into())
+        }
+    }
+    #[cfg(have_engine)]
+    pub fn portrait_preview(
+        &self,
+        window: usize,
+        rect: Option<engine::PreviewRect>,
+    ) -> Result<(), String> {
+        #[cfg(have_engine)]
+        {
+            self.handle
+                .as_ref()
+                .ok_or("live engine not running")?
+                .portrait_preview(window, rect)
+        }
+        #[cfg(not(have_engine))]
+        {
+            let _ = (window, rect);
+            Err("engine unavailable".into())
+        }
+    }
+    pub fn portrait_warm(&self, request: presentation::Request) -> Result<(), String> {
+        #[cfg(have_engine)]
+        {
+            self.handle
+                .as_ref()
+                .ok_or("live engine not running")?
+                .portrait_warm(request)
+        }
+        #[cfg(not(have_engine))]
+        {
+            let _ = request;
+            Err("Native engine unavailable".into())
+        }
+    }
+    pub fn portrait_apply(&self, request: presentation::Request) -> Result<(), String> {
+        #[cfg(have_engine)]
+        {
+            self.handle
+                .as_ref()
+                .ok_or("live engine not running")?
+                .portrait_apply(request)
+        }
+        #[cfg(not(have_engine))]
+        {
+            let _ = request;
+            Err("Native engine unavailable".into())
+        }
+    }
+    pub fn portrait_stop(&self) -> Result<(), String> {
+        #[cfg(have_engine)]
+        {
+            self.handle
+                .as_ref()
+                .ok_or("live engine not running")?
+                .portrait_stop()
+        }
+        #[cfg(not(have_engine))]
+        {
+            Ok(())
+        }
+    }
+    pub fn portrait_frame(&self) -> Result<String, String> {
+        #[cfg(have_engine)]
+        {
+            self.handle
+                .as_ref()
+                .ok_or("live engine not running")?
+                .portrait_frame()
+        }
+        #[cfg(not(have_engine))]
+        {
+            Err("Native engine unavailable".into())
+        }
+    }
     pub fn presentation_status(&self) -> Result<presentation::Status, String> {
         #[cfg(have_engine)]
         {
@@ -126,6 +264,20 @@ impl Live {
         }
         #[cfg(not(have_engine))]
         {
+            Err("Set output needs the native engine".into())
+        }
+    }
+    pub fn presentation_warm(&self, request: presentation::Request) -> Result<(), String> {
+        #[cfg(have_engine)]
+        {
+            self.handle
+                .as_ref()
+                .ok_or("live engine not running")?
+                .presentation_warm(request)
+        }
+        #[cfg(not(have_engine))]
+        {
+            let _ = request;
             Err("Set output needs the native engine".into())
         }
     }
@@ -380,6 +532,20 @@ impl Live {
         Err("live engine not bundled in this build".into())
     }
 
+    pub fn start_recording_mode(&self, stamp: String, dual: bool) -> Result<String, String> {
+        #[cfg(have_engine)]
+        {
+            self.handle
+                .as_ref()
+                .ok_or("live engine not running")?
+                .start_recording_mode(stamp, dual)
+        }
+        #[cfg(not(have_engine))]
+        {
+            let _ = (stamp, dual);
+            Err("engine unavailable".into())
+        }
+    }
     #[cfg(have_engine)]
     pub fn start_recording(&self, stamp: String) -> Result<String, String> {
         self.handle

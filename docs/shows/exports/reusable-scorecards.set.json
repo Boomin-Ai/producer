@@ -1,0 +1,810 @@
+{
+  "schema": "producer.presentation/1",
+  "id": "reusable-scorecards",
+  "version": "0.1.1",
+  "name": "Reusable Components \u00b7 Scorecards",
+  "set": {
+    "initialLayout": "slate",
+    "values": {
+      "clock": {
+        "type": "text",
+        "default": "15:00",
+        "maxLength": 8
+      },
+      "period": {
+        "type": "text",
+        "default": "Q1",
+        "maxLength": 16
+      },
+      "down": {
+        "type": "text",
+        "default": "1st & 10",
+        "maxLength": 22
+      },
+      "possession": {
+        "type": "text",
+        "default": "POSSESSION \u00b7 RAIDERS",
+        "maxLength": 34
+      },
+      "field": {
+        "type": "text",
+        "default": "BALL ON LV 25",
+        "maxLength": 28
+      },
+      "headline": {
+        "type": "text",
+        "default": "Raiders vs. Dolphins \u2014 your game-day desk.",
+        "maxLength": 90
+      },
+      "raidersScore": {
+        "type": "number",
+        "default": 0,
+        "min": 0,
+        "max": 199
+      },
+      "dolphinsScore": {
+        "type": "number",
+        "default": 0,
+        "min": 0,
+        "max": 199
+      }
+    },
+    "feeds": {},
+    "slots": [
+      {
+        "id": "background",
+        "label": "Background video"
+      }
+    ],
+    "components": {
+      "ScoreCard": {
+        "props": {
+          "name": "Team",
+          "city": "City",
+          "score": 0,
+          "accent": "#ffffff"
+        },
+        "root": {
+          "id": "scorecard-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%"
+          },
+          "children": [
+            {
+              "id": "accent-stripe",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 416,
+                "height": 5,
+                "background": {
+                  "get": "props.accent"
+                }
+              },
+              "children": []
+            },
+            {
+              "id": "team-name",
+              "type": "text",
+              "text": {
+                "get": "props.name"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 22,
+                "top": 21,
+                "width": 198,
+                "height": 44,
+                "fontSize": "29px",
+                "fontWeight": 850,
+                "letterSpacing": ".025em",
+                "color": "#f4f5f7"
+              }
+            },
+            {
+              "id": "team-city",
+              "type": "text",
+              "text": {
+                "get": "props.city"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 24,
+                "top": 70,
+                "width": 264,
+                "height": 25,
+                "fontSize": "12px",
+                "letterSpacing": ".22em",
+                "color": {
+                  "get": "props.accent"
+                }
+              }
+            },
+            {
+              "id": "team-score",
+              "type": "text",
+              "text": {
+                "get": "props.score"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 228,
+                "top": 13,
+                "width": 164,
+                "height": 91,
+                "fontSize": "76px",
+                "fontWeight": 850,
+                "textAlign": "right",
+                "color": {
+                  "get": "props.accent"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "layouts": [
+      {
+        "id": "overlay",
+        "label": "Game Overlay",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "overlay-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#081019"
+          },
+          "children": [
+            {
+              "id": "room-video",
+              "type": "slot",
+              "slotId": "background",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              }
+            },
+            {
+              "id": "scoreboard",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 38,
+                "width": 1160,
+                "height": 172,
+                "background": "linear-gradient(120deg,#11151cf5,#17232af5)",
+                "border": "1px solid #ffffff24",
+                "borderRadius": "18px",
+                "boxShadow": "0 12px 35px #00000044"
+              },
+              "children": [
+                {
+                  "id": "raiders-team",
+                  "type": "component",
+                  "component": "ScoreCard",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 0,
+                    "top": 50,
+                    "width": 416,
+                    "height": 126
+                  },
+                  "props": {
+                    "name": "RAIDERS",
+                    "city": "LAS VEGAS",
+                    "score": {
+                      "get": "values.raidersScore"
+                    },
+                    "accent": "#bec4cd"
+                  }
+                },
+                {
+                  "id": "dolphins-team",
+                  "type": "component",
+                  "component": "ScoreCard",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 744,
+                    "top": 50,
+                    "width": 416,
+                    "height": 126
+                  },
+                  "props": {
+                    "name": "DOLPHINS",
+                    "city": "MIAMI",
+                    "score": {
+                      "get": "values.dolphinsScore"
+                    },
+                    "accent": "#32c6cb"
+                  }
+                },
+                {
+                  "id": "middle",
+                  "type": "box",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 431,
+                    "top": 26,
+                    "width": 298,
+                    "height": 122,
+                    "background": "#080e15",
+                    "borderRadius": "12px"
+                  },
+                  "children": [
+                    {
+                      "id": "matchup",
+                      "type": "text",
+                      "text": "LAS VEGAS \u00d7 MIAMI",
+                      "styles": {
+                        "position": "absolute",
+                        "left": 15,
+                        "top": 12,
+                        "width": 268,
+                        "height": 22,
+                        "fontSize": "12px",
+                        "letterSpacing": ".16em",
+                        "textAlign": "center",
+                        "color": "#aab7c4"
+                      }
+                    },
+                    {
+                      "id": "clock",
+                      "type": "text",
+                      "text": {
+                        "get": "values.clock"
+                      },
+                      "styles": {
+                        "position": "absolute",
+                        "left": 15,
+                        "top": 38,
+                        "width": 268,
+                        "height": 50,
+                        "fontSize": "42px",
+                        "fontWeight": 800,
+                        "textAlign": "center",
+                        "color": "#f7f3eb"
+                      }
+                    },
+                    {
+                      "id": "period",
+                      "type": "text",
+                      "text": {
+                        "get": "values.period"
+                      },
+                      "styles": {
+                        "position": "absolute",
+                        "left": 15,
+                        "top": 91,
+                        "width": 268,
+                        "height": 20,
+                        "fontSize": "13px",
+                        "textAlign": "center",
+                        "color": "#fa9560",
+                        "letterSpacing": ".13em"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "game-status",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 226,
+                "width": 1160,
+                "height": 44,
+                "background": "#0a121be8",
+                "border": "1px solid #ffffff1a",
+                "borderRadius": "10px",
+                "display": "flex",
+                "alignItems": "center",
+                "justifyContent": "space-between",
+                "padding": "0 20px"
+              },
+              "children": [
+                {
+                  "id": "down",
+                  "type": "text",
+                  "text": {
+                    "get": "values.down"
+                  },
+                  "styles": {
+                    "fontSize": "17px",
+                    "fontWeight": 650,
+                    "color": "#f2f3f5"
+                  }
+                },
+                {
+                  "id": "possession",
+                  "type": "text",
+                  "text": {
+                    "get": "values.possession"
+                  },
+                  "styles": {
+                    "fontSize": "13px",
+                    "color": "#32c6cb",
+                    "letterSpacing": ".1em"
+                  }
+                },
+                {
+                  "id": "field",
+                  "type": "text",
+                  "text": {
+                    "get": "values.field"
+                  },
+                  "styles": {
+                    "fontSize": "14px",
+                    "color": "#bac2cc"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "ticker",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 620,
+                "width": 1160,
+                "height": 59,
+                "background": "#0c151eea",
+                "borderRadius": "12px",
+                "border": "1px solid #ffffff24",
+                "display": "flex",
+                "alignItems": "center",
+                "gap": "18px",
+                "padding": "0 20px"
+              },
+              "children": [
+                {
+                  "id": "ticker-tag",
+                  "type": "text",
+                  "text": "MATCHUP",
+                  "styles": {
+                    "fontSize": "12px",
+                    "fontWeight": 800,
+                    "letterSpacing": ".13em",
+                    "color": "#fa9560"
+                  }
+                },
+                {
+                  "id": "headline",
+                  "type": "text",
+                  "text": {
+                    "get": "values.headline"
+                  },
+                  "styles": {
+                    "fontSize": "19px",
+                    "color": "#eff1f3"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "slate",
+        "label": "Matchup Slate",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "slate-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": "100%",
+            "height": "100%",
+            "overflow": "hidden",
+            "background": "#081019"
+          },
+          "children": [
+            {
+              "id": "silver-light",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": -80,
+                "top": 270,
+                "width": 650,
+                "height": 400,
+                "background": "radial-gradient(ellipse,#bac5d12b,transparent 65%)"
+              },
+              "children": []
+            },
+            {
+              "id": "aqua-light",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 680,
+                "top": 250,
+                "width": 650,
+                "height": 450,
+                "background": "radial-gradient(ellipse,#00bac33a,transparent 65%)"
+              },
+              "children": []
+            },
+            {
+              "id": "slate-left",
+              "type": "text",
+              "text": "RAIDERS",
+              "styles": {
+                "position": "absolute",
+                "left": 94,
+                "top": 350,
+                "width": 485,
+                "height": 100,
+                "fontSize": "72px",
+                "fontWeight": 900,
+                "letterSpacing": "-.04em",
+                "color": "#bec4cd"
+              }
+            },
+            {
+              "id": "slate-vs",
+              "type": "text",
+              "text": "VS",
+              "styles": {
+                "position": "absolute",
+                "left": 574,
+                "top": 363,
+                "width": 132,
+                "height": 70,
+                "fontSize": "44px",
+                "fontWeight": 850,
+                "textAlign": "center",
+                "color": "#fa9560"
+              }
+            },
+            {
+              "id": "slate-right",
+              "type": "text",
+              "text": "DOLPHINS",
+              "styles": {
+                "position": "absolute",
+                "left": 738,
+                "top": 350,
+                "width": 482,
+                "height": 100,
+                "fontSize": "64px",
+                "fontWeight": 900,
+                "letterSpacing": "-.04em",
+                "color": "#32c6cb"
+              }
+            },
+            {
+              "id": "slate-caption",
+              "type": "text",
+              "text": "SILVER & BLACK  /  AQUA & ORANGE",
+              "styles": {
+                "position": "absolute",
+                "left": 160,
+                "top": 491,
+                "width": 960,
+                "height": 30,
+                "fontSize": "15px",
+                "textAlign": "center",
+                "letterSpacing": ".24em",
+                "color": "#a7b3c0"
+              }
+            },
+            {
+              "id": "scoreboard",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 38,
+                "width": 1160,
+                "height": 172,
+                "background": "linear-gradient(120deg,#11151cf5,#17232af5)",
+                "border": "1px solid #ffffff24",
+                "borderRadius": "18px",
+                "boxShadow": "0 12px 35px #00000044"
+              },
+              "children": [
+                {
+                  "id": "raiders-team",
+                  "type": "component",
+                  "component": "ScoreCard",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 0,
+                    "top": 50,
+                    "width": 416,
+                    "height": 126
+                  },
+                  "props": {
+                    "name": "RAIDERS",
+                    "city": "LAS VEGAS",
+                    "score": {
+                      "get": "values.raidersScore"
+                    },
+                    "accent": "#bec4cd"
+                  }
+                },
+                {
+                  "id": "dolphins-team",
+                  "type": "component",
+                  "component": "ScoreCard",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 744,
+                    "top": 50,
+                    "width": 416,
+                    "height": 126
+                  },
+                  "props": {
+                    "name": "DOLPHINS",
+                    "city": "MIAMI",
+                    "score": {
+                      "get": "values.dolphinsScore"
+                    },
+                    "accent": "#32c6cb"
+                  }
+                },
+                {
+                  "id": "middle",
+                  "type": "box",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 431,
+                    "top": 26,
+                    "width": 298,
+                    "height": 122,
+                    "background": "#080e15",
+                    "borderRadius": "12px"
+                  },
+                  "children": [
+                    {
+                      "id": "matchup",
+                      "type": "text",
+                      "text": "LAS VEGAS \u00d7 MIAMI",
+                      "styles": {
+                        "position": "absolute",
+                        "left": 15,
+                        "top": 12,
+                        "width": 268,
+                        "height": 22,
+                        "fontSize": "12px",
+                        "letterSpacing": ".16em",
+                        "textAlign": "center",
+                        "color": "#aab7c4"
+                      }
+                    },
+                    {
+                      "id": "clock",
+                      "type": "text",
+                      "text": {
+                        "get": "values.clock"
+                      },
+                      "styles": {
+                        "position": "absolute",
+                        "left": 15,
+                        "top": 38,
+                        "width": 268,
+                        "height": 50,
+                        "fontSize": "42px",
+                        "fontWeight": 800,
+                        "textAlign": "center",
+                        "color": "#f7f3eb"
+                      }
+                    },
+                    {
+                      "id": "period",
+                      "type": "text",
+                      "text": {
+                        "get": "values.period"
+                      },
+                      "styles": {
+                        "position": "absolute",
+                        "left": 15,
+                        "top": 91,
+                        "width": 268,
+                        "height": 20,
+                        "fontSize": "13px",
+                        "textAlign": "center",
+                        "color": "#fa9560",
+                        "letterSpacing": ".13em"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "game-status",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 226,
+                "width": 1160,
+                "height": 44,
+                "background": "#0a121be8",
+                "border": "1px solid #ffffff1a",
+                "borderRadius": "10px",
+                "display": "flex",
+                "alignItems": "center",
+                "justifyContent": "space-between",
+                "padding": "0 20px"
+              },
+              "children": [
+                {
+                  "id": "down",
+                  "type": "text",
+                  "text": {
+                    "get": "values.down"
+                  },
+                  "styles": {
+                    "fontSize": "17px",
+                    "fontWeight": 650,
+                    "color": "#f2f3f5"
+                  }
+                },
+                {
+                  "id": "possession",
+                  "type": "text",
+                  "text": {
+                    "get": "values.possession"
+                  },
+                  "styles": {
+                    "fontSize": "13px",
+                    "color": "#32c6cb",
+                    "letterSpacing": ".1em"
+                  }
+                },
+                {
+                  "id": "field",
+                  "type": "text",
+                  "text": {
+                    "get": "values.field"
+                  },
+                  "styles": {
+                    "fontSize": "14px",
+                    "color": "#bac2cc"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "ticker",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 620,
+                "width": 1160,
+                "height": 59,
+                "background": "#0c151eea",
+                "borderRadius": "12px",
+                "border": "1px solid #ffffff24",
+                "display": "flex",
+                "alignItems": "center",
+                "gap": "18px",
+                "padding": "0 20px"
+              },
+              "children": [
+                {
+                  "id": "ticker-tag",
+                  "type": "text",
+                  "text": "MATCHUP",
+                  "styles": {
+                    "fontSize": "12px",
+                    "fontWeight": 800,
+                    "letterSpacing": ".13em",
+                    "color": "#fa9560"
+                  }
+                },
+                {
+                  "id": "headline",
+                  "type": "text",
+                  "text": {
+                    "get": "values.headline"
+                  },
+                  "styles": {
+                    "fontSize": "19px",
+                    "color": "#eff1f3"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "controls": [
+      {
+        "id": "overlay-button",
+        "type": "button",
+        "label": "Game Overlay",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "overlay"
+        }
+      },
+      {
+        "id": "slate-button",
+        "type": "button",
+        "label": "Matchup Slate",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "slate"
+        }
+      },
+      {
+        "id": "clock-field",
+        "type": "text",
+        "label": "Game clock",
+        "key": "clock"
+      },
+      {
+        "id": "period-field",
+        "type": "text",
+        "label": "Quarter / status",
+        "key": "period"
+      },
+      {
+        "id": "down-field",
+        "type": "text",
+        "label": "Down & distance",
+        "key": "down"
+      },
+      {
+        "id": "possession-field",
+        "type": "text",
+        "label": "Possession",
+        "key": "possession"
+      },
+      {
+        "id": "field-field",
+        "type": "text",
+        "label": "Field position",
+        "key": "field"
+      },
+      {
+        "id": "headline-field",
+        "type": "text",
+        "label": "Ticker text",
+        "key": "headline"
+      },
+      {
+        "id": "raidersScore-field",
+        "type": "number",
+        "label": "Raiders score",
+        "key": "raidersScore"
+      },
+      {
+        "id": "dolphinsScore-field",
+        "type": "number",
+        "label": "Dolphins score",
+        "key": "dolphinsScore"
+      }
+    ]
+  }
+}
