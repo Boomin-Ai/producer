@@ -761,10 +761,14 @@ pub async fn live_stop_recording(state: State<'_, AppState>) -> EngineResult<Opt
     let path = state.live.stop_recording().map_err(EngineError::Other)?;
     if let Some(ref path) = path {
         let db = state.db.lock().unwrap();
-        crate::recordings::finish(&db, path)?;
+        let primary_result = crate::recordings::finish(&db, path);
         let portrait = path.strip_suffix(".mp4").unwrap_or(path).to_owned() + " Portrait.mp4";
         if std::path::Path::new(&portrait).exists() {
-            crate::recordings::finish(&db, &portrait)?;
+            let portrait_result = crate::recordings::finish(&db, &portrait);
+            primary_result?;
+            portrait_result?;
+        } else {
+            primary_result?;
         }
     }
     Ok(path)

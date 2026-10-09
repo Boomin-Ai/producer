@@ -73,7 +73,57 @@ pub fn begin(db: &Connection, path: &str, room_id: Option<&str>) -> EngineResult
     db.execute("INSERT INTO local_recordings(id,room_id,room_name,endpoint_id,source_room_id,path,started_ms) VALUES(?1,?2,?3,?4,?5,?6,?7)", params![Uuid::new_v4().to_string(),room,name,endpoint,server,path,now_ms()])?;
     Ok(())
 }
+/// Check the container index before advertising a recording as playable.
+/// Seek over media data: even a multi-hour recording needs only a few header reads.
+pub fn validate_mp4(path: &std::path::Path) -> Result<(), String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    let len = file.metadata().map_err(|e| e.to_string())?.len();
+    let (mut offset, mut movie, mut media, mut format) = (0u64, false, false, false);
+    while offset < len {
+        if len - offset < 8 {
+            return Err("Recording has a truncated MP4 header.".into());
+        }
+        file.seek(SeekFrom::Start(offset))
+            .map_err(|e| e.to_string())?;
+        let mut header = [0u8; 8];
+        file.read_exact(&mut header).map_err(|e| e.to_string())?;
+        let short = u32::from_be_bytes(header[..4].try_into().unwrap());
+        let (size, header_len) = match short {
+            0 => (len - offset, 8),
+            1 => {
+                let mut extended = [0u8; 8];
+                file.read_exact(&mut extended).map_err(|e| e.to_string())?;
+                (u64::from_be_bytes(extended), 16)
+            }
+            n => (n as u64, 8),
+        };
+        if size < header_len || size > len - offset {
+            return Err("Recording has an incomplete MP4 box.".into());
+        }
+        match &header[4..] {
+            b"ftyp" => format = size > header_len,
+            b"moov" => movie = size > header_len,
+            b"mdat" => media |= size > header_len,
+            _ => {}
+        }
+        offset += size;
+    }
+    if format && movie && media {
+        Ok(())
+    } else {
+        Err(
+            "Recording did not finish its MP4 container. The original file is kept for recovery."
+                .into(),
+        )
+    }
+}
+
 pub fn finish(db: &Connection, path: &str) -> EngineResult<()> {
+    if let Err(message) = validate_mp4(std::path::Path::new(path)) {
+        db.execute("UPDATE local_recordings SET status='interrupted', sync_error=?2 WHERE path=?1 AND status='recording'", params![path, message])?;
+        return Err(EngineError::Other(message));
+    }
     let size = std::fs::metadata(path)
         .map_err(|e| EngineError::Other(format!("Could not read the saved recording: {e}")))?
         .len() as i64;
@@ -183,7 +233,13 @@ mod tests {
         db.execute("INSERT INTO live_rooms(id,name,endpoint_id,config) VALUES('room','My room','endpoint','{\"server_room_id\":\"server-room\"}')", []).unwrap();
         let path =
             std::env::temp_dir().join(format!("producer-capture-test-{}.mp4", Uuid::new_v4()));
-        std::fs::write(&path, b"capture-test").unwrap();
+        let mut bytes = Vec::new();
+        for kind in [b"ftyp", b"mdat", b"moov"] {
+            bytes.extend_from_slice(&9u32.to_be_bytes());
+            bytes.extend_from_slice(kind);
+            bytes.push(0);
+        }
+        std::fs::write(&path, &bytes).unwrap();
         let path_string = path.to_string_lossy();
         begin(&db, &path_string, Some("room")).unwrap();
         finish(&db, &path_string).unwrap();
@@ -194,9 +250,31 @@ mod tests {
         assert_eq!(recording.endpoint_id.as_deref(), Some("endpoint"));
         assert_eq!(recording.source_room_id.as_deref(), Some("server-room"));
         assert_eq!(recording.status, "ready");
-        assert_eq!(recording.file_size, 12);
+        assert_eq!(recording.file_size, 27);
         assert!(recording.ended_at.is_some());
         assert!(begin(&db, &path_string, Some("room")).is_err());
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn missing_movie_index_is_interrupted_even_when_media_exists() {
+        let db = crate::store::open_in_memory().unwrap();
+        let path = std::env::temp_dir().join(format!("producer-unfinished-{}.mp4", Uuid::new_v4()));
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&9u32.to_be_bytes());
+        bytes.extend_from_slice(b"ftypx");
+        bytes.extend_from_slice(&0u32.to_be_bytes());
+        bytes.extend_from_slice(b"mdatunfinished-media");
+        std::fs::write(&path, bytes).unwrap();
+        let p = path.to_string_lossy();
+        begin(&db, &p, None).unwrap();
+        assert!(finish(&db, &p).is_err());
+        let recording = db
+            .query_row(&format!("SELECT {COLUMNS} FROM local_recordings"), [], row)
+            .unwrap();
+        assert_eq!(recording.status, "interrupted");
+        assert!(recording.sync_error.unwrap().contains("MP4 container"));
+        assert!(path.exists());
         std::fs::remove_file(path).unwrap();
     }
 

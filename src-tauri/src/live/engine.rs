@@ -2477,6 +2477,18 @@ pub fn start(
                 }
                 let iter_t0 = Instant::now();
                 let mut iter_label: &'static str = "idle";
+                for recording in [recorder.as_ref(), portrait_recorder.as_ref()].into_iter().flatten() {
+                    if let Some(message) = recording.take_failure() {
+                        eprintln!("[recording] {message}");
+                        let _ = std::fs::OpenOptions::new().create(true).append(true)
+                            .open(module_config_dir.join("recording-errors.log"))
+                            .and_then(|mut file| {
+                                use std::io::Write;
+                                writeln!(file, "{message}")
+                            });
+                        sink(&LiveEvent::EngineError { message });
+                    }
+                }
                 // Performance is sampled whether or not a session is running:
                 // FPS and CPU tell you the machine is struggling BEFORE you go
                 // live, which is when the information is still actionable.
