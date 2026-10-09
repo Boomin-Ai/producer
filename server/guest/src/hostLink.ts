@@ -48,6 +48,8 @@ export interface HostLinkOptions {
   session: Session;
   /** Absolute ws(s) URL of the signaling socket. */
   wsUrl: string;
+  /** Reconnect using a fresh ticket; old signaling tickets expire. */
+  refreshSession: () => Promise<{ session: Session; wsUrl: string }>;
   /** Camera + mic (already trimmed to the grants). May be null: a
    *  participant with no media grant connects to receive only. */
   localStream: () => MediaStream | null;
@@ -68,7 +70,10 @@ export interface HostLinkOptions {
 }
 
 export class HostLink {
-  private readonly ws: WebSocket;
+  private ws!: WebSocket;
+  private reconnectTimer: number | null = null;
+  private reconnectAttempt = 0;
+  private socketGeneration = 0;
   private readonly peers = new Map<HostPeer, PeerState>();
   private screen: MediaStream | null = null;
   private programRequest: ProgramRequest | null = null;
@@ -76,27 +81,63 @@ export class HostLink {
   private readonly programReceiver: ProgramReceiver;
 
   constructor(private readonly opts: HostLinkOptions) {
-    this.ws = new WebSocket(opts.wsUrl);
     this.programReceiver = new ProgramReceiver(opts.session.ice_servers, payload => this.send("program", payload), event => {
       const stream = event.streams[0];
       if (!stream) return;
       if (event.track.kind === "video") this.opts.onProgram(stream);
       else this.opts.onHostAudio(stream);
     });
-    this.ws.onopen = () => {
-      // Labels are announced BEFORE any offer that could carry the stream.
+    // The camera peer exists from the start, publishing whatever we hold.
+    this.connectSocket(opts.wsUrl);
+    this.ensurePeer("main");
+  }
+
+  private connectSocket(url: string): void {
+    const generation = ++this.socketGeneration;
+    const socket = new WebSocket(url);
+    this.ws = socket;
+    const current = () => !this.closed && generation === this.socketGeneration && this.ws === socket;
+    socket.onopen = () => {
+      if (!current()) return;
+      this.reconnectAttempt = 0;
       this.announceLocal();
-      // Every peer says hello; a host page already waiting learns to negotiate.
       for (const [name, peer] of this.peers) {
         this.send(name, { kind: "hello" });
-        // Flush an offer created before the socket opened — send() drops while
-        // CONNECTING, and losing it leaves both peers waiting on each other.
-        if (peer.pc.localDescription) this.send(name, { kind: "sdp", description: peer.pc.localDescription });
+        // Only an outstanding offer needs flushing. Replaying an old answer
+        // into a newly-created host peer is not a valid negotiation.
+        if (peer.pc.signalingState === "have-local-offer" && peer.pc.localDescription?.type === "offer") {
+          this.send(name, { kind: "sdp", description: peer.pc.localDescription });
+        }
       }
+      this.programRequest?.restart();
     };
-    this.ws.onmessage = (event) => void this.onFrame(event);
-    // The camera peer exists from the start, publishing whatever we hold.
-    this.ensurePeer("main");
+    socket.onmessage = (event) => { if (current()) void this.onFrame(event); };
+    socket.onclose = () => { if (current()) this.scheduleReconnect(); };
+    socket.onerror = () => { /* onclose schedules the retry */ };
+  }
+
+  private scheduleReconnect(): void {
+    if (this.closed || this.reconnectTimer !== null) return;
+    const wait = [1000, 2000, 3000, 5000, 8000][Math.min(this.reconnectAttempt++, 4)];
+    this.reconnectTimer = window.setTimeout(() => {
+      this.reconnectTimer = null;
+      void this.reconnect();
+    }, wait);
+  }
+
+  private async reconnect(): Promise<void> {
+    const generation = this.socketGeneration;
+    try {
+      const fresh = await this.opts.refreshSession();
+      if (this.closed || generation !== this.socketGeneration) return;
+      for (const peer of this.peers.values()) {
+        peer.pc.setConfiguration({ ...peer.pc.getConfiguration(), iceServers: fresh.session.ice_servers });
+      }
+      this.programReceiver.updateIceServers(fresh.session.ice_servers);
+      this.connectSocket(fresh.wsUrl);
+    } catch {
+      if (!this.closed && generation === this.socketGeneration) this.scheduleReconnect();
+    }
   }
 
   get sharing(): boolean {
@@ -320,6 +361,9 @@ export class HostLink {
 
   close(): void {
     this.closed = true;
+    this.socketGeneration++;
+    if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
     this.programRequest?.close();
     this.programReceiver.close();
     this.screen?.getTracks().forEach((t) => t.stop());

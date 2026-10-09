@@ -25,7 +25,9 @@
     "test:presentation-output": "node scripts/test-presentation-output.mjs",
     "test:presentation-native-sources": "node scripts/test-presentation-output.mjs --native-sources",
     "test:presentation-native-output": "node scripts/test-presentation-output.mjs --native",
-    "test:scene-restoration": "node scripts/test-scene-restoration.mjs"
+    "test:scene-restoration": "node scripts/test-scene-restoration.mjs",
+    "test:guest-reconnect": "node scripts/test-guest-reconnect.mjs",
+    "test:guest-reconnect-browser": "node scripts/test-guest-reconnect-browser.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.0",

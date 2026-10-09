@@ -258,6 +258,12 @@ export default function GuestRoomPage({ code }: { code: string }) {
     const link = new HostLink({
       session,
       wsUrl: signalingWsUrl(CONNECT_API_BASE_URL, session),
+      refreshSession: async () => {
+        const response = await fetch(`${CONNECT_API_BASE_URL}/guest/${encodeURIComponent(inviteCode)}/session`, { method: "POST" });
+        if (!response.ok) throw new Error(`Guest reconnect ${response.status}`);
+        const session = await response.json() as Session;
+        return { session, wsUrl: signalingWsUrl(CONNECT_API_BASE_URL, session) };
+      },
       // A participant with no media grants still connects — to receive the
       // return feed and, later, to take part — they simply publish nothing.
       localStream: () => streamRef.current,

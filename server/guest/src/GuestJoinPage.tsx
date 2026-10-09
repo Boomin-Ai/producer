@@ -249,6 +249,12 @@ export default function GuestJoinPage({ code }: { code: string }) {
       linkRef.current = new HostLink({
         session,
         wsUrl: signalingWsUrl(CONNECT_API_BASE_URL, session),
+        refreshSession: async () => {
+          const response = await fetch(`${CONNECT_API_BASE_URL}/guest/${encodeURIComponent(code)}/session`, { method: "POST" });
+          if (!response.ok) throw new Error(`Guest reconnect ${response.status}`);
+          const session = await response.json() as Session;
+          return { session, wsUrl: signalingWsUrl(CONNECT_API_BASE_URL, session) };
+        },
         localStream: () => streamRef.current,
         // The return leg is a grant (media.return_feed). This page never
         // asked for the program before — deal guests saw only the host's
