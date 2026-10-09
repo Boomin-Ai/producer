@@ -310,6 +310,13 @@ export class SeatMediaLeg implements ProgramSource {
     this.link = new HostLink({
       session,
       wsUrl: signalingWsUrl(this.api, session),
+      refreshSession: async () => {
+        if (!mine()) throw new Error("Seat connection closed");
+        const response = await fetch(`${this.api}/guest/${encodeURIComponent(this.code!)}/session`, { method: "POST" });
+        if (!response.ok) throw new Error(`Guest session renewal failed: ${response.status}`);
+        const fresh = await response.json() as Session;
+        return { session: fresh, wsUrl: signalingWsUrl(this.api, fresh) };
+      },
       localStream: () => this.local,
       // The return feed is pinned on the seat's row (api monitor.ts).
       returnFeed: true,
