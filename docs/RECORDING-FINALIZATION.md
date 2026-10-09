@@ -20,6 +20,8 @@ The two 19:48:05 recordings contained `ftyp`, `free`, and an open-ended `mdat`, 
 
 ## Recovery
 
-The original 19:48:05 files are untouched. Separate `Recovered.mp4` copies were created using the external anthwlock/untrunc utility and working local references. Portrait needed its 1080×1920 AVC configuration restored from a matching native reference, including corrected chunk offsets and display dimensions. macOS AVFoundation reports both recovered copies playable and decodes beginning, middle and end frames. Recovered video durations are 46.833 seconds landscape and 46.866 seconds portrait. Footage never written into the originals cannot be reconstructed.
+No recovery operation modifies the original 19:48:05 files. Separate `Recovered.mp4` copies were created using the external anthwlock/untrunc utility and working local references. Portrait needed its 1080×1920 AVC configuration restored from a matching native reference, including corrected chunk offsets and display dimensions. macOS AVFoundation reports both recovered copies playable and decodes beginning, middle and end frames. Recovered video durations are 46.833 seconds landscape and 46.866 seconds portrait. Footage never written into the originals cannot be reconstructed.
 
 The change is built locally. It is not installed over the running production app or deployed as a release. Historical database rows and remote Manager posts have not been rewritten.
+
+During final verification, both original 19:48:05 files and their recovered copies disappeared from Movies/Producer through an external change. Spotlight did not find the names elsewhere, and macOS denies terminal access to Trash. The user has been asked for the new location. The earlier playback evidence is retained, but no recovered copy is currently available in the recovery folder.
