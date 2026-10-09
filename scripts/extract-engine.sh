@@ -75,6 +75,11 @@ done
 cp -R "$SRC/Resources/license/." "$STAGE/licenses/" 2>/dev/null || true
 [[ -f "$REPO_ROOT/engine/obs-studio/COPYING" ]] && cp "$REPO_ROOT/engine/obs-studio/COPYING" "$STAGE/licenses/COPYING.obs-studio"
 
+# The official renderer lacks Producer's current-frame handoff. Rebuild only
+# that renderer from the same OBS pin and run its real-GPU checks locally.
+PRODUCER_ENGINE_DIR="$STAGE" "$REPO_ROOT/scripts/build-cutout-metal-lab.sh"
+cp "$REPO_ROOT/src-tauri/target/cutout-lab/libobs-metal-current-frame.dylib" "$STAGE/Frameworks/libobs-metal.dylib"
+
 # closure re-check against the staged artifact itself (zero-Qt gate, A9)
 "$REPO_ROOT/scripts/engine-closure.sh" "$STAGE" > /dev/null \
   || { echo "FATAL: staged artifact failed closure/Qt gate" >&2; exit 1; }

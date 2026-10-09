@@ -26,8 +26,13 @@
 //     waited on the provider thread. libobs-metal's gs_stage_texture and
 //     gs_copy_texture both waitUntilCompleted on the graphics thread, which
 //     is exactly why they are not used on this backend. The texture handed
-//     over is the ring entry rendered two renders EARLIER (4-deep ring), so
-//     libobs has committed the commands that drew it.
+//     over is the newest ring entry from the PREVIOUS video tick (4-deep
+//     ring). Preview/program renders share one analysis draw per tick.
+//     A slot is leased until the provider's blit completes, so a delayed
+//     worker cannot read a texture that the graphics thread is rewriting.
+//     The experimental current-frame engine API instead enqueues the copy
+//     AFTER the draw on libobs' own Metal queue, then starts Vision from the
+//     GPU completion callback. It does not wait on the graphics thread.
 //   * OpenGL (Intel Macs): the readback ring the encoder pipeline uses —
 //     gs_stage_texture this frame, gs_stagesurface_map the surface staged
 //     LAST frame — so the map does not stall on an in-flight download.
@@ -48,13 +53,35 @@
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <dlfcn.h>
+#include <math.h>
+
+static uint64_t pm_now_ns(void)
+{
+	struct timespec t;
+	clock_gettime(CLOCK_MONOTONIC, &t);
+	return (uint64_t)t.tv_sec * 1000000000ull + (uint64_t)t.tv_nsec;
+}
 
 #include "obs_min.h"
 #include "person_mask.effect.h"
 
+typedef bool (*pm_metal_copy_fn)(const void *, const void *, void *, void (*)(void *, int32_t));
+typedef void (^pm_copy_completion)(int32_t);
+
+// The engine calls this exactly once after an accepted async copy. The block
+// owns the provider until it has queued inference (or handled a failed copy).
+static void pm_copy_completed(void *context, int32_t ok)
+{
+	pm_copy_completion completion = CFBridgingRelease(context);
+	completion(ok);
+}
+
 // Longest edge fed to Vision. .balanced runs its network at a fixed internal
 // size anyway; feeding it more only costs the blit.
 #define PM_ANALYSIS_MAX_W 768
+#define PM_REFINE_MAX_EDGE 1280
 // Sources taller than this get .fast: the blit and the network both scale.
 #define PM_FAST_ABOVE_H 1080
 #define PM_ANA_RING 4
@@ -76,6 +103,9 @@ enum pm_mode { PM_OFF = 0, PM_SOFT = 1, PM_CUT = 2 };
 	// Index of the newest completed mask, -1 until the first one lands.
 	atomic_int _front;
 	atomic_uint_fast64_t _seq;
+	atomic_uint_fast64_t _busyDrops, _submittedNs, _maskSubmittedNs, _inferenceNs;
+	atomic_uint_fast64_t _copyNs, _inputWaitNs, _publishedNs;
+	atomic_int _copySlot;
 	CVPixelBufferRef _masks[PM_MASK_RING];
 	// Slots replaced after a size change park here until dealloc: the
 	// graphics thread may still be sampling them for a frame.
@@ -109,6 +139,14 @@ enum pm_mode { PM_OFF = 0, PM_SOFT = 1, PM_CUT = 2 };
 		atomic_init(&_busy, false);
 		atomic_init(&_front, -1);
 		atomic_init(&_seq, 0);
+		atomic_init(&_busyDrops, 0);
+		atomic_init(&_submittedNs, 0);
+		atomic_init(&_maskSubmittedNs, 0);
+		atomic_init(&_inferenceNs, 0);
+		atomic_init(&_copyNs, 0);
+		atomic_init(&_inputWaitNs, 0);
+		atomic_init(&_publishedNs, 0);
+		atomic_init(&_copySlot, -1);
 		_maskFormat = bgra ? kCVPixelFormatType_32BGRA : kCVPixelFormatType_OneComponent8;
 		VNGeneratePersonSegmentationRequest *req = [[VNGeneratePersonSegmentationRequest alloc] init];
 		req.qualityLevel = VNGeneratePersonSegmentationRequestQualityLevelBalanced;
@@ -183,13 +221,15 @@ enum pm_mode { PM_OFF = 0, PM_SOFT = 1, PM_CUT = 2 };
 }
 
 // Provider queue only: run Vision over _frame and publish the mask.
-- (void)segmentFast:(BOOL)fast {
+- (void)segmentQuality:(NSInteger)quality {
 	if (@available(macOS 12.0, *)) {
 		if (!_frame)
 			return;
 		VNGeneratePersonSegmentationRequest *req = (VNGeneratePersonSegmentationRequest *)_request;
-		req.qualityLevel = fast ? VNGeneratePersonSegmentationRequestQualityLevelFast
-					: VNGeneratePersonSegmentationRequestQualityLevelBalanced;
+		req.qualityLevel = quality == 1 ? VNGeneratePersonSegmentationRequestQualityLevelFast
+			: quality == 3 ? VNGeneratePersonSegmentationRequestQualityLevelAccurate
+			: VNGeneratePersonSegmentationRequestQualityLevelBalanced;
+		uint64_t started = pm_now_ns();
 		VNImageRequestHandler *handler = [[VNImageRequestHandler alloc] initWithCVPixelBuffer:_frame options:@{}];
 		NSError *err = nil;
 		if (![handler performRequests:@[ req ] error:&err]) {
@@ -199,6 +239,7 @@ enum pm_mode { PM_OFF = 0, PM_SOFT = 1, PM_CUT = 2 };
 				     err.localizedDescription.UTF8String ?: "?");
 			return;
 		}
+		atomic_store(&_inferenceNs, pm_now_ns() - started);
 		VNPixelBufferObservation *obs = req.results.firstObject;
 		CVPixelBufferRef src = obs.pixelBuffer;
 		if (!src)
@@ -228,6 +269,8 @@ enum pm_mode { PM_OFF = 0, PM_SOFT = 1, PM_CUT = 2 };
 		CVPixelBufferUnlockBaseAddress(src, kCVPixelBufferLock_ReadOnly);
 		_mask_w = w;
 		_mask_h = h;
+		atomic_store(&_maskSubmittedNs, atomic_load(&_submittedNs));
+		atomic_store(&_publishedNs, pm_now_ns());
 		atomic_fetch_add(&_seq, 1);
 		atomic_store(&_front, slot);
 	}
@@ -235,21 +278,87 @@ enum pm_mode { PM_OFF = 0, PM_SOFT = 1, PM_CUT = 2 };
 
 // Graphics thread. Hands a libobs-owned Metal texture (retained by the block)
 // to the provider; the blit into Vision's buffer runs on the provider queue.
-- (void)submitMetalTexture:(id<MTLTexture>)tex fast:(BOOL)fast {
+- (void)submitMetalTexture:(id<MTLTexture>)tex slot:(int)slot quality:(NSInteger)quality frameNs:(uint64_t)frameNs {
 	if (!tex)
 		return;
-	if (atomic_exchange(&_busy, true))
+	if (atomic_exchange(&_busy, true)) {
+		atomic_fetch_add(&_busyDrops, 1);
 		return;
+	}
+	atomic_store(&_submittedNs, frameNs);
+	atomic_store(&_copySlot, slot);
 	dispatch_async(_queue, ^{
 		@autoreleasepool {
-			[self blitAndSegment:tex fast:fast];
+			[self blitAndSegment:tex quality:quality];
 		}
+		atomic_store(&self->_copySlot, -1); // also covers setup failures
 		atomic_store(&self->_busy, false);
 	});
 }
 
+// Graphics thread. Set up one reusable Vision input buffer, then ask the
+// engine to copy on its render queue. The GPU completion queues Vision; the
+// render thread never waits for the copy or for inference.
+- (void)submitCurrentTexture:(gs_texture_t *)source slot:(int)slot copy:(pm_metal_copy_fn)copy quality:(NSInteger)quality frameNs:(uint64_t)frameNs {
+	if (atomic_exchange(&_busy, true)) {
+		atomic_fetch_add(&_busyDrops, 1);
+		return;
+	}
+	atomic_store(&_submittedNs, frameNs);
+	atomic_store(&_copySlot, slot);
+	uint64_t started = pm_now_ns();
+	atomic_store(&_inputWaitNs, started - frameNs);
+	id<MTLTexture> tex = (__bridge id<MTLTexture>)gs_texture_get_obj(source);
+	if (![self ensureFrame:(int)tex.width height:(int)tex.height]) {
+		atomic_store(&_copySlot, -1);
+		atomic_store(&_busy, false);
+		return;
+	}
+	if (_device != tex.device) {
+		if (_texCache)
+			CFRelease(_texCache);
+		_texCache = NULL;
+		_device = tex.device;
+		_cmdq = [_device newCommandQueue];
+		CVMetalTextureCacheCreate(kCFAllocatorDefault, NULL, _device, NULL, &_texCache);
+	}
+	CVMetalTextureRef cvtex = NULL;
+	CVReturn rc = _texCache ? CVMetalTextureCacheCreateTextureFromImage(kCFAllocatorDefault, _texCache, _frame, NULL,
+		tex.pixelFormat, tex.width, tex.height, 0, &cvtex) : kCVReturnError;
+	if (rc != kCVReturnSuccess || !cvtex) {
+		atomic_store(&_copySlot, -1);
+		atomic_store(&_busy, false);
+		return;
+	}
+	id<MTLTexture> destination = CVMetalTextureGetTexture(cvtex);
+	pm_copy_completion completion = ^(int32_t ok) {
+		atomic_store(&self->_copyNs, pm_now_ns() - started);
+		atomic_store(&self->_copySlot, -1);
+		dispatch_async(self->_queue, ^{
+			@autoreleasepool {
+				if (ok)
+					[self segmentQuality:quality];
+				else
+					blog(LOG_WARNING, "[person_mask] current-frame GPU copy failed");
+			}
+			atomic_store(&self->_busy, false);
+		});
+	};
+	void *context = (void *)CFBridgingRetain(completion);
+	bool accepted = copy(source, (__bridge const void *)destination, context, pm_copy_completed);
+	CFRelease(cvtex);
+	if (!accepted) {
+		CFBridgingRelease(context); // no callback is promised on rejection
+		atomic_store(&_copySlot, -1);
+		atomic_store(&_busy, false);
+		blog(LOG_WARNING, "[person_mask] current-frame GPU copy rejected");
+	}
+}
+
 // Provider queue only.
-- (void)blitAndSegment:(id<MTLTexture>)tex fast:(BOOL)fast {
+- (void)blitAndSegment:(id<MTLTexture>)tex quality:(NSInteger)quality {
+	uint64_t started = pm_now_ns();
+	atomic_store(&_inputWaitNs, started - atomic_load(&_submittedNs));
 	int w = (int)tex.width, h = (int)tex.height;
 	if (![self ensureFrame:w height:h])
 		return;
@@ -286,17 +395,24 @@ enum pm_mode { PM_OFF = 0, PM_SOFT = 1, PM_CUT = 2 };
 	[cmd commit];
 	[cmd waitUntilCompleted];
 	CFRelease(cvtex);
-	[self segmentFast:fast];
+	atomic_store(&_copyNs, pm_now_ns() - started);
+	atomic_store(&_copySlot, -1); // Vision now reads its own pixel buffer
+	[self segmentQuality:quality];
 }
 
 // Graphics thread (OpenGL path). Copies BGRA rows into the frame buffer and
 // queues Vision. The memcpy is the one cost paid on the graphics thread —
 // about a megabyte at analysis size.
-- (void)submitBGRA:(const uint8_t *)bytes linesize:(uint32_t)linesize width:(int)w height:(int)h fast:(BOOL)fast {
+- (void)submitBGRA:(const uint8_t *)bytes linesize:(uint32_t)linesize width:(int)w height:(int)h quality:(NSInteger)quality frameNs:(uint64_t)frameNs {
 	if (!bytes)
 		return;
-	if (atomic_exchange(&_busy, true))
+	if (atomic_exchange(&_busy, true)) {
+		atomic_fetch_add(&_busyDrops, 1);
 		return;
+	}
+	atomic_store(&_submittedNs, frameNs);
+	uint64_t started = pm_now_ns();
+	atomic_store(&_inputWaitNs, started - frameNs);
 	if (![self ensureFrame:w height:h]) {
 		atomic_store(&_busy, false);
 		return;
@@ -308,9 +424,10 @@ enum pm_mode { PM_OFF = 0, PM_SOFT = 1, PM_CUT = 2 };
 	for (int y = 0; y < h; y++)
 		memcpy(dp + (size_t)y * dls, bytes + (size_t)y * linesize, row);
 	CVPixelBufferUnlockBaseAddress(_frame, 0);
+	atomic_store(&_copyNs, pm_now_ns() - started);
 	dispatch_async(_queue, ^{
 		@autoreleasepool {
-			[self segmentFast:fast];
+			[self segmentQuality:quality];
 		}
 		atomic_store(&self->_busy, false);
 	});
@@ -341,13 +458,20 @@ struct person_mask {
 	// plain calloc'd C, so ARC never sees the field.
 	void *seg;
 	bool metal;
+	pm_metal_copy_fn currentFrameCopy;
 
 	gs_effect_t *effect;
 	gs_eparam_t *p_image, *p_mask, *p_blurred, *p_blur_dir, *p_mask_texel, *p_feather, *p_erode;
+	gs_eparam_t *p_refine_texel, *p_edge_refine;
 
 	gs_texrender_t *src_tr;
 	gs_texrender_t *ana_tr[PM_ANA_RING];
 	int ana_i;
+	int latestAnalysis;
+	bool analyzedThisTick;
+	bool refineAttempted, refineReady;
+	gs_texrender_t *refine_tr;
+	uint64_t analysisNs[PM_ANA_RING], stageNs[2];
 	uint32_t ana_w, ana_h;
 	// OpenGL readback ring.
 	gs_stagesurf_t *stage[2];
@@ -359,8 +483,11 @@ struct person_mask {
 	gs_texture_t *mask_tex[PM_MASK_RING];
 	IOSurfaceID mask_id[PM_MASK_RING];
 
-	int mode;
-	float feather, erode, blur;
+	int mode, quality;
+	uint64_t diagnosticsAt, diagnosticSeq, diagnosticDrops;
+	uint64_t refinePasses, diagnosticRefinePasses;
+	bool diagnostics;
+	float feather, erode, blur, edge_refine;
 };
 
 static const char *pm_name(void *unused)
@@ -372,14 +499,21 @@ static const char *pm_name(void *unused)
 static void pm_defaults(obs_data_t *settings)
 {
 	obs_data_set_default_string(settings, "mode", "soft");
+	obs_data_set_default_string(settings, "quality", "auto");
 	obs_data_set_default_double(settings, "feather", 0.35);
 	obs_data_set_default_double(settings, "erode", 0.25);
 	obs_data_set_default_double(settings, "blur", 0.6);
+	obs_data_set_default_double(settings, "edge_refine", 0.65);
 }
 
 static void pm_update(void *data, obs_data_t *settings)
 {
 	struct person_mask *f = data;
+	const char *quality = obs_data_get_string(settings, "quality");
+	f->quality = quality && strcmp(quality, "accurate") == 0 ? 3
+		: quality && strcmp(quality, "balanced") == 0 ? 2
+		: quality && strcmp(quality, "fast") == 0 ? 1 : 0;
+	f->diagnostics = getenv("PRODUCER_CUTOUT_DIAGNOSTICS") && strcmp(getenv("PRODUCER_CUTOUT_DIAGNOSTICS"), "1") == 0;
 	const char *mode = obs_data_get_string(settings, "mode");
 	if (mode && strcmp(mode, "cut") == 0)
 		f->mode = PM_CUT;
@@ -390,6 +524,7 @@ static void pm_update(void *data, obs_data_t *settings)
 	f->feather = (float)obs_data_get_double(settings, "feather");
 	f->erode = (float)obs_data_get_double(settings, "erode");
 	f->blur = (float)obs_data_get_double(settings, "blur");
+	f->edge_refine = fminf(1.0f, fmaxf(0.0f, (float)obs_data_get_double(settings, "edge_refine")));
 }
 
 static obs_properties_t *pm_properties(void *unused)
@@ -401,8 +536,14 @@ static obs_properties_t *pm_properties(void *unused)
 	obs_property_list_add_string(mode, "Off", "off");
 	obs_property_list_add_string(mode, "Soft", "soft");
 	obs_property_list_add_string(mode, "Cut", "cut");
+	obs_property_t *quality = obs_properties_add_list(props, "quality", "Quality", OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_STRING);
+	obs_property_list_add_string(quality, "Auto", "auto");
+	obs_property_list_add_string(quality, "Fast", "fast");
+	obs_property_list_add_string(quality, "Balanced", "balanced");
+	obs_property_list_add_string(quality, "Accurate", "accurate");
 	obs_properties_add_float_slider(props, "feather", "Feather", 0.0, 1.0, 0.01);
 	obs_properties_add_float_slider(props, "erode", "Erode", 0.0, 1.0, 0.01);
+	obs_properties_add_float_slider(props, "edge_refine", "Edge refinement", 0.0, 1.0, 0.01);
 	obs_properties_add_float_slider(props, "blur", "Blur radius", 0.0, 1.0, 0.01);
 	return props;
 }
@@ -423,6 +564,8 @@ static void pm_free_gpu(struct person_mask *f)
 		gs_texrender_destroy(f->blur_a);
 	if (f->blur_b)
 		gs_texrender_destroy(f->blur_b);
+	if (f->refine_tr)
+		gs_texrender_destroy(f->refine_tr);
 	for (int i = 0; i < PM_MASK_RING; i++)
 		if (f->mask_tex[i])
 			gs_texture_destroy(f->mask_tex[i]);
@@ -447,9 +590,19 @@ static void *pm_create(obs_data_t *settings, obs_source_t *ctx)
 	if (!f)
 		return NULL;
 	f->ctx = ctx;
+	f->latestAnalysis = -1;
 
 	obs_enter_graphics();
 	f->metal = gs_get_device_type() == GS_DEVICE_METAL;
+	const char *current_frame = getenv("PRODUCER_CUTOUT_CURRENT_FRAME");
+	if (f->metal && (!current_frame || strcmp(current_frame, "0") != 0)) {
+		NSString *path = [NSBundle.mainBundle.privateFrameworksPath stringByAppendingPathComponent:@"libobs-metal.dylib"];
+		void *module = path ? dlopen(path.fileSystemRepresentation, RTLD_LAZY | RTLD_NOLOAD) : NULL;
+		if (module) {
+			f->currentFrameCopy = (pm_metal_copy_fn)dlsym(module, "producer_metal_copy_texture_async_v1");
+			dlclose(module); // OBS retains the loaded backend for its lifetime
+		}
+	}
 	char *err = NULL;
 	f->effect = gs_effect_create(PRODUCER_PERSON_MASK_EFFECT, "person_mask.effect", &err);
 	if (f->effect) {
@@ -460,11 +613,14 @@ static void *pm_create(obs_data_t *settings, obs_source_t *ctx)
 		f->p_mask_texel = gs_effect_get_param_by_name(f->effect, "mask_texel");
 		f->p_feather = gs_effect_get_param_by_name(f->effect, "feather");
 		f->p_erode = gs_effect_get_param_by_name(f->effect, "erode");
+		f->p_refine_texel = gs_effect_get_param_by_name(f->effect, "refine_texel");
+		f->p_edge_refine = gs_effect_get_param_by_name(f->effect, "edge_refine");
 		f->src_tr = gs_texrender_create(GS_BGRA, GS_ZS_NONE);
 		for (int i = 0; i < PM_ANA_RING; i++)
 			f->ana_tr[i] = gs_texrender_create(GS_BGRA, GS_ZS_NONE);
 		f->blur_a = gs_texrender_create(GS_BGRA, GS_ZS_NONE);
 		f->blur_b = gs_texrender_create(GS_BGRA, GS_ZS_NONE);
+		f->refine_tr = gs_texrender_create(GS_BGRA, GS_ZS_NONE);
 	} else {
 		blog(LOG_ERROR, "[person_mask] effect failed to compile: %s", err ? err : "?");
 	}
@@ -485,6 +641,7 @@ static void *pm_create(obs_data_t *settings, obs_source_t *ctx)
 	pm_update(f, settings);
 	blog(LOG_INFO, "[person_mask] created (%s backend, %s)", f->metal ? "metal" : "opengl",
 	     f->seg ? "vision ready" : "no provider");
+	blog(LOG_INFO, "[person_mask] input handoff: %s", f->currentFrameCopy ? "current-frame async" : "previous-frame");
 	return f;
 }
 
@@ -532,20 +689,52 @@ static bool pm_pass(struct person_mask *f, gs_texrender_t *tr, uint32_t w, uint3
 	gs_ortho(0.0f, (float)cx, 0.0f, (float)cy, -100.0f, 100.0f);
 	gs_blend_state_push();
 	gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
-	gs_enable_framebuffer_srgb(true);
+	bool prior_srgb = gs_framebuffer_srgb_enabled();
+	// Mask confidence must stay linear: encoding 0.5 as sRGB (~0.74)
+	// would expand the silhouette when sampled as plain mask data.
+	gs_enable_framebuffer_srgb(strcmp(tech, "Refine") != 0);
 	pm_draw(f->effect, tech, f->p_image, tex, cx, cy);
+	gs_enable_framebuffer_srgb(prior_srgb);
 	gs_blend_state_pop();
 	gs_texrender_end(tr);
 	return true;
 }
 
-// The analysis half: downscale the frame into the ring and hand the entry
-// rendered LAST frame to the provider.
+// libobs ticks sources before program/preview rendering. Only the first
+// render of that tick performs analysis; all others reuse its completed mask.
+static void pm_tick(void *data, float seconds)
+{
+	(void)seconds;
+	struct person_mask *f = data;
+	f->analyzedThisTick = false;
+	f->refineAttempted = false;
+	f->refineReady = false;
+}
+
+// Submit the newest previous-tick texture before drawing this tick's input.
+// Keep one committed-frame boundary; render-call counts are not frame counts.
 static void pm_analyze(struct person_mask *f, gs_texture_t *src, uint32_t cx, uint32_t cy)
 {
+	if (f->analyzedThisTick)
+		return;
+	f->analyzedThisTick = true;
 	uint32_t aw, ah;
 	pm_fit(cx, cy, &aw, &ah);
-	const BOOL fast = cy > PM_FAST_ABOVE_H;
+	const NSInteger quality = f->quality ? f->quality : (cy > PM_FAST_ABOVE_H ? 1 : 2);
+	ProducerSegmentation *seg = (__bridge ProducerSegmentation *)f->seg;
+	if (f->metal && !f->currentFrameCopy && f->latestAnalysis >= 0) {
+		int prev_i = f->latestAnalysis;
+		gs_texture_t *prev = gs_texrender_get_texture(f->ana_tr[prev_i]);
+		if (prev && gs_texture_get_width(prev) == aw && gs_texture_get_height(prev) == ah) {
+			id<MTLTexture> mtl = (__bridge id<MTLTexture>)gs_texture_get_obj(prev);
+			[seg submitMetalTexture:mtl slot:prev_i quality:quality frameNs:f->analysisNs[prev_i]];
+		}
+	}
+	// Lease protects the readback even if the provider thread is delayed.
+	int leased = atomic_load(&seg->_copySlot);
+	if (f->ana_i == leased)
+		f->ana_i = (f->ana_i + 1) % PM_ANA_RING;
+	int drawn_i = f->ana_i;
 
 	gs_texrender_t *cur = f->ana_tr[f->ana_i];
 	gs_effect_t *def = obs_get_base_effect(OBS_EFFECT_DEFAULT);
@@ -563,19 +752,19 @@ static void pm_analyze(struct person_mask *f, gs_texture_t *src, uint32_t cx, ui
 		pm_draw(def, "Draw", def_image, src, cx, cy);
 		gs_blend_state_pop();
 		gs_texrender_end(cur);
+		f->analysisNs[f->ana_i] = pm_now_ns();
+		f->latestAnalysis = f->ana_i;
+	} else {
+		return;
 	}
-	// Two renders back, not one: preview and program each render the filter
-	// once per frame, so the previous entry may be this same frame's.
-	int prev_i = (f->ana_i + PM_ANA_RING - 2) % PM_ANA_RING;
 	f->ana_i = (f->ana_i + 1) % PM_ANA_RING;
-	ProducerSegmentation *seg = (__bridge ProducerSegmentation *)f->seg;
 
 	if (f->metal) {
-		gs_texture_t *prev = gs_texrender_get_texture(f->ana_tr[prev_i]);
-		if (!prev || gs_texture_get_width(prev) != aw || gs_texture_get_height(prev) != ah)
-			return; // first frames after a size change
-		id<MTLTexture> mtl = (__bridge id<MTLTexture>)gs_texture_get_obj(prev);
-		[seg submitMetalTexture:mtl fast:fast];
+		if (f->currentFrameCopy) {
+			gs_texture_t *current = gs_texrender_get_texture(cur);
+			if (current)
+				[seg submitCurrentTexture:current slot:drawn_i copy:f->currentFrameCopy quality:quality frameNs:f->analysisNs[drawn_i]];
+		}
 		return;
 	}
 
@@ -595,7 +784,7 @@ static void pm_analyze(struct person_mask *f, gs_texture_t *src, uint32_t cx, ui
 		uint8_t *bytes = NULL;
 		uint32_t linesize = 0;
 		if (gs_stagesurface_map(f->stage[other], &bytes, &linesize)) {
-			[seg submitBGRA:bytes linesize:linesize width:(int)aw height:(int)ah fast:fast];
+			[seg submitBGRA:bytes linesize:linesize width:(int)aw height:(int)ah quality:quality frameNs:f->stageNs[other]];
 			gs_stagesurface_unmap(f->stage[other]);
 		}
 		f->stage_pending[other] = false;
@@ -604,6 +793,7 @@ static void pm_analyze(struct person_mask *f, gs_texture_t *src, uint32_t cx, ui
 	if (cur_tex && f->stage[f->stage_i]) {
 		gs_stage_texture(f->stage[f->stage_i], cur_tex);
 		f->stage_pending[f->stage_i] = true;
+		f->stageNs[f->stage_i] = f->analysisNs[drawn_i];
 	}
 	f->stage_i = other;
 }
@@ -618,6 +808,24 @@ static gs_texture_t *pm_mask_texture(struct person_mask *f, int *mw, int *mh)
 	IOSurfaceRef surf = [seg latestSurface:&slot seq:&seq width:mw height:mh];
 	if (!surf)
 		return NULL;
+	if (f->diagnostics) {
+		uint64_t now = pm_now_ns();
+		if (!f->diagnosticsAt) { f->diagnosticsAt = now; f->diagnosticSeq = seq; f->diagnosticRefinePasses = f->refinePasses; }
+		if (now - f->diagnosticsAt >= 5000000000ull) {
+			uint64_t drops = atomic_load(&seg->_busyDrops), submitted = atomic_load(&seg->_maskSubmittedNs);
+			uint64_t published = atomic_load(&seg->_publishedNs);
+			blog(LOG_INFO, "[cutout_metrics] filter=%p quality=%d mask=%dx%d inference_ms=%.2f mask_input_age_ms=%.2f mask_hz=%.2f busy_skips=%llu input_wait_ms=%.2f copy_ms=%.2f mask_reuse_ms=%.2f edge_refine=%.2f refine_hz=%.2f",
+			     (void *)f->ctx, f->quality, *mw, *mh,
+			     atomic_load(&seg->_inferenceNs) / 1e6, submitted ? (now - submitted) / 1e6 : 0.,
+			     (seq - f->diagnosticSeq) * 1e9 / (now - f->diagnosticsAt),
+			     (unsigned long long)(drops - f->diagnosticDrops),
+			     atomic_load(&seg->_inputWaitNs) / 1e6, atomic_load(&seg->_copyNs) / 1e6,
+			     published ? (now - published) / 1e6 : 0., f->edge_refine,
+			     (f->refinePasses - f->diagnosticRefinePasses) * 1e9 / (now - f->diagnosticsAt));
+			f->diagnosticsAt = now; f->diagnosticSeq = seq; f->diagnosticDrops = drops;
+			f->diagnosticRefinePasses = f->refinePasses;
+		}
+	}
 	IOSurfaceID sid = IOSurfaceGetID(surf);
 	if (f->mask_tex[slot] && f->mask_id[slot] != sid) {
 		gs_texture_destroy(f->mask_tex[slot]);
@@ -710,11 +918,39 @@ static void pm_render(void *data, gs_effect_t *unused)
 	}
 
 	// 5. Composite into the caller's target, premultiplied like the color key.
+	struct vec2 native_texel = {1.0f / (float)mw, 1.0f / (float)mh};
+	struct vec2 refine_texel = native_texel;
+	gs_effect_set_texture(f->p_mask, mask);
+	gs_effect_set_vec2(f->p_mask_texel, &native_texel);
+	gs_effect_set_float(f->p_edge_refine, f->edge_refine);
+	if (f->edge_refine > 0.0f) {
+		uint32_t rw = cx, rh = cy, longest = cx > cy ? cx : cy;
+		if (longest > PM_REFINE_MAX_EDGE) {
+			rw = (uint32_t)((uint64_t)cx * PM_REFINE_MAX_EDGE / longest);
+			rh = (uint32_t)((uint64_t)cy * PM_REFINE_MAX_EDGE / longest);
+		}
+		rw = rw ? rw : 1;
+		rh = rh ? rh : 1;
+		// Accurate may already exceed this bounded target. Keep its native
+		// detail rather than downsampling a finer mask into this upsampler.
+		if (!f->refineAttempted && mw <= (int)rw && mh <= (int)rh) {
+			f->refineAttempted = true;
+			f->refineReady = pm_pass(f, f->refine_tr, rw, rh, "Refine", src, cx, cy);
+			if (f->refineReady)
+				f->refinePasses++;
+		}
+		gs_texture_t *refined = f->refineReady ? gs_texrender_get_texture(f->refine_tr) : NULL;
+		if (refined) {
+			mask = refined;
+			refine_texel.x = 1.0f / (float)gs_texture_get_width(refined);
+			refine_texel.y = 1.0f / (float)gs_texture_get_height(refined);
+		}
+	}
+	gs_enable_framebuffer_srgb(true);
 	gs_effect_set_texture(f->p_mask, mask);
 	if (blurred)
 		gs_effect_set_texture_srgb(f->p_blurred, blurred);
-	struct vec2 texel = {1.0f / (float)mw, 1.0f / (float)mh};
-	gs_effect_set_vec2(f->p_mask_texel, &texel);
+	gs_effect_set_vec2(f->p_refine_texel, &refine_texel);
 	gs_effect_set_float(f->p_feather, f->feather);
 	gs_effect_set_float(f->p_erode, f->erode * PM_ERODE_TEXELS);
 	gs_blend_state_push();
@@ -739,6 +975,7 @@ void producer_person_mask_register_native(void)
 	info.get_defaults = pm_defaults;
 	info.get_properties = pm_properties;
 	info.update = pm_update;
+	info.video_tick = pm_tick;
 	info.video_render = pm_render;
 	obs_register_source_s(&info, sizeof(info));
 }

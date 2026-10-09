@@ -79,8 +79,13 @@ export const FILTER_CATALOG: FilterSpec[] = [
           { value: "cut", label: "Cut" },
         ],
       },
+      { key: "quality", label: "Quality", kind: "choice", choices: [
+        { value: "auto", label: "Auto" }, { value: "fast", label: "Fast" },
+        { value: "balanced", label: "Balanced" }, { value: "accurate", label: "Accurate (slower)" },
+      ] },
       { key: "feather", label: "Feather", kind: "slider", min: 0, max: 1, step: 0.01 },
       { key: "erode", label: "Erode", kind: "slider", min: 0, max: 1, step: 0.01 },
+      { key: "edge_refine", label: "Edge refinement", kind: "slider", min: 0, max: 1, step: 0.01 },
       {
         key: "blur",
         label: "Blur radius",

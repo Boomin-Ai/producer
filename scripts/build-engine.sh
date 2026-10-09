@@ -39,6 +39,13 @@ done
 # the Windows script -- see apply_patchsets in engine-lib.sh.
 apply_patchsets "$SRC_DIR"
 
+# Add the current-frame copy API to the pinned Metal target. Keep the source
+# checkout repeatable across rebuilds without changing upstream's commit pin.
+cp "$REPO_ROOT/engine/metal-current-frame.swift" "$SRC_DIR/libobs-metal/producer-metal-current-frame.swift"
+if ! grep -q 'producer-metal-current-frame.swift' "$SRC_DIR/libobs-metal/CMakeLists.txt"; then
+  printf '\ntarget_sources(libobs-metal PRIVATE producer-metal-current-frame.swift)\n' >> "$SRC_DIR/libobs-metal/CMakeLists.txt"
+fi
+
 # our preset rides alongside upstream's as CMakeUserPresets.json
 cp "$REPO_ROOT/engine/producer-presets.json" "$SRC_DIR/CMakeUserPresets.json"
 cp "$REPO_ROOT/engine/producer-project-include.cmake" "$SRC_DIR/producer-project-include.cmake"
@@ -75,6 +82,10 @@ cp -R "$FW" "$STAGE/Frameworks/"
 for lib in libobs-metal.dylib libobs-opengl.dylib; do
   find "$BUILD" -name "$lib" -path "*Release*" -not -path "*.dSYM/*" | head -1 | xargs -I{} cp {} "$STAGE/Frameworks/"
 done
+# Fail before publishing an engine that silently falls back to old scheduling.
+nm -gU "$STAGE/Frameworks/libobs-metal.dylib" | grep ' _producer_metal_copy_texture_async_v1$' >/dev/null \
+  || { echo "FATAL: current-frame Metal copy API missing" >&2; exit 1; }
+
 for p in "${ENGINE_PLUGINS[@]}"; do
   # mac-virtualcam is the one plugin CMake must NOT provide. Upstream's build
   # of it carries OBS's bundle id, mach service and device UUID, so it can

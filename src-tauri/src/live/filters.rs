@@ -150,8 +150,10 @@ fn known_keys(kind: &str) -> &'static [(&'static str, KeyType)] {
         // rest 0–1. See person_mask.m.
         "producer_person_mask" => &[
             ("mode", KeyType::Text),
+            ("quality", KeyType::Text),
             ("feather", KeyType::Double),
             ("erode", KeyType::Double),
+            ("edge_refine", KeyType::Double),
             ("blur", KeyType::Double),
         ],
         "noise_suppress_filter_v2" => &[

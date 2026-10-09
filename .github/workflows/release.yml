@@ -81,20 +81,15 @@ jobs:
           tagName: v__VERSION__
           releaseName: "Producer v__VERSION__"
           releaseBody: |
-            Interactive audience rooms on your own hardware: share a link for
-            watching, chat, votes, reactions and stage invitations. Includes
-            guest audio monitoring, processed program return, phone playback
-            recovery, publisher reconnect fixes and compact audience controls.
+            Faster Apple Vision cutout on Apple Silicon: current-frame Metal
+            handoff, image-guided edge refinement and selectable mask quality.
+            The refinement slider can restore the previous edge processing at 0.
 
-            Direct video defaults to four viewers, capped at eight. Room
-            interactions allow 100 connected audience identities; this is not
-            a claim of 100 simultaneous video viewers.
-
-            Apple Silicon and Windows x64 include the native Live engine.
-            Apple Silicon installers are signed and notarized.
+            Apple Silicon installers are signed and notarized and include the
+            native Live engine. Windows retains its native Live engine;
             Intel macOS and Linux retain their existing engine-less builds.
 
-            Full release details: https://github.com/Boomin-Ai/producer/blob/main/docs/RELEASE-0.4.60.md
+            Full release details: https://github.com/Boomin-Ai/producer/blob/main/docs/RELEASE-0.4.68.md
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}

@@ -17,6 +17,8 @@ on:
       - "engine/producer-presets.json"
       - "engine/producer-project-include.cmake"
       - "engine/patches/**"
+      - "engine/metal-current-frame.swift"
+      - "scripts/build-cutout-metal-lab.sh"
       - "scripts/build-engine.sh"
       - "scripts/build-engine-windows.sh"
       - "scripts/engine-lib.sh"
