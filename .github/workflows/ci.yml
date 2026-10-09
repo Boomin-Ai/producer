@@ -43,6 +43,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      # Server tests import shared app document types; resolve their dependencies too.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+        working-directory: .
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npx vitest run
