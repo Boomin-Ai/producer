@@ -388,6 +388,8 @@ pub struct RoomRestore {
 }
 #[derive(Debug, serde::Deserialize)]
 pub struct RestoreExtra {
+    #[serde(default)]
+    pub filters: Vec<super::filters::FilterState>,
     pub id: String,
     pub label: String,
     pub spec: ExtraSpec,
@@ -1621,10 +1623,18 @@ impl SceneGraph {
         if change.id != id {
             return Err("Replacement source identity does not match".into());
         }
+        let saved_filters = self
+            .source_by_id(id)
+            .map(super::filters::list)
+            .unwrap_or_default();
         if previous.is_some() {
             self.remove_extra(id)?;
         }
         self.add_extra_visible(id, label, spec, false)?;
+        super::filters::restore(
+            self.source_by_id(id).ok_or("Replacement source missing")?,
+            &saved_filters,
+        )?;
         if let Some(item) = previous {
             self.set_source_audio(id, Some(item.volume), None)?;
             unsafe {
@@ -1671,8 +1681,20 @@ impl SceneGraph {
         }
         let mut warnings = Vec::new();
         for extra in restore.extras {
-            if let Err(error) = self.add_extra_visible(&extra.id, &extra.label, &extra.spec, false)
-            {
+            let result = self
+                .add_extra_visible(&extra.id, &extra.label, &extra.spec, false)
+                .and_then(|()| {
+                    super::filters::restore(
+                        self.source_by_id(&extra.id)
+                            .ok_or("Restored source missing")?,
+                        &extra.filters,
+                    )
+                });
+            if let Err(error) = result {
+                // A failed cutout/key must not silently expose a raw camera.
+                if self.source_by_id(&extra.id).is_some() {
+                    let _ = self.remove_extra(&extra.id);
+                }
                 warnings.push(format!("{}: {}", extra.label, error));
             }
         }
@@ -2522,6 +2544,84 @@ mod scene_restoration_tests {
             .all(|change| change.patch.visible == Some(false) && change.muted == Some(true)));
     }
 
+    /// Real source teardown/recreation, without camera permissions or user data.
+    #[test]
+    #[ignore = "requires the bundled native engine and graphics device"]
+    fn native_source_filters_survive_room_reopen_and_device_replace() {
+        use serde_json::json;
+        let temp =
+            std::env::temp_dir().join(format!("producer-filter-proof-{}", std::process::id()));
+        let report = super::super::engine::bootstrap_with_config(&temp);
+        assert!(report.ok, "native bootstrap: {report:?}");
+        let mut graph = SceneGraph::create().unwrap();
+        let spec = ExtraSpec::Color {
+            color: "#00ff00".into(),
+        };
+        graph
+            .add_extra("camera-2", "Camera fixture", &spec)
+            .unwrap();
+        let src = graph.source_by_id("camera-2").unwrap();
+        super::super::filters::add(src, "producer_person_mask", "Cutout").unwrap();
+        super::super::filters::update(src, "Cutout", &json!({"mode":"cut","quality":"balanced","feather":0.35,"erode":0.25,"edge_refine":0.65})).unwrap();
+        super::super::filters::set_enabled(src, "Cutout", false).unwrap();
+        super::super::filters::add(src, "chroma_key_filter_v2", "Green screen").unwrap();
+        super::super::filters::update(
+            src,
+            "Green screen",
+            &json!({"similarity":412,"smoothness":91}),
+        )
+        .unwrap();
+        super::super::filters::reorder(src, "Green screen", 2).unwrap(); // move to top
+        let expected = serde_json::to_value(super::super::filters::list(src)).unwrap();
+        let chain: Vec<super::super::filters::FilterState> =
+            serde_json::from_value(expected.clone()).unwrap();
+        let document = json!({"keep_ids":[],"extras":[{"id":"camera-2","label":"Camera fixture","spec":{"kind":"color","color":"#00ff00"},"filters":chain}],"overlay_window":null,"overlay_url":null,"changes":[]});
+        // A database round-trip, then room exit destroys the source.
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        db.execute("CREATE TABLE rooms (config TEXT)", []).unwrap();
+        db.execute("INSERT INTO rooms VALUES (?1)", [document.to_string()])
+            .unwrap();
+        graph.clear_room().unwrap();
+        assert!(graph.source_by_id("camera-2").is_none());
+        let saved: String = db
+            .query_row("SELECT config FROM rooms", [], |r| r.get(0))
+            .unwrap();
+        let restored = graph
+            .restore_room(serde_json::from_str(&saved).unwrap())
+            .unwrap();
+        assert!(restored.warnings.is_empty(), "{:?}", restored.warnings);
+        assert_eq!(
+            serde_json::to_value(super::super::filters::list(
+                graph.source_by_id("camera-2").unwrap()
+            ))
+            .unwrap(),
+            expected
+        );
+        graph
+            .replace_extra("camera-2", "Replacement fixture", &spec, None)
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(super::super::filters::list(
+                graph.source_by_id("camera-2").unwrap()
+            ))
+            .unwrap(),
+            expected
+        );
+        // A missing saved filter must not expose a raw replacement camera.
+        let bad = json!({"keep_ids":[],"extras":[{"id":"camera-2","label":"Camera fixture","spec":{"kind":"color","color":"#00ff00"},"filters":[{"name":"Missing","kind":"not_supported","enabled":true,"settings":{}}]}],"overlay_window":null,"overlay_url":null,"changes":[]});
+        let result = graph
+            .restore_room(serde_json::from_value(bad).unwrap())
+            .unwrap();
+        assert_eq!(result.warnings.len(), 1);
+        assert!(graph.source_by_id("camera-2").is_none());
+        unsafe {
+            ffi::obs_set_output_source(0, ptr::null_mut());
+            ffi::obs_scene_release(graph.scene);
+            ffi::obs_shutdown();
+        }
+        eprintln!("PASS: native filter settings/enabled/order survive DB round-trip, room exit/reopen and source replacement; failed filter never exposes raw source");
+    }
+
     /// Isolated real compositor test. No camera, microphone, room database,
     /// network, virtual camera or recorder. Run separately from pure tests.
     #[test]
@@ -2650,11 +2750,13 @@ mod scene_restoration_tests {
             let extras = if keep_ids.is_empty() {
                 vec![
                     RestoreExtra {
+                        filters: vec![],
                         id: "scene-1".into(),
                         label: "Scene 1 green".into(),
                         spec: green.clone(),
                     },
                     RestoreExtra {
+                        filters: vec![],
                         id: "scene-2".into(),
                         label: "Scene 2 red".into(),
                         spec: red.clone(),
@@ -2705,6 +2807,7 @@ mod scene_restoration_tests {
             .restore_room(RoomRestore {
                 keep_ids: vec!["scene-1".into(), "scene-2".into()],
                 extras: vec![RestoreExtra {
+                    filters: vec![],
                     id: "bad-camera".into(),
                     label: "Unavailable camera".into(),
                     spec: ExtraSpec::Camera {

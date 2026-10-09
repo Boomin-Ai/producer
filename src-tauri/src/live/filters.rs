@@ -15,7 +15,7 @@ use serde_json::{Map, Value};
 use super::ffi;
 
 /// One filter in a source's chain, as the UI sees it.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FilterState {
     /// Identity within the source — also the display name.
     pub name: String,
@@ -224,6 +224,23 @@ pub fn add(source: *mut ffi::obs_source_t, kind: &str, name: &str) -> Result<(),
         }
         ffi::obs_source_filter_add(source, f);
         ffi::obs_source_release(f);
+    }
+    Ok(())
+}
+
+/// Restore the saved user chain in order while its source is still hidden.
+/// Internal transition filters never belong to a room's user filter document.
+pub fn restore(source: *mut ffi::obs_source_t, chain: &[FilterState]) -> Result<(), String> {
+    for filter in chain {
+        if filter.name.is_empty() || filter.name.starts_with(INTERNAL_PREFIX) {
+            return Err("Invalid saved filter name".into());
+        }
+        if !filter.settings.is_object() {
+            return Err("Invalid saved filter settings".into());
+        }
+        add(source, &filter.kind, &filter.name)?;
+        update(source, &filter.name, &filter.settings)?;
+        set_enabled(source, &filter.name, filter.enabled)?;
     }
     Ok(())
 }

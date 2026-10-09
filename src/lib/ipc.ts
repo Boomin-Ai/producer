@@ -208,7 +208,7 @@ export const ipc = {
     invoke("live_set_transform", { id, patch, commit }),
   liveRestoreRoom: (restore: {
     keep_ids: string[];
-    extras: { id: string; label: string; spec: ExtraSpec }[];
+    extras: { id: string; label: string; spec: ExtraSpec; filters?: import("./filters").FilterState[] }[];
     overlay_window: number | null;
     overlay_url: string | null;
     changes: { id: string; patch: LiveTransformPatch; muted?: boolean }[];

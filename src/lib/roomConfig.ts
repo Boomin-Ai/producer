@@ -9,6 +9,7 @@
 
 import { parsePackage, type PresentationPackage } from "../features/presentation/schema";
 import { DEFAULT_LAYOUT, normalize, type DockSizes, type Layout } from "./layout";
+import type { FilterState } from "./filters";
 import type { ExtraSpec } from "./sourceSpec";
 import { parseModFeeds, type ModFeeds } from "./modFeed";
 import { isSlotId } from "./slotMath";
@@ -58,6 +59,8 @@ export interface RoomScene {
 
 /** One open-list item the room respawns on open (id is room-owned). */
 export interface RoomExtra {
+  /** Ordered user filter chain, restored before this source goes on output. */
+  filters?: FilterState[];
   id: string;
   label: string;
   spec: ExtraSpec;

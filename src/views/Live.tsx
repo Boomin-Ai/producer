@@ -63,6 +63,7 @@ import {
   type FilterOp,
   type FilterState,
 } from "../lib/filters";
+import { filterEditQueue, withSourceFilters } from "../lib/sourceFilters";
 import { DEMO_CHAT, DEMO_VIDEO_URL, demoOn } from "../lib/demo";
 import { activeEndpointId, isBoomin, resolveActiveEndpoint } from "../lib/workspace";
 import { BugSheet } from "./BugSheet";
@@ -1342,12 +1343,14 @@ function RunReportSheet({
  * tune — you're judging a chroma key by looking at the picture, not at a
  * dialog that covers it. Works the same wherever the panel is docked. */
 function FilterEditor({
+  onFilters,
   sourceId,
   sourceLabel,
   media,
   onBack,
   locked = false,
 }: {
+  onFilters: (source: string, op: FilterOp) => Promise<FilterState[]>;
   sourceId: string;
   sourceLabel: string;
   media: "video" | "audio";
@@ -1360,6 +1363,7 @@ function FilterEditor({
   const [adding, setAdding] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const queued = useMemo(() => filterEditQueue(op => onFilters(sourceId, op)), [sourceId, onFilters]);
   const run = useCallback(
     async (op: FilterOp) => {
       if (locked && op.op !== "list") {
@@ -1367,13 +1371,13 @@ function FilterEditor({
         return;
       }
       try {
-        setChain(await filtersIpc(sourceId, op));
+        setChain(await queued(op));
         setErr(null);
       } catch (e) {
         setErr(String(e));
       }
     },
-    [sourceId, locked],
+    [queued, locked],
   );
 
   useEffect(() => {
@@ -2906,6 +2910,22 @@ export function LiveView({
     // write was never read back anywhere (audited) — half-wired dead code.
     if (room) ipc.liveUpdateRoom(room.id, { config: serializeConfig(next) }).catch(() => {});
   };
+  const editSourceFilters = useCallback(async (source: string, op: FilterOp) => {
+    let chain: FilterState[] | undefined;
+    // Exit waits for this transaction before unloading the camera. Saving is
+    // part of the edit, not an unmount effect or a fire-and-forget request.
+    await roomEngineRef.current?.run(async () => {
+      chain = await filtersIpc(source, op);
+      if (op.op === "list") return;
+      const next = withSourceFilters(cfgRef.current, source, chain);
+      if (next === cfgRef.current) return;
+      cfgRef.current = next;
+      setCfgState(next);
+      if (room) await ipc.liveUpdateRoom(room.id, { config: serializeConfig(next) });
+    });
+    if (!chain) throw new Error("The room is closed. Reopen it to edit filters.");
+    return chain;
+  }, [room?.id]);
   const setLayout = (l: Layout) => writeCfg({ ...cfg, layout: l });
   const sizes: DockSizes = cfg.sizes ?? {};
   const setSizes = (next: DockSizes) => writeCfg({ ...cfgRef.current, sizes: next });
@@ -6821,6 +6841,7 @@ export function LiveView({
         if (filterFor) {
           return (
             <FilterEditor
+              onFilters={editSourceFilters}
               sourceId={filterFor.id}
               sourceLabel={filterFor.label}
               media={filterFor.media}
