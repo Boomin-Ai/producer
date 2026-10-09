@@ -25,6 +25,8 @@ jobs:
       - run: node scripts/test-room-votes.mjs
       - run: node scripts/test-program-readiness.mjs
       - run: node scripts/test-guest-return.mjs
+      - run: node scripts/test-guest-reconnect.mjs
+      - run: bun run --cwd server/guest typecheck
       - run: node --experimental-strip-types --test tests/slotMath.test.ts
       - run: node --experimental-strip-types --test tests/stageTruth.test.ts
       - run: node --experimental-strip-types --test tests/featureFlags.test.ts

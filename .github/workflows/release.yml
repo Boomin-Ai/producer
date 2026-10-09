@@ -81,15 +81,17 @@ jobs:
           tagName: v__VERSION__
           releaseName: "Producer v__VERSION__"
           releaseBody: |
-            Faster Apple Vision cutout on Apple Silicon: current-frame Metal
-            handoff, image-guided edge refinement and selectable mask quality.
-            The refinement slider can restore the previous edge processing at 0.
+            Camera filters now survive room exits and source replacement.
+            Browser guests reconnect with fresh signaling credentials while
+            keeping their camera and microphone tracks running.
+            Recording writes recoverable MP4 indexes during capture and
+            reports failed recording helpers instead of silently losing media.
 
-            Apple Silicon installers are signed and notarized and include the
-            native Live engine. Windows retains its native Live engine;
+            Apple Silicon app and installers are Developer ID signed and
+            Apple notarized. Windows retains its native Live engine;
             Intel macOS and Linux retain their existing engine-less builds.
 
-            Full release details: https://github.com/Boomin-Ai/producer/blob/main/docs/RELEASE-0.4.68.md
+            Full release details: https://github.com/Boomin-Ai/producer/blob/main/docs/RELEASE-0.4.69.md
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
@@ -176,6 +178,13 @@ jobs:
           test -d "engine/artifacts/$NAME/Frameworks/libobs.framework" \
             || { echo "FATAL: engine artifact missing after fetch — refusing to ship a stub build" >&2; exit 1; }
           echo "ENGINE_NAME=$NAME" >> "$GITHUB_ENV"
+
+      - name: Require Apple signing and notarization credentials
+        run: |
+          set -euo pipefail
+          for KEY in SIGN_IDENT CERT_B64 PROFILE_B64 NOTARY_ID NOTARY_PW NOTARY_TEAM; do
+            test -n "${!KEY:-}" || { echo "FATAL: $KEY is required for an Apple-signed release" >&2; exit 1; }
+          done
 
       - name: Import signing certificate
         if: env.CERT_B64 != ''
