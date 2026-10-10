@@ -1,0 +1,152 @@
+{
+  "run_label": "speakerphone-1791646774935151000",
+  "report": {
+    "additional_capture_hold_capacity": 1,
+    "agc": false,
+    "apm_channels": 1,
+    "apm_delay_estimate_ms": {
+      "acoustic_delay_calibrated": false,
+      "maximum": 115,
+      "minimum": 5
+    },
+    "capture_hold_limit_ms": 80,
+    "capture_hold_retired": false,
+    "devices": "CADefaultDeviceAggregate-57436-0 \u2192 CADefaultDeviceAggregate-57436-0",
+    "duration_seconds": 60.039852042,
+    "g1_complete": false,
+    "hardware_capture_used": true,
+    "high_pass": false,
+    "invalid_delay_blocks": 0,
+    "lifecycle": {
+      "callbacks_active": 0,
+      "clipped_samples": 431,
+      "format_or_timeline_errors": 0,
+      "maximum_tap_frames": {
+        "microphone": 4800,
+        "speaker": 4800
+      },
+      "microphone": {
+        "capacity": 32,
+        "consumed": 6000,
+        "overflow": 0,
+        "pending_retired": 0,
+        "queued": 6000
+      },
+      "owners_and_callback_state_retired": true,
+      "speaker": {
+        "capacity": 32,
+        "consumed": 6000,
+        "overflow": 0,
+        "pending_retired": 0,
+        "queued": 6000
+      }
+    },
+    "microphone_blocks": 6000,
+    "microphone_played_or_published": false,
+    "ns": false,
+    "physical_aec_qualified": false,
+    "physical_speaker_reference_connected": true,
+    "processing_both_apms_p95_us": 521,
+    "provisional_far_only_attenuation_db": {
+      "median": 30.76106174580265,
+      "p10": 1.0722938757934486,
+      "windows": 84
+    },
+    "reference_scope": "This engine's final stereo mixer output, downmixed to mono; excludes other apps and hardware-volume calibration",
+    "sample_rate": 48000,
+    "schema_version": 1,
+    "source_gain": 0.2,
+    "speaker_blocks": 6000,
+    "speech_intelligibility_qualified": false,
+    "stop_reason": "completed",
+    "system_voice_processing": false,
+    "user_phase_compliance_verified": false
+  },
+  "continuity": {
+    "speaker": {
+      "blocks": 6000,
+      "maximum_delta_ms": 10.00975,
+      "minimum_delta_ms": 10.0
+    },
+    "microphone": {
+      "blocks": 6000,
+      "maximum_delta_ms": 10.009417,
+      "minimum_delta_ms": 10.0
+    }
+  },
+  "phase_signal_levels": {
+    "baseline": {
+      "start_seconds": 0,
+      "end_seconds": 5,
+      "levels_dbfs": {
+        "microphone-raw": -19.48642521915191,
+        "processed-on": -19.676167955949456,
+        "processed-off": -19.48642521915191,
+        "speaker-reference": -90.30899869919436
+      },
+      "raw_clipped_samples": 30
+    },
+    "instructed_far_only": {
+      "start_seconds": 12,
+      "end_seconds": 29,
+      "levels_dbfs": {
+        "microphone-raw": -22.26270077417995,
+        "processed-on": -24.423172033557826,
+        "processed-off": -22.26270077417995,
+        "speaker-reference": -29.50782592462192
+      },
+      "raw_clipped_samples": 0
+    },
+    "observed_low_input_interval": {
+      "start_seconds": 18,
+      "end_seconds": 29,
+      "levels_dbfs": {
+        "microphone-raw": -28.888574230310603,
+        "processed-on": -61.093352766096615,
+        "processed-off": -28.888574230310603,
+        "speaker-reference": -29.455171142512793
+      },
+      "raw_clipped_samples": 0
+    },
+    "double_talk": {
+      "start_seconds": 31,
+      "end_seconds": 49,
+      "levels_dbfs": {
+        "microphone-raw": -17.77069629385677,
+        "processed-on": -19.328224866067124,
+        "processed-off": -17.77069629385677,
+        "speaker-reference": -29.54507634541585
+      },
+      "raw_clipped_samples": 395
+    },
+    "near_only": {
+      "start_seconds": 51,
+      "end_seconds": 59,
+      "levels_dbfs": {
+        "microphone-raw": -20.691728959864676,
+        "processed-on": -20.89040941133881,
+        "processed-off": -20.691728959864676,
+        "speaker-reference": -90.30899869919436
+      },
+      "raw_clipped_samples": 0
+    }
+  },
+  "interpretation": "Input energy indicates speech during baseline and early far-only. Human compliance/intelligibility remain unverified. Signal preservation is not intelligibility proof. Observed low-input interval is post hoc and cannot replace the full protocol gate.",
+  "voice_review_segments": [
+    [
+      34,
+      44
+    ],
+    [
+      52,
+      58
+    ]
+  ],
+  "wav_sha256": {
+    "microphone-raw.wav": "8f75cae4ea43a38b4c49a864b907f1636504fa4ea116233d819c71df3a54478f",
+    "processed-on.wav": "0596d7b888df9962f171578b36075263a825152682a62720789704def78848c5",
+    "processed-off.wav": "8f75cae4ea43a38b4c49a864b907f1636504fa4ea116233d819c71df3a54478f",
+    "speaker-reference.wav": "640b944bbaa4c2554a10922953bad043182f34acea2fb060f2da248511e11852",
+    "voice-review.wav": "d08ae1b4af6d05f6ea5a95d36c30f4f19b438a672d9b8bb3b82df37cd5bf1422"
+  }
+}

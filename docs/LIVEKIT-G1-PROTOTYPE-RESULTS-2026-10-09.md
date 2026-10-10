@@ -759,3 +759,27 @@ voice/audio files remain private outside the repository. Repeat the same setup
 with deliberate speech during seconds 30–60, review preserved speech, then test
 75% speaker volume and repeated lifecycle/device changes. Physical AEC acceptance
 and G1 remain incomplete; no production deployment or installed Producer change.
+
+## Second physical run with speech — 2026-10-10
+
+The second completed run collected 6,000 blocks per timeline in 60.040 seconds,
+with no queue overflow, native format/timeline errors, invalid delays or retained
+owners/callbacks. File/accounting validation passed. Both APM paths took 521
+microseconds at p95. There were 431 clipped samples in the native taps; recorded
+PCM locates them in the microphone, including a brief loud burst around second
+32. This requires headroom review rather than attributing distortion to AEC.
+
+Near-only seconds 51–59 measured -20.69 dBFS raw versus -20.89 dBFS processed
+(0.20 dB lower). During instructed double talk, seconds 31–49 measured -17.77
+versus -19.33 dBFS. That mixed-signal level difference cannot isolate retained
+near speech from removed echo or prove intelligibility. A private 17-second
+processed voice excerpt (seconds 34–44 and 52–58, separated by silence) was
+prepared and opened for human listening; review is pending. No audio is committed.
+
+The full far-only window reported median 30.76 dB but p10 only 1.07 dB, so its
+predeclared lower-tail target did not pass. Input levels strongly indicate speech
+during baseline and the early instructed far-only interval. Seconds 18–29 have
+lower input and show 32.20 dB aggregate attenuation; this is a post hoc diagnostic
+observation, not a replacement acceptance window. A compliant repeat is needed.
+Evidence: `labs/guest-rtc/evidence/speakerphone-second-completed-run.json`.
+Physical AEC, louder-speaker testing and the integrated G1 path remain unqualified.
