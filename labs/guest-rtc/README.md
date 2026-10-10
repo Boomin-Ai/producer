@@ -102,3 +102,36 @@ sequentially with the local SFU and fixture server running. The October 9 fixtur
 supplied no audio capture timestamps and no video NTP metadata. See
 [the timing investigation](../../docs/LIVEKIT-G1-AUDIO-TIMING-EXTENSION.md).
 These runs still do not qualify OBS synchronization.
+
+### Actual OBS recording experiment (macOS)
+
+Start the loopback SFU, then start `LIVEKIT_LAB_SYNC_STREAMS=1 node web/server.mjs`.
+This creates only the fixed local `producer-g1-sync-lab` room with syncStreams enabled;
+paired camera/audio publications use `camera-av` and program return uses `program-av`.
+The setting disables transceiver reuse upstream; frequent subscription changes need
+separate qualification. The normal fixture leaves this setting disabled.
+
+Build with `cargo build --locked --jobs 2 --features obs-proof`. The diagnostic
+recorder requires the installed Producer OBS 32.1.2 engine; it loads only x264,
+ffmpeg and CoreAudio encoder modules. It captures no physical camera/microphone and
+plays no audio. Place a symlink to `/Applications/Producer.app/Contents/MacOS/obs-ffmpeg-mux`
+at `target/debug/obs-ffmpeg-mux` for the standalone muxer helper. The process retains
+a macOS main run loop while the engine/RTC work executes off the main thread.
+
+```sh
+DYLD_FRAMEWORK_PATH=/Applications/Producer.app/Contents/Frameworks \
+DYLD_LIBRARY_PATH=/Applications/Producer.app/Contents/Frameworks \
+LIVEKIT_LAB_SYNC_STREAMS=1 \
+LIVEKIT_LAB_OBS_RECORDING="$PWD/runtime/obs-test.mp4" \
+LIVEKIT_LAB_RUN_NAME=transport-obs-test node web/smoke.mjs 1 normal
+swiftc -suppress-warnings analyze-recording.swift -o runtime/analyze-recording
+runtime/analyze-recording runtime/obs-test.mp4 evidence/obs-test-markers.json
+```
+
+Choose an unused runtime filename; the recorder refuses to overwrite. It records
+only guest-1 and stamps audio/video using one OBS monotonic anchor plus callback
+Instant elapsed. `LIVEKIT_LAB_OBS_UNBUFFERED=1` disables OBS async video buffering
+for a comparison. This is an arrival-clock experiment, not a validated sender
+presentation clock. AVFoundation decodes the actual MP4, pairs markers at most once,
+and reports unpaired markers, early/late drift, detector windows and source paint
+uncertainty. A passing marker result alone cannot qualify WAN impairment or G1.

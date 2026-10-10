@@ -58,3 +58,76 @@ an application-accessible clock. SDK callback delivery alone cannot qualify this
 An arrival-clock OBS adapter could measure output behavior, but must remain labeled
 an experiment until these impairment tests prove a bounded offset and drift.
 Production adoption and physical AEC qualification remain gated.
+
+## Shared stream groups and actual OBS recordings
+
+The pinned upstream WebRTC `pc/remote_audio_source.cc` explicitly supplies `nullopt`
+when remote audio is fanned out to AudioTrack sinks. The previous optional-field
+probe therefore encountered an intentional upstream boundary. `audio/channel_receive.cc`
+retains RTP timestamps internally, but the public track sink does not expose them.
+
+WebRTC chooses its receive synchronization group from the first media stream ID
+in both audio and video configuration. The original loopback SFU negotiated separate
+track-specific stream IDs. The lab now supports an opt-in local room created with
+`syncStreams: true`, paired guest publications `camera-av`, and paired native program
+publications `program-av`. SDP evidence confirms corresponding audio/video stream IDs
+match. One guest and three guests with disconnect/rejoin passed return transport.
+This setting disables transceiver reuse upstream and is not yet qualified for rapid
+stage changes. Its documentation emphasizes larger playout delays; no such production
+latency tradeoff was silently introduced here.
+
+Receiver stats report nonzero estimated playout timestamps for both tracks. However,
+those are snapshots, not per-frame scheduling instructions. The Rust stats struct
+also defaults absent fields to zero, so these diagnostics do not preserve presence
+and must not be used as a qualified clock mapping. No additional SDK fork was needed
+for the supported track stats API.
+
+The macOS-only `obs-proof` feature records decoded guest-1 I420/PCM through the
+installed OBS 32.1.2 Metal engine, x264/AAC and FFmpeg muxer. It uses one local OBS
+monotonic anchor plus callback Instant elapsed, not an original sender clock. The
+main thread pumps AppKit while the engine runs on another thread. Only the required
+encoder/muxer plugins are loaded; no physical camera, microphone or speaker is used.
+A standalone symlink supplies the existing muxer helper beside the lab executable.
+Both MP4s finalized with stop code zero and were decoded using native AVFoundation.
+
+| Experiment | Recorded absolute offset p95 | Video minus audio median | Paired detections | Unmatched audio / video |
+| --- | ---: | ---: | ---: | ---: |
+| OBS default async buffering | 177.35 ms | +82.69 ms | 11 | 0 / 0 |
+| OBS async video unbuffered | 88.69 ms | +32.02 ms | 11 | 3 / 0 |
+
+Both fail the proposed 80 ms marker criterion. The second run is encouraging but
+not a controlled performance comparison: callback load differed, and the first run
+had 24 oldest-audio drops plus 3 stale drops versus 2 oldest drops in the second.
+The analysis pairs each detection at most once. Three unmatched audio detections
+may reflect split threshold crossings or missing video markers; they are not proven
+source packet losses. Browser paint uncertainty remains approximately 33 ms, with
+up to 10 ms audio detector windows. No asymmetric network impairment was injected.
+Early/late median changes were +24 ms and -48 ms respectively over short runs,
+which is insufficient to qualify drift.
+
+During setup, Metal initialized successfully on some launches but failed once with
+an unspecified MetalDevice constructor error; an earlier attempt needed a main-thread
+run loop. The muxer helper absence was independently identified and corrected. A
+resource-layout cause for the intermittent Metal failure was not established. Neither
+issue changed the installed Producer app. Standalone packaging remains a lab limit.
+
+Evidence: [stream negotiation](../labs/guest-rtc/evidence/sync-stream-negotiation.json),
+[recording manifest](../labs/guest-rtc/evidence/obs-timing-manifest.json),
+[default buffering analysis](../labs/guest-rtc/evidence/obs-sync-recorded-markers.json),
+[unbuffered analysis](../labs/guest-rtc/evidence/obs-unbuffered-recorded-markers.json).
+
+Next implementation should separate real-time audio handoff from video conversion
+and analysis, retain receiver stream grouping, and define video presentation deadlines
+against WebRTC's local render clock mapped to OBS. Audio NetEq playout cadence and
+sample-origin discontinuities must be preserved without callback-arrival jitter
+rewriting the timeline. Validate every change through recorded markers under
+asymmetric network impairment, consumer stalls, rejoin and a longer drift run.
+G1 and production adoption remain unqualified.
+
+Primary source references (pinned versions):
+
+- [Remote audio timing boundary](https://raw.githubusercontent.com/webrtc-sdk/webrtc/89d790b/pc/remote_audio_source.cc)
+- [Audio NetEq/raw-sink timing](https://raw.githubusercontent.com/webrtc-sdk/webrtc/89d790b/audio/channel_receive.cc)
+- [Video receive/render scheduling](https://raw.githubusercontent.com/webrtc-sdk/webrtc/89d790b/video/video_receive_stream2.cc)
+- [LiveKit sync-stream support](https://raw.githubusercontent.com/livekit/livekit/v1.13.9/pkg/rtc/participant.go)
+- [Room sync-stream configuration](https://github.com/livekit/protocol/blob/main/protobufs/livekit_room.proto)

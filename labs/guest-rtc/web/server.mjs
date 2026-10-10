@@ -7,19 +7,33 @@ import { build } from 'esbuild';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const runtime = path.resolve(here, '../runtime');
+const syncStreams = process.env.LIVEKIT_LAB_SYNC_STREAMS === '1';
+const roomName = syncStreams ? 'producer-g1-sync-lab' : 'producer-g1-lab';
 await mkdir(runtime, { recursive: true });
 await build({ entryPoints: [path.join(here, 'fixture.js')], bundle: true,
   outfile: path.join(runtime, 'fixture.js'), format: 'esm', sourcemap: false });
 
 // These are LiveKit's public --dev credentials, exclusively for loopback fixtures.
-export function token(identity) {
+export function token(identity, videoGrant) {
   const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
   const now = Math.floor(Date.now() / 1000);
   const body = `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ iss: 'devkey', sub: identity,
-    nbf: now - 10, exp: now + 3600, video: { roomJoin: true, room: 'producer-g1-lab',
+    nbf: now - 10, exp: now + 3600, video: videoGrant ?? { roomJoin: true, room: roomName,
       canPublish: true, canSubscribe: true, canPublishData: false } })}`;
   return `${body}.${createHmac('sha256', 'secret').update(body).digest('base64url')}`;
 }
+if (syncStreams) {
+  // Fixed loopback dev server only. No cloud provisioning or production credentials.
+  const response = await fetch('http://127.0.0.1:7880/twirp/livekit.RoomService/CreateRoom', {
+    method: 'POST', headers: { 'Content-Type': 'application/json',
+      Authorization: `Bearer ${token('fixture-admin', { roomCreate: true })}` },
+    body: JSON.stringify({ name: roomName, syncStreams: true, departureTimeout: 1 }),
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!response.ok) throw new Error(`Local sync room creation failed: ${response.status}`);
+  await writeFile(path.join(runtime, 'sync-room.json'), JSON.stringify(await response.json(), null, 2));
+}
+await writeFile(path.join(runtime, 'fixture-settings.json'), JSON.stringify({ roomName, syncStreams }));
 await writeFile(path.join(runtime, 'native-token'), token('native-host'), { mode: 0o600 });
 
 const server = http.createServer(async (request, response) => {
@@ -35,7 +49,7 @@ const server = http.createServer(async (request, response) => {
         response.writeHead(403).end(); return;
       }
       response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
-        .end(JSON.stringify({ token: token(identity), url: 'ws://127.0.0.1:7880' })); return;
+        .end(JSON.stringify({ token: token(identity), url: 'ws://127.0.0.1:7880', syncStreams })); return;
     }
     const files = {
       '/': [path.join(here, 'index.html'), 'text/html'],

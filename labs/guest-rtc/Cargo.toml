@@ -5,6 +5,9 @@ edition = "2021"
 publish = false
 license = "AGPL-3.0-only"
 
+[features]
+obs-proof = []
+
 [dependencies]
 livekit = { version = "=0.9.4", default-features = false, features = ["native", "rustls-tls-native-roots"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "signal"] }

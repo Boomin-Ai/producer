@@ -201,6 +201,11 @@ fn pulse_offsets(audio: &[f64], video: &[f64]) -> Vec<f64> {
 }
 
 async fn publish(room: &Room) -> Result<(NativeAudioSource, NativeVideoSource)> {
+    let stream = if std::env::var("LIVEKIT_LAB_SYNC_STREAMS").as_deref() == Ok("1") {
+        "program-av".to_owned()
+    } else {
+        String::new()
+    };
     let audio = NativeAudioSource::new(
         AudioSourceOptions {
             echo_cancellation: false,
@@ -226,6 +231,7 @@ async fn publish(room: &Room) -> Result<(NativeAudioSource, NativeVideoSource)> 
             )),
             TrackPublishOptions {
                 source: TrackSource::Microphone,
+                stream: stream.clone(),
                 dtx: false,
                 red: false,
                 ..Default::default()
@@ -240,6 +246,7 @@ async fn publish(room: &Room) -> Result<(NativeAudioSource, NativeVideoSource)> 
             )),
             TrackPublishOptions {
                 source: TrackSource::Camera,
+                stream,
                 simulcast: false,
                 ..Default::default()
             },
@@ -308,6 +315,11 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     if !["ws://127.0.0.1:7880", "wss://localhost:7884"].contains(&url.as_str()) {
         bail!("This fixture only connects to its loopback SFU");
     }
+    #[cfg(feature = "obs-proof")]
+    let recorder = std::env::var("LIVEKIT_LAB_OBS_RECORDING")
+        .ok()
+        .map(|path| crate::obs_proof::Recorder::start(Path::new(&path)))
+        .transpose()?;
     let (room, mut events) = Room::connect(&url, token.trim(), RoomOptions::default()).await?;
     println!("Native host connected to local SFU; synthetic tracks only");
     let (source_audio, source_video) = publish(&room).await?;
@@ -374,6 +386,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                 if elapsed >= seconds as f64 { break; }
                 // Stall the receiving application for 200 ms every five seconds,
                 // while WebRTC callbacks and publication continue independently.
+                #[cfg(feature = "obs-proof")]
+                if let Some(recorder) = &recorder { recorder.pump(); }
                 if pressure && elapsed >= 5.0 && elapsed % 5.0 < 0.2 { continue; }
                 for (id, tap) in &audio {
                     let m = metrics.entry(id.clone()).or_default();
@@ -390,6 +404,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                             }
                             m.last_capture_timestamp_ms = Some(capture);
                         } else { m.last_capture_timestamp_ms = None; }
+                        #[cfg(feature = "obs-proof")]
+                        if id == "guest-1" { if let Some(recorder) = &recorder { recorder.audio(&frame.value.samples, frame.at); } }
                         let rms = (frame.value.samples.iter().map(|v| (*v as f64).powi(2)).sum::<f64>() / 480.0).sqrt();
                         let active = rms > 2000.0;
                         if active && !m.audio_active { m.audio_pulses.push(frame.at.duration_since(began).as_secs_f64() * 1000.0); }
@@ -403,7 +419,13 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                         if frame.value.ntp_time_ms() > 0 { m.video_ntp_nonzero += 1; }
                         // SAFETY: video_frame_buffer returns an owned wrapper for this frame.
                         let buffer = new_video_frame_buffer(unsafe { frame.value.video_frame_buffer() });
-                        let buffer = buffer.to_i420(); let (y, _, _) = buffer.data();
+                        let buffer = buffer.to_i420();
+                        #[cfg(feature = "obs-proof")]
+                        if id == "guest-1" { if let Some(recorder) = &recorder {
+                            let (y,u,v) = buffer.data(); let (ys,us,vs) = buffer.strides();
+                            recorder.video((y,u,v),buffer.width(),buffer.height(),(ys,us,vs),frame.at);
+                        } }
+                        let (y, _, _) = buffer.data();
                         let mean = y.iter().map(|v| *v as u64).sum::<u64>() as f64 / y.len() as f64;
                         let active = mean > 180.0; m.video_frames += 1;
                         if active && !m.video_active { m.video_pulses.push(frame.at.duration_since(began).as_secs_f64() * 1000.0); }
@@ -425,6 +447,30 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         None
     };
     source_audio.clear_buffer();
+    let mut receiver_stats = Vec::new();
+    for participant in room.remote_participants().values() {
+        for publication in participant.track_publications().values() {
+            if let Some(track) = publication.track() {
+                let result = tokio::time::timeout(Duration::from_secs(2), track.get_stats()).await;
+                if let Ok(Ok(stats)) = result {
+                    for stat in stats {
+                        if let livekit::webrtc::stats::RtcStats::InboundRtp(s) = stat {
+                            receiver_stats.push(json!({"identity":participant.identity().to_string(),
+                                "sid":publication.sid().to_string(), "kind":s.stream.kind,
+                                "estimated_playout_timestamp_ms":s.inbound.estimated_playout_timestamp,
+                                "estimated_playout_presence_preserved":false,
+                                "jitter_buffer_delay_seconds":s.inbound.jitter_buffer_delay,
+                                "jitter_buffer_emitted_count":s.inbound.jitter_buffer_emitted_count,
+                                "concealed_samples":s.inbound.concealed_samples,
+                                "inserted_samples_for_deceleration":s.inbound.inserted_samples_for_deceleration,
+                                "removed_samples_for_acceleration":s.inbound.removed_samples_for_acceleration,
+                                "frames_dropped":s.inbound.frames_dropped}));
+                        }
+                    }
+                }
+            }
+        }
+    }
     let participants: Vec<_> = metrics.iter().map(|(id, m)| {
         let offsets = pulse_offsets(&m.audio_pulses, &m.video_pulses);
         let abs: Vec<_> = offsets.iter().map(|v| v.abs()).collect();
@@ -444,11 +490,17 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
             "capture_timestamp_step_p95_ms":p95(&m.capture_step_ms),
             "original_audio_capture_timestamp_available":m.audio_capture_timestamps > 0})
     }).collect();
+    #[cfg(feature = "obs-proof")]
+    let obs_recording = recorder.as_ref().map(|r| r.finish()).transpose()?;
+    #[cfg(not(feature = "obs-proof"))]
+    let obs_recording: Option<serde_json::Value> = None;
     audio.clear();
     video.clear();
     room.close().await?;
     let report = json!({"schema_version":1,"livekit":"0.9.4","topology":"local browser guests to native host through loopback SFU",
         "signaling_url":url,"publisher_error":publisher_error,
+        "sync_streams_requested":std::env::var("LIVEKIT_LAB_SYNC_STREAMS").as_deref() == Ok("1"),
+        "receiver_stats":receiver_stats,"obs_recording":obs_recording,
         "duration_seconds":seconds,"consumer_stall_ms":if pressure {200} else {0},"stall_period_seconds":5,
         "native_publish_audio_internal_queue_ms":0,"callback_timestamps_are_capture_timestamps":false,
         "obs_recorded_av_qualified":false,"physical_speaker_reference_connected":false,"g1_complete":false,

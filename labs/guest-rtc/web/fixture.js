@@ -10,6 +10,8 @@ export async function start() {
   if (room) return;
   try {
     const credentials = await (await fetch(`/token?identity=${encodeURIComponent(state.identity)}`)).json();
+    state.syncStreams = credentials.syncStreams;
+    const stream = credentials.syncStreams ? 'camera-av' : undefined;
     room = new Room({ adaptiveStream: false, dynacast: false });
     context = new AudioContext({ sampleRate: 48000 });
     await context.audioWorklet.addModule('/pulse-worklet.js');
@@ -68,9 +70,9 @@ export async function start() {
     const destination = context.createMediaStreamDestination(); synthetic.connect(destination);
     const video = new LocalVideoTrack(canvas.captureStream(30).getVideoTracks()[0]);
     const audio = new LocalAudioTrack(destination.stream.getAudioTracks()[0]);
-    await room.localParticipant.publishTrack(video, { source: Track.Source.Camera, simulcast: false,
+    await room.localParticipant.publishTrack(video, { stream, source: Track.Source.Camera, simulcast: false,
       videoCodec: 'vp8', videoEncoding: { maxBitrate: 250000, maxFramerate: 30 } });
-    await room.localParticipant.publishTrack(audio, { source: Track.Source.Microphone, dtx: false,
+    await room.localParticipant.publishTrack(audio, { stream, source: Track.Source.Microphone, dtx: false,
       red: false, audioPreset: { maxBitrate: 64000 }, forceStereo: false });
     state.published = true; display();
   } catch (error) { state.error = String(error); display(); throw error; }
