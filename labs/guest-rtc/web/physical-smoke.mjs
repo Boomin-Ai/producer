@@ -23,7 +23,7 @@ try {
  await Promise.race([ready,new Promise((_,reject)=>{readyTimer=setTimeout(()=>reject(new Error('Native readiness timeout')),15000);})]);clearTimeout(readyTimer);
  browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true,args:['--autoplay-policy=no-user-gesture-required','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
  page=await browser.newPage();await page.goto('http://127.0.0.1:8990/?identity=guest-1');await page.evaluate(()=>window.startLab());
- await page.waitForFunction(()=>window.labState.published,{timeout:10000});
+ await page.waitForFunction(()=>window.labState.published,undefined,{timeout:10000});
  await new Promise(r=>setTimeout(r,8000));
  const snapshot=await page.evaluate(async()=>({state:window.labState,audio:[...((await window.returnAudioTrack?.getRTCStatsReport())?.values()??[])].filter(s=>s.type==='inbound-rtp'&&s.kind==='audio')}));
  const code=await done;
