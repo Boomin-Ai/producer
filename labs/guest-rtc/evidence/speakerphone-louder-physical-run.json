@@ -145,6 +145,8 @@
     ],
     "duration_seconds": 12,
     "processed_clipped_samples_in_excerpt": 0,
-    "human_quality_review": "Pending"
+    "human_quality_review": "User reported: sounds great.",
+    "subjective_excerpt_review_passed": true,
+    "scope": "One 12-second excerpt on this Mac; not full call, controlled-volume or cross-device acceptance."
   }
 }

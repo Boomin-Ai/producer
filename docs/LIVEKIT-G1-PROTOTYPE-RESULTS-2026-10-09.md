@@ -897,3 +897,13 @@ actual capture/reference/APM owner has now produced encouraging repeated
 physical results, but voice intelligibility, controlled volume coverage, device
 changes and the full integrated LiveKit guest path remain separate open gates.
 No production deployment or installed Producer changes occurred.
+
+The user listened to the louder-run excerpt and reported “sounds great.” This
+passes the subjective quality check for that excerpt. Together with measured
+echo reduction and repeated clean capture teardown, it supports retaining the
+no-forced-high-pass profile in the isolated prototype. It does not qualify a
+controlled constant-volume matrix, remote guests, the complete production mix
+reference, WAN recovery, device changes or the five-hour envelope. Next G1 work
+is to connect the actual capture/playback/APM owner to the isolated LiveKit
+guest path, retaining bounded timestamped queues, mix-minus, private-cue routing
+and lifecycle evidence before expanding integration.
