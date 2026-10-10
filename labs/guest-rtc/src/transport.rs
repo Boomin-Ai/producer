@@ -674,8 +674,18 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     audio.clear();
     video.clear();
     room.close().await?;
+    drop(room); // Release native peer owners before collecting observer destruction evidence.
+    let mut rtcp_exchange_probe: serde_json::Value =
+        serde_json::from_str(&webrtc_sys::webrtc::ffi::diagnostic_rtcp_exchange_report())?;
+    rtcp_exchange_probe["scope"] = json!("factory event-log instances; one instance may cover multiple peer connections; factory lifetime extends beyond room close");
     let timed_mixer_probe: serde_json::Value =
         serde_json::from_str(&webrtc_sys::webrtc::ffi::diagnostic_timed_mixer_report())?;
+    let sender_report_origin_maps = crate::sender_clock::diagnostic_maps(
+        &rtcp_exchange_probe,
+        &timed_mixer_probe,
+        &receiver_stats,
+        audio_sys::ffi::diagnostic_webrtc_time_us(),
+    );
     #[cfg(feature = "obs-proof")]
     let worker_lifecycle = json!({"alive_after_retirement":AUDIO_WORKERS_ALIVE.load(Ordering::Acquire),
         "peak_alive":AUDIO_WORKERS_PEAK.load(Ordering::Relaxed),"scope":"application OBS audio ingest workers only"});
@@ -684,7 +694,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     let report = json!({"schema_version":1,"livekit":"0.9.4","topology":"local browser guests to native host through loopback SFU",
         "signaling_url":url,"publisher_error":publisher_error,
         "sync_streams_requested":std::env::var("LIVEKIT_LAB_SYNC_STREAMS").as_deref() == Ok("1"),
-        "rrtr_lab_experiment_requested":std::env::var("LIVEKIT_LAB_RRTR").as_deref()==Ok("1"),"timed_mixer_probe":timed_mixer_probe,"remote_sender_reports":remote_sender_reports,"receiver_stats":receiver_stats,"obs_recording":obs_recording,"local_playout_clock_requested":use_playout_clock,"audio_ingest_generation_reports":audio_ingest_stats,"audio_ingest_session_totals":audio_ingest_totals,"audio_worker_lifecycle":worker_lifecycle,
+        "sender_report_origin_maps":sender_report_origin_maps,"rtcp_exchange_probe":rtcp_exchange_probe,"rrtr_lab_experiment_requested":std::env::var("LIVEKIT_LAB_RRTR").as_deref()==Ok("1"),"timed_mixer_probe":timed_mixer_probe,"remote_sender_reports":remote_sender_reports,"receiver_stats":receiver_stats,"obs_recording":obs_recording,"local_playout_clock_requested":use_playout_clock,"audio_ingest_generation_reports":audio_ingest_stats,"audio_ingest_session_totals":audio_ingest_totals,"audio_worker_lifecycle":worker_lifecycle,
         "duration_seconds":seconds,"consumer_stall_ms":if pressure {200} else {0},"stall_period_seconds":5,
         "native_publish_audio_internal_queue_ms":0,"callback_timestamps_are_capture_timestamps":false,
         "obs_recorded_av_qualified":false,"physical_speaker_reference_connected":false,"g1_complete":false,

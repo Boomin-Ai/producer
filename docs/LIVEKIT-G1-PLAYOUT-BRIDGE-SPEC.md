@@ -186,3 +186,99 @@ receiver mapping semantics.
 [Live probe verification](../labs/guest-rtc/evidence/timed-mixer-verification.json)
 retains every run's frame counts, lifetime result and the observed source-to-track
 association. Production and the OBS presentation adapter remain unchanged.
+
+## Authenticated RTCP exchange proof
+
+The opt-in `LIVEKIT_LAB_RTCP_PROBE=1` factory event-log wrapper now observes
+authenticated/decrypted incoming RTCP and outgoing pre-SRTCP RTCP at the native
+engine boundary. It forwards every event to the original logger, retains no raw
+packet or media payload, and stores bounded clock/SSRC observations. The existing
+`peers` JSON field actually identifies event-log instances: one factory log can
+cover multiple PeerConnections. It is not evidence of independent peer clocks.
+
+The baseline observed zero outgoing RRTR requests. Enabling the native RRTR SDP
+experiment produced six outgoing requests in 30 seconds, yet zero incoming DLRR
+replies. A 40-second three-guest/three-rejoin run produced 19 outgoing requests and
+zero replies. Incoming SFU RRTR requests and outgoing native DLRR replies were
+visible in both directions, so the observer can recognize each block type. The
+relay forwarded control traffic without configured delay/loss, queue overflow or
+send errors. Native outgoing events prove engine emission; the observer does not
+independently prove delivery inside the SFU's authenticated packet handler.
+
+The source-supported routing hypothesis is precise: outgoing RRTR uses a native
+reporter SSRC, distinct from all current downtrack media SSRCs. Pion RTCP v1.2.19
+ExtendedReport.DestinationSSRC includes its SenderSSRC; an RRTR block itself adds
+no target SSRC. Pion SRTCP v3.0.13 demultiplexes individual RTCP packets using that
+destination list. LiveKit v1.13.9 binds each downtrack's RTCP callback to its media
+SSRC. Thus an RRTR addressed only by the native reporter SSRC can miss the
+downtrack callback containing the DLRR response logic, even when it accompanies
+a ReceiverReport addressed to media SSRCs. This matches the observed absence of
+replies, but a patched SFU was not executed and the exact deployed handler path
+is not instrumented. Treat it as a strong interoperability lead, not a completed
+provider fix. The current machine has no Go toolchain and limited SSD headroom;
+no full SFU dependency build was started.
+
+The factory log remains alive after room close because the native factory/
+Environment outlives individual rooms. All six mixer sources retired in the live
+rejoin test. The standalone ownership workload destroys 200 log observers and
+200 source wrappers over 100 cycles, expires both weak registries, and returns
+thread/FD counts to their initial 1/4 values. These are explicit owner-lifetime
+proofs; they do not establish SDK-wide shutdown or a production device lifecycle.
+
+### Sender-report mapping path
+
+The probe also records authenticated incoming SenderReport NTP/RTP pairs without
+copying packet payloads. The three-guest run retained at least two reports for
+each of six current audio/video publications. Inferred audio clocks were
+47,949.52–48,047.14 Hz and video clocks 89,992.23–90,000.43 Hz, near the fixture's
+48 kHz Opus / 90 kHz video rates. These are short report-pair observations; their
+small variation and report age must remain visible rather than be treated as an
+exact or stable map. The native frame NTP estimator remained invalid.
+
+This provides another public extension route: map decoded frame RTP origins via
+authenticated sender reports, then choose one bounded common OBS presentation
+clock per validated synchronization group. Relative audio/video alignment does
+not require claiming an absolute one-way network delay or an RTT-derived local
+wall-clock offset. It still requires per-frame PCM timing, valid SSRC/generation
+association, report age/slope bounds, concealment/resampling semantics, startup
+policy before two reports, clock resets and recorded latency/drift tests. Sender
+report availability alone cannot pass G1. No sender-report map feeds OBS yet.
+
+Evidence: [RTCP exchange and report-map verification](../labs/guest-rtc/evidence/rtcp-exchange-verification.json),
+[native observer lifecycle](../labs/guest-rtc/evidence/rtcp-probe-lifecycle.json).
+
+Pinned primary routing sources:
+
+- [Pion XR destinations](https://raw.githubusercontent.com/pion/rtcp/v1.2.19/extended_report.go)
+- [Pion SRTCP per-packet routing](https://raw.githubusercontent.com/pion/srtp/v3.0.13/session_srtcp.go)
+- [LiveKit downtrack callback binding and XR responder](https://raw.githubusercontent.com/livekit/livekit/v1.13.9/pkg/sfu/downtrack.go)
+- [LiveKit RTCP buffer callback](https://raw.githubusercontent.com/livekit/livekit/v1.13.9/pkg/sfu/buffer/rtcpreader.go)
+
+### Guarded sender-origin mapper implemented
+
+The lab now includes a Rust diagnostic mapper using the retained authenticated
+report pairs. It operates in the remote sender-report NTP domain and establishes
+no local clock offset. It fits two report pairs, validates their RTP slope within
+a provisional 1% of the fixture's declared clock rate, rejects zero NTP seconds/
+wrong SSRCs, and requires fresh reports within 10 seconds. Backward or implausible
+clock changes discard the fitted pair and require a fresh pair. Duplicate reports
+do not refresh age. RTP wrap uses signed modular distance with a 10-second
+extrapolation bound; report intervals over 60 seconds invalidate the pair. These
+are explicit diagnostic budgets, not final production tolerances.
+
+Tests cover RTP wrap and frames preceding the latest report, stale/future reports,
+duplicate freshness, excessive extrapolation, source mismatch and discontinuity
+recovery. A new mapper instance cannot reuse a previous publication's map.
+
+In a 45-second three-guest/three-rejoin session without the RRTR experiment, all
+six current publications had a two-report map and all three current decoded audio
+sources produced reconstructed sender-NTP origins. All six source wrappers were
+destroyed. The original AudioFrame NTP estimator remained invalid, demonstrating
+that this diagnostic reconstruction does not depend on that estimator becoming
+valid. It is evaluated after the run using retained observations; no per-frame
+PCM, video scheduling or common local presentation clock was added. An origin
+for a concealed/stretched decoded frame is not a claim of original capture time.
+The next bridge must preserve those semantics and qualify actual recorded output.
+
+Evidence: [live sender-clock verification](../labs/guest-rtc/evidence/sender-clock-live-verification.json).
+Eleven Rust tests, native mixer/log lifecycle checks and Clippy passed.

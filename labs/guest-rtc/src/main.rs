@@ -4,6 +4,7 @@ mod fixture;
 mod obs_proof;
 mod playout_clock;
 mod queue;
+mod sender_clock;
 mod transport;
 
 #[cfg(not(feature = "obs-proof"))]

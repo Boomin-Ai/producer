@@ -19,6 +19,7 @@
 #include <memory>
 #include <cstdlib>
 #include "livekit/timed_mixer_probe.h"
+#include "livekit/rtcp_exchange_probe.h"
 #include <utility>
 #include <vector>
 
@@ -165,6 +166,10 @@ PeerConnectionFactory::PeerConnectionFactory(
   dependencies.signaling_thread = rtc_runtime_->signaling_thread();
   dependencies.socket_factory = rtc_runtime_->network_thread()->socketserver();
   dependencies.event_log_factory = std::make_unique<webrtc::RtcEventLogFactory>();
+  const char* rtcp_probe = std::getenv("LIVEKIT_LAB_RTCP_PROBE");
+  if (rtcp_probe && std::string(rtcp_probe) == "1") {
+    dependencies.event_log_factory = std::make_unique<RtcpExchangeFactory>();
+  }
   dependencies.env = env_;
 
   if (zero_playout_delay) {

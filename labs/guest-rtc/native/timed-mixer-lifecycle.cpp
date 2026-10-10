@@ -2,8 +2,12 @@
 #include <cassert>
 #include <iostream>
 #include <thread>
+#include <filesystem>
+#include <mach/mach.h>
 #include "livekit/timed_mixer_probe.h"
 #include "livekit/lab_rrtr_sdp.h"
+#include "livekit/rtcp_exchange_probe.h"
+#include "api/environment/environment_factory.h"
 using namespace livekit_ffi;
 class FakeSource final : public webrtc::AudioMixer::Source {
  public:
@@ -19,7 +23,19 @@ class FakeSource final : public webrtc::AudioMixer::Source {
     return AudioFrameInfo::kNormal;
   }
 };
+size_t thread_count() {
+  thread_act_array_t threads=nullptr; mach_msg_type_number_t count=0;
+  assert(task_threads(mach_task_self(),&threads,&count)==KERN_SUCCESS);
+  for(mach_msg_type_number_t i=0;i<count;++i) mach_port_deallocate(mach_task_self(),threads[i]);
+  vm_deallocate(mach_task_self(),reinterpret_cast<vm_address_t>(threads),count*sizeof(thread_t));
+  return count;
+}
+size_t fd_count() {
+  size_t count=0; for(const auto& entry:std::filesystem::directory_iterator("/dev/fd")) { (void)entry; ++count; }
+  return count;
+}
 int main() {
+  const auto initial_threads=thread_count(), initial_fds=fd_count();
   const std::string sdp = "v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=rtpmap:111 opus/48000/2\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\na=rtpmap:96 VP8/90000\r\n";
   const auto rrtr = lab_add_audio_rrtr(sdp);
   assert(lab_add_audio_rrtr(rrtr) == rrtr);
@@ -53,5 +69,40 @@ int main() {
   }
   assert(timed_sources_created.load() - before == 200);
   assert(timed_sources_created.load() == timed_sources_destroyed.load());
-  std::cout << timed_mixer_probe_report() << std::endl;
+  const auto env=webrtc::CreateEnvironment();
+  for(int cycle=0;cycle<100;++cycle) {
+    std::weak_ptr<RtcpProbeState> weak;
+    {
+      RtcpExchangeFactory factory;
+      auto outgoing=factory.Create(env), incoming=factory.Create(env);
+      weak=rtcp_registry;
+      const std::array<uint8_t,20> rrtr={0x80,207,0,4,0,0,0,1,4,0,0,2,0,0,0,1,0,0,0,0};
+      const std::array<uint8_t,24> dlrr={0x80,207,0,5,0,0,0,2,5,0,0,3,0,0,0,1,0,1,0,0,0,0,0,0};
+      outgoing->Log(std::make_unique<webrtc::RtcEventRtcpPacketOutgoing>(rrtr));
+      incoming->Log(std::make_unique<webrtc::RtcEventRtcpPacketIncoming>(dlrr));
+      const std::array<uint8_t,28> sr={0x80,200,0,6,0,0,0,2,0,0,0,1,0,0,0,0,0,0,187,128,0,0,0,0,0,0,0,0};
+      incoming->Log(std::make_unique<webrtc::RtcEventRtcpPacketIncoming>(sr));
+      auto state=weak.lock();
+      assert(state->peers[1].sr_size==1 && state->peers[1].sr[0].rtp_timestamp==48000 && state->peers[1].sr[0].ntp_seconds==1);
+      assert(state && state->peers[0].outgoing_rrtr==1 && state->peers[1].incoming_dlrr==1);
+      assert(state->peers[0].xr[0].last_rr==65536 && state->peers[1].xr[0].target==1);
+      const std::array<uint8_t,4> bad={0x80,207,0,15};
+      incoming->Log(std::make_unique<webrtc::RtcEventRtcpPacketIncoming>(bad));
+      assert(state->peers[1].malformed==1);
+      // Overfull observations remain bounded, and preserve the latest clock fields.
+      for(int n=0;n<70;++n) outgoing->Log(std::make_unique<webrtc::RtcEventRtcpPacketOutgoing>(rrtr));
+      assert(state->peers[0].size==64 && state->peers[0].overwritten==7);
+      assert(!outgoing->StartLogging(nullptr,0)); // Existing Null logger failure stays a failure.
+      bool stopped=false; incoming->StopLogging([&] { stopped=true; }); assert(stopped);
+      outgoing.reset(); incoming.reset();
+      assert(rtcp_logs_alive.load()==0 && !state->peers[0].active && !state->peers[1].active);
+    }
+    assert(weak.expired() && rtcp_registry.expired());
+  }
+  assert(rtcp_logs_created.load()==200 && rtcp_logs_destroyed.load()==200);
+  const auto final_threads=thread_count(), final_fds=fd_count();
+  assert(final_threads<=initial_threads+2 && final_fds<=initial_fds);
+  std::cout << "{\"initial_threads\":" << initial_threads << ",\"final_threads\":" << final_threads
+            << ",\"initial_fds\":" << initial_fds << ",\"final_fds\":" << final_fds << ",\"mixer\":" << timed_mixer_probe_report()
+            << ",\"rtcp\":" << rtcp_exchange_report() << "}" << std::endl;
 }

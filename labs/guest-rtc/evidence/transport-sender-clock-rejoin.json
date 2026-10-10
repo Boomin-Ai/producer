@@ -1,0 +1,2001 @@
+{
+  "audio_ingest_generation_reports": [],
+  "audio_ingest_session_totals": {
+    "callback_contention_dropped": 0,
+    "clock_resets": 0,
+    "consumed": 0,
+    "overflow_oldest_dropped": 0,
+    "pending_frames": 0,
+    "received": 0,
+    "stale_dropped": 0
+  },
+  "audio_worker_lifecycle": {
+    "alive_after_retirement": 0,
+    "peak_alive": 0,
+    "scope": "application OBS audio ingest workers only"
+  },
+  "callback_timestamps_are_capture_timestamps": false,
+  "consumer_stall_ms": 0,
+  "duration_seconds": 45,
+  "g1_complete": false,
+  "lifecycle": [
+    {
+      "at_ms": 3870,
+      "event": "subscribed",
+      "identity": "guest-1",
+      "sid": "TR_VCry5vQPSn38w3"
+    },
+    {
+      "at_ms": 4135,
+      "event": "subscribed",
+      "identity": "guest-1",
+      "sid": "TR_AMGViD36PzVoQo"
+    },
+    {
+      "at_ms": 5103,
+      "event": "subscribed",
+      "identity": "guest-2",
+      "sid": "TR_VCpfr5QP5qZ6tS"
+    },
+    {
+      "at_ms": 5352,
+      "event": "subscribed",
+      "identity": "guest-2",
+      "sid": "TR_AMvkTA5eWWpyxR"
+    },
+    {
+      "at_ms": 8391,
+      "event": "subscribed",
+      "identity": "guest-3",
+      "sid": "TR_VCrT8YkhaabDPY"
+    },
+    {
+      "at_ms": 8603,
+      "event": "subscribed",
+      "identity": "guest-3",
+      "sid": "TR_AMD4KJyjWUZxPR"
+    },
+    {
+      "at_ms": 14574,
+      "event": "unsubscribed",
+      "identity": "guest-1",
+      "sid": "TR_AMGViD36PzVoQo"
+    },
+    {
+      "at_ms": 14575,
+      "event": "unsubscribed",
+      "identity": "guest-1",
+      "sid": "TR_VCry5vQPSn38w3"
+    },
+    {
+      "at_ms": 16412,
+      "event": "subscribed",
+      "identity": "guest-1",
+      "sid": "TR_VCkgd2HtobYNvZ"
+    },
+    {
+      "at_ms": 16566,
+      "event": "subscribed",
+      "identity": "guest-1",
+      "sid": "TR_AMccSxx7gg7znd"
+    },
+    {
+      "at_ms": 22322,
+      "event": "unsubscribed",
+      "identity": "guest-1",
+      "sid": "TR_VCkgd2HtobYNvZ"
+    },
+    {
+      "at_ms": 22322,
+      "event": "unsubscribed",
+      "identity": "guest-1",
+      "sid": "TR_AMccSxx7gg7znd"
+    },
+    {
+      "at_ms": 23810,
+      "event": "subscribed",
+      "identity": "guest-1",
+      "sid": "TR_VCLJQtd4zTFRAw"
+    },
+    {
+      "at_ms": 24029,
+      "event": "subscribed",
+      "identity": "guest-1",
+      "sid": "TR_AMhBdMETHTGcye"
+    },
+    {
+      "at_ms": 30184,
+      "event": "unsubscribed",
+      "identity": "guest-1",
+      "sid": "TR_VCLJQtd4zTFRAw"
+    },
+    {
+      "at_ms": 30185,
+      "event": "unsubscribed",
+      "identity": "guest-1",
+      "sid": "TR_AMhBdMETHTGcye"
+    },
+    {
+      "at_ms": 33656,
+      "event": "subscribed",
+      "identity": "guest-1",
+      "sid": "TR_VCBeTuzbNiqkk2"
+    },
+    {
+      "at_ms": 34616,
+      "event": "subscribed",
+      "identity": "guest-1",
+      "sid": "TR_AMkdj9ykDRwd8X"
+    }
+  ],
+  "livekit": "0.9.4",
+  "local_playout_clock_requested": false,
+  "native_publish_audio_internal_queue_ms": 0,
+  "obs_recorded_av_qualified": false,
+  "obs_recording": null,
+  "participants": [
+    {
+      "audio_bad_format": 0,
+      "audio_blocks": 3075,
+      "audio_blocks_with_capture_timestamp": 0,
+      "audio_callback_to_consumer_p95_ms": 13.719209,
+      "audio_pulses_ms": [
+        7640.176542,
+        9610.220584,
+        13999.636875,
+        15951.669125,
+        17939.051834,
+        19848.785834000002,
+        21769.262709,
+        23691.077125,
+        25618.978084,
+        27529.053667,
+        29542.174375,
+        31605.289834,
+        33612.93275,
+        35609.160292,
+        37610.56675,
+        41843.494375,
+        44382.489292000006
+      ],
+      "audio_queue": {
+        "callback_contention_dropped": 4,
+        "capacity_frames": 3,
+        "consumed": 3075,
+        "max_age_ms": 30,
+        "overflow_oldest_dropped": 855,
+        "pending_frames": 3,
+        "received": 3978,
+        "stale_dropped": 41
+      },
+      "audio_resampled_blocks": 3074,
+      "audio_sample_discontinuities": 110,
+      "callback_av_abs_p95_ms": 347.42816700000003,
+      "capture_timestamp_clock_domain": "WebRTC TimeMillis (unmapped to OBS)",
+      "capture_timestamp_regressions": 0,
+      "capture_timestamp_step_p95_ms": null,
+      "identity": "guest-2",
+      "original_audio_capture_timestamp_available": false,
+      "paired_callback_video_minus_audio_ms": [
+        -347.42816700000003,
+        -226.96637499999997,
+        -386.1190409999999,
+        -322.8220420000034,
+        -170.94741700000304,
+        -104.33062499999869,
+        -29.747332999999344,
+        60.666958000001614,
+        107.79791699999987,
+        57.951458999999886,
+        -70.15591599999607,
+        -43.556625000004715,
+        -91.17041600000084,
+        3.0973329999978887
+      ],
+      "retired_queues": [],
+      "video_callback_to_consumer_p95_ms": 13.703334,
+      "video_deadline_minus_arrival_p95_ms": 10.276959,
+      "video_frames": 877,
+      "video_frames_with_ntp_metadata": 0,
+      "video_local_deadline_invalid": 64,
+      "video_local_deadline_valid": 813,
+      "video_pulses_ms": [
+        7292.748375,
+        9383.254209,
+        11640.151875000001,
+        13483.943,
+        15565.550084,
+        17616.229792,
+        19677.838417,
+        21664.932084,
+        23661.329792,
+        25679.645042,
+        27636.851584,
+        29600.125834,
+        33542.776834000004,
+        35565.603666999996,
+        37519.396334,
+        39554.315542,
+        44385.586625
+      ],
+      "video_queue": {
+        "callback_contention_dropped": 0,
+        "capacity_frames": 2,
+        "consumed": 877,
+        "max_age_ms": 50,
+        "overflow_oldest_dropped": 103,
+        "pending_frames": 2,
+        "received": 993,
+        "stale_dropped": 11
+      }
+    },
+    {
+      "audio_bad_format": 0,
+      "audio_blocks": 2839,
+      "audio_blocks_with_capture_timestamp": 0,
+      "audio_callback_to_consumer_p95_ms": 12.611834,
+      "audio_pulses_ms": [
+        8788.990709,
+        10819.018875,
+        13539.674167,
+        15490.046292,
+        17439.296124999997,
+        19359.360125,
+        21269.834042,
+        23078.905625,
+        24989.330209,
+        26909.3915,
+        28818.941417000002,
+        30949.794209,
+        33175.265792,
+        35283.526459,
+        37170.492667,
+        39180.207334
+      ],
+      "audio_queue": {
+        "callback_contention_dropped": 3,
+        "capacity_frames": 3,
+        "consumed": 2839,
+        "max_age_ms": 30,
+        "overflow_oldest_dropped": 773,
+        "pending_frames": 3,
+        "received": 3653,
+        "stale_dropped": 35
+      },
+      "audio_resampled_blocks": 2839,
+      "audio_sample_discontinuities": 95,
+      "callback_av_abs_p95_ms": 205.48816699999588,
+      "capture_timestamp_clock_domain": "WebRTC TimeMillis (unmapped to OBS)",
+      "capture_timestamp_regressions": 0,
+      "capture_timestamp_step_p95_ms": null,
+      "identity": "guest-3",
+      "original_audio_capture_timestamp_available": false,
+      "paired_callback_video_minus_audio_ms": [
+        -39.72795899999983,
+        -50.14037500000086,
+        -331.93283299999894,
+        -176.61012499999924,
+        23.53754200000185,
+        93.83787500000108,
+        131.24399999999878,
+        195.68816700000025,
+        47.86808300000121,
+        -205.48816699999588,
+        -139.64024999999674,
+        -130.60925000000134,
+        -56.51000000000204
+      ],
+      "retired_queues": [],
+      "video_callback_to_consumer_p95_ms": 10.383958,
+      "video_deadline_minus_arrival_p95_ms": 10.254,
+      "video_frames": 867,
+      "video_frames_with_ntp_metadata": 0,
+      "video_local_deadline_invalid": 59,
+      "video_local_deadline_valid": 808,
+      "video_pulses_ms": [
+        8749.26275,
+        10768.878499999999,
+        13051.500334,
+        14903.324959000001,
+        16959.382042,
+        19027.427292,
+        21093.223917,
+        23102.443167,
+        25083.168084,
+        27040.6355,
+        29014.629584000002,
+        30997.662292,
+        32969.777625,
+        35143.886209000004,
+        37039.883417,
+        39123.697334,
+        41128.329084,
+        43124.568584
+      ],
+      "video_queue": {
+        "callback_contention_dropped": 1,
+        "capacity_frames": 2,
+        "consumed": 867,
+        "max_age_ms": 50,
+        "overflow_oldest_dropped": 114,
+        "pending_frames": 2,
+        "received": 992,
+        "stale_dropped": 8
+      }
+    },
+    {
+      "audio_bad_format": 0,
+      "audio_blocks": 2528,
+      "audio_blocks_with_capture_timestamp": 0,
+      "audio_callback_to_consumer_p95_ms": 11.915167,
+      "audio_pulses_ms": [
+        5723.722334,
+        8071.9295839999995,
+        10119.19475,
+        12448.859917,
+        14438.940917,
+        18189.242167,
+        20189.669125,
+        22189.322792,
+        25889.22075,
+        27889.348834,
+        30084.315125,
+        35861.237417,
+        37861.40691699999,
+        40365.964583999994,
+        42242.575209,
+        44239.618334
+      ],
+      "audio_queue": {
+        "callback_contention_dropped": 1,
+        "capacity_frames": 3,
+        "consumed": 526,
+        "max_age_ms": 30,
+        "overflow_oldest_dropped": 502,
+        "pending_frames": 3,
+        "received": 1052,
+        "stale_dropped": 20
+      },
+      "audio_resampled_blocks": 2528,
+      "audio_sample_discontinuities": 81,
+      "callback_av_abs_p95_ms": 331.0229159999999,
+      "capture_timestamp_clock_domain": "WebRTC TimeMillis (unmapped to OBS)",
+      "capture_timestamp_regressions": 0,
+      "capture_timestamp_step_p95_ms": null,
+      "identity": "guest-1",
+      "original_audio_capture_timestamp_available": false,
+      "paired_callback_video_minus_audio_ms": [
+        -12.07366699999966,
+        43.021333000000595,
+        -331.0229159999999,
+        -23.5626250000023,
+        -44.37116600000081,
+        -32.99724999999671,
+        -0.9838750000017171,
+        -7.090667000000394,
+        -65.23633300000074,
+        -208.15395799999533
+      ],
+      "retired_queues": [
+        {
+          "ingest": null,
+          "kind": "audio",
+          "sid": "TR_AMGViD36PzVoQo",
+          "sink_removed": true,
+          "stats": {
+            "callback_contention_dropped": 0,
+            "capacity_frames": 3,
+            "consumed": 863,
+            "max_age_ms": 30,
+            "overflow_oldest_dropped": 171,
+            "pending_frames": 0,
+            "received": 1044,
+            "stale_dropped": 10
+          }
+        },
+        {
+          "kind": "video",
+          "sid": "TR_VCry5vQPSn38w3",
+          "stats": {
+            "callback_contention_dropped": 0,
+            "capacity_frames": 2,
+            "consumed": 245,
+            "max_age_ms": 50,
+            "overflow_oldest_dropped": 14,
+            "pending_frames": 0,
+            "received": 262,
+            "stale_dropped": 3
+          }
+        },
+        {
+          "kind": "video",
+          "sid": "TR_VCkgd2HtobYNvZ",
+          "stats": {
+            "callback_contention_dropped": 0,
+            "capacity_frames": 2,
+            "consumed": 156,
+            "max_age_ms": 50,
+            "overflow_oldest_dropped": 0,
+            "pending_frames": 0,
+            "received": 156,
+            "stale_dropped": 0
+          }
+        },
+        {
+          "ingest": null,
+          "kind": "audio",
+          "sid": "TR_AMccSxx7gg7znd",
+          "sink_removed": true,
+          "stats": {
+            "callback_contention_dropped": 0,
+            "capacity_frames": 3,
+            "consumed": 576,
+            "max_age_ms": 30,
+            "overflow_oldest_dropped": 0,
+            "pending_frames": 0,
+            "received": 576,
+            "stale_dropped": 0
+          }
+        },
+        {
+          "kind": "video",
+          "sid": "TR_VCLJQtd4zTFRAw",
+          "stats": {
+            "callback_contention_dropped": 0,
+            "capacity_frames": 2,
+            "consumed": 144,
+            "max_age_ms": 50,
+            "overflow_oldest_dropped": 5,
+            "pending_frames": 0,
+            "received": 151,
+            "stale_dropped": 2
+          }
+        },
+        {
+          "ingest": null,
+          "kind": "audio",
+          "sid": "TR_AMhBdMETHTGcye",
+          "sink_removed": true,
+          "stats": {
+            "callback_contention_dropped": 0,
+            "capacity_frames": 3,
+            "consumed": 563,
+            "max_age_ms": 30,
+            "overflow_oldest_dropped": 46,
+            "pending_frames": 0,
+            "received": 615,
+            "stale_dropped": 6
+          }
+        }
+      ],
+      "video_callback_to_consumer_p95_ms": 14.666917,
+      "video_deadline_minus_arrival_p95_ms": 10.325542,
+      "video_frames": 745,
+      "video_frames_with_ntp_metadata": 0,
+      "video_local_deadline_invalid": 60,
+      "video_local_deadline_valid": 685,
+      "video_pulses_ms": [
+        5711.648667,
+        8114.950917,
+        9788.171834,
+        13883.873834,
+        18165.679541999998,
+        20145.297959,
+        22156.325542000002,
+        25888.236875,
+        27882.258167,
+        35796.001083999996,
+        37653.252959,
+        44823.384084
+      ],
+      "video_queue": {
+        "callback_contention_dropped": 0,
+        "capacity_frames": 2,
+        "consumed": 200,
+        "max_age_ms": 50,
+        "overflow_oldest_dropped": 54,
+        "pending_frames": 2,
+        "received": 270,
+        "stale_dropped": 14
+      }
+    }
+  ],
+  "physical_speaker_reference_connected": false,
+  "publisher_error": null,
+  "receiver_stats": [
+    {
+      "concealed_samples": 92041,
+      "estimated_playout_presence_preserved": false,
+      "estimated_playout_timestamp_ms": 4000598129987.0,
+      "frames_dropped": 0,
+      "identity": "guest-3",
+      "inserted_samples_for_deceleration": 1008,
+      "jitter_buffer_delay_seconds": 624633.6,
+      "jitter_buffer_emitted_count": 1696320,
+      "jitter_seconds": 0.04,
+      "kind": "audio",
+      "packets_lost": 0,
+      "packets_received": 1802,
+      "removed_samples_for_acceleration": 35444,
+      "sid": "TR_AMD4KJyjWUZxPR",
+      "ssrc": 2410421624
+    },
+    {
+      "concealed_samples": 0,
+      "estimated_playout_presence_preserved": false,
+      "estimated_playout_timestamp_ms": 4000598130480.0,
+      "frames_dropped": 0,
+      "identity": "guest-3",
+      "inserted_samples_for_deceleration": 0,
+      "jitter_buffer_delay_seconds": 223.41144,
+      "jitter_buffer_emitted_count": 995,
+      "jitter_seconds": 0.065,
+      "kind": "video",
+      "packets_lost": 0,
+      "packets_received": 1003,
+      "removed_samples_for_acceleration": 0,
+      "sid": "TR_VCrT8YkhaabDPY",
+      "ssrc": 1581789501
+    },
+    {
+      "concealed_samples": 0,
+      "estimated_playout_presence_preserved": false,
+      "estimated_playout_timestamp_ms": 4000598130522.0,
+      "frames_dropped": 0,
+      "identity": "guest-1",
+      "inserted_samples_for_deceleration": 0,
+      "jitter_buffer_delay_seconds": 36.817942,
+      "jitter_buffer_emitted_count": 271,
+      "jitter_seconds": 0.054,
+      "kind": "video",
+      "packets_lost": 0,
+      "packets_received": 291,
+      "removed_samples_for_acceleration": 0,
+      "sid": "TR_VCBeTuzbNiqkk2",
+      "ssrc": 1846333841
+    },
+    {
+      "concealed_samples": 22440,
+      "estimated_playout_presence_preserved": false,
+      "estimated_playout_timestamp_ms": 4000598130643.0,
+      "frames_dropped": 0,
+      "identity": "guest-1",
+      "inserted_samples_for_deceleration": 3462,
+      "jitter_buffer_delay_seconds": 144950.4,
+      "jitter_buffer_emitted_count": 484800,
+      "jitter_seconds": 0.031,
+      "kind": "audio",
+      "packets_lost": 0,
+      "packets_received": 524,
+      "removed_samples_for_acceleration": 2160,
+      "sid": "TR_AMkdj9ykDRwd8X",
+      "ssrc": 1347547280
+    },
+    {
+      "concealed_samples": 0,
+      "estimated_playout_presence_preserved": false,
+      "estimated_playout_timestamp_ms": 4000598130445.0,
+      "frames_dropped": 0,
+      "identity": "guest-2",
+      "inserted_samples_for_deceleration": 0,
+      "jitter_buffer_delay_seconds": 318.187463,
+      "jitter_buffer_emitted_count": 995,
+      "jitter_seconds": 0.062,
+      "kind": "video",
+      "packets_lost": 0,
+      "packets_received": 1004,
+      "removed_samples_for_acceleration": 0,
+      "sid": "TR_VCpfr5QP5qZ6tS",
+      "ssrc": 3720950064
+    },
+    {
+      "concealed_samples": 74829,
+      "estimated_playout_presence_preserved": false,
+      "estimated_playout_timestamp_ms": 4000598130695.0,
+      "frames_dropped": 0,
+      "identity": "guest-2",
+      "inserted_samples_for_deceleration": 6060,
+      "jitter_buffer_delay_seconds": 793958.4,
+      "jitter_buffer_emitted_count": 1855680,
+      "jitter_seconds": 0.042,
+      "kind": "audio",
+      "packets_lost": 0,
+      "packets_received": 1965,
+      "removed_samples_for_acceleration": 27070,
+      "sid": "TR_AMvkTA5eWWpyxR",
+      "ssrc": 2316357231
+    }
+  ],
+  "remote_sender_reports": [
+    {
+      "identity": "guest-3",
+      "kind": "audio",
+      "optional_field_presence_preserved": false,
+      "remote_timestamp": 1791609331121.19,
+      "reports_sent": 12,
+      "round_trip_time": 0.0,
+      "round_trip_time_measurements": 0,
+      "sid": "TR_AMD4KJyjWUZxPR",
+      "ssrc": 2410421624
+    },
+    {
+      "identity": "guest-3",
+      "kind": "video",
+      "optional_field_presence_preserved": false,
+      "remote_timestamp": 1791609331124.602,
+      "reports_sent": 13,
+      "round_trip_time": 0.0,
+      "round_trip_time_measurements": 0,
+      "sid": "TR_VCrT8YkhaabDPY",
+      "ssrc": 1581789501
+    },
+    {
+      "identity": "guest-1",
+      "kind": "video",
+      "optional_field_presence_preserved": false,
+      "remote_timestamp": 1791609331140.059,
+      "reports_sent": 4,
+      "round_trip_time": 0.0,
+      "round_trip_time_measurements": 0,
+      "sid": "TR_VCBeTuzbNiqkk2",
+      "ssrc": 1846333841
+    },
+    {
+      "identity": "guest-1",
+      "kind": "audio",
+      "optional_field_presence_preserved": false,
+      "remote_timestamp": 1791609331130.161,
+      "reports_sent": 4,
+      "round_trip_time": 0.0,
+      "round_trip_time_measurements": 0,
+      "sid": "TR_AMkdj9ykDRwd8X",
+      "ssrc": 1347547280
+    },
+    {
+      "identity": "guest-2",
+      "kind": "video",
+      "optional_field_presence_preserved": false,
+      "remote_timestamp": 1791609330942.509,
+      "reports_sent": 13,
+      "round_trip_time": 0.0,
+      "round_trip_time_measurements": 0,
+      "sid": "TR_VCpfr5QP5qZ6tS",
+      "ssrc": 3720950064
+    },
+    {
+      "identity": "guest-2",
+      "kind": "audio",
+      "optional_field_presence_preserved": false,
+      "remote_timestamp": 1791609331116.068,
+      "reports_sent": 13,
+      "round_trip_time": 0.0,
+      "round_trip_time_measurements": 0,
+      "sid": "TR_AMvkTA5eWWpyxR",
+      "ssrc": 2316357231
+    }
+  ],
+  "rrtr_lab_experiment_requested": false,
+  "rtcp_exchange_probe": {
+    "capacity_exceeded": 0,
+    "contention_dropped": 0,
+    "logs_alive": 1,
+    "logs_created": 1,
+    "logs_destroyed": 0,
+    "peers": [
+      {
+        "active": true,
+        "id": 1,
+        "incoming_dlrr": 0,
+        "incoming_packets": 187,
+        "incoming_rrtr": 46,
+        "malformed": 0,
+        "outgoing_dlrr": 178,
+        "outgoing_packets": 318,
+        "outgoing_rrtr": 0,
+        "overwritten_observations": 160,
+        "receiver_reports": 234,
+        "sender_report_history": [
+          {
+            "incoming": false,
+            "ntp_fraction": 655003987,
+            "ntp_seconds": 4000598120,
+            "observed_us": 27387979798,
+            "rtp_timestamp": 3439851956,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 1884339591,
+            "ntp_seconds": 4000598120,
+            "observed_us": 27388266023,
+            "rtp_timestamp": 3439877696,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 2719457327,
+            "ntp_seconds": 4000598120,
+            "observed_us": 27388460482,
+            "rtp_timestamp": 3439895156,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 3613690993,
+            "ntp_seconds": 4000598120,
+            "observed_us": 27388668677,
+            "rtp_timestamp": 3439913966,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 1667211815,
+            "ntp_seconds": 4000598121,
+            "observed_us": 27389215482,
+            "rtp_timestamp": 3439963106,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 2548161147,
+            "ntp_seconds": 4000598121,
+            "observed_us": 27389420608,
+            "rtp_timestamp": 3439981646,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 3475882672,
+            "ntp_seconds": 4000598121,
+            "observed_us": 27389636588,
+            "rtp_timestamp": 3440001086,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 207094733,
+            "ntp_seconds": 4000598122,
+            "observed_us": 27389875521,
+            "rtp_timestamp": 3440022506,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 161153615,
+            "ntp_seconds": 4000598122,
+            "observed_us": 27389879904,
+            "rtp_timestamp": 3426747507,
+            "ssrc": 1581789501
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 167476881,
+            "ntp_seconds": 4000598122,
+            "observed_us": 27389879904,
+            "rtp_timestamp": 3320727253,
+            "ssrc": 2410421624
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 157684712,
+            "ntp_seconds": 4000598122,
+            "observed_us": 27389879904,
+            "rtp_timestamp": 2724289503,
+            "ssrc": 1846333841
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 142190081,
+            "ntp_seconds": 4000598122,
+            "observed_us": 27389879904,
+            "rtp_timestamp": 1153643605,
+            "ssrc": 1347547280
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 185991768,
+            "ntp_seconds": 4000598122,
+            "observed_us": 27389879904,
+            "rtp_timestamp": 1601808984,
+            "ssrc": 3720950064
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 89744239,
+            "ntp_seconds": 4000598122,
+            "observed_us": 27389879904,
+            "rtp_timestamp": 1375141826,
+            "ssrc": 2316357231
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 1043226081,
+            "ntp_seconds": 4000598122,
+            "observed_us": 27390070203,
+            "rtp_timestamp": 538155626,
+            "ssrc": 1308469066
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 1075133393,
+            "ntp_seconds": 4000598122,
+            "observed_us": 27390077622,
+            "rtp_timestamp": 3440040776,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 2036261174,
+            "ntp_seconds": 4000598122,
+            "observed_us": 27390301395,
+            "rtp_timestamp": 3440060846,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 2931650186,
+            "ntp_seconds": 4000598122,
+            "observed_us": 27390509880,
+            "rtp_timestamp": 3440079656,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 3867905812,
+            "ntp_seconds": 4000598122,
+            "observed_us": 27390727867,
+            "rtp_timestamp": 3440099276,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 517719652,
+            "ntp_seconds": 4000598123,
+            "observed_us": 27390947851,
+            "rtp_timestamp": 3440119076,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 1455615956,
+            "ntp_seconds": 4000598123,
+            "observed_us": 27391166211,
+            "rtp_timestamp": 3440138696,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 2383410496,
+            "ntp_seconds": 4000598123,
+            "observed_us": 27391382232,
+            "rtp_timestamp": 3440158136,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 3322148613,
+            "ntp_seconds": 4000598123,
+            "observed_us": 27391600805,
+            "rtp_timestamp": 3440177846,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 4222296449,
+            "ntp_seconds": 4000598123,
+            "observed_us": 27391810382,
+            "rtp_timestamp": 3440196656,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 1044574701,
+            "ntp_seconds": 4000598124,
+            "observed_us": 27392070518,
+            "rtp_timestamp": 3440220056,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 1873967245,
+            "ntp_seconds": 4000598124,
+            "observed_us": 27392263617,
+            "rtp_timestamp": 3440237516,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 2792488951,
+            "ntp_seconds": 4000598124,
+            "observed_us": 27392477481,
+            "rtp_timestamp": 3440256686,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 3653702908,
+            "ntp_seconds": 4000598124,
+            "observed_us": 27392677998,
+            "rtp_timestamp": 3440274776,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 191676337,
+            "ntp_seconds": 4000598125,
+            "observed_us": 27392909522,
+            "rtp_timestamp": 3427018135,
+            "ssrc": 1581789501
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 173976601,
+            "ntp_seconds": 4000598125,
+            "observed_us": 27392909522,
+            "rtp_timestamp": 3320871232,
+            "ssrc": 2410421624
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 192204975,
+            "ntp_seconds": 4000598125,
+            "observed_us": 27392909522,
+            "rtp_timestamp": 2724560203,
+            "ssrc": 1846333841
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 181894549,
+            "ntp_seconds": 4000598125,
+            "observed_us": 27392909522,
+            "rtp_timestamp": 1153788180,
+            "ssrc": 1347547280
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 175199232,
+            "ntp_seconds": 4000598125,
+            "observed_us": 27392909522,
+            "rtp_timestamp": 1602078781,
+            "ssrc": 3720950064
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 193511186,
+            "ntp_seconds": 4000598125,
+            "observed_us": 27392909522,
+            "rtp_timestamp": 1375287130,
+            "ssrc": 2316357231
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 353252470,
+            "ntp_seconds": 4000598125,
+            "observed_us": 27392909545,
+            "rtp_timestamp": 3440295656,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 1218920308,
+            "ntp_seconds": 4000598125,
+            "observed_us": 27393111100,
+            "rtp_timestamp": 3440313746,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 2143158615,
+            "ntp_seconds": 4000598125,
+            "observed_us": 27393326294,
+            "rtp_timestamp": 3440333096,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 4230465477,
+            "ntp_seconds": 4000598125,
+            "observed_us": 27393812286,
+            "rtp_timestamp": 3440376836,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 1870806149,
+            "ntp_seconds": 4000598126,
+            "observed_us": 27394262884,
+            "rtp_timestamp": 3440417426,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 3213945502,
+            "ntp_seconds": 4000598126,
+            "observed_us": 27394575605,
+            "rtp_timestamp": 3440445596,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 3433955202,
+            "ntp_seconds": 4000598126,
+            "observed_us": 27394631434,
+            "rtp_timestamp": 538314362,
+            "ssrc": 1308469066
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 4098996528,
+            "ntp_seconds": 4000598126,
+            "observed_us": 27394781677,
+            "rtp_timestamp": 3440464136,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 3147059976,
+            "ntp_seconds": 4000598127,
+            "observed_us": 27395560035,
+            "rtp_timestamp": 3440534156,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 3410139608,
+            "ntp_seconds": 4000598127,
+            "observed_us": 27395621284,
+            "rtp_timestamp": 3440539646,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 664650484,
+            "ntp_seconds": 4000598128,
+            "observed_us": 27395982043,
+            "rtp_timestamp": 3440572136,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 630311503,
+            "ntp_seconds": 4000598128,
+            "observed_us": 27395998447,
+            "rtp_timestamp": 1153937191,
+            "ssrc": 1347547280
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 453258099,
+            "ntp_seconds": 4000598128,
+            "observed_us": 27395998447,
+            "rtp_timestamp": 1602354571,
+            "ssrc": 3720950064
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 641936730,
+            "ntp_seconds": 4000598128,
+            "observed_us": 27395998447,
+            "rtp_timestamp": 1375436142,
+            "ssrc": 2316357231
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 207284249,
+            "ntp_seconds": 4000598128,
+            "observed_us": 27395998447,
+            "rtp_timestamp": 3427288514,
+            "ssrc": 1581789501
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 622674158,
+            "ntp_seconds": 4000598128,
+            "observed_us": 27395998447,
+            "rtp_timestamp": 3321020246,
+            "ssrc": 2410421624
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 282209416,
+            "ntp_seconds": 4000598128,
+            "observed_us": 27395998447,
+            "rtp_timestamp": 2724832163,
+            "ssrc": 1846333841
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 1705802096,
+            "ntp_seconds": 4000598128,
+            "observed_us": 27396224507,
+            "rtp_timestamp": 3440593916,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 3398422937,
+            "ntp_seconds": 4000598128,
+            "observed_us": 27396628670,
+            "rtp_timestamp": 3440629466,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 134788958,
+            "ntp_seconds": 4000598129,
+            "observed_us": 27396858687,
+            "rtp_timestamp": 3440651066,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 2247238558,
+            "ntp_seconds": 4000598129,
+            "observed_us": 27397350519,
+            "rtp_timestamp": 3440695346,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 401042571,
+            "ntp_seconds": 4000598130,
+            "observed_us": 27397922222,
+            "rtp_timestamp": 3440746646,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 802411560,
+            "ntp_seconds": 4000598131,
+            "observed_us": 27399014317,
+            "rtp_timestamp": 3440845016,
+            "ssrc": 3921533772
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 559036164,
+            "ntp_seconds": 4000598131,
+            "observed_us": 27399014427,
+            "rtp_timestamp": 1154080377,
+            "ssrc": 1347547280
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 4048046405,
+            "ntp_seconds": 4000598130,
+            "observed_us": 27399014427,
+            "rtp_timestamp": 1602609886,
+            "ssrc": 3720950064
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 498509338,
+            "ntp_seconds": 4000598131,
+            "observed_us": 27399014427,
+            "rtp_timestamp": 1375578532,
+            "ssrc": 2316357231
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 535162765,
+            "ntp_seconds": 4000598131,
+            "observed_us": 27399014427,
+            "rtp_timestamp": 3427565387,
+            "ssrc": 1581789501
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 520505476,
+            "ntp_seconds": 4000598131,
+            "observed_us": 27399014427,
+            "rtp_timestamp": 3321163108,
+            "ssrc": 2410421624
+          },
+          {
+            "incoming": true,
+            "ntp_fraction": 601550255,
+            "ntp_seconds": 4000598131,
+            "observed_us": 27399014427,
+            "rtp_timestamp": 2725108784,
+            "ssrc": 1846333841
+          },
+          {
+            "incoming": false,
+            "ntp_fraction": 2524921079,
+            "ntp_seconds": 4000598132,
+            "observed_us": 27400415174,
+            "rtp_timestamp": 3440971106,
+            "ssrc": 3921533772
+          }
+        ],
+        "sender_report_history_overwritten": 174,
+        "sender_reports": 238,
+        "xr": [
+          {
+            "block": 5,
+            "delay": 588,
+            "incoming": false,
+            "last_rr": 1214845360,
+            "observed_us": 27389113331,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 6717,
+            "incoming": false,
+            "last_rr": 1214845360,
+            "observed_us": 27389215482,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 11231,
+            "incoming": false,
+            "last_rr": 1214845360,
+            "observed_us": 27389275786,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 35520,
+            "incoming": false,
+            "last_rr": 1214845360,
+            "observed_us": 27389646359,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1214908493,
+            "observed_us": 27389866160,
+            "sender_ssrc": 1308469066,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 613,
+            "incoming": false,
+            "last_rr": 1214908493,
+            "observed_us": 27389875521,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 7208,
+            "incoming": false,
+            "last_rr": 1214908493,
+            "observed_us": 27389972248,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 13372,
+            "incoming": false,
+            "last_rr": 1214908493,
+            "observed_us": 27390070203,
+            "sender_ssrc": 1308469066,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 29616,
+            "incoming": false,
+            "last_rr": 1214908493,
+            "observed_us": 27390314202,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 61893,
+            "incoming": false,
+            "last_rr": 1214908493,
+            "observed_us": 27390806676,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1214973694,
+            "observed_us": 27390888772,
+            "sender_ssrc": 1308469066,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 2243,
+            "incoming": false,
+            "last_rr": 1214973694,
+            "observed_us": 27390889438,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 46,
+            "incoming": false,
+            "last_rr": 1214973694,
+            "observed_us": 27390889446,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 3871,
+            "incoming": false,
+            "last_rr": 1214973694,
+            "observed_us": 27390947851,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 23277,
+            "incoming": false,
+            "last_rr": 1214973694,
+            "observed_us": 27391210382,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 40391,
+            "incoming": false,
+            "last_rr": 1214973694,
+            "observed_us": 27391471520,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 60560,
+            "incoming": false,
+            "last_rr": 1214973694,
+            "observed_us": 27391779258,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1215039174,
+            "observed_us": 27391854290,
+            "sender_ssrc": 1308469066,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 4627,
+            "incoming": false,
+            "last_rr": 1215039174,
+            "observed_us": 27391924943,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 14170,
+            "incoming": false,
+            "last_rr": 1215039174,
+            "observed_us": 27392070518,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 37593,
+            "incoming": false,
+            "last_rr": 1215039174,
+            "observed_us": 27392427893,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 45924,
+            "incoming": false,
+            "last_rr": 1215039174,
+            "observed_us": 27392555066,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1215104837,
+            "observed_us": 27392857243,
+            "sender_ssrc": 1308469066,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 2701,
+            "incoming": false,
+            "last_rr": 1215104837,
+            "observed_us": 27392898424,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 3428,
+            "incoming": false,
+            "last_rr": 1215104837,
+            "observed_us": 27392909545,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 6857,
+            "incoming": false,
+            "last_rr": 1215104837,
+            "observed_us": 27392962022,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 14191,
+            "incoming": false,
+            "last_rr": 1215104837,
+            "observed_us": 27393073764,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 60950,
+            "incoming": false,
+            "last_rr": 1215104837,
+            "observed_us": 27393787277,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1215170388,
+            "observed_us": 27393878088,
+            "sender_ssrc": 1308469066,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 25217,
+            "incoming": false,
+            "last_rr": 1215170388,
+            "observed_us": 27394262884,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 26553,
+            "incoming": false,
+            "last_rr": 1215170388,
+            "observed_us": 27394283242,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 43599,
+            "incoming": false,
+            "last_rr": 1215170388,
+            "observed_us": 27394543349,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 49068,
+            "incoming": false,
+            "last_rr": 1215170388,
+            "observed_us": 27394631434,
+            "sender_ssrc": 1308469066,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 65385,
+            "incoming": false,
+            "last_rr": 1215170388,
+            "observed_us": 27394875782,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1215235783,
+            "observed_us": 27394940985,
+            "sender_ssrc": 1308469066,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 19931,
+            "incoming": false,
+            "last_rr": 1215235783,
+            "observed_us": 27395245104,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 40569,
+            "incoming": false,
+            "last_rr": 1215235783,
+            "observed_us": 27395560035,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 44590,
+            "incoming": false,
+            "last_rr": 1215235783,
+            "observed_us": 27395621364,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 51462,
+            "incoming": false,
+            "last_rr": 1215235783,
+            "observed_us": 27395726230,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1215309701,
+            "observed_us": 27396010358,
+            "sender_ssrc": 1308469066,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 14031,
+            "incoming": false,
+            "last_rr": 1215309701,
+            "observed_us": 27396224507,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 14335,
+            "incoming": false,
+            "last_rr": 1215309701,
+            "observed_us": 27396229361,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 54641,
+            "incoming": false,
+            "last_rr": 1215309701,
+            "observed_us": 27396844454,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1215366992,
+            "observed_us": 27396864940,
+            "sender_ssrc": 1308469066,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 31637,
+            "incoming": false,
+            "last_rr": 1215366992,
+            "observed_us": 27397347671,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 31823,
+            "incoming": false,
+            "last_rr": 1215366992,
+            "observed_us": 27397350519,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 42798,
+            "incoming": false,
+            "last_rr": 1215366992,
+            "observed_us": 27397517989,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 59868,
+            "incoming": false,
+            "last_rr": 1215366992,
+            "observed_us": 27397778940,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1215438332,
+            "observed_us": 27398089733,
+            "sender_ssrc": 1308469066,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 15050,
+            "incoming": false,
+            "last_rr": 1215438332,
+            "observed_us": 27398410523,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 29512,
+            "incoming": false,
+            "last_rr": 1215438332,
+            "observed_us": 27398539976,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 29521,
+            "incoming": false,
+            "last_rr": 1215438332,
+            "observed_us": 27398540184,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 60586,
+            "incoming": false,
+            "last_rr": 1215438332,
+            "observed_us": 27399014317,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1215504529,
+            "observed_us": 27399014363,
+            "sender_ssrc": 1308469066,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 3161,
+            "incoming": false,
+            "last_rr": 1215504529,
+            "observed_us": 27399062693,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 3790,
+            "incoming": false,
+            "last_rr": 1215504529,
+            "observed_us": 27399072377,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 15695,
+            "incoming": false,
+            "last_rr": 1215504529,
+            "observed_us": 27399253829,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 59888,
+            "incoming": false,
+            "last_rr": 1215504529,
+            "observed_us": 27399928174,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1215566512,
+            "observed_us": 27400409081,
+            "sender_ssrc": 1308469066,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 6,
+            "incoming": false,
+            "last_rr": 1215566512,
+            "observed_us": 27400409161,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 399,
+            "incoming": false,
+            "last_rr": 1215566512,
+            "observed_us": 27400415174,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 2873,
+            "incoming": false,
+            "last_rr": 1215566512,
+            "observed_us": 27400452920,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 16070,
+            "incoming": false,
+            "last_rr": 1215566512,
+            "observed_us": 27400654289,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          },
+          {
+            "block": 5,
+            "delay": 18073,
+            "incoming": false,
+            "last_rr": 1215566512,
+            "observed_us": 27400684846,
+            "sender_ssrc": 3921533772,
+            "target_ssrc": 1308469066
+          }
+        ]
+      }
+    ],
+    "raw_packets_retained": false,
+    "registry_expired": false,
+    "scope": "factory event-log instances; one instance may cover multiple peer connections; factory lifetime extends beyond room close"
+  },
+  "schema_version": 1,
+  "sender_report_origin_maps": [
+    {
+      "audio_source_generation": 3,
+      "clock_domain": "remote sender-report NTP; no sender-to-local clock offset established",
+      "fixture_clock_rate": 48000,
+      "identity": "guest-3",
+      "kind": "audio",
+      "last_decoded_audio_origin_ntp_us": 4000598131437514,
+      "obs_connected": false,
+      "observations_only": true,
+      "rejected_reports": 0,
+      "resets": 0,
+      "sid": "TR_AMD4KJyjWUZxPR",
+      "ssrc": 2410421624,
+      "two_report_map_available": true
+    },
+    {
+      "audio_source_generation": null,
+      "clock_domain": "remote sender-report NTP; no sender-to-local clock offset established",
+      "fixture_clock_rate": 90000,
+      "identity": "guest-3",
+      "kind": "video",
+      "last_decoded_audio_origin_ntp_us": null,
+      "obs_connected": false,
+      "observations_only": true,
+      "rejected_reports": 0,
+      "resets": 0,
+      "sid": "TR_VCrT8YkhaabDPY",
+      "ssrc": 1581789501,
+      "two_report_map_available": true
+    },
+    {
+      "audio_source_generation": null,
+      "clock_domain": "remote sender-report NTP; no sender-to-local clock offset established",
+      "fixture_clock_rate": 90000,
+      "identity": "guest-1",
+      "kind": "video",
+      "last_decoded_audio_origin_ntp_us": null,
+      "obs_connected": false,
+      "observations_only": true,
+      "rejected_reports": 0,
+      "resets": 0,
+      "sid": "TR_VCBeTuzbNiqkk2",
+      "ssrc": 1846333841,
+      "two_report_map_available": true
+    },
+    {
+      "audio_source_generation": 6,
+      "clock_domain": "remote sender-report NTP; no sender-to-local clock offset established",
+      "fixture_clock_rate": 48000,
+      "identity": "guest-1",
+      "kind": "audio",
+      "last_decoded_audio_origin_ntp_us": 4000598131935550,
+      "obs_connected": false,
+      "observations_only": true,
+      "rejected_reports": 0,
+      "resets": 0,
+      "sid": "TR_AMkdj9ykDRwd8X",
+      "ssrc": 1347547280,
+      "two_report_map_available": true
+    },
+    {
+      "audio_source_generation": null,
+      "clock_domain": "remote sender-report NTP; no sender-to-local clock offset established",
+      "fixture_clock_rate": 90000,
+      "identity": "guest-2",
+      "kind": "video",
+      "last_decoded_audio_origin_ntp_us": null,
+      "obs_connected": false,
+      "observations_only": true,
+      "rejected_reports": 0,
+      "resets": 0,
+      "sid": "TR_VCpfr5QP5qZ6tS",
+      "ssrc": 3720950064,
+      "two_report_map_available": true
+    },
+    {
+      "audio_source_generation": 2,
+      "clock_domain": "remote sender-report NTP; no sender-to-local clock offset established",
+      "fixture_clock_rate": 48000,
+      "identity": "guest-2",
+      "kind": "audio",
+      "last_decoded_audio_origin_ntp_us": 4000598131604842,
+      "obs_connected": false,
+      "observations_only": true,
+      "rejected_reports": 0,
+      "resets": 0,
+      "sid": "TR_AMvkTA5eWWpyxR",
+      "ssrc": 2316357231,
+      "two_report_map_available": true
+    }
+  ],
+  "signaling_url": "ws://127.0.0.1:7885",
+  "stall_period_seconds": 5,
+  "sync_streams_requested": true,
+  "timed_mixer_probe": {
+    "capacity_exceeded": 0,
+    "contention_dropped": 0,
+    "observations_only": true,
+    "registry_expired": false,
+    "sources": [
+      {
+        "active": false,
+        "channels": 2,
+        "elapsed_ms": 9929,
+        "frames": 1067,
+        "generation": 1,
+        "ntp_ms": -1,
+        "ntp_valid_frames": 0,
+        "packet_info_frames": 498,
+        "pull_us": 27368649418,
+        "rtp_timestamp": 4062400567,
+        "sample_rate": 48000,
+        "samples_per_channel": 480,
+        "speech_type": 0,
+        "ssrc": 207784734
+      },
+      {
+        "active": false,
+        "channels": 2,
+        "elapsed_ms": 40238,
+        "frames": 4162,
+        "generation": 2,
+        "ntp_ms": -1,
+        "ntp_valid_frames": 0,
+        "packet_info_frames": 1977,
+        "pull_us": 27400821411,
+        "rtp_timestamp": 1375601992,
+        "sample_rate": 48000,
+        "samples_per_channel": 480,
+        "speech_type": 3,
+        "ssrc": 2316357231
+      },
+      {
+        "active": false,
+        "channels": 2,
+        "elapsed_ms": 36819,
+        "frames": 3838,
+        "generation": 3,
+        "ntp_ms": -1,
+        "ntp_valid_frames": 0,
+        "packet_info_frames": 1819,
+        "pull_us": 27400821450,
+        "rtp_timestamp": 3321178292,
+        "sample_rate": 48000,
+        "samples_per_channel": 480,
+        "speech_type": 0,
+        "ssrc": 2410421624
+      },
+      {
+        "active": false,
+        "channels": 2,
+        "elapsed_ms": 6004,
+        "frames": 606,
+        "generation": 4,
+        "ntp_ms": -1,
+        "ntp_valid_frames": 0,
+        "packet_info_frames": 298,
+        "pull_us": 27376449456,
+        "rtp_timestamp": 594521089,
+        "sample_rate": 48000,
+        "samples_per_channel": 480,
+        "speech_type": 1,
+        "ssrc": 4257404990
+      },
+      {
+        "active": false,
+        "channels": 2,
+        "elapsed_ms": 6654,
+        "frames": 683,
+        "generation": 5,
+        "ntp_ms": -1,
+        "ntp_valid_frames": 0,
+        "packet_info_frames": 304,
+        "pull_us": 27384699374,
+        "rtp_timestamp": 2385886719,
+        "sample_rate": 48000,
+        "samples_per_channel": 480,
+        "speech_type": 3,
+        "ssrc": 957671353
+      },
+      {
+        "active": false,
+        "channels": 2,
+        "elapsed_ms": 11415,
+        "frames": 1247,
+        "generation": 6,
+        "ntp_ms": -1,
+        "ntp_valid_frames": 0,
+        "packet_info_frames": 561,
+        "pull_us": 27400821486,
+        "rtp_timestamp": 1154119031,
+        "sample_rate": 48000,
+        "samples_per_channel": 480,
+        "speech_type": 0,
+        "ssrc": 1347547280
+      }
+    ],
+    "sources_alive": 0,
+    "sources_created": 6,
+    "sources_destroyed": 6
+  },
+  "topology": "local browser guests to native host through loopback SFU"
+}

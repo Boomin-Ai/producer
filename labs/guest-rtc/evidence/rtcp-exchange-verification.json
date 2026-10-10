@@ -1,0 +1,266 @@
+{
+  "runs": [
+    {
+      "run": "transport-rtcp-baseline",
+      "evidence_sha256": "d853ac050d62f280e606733db98b99978f991c5a1910e6a545b743a5b4bb7ee5",
+      "outgoing_rrtr": 0,
+      "incoming_dlrr": 0,
+      "control_packets_unimpaired": true,
+      "observed_request_reporter_differs_from_downtrack_ssrcs": false,
+      "request_ring_overwrites": 8,
+      "retained_factory_log_instances": 1
+    },
+    {
+      "run": "transport-rtcp-rrtr",
+      "evidence_sha256": "938787ea3447bb0f8fa39ae3db6c999fb6ac7398c2f171c338cfe74e8b408967",
+      "outgoing_rrtr": 6,
+      "incoming_dlrr": 0,
+      "control_packets_unimpaired": true,
+      "observed_request_reporter_differs_from_downtrack_ssrcs": true,
+      "request_ring_overwrites": 35,
+      "retained_factory_log_instances": 1
+    },
+    {
+      "run": "transport-rtcp-sender-maps",
+      "evidence_sha256": "10b3ca53c21bc5aa808a69ecdc76fd2d7effa923227c93681bc2415b76a967aa",
+      "outgoing_rrtr": 19,
+      "incoming_dlrr": 0,
+      "control_packets_unimpaired": true,
+      "observed_request_reporter_differs_from_downtrack_ssrcs": true,
+      "request_ring_overwrites": 148,
+      "retained_factory_log_instances": 1,
+      "sender_report_maps": [
+        {
+          "identity": "guest-1",
+          "kind": "video",
+          "sid": "TR_VC792KPeetncvA",
+          "ssrc": 1955442471,
+          "received_reports_retained": 3,
+          "report_interval_seconds": 3.000092249829322,
+          "inferred_rtp_clock_hz": 89992.23274396302,
+          "expected_fixture_clock_hz": 90000
+        },
+        {
+          "identity": "guest-1",
+          "kind": "audio",
+          "sid": "TR_AMRymQrcDdSM2o",
+          "ssrc": 487668915,
+          "received_reports_retained": 2,
+          "report_interval_seconds": 2.9982989591080695,
+          "inferred_rtp_clock_hz": 47949.52136553042,
+          "expected_fixture_clock_hz": 48000
+        },
+        {
+          "identity": "guest-3",
+          "kind": "audio",
+          "sid": "TR_AML5KZsPVAqKyt",
+          "ssrc": 4210332561,
+          "received_reports_retained": 3,
+          "report_interval_seconds": 2.999304249882698,
+          "inferred_rtp_clock_hz": 48047.14293511104,
+          "expected_fixture_clock_hz": 48000
+        },
+        {
+          "identity": "guest-3",
+          "kind": "video",
+          "sid": "TR_VCaUKLCVvfcSLt",
+          "ssrc": 3182325704,
+          "received_reports_retained": 3,
+          "report_interval_seconds": 3.0000299580860883,
+          "inferred_rtp_clock_hz": 90000.43458641089,
+          "expected_fixture_clock_hz": 90000
+        },
+        {
+          "identity": "guest-2",
+          "kind": "audio",
+          "sid": "TR_AM4ABJEcwhPRcx",
+          "ssrc": 1891855576,
+          "received_reports_retained": 3,
+          "report_interval_seconds": 3.000224875053391,
+          "inferred_rtp_clock_hz": 47999.73535231663,
+          "expected_fixture_clock_hz": 48000
+        },
+        {
+          "identity": "guest-2",
+          "kind": "video",
+          "sid": "TR_VCU4QZk8GLHhPA",
+          "ssrc": 4263388285,
+          "received_reports_retained": 3,
+          "report_interval_seconds": 3.000240624882281,
+          "inferred_rtp_clock_hz": 89997.4481248798,
+          "expected_fixture_clock_hz": 90000
+        }
+      ]
+    },
+    {
+      "run": "transport-sender-clock-rejoin",
+      "evidence_sha256": "6411869c5567299ca13b6d125f0fd1b0cb173264eb1eb267bf1a4a8c459342d8",
+      "outgoing_rrtr": 0,
+      "incoming_dlrr": 0,
+      "control_packets_unimpaired": true,
+      "observed_request_reporter_differs_from_downtrack_ssrcs": false,
+      "request_ring_overwrites": 160,
+      "retained_factory_log_instances": 1,
+      "sender_report_maps": [
+        {
+          "identity": "guest-3",
+          "kind": "audio",
+          "sid": "TR_AMD4KJyjWUZxPR",
+          "ssrc": 2410421624,
+          "received_reports_retained": 4,
+          "report_interval_seconds": 2.9762120000086725,
+          "inferred_rtp_clock_hz": 48001.28485456806,
+          "expected_fixture_clock_hz": 48000
+        },
+        {
+          "identity": "guest-3",
+          "kind": "video",
+          "sid": "TR_VCrT8YkhaabDPY",
+          "ssrc": 1581789501,
+          "received_reports_retained": 4,
+          "report_interval_seconds": 3.0763401659205556,
+          "inferred_rtp_clock_hz": 90000.77529370009,
+          "expected_fixture_clock_hz": 90000
+        },
+        {
+          "identity": "guest-1",
+          "kind": "video",
+          "sid": "TR_VCBeTuzbNiqkk2",
+          "ssrc": 1846333841,
+          "received_reports_retained": 4,
+          "report_interval_seconds": 3.0743523330893368,
+          "inferred_rtp_clock_hz": 89977.00004086088,
+          "expected_fixture_clock_hz": 90000
+        },
+        {
+          "identity": "guest-1",
+          "kind": "audio",
+          "sid": "TR_AMkdj9ykDRwd8X",
+          "ssrc": 1347547280,
+          "received_reports_retained": 4,
+          "report_interval_seconds": 2.9834049169439822,
+          "inferred_rtp_clock_hz": 47994.155666496314,
+          "expected_fixture_clock_hz": 48000
+        },
+        {
+          "identity": "guest-2",
+          "kind": "video",
+          "sid": "TR_VCpfr5QP5qZ6tS",
+          "ssrc": 3720950064,
+          "received_reports_retained": 4,
+          "report_interval_seconds": 2.8369768750853837,
+          "inferred_rtp_clock_hz": 89995.44629432901,
+          "expected_fixture_clock_hz": 90000
+        },
+        {
+          "identity": "guest-2",
+          "kind": "audio",
+          "sid": "TR_AMvkTA5eWWpyxR",
+          "ssrc": 2316357231,
+          "received_reports_retained": 4,
+          "report_interval_seconds": 2.966605708003044,
+          "inferred_rtp_clock_hz": 47997.61546196482,
+          "expected_fixture_clock_hz": 48000
+        }
+      ],
+      "end_of_run_sender_origin_maps": [
+        {
+          "audio_source_generation": 3,
+          "clock_domain": "remote sender-report NTP; no sender-to-local clock offset established",
+          "fixture_clock_rate": 48000,
+          "identity": "guest-3",
+          "kind": "audio",
+          "last_decoded_audio_origin_ntp_us": 4000598131437514,
+          "obs_connected": false,
+          "observations_only": true,
+          "rejected_reports": 0,
+          "resets": 0,
+          "sid": "TR_AMD4KJyjWUZxPR",
+          "ssrc": 2410421624,
+          "two_report_map_available": true
+        },
+        {
+          "audio_source_generation": null,
+          "clock_domain": "remote sender-report NTP; no sender-to-local clock offset established",
+          "fixture_clock_rate": 90000,
+          "identity": "guest-3",
+          "kind": "video",
+          "last_decoded_audio_origin_ntp_us": null,
+          "obs_connected": false,
+          "observations_only": true,
+          "rejected_reports": 0,
+          "resets": 0,
+          "sid": "TR_VCrT8YkhaabDPY",
+          "ssrc": 1581789501,
+          "two_report_map_available": true
+        },
+        {
+          "audio_source_generation": null,
+          "clock_domain": "remote sender-report NTP; no sender-to-local clock offset established",
+          "fixture_clock_rate": 90000,
+          "identity": "guest-1",
+          "kind": "video",
+          "last_decoded_audio_origin_ntp_us": null,
+          "obs_connected": false,
+          "observations_only": true,
+          "rejected_reports": 0,
+          "resets": 0,
+          "sid": "TR_VCBeTuzbNiqkk2",
+          "ssrc": 1846333841,
+          "two_report_map_available": true
+        },
+        {
+          "audio_source_generation": 6,
+          "clock_domain": "remote sender-report NTP; no sender-to-local clock offset established",
+          "fixture_clock_rate": 48000,
+          "identity": "guest-1",
+          "kind": "audio",
+          "last_decoded_audio_origin_ntp_us": 4000598131935550,
+          "obs_connected": false,
+          "observations_only": true,
+          "rejected_reports": 0,
+          "resets": 0,
+          "sid": "TR_AMkdj9ykDRwd8X",
+          "ssrc": 1347547280,
+          "two_report_map_available": true
+        },
+        {
+          "audio_source_generation": null,
+          "clock_domain": "remote sender-report NTP; no sender-to-local clock offset established",
+          "fixture_clock_rate": 90000,
+          "identity": "guest-2",
+          "kind": "video",
+          "last_decoded_audio_origin_ntp_us": null,
+          "obs_connected": false,
+          "observations_only": true,
+          "rejected_reports": 0,
+          "resets": 0,
+          "sid": "TR_VCpfr5QP5qZ6tS",
+          "ssrc": 3720950064,
+          "two_report_map_available": true
+        },
+        {
+          "audio_source_generation": 2,
+          "clock_domain": "remote sender-report NTP; no sender-to-local clock offset established",
+          "fixture_clock_rate": 48000,
+          "identity": "guest-2",
+          "kind": "audio",
+          "last_decoded_audio_origin_ntp_us": 4000598131604842,
+          "obs_connected": false,
+          "observations_only": true,
+          "rejected_reports": 0,
+          "resets": 0,
+          "sid": "TR_AMvkTA5eWWpyxR",
+          "ssrc": 2316357231,
+          "two_report_map_available": true
+        }
+      ]
+    }
+  ],
+  "rtcp_exchange_failure_observed": true,
+  "sfu_ssrc_routing_cause": "source-supported hypothesis; patched SFU not executed",
+  "sender_report_pairs_available_for_common_map_experiment": true,
+  "obs_presentation_adapter_changed": false,
+  "common_clock_qualified": false,
+  "g1_complete": false
+}

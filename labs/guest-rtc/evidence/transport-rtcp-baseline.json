@@ -1,0 +1,814 @@
+{
+  "audio_ingest_generation_reports": [],
+  "audio_ingest_session_totals": {
+    "callback_contention_dropped": 0,
+    "clock_resets": 0,
+    "consumed": 0,
+    "overflow_oldest_dropped": 0,
+    "pending_frames": 0,
+    "received": 0,
+    "stale_dropped": 0
+  },
+  "audio_worker_lifecycle": {
+    "alive_after_retirement": 0,
+    "peak_alive": 0,
+    "scope": "application OBS audio ingest workers only"
+  },
+  "callback_timestamps_are_capture_timestamps": false,
+  "consumer_stall_ms": 0,
+  "duration_seconds": 25,
+  "g1_complete": false,
+  "lifecycle": [
+    {
+      "at_ms": 7154,
+      "event": "subscribed",
+      "identity": "guest-1",
+      "sid": "TR_VCCZHFfXZmRrMt"
+    },
+    {
+      "at_ms": 7310,
+      "event": "subscribed",
+      "identity": "guest-1",
+      "sid": "TR_AMSVr4EBSuPePi"
+    }
+  ],
+  "livekit": "0.9.4",
+  "local_playout_clock_requested": false,
+  "native_publish_audio_internal_queue_ms": 0,
+  "obs_recorded_av_qualified": false,
+  "obs_recording": null,
+  "participants": [
+    {
+      "audio_bad_format": 0,
+      "audio_blocks": 1758,
+      "audio_blocks_with_capture_timestamp": 0,
+      "audio_callback_to_consumer_p95_ms": 10.887417,
+      "audio_pulses_ms": [
+        8251.865583,
+        10231.530166,
+        12201.191416,
+        14201.287416,
+        16232.297875,
+        18231.763916,
+        20231.404375000002,
+        22231.319375,
+        24231.813916
+      ],
+      "audio_queue": {
+        "callback_contention_dropped": 3,
+        "capacity_frames": 3,
+        "consumed": 1758,
+        "max_age_ms": 30,
+        "overflow_oldest_dropped": 6,
+        "pending_frames": 3,
+        "received": 1771,
+        "stale_dropped": 1
+      },
+      "audio_resampled_blocks": 1756,
+      "audio_sample_discontinuities": 6,
+      "callback_av_abs_p95_ms": 86.39962500000001,
+      "capture_timestamp_clock_domain": "WebRTC TimeMillis (unmapped to OBS)",
+      "capture_timestamp_regressions": 0,
+      "capture_timestamp_step_p95_ms": null,
+      "identity": "guest-1",
+      "original_audio_capture_timestamp_available": false,
+      "paired_callback_video_minus_audio_ms": [
+        -86.39962500000001,
+        -4.030040999999983,
+        -9.325041000000056,
+        -25.916582999998354,
+        -47.24841699999888,
+        -65.75179099999878,
+        -28.323625000000902,
+        -30.100124999997206,
+        -30.258582999998907
+      ],
+      "retired_queues": [],
+      "video_callback_to_consumer_p95_ms": 10.01075,
+      "video_deadline_minus_arrival_p95_ms": 10.324708,
+      "video_frames": 491,
+      "video_frames_with_ntp_metadata": 0,
+      "video_local_deadline_invalid": 0,
+      "video_local_deadline_valid": 491,
+      "video_pulses_ms": [
+        8165.465958000001,
+        10227.500125,
+        12191.866375,
+        14175.370833,
+        16185.049458000001,
+        18166.012125,
+        20203.08075,
+        22201.219250000002,
+        24201.555333
+      ],
+      "video_queue": {
+        "callback_contention_dropped": 0,
+        "capacity_frames": 2,
+        "consumed": 491,
+        "max_age_ms": 50,
+        "overflow_oldest_dropped": 0,
+        "pending_frames": 1,
+        "received": 492,
+        "stale_dropped": 0
+      }
+    }
+  ],
+  "physical_speaker_reference_connected": false,
+  "publisher_error": null,
+  "receiver_stats": [
+    {
+      "concealed_samples": 5520,
+      "estimated_playout_presence_preserved": false,
+      "estimated_playout_timestamp_ms": 4000597113239.0,
+      "frames_dropped": 0,
+      "identity": "guest-1",
+      "inserted_samples_for_deceleration": 600,
+      "jitter_buffer_delay_seconds": 56582.4,
+      "jitter_buffer_emitted_count": 845760,
+      "jitter_seconds": 0.002,
+      "kind": "audio",
+      "packets_lost": 0,
+      "packets_received": 884,
+      "removed_samples_for_acceleration": 2748,
+      "sid": "TR_AMSVr4EBSuPePi",
+      "ssrc": 4257786172
+    },
+    {
+      "concealed_samples": 0,
+      "estimated_playout_presence_preserved": false,
+      "estimated_playout_timestamp_ms": 4000597113267.0,
+      "frames_dropped": 0,
+      "identity": "guest-1",
+      "inserted_samples_for_deceleration": 0,
+      "jitter_buffer_delay_seconds": 9.382355,
+      "jitter_buffer_emitted_count": 492,
+      "jitter_seconds": 0.0,
+      "kind": "video",
+      "packets_lost": 0,
+      "packets_received": 493,
+      "removed_samples_for_acceleration": 0,
+      "sid": "TR_VCCZHFfXZmRrMt",
+      "ssrc": 1796160273
+    }
+  ],
+  "remote_sender_reports": [
+    {
+      "identity": "guest-1",
+      "kind": "audio",
+      "optional_field_presence_preserved": false,
+      "remote_timestamp": 1791608312319.57,
+      "reports_sent": 5,
+      "round_trip_time": 0.0,
+      "round_trip_time_measurements": 0,
+      "sid": "TR_AMSVr4EBSuPePi",
+      "ssrc": 4257786172
+    },
+    {
+      "identity": "guest-1",
+      "kind": "video",
+      "optional_field_presence_preserved": false,
+      "remote_timestamp": 1791608312319.894,
+      "reports_sent": 6,
+      "round_trip_time": 0.0,
+      "round_trip_time_measurements": 0,
+      "sid": "TR_VCCZHFfXZmRrMt",
+      "ssrc": 1796160273
+    }
+  ],
+  "rrtr_lab_experiment_requested": false,
+  "rtcp_exchange_probe": {
+    "capacity_exceeded": 0,
+    "contention_dropped": 0,
+    "logs_alive": 1,
+    "logs_created": 1,
+    "logs_destroyed": 0,
+    "peers": [
+      {
+        "active": true,
+        "id": 1,
+        "incoming_dlrr": 0,
+        "incoming_packets": 99,
+        "incoming_rrtr": 25,
+        "malformed": 0,
+        "outgoing_dlrr": 47,
+        "outgoing_packets": 63,
+        "outgoing_rrtr": 0,
+        "overwritten_observations": 8,
+        "receiver_reports": 68,
+        "sender_reports": 54,
+        "xr": [
+          {
+            "block": 5,
+            "delay": 25750,
+            "incoming": false,
+            "last_rr": 1147425836,
+            "observed_us": 26360553956,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1147491381,
+            "observed_us": 26361161988,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 55800,
+            "incoming": false,
+            "last_rr": 1147491381,
+            "observed_us": 26362013457,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1147556811,
+            "observed_us": 26362162892,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 39194,
+            "incoming": false,
+            "last_rr": 1147556811,
+            "observed_us": 26362760963,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 44746,
+            "incoming": false,
+            "last_rr": 1147556811,
+            "observed_us": 26362845680,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1147622877,
+            "observed_us": 26363174096,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 60185,
+            "incoming": false,
+            "last_rr": 1147622877,
+            "observed_us": 26364092453,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1147687808,
+            "observed_us": 26364157422,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 48709,
+            "incoming": false,
+            "last_rr": 1147687808,
+            "observed_us": 26364900633,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1147753408,
+            "observed_us": 26365162962,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 5038,
+            "incoming": false,
+            "last_rr": 1147753408,
+            "observed_us": 26365239863,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 52151,
+            "incoming": false,
+            "last_rr": 1147753408,
+            "observed_us": 26365958727,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 63184,
+            "incoming": false,
+            "last_rr": 1147753408,
+            "observed_us": 26366127054,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1147818874,
+            "observed_us": 26366157369,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 41748,
+            "incoming": false,
+            "last_rr": 1147818874,
+            "observed_us": 26366794397,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 42714,
+            "incoming": false,
+            "last_rr": 1147818874,
+            "observed_us": 26366809132,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1147884410,
+            "observed_us": 26367157058,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 20330,
+            "incoming": false,
+            "last_rr": 1147884410,
+            "observed_us": 26367467268,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 64968,
+            "incoming": false,
+            "last_rr": 1147884410,
+            "observed_us": 26368148407,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1147949941,
+            "observed_us": 26368156972,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 17366,
+            "incoming": false,
+            "last_rr": 1147949941,
+            "observed_us": 26368421976,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 48399,
+            "incoming": false,
+            "last_rr": 1147949941,
+            "observed_us": 26368895639,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1148015486,
+            "observed_us": 26369157203,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 9481,
+            "incoming": false,
+            "last_rr": 1148015486,
+            "observed_us": 26369301885,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 13181,
+            "incoming": false,
+            "last_rr": 1148015486,
+            "observed_us": 26369358331,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 48058,
+            "incoming": false,
+            "last_rr": 1148015486,
+            "observed_us": 26369890503,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 54154,
+            "incoming": false,
+            "last_rr": 1148015486,
+            "observed_us": 26369983541,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1148081013,
+            "observed_us": 26370156987,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 21788,
+            "incoming": false,
+            "last_rr": 1148081013,
+            "observed_us": 26370489445,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 47667,
+            "incoming": false,
+            "last_rr": 1148081013,
+            "observed_us": 26370884339,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1148146545,
+            "observed_us": 26371157032,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 23345,
+            "incoming": false,
+            "last_rr": 1148146545,
+            "observed_us": 26371513260,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 33892,
+            "incoming": false,
+            "last_rr": 1148146545,
+            "observed_us": 26371674178,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1148212150,
+            "observed_us": 26372158159,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 9268,
+            "incoming": false,
+            "last_rr": 1148212150,
+            "observed_us": 26372299580,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 57629,
+            "incoming": false,
+            "last_rr": 1148212150,
+            "observed_us": 26373037507,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1148277687,
+            "observed_us": 26373158068,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 13089,
+            "incoming": false,
+            "last_rr": 1148277687,
+            "observed_us": 26373357796,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 27785,
+            "incoming": false,
+            "last_rr": 1148277687,
+            "observed_us": 26373582045,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 27875,
+            "incoming": false,
+            "last_rr": 1148277687,
+            "observed_us": 26373583409,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1148343213,
+            "observed_us": 26374157904,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 3065,
+            "incoming": false,
+            "last_rr": 1148343213,
+            "observed_us": 26374204678,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 57988,
+            "incoming": false,
+            "last_rr": 1148343213,
+            "observed_us": 26375042740,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 58130,
+            "incoming": false,
+            "last_rr": 1148343213,
+            "observed_us": 26375044921,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1148408716,
+            "observed_us": 26375161928,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 15738,
+            "incoming": false,
+            "last_rr": 1148408716,
+            "observed_us": 26375402084,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 56769,
+            "incoming": false,
+            "last_rr": 1148408716,
+            "observed_us": 26376028155,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1148474298,
+            "observed_us": 26376158252,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 20522,
+            "incoming": false,
+            "last_rr": 1148474298,
+            "observed_us": 26376471410,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 52884,
+            "incoming": false,
+            "last_rr": 1148474298,
+            "observed_us": 26376965214,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1148539806,
+            "observed_us": 26377157910,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 5870,
+            "incoming": false,
+            "last_rr": 1148539806,
+            "observed_us": 26377247471,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 21301,
+            "incoming": false,
+            "last_rr": 1148539806,
+            "observed_us": 26377482942,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1148605353,
+            "observed_us": 26378157967,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 21677,
+            "incoming": false,
+            "last_rr": 1148605353,
+            "observed_us": 26378488729,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 22523,
+            "incoming": false,
+            "last_rr": 1148605353,
+            "observed_us": 26378501640,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1148670898,
+            "observed_us": 26379158060,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 11703,
+            "incoming": false,
+            "last_rr": 1148670898,
+            "observed_us": 26379336640,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 19316,
+            "incoming": false,
+            "last_rr": 1148670898,
+            "observed_us": 26379452819,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1148736418,
+            "observed_us": 26380157814,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          },
+          {
+            "block": 5,
+            "delay": 9876,
+            "incoming": false,
+            "last_rr": 1148736418,
+            "observed_us": 26380308512,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 5,
+            "delay": 14788,
+            "incoming": false,
+            "last_rr": 1148736418,
+            "observed_us": 26380383473,
+            "sender_ssrc": 1124859880,
+            "target_ssrc": 1886703726
+          },
+          {
+            "block": 4,
+            "delay": 0,
+            "incoming": true,
+            "last_rr": 1148801949,
+            "observed_us": 26381158779,
+            "sender_ssrc": 1886703726,
+            "target_ssrc": 0
+          }
+        ]
+      }
+    ],
+    "raw_packets_retained": false,
+    "registry_expired": false
+  },
+  "schema_version": 1,
+  "signaling_url": "ws://127.0.0.1:7885",
+  "stall_period_seconds": 5,
+  "sync_streams_requested": true,
+  "timed_mixer_probe": {
+    "capacity_exceeded": 0,
+    "contention_dropped": 0,
+    "observations_only": true,
+    "registry_expired": false,
+    "sources": [
+      {
+        "active": false,
+        "channels": 2,
+        "elapsed_ms": 17619,
+        "frames": 1772,
+        "generation": 1,
+        "ntp_ms": -1,
+        "ntp_valid_frames": 0,
+        "packet_info_frames": 882,
+        "pull_us": 26381176037,
+        "rtp_timestamp": 1269767690,
+        "sample_rate": 48000,
+        "samples_per_channel": 480,
+        "speech_type": 0,
+        "ssrc": 4257786172
+      }
+    ],
+    "sources_alive": 0,
+    "sources_created": 1,
+    "sources_destroyed": 1
+  },
+  "topology": "local browser guests to native host through loopback SFU"
+}

@@ -228,3 +228,27 @@ untouched and does not rewrite SDK signaling payloads. Current evidence shows no
 valid frame NTP improvement; effective XR exchange is not verified. Keep it confined
 to this local SFU fixture. Run `python3 labs/guest-rtc/native/verify-timed-mixer.py`
 to validate the saved live probe evidence and source-wrapper retirement.
+
+### Native RTCP exchange probe
+
+Enable `LIVEKIT_LAB_RTCP_PROBE=1` with the mixer probe to observe authenticated
+RTCP clock fields and requests/replies. The wrapper forwards normal logger events
+and retains bounded XR and sender-report histories, never raw packets or media.
+One log instance may span multiple peer connections; the legacy `peers` field is
+a log-instance list. Explicit ring-overwrite, contention and capacity counters
+limit what may be inferred from retained histories.
+
+`python3 labs/guest-rtc/native/test-timed-mixer.py` now validates both mixer and
+log lifetimes and writes `evidence/rtcp-probe-lifecycle.json`.
+`python3 labs/guest-rtc/native/verify-rtcp-exchange.py` checks the three saved
+transport runs, request/reply behavior, control relay and sender-report clock pairs.
+Current evidence proves outgoing RTT requests with no incoming replies; the SSRC
+routing cause remains a source-supported hypothesis. Report maps have not been
+connected to OBS or qualified for synchronized presentation.
+
+The `sender_report_origin_maps` diagnostic fits fresh incoming sender reports and
+reconstructs the latest decoded audio RTP origin in sender-NTP time. It is evaluated
+after the run, has explicit age/slope/wrap/discontinuity guards, and does not feed
+OBS. The saved three-guest rejoin run demonstrates six current report maps and
+three audio origins without enabling RRTR. This remains timing metadata evidence,
+not synchronized playback or original capture-time qualification.

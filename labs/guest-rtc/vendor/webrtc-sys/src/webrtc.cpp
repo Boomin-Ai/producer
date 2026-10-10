@@ -16,6 +16,7 @@
 
 #include "livekit/webrtc.h"
 #include "livekit/timed_mixer_probe.h"
+#include "livekit/rtcp_exchange_probe.h"
 
 #include <algorithm>
 #include <atomic>
@@ -176,6 +177,10 @@ void LogSink::OnLogMessage(const std::string& message,
 std::unique_ptr<LogSink> new_log_sink(
     rust::Fn<void(rust::String, LoggingSeverity)> fnc) {
   return std::make_unique<LogSink>(fnc);
+}
+
+rust::String diagnostic_rtcp_exchange_report() {
+  return rtcp_exchange_report();
 }
 
 rust::String diagnostic_timed_mixer_report() {
