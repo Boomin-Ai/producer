@@ -1,5 +1,5 @@
 //! Explicit opt-in native microphone to loopback SFU publication prototype.
-//! Final speaker reference is the lab clip only; RTC return playout is not wired.
+//! Opt-in selected guest monitor uses final native output as its AEC reference.
 use crate::{
     capture_fixture::Evidence,
     capture_handoff::{Handoff, MicrophoneProcessor, ProcessedBlock},
@@ -33,6 +33,9 @@ unsafe extern "C" {
 }
 pub fn enabled() -> bool {
     std::env::var("LIVEKIT_LAB_PHYSICAL_CAPTURE").as_deref() == Ok("1")
+}
+pub fn monitor_enabled() -> bool {
+    enabled() && std::env::var("LIVEKIT_LAB_GUEST_MONITOR").as_deref() == Ok("1")
 }
 fn speech() -> Result<Vec<i16>> {
     let path = PathBuf::from(
@@ -98,6 +101,7 @@ struct Owner {
     discarded_stale_capture: u64,
     rejected_processed_blocks: u64,
     last_reference: Option<[i16; 480]>,
+    monitor_evidence: Option<Arc<crate::guest_monitor::Monitor>>,
 }
 impl Owner {
     fn new(device: Device, processor: MicrophoneProcessor, evidence: Evidence) -> Self {
@@ -127,6 +131,7 @@ impl Owner {
             discarded_stale_capture: 0,
             rejected_processed_blocks: 0,
             last_reference: None,
+            monitor_evidence: None,
         }
     }
 
@@ -202,6 +207,14 @@ impl Owner {
 impl Drop for Owner {
     fn drop(&mut self) {
         // First stop callbacks, then retire all voice pending for this generation.
+        let monitor_native = self
+            .monitor_evidence
+            .as_ref()
+            .map(|_| self.device.monitor_stats());
+        let monitor_inbox = self.monitor_evidence.as_ref().map(|monitor| {
+            monitor.replace();
+            monitor.stats()
+        });
         let lifecycle = self.device.close();
         self.handoff.retire();
         let target = (self.published * 95).div_ceil(100);
@@ -212,7 +225,8 @@ impl Drop for Owner {
         });
         let mut report = json!({
             "enabled":true,"input":"physical native I/O microphone","hardware_capture_used":self.processed>0,
-            "physical_speaker_playout_used":self.render_blocks>0,"reference_scope":"bundled lab clip final output; remote RTC audio is not played or included",
+            "physical_speaker_playout_used":self.render_blocks>0,"reference_scope":if self.monitor_evidence.is_some(){"selected remote guest-1 final native output; local microphone excluded"}else{"bundled lab clip final output; remote RTC audio is not played or included"},
+            "guest_monitor":{"inbox":monitor_inbox,"native":monitor_native,"full_room_monitor_qualified":false},
             "physical_microphone_published_to_loopback_only":self.published>0,"sdk_aec_ns_agc":false,
             "aec_enforced_high_pass":self.processor.high_pass_filter_enforced(),"processed":self.processed,"published":self.published,
             "publisher_timing_owner":"dedicated native absolute-wait loop", "publisher_previous_qos":self.previous_qos,"publisher_effective_qos":self.effective_qos,"publisher_qos_scope":"only this disposable thread; joined on shutdown, not a realtime-workgroup claim","maximum_video_capture_us":self.max_video_us,
@@ -240,6 +254,7 @@ pub fn run(
     video: NativeVideoSource,
     evidence: Evidence,
     stop: Arc<AtomicBool>,
+    monitor: Arc<crate::guest_monitor::Monitor>,
 ) -> Result<()> {
     if stop.load(Ordering::Acquire) {
         return Ok(());
@@ -250,8 +265,15 @@ pub fn run(
     if stop.load(Ordering::Acquire) {
         return Ok(());
     }
-    let (device, _) = Device::new(&reference, true)?;
+    let (device, _) = if monitor_enabled() {
+        Device::new_monitor()?
+    } else {
+        Device::new(&reference, true)?
+    };
     let mut owner = Owner::new(device, processor, evidence);
+    if monitor_enabled() {
+        owner.monitor_evidence = Some(monitor.clone());
+    }
     let mut pending: Option<Block> = None;
     let mut pending_since = Instant::now();
     let mut latest_render: Option<u64> = None;
@@ -292,6 +314,33 @@ pub fn run(
             );
         }
         owner.submit_due(&audio)?;
+        if owner.monitor_evidence.is_some() {
+            // At most 30 ms queued in native output. Input callback copies only
+            // the selected remote guest; hardware callback consumes lock-free.
+            if owner.device.monitor_pending() < 3 {
+                let (generation, frame) = monitor.pop(Instant::now());
+                owner.device.monitor_generation(generation);
+                if let Some(frame) = frame {
+                    let now = unsafe { lab_audio_now_ns() };
+                    let age = frame.at.elapsed().as_nanos() as u64;
+                    ensure!(now >= age, "Monitor delivery clock could not be mapped");
+                    ensure!(
+                        owner.device.monitor_push(
+                            &Block {
+                                host_ns: now - age,
+                                samples: frame.samples
+                            },
+                            frame.generation
+                        ),
+                        "Native guest monitor overflow"
+                    );
+                }
+            } else {
+                // Apply invalidation even while native output is full.
+                // pop would consume PCM, so use the separately observed epoch.
+                owner.device.monitor_generation(monitor.generation());
+            }
+        }
         for _ in 0..32 {
             let Some(block) = owner.device.pop(true) else {
                 break;
@@ -555,6 +604,7 @@ mod tests {
             video,
             evidence.clone(),
             Arc::new(AtomicBool::new(true)),
+            Arc::new(crate::guest_monitor::Monitor::new()),
         )
         .unwrap();
         assert_eq!(*evidence.lock().unwrap(), json!({"enabled":false}));

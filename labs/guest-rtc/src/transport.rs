@@ -31,6 +31,8 @@ struct AudioBlock {
 }
 struct AudioObserver {
     queue: Arc<Queue<AudioBlock>>,
+    #[cfg(feature = "physical-aec")]
+    monitor: Option<(Arc<crate::guest_monitor::Monitor>, u64)>,
     sample_count: AtomicU64,
     bad_format: AtomicU64,
     #[cfg(feature = "obs-proof")]
@@ -80,6 +82,10 @@ impl audio_sys::AudioSink for AudioObserver {
                 at,
                 value: value.clone(),
             });
+        }
+        #[cfg(feature = "physical-aec")]
+        if let Some((monitor, generation)) = &self.monitor {
+            monitor.push(*generation, value.samples, at);
         }
         self.queue.push(Captured { at, value });
     }
@@ -155,6 +161,7 @@ impl Drop for AudioIngest {
 impl AudioTap {
     fn new(
         track: &RemoteAudioTrack,
+        #[cfg(feature = "physical-aec")] monitor: Option<(Arc<crate::guest_monitor::Monitor>, u64)>,
         #[cfg(feature = "obs-proof")] writer: Option<crate::obs_proof::AudioWriter>,
     ) -> Self {
         #[cfg(feature = "obs-proof")]
@@ -167,6 +174,8 @@ impl AudioTap {
             .map(|(writer, queue)| AudioIngest::new(queue, writer));
         let observer = Arc::new(AudioObserver {
             queue: Arc::new(Queue::new(3, Duration::from_millis(30))),
+            #[cfg(feature = "physical-aec")]
+            monitor,
             sample_count: AtomicU64::new(0),
             bad_format: AtomicU64::new(0),
             #[cfg(feature = "obs-proof")]
@@ -439,6 +448,7 @@ impl Publisher {
         audio: NativeAudioSource,
         video: NativeVideoSource,
         evidence: crate::capture_fixture::Evidence,
+        #[cfg(feature = "physical-aec")] monitor: Arc<crate::guest_monitor::Monitor>,
     ) -> Result<Self> {
         let (stop, stopping) = tokio::sync::oneshot::channel();
         let physical_stop = Arc::new(AtomicBool::new(false));
@@ -449,7 +459,13 @@ impl Publisher {
             .spawn(move || {
                 #[cfg(feature = "physical-aec")]
                 if crate::physical_publication::enabled() {
-                    return crate::physical_publication::run(audio, video, evidence, thread_stop);
+                    return crate::physical_publication::run(
+                        audio,
+                        video,
+                        evidence,
+                        thread_stop,
+                        monitor,
+                    );
                 }
                 tokio::runtime::Builder::new_current_thread()
                     .enable_all()
@@ -520,15 +536,22 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     println!(
         "Native host connected to local SFU; {}",
         if physical_capture_enabled() {
-            "explicit physical microphone publication enabled; lab clip reference only"
+            "explicit physical microphone publication enabled; reference scope recorded in evidence"
         } else {
             "synthetic tracks only"
         }
     );
     let (source_audio, source_video) = publish(&room).await?;
     let capture_evidence = Arc::new(std::sync::Mutex::new(json!({"enabled":false})));
-    let mut publisher =
-        Publisher::start(source_audio.clone(), source_video, capture_evidence.clone())?;
+    #[cfg(feature = "physical-aec")]
+    let monitor = Arc::new(crate::guest_monitor::Monitor::new());
+    let mut publisher = Publisher::start(
+        source_audio.clone(),
+        source_video,
+        capture_evidence.clone(),
+        #[cfg(feature = "physical-aec")]
+        monitor.clone(),
+    )?;
     let (mut audio, mut video, mut metrics) = (
         HashMap::<String, AudioTap>::new(),
         HashMap::<String, VideoTap>::new(),
@@ -592,7 +615,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                             RemoteTrack::Audio(track) => {
                                 // Retire/join the old writer before a replacement can feed this OBS source.
                                 if let Some(old) = audio.remove(&id) { m.retired_queues.push(old.retire_evidence()); }
-                                audio.insert(id.clone(), AudioTap::new(&track, #[cfg(feature = "obs-proof")] if id == "guest-1" && !use_sender_clock { recorder.as_ref().map(|r| r.audio_writer()) } else { None }));
+                                audio.insert(id.clone(), AudioTap::new(&track, #[cfg(feature = "physical-aec")] if crate::physical_publication::monitor_enabled() && id=="guest-1" {Some((monitor.clone(),monitor.replace()))} else {None}, #[cfg(feature = "obs-proof")] if id == "guest-1" && !use_sender_clock { recorder.as_ref().map(|r| r.audio_writer()) } else { None }));
                                 m.next_sample = None; m.last_capture_timestamp_ms = None; m.audio_active = false;
                             },
                             RemoteTrack::Video(track) => {
@@ -620,6 +643,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                         // A late teardown from the old publication cannot retire its replacement.
                         match track {
                             RemoteTrack::Audio(_) if audio.get(&id).is_some_and(|tap| tap.sid == sid) => {
+                                #[cfg(feature = "physical-aec")]
+                                if id=="guest-1" {monitor.replace();}
                                 let old = audio.remove(&id).unwrap();
                                 m.retired_queues.push(old.retire_evidence());
                             },
@@ -631,7 +656,11 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                         }
                         lifecycle.push(json!({"event":"unsubscribed","identity":id,"sid":sid,"at_ms":began.elapsed().as_millis()}));
                     }
-                    RoomEvent::Reconnecting => lifecycle.push(json!({"event":"reconnecting","at_ms":began.elapsed().as_millis()})),
+                    RoomEvent::Reconnecting => {
+                        #[cfg(feature = "physical-aec")]
+                        {monitor.replace();}
+                        lifecycle.push(json!({"event":"reconnecting","at_ms":began.elapsed().as_millis()}));
+                    },
                     RoomEvent::Reconnected => lifecycle.push(json!({"event":"reconnected","at_ms":began.elapsed().as_millis()})),
                     _ => {}
                 }
@@ -991,6 +1020,8 @@ mod tests {
     fn missing_capture_time_is_distinct_from_zero_and_preserves_pcm() {
         use audio_sys::AudioSink;
         let observer = AudioObserver {
+            #[cfg(feature = "physical-aec")]
+            monitor: None,
             queue: Arc::new(Queue::new(3, Duration::from_millis(30))),
             sample_count: AtomicU64::new(0),
             bad_format: AtomicU64::new(0),

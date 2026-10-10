@@ -56,6 +56,7 @@ const server = http.createServer(async (request, response) => {
       '/fixture.js': [path.join(runtime, 'fixture.js'), 'text/javascript'],
       '/pulse-worklet.js': [path.join(here, 'pulse-worklet.js'), 'text/javascript'],
     };
+    if (process.env.LIVEKIT_LAB_GUEST_MONITOR === '1') files['/monitor-speech.wav'] = [path.join(runtime, 'near-speech.wav'), 'audio/wav'];
     const file = files[url.pathname];
     if (!file) { response.writeHead(404).end(); return; }
     response.writeHead(200, { 'Content-Type': file[1], 'Cache-Control': 'no-store' });

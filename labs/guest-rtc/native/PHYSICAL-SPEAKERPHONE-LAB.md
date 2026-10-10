@@ -197,3 +197,49 @@ For a longer deliberate diagnostic, use `--seconds 60` (allowed range 5–300).
 Browser numeric stats are sampled once per second; voice is never recorded by
 the receiver. The standalone speakerphone UI continues to use its local-only
 recording path and is separate from this opt-in transport runner.
+
+### Selected remote guest monitor prototype (2026-10-10)
+
+The isolated RTC runner now supports:
+
+```sh
+python3 native/run-physical-publication.py --publish-microphone --play-guest --wait-for-start --seconds 60
+```
+
+This opens a visible browser with a Start speaker test button. Before that click,
+only a generated remote speech fixture is published; native microphone capture
+and speaker output have not started. The browser never opens its microphone,
+plays the returning host microphone, or records received voice. The speech WAV
+route is available only when this explicit monitor experiment is enabled.
+
+Use built-in speakers/microphone, disconnect headphones and close other rooms.
+Start near 50% volume. Stay quiet for the first 20 seconds, then speak over the
+remote speech. This trial records numeric diagnostics only, not microphone PCM.
+Human voice review needs a separate listening/recording trial.
+
+Only `guest-1` remote audio enters the monitor. The source callback plays mono
+PCM into both hardware speaker channels at 0.20 gain. The existing post-render
+reference captures that final output and feeds the selected APM profile. The
+local microphone is never inserted into the monitor queue. The old bundled
+clip reference experiment remains the default without `--play-guest`.
+
+RTC callbacks use a try-lock bounded inbox (eight 10 ms blocks, 30 ms maximum
+age, reject overflow). One native owner transfers fresh blocks into a lock-free
+SPSC hardware queue (eight blocks; owner targets at most three queued blocks).
+Hardware callbacks allocate nothing and perform no SDK/APM/file calls. An
+underflow produces silence. Native PCM older than 80 ms from decoded delivery
+is retired, including a partially played block. These delivery timestamps are
+not original remote capture timestamps and do not qualify AV synchronization.
+
+Track replacement/unsubscription and reconnect invalidate the inbox generation;
+the native callback also rejects old queued or partial generation PCM. This is
+an application monitor bound, not an encoded SDK/private-cue privacy fence.
+After reconnect, playback stays silent until a new selected subscription binds;
+retained-track reconnect recovery remains an explicit later gate. This prototype
+does not mix multiple guests, room program audio, or private cues.
+
+The final device lifecycle report includes native monitor pending blocks and
+partial samples retired after callbacks stop. Inbox statistics are a shutdown
+snapshot; the SDK observer may still report rejected old-generation callbacks
+until the room removes its sink. Full room speakerphone AEC, voice preservation
+through SDK recovery, and load/reconnect acceptance remain unqualified.

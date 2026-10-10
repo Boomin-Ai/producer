@@ -4,6 +4,8 @@ mod binding_discovery;
 mod capture_fixture;
 mod capture_handoff;
 mod fixture;
+#[cfg(feature = "physical-aec")]
+mod guest_monitor;
 #[cfg(feature = "obs-proof")]
 mod obs_proof;
 #[cfg(feature = "physical-aec")]

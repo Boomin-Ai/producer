@@ -66,7 +66,11 @@ export async function start() {
       }
       display();
     }, 1000 / 30);
-    synthetic = new AudioWorkletNode(context, 'pulse');
+    if (new URLSearchParams(location.search).get('monitorSpeech') === '1') {
+      const pcm=await context.decodeAudioData(await (await fetch('/monitor-speech.wav')).arrayBuffer());
+      synthetic=context.createBufferSource();synthetic.buffer=pcm;synthetic.loop=true;synthetic.start();
+      state.guestFixture='remote speech only; no browser microphone';
+    } else synthetic = new AudioWorkletNode(context, 'pulse');
     const destination = context.createMediaStreamDestination(); synthetic.connect(destination);
     const video = new LocalVideoTrack(canvas.captureStream(30).getVideoTracks()[0]);
     const audio = new LocalAudioTrack(destination.stream.getAudioTracks()[0]);

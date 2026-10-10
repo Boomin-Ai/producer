@@ -1249,3 +1249,29 @@ persistent arrival-anchored latency. It has not eliminated all scheduling
 interruptions. Live voice review after AEC resets, longer load/reconnect tests,
 full guest monitor-reference routing, source-clock to RTP/camera alignment and
 platform packaging remain open. G1 incomplete; production unchanged.
+
+### Selected remote guest speaker reference — 2026-10-10
+
+The physical publication lab has an explicit `--play-guest` mode. A browser
+publishes only generated remote speech over LiveKit, the native selected
+`guest-1` sink feeds a bounded monitor, and post-render native output feeds APM.
+The local mic never enters the native monitor or audible browser return.
+A separate `--wait-for-start` gate leaves hardware closed until the user clicks
+Start in the visible browser. Received microphone voice is not recorded.
+
+Application inbox: eight 10 ms frames, 30 ms maximum delivery age, nonblocking
+callback admission, overflow rejection and track generation invalidation.
+Hardware monitor: eight blocks, owner targets three pending, lock-free callback
+consumption, stale/generation retirement including partially played blocks, and
+silence on underflow. Final device diagnostics include monitor queues and partial
+samples retired after callbacks stop. Reconnect deliberately invalidates the
+old generation; retained-track reattachment remains a later test/integration gate.
+This is selected guest playback only, without program/cue/multi-guest mixing.
+Delivery age does not establish capture timestamps or audio/video synchronization.
+
+Validation: 43 root tests passed, including 20 native queue/callback/teardown
+self-test rounds; strict combined `physical-aec obs-proof` all-targets Clippy and
+Objective-C++ warning-as-error syntax checks passed. Binary fingerprint saved in
+`labs/guest-rtc/evidence/guest-monitor-build.json`. Physical speakerphone,
+voice-preservation through publication recovery and G1 acceptance remain gated
+on the new physical trial and later listening/reconnect/load/sync proofs.

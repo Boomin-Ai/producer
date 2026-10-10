@@ -1,0 +1,12 @@
+{
+  "created_at": "2026-10-10T20:17:50.156770+00:00",
+  "scope": "selected remote guest native monitor prototype",
+  "native_binary_sha256": "f6dc8acef52f028ee847d759f48a315b129b170e513458845111214807795289",
+  "rust_tests_passed": 43,
+  "strict_combined_features_clippy": "passed",
+  "objc_warning_as_error_syntax_check": "passed",
+  "native_monitor_selftest": "20 rounds as part of root Rust test",
+  "physical_guest_monitor_qualified": false,
+  "g1_complete": false,
+  "production_changed": false
+}

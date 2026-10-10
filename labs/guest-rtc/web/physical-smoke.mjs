@@ -11,21 +11,31 @@ const name=process.env.LIVEKIT_LAB_RUN_NAME;
 const seconds=Number(process.env.LIVEKIT_LAB_SECONDS??20);
 if (!Number.isInteger(seconds)||seconds<5||seconds>300) throw new Error('Physical trial duration must be 5..300 seconds');
 if (!/^physical-publication-[0-9]+$/.test(name??'')) throw new Error('Unique physical-publication run name required');
+const monitor=process.env.LIVEKIT_LAB_GUEST_MONITOR==='1';
 let exited=false;
 let child,done,log='',browser,page,connected=false,readyTimer;
 try {
  // Warm generated guest + receiver before hardware starts. Browser startup
  // must not consume the physical trial or miss its short publication window.
  browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:false,args:['--autoplay-policy=no-user-gesture-required','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
- page=await browser.newPage();await page.goto('http://127.0.0.1:8990/?identity=guest-1');
- await page.evaluate(seconds=>{
+ page=await browser.newPage();await page.goto(`http://127.0.0.1:8990/?identity=guest-1${monitor?'&monitorSpeech=1':''}`);
+ await page.evaluate(({seconds,monitor})=>{
   document.title='Producer — local LiveKit microphone test';
-  const notice=document.createElement('p');notice.textContent=`Local microphone timing test • ${seconds} seconds • Browser speakers stay silent. No speaking needed.`;notice.style.fontWeight='bold';document.body.prepend(notice);
- },seconds);
+  const notice=document.createElement('p');notice.textContent=`Local microphone timing test • ${seconds} seconds • Browser speakers stay silent. ${monitor ? "Native speakers play remote speech. Use built-in speakers and microphone, disconnect headphones. Talk over the clip to check double-talk." : "No speaking needed."}`;notice.style.fontWeight='bold';document.body.prepend(notice);
+ },{seconds,monitor});
  await page.bringToFront();
  await page.evaluate(()=>window.startLab());
  await page.waitForFunction(()=>window.labState.published,undefined,{timeout:10000});
  await new Promise(r=>setTimeout(r,2000));
+ if(process.env.LIVEKIT_LAB_WAIT_FOR_START==='1') {
+  await page.evaluate(()=>{
+   window.physicalTestStarted=false;
+   const button=document.createElement('button');button.textContent='Start 60-second speaker test';
+   button.onclick=()=>{window.physicalTestStarted=true;button.disabled=true;button.textContent='Test running';};document.body.prepend(button);
+  });
+  console.log('Ready: click Start 60-second speaker test in the visible local lab. Microphone is not running yet.');
+  await page.waitForFunction(()=>window.physicalTestStarted,undefined,{timeout:300000});
+ }
  console.log(`Browser receiver warm; starting native ${seconds}-second capture now`);
  child=spawn(path.join(lab,'target/debug/producer-guest-rtc-lab'),['transport',path.join(lab,'runtime/native-token'),path.join(lab,`evidence/${name}.json`),String(seconds)],{cwd:lab});
  done=new Promise(resolve=>child.on('exit',code=>{exited=true;resolve(code);}));
@@ -47,7 +57,7 @@ try {
  const code=await done;
  const native=JSON.parse(await readFile(path.join(lab,`evidence/${name}.json`),'utf8'));
  const recoveries=native.capture_publication?.deadline_recoveries??0;
- const report={seconds,observations,deadline_recoveries:recoveries,source_fault_free:code===0&&recoveries===0,...snapshot,native_exit_code:code,receiver_warmed_before_native:true,physical_microphone_publication_requested:true,received_audio_recorded:false,browser_speaker_output_gain:0,reference_scope:'native lab clip only; guest return not played',camera_sync_qualified:false,g1_complete:false};
+ const report={seconds,observations,deadline_recoveries:recoveries,source_fault_free:code===0&&recoveries===0,...snapshot,native_exit_code:code,receiver_warmed_before_native:true,physical_microphone_publication_requested:true,received_audio_recorded:false,browser_speaker_output_gain:0,reference_scope:monitor?'selected remote guest speech through final native speaker output':'native lab clip only; guest return not played',guest_monitor_requested:monitor,camera_sync_qualified:false,g1_complete:false};
  await writeFile(path.join(lab,`evidence/${name}-browser.json`),JSON.stringify(report,null,2)+'\n');
  if(code!==0)throw new Error(`Native physical publication failed (${code}); retain reports`);
  if(snapshot.state.error || !snapshot.audio.some(s=>(s.packetsReceived??0)>100) || snapshot.state.returnVideoFrames<20)throw new Error('Browser did not receive expected physical audio RTP and placeholder video');

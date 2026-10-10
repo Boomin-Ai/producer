@@ -31,8 +31,36 @@ struct Ring {
         *block=blocks[r%ring_capacity]; read.store(r+1,std::memory_order_release); return true;
     }
 };
+// Single publisher-thread producer, source-render callback consumer.
+// The callback never locks, allocates or invokes the SDK. Expired/generation
+// retired PCM becomes silence instead of playing a queued old guest.
+struct MonitorBlock { LabBlock pcm{}; uint64_t generation=0; };
+struct Monitor {
+    std::array<MonitorBlock,8> blocks{};
+    std::atomic<uint64_t> written{0},read{0},overflow{0},generation{0};
+    std::atomic<uint64_t> played{0},silence{0},retired{0};
+    MonitorBlock current{};size_t offset=480;
+    bool push(const LabBlock &pcm,uint64_t epoch) {
+        auto w=written.load(std::memory_order_relaxed);
+        if(w-read.load(std::memory_order_acquire)>=blocks.size()) {overflow++;return false;}
+        blocks[w%blocks.size()]={pcm,epoch};written.store(w+1,std::memory_order_release);return true;
+    }
+    float sample(uint64_t now) {
+        auto epoch=generation.load(std::memory_order_acquire);
+        if(offset<480 && (current.generation!=epoch || now<current.pcm.host_ns || now-current.pcm.host_ns>80000000)) {offset=480;retired++;}
+        while(offset==480) {
+            auto r=read.load(std::memory_order_relaxed);
+            if(r==written.load(std::memory_order_acquire)) {silence++;return 0;}
+            current=blocks[r%blocks.size()];read.store(r+1,std::memory_order_release);
+            if(current.generation!=epoch || now<current.pcm.host_ns || now-current.pcm.host_ns>80000000) {retired++;continue;}
+            offset=0;played++;
+        }
+        return (float)current.pcm.samples[offset++]/32768.0f*0.20f;
+    }
+};
 struct State {
     Ring speaker,mic;
+    Monitor monitor;bool monitor_mode=false;
     LabBlock speaker_partial{},mic_partial{};
     size_t speaker_fill=0,mic_fill=0;
     std::vector<float> far;
@@ -220,13 +248,14 @@ extern "C" void lab_output_format_snapshot(char *message,size_t length) {
             (int)out_status,output.mSampleRate,(unsigned)output.mChannelsPerFrame,(unsigned)output.mBitsPerChannel,(unsigned)output.mFormatFlags,(unsigned)output.mBytesPerFrame);
     }
 }
-static void *create_audio(const int16_t *samples,size_t count,int fail_stage,bool io_callbacks,char *error,size_t length) {
+static void *create_audio(const int16_t *samples,size_t count,int fail_stage,bool io_callbacks,bool monitor_mode,char *error,size_t length) {
     @autoreleasepool { @try {
         auto fail=[&](NSString *message)->void* { snprintf(error,length,"%s",message.UTF8String); return nullptr; };
         if(!samples || count==0 || count>48000*120) return fail(@"Expected 48 kHz mono speech, at most two minutes");
         auto owner=std::make_unique<Owner>();
         if(fail_stage==1) return fail(@"Injected failure after engine creation");
         auto state=owner->state;
+        state->monitor_mode=monitor_mode;
         state->far.reserve(count);
         for(size_t i=0;i<count;i++) state->far.push_back((float)samples[i]/32768.0f*0.20f);
         AVAudioFormat *format=[[AVAudioFormat alloc] initStandardFormatWithSampleRate:48000 channels:2];
@@ -234,13 +263,15 @@ static void *create_audio(const int16_t *samples,size_t count,int fail_stage,boo
             state->callbacks++;
             bool stopped=state->stopping.load();
             bool silent=true;
+            auto now=state->ns(mach_absolute_time());
             if(data->mNumberBuffers!=2 || !data->mBuffers[0].mData || !data->mBuffers[1].mData || data->mBuffers[0].mDataByteSize<frames*sizeof(float) || data->mBuffers[1].mDataByteSize<frames*sizeof(float)) {
                 state->errors++; state->callbacks--; return kAudio_ParamError;
             }
             for(uint32_t n=0;n<frames;n++) {
                 auto frame=state->source_frame++;
                 auto second=frame/48000;
-                float v=(!stopped && second>=5 && second<50)?state->far[(frame-48000*5)%state->far.size()]:0;
+                float v=stopped?0:state->monitor_mode?state->monitor.sample(now):
+                    (second>=5 && second<50)?state->far[(frame-48000*5)%state->far.size()]:0;
                 silent= silent && v==0;
                 ((float*)data->mBuffers[0].mData)[n]=v;
                 ((float*)data->mBuffers[1].mData)[n]=v;
@@ -288,10 +319,25 @@ static void *create_audio(const int16_t *samples,size_t count,int fail_stage,boo
     } @catch(NSException *exception) { snprintf(error,length,"%s",exception.reason.UTF8String); return nullptr; } }
 }
 extern "C" void *lab_audio_create(const int16_t *samples,size_t count,int fail_stage,char *error,size_t length) {
-    return create_audio(samples,count,fail_stage,false,error,length);
+    return create_audio(samples,count,fail_stage,false,false,error,length);
 }
 extern "C" void *lab_audio_create_io(const int16_t *samples,size_t count,int fail_stage,char *error,size_t length) {
-    return create_audio(samples,count,fail_stage,true,error,length);
+    return create_audio(samples,count,fail_stage,true,false,error,length);
+}
+extern "C" void *lab_audio_create_monitor(char *error,size_t length) {
+    int16_t silence[480]={};return create_audio(silence,480,0,true,true,error,length);
+}
+extern "C" void lab_monitor_generation(void *handle,uint64_t generation) {
+    ((Owner*)handle)->state->monitor.generation.store(generation,std::memory_order_release);
+}
+extern "C" int lab_monitor_push(void *handle,const LabBlock *pcm,uint64_t generation) {
+    auto s=((Owner*)handle)->state;
+    return s->monitor_mode && !s->stopping && pcm && s->monitor.push(*pcm,generation);
+}
+extern "C" void lab_monitor_stats(void *handle,uint64_t *stats) {
+    auto &m=((Owner*)handle)->state->monitor;
+    stats[0]=m.written;stats[1]=m.read;stats[2]=m.overflow;
+    stats[3]=m.played;stats[4]=m.silence;stats[5]=m.retired;
 }
 extern "C" uint64_t lab_audio_now_ns() {
     mach_timebase_info_data_t timebase{};mach_timebase_info(&timebase);
@@ -340,7 +386,7 @@ extern "C" void lab_audio_fault_detail(void *handle,char *message,size_t length)
         (unsigned long long)s->mic.dropped.load(),ring_capacity,
         (unsigned long long)s->speaker_fault.load(),(unsigned long long)s->mic_fault.load());
 }
-extern "C" int lab_audio_close(void *handle,uint64_t *stats) {
+static int close_audio(void *handle,uint64_t *stats,bool monitor_stats) {
     auto *owner=(Owner*)handle;
     auto s=owner->state;
     std::weak_ptr<State> weak=s;
@@ -352,9 +398,16 @@ extern "C" int lab_audio_close(void *handle,uint64_t *stats) {
     stats[9]=s->speaker_max_frames;stats[10]=s->mic_max_frames;
     stats[11]=s->speaker_fault;stats[12]=s->mic_fault;
     stats[13]=s->speaker_startup_frames;stats[14]=s->mic_startup_frames;
+    if(monitor_stats) {
+        auto &m=s->monitor;stats[15]=m.written;stats[16]=m.read;stats[17]=m.overflow;
+        stats[18]=m.played;stats[19]=m.silence;stats[20]=m.retired;
+        stats[21]=m.offset<480?480-m.offset:0;
+    }
     s.reset();
     return weak.expired() && owners_alive==0 && notifications_alive==0;
 }
+extern "C" int lab_audio_close(void *handle,uint64_t *stats) {return close_audio(handle,stats,false);}
+extern "C" int lab_audio_close_extended(void *handle,uint64_t *stats) {return close_audio(handle,stats,true);}
 extern "C" int lab_audio_self_test() {
     for(int round=0;round<20;round++) {
         { Ring ring; LabBlock in{}; in.samples[0]=321;
@@ -378,6 +431,20 @@ extern "C" int lab_audio_self_test() {
             } while(!done.load() || ring.written.load()!=ring.read.load());
             producer.join();
             if(!ordered || ring.written+ring.dropped!=1000 || ring.written!=ring.read)return 0;
+        }
+        { // Partial blocks are silenced on replacement, old queued blocks
+          // cannot leak into the new guest, and expired PCM is never played.
+            Monitor monitor;LabBlock pcm{};pcm.host_ns=100000000;std::fill_n(pcm.samples,480,16384);
+            monitor.generation=1;
+            if(!monitor.push(pcm,1) || std::abs(monitor.sample(100000000)-0.1f)>0.00001f)return 0;
+            monitor.generation=2;
+            if(monitor.sample(100000000)!=0 || monitor.retired!=1)return 0;
+            if(!monitor.push(pcm,1) || !monitor.push(pcm,2))return 0;
+            if(std::abs(monitor.sample(100000000)-0.1f)>0.00001f || monitor.retired!=2)return 0;
+            if(monitor.sample(180000001)!=0 || monitor.retired!=3)return 0;
+            for(int n=0;n<8;n++)if(!monitor.push(pcm,2))return 0;
+            if(monitor.push(pcm,2) || monitor.overflow!=1)return 0;
+            if(monitor.sample(180000001)!=0 || monitor.retired!=11)return 0;
         }
         for(int stage=1;stage<=2;stage++) {
             int16_t pcm[480]={}; char error[256]={};
