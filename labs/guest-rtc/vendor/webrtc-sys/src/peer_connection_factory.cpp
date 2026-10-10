@@ -17,6 +17,8 @@
 #include "livekit/peer_connection_factory.h"
 
 #include <memory>
+#include <cstdlib>
+#include "livekit/timed_mixer_probe.h"
 #include <utility>
 #include <vector>
 
@@ -185,6 +187,10 @@ PeerConnectionFactory::PeerConnectionFactory(
       std::make_shared<AudioDeviceController>(rtc_runtime_, adm_proxy_);
 
   dependencies.adm = adm_proxy_;
+  const char* timed_probe = std::getenv("LIVEKIT_LAB_TIMED_MIXER");
+  if (timed_probe && std::string(timed_probe) == "1") {
+    dependencies.audio_mixer = create_timed_mixer_probe();
+  }
 
   dependencies.video_encoder_factory =
       std::move(std::make_unique<livekit_ffi::VideoEncoderFactory>());

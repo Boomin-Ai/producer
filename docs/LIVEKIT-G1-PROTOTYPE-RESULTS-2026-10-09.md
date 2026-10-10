@@ -64,3 +64,14 @@ pass; they do not qualify timing, physical AEC or SDK-wide cleanup. See the
 [latest timing evidence](LIVEKIT-G1-AUDIO-TIMING-EXTENSION.md#verified-packet-impairment-and-complete-ingest-accounting)
 and [required per-frame playout bridge](LIVEKIT-G1-PLAYOUT-BRIDGE-SPEC.md).
 Production remains unchanged, and G0/G1 are incomplete.
+
+## Decoded mixer timing checkpoint
+
+A public custom AudioMixer dependency now exposes decoded RTP/elapsed metadata
+without rebuilding the pinned WebRTC archive. Native ownership tests passed
+100 cycles; real three-guest rejoin tests destroyed every wrapper. A 90-second
+probe and an explicit RRTR feedback experiment both retained invalid frame NTP
+estimates. A video-jitter run matched the source SSRC to its guest publication
+and confirmed sender reports arrive. The common clock remains unqualified, and
+no timing from this probe feeds OBS yet. See the
+[updated timing investigation](LIVEKIT-G1-PLAYOUT-BRIDGE-SPEC.md#public-mixer-extension-investigation).

@@ -114,6 +114,7 @@ std::unique_ptr<LogSink> new_log_sink(
     rust::Fn<void(rust::String, LoggingSeverity)> fnc);
 
 rust::String create_random_uuid();
+rust::String diagnostic_timed_mixer_report();
 
 rust::Vec<VideoEncoderBackend> video_encoder_backend_list();
 

@@ -15,6 +15,8 @@
  */
 
 #include "livekit/peer_connection.h"
+#include "livekit/lab_rrtr_sdp.h"
+#include <cstdlib>
 #include "livekit/peer_connection_factory.h"
 
 #include <memory>
@@ -148,6 +150,11 @@ void PeerConnection::set_local_description(
       webrtc::make_ref_counted<NativeSetLocalSdpObserver>(std::move(ctx),
                                                        on_complete);
 
+  const char* rrtr = std::getenv("LIVEKIT_LAB_RRTR");
+  if (rrtr && std::string(rrtr) == "1") {
+    desc = create_session_description(desc->sdp_type(),
+        lab_add_audio_rrtr(std::string(desc->stringify())));
+  }
   peer_connection_->SetLocalDescription(desc->clone()->release(), observer);
 }
 
@@ -159,6 +166,11 @@ void PeerConnection::set_remote_description(
       webrtc::make_ref_counted<NativeSetRemoteSdpObserver>(std::move(ctx),
                                                         on_complete);
 
+  const char* rrtr = std::getenv("LIVEKIT_LAB_RRTR");
+  if (rrtr && std::string(rrtr) == "1") {
+    desc = create_session_description(desc->sdp_type(),
+        lab_add_audio_rrtr(std::string(desc->stringify())));
+  }
   peer_connection_->SetRemoteDescription(desc->clone()->release(), observer);
 }
 

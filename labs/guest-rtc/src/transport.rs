@@ -574,6 +574,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     };
     source_audio.clear_buffer();
     let mut receiver_stats = Vec::new();
+    let mut remote_sender_reports = Vec::new();
     for participant in room.remote_participants().values() {
         for publication in participant.track_publications().values() {
             if let Some(track) = publication.track() {
@@ -582,7 +583,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                     for stat in stats {
                         if let livekit::webrtc::stats::RtcStats::InboundRtp(s) = stat {
                             receiver_stats.push(json!({"identity":participant.identity().to_string(),
-                                "sid":publication.sid().to_string(), "kind":s.stream.kind,
+                                "sid":publication.sid().to_string(), "kind":s.stream.kind, "ssrc":s.stream.ssrc,
                                 "estimated_playout_timestamp_ms":s.inbound.estimated_playout_timestamp,
                                 "packets_received":s.received.packets_received,"packets_lost":s.received.packets_lost,"jitter_seconds":s.received.jitter,
                                 "estimated_playout_presence_preserved":false,
@@ -592,6 +593,15 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                                 "inserted_samples_for_deceleration":s.inbound.inserted_samples_for_deceleration,
                                 "removed_samples_for_acceleration":s.inbound.removed_samples_for_acceleration,
                                 "frames_dropped":s.inbound.frames_dropped}));
+                        } else if let livekit::webrtc::stats::RtcStats::RemoteOutboundRtp(s) = stat
+                        {
+                            remote_sender_reports.push(json!({"identity":participant.identity().to_string(),
+                                "sid":publication.sid().to_string(),"kind":s.stream.kind,"ssrc":s.stream.ssrc,
+                                "remote_timestamp":s.remote_outbound.remote_timestamp,
+                                "reports_sent":s.remote_outbound.reports_sent,
+                                "round_trip_time":s.remote_outbound.round_trip_time,
+                                "round_trip_time_measurements":s.remote_outbound.round_trip_time_measurements,
+                                "optional_field_presence_preserved":false}));
                         }
                     }
                 }
@@ -664,6 +674,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     audio.clear();
     video.clear();
     room.close().await?;
+    let timed_mixer_probe: serde_json::Value =
+        serde_json::from_str(&webrtc_sys::webrtc::ffi::diagnostic_timed_mixer_report())?;
     #[cfg(feature = "obs-proof")]
     let worker_lifecycle = json!({"alive_after_retirement":AUDIO_WORKERS_ALIVE.load(Ordering::Acquire),
         "peak_alive":AUDIO_WORKERS_PEAK.load(Ordering::Relaxed),"scope":"application OBS audio ingest workers only"});
@@ -672,7 +684,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     let report = json!({"schema_version":1,"livekit":"0.9.4","topology":"local browser guests to native host through loopback SFU",
         "signaling_url":url,"publisher_error":publisher_error,
         "sync_streams_requested":std::env::var("LIVEKIT_LAB_SYNC_STREAMS").as_deref() == Ok("1"),
-        "receiver_stats":receiver_stats,"obs_recording":obs_recording,"local_playout_clock_requested":use_playout_clock,"audio_ingest_generation_reports":audio_ingest_stats,"audio_ingest_session_totals":audio_ingest_totals,"audio_worker_lifecycle":worker_lifecycle,
+        "rrtr_lab_experiment_requested":std::env::var("LIVEKIT_LAB_RRTR").as_deref()==Ok("1"),"timed_mixer_probe":timed_mixer_probe,"remote_sender_reports":remote_sender_reports,"receiver_stats":receiver_stats,"obs_recording":obs_recording,"local_playout_clock_requested":use_playout_clock,"audio_ingest_generation_reports":audio_ingest_stats,"audio_ingest_session_totals":audio_ingest_totals,"audio_worker_lifecycle":worker_lifecycle,
         "duration_seconds":seconds,"consumer_stall_ms":if pressure {200} else {0},"stall_period_seconds":5,
         "native_publish_audio_internal_queue_ms":0,"callback_timestamps_are_capture_timestamps":false,
         "obs_recorded_av_qualified":false,"physical_speaker_reference_connected":false,"g1_complete":false,

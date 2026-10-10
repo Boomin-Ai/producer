@@ -206,3 +206,25 @@ Pending samples at teardown are recorded rather than credited as consumed. It al
 checks source sink removal, successful worker exit, no overlapping writers for the
 single guest-1 OBS source, and zero application ingest workers after retirement.
 Native SDK device/thread cleanup and G2 private-cue queue flushing remain separate.
+
+### Decoded timing mixer probe
+
+Set `LIVEKIT_LAB_TIMED_MIXER=1` on the native fixture to install the optional
+custom AudioMixer. The probe delegates normal PCM processing and records RTP,
+NTP, elapsed time, rate/channels/sample count and local pull observations after
+GetAudioFrameWithInfo returns. `timed_mixer_probe` in transport evidence includes
+retired source generations, live/created/destroyed wrapper counts and explicit
+contention/capacity counters. No timing from this probe feeds OBS yet.
+
+Run `python3 labs/guest-rtc/native/test-timed-mixer.py` from the worktree root after
+building the lab. It links the already-present pinned native archive and executes
+100 ownership/delegation cycles without downloading a new WebRTC checkout.
+Source metadata availability, source-to-track association and OBS timing remain
+separate proofs. See [the updated timing bridge investigation](../../docs/LIVEKIT-G1-PLAYOUT-BRIDGE-SPEC.md).
+
+`LIVEKIT_LAB_RRTR=1` is an opt-in native SDP experiment, documented in the bridge
+investigation. It augments native local/remote audio feedback copies, leaves video
+untouched and does not rewrite SDK signaling payloads. Current evidence shows no
+valid frame NTP improvement; effective XR exchange is not verified. Keep it confined
+to this local SFU fixture. Run `python3 labs/guest-rtc/native/verify-timed-mixer.py`
+to validate the saved live probe evidence and source-wrapper retirement.
