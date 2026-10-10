@@ -869,3 +869,31 @@ compiler checks and physical-bin Clippy pass after rebuilding/packaging.
 Evidence: `labs/guest-rtc/evidence/speakerphone-refined-physical-run.json`. The
 updated native lab is open for a louder 75% repeat, with deliberate speech only
 during seconds 30–60. Full physical AEC acceptance and integrated G1 remain open.
+
+## Louder physical stress run — 2026-10-10
+
+The no-forced-high-pass run started at a recorded default-output scalar volume
+of 75.0% and ended at 93.75%. Change timing is not sampled. Preserve this as a
+variable-volume stress result rather than claiming a controlled constant-75%
+acceptance run or calibrated acoustic SPL.
+
+It completed in 60.046 seconds with 6,000 blocks per timeline, zero overflow,
+zero format/timeline faults, zero invalid delays and clean native owner/callback
+retirement. The file/accounting verifier passed. Both APM paths took 520
+microseconds at p95. Across 84 eligible far-only windows, provisional echo
+attenuation was 36.89 dB median/26.07 dB p10, exceeding the initial signal
+thresholds for this recording.
+
+Near-only signal level measured -20.5004 dBFS raw versus -20.5012 dBFS
+processed. Instructed double-talk level was -16.37 versus -19.70 dBFS; this
+mixed-signal change cannot isolate voice attenuation from removed speaker echo.
+There were 384 raw microphone clipped samples, predominantly during a brief
+burst around second 37. The inspected near-only interval has no clipping. A
+12-second cleaned excerpt (seconds 39–44 and 52–58) contains zero clipped
+processed samples and was opened for human quality review, which is pending.
+
+Evidence: `labs/guest-rtc/evidence/speakerphone-louder-physical-run.json`. The
+actual capture/reference/APM owner has now produced encouraging repeated
+physical results, but voice intelligibility, controlled volume coverage, device
+changes and the full integrated LiveKit guest path remain separate open gates.
+No production deployment or installed Producer changes occurred.

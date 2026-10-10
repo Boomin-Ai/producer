@@ -1,0 +1,150 @@
+{
+  "run_label": "speakerphone-1791649047344721000",
+  "report": {
+    "additional_capture_hold_capacity": 1,
+    "aec_enforced_high_pass": false,
+    "aec_profile": "no_forced_high_pass",
+    "agc": false,
+    "apm_channels": 1,
+    "apm_delay_estimate_ms": {
+      "acoustic_delay_calibrated": false,
+      "maximum": 115,
+      "minimum": 5
+    },
+    "capture_hold_limit_ms": 80,
+    "capture_hold_retired": false,
+    "default_output_volume_percent": {
+      "acoustic_spl_calibrated": false,
+      "continuous_verification": false,
+      "end": 93.75000596046448,
+      "start": 75.0
+    },
+    "devices": "CADefaultDeviceAggregate-59305-0 \u2192 CADefaultDeviceAggregate-59305-0",
+    "duration_seconds": 60.046234875,
+    "g1_complete": false,
+    "hardware_capture_used": true,
+    "high_pass": false,
+    "high_pass_requested": false,
+    "invalid_delay_blocks": 0,
+    "lifecycle": {
+      "callbacks_active": 0,
+      "clipped_samples": 384,
+      "format_or_timeline_errors": 0,
+      "maximum_tap_frames": {
+        "microphone": 4800,
+        "speaker": 4800
+      },
+      "microphone": {
+        "capacity": 32,
+        "consumed": 6000,
+        "overflow": 0,
+        "pending_retired": 0,
+        "queued": 6000
+      },
+      "owners_and_callback_state_retired": true,
+      "speaker": {
+        "capacity": 32,
+        "consumed": 6000,
+        "overflow": 0,
+        "pending_retired": 0,
+        "queued": 6000
+      }
+    },
+    "microphone_blocks": 6000,
+    "microphone_played_or_published": false,
+    "ns": false,
+    "physical_aec_qualified": false,
+    "physical_speaker_reference_connected": true,
+    "processing_both_apms_p95_us": 520,
+    "provisional_far_only_attenuation_db": {
+      "median": 36.8863634254635,
+      "p10": 26.06684529079365,
+      "windows": 84
+    },
+    "reference_scope": "This engine's final stereo mixer output, downmixed to mono; excludes other apps and hardware-volume calibration",
+    "sample_rate": 48000,
+    "schema_version": 1,
+    "source_gain": 0.2,
+    "speaker_blocks": 6000,
+    "speech_intelligibility_qualified": false,
+    "stop_reason": "completed",
+    "system_voice_processing": false,
+    "user_phase_compliance_verified": false
+  },
+  "phase_signal_levels": {
+    "baseline": {
+      "levels_dbfs": {
+        "microphone-raw": -38.69732204633942,
+        "processed-on": -38.69967454315291,
+        "processed-off": -38.69732204633942,
+        "speaker-reference": -90.30899869919436
+      },
+      "raw_clipped_samples": 0,
+      "processed_clipped_samples": 0
+    },
+    "far_only": {
+      "levels_dbfs": {
+        "microphone-raw": -20.886161017323232,
+        "processed-on": -49.468503156567195,
+        "processed-off": -20.886161017323232,
+        "speaker-reference": -29.513440916291614
+      },
+      "raw_clipped_samples": 0,
+      "processed_clipped_samples": 0
+    },
+    "double_talk": {
+      "levels_dbfs": {
+        "microphone-raw": -16.367187594441706,
+        "processed-on": -19.704650137463148,
+        "processed-off": -16.367187594441706,
+        "speaker-reference": -29.54524962751622
+      },
+      "raw_clipped_samples": 379,
+      "processed_clipped_samples": 56
+    },
+    "near_only": {
+      "levels_dbfs": {
+        "microphone-raw": -20.500389706637968,
+        "processed-on": -20.501181364094656,
+        "processed-off": -20.500389706637968,
+        "speaker-reference": -90.30899869919436
+      },
+      "raw_clipped_samples": 0,
+      "processed_clipped_samples": 0
+    }
+  },
+  "continuity": {
+    "speaker": {
+      "minimum_delta_ms": 10.0,
+      "maximum_delta_ms": 10.011375
+    },
+    "microphone": {
+      "minimum_delta_ms": 10.0,
+      "maximum_delta_ms": 10.010959
+    }
+  },
+  "volume_interpretation": "Starts at 75%, ends at 93.75%; change time is not recorded. This is a variable-volume stress observation, not a controlled constant-75% acceptance run.",
+  "physical_aec_qualified": false,
+  "g1_complete": false,
+  "wav_sha256": {
+    "microphone-raw.wav": "7e5e40861dfd79fba5721c9817efdf23527968108363b8df1b2e4ca99ac478df",
+    "processed-on.wav": "0dbb6aa43f04a9c136c55493a73b42baad29552ad6dec433dcbdbec6e57a63c3",
+    "processed-off.wav": "7e5e40861dfd79fba5721c9817efdf23527968108363b8df1b2e4ca99ac478df",
+    "speaker-reference.wav": "cadc099cb584f6fe5f13e83f15d904de2bdc7f3db6f5800d5a1eab7f7cba9851"
+  },
+  "listening_review": {
+    "segments_seconds": [
+      [
+        39,
+        44
+      ],
+      [
+        52,
+        58
+      ]
+    ],
+    "duration_seconds": 12,
+    "processed_clipped_samples_in_excerpt": 0,
+    "human_quality_review": "Pending"
+  }
+}
