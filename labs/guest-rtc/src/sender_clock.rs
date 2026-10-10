@@ -63,10 +63,34 @@ impl SenderClock {
         }
         self.latest = Some(report);
     }
+    /// Lab-only first-report bootstrap at the explicit fixture clock rate.
+    /// Never use it to bypass a detected discontinuity; a fresh pair is then required.
     #[cfg(any(feature = "obs-proof", test))]
-    pub fn ready(&self, now_us: i64) -> bool {
-        self.latest
-            .is_some_and(|last| self.origin_ntp_us(last.rtp_timestamp, now_us).is_some())
+    pub fn playback_origin(&self, rtp: u32, now_us: i64, bootstrap: bool) -> Option<i64> {
+        if self.previous.is_some() {
+            return self.origin_ntp_us(rtp, now_us);
+        }
+        if !bootstrap || self.resets != 0 {
+            return None;
+        }
+        let last = self.latest?;
+        let age = now_us.checked_sub(last.observed_us)?;
+        let delta = i64::from(rtp.wrapping_sub(last.rtp_timestamp) as i32);
+        if !(0..=5_000_000).contains(&age) || delta.abs() > i64::from(self.rate) * 5 {
+            return None;
+        }
+        let ntp = last.ntp_ticks() + (i128::from(delta) << 32) / i128::from(self.rate);
+        if ntp <= 0 {
+            return None;
+        }
+        i64::try_from(ntp * 1_000_000 / (1i128 << 32)).ok()
+    }
+    #[cfg(any(feature = "obs-proof", test))]
+    pub fn playback_ready(&self, now_us: i64, bootstrap: bool) -> bool {
+        self.latest.is_some_and(|last| {
+            self.playback_origin(last.rtp_timestamp, now_us, bootstrap)
+                .is_some()
+        })
     }
     pub fn origin_ntp_us(&self, rtp: u32, now_us: i64) -> Option<i64> {
         let (first, last) = (self.previous?, self.latest?);
@@ -189,12 +213,15 @@ impl DecodedOrigins {
         &self,
         frame: &webrtc_sys::webrtc::ffi::DecodedAudioBlock,
         now_us: i64,
+        bootstrap: bool,
     ) -> Option<i64> {
         let source = self.sources.get(&frame.generation)?;
         if source.clock.ssrc != frame.ssrc {
             return None;
         }
-        source.clock.origin_ntp_us(frame.rtp_timestamp, now_us)
+        source
+            .clock
+            .playback_origin(frame.rtp_timestamp, now_us, bootstrap)
     }
     pub fn consume(&mut self, frame: &webrtc_sys::webrtc::ffi::DecodedAudioBlock, now_us: i64) {
         if !self.sources.contains_key(&frame.generation) && self.sources.len() >= 64 {
@@ -337,6 +364,33 @@ mod tests {
         assert_eq!(clock.origin_ntp_us(144000, 4_000_000), Some(104_000_000));
         let fresh = SenderClock::new(7, 48000);
         assert_eq!(fresh.origin_ntp_us(144000, 4_000_000), None);
+    }
+    #[test]
+    fn bootstrap_is_opt_in_bounded_and_cannot_hide_a_discontinuity() {
+        let mut clock = SenderClock::new(7, 48000);
+        assert_eq!(clock.playback_origin(48000, 1_000_000, true), None);
+        clock.observe(sr(u32::MAX - 23999, 100, 1_000_000));
+        assert_eq!(clock.playback_origin(24000, 1_000_000, false), None);
+        assert_eq!(
+            clock.playback_origin(24000, 1_000_000, true),
+            Some(101_000_000)
+        );
+        assert_eq!(clock.playback_origin(24000, 999_999, true), None);
+        assert_eq!(clock.playback_origin(24000, 6_000_001, true), None);
+        assert_eq!(clock.playback_origin(240001, 1_000_000, true), None);
+        clock.observe(sr(24000, 101, 2_000_000));
+        assert_eq!(
+            clock.playback_origin(24000, 2_000_000, true),
+            clock.origin_ntp_us(24000, 2_000_000)
+        );
+        clock.observe(sr(72000, 104, 3_000_000));
+        assert_eq!(clock.playback_origin(72000, 3_000_000, true), None);
+        clock.observe(sr(120000, 105, 4_000_000));
+        assert_eq!(
+            clock.playback_origin(120000, 4_000_000, true),
+            Some(105_000_000)
+        );
+        assert!(!SenderClock::new(8, 48000).playback_ready(4_000_000, true));
     }
     #[test]
     fn online_pcm_mapping_waits_for_reports_and_resets_on_new_generation() {

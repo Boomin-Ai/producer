@@ -208,6 +208,9 @@ impl Presentation {
 }
 pub struct SelectedPlayback {
     pub clock: Presentation,
+    pub bootstrap: bool,
+    pub audio_bootstrap_blocks: u64,
+    video_bootstrap_frames: u64,
     pub audio_binding: Option<(String, u32)>,
     pub video_binding: Option<(String, u32, SenderClock, i64)>,
     pub since_us: i64,
@@ -222,6 +225,9 @@ impl SelectedPlayback {
     pub fn new(since_us: i64) -> Self {
         Self {
             clock: Presentation::new(Duration::from_millis(120)),
+            bootstrap: std::env::var("LIVEKIT_LAB_FIRST_REPORT_BOOTSTRAP").as_deref() == Ok("1"),
+            audio_bootstrap_blocks: 0,
+            video_bootstrap_frames: 0,
             audio_binding: None,
             video_binding: None,
             since_us,
@@ -290,21 +296,25 @@ impl SelectedPlayback {
     pub fn video_ready(&self, now_us: i64) -> bool {
         self.video_binding
             .as_ref()
-            .is_some_and(|(_, _, clock, _)| clock.ready(now_us))
+            .is_some_and(|(_, _, clock, _)| clock.playback_ready(now_us, self.bootstrap))
     }
-    pub fn video_origin(&self, sid: &str, rtp: u32, now_us: i64) -> Option<i64> {
+    pub fn video_origin(&mut self, sid: &str, rtp: u32, now_us: i64) -> Option<i64> {
         let (bound, _, clock, _) = self.video_binding.as_ref()?;
         if bound != sid {
             return None;
         }
-        clock.origin_ntp_us(rtp, now_us)
+        let origin = clock.playback_origin(rtp, now_us, self.bootstrap);
+        if origin.is_some() && clock.origin_ntp_us(rtp, now_us).is_none() {
+            self.video_bootstrap_frames += 1;
+        }
+        origin
     }
     pub fn report(&self) -> Value {
         json!({"clock":self.clock.report(),"audio_binding":self.audio_binding,
             "video_binding":self.video_binding.as_ref().map(|(sid,ssrc,clock,_)|json!({
                 "sid":sid,"ssrc":ssrc,"clock_resets":clock.resets,"rejected_reports":clock.rejected})),
             "input_marker_deadlines":self.markers,"unmatched_audio_blocks":self.unmatched_audio,"invalid_audio_pull":self.invalid_audio_pull,
-            "startup_policy":"wait for fresh audio and video two-report maps; no arrival fallback",
+            "startup_policy":if self.bootstrap {"lab first-report nominal-rate bootstrap, five-second bound; discontinuities require fresh pair"} else {"wait for fresh audio and video two-report maps; no arrival fallback"},"first_report_bootstrap":self.bootstrap,"audio_bootstrap_blocks":self.audio_bootstrap_blocks,"video_bootstrap_frames":self.video_bootstrap_frames,
             "obs_sync_qualified":false})
     }
 }

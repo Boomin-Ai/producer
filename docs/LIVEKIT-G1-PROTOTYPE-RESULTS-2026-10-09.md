@@ -303,3 +303,42 @@ decoder comparison; formatting and diff checks. All callback/source retirement
 and bounded queue accounting checks pass. A low-disk build failure was corrected
 by removing inactive compiled caches. User sets/media/recordings and installed
 production were left intact. G1 remains incomplete; production is unchanged.
+
+
+### First-report startup experiment — October 10
+
+Added `LIVEKIT_LAB_FIRST_REPORT_BOOTSTRAP=1` as a lab-only opt-in. The first fresh
+sender report maps RTP using the fixture's explicit nominal clock rate, bounded
+to five seconds of report age/extrapolation. It switches to the measured slope
+when a plausible second report arrives. Any detected discontinuity requires a
+fresh pair; bootstrap cannot hide it. Current SSRC/publication/generation guards
+remain intact, no old-publication or arrival-time origin is substituted, and the
+default two-report policy is unchanged. Separate counters show actual bootstrap
+use; existing decoded-origin diagnostics still describe two-report mapping.
+
+| Test | Prior startup-dropped PCM | Bootstrap startup-dropped PCM | Bootstrap matched p95 | Missing audio/video |
+| --- | --- | --- | --- | --- |
+| Three guests, three rejoins, 45 seconds | 22.28 seconds | 12.49 seconds | 42.00 ms | 7 / 0 |
+| One guest, video jitter, 30 seconds | 7.45 seconds | 2.96 seconds | 54.67 ms | 0 / 0 |
+
+These are separate sequential workloads, not controlled proof of causality. The
+rejoin experiment improves observed startup suppression by 44% but **fails** the
+marker gate. It has 353 overly early video deadlines, 365 frames without an audio
+origin, 14 explicit binding clears, 62 late audio blocks and five late video frames.
+Its 898 bootstrap audio blocks and 295 bootstrap video frames prove the experimental
+path was exercised. All source/callback retirement and queue counts reconcile.
+The jitter run uses 305 bootstrap audio blocks and 80 video frames; it has two late
+video deadlines, 81 frames without an origin and no overly early deadline rejections.
+Its local marker gate passes, without qualifying recovery or G1.
+
+The experiment remains off by default. Next: trace first-report-to-measured-map
+transitions separately for each replacement publication and the audio origin label
+versus continuous PCM sample clock. Resolve early deadlines without relaxing bounds
+or concealing missing markers. Physical speakerphone AEC remains outstanding.
+
+Validation: 17 Rust tests including RTP wrap, bootstrap freshness/extrapolation,
+opt-in behavior, and refusal after discontinuity; default/OBS-feature Clippy with
+warnings denied; 19 recorded-run retirement/accounting checks; nine pre-mux traces;
+independent decoder comparisons; formatting/diff checks. All pass while preserving
+failed timing gates. A low-disk link failure was resolved by removing six older
+compiled build-script caches; production and user data were unchanged.

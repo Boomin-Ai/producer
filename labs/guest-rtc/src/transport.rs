@@ -583,7 +583,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                     if use_sender_clock {
                         if block.pull_us >= playback.since_us && playback.audio_binding.as_ref().is_some_and(|(_,ssrc)|*ssrc==block.ssrc) {
                             if let Some(pull)=video_clock.deadline(block.pull_us,Instant::now()) {
-                                let origin=playback.video_ready(decoded_at).then(||decoded_origins.origin_for(&block,decoded_at)).flatten();
+                                let origin=playback.video_ready(decoded_at).then(||decoded_origins.origin_for(&block,decoded_at,playback.bootstrap)).flatten();
+                                if origin.is_some() && playback.bootstrap && decoded_origins.origin_for(&block,decoded_at,false).is_none() {playback.audio_bootstrap_blocks+=1;}
                                 let resets=playback.clock.reset_count();
                                 let stamp=playback.clock.audio(block.generation,block.sequence,origin,pull);
                                 if resets!=playback.clock.reset_count() {scheduled_audio.clear();scheduled_video.clear();}

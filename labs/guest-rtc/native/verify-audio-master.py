@@ -34,6 +34,10 @@ for path in sorted((lab / 'evidence').glob('transport-obs-audio-master-*.json'))
         assert len(clock['diagnostics']) <= 64
         assert all(event['reason'] in reasons and event['repetitions'] > 0 for event in clock['diagnostics'])
     assert not r['g1_complete'] and not r['obs_recording']['qualified']
+    if playback.get('first_report_bootstrap', False):
+        assert 'five-second bound' in playback['startup_policy']
+        assert playback['audio_bootstrap_blocks'] > 0 and playback['video_bootstrap_frames'] > 0
+        assert not clock['sender_capture_time_qualified']
     assert playback['audio_binding'] and playback['video_binding']
     assert mixer['sources_alive'] == 0 and mixer['sources_created'] == mixer['sources_destroyed']
     for source in mixer['sources']:

@@ -342,3 +342,19 @@ missing video markers still prevent G1 qualification.
 The opt-in external archive build now also passes macOS linker `-S`, avoiding a
 large temporary binary containing unused upstream native debug symbols. Disk-full
 recordings and failed links are excluded from synchronization evidence.
+
+
+### First-report startup experiment
+
+`LIVEKIT_LAB_FIRST_REPORT_BOOTSTRAP=1` is an opt-in audio-master lab experiment.
+It maps the first fresh authenticated sender report using the fixture's explicit
+48 kHz audio / 90 kHz video rates, for at most five seconds of report age and RTP
+extrapolation. A second plausible report switches to the measured slope. A detected
+report discontinuity disables bootstrap for that clock until a fresh pair exists.
+It uses no arrival-time or previous-publication fallback. The default still requires
+two reports. Playback evidence labels the policy and counts audio/video bootstrap
+usage; the separate decoded-origin diagnostic continues to measure two-report maps.
+
+The first rejoin test reduced startup suppression but missed seven video markers;
+a separate jitter run passed locally. This experiment is not qualified for adoption
+or production. Synthetic timing does not qualify physical speakerphone AEC.
