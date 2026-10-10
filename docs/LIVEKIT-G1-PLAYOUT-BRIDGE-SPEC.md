@@ -282,3 +282,97 @@ The next bridge must preserve those semantics and qualify actual recorded output
 
 Evidence: [live sender-clock verification](../labs/guest-rtc/evidence/sender-clock-live-verification.json).
 Eleven Rust tests, native mixer/log lifecycle checks and Clippy passed.
+
+### Paired decoded PCM handoff
+
+The next isolated lab step introduces `diagnostic_take_decoded_audio`: a typed
+native-to-Rust handoff of each decoded 10 ms PCM block with its source generation,
+sequence, SSRC, RTP timestamp, local pull observation, elapsed time, speech type,
+muted flag and channel count. The optional mixer retains three blocks per source
+in fixed arrays. Its existing pull callback copies samples without allocating or
+waiting for a consumer lock. A busy consumer causes an explicit contention drop;
+an overfull ring discards the oldest block. Polling discards blocks older than
+30 ms and source removal clears pending PCM before wrapper destruction.
+
+The first live attempt exposed an important adapter mismatch: browser Opus audio
+arrives from the native mixer in stereo even though the synthetic signal is mono.
+The initial mono-only handoff rejected almost all blocks, producing no valid
+online origin maps. This failed-format evidence is retained as
+`transport-decoded-pcm-rejoin.json`. The revised handoff preserves 480 samples per
+channel for either mono or stereo in a fixed 960-sample array. Other layouts remain
+explicitly rejected. Unused mono capacity is zeroed; no implicit downmix occurs.
+
+`DecodedOrigins` consumes the paired handoff and fits sender-report clocks during
+the run, rather than reconstructing a final-frame timestamp after disconnect.
+Each native source generation gets a fresh mapper. Reports observed before that
+generation's first delivered pull are excluded, and previously seen retained
+reports cannot refresh clock age or reset a valid map. Source state is bounded to
+64 generations, matching the existing lab probe capacity. All PCM and sender
+reports are processed off the native pull callback; only bounded origin metadata
+and aggregate nonzero-PCM counts are written to evidence, not recorded PCM.
+
+The ownership graph is unchanged: factory owns mixer; mixer owns delegate and
+source wrappers; wrappers borrow their registered WebRTC sources and own shared
+probe state; registry holds only a weak state reference. Delegate registration is
+unlinked before wrapper destruction. The new ring stores values and introduces
+no threads, file descriptors, retained callbacks or ownership back-references.
+The 100-cycle native test exercises PCM pairing, mono/stereo preservation,
+overflow, stale blocks, lock contention, unsupported format, retirement flush,
+accounting and partial teardown, with observable destruction and thread/FD counts.
+
+This handoff remains an observation path. OBS continues using the previous audio
+sink and has not switched to this PCM stream. A source RTP timestamp is not a
+qualification of original capture time: NetEq concealment, inserted/removed
+samples and time stretching still need treatment before assigning presentation
+slots. Publication/session binding and a shared local presentation timeline for
+audio and video are the next implementation steps. No recorded lip-sync result
+or speakerphone AEC result is implied by online origin mapping.
+
+#### Live paired-PCM results and presentation constraint
+
+The corrected 45-second, three-guest rejoin run delivered 10,289 paired native
+PCM blocks, with 6,563 origins mapped online. All six generations had nonzero PCM
+and zero format rejections; all three current publications had usable maps. Two
+brief retired generations closed before two fresh sender reports arrived and
+correctly stayed unmapped. Nine native pull observations were skipped by the
+nonblocking contention guard; that is explicitly recorded rather than counted as
+successful handoff. Pending PCM was flushed at retirement and quiescent accounting
+held for every recorded source.
+
+The 35-second audio-jitter run delivered 9,293 paired blocks with 7,147 mapped
+origins across all three guests, zero mapper resets and zero native pull contention.
+A separate 25-second run measured consecutive mapped-origin steps while the relay
+applied verified 20–79 ms packet delay and about 2% audio packet loss on each leg.
+All control and video packets remained unimpaired. The paired blocks still each
+contain 480 samples per channel (10 ms), but adjacent mapped origins ranged from
+0 to 27,500 microseconds. The maximum discrepancy against a continuous 10 ms PCM
+step was 17,500 microseconds. Receiver audio counters recorded concealment and
+inserted/removed samples, consistent with nonuniform decoded-origin progression;
+clock-fit refresh can also contribute to these observations, so this is not a
+proof that every discrepancy is caused by NetEq time stretching.
+
+This rules out simply stamping every block with its independently mapped RTP
+origin. Such timestamps would describe overlaps or holes in a fixed-size PCM
+stream. The next presentation implementation needs a continuous audio sample
+clock, with generation/discontinuity guards, plus a measured relation between
+sender origin and that decoded sample timeline. Video deadlines must derive from
+that same relation, rather than use an independent arrival anchor. Any correction
+must preserve PCM order and bounded queues; it must not fabricate capture time or
+silently replay old generations. Recorded baseline, video-jitter, audio-jitter and
+rejoin marker acceptance still remain mandatory after OBS is connected.
+
+In the origin-step run, first usable maps occurred at decoded sequences 618, 684
+and 805 (roughly 6–8 seconds of decoded output). This is a material startup-policy
+constraint for the two-report mapper, not acceptable hidden latency. G1 must expose
+unqualified startup or provide a separately measured bounded startup strategy;
+these diagnostic runs do not establish immediate synchronized guest admission.
+
+Evidence: `decoded-pcm-lifecycle.json`, `decoded-pcm-verification.json`,
+`transport-decoded-pcm-stereo-rejoin.json`, `transport-decoded-pcm-audio-jitter.json`
+and `transport-decoded-pcm-step-jitter.json`, with their browser and packet-relay
+companions. The verifier checks actual current audio SSRCs, generation retirement,
+PCM accounting, nonzero samples, positive mapped origins and measured packet
+impairment. Twelve Rust tests and default/OBS lint checks pass. The macOS lab
+build can set `LIVEKIT_LAB_LINK_EXTERNAL_ARCHIVE=1` to reference the unchanged
+pinned native archive at final link and avoid another ~700 MiB archive copy; this
+is an opt-in lab build change and does not modify the production application.

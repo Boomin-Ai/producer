@@ -123,6 +123,143 @@ pub fn diagnostic_maps(
             "clock_domain":"remote sender-report NTP; no sender-to-local clock offset established"}))
     }).collect()
 }
+/// Online lab consumer of paired PCM/RTP blocks. Maps remote sender time only;
+/// no sender-to-local offset or OBS scheduling is inferred from pull arrival.
+#[derive(Default)]
+pub struct DecodedOrigins {
+    sources: std::collections::BTreeMap<u64, DecodedSource>,
+    reports: Vec<SenderReport>,
+    capacity_rejected: u64,
+}
+struct DecodedSource {
+    clock: SenderClock,
+    latest_report_seen: i64,
+    last_sequence: u64,
+    consumed: u64,
+    mapped: u64,
+    unmapped: u64,
+    sequence_gaps: u64,
+    nonzero_pcm: u64,
+    observations: Vec<Value>,
+    last_mapped: Option<(u64, i64)>,
+    mapped_step_pairs: u64,
+    origin_step_min_us: Option<i64>,
+    origin_step_max_us: Option<i64>,
+    max_step_sample_error_us: u64,
+    first_mapped_sequence: Option<u64>,
+}
+impl DecodedSource {
+    fn refresh(&mut self, reports: &[SenderReport]) {
+        let ssrc = self.clock.ssrc;
+        for report in reports.iter().filter(|report| report.ssrc == ssrc) {
+            if report.observed_us > self.latest_report_seen {
+                self.clock.observe(*report);
+                self.latest_report_seen = report.observed_us;
+            }
+        }
+    }
+}
+impl DecodedOrigins {
+    pub fn refresh(&mut self, rtcp: &Value) {
+        self.reports = rtcp["peers"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .flat_map(|log| {
+                log["sender_report_history"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+            })
+            .filter(|report| report["incoming"].as_bool() == Some(true))
+            .filter_map(|report| serde_json::from_value::<SenderReport>(report.clone()).ok())
+            .collect();
+        self.reports.sort_by_key(|report| report.observed_us);
+        for source in self.sources.values_mut() {
+            source.refresh(&self.reports);
+        }
+    }
+    pub fn consume(&mut self, frame: &webrtc_sys::webrtc::ffi::DecodedAudioBlock, now_us: i64) {
+        if !self.sources.contains_key(&frame.generation) && self.sources.len() >= 64 {
+            self.capacity_rejected += 1;
+            return;
+        }
+        let source = self
+            .sources
+            .entry(frame.generation)
+            .or_insert_with(|| DecodedSource {
+                clock: SenderClock::new(frame.ssrc, 48000),
+                latest_report_seen: frame.pull_us.saturating_sub(1),
+                last_sequence: 0,
+                consumed: 0,
+                mapped: 0,
+                unmapped: 0,
+                sequence_gaps: 0,
+                nonzero_pcm: 0,
+                observations: Vec::with_capacity(16),
+                last_mapped: None,
+                mapped_step_pairs: 0,
+                origin_step_min_us: None,
+                origin_step_max_us: None,
+                max_step_sample_error_us: 0,
+                first_mapped_sequence: None,
+            });
+        source.refresh(&self.reports);
+        source.consumed += 1;
+        source.nonzero_pcm += u64::from(frame.samples.iter().any(|sample| *sample != 0));
+        source.sequence_gaps += frame
+            .sequence
+            .saturating_sub(source.last_sequence.saturating_add(1));
+        source.last_sequence = frame.sequence;
+        let origin = if source.clock.ssrc == frame.ssrc {
+            source.clock.origin_ntp_us(frame.rtp_timestamp, now_us)
+        } else {
+            None
+        };
+        if let Some(origin) = origin {
+            source.mapped += 1;
+            source.first_mapped_sequence.get_or_insert(frame.sequence);
+            if let Some((sequence, previous_origin)) = source.last_mapped {
+                if frame.sequence == sequence + 1 {
+                    let step = origin - previous_origin;
+                    source.mapped_step_pairs += 1;
+                    source.origin_step_min_us =
+                        Some(source.origin_step_min_us.map_or(step, |old| old.min(step)));
+                    source.origin_step_max_us =
+                        Some(source.origin_step_max_us.map_or(step, |old| old.max(step)));
+                    source.max_step_sample_error_us = source
+                        .max_step_sample_error_us
+                        .max((step - 10_000).unsigned_abs());
+                }
+            }
+            source.last_mapped = Some((frame.sequence, origin));
+            if source.observations.len() < 16 {
+                source.observations.push(
+                    json!({"sequence":frame.sequence,"rtp_timestamp":frame.rtp_timestamp,
+                    "origin_ntp_us":origin,"pull_us":frame.pull_us,"elapsed_ms":frame.elapsed_ms,
+                    "speech_type":frame.speech_type,"muted":frame.muted,"channels":frame.channels}),
+                );
+            }
+        } else {
+            source.unmapped += 1;
+            source.last_mapped = None;
+        }
+    }
+    pub fn report(&self) -> Value {
+        json!({"online":true,"obs_connected":false,"capture_time_qualified":false,
+            "fixture_clock_rate":48000,"capacity_rejected":self.capacity_rejected,
+            "clock_domain":"remote sender-report NTP; no sender-to-local offset",
+            "sources":self.sources.iter().map(|(generation,source)|json!({
+                "generation":generation,"ssrc":source.clock.ssrc,"blocks_consumed":source.consumed,
+                "origins_mapped":source.mapped,"origins_unavailable":source.unmapped,
+                "sequence_gaps":source.sequence_gaps,"nonzero_pcm_blocks":source.nonzero_pcm,
+                "clock_resets":source.clock.resets,"rejected_reports":source.clock.rejected,
+                "origin_observations":source.observations,"first_mapped_sequence":source.first_mapped_sequence,
+                "consecutive_mapped_pairs":source.mapped_step_pairs,
+                "origin_step_min_us":source.origin_step_min_us,"origin_step_max_us":source.origin_step_max_us,
+                "max_origin_step_error_vs_10ms_pcm_us":source.max_step_sample_error_us})).collect::<Vec<_>>()})
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -183,5 +320,41 @@ mod tests {
         assert_eq!(clock.origin_ntp_us(144000, 4_000_000), Some(104_000_000));
         let fresh = SenderClock::new(7, 48000);
         assert_eq!(fresh.origin_ntp_us(144000, 4_000_000), None);
+    }
+    #[test]
+    fn online_pcm_mapping_waits_for_reports_and_resets_on_new_generation() {
+        let frame = |generation, sequence, rtp| webrtc_sys::webrtc::ffi::DecodedAudioBlock {
+            samples: [123; 960],
+            channels: 2,
+            generation,
+            sequence,
+            ssrc: 7,
+            rtp_timestamp: rtp,
+            pull_us: if generation == 1 { 0 } else { 3_000_000 },
+            elapsed_ms: 10,
+            speech_type: 0,
+            muted: false,
+        };
+        let mut online = DecodedOrigins::default();
+        online.consume(&frame(1, 1, 48000), 2_000_000);
+        let reports = json!({"peers":[{"sender_report_history":[
+            {"incoming":true,"ssrc":7,"ntp_seconds":100,"ntp_fraction":0,"rtp_timestamp":0,"observed_us":1_000_000},
+            {"incoming":true,"ssrc":7,"ntp_seconds":101,"ntp_fraction":0,"rtp_timestamp":48000,"observed_us":2_000_000}]}]});
+        online.refresh(&reports);
+        online.consume(&frame(1, 3, 48960), 2_000_000);
+        online.refresh(&reports); // Retained old history must not reset the clock.
+        online.consume(&frame(1, 4, 49440), 2_000_000);
+        online.refresh(&json!({"peers":[]}));
+        online.consume(&frame(2, 1, 48000), 3_000_000);
+        let report = online.report();
+        assert_eq!(report["sources"][0]["origins_mapped"], 2);
+        assert_eq!(report["sources"][0]["origins_unavailable"], 1);
+        assert_eq!(report["sources"][0]["sequence_gaps"], 1);
+        assert_eq!(report["sources"][0]["clock_resets"], 0);
+        let origin = report["sources"][0]["origin_observations"][0]["origin_ntp_us"]
+            .as_i64()
+            .unwrap();
+        assert!((origin - 101_020_000).abs() <= 1); // Fixed-point truncation is at most one microsecond.
+        assert_eq!(report["sources"][1]["origins_mapped"], 0);
     }
 }

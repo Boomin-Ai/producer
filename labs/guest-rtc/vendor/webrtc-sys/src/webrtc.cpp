@@ -183,6 +183,16 @@ rust::String diagnostic_rtcp_exchange_report() {
   return rtcp_exchange_report();
 }
 
+rust::Vec<DecodedAudioBlock> diagnostic_take_decoded_audio() {
+  rust::Vec<DecodedAudioBlock> result;
+  for (const auto& block : take_timed_pcm_blocks(webrtc::TimeMicros())) {
+    result.push_back(DecodedAudioBlock{block.pcm, block.generation, block.sequence,
+      block.channels, block.ssrc, block.rtp_timestamp, block.pull_us, block.elapsed_ms,
+      block.speech_type, block.muted});
+  }
+  return result;
+}
+
 rust::String diagnostic_timed_mixer_report() {
   return timed_mixer_probe_report();
 }

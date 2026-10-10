@@ -26,6 +26,7 @@ fn main() {
     let is_desktop = target_os == "linux" || target_os == "windows" || target_os == "macos";
 
     println!("cargo:rerun-if-env-changed=LK_DEBUG_WEBRTC");
+    println!("cargo:rerun-if-env-changed=LIVEKIT_LAB_LINK_EXTERNAL_ARCHIVE");
     println!("cargo:rerun-if-env-changed=LK_CUSTOM_WEBRTC");
 
     let mut rust_files = vec![
@@ -133,7 +134,13 @@ fn main() {
     }
 
     // Link webrtc library
-    println!("cargo:rustc-link-lib=static=webrtc");
+    if target_os == "macos" && env::var("LIVEKIT_LAB_LINK_EXTERNAL_ARCHIVE").as_deref() == Ok("1") {
+        // Isolated executable lab: reference the pinned archive at final link
+        // rather than embedding another ~700 MiB copy into every Rust rlib.
+        println!("cargo:rustc-link-lib=static:-bundle=webrtc");
+    } else {
+        println!("cargo:rustc-link-lib=static=webrtc");
+    }
     match target_os.as_str() {
         "windows" => {
             println!("cargo:rustc-link-lib=dylib=msdmo");

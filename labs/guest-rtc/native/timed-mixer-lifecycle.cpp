@@ -12,13 +12,16 @@ using namespace livekit_ffi;
 class FakeSource final : public webrtc::AudioMixer::Source {
  public:
   bool fail = false;
+  uint32_t timestamp = 48000;
+  int16_t marker = 123;
+  size_t channels = 1;
   int Ssrc() const override { return 123; }
   int PreferredSampleRate() const override { return 48000; }
   AudioFrameInfo GetAudioFrameWithInfo(int rate, webrtc::AudioFrame* frame) override {
     if (fail) return AudioFrameInfo::kError;
-    std::array<int16_t,480> pcm{};
-    frame->UpdateFrame(48000, pcm.data(), 480, rate, webrtc::AudioFrame::kNormalSpeech,
-                      webrtc::AudioFrame::kVadUnknown, 1);
+    std::array<int16_t,960> pcm{}; pcm.fill(marker);
+    frame->UpdateFrame(timestamp, pcm.data(), 480, rate, webrtc::AudioFrame::kNormalSpeech,
+                      webrtc::AudioFrame::kVadUnknown, channels);
     frame->ntp_time_ms_ = 123456; frame->elapsed_time_ms_ = 1000;
     return AudioFrameInfo::kNormal;
   }
@@ -53,13 +56,37 @@ int main() {
     assert(state && state->records[0].frames == 1);
     assert(state->records[0].rtp_timestamp == 48000 && state->records[0].ntp_ms == 123456);
     assert(state->records[0].samples == 480 && output.samples_per_channel_ == 480);
+    auto blocks = take_timed_pcm_blocks(state->records[0].pull_us);
+    assert(blocks.size() == 1 && blocks[0].pcm[0] == 123 && blocks[0].pcm[479] == 123);
+    assert(blocks[0].rtp_timestamp == 48000 && blocks[0].sequence == 1 && blocks[0].ssrc == 123);
+    source.timestamp = 48480; source.marker = 456; mixer->Mix(1,&output);
+    blocks = take_timed_pcm_blocks(state->records[0].pull_us);
+    assert(blocks.size() == 1 && blocks[0].pcm[0] == 456 && blocks[0].rtp_timestamp == 48480 && blocks[0].sequence == 2);
     source.fail = true; mixer->Mix(1,&output);
-    assert(state->records[0].frames == 1); // Failed PCM never counted as valid timing.
+    assert(state->records[0].frames == 2); // Failed PCM never counted as valid timing.
+    assert(take_timed_pcm_blocks(webrtc::TimeMicros()).empty());
     source.fail = false;
+    for (int i=0;i<4;++i) { source.timestamp += 480; mixer->Mix(1,&output); }
+    blocks = take_timed_pcm_blocks(state->records[0].pull_us);
+    assert(blocks.size() == 3 && blocks[0].sequence == 4 && blocks[2].sequence == 6);
+    assert(state->records[0].pcm_overflow == 1);
+    mixer->Mix(1,&output);
+    assert(take_timed_pcm_blocks(state->records[0].pull_us + 30001).empty());
+    assert(state->records[0].pcm_stale == 1);
+    { std::lock_guard<std::mutex> lock(state->mutex); mixer->Mix(1,&output); }
+    assert(state->contention.load() == 1); // Pull must not wait for polling.
+    source.channels = 2; mixer->Mix(2,&output); source.channels = 1;
+    assert(state->records[0].pcm_format_rejected == 0);
+    blocks = take_timed_pcm_blocks(state->records[0].pull_us);
+    assert(blocks.size() == 1 && blocks[0].channels == 2 && blocks[0].pcm[959] == 456);
     // Exercise removal serialized against an in-flight audio pull.
     std::thread pull([&] { for (int i = 0; i < 20; ++i) mixer->Mix(1,&output); });
     mixer->RemoveSource(&source); pull.join();
     assert(timed_sources_alive.load() == 0 && !state->records[0].active);
+    assert(take_timed_pcm_blocks(webrtc::TimeMicros()).empty());
+    const auto& record = state->records[0];
+    assert(record.frames == record.pcm_consumed + record.pcm_overflow + record.pcm_stale + record.pcm_retired + record.pcm_format_rejected);
+
     assert(mixer->AddSource(&source));
     // Cancel/partial lifecycle: destruction without explicit RemoveSource must unlink.
     std::weak_ptr<TimedMixerState> weak = state;
@@ -68,6 +95,14 @@ int main() {
     assert(timed_sources_alive.load() == 0);
   }
   assert(timed_sources_created.load() - before == 200);
+  {
+    FakeSource source; auto state=std::make_shared<TimedMixerState>();
+    { TimedMixerSource wrapper(&source,state); webrtc::AudioFrame frame;
+      wrapper.GetAudioFrameWithInfo(32000,&frame);
+      assert(state->records[0].pcm_format_rejected == 1 && state->records[0].pcm_size == 0);
+    }
+    assert(!state->records[0].active);
+  }
   assert(timed_sources_created.load() == timed_sources_destroyed.load());
   const auto env=webrtc::CreateEnvironment();
   for(int cycle=0;cycle<100;++cycle) {

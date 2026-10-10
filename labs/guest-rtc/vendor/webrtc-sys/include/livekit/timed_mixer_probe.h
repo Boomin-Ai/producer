@@ -1,5 +1,6 @@
 // Isolated lab probe: observes existing AudioMixer pulls without altering PCM.
 #pragma once
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <memory>
@@ -14,6 +15,14 @@
 
 namespace livekit_ffi {
 inline std::atomic<uint64_t> timed_sources_alive{0}, timed_sources_created{0}, timed_sources_destroyed{0};
+struct TimedPcmBlock {
+  std::array<int16_t, 960> pcm{};
+  uint64_t generation = 0, sequence = 0;
+  uint32_t ssrc = 0, rtp_timestamp = 0, channels = 0;
+  int64_t pull_us = 0, elapsed_ms = -1;
+  int speech_type = 0;
+  bool muted = false;
+};
 struct TimedMixerRecord {
   uint64_t generation = 0, frames = 0, ntp_valid_frames = 0, packet_info_frames = 0;
   uint32_t ssrc = 0, rtp_timestamp = 0;
@@ -21,6 +30,9 @@ struct TimedMixerRecord {
   size_t samples = 0, channels = 0;
   int rate = 0, speech_type = 0;
   bool active = false;
+  std::array<TimedPcmBlock, 3> pcm_queue{};
+  size_t pcm_head = 0, pcm_size = 0;
+  uint64_t pcm_consumed = 0, pcm_overflow = 0, pcm_stale = 0, pcm_retired = 0, pcm_format_rejected = 0;
 };
 struct TimedMixerState {
   std::mutex mutex;
@@ -46,7 +58,8 @@ class TimedMixerSource final : public webrtc::AudioMixer::Source {
   }
   ~TimedMixerSource() override {
     if (slot_ < state_->records.size()) {
-      std::lock_guard<std::mutex> lock(state_->mutex); state_->records[slot_].active = false;
+      std::lock_guard<std::mutex> lock(state_->mutex); auto& record = state_->records[slot_];
+      record.active = false; record.pcm_retired += record.pcm_size; record.pcm_size = 0;
     }
     timed_sources_alive.fetch_sub(1); timed_sources_destroyed.fetch_add(1);
   }
@@ -65,6 +78,22 @@ class TimedMixerSource final : public webrtc::AudioMixer::Source {
         record.elapsed_ms = frame->elapsed_time_ms_; record.pull_us = webrtc::TimeMicros();
         record.samples = frame->samples_per_channel_; record.channels = frame->num_channels_;
         record.rate = frame->sample_rate_hz_; record.speech_type = static_cast<int>(frame->speech_type_);
+        // Fixed-size copy on the existing pull thread; no allocation or waiting.
+        if (record.rate == 48000 && (record.channels == 1 || record.channels == 2) && record.samples == 480) {
+          if (record.pcm_size == record.pcm_queue.size()) {
+            record.pcm_head = (record.pcm_head + 1) % record.pcm_queue.size();
+            --record.pcm_size; ++record.pcm_overflow;
+          }
+          auto& block = record.pcm_queue[(record.pcm_head + record.pcm_size) % record.pcm_queue.size()];
+          block.pcm.fill(0);
+          std::copy_n(frame->data(), record.channels * 480, block.pcm.begin());
+          block.channels = static_cast<uint32_t>(record.channels);
+          block.generation = record.generation; block.sequence = record.frames;
+          block.ssrc = record.ssrc; block.rtp_timestamp = record.rtp_timestamp;
+          block.pull_us = record.pull_us; block.elapsed_ms = record.elapsed_ms;
+          block.speech_type = record.speech_type; block.muted = result == AudioFrameInfo::kMuted;
+          ++record.pcm_size;
+        } else ++record.pcm_format_rejected;
       }
     }
     return result;
@@ -113,6 +142,26 @@ inline webrtc::scoped_refptr<webrtc::AudioMixer> create_timed_mixer_probe() {
   { std::lock_guard<std::mutex> lock(timed_registry_mutex); timed_registry = state; }
   return webrtc::make_ref_counted<TimedMixerProbe>(std::move(state));
 }
+// Polling side may allocate; the native audio pull never does. Only active
+// generations are drained. Retirement clears pending PCM before replacement.
+inline std::vector<TimedPcmBlock> take_timed_pcm_blocks(int64_t now_us) {
+  std::shared_ptr<TimedMixerState> state;
+  { std::lock_guard<std::mutex> lock(timed_registry_mutex); state = timed_registry.lock(); }
+  std::vector<TimedPcmBlock> blocks;
+  if (!state) return blocks;
+  blocks.reserve(64 * 3);
+  std::lock_guard<std::mutex> lock(state->mutex);
+  for (size_t i = 0; i < state->used; ++i) {
+    auto& record = state->records[i];
+    while (record.active && record.pcm_size > 0) {
+      const auto& block = record.pcm_queue[record.pcm_head];
+      if (now_us < block.pull_us || now_us - block.pull_us > 30000) ++record.pcm_stale;
+      else { blocks.push_back(block); ++record.pcm_consumed; }
+      record.pcm_head = (record.pcm_head + 1) % record.pcm_queue.size(); --record.pcm_size;
+    }
+  }
+  return blocks;
+}
 inline std::string timed_mixer_probe_report() {
   std::shared_ptr<TimedMixerState> state;
   { std::lock_guard<std::mutex> lock(timed_registry_mutex); state = timed_registry.lock(); }
@@ -132,7 +181,10 @@ inline std::string timed_mixer_probe_report() {
           << ",\"rtp_timestamp\":" << r.rtp_timestamp << ",\"ntp_ms\":" << r.ntp_ms
           << ",\"elapsed_ms\":" << r.elapsed_ms << ",\"pull_us\":" << r.pull_us
           << ",\"samples_per_channel\":" << r.samples << ",\"channels\":" << r.channels
-          << ",\"sample_rate\":" << r.rate << ",\"speech_type\":" << r.speech_type << '}';
+          << ",\"sample_rate\":" << r.rate << ",\"speech_type\":" << r.speech_type
+          << ",\"pcm_consumed\":" << r.pcm_consumed << ",\"pcm_pending\":" << r.pcm_size
+          << ",\"pcm_overflow\":" << r.pcm_overflow << ",\"pcm_stale\":" << r.pcm_stale
+          << ",\"pcm_retired\":" << r.pcm_retired << ",\"pcm_format_rejected\":" << r.pcm_format_rejected << '}';
     }
     out << "],\"contention_dropped\":" << state->contention.load()
         << ",\"capacity_exceeded\":" << state->capacity_exceeded.load();

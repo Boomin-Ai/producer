@@ -252,3 +252,26 @@ after the run, has explicit age/slope/wrap/discontinuity guards, and does not fe
 OBS. The saved three-guest rejoin run demonstrates six current report maps and
 three audio origins without enabling RRTR. This remains timing metadata evidence,
 not synchronized playback or original capture-time qualification.
+
+### Paired PCM handoff
+
+With the mixer and RTCP probes enabled, transport drains a typed, bounded decoded
+PCM handoff and maps each block's RTP timestamp online. `decoded_pcm_origin_handoff`
+reports per-generation consumption, clock availability, sequence gaps, nonzero PCM
+counts and up to 16 mapped origins. Mono and stereo 48 kHz, 480 samples per channel
+are preserved; no downmix or inferred capture timestamp is introduced. The native
+pull uses fixed arrays and try-lock; polling owns allocations and serialization.
+
+The lifecycle script now writes `evidence/decoded-pcm-lifecycle.json` and adds
+paired PCM, stereo, overflow, stale, contention, retirement and accounting checks.
+Run `python3 labs/guest-rtc/native/verify-decoded-pcm.py` to validate saved stereo
+rejoin and audio-jitter runs. The initial mono-only format failure is retained in
+`transport-decoded-pcm-rejoin.json`. OBS has not switched to this handoff, so these
+runs qualify metadata delivery and online mapping only.
+
+On macOS with limited build space, set
+`LIVEKIT_LAB_LINK_EXTERNAL_ARCHIVE=1` on every Cargo invocation. The isolated
+vendor build then links the same pinned `libwebrtc.a` at the executable link step
+rather than embedding another roughly 700 MiB copy in the Rust archive. Keep the
+native archive in place; no WebRTC implementation or runtime behavior changes.
+The default upstream bundling behavior remains available without this lab option.

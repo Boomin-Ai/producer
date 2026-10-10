@@ -455,6 +455,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     let mut tick = tokio::time::interval(Duration::from_millis(10));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut lifecycle = Vec::new();
+    let mut decoded_origins = crate::sender_clock::DecodedOrigins::default();
+    let mut next_sender_report_refresh = Instant::now();
     loop {
         tokio::select! {
             event = events.recv() => {
@@ -506,6 +508,15 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
             _ = tick.tick() => {
                 let now = Instant::now(); let elapsed = now.duration_since(began).as_secs_f64();
                 if elapsed >= seconds as f64 { break; }
+                if now >= next_sender_report_refresh {
+                    let rtcp = serde_json::from_str(&webrtc_sys::webrtc::ffi::diagnostic_rtcp_exchange_report())?;
+                    decoded_origins.refresh(&rtcp);
+                    next_sender_report_refresh = now + Duration::from_millis(100);
+                }
+                let decoded_at = audio_sys::ffi::diagnostic_webrtc_time_us();
+                for block in webrtc_sys::webrtc::ffi::diagnostic_take_decoded_audio() {
+                    decoded_origins.consume(&block, decoded_at);
+                }
                 // Stall the receiving application for 200 ms every five seconds,
                 // while WebRTC callbacks and publication continue independently.
                 #[cfg(feature = "obs-proof")]
@@ -694,7 +705,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     let report = json!({"schema_version":1,"livekit":"0.9.4","topology":"local browser guests to native host through loopback SFU",
         "signaling_url":url,"publisher_error":publisher_error,
         "sync_streams_requested":std::env::var("LIVEKIT_LAB_SYNC_STREAMS").as_deref() == Ok("1"),
-        "sender_report_origin_maps":sender_report_origin_maps,"rtcp_exchange_probe":rtcp_exchange_probe,"rrtr_lab_experiment_requested":std::env::var("LIVEKIT_LAB_RRTR").as_deref()==Ok("1"),"timed_mixer_probe":timed_mixer_probe,"remote_sender_reports":remote_sender_reports,"receiver_stats":receiver_stats,"obs_recording":obs_recording,"local_playout_clock_requested":use_playout_clock,"audio_ingest_generation_reports":audio_ingest_stats,"audio_ingest_session_totals":audio_ingest_totals,"audio_worker_lifecycle":worker_lifecycle,
+        "decoded_pcm_origin_handoff":decoded_origins.report(),"sender_report_origin_maps":sender_report_origin_maps,"rtcp_exchange_probe":rtcp_exchange_probe,"rrtr_lab_experiment_requested":std::env::var("LIVEKIT_LAB_RRTR").as_deref()==Ok("1"),"timed_mixer_probe":timed_mixer_probe,"remote_sender_reports":remote_sender_reports,"receiver_stats":receiver_stats,"obs_recording":obs_recording,"local_playout_clock_requested":use_playout_clock,"audio_ingest_generation_reports":audio_ingest_stats,"audio_ingest_session_totals":audio_ingest_totals,"audio_worker_lifecycle":worker_lifecycle,
         "duration_seconds":seconds,"consumer_stall_ms":if pressure {200} else {0},"stall_period_seconds":5,
         "native_publish_audio_internal_queue_ms":0,"callback_timestamps_are_capture_timestamps":false,
         "obs_recorded_av_qualified":false,"physical_speaker_reference_connected":false,"g1_complete":false,

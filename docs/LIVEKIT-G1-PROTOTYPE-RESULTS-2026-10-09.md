@@ -97,3 +97,26 @@ The original frame NTP estimator stayed invalid. This is end-of-run metadata
 reconstruction; per-frame PCM handoff and common OBS scheduling remain unimplemented.
 The [live verification](../labs/guest-rtc/evidence/sender-clock-live-verification.json)
 and mapper tests preserve that distinction.
+
+### Paired decoded PCM checkpoint
+
+The prototype now hands decoded mono/stereo PCM and source RTP metadata together
+from the native mixer into a bounded Rust observation path. Three-guest rejoin
+and measured audio-jitter runs produced more than 13,000 mapped blocks online,
+with no clock resets or format rejections in the corrected runs. Native lifecycle
+checks cover overflow, stale blocks, contention, retirement flush and PCM
+accounting. All 12 Rust tests and lint checks pass.
+
+A follow-up jitter run found that consecutive 10 ms PCM blocks can have mapped
+RTP-origin steps from 0 to 27.5 ms. Receiver statistics also report concealment and
+inserted/removed samples. Consequently, per-block mapped RTP origin cannot simply
+be used as the PCM presentation timestamp. A continuous audio sample timeline and
+its relation to sender time must drive video scheduling. The two-report mapper
+also took about 6–8 seconds of decoded output to become usable in that run, leaving
+a startup-policy constraint to resolve.
+
+This advances the metadata bridge; OBS still consumes the previous audio path.
+Recorded synchronization, physical speakerphone AEC, platform integration and
+production rollout remain unqualified. See
+[the paired PCM investigation](LIVEKIT-G1-PLAYOUT-BRIDGE-SPEC.md) and
+[the saved handoff verifier](../labs/guest-rtc/evidence/decoded-pcm-verification.json).

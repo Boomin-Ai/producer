@@ -115,6 +115,7 @@ std::unique_ptr<LogSink> new_log_sink(
 
 rust::String create_random_uuid();
 rust::String diagnostic_timed_mixer_report();
+rust::Vec<DecodedAudioBlock> diagnostic_take_decoded_audio();
 rust::String diagnostic_rtcp_exchange_report();
 
 rust::Vec<VideoEncoderBackend> video_encoder_backend_list();

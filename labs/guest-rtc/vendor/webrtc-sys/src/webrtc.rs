@@ -66,6 +66,20 @@ pub mod ffi {
         PreEncoded,
     }
 
+    #[derive(Debug, Clone)]
+    pub struct DecodedAudioBlock {
+        pub samples: [i16; 960],
+        pub generation: u64,
+        pub sequence: u64,
+        pub channels: u32,
+        pub ssrc: u32,
+        pub rtp_timestamp: u32,
+        pub pull_us: i64,
+        pub elapsed_ms: i64,
+        pub speech_type: i32,
+        pub muted: bool,
+    }
+
     unsafe extern "C++" {
         include!("livekit/webrtc.h");
 
@@ -73,6 +87,7 @@ pub mod ffi {
 
         fn create_random_uuid() -> String;
         fn diagnostic_timed_mixer_report() -> String;
+        fn diagnostic_take_decoded_audio() -> Vec<DecodedAudioBlock>;
         fn diagnostic_rtcp_exchange_report() -> String;
         fn video_encoder_backend_list() -> Vec<VideoEncoderBackend>;
         fn new_log_sink(fnc: fn(String, LoggingSeverity)) -> UniquePtr<LogSink>;
