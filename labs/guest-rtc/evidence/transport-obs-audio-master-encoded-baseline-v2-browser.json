@@ -1,0 +1,69 @@
+{
+  "browser": "154.0.8037.98",
+  "guests": 1,
+  "mode": "normal",
+  "states": [
+    {
+      "identity": "guest-1",
+      "connected": true,
+      "published": true,
+      "returnAudioBlocks": 826,
+      "returnAudioPulses": 13,
+      "returnVideoFrames": 392,
+      "events": [
+        "return-audio",
+        "return-video"
+      ],
+      "audioMaxRms": 0.28535827459690566,
+      "error": null,
+      "syncStreams": true
+    }
+  ],
+  "audioStats": [
+    [
+      {
+        "id": "IT01A3344578468",
+        "timestamp": 1791632458001.31,
+        "type": "inbound-rtp",
+        "codecId": "CIT01_111_minptime=10;stereo=1;useinbandfec=1",
+        "kind": "audio",
+        "mediaType": "audio",
+        "ssrc": 3344578468,
+        "transportId": "T01",
+        "jitter": 0.001,
+        "packetsLost": 0,
+        "packetsReceived": 206,
+        "packetsReceivedWithCe": 0,
+        "packetsReceivedWithEct1": 0,
+        "audioLevel": 0,
+        "bytesReceived": 2746,
+        "concealedSamples": 0,
+        "concealmentEvents": 0,
+        "fecPacketsDiscarded": 0,
+        "fecPacketsReceived": 0,
+        "headerBytesReceived": 2472,
+        "insertedSamplesForDeceleration": 1080,
+        "jitterBufferDelay": 5760,
+        "jitterBufferEmittedCount": 195840,
+        "jitterBufferMinimumDelay": 5529.6,
+        "jitterBufferTargetDelay": 5529.6,
+        "lastPacketReceivedTimestamp": 1791632457987.57,
+        "mid": "8",
+        "packetsDiscarded": 0,
+        "playoutId": "AP",
+        "removedSamplesForAcceleration": 240,
+        "silentConcealedSamples": 0,
+        "totalAudioEnergy": 0,
+        "totalProcessingDelay": 4601.2032,
+        "totalSamplesDuration": 4.079999999999957,
+        "totalSamplesReceived": 195840,
+        "trackIdentifier": "06b2b01c-fe82-4884-ac0a-1d475f0241f8"
+      }
+    ]
+  ],
+  "impairments": [],
+  "packetProbe": [],
+  "return_transport_observed": true,
+  "hardware_capture_used": false,
+  "physical_speaker_playout_used": false
+}

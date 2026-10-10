@@ -1,0 +1,69 @@
+{
+  "browser": "154.0.8037.98",
+  "guests": 1,
+  "mode": "normal",
+  "states": [
+    {
+      "identity": "guest-1",
+      "connected": true,
+      "published": true,
+      "returnAudioBlocks": 845,
+      "returnAudioPulses": 13,
+      "returnVideoFrames": 383,
+      "events": [
+        "return-audio",
+        "return-video"
+      ],
+      "audioMaxRms": 0.2899791114079779,
+      "error": null,
+      "syncStreams": true
+    }
+  ],
+  "audioStats": [
+    [
+      {
+        "id": "IT01A596936856",
+        "timestamp": 1791633260328.71,
+        "type": "inbound-rtp",
+        "codecId": "CIT01_111_minptime=10;stereo=1;useinbandfec=1",
+        "kind": "audio",
+        "mediaType": "audio",
+        "ssrc": 596936856,
+        "transportId": "T01",
+        "jitter": 0.002,
+        "packetsLost": 0,
+        "packetsReceived": 206,
+        "packetsReceivedWithCe": 0,
+        "packetsReceivedWithEct1": 0,
+        "audioLevel": 0,
+        "bytesReceived": 2746,
+        "concealedSamples": 0,
+        "concealmentEvents": 0,
+        "fecPacketsDiscarded": 0,
+        "fecPacketsReceived": 0,
+        "headerBytesReceived": 2472,
+        "insertedSamplesForDeceleration": 1080,
+        "jitterBufferDelay": 6883.2,
+        "jitterBufferEmittedCount": 195840,
+        "jitterBufferMinimumDelay": 5472,
+        "jitterBufferTargetDelay": 5472,
+        "lastPacketReceivedTimestamp": 1791633260326.3,
+        "mid": "8",
+        "packetsDiscarded": 0,
+        "playoutId": "AP",
+        "removedSamplesForAcceleration": 240,
+        "silentConcealedSamples": 0,
+        "totalAudioEnergy": 0,
+        "totalProcessingDelay": 5974.88832,
+        "totalSamplesDuration": 4.089999999999957,
+        "totalSamplesReceived": 196320,
+        "trackIdentifier": "1bf89d04-bc88-49aa-9dd8-bebe065dc8eb"
+      }
+    ]
+  ],
+  "impairments": [],
+  "packetProbe": [],
+  "return_transport_observed": true,
+  "hardware_capture_used": false,
+  "physical_speaker_playout_used": false
+}

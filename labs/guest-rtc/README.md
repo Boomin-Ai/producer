@@ -307,3 +307,38 @@ This experiment is unqualified: jitter still fails the recorded 80 ms gate,
 startup waits for two sender reports, and raw-mix versus recording offsets need
 encoder/muxer investigation. See the October 10 checkpoint in
 [prototype results](../../docs/LIVEKIT-G1-PROTOTYPE-RESULTS-2026-10-09.md).
+
+### Pre-mux timing and independent audio decoding
+
+The raw pipeline option also installs a synchronous OBS output packet callback.
+It copies timestamps only, with an 8,192-entry cap and try-lock; the recorder
+unregisters it before releasing the output. Its lifecycle workload includes an
+injected failure after packet registration. The lab samples AAC priming while the
+encoder is active, because OBS destroys encoder context data on stop.
+
+```sh
+python3 native/build-audio-decoder.py
+swiftc -suppress-warnings inspect-container.swift -o runtime/inspect-container
+runtime/inspect-container runtime/example.mp4 evidence/example-container.json
+DYLD_LIBRARY_PATH=/Applications/Producer.app/Contents/Frameworks \
+  runtime/decode-audio-markers runtime/example.mp4
+python3 native/compare-decoders.py
+python3 native/verify-packet-timing.py
+```
+
+The decoder builder fetches only FFmpeg 7.1.1 headers into ignored runtime storage;
+it requires the installed Producer libraries to report `n7.1.1`. Compressed sample
+timing is read without decoding by the Swift inspector. The independent C decoder
+reads the synthetic audio file using FFmpeg, with explicit packet/frame/context
+cleanup; it captures and plays nothing. Comparisons preserve archived AVFoundation
+failures instead of replacing them with another decoder's results.
+
+`LIVEKIT_LAB_OBS_FINALIZED_MP4=1` selects `movflags=faststart` in the lab for container
+comparison. It requires successful finalization and is not a crash recovery policy.
+Fragmented MP4 remains the default and production configuration. The observed
+cross-decoder disagreement disappears in the finalized comparison, but jitter and
+missing video markers still prevent G1 qualification.
+
+The opt-in external archive build now also passes macOS linker `-S`, avoiding a
+large temporary binary containing unused upstream native debug symbols. Disk-full
+recordings and failed links are excluded from synchronization evidence.

@@ -8,7 +8,7 @@ use std::{
     path::Path,
     ptr,
     sync::{
-        atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicI64, AtomicU64, AtomicUsize, Ordering},
         Mutex,
     },
     time::{Duration, Instant},
@@ -42,6 +42,17 @@ extern "C" {
     fn obs_source_set_async_unbuffered(source: *mut ffi::obs_source_t, unbuffered: bool);
     fn obs_source_set_async_decoupled(source: *mut ffi::obs_source_t, decoupled: bool);
     fn obs_add_safe_module(name: *const std::ffi::c_char);
+    fn obs_output_add_packet_callback(
+        output: *mut ffi::obs_output_t,
+        callback: PacketCallback,
+        param: *mut c_void,
+    );
+    fn obs_output_remove_packet_callback(
+        output: *mut ffi::obs_output_t,
+        callback: PacketCallback,
+        param: *mut c_void,
+    );
+    fn obs_encoder_get_priming_samples(encoder: *const ffi::obs_encoder_t) -> u32;
     fn obs_add_raw_audio_callback(
         mix: usize,
         conversion: *const c_void,
@@ -127,6 +138,53 @@ struct RawVideoState {
     active: bool,
     overflow: u64,
 }
+// Pinned public layouts from OBS 32.1.2 libobs/obs-encoder.h.
+#[repr(C)]
+struct EncoderPacket {
+    data: *mut u8,
+    size: usize,
+    pts: i64,
+    dts: i64,
+    timebase_num: i32,
+    timebase_den: i32,
+    kind: i32,
+    keyframe: bool,
+    dts_usec: i64,
+    sys_dts_usec: i64,
+    priority: i32,
+    drop_priority: i32,
+    track_idx: usize,
+    encoder: *mut ffi::obs_encoder_t,
+}
+#[repr(C)]
+struct EncoderPacketTime {
+    pts: i64,
+    cts: u64,
+    fer: u64,
+    ferc: u64,
+    pir: u64,
+}
+type PacketCallback =
+    extern "C" fn(*mut ffi::obs_output_t, *mut EncoderPacket, *mut EncoderPacketTime, *mut c_void);
+#[derive(serde::Serialize)]
+struct PacketStamp {
+    video: bool,
+    pts: i64,
+    dts: i64,
+    timebase_num: i32,
+    timebase_den: i32,
+    dts_usec: i64,
+    sys_dts_usec: i64,
+    observed_ns: u64,
+    composition_ns: Option<u64>,
+    encode_request_ns: Option<u64>,
+    encode_complete_ns: Option<u64>,
+    interleave_ns: Option<u64>,
+}
+struct PacketState {
+    stamps: Vec<PacketStamp>,
+    overflow: u64,
+}
 struct RawVideoProbe {
     state: Mutex<RawVideoState>,
     audio_state: Mutex<RawVideoState>,
@@ -134,6 +192,9 @@ struct RawVideoProbe {
     frames: AtomicU64,
     contention: AtomicU64,
     registered: AtomicBool,
+    packet_output: AtomicUsize,
+    packet_count: AtomicU64,
+    packet_state: Mutex<PacketState>,
 }
 impl RawVideoProbe {
     fn new() -> Self {
@@ -156,9 +217,25 @@ impl RawVideoProbe {
             frames: AtomicU64::new(0),
             contention: AtomicU64::new(0),
             registered: AtomicBool::new(false),
+            packet_output: AtomicUsize::new(0),
+            packet_count: AtomicU64::new(0),
+            packet_state: Mutex::new(PacketState {
+                stamps: Vec::with_capacity(8192),
+                overflow: 0,
+            }),
         }
     }
     fn remove(&self) {
+        let output = self.packet_output.swap(0, Ordering::AcqRel);
+        if output != 0 {
+            unsafe {
+                obs_output_remove_packet_callback(
+                    output as *mut ffi::obs_output_t,
+                    encoded_packet_probe,
+                    self as *const Self as *mut c_void,
+                );
+            }
+        }
         if self.registered.swap(false, Ordering::AcqRel) {
             unsafe {
                 obs_remove_raw_audio_callback(
@@ -176,10 +253,13 @@ impl RawVideoProbe {
     fn report(&self) -> serde_json::Value {
         let state = self.state.lock().unwrap();
         let audio = self.audio_state.lock().unwrap();
+        let packets = self.packet_state.lock().unwrap();
         serde_json::json!({"frames":self.frames.load(Ordering::Relaxed),"contention_dropped":self.contention.load(Ordering::Relaxed),
             "registered":self.registered.load(Ordering::Acquire),"capacity":64,"overflow":state.overflow,
             "audio_frames":self.audio_frames.load(Ordering::Relaxed), "audio_marker_window_ms":10,
             "audio_overflow":audio.overflow,
+            "packet_probe":{"capacity":8192,"registered":self.packet_output.load(Ordering::Acquire)!=0,
+                "count":self.packet_count.load(Ordering::Relaxed),"overflow":packets.overflow,"stamps":packets.stamps},
             "audio_markers":audio.markers[..audio.used].iter().map(|m|serde_json::json!({"timestamp_ns":m.timestamp_ns,"observed_ns":m.observed_ns})).collect::<Vec<_>>(),
             "markers":state.markers[..state.used].iter().map(|m|serde_json::json!({"timestamp_ns":m.timestamp_ns,"observed_ns":m.observed_ns})).collect::<Vec<_>>()})
     }
@@ -264,6 +344,43 @@ extern "C" fn raw_audio_probe(param: *mut c_void, mix: usize, data: *mut ffi::au
         state.active = active;
     }
 }
+// Synchronous pre-mux callback: copy bounded timestamp metadata only. No packet
+// payloads are retained or modified; the OBS output pointer is a non-owning edge.
+extern "C" fn encoded_packet_probe(
+    _output: *mut ffi::obs_output_t,
+    packet: *mut EncoderPacket,
+    time: *mut EncoderPacketTime,
+    param: *mut c_void,
+) {
+    if packet.is_null() || param.is_null() {
+        return;
+    }
+    let (probe, packet) = unsafe { (&*(param as *const RawVideoProbe), &*packet) };
+    probe.packet_count.fetch_add(1, Ordering::Relaxed);
+    let Ok(mut state) = probe.packet_state.try_lock() else {
+        probe.contention.fetch_add(1, Ordering::Relaxed);
+        return;
+    };
+    if state.stamps.len() == 8192 {
+        state.overflow += 1;
+        return;
+    }
+    let time = unsafe { time.as_ref() };
+    state.stamps.push(PacketStamp {
+        video: packet.kind == 1,
+        pts: packet.pts,
+        dts: packet.dts,
+        timebase_num: packet.timebase_num,
+        timebase_den: packet.timebase_den,
+        dts_usec: packet.dts_usec,
+        sys_dts_usec: packet.sys_dts_usec,
+        observed_ns: unsafe { guest_obs_now_ns() },
+        composition_ns: time.map(|t| t.cts),
+        encode_request_ns: time.map(|t| t.fer),
+        encode_complete_ns: time.map(|t| t.ferc),
+        interleave_ns: time.map(|t| t.pir),
+    });
+}
 pub fn pipeline_probe_lifecycle() -> serde_json::Value {
     serde_json::json!({"alive":PIPELINE_PROBES_ALIVE.load(Ordering::Relaxed),"created":PIPELINE_PROBES_CREATED.load(Ordering::Relaxed),"destroyed":PIPELINE_PROBES_DESTROYED.load(Ordering::Relaxed)})
 }
@@ -273,6 +390,8 @@ pub struct Recorder {
     output: *mut ffi::obs_output_t,
     video_encoder: *mut ffi::obs_encoder_t,
     audio_encoder: *mut ffi::obs_encoder_t,
+    audio_priming_samples: u32,
+    finalized_mp4: bool,
     origin: Instant,
     origin_ns: u64,
     stop: Box<Stop>,
@@ -294,6 +413,8 @@ impl Recorder {
             output: ptr::null_mut(),
             video_encoder: ptr::null_mut(),
             audio_encoder: ptr::null_mut(),
+            audio_priming_samples: 0,
+            finalized_mp4: std::env::var("LIVEKIT_LAB_OBS_FINALIZED_MP4").as_deref() == Ok("1"),
             origin: Instant::now(),
             origin_ns: 0,
             stop: Box::new(Stop {
@@ -442,7 +563,12 @@ impl Recorder {
             ffi::obs_data_set_string(
                 settings,
                 c("muxer_settings").as_ptr(),
-                c("movflags=frag_keyframe+empty_moov+default_base_moof").as_ptr(),
+                c(if r.finalized_mp4 {
+                    "movflags=faststart"
+                } else {
+                    "movflags=frag_keyframe+empty_moov+default_base_moof"
+                })
+                .as_ptr(),
             );
             r.output = ffi::obs_output_create(
                 c("ffmpeg_muxer").as_ptr(),
@@ -454,6 +580,19 @@ impl Recorder {
             ensure!(!r.output.is_null(), "OBS proof muxer creation failed");
             ffi::obs_output_set_video_encoder(r.output, r.video_encoder);
             ffi::obs_output_set_audio_encoder(r.output, r.audio_encoder, 0);
+            if let Some(probe) = &r.raw_probe {
+                obs_output_add_packet_callback(
+                    r.output,
+                    encoded_packet_probe,
+                    &**probe as *const RawVideoProbe as *mut c_void,
+                );
+                probe
+                    .packet_output
+                    .store(r.output as usize, Ordering::Release);
+                if std::env::var("LIVEKIT_LAB_OBS_FAIL_AFTER_PACKET_PROBE").as_deref() == Ok("1") {
+                    bail!("Injected lab failure after packet callback registration");
+                }
+            }
             ffi::signal_handler_connect(
                 ffi::obs_output_get_signal_handler(r.output),
                 c("stop").as_ptr(),
@@ -464,6 +603,8 @@ impl Recorder {
                 ffi::obs_output_start(r.output),
                 "OBS proof recording failed to start"
             );
+            // Stop destroys encoder context data; query padding while active.
+            r.audio_priming_samples = obs_encoder_get_priming_samples(r.audio_encoder);
         }
         Ok(r)
     }
@@ -524,6 +665,7 @@ impl Recorder {
             let before = (
                 probe.frames.load(Ordering::Acquire),
                 probe.audio_frames.load(Ordering::Acquire),
+                probe.packet_count.load(Ordering::Acquire),
             );
             for _ in 0..5 {
                 self.pump();
@@ -532,6 +674,7 @@ impl Recorder {
             let after = (
                 probe.frames.load(Ordering::Acquire),
                 probe.audio_frames.load(Ordering::Acquire),
+                probe.packet_count.load(Ordering::Acquire),
             );
             ensure!(
                 before == after,
@@ -544,7 +687,7 @@ impl Recorder {
             None
         };
         Ok(
-            serde_json::json!({"raw_video_pipeline_probe":raw_probe,"stop_code":code,"frames":unsafe {ffi::obs_output_get_total_frames(self.output)},
+            serde_json::json!({"raw_video_pipeline_probe":raw_probe,"audio_priming_samples":self.audio_priming_samples,"container_mode":if self.finalized_mp4 {"finalized-comparison"}else{"fragmented-default"},"stop_code":code,"frames":unsafe {ffi::obs_output_get_total_frames(self.output)},
             "clock":if std::env::var("LIVEKIT_LAB_AUDIO_MASTER").as_deref() == Ok("1") {
                 "shared OBS monotonic anchor + continuous decoded audio sample timeline; sender-relative video mapping unqualified"
             } else { "shared OBS monotonic anchor + callback Instant elapsed; sender clock unqualified" },
@@ -651,11 +794,11 @@ pub fn lifecycle(output: &Path) -> Result<()> {
         reports.push(serde_json::json!({"cycle":cycle,"cancelled":cycle==3,"recording":path.file_name().unwrap().to_string_lossy(),
             "threads_after_shutdown":current.0,"fds_after_shutdown":current.1,"probe_lifecycle":counters,"finish":result}));
     }
-    std::env::set_var("LIVEKIT_LAB_OBS_FAIL_AFTER_PROBE", "1");
+    std::env::set_var("LIVEKIT_LAB_OBS_FAIL_AFTER_PACKET_PROBE", "1");
     let partial = Recorder::start(&root.join(format!("partial-init-{}.mp4", unsafe {
         guest_obs_now_ns()
     })));
-    std::env::remove_var("LIVEKIT_LAB_OBS_FAIL_AFTER_PROBE");
+    std::env::remove_var("LIVEKIT_LAB_OBS_FAIL_AFTER_PACKET_PROBE");
     ensure!(
         partial.is_err(),
         "Partial-initialization fault was not injected"
@@ -683,7 +826,7 @@ pub fn lifecycle(output: &Path) -> Result<()> {
             &serde_json::json!({"cycles":reports,"initial_threads":initial.0,
         "initial_fds":initial.1,"warm_threads":warm.unwrap().0,"warm_fds":warm.unwrap().1,
         "hardware_capture":false,"speaker_playout":false,"success_and_drop_cancellation":true,
-        "partial_initialization":{"injected_after_callback_registration":true,
+        "partial_initialization":{"injected_after_callback_registration":true,"injected_after_packet_callback_registration":true,
             "probe_lifecycle":partial_lifecycle,"threads_after_shutdown":partial_counts.0,"fds_after_shutdown":partial_counts.1}}),
         )?,
     )?;

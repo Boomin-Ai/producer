@@ -1,9 +1,15 @@
 use std::{env, path::PathBuf, process::Command};
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-env-changed=LIVEKIT_LAB_LINK_EXTERNAL_ARCHIVE");
     println!("cargo:rerun-if-changed=src/obs_bridge.m");
     if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
         println!("cargo:rustc-link-arg=-ObjC");
+        if env::var("LIVEKIT_LAB_LINK_EXTERNAL_ARCHIVE").as_deref() == Ok("1") {
+            // Discard upstream native DWARF during linking rather than creating
+            // a large unstripped binary and another objcopy temporary file.
+            println!("cargo:rustc-link-arg=-Wl,-S");
+        }
     }
     if env::var_os("CARGO_FEATURE_OBS_PROOF").is_some() {
         assert_eq!(

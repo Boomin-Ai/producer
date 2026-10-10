@@ -187,3 +187,72 @@ repeat asymmetric jitter and rejoin qualification after any clock correction.
 Speaker-reference AEC, permission/admission concurrency, cue routing, Windows
 packaging and production integration remain gated. No production/provider change
 was made by this checkpoint.
+
+### Pre-mux and independent-decoder checkpoint — October 10
+
+The recorder now observes bounded timestamp metadata immediately before OBS forwards
+encoded packets to its muxer. Audio/video packets share a common monotonic origin
+within 0.01 ms in the complete runs. A compressed-sample inspector and an independent
+FFmpeg 7.1.1 audio decoder separate this timeline from AVFoundation decoding.
+
+The complete fragmented baseline exposes a decoder discrepancy: video markers in
+the MP4 are shifted +21.35 ms from their raw mix timestamps, while AVFoundation's
+PCM markers appear about 17–30 ms earlier. FFmpeg places audio markers roughly
+35–52 ms later than AVFoundation in the same file. That changes the baseline's
+local marker result from 94.02 ms to 50.69 ms p95. This does not erase the original
+Apple playback observation; both decoders' results and the recording hash are retained.
+
+A fresh, valid video-jitter run still fails: 138.69 ms using AVFoundation audio,
+85.35 ms using independently decoded audio. All nine markers match in that run.
+The historical scheduled video-jitter recording also still fails with independent
+audio at 95.35 ms and unmatched markers. The direct-clock implementations retain
+large failures. Several other scheduled recordings pass with independent audio.
+Thus the earlier results combined a real scheduling problem with decoder/container
+behavior; changing the decoder does not complete G1.
+
+An opt-in finalized MP4 comparison uses `movflags=faststart`. Audio decoders then
+agree within about 0–7 ms, and video no longer has the +21.35 ms container shift.
+This is evidence that the fragmented container/priming path contributes to the
+cross-decoder discrepancy. AAC priming reports 1,024 samples. The finalized baseline
+has matched-pair p95 of 28.67 ms (AVFoundation) / 23.33 ms (independent audio), but
+misses five video markers and therefore fails the full local gate. The application
+rejects those early video deadlines; they are not decoder-only missing samples.
+A production fix must preserve crash recovery and explain container priming across
+players; finalized MP4 is a diagnostic comparison, not a proposed replacement policy.
+
+The recorder owns all three callback pointers through one boxed observer. Packet
+storage is capped at 8,192 timestamp records, with no encoded payload copies or
+callback allocation. Four success/cancellation cycles plus an injected failure
+following packet registration destroy all five observers; post-warmup thread/FD
+counts remain bounded (12 / 14 in this workload). Fifteen OBS-feature Rust
+tests, default/OBS Clippy, strict C compilation, and all three saved timing
+verifiers pass; synchronization failures remain represented in their reports. Querying priming after stop crashed
+the first diagnostic workload; the corrected code captures it while the encoder is
+active and passes repeated teardown. Production code was not changed.
+
+Low disk space invalidated one jitter attempt and truncated an initial link artifact;
+those attempts are excluded from successful timing evidence. Inactive lab logs were
+compressed and stale compiled debug binaries removed. A linker-only debug stripping
+option avoids another large temporary binary. The upstream cached native archive
+remains intact; the attempted stripped copy failed and was removed.
+
+Evidence: [decoder comparison](../labs/guest-rtc/evidence/decoder-comparison.json),
+[packet/container verification](../labs/guest-rtc/evidence/packet-timing-verification.json),
+[three-callback lifecycle](../labs/guest-rtc/evidence/obs-packet-pipeline-lifecycle.json).
+Remaining gates: stable video deadlines without missing markers, startup/report
+warmup, current-clock reconnect qualification, physical speakerphone AEC, admission
+concurrency, cue routing and platform packaging. G1 remains incomplete.
+
+A 45-second finalized-format test with three guests and three guest-1 rejoins now
+verifies observable queue retirement but fails synchronization: matched-pair
+p95 is 88.67 ms (AVFoundation) / 97.33 ms (independent audio), with one unmatched
+audio marker. Six native source generations are destroyed, both application queues
+are empty after teardown, and queue counts reconcile. The audio-master records
+14 resets and 2,436 startup-dropped 10 ms blocks; report warmup across reconnects
+interrupts the output. Nineteen late audio blocks and four late video frames remain
+visible. None of these reconnect results qualify G1.
+
+Next implementation work is stable presentation origin/deadline handling across
+startup and publication replacement, with rejection reasons and measured warmup.
+A fixed recording offset would not address these failures. Physical speakerphone
+AEC and production integration remain separate gates.
