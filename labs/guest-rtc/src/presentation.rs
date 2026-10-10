@@ -7,6 +7,9 @@ use std::time::{Duration, Instant};
 
 pub struct Presentation {
     delay: Duration,
+    max_video_lead: Duration,
+    video_lead_total_us: u128,
+    video_lead_max_us: u128,
     audio: Option<(u64, u64, Instant)>,
     origin: Option<(i64, Instant, Instant)>,
     last_video: Option<Instant>,
@@ -24,6 +27,9 @@ impl Presentation {
         assert!(delay <= Duration::from_millis(200));
         Self {
             delay,
+            max_video_lead: Duration::from_millis(250),
+            video_lead_total_us: 0,
+            video_lead_max_us: 0,
             audio: None,
             origin: None,
             last_video: None,
@@ -35,6 +41,20 @@ impl Presentation {
             began: Instant::now(),
             reasons: BTreeMap::new(),
             diagnostics: VecDeque::with_capacity(64),
+        }
+    }
+    fn with_video_buffer(delay: Duration, extended: bool) -> Self {
+        let mut clock = Self::new(delay);
+        if extended {
+            clock.max_video_lead = Duration::from_millis(400);
+        }
+        clock
+    }
+    pub fn video_capacity(&self) -> usize {
+        if self.max_video_lead > Duration::from_millis(250) {
+            14
+        } else {
+            8
         }
     }
     pub fn reset_count(&self) -> u64 {
@@ -174,7 +194,7 @@ impl Presentation {
             if late > 30_000 {
                 return Err(("video_deadline_late", details));
             }
-            if lead > 250_000 {
+            if lead > self.max_video_lead.as_micros() {
                 return Err(("video_deadline_too_early", details));
             }
             if let Some(last) = self.last_video {
@@ -189,6 +209,9 @@ impl Presentation {
         match result {
             Ok(stamp) => {
                 self.video_submitted += 1;
+                let lead = stamp.saturating_duration_since(arrival).as_micros();
+                self.video_lead_total_us += lead;
+                self.video_lead_max_us = self.video_lead_max_us.max(lead);
                 self.last_video = Some(stamp);
                 Some(stamp)
             }
@@ -203,11 +226,120 @@ impl Presentation {
         json!({"audio_master":true,"presentation_delay_ms":self.delay.as_millis(),
             "audio_submitted":self.audio_submitted,"audio_startup_dropped":self.audio_startup_dropped,
             "video_submitted":self.video_submitted,"video_rejected":self.video_rejected,"clock_resets":self.resets,"failure_reasons":self.reasons,"diagnostics":self.diagnostics,
-            "sender_capture_time_qualified":false})
+            "video_max_lead_ms":self.max_video_lead.as_millis(),"video_mean_lead_us":self.video_lead_total_us.checked_div(u128::from(self.video_submitted)),"video_observed_max_lead_us":self.video_lead_max_us,"sender_capture_time_qualified":false})
+    }
+}
+/// Bounded numeric observations; never changes scheduling or retains media.
+#[derive(serde::Serialize)]
+struct AudioLabelPoint {
+    generation: u64,
+    sequence: u64,
+    rtp: u32,
+    bootstrap: bool,
+    origin_us: i64,
+    local_us: u128,
+    label_step_error_us: i128,
+    label_shift_since_start_us: i128,
+}
+struct AudioLabels {
+    began: Instant,
+    first: Option<(u64, i64, Instant)>,
+    previous: Option<(i64, Instant, bool)>,
+    last_saved: Option<Instant>,
+    points: VecDeque<AudioLabelPoint>,
+    observations: u64,
+    transitions: u64,
+    max_step_error_us: u128,
+    max_shift_us: u128,
+}
+impl AudioLabels {
+    fn new() -> Self {
+        Self {
+            began: Instant::now(),
+            first: None,
+            previous: None,
+            last_saved: None,
+            points: VecDeque::with_capacity(192),
+            observations: 0,
+            transitions: 0,
+            max_step_error_us: 0,
+            max_shift_us: 0,
+        }
+    }
+    fn clear(&mut self) {
+        self.first = None;
+        self.previous = None;
+        self.last_saved = None;
+    }
+    fn observe(
+        &mut self,
+        generation: u64,
+        sequence: u64,
+        rtp: u32,
+        bootstrap: bool,
+        origin: i64,
+        stamp: Instant,
+    ) {
+        if self.first.is_some_and(|(old, _, _)| old != generation) {
+            self.clear();
+        }
+        let (_, first_origin, first_stamp) = *self.first.get_or_insert((generation, origin, stamp));
+        let shift =
+            i128::from(origin) - i128::from(first_origin) - signed_micros(stamp, first_stamp);
+        let (step, transition) = self.previous.map_or(
+            (0, false),
+            |(previous, previous_stamp, previous_bootstrap)| {
+                (
+                    i128::from(origin)
+                        - i128::from(previous)
+                        - signed_micros(stamp, previous_stamp),
+                    bootstrap != previous_bootstrap,
+                )
+            },
+        );
+        self.observations += 1;
+        self.transitions += u64::from(transition);
+        self.max_step_error_us = self.max_step_error_us.max(step.unsigned_abs());
+        self.max_shift_us = self.max_shift_us.max(shift.unsigned_abs());
+        if transition
+            || step.unsigned_abs() > 30_000
+            || self.last_saved.is_none_or(|last| {
+                stamp.saturating_duration_since(last) >= Duration::from_millis(250)
+            })
+        {
+            if self.points.len() == 192 {
+                self.points.pop_front();
+            }
+            self.points.push_back(AudioLabelPoint {
+                generation,
+                sequence,
+                rtp,
+                bootstrap,
+                origin_us: origin,
+                local_us: stamp.saturating_duration_since(self.began).as_micros(),
+                label_step_error_us: step,
+                label_shift_since_start_us: shift,
+            });
+            self.last_saved = Some(stamp);
+        }
+        self.previous = Some((origin, stamp, bootstrap));
+    }
+    fn report(&self) -> Value {
+        json!({"observations":self.observations,"bootstrap_transitions":self.transitions,
+            "max_label_step_error_us":self.max_step_error_us,"max_label_shift_us":self.max_shift_us,
+            "capacity":192,"points":self.points,"observations_only":true})
+    }
+}
+fn signed_micros(left: Instant, right: Instant) -> i128 {
+    if left >= right {
+        left.duration_since(right).as_micros() as i128
+    } else {
+        -(right.duration_since(left).as_micros() as i128)
     }
 }
 pub struct SelectedPlayback {
     pub clock: Presentation,
+    labels: AudioLabels,
     pub bootstrap: bool,
     pub audio_bootstrap_blocks: u64,
     video_bootstrap_frames: u64,
@@ -224,7 +356,11 @@ pub struct SelectedPlayback {
 impl SelectedPlayback {
     pub fn new(since_us: i64) -> Self {
         Self {
-            clock: Presentation::new(Duration::from_millis(120)),
+            clock: Presentation::with_video_buffer(
+                Duration::from_millis(120),
+                std::env::var("LIVEKIT_LAB_EXTENDED_VIDEO_BUFFER").as_deref() == Ok("1"),
+            ),
+            labels: AudioLabels::new(),
             bootstrap: std::env::var("LIVEKIT_LAB_FIRST_REPORT_BOOTSTRAP").as_deref() == Ok("1"),
             audio_bootstrap_blocks: 0,
             video_bootstrap_frames: 0,
@@ -241,11 +377,24 @@ impl SelectedPlayback {
     }
     pub fn clear(&mut self, since_us: i64) {
         self.clock.clear();
+        self.labels.clear();
         self.audio_binding = None;
         self.video_binding = None;
         self.since_us = since_us;
         self.audio_marker_active = false;
         self.video_marker_active = false;
+    }
+    pub fn audio_label(
+        &mut self,
+        generation: u64,
+        sequence: u64,
+        rtp: u32,
+        bootstrap: bool,
+        origin: i64,
+        stamp: Instant,
+    ) {
+        self.labels
+            .observe(generation, sequence, rtp, bootstrap, origin, stamp);
     }
     pub fn refresh(&mut self, rtcp: &Value) {
         let Some((_, ssrc, clock, seen)) = &mut self.video_binding else {
@@ -310,7 +459,7 @@ impl SelectedPlayback {
         origin
     }
     pub fn report(&self) -> Value {
-        json!({"clock":self.clock.report(),"audio_binding":self.audio_binding,
+        json!({"clock":self.clock.report(),"audio_labels":self.labels.report(),"audio_binding":self.audio_binding,
             "video_binding":self.video_binding.as_ref().map(|(sid,ssrc,clock,_)|json!({
                 "sid":sid,"ssrc":ssrc,"clock_resets":clock.resets,"rejected_reports":clock.rejected})),
             "input_marker_deadlines":self.markers,"unmatched_audio_blocks":self.unmatched_audio,"invalid_audio_pull":self.invalid_audio_pull,
@@ -321,6 +470,47 @@ impl SelectedPlayback {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn extended_buffer_retains_early_frames_but_keeps_a_hard_bound() {
+        let now = Instant::now();
+        let mut normal = Presentation::new(Duration::from_millis(120));
+        let mut extended = Presentation::with_video_buffer(Duration::from_millis(120), true);
+        normal.audio(1, 1, Some(1_000_000), now);
+        extended.audio(1, 1, Some(1_000_000), now);
+        assert_eq!(normal.video(Some(1_240_000), now), None);
+        assert_eq!(
+            extended.video(Some(1_240_000), now),
+            Some(now + Duration::from_millis(360))
+        );
+        assert_eq!(extended.video(Some(1_281_000), now), None);
+        assert_eq!(extended.video_capacity(), 14);
+        assert_eq!(normal.video_capacity(), 8);
+        assert_eq!(extended.report()["video_observed_max_lead_us"], 360_000);
+    }
+    #[test]
+    fn label_trace_distinguishes_transition_jump_from_accumulated_drift() {
+        let now = Instant::now();
+        let mut labels = AudioLabels::new();
+        labels.observe(1, 1, 0, true, 1_000_000, now);
+        labels.observe(1, 2, 480, false, 1_050_000, now + Duration::from_millis(10));
+        assert_eq!(labels.transitions, 1);
+        assert_eq!(labels.max_step_error_us, 40_000);
+        assert_eq!(labels.max_shift_us, 40_000);
+        labels.observe(2, 1, 0, true, 10_000_000, now + Duration::from_secs(1));
+        assert_eq!(labels.points.back().unwrap().label_shift_since_start_us, 0);
+        for sequence in 2..1000 {
+            labels.observe(
+                2,
+                sequence,
+                0,
+                true,
+                10_000_000 + sequence as i64 * 1000,
+                now + Duration::from_secs(1) + Duration::from_millis(sequence * 10),
+            );
+        }
+        assert!(labels.max_shift_us > 8_000_000);
+        assert!(labels.points.len() <= 192);
+    }
     #[test]
     fn rejected_deadlines_are_explained_without_unbounding_history() {
         let now = Instant::now();

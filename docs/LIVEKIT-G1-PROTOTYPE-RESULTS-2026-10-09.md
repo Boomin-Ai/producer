@@ -342,3 +342,60 @@ warnings denied; 19 recorded-run retirement/accounting checks; nine pre-mux trac
 independent decoder comparisons; formatting/diff checks. All pass while preserving
 failed timing gates. A low-disk link failure was resolved by removing six older
 compiled build-script caches; production and user data were unchanged.
+
+
+### Audio origin drift and bounded composition-buffer experiment — October 10
+
+A bounded (192-point) numeric trace now measures the difference between sender
+origin progression and the continuous PCM sample clock. In the 45-second label
+rejoin run, generation five takes a 130 ms label step before receiving the second
+report and accumulates approximately −200 ms. The bootstrap-to-measured-rate
+transition adds only −2.871 ms. Its last active guest has mean native audio jitter
+buffer residence of 177.46 ms versus video 43.64 ms (cumulative delay / emitted
+count). These are observations supporting receive-side timeline/buffering
+investigation, not proof of the underlying NetEQ/SFU cause. The trace resets at
+publication changes/generations, but currently does not segment presentation
+reanchors within one generation; do not interpret its largest drift in such runs
+as pure decoder delay. The run misses five video matches; p95 of surviving pairs
+is 75.33 ms. High CPU load was also reported by the local SFU during this workload.
+
+Added a separate opt-in `LIVEKIT_LAB_EXTENDED_VIDEO_BUFFER=1`: 400 ms maximum video
+lead and 14 scheduled frames for the fixed 30 fps fixture, versus default 250 ms
+and eight frames. The callback ingress remains separately bounded. This retains
+valid early video when audio buffering has grown, at a composition-latency cost.
+Audio delay remains 120 ms and marker acceptance remains 80 ms; neither default
+nor production behavior changes. Reports expose actual mean/max accepted lead.
+
+| 45-second / three guests / three rejoins | Buffer | Matched independent p95 | Unmatched audio/video | Accepted max video lead | Startup-dropped PCM |
+| --- | --- | --- | --- | --- | --- |
+| Label trace, baseline | 250 ms / 8 frames | 75.33 ms | 5 / 0 | Not recorded | 10.33 seconds |
+| Extended baseline | 400 ms / 14 frames | 54.00 ms | 0 / 0 | 233.29 ms | 12.48 seconds |
+| Extended audio jitter | 400 ms / 14 frames | 39.33 ms | 0 / 0 | 376.49 ms | 15.56 seconds |
+| Default-buffer audio jitter | 250 ms / 8 frames | 71.33 ms | 2 / 0 | 245.60 ms | 13.44 seconds |
+
+The extended baseline did not exercise deadlines beyond the original bound and
+cannot substantiate a buffer improvement. Audio jitter did exercise that path;
+mean accepted lead is 248.48 ms, with 37 frames still beyond the new limit, ten
+late deadlines, 12 origin-delta rejections and two audio deadline resets. Queue
+overflow is zero; 452 video frames are submitted, ten late and 20 flushed on
+binding changes/shutdown. The default-buffer comparison has 91 overly early
+frames, 51 origin-delta rejections and three audio deadline resets. These are
+sequential recordings with different measured jitter/load, not identical-input
+A/B tests or causal proof. The experimental buffer remains disabled by default.
+True capture timing, total conversation latency and G1 remain unqualified.
+
+Validation: 19 Rust tests; default/OBS Clippy with warnings denied; 23 recorded-run
+queue/retirement checks; 13 pre-mux traces; independent decoder comparisons;
+formatting/diff checks. New checks verify numeric trace bounds and actual accepted
+lead versus declared buffer/capacity. No source or callback ownership was added.
+The first extended attempt found the relay had previously died from ENOSPC and
+failed connection setup; its short recording is excluded. Restarted relay runs
+complete with saved packet statistics. No builds or decoder analyses ran during
+the valid recordings.
+
+To resolve repeated low-disk failures, inactive original-checkout Rust debug caches
+and the cached development app bundle were removed. Source, module configuration,
+user sets/media/recordings and installed production remain intact; that checkout's
+development bundle now requires rebuilding. G1 is incomplete. Next work is bounded
+startup/recovery and explicit receive-buffer/conversation latency accounting,
+followed by physical reference-fed speakerphone AEC and platform packaging proofs.

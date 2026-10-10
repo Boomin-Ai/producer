@@ -358,3 +358,28 @@ usage; the separate decoded-origin diagnostic continues to measure two-report ma
 The first rejoin test reduced startup suppression but missed seven video markers;
 a separate jitter run passed locally. This experiment is not qualified for adoption
 or production. Synthetic timing does not qualify physical speakerphone AEC.
+
+
+### Sender labels and experimental composition buffering
+
+Playback now retains up to 192 numeric audio label observations. It measures the
+sender-origin advance relative to the continuous PCM sample clock, saving quarter-
+second observations, bootstrap transitions and large steps. It stores no media.
+The trace resets its reference at publication binding changes and new generations;
+currently an audio reanchor within the same generation can appear as label drift.
+Use the explicit clock-reset counters when interpreting that result.
+
+`LIVEKIT_LAB_EXTENDED_VIDEO_BUFFER=1` is a separate opt-in experiment: scheduled
+composition permits video deadlines up to 400 ms ahead and owns at most 14 pending
+frames for this fixed 30 fps fixture. Default behavior remains 250 ms / eight
+frames; the callback ingress queue is separate. Evidence reports maximum/mean
+accepted video lead, queue capacity, drops and post-shutdown accounting. This is a
+composition-latency tradeoff, not a qualified conversation playback policy. It
+changes neither audio presentation delay (120 ms) nor the 80 ms marker sync gate.
+
+Audio-jitter/rejoin recordings matched all markers with the experimental buffer,
+while a separate default-buffer run missed two matches. Default-buffer rejoin
+recordings have also passed on other runs, so this does not establish causal or
+universal improvement. Startup waiting, clock reanchors, true capture timing,
+physical AEC and packaged platform tests remain outstanding. Neither experiment
+is enabled in production.

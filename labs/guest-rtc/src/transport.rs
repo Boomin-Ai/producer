@@ -476,7 +476,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     #[cfg(feature = "obs-proof")]
     let mut scheduled_audio = crate::presentation::Scheduled::new(24);
     #[cfg(feature = "obs-proof")]
-    let mut scheduled_video = crate::presentation::Scheduled::new(8);
+    let mut scheduled_video = crate::presentation::Scheduled::new(playback.clock.video_capacity());
     let mut tick = tokio::time::interval(Duration::from_millis(10));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut lifecycle = Vec::new();
@@ -584,11 +584,13 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                         if block.pull_us >= playback.since_us && playback.audio_binding.as_ref().is_some_and(|(_,ssrc)|*ssrc==block.ssrc) {
                             if let Some(pull)=video_clock.deadline(block.pull_us,Instant::now()) {
                                 let origin=playback.video_ready(decoded_at).then(||decoded_origins.origin_for(&block,decoded_at,playback.bootstrap)).flatten();
-                                if origin.is_some() && playback.bootstrap && decoded_origins.origin_for(&block,decoded_at,false).is_none() {playback.audio_bootstrap_blocks+=1;}
+                                let bootstrap_used=origin.is_some() && playback.bootstrap && decoded_origins.origin_for(&block,decoded_at,false).is_none();
+                                if bootstrap_used {playback.audio_bootstrap_blocks+=1;}
                                 let resets=playback.clock.reset_count();
                                 let stamp=playback.clock.audio(block.generation,block.sequence,origin,pull);
                                 if resets!=playback.clock.reset_count() {scheduled_audio.clear();scheduled_video.clear();}
                                 if let Some(stamp)=stamp {
+                                    if let Some(origin)=origin {playback.audio_label(block.generation,block.sequence,block.rtp_timestamp,bootstrap_used,origin,stamp);}
                                     let pcm=&block.samples[..480*block.channels as usize];
                                     let rms=(pcm.iter().map(|sample|(*sample as f64).powi(2)).sum::<f64>()/pcm.len() as f64).sqrt();
                                     playback.marker(false,rms>2000.0,origin,stamp,pull,recorder.as_ref().unwrap().timestamp(stamp));

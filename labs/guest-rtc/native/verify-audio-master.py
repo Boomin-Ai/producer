@@ -34,6 +34,21 @@ for path in sorted((lab / 'evidence').glob('transport-obs-audio-master-*.json'))
         assert len(clock['diagnostics']) <= 64
         assert all(event['reason'] in reasons and event['repetitions'] > 0 for event in clock['diagnostics'])
     assert not r['g1_complete'] and not r['obs_recording']['qualified']
+    if 'video_max_lead_ms' in clock:
+        bound = clock['video_max_lead_ms']
+        assert bound in [250, 400]
+        assert clock['video_observed_max_lead_us'] <= bound * 1000
+        if clock['video_submitted']:
+            assert 0 <= clock['video_mean_lead_us'] <= clock['video_observed_max_lead_us']
+        queue = playback['video_presentation_queue_after_shutdown']
+        assert queue['capacity'] == (14 if bound == 400 else 8)
+    if 'audio_labels' in playback:
+        labels = playback['audio_labels']
+        assert labels['observations_only'] and labels['capacity'] == 192
+        assert len(labels['points']) <= labels['capacity']
+        assert labels['observations'] >= len(labels['points'])
+        assert all(abs(p['label_step_error_us']) <= labels['max_label_step_error_us'] and
+            abs(p['label_shift_since_start_us']) <= labels['max_label_shift_us'] for p in labels['points'])
     if playback.get('first_report_bootstrap', False):
         assert 'five-second bound' in playback['startup_policy']
         assert playback['audio_bootstrap_blocks'] > 0 and playback['video_bootstrap_frames'] > 0
