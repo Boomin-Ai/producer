@@ -1,0 +1,13 @@
+{
+  "run_name": "physical-publication-1791663783537881000",
+  "status": "completed",
+  "loopback_only": true,
+  "physical_microphone_publication_requested": true,
+  "browser_voice_recorded": false,
+  "seconds": 10,
+  "g1_complete": false,
+  "guest_monitor_requested": true,
+  "wait_for_user_start": false,
+  "native_binary_sha256": "fcc5ed531217f14686830892c6a377ca6f89f3357061df0f09d467399eabb8c7",
+  "sfu_binary_sha256": "09d100f23cd3377edb8acb90496d63ed95a590b8524d6b33061bf9108fb31c09"
+}

@@ -212,7 +212,7 @@ impl Drop for Owner {
             .as_ref()
             .map(|_| self.device.monitor_stats());
         let monitor_inbox = self.monitor_evidence.as_ref().map(|monitor| {
-            monitor.replace();
+            monitor.stop();
             monitor.stats()
         });
         let lifecycle = self.device.close();
@@ -272,6 +272,7 @@ pub fn run(
     };
     let mut owner = Owner::new(device, processor, evidence);
     if monitor_enabled() {
+        monitor.activate();
         owner.monitor_evidence = Some(monitor.clone());
     }
     let mut pending: Option<Block> = None;

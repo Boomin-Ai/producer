@@ -1,0 +1,42 @@
+{
+  "run": "physical-publication-1791663412460630000",
+  "source_fault_free": true,
+  "completed_seconds": 60.0404235,
+  "capture_to_sdk_p95_ms": 26,
+  "published": 5940,
+  "deadline_recoveries": 0,
+  "monitor_inbox": {
+    "accepted": 5968,
+    "callback_contention_rejected": 3,
+    "capacity_blocks": 8,
+    "generation": 2,
+    "max_age_ms": 30,
+    "old_generation_rejected": 0,
+    "overflow_rejected": 29,
+    "pending": 0,
+    "retired": 0,
+    "stale": 8
+  },
+  "monitor_after_stop": {
+    "consumed": 5958,
+    "overflow_rejected": 0,
+    "partial_samples_retired": 160,
+    "pending_retired": 2,
+    "played_blocks": 5958,
+    "queued": 5960,
+    "silent_samples": 1888,
+    "stale_or_generation_retired": 0
+  },
+  "callbacks_active_after_stop": 0,
+  "native_owners_retired": true,
+  "receiver_packets": 2980,
+  "receiver_reported_packet_loss": 0,
+  "receiver_concealed_samples": 1747,
+  "receiver_concealment_events": 2,
+  "human_completed_test": true,
+  "human_playback_review_pending": true,
+  "echo_attenuation_measured": false,
+  "voice_quality_qualified": false,
+  "g1_complete": false,
+  "production_changed": false
+}

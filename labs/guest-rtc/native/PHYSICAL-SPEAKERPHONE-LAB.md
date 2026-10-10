@@ -243,3 +243,10 @@ partial samples retired after callbacks stop. Inbox statistics are a shutdown
 snapshot; the SDK observer may still report rejected old-generation callbacks
 until the room removes its sink. Full room speakerphone AEC, voice preservation
 through SDK recovery, and load/reconnect acceptance remain unqualified.
+
+Monitor admission is now gated until native device creation/start succeeds.
+Pre-device callback frames are rejected and counted separately, never queued.
+After startup, only the current selected track generation can feed playback.
+Stopping closes admission before native callback teardown. This avoids hiding
+startup backlog in steady-state overflow counters; a follow-up physical trial
+must measure the revised path.

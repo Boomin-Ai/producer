@@ -1275,3 +1275,34 @@ Objective-C++ warning-as-error syntax checks passed. Binary fingerprint saved in
 `labs/guest-rtc/evidence/guest-monitor-build.json`. Physical speakerphone,
 voice-preservation through publication recovery and G1 acceptance remain gated
 on the new physical trial and later listening/reconnect/load/sync proofs.
+
+The first remote guest speaker trial completed 60.040 seconds: 5,940 physical
+mic blocks published, capture-to-SDK p95 26 ms, zero publication deadline
+recoveries, zero native format/timeline errors or capture/reference overflow,
+and publisher join in 26.02 ms. The browser received 2,980 audio packets with
+zero reported packet loss (1,747 concealed samples in two events, not a claim
+of no receiver concealment). Native output consumed 5,958 monitor blocks; stop
+retired two queued blocks and 160 partial samples with zero remaining owners,
+callbacks, or render registrations. These are selected-guest transport/lifecycle
+measurements, not full room AEC or subjective voice-quality acceptance.
+
+Monitor admission recorded 29 overflow rejections, three callback-contention
+rejections, and eight stale discards. The run did not timestamp these drops,
+so their exact phase is unproven. Code inspection identified admission before
+native device readiness as a source of startup backlog; the next change gates
+admission on readiness and counts pre-device frames separately. It preserves
+existing generation and age bounds. The first-run numeric summary is
+`labs/guest-rtc/evidence/guest-monitor-first-physical-run.json`; all three raw
+numeric reports are retained. User completed the trial; playback review pending.
+
+The readiness-gated recheck (`1791663783537881000`) completed 10.028 seconds,
+940 mic publications, p95 26 ms, zero publication recoveries and zero native
+format/timeline errors. It rejected 37 frames explicitly before device readiness;
+after readiness it admitted 963 frames with zero inbox overflow, contention or
+stale discards. Hardware consumed 961 blocks; shutdown retired two blocks and
+384 partial samples, with no surviving callback/owner. The receiver observed
+470 packets and no reported loss. This verifies the revised startup admission
+on one short run, not a long-run/load/subjective audio guarantee. Native output
+reported 928 silent samples including startup/underflow; the run does not
+localize them, so no claim of zero audible interruption is made. All 44 root
+tests and strict combined-features all-targets Clippy passed after this change.
