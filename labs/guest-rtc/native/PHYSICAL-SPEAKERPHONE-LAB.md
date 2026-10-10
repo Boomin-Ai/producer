@@ -93,3 +93,35 @@ not verify changes during capture or calibrate acoustic SPL. A headless
 `--volume-snapshot` probe returned 6.25% on the current Mac (AppleScript's
 rounded output volume was 6). The user had lowered volume after the preceding
 run, so that later value cannot be assigned to the completed run.
+
+Native I/O callback timing candidate (2026-10-10): launch the packaged app with
+`open -na "$HOME/Applications/Producer Speakerphone Lab.app" --args --io-callbacks`.
+The readiness text must say “Native I/O callback timing test.” The default mode
+still uses engine taps. The candidate uses an `AVAudioSinkNode` connected to the
+input's hardware-matching 48 kHz Float32 noninterleaved format, and an AudioUnit
+post-render notification on output bus 0 for final device-bound stereo PCM.
+Both copy into the existing fixed SPSC rings and reblock into contiguous 480
+sample chunks. They never process APM, allocate PCM, publish or write files.
+Unexpected formats, absent host-time flags, discontinuous partial chunks,
+render errors and overflow stop the trial. System voice processing stays off.
+
+The output notification's context borrows the owner's state; the owner holds
+state through engine stop, notification removal and callback retirement.
+Input/source/observer blocks capture state with no back-reference. Teardown
+removes the configuration observer before stopping, removes the render
+notification while its AudioUnit is still owned, and detaches input/source
+nodes before releasing the engine. Native 20-cycle tests exercise both modes'
+partial construction, real notification add/remove on a non-hardware mixer
+unit, synthetic 512-frame microphone/stereo-reference reblocking, actual PCM
+values/host continuity, post-render errors, empty registries and weak expiry.
+Those tests open no microphone and play no sound. Actual engine I/O callback
+buffer layout, cadence and timestamp semantics remain a physical test gate.
+
+Reports label the selected mode, maximum callback frame counts (the legacy
+`maximum_tap_frames` key), remaining notification count, and bounded minimum/
+p95/maximum capture age at APM processing in the device host-time domain. That
+age includes owner scheduling/reference wait and may be signed; it is not
+calibrated acoustic delay or end-to-end RTC latency. Up to 6,100 observations
+cover a 60-second trial. Repeat the standard deliberate-speech protocol at
+50%, compare with the prior tap runs, and verify the new capture/reference
+before changing the LiveKit publication diagnostic or claiming G1 acceptance.

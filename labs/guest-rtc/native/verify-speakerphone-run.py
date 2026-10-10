@@ -19,6 +19,12 @@ else:
     print("Legacy report high_pass field records the request only; upstream AEC implicitly enforces high-pass filtering")
 life = report["lifecycle"]
 assert life["owners_and_callback_state_retired"] and life["callbacks_active"] == 0
+if "render_notifications_alive" in life:
+    assert life["render_notifications_alive"] == 0
+if "capture_age_at_apm_us" in report:
+    age = report["capture_age_at_apm_us"]
+    assert age["count"] == min(report["microphone_blocks"], age["capacity"])
+    assert age["minimum"] <= age["p95"] <= age["maximum"]
 assert life["format_or_timeline_errors"] == report["invalid_delay_blocks"] == 0
 for kind, blocks in [("speaker", report["speaker_blocks"]), ("microphone", report["microphone_blocks"])]:
     queue = life[kind]

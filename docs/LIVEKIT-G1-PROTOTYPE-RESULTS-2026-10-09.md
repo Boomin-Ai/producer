@@ -980,3 +980,36 @@ its actual PCM/timestamp semantics must be proven. Then establish source
 capture-clock propagation or an explicitly measured alternate synchronization
 contract, and repeat physical AEC/double-talk with real loopback RTC routing.
 G1 remains incomplete. No installed Producer or production deployment changed.
+
+
+### Native I/O callback candidate — October 10, physical qualification pending
+
+Added an opt-in `--io-callbacks` speakerphone lab path: hardware-matching
+AVAudioSinkNode input and an output AudioUnit post-render notification. Both
+callbacks copy only bounded PCM into existing fixed-capacity rings. The owner
+stops the engine, removes the notification while the unit is still owned,
+detaches nodes and waits for callbacks before releasing state. Default tap
+capture and the selected no-forced-high-pass AEC profile remain available.
+Capture-to-APM age is recorded in a bounded 6,100-entry signed microsecond
+sample collection; it includes scheduling/reference wait and is not acoustic
+latency or SDK/RTP synchronization proof.
+
+The first physical attempt failed during setup: the output scope bus 0 has
+48 kHz stereo Float32 **interleaved** PCM (flags 0x9, eight bytes/frame), while
+the input scope has noninterleaved PCM (flags 0x29, four bytes/frame). A
+read-only `--format-snapshot` probe confirmed those actual formats without
+starting capture. The candidate now accepts native-endian packed stereo
+Float32 in either layout and downmixes the supplied buffers. It still rejects
+other rates/formats and malformed callback buffers. Setup errors now finalize
+empty files and save an explicit failed report instead of losing the reason.
+
+Twenty native synthetic lifecycle cycles passed, including actual notification
+registration/removal on a non-hardware mixer AudioUnit, mixed interleaved and
+noninterleaved 512-frame callbacks, identical expected downmixed samples,
+continuous 10 ms block timestamps, injected errors, partial initialization
+cleanup and zero surviving owners/states/notifications. Strict Objective-C++
+warning checks and the native lab build passed. The development app was
+repackaged, ad-hoc signature verified, and visually confirmed ready. Physical
+callback PCM availability, timing, echo attenuation and speech preservation
+remain unproven until the next user-operated test is analyzed. Nothing in
+this candidate is a production deployment, Apple notarization or G1 completion.

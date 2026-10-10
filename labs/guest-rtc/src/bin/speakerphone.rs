@@ -31,6 +31,16 @@ unsafe extern "C" {
         error: *mut c_char,
         length: usize,
     ) -> *mut c_void;
+    fn lab_audio_create_io(
+        samples: *const i16,
+        count: usize,
+        fail_stage: i32,
+        error: *mut c_char,
+        length: usize,
+    ) -> *mut c_void;
+    fn lab_audio_now_ns() -> u64;
+    fn lab_audio_notifications_alive() -> i32;
+    fn lab_output_format_snapshot(message: *mut c_char, length: usize);
     fn lab_audio_start(handle: *mut c_void, error: *mut c_char, length: usize) -> i32;
     fn lab_audio_pop(handle: *mut c_void, render: i32, block: *mut Block) -> i32;
     fn lab_audio_faults(handle: *mut c_void) -> u64;
@@ -56,10 +66,15 @@ struct Device {
     handle: *mut c_void,
 }
 impl Device {
-    fn new(speech: &[i16]) -> Result<(Self, String)> {
+    fn new(speech: &[i16], io_callbacks: bool) -> Result<(Self, String)> {
         let mut message = [0i8; 1024];
         let handle = unsafe {
-            lab_audio_create(
+            let create = if io_callbacks {
+                lab_audio_create_io
+            } else {
+                lab_audio_create
+            };
+            create(
                 speech.as_ptr(),
                 speech.len(),
                 0,
@@ -93,7 +108,7 @@ impl Device {
         let mut counts = [0u64; 11];
         let retired = unsafe { lab_audio_close(self.handle, counts.as_mut_ptr()) } != 0;
         self.handle = std::ptr::null_mut();
-        json!({"owners_and_callback_state_retired":retired,"callbacks_active":counts[6],"format_or_timeline_errors":counts[7],"clipped_samples":counts[8],"maximum_tap_frames":{"speaker":counts[9],"microphone":counts[10]},
+        json!({"owners_and_callback_state_retired":retired,"callbacks_active":counts[6],"render_notifications_alive":unsafe {lab_audio_notifications_alive()},"format_or_timeline_errors":counts[7],"clipped_samples":counts[8],"maximum_tap_frames":{"speaker":counts[9],"microphone":counts[10]},
             "speaker":{"queued":counts[0],"consumed":counts[1],"overflow":counts[2],"pending_retired":counts[0]-counts[1],"capacity":QUEUE_CAPACITY},
             "microphone":{"queued":counts[3],"consumed":counts[4],"overflow":counts[5],"pending_retired":counts[3]-counts[4],"capacity":QUEUE_CAPACITY}})
     }
@@ -129,6 +144,8 @@ fn write_pcm(writer: &mut Wav, pcm: &[i16]) -> Result<()> {
     Ok(())
 }
 struct Session {
+    io_callbacks: bool,
+    capture_age_us: Vec<i64>,
     device: Device,
     devices: String,
     dir: PathBuf,
@@ -159,7 +176,7 @@ struct Session {
     output_volume_start: Option<f64>,
 }
 impl Session {
-    fn new(root: &Path, speech: &[i16]) -> Result<Self> {
+    fn new(root: &Path, speech: &[i16], io_callbacks: bool) -> Result<Self> {
         std::fs::create_dir_all(root)?;
         let label = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
         let dir = root.join(format!("speakerphone-{label}"));
@@ -167,6 +184,8 @@ impl Session {
         let mut stamps = BufWriter::new(file(&dir.join("timestamps.csv"))?);
         writeln!(stamps, "kind,host_ns,phase_seconds,estimated_apm_delay_ms")?;
         let mut session = Self {
+            io_callbacks,
+            capture_age_us: Vec::with_capacity(6100),
             on: capture_handoff::MicrophoneProcessor::new()?,
             off: apm::Processor::new(false, 48000, 1)?,
             speaker: wav(&dir.join("speaker-reference.wav"))?,
@@ -203,7 +222,13 @@ impl Session {
             !session.on.high_pass_filter_enforced(),
             "Voice refinement configuration failed"
         );
-        let (device, devices) = Device::new(speech)?;
+        let (device, devices) = match Device::new(speech, io_callbacks) {
+            Ok(device) => device,
+            Err(error) => {
+                let dir = session.finish(&format!("setup_failed: {error:#}"))?;
+                bail!("{error:#}. Setup failure saved to {}", dir.display());
+            }
+        };
         session.device = device;
         session.devices = devices;
         session.began = Instant::now();
@@ -274,6 +299,12 @@ impl Session {
                 self.delay_min = self.delay_min.min(delay);
                 self.delay_max = self.delay_max.max(delay);
                 let mut on = block.samples;
+                if self.capture_age_us.len() < 6100 {
+                    let age = (i128::from(unsafe { lab_audio_now_ns() })
+                        - i128::from(block.host_ns))
+                        / 1000;
+                    self.capture_age_us.push(age as i64);
+                }
                 let mut off = block.samples;
                 let began = Instant::now();
                 self.on.capture(&mut on, delay)?;
@@ -340,6 +371,7 @@ impl Session {
         self.disabled.finalize()?;
         self.stamps.flush()?;
         self.processing_us.sort_unstable();
+        self.capture_age_us.sort_unstable();
         self.attenuation.sort_by(f64::total_cmp);
         let percentile = |fraction: f64| {
             self.attenuation
@@ -352,9 +384,11 @@ impl Session {
             .processing_us
             .get(((self.processing_us.len().saturating_sub(1)) as f64 * 0.95).round() as usize);
         let report = json!({"schema_version":1,"stop_reason":reason,"devices":self.devices,"duration_seconds":self.began.elapsed().as_secs_f64(),
+            "device_callback_mode":if self.io_callbacks {"input_sink_and_output_render_notification"} else {"engine_taps"},
+            "capture_age_at_apm_us":{"minimum":self.capture_age_us.first(),"p95":self.capture_age_us.get((self.capture_age_us.len().saturating_sub(1) as f64*0.95).round() as usize),"maximum":self.capture_age_us.last(),"count":self.capture_age_us.len(),"capacity":6100,"scope":"device host timestamp to processing; includes owner scheduling and reference wait; signed, not calibrated acoustic latency"},
             "hardware_capture_used":self.mic_blocks>0,"physical_speaker_reference_connected":self.render_blocks>0,
             "default_output_volume_percent":{"start":self.output_volume_start,"end":output_volume_end,"continuous_verification":false,"acoustic_spl_calibrated":false},
-            "reference_scope":"This engine's final stereo mixer output, downmixed to mono; excludes other apps and hardware-volume calibration",
+            "reference_scope":if self.io_callbacks {"Engine output AudioUnit post-render bus 0, downmixed to mono; actual buffers/timing require physical verification; excludes other apps and calibrated hardware volume"} else {"This engine's final stereo mixer output, downmixed to mono; excludes other apps and hardware-volume calibration"},
             "sample_rate":48000,"apm_channels":1,"source_gain":0.20,"microphone_blocks":self.mic_blocks,"speaker_blocks":self.render_blocks,
             "apm_delay_estimate_ms":{"minimum":self.delay_min,"maximum":self.delay_max,"acoustic_delay_calibrated":false},
             "aec_profile":"no_forced_high_pass","ns":false,"agc":false,"high_pass_requested":false,"aec_enforced_high_pass":self.on.high_pass_filter_enforced(),
@@ -370,7 +404,11 @@ impl Session {
     }
 }
 fn main() -> Result<()> {
-    let mut args = std::env::args().skip(1);
+    let mut args = std::env::args().skip(1).peekable();
+    let io_callbacks = args.peek().is_some_and(|a| a == "--io-callbacks");
+    if io_callbacks {
+        args.next();
+    }
     let input = match args.next() {
         Some(input) => input,
         None => std::env::current_exe()?
@@ -391,6 +429,17 @@ fn main() -> Result<()> {
     }
     if input == "--volume-snapshot" {
         println!("{:?}", output_volume_percent());
+        return Ok(());
+    }
+    if input == "--format-snapshot" {
+        let mut message = [0i8; 1024];
+        unsafe {
+            lab_output_format_snapshot(message.as_mut_ptr(), message.len());
+        }
+        println!(
+            "{}",
+            unsafe { CStr::from_ptr(message.as_ptr()) }.to_string_lossy()
+        );
         return Ok(());
     }
     let root = args.next().map(PathBuf::from).unwrap_or_else(|| {
@@ -414,6 +463,9 @@ fn main() -> Result<()> {
         .samples::<i16>()
         .collect::<std::result::Result<Vec<_>, _>>()?;
     unsafe { lab_ui_open() };
+    if io_callbacks {
+        status("Ready. Native I/O callback timing test. Voice refinement active. Click Start when prepared.");
+    }
     let mut active: Option<Session> = None;
     let mut permission_pending = false;
     loop {
@@ -439,7 +491,7 @@ fn main() -> Result<()> {
             match unsafe { lab_permission(0) } {
                 1 => {
                     permission_pending = false;
-                    match Session::new(&root, &speech) {
+                    match Session::new(&root, &speech, io_callbacks) {
                         Ok(session) => active = Some(session),
                         Err(error) => status(&format!("Could not start: {error:#}")),
                     }

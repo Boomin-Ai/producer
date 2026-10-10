@@ -9,7 +9,7 @@
 #include <thread>
 #include <mach/mach_time.h>
 
-static std::atomic<int> states_alive{0}, owners_alive{0};
+static std::atomic<int> states_alive{0}, owners_alive{0}, notifications_alive{0};
 struct LabBlock { uint64_t host_ns; int16_t samples[480]; };
 // AVAudioEngine may deliver 100 ms tap batches despite bufferSize:480.
 // Bound each ring to 320 ms to accommodate batches/startup; drain promptly.
@@ -39,9 +39,48 @@ struct State {
     std::atomic<bool> stopping{false};
     std::atomic<uint64_t> callbacks{0}, errors{0}, clipped{0};
     std::atomic<uint64_t> speaker_max_frames{0}, mic_max_frames{0};
+    uint32_t mic_channels=1;
     State() { states_alive++; mach_timebase_info(&timebase); }
     ~State() { states_alive--; }
     uint64_t ns(uint64_t ticks) const { return (uint64_t)((__uint128_t)ticks*timebase.numer/timebase.denom); }
+    // Both I/O callbacks copy only bounded Float32 PCM. The final output may
+    // interleave stereo; microphone buffers remain noninterleaved. No
+    // allocation, file I/O, APM or SDK calls belong on these realtime threads.
+    OSStatus io(const AudioTimeStamp *time,uint32_t frames,const AudioBufferList *data,bool render) {
+        callbacks++;
+        auto &maximum=render?speaker_max_frames:mic_max_frames;
+        if(frames>maximum.load()) maximum=frames;
+        if(stopping.load()) { callbacks--; return noErr; }
+        auto channels=render?2:mic_channels;
+        bool interleaved=render && data && data->mNumberBuffers==1;
+        auto buffers=interleaved?1:channels;
+        if(!time || !(time->mFlags & kAudioTimeStampHostTimeValid) || !data ||
+            !frames || frames>16384 || data->mNumberBuffers!=buffers) {
+            errors++; callbacks--; return kAudio_ParamError;
+        }
+        for(uint32_t c=0;c<buffers;c++) if(data->mBuffers[c].mNumberChannels!=(interleaved?2:1) ||
+            !data->mBuffers[c].mData || data->mBuffers[c].mDataByteSize<(size_t)frames*sizeof(float)*(interleaved?2:1)) {
+            errors++; callbacks--; return kAudio_ParamError;
+        }
+        auto &part=render?speaker_partial:mic_partial;
+        auto &fill=render?speaker_fill:mic_fill;
+        auto &ring=render?speaker:mic;
+        auto start=ns(time->mHostTime);
+        if(fill && std::llabs((int64_t)start-(int64_t)(part.host_ns+fill*1000000000/48000))>2000000) {
+            errors++; callbacks--; return kAudio_ParamError;
+        }
+        auto *left=(const float*)data->mBuffers[0].mData;
+        auto *right=render && !interleaved?(const float*)data->mBuffers[1].mData:left;
+        for(uint32_t n=0;n<frames;n++) {
+            if(fill==0) part.host_ns=start+(uint64_t)n*1000000000/48000;
+            float sample=render?(interleaved?(left[2*n]+left[2*n+1])*0.5f:(left[n]+right[n])*0.5f):left[n];
+            if(!std::isfinite(sample)) { errors++; sample=0; }
+            if(std::abs(sample)>=0.999f) clipped++;
+            part.samples[fill++]=(int16_t)std::lrint(std::fmax(-1.0f,std::fmin(0.999969f,sample))*32768.0f);
+            if(fill==480) {ring.push(part);fill=0;}
+        }
+        callbacks--; return noErr;
+    }
     void tap(AVAudioPCMBuffer *pcm,AVAudioTime *time,bool render) {
         callbacks++;
         auto &max_frames=render?speaker_max_frames:mic_max_frames;
@@ -74,10 +113,34 @@ struct State {
         callbacks--;
     }
 };
+static OSStatus rendered(void *context,AudioUnitRenderActionFlags *flags,const AudioTimeStamp *time,
+    UInt32 bus,UInt32 frames,AudioBufferList *data) {
+    auto *state=(State*)context;
+    if(*flags & kAudioUnitRenderAction_PostRenderError) { state->errors++;return noErr; }
+    if((*flags & kAudioUnitRenderAction_PostRender) && bus==0) return state->io(time,frames,data,true);
+    return noErr;
+}
+struct RenderNotification {
+    AudioUnit unit=nullptr;
+    State *context=nullptr;
+    bool attach(AudioUnit candidate,State *state) {
+        if(AudioUnitAddRenderNotify(candidate,rendered,state)!=noErr)return false;
+        unit=candidate;context=state;notifications_alive++;return true;
+    }
+    void detach() {
+        if(unit) {
+            if(AudioUnitRemoveRenderNotify(unit,rendered,context)!=noErr)context->errors++;
+            notifications_alive--;unit=nullptr;context=nullptr;
+        }
+    }
+    ~RenderNotification() {detach();}
+};
 struct Owner {
     std::shared_ptr<State> state=std::make_shared<State>();
     AVAudioEngine *engine=nil;
     AVAudioSourceNode *source=nil;
+    AVAudioSinkNode *sink=nil;
+    RenderNotification notification;
     id observer=nil;
     bool mic_tap=false,speaker_tap=false;
     Owner() { owners_alive++; engine=[[AVAudioEngine alloc] init]; }
@@ -85,10 +148,12 @@ struct Owner {
         state->stopping=true;
         if(observer) [[NSNotificationCenter defaultCenter] removeObserver:observer];
         [engine stop];
+        notification.detach();
         if(mic_tap) [engine.inputNode removeTapOnBus:0];
         if(speaker_tap) [engine.mainMixerNode removeTapOnBus:0];
         if(source) [engine detachNode:source];
-        observer=nil; source=nil; engine=nil;
+        if(sink) [engine detachNode:sink];
+        observer=nil; source=nil; sink=nil; engine=nil;
         owners_alive--;
     }
 };
@@ -118,7 +183,21 @@ extern "C" double lab_output_volume_percent() {
     }
     return channels?sum/channels*100.0:-1;
 }
-extern "C" void *lab_audio_create(const int16_t *samples,size_t count,int fail_stage,char *error,size_t length) {
+extern "C" void lab_output_format_snapshot(char *message,size_t length) {
+    @autoreleasepool {
+        auto owner=std::make_unique<Owner>();
+        AudioUnit unit=owner->engine.outputNode.audioUnit;
+        AudioStreamBasicDescription input{},output{};
+        UInt32 size=sizeof(input);
+        auto in_status=AudioUnitGetProperty(unit,kAudioUnitProperty_StreamFormat,kAudioUnitScope_Input,0,&input,&size);
+        size=sizeof(output);
+        auto out_status=AudioUnitGetProperty(unit,kAudioUnitProperty_StreamFormat,kAudioUnitScope_Output,0,&output,&size);
+        snprintf(message,length,"input scope bus 0: status=%d, rate=%.0f, channels=%u, bits=%u, flags=0x%x, bytes/frame=%u; output scope bus 0: status=%d, rate=%.0f, channels=%u, bits=%u, flags=0x%x, bytes/frame=%u",
+            (int)in_status,input.mSampleRate,(unsigned)input.mChannelsPerFrame,(unsigned)input.mBitsPerChannel,(unsigned)input.mFormatFlags,(unsigned)input.mBytesPerFrame,
+            (int)out_status,output.mSampleRate,(unsigned)output.mChannelsPerFrame,(unsigned)output.mBitsPerChannel,(unsigned)output.mFormatFlags,(unsigned)output.mBytesPerFrame);
+    }
+}
+static void *create_audio(const int16_t *samples,size_t count,int fail_stage,bool io_callbacks,char *error,size_t length) {
     @autoreleasepool { @try {
         auto fail=[&](NSString *message)->void* { snprintf(error,length,"%s",message.UTF8String); return nullptr; };
         if(!samples || count==0 || count>48000*120) return fail(@"Expected 48 kHz mono speech, at most two minutes");
@@ -146,6 +225,12 @@ extern "C" void *lab_audio_create(const int16_t *samples,size_t count,int fail_s
             *silence=silent; state->callbacks--; return noErr;
         }];
         [owner->engine attachNode:owner->source];
+        if(io_callbacks) {
+            owner->sink=[[AVAudioSinkNode alloc] initWithReceiverBlock:^OSStatus(const AudioTimeStamp *time,AVAudioFrameCount frames,const AudioBufferList *data) {
+                return state->io(time,frames,data,false);
+            }];
+            [owner->engine attachNode:owner->sink];
+        }
         if(fail_stage==2) return fail(@"Injected failure after source attachment");
         AVAudioFormat *input=[owner->engine.inputNode outputFormatForBus:0];
         AVAudioFormat *output=[owner->engine.outputNode inputFormatForBus:0];
@@ -154,15 +239,42 @@ extern "C" void *lab_audio_create(const int16_t *samples,size_t count,int fail_s
         [owner->engine connect:owner->source to:owner->engine.mainMixerNode format:format];
         [owner->engine connect:owner->engine.mainMixerNode to:owner->engine.outputNode format:output];
         owner->engine.mainMixerNode.outputVolume=1;
-        [owner->engine.inputNode installTapOnBus:0 bufferSize:480 format:input block:^(AVAudioPCMBuffer *buffer,AVAudioTime *time){ state->tap(buffer,time,false); }];
-        owner->mic_tap=true;
-        [owner->engine.mainMixerNode installTapOnBus:0 bufferSize:480 format:output block:^(AVAudioPCMBuffer *buffer,AVAudioTime *time){ state->tap(buffer,time,true); }];
-        owner->speaker_tap=true;
+        if(io_callbacks) {
+            if(input.commonFormat!=AVAudioPCMFormatFloat32 || input.interleaved || input.channelCount>2)
+                return fail(@"I/O capture requires hardware 48 kHz noninterleaved Float32 microphone");
+            state->mic_channels=input.channelCount;
+            [owner->engine connect:owner->engine.inputNode to:owner->sink format:input];
+            AudioUnit unit=owner->engine.outputNode.audioUnit;
+            AudioStreamBasicDescription description{};UInt32 size=sizeof(description);
+            if(AudioUnitGetProperty(unit,kAudioUnitProperty_StreamFormat,kAudioUnitScope_Output,0,&description,&size)!=noErr ||
+                description.mSampleRate!=48000 || description.mChannelsPerFrame!=2 || description.mBitsPerChannel!=32 ||
+                description.mFormatID!=kAudioFormatLinearPCM || !(description.mFormatFlags&kAudioFormatFlagIsFloat) ||
+                (description.mFormatFlags&kAudioFormatFlagIsBigEndian) ||
+                description.mBytesPerFrame!=((description.mFormatFlags&kAudioFormatFlagIsNonInterleaved)?4:8))
+                return fail(@"I/O reference requires packed native-endian 48 kHz stereo Float32 output");
+            if(!owner->notification.attach(unit,state.get()))return fail(@"Could not register final output render reference");
+        } else {
+            [owner->engine.inputNode installTapOnBus:0 bufferSize:480 format:input block:^(AVAudioPCMBuffer *buffer,AVAudioTime *time){ state->tap(buffer,time,false); }];
+            owner->mic_tap=true;
+            [owner->engine.mainMixerNode installTapOnBus:0 bufferSize:480 format:output block:^(AVAudioPCMBuffer *buffer,AVAudioTime *time){ state->tap(buffer,time,true); }];
+            owner->speaker_tap=true;
+        }
         owner->observer=[[NSNotificationCenter defaultCenter] addObserverForName:AVAudioEngineConfigurationChangeNotification object:owner->engine queue:nil usingBlock:^(NSNotification*){state->errors++;}];
         snprintf(error,length,"%s → %s",deviceName(owner->engine.inputNode.audioUnit).UTF8String,deviceName(owner->engine.outputNode.audioUnit).UTF8String);
         return owner.release();
     } @catch(NSException *exception) { snprintf(error,length,"%s",exception.reason.UTF8String); return nullptr; } }
 }
+extern "C" void *lab_audio_create(const int16_t *samples,size_t count,int fail_stage,char *error,size_t length) {
+    return create_audio(samples,count,fail_stage,false,error,length);
+}
+extern "C" void *lab_audio_create_io(const int16_t *samples,size_t count,int fail_stage,char *error,size_t length) {
+    return create_audio(samples,count,fail_stage,true,error,length);
+}
+extern "C" uint64_t lab_audio_now_ns() {
+    mach_timebase_info_data_t timebase{};mach_timebase_info(&timebase);
+    return (uint64_t)((__uint128_t)mach_absolute_time()*timebase.numer/timebase.denom);
+}
+extern "C" int lab_audio_notifications_alive() { return notifications_alive.load(); }
 extern "C" int lab_audio_start(void *handle,char *error,size_t length) {
     @autoreleasepool { @try {
         NSError *problem=nil;
@@ -195,7 +307,7 @@ extern "C" int lab_audio_close(void *handle,uint64_t *stats) {
     stats[6]=s->callbacks;stats[7]=s->errors;stats[8]=s->clipped;
     stats[9]=s->speaker_max_frames;stats[10]=s->mic_max_frames;
     s.reset();
-    return weak.expired() && owners_alive==0;
+    return weak.expired() && owners_alive==0 && notifications_alive==0;
 }
 extern "C" int lab_audio_self_test() {
     for(int round=0;round<20;round++) {
@@ -224,6 +336,49 @@ extern "C" int lab_audio_self_test() {
         for(int stage=1;stage<=2;stage++) {
             int16_t pcm[480]={}; char error[256]={};
             if(lab_audio_create(pcm,480,stage,error,sizeof(error)) || states_alive || owners_alive) return 0;
+            if(lab_audio_create_io(pcm,480,stage,error,sizeof(error)) || states_alive || owners_alive || notifications_alive)return 0;
+        }
+        { // Exercise actual AudioUnit notification registration without hardware
+          // capture, then copy 512-frame callbacks into contiguous 10 ms PCM.
+            auto state=std::make_shared<State>();std::weak_ptr<State> weak=state;
+            AudioComponentDescription description={kAudioUnitType_Mixer,kAudioUnitSubType_MultiChannelMixer,kAudioUnitManufacturer_Apple,0,0};
+            AudioUnit unit=nullptr;
+            if(AudioComponentInstanceNew(AudioComponentFindNext(nullptr,&description),&unit)!=noErr)return 0;
+            bool good=true;
+            {
+                RenderNotification registration;
+                if(!registration.attach(unit,state.get()))good=false;
+                std::array<float,512> left{},right{};left.fill(.25f);right.fill(.75f);
+                std::array<float,1024> packed{};
+                for(size_t n=0;n<512;n++){packed[2*n]=.25f;packed[2*n+1]=.75f;}
+                AudioBufferList interleaved={1,{{2,sizeof(packed),packed.data()}}};
+                struct {UInt32 count;AudioBuffer buffers[2];} stereo={2,{{1,sizeof(left),left.data()},{1,sizeof(right),right.data()}}};
+                AudioBufferList mono={1,{{1,sizeof(left),left.data()}}};
+                auto first=mach_absolute_time();
+                for(uint64_t n=0;n<4;n++) {
+                    AudioTimeStamp time{};time.mFlags=kAudioTimeStampHostTimeValid;
+                    time.mHostTime=first+(uint64_t)((__uint128_t)n*512*1000000000*state->timebase.denom/(48000*state->timebase.numer));
+                    AudioUnitRenderActionFlags flags=kAudioUnitRenderAction_PostRender;
+                    if(rendered(state.get(),&flags,&time,0,512,(n%2?&interleaved:(AudioBufferList*)&stereo))!=noErr || state->io(&time,512,&mono,false)!=noErr)good=false;
+                }
+                for(bool render:{false,true}) {
+                    auto &ring=render?state->speaker:state->mic;LabBlock block{};uint64_t previous=0;
+                    for(int n=0;n<4;n++) {
+                        if(!ring.pop(&block)) {good=false;break;}
+                        if(n && std::llabs((int64_t)(block.host_ns-previous)-10000000)>3)good=false;
+                        for(auto sample:block.samples)if(sample!=(render?16384:8192))good=false;
+                        previous=block.host_ns;
+                    }
+                    if(ring.written!=4 || ring.read!=4 || ring.dropped)good=false;
+                }
+                if(state->callbacks || state->errors || state->speaker_max_frames!=512 || state->mic_max_frames!=512)good=false;
+                // Partial/error exit still removes the registration.
+                AudioUnitRenderActionFlags flags=kAudioUnitRenderAction_PostRenderError;
+                if(rendered(state.get(),&flags,nullptr,0,0,nullptr)!=noErr || state->errors!=1)good=false;
+            }
+            if(notifications_alive || AudioComponentInstanceDispose(unit)!=noErr)good=false;
+            state.reset();
+            if(!good || !weak.expired() || states_alive || owners_alive)return 0;
         }
     }
     return 1;

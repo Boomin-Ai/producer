@@ -1,8 +1,14 @@
 {
-  "binary_sha256": "df7d2a211db4972dd7ee1fa1fd217d2a976ac47686bfcc30aa93bbc9c4f11d4f",
+  "binary_sha256": "344c35648d0acc057f931fc738bc4a98c5b6ef6f957a6650e44565c6ecac0a34",
   "application_location": "~/Applications/Producer Speakerphone Lab.app",
   "default_capture_root": "~/Library/Application Support/Producer Guest RTC Lab",
   "physical_aec_profile": "no_forced_high_pass",
+  "device_callback_modes": {
+    "default": "engine_taps",
+    "opt_in_argument": "--io-callbacks",
+    "opt_in": "input_sink_and_output_render_notification",
+    "physical_io_callback_timing_qualified": false
+  },
   "bundled_speech_sha256": "e7084561f969d6b1b2912cfe919154ea0fc7feada08f840089b4ed4533f5b807",
   "native_queue_and_partial_initialization_cycles": 20,
   "signing": "ad hoc development signature; not a production release or Apple notarization",
