@@ -724,3 +724,38 @@ installed Producer app changed. G1 remains incomplete. Next: address binding-tim
 video-report availability without accepting stale publication reports, then wire
 one actual capture/playback owner and final speaker-bound PCM into APM before
 asking for physical speakerphone testing.
+
+## First physical speakerphone capture — 2026-10-10
+
+An isolated native macOS lab now owns actual microphone capture, speaker
+playback and the final mixer reference feeding WebRTC APM. It does not publish
+the microphone or integrate the production LiveKit guest path. The app bundles
+its test clip in `~/Applications` and writes private recordings to Application
+Support, avoiding the Documents permission prompt that blocked first launch.
+
+The first hardware attempts overflowed the original eight-block rings before
+the owner processed any audio. Both taps are now measured delivering 4,800-frame
+(100 ms) batches despite requesting 480 frames. Fixed 32-block rings accommodate
+those bursts; overflow still invalidates the run. Native self-tests cover a
+ten-block burst, bounded overflow, concurrent producer/consumer accounting and
+20 partial-initialization teardown cycles. Rust Clippy and strict native compiler
+checks pass.
+
+The next physical run completed in 60.030 seconds with 5,990 ten-millisecond
+blocks on each timeline, zero overflow, zero format/timeline faults, zero clipped
+samples and no active callbacks or retained native owners at shutdown. Maximum
+block interval deviation from 10 ms was 0.0072 ms. Processing both APM-on and
+APM-off took 517 microseconds at p95. The file/lifecycle verifier passed.
+
+Across 84 eligible far-only windows, provisional echo attenuation was 31.26 dB
+median and 12.27 dB p10, exceeding the initial 20/10 dB thresholds for this run.
+Speaker volume was instructed at 50%, not independently measured. The user
+reported forgetting to talk; therefore double-talk preservation and near-speech
+intelligibility were **not tested**. A reduction in the instructed double-talk
+window is not evidence of speech suppression when no deliberate speech occurred.
+
+Evidence: `labs/guest-rtc/evidence/speakerphone-first-completed-run.json`; raw
+voice/audio files remain private outside the repository. Repeat the same setup
+with deliberate speech during seconds 30–60, review preserved speech, then test
+75% speaker volume and repeated lifecycle/device changes. Physical AEC acceptance
+and G1 remain incomplete; no production deployment or installed Producer change.
