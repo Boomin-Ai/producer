@@ -230,7 +230,7 @@ extern "C" void lab_ui_open() {
     controls.window.title=@"Producer Speakerphone Lab";controls.window.delegate=controls;
     NSTextField *instructions=[NSTextField wrappingLabelWithString:@"Exit other Producer rooms and stop other audio. Use built-in speakers and microphone; disconnect headphones. Start at 50% system volume.\n0–5 s: stay quiet. 5–30 s: hear the clip, stay quiet. 30–50 s: talk over it. 50–60 s: talk while the clip is silent.\nThis records locally. Microphone audio is never played back or published."];
     instructions.frame=NSMakeRect(24,155,692,115);[controls.window.contentView addSubview:instructions];
-    controls.status=[NSTextField wrappingLabelWithString:@"Ready. Click Start when prepared."];controls.status.frame=NSMakeRect(24,75,692,70);[controls.window.contentView addSubview:controls.status];
+    controls.status=[NSTextField wrappingLabelWithString:@"Ready. Voice refinement active. Click Start when prepared."];controls.status.font=[NSFont systemFontOfSize:17 weight:NSFontWeightSemibold];controls.status.frame=NSMakeRect(24,75,692,70);[controls.window.contentView addSubview:controls.status];
     for(int n=0;n<2;n++) {
         NSButton *button=[NSButton buttonWithTitle:n?@"Stop":@"Start 60-second test" target:controls action:n?@selector(stop:):@selector(start:)];
         button.frame=NSMakeRect(24+n*220,24,200,36);[controls.window.contentView addSubview:button];

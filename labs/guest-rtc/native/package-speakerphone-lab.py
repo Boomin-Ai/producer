@@ -33,6 +33,7 @@ subprocess.run(["codesign", "--verify", "--strict", str(APP)], check=True)
 report = {"binary_sha256": hashlib.sha256(BINARY.read_bytes()).hexdigest(),
           "application_location": "~/Applications/Producer Speakerphone Lab.app",
           "default_capture_root": "~/Library/Application Support/Producer Guest RTC Lab",
+          "physical_aec_profile": "no_forced_high_pass",
           "bundled_speech_sha256": hashlib.sha256((resources / "far-speech.wav").read_bytes()).hexdigest(),
           "native_queue_and_partial_initialization_cycles": 20,
           "signing": "ad hoc development signature; not a production release or Apple notarization",

@@ -55,5 +55,10 @@
       "physical_aec_qualified": false,
       "g1_complete": false
     }
-  ]
+  ],
+  "human_comparison_feedback": {
+    "candidate": "User reported second version a little better, slightly.",
+    "candidate_selected_for_next_physical_run": true,
+    "physical_aec_qualified": false
+  }
 }

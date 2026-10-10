@@ -40,7 +40,9 @@ no zero/arrival-time reference is substituted.
 
 APM-on and APM-off process the same captured blocks with NS and AGC
 disabled. Explicit high-pass filtering is requested off, but upstream AEC
-enforces its high-pass filter by default. New reports distinguish the explicit
+enforces its high-pass filter by default. The current physical refinement
+profile explicitly disables that enforcement once before starting capture,
+while retaining AEC. New reports distinguish the explicit
 request and AEC enforcement; historical `high_pass:false` fields were requests,
 not effective processing status. Offline replay compares the default with
 enforcement disabled before processing, while keeping AEC enabled in both. Local private files contain speaker-reference, raw microphone,
@@ -79,5 +81,6 @@ CSV order, with the recorded delays, into independent baseline and candidate
 APMs. The candidate disables only AEC high-pass enforcement before processing.
 The default constructor remains unchanged. Output WAVs and per-window statistics
 stay in the private output directory. On both recorded runs the baseline
-reproduced the physical processed output with zero PCM RMS error. Listening
-comparison and a new physical run are required before adopting the candidate.
+reproduced the physical processed output with zero PCM RMS error. The user reported the candidate sounded slightly better in the listening
+comparison. It is selected for the next physical lab run; acceptance remains
+pending compliant speech/echo testing and louder-speaker testing.

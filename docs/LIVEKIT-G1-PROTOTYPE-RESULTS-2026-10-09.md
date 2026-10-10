@@ -829,3 +829,12 @@ was opened for human listening; candidate quality and a new physical run remain
 pending. Evidence: `labs/guest-rtc/evidence/speakerphone-high-pass-replay-comparison.json`.
 No candidate change has been applied to production or promoted to physical
 acceptance. G1 remains incomplete.
+
+The user reported the high-pass-disabled candidate sounded slightly better
+than the current cleaned voice. The isolated physical lab now selects this
+profile once before any audio processing, keeps AEC enabled, and records
+`aec_profile=no_forced_high_pass` plus the observed enforcement flag. Its
+status identifies voice refinement and uses larger phase prompts. Native
+20-cycle queue/partial-initialization checks, two Rust tests, Clippy and strict
+ad hoc signature validation passed after packaging. It was reopened for a
+compliant 50% speaker-volume run; no new physical result or qualification yet.
