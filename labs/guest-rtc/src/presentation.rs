@@ -419,6 +419,22 @@ impl SelectedPlayback {
         self.labels
             .observe(generation, sequence, rtp, bootstrap, origin, stamp);
     }
+    fn sender_report_note(&mut self, milestone: &str, report: SenderReport) {
+        self.startup_note(milestone, report.observed_us);
+        if let Some(point) = self.startup.iter_mut().find(|point| {
+            point["binding_since_us"] == self.since_us
+                && point["milestone"] == milestone
+                && point["observed_us"] == report.observed_us
+                && point.get("sender_ntp_us").is_none()
+        }) {
+            point["ssrc"] = json!(report.ssrc);
+            point["rtp_timestamp"] = json!(report.rtp_timestamp);
+            point["sender_ntp_us"] = json!(
+                u64::from(report.ntp_seconds) * 1_000_000
+                    + ((u64::from(report.ntp_fraction) * 1_000_000) >> 32)
+            );
+        }
+    }
     pub fn note_sender_reports(&mut self, rtcp: &Value) {
         let mut reports: Vec<SenderReport> = rtcp["peers"]
             .as_array()
@@ -443,14 +459,14 @@ impl SelectedPlayback {
                 .as_ref()
                 .is_some_and(|(_, ssrc)| *ssrc == report.ssrc)
             {
-                self.startup_note("first_incoming_audio_report", report.observed_us);
+                self.sender_report_note("first_incoming_audio_report", report);
             }
             if self
                 .video_binding
                 .as_ref()
                 .is_some_and(|(_, ssrc, _, _)| *ssrc == report.ssrc)
             {
-                self.startup_note("first_incoming_video_report", report.observed_us);
+                self.sender_report_note("first_incoming_video_report", report);
             }
         }
     }
@@ -595,10 +611,31 @@ mod tests {
         ]}]}));
         assert_eq!(playback.startup.len(), 1);
         assert_eq!(playback.startup[0]["observed_us"], 110);
+        assert_eq!(playback.startup[0]["ssrc"], 7);
+        assert_eq!(playback.startup[0]["rtp_timestamp"], 0);
+        assert_eq!(playback.startup[0]["sender_ntp_us"], 1_000_000);
         assert_eq!(
             playback.startup[0]["milestone"],
             "first_incoming_audio_report"
         );
+        // A later poll cannot overwrite the first report's publisher timing.
+        playback.note_sender_reports(&json!({"peers":[{"sender_report_history":[
+            {"incoming":true,"ssrc":7,"ntp_seconds":2,"ntp_fraction":2147483648_u64,"rtp_timestamp":960,"observed_us":130}
+        ]}]}));
+        assert_eq!(playback.startup.len(), 1);
+        assert_eq!(playback.startup[0]["sender_ntp_us"], 1_000_000);
+        playback.clear(200);
+        playback.video_binding = Some(("new-video".into(), 9, SenderClock::new(9, 90_000), 200));
+        playback.note_sender_reports(&json!({"peers":[{"sender_report_history":[
+            {"incoming":true,"ssrc":9,"ntp_seconds":2,"ntp_fraction":2147483648_u64,"rtp_timestamp":180000,"observed_us":220}
+        ]}]}));
+        assert_eq!(playback.startup.len(), 2);
+        assert_eq!(
+            playback.startup[1]["milestone"],
+            "first_incoming_video_report"
+        );
+        assert_eq!(playback.startup[1]["sender_ntp_us"], 2_500_000);
+        assert_eq!(playback.startup[1]["rtp_timestamp"], 180000);
     }
     #[test]
     fn startup_trace_preserves_first_observation_and_is_bounded() {

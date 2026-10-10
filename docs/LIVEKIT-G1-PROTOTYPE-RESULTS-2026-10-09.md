@@ -529,3 +529,71 @@ lab services stopped. G1 and physical speakerphone AEC remain incomplete. Next:
 prototype earlier downstream SR delivery on a pinned isolated SFU while preserving
 publisher timing, and distinguish publisher-first-report wait from SFU emission
 wait. Provider deployment/integration remains gated.
+
+### Isolated downstream sender-report cadence comparison — October 10
+
+Built an isolated LiveKit v1.13.9 server from immutable commit
+`6fbe7f7e648aab4b2f734d6044a416bc2cbc482c` with checksum-verified Go 1.26.0.
+The tracked `native/build-sfu-lab.py`, patch and provenance manifest reproduce
+the experiment under ignored runtime directories. The default subscriber SR
+interval remains three seconds; a lab-only environment switch selects 250 ms.
+This increases cadence 12 times and preserves the publisher-SR prerequisite and
+RTP/NTP mapping. Publisher reports are traced before the existing reference update.
+No deployed provider, production application or upstream installation was changed.
+
+Two sequential 45-second synthetic recordings used that same server executable,
+three guests, three guest-1 rejoins, the audio-jitter relay, and the same native
+first-report bootstrap, extended video buffer and diagnostic finalized-MP4 opt-ins.
+Both had zero relay snapshot-write errors. This is a local comparison rather
+than an identical captured-input replay or a Cloud performance qualification.
+
+| Epoch | Normal cadence: first scheduled audio | 250 ms cadence: first scheduled audio |
+| --- | --- | --- |
+| Initial | 4,051.5 ms | 2,488.4 ms |
+| Rejoin 1 | 4,906.9 ms | 2,575.3 ms |
+| Rejoin 2 | 3,785.4 ms | 2,462.3 ms |
+| Rejoin 3 | 2,497.2 ms | 2,505.2 ms |
+
+Times are measured from the corresponding native binding epoch, not from a
+user's join click. The normal run has one intermediate video-only epoch with no
+scheduled audio; the table uses the four epochs that actually scheduled audio.
+Startup-dropped 10 ms audio blocks decreased from 1,315 to 842 (summed over the
+run), but the faster arm still takes approximately 2.5 seconds to schedule audio.
+Both runs had 14 binding-clear resets. Discovery stayed bounded to one active job:
+normal 12 spawned/completed, fast 11 spawned/completed, zero timeouts, failures,
+stale results or active jobs at shutdown. Each run retired all six decoded native
+sources (six created/six destroyed/zero alive) and its OBS pipeline probe.
+
+The new bounded native milestone metadata preserves first-report SSRC, RTP and
+sender NTP after later reports arrive. `native/analyze-sfu-startup.py` correlates
+these with the SFU publisher trace by downstream SSRC and unambiguous track ID.
+In the SFU's own wall-clock domain, the first publisher audio report arrived
+2,024–2,052 ms after the first publisher video report in the normal arm, and
+2,035–2,045 ms later in the faster arm. This exposes a publisher-report availability
+gap that lowering the downstream interval does not remove. Sender NTP advancement
+between the first publisher reference and first received downstream report was
+31–235 ms for audio in the faster arm, versus 148–2,557 ms in the normal arm.
+NTP advancement is not an exact isolated SFU hold or network latency measurement;
+no SFU wall time is subtracted from native monotonic time.
+
+Both recordings pass the independent local marker gate with no unmatched markers:
+normal 61.33 ms p95 (12 pairs), faster 53.33 ms p95 (13 pairs). AVFoundation reports
+61.33/54.67 ms respectively. The reduced startup delay does not establish end-to-end
+conversation latency, speakerphone AEC, or G1 completion.
+
+The server initially failed compilation repeatedly due to ENOSPC. Additional
+authorized cleanup removed rebuildable dependency download archives, compressed
+inactive SFU logs, and cleared an inactive 920 MiB Clang module cache. Sources,
+native SDK archive, sets, user recordings, profiles and installed apps were retained.
+Compilation and decoder analysis did not overlap either valid recording. The final
+SFU is a valid arm64 executable reporting 1.13.9; its hash is in the manifest. The
+native proof executable was rebuilt with the final-crate strip override and checked
+as a valid Mach-O. All owned lab listeners were stopped afterward.
+
+Validation: cadence helper test (not the full upstream test suite), full server
+build, 27 OBS-feature Rust tests including first-report retention across polls and
+epochs, OBS-feature Clippy with warnings denied, formatting/syntax/provenance
+checks, 28 recording-accounting reports and 18 pre-mux traces. Failed historical
+timing evidence remains preserved. G1 and physical speakerphone AEC remain open.
+Next: investigate a supported early publisher timing mechanism and prove startup
+without inventing an arrival-time clock; the faster SFU cadence alone is insufficient.
