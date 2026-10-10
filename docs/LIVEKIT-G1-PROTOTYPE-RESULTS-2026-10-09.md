@@ -1068,3 +1068,12 @@ restart acceptance remains pending. The bundled clip schedule starts with the
 engine, so this warmup shortens its initial recorded silence by about 250 ms.
 The prior complete run and voice review remain evidence for the prior binary,
 not qualification of this startup candidate. No production changes.
+
+
+### Two warmup-candidate restarts — October 10
+
+Short run `speakerphone-1791653658949935000`: 6.183 seconds, 596 microphone/599 reference blocks, capture-to-processing p95 24.241 ms and max 25.492 ms. Explicit user stop.
+
+Short run `speakerphone-1791653716165844000`: 8.771 seconds, 852 microphone/855 reference blocks, capture-to-processing p95 24.062 ms and max 25.885 ms. Explicit user stop.
+
+Both runs passed file/timestamp/bounded-accounting checks, with zero native faults, queue overflow or invalid APM delay, and zero surviving callback registrations/owners. Startup-discarded frames are separately accounted in each report. The verifier permits an intentional short user stop only with explicit `--allow-user-stop`; default completed-run enforcement and rejection of invalid reports remain intact. Two starts support proceeding with an isolated publication-handoff prototype, not broad startup/device qualification. Numeric reports are retained in `labs/guest-rtc/evidence/native-io-startup-restarts.json`; private audio is not committed. Physical LiveKit publication, full monitor reference routing and RTP/video timestamp mapping remain unproven.

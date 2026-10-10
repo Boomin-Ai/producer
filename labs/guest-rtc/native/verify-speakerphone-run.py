@@ -7,9 +7,11 @@ import wave
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("directory", type=Path)
+parser.add_argument("--allow-user-stop", action="store_true", help="Validate an intentional short startup run; never grants completed-test/AEC acceptance")
 args = parser.parse_args()
 report = json.loads((args.directory / "report.json").read_text())
-assert report["stop_reason"] == "completed", "Stopped/invalid runs remain evidence, not acceptance runs"
+assert report["stop_reason"] == "completed" or (args.allow_user_stop and report["stop_reason"] == "user_stopped"), "Invalid runs cannot pass; short intentional stops require --allow-user-stop"
+assert report["duration_seconds"] >= 1 and report["microphone_blocks"] > 0 and report["speaker_blocks"] > 0
 assert report["hardware_capture_used"] and report["physical_speaker_reference_connected"]
 assert not report["microphone_played_or_published"]
 assert not any(report[k] for k in ("ns", "agc", "system_voice_processing", "physical_aec_qualified", "g1_complete"))
@@ -21,6 +23,12 @@ life = report["lifecycle"]
 assert life["owners_and_callback_state_retired"] and life["callbacks_active"] == 0
 if "render_notifications_alive" in life:
     assert life["render_notifications_alive"] == 0
+if "startup_quarantine" in life:
+    startup = life["startup_quarantine"]
+    assert startup["duration_ms"] == 250
+    assert startup["speaker_frames"] >= 0 and startup["microphone_frames"] >= 0
+if "first_io_fault" in life:
+    assert life["first_io_fault"]["speaker"] == life["first_io_fault"]["microphone"] == 0
 if "capture_age_at_apm_us" in report:
     age = report["capture_age_at_apm_us"]
     assert age["count"] == min(report["microphone_blocks"], age["capacity"])
