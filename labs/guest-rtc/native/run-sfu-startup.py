@@ -70,6 +70,10 @@ def main():
         env["LIVEKIT_LAB_DELAYED_AUDIO_SR"] = "1"
     # Keep existing controls untouched even if the parent environment enabled it.
     env.pop("LIVEKIT_LAB_BATCHED_CAPTURE", None)
+    # This runner is always generated-media only, even if the parent opts into
+    # a separate physical prototype. Never inherit microphone publication.
+    env.pop("LIVEKIT_LAB_PHYSICAL_CAPTURE", None)
+    env.pop("LIVEKIT_LAB_PHYSICAL_SPEECH", None)
     if args.capture_handoff:
         env["LIVEKIT_LAB_BATCHED_CAPTURE"] = "1"
     owned, logs = [], []

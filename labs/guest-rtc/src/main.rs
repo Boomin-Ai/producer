@@ -6,6 +6,10 @@ mod capture_handoff;
 mod fixture;
 #[cfg(feature = "obs-proof")]
 mod obs_proof;
+#[cfg(feature = "physical-aec")]
+mod physical_device;
+#[cfg(feature = "physical-aec")]
+mod physical_publication;
 mod playout_clock;
 #[cfg(any(feature = "obs-proof", test))]
 mod presentation;

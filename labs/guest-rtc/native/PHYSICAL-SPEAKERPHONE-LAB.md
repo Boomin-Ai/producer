@@ -125,3 +125,38 @@ calibrated acoustic delay or end-to-end RTC latency. Up to 6,100 observations
 cover a 60-second trial. Repeat the standard deliberate-speech protocol at
 50%, compare with the prior tap runs, and verify the new capture/reference
 before changing the LiveKit publication diagnostic or claiming G1 acceptance.
+
+
+## Native microphone to loopback LiveKit candidate
+
+The transport binary built with `physical-aec` now has an explicit physical
+publication path. It is disabled unless `LIVEKIT_LAB_PHYSICAL_CAPTURE=1`.
+It requires an explicit `LIVEKIT_LAB_PHYSICAL_SPEECH` path to a 48 kHz mono
+PCM16 reference WAV (at most 120 seconds) and existing microphone permission.
+The transport still rejects every signaling URL outside its three exact
+loopback fixture URLs. Missing permissions/reference or conflicting synthetic
+batch flags reject before room connection. This path does **publish microphone
+audio to the local SFU** when deliberately enabled; the ordinary speakerphone
+UI still records locally and never publishes microphone audio.
+
+The native engine/owner is shared with the measured speakerphone lab, including
+250 ms startup quarantine and strict callback continuity. Its output reference
+is still only the lab clip. The publisher thread processes native reference and
+microphone blocks with the selected manual AEC profile, holds at most one mic
+block for an 80 ms reference deadline, then feeds original capture timestamps
+and cleaned PCM through the bounded publication handoff. SDK AEC/NS/AGC remain
+disabled; SDK source queue is zero. Generated black video is a placeholder;
+this is not camera/RTP synchronization proof or a full guest monitor reference.
+
+On cancellation/error, the native device stops/removes callbacks, the handoff
+retires pending voice, and the existing publisher owner joins the thread.
+A submission that has left the handoff but has not confirmed SDK completion
+is separately reported. No claim is made that the SDK can flush encoded voice.
+The evidence records native lifecycle, handoff accounting, SDK submission time,
+owner tick gaps and a bounded capture-to-SDK age histogram. The generated SFU
+runner explicitly removes both physical environment flags, even when inherited
+from a parent. It cannot be used to test this physical path accidentally.
+
+The first deliberate physical-SFU run and guest/camera synchronization remain
+pending; do not use this candidate for production or infer a full speakerphone
+routing acceptance from the earlier standalone AEC tests.

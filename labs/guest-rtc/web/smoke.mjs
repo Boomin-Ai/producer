@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const here = path.dirname(fileURLToPath(import.meta.url)), lab = path.resolve(here, '..');
+if (process.env.LIVEKIT_LAB_PHYSICAL_CAPTURE === '1') throw new Error('Generated smoke does not accept physical microphone publication; use the explicit physical runner');
 const guests = Number(process.argv[2] ?? 1), mode = process.argv[3] ?? 'normal';
 if (![1, 3].includes(guests) || !['normal', 'pressure', 'republish', 'network', 'hard-loss', 'churn'].includes(mode)) throw new Error('Use 1|3 normal|pressure|republish|network|hard-loss|churn');
 const name = process.env.LIVEKIT_LAB_RUN_NAME ?? `transport-${guests}-${mode}`;

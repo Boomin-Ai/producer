@@ -337,7 +337,11 @@ async fn publish(room: &Room) -> Result<(NativeAudioSource, NativeVideoSource)> 
     room.local_participant()
         .publish_track(
             LocalTrack::Audio(LocalAudioTrack::create_audio_track(
-                "synthetic-program",
+                if physical_capture_enabled() {
+                    "physical-microphone-lab"
+                } else {
+                    "synthetic-program"
+                },
                 RtcAudioSource::Native(audio.clone()),
             )),
             TrackPublishOptions {
@@ -371,6 +375,10 @@ async fn source_loop(
     video: NativeVideoSource,
     capture_evidence: crate::capture_fixture::Evidence,
 ) -> Result<()> {
+    #[cfg(feature = "physical-aec")]
+    if crate::physical_publication::enabled() {
+        return crate::physical_publication::run(audio, video, capture_evidence).await;
+    }
     if std::env::var("LIVEKIT_LAB_BATCHED_CAPTURE").as_deref() == Ok("1") {
         return crate::capture_fixture::run(audio, video, capture_evidence).await;
     }
@@ -472,6 +480,9 @@ impl Drop for Publisher {
     }
 }
 
+fn physical_capture_enabled() -> bool {
+    std::env::var("LIVEKIT_LAB_PHYSICAL_CAPTURE").as_deref() == Ok("1")
+}
 pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool) -> Result<()> {
     if !(5..=300).contains(&seconds) {
         bail!("Fixture duration must be 5..300 seconds");
@@ -488,13 +499,26 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     {
         bail!("This fixture only connects to its loopback SFU");
     }
+    if physical_capture_enabled() {
+        #[cfg(not(feature = "physical-aec"))]
+        bail!("Physical publication requires the physical-aec feature");
+        #[cfg(feature = "physical-aec")]
+        crate::physical_publication::preflight()?;
+    }
     #[cfg(feature = "obs-proof")]
     let recorder = std::env::var("LIVEKIT_LAB_OBS_RECORDING")
         .ok()
         .map(|path| crate::obs_proof::Recorder::start(Path::new(&path)))
         .transpose()?;
     let (room, mut events) = Room::connect(&url, token.trim(), RoomOptions::default()).await?;
-    println!("Native host connected to local SFU; synthetic tracks only");
+    println!(
+        "Native host connected to local SFU; {}",
+        if physical_capture_enabled() {
+            "explicit physical microphone publication enabled; lab clip reference only"
+        } else {
+            "synthetic tracks only"
+        }
+    );
     let (source_audio, source_video) = publish(&room).await?;
     let capture_evidence = Arc::new(std::sync::Mutex::new(json!({"enabled":false})));
     let mut publisher =

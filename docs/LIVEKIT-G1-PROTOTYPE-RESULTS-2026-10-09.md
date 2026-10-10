@@ -1077,3 +1077,40 @@ Short run `speakerphone-1791653658949935000`: 6.183 seconds, 596 microphone/599 
 Short run `speakerphone-1791653716165844000`: 8.771 seconds, 852 microphone/855 reference blocks, capture-to-processing p95 24.062 ms and max 25.885 ms. Explicit user stop.
 
 Both runs passed file/timestamp/bounded-accounting checks, with zero native faults, queue overflow or invalid APM delay, and zero surviving callback registrations/owners. Startup-discarded frames are separately accounted in each report. The verifier permits an intentional short user stop only with explicit `--allow-user-stop`; default completed-run enforcement and rejection of invalid reports remain intact. Two starts support proceeding with an isolated publication-handoff prototype, not broad startup/device qualification. Numeric reports are retained in `labs/guest-rtc/evidence/native-io-startup-restarts.json`; private audio is not committed. Physical LiveKit publication, full monitor reference routing and RTP/video timestamp mapping remain unproven.
+
+
+### Native physical publication bridge implemented; SFU proof pending
+
+Extracted the native device owner into `physical_device.rs`, reused by the
+speakerphone UI and the opt-in transport path in `physical_publication.rs`.
+The transport uses its existing named publisher thread and explicit join.
+Physical capture requires the `physical-aec` build feature, an explicit flag
+and reference file, existing microphone permission and an allowed loopback
+URL. Its track is named `physical-microphone-lab`; its video is explicitly
+synthetic black output. The AEC owner reads real output-reference callbacks,
+processes microphone blocks and feeds cleaned 10 ms PCM plus original host
+timestamps into the previously tested bounded handoff and zero-queue SDK
+source. Native faults, reference wait, capture discontinuity, overflow and
+missed publication deadlines retire the run. There is no silent fallback to
+synthetic audio, no clock reanchor and no queued-voice reuse after cancellation.
+
+Shutdown saves native lifecycle, handoff counters, capture-to-SDK histogram,
+SDK call latency and scheduling gaps. An SDK submission whose completion is
+unconfirmed at shutdown is flagged separately from successful publication.
+The source API still has no external capture-timestamp argument. Guest return
+audio is not yet included in the physical speaker reference, and a physical
+camera is not yet connected. This implementation alone proves neither full
+speakerphone routing nor RTP/video synchronization.
+
+Validation: 33 shared receiver/handoff tests and six speakerphone/handoff tests
+passed; strict Clippy passed with the combined `physical-aec obs-proof` lab
+features, and twenty native lifecycle cycles passed after device extraction.
+The physical-only all-target Clippy invocation exposed existing unused OBS
+test helpers; the combined feature configuration uses them and passes without
+suppressions. The real transport binary rejected an explicit physical flag
+with missing reference before connection/device creation; numeric evidence is
+in `labs/guest-rtc/evidence/physical-publication-preflight.json`. Generated SFU
+runner now clears physical flags to preserve its no-microphone contract.
+Both development binaries built. No physical SFU microphone publication was
+started; that requires the next deliberate operator test. G1 incomplete,
+installed Producer and production unchanged.
