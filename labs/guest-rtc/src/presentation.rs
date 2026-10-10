@@ -232,6 +232,7 @@ impl Presentation {
 /// Bounded numeric observations; never changes scheduling or retains media.
 #[derive(serde::Serialize)]
 struct AudioLabelPoint {
+    epoch: u64,
     generation: u64,
     sequence: u64,
     rtp: u32,
@@ -243,6 +244,7 @@ struct AudioLabelPoint {
 }
 struct AudioLabels {
     began: Instant,
+    epoch: u64,
     first: Option<(u64, i64, Instant)>,
     previous: Option<(i64, Instant, bool)>,
     last_saved: Option<Instant>,
@@ -256,6 +258,7 @@ impl AudioLabels {
     fn new() -> Self {
         Self {
             began: Instant::now(),
+            epoch: 0,
             first: None,
             previous: None,
             last_saved: None,
@@ -267,6 +270,7 @@ impl AudioLabels {
         }
     }
     fn clear(&mut self) {
+        self.epoch += 1;
         self.first = None;
         self.previous = None;
         self.last_saved = None;
@@ -311,6 +315,7 @@ impl AudioLabels {
                 self.points.pop_front();
             }
             self.points.push_back(AudioLabelPoint {
+                epoch: self.epoch,
                 generation,
                 sequence,
                 rtp,
@@ -327,7 +332,7 @@ impl AudioLabels {
     fn report(&self) -> Value {
         json!({"observations":self.observations,"bootstrap_transitions":self.transitions,
             "max_label_step_error_us":self.max_step_error_us,"max_label_shift_us":self.max_shift_us,
-            "capacity":192,"points":self.points,"observations_only":true})
+            "capacity":192,"points":self.points,"observations_only":true,"presentation_epochs":self.epoch,"reanchors_segmented":true})
     }
 }
 fn signed_micros(left: Instant, right: Instant) -> i128 {
@@ -340,6 +345,7 @@ fn signed_micros(left: Instant, right: Instant) -> i128 {
 pub struct SelectedPlayback {
     pub clock: Presentation,
     labels: AudioLabels,
+    startup: VecDeque<Value>,
     pub bootstrap: bool,
     pub audio_bootstrap_blocks: u64,
     video_bootstrap_frames: u64,
@@ -361,6 +367,7 @@ impl SelectedPlayback {
                 std::env::var("LIVEKIT_LAB_EXTENDED_VIDEO_BUFFER").as_deref() == Ok("1"),
             ),
             labels: AudioLabels::new(),
+            startup: VecDeque::with_capacity(64),
             bootstrap: std::env::var("LIVEKIT_LAB_FIRST_REPORT_BOOTSTRAP").as_deref() == Ok("1"),
             audio_bootstrap_blocks: 0,
             video_bootstrap_frames: 0,
@@ -383,6 +390,22 @@ impl SelectedPlayback {
         self.since_us = since_us;
         self.audio_marker_active = false;
         self.video_marker_active = false;
+    }
+    /// Numeric-only, first observation per milestone and binding epoch.
+    pub fn startup_note(&mut self, milestone: &str, observed_us: i64) {
+        if self.startup.iter().any(|event| {
+            event["binding_since_us"] == self.since_us && event["milestone"] == milestone
+        }) {
+            return;
+        }
+        if self.startup.len() == 64 {
+            self.startup.pop_front();
+        }
+        self.startup.push_back(json!({"binding_since_us":self.since_us,"milestone":milestone,
+            "observed_us":observed_us,"since_binding_us":observed_us.saturating_sub(self.since_us)}));
+    }
+    pub fn audio_reanchored(&mut self) {
+        self.labels.clear();
     }
     pub fn audio_label(
         &mut self,
@@ -459,7 +482,7 @@ impl SelectedPlayback {
         origin
     }
     pub fn report(&self) -> Value {
-        json!({"clock":self.clock.report(),"audio_labels":self.labels.report(),"audio_binding":self.audio_binding,
+        json!({"clock":self.clock.report(),"audio_labels":self.labels.report(),"startup_milestones":self.startup,"startup_milestone_capacity":64,"audio_binding":self.audio_binding,
             "video_binding":self.video_binding.as_ref().map(|(sid,ssrc,clock,_)|json!({
                 "sid":sid,"ssrc":ssrc,"clock_resets":clock.resets,"rejected_reports":clock.rejected})),
             "input_marker_deadlines":self.markers,"unmatched_audio_blocks":self.unmatched_audio,"invalid_audio_pull":self.invalid_audio_pull,
@@ -510,6 +533,33 @@ mod tests {
         }
         assert!(labels.max_shift_us > 8_000_000);
         assert!(labels.points.len() <= 192);
+    }
+    #[test]
+    fn same_generation_reanchor_starts_a_separate_label_epoch() {
+        let now = Instant::now();
+        let mut labels = AudioLabels::new();
+        labels.observe(1, 1, 0, true, 1_000_000, now);
+        labels.clear();
+        labels.observe(1, 2, 480, true, 1_010_000, now + Duration::from_secs(1));
+        let point = labels.points.back().unwrap();
+        assert_eq!(point.epoch, 1);
+        assert_eq!(point.label_step_error_us, 0);
+        assert_eq!(point.label_shift_since_start_us, 0);
+        assert_eq!(labels.max_step_error_us, 0);
+    }
+    #[test]
+    fn startup_trace_preserves_first_observation_and_is_bounded() {
+        let mut playback = SelectedPlayback::new(100);
+        playback.startup_note("audio_bound", 150);
+        playback.startup_note("audio_bound", 200);
+        assert_eq!(playback.startup.len(), 1);
+        assert_eq!(playback.startup[0]["since_binding_us"], 50);
+        for epoch in 1..100 {
+            playback.clear(100 + epoch * 100);
+            playback.startup_note("audio_bound", 150 + epoch * 100);
+        }
+        assert_eq!(playback.startup.len(), 64);
+        assert_eq!(playback.startup.back().unwrap()["binding_since_us"], 10_000);
     }
     #[test]
     fn rejected_deadlines_are_explained_without_unbounding_history() {

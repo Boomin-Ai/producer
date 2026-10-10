@@ -1,0 +1,100 @@
+[
+  {
+    "run": "transport-obs-audio-master-startup-trace-rejoin",
+    "startup_epochs_ms": {
+      "40468189181": {
+        "audio_bound": 294.999,
+        "bound_audio_pcm": 290.856,
+        "video_bound": 803.893,
+        "video_clock_ready": 3330.73,
+        "audio_clock_ready": 3330.764,
+        "first_audio_scheduled": 3330.764,
+        "first_video_scheduled": 3331.954
+      },
+      "40477596024": {
+        "audio_bound": 115.038,
+        "bound_audio_pcm": 112.522,
+        "video_bound": 624.668,
+        "video_clock_ready": 2844.02,
+        "audio_clock_ready": 2844.204,
+        "first_audio_scheduled": 2844.204,
+        "first_video_scheduled": 2863.746
+      },
+      "40484832545": {
+        "audio_bound": 138.437,
+        "video_bound": 138.805,
+        "bound_audio_pcm": 136.0,
+        "video_clock_ready": 1607.152,
+        "audio_clock_ready": 4688.802,
+        "first_audio_scheduled": 4688.802,
+        "first_video_scheduled": 4709.088
+      },
+      "40492066570": {
+        "audio_bound": 114.27,
+        "video_bound": 114.793,
+        "bound_audio_pcm": 112.608,
+        "video_clock_ready": 453.899,
+        "audio_clock_ready": 3422.891,
+        "first_audio_scheduled": 3422.891,
+        "first_video_scheduled": 3432.553
+      }
+    },
+    "independent_abs_p95_ms": 72.0,
+    "unmatched_audio": 1,
+    "unmatched_video": 0,
+    "local_gate_passed": false,
+    "audio_label_step_max_us": 10014,
+    "audio_label_shift_max_us": 11193,
+    "g1_complete": false,
+    "capture_to_playout_latency_qualified": false
+  },
+  {
+    "run": "transport-obs-audio-master-startup-event-rejoin",
+    "startup_epochs_ms": {
+      "40616508499": {
+        "audio_bound": 10.226,
+        "bound_audio_pcm": 5.484,
+        "video_bound": 510.38,
+        "video_clock_ready": 3588.335,
+        "audio_clock_ready": 3588.557,
+        "first_audio_scheduled": 3588.557,
+        "first_video_scheduled": 3609.792
+      },
+      "40625894878": {
+        "video_bound": 502.434,
+        "audio_bound": 502.763,
+        "bound_audio_pcm": 499.006,
+        "video_clock_ready": 3223.882,
+        "audio_clock_ready": 3223.97,
+        "first_audio_scheduled": 3223.97,
+        "first_video_scheduled": 3233.207
+      },
+      "40633137780": {
+        "audio_bound": 10.963,
+        "bound_audio_pcm": 6.161,
+        "video_bound": 520.138,
+        "video_clock_ready": 1990.212,
+        "audio_clock_ready": 4941.229,
+        "first_audio_scheduled": 4941.229,
+        "first_video_scheduled": 4941.951
+      },
+      "40640372780": {
+        "video_bound": 505.869,
+        "audio_bound": 506.216,
+        "bound_audio_pcm": 500.497,
+        "video_clock_ready": 3684.573,
+        "audio_clock_ready": 3684.682,
+        "first_audio_scheduled": 3684.682,
+        "first_video_scheduled": 3733.957
+      }
+    },
+    "independent_abs_p95_ms": 65.33333300000231,
+    "unmatched_audio": 0,
+    "unmatched_video": 0,
+    "local_gate_passed": true,
+    "audio_label_step_max_us": 10000,
+    "audio_label_shift_max_us": 39992,
+    "g1_complete": false,
+    "capture_to_playout_latency_qualified": false
+  }
+]

@@ -494,6 +494,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                         #[cfg(feature = "obs-proof")]
                         if use_sender_clock && id == "guest-1" {
                             playback.clear(audio_sys::ffi::diagnostic_webrtc_time_us());
+                            next_binding_refresh=Instant::now();
                             scheduled_audio.clear();scheduled_video.clear();
                         }
                         match track {
@@ -521,6 +522,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                             && (audio.get(&id).is_some_and(|tap| tap.sid==sid)
                                 || video.get(&id).is_some_and(|tap| tap.sid==sid)) {
                             playback.clear(audio_sys::ffi::diagnostic_webrtc_time_us());
+                            next_binding_refresh=Instant::now();
                             scheduled_audio.clear();scheduled_video.clear();
                         }
                         // A late teardown from the old publication cannot retire its replacement.
@@ -551,6 +553,9 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                     for participant in room.remote_participants().values().filter(|p|p.identity().as_str()=="guest-1") {
                         for publication in participant.track_publications().values() {
                             let sid=publication.sid().to_string();
+                            // Event-triggered discovery must not repeatedly await stats for a bound track.
+                            if playback.audio_binding.as_ref().is_some_and(|(bound,_)|bound==&sid)
+                                || playback.video_binding.as_ref().is_some_and(|(bound,_,_,_)|bound==&sid) {continue;}
                             if let Some(track)=publication.track() {
                                 let Ok(Ok(stats))=tokio::time::timeout(Duration::from_millis(100),track.get_stats()).await else {continue;};
                                 let inbound:Vec<_>=stats.into_iter().filter_map(|stat| {
@@ -559,10 +564,11 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                                 if inbound.len()!=1 {continue;}
                                 let stat=&inbound[0];
                                 if stat.kind=="audio" && audio.get("guest-1").is_some_and(|tap|tap.sid==sid)
-                                    && playback.audio_binding.is_none() {playback.audio_binding=Some((sid,stat.ssrc));}
+                                    && playback.audio_binding.is_none() {playback.audio_binding=Some((sid,stat.ssrc));playback.startup_note("audio_bound",audio_sys::ffi::diagnostic_webrtc_time_us());}
                                 else if stat.kind=="video" && video.get("guest-1").is_some_and(|tap|tap.sid==sid)
                                     && playback.video_binding.is_none() {
                                     playback.video_binding=Some((sid,stat.ssrc,crate::sender_clock::SenderClock::new(stat.ssrc,90000),playback.since_us.saturating_sub(1)));
+                                    playback.startup_note("video_bound",audio_sys::ffi::diagnostic_webrtc_time_us());
                                 }
                             }
                         }
@@ -573,7 +579,11 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                     let rtcp = serde_json::from_str(&webrtc_sys::webrtc::ffi::diagnostic_rtcp_exchange_report())?;
                     decoded_origins.refresh(&rtcp);
                     #[cfg(feature = "obs-proof")]
-                    if use_sender_clock {playback.refresh(&rtcp);}
+                    if use_sender_clock {
+                        playback.refresh(&rtcp);
+                        let observed=audio_sys::ffi::diagnostic_webrtc_time_us();
+                        if playback.video_ready(observed) {playback.startup_note("video_clock_ready",observed);}
+                    }
                     next_sender_report_refresh = now + Duration::from_millis(100);
                 }
                 let decoded_at = audio_sys::ffi::diagnostic_webrtc_time_us();
@@ -583,13 +593,17 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                     if use_sender_clock {
                         if block.pull_us >= playback.since_us && playback.audio_binding.as_ref().is_some_and(|(_,ssrc)|*ssrc==block.ssrc) {
                             if let Some(pull)=video_clock.deadline(block.pull_us,Instant::now()) {
-                                let origin=playback.video_ready(decoded_at).then(||decoded_origins.origin_for(&block,decoded_at,playback.bootstrap)).flatten();
+                                playback.startup_note("bound_audio_pcm",block.pull_us);
+                                let audio_origin=decoded_origins.origin_for(&block,decoded_at,playback.bootstrap);
+                                if audio_origin.is_some() {playback.startup_note("audio_clock_ready",decoded_at);}
+                                let origin=playback.video_ready(decoded_at).then_some(audio_origin).flatten();
                                 let bootstrap_used=origin.is_some() && playback.bootstrap && decoded_origins.origin_for(&block,decoded_at,false).is_none();
                                 if bootstrap_used {playback.audio_bootstrap_blocks+=1;}
                                 let resets=playback.clock.reset_count();
                                 let stamp=playback.clock.audio(block.generation,block.sequence,origin,pull);
-                                if resets!=playback.clock.reset_count() {scheduled_audio.clear();scheduled_video.clear();}
+                                if resets!=playback.clock.reset_count() {scheduled_audio.clear();scheduled_video.clear();playback.audio_reanchored();}
                                 if let Some(stamp)=stamp {
+                                    playback.startup_note("first_audio_scheduled",decoded_at);
                                     if let Some(origin)=origin {playback.audio_label(block.generation,block.sequence,block.rtp_timestamp,bootstrap_used,origin,stamp);}
                                     let pcm=&block.samples[..480*block.channels as usize];
                                     let rms=(pcm.iter().map(|sample|(*sample as f64).powi(2)).sum::<f64>()/pcm.len() as f64).sqrt();
@@ -649,6 +663,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                             if use_sender_clock {
                                 let origin=playback.video_origin(&tap.sid,frame.value.timestamp(),audio_sys::ffi::diagnostic_webrtc_time_us());
                                 if let Some(stamp)=playback.clock.video(origin,frame.at) {
+                                    playback.startup_note("first_video_scheduled",audio_sys::ffi::diagnostic_webrtc_time_us());
                                     playback.marker(true,mean>180.0,origin,stamp,frame.at,recorder.timestamp(stamp));
                                     if scheduled_handoff {scheduled_video.push(stamp,frame.value);} else {
                                         recorder.video((y,u,v),buffer.width(),buffer.height(),(ys,us,vs),stamp);

@@ -984,6 +984,149 @@
     "g1_complete": false
   },
   {
+    "run": "transport-obs-audio-master-startup-event-rejoin",
+    "evidence_sha256": "32f5d20c65ee9be4b0c3ce7c6beae90ba6a08dbaadebc6ae516e48eed4bb157e",
+    "recorded_abs_p95_ms": 64.66666666666424,
+    "matched_markers": 12,
+    "unmatched_audio": 0,
+    "unmatched_video": 0,
+    "local_marker_gate_passed": true,
+    "bounded_accounting_verified": true,
+    "g1_complete": false,
+    "raw_pipeline_trace": [
+      {
+        "kind": "audio",
+        "input_to_raw_output_ms": [
+          28.072374,
+          23.405707,
+          27.405707,
+          -0.946959,
+          4.257374,
+          9.590707,
+          3.590707,
+          8.924041,
+          4.257374,
+          9.590707,
+          4.924041,
+          8.924041
+        ],
+        "unmatched_input": 0,
+        "unmatched_output": 0
+      },
+      {
+        "kind": "video",
+        "input_to_raw_output_ms": [
+          24.635723,
+          34.969036,
+          24.61235,
+          18.702625,
+          2.158814,
+          2.492127,
+          4.170774,
+          1.144087,
+          31.7004,
+          25.871047,
+          23.48436,
+          33.28434
+        ],
+        "unmatched_input": 0,
+        "unmatched_output": 0
+      }
+    ],
+    "raw_video_minus_audio_ms": [
+      7.947349,
+      55.947329,
+      5.280643,
+      57.280584,
+      5.28044,
+      33.28042,
+      5.947067,
+      33.947046,
+      71.947026,
+      23.28034,
+      61.280319,
+      67.280299
+    ],
+    "raw_unmatched_audio": 0,
+    "raw_unmatched_video": 0,
+    "recording_minus_raw_offset_ms": [
+      2.052651,
+      0.7193376666678759,
+      2.0526903333339392,
+      -7.947250666664239,
+      -7.947106666664241,
+      -0.6137533333284821,
+      0.7195996666642417,
+      -2.6137126666642416,
+      -0.6136926666715112,
+      8.719660000000001,
+      0.7196810000000013,
+      -2.613632333335758
+    ]
+  },
+  {
+    "run": "transport-obs-audio-master-startup-trace-rejoin",
+    "evidence_sha256": "52ad20d8a8ef25a12995616b52073949250b15cb0efeefce05c1e73f2525bfe7",
+    "recorded_abs_p95_ms": 74.66666666666424,
+    "matched_markers": 10,
+    "unmatched_audio": 1,
+    "unmatched_video": 0,
+    "local_marker_gate_passed": false,
+    "bounded_accounting_verified": true,
+    "g1_complete": false,
+    "raw_pipeline_trace": [
+      {
+        "kind": "audio",
+        "input_to_raw_output_ms": [
+          -3.783333,
+          12.883333,
+          -6.756667,
+          -3.131667,
+          -7.798333,
+          -12.465,
+          2.868333,
+          -13.131667,
+          3.535,
+          -2.465,
+          -7.131667
+        ],
+        "unmatched_input": 1,
+        "unmatched_output": 1
+      },
+      {
+        "kind": "video",
+        "input_to_raw_output_ms": [
+          14.622344,
+          16.622324,
+          7.198247,
+          7.892769,
+          5.223749,
+          5.750729,
+          1.926709,
+          -0.084311,
+          3.253669,
+          39.090982
+        ],
+        "unmatched_input": 2,
+        "unmatched_output": 0
+      }
+    ],
+    "raw_video_minus_audio_ms": [
+      55.300677,
+      71.300657,
+      58.633914,
+      41.300436,
+      45.967082,
+      50.633729,
+      35.300376,
+      51.300356,
+      34.633669,
+      73.966982
+    ],
+    "raw_unmatched_audio": 2,
+    "raw_unmatched_video": 0
+  },
+  {
     "run": "transport-obs-audio-master-traced-baseline",
     "evidence_sha256": "c931dbaf57365e90e125d88c27f076481df172be1c9547cdd8f32759f063087a",
     "recorded_abs_p95_ms": 97.35416666666788,

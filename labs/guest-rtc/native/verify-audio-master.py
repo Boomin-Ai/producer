@@ -49,6 +49,21 @@ for path in sorted((lab / 'evidence').glob('transport-obs-audio-master-*.json'))
         assert labels['observations'] >= len(labels['points'])
         assert all(abs(p['label_step_error_us']) <= labels['max_label_step_error_us'] and
             abs(p['label_shift_since_start_us']) <= labels['max_label_shift_us'] for p in labels['points'])
+    if 'startup_milestones' in playback:
+        milestones = playback['startup_milestones']
+        assert len(milestones) <= playback['startup_milestone_capacity'] == 64
+        keys = [(p['binding_since_us'], p['milestone']) for p in milestones]
+        assert len(keys) == len(set(keys))
+        assert all(p['since_binding_us'] == p['observed_us'] - p['binding_since_us'] >= 0 for p in milestones)
+        assert any(p['milestone'] == 'first_audio_scheduled' for p in milestones)
+        assert any(p['milestone'] == 'first_video_scheduled' for p in milestones)
+    if playback.get('audio_labels', {}).get('reanchors_segmented'):
+        points = playback['audio_labels']['points']
+        assert all(p['epoch'] <= playback['audio_labels']['presentation_epochs'] for p in points)
+        for previous, current in zip(points, points[1:]):
+            assert current['epoch'] >= previous['epoch']
+            if current['epoch'] != previous['epoch']:
+                assert current['label_step_error_us'] == current['label_shift_since_start_us'] == 0
     if playback.get('first_report_bootstrap', False):
         assert 'five-second bound' in playback['startup_policy']
         assert playback['audio_bootstrap_blocks'] > 0 and playback['video_bootstrap_frames'] > 0

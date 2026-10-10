@@ -399,3 +399,54 @@ user sets/media/recordings and installed production remain intact; that checkout
 development bundle now requires rebuilding. G1 is incomplete. Next work is bounded
 startup/recovery and explicit receive-buffer/conversation latency accounting,
 followed by physical reference-fed speakerphone AEC and platform packaging proofs.
+
+
+### Startup milestones and label reanchor correction — October 10
+
+New playback evidence retains at most 64 first-observation startup milestones,
+keyed by binding epoch: audio/video binding, first bound PCM pull, usable clock
+maps, and first scheduled media. These use receiver-local observation/pull clocks;
+they do not prove sender capture time or physical speaker latency. A paired PCM
+pull can precede the stats-binding observation by a few milliseconds without
+preceding the binding epoch. Audio label observations now segment on every
+presentation reanchor, including reanchors within the same source generation.
+Older maximum label drift values remain saved and retain the prior caveat.
+
+Two 45-second audio-jitter recordings use three publishers and three guest-1
+rejoins, with both bounded experimental policies enabled. Build/decode analysis
+did not overlap either recording. See `startup-rejoin-milestones.json` and the
+full native/browser/packet/container/decoder evidence.
+
+| Run | Binding discovery | First audio scheduled after binding epoch | Independent matched p95 | Missing audio/video |
+| --- | --- | --- | --- | --- |
+| Startup trace, prior binding polling | 114–804 ms | 2,844–4,689 ms | 72.00 ms | 1 / 0 — local gate fails |
+| Event-triggered binding discovery | 10–520 ms | 3,224–4,941 ms | 65.33 ms | 0 / 0 — local gate passes |
+
+Publication subscription/valid unsubscription now triggers immediate stats-based
+binding discovery; already bound publications skip redundant stats awaits.
+Unsuccessful discovery still retries every 500 ms, with a 100 ms timeout per
+track. The trace shows a remaining approximately 500 ms binding retry in several
+epochs: event notification can arrive before usable inbound SSRC stats. Stats
+awaits still share the 10 ms application loop; this is not a qualified production
+scheduling design. These sequential workloads differ in jitter/load and do not
+prove overall recovery improved. The several-second usable-clock wait dominates
+and remains unresolved; removing the binding poll alone does not solve it.
+
+Corrected traces show maximum label step/shift of 10.014/11.193 ms in the first
+run and 10.000/39.992 ms in the second. They do not retroactively establish that
+all earlier drift was scheduling-related. Neither new run incurred an audio
+presentation reanchor after the 14 publication-binding clears, so that specific
+regression is verified by the same-generation reanchor unit test, not asserted
+as exercised by these recordings. New tests also prove milestone deduplication,
+epoch separation and the 64-entry hard bound. Queue/probe accounting checks now
+cover 25 recordings and 15 pre-mux traces; timing failures remain preserved.
+
+G1 remains incomplete. Next: separate first-report availability from mapped PCM
+availability, investigate supported sender-report scheduling, and move binding
+stats collection off the presentation loop with owned cancellation and stale-SID
+checks. Physical reference-fed speakerphone AEC and platform packaging still gate
+broader integration. No deployment or production recording policy changed.
+
+Validation for this checkpoint: 21 Rust tests pass; default and OBS Clippy pass
+with warnings denied; formatting and diff checks pass. Owned lab services stopped
+after both recordings; the installed production app remains untouched.

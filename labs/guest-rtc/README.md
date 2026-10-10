@@ -366,7 +366,7 @@ Playback now retains up to 192 numeric audio label observations. It measures the
 sender-origin advance relative to the continuous PCM sample clock, saving quarter-
 second observations, bootstrap transitions and large steps. It stores no media.
 The trace resets its reference at publication binding changes and new generations;
-currently an audio reanchor within the same generation can appear as label drift.
+audio reanchors now start a new trace epoch, including within one generation, so a scheduling reset cannot appear as source-clock drift in new evidence. Older reports retain their original measurements.
 Use the explicit clock-reset counters when interpreting that result.
 
 `LIVEKIT_LAB_EXTENDED_VIDEO_BUFFER=1` is a separate opt-in experiment: scheduled
@@ -383,3 +383,16 @@ recordings have also passed on other runs, so this does not establish causal or
 universal improvement. Startup waiting, clock reanchors, true capture timing,
 physical AEC and packaged platform tests remain outstanding. Neither experiment
 is enabled in production.
+
+### Startup and rejoin milestones
+
+Playback retains up to 64 numeric startup milestones across binding epochs:
+audio/video SSRC binding, first bound PCM, usable audio/video clock maps, and first
+scheduled audio/video. Each milestone records its first observation only. PCM pull
+time and application observation time are explicitly separate; these measurements
+are neither capture latency nor speaker playout latency. Publication events now
+trigger immediate binding discovery instead of waiting for an existing 500 ms
+retry deadline; discovery skips stats requests for already bound tracks. Failed
+initial discovery still uses the bounded 500 ms retry and 100 ms per-track timeout.
+The stats await still occurs in the application loop and is not yet qualified as
+a production scheduling design. Sender-report waiting and physical AEC remain open.
