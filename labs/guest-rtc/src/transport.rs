@@ -633,6 +633,10 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
             _ = tick.tick() => {
                 let now = Instant::now(); let elapsed = now.duration_since(began).as_secs_f64();
                 if elapsed >= seconds as f64 { break; }
+                if physical_capture_enabled() && publisher.thread.as_ref().is_some_and(|thread|thread.is_finished()) {
+                    println!("Physical publisher ended early; stopping room and saving diagnostics");
+                    break;
+                }
                 #[cfg(feature = "obs-proof")]
                 if use_sender_clock {
                     if let Some(bindings)=binding_discovery.poll(playback.since_us) {
@@ -959,7 +963,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         "capture_publisher_owner":{"named_thread":true,"joined":publisher.thread.is_none(),"shutdown_ms":publisher_join_ms},
         "sync_streams_requested":std::env::var("LIVEKIT_LAB_SYNC_STREAMS").as_deref() == Ok("1"),
         "decoded_pcm_origin_handoff":decoded_pcm_origin_handoff,"sender_report_origin_maps":sender_report_origin_maps,"rtcp_exchange_probe":rtcp_exchange_probe,"rrtr_lab_experiment_requested":std::env::var("LIVEKIT_LAB_RRTR").as_deref()==Ok("1"),"timed_mixer_probe":timed_mixer_probe,"remote_sender_reports":remote_sender_reports,"receiver_stats":receiver_stats,"obs_recording":obs_recording,"local_playout_clock_requested":use_playout_clock,"audio_ingest_generation_reports":audio_ingest_stats,"audio_ingest_session_totals":audio_ingest_totals,"audio_worker_lifecycle":worker_lifecycle,
-        "duration_seconds":seconds,"consumer_stall_ms":if pressure {200} else {0},"stall_period_seconds":5,
+        "duration_seconds":seconds,"actual_duration_seconds":began.elapsed().as_secs_f64(),"consumer_stall_ms":if pressure {200} else {0},"stall_period_seconds":5,
         "native_publish_audio_internal_queue_ms":0,"callback_timestamps_are_capture_timestamps":false,
         "obs_recorded_av_qualified":false,"physical_speaker_reference_connected":false,"g1_complete":false,
         "participants":participants,"lifecycle":lifecycle});

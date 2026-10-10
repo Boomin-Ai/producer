@@ -9,7 +9,9 @@ use anyhow::{ensure, Result};
 use livekit::webrtc::{
     audio_source::native::NativeAudioSource, prelude::*, video_source::native::NativeVideoSource,
 };
+use serde::Serialize;
 use serde_json::json;
+use std::collections::VecDeque;
 use std::{
     borrow::Cow,
     ffi::{c_char, c_void, CStr},
@@ -57,6 +59,12 @@ pub fn preflight() -> Result<()> {
     speech()?;
     Ok(())
 }
+#[derive(Serialize)]
+struct CaptureTiming {
+    host_ns: u64,
+    age_before_apm_us: i64,
+    processing_us: u64,
+}
 struct Owner {
     device: Device,
     processor: MicrophoneProcessor,
@@ -70,6 +78,10 @@ struct Owner {
     sdk_age_ms: [u64; 350],
     maximum_sdk_age_us: u64,
     pending_retired: bool,
+    capture_timing: VecDeque<CaptureTiming>,
+    first_capture_age_us: Option<i64>,
+    max_reverse_us: u64,
+    max_capture_us: u64,
     sdk_submission_unconfirmed: bool,
 }
 impl Drop for Owner {
@@ -90,7 +102,10 @@ impl Drop for Owner {
             "aec_enforced_high_pass":self.processor.high_pass_filter_enforced(),"processed":self.processed,"published":self.published,
             "render_blocks":self.render_blocks,"maximum_sdk_capture_us":self.max_sdk_us,"maximum_owner_tick_gap_us":self.max_tick_us,
             "capture_to_sdk_p95_ms_upper_bucket":p95,"maximum_capture_to_sdk_us":self.maximum_sdk_age_us,
-            "capture_hold_retired":self.pending_retired,"sdk_submission_unconfirmed_at_shutdown":self.sdk_submission_unconfirmed,"handoff":self.handoff.report(),"native_lifecycle":lifecycle,
+            "capture_hold_retired":self.pending_retired,
+            "capture_timing_last_blocks":self.capture_timing,"capture_timing_capacity":64,
+            "first_capture_age_before_apm_us":self.first_capture_age_us,
+            "maximum_reverse_apm_us":self.max_reverse_us,"maximum_capture_apm_us":self.max_capture_us,"sdk_submission_unconfirmed_at_shutdown":self.sdk_submission_unconfirmed,"handoff":self.handoff.report(),"native_lifecycle":lifecycle,
             "video":"generated black frame, not a physical camera","capture_rtp_alignment_qualified":false,
             "full_monitor_reference_qualified":false,"physical_aec_qualified":false,"g1_complete":false});
     }
@@ -116,6 +131,10 @@ pub async fn run(
         sdk_age_ms: [0; 350],
         maximum_sdk_age_us: 0,
         pending_retired: false,
+        capture_timing: VecDeque::with_capacity(64),
+        first_capture_age_us: None,
+        max_reverse_us: 0,
+        max_capture_us: 0,
         sdk_submission_unconfirmed: false,
     };
     let mut pending: Option<Block> = None;
@@ -151,7 +170,11 @@ pub async fn run(
                 latest_render.is_none_or(|previous| block.host_ns > previous),
                 "Reference clock regressed"
             );
+            let reverse_started = Instant::now();
             owner.processor.reverse(&block.samples)?;
+            owner.max_reverse_us = owner
+                .max_reverse_us
+                .max(reverse_started.elapsed().as_micros() as u64);
             latest_render = Some(block.host_ns);
             owner.render_blocks += 1;
         }
@@ -177,7 +200,21 @@ pub async fn run(
                 let delay = (render - block.host_ns) / 1_000_000;
                 ensure!(delay <= 500, "Invalid APM delay");
                 let mut samples = block.samples;
+                let age = ((i128::from(unsafe { lab_audio_now_ns() }) - i128::from(block.host_ns))
+                    / 1000) as i64;
+                owner.first_capture_age_us.get_or_insert(age);
+                let processing_started = Instant::now();
                 owner.processor.capture(&mut samples, delay as i32)?;
+                let processing_us = processing_started.elapsed().as_micros() as u64;
+                owner.max_capture_us = owner.max_capture_us.max(processing_us);
+                if owner.capture_timing.len() == 64 {
+                    owner.capture_timing.pop_front();
+                }
+                owner.capture_timing.push_back(CaptureTiming {
+                    host_ns: block.host_ns,
+                    age_before_apm_us: age,
+                    processing_us,
+                });
                 owner.processed += 1;
                 owner.handoff.push(
                     ProcessedBlock {

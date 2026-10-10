@@ -109,7 +109,9 @@ impl Handoff {
             .get_or_insert((block.host_ns, arrival + START_LEAD));
         let due = due + Duration::from_nanos(block.host_ns - first);
         if arrival > due + MAX_LATE {
-            return self.fault("Microphone block arrived after its publication deadline");
+            let late = arrival.duration_since(due).as_micros() as u64;
+            self.maximum_late_us = self.maximum_late_us.max(late);
+            return self.fault(&format!("Microphone block arrived after its publication deadline ({late} us late; limit {} us)", MAX_LATE.as_micros()));
         }
         self.last_capture = Some(block.host_ns);
         self.pending.push_back(Pending {

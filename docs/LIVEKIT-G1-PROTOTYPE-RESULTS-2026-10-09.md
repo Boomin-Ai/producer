@@ -1126,3 +1126,47 @@ now rejects inherited physical flags. Argument-omission rejection and Python/
 JavaScript syntax checks passed. The operator has been asked for readiness
 before starting this distinct physical publication test; no test audio was
 published while preparing the runner.
+
+
+### First physical LiveKit trials — real transport, publication deadline open
+
+The operator explicitly reported ready for the local 20-second microphone
+trial. Two attempts failed the unchanged publication-arrival deadline. The
+first submitted 321 blocks before failure, with a 34.543 ms maximum owner tick
+gap and 1.015 ms maximum SDK call. Browser launch occurred after native capture
+started, and the receiver joined too late to observe its brief output. Corrected
+the harness to warm the generated guest/browser before native capture begins.
+
+The corrected repeat submitted 1,460 cleaned microphone blocks before the same
+fault. Capture-to-SDK p95 upper bucket was 26 ms, maximum age 34.551 ms, maximum
+owner tick gap 17.997 ms and maximum SDK call 2.328 ms. The warmed receiver
+observed 564 inbound audio RTP packets, zero reported loss and maximum analysed
+RMS 0.07728, plus 169 placeholder video frames. This proves real microphone
+transport reached the browser for this trial. It does not qualify sustained
+publication, intelligibility, physical camera synchronization or full monitor
+reference/AEC routing. Received voice was not recorded; browser gain stayed zero.
+
+Both attempts had zero native format/timeline faults or ring overflow. Native
+callback registrations/owners retired, the publisher thread joined, all handoff
+pending blocks were retired and no SDK submission remained unconfirmed. Native
+ring consumed+retired counts matched queued counts. Reports and browser/condition
+files are retained with a compact `physical-publication-first-trials.json` index.
+Failures remain failures despite useful p95 metrics and observed RTP reception.
+
+The old error did not include the rejected block's exact lateness; the new
+candidate records that value without changing the 20 ms limit. Added a bounded
+64-block timing trace (host timestamp, pre-APM age and processing time), initial
+capture age and maximum reference/capture APM times. No PCM enters this trace.
+The physical room now stops and saves diagnostics promptly if its publisher
+thread ends, instead of waiting for the requested duration. Future physical
+trials open a visible browser window with a microphone-test notice; the user
+could not locate the prior headless receiver. No further physical trial was
+started after that clarification. The previous standalone lab remains separate.
+
+Apple's [Audio Workgroups documentation](https://developer.apple.com/documentation/audiotoolbox/understanding-audio-workgroups)
+distinguishes real-time audio threads from generic asynchronous tasks and
+requires real-time threads for workgroup membership. Joining the current Tokio/
+SDK owner blindly is not an established fix. Next measure the newly retained
+per-block fault trace, then isolate the audio deadline path and use an appropriate
+native scheduling/wakeup contract rather than widening latency or queue limits
+to conceal the failure. G1 incomplete; production unchanged.
