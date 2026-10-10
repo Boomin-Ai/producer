@@ -22,8 +22,9 @@ use std::{
 };
 use webrtc_sys::{audio_track as audio_sys, video_frame as frame_sys, video_track as video_sys};
 
+#[derive(Clone)]
 struct AudioBlock {
-    samples: Vec<i16>,
+    samples: [i16; 480],
     first_sample: u64,
     capture_timestamp_ms: Option<i64>,
     resampled: bool,
@@ -32,6 +33,8 @@ struct AudioObserver {
     queue: Arc<Queue<AudioBlock>>,
     sample_count: AtomicU64,
     bad_format: AtomicU64,
+    #[cfg(feature = "obs-proof")]
+    ingest_queue: Option<Arc<Queue<AudioBlock>>>,
 }
 impl audio_sys::AudioSink for AudioObserver {
     fn on_data(&self, data: &[i16], rate: i32, channels: usize, frames: usize) {
@@ -63,17 +66,22 @@ impl audio_sys::AudioSink for AudioObserver {
         let first_sample = self
             .sample_count
             .fetch_add(frames as u64, Ordering::Relaxed);
-        self.queue.push(Captured {
-            at,
-            value: AudioBlock {
-                samples: data.to_vec(),
-                first_sample,
-                capture_timestamp_ms: timing
-                    .has_capture_timestamp
-                    .then_some(timing.capture_timestamp_ms),
-                resampled: timing.resampled,
-            },
-        });
+        let value = AudioBlock {
+            samples: data.try_into().expect("validated 10ms audio layout"),
+            first_sample,
+            capture_timestamp_ms: timing
+                .has_capture_timestamp
+                .then_some(timing.capture_timestamp_ms),
+            resampled: timing.resampled,
+        };
+        #[cfg(feature = "obs-proof")]
+        if let Some(queue) = &self.ingest_queue {
+            queue.push(Captured {
+                at,
+                value: value.clone(),
+            });
+        }
+        self.queue.push(Captured { at, value });
     }
 }
 struct AudioTap {
@@ -81,13 +89,74 @@ struct AudioTap {
     track: SharedPtr<audio_sys::ffi::AudioTrack>,
     sink: SharedPtr<audio_sys::ffi::NativeAudioSink>,
     observer: Arc<AudioObserver>,
+    #[cfg(feature = "obs-proof")]
+    ingest: Option<AudioIngest>,
+}
+#[cfg(feature = "obs-proof")]
+struct AudioIngest {
+    stop: Arc<std::sync::atomic::AtomicBool>,
+    worker: Option<std::thread::JoinHandle<()>>,
+    resets: Arc<AtomicU64>,
+}
+#[cfg(feature = "obs-proof")]
+impl AudioIngest {
+    fn new(queue: Arc<Queue<AudioBlock>>, writer: crate::obs_proof::AudioWriter) -> Self {
+        use std::sync::atomic::AtomicBool;
+        let stop = Arc::new(AtomicBool::new(false));
+        let done = stop.clone();
+        let resets = Arc::new(AtomicU64::new(0));
+        let count = resets.clone();
+        let smooth = std::env::var("LIVEKIT_LAB_PLAYOUT_CLOCK").as_deref() == Ok("1");
+        let worker = std::thread::spawn(move || {
+            let mut clock = crate::playout_clock::AudioClock::default();
+            while !done.load(Ordering::Acquire) {
+                while let Some(frame) = queue.pop(Instant::now()) {
+                    let at = if smooth {
+                        clock.stamp(frame.value.first_sample, frame.at)
+                    } else {
+                        frame.at
+                    };
+                    writer.write(&frame.value.samples, at);
+                    count.store(clock.resets, Ordering::Relaxed);
+                }
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        });
+        Self {
+            stop,
+            worker: Some(worker),
+            resets,
+        }
+    }
+}
+#[cfg(feature = "obs-proof")]
+impl Drop for AudioIngest {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Release);
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
 }
 impl AudioTap {
-    fn new(track: &RemoteAudioTrack) -> Self {
+    fn new(
+        track: &RemoteAudioTrack,
+        #[cfg(feature = "obs-proof")] writer: Option<crate::obs_proof::AudioWriter>,
+    ) -> Self {
+        #[cfg(feature = "obs-proof")]
+        let ingest_queue = writer
+            .as_ref()
+            .map(|_| Arc::new(Queue::new(3, Duration::from_millis(30))));
+        #[cfg(feature = "obs-proof")]
+        let ingest = writer
+            .zip(ingest_queue.clone())
+            .map(|(writer, queue)| AudioIngest::new(queue, writer));
         let observer = Arc::new(AudioObserver {
             queue: Arc::new(Queue::new(3, Duration::from_millis(30))),
             sample_count: AtomicU64::new(0),
             bad_format: AtomicU64::new(0),
+            #[cfg(feature = "obs-proof")]
+            ingest_queue,
         });
         let sink = audio_sys::ffi::new_native_audio_sink(
             Box::new(audio_sys::AudioSinkWrapper::new(observer.clone())),
@@ -104,12 +173,18 @@ impl AudioTap {
             track,
             sink,
             observer,
+            #[cfg(feature = "obs-proof")]
+            ingest,
         }
     }
 }
 impl Drop for AudioTap {
     fn drop(&mut self) {
         self.track.remove_sink(&self.sink);
+        #[cfg(feature = "obs-proof")]
+        {
+            self.ingest.take();
+        }
     }
 }
 struct VideoObserver {
@@ -170,6 +245,9 @@ struct Measurements {
     video_pulses: Vec<f64>,
     audio_active: bool,
     video_active: bool,
+    video_deadline_valid: u64,
+    video_deadline_invalid: u64,
+    video_deadline_minus_arrival_ms: Vec<f64>,
     audio_blocks: u64,
     audio_capture_timestamps: u64,
     audio_resampled_blocks: u64,
@@ -330,6 +408,11 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         HashMap::<String, Measurements>::new(),
     );
     let began = Instant::now();
+    let video_clock = crate::playout_clock::VideoClock::new(
+        audio_sys::ffi::diagnostic_webrtc_time_us(),
+        Instant::now(),
+    );
+    let use_playout_clock = std::env::var("LIVEKIT_LAB_PLAYOUT_CLOCK").as_deref() == Ok("1");
     let mut tick = tokio::time::interval(Duration::from_millis(10));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut lifecycle = Vec::new();
@@ -344,7 +427,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                         let m = metrics.entry(id.clone()).or_default();
                         match track {
                             RemoteTrack::Audio(track) => {
-                                if let Some(old) = audio.insert(id.clone(), AudioTap::new(&track)) {
+                                if let Some(old) = audio.insert(id.clone(), AudioTap::new(&track, #[cfg(feature = "obs-proof")] if id == "guest-1" { recorder.as_ref().map(|r| r.audio_writer()) } else { None })) {
                                     m.retired_queues.push(json!({"kind":"audio","sid":old.sid,"stats":old.observer.queue.stats()}));
                                 }
                                 m.next_sample = None; m.last_capture_timestamp_ms = None; m.audio_active = false;
@@ -404,8 +487,6 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                             }
                             m.last_capture_timestamp_ms = Some(capture);
                         } else { m.last_capture_timestamp_ms = None; }
-                        #[cfg(feature = "obs-proof")]
-                        if id == "guest-1" { if let Some(recorder) = &recorder { recorder.audio(&frame.value.samples, frame.at); } }
                         let rms = (frame.value.samples.iter().map(|v| (*v as f64).powi(2)).sum::<f64>() / 480.0).sqrt();
                         let active = rms > 2000.0;
                         if active && !m.audio_active { m.audio_pulses.push(frame.at.duration_since(began).as_secs_f64() * 1000.0); }
@@ -417,13 +498,19 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                     while let Some(frame) = tap.observer.queue.pop(now) {
                         m.video_age.push(now.saturating_duration_since(frame.at).as_secs_f64() * 1000.0);
                         if frame.value.ntp_time_ms() > 0 { m.video_ntp_nonzero += 1; }
+                        let deadline = video_clock.deadline(frame.value.timestamp_us(), frame.at);
+                        if let Some(time) = deadline {
+                            m.video_deadline_valid += 1;
+                            let offset = if time > frame.at { time.duration_since(frame.at).as_secs_f64()*1000.0 } else { -frame.at.duration_since(time).as_secs_f64()*1000.0 };
+                            m.video_deadline_minus_arrival_ms.push(offset);
+                        } else { m.video_deadline_invalid += 1; }
                         // SAFETY: video_frame_buffer returns an owned wrapper for this frame.
                         let buffer = new_video_frame_buffer(unsafe { frame.value.video_frame_buffer() });
                         let buffer = buffer.to_i420();
                         #[cfg(feature = "obs-proof")]
                         if id == "guest-1" { if let Some(recorder) = &recorder {
                             let (y,u,v) = buffer.data(); let (ys,us,vs) = buffer.strides();
-                            recorder.video((y,u,v),buffer.width(),buffer.height(),(ys,us,vs),frame.at);
+                            recorder.video((y,u,v),buffer.width(),buffer.height(),(ys,us,vs),if use_playout_clock { deadline.unwrap_or(frame.at) } else { frame.at });
                         } }
                         let (y, _, _) = buffer.data();
                         let mean = y.iter().map(|v| *v as u64).sum::<u64>() as f64 / y.len() as f64;
@@ -458,6 +545,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                             receiver_stats.push(json!({"identity":participant.identity().to_string(),
                                 "sid":publication.sid().to_string(), "kind":s.stream.kind,
                                 "estimated_playout_timestamp_ms":s.inbound.estimated_playout_timestamp,
+                                "packets_received":s.received.packets_received,"packets_lost":s.received.packets_lost,"jitter_seconds":s.received.jitter,
                                 "estimated_playout_presence_preserved":false,
                                 "jitter_buffer_delay_seconds":s.inbound.jitter_buffer_delay,
                                 "jitter_buffer_emitted_count":s.inbound.jitter_buffer_emitted_count,
@@ -482,6 +570,9 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
             "audio_pulses_ms":m.audio_pulses,"video_pulses_ms":m.video_pulses,
             "paired_callback_video_minus_audio_ms":offsets,"callback_av_abs_p95_ms":p95(&abs),
             "video_frames_with_ntp_metadata":m.video_ntp_nonzero,
+            "video_local_deadline_valid":m.video_deadline_valid,"video_local_deadline_invalid":m.video_deadline_invalid,
+            "video_deadline_minus_arrival_p95_ms":p95(&m.video_deadline_minus_arrival_ms),
+
             "retired_queues":m.retired_queues,
             "audio_blocks_with_capture_timestamp":m.audio_capture_timestamps,
             "audio_resampled_blocks":m.audio_resampled_blocks,
@@ -490,6 +581,20 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
             "capture_timestamp_step_p95_ms":p95(&m.capture_step_ms),
             "original_audio_capture_timestamp_available":m.audio_capture_timestamps > 0})
     }).collect();
+    #[cfg(feature = "obs-proof")]
+    let audio_ingest_stats: Vec<_> = audio
+        .iter()
+        .filter_map(|(id, tap)| {
+            tap.ingest.as_ref().map(|worker| {
+                json!({
+        "identity":id,"clock_resets":worker.resets.load(Ordering::Relaxed),
+        "queue":tap.observer.ingest_queue.as_ref().map(|q| q.stats())})
+            })
+        })
+        .collect();
+    #[cfg(not(feature = "obs-proof"))]
+    let audio_ingest_stats: Vec<serde_json::Value> = vec![];
+    audio.clear(); // removes sinks and joins writers before stopping/releasing OBS
     #[cfg(feature = "obs-proof")]
     let obs_recording = recorder.as_ref().map(|r| r.finish()).transpose()?;
     #[cfg(not(feature = "obs-proof"))]
@@ -500,7 +605,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     let report = json!({"schema_version":1,"livekit":"0.9.4","topology":"local browser guests to native host through loopback SFU",
         "signaling_url":url,"publisher_error":publisher_error,
         "sync_streams_requested":std::env::var("LIVEKIT_LAB_SYNC_STREAMS").as_deref() == Ok("1"),
-        "receiver_stats":receiver_stats,"obs_recording":obs_recording,
+        "receiver_stats":receiver_stats,"obs_recording":obs_recording,"local_playout_clock_requested":use_playout_clock,"dedicated_audio_ingest":audio_ingest_stats,
         "duration_seconds":seconds,"consumer_stall_ms":if pressure {200} else {0},"stall_period_seconds":5,
         "native_publish_audio_internal_queue_ms":0,"callback_timestamps_are_capture_timestamps":false,
         "obs_recorded_av_qualified":false,"physical_speaker_reference_connected":false,"g1_complete":false,
@@ -526,6 +631,8 @@ mod tests {
             queue: Arc::new(Queue::new(3, Duration::from_millis(30))),
             sample_count: AtomicU64::new(0),
             bad_format: AtomicU64::new(0),
+            #[cfg(feature = "obs-proof")]
+            ingest_queue: None,
         };
         let pcm = [123i16; 480];
         observer.on_data(&pcm, 48000, 1, 480);

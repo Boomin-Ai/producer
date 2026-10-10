@@ -38,6 +38,8 @@ pub mod ffi {
     unsafe extern "C++" {
         include!("livekit/audio_track.h");
 
+        fn diagnostic_webrtc_time_us() -> i64;
+
         type AudioTrack;
         type NativeAudioSink;
         type AudioTrackSource;

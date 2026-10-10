@@ -1,0 +1,70 @@
+{
+  "browser": "154.0.8037.98",
+  "guests": 1,
+  "mode": "pressure",
+  "states": [
+    {
+      "identity": "guest-1",
+      "connected": true,
+      "published": true,
+      "returnAudioBlocks": 3549,
+      "returnAudioPulses": 58,
+      "returnVideoFrames": 1744,
+      "events": [
+        "return-audio",
+        "return-video"
+      ],
+      "audioMaxRms": 0.29392777903304657,
+      "error": null,
+      "syncStreams": true
+    }
+  ],
+  "audioStats": [
+    [
+      {
+        "id": "IT01A2618033158",
+        "timestamp": 1791604973225.945,
+        "type": "inbound-rtp",
+        "codecId": "CIT01_111_minptime=10;stereo=1;useinbandfec=1",
+        "kind": "audio",
+        "mediaType": "audio",
+        "ssrc": 2618033158,
+        "transportId": "T01",
+        "jitter": 0,
+        "packetsLost": 0,
+        "packetsReceived": 217,
+        "packetsReceivedWithCe": 0,
+        "packetsReceivedWithEct1": 0,
+        "audioLevel": 0,
+        "bytesReceived": 3015,
+        "concealedSamples": 1440,
+        "concealmentEvents": 1,
+        "fecPacketsDiscarded": 0,
+        "fecPacketsReceived": 0,
+        "headerBytesReceived": 2604,
+        "insertedSamplesForDeceleration": 960,
+        "jitterBufferDelay": 12009.6,
+        "jitterBufferEmittedCount": 205440,
+        "jitterBufferMinimumDelay": 9715.2,
+        "jitterBufferTargetDelay": 9715.2,
+        "lastPacketReceivedTimestamp": 1791604973216.98,
+        "mid": "0",
+        "packetsDiscarded": 0,
+        "playoutId": "AP",
+        "remoteId": "ROA2618033158",
+        "removedSamplesForAcceleration": 120,
+        "silentConcealedSamples": 0,
+        "totalAudioEnergy": 0,
+        "totalProcessingDelay": 10771.39008,
+        "totalSamplesDuration": 4.319999999999952,
+        "totalSamplesReceived": 207360,
+        "trackIdentifier": "2946ba1b-463c-4ce8-a67d-ea07a36f3eab"
+      }
+    ]
+  ],
+  "impairments": [],
+  "packetProbe": [],
+  "return_transport_observed": true,
+  "hardware_capture_used": false,
+  "physical_speaker_playout_used": false
+}

@@ -29,6 +29,7 @@
 #include "common_audio/include/audio_util.h"
 #include "livekit/global_task_queue.h"
 #include "rtc_base/checks.h"
+#include "rtc_base/time_utils.h"
 #include "rtc_base/logging.h"
 #include "rtc_base/ref_counted_object.h"
 #include "rtc_base/synchronization/mutex.h"
@@ -36,6 +37,8 @@
 #include "webrtc-sys/src/audio_track.rs.h"
 
 namespace livekit_ffi {
+
+int64_t diagnostic_webrtc_time_us() { return webrtc::TimeMicros(); }
 
 inline webrtc::AudioOptions to_native_audio_options(
     const AudioSourceOptions& options) {

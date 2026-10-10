@@ -2,6 +2,7 @@ mod apm;
 mod fixture;
 #[cfg(feature = "obs-proof")]
 mod obs_proof;
+mod playout_clock;
 mod queue;
 mod transport;
 

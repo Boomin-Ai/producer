@@ -135,3 +135,24 @@ for a comparison. This is an arrival-clock experiment, not a validated sender
 presentation clock. AVFoundation decodes the actual MP4, pairs markers at most once,
 and reports unpaired markers, early/late drift, detector windows and source paint
 uncertainty. A passing marker result alone cannot qualify WAN impairment or G1.
+
+### Local playout clock and dedicated audio ingest
+
+`LIVEKIT_LAB_PLAYOUT_CLOCK=1` anchors native video render timestamps using
+WebRTC TimeMicros and one local Instant; invalid timestamps fall back to arrival
+with visible counters. Audio follows its 48 kHz sample progression until callback
+arrival differs by more than 30 ms, then reanchors and counts the reset. This is a
+receiver playout experiment, not sender capture synchronization. Each new track SID
+owns fresh clock state. OBS audio now drains a separate three-block/30 ms queue on
+a dedicated worker; audio callback copies use fixed 480-sample arrays. Sink removal
+and worker join precede OBS stop/source release. Pressure mode stalls the video and
+analysis consumer while the independent audio worker continues. Source/SDK/device
+buffers outside these queues remain unmeasured.
+
+The smoke runner's `network` mode can request global Chrome CDP rules with packet
+loss/reordering and 60 ms latency. Use `LIVEKIT_LAB_PACKET_LOSS=100` as a hard-loss
+control. The October 9 control continued receiving 199 return-audio packets in four
+seconds and native receivers reported zero packet loss. Thus CDP acknowledgement
+did not prove impairment on this tested media path. Those runs must not be counted
+as WAN/network acceptance. Rules are scoped to the disposable headless browser;
+no system firewall or production network settings are altered.

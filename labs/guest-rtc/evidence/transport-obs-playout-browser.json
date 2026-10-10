@@ -1,0 +1,68 @@
+{
+  "browser": "154.0.8037.98",
+  "guests": 1,
+  "mode": "normal",
+  "states": [
+    {
+      "identity": "guest-1",
+      "connected": true,
+      "published": true,
+      "returnAudioBlocks": 592,
+      "returnAudioPulses": 10,
+      "returnVideoFrames": 272,
+      "events": [
+        "return-audio",
+        "return-video"
+      ],
+      "audioMaxRms": 0.2917875844133067,
+      "error": null,
+      "syncStreams": true
+    }
+  ],
+  "audioStats": [
+    [
+      {
+        "id": "IT01A2819625091",
+        "timestamp": 1791604749916.464,
+        "type": "inbound-rtp",
+        "codecId": "CIT01_111_minptime=10;stereo=1;useinbandfec=1",
+        "kind": "audio",
+        "mediaType": "audio",
+        "ssrc": 2819625091,
+        "transportId": "T01",
+        "jitter": 0.008,
+        "packetsLost": 0,
+        "packetsReceived": 208,
+        "packetsReceivedWithCe": 0,
+        "packetsReceivedWithEct1": 0,
+        "audioLevel": 0,
+        "bytesReceived": 2752,
+        "concealedSamples": 6480,
+        "concealmentEvents": 2,
+        "fecPacketsDiscarded": 0,
+        "fecPacketsReceived": 0,
+        "headerBytesReceived": 2496,
+        "insertedSamplesForDeceleration": 1080,
+        "jitterBufferDelay": 7046.4,
+        "jitterBufferEmittedCount": 196800,
+        "jitterBufferMinimumDelay": 5491.2,
+        "jitterBufferTargetDelay": 5491.2,
+        "lastPacketReceivedTimestamp": 1791604749909.565,
+        "mid": "8",
+        "packetsDiscarded": 0,
+        "playoutId": "AP",
+        "removedSamplesForAcceleration": 1248,
+        "silentConcealedSamples": 3360,
+        "totalAudioEnergy": 0,
+        "totalProcessingDelay": 6107.04384,
+        "totalSamplesDuration": 4.229999999999954,
+        "totalSamplesReceived": 203040,
+        "trackIdentifier": "0c404d46-e46e-4e2a-a63b-dd978c1650e2"
+      }
+    ]
+  ],
+  "impairments": [],
+  "return_transport_observed": true,
+  "hardware_capture_used": false,
+  "physical_speaker_playout_used": false
+}

@@ -131,3 +131,78 @@ Primary source references (pinned versions):
 - [Video receive/render scheduling](https://raw.githubusercontent.com/webrtc-sdk/webrtc/89d790b/video/video_receive_stream2.cc)
 - [LiveKit sync-stream support](https://raw.githubusercontent.com/livekit/livekit/v1.13.9/pkg/rtc/participant.go)
 - [Room sync-stream configuration](https://github.com/livekit/protocol/blob/main/protobufs/livekit_room.proto)
+
+## Local render-clock refinement and independent audio ingest
+
+The diagnostic bridge exports WebRTC TimeMicros for one local clock anchor. Received
+video timestamp_us is mapped to Instant and accepted only within -100/+250 ms of
+callback arrival; missing/implausible deadlines fall back to arrival and are counted.
+Accepted deadlines in these runs were approximately 10 ms ahead of arrival at p95.
+Audio follows decoded 48 kHz sample progression with a 30 ms drift bound; regression
+or excessive arrival deviation reanchors and counts a reset. This still does not
+supply original sender capture time. The mapped video stamp is fed into OBS's async
+source; an explicit deadline-aware bounded compositor is not yet implemented.
+
+OBS PCM ingest now has a separate three-block/30 ms handoff and worker, independent
+of video conversion and diagnostic consumer stalls. Callback PCM uses fixed
+480-sample arrays, eliminating that callback's per-block Vec allocation. The mutex
+handoff remains nonblocking for producers and can count/drop contention. Each audio
+publication owns fresh worker/clock state. Removing its sink and joining the worker
+happens before OBS output stop and source release. This is a lab implementation;
+real-time thread priority, hardware routing and native application integration remain
+unqualified.
+
+A clock-only 25-second recording still failed at 105.35 ms p95. Adding the independent
+audio worker yielded 50.02 ms p95 in a short run and 60.02 ms over two minutes with
+repeated 200 ms diagnostic/video-consumer stalls. These are sequential runs with
+varying machine load, not a controlled estimate of each change's isolated effect.
+
+The v2 detector preserves raw threshold crossings and merges crossings within 150 ms
+for the known 120 ms pulse envelope. The dedicated short run had an extra crossing
+100.7 ms after the preceding crossing inside the same pulse; the original v1 evidence
+remains available. The two-minute run paired 58 markers with no unmatched detections
+after grouping, video-minus-audio median 17.35 ms, and late-minus-early median change
+37.33 ms. It passes this local recorded-marker criterion, not G1. Its dedicated audio
+queue still dropped 20 oldest blocks and 10 callback-contention blocks, with two clock
+resets. Some blocks can be lost between markers; successful pairing is not proof of
+lossless media or acceptable speech quality. The bounded handoff protects latency
+without hiding these drops.
+
+Evidence: [clock-only recording](../labs/guest-rtc/evidence/obs-playout-recorded-markers.json),
+[dedicated worker v2 analysis](../labs/guest-rtc/evidence/obs-dedicated-markers-v2.json),
+[two-minute stall analysis](../labs/guest-rtc/evidence/obs-dedicated-120s-markers.json),
+[two-minute transport/drop counters](../labs/guest-rtc/evidence/transport-obs-dedicated-120s.json).
+
+### Network impairment control did not take effect
+
+The disposable Chrome harness now supports `Network.emulateNetworkConditionsByRule`
+with a global rule, packet loss/reordering and bounded packet queue. Chrome accepted
+the rule, but the 100% loss control continued to receive 199 audio packets in four
+seconds; native audio/video receiver stats showed zero packet loss. The requested
+60 ms latency and 2% loss run is therefore not accepted as proof of WAN impairment,
+regardless of its 42.69 ms recorded p95. CDP acceptance alone is insufficient.
+A verified packet-level impairment harness is still required. No system firewall,
+physical network or production environment was modified.
+
+Evidence: [hard-loss browser control](../labs/guest-rtc/evidence/transport-network-hard-loss-browser.json),
+[hard-loss native receiver counters](../labs/guest-rtc/evidence/transport-network-hard-loss.json).
+Primary API definition: [Chrome DevTools Network conditions](https://raw.githubusercontent.com/ChromeDevTools/devtools-protocol/master/json/browser_protocol.json).
+
+Seven Rust tests (including deadline rejection, sample-gap preservation and clock
+reanchor), Clippy for both default and OBS features, and Node syntax checks passed.
+Next gates remain verified asymmetric network impairment, extended drift/speech
+quality, physical speakerphone/double-talk AEC and Windows/native packaging.
+
+The three-guest disconnect/rejoin run with dedicated ingest recorded 79.35 ms
+absolute offset p95 and paired 10 markers. Its observed-marker result is
+`false`; this is close to the 80 ms limit and remains a short loopback
+experiment. The native source closed its old audio worker, retired both old guest-1
+track queues, and resumed media after republish. The final-generation ingest reported
+one callback-contention drop, zero oldest/stale drops and zero clock resets. Ingest
+worker counters for retired generations are not yet aggregated, so those numbers
+are not full-session totals. Transport teardown and G2 privacy flush remain separate
+qualification work.
+
+Evidence: [rejoin recording](../labs/guest-rtc/evidence/obs-dedicated-rejoin-markers.json),
+[rejoin transport](../labs/guest-rtc/evidence/transport-obs-dedicated-rejoin.json),
+[refinement manifest](../labs/guest-rtc/evidence/playout-refinement-manifest.json).

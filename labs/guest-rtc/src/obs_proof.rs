@@ -67,6 +67,29 @@ extern "C" fn stopped(data: *mut c_void, call: *mut ffi::calldata_t) {
         stop.done.store(true, Ordering::Release);
     }
 }
+// OBS's source audio output API accepts calls from the source's capture thread.
+// AudioTap joins its worker before Recorder releases this source.
+#[derive(Clone)]
+pub struct AudioWriter {
+    source: usize,
+    origin: Instant,
+    origin_ns: u64,
+}
+impl AudioWriter {
+    pub fn write(&self, pcm: &[i16], at: Instant) {
+        let timestamp =
+            self.origin_ns + at.saturating_duration_since(self.origin).as_nanos() as u64;
+        unsafe {
+            guest_obs_audio(
+                self.source as *mut ffi::obs_source_t,
+                pcm.as_ptr(),
+                pcm.len() as u32,
+                timestamp,
+            );
+        }
+    }
+}
+
 pub struct Recorder {
     source: *mut ffi::obs_source_t,
     output: *mut ffi::obs_output_t,
@@ -245,14 +268,11 @@ impl Recorder {
     fn timestamp(&self, at: Instant) -> u64 {
         self.origin_ns + at.saturating_duration_since(self.origin).as_nanos() as u64
     }
-    pub fn audio(&self, pcm: &[i16], at: Instant) {
-        unsafe {
-            guest_obs_audio(
-                self.source,
-                pcm.as_ptr(),
-                pcm.len() as u32,
-                self.timestamp(at),
-            );
+    pub fn audio_writer(&self) -> AudioWriter {
+        AudioWriter {
+            source: self.source as usize,
+            origin: self.origin,
+            origin_ns: self.origin_ns,
         }
     }
     pub fn video(

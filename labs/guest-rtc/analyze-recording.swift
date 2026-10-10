@@ -57,6 +57,17 @@ while let sample = ao.copyNextSampleBuffer() {
     audioSamples += frames
 }
 guard ar.status == .completed else { fail("Audio decode failed: \(String(describing:ar.error))") }
+// A 120 ms source pulse can recross the RMS threshold across codec chunks.
+// Preserve every raw crossing, but collapse crossings within its pulse envelope.
+let rawAudioEdges = audioEdges
+let rawVideoEdges = videoEdges
+func collapsePulseCrossings(_ values: [Double]) -> [Double] {
+    var result: [Double] = []
+    for value in values { if result.last.map({ value - $0 >= 150 }) ?? true { result.append(value) } }
+    return result
+}
+audioEdges = collapsePulseCrossings(audioEdges)
+videoEdges = collapsePulseCrossings(videoEdges)
 // Pair each marker at most once; account for every unmatched marker.
 var used = Set<Int>(), pairs: [[String:Double]] = [], unmatchedAudio = 0
 for a in audioEdges {
@@ -69,9 +80,11 @@ let offsets = pairs.map { $0["video_minus_audio_ms"]! }
 let duration = asset.duration.seconds
 let early = pairs.filter { $0["audio_pts_ms"]! < duration*1000/3 }.map { $0["video_minus_audio_ms"]! }
 let late = pairs.filter { $0["audio_pts_ms"]! > duration*2000/3 }.map { $0["video_minus_audio_ms"]! }
-var report: [String:Any] = ["schema_version":1,"decoder":"macOS AVFoundation","recording":URL(fileURLWithPath:args[1]).lastPathComponent,
+var report: [String:Any] = ["schema_version":2,"decoder":"macOS AVFoundation","recording":URL(fileURLWithPath:args[1]).lastPathComponent,
     "duration_seconds":duration,"video_frames_decoded":videoFrames,"audio_samples_decoded":audioSamples,
-    "video_marker_pts_ms":videoEdges,"audio_marker_pts_ms":audioEdges,"pairs":pairs,
+    "video_marker_pts_ms":videoEdges,"audio_marker_pts_ms":audioEdges,
+    "raw_audio_threshold_crossings_ms":rawAudioEdges,"raw_video_threshold_crossings_ms":rawVideoEdges,
+    "pulse_recrossing_collapse_window_ms":150,"source_pulse_duration_ms":120,"pairs":pairs,
     "unmatched_audio_markers":unmatchedAudio,"unmatched_video_markers":videoEdges.count-used.count,
     "browser_source_paint_uncertainty_ms":1000.0/30,"audio_detector_window_max_ms":10,
     "observed_marker_test_pass":pairs.count >= 5 && unmatchedAudio == 0 && videoEdges.count == used.count && (percentile(offsets.map(abs),0.95) ?? Double.infinity) <= 80,

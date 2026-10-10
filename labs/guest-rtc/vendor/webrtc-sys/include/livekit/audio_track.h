@@ -46,6 +46,8 @@ using CompleteCallback = void (*)(const livekit_ffi::SourceContext*);
 
 namespace livekit_ffi {
 
+int64_t diagnostic_webrtc_time_us();
+
 class AudioTrack : public MediaStreamTrack {
  private:
   friend RtcRuntime;

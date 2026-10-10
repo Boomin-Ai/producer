@@ -26,3 +26,7 @@ WebRTC TimeMillis; no mapping to Rust Instant, sender wall time, or OBS is assum
 Remix/resampling delay remains unmeasured. Codec, jitter, and APM behavior stay upstream.
 
 This is diagnostic instrumentation, not an OBS playout adapter or synchronization fix.
+
+The same audio bridge now exports `diagnostic_webrtc_time_us()` using upstream
+`webrtc::TimeMicros()` solely to anchor received video render timestamps to a local
+Instant clock. It does not expose sender capture time or alter jitter/codec behavior.
