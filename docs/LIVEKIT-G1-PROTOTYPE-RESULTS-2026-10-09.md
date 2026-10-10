@@ -1358,3 +1358,25 @@ These are SDK diagnostic reconnects and one explicit guest rejoin on loopback.
 WAN packet blackholes, server failover, repeated reconnect/load, voice quality,
 physical camera sync and broader room integration remain open. Production and
 the installed Producer application were not changed.
+
+### Private end-to-end voice review harness — 2026-10-10
+
+Added explicit `--voice-review --wait-for-start --play-guest` capture of the
+browser's decoded native-host microphone return, after native APM, publication,
+SFU and Opus decoding. A zero-output recording worklet keeps the returned mic
+silent while the native monitor plays generated guest speech. First 10 seconds
+are quiet, 10–30 seconds are double-talk, and the generated guest speech is muted
+at 30 seconds for a near-voice-only listening sample. Phase clock is the harness
+clock; source/decoded timestamp synchronization is not asserted.
+
+Voice capture is off by default and gated on the visible Start button. It is
+limited to 35–60 second trials without reconnect/rejoin; the worklet has a
+65-second hard sample cap. Output is PCM16 WAV without a second lossy codec.
+WAV/manifest are private Application Support files (0700 directory/0600 files),
+never repository PCM. Numeric reports reflect whether recording actually saved.
+Two Node tests cover WAV fidelity/accounting/limits and worklet silent output,
+finite format and cap enforcement. A real headless browser test generated a
+one-second 997 Hz tone (no microphone or SFU) and captured exactly 48,000 samples
+with zero worklet output amplitude. The native binary is unchanged from the
+45-test reconnect build. Actual physical listening and human speech confirmation
+remain pending; this harness is not yet a voice-quality acceptance result.

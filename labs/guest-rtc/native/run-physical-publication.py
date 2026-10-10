@@ -1,4 +1,4 @@
-"""Explicit local microphone publication; loopback only, no voice recording in browser."""
+"""Explicit loopback microphone publication; private decoded voice review is opt-in."""
 import argparse
 import hashlib
 import json
@@ -9,6 +9,7 @@ import subprocess
 import time
 LAB = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--voice-review', action='store_true', help='Save a private decoded return WAV for end-to-end listening (requires explicit Start)')
 parser.add_argument('--publish-microphone', action='store_true')
 parser.add_argument('--play-guest', action='store_true', help='Play the remote speech fixture through native speakers (local microphone never monitored)')
 parser.add_argument('--wait-for-start', action='store_true', help='Wait for the visible browser Start speaker test button before microphone capture')
@@ -24,6 +25,8 @@ if args.guest_rejoin and args.reconnect:
     parser.error("Use --guest-rejoin or --reconnect separately")
 if (args.reconnect or args.guest_rejoin) and (not args.play_guest or args.seconds<20):
     parser.error("Reconnect/rejoin requires --play-guest and at least 20 seconds")
+if args.voice_review and (not args.play_guest or not args.wait_for_start or args.seconds>60 or args.seconds<35 or args.reconnect or args.guest_rejoin):
+    parser.error("--voice-review requires --play-guest --wait-for-start, 35..60 seconds, and no reconnect/rejoin")
 for port in (7880,8990):
     with socket.socket() as probe:
         probe.bind(('127.0.0.1',port))
@@ -37,9 +40,15 @@ if args.guest_rejoin:env["LIVEKIT_LAB_GUEST_REJOIN"]="1"
 if args.reconnect:env["LIVEKIT_LAB_MONITOR_RECONNECT"]=args.reconnect
 if args.play_guest:env["LIVEKIT_LAB_GUEST_MONITOR"]="1"
 if args.wait_for_start:env["LIVEKIT_LAB_WAIT_FOR_START"]="1"
+if args.voice_review:
+    private=Path.home()/'Library/Application Support/Producer Guest RTC Lab'/('voice-review-'+name)
+    private.mkdir(parents=True,mode=0o700,exist_ok=False)
+    private.chmod(0o700)
+    env['LIVEKIT_LAB_VOICE_REVIEW']='1'
+    env['LIVEKIT_LAB_VOICE_REVIEW_DIRECTORY']=str(private)
 owned=[]
 logs=[]
-report={'run_name':name,'status':'running','loopback_only':True,'physical_microphone_publication_requested':True,'browser_voice_recorded':False,'seconds':args.seconds,'g1_complete':False,'guest_monitor_requested':args.play_guest,'wait_for_user_start':args.wait_for_start,'sdk_reconnect_requested':args.reconnect,'guest_rejoin_requested':args.guest_rejoin}
+report={'run_name':name,'status':'running','loopback_only':True,'physical_microphone_publication_requested':True,'browser_voice_recording_requested':args.voice_review,'voice_recording_scope':'decoded return WAV in private Application Support directory' if args.voice_review else 'none','seconds':args.seconds,'g1_complete':False,'guest_monitor_requested':args.play_guest,'wait_for_user_start':args.wait_for_start,'sdk_reconnect_requested':args.reconnect,'guest_rejoin_requested':args.guest_rejoin}
 def digest_file(path):
     digest=hashlib.sha256()
     with path.open('rb') as stream:

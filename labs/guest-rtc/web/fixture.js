@@ -1,6 +1,17 @@
 import { Room, RoomEvent, LocalAudioTrack, LocalVideoTrack, Track } from 'livekit-client';
 
-let room, context, timer, analyser, returnAudio, synthetic, silentOutput;
+let room, context, timer, analyser, returnAudio, synthetic, silentOutput, guestGain, voiceRecorder;
+const voiceReview=new URLSearchParams(location.search).get("voiceReview")==="1";
+let voiceChunks=[],voiceSamples=0,voiceFinished,voiceResolve;
+window.finishVoiceReview=async()=>{
+ if(!voiceRecorder)throw new Error("No decoded voice recorder attached");
+ voiceRecorder.port.postMessage("finish");
+ const result=await Promise.race([voiceFinished,new Promise((_,reject)=>setTimeout(()=>reject(new Error("Decoded recorder finish timeout")),2000))]);
+ voiceRecorder.disconnect();
+ const chunks=voiceChunks.map(pcm=>{const bytes=new Uint8Array(pcm.buffer,pcm.byteOffset,pcm.byteLength);let text="";for(let at=0;at<bytes.length;at+=16384)text+=String.fromCharCode(...bytes.subarray(at,at+16384));return btoa(text);});
+ voiceChunks=[];return {...result,chunks};
+};
+window.setGuestSpeechEnabled=enabled=>{if(guestGain)guestGain.gain.value=enabled?1:0;};
 const state = { identity: new URLSearchParams(location.search).get('identity') ?? 'guest-1',
   connected: false, published: false, returnAudioBlocks: 0, returnAudioPulses: 0, returnVideoFrames: 0,
   events: [], audioMaxRms: 0, error: null };
@@ -15,6 +26,7 @@ export async function start() {
     room = new Room({ adaptiveStream: false, dynacast: false });
     context = new AudioContext({ sampleRate: 48000 });
     await context.audioWorklet.addModule('/pulse-worklet.js');
+    if(voiceReview)await context.audioWorklet.addModule('/voice-review-worklet.js');
     await context.resume();
     const subscribe = (publication, participant) => {
       if (participant.identity === 'native-host') publication.setSubscribed(true);
@@ -42,6 +54,20 @@ export async function start() {
         // Keep the Web Audio graph running while output remains exactly silent.
         silentOutput = context.createGain(); silentOutput.gain.value = 0;
         analyser.connect(silentOutput); silentOutput.connect(context.destination);
+        if(voiceReview) {
+          if(voiceRecorder)throw new Error('Voice review does not support track replacement');
+          voiceFinished=new Promise(resolve=>{voiceResolve=resolve;});
+          voiceRecorder=new AudioWorkletNode(context,'voice-review',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1],channelCount:1,channelCountMode:'explicit',processorOptions:{limitSamples:48000*65}});
+          voiceRecorder.port.onmessage=event=>{
+            const message=event.data;
+            if(message.kind==='pcm') {
+              if(message.sequence!==voiceChunks.length || voiceChunks.length>=66 || voiceSamples+message.pcm.length>48000*65) {voiceResolve({error:'Decoded recorder chunk limit/sequence fault'});voiceRecorder.port.postMessage('finish');return;}
+              voiceSamples+=message.pcm.length;voiceChunks.push(message.pcm);
+            } else if(message.kind==='finished')voiceResolve(message);
+          };
+          returnAudio.connect(voiceRecorder);voiceRecorder.connect(silentOutput);
+        }
+
       }
       display();
     });
@@ -71,7 +97,7 @@ export async function start() {
       synthetic=context.createBufferSource();synthetic.buffer=pcm;synthetic.loop=true;synthetic.start();
       state.guestFixture='remote speech only; no browser microphone';
     } else synthetic = new AudioWorkletNode(context, 'pulse');
-    const destination = context.createMediaStreamDestination(); synthetic.connect(destination);
+    const destination = context.createMediaStreamDestination(); guestGain=context.createGain();synthetic.connect(guestGain);guestGain.connect(destination);
     const video = new LocalVideoTrack(canvas.captureStream(30).getVideoTracks()[0]);
     const audio = new LocalAudioTrack(destination.stream.getAudioTracks()[0]);
     await room.localParticipant.publishTrack(video, { stream, source: Track.Source.Camera, simulcast: false,
@@ -82,7 +108,7 @@ export async function start() {
   } catch (error) { state.error = String(error); display(); throw error; }
 }
 export async function stop() {
-  clearInterval(timer); synthetic?.disconnect(); returnAudio?.disconnect();
+  clearInterval(timer); synthetic?.disconnect(); guestGain?.disconnect(); voiceRecorder?.disconnect(); returnAudio?.disconnect();
   await room?.disconnect(); await context?.close(); room = null;
   state.published = false; display();
 }

@@ -1,8 +1,10 @@
-// Deliberate local microphone publication test. Never record received voice.
+// Deliberate local microphone publication; decoded recording requires explicit voice-review opt-in.
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
-import { writeFile, readFile } from 'node:fs/promises';
+import { writeFile, readFile, lstat } from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
+import {decodedVoiceWav} from './voice-review-wav.mjs';
 import { fileURLToPath } from 'node:url';
 if (process.argv[2] !== '--publish-microphone') throw new Error('Explicit --publish-microphone is required; this sends your microphone to the local SFU');
 if (process.env.LIVEKIT_LAB_PHYSICAL_CAPTURE !== '1' || !process.env.LIVEKIT_LAB_PHYSICAL_SPEECH) throw new Error('Explicit physical capture/reference configuration required');
@@ -12,28 +14,38 @@ const seconds=Number(process.env.LIVEKIT_LAB_SECONDS??20);
 if (!Number.isInteger(seconds)||seconds<5||seconds>300) throw new Error('Physical trial duration must be 5..300 seconds');
 if (!/^physical-publication-[0-9]+$/.test(name??'')) throw new Error('Unique physical-publication run name required');
 const monitor=process.env.LIVEKIT_LAB_GUEST_MONITOR==='1';
+const voiceReview=process.env.LIVEKIT_LAB_VOICE_REVIEW==='1';
+let privateDirectory;
+if(voiceReview) {
+ if(!monitor || process.env.LIVEKIT_LAB_WAIT_FOR_START!=='1' || seconds<35 || seconds>60 || process.env.LIVEKIT_LAB_MONITOR_RECONNECT || process.env.LIVEKIT_LAB_GUEST_REJOIN)throw new Error('Invalid explicit voice-review configuration');
+ privateDirectory=path.join(os.homedir(),'Library/Application Support/Producer Guest RTC Lab',`voice-review-${name}`);
+ if(process.env.LIVEKIT_LAB_VOICE_REVIEW_DIRECTORY!==privateDirectory)throw new Error('Unexpected private voice directory');
+ const directory=await lstat(privateDirectory);
+ if(!directory.isDirectory() || directory.isSymbolicLink() || (directory.mode&0o777)!==0o700)throw new Error('Private voice directory must be a real directory with mode 0700');
+}
 let exited=false;
 let child,done,log='',browser,page,connected=false,readyTimer;
 try {
  // Warm generated guest + receiver before hardware starts. Browser startup
  // must not consume the physical trial or miss its short publication window.
  browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:false,args:['--autoplay-policy=no-user-gesture-required','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
- page=await browser.newPage();await page.goto(`http://127.0.0.1:8990/?identity=guest-1${monitor?'&monitorSpeech=1':''}`);
- await page.evaluate(({seconds,monitor})=>{
-  document.title='Producer — local LiveKit microphone test';
-  const notice=document.createElement('p');notice.textContent=`Local microphone timing test • ${seconds} seconds • Browser speakers stay silent. ${monitor ? "Native speakers play remote speech. Use built-in speakers and microphone, disconnect headphones. Talk over the clip to check double-talk." : "No speaking needed."}`;notice.style.fontWeight='bold';document.body.prepend(notice);
- },{seconds,monitor});
+ page=await browser.newPage();await page.goto(`http://127.0.0.1:8990/?identity=guest-1${monitor?'&monitorSpeech=1':''}${voiceReview?'&voiceReview=1':''}`);
+ await page.evaluate(({seconds,monitor,voiceReview})=>{
+  document.title=voiceReview?'Producer — private voice review':'Producer — local LiveKit microphone test';
+  if(voiceReview){document.querySelector('h1').textContent='Producer voice test';document.querySelector('h1+p').textContent='Native mic starts after Start. Your decoded voice is saved privately for listening afterward.';document.querySelector('#start').hidden=true;document.querySelector('#stop').hidden=true;}
+  const notice=document.createElement('p');notice.id='voice-review-instructions';notice.textContent=voiceReview?`Private ${seconds}-second voice recording. Built-in speakers/mic near 50%. First 10 seconds quiet; 10–30 seconds talk over the clip; after 30 seconds keep talking with the clip silent. Decoded microphone WAV stays on this Mac. Your mic is never played during capture.`:`Local microphone timing test • ${seconds} seconds • Browser speakers stay silent. ${monitor ? "Native speakers play remote speech. Use built-in speakers and microphone, disconnect headphones. Talk over the clip to check double-talk." : "No speaking needed."}`;notice.style.fontWeight='bold';document.body.prepend(notice);
+ },{seconds,monitor,voiceReview});
  await page.bringToFront();
  await page.evaluate(()=>window.startLab());
  await page.waitForFunction(()=>window.labState.published,undefined,{timeout:10000});
  await new Promise(r=>setTimeout(r,2000));
  if(process.env.LIVEKIT_LAB_WAIT_FOR_START==='1') {
-  await page.evaluate(()=>{
+  await page.evaluate(({seconds,voiceReview})=>{
    window.physicalTestStarted=false;
-   const button=document.createElement('button');button.textContent='Start 60-second speaker test';
+   const button=document.createElement('button');button.textContent=`Start ${seconds}-second ${voiceReview?'voice':'speaker'} test`;
    button.onclick=()=>{window.physicalTestStarted=true;button.disabled=true;button.textContent='Test running';};document.body.prepend(button);
-  });
-  console.log('Ready: click Start 60-second speaker test in the visible local lab. Microphone is not running yet.');
+  },{seconds,voiceReview});
+  console.log(`Ready: click Start ${seconds}-second ${voiceReview?'voice':'speaker'} test. Microphone is not running yet.`);
   await page.waitForFunction(()=>window.physicalTestStarted,undefined,{timeout:300000});
  }
  console.log(`Browser receiver warm; starting native ${seconds}-second capture now`);
@@ -48,12 +60,18 @@ try {
  await Promise.race([ready,new Promise((_,reject)=>{readyTimer=setTimeout(()=>reject(new Error('Native readiness timeout')),15000);})]);clearTimeout(readyTimer);
  const observations=[];let snapshot;
  const observationBegan=performance.now();let rejoinCompleted=false;
+ let clipMuted=false;
  while(!exited) {
   await new Promise(r=>setTimeout(r,1000));
   if(process.env.LIVEKIT_LAB_GUEST_REJOIN==='1' && !rejoinCompleted && performance.now()-observationBegan>=5000 && !exited) {
    await page.evaluate(()=>window.stopLab());await new Promise(r=>setTimeout(r,1000));
    await page.evaluate(()=>window.startLab());await page.waitForFunction(()=>window.labState.published,undefined,{timeout:10000});
    rejoinCompleted=true;
+  }
+  if(voiceReview) {
+   const elapsed=(performance.now()-observationBegan)/1000;
+   if(elapsed>=30 && !clipMuted) {await page.evaluate(()=>window.setGuestSpeechEnabled(false));clipMuted=true;}
+   await page.evaluate(({elapsed,seconds})=>{document.querySelector('#voice-review-instructions').textContent=`${Math.floor(elapsed)} / ${seconds} seconds — ${elapsed<10?'Stay quiet; the guest clip is playing.':elapsed<30?'Talk over the guest clip.':'Keep talking; the guest clip is now silent.'} Your microphone return is recorded locally and stays silent during capture.`;},{elapsed,seconds});
   }
   const observation=await page.evaluate(async()=>({state:window.labState,audio:[...((await window.returnAudioTrack?.getRTCStatsReport())?.values()??[])].filter(s=>s.type==='inbound-rtp'&&s.kind==='audio')}));
   if(observations.length<300)observations.push(observation);
@@ -63,8 +81,22 @@ try {
  const code=await done;
  const native=JSON.parse(await readFile(path.join(lab,`evidence/${name}.json`),'utf8'));
  const recoveries=native.capture_publication?.deadline_recoveries??0;
- const report={guest_rejoin_requested:process.env.LIVEKIT_LAB_GUEST_REJOIN==='1',guest_rejoin_completed:rejoinCompleted,sdk_reconnect_requested:process.env.LIVEKIT_LAB_MONITOR_RECONNECT??null,seconds,observations,deadline_recoveries:recoveries,source_fault_free:code===0&&recoveries===0,...snapshot,native_exit_code:code,receiver_warmed_before_native:true,physical_microphone_publication_requested:true,received_audio_recorded:false,browser_speaker_output_gain:0,reference_scope:monitor?'selected remote guest speech through final native speaker output':'native lab clip only; guest return not played',guest_monitor_requested:monitor,camera_sync_qualified:false,g1_complete:false};
+ let voiceCapture=null;
+ if(voiceReview) {
+  try {
+   const capture=await page.evaluate(()=>window.finishVoiceReview());
+   if(capture.error)throw new Error(capture.error);
+   const wav=decodedVoiceWav(capture.chunks,capture.samples,capture.rate,seconds);
+   const file=path.join(privateDirectory,'decoded-return.wav');
+   await writeFile(file,wav,{mode:0o600,flag:'wx'});
+   voiceCapture={recorded:true,rate:capture.rate,samples:capture.samples,duration_seconds:capture.samples/capture.rate,bytes:wav.length,scope:'private Application Support decoded return; no PCM in repository',guest_clip_muted_after_30_seconds:clipMuted};
+   await writeFile(path.join(privateDirectory,'review.json'),JSON.stringify({run:name,...voiceCapture},null,2)+'\n',{mode:0o600,flag:'wx'});
+   console.log(`Private decoded voice WAV ready: ${file}`);
+  } catch(error) {voiceCapture={recorded:false,error:String(error)};}
+ }
+ const report={voice_capture:voiceCapture,guest_rejoin_requested:process.env.LIVEKIT_LAB_GUEST_REJOIN==='1',guest_rejoin_completed:rejoinCompleted,sdk_reconnect_requested:process.env.LIVEKIT_LAB_MONITOR_RECONNECT??null,seconds,observations,deadline_recoveries:recoveries,source_fault_free:code===0&&recoveries===0,...snapshot,native_exit_code:code,receiver_warmed_before_native:true,physical_microphone_publication_requested:true,received_audio_recorded:voiceCapture?.recorded??false,browser_speaker_output_gain:0,reference_scope:monitor?'selected remote guest speech through final native speaker output':'native lab clip only; guest return not played',guest_monitor_requested:monitor,camera_sync_qualified:false,g1_complete:false};
  await writeFile(path.join(lab,`evidence/${name}-browser.json`),JSON.stringify(report,null,2)+'\n');
+ if(voiceReview && !voiceCapture?.recorded)throw new Error(`Decoded voice review failed: ${voiceCapture?.error}`);
  if(code!==0)throw new Error(`Native physical publication failed (${code}); retain reports`);
  if(snapshot.state.error || !snapshot.audio.some(s=>(s.packetsReceived??0)>100) || snapshot.state.returnVideoFrames<20)throw new Error('Browser did not receive expected physical audio RTP and placeholder video');
  if(process.env.LIVEKIT_LAB_GUEST_REJOIN==='1') {

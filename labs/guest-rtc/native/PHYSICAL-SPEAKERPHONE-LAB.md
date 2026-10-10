@@ -283,3 +283,37 @@ mutually exclusive with `--reconnect` and also requires at least 20 seconds and
 `--play-guest`. The fixture verifies changed guest audio publication SIDs and
 subsequent native PCM consumption, not merely browser reconnection status.
 The selected guest identity stays `guest-1`; this is not a roster/admission test.
+
+### Private decoded voice listening review
+
+```sh
+python3 native/run-physical-publication.py --publish-microphone --play-guest --wait-for-start --voice-review --seconds 40
+```
+
+This opt-in records the browser's decoded native-host return as mono 48 kHz
+PCM16 WAV, after native APM and LiveKit/Opus transport. It never opens the browser
+microphone. The capture worklet outputs zero PCM; both the HTML return player
+and analyser output remain muted. There is no second lossy encoding pass.
+
+Wait for the visible Start 40-second voice test button. Use built-in speakers
+and mic near 50%, close other rooms/audio and disconnect headphones. Stay quiet
+for 0–10 seconds, talk over the remote guest clip during 10–30 seconds, then
+keep talking during 30–40 seconds while the harness mutes only the generated
+guest clip. On-screen instructions show elapsed time. Phases follow the harness
+wall clock, not synchronized source/decoded capture clocks; exact acoustic
+alignment/attenuation is not claimed.
+
+Voice WAV/review manifest are saved exclusively under a unique mode-0700
+`~/Library/Application Support/Producer Guest RTC Lab/voice-review-<run>`
+directory, with mode-0600 files. Repository evidence contains numeric metadata
+only. The runner rejects arbitrary output directories, symlink leaf directories,
+non-private leaf permissions, missing explicit Start, recording longer than 60
+seconds, and combined reconnect/rejoin capture. WAV serialization verifies PCM
+format, sample/chunk limits and accounting; browser capture has its own 65-second
+hard cap. Default physical and generated experiments still do not record voice.
+
+The result compares speaking over guest audio with speaking alone. It is not a
+raw microphone A/B comparison, a microphone calibration, or an A/V sync test.
+Listening approval and actual speech during the instructed phases are required
+before making a subjective voice-quality claim. Recording through reconnect is
+a separate later trial.
