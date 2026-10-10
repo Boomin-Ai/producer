@@ -1380,3 +1380,21 @@ one-second 997 Hz tone (no microphone or SFU) and captured exactly 48,000 sample
 with zero worklet output amplitude. The native binary is unchanged from the
 45-test reconnect build. Actual physical listening and human speech confirmation
 remain pending; this harness is not yet a voice-quality acceptance result.
+
+The first completed private voice trial (`1791667205311786000`) ran 40.085 s
+and saved exactly 1,920,000 decoded samples (40.000 s, 48 kHz mono PCM16,
+3,840,044-byte WAV). File/directory permission checks passed (0600/0700).
+The browser worklet stayed silent; generated guest speech was muted at the
+30-second harness transition. Native capture-to-SDK p95 27 ms, one explicitly
+logged publication deadline recovery, zero native format/timeline errors,
+zero active callbacks/owners after stop, joined publisher in 42.29 ms. This is
+not a fault-free trial. Approximate decoded RMS was -44.68 dBFS in 2–9 s,
+-25.42 dBFS in 12–28 s, and -19.97 dBFS in 32–38 s; these are output energy
+observations, not echo attenuation or voice suppression measurements without a
+raw reference/controlled speaker level. Listening review is pending.
+
+The WAV was opened in QuickTime; only numeric source/browser/condition reports
+and `labs/guest-rtc/evidence/voice-review-first-physical-run.json` are retained in
+git. The private WAV and review manifest remain in Application Support. An
+earlier unstarted trial (`1791665950205546000`) timed out waiting for Start;
+its failed conditions report is retained without a voice-quality result.
