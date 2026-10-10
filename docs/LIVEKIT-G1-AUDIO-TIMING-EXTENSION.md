@@ -206,3 +206,53 @@ qualification work.
 Evidence: [rejoin recording](../labs/guest-rtc/evidence/obs-dedicated-rejoin-markers.json),
 [rejoin transport](../labs/guest-rtc/evidence/transport-obs-dedicated-rejoin.json),
 [refinement manifest](../labs/guest-rtc/evidence/playout-refinement-manifest.json).
+
+## Verified packet impairment and complete ingest accounting
+
+The loopback signaling/UDP relay now forces native and browser media through an
+observable packet path. A baseline delivered both directions; a hard-loss control
+dropped all RTP while allowing ICE/DTLS/control traffic. The browser received no
+return audio/video during that control. This supersedes the unverified CDP
+impairment experiment above. No system firewall or production network was changed.
+
+The fixture delays either video or audio independently, with approximately 2%
+packet loss on each relay leg. Video delay is 20–119 ms per leg; audio delay is
+20–79 ms. Browser-to-native traffic crosses two impaired legs. Payload classification
+uses the fixture's negotiated Opus PT111; this is not a general production proxy.
+RTCP, STUN and DTLS remain unimpaired. Matching camera/program audio-video MSID
+groups and room syncStreams are retained, including when an empty room is recreated.
+
+| Recorded run | Absolute video/audio offset p95 | Marker pairs | Result at 80 ms |
+| --- | ---: | ---: | --- |
+| Video-only packet jitter | 134.02 ms | 11 | Fail; one unmatched video marker |
+| Audio-only packet jitter | 121.31 ms | 11 | Fail |
+| Three-guest repeated rejoin | 74.69 ms | 16 | Short local pass |
+| Rejoin with worker-lifetime instrumentation | 88.69 ms | 16 | Fail |
+| Rejoin with complete block accounting | 231.31 ms | 10 | Fail |
+
+These sequential runs have varying machine load and are not estimates of the
+isolated performance cost of instrumentation. The inconsistent rejoin results
+confirm that short local passes cannot qualify this adapter. Verified asymmetric
+packet impairment fails the synchronization gate despite SDK stream grouping.
+The current arrival/sample-count audio clock is insufficient evidence of a common
+presentation timeline. The next implementation needs the per-frame timing contract
+in [the playout bridge specification](LIVEKIT-G1-PLAYOUT-BRIDGE-SPEC.md).
+
+Replacing an audio publication now removes its sink and joins the old writer before
+creating the replacement. Reports retain every retired generation's ingest counters.
+The final 35-second, three-guest/three-rejoin run verified four audio generations and
+zero remaining application ingest workers, with peak one writer for the OBS source.
+All 2,606 received blocks reconcile: 2,501 consumed, 99 oldest-overflow drops, two
+callback-contention drops, four stale drops and zero queued at teardown. Eleven
+clock resets remain visible. These counts prove bounded application handoff accounting,
+not lossless audio, SDK-wide resource cleanup or private-cue queue flushing.
+
+Evidence: [packet experiment manifest](../labs/guest-rtc/evidence/packet-impairment-manifest.json),
+[video jitter recording analysis](../labs/guest-rtc/evidence/obs-packet-video-markers.json),
+[audio jitter recording analysis](../labs/guest-rtc/evidence/obs-packet-audio-markers.json),
+[latest rejoin recording analysis](../labs/guest-rtc/evidence/obs-packet-accounting-markers.json),
+[verified full ingest accounting](../labs/guest-rtc/evidence/ingest-accounting-verification.json).
+
+Seven Rust tests, Clippy for default and OBS features, Node syntax checks and the
+live evidence accounting validator passed. G0/G1 remain incomplete. Production
+integration, physical speakerphone AEC and Windows/native packaging remain gated.

@@ -156,3 +156,53 @@ seconds and native receivers reported zero packet loss. Thus CDP acknowledgement
 did not prove impairment on this tested media path. Those runs must not be counted
 as WAN/network acceptance. Rules are scoped to the disposable headless browser;
 no system firewall or production network settings are altered.
+
+### Verified packet-level impairment
+
+Start the isolated SFU with loopback ICE candidates and TCP disabled:
+
+```sh
+livekit-server --dev --bind 127.0.0.1 --rtc.enable_loopback_candidate --rtc.tcp_port 0
+LIVEKIT_LAB_SYNC_STREAMS=1 LIVEKIT_LAB_PACKET_PROXY=1 node web/server.mjs
+LIVEKIT_LAB_PACKET_PROFILE=baseline node web/packet-proxy.mjs
+```
+
+The relay terminates loopback signaling at port 7885 and rewrites the fixed SFU UDP
+candidate to a loopback NAT at 7883, forwarding encrypted datagrams to 7882. It
+rejects TCP and non-mux candidates to prevent bypass. ICE/DTLS/RTCP are unimpaired;
+it classifies the fixture's negotiated Opus payload type 111 as audio and other RTP
+as video. This classifier is specific to the synthetic fixture, not a generic
+production RTP classifier. No media payload is decrypted or logged.
+
+Restart the relay for each run/profile; it bounds peers to 16 and delayed packets
+to 1024. Initial signaling buffers are capped at 64 messages/128 KiB, connected
+WebSocket backpressure at 1 MiB. All sockets/timers have a process shutdown path.
+The SFU is a local lab process; `--bind` alone does not bind RTC to loopback, so
+loopback candidates must be explicitly enabled. System networking is unchanged.
+
+Use `LIVEKIT_LAB_URL=ws://127.0.0.1:7885` for native smoke runs. `hard-loss` relay
+profile plus smoke mode `hard-loss` must suppress all return markers while counting
+media drops and continuing control traffic. `video-jitter` delays each video packet
+20–119 ms and drops approximately 2%; `audio-jitter` delays audio 20–79 ms and drops
+approximately 2%. Both directions are affected on the selected media class, so a
+browser-to-native path crosses two impairment legs. A seeded PRNG selects events;
+exact packet order depends on scheduling. Return RTP and retransmissions are also
+affected. Relay packet counters are saved alongside smoke evidence.
+
+The fixture tokens include sync room configuration so recreating an empty room does
+not silently lose stream grouping. `churn` smoke mode rejoins guest-1 three times;
+use a duration of at least 35 seconds. Audio generations now retire their sinks and
+join the old writer before a replacement writer starts. Final worker counts and
+per-generation/session handoff counters include retired generations.
+
+```sh
+node web/verify-ingest-accounting.mjs \
+  evidence/transport-obs-packet-accounting.json evidence/ingest-accounting-verification.json
+```
+
+This checks the quiescent accounting invariant for every generation: received equals
+consumed plus overflow/contention/stale drops plus the pending shutdown tail.
+Pending samples at teardown are recorded rather than credited as consumed. It also
+checks source sink removal, successful worker exit, no overlapping writers for the
+single guest-1 OBS source, and zero application ingest workers after retirement.
+Native SDK device/thread cleanup and G2 private-cue queue flushing remain separate.

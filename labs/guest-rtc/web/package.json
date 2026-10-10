@@ -7,8 +7,10 @@
     "test": "node smoke.mjs"
   },
   "dependencies": {
-    "livekit-client": "2.22.4",
+    "@livekit/protocol": "1.52.1",
     "esbuild": "0.25.12",
-    "playwright-core": "1.64.0"
+    "livekit-client": "2.22.4",
+    "playwright-core": "1.64.0",
+    "ws": "8.22.0"
   }
 }

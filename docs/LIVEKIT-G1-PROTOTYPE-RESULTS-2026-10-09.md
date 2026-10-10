@@ -53,3 +53,14 @@ Cloudflare deployment metadata was read without deploying: API version `803dcc2e
 4. Freeze guest viewing/subscriptions using measured conversation and composed-preview synchronization. Finish G0 deployment mapping and physical legacy baselines. Only then expand into G2 admission/authorization/private-cue integration.
 
 For the next review, inspect the native callback/queue lifetime, SID replacement behavior, TLS fixture, APM measurement definitions and baseline drift. Treat the recorded pass results narrowly and leave G0/G1 incomplete until the physical/timing requirements are demonstrated. The [original review](LIVEKIT-GUEST-REFACTOR-REVIEW-2026-10-09.md) remains unchanged.
+
+## Packet impairment checkpoint
+
+A verified UDP relay and all-RTP hard-loss control now exercise actual media
+impairment. Recorded A/V offset fails the 80 ms gate: 134.02 ms p95 with video-only
+jitter and 121.31 ms with audio-only jitter. Repeated rejoin results also vary beyond
+the target. Complete per-generation application audio accounting and worker retirement
+pass; they do not qualify timing, physical AEC or SDK-wide cleanup. See the
+[latest timing evidence](LIVEKIT-G1-AUDIO-TIMING-EXTENSION.md#verified-packet-impairment-and-complete-ingest-accounting)
+and [required per-frame playout bridge](LIVEKIT-G1-PLAYOUT-BRIDGE-SPEC.md).
+Production remains unchanged, and G0/G1 are incomplete.

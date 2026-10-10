@@ -22,6 +22,7 @@ pub struct Queue<T> {
     overflow: AtomicU64,
     contention: AtomicU64,
     stale: AtomicU64,
+    consumed: AtomicU64,
 }
 impl<T> Queue<T> {
     pub fn new(capacity: usize, max_age: Duration) -> Self {
@@ -34,6 +35,7 @@ impl<T> Queue<T> {
             overflow: AtomicU64::new(0),
             contention: AtomicU64::new(0),
             stale: AtomicU64::new(0),
+            consumed: AtomicU64::new(0),
         }
     }
     pub fn push(&self, frame: Captured<T>) {
@@ -55,6 +57,7 @@ impl<T> Queue<T> {
             if now.saturating_duration_since(frame.at) > self.max_age {
                 self.stale.fetch_add(1, Ordering::Relaxed);
             } else {
+                self.consumed.fetch_add(1, Ordering::Relaxed);
                 return Some(frame);
             }
         }
@@ -64,7 +67,8 @@ impl<T> Queue<T> {
         json!({"capacity_frames":self.capacity,"max_age_ms":self.max_age.as_millis(),
             "received":self.received.load(Ordering::Relaxed),"overflow_oldest_dropped":self.overflow.load(Ordering::Relaxed),
             "callback_contention_dropped":self.contention.load(Ordering::Relaxed),
-            "stale_dropped":self.stale.load(Ordering::Relaxed)})
+            "stale_dropped":self.stale.load(Ordering::Relaxed),
+            "consumed":self.consumed.load(Ordering::Relaxed),"pending_frames":self.entries.lock().unwrap().len()})
     }
 }
 #[cfg(test)]

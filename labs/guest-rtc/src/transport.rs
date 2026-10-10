@@ -85,6 +85,7 @@ impl audio_sys::AudioSink for AudioObserver {
     }
 }
 struct AudioTap {
+    registered: bool,
     sid: String,
     track: SharedPtr<audio_sys::ffi::AudioTrack>,
     sink: SharedPtr<audio_sys::ffi::NativeAudioSink>,
@@ -92,6 +93,10 @@ struct AudioTap {
     #[cfg(feature = "obs-proof")]
     ingest: Option<AudioIngest>,
 }
+#[cfg(feature = "obs-proof")]
+static AUDIO_WORKERS_ALIVE: AtomicU64 = AtomicU64::new(0);
+#[cfg(feature = "obs-proof")]
+static AUDIO_WORKERS_PEAK: AtomicU64 = AtomicU64::new(0);
 #[cfg(feature = "obs-proof")]
 struct AudioIngest {
     stop: Arc<std::sync::atomic::AtomicBool>,
@@ -108,6 +113,15 @@ impl AudioIngest {
         let count = resets.clone();
         let smooth = std::env::var("LIVEKIT_LAB_PLAYOUT_CLOCK").as_deref() == Ok("1");
         let worker = std::thread::spawn(move || {
+            struct Lifetime;
+            impl Drop for Lifetime {
+                fn drop(&mut self) {
+                    AUDIO_WORKERS_ALIVE.fetch_sub(1, Ordering::AcqRel);
+                }
+            }
+            let alive = AUDIO_WORKERS_ALIVE.fetch_add(1, Ordering::AcqRel) + 1;
+            AUDIO_WORKERS_PEAK.fetch_max(alive, Ordering::Relaxed);
+            let _lifetime = Lifetime;
             let mut clock = crate::playout_clock::AudioClock::default();
             while !done.load(Ordering::Acquire) {
                 while let Some(frame) = queue.pop(Instant::now()) {
@@ -169,6 +183,7 @@ impl AudioTap {
             unsafe { audio_sys::ffi::media_to_audio(track.rtc_track().native_sys_handle()) };
         track.add_sink(&sink);
         Self {
+            registered: true,
             sid,
             track,
             sink,
@@ -178,9 +193,27 @@ impl AudioTap {
         }
     }
 }
+impl AudioTap {
+    fn retire_evidence(mut self) -> serde_json::Value {
+        self.track.remove_sink(&self.sink);
+        self.registered = false;
+        #[cfg(feature = "obs-proof")]
+        let ingest = self.ingest.take().map(|mut worker| {
+            worker.stop.store(true, Ordering::Release);
+            let worker_exit_ok = worker.worker.take().is_none_or(|handle| handle.join().is_ok());
+            json!({"clock_resets":worker.resets.load(Ordering::Relaxed),
+                "queue":self.observer.ingest_queue.as_ref().map(|q| q.stats()),"worker_joined":true,"worker_exit_ok":worker_exit_ok})
+        });
+        #[cfg(not(feature = "obs-proof"))]
+        let ingest: Option<serde_json::Value> = None;
+        json!({"kind":"audio","sid":self.sid,"stats":self.observer.queue.stats(),"ingest":ingest,"sink_removed":true})
+    }
+}
 impl Drop for AudioTap {
     fn drop(&mut self) {
-        self.track.remove_sink(&self.sink);
+        if self.registered {
+            self.track.remove_sink(&self.sink);
+        }
         #[cfg(feature = "obs-proof")]
         {
             self.ingest.take();
@@ -390,7 +423,13 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     let token = std::fs::read_to_string(token_path)
         .context("Read loopback-only token file; start web/server.mjs first")?;
     let url = std::env::var("LIVEKIT_LAB_URL").unwrap_or_else(|_| "ws://127.0.0.1:7880".into());
-    if !["ws://127.0.0.1:7880", "wss://localhost:7884"].contains(&url.as_str()) {
+    if ![
+        "ws://127.0.0.1:7880",
+        "ws://127.0.0.1:7885",
+        "wss://localhost:7884",
+    ]
+    .contains(&url.as_str())
+    {
         bail!("This fixture only connects to its loopback SFU");
     }
     #[cfg(feature = "obs-proof")]
@@ -427,9 +466,9 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                         let m = metrics.entry(id.clone()).or_default();
                         match track {
                             RemoteTrack::Audio(track) => {
-                                if let Some(old) = audio.insert(id.clone(), AudioTap::new(&track, #[cfg(feature = "obs-proof")] if id == "guest-1" { recorder.as_ref().map(|r| r.audio_writer()) } else { None })) {
-                                    m.retired_queues.push(json!({"kind":"audio","sid":old.sid,"stats":old.observer.queue.stats()}));
-                                }
+                                // Retire/join the old writer before a replacement can feed this OBS source.
+                                if let Some(old) = audio.remove(&id) { m.retired_queues.push(old.retire_evidence()); }
+                                audio.insert(id.clone(), AudioTap::new(&track, #[cfg(feature = "obs-proof")] if id == "guest-1" { recorder.as_ref().map(|r| r.audio_writer()) } else { None }));
                                 m.next_sample = None; m.last_capture_timestamp_ms = None; m.audio_active = false;
                             },
                             RemoteTrack::Video(track) => {
@@ -449,7 +488,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                         match track {
                             RemoteTrack::Audio(_) if audio.get(&id).is_some_and(|tap| tap.sid == sid) => {
                                 let old = audio.remove(&id).unwrap();
-                                m.retired_queues.push(json!({"kind":"audio","sid":old.sid,"stats":old.observer.queue.stats()}));
+                                m.retired_queues.push(old.retire_evidence());
                             },
                             RemoteTrack::Video(_) if video.get(&id).is_some_and(|tap| tap.sid == sid) => {
                                 let old = video.remove(&id).unwrap();
@@ -581,20 +620,43 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
             "capture_timestamp_step_p95_ms":p95(&m.capture_step_ms),
             "original_audio_capture_timestamp_available":m.audio_capture_timestamps > 0})
     }).collect();
-    #[cfg(feature = "obs-proof")]
-    let audio_ingest_stats: Vec<_> = audio
-        .iter()
-        .filter_map(|(id, tap)| {
-            tap.ingest.as_ref().map(|worker| {
-                json!({
-        "identity":id,"clock_resets":worker.resets.load(Ordering::Relaxed),
-        "queue":tap.observer.ingest_queue.as_ref().map(|q| q.stats())})
-            })
-        })
-        .collect();
-    #[cfg(not(feature = "obs-proof"))]
-    let audio_ingest_stats: Vec<serde_json::Value> = vec![];
-    audio.clear(); // removes sinks and joins writers before stopping/releasing OBS
+    let mut audio_ingest_stats = Vec::new();
+    for (id, m) in &metrics {
+        for evidence in &m.retired_queues {
+            if !evidence["ingest"].is_null() {
+                audio_ingest_stats
+                    .push(json!({"identity":id,"generation":"retired","evidence":evidence}));
+            }
+        }
+    }
+    for (id, tap) in audio.drain() {
+        let evidence = tap.retire_evidence();
+        if !evidence["ingest"].is_null() {
+            audio_ingest_stats
+                .push(json!({"identity":id,"generation":"final","evidence":evidence}));
+        }
+    }
+    let mut audio_ingest_totals = json!({"received":0u64,"overflow_oldest_dropped":0u64,"callback_contention_dropped":0u64,"stale_dropped":0u64,"consumed":0u64,"pending_frames":0u64,"clock_resets":0u64});
+    for generation in &audio_ingest_stats {
+        let ingest = &generation["evidence"]["ingest"];
+        for key in [
+            "received",
+            "overflow_oldest_dropped",
+            "callback_contention_dropped",
+            "stale_dropped",
+            "consumed",
+            "pending_frames",
+        ] {
+            audio_ingest_totals[key] = json!(
+                audio_ingest_totals[key].as_u64().unwrap()
+                    + ingest["queue"][key].as_u64().unwrap_or(0)
+            );
+        }
+        audio_ingest_totals["clock_resets"] = json!(
+            audio_ingest_totals["clock_resets"].as_u64().unwrap()
+                + ingest["clock_resets"].as_u64().unwrap_or(0)
+        );
+    }
     #[cfg(feature = "obs-proof")]
     let obs_recording = recorder.as_ref().map(|r| r.finish()).transpose()?;
     #[cfg(not(feature = "obs-proof"))]
@@ -602,10 +664,15 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     audio.clear();
     video.clear();
     room.close().await?;
+    #[cfg(feature = "obs-proof")]
+    let worker_lifecycle = json!({"alive_after_retirement":AUDIO_WORKERS_ALIVE.load(Ordering::Acquire),
+        "peak_alive":AUDIO_WORKERS_PEAK.load(Ordering::Relaxed),"scope":"application OBS audio ingest workers only"});
+    #[cfg(not(feature = "obs-proof"))]
+    let worker_lifecycle: Option<serde_json::Value> = None;
     let report = json!({"schema_version":1,"livekit":"0.9.4","topology":"local browser guests to native host through loopback SFU",
         "signaling_url":url,"publisher_error":publisher_error,
         "sync_streams_requested":std::env::var("LIVEKIT_LAB_SYNC_STREAMS").as_deref() == Ok("1"),
-        "receiver_stats":receiver_stats,"obs_recording":obs_recording,"local_playout_clock_requested":use_playout_clock,"dedicated_audio_ingest":audio_ingest_stats,
+        "receiver_stats":receiver_stats,"obs_recording":obs_recording,"local_playout_clock_requested":use_playout_clock,"audio_ingest_generation_reports":audio_ingest_stats,"audio_ingest_session_totals":audio_ingest_totals,"audio_worker_lifecycle":worker_lifecycle,
         "duration_seconds":seconds,"consumer_stall_ms":if pressure {200} else {0},"stall_period_seconds":5,
         "native_publish_audio_internal_queue_ms":0,"callback_timestamps_are_capture_timestamps":false,
         "obs_recorded_av_qualified":false,"physical_speaker_reference_connected":false,"g1_complete":false,

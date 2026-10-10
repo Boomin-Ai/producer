@@ -18,7 +18,7 @@ export function token(identity, videoGrant) {
   const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
   const now = Math.floor(Date.now() / 1000);
   const body = `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ iss: 'devkey', sub: identity,
-    nbf: now - 10, exp: now + 3600, video: videoGrant ?? { roomJoin: true, room: roomName,
+    nbf: now - 10, exp: now + 3600, roomConfig: syncStreams ? { name: roomName, syncStreams: true, departureTimeout: 1 } : undefined, video: videoGrant ?? { roomJoin: true, room: roomName,
       canPublish: true, canSubscribe: true, canPublishData: false } })}`;
   return `${body}.${createHmac('sha256', 'secret').update(body).digest('base64url')}`;
 }
@@ -49,7 +49,7 @@ const server = http.createServer(async (request, response) => {
         response.writeHead(403).end(); return;
       }
       response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
-        .end(JSON.stringify({ token: token(identity), url: 'ws://127.0.0.1:7880', syncStreams })); return;
+        .end(JSON.stringify({ token: token(identity), url: process.env.LIVEKIT_LAB_PACKET_PROXY === '1' ? 'ws://127.0.0.1:7885' : 'ws://127.0.0.1:7880', syncStreams })); return;
     }
     const files = {
       '/': [path.join(here, 'index.html'), 'text/html'],
