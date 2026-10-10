@@ -1,0 +1,26 @@
+{
+  "state": {
+    "identity": "guest-1",
+    "connected": true,
+    "published": true,
+    "returnAudioBlocks": 367,
+    "returnAudioPulses": 0,
+    "returnVideoFrames": 108,
+    "events": [
+      "return-audio",
+      "return-video"
+    ],
+    "audioMaxRms": 0.035521399492873196,
+    "error": null,
+    "syncStreams": false
+  },
+  "audio": [],
+  "native_exit_code": 1,
+  "receiver_warmed_before_native": true,
+  "physical_microphone_publication_requested": true,
+  "received_audio_recorded": false,
+  "browser_speaker_output_gain": 0,
+  "reference_scope": "native lab clip only; guest return not played",
+  "camera_sync_qualified": false,
+  "g1_complete": false
+}

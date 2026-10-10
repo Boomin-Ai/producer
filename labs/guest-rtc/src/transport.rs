@@ -15,7 +15,7 @@ use std::{
     collections::HashMap,
     path::Path,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
     },
     time::{Duration, Instant},
@@ -375,10 +375,6 @@ async fn source_loop(
     video: NativeVideoSource,
     capture_evidence: crate::capture_fixture::Evidence,
 ) -> Result<()> {
-    #[cfg(feature = "physical-aec")]
-    if crate::physical_publication::enabled() {
-        return crate::physical_publication::run(audio, video, capture_evidence).await;
-    }
     if std::env::var("LIVEKIT_LAB_BATCHED_CAPTURE").as_deref() == Ok("1") {
         return crate::capture_fixture::run(audio, video, capture_evidence).await;
     }
@@ -434,6 +430,7 @@ async fn source_loop(
 /// The direct SDK source is synchronous. Keep its pacing owner off the room's
 /// shared Tokio workers, and join it on success, failure and cancellation.
 struct Publisher {
+    physical_stop: Arc<AtomicBool>,
     stop: Option<tokio::sync::oneshot::Sender<()>>,
     thread: Option<std::thread::JoinHandle<Result<()>>>,
 }
@@ -444,9 +441,16 @@ impl Publisher {
         evidence: crate::capture_fixture::Evidence,
     ) -> Result<Self> {
         let (stop, stopping) = tokio::sync::oneshot::channel();
+        let physical_stop = Arc::new(AtomicBool::new(false));
+        #[cfg(feature = "physical-aec")]
+        let thread_stop = physical_stop.clone();
         let thread = std::thread::Builder::new()
             .name("guest-capture-publisher".into())
             .spawn(move || {
+                #[cfg(feature = "physical-aec")]
+                if crate::physical_publication::enabled() {
+                    return crate::physical_publication::run(audio, video, evidence, thread_stop);
+                }
                 tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()?
@@ -458,11 +462,13 @@ impl Publisher {
                     })
             })?;
         Ok(Self {
+            physical_stop,
             stop: Some(stop),
             thread: Some(thread),
         })
     }
     fn shutdown(&mut self) -> Result<()> {
+        self.physical_stop.store(true, Ordering::Release);
         if let Some(stop) = self.stop.take() {
             let _ = stop.send(());
         }

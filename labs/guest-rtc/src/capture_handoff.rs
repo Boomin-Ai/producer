@@ -55,9 +55,11 @@ struct Pending {
 pub struct Handoff {
     pending: VecDeque<Pending>,
     anchor: Option<(u64, Instant)>,
+    capture_clock_anchored: bool,
     last_capture: Option<u64>,
     last_emit: Option<Instant>,
     closed: bool,
+    deadline_missed: bool,
     accepted: u64,
     emitted: u64,
     retired: u64,
@@ -73,9 +75,11 @@ impl Handoff {
         Self {
             pending: VecDeque::with_capacity(CAPACITY),
             anchor: None,
+            capture_clock_anchored: false,
             last_capture: None,
             last_emit: None,
             closed: false,
+            deadline_missed: false,
             accepted: 0,
             emitted: 0,
             retired: 0,
@@ -86,6 +90,14 @@ impl Handoff {
             queue_age_ms: [0; 350],
             maximum_queue_age_us: 0,
         }
+    }
+    /// Install one calibrated capture-clock deadline before the generation starts.
+    /// The caller maps its device host clock to Instant; never change it midstream.
+    pub fn with_capture_anchor(first_host_ns: u64, first_due: Instant) -> Self {
+        let mut handoff = Self::new();
+        handoff.anchor = Some((first_host_ns, first_due));
+        handoff.capture_clock_anchored = true;
+        handoff
     }
     fn fault<T>(&mut self, message: &str) -> Result<T> {
         self.faults += 1;
@@ -107,8 +119,12 @@ impl Handoff {
         let (first, due) = *self
             .anchor
             .get_or_insert((block.host_ns, arrival + START_LEAD));
+        if block.host_ns < first {
+            return self.fault("Microphone timestamp predates this generation's capture anchor");
+        }
         let due = due + Duration::from_nanos(block.host_ns - first);
         if arrival > due + MAX_LATE {
+            self.deadline_missed = true;
             let late = arrival.duration_since(due).as_micros() as u64;
             self.maximum_late_us = self.maximum_late_us.max(late);
             return self.fault(&format!("Microphone block arrived after its publication deadline ({late} us late; limit {} us)", MAX_LATE.as_micros()));
@@ -137,6 +153,7 @@ impl Handoff {
         let late = now.duration_since(next.due);
         self.maximum_late_us = self.maximum_late_us.max(late.as_micros() as u64);
         if late > MAX_LATE {
+            self.deadline_missed = true;
             return self.fault("Microphone publisher missed its bounded deadline");
         }
         if self
@@ -158,6 +175,9 @@ impl Handoff {
         self.emitted += 1;
         Ok(self.pending.pop_front().map(|p| p.block))
     }
+    pub fn deadline_missed(&self) -> bool {
+        self.deadline_missed
+    }
     pub fn retire(&mut self) {
         self.retired += self.pending.len() as u64;
         self.pending.clear();
@@ -170,9 +190,9 @@ impl Handoff {
             cumulative += count;
             self.emitted > 0 && cumulative >= target
         });
-        json!({"capacity_blocks":CAPACITY,"accepted":self.accepted,
+        json!({"capacity_blocks":CAPACITY,"capture_clock_anchored":self.capture_clock_anchored,"accepted":self.accepted,
             "emitted":self.emitted,"pending":self.pending.len(),"retired_pending":self.retired,
-            "peak_pending":self.peak,"faults":self.faults,"closed":self.closed,
+            "peak_pending":self.peak,"faults":self.faults,"deadline_missed":self.deadline_missed,"closed":self.closed,
             "maximum_lateness_us":self.maximum_late_us,"minimum_spacing_us":self.minimum_spacing_us,
             "maximum_lateness_ms":MAX_LATE.as_millis(),"minimum_spacing_ms":MIN_SPACING.as_millis(),
             "maximum_adapter_queue_age_us":self.maximum_queue_age_us,
@@ -191,6 +211,45 @@ mod tests {
             host_ns: 123_000_000 + n * BLOCK_NS,
             samples: [n as i16; 480],
         }
+    }
+    #[test]
+    fn physical_capture_anchor_keeps_deadlines_independent_of_first_arrival_age() {
+        let start = Instant::now();
+        for age in [15, 23] {
+            let mut q =
+                Handoff::with_capture_anchor(block(0).host_ns, start + Duration::from_millis(25));
+            q.push(block(0), start + Duration::from_millis(age))
+                .unwrap();
+            assert!(q
+                .pop_due(start + Duration::from_millis(24))
+                .unwrap()
+                .is_none());
+            assert_eq!(
+                q.pop_due(start + Duration::from_millis(25))
+                    .unwrap()
+                    .unwrap()
+                    .host_ns,
+                block(0).host_ns
+            );
+            q.push(block(1), start + Duration::from_millis(age + 10))
+                .unwrap();
+            assert_eq!(
+                q.pop_due(start + Duration::from_millis(35))
+                    .unwrap()
+                    .unwrap()
+                    .host_ns,
+                block(1).host_ns
+            );
+            assert_eq!(q.report()["capture_clock_anchored"], true);
+        }
+    }
+    #[test]
+    fn capture_anchor_rejects_an_older_first_block_without_clock_underflow() {
+        let now = Instant::now();
+        let mut q = Handoff::with_capture_anchor(block(1).host_ns, now);
+        assert!(q.push(block(0), now).is_err());
+        assert!(!q.deadline_missed());
+        assert_eq!(q.report()["pending"], 0);
     }
     #[test]
     fn batched_capture_is_paced_without_losing_samples_or_timestamps() {

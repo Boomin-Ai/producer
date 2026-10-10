@@ -1,5 +1,6 @@
 """Explicit local microphone publication; loopback only, no voice recording in browser."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -9,7 +10,10 @@ import time
 LAB = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--publish-microphone', action='store_true')
+parser.add_argument('--seconds', type=int, default=20)
 args = parser.parse_args()
+if not 5 <= args.seconds <= 300:
+    parser.error('--seconds must be 5..300')
 if not args.publish_microphone:
     parser.error('Explicit --publish-microphone required; microphone will be sent to the local SFU')
 for port in (7880,8990):
@@ -20,10 +24,18 @@ env=dict(os.environ)
 for key in list(env):
     if key.startswith('LIVEKIT_LAB_'):
         env.pop(key)
-env.update(LIVEKIT_LAB_PHYSICAL_CAPTURE='1',LIVEKIT_LAB_PHYSICAL_SPEECH=str(LAB/'runtime/near-speech.wav'),LIVEKIT_LAB_URL='ws://127.0.0.1:7880',LIVEKIT_LAB_RUN_NAME=name)
+env.update(LIVEKIT_LAB_PHYSICAL_CAPTURE='1',LIVEKIT_LAB_PHYSICAL_SPEECH=str(LAB/'runtime/near-speech.wav'),LIVEKIT_LAB_URL='ws://127.0.0.1:7880',LIVEKIT_LAB_RUN_NAME=name,LIVEKIT_LAB_SECONDS=str(args.seconds))
 owned=[]
 logs=[]
-report={'run_name':name,'status':'running','loopback_only':True,'physical_microphone_publication_requested':True,'browser_voice_recorded':False,'g1_complete':False}
+report={'run_name':name,'status':'running','loopback_only':True,'physical_microphone_publication_requested':True,'browser_voice_recorded':False,'seconds':args.seconds,'g1_complete':False}
+def digest_file(path):
+    digest=hashlib.sha256()
+    with path.open('rb') as stream:
+        for chunk in iter(lambda:stream.read(1024*1024),b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+report['native_binary_sha256']=digest_file(LAB/'target/debug/producer-guest-rtc-lab')
+report['sfu_binary_sha256']=digest_file(LAB/'runtime/livekit-server-delayed-report-lab')
 conditions=LAB/'evidence'/f'{name}-conditions.json'
 conditions.write_text(json.dumps(report,indent=2)+'\n')
 def start(command,label,port):
@@ -41,7 +53,7 @@ try:
     start(['node','web/server.mjs'],'web',8990)
     fixture=subprocess.Popen(['node','web/physical-smoke.mjs','--publish-microphone'],cwd=LAB,env=env,start_new_session=True)
     try:
-        code=fixture.wait(timeout=60)
+        code=fixture.wait(timeout=args.seconds+45)
         if code:raise RuntimeError(f'Physical fixture exited {code}; retain diagnostics')
     finally:
         if fixture.poll() is None:

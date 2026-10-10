@@ -1170,3 +1170,82 @@ SDK owner blindly is not an established fix. Next measure the newly retained
 per-block fault trace, then isolate the audio deadline path and use an appropriate
 native scheduling/wakeup contract rather than widening latency or queue limits
 to conceal the failure. G1 incomplete; production unchanged.
+
+
+### Capture-clock pacing and explicit stall recovery — October 10
+
+The visible diagnostic trace failed at 9.055 seconds with 817 successful SDK
+submissions. Near the fault, ordinary capture APM processing was about 0.1–0.4
+ms and the maximum SDK call was 0.823 ms, but the owner tick gap reached 18.717
+ms. Input arrived in a short batch, and output aged further while that batch
+was processed before due audio submission. Timers/processing priorities alone
+could not be assumed to eliminate the deadline problem.
+
+Implemented a dedicated physical publisher loop using native absolute 1 ms
+waits and a disposable thread's user-interactive QoS. It has an atomic stop
+flag and explicit join, never migrates this owner onto Tokio workers, and skips
+missed wakeups without catch-up. The pinned zero-queue SDK path completes
+synchronously; tests prove that assumption for direct audio capture and reject
+an unexpected asynchronous submission. Video's black buffer is allocated once
+and reused; video submission time is measured. This remains a normal scheduled
+thread, not a real-time/audio-workgroup guarantee. The first physical native-
+loop trial still failed after 8.010 seconds: tick gap 31.320 ms, maximum capture
+APM elapsed 12.204 ms, missed deadline 49.705 ms late. Prioritization alone is
+not sufficient and that failed trial is retained.
+
+Due audio now submits before new microphone processing. At most one mic block
+is processed per turn. A deadline failure retires the entire pending generation,
+logs its counters, resets the AEC owner, discards stale capture until input age
+is at most 30 ms, and starts a separately reported generation. A timestamp,
+format, overflow, SDK error or unconfirmed submission still stops the run.
+Recovery history is capped at 32; no history grows without bound. This recovery
+is for the same public microphone destination only, not proof of a private-cue
+fence or flushing encoded SDK packets. Every generation retains the original
+20 ms lateness limit, eight ms minimum emission spacing and 32-block capacity.
+No active generation's clock is reanchored and no retired voice is resubmitted.
+
+The first recovery trial ran all 20.030 seconds with three recoveries, but
+capture-to-SDK p95 was 38 ms. Its new generation had inherited a delayed first
+block's arrival time. Corrected physical pacing to map the device's host clock
+to Instant once per fresh generation with a fixed capture+25 ms deadline.
+This keeps the first arrival's scheduling delay from becoming persistent
+latency. `Handoff::with_capture_anchor` is additive; generated fixture pacing
+retains its existing behavior. An older first block is rejected instead of
+underflowing the capture-clock subtraction. External SDK/RTP capture timestamp
+support remains absent; this is local pacing only.
+
+Final clock-anchored trials:
+
+| Duration | SDK submissions | Capture-to-SDK p95 upper bucket | Recoveries | Browser audio packets / reported loss |
+| --- | ---: | ---: | ---: | ---: |
+| 20.095 s | 1,926 | 26 ms | 2 | 563 / 0 |
+| 60.106 s | 5,932 | 27 ms | 1 | 2,976 / 0 |
+
+Both completed with no native overflow, timeline faults, surviving callbacks,
+unconfirmed SDK submission or unjoined owner thread. Native ring accounting
+and each generation's accepted=emitted+retired accounting passed. In the minute
+run, 5,936 blocks were processed, two stale input blocks discarded, and four
+pending handoff blocks retired across recovery/shutdown. Receiver statistics
+reported 6,997 concealed samples/four concealment events; brief audio gaps are
+still possible even with zero reported network packet loss. Completion through
+recovery is not a fault-free result. The browser report now exposes that
+explicitly, samples aggregate stats once per second up to 300 observations,
+opens visibly and brings its page forward. The runner supports explicit 5–300
+second trials and records binary hashes for future starts.
+
+Thirty-nine receiver/pacing/native-publication tests and strict combined-feature
+Clippy checks passed. Twenty native lifecycle cycles passed during native helper
+validation. Tests include fixed capture deadlines independent of first arrival
+age, old-anchor rejection, synchronous zero-queue SDK submission, cancellation
+before device setup, retired voice excluded from a new generation, timestamp
+faults not treated as recoverable and bounded restart history. All five trials
+from this investigation, including failures and the inflated-latency trial,
+are indexed in `physical-publication-timing-investigation.json`; private received
+voice is not recorded. Its native hash was read after the final two trials,
+with no intervening native rebuild. Owned loopback services were stopped.
+
+The prototype now keeps publishing through short deadline stalls and avoids
+persistent arrival-anchored latency. It has not eliminated all scheduling
+interruptions. Live voice review after AEC resets, longer load/reconnect tests,
+full guest monitor-reference routing, source-clock to RTP/camera alignment and
+platform packaging remain open. G1 incomplete; production unchanged.

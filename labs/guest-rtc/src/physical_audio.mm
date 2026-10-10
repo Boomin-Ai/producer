@@ -8,6 +8,8 @@
 #include <cmath>
 #include <thread>
 #include <mach/mach_time.h>
+#include <mach/mach.h>
+#include <pthread/qos.h>
 
 static std::atomic<int> states_alive{0}, owners_alive{0}, notifications_alive{0};
 struct LabBlock { uint64_t host_ns; int16_t samples[480]; };
@@ -294,6 +296,24 @@ extern "C" void *lab_audio_create_io(const int16_t *samples,size_t count,int fai
 extern "C" uint64_t lab_audio_now_ns() {
     mach_timebase_info_data_t timebase{};mach_timebase_info(&timebase);
     return (uint64_t)((__uint128_t)mach_absolute_time()*timebase.numer/timebase.denom);
+}
+// These helpers are used only by the dedicated, disposable physical publisher
+// thread. They never change the UI/network threads or hardware callback policy.
+extern "C" int lab_publisher_thread_qos(int *previous,int *effective) {
+    qos_class_t prior{},current{};
+    int result=pthread_get_qos_class_np(pthread_self(),&prior,nullptr);
+    if(result)return result;
+    *previous=(int)prior;
+    result=pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE,0);
+    if(result)return result;
+    result=pthread_get_qos_class_np(pthread_self(),&current,nullptr);
+    *effective=(int)current;
+    return result;
+}
+extern "C" int lab_publisher_wait_until_ns(uint64_t host_ns) {
+    mach_timebase_info_data_t timebase{};mach_timebase_info(&timebase);
+    auto ticks=(uint64_t)((__uint128_t)host_ns*timebase.denom/timebase.numer);
+    return (int)mach_wait_until(ticks);
 }
 extern "C" int lab_audio_notifications_alive() { return notifications_alive.load(); }
 extern "C" int lab_audio_start(void *handle,char *error,size_t length) {

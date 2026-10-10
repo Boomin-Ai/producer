@@ -175,3 +175,25 @@ recording is created. Without the argument it rejects before starting services.
 Run only when the operator is prepared for local microphone publication.
 The headless guest publishes generated media only. This test cannot establish
 speakerphone behavior for real guest return playback or physical camera sync.
+
+
+Physical publication now uses a disposable native absolute-wait owner thread
+with an atomic stop flag. Due audio is submitted before processing a new mic
+block; only one mic block is processed per turn. Each fresh generation maps
+its capture host clock to an initial capture+25 ms deadline. The clock stays
+fixed until that generation is explicitly retired. The SDK source still has
+no external capture-timestamp argument, so this is not RTP/camera sync proof.
+
+A publication deadline miss retires all pending audio and records that failed
+generation. The AEC owner resets and stale input is discarded until a fresh
+capture block can start the next generation. The 20 ms lateness limit and
+queue/pacing bounds are unchanged. At most 32 retired generations are retained;
+other faults and unknown SDK completion still stop publication. The browser
+report distinguishes completed-with-recovery from a fault-free source. Recovery
+can leave a brief audio gap and requires voice review; it cannot qualify a
+private cue or prove the SDK's encoded queue is flushed.
+
+For a longer deliberate diagnostic, use `--seconds 60` (allowed range 5–300).
+Browser numeric stats are sampled once per second; voice is never recorded by
+the receiver. The standalone speakerphone UI continues to use its local-only
+recording path and is separate from this opt-in transport runner.
