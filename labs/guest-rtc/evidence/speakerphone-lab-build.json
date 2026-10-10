@@ -1,5 +1,5 @@
 {
-  "binary_sha256": "344c35648d0acc057f931fc738bc4a98c5b6ef6f957a6650e44565c6ecac0a34",
+  "binary_sha256": "de787db498edd3436e5f28aa401e2cf01c3874b98af82da831eda8c9c66b4030",
   "application_location": "~/Applications/Producer Speakerphone Lab.app",
   "default_capture_root": "~/Library/Application Support/Producer Guest RTC Lab",
   "physical_aec_profile": "no_forced_high_pass",

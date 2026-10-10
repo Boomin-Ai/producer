@@ -1013,3 +1013,34 @@ repackaged, ad-hoc signature verified, and visually confirmed ready. Physical
 callback PCM availability, timing, echo attenuation and speech preservation
 remain unproven until the next user-operated test is analyzed. Nothing in
 this candidate is a production deployment, Apple notarization or G1 completion.
+
+
+### Native I/O physical run and voice review — October 10
+
+The user-operated second attempt completed 60.043 seconds at reported 56.25%
+output volume start/end. Each stream supplied 6,000 10 ms blocks from maximum
+512-frame native callbacks. Zero format/timeline errors, overflow, invalid
+APM delays or clipping; all blocks were consumed and native callback owners
+and render registrations were retired. The file/timestamp/accounting verifier
+passed. Capture-host-timestamp to APM processing age was 13.185 ms minimum,
+24.104 ms p95 and 30.402 ms maximum. This meets the provisional p95 30 ms
+adapter target for this run; it is not SDK publication or acoustic latency.
+Both APMs took 323 microseconds p95 together. Provisional far-only attenuation
+was 28.322 dB median / 17.634 dB p10. The user confirmed speaking during
+30–50 seconds and that the original/cleaned comparison preserved clear voice.
+Near-only 52–58-second levels were -26.413/-26.320 dBFS raw/cleaned. Private
+voice recordings and comparisons remain in Application Support; only numeric
+reports, a report hash and the human review statement are retained in git.
+
+The immediately preceding attempt failed after 68.674 ms with two native
+errors; it produced only one block per stream and still retired all callbacks
+and registrations without overflow. Its generic error counters cannot prove
+the cause. It is retained beside the completed report in
+`labs/guest-rtc/evidence/native-io-physical-run.json`; this pair does not qualify
+startup reliability. Add first-fault codes per I/O stream (layout/timestamp,
+buffer, continuity, nonfinite samples, post-render, configuration change),
+without removing rejection checks or retrying invisibly. Further native starts
+must establish whether the failure recurs and report its precise category.
+After stable starts, connect this hardware callback path to the bounded
+publication handoff and measure actual SDK/receiver synchronization and owned
+monitor-reference routing. G1 remains incomplete; production unchanged.
