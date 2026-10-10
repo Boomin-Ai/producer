@@ -38,8 +38,12 @@ claimed acoustic calibration. Invalid format/timeline, device configuration
 changes, missing reference, timestamp regression and ring overflow stop the run;
 no zero/arrival-time reference is substituted.
 
-APM-on and APM-off process the same captured blocks with NS, AGC and high-pass
-disabled. Local private files contain speaker-reference, raw microphone,
+APM-on and APM-off process the same captured blocks with NS and AGC
+disabled. Explicit high-pass filtering is requested off, but upstream AEC
+enforces its high-pass filter by default. New reports distinguish the explicit
+request and AEC enforcement; historical `high_pass:false` fields were requests,
+not effective processing status. Offline replay compares the default with
+enforcement disabled before processing, while keeping AEC enabled in both. Local private files contain speaker-reference, raw microphone,
 processed-on/off WAVs, device-time CSV and a report. Native queues retire after
 engine stop, taps removal, observer removal and source detachment. Callbacks
 capture shared state without a back-reference to the engine/owner, so the
@@ -66,3 +70,14 @@ is covered by a ten-block single-burst self-test and reports maximum tap frame
 counts so the next physical run can distinguish callback batching from slower
 consumer scheduling. Overflow remains a hard failure; no dropped audio is
 accepted as a successful run.
+
+Offline filter comparison: build `speakerphone_replay` with the same locked
+external-archive linkage, then run `target/debug/speakerphone_replay
+<completed-session-directory> <new-private-output-directory>`. It opens no
+devices. It feeds the recorded ten-millisecond speaker/microphone blocks in
+CSV order, with the recorded delays, into independent baseline and candidate
+APMs. The candidate disables only AEC high-pass enforcement before processing.
+The default constructor remains unchanged. Output WAVs and per-window statistics
+stay in the private output directory. On both recorded runs the baseline
+reproduced the physical processed output with zero PCM RMS error. Listening
+comparison and a new physical run are required before adopting the candidate.

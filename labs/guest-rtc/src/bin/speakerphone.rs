@@ -340,7 +340,8 @@ impl Session {
             "reference_scope":"This engine's final stereo mixer output, downmixed to mono; excludes other apps and hardware-volume calibration",
             "sample_rate":48000,"apm_channels":1,"source_gain":0.20,"microphone_blocks":self.mic_blocks,"speaker_blocks":self.render_blocks,
             "apm_delay_estimate_ms":{"minimum":self.delay_min,"maximum":self.delay_max,"acoustic_delay_calibrated":false},
-            "ns":false,"agc":false,"high_pass":false,"system_voice_processing":false,"microphone_played_or_published":false,
+            "ns":false,"agc":false,"high_pass_requested":false,"aec_enforced_high_pass":self.on.high_pass_filter_enforced(),
+            "high_pass":self.on.high_pass_filter_enforced(),"system_voice_processing":false,"microphone_played_or_published":false,
             "processing_both_apms_p95_us":p95,"provisional_far_only_attenuation_db":{"median":percentile(0.5),"p10":percentile(0.1),"windows":self.attenuation.len()},
             "invalid_delay_blocks":self.skipped,"additional_capture_hold_capacity":1,"capture_hold_limit_ms":80,"capture_hold_retired":self.pending_mic.is_some(),"lifecycle":lifecycle,"user_phase_compliance_verified":false,
             "speech_intelligibility_qualified":false,"physical_aec_qualified":false,"g1_complete":false});

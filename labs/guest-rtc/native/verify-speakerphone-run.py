@@ -12,7 +12,11 @@ report = json.loads((args.directory / "report.json").read_text())
 assert report["stop_reason"] == "completed", "Stopped/invalid runs remain evidence, not acceptance runs"
 assert report["hardware_capture_used"] and report["physical_speaker_reference_connected"]
 assert not report["microphone_played_or_published"]
-assert not any(report[k] for k in ("ns", "agc", "high_pass", "system_voice_processing", "physical_aec_qualified", "g1_complete"))
+assert not any(report[k] for k in ("ns", "agc", "system_voice_processing", "physical_aec_qualified", "g1_complete"))
+if "aec_enforced_high_pass" in report:
+    assert report["high_pass"] == report["aec_enforced_high_pass"]
+else:
+    print("Legacy report high_pass field records the request only; upstream AEC implicitly enforces high-pass filtering")
 life = report["lifecycle"]
 assert life["owners_and_callback_state_retired"] and life["callbacks_active"] == 0
 assert life["format_or_timeline_errors"] == report["invalid_delay_blocks"] == 0

@@ -793,3 +793,39 @@ a single-window lag search found a strongest positive correlation at 8.75 ms;
 this is diagnostic, not an end-to-end latency result or speech-quality score.
 Do not tune suppression or claim intelligibility acceptance until the listening
 comparison distinguishes capture coloration from AEC processing artifacts.
+
+## Offline voice-coloration comparison — 2026-10-10
+
+The user identified slight distortion only in the cleaned audio. Inspection of
+the pinned WebRTC headers found that `echo_canceller.enforce_high_pass_filtering`
+defaults true. The SDK wrapper passed explicit high-pass=false but never
+overrode AEC enforcement. Earlier high_pass=false reports described the request,
+not effective processing. Historical evidence now carries this correction;
+new physical and synthetic fixture reports distinguish the request from AEC
+enforcement. Original recordings/reports are preserved.
+
+An additive SDK setter/getter exposes enforcement for setup-time experiments;
+ordinary constructors retain existing behavior. No new native owner, callback
+or thread is introduced. Repeated APM initialization, processing, configuration
+observation and drop tests cover the new option over 20 cycles. The existing
+shared native receiver suite passes 28 tests; replay tests pass 2 and replay
+Clippy passes with warnings denied.
+
+A device-free replay uses each recorded speaker/microphone block in its original
+CSV processing order and its original delay value. On both recordings, the
+baseline reproduces all original processed PCM exactly (zero RMS error). The
+candidate disables only AEC high-pass enforcement before processing, keeping
+AEC enabled and NS/AGC/explicit high-pass disabled. Across 83 eligible aligned
+comparison windows in the clean echo-only recording, baseline attenuation was
+31.08 dB median/12.27 dB p10; candidate 29.83/12.10 dB. These same-window replay
+metrics differ slightly from the online report's window boundaries. Both meet
+the initial 20/10 dB thresholds on that recording.
+
+On the speech recording, near-only gain changes from -0.199 dB with baseline
+to -0.009 dB with the candidate. Signal level does not establish perceived
+quality. The contaminated instructed far-only window remains unqualified in
+both profiles (p10 1.07/0.94 dB). A private current/candidate voice comparison
+was opened for human listening; candidate quality and a new physical run remain
+pending. Evidence: `labs/guest-rtc/evidence/speakerphone-high-pass-replay-comparison.json`.
+No candidate change has been applied to production or promoted to physical
+acceptance. G1 remains incomplete.

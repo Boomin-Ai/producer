@@ -42,6 +42,8 @@ pub mod ffi {
         ) -> i32;
 
         fn set_stream_delay_ms(self: Pin<&mut AudioProcessingModule>, delay: i32) -> i32;
+        fn set_high_pass_filter_enforcement(self: Pin<&mut AudioProcessingModule>, enabled: bool);
+        fn high_pass_filter_enforced(self: &AudioProcessingModule) -> bool;
 
         fn create_apm(
             echo_canceller_enabled: bool,

@@ -22,6 +22,16 @@ pub struct AudioProcessingModule {
 }
 
 impl AudioProcessingModule {
+    /// Controls AEC's implicit high-pass filter separately from the explicit filter.
+    /// Call before processing; ordinary constructors retain upstream defaults.
+    pub fn set_high_pass_filter_enforcement(&mut self, enabled: bool) {
+        self.sys_handle.pin_mut().set_high_pass_filter_enforcement(enabled);
+    }
+
+    pub fn high_pass_filter_enforced(&self) -> bool {
+        self.sys_handle.high_pass_filter_enforced()
+    }
+
     pub fn new(
         echo_canceller_enabled: bool,
         gain_controller_enabled: bool,

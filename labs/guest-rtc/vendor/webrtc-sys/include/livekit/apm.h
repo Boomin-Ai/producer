@@ -62,6 +62,8 @@ class AudioProcessingModule {
                              int num_channels);
 
   int set_stream_delay_ms(int delay_ms);
+  void set_high_pass_filter_enforcement(bool enabled);
+  bool high_pass_filter_enforced() const;
 
  private:
   webrtc::scoped_refptr<webrtc::AudioProcessing> apm_;

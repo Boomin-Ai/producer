@@ -152,7 +152,7 @@
   "human_review": {
     "processed_excerpt": "User: sounds pretty good, only slightly distorted.",
     "intelligibility_acceptance": false,
-    "distortion_origin": "Unresolved; raw/processed comparison prepared"
+    "distortion_origin": "User heard slight distortion only in the cleaned version of the original/processed comparison."
   },
   "review_signal_metrics": {
     "double_talk_review": {
@@ -182,5 +182,10 @@
       "lag_aligned_sample_correlation": 0.5282257288118717,
       "scope": "One speech window; not an end-to-end latency measurement or intelligibility proof."
     }
+  },
+  "configuration_correction": {
+    "legacy_high_pass_field": "Requested explicit high-pass=false; not effective processing status",
+    "aec_enforces_high_pass_by_default": true,
+    "basis": "Pinned WebRTC Config.echo_canceller.enforce_high_pass_filtering defaults true; original SDK wrapper did not override it."
   }
 }

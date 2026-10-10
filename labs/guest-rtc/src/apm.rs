@@ -9,6 +9,14 @@ pub struct Processor {
 }
 
 impl Processor {
+    pub fn set_high_pass_filter_enforcement(&mut self, enabled: bool) {
+        self.apm.set_high_pass_filter_enforcement(enabled);
+    }
+
+    pub fn high_pass_filter_enforced(&self) -> bool {
+        self.apm.high_pass_filter_enforced()
+    }
+
     pub fn new(enabled: bool, rate: i32, channels: i32) -> Result<Self> {
         if ![16000, 32000, 48000].contains(&rate) || ![1, 2].contains(&channels) {
             bail!("Unsupported APM rate/channel layout");
@@ -55,6 +63,21 @@ impl Processor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn filter_enforcement_is_explicit_and_defaults_are_preserved() {
+        for _ in 0..20 {
+            let mut on = Processor::new(true, 48000, 1).unwrap();
+            assert!(on.high_pass_filter_enforced());
+            on.set_high_pass_filter_enforcement(false);
+            assert!(!on.high_pass_filter_enforced());
+            on.process(&[0; 480], &mut [0; 480], 40).unwrap();
+            on.set_high_pass_filter_enforcement(true);
+            assert!(on.high_pass_filter_enforced());
+            assert!(!Processor::new(false, 48000, 1)
+                .unwrap()
+                .high_pass_filter_enforced());
+        }
+    }
     #[test]
     fn bad_external_pcm_is_rejected_before_native_assertions() {
         assert!(Processor::new(true, 0, 1).is_err());

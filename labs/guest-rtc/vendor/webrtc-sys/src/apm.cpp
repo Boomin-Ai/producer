@@ -57,6 +57,18 @@ int AudioProcessingModule::set_stream_delay_ms(int delay_ms) {
   return apm_->set_stream_delay_ms(delay_ms);
 }
 
+void AudioProcessingModule::set_high_pass_filter_enforcement(bool enabled) {
+  auto config = apm_->GetConfig();
+  config.echo_canceller.enforce_high_pass_filtering = enabled;
+  apm_->ApplyConfig(config);
+}
+
+bool AudioProcessingModule::high_pass_filter_enforced() const {
+  const auto config = apm_->GetConfig();
+  return config.echo_canceller.enabled &&
+         config.echo_canceller.enforce_high_pass_filtering;
+}
+
 std::unique_ptr<AudioProcessingModule> create_apm(
     bool echo_canceller_enabled,
     bool gain_controller_enabled,

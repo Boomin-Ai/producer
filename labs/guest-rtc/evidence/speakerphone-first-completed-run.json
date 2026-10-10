@@ -144,5 +144,10 @@
     "double_talk_tested": false,
     "near_speech_intelligibility_tested": false,
     "speaker_volume": "Instructed 50%; not independently measured"
+  },
+  "configuration_correction": {
+    "legacy_high_pass_field": "Requested explicit high-pass=false; not effective processing status",
+    "aec_enforces_high_pass_by_default": true,
+    "basis": "Pinned WebRTC Config.echo_canceller.enforce_high_pass_filtering defaults true; original SDK wrapper did not override it."
   }
 }

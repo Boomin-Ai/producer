@@ -147,7 +147,7 @@ pub fn run(dir: &Path, speech: Option<&Path>) -> Result<()> {
             passed = median >= 20.0 && p10 >= 10.0;
         }
         runs.push(
-            json!({"aec_enabled":enabled,"far_end_attenuation_median_db":median,
+            json!({"aec_enabled":enabled,"aec_enforced_high_pass":apm.high_pass_filter_enforced(),"far_end_attenuation_median_db":median,
             "far_end_attenuation_p10_db":p10,"processing_p95_us_per_10ms":p95_us,
             "double_talk_near_signal":near_projection(&processed, &near),
             "far_only_measured_seconds":[5,12],"double_talk_measured_seconds":[14,20]}),
@@ -167,7 +167,7 @@ pub fn run(dir: &Path, speech: Option<&Path>) -> Result<()> {
     let report = json!({"schema_version":1,"fixture":"synthetic linear acoustic path; no device capture",
         "livekit":"0.9.4","rate":RATE,"channels":1,"block_ms":10,"stream_delay_ms":40,
         "echo_paths":[{"delay_ms":40,"gain":0.55},{"delay_ms":67,"gain":0.12}],
-        "speech_processing":{"ns":false,"agc":false,"high_pass":false},"runs":runs,
+        "speech_processing":{"ns":false,"agc":false,"high_pass_requested":false,"high_pass_enforcement":"See each run's aec_enforced_high_pass"},"runs":runs,
         "near_fixture":if speech.is_some() { "offline synthesized speech" } else { "independent shaped noise" },
         "synthetic_attenuation_target_met":passed,"physical_speakerphone_qualified":false,"g1_complete":false});
     std::fs::write(
