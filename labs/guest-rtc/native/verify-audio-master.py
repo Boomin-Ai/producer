@@ -5,6 +5,7 @@ from pathlib import Path
 
 lab = Path(__file__).resolve().parents[1]
 results = []
+bootstrap_exercised = {"audio": False, "video": False}
 
 def pair(left, right, key, window):
     used = set()
@@ -75,7 +76,11 @@ for path in sorted((lab / 'evidence').glob('transport-obs-audio-master-*.json'))
         assert not discovery['presentation_loop_awaits_stats']
     if playback.get('first_report_bootstrap', False):
         assert 'five-second bound' in playback['startup_policy']
-        assert playback['audio_bootstrap_blocks'] > 0 and playback['video_bootstrap_frames'] > 0
+        # Enabling bootstrap does not require using it: a fresh two-report
+        # map may already be ready when the other track starts presentation.
+        for kind, field in [('audio', 'audio_bootstrap_blocks'), ('video', 'video_bootstrap_frames')]:
+            assert isinstance(playback[field], int) and playback[field] >= 0
+            bootstrap_exercised[kind] |= playback[field] > 0
         assert not clock['sender_capture_time_qualified']
     assert playback['audio_binding'] and playback['video_binding']
     assert mixer['sources_alive'] == 0 and mixer['sources_created'] == mixer['sources_destroyed']
@@ -148,3 +153,5 @@ for name in ['obs-pipeline-lifecycle', 'obs-media-pipeline-lifecycle']:
         assert partial['fds_after_shutdown'] <= cycles['warm_fds'] + 2
 (lab / 'evidence/audio-master-verification.json').write_text(json.dumps(results, indent=2) + '\n')
 print(f'Verified {len(results)} recorded runs, queue accounting, probe retirement and preserved qualification failures')
+
+assert all(bootstrap_exercised.values()), "Archived fixtures must exercise both bootstrap paths"

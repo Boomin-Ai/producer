@@ -671,3 +671,56 @@ prepare one declared native capture/playback owner, feed the final device-bound
 PCM into APM, save enabled/disabled capture and processing evidence, and expose a
 controlled double-talk test. Startup work and real device-reference wiring remain
 open; G1 and physical speakerphone AEC remain incomplete.
+
+
+### 2026-10-10: One delayed request improves local startup; physical AEC remains open
+
+Built a separate pinned SFU executable with one-shot audio SR requests after
+500 ms and buffer-level receipt tracing. Both one-guest comparison arms use this
+same binary (SHA-256 `09d100f23cd3377edb8acb90496d63ed95a590b8524d6b33061bf9108fb31c09`),
+250 ms downstream RTCP cadence, the audio-jitter relay, 30-second finalized MP4,
+first-report bootstrap and the extended video queue. The old immediate-request
+flag is unset. No upstream timestamp-offset validity guard was changed and no
+cached report was seeded. This fixed delay is a diagnostic candidate, not a
+subscriber-aware deployment policy.
+
+| Run | First scheduled audio after binding / rejoins | Startup dropped 10 ms blocks | Independent recorded A/V absolute p95 |
+| --- | --- | --- | --- |
+| One guest, request off | 2.553 / 2.581 seconds | 459 | 65.33 ms, 10 marker pairs |
+| One guest, delayed request | 1.376 / 1.893 seconds | 223 | 52.67 ms, 12 pairs |
+| Three guests, delayed request, three guest-1 rejoins | 1.498 / 0.592 / 0.610 / 0.582 seconds | 169 | 60.67 ms, 17 pairs |
+
+All three recordings have zero unmatched markers and pass the local 80 ms p95
+gate. The three-guest run still contains one 120 ms marker offset; a p95 pass is
+not a maximum-offset guarantee. These intervals begin at the receiver binding
+epoch, not at user admission, and the separate runs are not identical-input
+replays. The candidate initially waits for video timing after audio timing is
+ready; startup/recovery and end-to-end capture latency remain unqualified.
+
+Buffer traces now show each candidate guest audio request occurring 411–443 ms
+after downtrack registration, with one subscriber present at first accepted SR
+receipt. Its report callback reaches the subscriber handler within 0.014–0.015 ms
+on the SFU clock. Control first receipt occurs about 2.34 seconds after downtrack
+registration. These are callback observations, not wire-arrival latency. Evidence:
+`labs/guest-rtc/evidence/delayed-request-subscription-order.json`,
+`sfu-delayed-request-startup-comparison.json`, and
+`sfu-delayed-churn-startup-comparison.json`. This supports the delayed candidate;
+it does not retroactively prove the uninstrumented immediate-request failure.
+
+The one-guest runs each create and destroy two decoded sources; three-guest
+churn creates and destroys six. All finish with zero live sources, active
+discovery jobs, or outstanding presentation queue entries. Policy helper tests,
+full SFU build, patch/provenance checks, and Python syntax checks pass. Full
+upstream server tests were not run. The recording verifiers now cover 33 completed
+reports and 23 pre-mux traces. A verifier assumption was corrected: enabling
+first-report bootstrap does not force a run to use it when a strict two-report
+map is already fresh. Archived fixtures must still exercise both bootstrap paths;
+all queue, timing and retirement gates remain in place.
+
+The owned-process runner preserves existing evidence and shuts down its SFU,
+web and relay processes. It can reproduce one-guest control/candidate runs and
+three-guest churn via `native/run-sfu-startup.py`. No production configuration or
+installed Producer app changed. G1 remains incomplete. Next: address binding-time
+video-report availability without accepting stale publication reports, then wire
+one actual capture/playback owner and final speaker-bound PCM into APM before
+asking for physical speakerphone testing.

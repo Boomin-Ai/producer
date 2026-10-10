@@ -1,0 +1,185 @@
+{
+  "runs": [
+    {
+      "cadence": "delayed-control",
+      "cadence_ms": 250,
+      "native_report_sha256": "639efaba384d5a041bb0d4e0d0770fb23ea8f85c4c871a72d716a53323217cd8",
+      "sfu_trace_sha256": "6124cd03280a75d031021590c02c1bac854600744600a7ca7066912e17c2bd97",
+      "epochs": [
+        {
+          "binding_since_us": 47083216413,
+          "video_bound_ms": 12.109,
+          "audio_bound_ms": 522.087,
+          "bound_audio_pcm_ms": 521.339,
+          "first_incoming_video_report_ms": 464.573,
+          "first_incoming_video_report_origin_trace": {
+            "ssrc": 4215722393,
+            "publisher_track_id": "TR_VCNDpFyWYrMZL2",
+            "publisher_reports_seen_at_sfu": 7,
+            "first_publisher_report_sfu_wall_us": 1791643996223796,
+            "first_publisher_ntp_us": 4000632796223105,
+            "first_received_report_ntp_us": 4000632796440303,
+            "sender_ntp_advance_ms": 217.198
+          },
+          "video_clock_ready_ms": 542.344,
+          "first_incoming_audio_report_ms": 2467.307,
+          "first_incoming_audio_report_origin_trace": {
+            "ssrc": 732188811,
+            "publisher_track_id": "TR_AM7CoHZGaoVSQm",
+            "publisher_reports_seen_at_sfu": 2,
+            "first_publisher_report_sfu_wall_us": 1791643998309376,
+            "first_publisher_ntp_us": 4000632798308263,
+            "first_received_report_ntp_us": 4000632798442711,
+            "sender_ntp_advance_ms": 134.448
+          },
+          "audio_clock_ready_ms": 2553.171,
+          "first_audio_scheduled_ms": 2553.171,
+          "first_video_scheduled_ms": 2563.155,
+          "sfu_first_audio_minus_video_publisher_report_ms": 2085.58
+        },
+        {
+          "binding_since_us": 47091468509,
+          "video_bound_ms": 20.41,
+          "audio_bound_ms": 20.43,
+          "bound_audio_pcm_ms": 9.672,
+          "first_incoming_video_report_ms": 478.955,
+          "first_incoming_video_report_origin_trace": {
+            "ssrc": 1561669428,
+            "publisher_track_id": "TR_VCCmTBH6WCkBWW",
+            "publisher_reports_seen_at_sfu": 26,
+            "first_publisher_report_sfu_wall_us": 1791644004512552,
+            "first_publisher_ntp_us": 4000632804511681,
+            "first_received_report_ntp_us": 4000632804706625,
+            "sender_ntp_advance_ms": 194.944
+          },
+          "video_clock_ready_ms": 571.111,
+          "first_incoming_audio_report_ms": 2482.195,
+          "first_incoming_audio_report_origin_trace": {
+            "ssrc": 2006770931,
+            "publisher_track_id": "TR_AMrUZirDx5T3tt",
+            "publisher_reports_seen_at_sfu": 4,
+            "first_publisher_report_sfu_wall_us": 1791644006559196,
+            "first_publisher_ntp_us": 4000632806558357,
+            "first_received_report_ntp_us": 4000632806709923,
+            "sender_ntp_advance_ms": 151.566
+          },
+          "audio_clock_ready_ms": 2581.354,
+          "first_audio_scheduled_ms": 2581.354,
+          "first_video_scheduled_ms": 2590.897,
+          "sfu_first_audio_minus_video_publisher_report_ms": 2046.644
+        }
+      ],
+      "audio_startup_dropped_blocks": 459,
+      "epochs_with_bound_audio_but_no_scheduled_audio": 0,
+      "startup_qualified": false,
+      "discovery_after_shutdown": {
+        "active": 0,
+        "cancelled": 0,
+        "capacity": 1,
+        "completed": 5,
+        "failed": 0,
+        "overall_timeout_ms": 250,
+        "peak_active": 1,
+        "presentation_loop_awaits_stats": false,
+        "spawned": 5,
+        "stale_epoch_results": 0,
+        "timed_out": 0
+      },
+      "decoded_sources_created": 2,
+      "decoded_sources_destroyed": 2,
+      "decoded_sources_alive": 0
+    },
+    {
+      "cadence": "delayed-candidate",
+      "cadence_ms": 250,
+      "native_report_sha256": "78db4a1df28e5cafdde517a828305cf2558c922e02e5065b5bcb8074da68b6b2",
+      "sfu_trace_sha256": "73cab38d9fc3cb16bbd6049d405d3d5696c1ad6b005510ec93494f3fa34684b9",
+      "epochs": [
+        {
+          "binding_since_us": 47152134317,
+          "video_bound_ms": 514.843,
+          "audio_bound_ms": 514.86,
+          "bound_audio_pcm_ms": 514.482,
+          "first_incoming_audio_report_ms": 589.073,
+          "first_incoming_audio_report_origin_trace": {
+            "ssrc": 541865917,
+            "publisher_track_id": "TR_AMtm4DhiYLiN7r",
+            "publisher_reports_seen_at_sfu": 2,
+            "first_publisher_report_sfu_wall_us": 1791644065295567,
+            "first_publisher_ntp_us": 4000632865295156,
+            "first_received_report_ntp_us": 4000632865482823,
+            "sender_ntp_advance_ms": 187.667
+          },
+          "audio_clock_ready_ms": 624.869,
+          "first_incoming_video_report_ms": 1340.343,
+          "first_incoming_video_report_origin_trace": {
+            "ssrc": 2005312544,
+            "publisher_track_id": "TR_VCupKH2U9pPPrU",
+            "publisher_reports_seen_at_sfu": 9,
+            "first_publisher_report_sfu_wall_us": 1791644065167280,
+            "first_publisher_ntp_us": 4000632865166603,
+            "first_received_report_ntp_us": 4000632866234065,
+            "sender_ntp_advance_ms": 1067.462
+          },
+          "video_clock_ready_ms": 1375.492,
+          "first_audio_scheduled_ms": 1375.562,
+          "first_video_scheduled_ms": 1396.045,
+          "sfu_first_audio_minus_video_publisher_report_ms": 128.287
+        },
+        {
+          "binding_since_us": 47160418031,
+          "audio_bound_ms": 511.741,
+          "video_bound_ms": 511.765,
+          "bound_audio_pcm_ms": 511.324,
+          "first_incoming_audio_report_ms": 579.023,
+          "first_incoming_audio_report_origin_trace": {
+            "ssrc": 2601498655,
+            "publisher_track_id": "TR_AMLB8wkTNDhbK3",
+            "publisher_reports_seen_at_sfu": 4,
+            "first_publisher_report_sfu_wall_us": 1791644073612231,
+            "first_publisher_ntp_us": 4000632873611869,
+            "first_received_report_ntp_us": 4000632873756350,
+            "sender_ntp_advance_ms": 144.481
+          },
+          "audio_clock_ready_ms": 632.7,
+          "first_incoming_video_report_ms": 1831.802,
+          "first_incoming_video_report_origin_trace": {
+            "ssrc": 3446881236,
+            "publisher_track_id": "TR_VCm763fyHDgGtr",
+            "publisher_reports_seen_at_sfu": 33,
+            "first_publisher_report_sfu_wall_us": 1791644073465757,
+            "first_publisher_ntp_us": 4000632873465326,
+            "first_received_report_ntp_us": 4000632875009213,
+            "sender_ntp_advance_ms": 1543.887
+          },
+          "video_clock_ready_ms": 1892.841,
+          "first_audio_scheduled_ms": 1892.914,
+          "first_video_scheduled_ms": 1912.55,
+          "sfu_first_audio_minus_video_publisher_report_ms": 146.474
+        }
+      ],
+      "audio_startup_dropped_blocks": 223,
+      "epochs_with_bound_audio_but_no_scheduled_audio": 0,
+      "startup_qualified": false,
+      "discovery_after_shutdown": {
+        "active": 0,
+        "cancelled": 0,
+        "capacity": 1,
+        "completed": 6,
+        "failed": 0,
+        "overall_timeout_ms": 250,
+        "peak_active": 1,
+        "presentation_loop_awaits_stats": false,
+        "spawned": 6,
+        "stale_epoch_results": 0,
+        "timed_out": 0
+      },
+      "decoded_sources_created": 2,
+      "decoded_sources_destroyed": 2,
+      "decoded_sources_alive": 0
+    }
+  ],
+  "clock_domains": "Epoch intervals use receiver monotonic time only. NTP advance uses sender origin only; it is not isolated network latency or an exact SFU hold measurement.",
+  "limits": "Sequential synthetic local runs, not an identical captured-input replay. Increased RTCP traffic; no Cloud, physical AEC or production qualification.",
+  "g1_complete": false
+}

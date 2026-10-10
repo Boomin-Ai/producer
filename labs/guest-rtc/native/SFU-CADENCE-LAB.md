@@ -5,7 +5,7 @@ This is an isolated G1 diagnostic experiment, not a deployment fork.
 `evidence/sfu-build-provenance.json`. It applies `native/sfu-cadence.patch`,
 checks the changed files, runs the cadence helper test, and builds only under
 ignored `runtime/`. `--prepare-only` verifies preparation without compilation.
-Keep at least 1 GiB free; compilation may require more. The helper test does
+Keep at least 3 GiB free for a cold build; compilation and macOS swap may require more. The helper test does
 not replace the full server build or media tests.
 
 The default subscriber sender-report interval stays at three seconds.
@@ -61,3 +61,32 @@ That source finding and event order motivate testing subscriber initialization;
 buffer receipt was not separately instrumented, so they do not prove every hop.
 The control was a 30-second one-guest republish run. A preceding three-guest
 control failed ENOSPC, has no native completion report, and is excluded.
+
+The follow-up `--delayed-report` builds a separate
+`runtime/livekit-server-delayed-report-lab` from the same pinned source plus
+`sfu-delayed-report.patch`. This includes buffer-level SR receipt tracing under
+`LIVEKIT_LAB_RTCP_TRACE=1`: each accepted report records publisher NTP/RTP,
+layer, SFU wall time and the number of registered subscribers at that moment.
+It preserves the forwarder's upstream timestamp-offset validity guard.
+
+Only the candidate arm sets `LIVEKIT_LAB_DELAYED_AUDIO_SR=1`; leave
+`LIVEKIT_LAB_EARLY_AUDIO_SR` unset in both arms. The candidate emits at most
+one RFC 6051 request per audio buffer, after 500 ms of audio RTP and before
+one second. A received report, an expired window or a sent request retires it.
+It uses the existing buffer lock and introduces no thread or timer. This delay
+is an experiment, not proof that every subscriber is initialized. It deliberately
+avoids seeding pre-resume reports or overriding the SFU's offset validity guard.
+Compare candidate off/on using this same executable and identical fixture
+settings; assess every binding epoch, including an epoch with no scheduled
+audio. Subsequent subscriber-aware design still needs join/close/concurrent
+report coverage. Neither successful compilation nor later aligned markers
+qualifies startup, real network behavior or physical AEC.
+
+After building the delayed variant, run `python3 native/run-sfu-startup.py
+control` and then `python3 native/run-sfu-startup.py candidate`. This runner
+requires the lab ports to be free, preserves earlier evidence/recordings, starts
+and retires only its own SFU/web/relay processes, and archives the binary hash
+and run conditions. Each arm has one synthetic guest and one republish over
+30 seconds. It does not open real microphones or speakers. Analyse recordings
+only after each fixture has completed. Use the three-guest churn suite separately
+before claiming room-level acceptance.

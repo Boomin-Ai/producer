@@ -1,0 +1,12 @@
+{
+  "variant": "candidate",
+  "sfu_binary_sha256": "09d100f23cd3377edb8acb90496d63ed95a590b8524d6b33061bf9108fb31c09",
+  "guests": 3,
+  "mode": "churn",
+  "seconds": 45,
+  "packet_profile": "audio-jitter",
+  "report_interval_ms": 250,
+  "delayed_request_ms": 500,
+  "physical_speaker_playout_used": false,
+  "g1_complete": false
+}

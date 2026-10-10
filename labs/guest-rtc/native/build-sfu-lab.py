@@ -38,7 +38,7 @@ def run(*args, **kwargs):
     subprocess.run(args, check=True, **kwargs)
 
 
-def prepare(early_report=False):
+def prepare(early_report=False, delayed_report=False):
     if platform.system() != "Darwin" or platform.machine() != "arm64":
         raise RuntimeError("Pinned compiler archive is for macOS arm64 only")
     RUNTIME.mkdir(exist_ok=True)
@@ -73,6 +73,7 @@ def prepare(early_report=False):
     for name, expected in MANIFEST["patched_files_sha256"].items():
         if digest(source / name) != expected:
             raise RuntimeError("Patched source mismatch: " + name)
+    delayed = json.loads((ROOT / "evidence/sfu-delayed-report-provenance.json").read_text()) if delayed_report else None
     early_manifest_path = ROOT / "evidence/sfu-early-report-provenance.json"
     if early_manifest_path.exists():
         early = json.loads(early_manifest_path.read_text())
@@ -84,10 +85,19 @@ def prepare(early_report=False):
             if digest(buffer) == early["upstream_buffer_sha256"]:
                 run("patch", "--batch", "-p1", "-i", str(patch), cwd=source)
             for name, expected in early["patched_files_sha256"].items():
-                if digest(source / name) != expected:
+                if digest(source / name) != expected and not (delayed and digest(source / name) == delayed["patched_files_sha256"].get(name)):
                     raise RuntimeError("Early-report source mismatch: " + name)
         elif digest(buffer) != early["upstream_buffer_sha256"]:
             raise RuntimeError("Source contains the early-report patch; use --early-report or a fresh runtime source directory")
+    if delayed:
+        patch = ROOT / "native/sfu-delayed-report.patch"
+        if digest(patch) != delayed["patch_sha256"]:
+            raise RuntimeError("Delayed-report patch provenance mismatch")
+        if all(digest(source / name) == expected for name, expected in delayed["base_files_sha256"].items()):
+            run("patch", "--batch", "-p1", "-i", str(patch), cwd=source)
+        for name, expected in delayed["patched_files_sha256"].items():
+            if digest(source / name) != expected:
+                raise RuntimeError("Delayed-report source mismatch: " + name)
     return go, source
 
 
@@ -96,21 +106,24 @@ def main():
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--early-report", action="store_true",
                         help="Also apply the bounded RFC 6051 audio timing request experiment")
+    parser.add_argument("--delayed-report", action="store_true",
+                        help="Add one-shot 500 ms audio request and buffer report arrival tracing")
     args = parser.parse_args()
-    go, source = prepare(args.early_report)
+    go, source = prepare(args.early_report or args.delayed_report, args.delayed_report)
     if args.prepare_only:
         print("Verified pinned compiler and patched SFU source")
         return
-    if shutil.disk_usage(RUNTIME).free < 1024 ** 3:
-        raise RuntimeError("Need at least 1 GiB free before compiling; more may be required")
+    if shutil.disk_usage(RUNTIME).free < 3 * 1024 ** 3:
+        raise RuntimeError("Need at least 3 GiB free before compiling; cold caches and macOS swap may require more")
     env = dict(os.environ, GOMAXPROCS="1", GOMEMLIMIT="128MiB", GOTOOLCHAIN="local",
                GOCACHE=str(RUNTIME / "go-build-cache"), GOPATH=str(RUNTIME / "go-work"))
     run(str(go), "-C", str(source), "test", "pkg/rtc/lab_sender_report_interval.go",
         "pkg/rtc/lab_sender_report_interval_test.go", env=env)
-    if args.early_report:
+    if args.early_report or args.delayed_report:
         run(str(go), "-C", str(source), "test", "pkg/sfu/buffer/lab_sr_request.go",
             "pkg/sfu/buffer/lab_sr_request_test.go", env=env)
-    binary = RUNTIME / ("livekit-server-early-report-lab" if args.early_report
+    binary = RUNTIME / ("livekit-server-delayed-report-lab" if args.delayed_report else
+                        "livekit-server-early-report-lab" if args.early_report
                         else "livekit-server-cadence-lab")
     run(str(go), "-C", str(source), "build", "-p", "1", "-trimpath",
         "-ldflags=-s -w", "-o", str(binary), "./cmd/server", env=env)
