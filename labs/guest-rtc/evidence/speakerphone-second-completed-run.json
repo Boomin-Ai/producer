@@ -148,5 +148,39 @@
     "processed-off.wav": "8f75cae4ea43a38b4c49a864b907f1636504fa4ea116233d819c71df3a54478f",
     "speaker-reference.wav": "640b944bbaa4c2554a10922953bad043182f34acea2fb060f2da248511e11852",
     "voice-review.wav": "d08ae1b4af6d05f6ea5a95d36c30f4f19b438a672d9b8bb3b82df37cd5bf1422"
+  },
+  "human_review": {
+    "processed_excerpt": "User: sounds pretty good, only slightly distorted.",
+    "intelligibility_acceptance": false,
+    "distortion_origin": "Unresolved; raw/processed comparison prepared"
+  },
+  "review_signal_metrics": {
+    "double_talk_review": {
+      "raw_clipped_samples": 0,
+      "processed_clipped_samples": 0,
+      "raw_peak": 28252,
+      "processed_peak": 24758,
+      "gain_db": -1.7678780416193396,
+      "sample_correlation": -0.03535805260261117
+    },
+    "near_only_review": {
+      "raw_clipped_samples": 0,
+      "processed_clipped_samples": 0,
+      "raw_peak": 25528,
+      "processed_peak": 26940,
+      "gain_db": -0.21367836524841502,
+      "sample_correlation": -0.08766174269455358
+    },
+    "zero_lag_correlation_note": "APM output can have processing delay; zero-lag correlation is not a speech quality score.",
+    "near_only_aligned_comparison": {
+      "near_only_window_seconds": [
+        54,
+        55
+      ],
+      "processed_delay_samples": 420,
+      "processed_delay_ms": 8.75,
+      "lag_aligned_sample_correlation": 0.5282257288118717,
+      "scope": "One speech window; not an end-to-end latency measurement or intelligibility proof."
+    }
   }
 }

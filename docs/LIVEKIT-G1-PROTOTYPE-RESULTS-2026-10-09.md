@@ -783,3 +783,13 @@ lower input and show 32.20 dB aggregate attenuation; this is a post hoc diagnost
 observation, not a replacement acceptance window. A compliant repeat is needed.
 Evidence: `labs/guest-rtc/evidence/speakerphone-second-completed-run.json`.
 Physical AEC, louder-speaker testing and the integrated G1 path remain unqualified.
+
+Human feedback on the processed excerpt: “sounds pretty good,” with slight
+distortion. The excerpt's double-talk and near-only portions contain no clipped
+PCM samples in either raw or processed files, so clipping elsewhere cannot
+explain that feedback. A 19-second original/processed comparison was prepared
+and opened for attribution. Near-only signal timing also changes through APM:
+a single-window lag search found a strongest positive correlation at 8.75 ms;
+this is diagnostic, not an end-to-end latency result or speech-quality score.
+Do not tune suppression or claim intelligibility acceptance until the listening
+comparison distinguishes capture coloration from AEC processing artifacts.
