@@ -101,6 +101,23 @@ static NSString *deviceName(AudioUnit unit) {
     if(AudioObjectGetPropertyData(device,&address,0,nullptr,&size,&name)!=noErr) return @"Unknown device";
     return CFBridgingRelease(name);
 }
+// Read the default output's scalar volume without changing routing or controls.
+// Unsupported device controls remain unknown; this is not calibrated acoustic SPL.
+extern "C" double lab_output_volume_percent() {
+    AudioDeviceID device=0; UInt32 size=sizeof(device);
+    AudioObjectPropertyAddress address={kAudioHardwarePropertyDefaultOutputDevice,kAudioObjectPropertyScopeGlobal,kAudioObjectPropertyElementMain};
+    if(AudioObjectGetPropertyData(kAudioObjectSystemObject,&address,0,nullptr,&size,&device)!=noErr || !device)return -1;
+    double sum=0; int channels=0;
+    for(UInt32 element=0;element<=2;element++) {
+        address={kAudioDevicePropertyVolumeScalar,kAudioDevicePropertyScopeOutput,element};
+        Float32 volume=0;size=sizeof(volume);
+        if(AudioObjectHasProperty(device,&address) && AudioObjectGetPropertyData(device,&address,0,nullptr,&size,&volume)==noErr && std::isfinite(volume) && volume>=0 && volume<=1) {
+            if(element==0)return volume*100.0;
+            sum+=volume;channels++;
+        }
+    }
+    return channels?sum/channels*100.0:-1;
+}
 extern "C" void *lab_audio_create(const int16_t *samples,size_t count,int fail_stage,char *error,size_t length) {
     @autoreleasepool { @try {
         auto fail=[&](NSString *message)->void* { snprintf(error,length,"%s",message.UTF8String); return nullptr; };

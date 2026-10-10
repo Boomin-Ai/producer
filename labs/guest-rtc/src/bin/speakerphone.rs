@@ -38,6 +38,11 @@ unsafe extern "C" {
     fn lab_ui_poll() -> i32;
     fn lab_ui_status(text: *const c_char);
     fn lab_permission(request: i32) -> i32;
+    fn lab_output_volume_percent() -> f64;
+}
+fn output_volume_percent() -> Option<f64> {
+    let value = unsafe { lab_output_volume_percent() };
+    (value.is_finite() && (0.0..=100.0).contains(&value)).then_some(value)
 }
 fn status(text: &str) {
     if let Ok(text) = CString::new(text) {
@@ -148,6 +153,7 @@ struct Session {
     energy_on: f64,
     energy_blocks: u64,
     last_status: Instant,
+    output_volume_start: Option<f64>,
 }
 impl Session {
     fn new(root: &Path, speech: &[i16]) -> Result<Self> {
@@ -187,6 +193,7 @@ impl Session {
             energy_on: 0.0,
             energy_blocks: 0,
             last_status: Instant::now(),
+            output_volume_start: output_volume_percent(),
         };
         // Set once before any capture/reference processing; preserve AEC itself.
         session.on.set_high_pass_filter_enforcement(false);
@@ -324,6 +331,7 @@ impl Session {
     }
     fn finish(mut self, reason: &str) -> Result<PathBuf> {
         let lifecycle = self.device.close();
+        let output_volume_end = output_volume_percent();
         self.speaker.finalize()?;
         self.mic.finalize()?;
         self.processed.finalize()?;
@@ -343,6 +351,7 @@ impl Session {
             .get(((self.processing_us.len().saturating_sub(1)) as f64 * 0.95).round() as usize);
         let report = json!({"schema_version":1,"stop_reason":reason,"devices":self.devices,"duration_seconds":self.began.elapsed().as_secs_f64(),
             "hardware_capture_used":self.mic_blocks>0,"physical_speaker_reference_connected":self.render_blocks>0,
+            "default_output_volume_percent":{"start":self.output_volume_start,"end":output_volume_end,"continuous_verification":false,"acoustic_spl_calibrated":false},
             "reference_scope":"This engine's final stereo mixer output, downmixed to mono; excludes other apps and hardware-volume calibration",
             "sample_rate":48000,"apm_channels":1,"source_gain":0.20,"microphone_blocks":self.mic_blocks,"speaker_blocks":self.render_blocks,
             "apm_delay_estimate_ms":{"minimum":self.delay_min,"maximum":self.delay_max,"acoustic_delay_calibrated":false},
@@ -376,6 +385,10 @@ fn main() -> Result<()> {
             "Native ownership/queue self-test failed"
         );
         println!("20 native queue and partial-initialization teardown cycles passed");
+        return Ok(());
+    }
+    if input == "--volume-snapshot" {
+        println!("{:?}", output_volume_percent());
         return Ok(());
     }
     let root = args.next().map(PathBuf::from).unwrap_or_else(|| {

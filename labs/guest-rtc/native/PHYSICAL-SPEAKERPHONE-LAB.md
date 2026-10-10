@@ -84,3 +84,12 @@ stay in the private output directory. On both recorded runs the baseline
 reproduced the physical processed output with zero PCM RMS error. The user reported the candidate sounded slightly better in the listening
 comparison. It is selected for the next physical lab run; acceptance remains
 pending compliant speech/echo testing and louder-speaker testing.
+
+Current lab reports default output-device scalar volume snapshots immediately
+before engine creation and after engine shutdown. Unsupported controls are
+reported as null, never replaced with a guessed percentage. Snapshot reads do
+not change devices or volume, and do not run inside audio callbacks. They do
+not verify changes during capture or calibrate acoustic SPL. A headless
+`--volume-snapshot` probe returned 6.25% on the current Mac (AppleScript's
+rounded output volume was 6). The user had lowered volume after the preceding
+run, so that later value cannot be assigned to the completed run.

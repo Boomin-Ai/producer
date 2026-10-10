@@ -838,3 +838,34 @@ status identifies voice refinement and uses larger phase prompts. Native
 20-cycle queue/partial-initialization checks, two Rust tests, Clippy and strict
 ad hoc signature validation passed after packaging. It was reopened for a
 compliant 50% speaker-volume run; no new physical result or qualification yet.
+
+## Refined physical run and volume evidence — 2026-10-10
+
+The first actual no-forced-high-pass run completed in 60.043 seconds, with
+5,990 blocks per timeline, zero overflow, zero native format/timeline faults,
+zero invalid delay blocks, and clean owner/callback retirement. File/accounting
+verification passed. Both APM paths took 403 microseconds at p95. The report
+confirms AEC high-pass enforcement false. Across 82 eligible far-only windows,
+echo attenuation measured 28.57 dB median and 22.47 dB p10, passing the initial
+20/10 dB signal thresholds for this recording.
+
+The instructed baseline/echo-only levels are consistent with quiet participation.
+Near-only signal level is essentially unchanged (-17.9150 dBFS raw/processed),
+and instructed double-talk level changes -0.92 dB. There were 35 raw microphone
+clipped samples during double talk, with no clipping in the inspected quiet
+and near-only intervals. These signal levels support preservation but cannot
+establish intelligibility by themselves.
+
+The protocol requested 50% speaker volume. A post-run read returned 6%; the
+user explicitly said they lowered it afterward. That reading cannot establish
+volume during the test. Existing recording evidence is preserved with this
+context. New lab builds record CoreAudio default-output volume scalar snapshots
+at start/end, with unsupported controls null and no claim of continuously
+verified volume or calibrated acoustic SPL. A read-only native probe returned
+6.25%, consistent with the rounded OS setting. It creates no audio owner or
+callback and does not change volume/routing. Native 20-cycle checks, strict
+compiler checks and physical-bin Clippy pass after rebuilding/packaging.
+
+Evidence: `labs/guest-rtc/evidence/speakerphone-refined-physical-run.json`. The
+updated native lab is open for a louder 75% repeat, with deliberate speech only
+during seconds 30–60. Full physical AEC acceptance and integrated G1 remain open.

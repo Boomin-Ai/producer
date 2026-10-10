@@ -1,0 +1,131 @@
+{
+  "run_label": "speakerphone-1791648071775927000",
+  "report": {
+    "additional_capture_hold_capacity": 1,
+    "aec_enforced_high_pass": false,
+    "aec_profile": "no_forced_high_pass",
+    "agc": false,
+    "apm_channels": 1,
+    "apm_delay_estimate_ms": {
+      "acoustic_delay_calibrated": false,
+      "maximum": 115,
+      "minimum": 5
+    },
+    "capture_hold_limit_ms": 80,
+    "capture_hold_retired": false,
+    "devices": "CADefaultDeviceAggregate-59048-0 \u2192 CADefaultDeviceAggregate-59048-0",
+    "duration_seconds": 60.042876792,
+    "g1_complete": false,
+    "hardware_capture_used": true,
+    "high_pass": false,
+    "high_pass_requested": false,
+    "invalid_delay_blocks": 0,
+    "lifecycle": {
+      "callbacks_active": 0,
+      "clipped_samples": 35,
+      "format_or_timeline_errors": 0,
+      "maximum_tap_frames": {
+        "microphone": 4800,
+        "speaker": 4800
+      },
+      "microphone": {
+        "capacity": 32,
+        "consumed": 5990,
+        "overflow": 0,
+        "pending_retired": 0,
+        "queued": 5990
+      },
+      "owners_and_callback_state_retired": true,
+      "speaker": {
+        "capacity": 32,
+        "consumed": 5990,
+        "overflow": 0,
+        "pending_retired": 0,
+        "queued": 5990
+      }
+    },
+    "microphone_blocks": 5990,
+    "microphone_played_or_published": false,
+    "ns": false,
+    "physical_aec_qualified": false,
+    "physical_speaker_reference_connected": true,
+    "processing_both_apms_p95_us": 403,
+    "provisional_far_only_attenuation_db": {
+      "median": 28.566200656954063,
+      "p10": 22.465173936981145,
+      "windows": 82
+    },
+    "reference_scope": "This engine's final stereo mixer output, downmixed to mono; excludes other apps and hardware-volume calibration",
+    "sample_rate": 48000,
+    "schema_version": 1,
+    "source_gain": 0.2,
+    "speaker_blocks": 5990,
+    "speech_intelligibility_qualified": false,
+    "stop_reason": "completed",
+    "system_voice_processing": false,
+    "user_phase_compliance_verified": false
+  },
+  "phase_signal_levels": {
+    "baseline": {
+      "levels_dbfs": {
+        "microphone-raw": -52.67352668275465,
+        "processed-on": -52.678877651301555,
+        "processed-off": -52.67352668275465,
+        "speaker-reference": -90.30899869919436
+      },
+      "raw_clipped_samples": 0
+    },
+    "far_only": {
+      "levels_dbfs": {
+        "microphone-raw": -31.26904553471065,
+        "processed-on": -53.76664931930256,
+        "processed-off": -31.26904553471065,
+        "speaker-reference": -29.516427417204728
+      },
+      "raw_clipped_samples": 0
+    },
+    "double_talk": {
+      "levels_dbfs": {
+        "microphone-raw": -15.659175484494243,
+        "processed-on": -16.57588315299951,
+        "processed-off": -15.659175484494243,
+        "speaker-reference": -29.545219938242617
+      },
+      "raw_clipped_samples": 35
+    },
+    "near_only": {
+      "levels_dbfs": {
+        "microphone-raw": -17.915008741454255,
+        "processed-on": -17.914991926542086,
+        "processed-off": -17.915008741454255,
+        "speaker-reference": -90.30899869919436
+      },
+      "raw_clipped_samples": 0
+    }
+  },
+  "continuity": {
+    "speaker": {
+      "minimum_delta_ms": 10.0,
+      "maximum_delta_ms": 10.007083
+    },
+    "microphone": {
+      "minimum_delta_ms": 10.0,
+      "maximum_delta_ms": 10.006834
+    }
+  },
+  "phase_compliance": "Signal levels inspected; human speech compliance not independently verified.",
+  "physical_aec_qualified": false,
+  "g1_complete": false,
+  "wav_sha256": {
+    "microphone-raw.wav": "608098a2d4d3b7751ebab1ffec2a269dbc915755a11fa0fc480fc9456a07ec1d",
+    "processed-on.wav": "6fd221fbaf71328b6939a874466cef207da0e00bccdf439e8600ec4ba15ff296",
+    "processed-off.wav": "608098a2d4d3b7751ebab1ffec2a269dbc915755a11fa0fc480fc9456a07ec1d",
+    "speaker-reference.wav": "5e3c5e594b4b813f1365141efb9ff692d88f98986e6a98c9ad565ac906a75a43"
+  },
+  "volume_context": {
+    "instruction": "50% speakers",
+    "post_run_snapshot_percent": 6,
+    "user_explanation": "User turned speaker volume down afterward; post-run reading does not establish test volume.",
+    "start_end_snapshots_available": false
+  }
+}
