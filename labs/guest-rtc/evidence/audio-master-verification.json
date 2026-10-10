@@ -304,6 +304,83 @@
     "raw_unmatched_video": 0
   },
   {
+    "run": "transport-obs-audio-master-discovery-worker-rejoin-v2",
+    "evidence_sha256": "aba9683827fe4a40aaa871f7ce8bbbe491a5a097d03dc21a62b545226f1cebad",
+    "recorded_abs_p95_ms": 56.66666666666697,
+    "matched_markers": 11,
+    "unmatched_audio": 0,
+    "unmatched_video": 0,
+    "local_marker_gate_passed": true,
+    "bounded_accounting_verified": true,
+    "g1_complete": false,
+    "raw_pipeline_trace": [
+      {
+        "kind": "audio",
+        "input_to_raw_output_ms": [
+          7.281749,
+          12.615082,
+          8.867416,
+          32.688749,
+          28.695749,
+          25.362416,
+          29.362416,
+          24.695749,
+          30.029082,
+          25.362416,
+          19.362416
+        ],
+        "unmatched_input": 0,
+        "unmatched_output": 0
+      },
+      {
+        "kind": "video",
+        "input_to_raw_output_ms": [
+          16.637807,
+          15.137787,
+          8.205714,
+          25.803975,
+          3.321216,
+          19.928529,
+          4.497176,
+          14.309489,
+          21.333136,
+          20.512449,
+          20.999096
+        ],
+        "unmatched_input": 0,
+        "unmatched_output": 0
+      }
+    ],
+    "raw_video_minus_audio_ms": [
+      55.943058,
+      50.609705,
+      33.276298,
+      3.276226,
+      20.609467,
+      37.276113,
+      19.94276,
+      37.94274,
+      -0.723946,
+      37.276033,
+      9.94268
+    ],
+    "raw_unmatched_audio": 0,
+    "raw_unmatched_video": 0,
+    "recording_minus_raw_offset_ms": [
+      0.7236086666669692,
+      3.390295000000002,
+      -0.6096313333321177,
+      3.3904406666678795,
+      4.72386633333576,
+      3.390553666664239,
+      4.7239066666715175,
+      3.390593333335758,
+      6.057279333343034,
+      3.390633666664243,
+      -5.276013333328482
+    ]
+  },
+  {
     "run": "transport-obs-audio-master-encoded-baseline-v2",
     "evidence_sha256": "fe7c68a8455440a76e65fa6b29c19d0bdd931039b7b2c78b1585f387cdf0ff82",
     "recorded_abs_p95_ms": 94.02083333333212,

@@ -390,9 +390,23 @@ Playback retains up to 64 numeric startup milestones across binding epochs:
 audio/video SSRC binding, first bound PCM, usable audio/video clock maps, and first
 scheduled audio/video. Each milestone records its first observation only. PCM pull
 time and application observation time are explicitly separate; these measurements
-are neither capture latency nor speaker playout latency. Publication events now
-trigger immediate binding discovery instead of waiting for an existing 500 ms
-retry deadline; discovery skips stats requests for already bound tracks. Failed
-initial discovery still uses the bounded 500 ms retry and 100 ms per-track timeout.
-The stats await still occurs in the application loop and is not yet qualified as
-a production scheduling design. Sender-report waiting and physical AEC remain open.
+are neither capture latency nor speaker playout latency. Publication events trigger immediate binding discovery, but events can precede
+usable inbound SSRC stats. Discovery runs as one owned Tokio task, with at most
+two current publication clones, 100 ms per-track stats timeout and 250 ms overall
+timeout. The presentation tick only polls completed results. Binding changes abort
+old discovery; results must match the binding epoch and current publication SID.
+Shutdown aborts and joins all discovery work before retiring the room. Evidence
+reports task completion/cancellation/timeouts and verifies zero active jobs after
+shutdown. Unsuccessful discovery retains a 500 ms retry.
+
+The trace also separates first incoming audio/video sender-report arrival from
+usable clock/PCM availability. Arrival milestones match current SSRC, incoming
+reports and binding epoch; they are observations, not proof that a report gives a
+usable mapping. Sender-report waiting and physical AEC remain open.
+
+Low-disk build recovery: if macOS `rust-objcopy` exhausts disk while doing the
+redundant post-link stripping pass, check executable type and size rather than
+trusting Cargo's exit status. The lab linker already strips native DWARF. Override
+stripping only for this final crate with
+`LIVEKIT_LAB_LINK_EXTERNAL_ARCHIVE=1 cargo rustc --locked --jobs 2 --features obs-proof -- -C strip=none`.
+Changing the whole Cargo profile instead rebuilds dependencies and uses more disk.

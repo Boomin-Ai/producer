@@ -419,6 +419,41 @@ impl SelectedPlayback {
         self.labels
             .observe(generation, sequence, rtp, bootstrap, origin, stamp);
     }
+    pub fn note_sender_reports(&mut self, rtcp: &Value) {
+        let mut reports: Vec<SenderReport> = rtcp["peers"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .flat_map(|log| {
+                log["sender_report_history"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+            })
+            .filter(|report| report["incoming"].as_bool() == Some(true))
+            .filter_map(|report| serde_json::from_value(report.clone()).ok())
+            .collect();
+        reports.sort_by_key(|report| report.observed_us);
+        for report in reports {
+            if report.ntp_seconds == 0 || report.observed_us < self.since_us {
+                continue;
+            }
+            if self
+                .audio_binding
+                .as_ref()
+                .is_some_and(|(_, ssrc)| *ssrc == report.ssrc)
+            {
+                self.startup_note("first_incoming_audio_report", report.observed_us);
+            }
+            if self
+                .video_binding
+                .as_ref()
+                .is_some_and(|(_, ssrc, _, _)| *ssrc == report.ssrc)
+            {
+                self.startup_note("first_incoming_video_report", report.observed_us);
+            }
+        }
+    }
     pub fn refresh(&mut self, rtcp: &Value) {
         let Some((_, ssrc, clock, seen)) = &mut self.video_binding else {
             return;
@@ -546,6 +581,24 @@ mod tests {
         assert_eq!(point.label_step_error_us, 0);
         assert_eq!(point.label_shift_since_start_us, 0);
         assert_eq!(labels.max_step_error_us, 0);
+    }
+    #[test]
+    fn report_arrival_trace_rejects_old_epoch_wrong_ssrc_and_outgoing_reports() {
+        let mut playback = SelectedPlayback::new(100);
+        playback.audio_binding = Some(("current".into(), 7));
+        playback.note_sender_reports(&json!({"peers":[{"sender_report_history":[
+            {"incoming":true,"ssrc":7,"ntp_seconds":1,"ntp_fraction":0,"rtp_timestamp":0,"observed_us":99},
+            {"incoming":true,"ssrc":8,"ntp_seconds":1,"ntp_fraction":0,"rtp_timestamp":0,"observed_us":101},
+            {"incoming":false,"ssrc":7,"ntp_seconds":1,"ntp_fraction":0,"rtp_timestamp":0,"observed_us":102},
+            {"incoming":true,"ssrc":7,"ntp_seconds":1,"ntp_fraction":0,"rtp_timestamp":0,"observed_us":110},
+            {"incoming":true,"ssrc":7,"ntp_seconds":1,"ntp_fraction":0,"rtp_timestamp":480,"observed_us":120}
+        ]}]}));
+        assert_eq!(playback.startup.len(), 1);
+        assert_eq!(playback.startup[0]["observed_us"], 110);
+        assert_eq!(
+            playback.startup[0]["milestone"],
+            "first_incoming_audio_report"
+        );
     }
     #[test]
     fn startup_trace_preserves_first_observation_and_is_bounded() {

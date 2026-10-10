@@ -14,7 +14,7 @@ if (!['baseline','video-jitter','audio-jitter','hard-loss'].includes(profile)) t
 let stopping = false, rng = 123456789;
 function random() { rng ^= rng << 13; rng ^= rng >>> 17; rng ^= rng << 5; return (rng >>> 0)/4294967296; }
 const counts = { profile, signaling_rewrites: 0, rejected_tcp_candidates: 0, rejected_non_mux_candidates: 0, pending_max: 0,
-  peer_limit_drops: 0, overflow_drops: 0, send_errors: 0, websocket_backpressure_closes: 0, packets: {},
+  snapshot_write_errors: 0, last_snapshot_error_code: null, peer_limit_drops: 0, overflow_drops: 0, send_errors: 0, websocket_backpressure_closes: 0, packets: {},
   payloads_decrypted: false, payloads_logged: false, packet_profile_effect_observed: false };
 function rewriteCandidate(candidate) {
   const prefix = candidate.startsWith('a=') ? 'a=' : '';
@@ -121,7 +121,16 @@ udp.on('message',(packet,remote) => {
   forward(packet,'client_to_sfu',callback => upstream.send(packet,7882,'127.0.0.1',callback));
 });
 udp.on('error',error => { console.error(error.message); shutdown(); });
-function snapshot() { writeFileSync(path.join(runtime,`packet-proxy-${profile}.json`),JSON.stringify({...counts,peers:peers.size,pending:timers.size},null,2)); }
+function snapshot() {
+  try {
+    writeFileSync(path.join(runtime,`packet-proxy-${profile}.json`),JSON.stringify({...counts,peers:peers.size,pending:timers.size},null,2));
+  } catch (error) {
+    // Snapshot persistence is diagnostic; it must not terminate active media forwarding.
+    // The HTTP stats endpoint continues exposing counters and the failure explicitly.
+    counts.snapshot_write_errors++;
+    counts.last_snapshot_error_code = typeof error.code === 'string' ? error.code : 'UNKNOWN';
+  }
+}
 function shutdown() {
   if (stopping) return; stopping = true; clearInterval(report);
   for (const timer of timers) clearTimeout(timer); timers.clear();

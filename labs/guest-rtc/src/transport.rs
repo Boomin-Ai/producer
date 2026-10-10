@@ -468,6 +468,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     #[cfg(feature = "obs-proof")]
     let mut next_binding_refresh = Instant::now();
     #[cfg(feature = "obs-proof")]
+    let mut binding_discovery = crate::binding_discovery::Discovery::default();
+    #[cfg(feature = "obs-proof")]
     let scheduled_handoff = std::env::var("LIVEKIT_LAB_SCHEDULE_HANDOFF").as_deref() == Ok("1");
     #[cfg(feature = "obs-proof")]
     if scheduled_handoff && !use_sender_clock {
@@ -495,6 +497,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                         if use_sender_clock && id == "guest-1" {
                             playback.clear(audio_sys::ffi::diagnostic_webrtc_time_us());
                             next_binding_refresh=Instant::now();
+                            binding_discovery.invalidate();
                             scheduled_audio.clear();scheduled_video.clear();
                         }
                         match track {
@@ -523,6 +526,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                                 || video.get(&id).is_some_and(|tap| tap.sid==sid)) {
                             playback.clear(audio_sys::ffi::diagnostic_webrtc_time_us());
                             next_binding_refresh=Instant::now();
+                            binding_discovery.invalidate();
                             scheduled_audio.clear();scheduled_video.clear();
                         }
                         // A late teardown from the old publication cannot retire its replacement.
@@ -548,38 +552,59 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                 let now = Instant::now(); let elapsed = now.duration_since(began).as_secs_f64();
                 if elapsed >= seconds as f64 { break; }
                 #[cfg(feature = "obs-proof")]
-                if use_sender_clock && now >= next_binding_refresh
-                    && (playback.audio_binding.is_none() || playback.video_binding.is_none()) {
-                    for participant in room.remote_participants().values().filter(|p|p.identity().as_str()=="guest-1") {
-                        for publication in participant.track_publications().values() {
-                            let sid=publication.sid().to_string();
-                            // Event-triggered discovery must not repeatedly await stats for a bound track.
-                            if playback.audio_binding.as_ref().is_some_and(|(bound,_)|bound==&sid)
-                                || playback.video_binding.as_ref().is_some_and(|(bound,_,_,_)|bound==&sid) {continue;}
-                            if let Some(track)=publication.track() {
-                                let Ok(Ok(stats))=tokio::time::timeout(Duration::from_millis(100),track.get_stats()).await else {continue;};
-                                let inbound:Vec<_>=stats.into_iter().filter_map(|stat| {
-                                    if let livekit::webrtc::stats::RtcStats::InboundRtp(stat)=stat {Some(stat.stream)} else {None}
-                                }).collect();
-                                if inbound.len()!=1 {continue;}
-                                let stat=&inbound[0];
-                                if stat.kind=="audio" && audio.get("guest-1").is_some_and(|tap|tap.sid==sid)
-                                    && playback.audio_binding.is_none() {playback.audio_binding=Some((sid,stat.ssrc));playback.startup_note("audio_bound",audio_sys::ffi::diagnostic_webrtc_time_us());}
-                                else if stat.kind=="video" && video.get("guest-1").is_some_and(|tap|tap.sid==sid)
-                                    && playback.video_binding.is_none() {
-                                    playback.video_binding=Some((sid,stat.ssrc,crate::sender_clock::SenderClock::new(stat.ssrc,90000),playback.since_us.saturating_sub(1)));
-                                    playback.startup_note("video_bound",audio_sys::ffi::diagnostic_webrtc_time_us());
-                                }
+                if use_sender_clock {
+                    if let Some(bindings)=binding_discovery.poll(playback.since_us) {
+                        for binding in bindings {
+                            let observed=audio_sys::ffi::diagnostic_webrtc_time_us();
+                            if binding.kind=="audio" && audio.get("guest-1").is_some_and(|tap|tap.sid==binding.sid)
+                                && playback.audio_binding.is_none() {
+                                playback.audio_binding=Some((binding.sid,binding.ssrc));
+                                playback.startup_note("audio_bound",observed);
+                            } else if binding.kind=="video" && video.get("guest-1").is_some_and(|tap|tap.sid==binding.sid)
+                                && playback.video_binding.is_none() {
+                                playback.video_binding=Some((binding.sid,binding.ssrc,crate::sender_clock::SenderClock::new(binding.ssrc,90000),playback.since_us.saturating_sub(1)));
+                                playback.startup_note("video_bound",observed);
                             }
                         }
                     }
-                    next_binding_refresh=now+Duration::from_millis(500);
+                    if now >= next_binding_refresh && binding_discovery.idle()
+                        && (playback.audio_binding.is_none() || playback.video_binding.is_none()) {
+                        // At most the selected publisher's current audio/video tracks.
+                        // The owned job drops track clones on timeout, invalidation or shutdown.
+                        let mut tracks=Vec::with_capacity(2);
+                        for participant in room.remote_participants().values().filter(|p|p.identity().as_str()=="guest-1") {
+                            for publication in participant.track_publications().values() {
+                                let sid=publication.sid().to_string();
+                                let needed=audio.get("guest-1").is_some_and(|tap|tap.sid==sid) && playback.audio_binding.is_none()
+                                    || video.get("guest-1").is_some_and(|tap|tap.sid==sid) && playback.video_binding.is_none();
+                                if needed && tracks.len()<2 {if let Some(track)=publication.track() {tracks.push((sid,track));}}
+                            }
+                        }
+                        if !tracks.is_empty() {
+                            binding_discovery.request(playback.since_us,async move {
+                                let mut bindings=Vec::with_capacity(2);
+                                for (sid,track) in tracks {
+                                    let Ok(Ok(stats))=tokio::time::timeout(Duration::from_millis(100),track.get_stats()).await else {continue;};
+                                    let inbound:Vec<_>=stats.into_iter().filter_map(|stat| {
+                                        if let livekit::webrtc::stats::RtcStats::InboundRtp(stat)=stat {Some(stat.stream)} else {None}
+                                    }).collect();
+                                    if inbound.len()==1 {
+                                        let stat=&inbound[0];
+                                        bindings.push(crate::binding_discovery::Binding{sid,kind:stat.kind.clone(),ssrc:stat.ssrc});
+                                    }
+                                }
+                                bindings
+                            });
+                            next_binding_refresh=now+Duration::from_millis(500);
+                        }
+                    }
                 }
                 if now >= next_sender_report_refresh {
                     let rtcp = serde_json::from_str(&webrtc_sys::webrtc::ffi::diagnostic_rtcp_exchange_report())?;
                     decoded_origins.refresh(&rtcp);
                     #[cfg(feature = "obs-proof")]
                     if use_sender_clock {
+                        playback.note_sender_reports(&rtcp);
                         playback.refresh(&rtcp);
                         let observed=audio_sys::ffi::diagnostic_webrtc_time_us();
                         if playback.video_ready(observed) {playback.startup_note("video_clock_ready",observed);}
@@ -694,6 +719,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
             }
         }
     }
+    #[cfg(feature = "obs-proof")]
+    binding_discovery.shutdown().await;
     let publisher_error = if publisher.is_finished() {
         match publisher.await {
             Ok(Err(error)) => Some(error.to_string()),
@@ -830,6 +857,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     let audio_master_playback = if use_sender_clock {
         let mut report = playback.report();
         report["scheduled_handoff"] = json!(scheduled_handoff);
+        report["binding_discovery_after_shutdown"] = binding_discovery.report();
         report["audio_presentation_queue"] = scheduled_audio.report();
         report["video_presentation_queue"] = scheduled_video.report();
         scheduled_audio.clear();

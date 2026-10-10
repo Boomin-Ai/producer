@@ -450,3 +450,82 @@ broader integration. No deployment or production recording policy changed.
 Validation for this checkpoint: 21 Rust tests pass; default and OBS Clippy pass
 with warnings denied; formatting and diff checks pass. Owned lab services stopped
 after both recordings; the installed production app remains untouched.
+
+
+### Owned binding discovery and sender-report cadence — October 10
+
+Stats-based binding discovery is now off the 10 ms presentation loop. One owned
+Tokio JoinSet job holds at most two current publication clones, applies 100 ms
+per-track / 250 ms overall deadlines, and returns bounded SID/kind/SSRC results.
+Presentation only polls completed work. Binding changes abort the job; results
+must match the current binding epoch, an independent invalidation generation, and
+current publication SID. Shutdown aborts and joins pending jobs before room
+retirement. No thread, native observer registration, or strong callback back-reference
+was added. Ownership is presentation scope → JoinSet job → track clones → existing
+SDK receiver; a completed SDK stats callback only owns its existing response
+context, without a reference back to the job. Aborting the Rust future does not
+prove cancellation of WebRTC's internal stats request; its eventual callback is
+handled by the existing SDK. Broader lifecycle qualification remains gated.
+
+New tests exercise a blocked future without blocking poll, cancellation with
+observable owned-resource destruction, timeout and retry, task failure and retry,
+old-epoch rejection, and invalidation of completed work even when timestamp epochs
+are equal. A sender-report arrival test rejects outgoing reports, wrong SSRC and
+old epochs, retaining only the earliest valid incoming observation.
+
+One valid 45-second / three-publisher / three-rejoin audio-jitter recording
+(`discovery-worker-rejoin-v2`) matched every marker with independent p95 **55.33 ms**.
+Discovery performed ten jobs, ten completed, zero timeout/failure/cancellation,
+peak one and zero active after shutdown. This recording therefore validates the
+normal asynchronous stats path, not cancellation under delayed native SDK stats;
+those Rust ownership/race paths are exercised by unit tests. The recording
+preceded the additional independent invalidation-generation guard, which has its
+own regression test; the final executable includes that guard. No build or decode
+analysis overlapped the valid recording. All six native decoded source registrations
+retired (six created/six destroyed/zero alive), and the OBS pipeline probe retired.
+The experimental video bound remained 400 ms, but maximum actual lead was only
+246.35 ms; this run does not test holding frames beyond the default 250 ms bound.
+
+| Epoch | Audio/video binding | First incoming video SR | First incoming audio SR | First scheduled audio |
+| --- | --- | --- | --- | --- |
+| Initial | 517.0–517.1 ms | 3,936.2 ms | 3,936.2 ms | 3,987.3 ms |
+| Rejoin 1 | 16.4–16.5 ms | 767.5 ms | 3,768.1 ms | 3,797.8 ms |
+| Rejoin 2 | 21.9–22.0 ms | 2,535.2 ms | 2,535.2 ms | 2,632.2 ms |
+| Rejoin 3 | 512.0–512.1 ms | 4,300.0 ms | 4,300.0 ms | 4,394.2 ms |
+
+All report times are after the first observed bound PCM pull in their epoch.
+This run does not support the hypothesis that an audio report arrived before the
+PCM mapper's cutoff and was discarded. The ~3,001 ms audio/video SR gap at rejoin 1
+is instead consistent with the pinned SFU's subscriber report schedule.
+[LiveKit v1.13.9 participant source](https://github.com/livekit/livekit/blob/v1.13.9/pkg/rtc/participant.go#L2635-L2695)
+creates downstream reports and sleeps three seconds between batches.
+The local pinned `RTPStatsSender.GetRtcpSenderReport` source also requires publisher
+SR data before creating a downstream report. Thus publisher report availability
+plus the downstream schedule can contribute to startup; the measurements do not
+separately attribute how much wait occurred at each hop. No supported cadence
+configuration or modified-SFU build has yet been qualified. Do not describe this
+as a solved subsecond startup path or silently replace sender timing with arrival.
+
+The first attempted recording was invalidated by ENOSPC: the relay crashed on an
+optional snapshot write, followed by recording pipe failure. Its MP4 has no native
+report and is excluded. Relay snapshot writes now catch and report persistence
+errors instead of terminating forwarding. A deterministic temporary-directory fault
+produced EISDIR while the HTTP stats endpoint remained alive; no media-performance
+claim is made from that fault test. The restarted valid recording reports zero
+snapshot errors and an observed audio-jitter profile. Invalid evidence is preserved.
+
+The first build also produced a truncated executable after `rust-objcopy` ENOSPC
+despite Cargo reporting success. A whole-profile stripping override triggered
+unnecessary dependency rebuilds; that build was interrupted and only its newly
+created target-cache files (134.4 MiB) were removed. The final-crate-only override
+`cargo rustc ... -- -C strip=none` produced a valid ~58 MiB Mach-O using the existing
+link-time native DWARF stripping. The rebuildable npm download cache (~222 MiB) was
+also cleared; installed dependencies, source and user media/data were preserved.
+
+Validation: 27 Rust tests; default/OBS Clippy with warnings denied; syntax check and
+injected relay snapshot failure; 26 recording-accounting checks; 16 pre-mux traces;
+independent decoder comparisons; final build, formatting and diff checks. All owned
+lab services stopped. G1 and physical speakerphone AEC remain incomplete. Next:
+prototype earlier downstream SR delivery on a pinned isolated SFU while preserving
+publisher timing, and distinguish publisher-first-report wait from SFU emission
+wait. Provider deployment/integration remains gated.

@@ -1,4 +1,6 @@
 mod apm;
+#[cfg(any(feature = "obs-proof", test))]
+mod binding_discovery;
 mod fixture;
 #[cfg(feature = "obs-proof")]
 mod obs_proof;

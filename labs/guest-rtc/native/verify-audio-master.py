@@ -64,6 +64,15 @@ for path in sorted((lab / 'evidence').glob('transport-obs-audio-master-*.json'))
             assert current['epoch'] >= previous['epoch']
             if current['epoch'] != previous['epoch']:
                 assert current['label_step_error_us'] == current['label_shift_since_start_us'] == 0
+    if 'binding_discovery_after_shutdown' in playback:
+        discovery = playback['binding_discovery_after_shutdown']
+        assert discovery['capacity'] == 1 and discovery['peak_active'] <= 1
+        assert discovery['active'] == 0 and discovery['spawned'] > 0
+        assert discovery['spawned'] == discovery['completed'] + discovery['cancelled'] + discovery['failed']
+        assert discovery['timed_out'] <= discovery['completed']
+        assert discovery['stale_epoch_results'] <= discovery['completed']
+        assert discovery['overall_timeout_ms'] == 250
+        assert not discovery['presentation_loop_awaits_stats']
     if playback.get('first_report_bootstrap', False):
         assert 'five-second bound' in playback['startup_policy']
         assert playback['audio_bootstrap_blocks'] > 0 and playback['video_bootstrap_frames'] > 0
