@@ -2,6 +2,7 @@
 //! it never replaces the continuous sample clock or claims capture time.
 use crate::sender_clock::{SenderClock, SenderReport};
 use serde_json::{json, Value};
+use std::collections::{BTreeMap, VecDeque};
 use std::time::{Duration, Instant};
 
 pub struct Presentation {
@@ -14,6 +15,9 @@ pub struct Presentation {
     video_submitted: u64,
     video_rejected: u64,
     resets: u64,
+    began: Instant,
+    reasons: BTreeMap<&'static str, u64>,
+    diagnostics: VecDeque<Value>,
 }
 impl Presentation {
     pub fn new(delay: Duration) -> Self {
@@ -28,16 +32,46 @@ impl Presentation {
             video_submitted: 0,
             video_rejected: 0,
             resets: 0,
+            began: Instant::now(),
+            reasons: BTreeMap::new(),
+            diagnostics: VecDeque::with_capacity(64),
         }
     }
     pub fn reset_count(&self) -> u64 {
         self.resets
     }
-    pub fn clear(&mut self) {
+    fn note(&mut self, reason: &'static str, at: Instant, details: Value) {
+        *self.reasons.entry(reason).or_default() += 1;
+        // Keep representative transitions and the latest failure, rather than
+        // letting a per-frame startup failure overwrite the whole history.
+        if self
+            .diagnostics
+            .back()
+            .is_some_and(|last| last["reason"] == reason)
+        {
+            let last = self.diagnostics.back_mut().unwrap();
+            last["last_local_us"] = json!(at.saturating_duration_since(self.began).as_micros());
+            last["repetitions"] = json!(last["repetitions"].as_u64().unwrap() + 1);
+            last["details"] = details;
+            return;
+        }
+        if self.diagnostics.len() == 64 {
+            self.diagnostics.pop_front();
+        }
+        self.diagnostics.push_back(json!({"reason":reason,
+            "first_local_us":at.saturating_duration_since(self.began).as_micros(),
+            "last_local_us":at.saturating_duration_since(self.began).as_micros(),
+            "repetitions":1,"details":details}));
+    }
+    fn reset(&mut self, reason: &'static str, at: Instant, details: Value) {
+        self.note(reason, at, details);
         self.audio = None;
         self.origin = None;
         self.last_video = None;
         self.resets += 1;
+    }
+    pub fn clear(&mut self) {
+        self.reset("binding_clear", Instant::now(), Value::Null);
     }
     pub fn audio(
         &mut self,
@@ -47,7 +81,11 @@ impl Presentation {
         pull: Instant,
     ) -> Option<Instant> {
         if self.audio.is_some_and(|(old, _, _)| old != generation) {
-            self.clear();
+            self.reset(
+                "audio_generation_changed",
+                pull,
+                json!({"generation":generation,"sequence":sequence}),
+            );
         }
         let stamp = match self.audio {
             Some((_, previous, at)) if sequence > previous => {
@@ -57,21 +95,43 @@ impl Presentation {
                 if pull.saturating_duration_since(stamp) > Duration::from_millis(30)
                     || stamp.saturating_duration_since(pull) > Duration::from_millis(250)
                 {
-                    self.clear();
-                    origin_us?;
+                    self.reset(
+                        "audio_deadline_out_of_bounds",
+                        pull,
+                        json!({
+                        "generation":generation,"sequence":sequence,"previous_sequence":previous,
+                        "late_us":pull.saturating_duration_since(stamp).as_micros(),
+                        "lead_us":stamp.saturating_duration_since(pull).as_micros()}),
+                    );
+                    if origin_us.is_none() {
+                        self.audio_startup_dropped += 1;
+                        return None;
+                    }
                     pull.checked_add(self.delay)?
                 } else {
                     stamp
                 }
             }
             Some(_) => {
-                self.clear();
-                origin_us?;
+                self.reset(
+                    "audio_sequence_regressed",
+                    pull,
+                    json!({"generation":generation,"sequence":sequence}),
+                );
+                if origin_us.is_none() {
+                    self.audio_startup_dropped += 1;
+                    return None;
+                }
                 pull.checked_add(self.delay)?
             }
             None => {
                 if origin_us.is_none() {
                     self.audio_startup_dropped += 1;
+                    self.note(
+                        "audio_waiting_for_maps",
+                        pull,
+                        json!({"generation":generation,"sequence":sequence}),
+                    );
                     return None;
                 }
                 pull.checked_add(self.delay)?
@@ -85,40 +145,64 @@ impl Presentation {
         Some(stamp)
     }
     pub fn video(&mut self, sender_us: Option<i64>, arrival: Instant) -> Option<Instant> {
-        let stamp = (|| {
-            let (audio_origin, audio_stamp, observed) = self.origin?;
-            if arrival.saturating_duration_since(observed) > Duration::from_millis(200) {
-                return None;
+        let result: Result<Instant, (&'static str, Value)> = (|| {
+            let (audio_origin, audio_stamp, observed) =
+                self.origin.ok_or(("video_no_audio_origin", Value::Null))?;
+            let age = arrival.saturating_duration_since(observed).as_micros();
+            if age > 200_000 {
+                return Err(("video_stale_audio_origin", json!({"age_us":age})));
             }
-            let delta = sender_us?.checked_sub(audio_origin)?;
+            let sender = sender_us.ok_or(("video_no_sender_map", Value::Null))?;
+            let delta = sender
+                .checked_sub(audio_origin)
+                .ok_or(("video_arithmetic_overflow", Value::Null))?;
+            let details = json!({"sender_us":sender,"audio_origin_us":audio_origin,"delta_us":delta,"origin_age_us":age});
             if delta.unsigned_abs() > 500_000 {
-                return None;
+                return Err(("video_origin_delta_out_of_bounds", details));
             }
             let stamp = if delta >= 0 {
-                audio_stamp.checked_add(Duration::from_micros(delta as u64))?
+                audio_stamp.checked_add(Duration::from_micros(delta as u64))
             } else {
-                audio_stamp.checked_sub(Duration::from_micros(delta.unsigned_abs()))?
-            };
-            if arrival.saturating_duration_since(stamp) > Duration::from_millis(30)
-                || stamp.saturating_duration_since(arrival) > Duration::from_millis(250)
-                || self.last_video.is_some_and(|last| stamp <= last)
-            {
-                return None;
+                audio_stamp.checked_sub(Duration::from_micros(delta.unsigned_abs()))
             }
-            Some(stamp)
+            .ok_or(("video_arithmetic_overflow", Value::Null))?;
+            let mut details = details;
+            let late = arrival.saturating_duration_since(stamp).as_micros();
+            let lead = stamp.saturating_duration_since(arrival).as_micros();
+            details["late_us"] = json!(late);
+            details["lead_us"] = json!(lead);
+            if late > 30_000 {
+                return Err(("video_deadline_late", details));
+            }
+            if lead > 250_000 {
+                return Err(("video_deadline_too_early", details));
+            }
+            if let Some(last) = self.last_video {
+                if stamp <= last {
+                    details["regression_us"] =
+                        json!(last.saturating_duration_since(stamp).as_micros());
+                    return Err(("video_deadline_nonmonotonic", details));
+                }
+            }
+            Ok(stamp)
         })();
-        if let Some(stamp) = stamp {
-            self.video_submitted += 1;
-            self.last_video = Some(stamp);
-        } else {
-            self.video_rejected += 1;
+        match result {
+            Ok(stamp) => {
+                self.video_submitted += 1;
+                self.last_video = Some(stamp);
+                Some(stamp)
+            }
+            Err((reason, details)) => {
+                self.video_rejected += 1;
+                self.note(reason, arrival, details);
+                None
+            }
         }
-        stamp
     }
     pub fn report(&self) -> Value {
         json!({"audio_master":true,"presentation_delay_ms":self.delay.as_millis(),
             "audio_submitted":self.audio_submitted,"audio_startup_dropped":self.audio_startup_dropped,
-            "video_submitted":self.video_submitted,"video_rejected":self.video_rejected,"clock_resets":self.resets,
+            "video_submitted":self.video_submitted,"video_rejected":self.video_rejected,"clock_resets":self.resets,"failure_reasons":self.reasons,"diagnostics":self.diagnostics,
             "sender_capture_time_qualified":false})
     }
 }
@@ -227,6 +311,41 @@ impl SelectedPlayback {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rejected_deadlines_are_explained_without_unbounding_history() {
+        let now = Instant::now();
+        let mut clock = Presentation::new(Duration::from_millis(120));
+        for _ in 0..1000 {
+            assert_eq!(clock.video(Some(1_000_000), now), None);
+        }
+        assert_eq!(clock.diagnostics.len(), 1);
+        assert_eq!(
+            clock.report()["failure_reasons"]["video_no_audio_origin"],
+            1000
+        );
+        clock.audio(1, 1, Some(1_000_000), now).unwrap();
+        assert_eq!(clock.video(Some(1_140_000), now), None);
+        assert_eq!(
+            clock.report()["failure_reasons"]["video_deadline_too_early"],
+            1
+        );
+        assert_eq!(clock.video(Some(840_000), now), None);
+        assert_eq!(clock.report()["failure_reasons"]["video_deadline_late"], 1);
+        for _ in 0..100 {
+            clock.video(None, now);
+            clock.video(Some(1_140_000), now);
+        }
+        assert_eq!(clock.diagnostics.len(), 64);
+        assert_eq!(
+            clock.video(Some(1_000_000), now),
+            Some(now + Duration::from_millis(120))
+        );
+        assert_eq!(clock.video(Some(1_000_000), now), None);
+        assert_eq!(
+            clock.report()["failure_reasons"]["video_deadline_nonmonotonic"],
+            1
+        );
+    }
     #[test]
     fn audio_stays_continuous_while_video_follows_current_sender_origin() {
         let now = Instant::now();

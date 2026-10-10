@@ -5,10 +5,11 @@ from pathlib import Path
 
 lab = Path(__file__).resolve().parents[1]
 results = []
-for path in sorted((lab/'evidence').glob('transport-obs-audio-master-encoded-*.json')):
+for path in sorted((lab/'evidence').glob('transport-obs-audio-master-*.json')):
     if path.stem.endswith(('-browser','-packet')):continue
     report = json.loads(path.read_text())
-    probe = report['obs_recording']['raw_video_pipeline_probe']
+    probe = report['obs_recording'].get('raw_video_pipeline_probe', {})
+    if 'packet_probe' not in probe: continue
     packets = probe['packet_probe']
     assert not packets['registered'] and packets['overflow'] == 0
     assert packets['count'] == len(packets['stamps'])

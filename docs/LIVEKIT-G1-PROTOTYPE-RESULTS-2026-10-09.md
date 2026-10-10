@@ -256,3 +256,50 @@ Next implementation work is stable presentation origin/deadline handling across
 startup and publication replacement, with rejection reasons and measured warmup.
 A fixed recording offset would not address these failures. Physical speakerphone
 AEC and production integration remain separate gates.
+
+
+### Deadline rejection trace checkpoint — October 10
+
+The lab now counts explicit video rejection and audio reset reasons and retains
+at most 64 diagnostic transitions with sender origins, deadline lead/late time,
+and observation age. Repeated adjacent reasons are coalesced; totals cover the
+whole run, while the bounded trace may omit earlier transitions. Startup-drop
+accounting also includes resets that cannot immediately acquire a fresh origin.
+The clock limits and two-report startup policy are unchanged.
+
+Three new finalized-format recordings separate startup/report waiting from
+presentation failures. Independent FFmpeg audio plus AVFoundation video yields:
+
+| Run | Matched-pair absolute p95 | Missing audio/video markers | Clock reasons |
+| --- | --- | --- | --- |
+| 30-second baseline | 55.33 ms | 0 / 0 | 547 startup blocks; 142 video frames without audio origin |
+| 45-second, three guests, three rejoins | 48.67 ms | 0 / 0 | 2,228 startup blocks; 606 video frames without audio origin |
+| 30-second video jitter | 60.00 ms | 3 / 0 | 745 startup blocks; 196 frames without origin, 91 overly early deadlines, seven late deadlines |
+
+Baseline and rejoin matched-marker tests pass locally, but they do not qualify
+startup/recovery: rejoin still suppresses 22.28 seconds of observed PCM across the
+initial startup and publication replacements. All 14 resets in this rejoin run
+were explicit publication binding clears; no audio clock drift/reset was observed.
+The previously failed rejoin run remains in the evidence. Run-to-run variability
+is unresolved; this is diagnosis, not proof of a synchronization fix.
+
+Jitter fails because three audio markers have no corresponding video. The trace
+shows a late group followed by video deadlines more than 250 ms ahead; the last
+reported early deadline leads arrival by 251.45 ms with sender video origin
+136.87 ms ahead of the current audio origin. Changing caps would hide the failure.
+The next clock experiment must address how sender origin labels relate to the
+continuous decoded-audio sample clock, and measure the transition to fresh maps
+without reusing another publication's clock. A nominal-rate first-report bootstrap
+is a possible lab experiment, not an approved replacement for qualified mapping.
+
+The baseline decoder analysis finished during the opening portion of the rejoin
+run; treat its latency figures as diagnostic, not a clean performance benchmark.
+No build/tests ran during recording. The jitter trace reports rendering stalls;
+physical speakerphone AEC, packaging and broader integration remain unqualified.
+
+Validation: 16 Rust tests; default and OBS-feature Clippy with warnings denied;
+17 recording/queue accounting checks; seven pre-mux clock traces; independent
+decoder comparison; formatting and diff checks. All callback/source retirement
+and bounded queue accounting checks pass. A low-disk build failure was corrected
+by removing inactive compiled caches. User sets/media/recordings and installed
+production were left intact. G1 remains incomplete; production is unchanged.

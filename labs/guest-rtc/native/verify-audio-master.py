@@ -25,6 +25,14 @@ for path in sorted((lab / 'evidence').glob('transport-obs-audio-master-*.json'))
     playback = r['audio_master_playback']
     mixer = r['timed_mixer_probe']
     assert playback['clock']['audio_master'] and not playback['obs_sync_qualified']
+    clock = playback['clock']
+    if 'failure_reasons' in clock:
+        reasons = clock['failure_reasons']
+        assert sum(n for reason, n in reasons.items() if reason.startswith('video_')) == clock['video_rejected']
+        assert sum(reasons.get(reason, 0) for reason in ['binding_clear', 'audio_generation_changed',
+            'audio_deadline_out_of_bounds', 'audio_sequence_regressed']) == clock['clock_resets']
+        assert len(clock['diagnostics']) <= 64
+        assert all(event['reason'] in reasons and event['repetitions'] > 0 for event in clock['diagnostics'])
     assert not r['g1_complete'] and not r['obs_recording']['qualified']
     assert playback['audio_binding'] and playback['video_binding']
     assert mixer['sources_alive'] == 0 and mixer['sources_created'] == mixer['sources_destroyed']
