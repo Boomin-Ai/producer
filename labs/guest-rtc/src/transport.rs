@@ -25,6 +25,8 @@ use webrtc_sys::{audio_track as audio_sys, video_frame as frame_sys, video_track
 struct AudioBlock {
     samples: Vec<i16>,
     first_sample: u64,
+    capture_timestamp_ms: Option<i64>,
+    resampled: bool,
 }
 struct AudioObserver {
     queue: Arc<Queue<AudioBlock>>,
@@ -33,6 +35,26 @@ struct AudioObserver {
 }
 impl audio_sys::AudioSink for AudioObserver {
     fn on_data(&self, data: &[i16], rate: i32, channels: usize, frames: usize) {
+        self.on_timed_data(
+            data,
+            rate,
+            channels,
+            frames,
+            audio_sys::ffi::AudioCaptureTiming {
+                has_capture_timestamp: false,
+                capture_timestamp_ms: 0,
+                resampled: false,
+            },
+        );
+    }
+    fn on_timed_data(
+        &self,
+        data: &[i16],
+        rate: i32,
+        channels: usize,
+        frames: usize,
+        timing: audio_sys::ffi::AudioCaptureTiming,
+    ) {
         let at = Instant::now();
         if rate != 48000 || channels != 1 || frames != 480 || data.len() != 480 {
             self.bad_format.fetch_add(1, Ordering::Relaxed);
@@ -46,6 +68,10 @@ impl audio_sys::AudioSink for AudioObserver {
             value: AudioBlock {
                 samples: data.to_vec(),
                 first_sample,
+                capture_timestamp_ms: timing
+                    .has_capture_timestamp
+                    .then_some(timing.capture_timestamp_ms),
+                resampled: timing.resampled,
             },
         });
     }
@@ -145,6 +171,11 @@ struct Measurements {
     audio_active: bool,
     video_active: bool,
     audio_blocks: u64,
+    audio_capture_timestamps: u64,
+    audio_resampled_blocks: u64,
+    capture_time_regressions: u64,
+    last_capture_timestamp_ms: Option<i64>,
+    capture_step_ms: Vec<f64>,
     video_frames: u64,
     audio_gaps: u64,
     next_sample: Option<u64>,
@@ -304,7 +335,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                                 if let Some(old) = audio.insert(id.clone(), AudioTap::new(&track)) {
                                     m.retired_queues.push(json!({"kind":"audio","sid":old.sid,"stats":old.observer.queue.stats()}));
                                 }
-                                m.next_sample = None; m.audio_active = false;
+                                m.next_sample = None; m.last_capture_timestamp_ms = None; m.audio_active = false;
                             },
                             RemoteTrack::Video(track) => {
                                 if let Some(old) = video.insert(id.clone(), VideoTap::new(&track)) {
@@ -350,6 +381,15 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                         m.audio_age.push(now.saturating_duration_since(frame.at).as_secs_f64() * 1000.0);
                         if m.next_sample.is_some_and(|sample| sample != frame.value.first_sample) { m.audio_gaps += 1; }
                         m.next_sample = Some(frame.value.first_sample + 480); m.audio_blocks += 1;
+                        if frame.value.resampled { m.audio_resampled_blocks += 1; }
+                        if let Some(capture) = frame.value.capture_timestamp_ms {
+                            m.audio_capture_timestamps += 1;
+                            if let Some(previous) = m.last_capture_timestamp_ms {
+                                if capture < previous { m.capture_time_regressions += 1; }
+                                m.capture_step_ms.push((capture - previous) as f64);
+                            }
+                            m.last_capture_timestamp_ms = Some(capture);
+                        } else { m.last_capture_timestamp_ms = None; }
                         let rms = (frame.value.samples.iter().map(|v| (*v as f64).powi(2)).sum::<f64>() / 480.0).sqrt();
                         let active = rms > 2000.0;
                         if active && !m.audio_active { m.audio_pulses.push(frame.at.duration_since(began).as_secs_f64() * 1000.0); }
@@ -397,7 +437,12 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
             "paired_callback_video_minus_audio_ms":offsets,"callback_av_abs_p95_ms":p95(&abs),
             "video_frames_with_ntp_metadata":m.video_ntp_nonzero,
             "retired_queues":m.retired_queues,
-            "original_audio_capture_timestamp_available":false})
+            "audio_blocks_with_capture_timestamp":m.audio_capture_timestamps,
+            "audio_resampled_blocks":m.audio_resampled_blocks,
+            "capture_timestamp_clock_domain":"WebRTC TimeMillis (unmapped to OBS)",
+            "capture_timestamp_regressions":m.capture_time_regressions,
+            "capture_timestamp_step_p95_ms":p95(&m.capture_step_ms),
+            "original_audio_capture_timestamp_available":m.audio_capture_timestamps > 0})
     }).collect();
     audio.clear();
     video.clear();
@@ -422,6 +467,35 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn missing_capture_time_is_distinct_from_zero_and_preserves_pcm() {
+        use audio_sys::AudioSink;
+        let observer = AudioObserver {
+            queue: Arc::new(Queue::new(3, Duration::from_millis(30))),
+            sample_count: AtomicU64::new(0),
+            bad_format: AtomicU64::new(0),
+        };
+        let pcm = [123i16; 480];
+        observer.on_data(&pcm, 48000, 1, 480);
+        observer.on_timed_data(
+            &pcm,
+            48000,
+            1,
+            480,
+            audio_sys::ffi::AudioCaptureTiming {
+                has_capture_timestamp: true,
+                capture_timestamp_ms: 0,
+                resampled: false,
+            },
+        );
+        let missing = observer.queue.pop(Instant::now()).unwrap().value;
+        let present = observer.queue.pop(Instant::now()).unwrap().value;
+        assert_eq!(missing.capture_timestamp_ms, None);
+        assert_eq!(present.capture_timestamp_ms, Some(0));
+        assert_eq!(missing.samples, present.samples);
+        assert_eq!(present.first_sample, 480);
+    }
+
     #[test]
     fn separated_periods_cannot_be_paired_as_synchronized() {
         assert!(pulse_offsets(&[500.0], &[1500.0]).is_empty());

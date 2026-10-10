@@ -17,6 +17,7 @@ webrtc-sys = "=0.3.48"
 cxx = "1.0"
 
 [patch.crates-io]
+webrtc-sys = { path = "vendor/webrtc-sys" }
 libwebrtc = { path = "vendor/libwebrtc" }
 
 [profile.dev]

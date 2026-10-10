@@ -92,3 +92,13 @@ The media callback stamps decoded delivery before application queueing. Audio sa
 Queues evict the oldest frame when full, reject stale audio older than 30 ms and stale video older than 50 ms, and count callback lock contention. Audio callbacks copy a 10 ms block into an owned Vec, so allocation and real-time callback suitability remain to be qualified. This bounds the application's decoded handoff only; SDK encoder/network/jitter buffers remain outside these measurements.
 
 Transport teardown removes sinks through RAII, aborts the publisher and clears its source buffer. Publication SIDs identify each track generation; stable guest identity keys measurements. An unsubscribe removes only the matching SID, so an old track's late teardown cannot remove its replacement. Retired queue evidence is saved. Admission, grants, host reclaim, source binding and private cue policies remain G2 work.
+
+### Optional capture-time investigation
+
+The native sink bridge now preserves optional WebRTC audio capture metadata. Run
+`LIVEKIT_LAB_RUN_NAME=transport-timed-sink node web/smoke.mjs 1 normal` and
+`LIVEKIT_LAB_RUN_NAME=transport-timed-republish node web/smoke.mjs 3 republish`
+sequentially with the local SFU and fixture server running. The October 9 fixtures
+supplied no audio capture timestamps and no video NTP metadata. See
+[the timing investigation](../../docs/LIVEKIT-G1-AUDIO-TIMING-EXTENSION.md).
+These runs still do not qualify OBS synchronization.
