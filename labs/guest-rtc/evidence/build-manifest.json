@@ -1,0 +1,38 @@
+{
+  "recorded_utc": "2026-10-10T02:02:41.487066+00:00",
+  "architecture": "arm64",
+  "os": "macOS-27.0.1-arm64-arm-64bit",
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01) (Homebrew)",
+  "livekit": "0.9.4",
+  "libwebrtc": "0.3.51 + prototype callback handle patch",
+  "webrtc_sys": "0.3.48",
+  "webrtc_sys_build": "0.3.19",
+  "native_release": "mac-arm64-release-webrtc-89d790b",
+  "native_archive_sha256": "979b6310063a49a022bc11cb55397e3ccef887ef23b613fed43afdc4769ea75e",
+  "livekit_js": "2.22.4",
+  "sfu": "livekit-server version 1.13.9",
+  "tls_feature": "rustls-tls-native-roots",
+  "cargo_lock_sha256": "98f4b5ad74d0b3260d7b2f24975ed74c669f7e88c127499a2ae902b42f788756",
+  "web_lock_sha256": "75914b278cd9b07f582e545d5173ae96d6bf00ae601441824944d6839f1cccbb",
+  "packaged_binary_sha256": "a25aadd1ee78927ff008032a649440a3a6fc3d8cc56ef3467997ff6210527a1a",
+  "macos_bundle_signing": "ad hoc, hardened runtime; no Developer ID or notarization",
+  "codesign_verification": true,
+  "packaged_windows_tested": false,
+  "tauri_obs_media_adapter_tested": false,
+  "physical_speaker_reference_tested": false,
+  "prototype_source_sha256": {
+    "src/apm.rs": "ef943644caed493f139736d6a54439d73cc2dae9a93d3c2b12d3c3b2f93771a1",
+    "src/fixture.rs": "457a7589e6c21f45b49aa1d66328155f39571cab169b78144657345d8243e537",
+    "src/main.rs": "c7e256d99efdc98a0530f437a1859f4bc8f2f0cb5f48dcf30c5cbce82cec3a1f",
+    "src/queue.rs": "cb1b34a738cc78e1d6488d1b0ccc4c12bffe23af0b3bcfff581d8802ec942ed9",
+    "src/transport.rs": "01e0290ab8a4a31ace4bbb8de600b9b003c777d8ad343e236081c42a3f4376ce"
+  },
+  "validation": {
+    "rust_tests_passed": 4,
+    "rust_tests_failed": 0,
+    "clippy_warnings": 0,
+    "legacy_node_tests_passed": 11,
+    "legacy_node_tests_failed": 0,
+    "legacy_obs_audio_checks_passed": 6
+  }
+}
