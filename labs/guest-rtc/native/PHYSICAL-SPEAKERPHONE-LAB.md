@@ -160,3 +160,18 @@ from a parent. It cannot be used to test this physical path accidentally.
 The first deliberate physical-SFU run and guest/camera synchronization remain
 pending; do not use this candidate for production or infer a full speakerphone
 routing acceptance from the earlier standalone AEC tests.
+
+
+The deliberate 20-second test runner is:
+
+```sh
+python3 native/run-physical-publication.py --publish-microphone
+```
+
+It owns/stops its loopback SFU and web server, launches the explicit physical
+browser harness, saves unique success/failure conditions and observes inbound
+RTP packet counts with exactly silent browser speaker output. No browser voice
+recording is created. Without the argument it rejects before starting services.
+Run only when the operator is prepared for local microphone publication.
+The headless guest publishes generated media only. This test cannot establish
+speakerphone behavior for real guest return playback or physical camera sync.

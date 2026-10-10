@@ -1114,3 +1114,15 @@ runner now clears physical flags to preserve its no-microphone contract.
 Both development binaries built. No physical SFU microphone publication was
 started; that requires the next deliberate operator test. G1 incomplete,
 installed Producer and production unchanged.
+
+
+Prepared `native/run-physical-publication.py` and `web/physical-smoke.mjs` for
+an explicit 20-second local microphone trial. The runner owns its services,
+uses a unique evidence name, clears inherited lab configuration, and stops its
+process group on timeout. Browser return audio is analysed for inbound packets
+and aggregate level with gain zero; no voice recording. Both wrappers require
+explicit microphone-publication arguments, and the ordinary generated smoke
+now rejects inherited physical flags. Argument-omission rejection and Python/
+JavaScript syntax checks passed. The operator has been asked for readiness
+before starting this distinct physical publication test; no test audio was
+published while preparing the runner.
