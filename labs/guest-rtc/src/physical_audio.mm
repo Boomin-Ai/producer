@@ -11,19 +11,22 @@
 
 static std::atomic<int> states_alive{0}, owners_alive{0};
 struct LabBlock { uint64_t host_ns; int16_t samples[480]; };
+// AVAudioEngine may deliver 100 ms tap batches despite bufferSize:480.
+// Bound each ring to 320 ms to accommodate batches/startup; drain promptly.
 // One tap produces each ring; Rust's main thread is its single consumer.
+static constexpr size_t ring_capacity=32;
 struct Ring {
-    std::array<LabBlock,8> blocks{};
+    std::array<LabBlock,ring_capacity> blocks{};
     std::atomic<uint64_t> written{0}, read{0}, dropped{0};
     void push(const LabBlock &block) {
         auto w=written.load(std::memory_order_relaxed);
-        if(w-read.load(std::memory_order_acquire)>=8) { dropped++; return; }
-        blocks[w%8]=block; written.store(w+1,std::memory_order_release);
+        if(w-read.load(std::memory_order_acquire)>=ring_capacity) { dropped++; return; }
+        blocks[w%ring_capacity]=block; written.store(w+1,std::memory_order_release);
     }
     bool pop(LabBlock *block) {
         auto r=read.load(std::memory_order_relaxed);
         if(r==written.load(std::memory_order_acquire)) return false;
-        *block=blocks[r%8]; read.store(r+1,std::memory_order_release); return true;
+        *block=blocks[r%ring_capacity]; read.store(r+1,std::memory_order_release); return true;
     }
 };
 struct State {
@@ -35,11 +38,14 @@ struct State {
     mach_timebase_info_data_t timebase{};
     std::atomic<bool> stopping{false};
     std::atomic<uint64_t> callbacks{0}, errors{0}, clipped{0};
+    std::atomic<uint64_t> speaker_max_frames{0}, mic_max_frames{0};
     State() { states_alive++; mach_timebase_info(&timebase); }
     ~State() { states_alive--; }
     uint64_t ns(uint64_t ticks) const { return (uint64_t)((__uint128_t)ticks*timebase.numer/timebase.denom); }
     void tap(AVAudioPCMBuffer *pcm,AVAudioTime *time,bool render) {
         callbacks++;
+        auto &max_frames=render?speaker_max_frames:mic_max_frames;
+        if(pcm.frameLength>max_frames.load()) max_frames=pcm.frameLength;
         if(!stopping.load()) {
             if(!time.hostTimeValid || pcm.format.sampleRate!=48000 ||
                 pcm.format.commonFormat!=AVAudioPCMFormatFloat32 || pcm.format.interleaved ||
@@ -155,6 +161,12 @@ extern "C" uint64_t lab_audio_faults(void *handle) {
     auto s=((Owner*)handle)->state;
     return s->errors+s->speaker.dropped+s->mic.dropped;
 }
+extern "C" void lab_audio_fault_detail(void *handle,char *message,size_t length) {
+    auto s=((Owner*)handle)->state;
+    snprintf(message,length,"native errors=%llu, speaker overflow=%llu, microphone overflow=%llu (capacity=%zu blocks)",
+        (unsigned long long)s->errors.load(),(unsigned long long)s->speaker.dropped.load(),
+        (unsigned long long)s->mic.dropped.load(),ring_capacity);
+}
 extern "C" int lab_audio_close(void *handle,uint64_t *stats) {
     auto *owner=(Owner*)handle;
     auto s=owner->state;
@@ -164,15 +176,22 @@ extern "C" int lab_audio_close(void *handle,uint64_t *stats) {
     stats[0]=s->speaker.written;stats[1]=s->speaker.read;stats[2]=s->speaker.dropped;
     stats[3]=s->mic.written;stats[4]=s->mic.read;stats[5]=s->mic.dropped;
     stats[6]=s->callbacks;stats[7]=s->errors;stats[8]=s->clipped;
+    stats[9]=s->speaker_max_frames;stats[10]=s->mic_max_frames;
     s.reset();
     return weak.expired() && owners_alive==0;
 }
 extern "C" int lab_audio_self_test() {
     for(int round=0;round<20;round++) {
         { Ring ring; LabBlock in{}; in.samples[0]=321;
-          for(int n=0;n<9;n++) {in.host_ns=n;ring.push(in);} 
-          LabBlock out{}; for(int n=0;n<8;n++) if(!ring.pop(&out)||out.host_ns!=(uint64_t)n||out.samples[0]!=321)return 0;
+          for(size_t n=0;n<ring_capacity+1;n++) {in.host_ns=n;ring.push(in);}
+          LabBlock out{}; for(size_t n=0;n<ring_capacity;n++) if(!ring.pop(&out)||out.host_ns!=(uint64_t)n||out.samples[0]!=321)return 0;
           if(ring.pop(&out)||ring.dropped!=1)return 0;
+        }
+        { // A single 4,800-frame tap burst must fit without dropping blocks.
+            Ring ring; LabBlock block{};
+            for(int n=0;n<10;n++) {block.host_ns=n;ring.push(block);}
+            for(int n=0;n<10;n++) if(!ring.pop(&block)||block.host_ns!=(uint64_t)n)return 0;
+            if(ring.dropped || ring.written!=ring.read)return 0;
         }
         {
             Ring ring; std::atomic<bool> done{false}; bool ordered=true; uint64_t previous=0; bool first=true;
@@ -221,7 +240,7 @@ extern "C" void lab_ui_open() {
 extern "C" int lab_ui_poll() {
     @autoreleasepool {
         NSEvent *next;
-        while((next=[NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.001] inMode:NSDefaultRunLoopMode dequeue:YES])) [NSApp sendEvent:next];
+        for(int count=0;count<16 && (next=[NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.001] inMode:NSDefaultRunLoopMode dequeue:YES]);count++) [NSApp sendEvent:next];
         [NSApp updateWindows];return event.exchange(0);
     }
 }

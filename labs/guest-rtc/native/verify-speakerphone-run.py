@@ -18,7 +18,7 @@ assert life["owners_and_callback_state_retired"] and life["callbacks_active"] ==
 assert life["format_or_timeline_errors"] == report["invalid_delay_blocks"] == 0
 for kind, blocks in [("speaker", report["speaker_blocks"]), ("microphone", report["microphone_blocks"])]:
     queue = life[kind]
-    assert queue["capacity"] == 8 and queue["overflow"] == 0
+    assert queue["capacity"] == 32 and queue["overflow"] == 0
     assert queue["queued"] == queue["consumed"] + queue["pending_retired"]
     held = int(report["capture_hold_retired"]) if kind == "microphone" else 0
     assert queue["consumed"] == blocks + held

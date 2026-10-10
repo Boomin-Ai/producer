@@ -26,7 +26,10 @@ processing disabled. It rejects unsupported formats instead of silently
 resampling or substituting an earlier reference. Other applications' audio and
 hardware-volume calibration are outside this engine's reference scope.
 
-Each tap copies PCM into an eight-block SPSC ring, each block 10 ms. Callbacks
+Each tap copies PCM into a 32-block SPSC ring, each block 10 ms. The 320 ms
+capacity accommodates AVAudioEngine tap batches and startup; it is a safety
+bound, not an intentional processing delay. The owner drains queued blocks
+promptly. Maximum observed tap frame counts are reported. Callbacks
 allocate no PCM buffers, run no APM, and perform no filesystem writes. A named
 Rust owner drains render before capture and supplies the WebRTC APM reverse
 stream. One additional microphone block can wait for render for at most 80 ms.
@@ -53,3 +56,13 @@ at 50% and 75%, review double talk/near-only recordings, verify teardown and
 compare with the speakerphone contract. LiveKit microphone publication, host
 mix-minus, private-cue switching, device change recovery and other platforms
 remain integration work.
+
+First hardware attempt (`evidence/speakerphone-startup-overflow.json`) stopped
+after 0.131 seconds: both eight-block rings had eight queued blocks and two
+overflows, with zero consumed blocks and zero native format/timeline errors.
+The microphone and speaker callbacks therefore delivered at least ten blocks
+before the first pump. No AEC result was collected. The revised 32-block bound
+is covered by a ten-block single-burst self-test and reports maximum tap frame
+counts so the next physical run can distinguish callback batching from slower
+consumer scheduling. Overflow remains a hard failure; no dropped audio is
+accepted as a successful run.

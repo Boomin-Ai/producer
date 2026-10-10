@@ -13,6 +13,8 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
+const QUEUE_CAPACITY: usize = 32;
+
 #[repr(C)]
 struct Block {
     host_ns: u64,
@@ -29,6 +31,7 @@ unsafe extern "C" {
     fn lab_audio_start(handle: *mut c_void, error: *mut c_char, length: usize) -> i32;
     fn lab_audio_pop(handle: *mut c_void, render: i32, block: *mut Block) -> i32;
     fn lab_audio_faults(handle: *mut c_void) -> u64;
+    fn lab_audio_fault_detail(handle: *mut c_void, message: *mut c_char, length: usize);
     fn lab_audio_close(handle: *mut c_void, stats: *mut u64) -> i32;
     fn lab_audio_self_test() -> i32;
     fn lab_ui_open();
@@ -79,12 +82,12 @@ impl Device {
         if self.handle.is_null() {
             return json!({"already_closed":true});
         }
-        let mut counts = [0u64; 9];
+        let mut counts = [0u64; 11];
         let retired = unsafe { lab_audio_close(self.handle, counts.as_mut_ptr()) } != 0;
         self.handle = std::ptr::null_mut();
-        json!({"owners_and_callback_state_retired":retired,"callbacks_active":counts[6],"format_or_timeline_errors":counts[7],"clipped_samples":counts[8],
-            "speaker":{"queued":counts[0],"consumed":counts[1],"overflow":counts[2],"pending_retired":counts[0]-counts[1],"capacity":8},
-            "microphone":{"queued":counts[3],"consumed":counts[4],"overflow":counts[5],"pending_retired":counts[3]-counts[4],"capacity":8}})
+        json!({"owners_and_callback_state_retired":retired,"callbacks_active":counts[6],"format_or_timeline_errors":counts[7],"clipped_samples":counts[8],"maximum_tap_frames":{"speaker":counts[9],"microphone":counts[10]},
+            "speaker":{"queued":counts[0],"consumed":counts[1],"overflow":counts[2],"pending_retired":counts[0]-counts[1],"capacity":QUEUE_CAPACITY},
+            "microphone":{"queued":counts[3],"consumed":counts[4],"overflow":counts[5],"pending_retired":counts[3]-counts[4],"capacity":QUEUE_CAPACITY}})
     }
 }
 impl Drop for Device {
@@ -192,13 +195,19 @@ impl Session {
         Ok(session)
     }
     fn pump(&mut self) -> Result<bool> {
-        ensure!(
-            unsafe { lab_audio_faults(self.device.handle) } == 0,
-            "Device configuration, format, timestamp or bounded-queue fault; test stopped"
-        );
+        if unsafe { lab_audio_faults(self.device.handle) } != 0 {
+            let mut message = [0i8; 256];
+            unsafe {
+                lab_audio_fault_detail(self.device.handle, message.as_mut_ptr(), message.len())
+            };
+            bail!(
+                "Audio stopped: {}",
+                unsafe { CStr::from_ptr(message.as_ptr()) }.to_string_lossy()
+            );
+        }
         // Feed all device-bound render blocks before capture. APM runs on this
         // owner thread; audio callbacks only copy into fixed-capacity rings.
-        for _ in 0..8 {
+        for _ in 0..QUEUE_CAPACITY {
             let Some(block) = self.device.pop(true) else {
                 break;
             };
@@ -213,7 +222,7 @@ impl Session {
             writeln!(self.stamps, "speaker,{},,", block.host_ns)?;
         }
         if let Some(render) = self.latest_render {
-            for _ in 0..8 {
+            for _ in 0..QUEUE_CAPACITY {
                 let waiting = self.pending_mic.is_some();
                 let Some(block) = self.pending_mic.take().or_else(|| self.device.pop(false)) else {
                     break;
