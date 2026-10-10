@@ -1044,3 +1044,27 @@ must establish whether the failure recurs and report its precise category.
 After stable starts, connect this hardware callback path to the bounded
 publication handoff and measure actual SDK/receiver synchronization and owned
 monitor-reference routing. G1 remains incomplete; production unchanged.
+
+
+### Startup continuity failure isolated; bounded warmup candidate
+
+The short physical restart failed after 73.018 ms with first speaker/microphone
+fault codes 3/3 (callback timeline discontinuity), one accepted block per stream,
+zero overflow, and clean teardown. This establishes the category and initial
+location; the precise host-clock jump was not recorded. Evidence is retained
+in `labs/guest-rtc/evidence/native-io-startup-discontinuity.json`.
+
+The candidate quarantines a fixed 250 ms of initial hardware callback PCM;
+these samples are counted separately and never recorded or processed. It does
+not reset an active stream on a gap, alter the 2 ms continuity tolerance, or
+retry failed starts. Every post-deadline callback is checked against the
+previous callback end, including exact 480-frame block boundaries (previously
+only a partial-block continuation checked that boundary). Format and buffer
+checks still apply during warmup. Synthetic tests verify discarded startup
+samples, contiguous accepted samples and a later whole-block gap rejected with
+fault code 3. Twenty lifecycle cycles and strict Objective-C++ checks passed;
+the development app is repackaged with its ad-hoc signature verified. Physical
+restart acceptance remains pending. The bundled clip schedule starts with the
+engine, so this warmup shortens its initial recorded silence by about 250 ms.
+The prior complete run and voice review remain evidence for the prior binary,
+not qualification of this startup candidate. No production changes.

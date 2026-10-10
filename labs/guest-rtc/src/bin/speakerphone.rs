@@ -105,10 +105,10 @@ impl Device {
         if self.handle.is_null() {
             return json!({"already_closed":true});
         }
-        let mut counts = [0u64; 13];
+        let mut counts = [0u64; 15];
         let retired = unsafe { lab_audio_close(self.handle, counts.as_mut_ptr()) } != 0;
         self.handle = std::ptr::null_mut();
-        json!({"owners_and_callback_state_retired":retired,"callbacks_active":counts[6],"render_notifications_alive":unsafe {lab_audio_notifications_alive()},"format_or_timeline_errors":counts[7],"first_io_fault":{"speaker":counts[11],"microphone":counts[12],"codes":"0 none; 1 timestamp/layout; 2 buffer; 3 timeline; 4 nonfinite sample; 5 post-render error; 6 configuration change"},"clipped_samples":counts[8],"maximum_tap_frames":{"speaker":counts[9],"microphone":counts[10]},
+        json!({"owners_and_callback_state_retired":retired,"callbacks_active":counts[6],"render_notifications_alive":unsafe {lab_audio_notifications_alive()},"format_or_timeline_errors":counts[7],"startup_quarantine":{"duration_ms":250,"speaker_frames":counts[13],"microphone_frames":counts[14],"scope":"I/O callback mode only; PCM before the fixed deadline is not recorded or processed"},"first_io_fault":{"speaker":counts[11],"microphone":counts[12],"codes":"0 none; 1 timestamp/layout; 2 buffer; 3 timeline; 4 nonfinite sample; 5 post-render error; 6 configuration change"},"clipped_samples":counts[8],"maximum_tap_frames":{"speaker":counts[9],"microphone":counts[10]},
             "speaker":{"queued":counts[0],"consumed":counts[1],"overflow":counts[2],"pending_retired":counts[0]-counts[1],"capacity":QUEUE_CAPACITY},
             "microphone":{"queued":counts[3],"consumed":counts[4],"overflow":counts[5],"pending_retired":counts[3]-counts[4],"capacity":QUEUE_CAPACITY}})
     }

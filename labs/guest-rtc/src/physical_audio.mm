@@ -40,6 +40,9 @@ struct State {
     std::atomic<uint64_t> callbacks{0}, errors{0}, clipped{0};
     std::atomic<uint64_t> speaker_max_frames{0}, mic_max_frames{0};
     uint32_t mic_channels=1;
+    uint64_t startup_until_ns=0;
+    uint64_t speaker_next_ns=0,mic_next_ns=0;
+    std::atomic<uint64_t> speaker_startup_frames{0},mic_startup_frames{0};
     // First fault per I/O stream: 1=timestamp/layout, 2=buffer, 3=timeline,
     // 4=nonfinite sample, 5=post-render error, 6=engine configuration change.
     std::atomic<uint64_t> speaker_fault{0},mic_fault{0};
@@ -73,6 +76,17 @@ struct State {
         auto &fill=render?speaker_fill:mic_fill;
         auto &ring=render?speaker:mic;
         auto start=ns(time->mHostTime);
+        auto &next=render?speaker_next_ns:mic_next_ns;
+        bool continuous=!next || std::llabs((int64_t)start-(int64_t)next)<=2000000;
+        next=start+(uint64_t)frames*1000000000/48000;
+        // The engine's first hardware callbacks may adjust both clocks. Quarantine
+        // a fixed 250 ms before accepting any PCM, never splice across that period.
+        // Afterward every callback must be continuous, including block boundaries.
+        if(startup_until_ns && start<startup_until_ns) {
+            (render?speaker_startup_frames:mic_startup_frames)+=frames;
+            callbacks--;return noErr;
+        }
+        if(!continuous) {fault(render,3);callbacks--;return kAudio_ParamError;}
         if(fill && std::llabs((int64_t)start-(int64_t)(part.host_ns+fill*1000000000/48000))>2000000) {
             fault(render,3); callbacks--; return kAudio_ParamError;
         }
@@ -285,6 +299,8 @@ extern "C" int lab_audio_notifications_alive() { return notifications_alive.load
 extern "C" int lab_audio_start(void *handle,char *error,size_t length) {
     @autoreleasepool { @try {
         NSError *problem=nil;
+        auto *owner=(Owner*)handle;
+        if(owner->sink)owner->state->startup_until_ns=lab_audio_now_ns()+250000000;
         if(![((Owner*)handle)->engine startAndReturnError:&problem]) { snprintf(error,length,"%s",problem.localizedDescription.UTF8String); return 0; }
         return 1;
     } @catch(NSException *exception) { snprintf(error,length,"%s",exception.reason.UTF8String); return 0; } }
@@ -315,6 +331,7 @@ extern "C" int lab_audio_close(void *handle,uint64_t *stats) {
     stats[6]=s->callbacks;stats[7]=s->errors;stats[8]=s->clipped;
     stats[9]=s->speaker_max_frames;stats[10]=s->mic_max_frames;
     stats[11]=s->speaker_fault;stats[12]=s->mic_fault;
+    stats[13]=s->speaker_startup_frames;stats[14]=s->mic_startup_frames;
     s.reset();
     return weak.expired() && owners_alive==0 && notifications_alive==0;
 }
@@ -346,6 +363,21 @@ extern "C" int lab_audio_self_test() {
             int16_t pcm[480]={}; char error[256]={};
             if(lab_audio_create(pcm,480,stage,error,sizeof(error)) || states_alive || owners_alive) return 0;
             if(lab_audio_create_io(pcm,480,stage,error,sizeof(error)) || states_alive || owners_alive || notifications_alive)return 0;
+        }
+        { // Startup clock adjustments never become accepted PCM; later gaps fail
+          // even when the previous callback ended at a full 480-frame boundary.
+            State state;
+            std::array<float,480> pcm{};
+            AudioBufferList mono={1,{{1,sizeof(pcm),pcm.data()}}};
+            auto first=mach_absolute_time();state.startup_until_ns=state.ns(first)+250000000;
+            for(uint64_t ms:{0,100,240,250,260,280}) {
+                AudioTimeStamp time{};time.mFlags=kAudioTimeStampHostTimeValid;
+                time.mHostTime=first+(uint64_t)((__uint128_t)ms*1000000*state.timebase.denom/state.timebase.numer);
+                auto result=state.io(&time,480,&mono,false);
+                if((ms==280 && result!=kAudio_ParamError) || (ms!=280 && result!=noErr))return 0;
+            }
+            if(state.mic_startup_frames!=1440 || state.mic.written!=2 ||
+                state.mic_fault!=3 || state.errors!=1 || state.callbacks)return 0;
         }
         { // Exercise actual AudioUnit notification registration without hardware
           // capture, then copy 512-frame callbacks into contiguous 10 ms PCM.
