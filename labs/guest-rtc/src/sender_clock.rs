@@ -63,6 +63,11 @@ impl SenderClock {
         }
         self.latest = Some(report);
     }
+    #[cfg(any(feature = "obs-proof", test))]
+    pub fn ready(&self, now_us: i64) -> bool {
+        self.latest
+            .is_some_and(|last| self.origin_ntp_us(last.rtp_timestamp, now_us).is_some())
+    }
     pub fn origin_ntp_us(&self, rtp: u32, now_us: i64) -> Option<i64> {
         let (first, last) = (self.previous?, self.latest?);
         let age = now_us.checked_sub(last.observed_us)?;
@@ -178,6 +183,18 @@ impl DecodedOrigins {
         for source in self.sources.values_mut() {
             source.refresh(&self.reports);
         }
+    }
+    #[cfg(feature = "obs-proof")]
+    pub fn origin_for(
+        &self,
+        frame: &webrtc_sys::webrtc::ffi::DecodedAudioBlock,
+        now_us: i64,
+    ) -> Option<i64> {
+        let source = self.sources.get(&frame.generation)?;
+        if source.clock.ssrc != frame.ssrc {
+            return None;
+        }
+        source.clock.origin_ntp_us(frame.rtp_timestamp, now_us)
     }
     pub fn consume(&mut self, frame: &webrtc_sys::webrtc::ffi::DecodedAudioBlock, now_us: i64) {
         if !self.sources.contains_key(&frame.generation) && self.sources.len() >= 64 {

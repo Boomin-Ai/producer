@@ -3,6 +3,8 @@ mod fixture;
 #[cfg(feature = "obs-proof")]
 mod obs_proof;
 mod playout_clock;
+#[cfg(any(feature = "obs-proof", test))]
+mod presentation;
 mod queue;
 mod sender_clock;
 mod transport;
@@ -39,6 +41,11 @@ async fn run() -> anyhow::Result<()> {
             let dir = args.next().unwrap_or_else(|| "evidence/apm".into());
             let speech = args.next();
             fixture::run(std::path::Path::new(&dir), speech.as_deref().map(std::path::Path::new))
+        }
+        #[cfg(feature = "obs-proof")]
+        Some("obs-lifecycle") => {
+            let output=args.next().ok_or_else(||anyhow::anyhow!("Evidence path required"))?;
+            obs_proof::lifecycle(std::path::Path::new(&output))
         }
         Some("transport") => {
             let token = args.next().ok_or_else(|| anyhow::anyhow!("Token file required"))?;

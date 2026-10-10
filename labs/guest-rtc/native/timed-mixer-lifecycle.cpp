@@ -78,7 +78,7 @@ int main() {
     source.channels = 2; mixer->Mix(2,&output); source.channels = 1;
     assert(state->records[0].pcm_format_rejected == 0);
     blocks = take_timed_pcm_blocks(state->records[0].pull_us);
-    assert(blocks.size() == 1 && blocks[0].channels == 2 && blocks[0].pcm[959] == 456);
+    assert(blocks.size() == 1 && blocks[0].channels == 2 && blocks[0].pcm[959] == 456 && blocks[0].sequence == 9);
     // Exercise removal serialized against an in-flight audio pull.
     std::thread pull([&] { for (int i = 0; i < 20; ++i) mixer->Mix(1,&output); });
     mixer->RemoveSource(&source); pull.join();

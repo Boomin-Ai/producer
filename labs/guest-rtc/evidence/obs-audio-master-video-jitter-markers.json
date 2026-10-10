@@ -1,0 +1,149 @@
+{
+  "audio_detector_window_max_ms" : 10,
+  "audio_marker_pts_ms" : [
+    11233.333333333334,
+    13201.333333333334,
+    15199.333333333334,
+    17216.666666666668,
+    19204.666666666668,
+    21202.666666666668,
+    23270.666666666668,
+    25268.666666666668,
+    27246,
+    29234,
+    31242,
+    33229.333333333328,
+    35227.333333333336
+  ],
+  "audio_samples_decoded" : 1704896,
+  "browser_source_paint_uncertainty_ms" : 33.333333333333336,
+  "decoder" : "macOS AVFoundation",
+  "duration_seconds" : 35.5546875,
+  "g1_complete" : false,
+  "late_minus_early_median_offset_ms" : 99.33333333333394,
+  "lip_sync_qualified" : false,
+  "network_impairment_qualified" : false,
+  "observed_marker_test_pass" : false,
+  "pairs" : [
+    {
+      "audio_pts_ms" : 11233.333333333334,
+      "video_minus_audio_ms" : 88.02083333333394,
+      "video_pts_ms" : 11321.354166666668
+    },
+    {
+      "audio_pts_ms" : 13201.333333333334,
+      "video_minus_audio_ms" : 186.6875,
+      "video_pts_ms" : 13388.020833333334
+    },
+    {
+      "audio_pts_ms" : 15199.333333333334,
+      "video_minus_audio_ms" : 122.02083333333394,
+      "video_pts_ms" : 15321.354166666668
+    },
+    {
+      "audio_pts_ms" : 17216.666666666668,
+      "video_minus_audio_ms" : 104.68749999999636,
+      "video_pts_ms" : 17321.354166666664
+    },
+    {
+      "audio_pts_ms" : 19204.666666666668,
+      "video_minus_audio_ms" : 183.35416666666424,
+      "video_pts_ms" : 19388.020833333332
+    },
+    {
+      "audio_pts_ms" : 21202.666666666668,
+      "video_minus_audio_ms" : 185.35416666666424,
+      "video_pts_ms" : 21388.020833333332
+    },
+    {
+      "audio_pts_ms" : 23270.666666666668,
+      "video_minus_audio_ms" : 184.02083333333212,
+      "video_pts_ms" : 23454.6875
+    },
+    {
+      "audio_pts_ms" : 25268.666666666668,
+      "video_minus_audio_ms" : 152.6875,
+      "video_pts_ms" : 25421.354166666668
+    },
+    {
+      "audio_pts_ms" : 27246,
+      "video_minus_audio_ms" : 175.35416666666788,
+      "video_pts_ms" : 27421.354166666668
+    },
+    {
+      "audio_pts_ms" : 29234,
+      "video_minus_audio_ms" : 187.35416666666788,
+      "video_pts_ms" : 29421.354166666668
+    },
+    {
+      "audio_pts_ms" : 31242,
+      "video_minus_audio_ms" : 179.35416666666788,
+      "video_pts_ms" : 31421.354166666668
+    },
+    {
+      "audio_pts_ms" : 33229.333333333328,
+      "video_minus_audio_ms" : 258.6875,
+      "video_pts_ms" : 33488.020833333328
+    },
+    {
+      "audio_pts_ms" : 35227.333333333336,
+      "video_minus_audio_ms" : 194.02083333332848,
+      "video_pts_ms" : 35421.354166666664
+    }
+  ],
+  "pulse_recrossing_collapse_window_ms" : 150,
+  "raw_audio_threshold_crossings_ms" : [
+    11233.333333333334,
+    13201.333333333334,
+    15199.333333333334,
+    17216.666666666668,
+    19204.666666666668,
+    21202.666666666668,
+    23270.666666666668,
+    25268.666666666668,
+    27246,
+    29234,
+    31242,
+    33229.333333333328,
+    35227.333333333336,
+    35358
+  ],
+  "raw_video_threshold_crossings_ms" : [
+    11321.354166666668,
+    13388.020833333334,
+    15321.354166666668,
+    17321.354166666664,
+    19388.020833333332,
+    21388.020833333332,
+    23454.6875,
+    25421.354166666668,
+    27421.354166666668,
+    29421.354166666668,
+    31421.354166666668,
+    33488.020833333328,
+    35421.354166666664
+  ],
+  "recorded_av_abs_p95_ms" : 194.02083333332848,
+  "recorded_video_minus_audio_median_ms" : 183.35416666666424,
+  "recording" : "obs-audio-master-video-jitter.mp4",
+  "schema_version" : 2,
+  "source_pulse_duration_ms" : 120,
+  "unmatched_audio_markers" : 0,
+  "unmatched_video_markers" : 0,
+  "video_frames_decoded" : 1066,
+  "video_marker_pts_ms" : [
+    11321.354166666668,
+    13388.020833333334,
+    15321.354166666668,
+    17321.354166666664,
+    19388.020833333332,
+    21388.020833333332,
+    23454.6875,
+    25421.354166666668,
+    27421.354166666668,
+    29421.354166666668,
+    31421.354166666668,
+    33488.020833333328,
+    35421.354166666664
+  ]
+}

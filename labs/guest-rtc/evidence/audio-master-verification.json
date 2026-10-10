@@ -1,0 +1,256 @@
+[
+  {
+    "run": "transport-obs-audio-master-audio-jitter",
+    "evidence_sha256": "10ca6d7671fc550df750967c425d3d71e443b450076139cb3210620ed8329899",
+    "recorded_abs_p95_ms": 104.64583333333212,
+    "matched_markers": 11,
+    "unmatched_audio": 1,
+    "unmatched_video": 0,
+    "local_marker_gate_passed": false,
+    "bounded_accounting_verified": true,
+    "g1_complete": false
+  },
+  {
+    "run": "transport-obs-audio-master-baseline",
+    "evidence_sha256": "4d1661189405e24d553cd2465bc8ee7f0118de773051042282fdd98856f63912",
+    "recorded_abs_p95_ms": 38.02083333333212,
+    "matched_markers": 12,
+    "unmatched_audio": 0,
+    "unmatched_video": 0,
+    "local_marker_gate_passed": true,
+    "bounded_accounting_verified": true,
+    "g1_complete": false
+  },
+  {
+    "run": "transport-obs-audio-master-media-pipeline-baseline",
+    "evidence_sha256": "05fe1266b4a9a1f6b599f861241fe8efaac66664f5741de97bb7576294559f2b",
+    "recorded_abs_p95_ms": 78.68750000000364,
+    "matched_markers": 10,
+    "unmatched_audio": 0,
+    "unmatched_video": 0,
+    "local_marker_gate_passed": true,
+    "bounded_accounting_verified": true,
+    "g1_complete": false,
+    "raw_pipeline_trace": [
+      {
+        "kind": "audio",
+        "input_to_raw_output_ms": [
+          30.961125,
+          26.294459,
+          31.627792,
+          25.627792,
+          9.627792,
+          36.294459,
+          31.627792,
+          25.627792,
+          30.961125,
+          26.294459
+        ],
+        "unmatched_input": 0,
+        "unmatched_output": 0
+      },
+      {
+        "kind": "video",
+        "input_to_raw_output_ms": [
+          28.057468,
+          12.156115,
+          12.183095,
+          -2.772925,
+          8.363055,
+          24.182368,
+          11.443015,
+          26.862328,
+          31.674308,
+          18.442955
+        ],
+        "unmatched_input": 0,
+        "unmatched_output": 0
+      }
+    ],
+    "raw_video_minus_audio_ms": [
+      27.009343,
+      -1.657344,
+      -6.990697,
+      -0.990717,
+      15.009263,
+      21.675909,
+      -6.990777,
+      32.342536,
+      27.009183,
+      -1.657504
+    ],
+    "raw_unmatched_audio": 0,
+    "raw_unmatched_video": 0,
+    "recording_minus_raw_offset_ms": [
+      46.34482366666788,
+      43.67817733333394,
+      51.678197,
+      37.678217,
+      43.678236999999996,
+      52.344924333335754,
+      40.34494366666424,
+      46.344964000003635,
+      43.678317,
+      41.678337333332124
+    ]
+  },
+  {
+    "run": "transport-obs-audio-master-media-pipeline-video-jitter",
+    "evidence_sha256": "cfc80ae63d0a218f84cdb51b9a124fb88edd8c70cb3c3268db161e9c05ac35c0",
+    "recorded_abs_p95_ms": 94.02083333333212,
+    "matched_markers": 11,
+    "unmatched_audio": 0,
+    "unmatched_video": 0,
+    "local_marker_gate_passed": false,
+    "bounded_accounting_verified": true,
+    "g1_complete": false,
+    "raw_pipeline_trace": [
+      {
+        "kind": "audio",
+        "input_to_raw_output_ms": [
+          20.321917,
+          11.65525,
+          16.988583,
+          22.321917,
+          27.65525,
+          24.321917,
+          19.65525,
+          24.988583,
+          18.988583,
+          25.65525,
+          20.988583
+        ],
+        "unmatched_input": 0,
+        "unmatched_output": 0
+      },
+      {
+        "kind": "video",
+        "input_to_raw_output_ms": [
+          15.320612,
+          21.950592,
+          4.900572,
+          16.425552,
+          20.226865,
+          18.983178,
+          35.479158,
+          35.683138,
+          25.757785,
+          29.152098,
+          15.548078
+        ],
+        "unmatched_input": 0,
+        "unmatched_output": 0
+      }
+    ],
+    "raw_video_minus_audio_ms": [
+      -30.720305,
+      17.946342,
+      12.612989,
+      7.279635,
+      25.279615,
+      41.946261,
+      46.612908,
+      41.279555,
+      13.946202,
+      20.612848,
+      25.279495
+    ],
+    "raw_unmatched_audio": 0,
+    "raw_unmatched_video": 0,
+    "recording_minus_raw_offset_ms": [
+      44.74113833333212,
+      38.741158,
+      46.074511,
+      53.407865,
+      50.74121833333212,
+      50.07457233333212,
+      47.40792533333212,
+      44.74127833333212,
+      40.741298,
+      50.07465199999636,
+      47.408005
+    ]
+  },
+  {
+    "run": "transport-obs-audio-master-pipeline-baseline",
+    "evidence_sha256": "5ac3d718665d4e5589bc0ba6b47be614493863d5860084052a67e7d565a431ef",
+    "recorded_abs_p95_ms": 76.68749999999818,
+    "matched_markers": 7,
+    "unmatched_audio": 2,
+    "unmatched_video": 0,
+    "local_marker_gate_passed": false,
+    "bounded_accounting_verified": true,
+    "g1_complete": false,
+    "raw_pipeline_trace": [
+      {
+        "kind": "video",
+        "input_to_raw_output_ms": [
+          18.550076,
+          2.826723,
+          6.979703,
+          22.843308,
+          24.772622,
+          3.646603,
+          21.320583
+        ],
+        "unmatched_input": 0,
+        "unmatched_output": 0
+      }
+    ]
+  },
+  {
+    "run": "transport-obs-audio-master-scheduled-audio-jitter",
+    "evidence_sha256": "5335a4ae6ab715576b6cc8b1bc63557805e12496f164c1c856e8ed04224a18c8",
+    "recorded_abs_p95_ms": 92.68750000000364,
+    "matched_markers": 11,
+    "unmatched_audio": 0,
+    "unmatched_video": 0,
+    "local_marker_gate_passed": false,
+    "bounded_accounting_verified": true,
+    "g1_complete": false
+  },
+  {
+    "run": "transport-obs-audio-master-scheduled-video-jitter",
+    "evidence_sha256": "f42a0ea9ae7cb9bcb880329b8fb36f5d9ec6d70a122fff41c8f21b77cb96ea16",
+    "recorded_abs_p95_ms": 139.35416666666788,
+    "matched_markers": 10,
+    "unmatched_audio": 2,
+    "unmatched_video": 1,
+    "local_marker_gate_passed": false,
+    "bounded_accounting_verified": true,
+    "g1_complete": false
+  },
+  {
+    "run": "transport-obs-audio-master-traced-baseline",
+    "evidence_sha256": "c931dbaf57365e90e125d88c27f076481df172be1c9547cdd8f32759f063087a",
+    "recorded_abs_p95_ms": 97.35416666666788,
+    "matched_markers": 10,
+    "unmatched_audio": 0,
+    "unmatched_video": 0,
+    "local_marker_gate_passed": false,
+    "bounded_accounting_verified": true,
+    "g1_complete": false
+  },
+  {
+    "run": "transport-obs-audio-master-traced-video-jitter",
+    "evidence_sha256": "499b2755816480af0db2691e580c0b7255745e7b9a1f8494dffc8b4788f06780",
+    "recorded_abs_p95_ms": 109.35416666666788,
+    "matched_markers": 9,
+    "unmatched_audio": 0,
+    "unmatched_video": 0,
+    "local_marker_gate_passed": false,
+    "bounded_accounting_verified": true,
+    "g1_complete": false
+  },
+  {
+    "run": "transport-obs-audio-master-video-jitter",
+    "evidence_sha256": "9a58089bca67f4e091449c60de0d0cc261bc1a2b8a6e1cf7639b69732cb429a8",
+    "recorded_abs_p95_ms": 194.02083333332848,
+    "matched_markers": 13,
+    "unmatched_audio": 0,
+    "unmatched_video": 0,
+    "local_marker_gate_passed": false,
+    "bounded_accounting_verified": true,
+    "g1_complete": false
+  }
+]

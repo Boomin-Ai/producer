@@ -67,6 +67,7 @@ class TimedMixerSource final : public webrtc::AudioMixer::Source {
   int PreferredSampleRate() const override { return source_->PreferredSampleRate(); }
   AudioFrameInfo GetAudioFrameWithInfo(int rate, webrtc::AudioFrame* frame) override {
     const auto result = source_->GetAudioFrameWithInfo(rate, frame);
+    if (result != AudioFrameInfo::kError) ++sequence_;
     if (result != AudioFrameInfo::kError && slot_ < state_->records.size()) {
       std::unique_lock<std::mutex> lock(state_->mutex, std::try_to_lock);
       if (!lock.owns_lock()) state_->contention.fetch_add(1);
@@ -88,7 +89,7 @@ class TimedMixerSource final : public webrtc::AudioMixer::Source {
           block.pcm.fill(0);
           std::copy_n(frame->data(), record.channels * 480, block.pcm.begin());
           block.channels = static_cast<uint32_t>(record.channels);
-          block.generation = record.generation; block.sequence = record.frames;
+          block.generation = record.generation; block.sequence = sequence_;
           block.ssrc = record.ssrc; block.rtp_timestamp = record.rtp_timestamp;
           block.pull_us = record.pull_us; block.elapsed_ms = record.elapsed_ms;
           block.speech_type = record.speech_type; block.muted = result == AudioFrameInfo::kMuted;
@@ -104,6 +105,7 @@ class TimedMixerSource final : public webrtc::AudioMixer::Source {
   Source* source_;
   std::shared_ptr<TimedMixerState> state_;
   size_t slot_ = 64;
+  uint64_t sequence_ = 0;
 };
 class TimedMixerProbe : public webrtc::AudioMixer {
  public:

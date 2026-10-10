@@ -7,7 +7,10 @@ use std::{
     ffi::{c_void, CStr, CString},
     path::Path,
     ptr,
-    sync::atomic::{AtomicBool, AtomicI64, Ordering},
+    sync::{
+        atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering},
+        Mutex,
+    },
     time::{Duration, Instant},
 };
 extern "C" {
@@ -15,6 +18,8 @@ extern "C" {
     fn guest_obs_init_main();
     fn guest_obs_pump();
     fn guest_obs_now_ns() -> u64;
+    fn guest_obs_thread_count() -> u64;
+    fn guest_obs_fd_count() -> u64;
     fn guest_obs_video(
         source: *mut ffi::obs_source_t,
         y: *const u8,
@@ -31,10 +36,23 @@ extern "C" {
         source: *mut ffi::obs_source_t,
         pcm: *const i16,
         samples: u32,
+        channels: u32,
         timestamp: u64,
     );
     fn obs_source_set_async_unbuffered(source: *mut ffi::obs_source_t, unbuffered: bool);
+    fn obs_source_set_async_decoupled(source: *mut ffi::obs_source_t, decoupled: bool);
     fn obs_add_safe_module(name: *const std::ffi::c_char);
+    fn obs_add_raw_audio_callback(
+        mix: usize,
+        conversion: *const c_void,
+        callback: extern "C" fn(*mut c_void, usize, *mut ffi::audio_data),
+        param: *mut c_void,
+    );
+    fn obs_remove_raw_audio_callback(
+        mix: usize,
+        callback: extern "C" fn(*mut c_void, usize, *mut ffi::audio_data),
+        param: *mut c_void,
+    );
 }
 pub fn init_main() {
     unsafe {
@@ -77,17 +95,177 @@ pub struct AudioWriter {
 }
 impl AudioWriter {
     pub fn write(&self, pcm: &[i16], at: Instant) {
+        self.write_interleaved(pcm, 1, at);
+    }
+    pub fn write_interleaved(&self, pcm: &[i16], channels: u32, at: Instant) {
+        assert!((channels == 1 || channels == 2) && pcm.len().is_multiple_of(channels as usize));
         let timestamp =
             self.origin_ns + at.saturating_duration_since(self.origin).as_nanos() as u64;
         unsafe {
             guest_obs_audio(
                 self.source as *mut ffi::obs_source_t,
                 pcm.as_ptr(),
-                pcm.len() as u32,
+                pcm.len() as u32 / channels,
+                channels,
                 timestamp,
             );
         }
     }
+}
+
+static PIPELINE_PROBES_ALIVE: AtomicU64 = AtomicU64::new(0);
+static PIPELINE_PROBES_CREATED: AtomicU64 = AtomicU64::new(0);
+static PIPELINE_PROBES_DESTROYED: AtomicU64 = AtomicU64::new(0);
+#[derive(Clone, Copy, Default)]
+struct RawMarker {
+    timestamp_ns: u64,
+    observed_ns: u64,
+}
+struct RawVideoState {
+    markers: [RawMarker; 64],
+    used: usize,
+    active: bool,
+    overflow: u64,
+}
+struct RawVideoProbe {
+    state: Mutex<RawVideoState>,
+    audio_state: Mutex<RawVideoState>,
+    audio_frames: AtomicU64,
+    frames: AtomicU64,
+    contention: AtomicU64,
+    registered: AtomicBool,
+}
+impl RawVideoProbe {
+    fn new() -> Self {
+        PIPELINE_PROBES_ALIVE.fetch_add(1, Ordering::Relaxed);
+        PIPELINE_PROBES_CREATED.fetch_add(1, Ordering::Relaxed);
+        Self {
+            state: Mutex::new(RawVideoState {
+                markers: [RawMarker::default(); 64],
+                used: 0,
+                active: false,
+                overflow: 0,
+            }),
+            audio_state: Mutex::new(RawVideoState {
+                markers: [RawMarker::default(); 64],
+                used: 0,
+                active: false,
+                overflow: 0,
+            }),
+            audio_frames: AtomicU64::new(0),
+            frames: AtomicU64::new(0),
+            contention: AtomicU64::new(0),
+            registered: AtomicBool::new(false),
+        }
+    }
+    fn remove(&self) {
+        if self.registered.swap(false, Ordering::AcqRel) {
+            unsafe {
+                obs_remove_raw_audio_callback(
+                    0,
+                    raw_audio_probe,
+                    self as *const Self as *mut c_void,
+                );
+                ffi::obs_remove_raw_video_callback(
+                    raw_video_probe,
+                    self as *const Self as *mut c_void,
+                );
+            }
+        }
+    }
+    fn report(&self) -> serde_json::Value {
+        let state = self.state.lock().unwrap();
+        let audio = self.audio_state.lock().unwrap();
+        serde_json::json!({"frames":self.frames.load(Ordering::Relaxed),"contention_dropped":self.contention.load(Ordering::Relaxed),
+            "registered":self.registered.load(Ordering::Acquire),"capacity":64,"overflow":state.overflow,
+            "audio_frames":self.audio_frames.load(Ordering::Relaxed), "audio_marker_window_ms":10,
+            "audio_overflow":audio.overflow,
+            "audio_markers":audio.markers[..audio.used].iter().map(|m|serde_json::json!({"timestamp_ns":m.timestamp_ns,"observed_ns":m.observed_ns})).collect::<Vec<_>>(),
+            "markers":state.markers[..state.used].iter().map(|m|serde_json::json!({"timestamp_ns":m.timestamp_ns,"observed_ns":m.observed_ns})).collect::<Vec<_>>()})
+    }
+}
+impl Drop for RawVideoProbe {
+    fn drop(&mut self) {
+        self.remove();
+        PIPELINE_PROBES_ALIVE.fetch_sub(1, Ordering::Relaxed);
+        PIPELINE_PROBES_DESTROYED.fetch_add(1, Ordering::Relaxed);
+    }
+}
+extern "C" fn raw_video_probe(param: *mut c_void, frame: *mut ffi::video_data) {
+    if param.is_null() || frame.is_null() {
+        return;
+    }
+    // The lab fixes the raw mix to NV12 320x180. Read luma only; retain no frame pointers.
+    let (probe, frame) = unsafe { (&*(param as *const RawVideoProbe), &*frame) };
+    if frame.data[0].is_null() || frame.linesize[0] < 320 {
+        return;
+    }
+    probe.frames.fetch_add(1, Ordering::Relaxed);
+    let Ok(mut state) = probe.state.try_lock() else {
+        probe.contention.fetch_add(1, Ordering::Relaxed);
+        return;
+    };
+    let mut sum = 0u64;
+    let mut count = 0u64;
+    for y in (0..180).step_by(4) {
+        for x in (0..320).step_by(4) {
+            sum += u64::from(unsafe { *frame.data[0].add(y * frame.linesize[0] as usize + x) });
+            count += 1;
+        }
+    }
+    let active = sum / count > 180;
+    if active && !state.active {
+        if state.used < 64 {
+            let slot = state.used;
+            state.markers[slot] = RawMarker {
+                timestamp_ns: frame.timestamp,
+                observed_ns: unsafe { guest_obs_now_ns() },
+            };
+            state.used += 1;
+        } else {
+            state.overflow += 1;
+        }
+    }
+    state.active = active;
+}
+// OBS's lab mix is float planar, 48 kHz stereo. Observe plane zero in bounded
+// 10 ms windows; copy only marker timestamps and never retain the audio pointer.
+extern "C" fn raw_audio_probe(param: *mut c_void, mix: usize, data: *mut ffi::audio_data) {
+    if param.is_null() || data.is_null() || mix != 0 {
+        return;
+    }
+    let (probe, data) = unsafe { (&*(param as *const RawVideoProbe), &*data) };
+    if data.data[0].is_null() || data.frames > 4096 {
+        return;
+    }
+    probe.audio_frames.fetch_add(1, Ordering::Relaxed);
+    let Ok(mut state) = probe.audio_state.try_lock() else {
+        probe.contention.fetch_add(1, Ordering::Relaxed);
+        return;
+    };
+    let samples =
+        unsafe { std::slice::from_raw_parts(data.data[0] as *const f32, data.frames as usize) };
+    for (index, window) in samples.chunks(480).enumerate() {
+        let rms = (window.iter().map(|v| f64::from(*v).powi(2)).sum::<f64>() / window.len() as f64)
+            .sqrt();
+        let active = rms > 2000.0 / 32768.0;
+        if active && !state.active {
+            if state.used < 64 {
+                let slot = state.used;
+                state.markers[slot] = RawMarker {
+                    timestamp_ns: data.timestamp + (index * 480) as u64 * 1_000_000_000 / 48000,
+                    observed_ns: unsafe { guest_obs_now_ns() },
+                };
+                state.used += 1;
+            } else {
+                state.overflow += 1;
+            }
+        }
+        state.active = active;
+    }
+}
+pub fn pipeline_probe_lifecycle() -> serde_json::Value {
+    serde_json::json!({"alive":PIPELINE_PROBES_ALIVE.load(Ordering::Relaxed),"created":PIPELINE_PROBES_CREATED.load(Ordering::Relaxed),"destroyed":PIPELINE_PROBES_DESTROYED.load(Ordering::Relaxed)})
 }
 
 pub struct Recorder {
@@ -99,6 +277,7 @@ pub struct Recorder {
     origin_ns: u64,
     stop: Box<Stop>,
     initialized: bool,
+    raw_probe: Option<Box<RawVideoProbe>>,
 }
 impl Recorder {
     pub fn start(path: &Path) -> Result<Self> {
@@ -122,6 +301,8 @@ impl Recorder {
                 code: AtomicI64::new(i64::MIN),
             }),
             initialized: false,
+            raw_probe: (std::env::var("LIVEKIT_LAB_OBS_PIPELINE_PROBE").as_deref() == Ok("1"))
+                .then(|| Box::new(RawVideoProbe::new())),
         };
         unsafe {
             ensure!(
@@ -186,8 +367,29 @@ impl Recorder {
             if std::env::var("LIVEKIT_LAB_OBS_UNBUFFERED").as_deref() == Ok("1") {
                 obs_source_set_async_unbuffered(r.source, true);
             }
+            if std::env::var("LIVEKIT_LAB_SCHEDULE_HANDOFF").as_deref() == Ok("1") {
+                obs_source_set_async_decoupled(r.source, true);
+                obs_source_set_async_unbuffered(r.source, true);
+            }
             ffi::obs_source_set_audio_mixers(r.source, 1);
             ffi::obs_set_output_source(0, r.source);
+            if let Some(probe) = &r.raw_probe {
+                ffi::obs_add_raw_video_callback(
+                    ptr::null(),
+                    raw_video_probe,
+                    &**probe as *const RawVideoProbe as *mut c_void,
+                );
+                obs_add_raw_audio_callback(
+                    0,
+                    ptr::null(),
+                    raw_audio_probe,
+                    &**probe as *const RawVideoProbe as *mut c_void,
+                );
+                probe.registered.store(true, Ordering::Release);
+            }
+            if std::env::var("LIVEKIT_LAB_OBS_FAIL_AFTER_PROBE").as_deref() == Ok("1") {
+                bail!("Injected lab failure after raw callback registration");
+            }
             r.origin = Instant::now();
             r.origin_ns = guest_obs_now_ns();
             let y = vec![16u8; 320 * 180];
@@ -265,7 +467,7 @@ impl Recorder {
         }
         Ok(r)
     }
-    fn timestamp(&self, at: Instant) -> u64 {
+    pub fn timestamp(&self, at: Instant) -> u64 {
         self.origin_ns + at.saturating_duration_since(self.origin).as_nanos() as u64
     }
     pub fn audio_writer(&self) -> AudioWriter {
@@ -317,15 +519,44 @@ impl Recorder {
         }
         let code = self.stop.code.load(Ordering::Relaxed);
         ensure!(code == 0, "OBS stop code {code}");
+        let raw_probe = if let Some(probe) = &self.raw_probe {
+            probe.remove();
+            let before = (
+                probe.frames.load(Ordering::Acquire),
+                probe.audio_frames.load(Ordering::Acquire),
+            );
+            for _ in 0..5 {
+                self.pump();
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            let after = (
+                probe.frames.load(Ordering::Acquire),
+                probe.audio_frames.load(Ordering::Acquire),
+            );
+            ensure!(
+                before == after,
+                "Raw media callback remained active after unregister"
+            );
+            let mut report = probe.report();
+            report["callbacks_quiescent_after_unregister"] = serde_json::json!(true);
+            Some(report)
+        } else {
+            None
+        };
         Ok(
-            serde_json::json!({"stop_code":code,"frames":unsafe {ffi::obs_output_get_total_frames(self.output)},
-            "clock":"shared OBS monotonic anchor + callback Instant elapsed; sender clock unqualified",
-            "recorded_av_analyzed":false,"async_video_unbuffered":std::env::var("LIVEKIT_LAB_OBS_UNBUFFERED").as_deref() == Ok("1"),"qualified":false}),
+            serde_json::json!({"raw_video_pipeline_probe":raw_probe,"stop_code":code,"frames":unsafe {ffi::obs_output_get_total_frames(self.output)},
+            "clock":if std::env::var("LIVEKIT_LAB_AUDIO_MASTER").as_deref() == Ok("1") {
+                "shared OBS monotonic anchor + continuous decoded audio sample timeline; sender-relative video mapping unqualified"
+            } else { "shared OBS monotonic anchor + callback Instant elapsed; sender clock unqualified" },
+            "recorded_av_analyzed":false,"async_video_unbuffered":std::env::var("LIVEKIT_LAB_OBS_UNBUFFERED").as_deref() == Ok("1") || std::env::var("LIVEKIT_LAB_SCHEDULE_HANDOFF").as_deref() == Ok("1"),"qualified":false}),
         )
     }
 }
 impl Drop for Recorder {
     fn drop(&mut self) {
+        if let Some(probe) = &self.raw_probe {
+            probe.remove();
+        }
         unsafe {
             if !self.output.is_null() {
                 if ffi::obs_output_active(self.output) {
@@ -350,4 +581,111 @@ impl Drop for Recorder {
             }
         }
     }
+}
+
+/// Real OBS success and cancellation workload; no camera, SFU or speaker output.
+pub fn lifecycle(output: &Path) -> Result<()> {
+    std::env::set_var("LIVEKIT_LAB_OBS_PIPELINE_PROBE", "1");
+    let root = Path::new("runtime");
+    std::fs::create_dir_all(root)?;
+    let initial = (unsafe { guest_obs_thread_count() }, unsafe {
+        guest_obs_fd_count()
+    });
+    ensure!(
+        initial.0 != u64::MAX && initial.1 != u64::MAX,
+        "Thread/FD probe unavailable"
+    );
+    let mut warm = None;
+    let mut reports = Vec::new();
+    for cycle in 0..4 {
+        let path = root.join(format!("pipeline-lifecycle-{cycle}-{}.mp4", unsafe {
+            guest_obs_now_ns()
+        }));
+        let recorder = Recorder::start(&path)?;
+        let began = Instant::now();
+        let white = [235u8; 320 * 180];
+        let uv = [128u8; 160 * 90];
+        let pcm = [0i16; 480];
+        while began.elapsed() < Duration::from_millis(350) {
+            recorder.video(
+                (&white, &uv, &uv),
+                320,
+                180,
+                (320, 160, 160),
+                Instant::now(),
+            );
+            recorder.audio_writer().write(&pcm, Instant::now());
+            recorder.pump();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let result = if cycle == 3 {
+            None
+        } else {
+            Some(recorder.finish()?)
+        };
+        drop(recorder); // The fourth cycle cancels through Drop while output is active.
+        for _ in 0..10 {
+            pump_main();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let current = (unsafe { guest_obs_thread_count() }, unsafe {
+            guest_obs_fd_count()
+        });
+        ensure!(
+            current.0 != u64::MAX && current.1 != u64::MAX,
+            "Thread/FD probe unavailable"
+        );
+        if let Some((threads, fds)) = warm {
+            ensure!(
+                current.0 <= threads + 2 && current.1 <= fds + 2,
+                "OBS callback lifecycle thread/FD growth"
+            );
+        } else {
+            warm = Some(current);
+        }
+        let counters = pipeline_probe_lifecycle();
+        ensure!(
+            counters["alive"] == 0 && counters["created"] == counters["destroyed"],
+            "Raw callback observer retained"
+        );
+        reports.push(serde_json::json!({"cycle":cycle,"cancelled":cycle==3,"recording":path.file_name().unwrap().to_string_lossy(),
+            "threads_after_shutdown":current.0,"fds_after_shutdown":current.1,"probe_lifecycle":counters,"finish":result}));
+    }
+    std::env::set_var("LIVEKIT_LAB_OBS_FAIL_AFTER_PROBE", "1");
+    let partial = Recorder::start(&root.join(format!("partial-init-{}.mp4", unsafe {
+        guest_obs_now_ns()
+    })));
+    std::env::remove_var("LIVEKIT_LAB_OBS_FAIL_AFTER_PROBE");
+    ensure!(
+        partial.is_err(),
+        "Partial-initialization fault was not injected"
+    );
+    for _ in 0..10 {
+        pump_main();
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let partial_counts = (unsafe { guest_obs_thread_count() }, unsafe {
+        guest_obs_fd_count()
+    });
+    let partial_lifecycle = pipeline_probe_lifecycle();
+    ensure!(
+        partial_counts.0 <= warm.unwrap().0 + 2 && partial_counts.1 <= warm.unwrap().1 + 2,
+        "Partial initialization retained thread/FD resources"
+    );
+    ensure!(
+        partial_lifecycle["alive"] == 0
+            && partial_lifecycle["created"] == partial_lifecycle["destroyed"],
+        "Partial initialization retained callback observer"
+    );
+    std::fs::write(
+        output,
+        serde_json::to_vec_pretty(
+            &serde_json::json!({"cycles":reports,"initial_threads":initial.0,
+        "initial_fds":initial.1,"warm_threads":warm.unwrap().0,"warm_fds":warm.unwrap().1,
+        "hardware_capture":false,"speaker_playout":false,"success_and_drop_cancellation":true,
+        "partial_initialization":{"injected_after_callback_registration":true,
+            "probe_lifecycle":partial_lifecycle,"threads_after_shutdown":partial_counts.0,"fds_after_shutdown":partial_counts.1}}),
+        )?,
+    )?;
+    Ok(())
 }

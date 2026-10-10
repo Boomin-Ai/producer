@@ -452,6 +452,31 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         Instant::now(),
     );
     let use_playout_clock = std::env::var("LIVEKIT_LAB_PLAYOUT_CLOCK").as_deref() == Ok("1");
+    #[cfg(feature = "obs-proof")]
+    let use_sender_clock = std::env::var("LIVEKIT_LAB_AUDIO_MASTER").as_deref() == Ok("1");
+    #[cfg(feature = "obs-proof")]
+    if use_sender_clock
+        && (recorder.is_none()
+            || std::env::var("LIVEKIT_LAB_TIMED_MIXER").as_deref() != Ok("1")
+            || std::env::var("LIVEKIT_LAB_RTCP_PROBE").as_deref() != Ok("1"))
+    {
+        bail!("Audio-master experiment requires OBS recording and both native timing probes");
+    }
+    #[cfg(feature = "obs-proof")]
+    let mut playback =
+        crate::presentation::SelectedPlayback::new(audio_sys::ffi::diagnostic_webrtc_time_us());
+    #[cfg(feature = "obs-proof")]
+    let mut next_binding_refresh = Instant::now();
+    #[cfg(feature = "obs-proof")]
+    let scheduled_handoff = std::env::var("LIVEKIT_LAB_SCHEDULE_HANDOFF").as_deref() == Ok("1");
+    #[cfg(feature = "obs-proof")]
+    if scheduled_handoff && !use_sender_clock {
+        bail!("Scheduled handoff requires audio-master mode");
+    }
+    #[cfg(feature = "obs-proof")]
+    let mut scheduled_audio = crate::presentation::Scheduled::new(24);
+    #[cfg(feature = "obs-proof")]
+    let mut scheduled_video = crate::presentation::Scheduled::new(8);
     let mut tick = tokio::time::interval(Duration::from_millis(10));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut lifecycle = Vec::new();
@@ -466,11 +491,16 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                         let id = participant.identity().to_string();
                         let sid = track.sid().to_string();
                         let m = metrics.entry(id.clone()).or_default();
+                        #[cfg(feature = "obs-proof")]
+                        if use_sender_clock && id == "guest-1" {
+                            playback.clear(audio_sys::ffi::diagnostic_webrtc_time_us());
+                            scheduled_audio.clear();scheduled_video.clear();
+                        }
                         match track {
                             RemoteTrack::Audio(track) => {
                                 // Retire/join the old writer before a replacement can feed this OBS source.
                                 if let Some(old) = audio.remove(&id) { m.retired_queues.push(old.retire_evidence()); }
-                                audio.insert(id.clone(), AudioTap::new(&track, #[cfg(feature = "obs-proof")] if id == "guest-1" { recorder.as_ref().map(|r| r.audio_writer()) } else { None }));
+                                audio.insert(id.clone(), AudioTap::new(&track, #[cfg(feature = "obs-proof")] if id == "guest-1" && !use_sender_clock { recorder.as_ref().map(|r| r.audio_writer()) } else { None }));
                                 m.next_sample = None; m.last_capture_timestamp_ms = None; m.audio_active = false;
                             },
                             RemoteTrack::Video(track) => {
@@ -486,6 +516,13 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                         let id = participant.identity().to_string();
                         let sid = track.sid().to_string();
                         let m = metrics.entry(id.clone()).or_default();
+                        #[cfg(feature = "obs-proof")]
+                        if use_sender_clock && id == "guest-1"
+                            && (audio.get(&id).is_some_and(|tap| tap.sid==sid)
+                                || video.get(&id).is_some_and(|tap| tap.sid==sid)) {
+                            playback.clear(audio_sys::ffi::diagnostic_webrtc_time_us());
+                            scheduled_audio.clear();scheduled_video.clear();
+                        }
                         // A late teardown from the old publication cannot retire its replacement.
                         match track {
                             RemoteTrack::Audio(_) if audio.get(&id).is_some_and(|tap| tap.sid == sid) => {
@@ -508,14 +545,58 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
             _ = tick.tick() => {
                 let now = Instant::now(); let elapsed = now.duration_since(began).as_secs_f64();
                 if elapsed >= seconds as f64 { break; }
+                #[cfg(feature = "obs-proof")]
+                if use_sender_clock && now >= next_binding_refresh
+                    && (playback.audio_binding.is_none() || playback.video_binding.is_none()) {
+                    for participant in room.remote_participants().values().filter(|p|p.identity().as_str()=="guest-1") {
+                        for publication in participant.track_publications().values() {
+                            let sid=publication.sid().to_string();
+                            if let Some(track)=publication.track() {
+                                let Ok(Ok(stats))=tokio::time::timeout(Duration::from_millis(100),track.get_stats()).await else {continue;};
+                                let inbound:Vec<_>=stats.into_iter().filter_map(|stat| {
+                                    if let livekit::webrtc::stats::RtcStats::InboundRtp(stat)=stat {Some(stat.stream)} else {None}
+                                }).collect();
+                                if inbound.len()!=1 {continue;}
+                                let stat=&inbound[0];
+                                if stat.kind=="audio" && audio.get("guest-1").is_some_and(|tap|tap.sid==sid)
+                                    && playback.audio_binding.is_none() {playback.audio_binding=Some((sid,stat.ssrc));}
+                                else if stat.kind=="video" && video.get("guest-1").is_some_and(|tap|tap.sid==sid)
+                                    && playback.video_binding.is_none() {
+                                    playback.video_binding=Some((sid,stat.ssrc,crate::sender_clock::SenderClock::new(stat.ssrc,90000),playback.since_us.saturating_sub(1)));
+                                }
+                            }
+                        }
+                    }
+                    next_binding_refresh=now+Duration::from_millis(500);
+                }
                 if now >= next_sender_report_refresh {
                     let rtcp = serde_json::from_str(&webrtc_sys::webrtc::ffi::diagnostic_rtcp_exchange_report())?;
                     decoded_origins.refresh(&rtcp);
+                    #[cfg(feature = "obs-proof")]
+                    if use_sender_clock {playback.refresh(&rtcp);}
                     next_sender_report_refresh = now + Duration::from_millis(100);
                 }
                 let decoded_at = audio_sys::ffi::diagnostic_webrtc_time_us();
                 for block in webrtc_sys::webrtc::ffi::diagnostic_take_decoded_audio() {
                     decoded_origins.consume(&block, decoded_at);
+                    #[cfg(feature = "obs-proof")]
+                    if use_sender_clock {
+                        if block.pull_us >= playback.since_us && playback.audio_binding.as_ref().is_some_and(|(_,ssrc)|*ssrc==block.ssrc) {
+                            if let Some(pull)=video_clock.deadline(block.pull_us,Instant::now()) {
+                                let origin=playback.video_ready(decoded_at).then(||decoded_origins.origin_for(&block,decoded_at)).flatten();
+                                let resets=playback.clock.reset_count();
+                                let stamp=playback.clock.audio(block.generation,block.sequence,origin,pull);
+                                if resets!=playback.clock.reset_count() {scheduled_audio.clear();scheduled_video.clear();}
+                                if let Some(stamp)=stamp {
+                                    let pcm=&block.samples[..480*block.channels as usize];
+                                    let rms=(pcm.iter().map(|sample|(*sample as f64).powi(2)).sum::<f64>()/pcm.len() as f64).sqrt();
+                                    playback.marker(false,rms>2000.0,origin,stamp,pull,recorder.as_ref().unwrap().timestamp(stamp));
+                                    if scheduled_handoff {scheduled_audio.push(stamp,block);}
+                                    else {recorder.as_ref().unwrap().audio_writer().write_interleaved(&block.samples[..480*block.channels as usize],block.channels,stamp);}
+                                }
+                            } else {playback.invalid_audio_pull+=1;}
+                        } else {playback.unmatched_audio+=1;}
+                    }
                 }
                 // Stall the receiving application for 200 ms every five seconds,
                 // while WebRTC callbacks and publication continue independently.
@@ -557,16 +638,39 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                         // SAFETY: video_frame_buffer returns an owned wrapper for this frame.
                         let buffer = new_video_frame_buffer(unsafe { frame.value.video_frame_buffer() });
                         let buffer = buffer.to_i420();
+                        let (luma,_,_)=buffer.data();
+                        let mean=luma.iter().map(|v|*v as u64).sum::<u64>() as f64/luma.len() as f64;
                         #[cfg(feature = "obs-proof")]
                         if id == "guest-1" { if let Some(recorder) = &recorder {
                             let (y,u,v) = buffer.data(); let (ys,us,vs) = buffer.strides();
-                            recorder.video((y,u,v),buffer.width(),buffer.height(),(ys,us,vs),if use_playout_clock { deadline.unwrap_or(frame.at) } else { frame.at });
+                            if use_sender_clock {
+                                let origin=playback.video_origin(&tap.sid,frame.value.timestamp(),audio_sys::ffi::diagnostic_webrtc_time_us());
+                                if let Some(stamp)=playback.clock.video(origin,frame.at) {
+                                    playback.marker(true,mean>180.0,origin,stamp,frame.at,recorder.timestamp(stamp));
+                                    if scheduled_handoff {scheduled_video.push(stamp,frame.value);} else {
+                                        recorder.video((y,u,v),buffer.width(),buffer.height(),(ys,us,vs),stamp);
+                                    }
+                                }
+                            } else {
+                                recorder.video((y,u,v),buffer.width(),buffer.height(),(ys,us,vs),if use_playout_clock { deadline.unwrap_or(frame.at) } else { frame.at });
+                            }
                         } }
-                        let (y, _, _) = buffer.data();
-                        let mean = y.iter().map(|v| *v as u64).sum::<u64>() as f64 / y.len() as f64;
                         let active = mean > 180.0; m.video_frames += 1;
                         if active && !m.video_active { m.video_pulses.push(frame.at.duration_since(began).as_secs_f64() * 1000.0); }
                         m.video_active = active;
+                    }
+                }
+                #[cfg(feature = "obs-proof")]
+                if scheduled_handoff {
+                    let due=Instant::now();
+                    let recorder=recorder.as_ref().unwrap();
+                    while let Some((stamp,block))=scheduled_audio.pop_due(due) {
+                        recorder.audio_writer().write_interleaved(&block.samples[..480*block.channels as usize],block.channels,stamp);
+                    }
+                    while let Some((stamp,frame))=scheduled_video.pop_due(due) {
+                        let buffer=new_video_frame_buffer(unsafe {frame.video_frame_buffer()}).to_i420();
+                        let (y,u,v)=buffer.data();let (ys,us,vs)=buffer.strides();
+                        recorder.video((y,u,v),buffer.width(),buffer.height(),(ys,us,vs),stamp);
                     }
                 }
             }
@@ -680,6 +784,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     }
     #[cfg(feature = "obs-proof")]
     let obs_recording = recorder.as_ref().map(|r| r.finish()).transpose()?;
+    #[cfg(feature = "obs-proof")]
+    drop(recorder);
     #[cfg(not(feature = "obs-proof"))]
     let obs_recording: Option<serde_json::Value> = None;
     audio.clear();
@@ -699,13 +805,38 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     );
     #[cfg(feature = "obs-proof")]
     let worker_lifecycle = json!({"alive_after_retirement":AUDIO_WORKERS_ALIVE.load(Ordering::Acquire),
-        "peak_alive":AUDIO_WORKERS_PEAK.load(Ordering::Relaxed),"scope":"application OBS audio ingest workers only"});
+        "peak_alive":AUDIO_WORKERS_PEAK.load(Ordering::Relaxed),"scope":"application OBS audio ingest workers only","pipeline_probe_lifecycle":crate::obs_proof::pipeline_probe_lifecycle()});
     #[cfg(not(feature = "obs-proof"))]
     let worker_lifecycle: Option<serde_json::Value> = None;
-    let report = json!({"schema_version":1,"livekit":"0.9.4","topology":"local browser guests to native host through loopback SFU",
+    #[cfg(feature = "obs-proof")]
+    let audio_master_playback = if use_sender_clock {
+        let mut report = playback.report();
+        report["scheduled_handoff"] = json!(scheduled_handoff);
+        report["audio_presentation_queue"] = scheduled_audio.report();
+        report["video_presentation_queue"] = scheduled_video.report();
+        scheduled_audio.clear();
+        scheduled_video.clear();
+        report["audio_presentation_queue_after_shutdown"] = scheduled_audio.report();
+        report["video_presentation_queue_after_shutdown"] = scheduled_video.report();
+        Some(report)
+    } else {
+        None
+    };
+    #[cfg(not(feature = "obs-proof"))]
+    let audio_master_playback: Option<serde_json::Value> = None;
+    let mut decoded_pcm_origin_handoff = decoded_origins.report();
+    #[cfg(feature = "obs-proof")]
+    {
+        decoded_pcm_origin_handoff["obs_connected"] = json!(use_sender_clock);
+    }
+    #[cfg(not(feature = "obs-proof"))]
+    {
+        decoded_pcm_origin_handoff["obs_connected"] = json!(false);
+    }
+    let report = json!({"audio_master_playback":audio_master_playback,"schema_version":1,"livekit":"0.9.4","topology":"local browser guests to native host through loopback SFU",
         "signaling_url":url,"publisher_error":publisher_error,
         "sync_streams_requested":std::env::var("LIVEKIT_LAB_SYNC_STREAMS").as_deref() == Ok("1"),
-        "decoded_pcm_origin_handoff":decoded_origins.report(),"sender_report_origin_maps":sender_report_origin_maps,"rtcp_exchange_probe":rtcp_exchange_probe,"rrtr_lab_experiment_requested":std::env::var("LIVEKIT_LAB_RRTR").as_deref()==Ok("1"),"timed_mixer_probe":timed_mixer_probe,"remote_sender_reports":remote_sender_reports,"receiver_stats":receiver_stats,"obs_recording":obs_recording,"local_playout_clock_requested":use_playout_clock,"audio_ingest_generation_reports":audio_ingest_stats,"audio_ingest_session_totals":audio_ingest_totals,"audio_worker_lifecycle":worker_lifecycle,
+        "decoded_pcm_origin_handoff":decoded_pcm_origin_handoff,"sender_report_origin_maps":sender_report_origin_maps,"rtcp_exchange_probe":rtcp_exchange_probe,"rrtr_lab_experiment_requested":std::env::var("LIVEKIT_LAB_RRTR").as_deref()==Ok("1"),"timed_mixer_probe":timed_mixer_probe,"remote_sender_reports":remote_sender_reports,"receiver_stats":receiver_stats,"obs_recording":obs_recording,"local_playout_clock_requested":use_playout_clock,"audio_ingest_generation_reports":audio_ingest_stats,"audio_ingest_session_totals":audio_ingest_totals,"audio_worker_lifecycle":worker_lifecycle,
         "duration_seconds":seconds,"consumer_stall_ms":if pressure {200} else {0},"stall_period_seconds":5,
         "native_publish_audio_internal_queue_ms":0,"callback_timestamps_are_capture_timestamps":false,
         "obs_recorded_av_qualified":false,"physical_speaker_reference_connected":false,"g1_complete":false,

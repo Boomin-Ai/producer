@@ -275,3 +275,35 @@ vendor build then links the same pinned `libwebrtc.a` at the executable link ste
 rather than embedding another roughly 700 MiB copy in the Rust archive. Keep the
 native archive in place; no WebRTC implementation or runtime behavior changes.
 The default upstream bundling behavior remains available without this lab option.
+
+### Opt-in continuous audio-master / raw pipeline experiment
+
+The previous callback clock remains the default lab path. To feed OBS paired
+native PCM, build with `LIVEKIT_LAB_LINK_EXTERNAL_ARCHIVE=1 cargo build --locked
+--jobs 2 --features obs-proof`; this macOS opt-in links the pinned WebRTC archive
+externally to avoid a second large Rust archive copy. Keep the native archive
+available for the final linker. Use the environment and unused recording filename
+from the OBS example above, plus:
+
+```sh
+LIVEKIT_LAB_TIMED_MIXER=1
+LIVEKIT_LAB_RTCP_PROBE=1
+LIVEKIT_LAB_AUDIO_MASTER=1
+LIVEKIT_LAB_SCHEDULE_HANDOFF=1
+LIVEKIT_LAB_OBS_PIPELINE_PROBE=1
+```
+
+Export these variables or pass them inline to the smoke command. Audio-master
+requires both native probes and an OBS recording. Scheduled handoff requires
+audio-master; it bounds application queues and decouples/unbuffers async video.
+The raw pipeline flag observes the lab's fixed NV12 320×180 mix and float-planar
+48 kHz audio with bounded marker storage. It captures no physical devices and
+plays no audio. `obs-lifecycle <evidence-file>` checks repeated recorder/probe
+finish and cancellation. `python3 native/verify-audio-master.py` checks saved
+recordings, native block accounting, presentation queue retirement and probe
+cleanup while preserving local synchronization failures.
+
+This experiment is unqualified: jitter still fails the recorded 80 ms gate,
+startup waits for two sender reports, and raw-mix versus recording offsets need
+encoder/muxer investigation. See the October 10 checkpoint in
+[prototype results](../../docs/LIVEKIT-G1-PROTOTYPE-RESULTS-2026-10-09.md).

@@ -120,3 +120,70 @@ Recorded synchronization, physical speakerphone AEC, platform integration and
 production rollout remain unqualified. See
 [the paired PCM investigation](LIVEKIT-G1-PLAYOUT-BRIDGE-SPEC.md) and
 [the saved handoff verifier](../labs/guest-rtc/evidence/decoded-pcm-verification.json).
+
+### Continuous audio-master playback and raw OBS probes — October 10
+
+OBS now consumes the paired native PCM path in the opt-in audio-master lab. The
+old callback audio writer is disabled in that mode. Current guest-1 publication
+IDs are bound to receiver SSRCs; replacement clears both application presentation
+queues. PCM sequence numbers advance even when native observation contention drops
+a block, preserving gaps rather than compressing the sample timeline.
+
+The audio clock advances continuously in 10 ms blocks. Sender-report origins label
+that position for video mapping; irregular origin steps do not replace the sample
+clock. Startup requires fresh two-report audio/video maps and still costs roughly
+6–8 seconds in these fixtures. Audio and video queues are bounded, drop late data,
+and account for their shutdown flush. This is actual native PCM-to-OBS ingestion,
+but it is not a qualified common presentation clock.
+
+| Recording configuration | Absolute A/V p95 | Marker pairs | Local 80 ms gate |
+| --- | ---: | ---: | --- |
+| Direct audio-master baseline | 38.02 ms | 12 | Pass |
+| Direct video jitter | 194.02 ms | 13 | Fail |
+| Direct audio jitter | 104.65 ms | 11 | Fail; unmatched audio |
+| Scheduled video jitter | 139.35 ms | 10 | Fail; unmatched markers |
+| Scheduled audio jitter | 92.69 ms | 11 | Fail |
+| Scheduled traced video jitter | 109.35 ms | 9 | Fail |
+| Scheduled traced baseline | 97.35 ms | 10 | Fail |
+| Raw-video-probed baseline | 76.69 ms | 7 | Fail; unmatched audio |
+| Raw-audio/video-probed baseline | 78.69 ms | 10 | Pass |
+| Raw-audio/video-probed video jitter | 94.02 ms | 11 | Fail |
+
+A local pass is not G1 completion. These sequential runs vary with receiver
+conditions and machine load; the first scheduled video-jitter run also overlapped
+build/lint activity. They cannot establish an instrumentation performance penalty.
+No current-clock repeated-rejoin recording or physical speakerphone test is qualified.
+
+Input marker traces record the exact OBS target timestamp. Optional raw OBS mix
+callbacks independently record marker PTS before encoding. In the complete
+raw-audio/video runs, decoded recordings add about 38–53 ms to the raw mix's
+video-minus-audio offset. The baseline raw video output differs from its input
+marker targets by about −3 to +32 ms; the larger final recording offset therefore
+cannot all be assigned to the sender mapper. Encoder/muxer timestamp handling,
+codec priming, and independent decoding still need investigation. No fixed delay
+has been applied to hide this offset.
+
+Raw probes have one boxed recorder owner, non-owning callback pointers, bounded
+64-marker arrays, try-lock callbacks and explicit unregister before destruction.
+Four same-process cycles cover successful finish and active-output cancellation.
+An additional injected failure after callback registration checks partial
+initialization cleanup. Both raw callbacks become quiescent after unregister;
+all five observers are destroyed, with stable post-warmup 11 threads and 14 file
+descriptors. Native PCM
+lifecycle checks also pass after the sequence correction. Fifteen Rust tests,
+default/OBS Clippy, and the recorded evidence accounting verifier passed for
+this checkpoint.
+
+Evidence: [all recording and queue checks](../labs/guest-rtc/evidence/audio-master-verification.json),
+[raw media callback lifecycle](../labs/guest-rtc/evidence/obs-media-pipeline-lifecycle.json),
+[latest jitter recording](../labs/guest-rtc/evidence/obs-audio-master-media-pipeline-video-jitter-markers.json).
+The first two direct-mode evidence files retain an obsolete `obs_connected:false`
+descriptor from their binary; their `audio_master_playback` counters identify the
+actual paired-PCM ingestion. Later runs correct that descriptor. Original evidence
+is preserved rather than rewritten.
+
+Next: measure encoder packet timestamps and compare another decoding path, then
+repeat asymmetric jitter and rejoin qualification after any clock correction.
+Speaker-reference AEC, permission/admission concurrency, cue routing, Windows
+packaging and production integration remain gated. No production/provider change
+was made by this checkpoint.

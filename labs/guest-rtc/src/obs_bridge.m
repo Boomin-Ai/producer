@@ -56,10 +56,26 @@ void guest_obs_video(obs_source_t *source, const uint8_t *y, const uint8_t *u,
     video_format_get_parameters(2, 1, frame.color_matrix, frame.color_range_min, frame.color_range_max);
     obs_source_output_video(source, &frame); // libobs copies before return
 }
-void guest_obs_audio(obs_source_t *source, const int16_t *pcm, uint32_t samples,
+void guest_obs_audio(obs_source_t *source, const int16_t *pcm, uint32_t samples, uint32_t channels,
                      uint64_t timestamp) {
     struct obs_source_audio audio = {0};
     audio.data[0] = (const uint8_t *)pcm; audio.frames = samples;
-    audio.speakers = 1; audio.format = 2; audio.samples_per_sec = 48000;
+    audio.speakers = channels == 2 ? 2 : 1; audio.format = 2; audio.samples_per_sec = 48000;
     audio.timestamp = timestamp; obs_source_output_audio(source, &audio);
+}
+
+#include <mach/mach.h>
+#include <dirent.h>
+uint64_t guest_obs_thread_count(void) {
+    thread_act_array_t threads = NULL; mach_msg_type_number_t count = 0;
+    if (task_threads(mach_task_self(), &threads, &count) != KERN_SUCCESS) return UINT64_MAX;
+    for (mach_msg_type_number_t i = 0; i < count; ++i) mach_port_deallocate(mach_task_self(), threads[i]);
+    vm_deallocate(mach_task_self(), (vm_address_t)threads, count * sizeof(thread_t));
+    return count;
+}
+uint64_t guest_obs_fd_count(void) {
+    DIR *directory = opendir("/dev/fd"); if (!directory) return UINT64_MAX;
+    uint64_t count = 0; struct dirent *entry;
+    while ((entry = readdir(directory))) if (entry->d_name[0] != '.') ++count;
+    closedir(directory); return count;
 }
