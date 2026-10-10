@@ -7,6 +7,12 @@ license = "AGPL-3.0-only"
 
 [features]
 obs-proof = []
+physical-aec = []
+
+[[bin]]
+name = "producer-speakerphone-lab"
+path = "src/bin/speakerphone.rs"
+required-features = ["physical-aec"]
 
 [dependencies]
 livekit = { version = "=0.9.4", default-features = false, features = ["native", "rustls-tls-native-roots"] }
