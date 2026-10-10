@@ -31,6 +31,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("variant", choices=["control", "candidate"])
     parser.add_argument("--churn", action="store_true", help="Three guests, three guest-1 rejoins over 45 seconds")
+    parser.add_argument("--capture-handoff", action="store_true", help="Generated batched capture through refined AEC and paced SDK publication; no hardware")
+    parser.add_argument("--suffix", default="", help="Unique retained evidence suffix for a corrected/repeated run")
     args = parser.parse_args()
     for port in (7880, 8990, 7885):
         probe = socket.socket()
@@ -43,6 +45,12 @@ def main():
         raise RuntimeError("Need 1 GiB free before recording")
     guests, mode, seconds = (3, "churn", 45) if args.churn else (1, "republish", 30)
     prefix = "delayed-" + args.variant + ("-churn" if args.churn else "")
+    if args.capture_handoff:
+        prefix += "-capture-handoff"
+    if args.suffix:
+        if not all(c in "abcdefghijklmnopqrstuvwxyz0123456789-" for c in args.suffix):
+            raise RuntimeError("Suffix must contain lowercase letters, digits or hyphens")
+        prefix += "-" + args.suffix
     run_name = "transport-obs-audio-master-" + prefix + "-rejoin"
     if (LAB / f"evidence/sfu-{prefix}-conditions.json").exists():
         raise RuntimeError("Refusing to overwrite retained conditions")
@@ -60,7 +68,25 @@ def main():
                LIVEKIT_LAB_PACKET_PROFILE="audio-jitter")
     if args.variant == "candidate":
         env["LIVEKIT_LAB_DELAYED_AUDIO_SR"] = "1"
+    # Keep existing controls untouched even if the parent environment enabled it.
+    env.pop("LIVEKIT_LAB_BATCHED_CAPTURE", None)
+    if args.capture_handoff:
+        env["LIVEKIT_LAB_BATCHED_CAPTURE"] = "1"
     owned, logs = [], []
+    native_digest = hashlib.sha256()
+    with (LAB / "target/debug/producer-guest-rtc-lab").open("rb") as native:
+        for chunk in iter(lambda: native.read(1024 * 1024), b""):
+            native_digest.update(chunk)
+    native_hash = native_digest.hexdigest()
+    report = {"variant": args.variant, "sfu_binary_sha256": binary_hash,
+              "native_binary_sha256": native_hash, "status": "running",
+              "guests": guests, "mode": mode, "seconds": seconds,
+              "packet_profile": "audio-jitter", "report_interval_ms": 250,
+              "delayed_request_ms": 500 if args.variant == "candidate" else None,
+              "generated_batched_capture_handoff": args.capture_handoff,
+              "physical_speaker_playout_used": False, "g1_complete": False}
+    conditions = LAB / f"evidence/sfu-{prefix}-conditions.json"
+    conditions.write_text(json.dumps(report, indent=2) + "\n")
 
     def start(command, label, port):
         stream = (LAB / f"runtime/{prefix}-{label}.log").open("w")
@@ -99,14 +125,12 @@ def main():
                     except subprocess.TimeoutExpired:
                         os.killpg(fixture.pid, signal.SIGKILL)
                         fixture.wait()
-        report = {"variant": args.variant, "sfu_binary_sha256": binary_hash,
-                  "guests": guests, "mode": mode, "seconds": seconds,
-                  "packet_profile": "audio-jitter", "report_interval_ms": 250,
-                  "delayed_request_ms": 500 if args.variant == "candidate" else None,
-                  "physical_speaker_playout_used": False, "g1_complete": False}
-        (LAB / f"evidence/sfu-{prefix}-conditions.json").write_text(json.dumps(report, indent=2) + "\n")
+        report["status"] = "completed"
         print("Completed", run_name)
     finally:
+        if report["status"] == "running":
+            report["status"] = "failed"
+        conditions.write_text(json.dumps(report, indent=2) + "\n")
         for process in reversed(owned):
             if process.poll() is None:
                 process.terminate()

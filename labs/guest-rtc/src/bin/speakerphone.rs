@@ -2,6 +2,9 @@
 #[allow(dead_code)]
 #[path = "../apm.rs"]
 mod apm;
+#[allow(dead_code)]
+#[path = "../capture_handoff.rs"]
+mod capture_handoff;
 use anyhow::{bail, ensure, Context, Result};
 use serde_json::json;
 use std::{
@@ -130,7 +133,7 @@ struct Session {
     devices: String,
     dir: PathBuf,
     began: Instant,
-    on: apm::Processor,
+    on: capture_handoff::MicrophoneProcessor,
     off: apm::Processor,
     speaker: Wav,
     mic: Wav,
@@ -164,7 +167,7 @@ impl Session {
         let mut stamps = BufWriter::new(file(&dir.join("timestamps.csv"))?);
         writeln!(stamps, "kind,host_ns,phase_seconds,estimated_apm_delay_ms")?;
         let mut session = Self {
-            on: apm::Processor::new(true, 48000, 1)?,
+            on: capture_handoff::MicrophoneProcessor::new()?,
             off: apm::Processor::new(false, 48000, 1)?,
             speaker: wav(&dir.join("speaker-reference.wav"))?,
             mic: wav(&dir.join("microphone-raw.wav"))?,
@@ -196,7 +199,6 @@ impl Session {
             output_volume_start: output_volume_percent(),
         };
         // Set once before any capture/reference processing; preserve AEC itself.
-        session.on.set_high_pass_filter_enforcement(false);
         ensure!(
             !session.on.high_pass_filter_enforced(),
             "Voice refinement configuration failed"

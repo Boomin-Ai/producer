@@ -907,3 +907,76 @@ reference, WAN recovery, device changes or the five-hour envelope. Next G1 work
 is to connect the actual capture/playback/APM owner to the isolated LiveKit
 guest path, retaining bounded timestamped queues, mix-minus, private-cue routing
 and lifecycle evidence before expanding integration.
+
+## Capture publication handoff investigation — 2026-10-10
+
+Extracted the selected no-forced-high-pass AEC profile into a shared
+`MicrophoneProcessor`, used by the physical speakerphone session and a new
+generated-input LiveKit publication diagnostic. This preserves the physical
+lab's processing order/settings and does not publish its microphone. The
+diagnostic uses generated 48 kHz mono PCM in ten-block/100 ms batches and
+generated silent reference PCM; it cannot establish physical AEC performance.
+SDK AEC/NS/AGC remain disabled to avoid double processing.
+
+The timestamped handoff owns at most 32 blocks, anchors once per generation,
+checks consecutive 10 ms capture steps with 2 ms tolerance, and enforces at
+least 8 ms publication spacing. Overflow, discontinuity, clock regression,
+late arrival or a missed provisional 20 ms publication deadline retires the
+generation and clears its queue. Cancellation/error also clears pending PCM.
+These are diagnostic bounds, not a frozen production scheduler or private-cue
+implementation. Actual destination authorization and SDK/encoder queue fencing
+remain open.
+
+Four sequential one-guest/one-rejoin loopback runs failed the new publisher
+deadline. The shared-runtime version emitted 94 blocks; an isolated publisher
+thread emitted 144. Interactive QoS then emitted 1,801 blocks before failure;
+a repeat without a simultaneous build emitted 50 before failure. The two
+instrumented interactive runs observed owner tick gaps of 28.131 and 27.008 ms,
+maximum direct audio SDK call durations of 0.807 and 0.399 ms, and maximum APM
+batch durations of 4.291 and 0.969 ms. This points toward scheduling pauses in
+these runs, rather than a long direct SDK audio call. It does not identify the
+OS/root cause or qualify the source under pressure. Earlier fault metrics
+omitted the offending lateness; current code records it before retiring.
+
+All failed generations accounted for accepted = emitted + retired pending;
+pending was zero afterward. Both decoded sources were destroyed in every run.
+Where the dedicated publisher owner was present, its thread was explicitly
+joined. Initial runs overlapped some local compilation; the idle repeat did not.
+Interactive priority failed to resolve the issue and its override was removed
+from retained code. No additional successful batching run is claimed.
+
+There is also a structural latency failure: the deterministic 100 ms batching
+test produces a 100 ms p95 adapter queue age, above the plan's initial 30 ms
+audio adapter target. Current code measures this with a fixed 350-bin histogram
+and reports the target separately from deadline faults. Increasing the queue or
+deadline would not resolve the batching latency. The capture/playback owner
+must deliver smaller timestamped blocks before this becomes a candidate for
+the integrated physical call test. In addition, the SDK direct source still
+has no external capture timestamp parameter; preserving timestamps in the
+Rust handoff alone does not prove their mapping into RTP or camera alignment.
+
+The original generated source remains the default. A 30-second control with
+the new named publisher thread passed browser/native return media and guest
+rejoin. It joined in 0.165 ms and destroyed both decoded sources. This is an
+existing synthetic-path regression check, not physical publication acceptance.
+The owned runner now records binary hashes and failed as well as completed
+conditions, and accepts a unique evidence suffix without overwriting trials.
+
+Tests cover paced batches and the explicit queue-age target failure, stalls,
+overflow, timestamp/clock discontinuity, cleared destination generations, and
+40 AEC-owner cancellation/error teardown cycles. The shared receiver suite has
+33 passing tests. A deterministic 10 ms input comparison meets the queue-age
+target with 10 ms p95/peak two pending blocks; hardware I/O still must establish
+that cadence. The physical-bin tests also pass. Evidence is summarized in
+`labs/guest-rtc/evidence/capture-publication-batching-investigation.json`, with
+references/hashes for all five runs. Original reports/logs/recordings are kept.
+
+Next: prototype low-latency native I/O capture and final monitor-reference
+callbacks, with bounded callback copies and explicit unregister/owner teardown.
+The local Apple SDK documents `AVAudioSinkNode` as an input-chain I/O-thread
+receiver with hardware-matching format and no format conversion; it cannot be
+used as a mixer-output sink. A separate final-output/reference callback and
+its actual PCM/timestamp semantics must be proven. Then establish source
+capture-clock propagation or an explicitly measured alternate synchronization
+contract, and repeat physical AEC/double-talk with real loopback RTC routing.
+G1 remains incomplete. No installed Producer or production deployment changed.

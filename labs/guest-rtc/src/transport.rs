@@ -366,7 +366,14 @@ async fn publish(room: &Room) -> Result<(NativeAudioSource, NativeVideoSource)> 
     Ok((audio, video))
 }
 
-async fn source_loop(audio: NativeAudioSource, video: NativeVideoSource) -> Result<()> {
+async fn source_loop(
+    audio: NativeAudioSource,
+    video: NativeVideoSource,
+    capture_evidence: crate::capture_fixture::Evidence,
+) -> Result<()> {
+    if std::env::var("LIVEKIT_LAB_BATCHED_CAPTURE").as_deref() == Ok("1") {
+        return crate::capture_fixture::run(audio, video, capture_evidence).await;
+    }
     let began = Instant::now();
     let mut tick = tokio::time::interval(Duration::from_millis(10));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -416,6 +423,55 @@ async fn source_loop(audio: NativeAudioSource, video: NativeVideoSource) -> Resu
     }
 }
 
+/// The direct SDK source is synchronous. Keep its pacing owner off the room's
+/// shared Tokio workers, and join it on success, failure and cancellation.
+struct Publisher {
+    stop: Option<tokio::sync::oneshot::Sender<()>>,
+    thread: Option<std::thread::JoinHandle<Result<()>>>,
+}
+impl Publisher {
+    fn start(
+        audio: NativeAudioSource,
+        video: NativeVideoSource,
+        evidence: crate::capture_fixture::Evidence,
+    ) -> Result<Self> {
+        let (stop, stopping) = tokio::sync::oneshot::channel();
+        let thread = std::thread::Builder::new()
+            .name("guest-capture-publisher".into())
+            .spawn(move || {
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()?
+                    .block_on(async {
+                        tokio::select! {
+                            result = source_loop(audio, video, evidence) => result,
+                            _ = stopping => Ok(()),
+                        }
+                    })
+            })?;
+        Ok(Self {
+            stop: Some(stop),
+            thread: Some(thread),
+        })
+    }
+    fn shutdown(&mut self) -> Result<()> {
+        if let Some(stop) = self.stop.take() {
+            let _ = stop.send(());
+        }
+        if let Some(thread) = self.thread.take() {
+            thread
+                .join()
+                .map_err(|_| anyhow::anyhow!("Capture publisher thread panicked"))??;
+        }
+        Ok(())
+    }
+}
+impl Drop for Publisher {
+    fn drop(&mut self) {
+        let _ = self.shutdown();
+    }
+}
+
 pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool) -> Result<()> {
     if !(5..=300).contains(&seconds) {
         bail!("Fixture duration must be 5..300 seconds");
@@ -440,7 +496,9 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     let (room, mut events) = Room::connect(&url, token.trim(), RoomOptions::default()).await?;
     println!("Native host connected to local SFU; synthetic tracks only");
     let (source_audio, source_video) = publish(&room).await?;
-    let publisher = tokio::spawn(source_loop(source_audio.clone(), source_video));
+    let capture_evidence = Arc::new(std::sync::Mutex::new(json!({"enabled":false})));
+    let mut publisher =
+        Publisher::start(source_audio.clone(), source_video, capture_evidence.clone())?;
     let (mut audio, mut video, mut metrics) = (
         HashMap::<String, AudioTap>::new(),
         HashMap::<String, VideoTap>::new(),
@@ -721,17 +779,9 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     }
     #[cfg(feature = "obs-proof")]
     binding_discovery.shutdown().await;
-    let publisher_error = if publisher.is_finished() {
-        match publisher.await {
-            Ok(Err(error)) => Some(error.to_string()),
-            Err(error) => Some(error.to_string()),
-            _ => None,
-        }
-    } else {
-        publisher.abort();
-        let _ = publisher.await;
-        None
-    };
+    let publisher_join_started = Instant::now();
+    let publisher_error = publisher.shutdown().err().map(|e| e.to_string());
+    let publisher_join_ms = publisher_join_started.elapsed().as_secs_f64() * 1000.0;
     source_audio.clear_buffer();
     let mut receiver_stats = Vec::new();
     let mut remote_sender_reports = Vec::new();
@@ -881,6 +931,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     }
     let report = json!({"audio_master_playback":audio_master_playback,"schema_version":1,"livekit":"0.9.4","topology":"local browser guests to native host through loopback SFU",
         "signaling_url":url,"publisher_error":publisher_error,
+        "capture_publication":capture_evidence.lock().unwrap_or_else(|p|p.into_inner()).clone(),
+        "capture_publisher_owner":{"named_thread":true,"joined":publisher.thread.is_none(),"shutdown_ms":publisher_join_ms},
         "sync_streams_requested":std::env::var("LIVEKIT_LAB_SYNC_STREAMS").as_deref() == Ok("1"),
         "decoded_pcm_origin_handoff":decoded_pcm_origin_handoff,"sender_report_origin_maps":sender_report_origin_maps,"rtcp_exchange_probe":rtcp_exchange_probe,"rrtr_lab_experiment_requested":std::env::var("LIVEKIT_LAB_RRTR").as_deref()==Ok("1"),"timed_mixer_probe":timed_mixer_probe,"remote_sender_reports":remote_sender_reports,"receiver_stats":receiver_stats,"obs_recording":obs_recording,"local_playout_clock_requested":use_playout_clock,"audio_ingest_generation_reports":audio_ingest_stats,"audio_ingest_session_totals":audio_ingest_totals,"audio_worker_lifecycle":worker_lifecycle,
         "duration_seconds":seconds,"consumer_stall_ms":if pressure {200} else {0},"stall_period_seconds":5,

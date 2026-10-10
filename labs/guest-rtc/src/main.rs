@@ -1,6 +1,8 @@
 mod apm;
 #[cfg(any(feature = "obs-proof", test))]
 mod binding_discovery;
+mod capture_fixture;
+mod capture_handoff;
 mod fixture;
 #[cfg(feature = "obs-proof")]
 mod obs_proof;
