@@ -15,6 +15,8 @@ pub struct Frame {
 struct State {
     generation: u64,
     ready: bool,
+    suspended: bool,
+    suspended_rejected: u64,
     before_device_ready: u64,
     frames: VecDeque<Frame>,
     accepted: u64,
@@ -33,6 +35,8 @@ impl Monitor {
             state: Mutex::new(State {
                 generation: 0,
                 ready: false,
+                suspended: false,
+                suspended_rejected: 0,
                 before_device_ready: 0,
                 frames: VecDeque::with_capacity(CAPACITY),
                 accepted: 0,
@@ -57,6 +61,21 @@ impl Monitor {
         state.frames.clear();
         state.generation += 1;
     }
+    pub fn suspend(&self) {
+        let mut state = self.state.lock().unwrap();
+        state.suspended = true;
+        state.retired += state.frames.len() as u64;
+        state.frames.clear();
+        state.generation += 1;
+    }
+    pub fn resume(&self) -> u64 {
+        let mut state = self.state.lock().unwrap();
+        state.suspended = false;
+        state.retired += state.frames.len() as u64;
+        state.frames.clear();
+        state.generation += 1;
+        state.generation
+    }
     pub fn replace(&self) -> u64 {
         let mut state = self.state.lock().unwrap();
         state.retired += state.frames.len() as u64;
@@ -72,6 +91,10 @@ impl Monitor {
         };
         if generation != state.generation {
             state.rejected_generation += 1;
+            return;
+        }
+        if state.suspended {
+            state.suspended_rejected += 1;
             return;
         }
         if !state.ready {
@@ -105,7 +128,7 @@ impl Monitor {
     }
     pub fn stats(&self) -> serde_json::Value {
         let state = self.state.lock().unwrap();
-        json!({"generation":state.generation,"device_ready":state.ready,"before_device_ready_rejected":state.before_device_ready,"accepted":state.accepted,"overflow_rejected":state.overflow,"retired":state.retired,"old_generation_rejected":state.rejected_generation,"stale":state.stale,"pending":state.frames.len(),"capacity_blocks":CAPACITY,"max_age_ms":30,"callback_contention_rejected":self.contention.load(std::sync::atomic::Ordering::Relaxed)})
+        json!({"generation":state.generation,"device_ready":state.ready,"suspended":state.suspended,"suspended_rejected":state.suspended_rejected,"before_device_ready_rejected":state.before_device_ready,"accepted":state.accepted,"overflow_rejected":state.overflow,"retired":state.retired,"old_generation_rejected":state.rejected_generation,"stale":state.stale,"pending":state.frames.len(),"capacity_blocks":CAPACITY,"max_age_ms":30,"callback_contention_rejected":self.contention.load(std::sync::atomic::Ordering::Relaxed)})
     }
 }
 #[cfg(test)]
@@ -158,6 +181,26 @@ mod tests {
         m.stop();
         m.push(generation, [33; 480], now);
         assert!(m.pop(now).1.is_none());
+    }
+    #[test]
+    fn reconnect_closes_admission_even_if_a_subscription_arrives_early() {
+        let m = Monitor::new();
+        m.activate();
+        let now = Instant::now();
+        let old = m.replace();
+        m.push(old, [11; 480], now);
+        m.suspend();
+        let early = m.replace();
+        m.push(early, [22; 480], now);
+        assert!(m.pop(now).1.is_none());
+        assert_eq!(m.stats()["suspended_rejected"], 1);
+        let fresh = m.resume();
+        m.push(old, [33; 480], now);
+        m.push(early, [44; 480], now);
+        m.push(fresh, [55; 480], now);
+        assert_eq!(m.pop(now).1.unwrap().samples[0], 55);
+        assert_eq!(m.stats()["old_generation_rejected"], 2);
+        assert_eq!(m.stats()["retired"], 1);
     }
     #[test]
     fn rtc_callback_never_waits_for_consumer_lock() {

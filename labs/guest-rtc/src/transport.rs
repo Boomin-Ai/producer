@@ -164,6 +164,25 @@ impl AudioTap {
         #[cfg(feature = "physical-aec")] monitor: Option<(Arc<crate::guest_monitor::Monitor>, u64)>,
         #[cfg(feature = "obs-proof")] writer: Option<crate::obs_proof::AudioWriter>,
     ) -> Self {
+        let sid = track.sid().to_string();
+        // SAFETY: the SDK RemoteAudioTrack supplies an audio MediaStreamTrack.
+        let native =
+            unsafe { audio_sys::ffi::media_to_audio(track.rtc_track().native_sys_handle()) };
+        Self::from_native(
+            native,
+            sid,
+            #[cfg(feature = "physical-aec")]
+            monitor,
+            #[cfg(feature = "obs-proof")]
+            writer,
+        )
+    }
+    fn from_native(
+        track: SharedPtr<audio_sys::ffi::AudioTrack>,
+        sid: String,
+        #[cfg(feature = "physical-aec")] monitor: Option<(Arc<crate::guest_monitor::Monitor>, u64)>,
+        #[cfg(feature = "obs-proof")] writer: Option<crate::obs_proof::AudioWriter>,
+    ) -> Self {
         #[cfg(feature = "obs-proof")]
         let ingest_queue = writer
             .as_ref()
@@ -186,10 +205,6 @@ impl AudioTap {
             48000,
             1,
         );
-        // SAFETY: the SDK's RemoteAudioTrack supplies an audio MediaStreamTrack.
-        let sid = track.sid().to_string();
-        let track =
-            unsafe { audio_sys::ffi::media_to_audio(track.rtc_track().native_sys_handle()) };
         track.add_sink(&sink);
         Self {
             registered: true,
@@ -595,6 +610,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     let mut lifecycle = Vec::new();
     let mut decoded_origins = crate::sender_clock::DecodedOrigins::default();
     let mut next_sender_report_refresh = Instant::now();
+    let mut reconnect_injected = false;
     loop {
         tokio::select! {
             event = events.recv() => {
@@ -658,16 +674,46 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                     }
                     RoomEvent::Reconnecting => {
                         #[cfg(feature = "physical-aec")]
-                        {monitor.replace();}
+                        {monitor.suspend();}
                         lifecycle.push(json!({"event":"reconnecting","at_ms":began.elapsed().as_millis()}));
                     },
-                    RoomEvent::Reconnected => lifecycle.push(json!({"event":"reconnected","at_ms":began.elapsed().as_millis()})),
+                    RoomEvent::Reconnected => {
+                        #[cfg(feature = "physical-aec")]
+                        if crate::physical_publication::monitor_enabled() {
+                            let generation=monitor.resume();
+                            if let Some(old)=audio.remove("guest-1") {
+                                let track=old.track.clone();let sid=old.sid.clone();
+                                let m=metrics.entry("guest-1".into()).or_default();
+                                m.retired_queues.push(old.retire_evidence());
+                                // Remove the old sink before installing a fresh observer;
+                                // callbacks holding the old observer retain its retired epoch.
+                                audio.insert("guest-1".into(),AudioTap::from_native(track,sid.clone(),Some((monitor.clone(),generation)), #[cfg(feature = "obs-proof")] if !use_sender_clock {recorder.as_ref().map(|r|r.audio_writer())} else {None}));
+                                m.next_sample=None;m.last_capture_timestamp_ms=None;m.audio_active=false;
+                                lifecycle.push(json!({"event":"guest_monitor_rebound","sid":sid,"generation":generation,"at_ms":began.elapsed().as_millis()}));
+                            }
+                        }
+                        lifecycle.push(json!({"event":"reconnected","at_ms":began.elapsed().as_millis()}));
+                    },
                     _ => {}
                 }
             }
             _ = tick.tick() => {
                 let now = Instant::now(); let elapsed = now.duration_since(began).as_secs_f64();
                 if elapsed >= seconds as f64 { break; }
+                if physical_capture_enabled() && !reconnect_injected && elapsed>=5.0 {
+                    let requested=std::env::var("LIVEKIT_LAB_MONITOR_RECONNECT").unwrap_or_default();
+                    let scenario=match requested.as_str() {
+                        "signal"=>Some(livekit::SimulateScenario::SignalReconnect),
+                        "full"=>Some(livekit::SimulateScenario::FullReconnect),
+                        _=>None,
+                    };
+                    if let Some(scenario)=scenario {
+                        reconnect_injected=true;
+                        // Timeout bounds the fixture control call, not reconnection itself.
+                        tokio::time::timeout(Duration::from_secs(2),room.simulate_scenario(scenario)).await??;
+                        lifecycle.push(json!({"event":"reconnect_injected","mode":requested,"at_ms":began.elapsed().as_millis()}));
+                    }
+                }
                 if physical_capture_enabled() && publisher.thread.as_ref().is_some_and(|thread|thread.is_finished()) {
                     println!("Physical publisher ended early; stopping room and saving diagnostics");
                     break;

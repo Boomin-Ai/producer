@@ -1,0 +1,268 @@
+{
+  "scope": "actual local SFU SDK signaling/full reconnect and guest publication replacement",
+  "rust_tests_passed": 45,
+  "strict_all_targets_combined_features_clippy": "passed",
+  "trials": [
+    {
+      "mode": "signal",
+      "run": "physical-publication-1791664690712005000",
+      "completed_seconds": 25.038255084,
+      "events": [
+        {
+          "at_ms": 0,
+          "event": "subscribed",
+          "identity": "guest-1",
+          "sid": "TR_VCdH8RdYPSXQHM"
+        },
+        {
+          "at_ms": 0,
+          "event": "subscribed",
+          "identity": "guest-1",
+          "sid": "TR_AMhkVZBD8pgTWh"
+        },
+        {
+          "at_ms": 5002,
+          "event": "reconnect_injected",
+          "mode": "signal"
+        },
+        {
+          "at_ms": 5002,
+          "event": "reconnecting"
+        },
+        {
+          "at_ms": 8061,
+          "event": "guest_monitor_rebound",
+          "generation": 3,
+          "sid": "TR_AMhkVZBD8pgTWh"
+        },
+        {
+          "at_ms": 8061,
+          "event": "reconnected"
+        }
+      ],
+      "capture_to_sdk_p95_ms": 26,
+      "deadline_recoveries": 0,
+      "source_fault_free": true,
+      "post_reconnect_native_played_block_growth": 1300,
+      "monitor_inbox": {
+        "accepted": 2154,
+        "before_device_ready_rejected": 39,
+        "callback_contention_rejected": 1,
+        "capacity_blocks": 8,
+        "device_ready": false,
+        "generation": 4,
+        "max_age_ms": 30,
+        "old_generation_rejected": 306,
+        "overflow_rejected": 0,
+        "pending": 0,
+        "retired": 0,
+        "stale": 0,
+        "suspended": false,
+        "suspended_rejected": 0
+      },
+      "monitor_after_stop": {
+        "consumed": 2154,
+        "overflow_rejected": 0,
+        "partial_samples_retired": 320,
+        "pending_retired": 0,
+        "played_blocks": 2154,
+        "queued": 2154,
+        "silent_samples": 147872,
+        "stale_or_generation_retired": 1
+      },
+      "native_errors": 0,
+      "native_owners_retired": true,
+      "publisher_join_ms": 24.890167,
+      "final_receiver_packets": 1214,
+      "final_receiver_packet_loss": 7,
+      "receiver_concealed_samples": 7422,
+      "receiver_concealment_events": 3
+    },
+    {
+      "mode": "full",
+      "run": "physical-publication-1791664763331235000",
+      "completed_seconds": 30.097725417,
+      "events": [
+        {
+          "at_ms": 0,
+          "event": "subscribed",
+          "identity": "guest-1",
+          "sid": "TR_VCNzfS5Ws4hMM6"
+        },
+        {
+          "at_ms": 0,
+          "event": "subscribed",
+          "identity": "guest-1",
+          "sid": "TR_AM5sSNQnPz6FMr"
+        },
+        {
+          "at_ms": 5000,
+          "event": "reconnect_injected",
+          "mode": "full"
+        },
+        {
+          "at_ms": 5001,
+          "event": "unsubscribed",
+          "identity": "guest-1",
+          "sid": "TR_AM5sSNQnPz6FMr"
+        },
+        {
+          "at_ms": 5001,
+          "event": "unsubscribed",
+          "identity": "guest-1",
+          "sid": "TR_VCNzfS5Ws4hMM6"
+        },
+        {
+          "at_ms": 5001,
+          "event": "reconnecting"
+        },
+        {
+          "at_ms": 5039,
+          "event": "subscribed",
+          "identity": "guest-1",
+          "sid": "TR_VCNzfS5Ws4hMM6"
+        },
+        {
+          "at_ms": 5040,
+          "event": "subscribed",
+          "identity": "guest-1",
+          "sid": "TR_AM5sSNQnPz6FMr"
+        },
+        {
+          "at_ms": 5050,
+          "event": "guest_monitor_rebound",
+          "generation": 5,
+          "sid": "TR_AM5sSNQnPz6FMr"
+        },
+        {
+          "at_ms": 5050,
+          "event": "reconnected"
+        }
+      ],
+      "capture_to_sdk_p95_ms": 26,
+      "deadline_recoveries": 1,
+      "source_fault_free": false,
+      "post_reconnect_native_played_block_growth": 2093,
+      "monitor_inbox": {
+        "accepted": 2954,
+        "before_device_ready_rejected": 38,
+        "callback_contention_rejected": 1,
+        "capacity_blocks": 8,
+        "device_ready": false,
+        "generation": 6,
+        "max_age_ms": 30,
+        "old_generation_rejected": 0,
+        "overflow_rejected": 2,
+        "pending": 0,
+        "retired": 1,
+        "stale": 4,
+        "suspended": false,
+        "suspended_rejected": 1
+      },
+      "monitor_after_stop": {
+        "consumed": 2946,
+        "overflow_rejected": 0,
+        "partial_samples_retired": 224,
+        "pending_retired": 3,
+        "played_blocks": 2945,
+        "queued": 2949,
+        "silent_samples": 8256,
+        "stale_or_generation_retired": 2
+      },
+      "native_errors": 0,
+      "native_owners_retired": true,
+      "publisher_join_ms": 48.670167,
+      "final_receiver_packets": 1240,
+      "final_receiver_packet_loss": 0,
+      "receiver_concealed_samples": 7702,
+      "receiver_concealment_events": 4
+    },
+    {
+      "mode": "guest-rejoin",
+      "run": "physical-publication-1791664858392506000",
+      "completed_seconds": 25.049462417,
+      "events": [
+        {
+          "at_ms": 0,
+          "event": "subscribed",
+          "identity": "guest-1",
+          "sid": "TR_AMa4cm7mKXNPm7"
+        },
+        {
+          "at_ms": 0,
+          "event": "subscribed",
+          "identity": "guest-1",
+          "sid": "TR_VCHst6zPDvMCm7"
+        },
+        {
+          "at_ms": 5004,
+          "event": "unsubscribed",
+          "identity": "guest-1",
+          "sid": "TR_VCHst6zPDvMCm7"
+        },
+        {
+          "at_ms": 5004,
+          "event": "unsubscribed",
+          "identity": "guest-1",
+          "sid": "TR_AMa4cm7mKXNPm7"
+        },
+        {
+          "at_ms": 6318,
+          "event": "subscribed",
+          "identity": "guest-1",
+          "sid": "TR_VCu3D9BqnzBbKD"
+        },
+        {
+          "at_ms": 6510,
+          "event": "subscribed",
+          "identity": "guest-1",
+          "sid": "TR_AMkr7i4iUtxSLD"
+        }
+      ],
+      "capture_to_sdk_p95_ms": 27,
+      "deadline_recoveries": 0,
+      "source_fault_free": true,
+      "post_reconnect_native_played_block_growth": 1501,
+      "monitor_inbox": {
+        "accepted": 2310,
+        "before_device_ready_rejected": 39,
+        "callback_contention_rejected": 2,
+        "capacity_blocks": 8,
+        "device_ready": false,
+        "generation": 4,
+        "max_age_ms": 30,
+        "old_generation_rejected": 0,
+        "overflow_rejected": 0,
+        "pending": 0,
+        "retired": 1,
+        "stale": 0,
+        "suspended": false,
+        "suspended_rejected": 0
+      },
+      "monitor_after_stop": {
+        "consumed": 2309,
+        "overflow_rejected": 0,
+        "partial_samples_retired": 256,
+        "pending_retired": 0,
+        "played_blocks": 2307,
+        "queued": 2309,
+        "silent_samples": 74176,
+        "stale_or_generation_retired": 3
+      },
+      "native_errors": 0,
+      "native_owners_retired": true,
+      "publisher_join_ms": 23.1385,
+      "final_receiver_packets": 913,
+      "final_receiver_packet_loss": 0,
+      "receiver_concealed_samples": 0,
+      "receiver_concealment_events": 0
+    }
+  ],
+  "application_generation_retirement_tested": true,
+  "encoded_or_decoded_sdk_queue_privacy_fence_qualified": false,
+  "wan_outage_qualified": false,
+  "voice_quality_qualified": false,
+  "camera_sync_qualified": false,
+  "g1_complete": false,
+  "production_changed": false
+}

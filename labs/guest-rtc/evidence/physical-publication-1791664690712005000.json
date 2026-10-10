@@ -1,0 +1,1623 @@
+{
+  "actual_duration_seconds": 25.038255084,
+  "audio_ingest_generation_reports": [],
+  "audio_ingest_session_totals": {
+    "callback_contention_dropped": 0,
+    "clock_resets": 0,
+    "consumed": 0,
+    "overflow_oldest_dropped": 0,
+    "pending_frames": 0,
+    "received": 0,
+    "stale_dropped": 0
+  },
+  "audio_master_playback": null,
+  "audio_worker_lifecycle": null,
+  "callback_timestamps_are_capture_timestamps": false,
+  "capture_publication": {
+    "aec_enforced_high_pass": false,
+    "awaiting_fresh_capture_at_shutdown": false,
+    "capture_hold_retired": false,
+    "capture_rtp_alignment_qualified": false,
+    "capture_timing_capacity": 64,
+    "capture_timing_last_blocks": [
+      {
+        "age_before_apm_us": 18505,
+        "host_ns": 63662784588166,
+        "processing_us": 170
+      },
+      {
+        "age_before_apm_us": 19404,
+        "host_ns": 63662794588333,
+        "processing_us": 146
+      },
+      {
+        "age_before_apm_us": 19517,
+        "host_ns": 63662804588499,
+        "processing_us": 170
+      },
+      {
+        "age_before_apm_us": 20510,
+        "host_ns": 63662814588625,
+        "processing_us": 128
+      },
+      {
+        "age_before_apm_us": 21547,
+        "host_ns": 63662824588791,
+        "processing_us": 232
+      },
+      {
+        "age_before_apm_us": 21512,
+        "host_ns": 63662834588957,
+        "processing_us": 140
+      },
+      {
+        "age_before_apm_us": 22524,
+        "host_ns": 63662844589125,
+        "processing_us": 180
+      },
+      {
+        "age_before_apm_us": 23525,
+        "host_ns": 63662854589291,
+        "processing_us": 251
+      },
+      {
+        "age_before_apm_us": 14418,
+        "host_ns": 63662864589416,
+        "processing_us": 202
+      },
+      {
+        "age_before_apm_us": 13514,
+        "host_ns": 63662874589583,
+        "processing_us": 127
+      },
+      {
+        "age_before_apm_us": 14511,
+        "host_ns": 63662884589583,
+        "processing_us": 179
+      },
+      {
+        "age_before_apm_us": 15509,
+        "host_ns": 63662894589749,
+        "processing_us": 232
+      },
+      {
+        "age_before_apm_us": 15534,
+        "host_ns": 63662904589916,
+        "processing_us": 157
+      },
+      {
+        "age_before_apm_us": 16517,
+        "host_ns": 63662914590083,
+        "processing_us": 141
+      },
+      {
+        "age_before_apm_us": 17518,
+        "host_ns": 63662924590208,
+        "processing_us": 170
+      },
+      {
+        "age_before_apm_us": 17517,
+        "host_ns": 63662934590374,
+        "processing_us": 140
+      },
+      {
+        "age_before_apm_us": 18502,
+        "host_ns": 63662944590541,
+        "processing_us": 181
+      },
+      {
+        "age_before_apm_us": 19517,
+        "host_ns": 63662954590708,
+        "processing_us": 138
+      },
+      {
+        "age_before_apm_us": 19531,
+        "host_ns": 63662964590874,
+        "processing_us": 173
+      },
+      {
+        "age_before_apm_us": 20510,
+        "host_ns": 63662974591000,
+        "processing_us": 140
+      },
+      {
+        "age_before_apm_us": 21509,
+        "host_ns": 63662984591124,
+        "processing_us": 347
+      },
+      {
+        "age_before_apm_us": 21355,
+        "host_ns": 63662994591291,
+        "processing_us": 121
+      },
+      {
+        "age_before_apm_us": 22515,
+        "host_ns": 63663004591458,
+        "processing_us": 170
+      },
+      {
+        "age_before_apm_us": 23509,
+        "host_ns": 63663014591624,
+        "processing_us": 124
+      },
+      {
+        "age_before_apm_us": 14457,
+        "host_ns": 63663024591791,
+        "processing_us": 160
+      },
+      {
+        "age_before_apm_us": 13520,
+        "host_ns": 63663034591916,
+        "processing_us": 129
+      },
+      {
+        "age_before_apm_us": 14515,
+        "host_ns": 63663044591916,
+        "processing_us": 166
+      },
+      {
+        "age_before_apm_us": 15447,
+        "host_ns": 63663054592083,
+        "processing_us": 123
+      },
+      {
+        "age_before_apm_us": 15731,
+        "host_ns": 63663064592249,
+        "processing_us": 326
+      },
+      {
+        "age_before_apm_us": 16503,
+        "host_ns": 63663074592416,
+        "processing_us": 125
+      },
+      {
+        "age_before_apm_us": 17513,
+        "host_ns": 63663084592583,
+        "processing_us": 155
+      },
+      {
+        "age_before_apm_us": 17510,
+        "host_ns": 63663094592707,
+        "processing_us": 145
+      },
+      {
+        "age_before_apm_us": 18523,
+        "host_ns": 63663104592875,
+        "processing_us": 209
+      },
+      {
+        "age_before_apm_us": 19542,
+        "host_ns": 63663114593041,
+        "processing_us": 123
+      },
+      {
+        "age_before_apm_us": 19501,
+        "host_ns": 63663124593207,
+        "processing_us": 149
+      },
+      {
+        "age_before_apm_us": 20503,
+        "host_ns": 63663134593375,
+        "processing_us": 119
+      },
+      {
+        "age_before_apm_us": 21522,
+        "host_ns": 63663144593499,
+        "processing_us": 165
+      },
+      {
+        "age_before_apm_us": 21511,
+        "host_ns": 63663154593666,
+        "processing_us": 114
+      },
+      {
+        "age_before_apm_us": 22505,
+        "host_ns": 63663164593833,
+        "processing_us": 152
+      },
+      {
+        "age_before_apm_us": 23504,
+        "host_ns": 63663174593999,
+        "processing_us": 109
+      },
+      {
+        "age_before_apm_us": 14454,
+        "host_ns": 63663184594166,
+        "processing_us": 120
+      },
+      {
+        "age_before_apm_us": 13521,
+        "host_ns": 63663194594291,
+        "processing_us": 102
+      },
+      {
+        "age_before_apm_us": 14504,
+        "host_ns": 63663204594291,
+        "processing_us": 151
+      },
+      {
+        "age_before_apm_us": 15531,
+        "host_ns": 63663214594458,
+        "processing_us": 121
+      },
+      {
+        "age_before_apm_us": 15526,
+        "host_ns": 63663224594624,
+        "processing_us": 151
+      },
+      {
+        "age_before_apm_us": 16504,
+        "host_ns": 63663234594791,
+        "processing_us": 117
+      },
+      {
+        "age_before_apm_us": 17516,
+        "host_ns": 63663244594958,
+        "processing_us": 263
+      },
+      {
+        "age_before_apm_us": 17508,
+        "host_ns": 63663254595082,
+        "processing_us": 124
+      },
+      {
+        "age_before_apm_us": 18502,
+        "host_ns": 63663264595250,
+        "processing_us": 161
+      },
+      {
+        "age_before_apm_us": 19531,
+        "host_ns": 63663274595416,
+        "processing_us": 132
+      },
+      {
+        "age_before_apm_us": 19506,
+        "host_ns": 63663284595582,
+        "processing_us": 153
+      },
+      {
+        "age_before_apm_us": 20382,
+        "host_ns": 63663294595750,
+        "processing_us": 129
+      },
+      {
+        "age_before_apm_us": 21528,
+        "host_ns": 63663304595874,
+        "processing_us": 156
+      },
+      {
+        "age_before_apm_us": 21509,
+        "host_ns": 63663314595749,
+        "processing_us": 107
+      },
+      {
+        "age_before_apm_us": 22511,
+        "host_ns": 63663324595916,
+        "processing_us": 160
+      },
+      {
+        "age_before_apm_us": 23525,
+        "host_ns": 63663334596083,
+        "processing_us": 193
+      },
+      {
+        "age_before_apm_us": 14418,
+        "host_ns": 63663344596207,
+        "processing_us": 196
+      },
+      {
+        "age_before_apm_us": 14507,
+        "host_ns": 63663354596375,
+        "processing_us": 130
+      },
+      {
+        "age_before_apm_us": 14516,
+        "host_ns": 63663364596375,
+        "processing_us": 167
+      },
+      {
+        "age_before_apm_us": 15529,
+        "host_ns": 63663374596541,
+        "processing_us": 133
+      },
+      {
+        "age_before_apm_us": 15586,
+        "host_ns": 63663384596707,
+        "processing_us": 314
+      },
+      {
+        "age_before_apm_us": 16527,
+        "host_ns": 63663394596875,
+        "processing_us": 136
+      },
+      {
+        "age_before_apm_us": 17510,
+        "host_ns": 63663404596999,
+        "processing_us": 155
+      },
+      {
+        "age_before_apm_us": 18508,
+        "host_ns": 63663414597166,
+        "processing_us": 123
+      }
+    ],
+    "capture_to_sdk_clock_target_ms": 25,
+    "capture_to_sdk_p95_ms_upper_bucket": 26,
+    "deadline_recoveries": 0,
+    "deadline_recovery_qualified": false,
+    "discarded_stale_capture_blocks": 0,
+    "enabled": true,
+    "first_capture_age_before_apm_us": 13881,
+    "full_monitor_reference_qualified": false,
+    "g1_complete": false,
+    "generation_history_capacity": 32,
+    "guest_monitor": {
+      "full_room_monitor_qualified": false,
+      "inbox": {
+        "accepted": 2154,
+        "before_device_ready_rejected": 39,
+        "callback_contention_rejected": 1,
+        "capacity_blocks": 8,
+        "device_ready": false,
+        "generation": 4,
+        "max_age_ms": 30,
+        "old_generation_rejected": 306,
+        "overflow_rejected": 0,
+        "pending": 0,
+        "retired": 0,
+        "stale": 0,
+        "suspended": false,
+        "suspended_rejected": 0
+      },
+      "native": {
+        "capacity_blocks": 8,
+        "consumed": 2154,
+        "gain": 0.2,
+        "max_age_ms": 80,
+        "overflow_rejected": 0,
+        "pending": 0,
+        "played_blocks": 2154,
+        "queued": 2154,
+        "silent_samples": 147872,
+        "stale_or_generation_retired": 1
+      },
+      "progress": [
+        {
+          "at_ms": 0,
+          "inbox": {
+            "accepted": 0,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 1,
+            "max_age_ms": 30,
+            "old_generation_rejected": 0,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 0,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "played_blocks": 0,
+            "queued": 0,
+            "silent_samples": 0,
+            "stale_or_generation_retired": 0
+          }
+        },
+        {
+          "at_ms": 1000,
+          "inbox": {
+            "accepted": 100,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 1,
+            "max_age_ms": 30,
+            "old_generation_rejected": 0,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 99,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 1,
+            "played_blocks": 99,
+            "queued": 100,
+            "silent_samples": 192,
+            "stale_or_generation_retired": 0
+          }
+        },
+        {
+          "at_ms": 2001,
+          "inbox": {
+            "accepted": 200,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 1,
+            "max_age_ms": 30,
+            "old_generation_rejected": 0,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 200,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "played_blocks": 200,
+            "queued": 200,
+            "silent_samples": 192,
+            "stale_or_generation_retired": 0
+          }
+        },
+        {
+          "at_ms": 3002,
+          "inbox": {
+            "accepted": 301,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 1,
+            "max_age_ms": 30,
+            "old_generation_rejected": 0,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 300,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 1,
+            "played_blocks": 300,
+            "queued": 301,
+            "silent_samples": 192,
+            "stale_or_generation_retired": 0
+          }
+        },
+        {
+          "at_ms": 4003,
+          "inbox": {
+            "accepted": 401,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 1,
+            "max_age_ms": 30,
+            "old_generation_rejected": 0,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 400,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 1,
+            "played_blocks": 400,
+            "queued": 401,
+            "silent_samples": 192,
+            "stale_or_generation_retired": 0
+          }
+        },
+        {
+          "at_ms": 5004,
+          "inbox": {
+            "accepted": 461,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 2,
+            "max_age_ms": 30,
+            "old_generation_rejected": 40,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": true,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 461,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "played_blocks": 461,
+            "queued": 461,
+            "silent_samples": 19136,
+            "stale_or_generation_retired": 1
+          }
+        },
+        {
+          "at_ms": 6005,
+          "inbox": {
+            "accepted": 461,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 2,
+            "max_age_ms": 30,
+            "old_generation_rejected": 140,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": true,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 461,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "played_blocks": 461,
+            "queued": 461,
+            "silent_samples": 67264,
+            "stale_or_generation_retired": 1
+          }
+        },
+        {
+          "at_ms": 7006,
+          "inbox": {
+            "accepted": 461,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 2,
+            "max_age_ms": 30,
+            "old_generation_rejected": 240,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": true,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 461,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "played_blocks": 461,
+            "queued": 461,
+            "silent_samples": 114880,
+            "stale_or_generation_retired": 1
+          }
+        },
+        {
+          "at_ms": 8007,
+          "inbox": {
+            "accepted": 495,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 3,
+            "max_age_ms": 30,
+            "old_generation_rejected": 306,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 494,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 1,
+            "played_blocks": 494,
+            "queued": 495,
+            "silent_samples": 147360,
+            "stale_or_generation_retired": 1
+          }
+        },
+        {
+          "at_ms": 9008,
+          "inbox": {
+            "accepted": 595,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 3,
+            "max_age_ms": 30,
+            "old_generation_rejected": 306,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 594,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 1,
+            "played_blocks": 594,
+            "queued": 595,
+            "silent_samples": 147360,
+            "stale_or_generation_retired": 1
+          }
+        },
+        {
+          "at_ms": 10009,
+          "inbox": {
+            "accepted": 695,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 3,
+            "max_age_ms": 30,
+            "old_generation_rejected": 306,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 695,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "played_blocks": 695,
+            "queued": 695,
+            "silent_samples": 147360,
+            "stale_or_generation_retired": 1
+          }
+        },
+        {
+          "at_ms": 11010,
+          "inbox": {
+            "accepted": 795,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 3,
+            "max_age_ms": 30,
+            "old_generation_rejected": 306,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 795,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "played_blocks": 795,
+            "queued": 795,
+            "silent_samples": 147360,
+            "stale_or_generation_retired": 1
+          }
+        },
+        {
+          "at_ms": 12011,
+          "inbox": {
+            "accepted": 896,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 3,
+            "max_age_ms": 30,
+            "old_generation_rejected": 306,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 895,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 1,
+            "played_blocks": 895,
+            "queued": 896,
+            "silent_samples": 147360,
+            "stale_or_generation_retired": 1
+          }
+        },
+        {
+          "at_ms": 13012,
+          "inbox": {
+            "accepted": 996,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 3,
+            "max_age_ms": 30,
+            "old_generation_rejected": 306,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 995,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 1,
+            "played_blocks": 995,
+            "queued": 996,
+            "silent_samples": 147360,
+            "stale_or_generation_retired": 1
+          }
+        },
+        {
+          "at_ms": 14013,
+          "inbox": {
+            "accepted": 1096,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 3,
+            "max_age_ms": 30,
+            "old_generation_rejected": 306,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 1095,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 1,
+            "played_blocks": 1095,
+            "queued": 1096,
+            "silent_samples": 147360,
+            "stale_or_generation_retired": 1
+          }
+        },
+        {
+          "at_ms": 15014,
+          "inbox": {
+            "accepted": 1196,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 3,
+            "max_age_ms": 30,
+            "old_generation_rejected": 306,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 1195,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 1,
+            "played_blocks": 1195,
+            "queued": 1196,
+            "silent_samples": 147360,
+            "stale_or_generation_retired": 1
+          }
+        },
+        {
+          "at_ms": 16015,
+          "inbox": {
+            "accepted": 1296,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 3,
+            "max_age_ms": 30,
+            "old_generation_rejected": 306,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 1295,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 1,
+            "played_blocks": 1295,
+            "queued": 1296,
+            "silent_samples": 147360,
+            "stale_or_generation_retired": 1
+          }
+        },
+        {
+          "at_ms": 17016,
+          "inbox": {
+            "accepted": 1396,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 3,
+            "max_age_ms": 30,
+            "old_generation_rejected": 306,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 1395,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 1,
+            "played_blocks": 1395,
+            "queued": 1396,
+            "silent_samples": 147360,
+            "stale_or_generation_retired": 1
+          }
+        },
+        {
+          "at_ms": 18017,
+          "inbox": {
+            "accepted": 1496,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 3,
+            "max_age_ms": 30,
+            "old_generation_rejected": 306,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 1496,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "played_blocks": 1496,
+            "queued": 1496,
+            "silent_samples": 147360,
+            "stale_or_generation_retired": 1
+          }
+        },
+        {
+          "at_ms": 19018,
+          "inbox": {
+            "accepted": 1595,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 1,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 3,
+            "max_age_ms": 30,
+            "old_generation_rejected": 306,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 1595,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "played_blocks": 1595,
+            "queued": 1595,
+            "silent_samples": 147840,
+            "stale_or_generation_retired": 1
+          }
+        },
+        {
+          "at_ms": 20019,
+          "inbox": {
+            "accepted": 1695,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 1,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 3,
+            "max_age_ms": 30,
+            "old_generation_rejected": 306,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 1694,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 1,
+            "played_blocks": 1694,
+            "queued": 1695,
+            "silent_samples": 147840,
+            "stale_or_generation_retired": 1
+          }
+        },
+        {
+          "at_ms": 21020,
+          "inbox": {
+            "accepted": 1795,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 1,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 3,
+            "max_age_ms": 30,
+            "old_generation_rejected": 306,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 1794,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 1,
+            "played_blocks": 1794,
+            "queued": 1795,
+            "silent_samples": 147840,
+            "stale_or_generation_retired": 1
+          }
+        },
+        {
+          "at_ms": 22021,
+          "inbox": {
+            "accepted": 1895,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 1,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 3,
+            "max_age_ms": 30,
+            "old_generation_rejected": 306,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 1895,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "played_blocks": 1895,
+            "queued": 1895,
+            "silent_samples": 147872,
+            "stale_or_generation_retired": 1
+          }
+        },
+        {
+          "at_ms": 23022,
+          "inbox": {
+            "accepted": 1996,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 1,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 3,
+            "max_age_ms": 30,
+            "old_generation_rejected": 306,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 1995,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 1,
+            "played_blocks": 1995,
+            "queued": 1996,
+            "silent_samples": 147872,
+            "stale_or_generation_retired": 1
+          }
+        },
+        {
+          "at_ms": 24023,
+          "inbox": {
+            "accepted": 2096,
+            "before_device_ready_rejected": 39,
+            "callback_contention_rejected": 1,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 3,
+            "max_age_ms": 30,
+            "old_generation_rejected": 306,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 2095,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 1,
+            "played_blocks": 2095,
+            "queued": 2096,
+            "silent_samples": 147872,
+            "stale_or_generation_retired": 1
+          }
+        }
+      ]
+    },
+    "handoff": {
+      "accepted": 2439,
+      "adapter_queue_age_histogram_bins": 350,
+      "adapter_queue_age_p95_ms_upper_bucket": 12,
+      "adapter_queue_age_target_met": true,
+      "adapter_queue_age_target_ms": 30,
+      "capacity_blocks": 32,
+      "capture_clock_anchored": true,
+      "closed": true,
+      "deadline_missed": false,
+      "emitted": 2438,
+      "faults": 0,
+      "maximum_adapter_queue_age_us": 13392,
+      "maximum_lateness_ms": 20,
+      "maximum_lateness_us": 2601,
+      "minimum_spacing_ms": 8,
+      "minimum_spacing_us": 8312,
+      "peak_pending": 2,
+      "pending": 0,
+      "retired_pending": 1,
+      "sdk_external_capture_timestamp_supported": false,
+      "sdk_internal_queue_ms": 0
+    },
+    "hardware_capture_used": true,
+    "input": "physical native I/O microphone",
+    "maximum_capture_apm_us": 2068,
+    "maximum_capture_to_sdk_us": 27606,
+    "maximum_owner_tick_gap_us": 6610,
+    "maximum_reverse_apm_us": 2093,
+    "maximum_sdk_capture_us": 1556,
+    "maximum_video_capture_us": 223,
+    "native_lifecycle": {
+      "callbacks_active": 0,
+      "clipped_samples": 0,
+      "first_io_fault": {
+        "codes": "0 none; 1 timestamp/layout; 2 buffer; 3 timeline; 4 nonfinite sample; 5 post-render error; 6 configuration change",
+        "microphone": 0,
+        "speaker": 0
+      },
+      "format_or_timeline_errors": 0,
+      "maximum_tap_frames": {
+        "microphone": 512,
+        "speaker": 512
+      },
+      "microphone": {
+        "capacity": 32,
+        "consumed": 2439,
+        "overflow": 0,
+        "pending_retired": 0,
+        "queued": 2439
+      },
+      "monitor_after_stop": {
+        "consumed": 2154,
+        "overflow_rejected": 0,
+        "partial_samples_retired": 320,
+        "pending_retired": 0,
+        "played_blocks": 2154,
+        "queued": 2154,
+        "silent_samples": 147872,
+        "stale_or_generation_retired": 1
+      },
+      "owners_and_callback_state_retired": true,
+      "render_notifications_alive": 0,
+      "speaker": {
+        "capacity": 32,
+        "consumed": 2442,
+        "overflow": 0,
+        "pending_retired": 0,
+        "queued": 2442
+      },
+      "startup_quarantine": {
+        "duration_ms": 250,
+        "microphone_frames": 10240,
+        "scope": "I/O callback mode only; PCM before the fixed deadline is not recorded or processed",
+        "speaker_frames": 8704
+      }
+    },
+    "physical_aec_qualified": false,
+    "physical_microphone_published_to_loopback_only": true,
+    "physical_speaker_playout_used": true,
+    "processed": 2439,
+    "publication_generations_retired": [],
+    "published": 2438,
+    "publisher_effective_qos": 33,
+    "publisher_previous_qos": 21,
+    "publisher_qos_scope": "only this disposable thread; joined on shutdown, not a realtime-workgroup claim",
+    "publisher_timing_owner": "dedicated native absolute-wait loop",
+    "reference_scope": "selected remote guest-1 final native output; local microphone excluded",
+    "rejected_processed_blocks": 0,
+    "render_blocks": 2442,
+    "sdk_aec_ns_agc": false,
+    "sdk_submission_unconfirmed_at_shutdown": false,
+    "video": "generated black frame, not a physical camera"
+  },
+  "capture_publisher_owner": {
+    "joined": true,
+    "named_thread": true,
+    "shutdown_ms": 24.890167
+  },
+  "consumer_stall_ms": 0,
+  "decoded_pcm_origin_handoff": {
+    "capacity_rejected": 0,
+    "capture_time_qualified": false,
+    "clock_domain": "remote sender-report NTP; no sender-to-local offset",
+    "fixture_clock_rate": 48000,
+    "obs_connected": false,
+    "online": true,
+    "sources": []
+  },
+  "duration_seconds": 25,
+  "g1_complete": false,
+  "lifecycle": [
+    {
+      "at_ms": 0,
+      "event": "subscribed",
+      "identity": "guest-1",
+      "sid": "TR_VCdH8RdYPSXQHM"
+    },
+    {
+      "at_ms": 0,
+      "event": "subscribed",
+      "identity": "guest-1",
+      "sid": "TR_AMhkVZBD8pgTWh"
+    },
+    {
+      "at_ms": 5002,
+      "event": "reconnect_injected",
+      "mode": "signal"
+    },
+    {
+      "at_ms": 5002,
+      "event": "reconnecting"
+    },
+    {
+      "at_ms": 8061,
+      "event": "guest_monitor_rebound",
+      "generation": 3,
+      "sid": "TR_AMhkVZBD8pgTWh"
+    },
+    {
+      "at_ms": 8061,
+      "event": "reconnected"
+    }
+  ],
+  "livekit": "0.9.4",
+  "local_playout_clock_requested": false,
+  "native_publish_audio_internal_queue_ms": 0,
+  "obs_recorded_av_qualified": false,
+  "obs_recording": null,
+  "participants": [
+    {
+      "audio_bad_format": 0,
+      "audio_blocks": 2499,
+      "audio_blocks_with_capture_timestamp": 0,
+      "audio_callback_to_consumer_p95_ms": 9.335625,
+      "audio_pulses_ms": [
+        85.139917,
+        353.107167,
+        635.045625,
+        683.85275,
+        1263.386417,
+        1463.995584,
+        1674.888875,
+        1865.618917,
+        2074.921125,
+        2144.4155419999997,
+        2303.214334,
+        2483.948417,
+        2783.976459,
+        3434.94175,
+        3813.380417,
+        3994.2202500000003,
+        4204.694542,
+        4494.235459,
+        4853.067417,
+        5723.2065,
+        6033.292792,
+        6234.265875,
+        6473.880459,
+        7194.295292,
+        7453.118542,
+        8134.989917000001,
+        8465.325917,
+        8715.368124999999,
+        9015.283916999999,
+        9244.395459,
+        9594.298459000001,
+        9834.695667,
+        10094.302959,
+        10765.58675,
+        10974.881292,
+        11174.723291999999,
+        11364.620459,
+        11575.238917,
+        11644.410125,
+        11803.476166999999,
+        11983.298584,
+        12284.153333999999,
+        12935.011625,
+        13314.338875000001,
+        13504.826792,
+        13703.29325,
+        13994.38125,
+        14165.641834,
+        14353.220209,
+        15235.062624999999,
+        15534.966167,
+        15744.4665,
+        15985.5215,
+        16694.40175,
+        16965.451417,
+        17644.498417000003,
+        17974.841292,
+        18223.997167,
+        18514.963125000002,
+        18744.513875,
+        19103.392166999998,
+        19344.537792,
+        19603.262749999998,
+        20273.519125,
+        20474.924375000002,
+        20685.482042,
+        20873.654625,
+        21085.005709,
+        21154.925375000003,
+        21314.496667,
+        21494.472875,
+        21794.495417000002,
+        22444.560333999998,
+        22815.391292,
+        23004.983249999997,
+        23494.509667,
+        23853.356209,
+        23983.928875,
+        24735.00825,
+        24933.922542
+      ],
+      "audio_queue": {
+        "callback_contention_dropped": 0,
+        "capacity_frames": 3,
+        "consumed": 1693,
+        "max_age_ms": 30,
+        "overflow_oldest_dropped": 1,
+        "pending_frames": 3,
+        "received": 1697,
+        "stale_dropped": 0
+      },
+      "audio_resampled_blocks": 2499,
+      "audio_sample_discontinuities": 0,
+      "callback_av_abs_p95_ms": 386.72699999999986,
+      "capture_timestamp_clock_domain": "WebRTC TimeMillis (unmapped to OBS)",
+      "capture_timestamp_regressions": 0,
+      "capture_timestamp_step_p95_ms": null,
+      "identity": "guest-1",
+      "original_audio_capture_timestamp_available": false,
+      "paired_callback_video_minus_audio_ms": [
+        12.141917000000007,
+        -255.825333,
+        231.6025000000002,
+        22.300292000000354,
+        -47.19412499999953,
+        -205.99291699999958,
+        -386.72699999999986,
+        283.2917079999993,
+        102.45187499999884,
+        -108.02241700000104,
+        -397.5633340000013,
+        371.78904200000034,
+        61.70275000000038,
+        -139.27033299999948,
+        -378.8849169999994,
+        -39.877167000000554,
+        -370.2131669999999,
+        294.24212500000067,
+        34.63483300000007,
+        294.2542080000003,
+        114.43179099999907,
+        -186.42295899999954,
+        392.8461669999997,
+        101.75816699999996,
+        -69.5024169999997,
+        -257.08079199999884,
+        350.2084589999977,
+        109.15345899999738,
+        121.45637500000157,
+        -127.6994999999988,
+        -179.471499999996,
+        -380.87674999999945,
+        266.75645799999984,
+        -383.3084589999962,
+        244.46933299999728,
+        113.89666699999725
+      ],
+      "retired_queues": [
+        {
+          "ingest": null,
+          "kind": "audio",
+          "sid": "TR_AMhkVZBD8pgTWh",
+          "sink_removed": true,
+          "stats": {
+            "callback_contention_dropped": 0,
+            "capacity_frames": 3,
+            "consumed": 806,
+            "max_age_ms": 30,
+            "overflow_oldest_dropped": 0,
+            "pending_frames": 0,
+            "received": 806,
+            "stale_dropped": 0
+          }
+        }
+      ],
+      "video_callback_to_consumer_p95_ms": 9.980667,
+      "video_deadline_minus_arrival_p95_ms": 9.639792,
+      "video_frames": 651,
+      "video_frames_with_ntp_metadata": 0,
+      "video_local_deadline_invalid": 0,
+      "video_local_deadline_valid": 651,
+      "video_pulses_ms": [
+        97.281834,
+        2097.221417,
+        4096.672124999999,
+        6094.995542000001,
+        8095.11275,
+        10128.937792,
+        12097.730375,
+        14096.139417,
+        16094.674958999998,
+        18096.297667000003,
+        20094.047625000003,
+        22061.251875,
+        24097.825542
+      ],
+      "video_queue": {
+        "callback_contention_dropped": 0,
+        "capacity_frames": 2,
+        "consumed": 651,
+        "max_age_ms": 50,
+        "overflow_oldest_dropped": 3,
+        "pending_frames": 2,
+        "received": 656,
+        "stale_dropped": 0
+      }
+    }
+  ],
+  "physical_speaker_reference_connected": false,
+  "publisher_error": null,
+  "receiver_stats": [
+    {
+      "concealed_samples": 0,
+      "estimated_playout_presence_preserved": false,
+      "estimated_playout_timestamp_ms": 0.0,
+      "frames_dropped": 0,
+      "identity": "guest-1",
+      "inserted_samples_for_deceleration": 0,
+      "jitter_buffer_delay_seconds": 8.198096999999999,
+      "jitter_buffer_emitted_count": 655,
+      "jitter_seconds": 0.0,
+      "kind": "video",
+      "packets_lost": 2,
+      "packets_received": 656,
+      "removed_samples_for_acceleration": 0,
+      "sid": "TR_VCdH8RdYPSXQHM",
+      "ssrc": 170598994
+    },
+    {
+      "concealed_samples": 3717,
+      "estimated_playout_presence_preserved": false,
+      "estimated_playout_timestamp_ms": 0.0,
+      "frames_dropped": 0,
+      "identity": "guest-1",
+      "inserted_samples_for_deceleration": 2488,
+      "jitter_buffer_delay_seconds": 35779.2,
+      "jitter_buffer_emitted_count": 1198080,
+      "jitter_seconds": 0.002,
+      "kind": "audio",
+      "packets_lost": 3,
+      "packets_received": 1249,
+      "removed_samples_for_acceleration": 1967,
+      "sid": "TR_AMhkVZBD8pgTWh",
+      "ssrc": 2692745371
+    }
+  ],
+  "remote_sender_reports": [
+    {
+      "identity": "guest-1",
+      "kind": "video",
+      "optional_field_presence_preserved": false,
+      "remote_timestamp": 1791664723983.818,
+      "reports_sent": 8,
+      "round_trip_time": 0.0,
+      "round_trip_time_measurements": 0,
+      "sid": "TR_VCdH8RdYPSXQHM",
+      "ssrc": 170598994
+    },
+    {
+      "identity": "guest-1",
+      "kind": "audio",
+      "optional_field_presence_preserved": false,
+      "remote_timestamp": 1791664723983.8,
+      "reports_sent": 7,
+      "round_trip_time": 0.0,
+      "round_trip_time_measurements": 0,
+      "sid": "TR_AMhkVZBD8pgTWh",
+      "ssrc": 2692745371
+    }
+  ],
+  "rrtr_lab_experiment_requested": false,
+  "rtcp_exchange_probe": {
+    "logs_alive": 0,
+    "logs_created": 0,
+    "logs_destroyed": 0,
+    "peers": [],
+    "raw_packets_retained": false,
+    "registry_expired": true,
+    "scope": "factory event-log instances; one instance may cover multiple peer connections; factory lifetime extends beyond room close"
+  },
+  "schema_version": 1,
+  "sender_report_origin_maps": [
+    {
+      "audio_source_generation": null,
+      "clock_domain": "remote sender-report NTP; no sender-to-local clock offset established",
+      "fixture_clock_rate": 90000,
+      "identity": "guest-1",
+      "kind": "video",
+      "last_decoded_audio_origin_ntp_us": null,
+      "obs_connected": false,
+      "observations_only": true,
+      "rejected_reports": 0,
+      "resets": 0,
+      "sid": "TR_VCdH8RdYPSXQHM",
+      "ssrc": 170598994,
+      "two_report_map_available": false
+    },
+    {
+      "audio_source_generation": null,
+      "clock_domain": "remote sender-report NTP; no sender-to-local clock offset established",
+      "fixture_clock_rate": 48000,
+      "identity": "guest-1",
+      "kind": "audio",
+      "last_decoded_audio_origin_ntp_us": null,
+      "obs_connected": false,
+      "observations_only": true,
+      "rejected_reports": 0,
+      "resets": 0,
+      "sid": "TR_AMhkVZBD8pgTWh",
+      "ssrc": 2692745371,
+      "two_report_map_available": false
+    }
+  ],
+  "signaling_url": "ws://127.0.0.1:7880",
+  "stall_period_seconds": 5,
+  "sync_streams_requested": false,
+  "timed_mixer_probe": {
+    "observations_only": true,
+    "registry_expired": true,
+    "sources": [],
+    "sources_alive": 0,
+    "sources_created": 0,
+    "sources_destroyed": 0
+  },
+  "topology": "local browser guests to native host through loopback SFU"
+}

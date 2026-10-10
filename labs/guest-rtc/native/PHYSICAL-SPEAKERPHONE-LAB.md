@@ -234,8 +234,9 @@ not original remote capture timestamps and do not qualify AV synchronization.
 Track replacement/unsubscription and reconnect invalidate the inbox generation;
 the native callback also rejects old queued or partial generation PCM. This is
 an application monitor bound, not an encoded SDK/private-cue privacy fence.
-After reconnect, playback stays silent until a new selected subscription binds;
-retained-track reconnect recovery remains an explicit later gate. This prototype
+On reconnect, admission is suspended and queued PCM is retired. After the SDK
+reports reconnection, a fresh sink/observer binds the current retained guest
+track; a replaced subscription also receives a fresh generation. This prototype
 does not mix multiple guests, room program audio, or private cues.
 
 The final device lifecycle report includes native monitor pending blocks and
@@ -250,3 +251,35 @@ After startup, only the current selected track generation can feed playback.
 Stopping closes admission before native callback teardown. This avoids hiding
 startup backlog in steady-state overflow counters; a follow-up physical trial
 must measure the revised path.
+
+
+### Reconnect fixtures
+
+Add `--reconnect signal` or `--reconnect full` with `--play-guest` and at least
+20 seconds. At five seconds the native host invokes the installed SDK's
+`SignalReconnect` (close signaling and resume) or `FullReconnect` (new RTC
+session) diagnostic scenario. These exercise SDK events against the actual
+loopback SFU. They do not simulate WAN packet loss, server outages or an ICE
+blackhole, and do not establish five-hour reliability.
+
+Monitor admission closes on `Reconnecting`, including subscriptions arriving
+before `Reconnected`. On resume the old selected sink is removed before a new
+observer is installed with a new generation, even if the track SID is retained.
+In-flight old observer callbacks retain their old generation and are rejected.
+Once-per-second bounded progress snapshots prove actual native PCM consumption
+continues after reconnection; the fixture fails if events or post-reconnect
+playback growth are missing. PCM is never recorded. Snapshot times are relative
+to the native device owner and room event times to room setup, so they are not
+an exact reconnect-to-first-sample latency measurement.
+
+A reconnect deliberately silences guest monitoring until the SDK reports
+completion. It is not a zero-gap signaling-resume guarantee. Rebinding resets
+application queues, not undocumented encoded/decoded SDK buffers; private-cue
+privacy fences and upstream capture timestamps remain separate gates.
+
+`--guest-rejoin` instead disconnects the generated browser guest after five
+seconds, waits one second, then reconnects it with new publications. It is
+mutually exclusive with `--reconnect` and also requires at least 20 seconds and
+`--play-guest`. The fixture verifies changed guest audio publication SIDs and
+subsequent native PCM consumption, not merely browser reconnection status.
+The selected guest identity stays `guest-1`; this is not a roster/admission test.

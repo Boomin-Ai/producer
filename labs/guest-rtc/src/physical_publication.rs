@@ -102,6 +102,7 @@ struct Owner {
     rejected_processed_blocks: u64,
     last_reference: Option<[i16; 480]>,
     monitor_evidence: Option<Arc<crate::guest_monitor::Monitor>>,
+    monitor_progress: Vec<serde_json::Value>,
 }
 impl Owner {
     fn new(device: Device, processor: MicrophoneProcessor, evidence: Evidence) -> Self {
@@ -132,6 +133,7 @@ impl Owner {
             rejected_processed_blocks: 0,
             last_reference: None,
             monitor_evidence: None,
+            monitor_progress: Vec::with_capacity(301),
         }
     }
 
@@ -226,7 +228,7 @@ impl Drop for Owner {
         let mut report = json!({
             "enabled":true,"input":"physical native I/O microphone","hardware_capture_used":self.processed>0,
             "physical_speaker_playout_used":self.render_blocks>0,"reference_scope":if self.monitor_evidence.is_some(){"selected remote guest-1 final native output; local microphone excluded"}else{"bundled lab clip final output; remote RTC audio is not played or included"},
-            "guest_monitor":{"inbox":monitor_inbox,"native":monitor_native,"full_room_monitor_qualified":false},
+            "guest_monitor":{"progress":self.monitor_progress,"inbox":monitor_inbox,"native":monitor_native,"full_room_monitor_qualified":false},
             "physical_microphone_published_to_loopback_only":self.published>0,"sdk_aec_ns_agc":false,
             "aec_enforced_high_pass":self.processor.high_pass_filter_enforced(),"processed":self.processed,"published":self.published,
             "publisher_timing_owner":"dedicated native absolute-wait loop", "publisher_previous_qos":self.previous_qos,"publisher_effective_qos":self.effective_qos,"publisher_qos_scope":"only this disposable thread; joined on shutdown, not a realtime-workgroup claim","maximum_video_capture_us":self.max_video_us,
@@ -286,6 +288,7 @@ pub fn run(
     let began = Instant::now();
     let mut last_tick = began;
     let mut last_video = None;
+    let mut next_monitor_snapshot = Instant::now();
     let video_buffer = I420Buffer::new_black(320, 180);
     while !stop.load(Ordering::Acquire) {
         ensure!(
@@ -341,6 +344,12 @@ pub fn run(
                 // pop would consume PCM, so use the separately observed epoch.
                 owner.device.monitor_generation(monitor.generation());
             }
+        }
+        if owner.monitor_evidence.is_some() && Instant::now() >= next_monitor_snapshot {
+            if owner.monitor_progress.len() < 301 {
+                owner.monitor_progress.push(json!({"at_ms":began.elapsed().as_millis(),"inbox":monitor.stats(),"native":owner.device.monitor_stats()}));
+            }
+            next_monitor_snapshot = Instant::now() + Duration::from_secs(1);
         }
         for _ in 0..32 {
             let Some(block) = owner.device.pop(true) else {

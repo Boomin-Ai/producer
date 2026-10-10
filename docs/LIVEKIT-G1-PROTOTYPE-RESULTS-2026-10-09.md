@@ -1306,3 +1306,55 @@ on one short run, not a long-run/load/subjective audio guarantee. Native output
 reported 928 silent samples including startup/underflow; the run does not
 localize them, so no claim of zero audible interruption is made. All 44 root
 tests and strict combined-features all-targets Clippy passed after this change.
+
+### Retained-track reconnect and guest publication replacement — 2026-10-10
+
+Fixed the retained-track monitor gap: `Reconnecting` suspends admission and
+retires its generation. `Reconnected` removes the selected old native sink,
+then attaches a fresh observer to the current audio track with a new epoch.
+Subscriptions arriving while suspended cannot feed output. An observer already
+in a callback retains its old epoch; it cannot inject into the resumed inbox.
+Full reconnect and guest track replacement also retire old queued/partial PCM.
+This is application queue retirement, not a proof about undocumented SDK
+encoded/decoded queues or a private-cue privacy fence.
+
+Validated three actual loopback-SFU/native-speaker trials:
+
+- Signaling resume `1791664690712005000`, 25.038 seconds: SDK control closes
+  signaling at 5.002 s; reconnect completes at 8.061 s with the same guest SID.
+  New monitor epoch plays another 1,300 blocks in the conservative post-resume
+  observation window. Capture-to-SDK p95 26 ms, no publication recovery, no
+  monitor inbox overflow/stale discards, one callback-contention rejection.
+  306 old-epoch callbacks rejected while paused. Native output deliberately
+  silences during the roughly three-second SDK reconnect. Final receiver reports
+  seven lost packets, 7,422 concealed samples in three events; no zero-loss claim.
+- Full reconnect `1791664763331235000`, 30.098 seconds: unsubscribe/re-subscribe
+  and native observer replacement verified; SDK reconnect event interval 49 ms
+  on this loopback server (not WAN or first-audible-frame latency). Post-resume
+  output grows by 2,093 blocks. P95 26 ms, one later publication deadline recovery,
+  so `source_fault_free=false`. Monitor inbox reports two overflow rejections,
+  four stale discards and one contention rejection. Final receiver's new track
+  reports no lost packets and 7,702 concealed samples in four events; those are
+  final-track statistics, not totals across both reconnect track generations.
+- Guest leave/rejoin `1791664858392506000`, 25.049 seconds: old audio publication
+  unsubscribes at 5.004 s, a different guest audio SID subscribes at 6.510 s.
+  Native output then grows by 1,501 blocks in the conservative observation window.
+  P95 27 ms, no publication recovery, no monitor overflow/stale discards, two
+  contention rejections. Final receiver reports no loss/concealment on its new
+  peer connection; not whole-session aggregate statistics.
+
+All three have zero native format/timeline errors, zero monitor hardware queue
+overflow, no surviving device owners/callbacks/render registrations, and joined
+publisher threads (23–49 ms). Native queue/shutdown accounting assertions passed.
+The observer callback, output generation and publication recovery remain bounded.
+45 root tests and strict combined-feature all-targets Clippy passed. Numeric
+source reports, browser observations, conditions/binary fingerprints and the
+summary `labs/guest-rtc/evidence/guest-monitor-reconnect-trials.json` are retained;
+no voice PCM recorded. Fixture checks require SDK reconnect events and growth in
+actual native played-block counters, or changed guest audio SIDs and output
+growth, not merely a connected browser state.
+
+These are SDK diagnostic reconnects and one explicit guest rejoin on loopback.
+WAN packet blackholes, server failover, repeated reconnect/load, voice quality,
+physical camera sync and broader room integration remain open. Production and
+the installed Producer application were not changed.
