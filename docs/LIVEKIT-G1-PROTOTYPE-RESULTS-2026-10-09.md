@@ -597,3 +597,77 @@ checks, 28 recording-accounting reports and 18 pre-mux traces. Failed historical
 timing evidence remains preserved. G1 and physical speakerphone AEC remain open.
 Next: investigate a supported early publisher timing mechanism and prove startup
 without inventing an arrival-time clock; the faster SFU cadence alone is insufficient.
+
+### Early publisher report request — failed startup experiment, October 10
+
+Investigated the standard RTCP-SR-REQ mechanism, defined in
+[RFC 6051 section 3.2](https://www.rfc-editor.org/rfc/rfc6051.html#section-3.2).
+The inspected upstream WebRTC receiver parses RapidResyncRequest and invokes
+OnRequestSendReport for a sending module. This source capability does not establish
+support in every browser release or a configurable LiveKit Cloud feature.
+[WebRTC receiver source](https://webrtc.googlesource.com/src/+/refs/heads/main/modules/rtp_rtcp/source/rtcp_receiver.cc).
+Browser RTCRtcpParameters exposes CNAME/reduced-size configuration rather than
+a sender-report interval control. [WebRTC specification](https://www.w3.org/TR/webrtc/#dom-rtcrtcpparameters).
+
+An additional pinned-source patch adds a disabled-by-default request policy to
+the existing audio buffer packet path. It uses the existing buffer lock, owns no
+thread, queue or timer, targets that buffer's audio SSRC, and retires on a received
+publisher report, expiry or budget exhaustion. The diagnostic budget is three
+attempts at 250 ms spacing within one second. The policy test covers disabled,
+report arrival, exhaustion, deadline and timestamp regression; the full server
+built successfully. Its source and binary hashes are in
+`evidence/sfu-early-report-provenance.json`. This retry spacing is not accepted for
+deployment: RFC 6051 permits repetition once per RTCP reporting interval. Only
+one request per audio track was actually observed in this experiment. A follow-up
+must use one request or respect the publisher's reporting interval.
+
+After a three-guest control attempt failed ENOSPC during muxing, two valid local
+30-second recordings used one guest and one disconnect/rejoin, the same newly
+built server executable, 250 ms downstream cadence and the same native timing
+opt-ins. Only the enabled arm set LIVEKIT_LAB_EARLY_AUDIO_SR. The failed recording
+has no native completion report and is excluded; its separate invalid-run record
+preserves log/recording hashes. Reduced concurrency is not a three-guest acceptance
+result. Compilation and decoding did not overlap valid recordings.
+
+| Observation | Request disabled | Request enabled |
+| --- | --- | --- |
+| Initial first scheduled audio | 2,370.2 ms | None before guest disconnect |
+| Rejoined first scheduled audio | 2,531.8 ms | 6,103.4 ms |
+| Startup-dropped 10 ms audio blocks, summed | 435 | 1,244 |
+| Independent recorded marker p95 | 54.67 ms, 10 pairs | 26.00 ms, 7 pairs |
+
+The early request failed startup acceptance. Passing marker pairs later in the
+recording do not account for the missing initial audio or excuse a six-second
+rejoin. The comparison explicitly counts the epoch with bound PCM and no scheduled
+audio, and retains startup_qualified=false. Both runs retired two decoded sources
+and their OBS probes, with zero live native sources and discovery jobs at shutdown.
+Discovery spawned/completed five jobs in the control and six with requests, with
+no timeouts, failures or stale results. Local marker pairs had zero unmatched
+markers; no arrival-time fallback was added.
+
+The SFU log places each guest audio request approximately 90–92 ms before its
+audio downtrack addition. The inspected pinned ReceiverBase.AddDownTrack stores
+the subscriber but does not seed cached publisher sender-report data; setupBuffer
+broadcasts new SR data only to downtracks present when that callback fires.
+[Pinned receiver source](https://github.com/livekit/livekit/blob/6fbe7f7e648aab4b2f734d6044a416bc2cbc482c/pkg/sfu/receiver_base.go).
+This source finding and event order are consistent with losing an early report
+before subscriber initialization. The buffer's actual SR receipt was not separately
+instrumented, so exact causal attribution remains an inference. Next: instrument
+buffer receipt and seed subscriber timing safely, covering concurrent report
+updates, stale publications and close races. Do not promote this request policy.
+
+Disk pressure also prevented small source writes after testing. Rebuildable Go
+compiler/module caches, Bun/Chrome caches and Rust dependency artifacts were
+cleared after their use; source, lab executables, the native WebRTC SDK archive,
+user media and installed apps were preserved. Subsequent Rust/SFU rebuilds will
+recreate those caches. The verified native executable remains available. All owned
+lab listeners stopped, and source/patch/provenance/syntax/diff checks passed.
+The recording verifiers cover 30 completed reports and 20 pre-mux traces while
+retaining historical failures. No deployment or production migration occurred.
+
+Physical testing is not ready yet: the existing APM speech/noise fixture supplies
+synthetic reference PCM, not actual speaker playback. Before requesting user time,
+prepare one declared native capture/playback owner, feed the final device-bound
+PCM into APM, save enabled/disabled capture and processing evidence, and expose a
+controlled double-talk test. Startup work and real device-reference wiring remain
+open; G1 and physical speakerphone AEC remain incomplete.

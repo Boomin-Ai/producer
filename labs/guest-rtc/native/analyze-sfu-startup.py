@@ -1,13 +1,20 @@
 """Compare the two isolated cadence runs without mixing wall and receiver clocks."""
 import hashlib
 import json
+import argparse
 from pathlib import Path
 
 LAB = Path(__file__).resolve().parents[1]
 results = []
-for cadence in ("baseline", "fast"):
-    path = LAB / f"evidence/transport-obs-audio-master-cadence-{cadence}-rejoin.json"
-    log = LAB / f"runtime/cadence-{cadence}-sfu.log"
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--runs", nargs=2, default=["cadence-baseline", "cadence-fast"])
+parser.add_argument("--output", default="sfu-cadence-startup-comparison.json")
+args = parser.parse_args()
+for cadence in args.runs:
+    if not all(c.isalnum() or c == "-" for c in cadence):
+        raise RuntimeError("Invalid run name")
+    path = LAB / f"evidence/transport-obs-audio-master-{cadence}-rejoin.json"
+    log = LAB / f"runtime/{cadence}-sfu.log"
     report = json.loads(path.read_text())
     publishers = {}
     for line in log.read_text().splitlines():
@@ -48,10 +55,14 @@ for cadence in ("baseline", "fast"):
     playback = report["audio_master_playback"]
     mixer = report["timed_mixer_probe"]
     results.append({
-        "cadence": cadence, "cadence_ms": 3000 if cadence == "baseline" else 250,
+        "cadence": cadence, "cadence_ms": 3000 if cadence == "cadence-baseline" else 250,
         "native_report_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         "sfu_trace_sha256": hashlib.sha256(log.read_bytes()).hexdigest(),
         "epochs": list(epochs.values()), "audio_startup_dropped_blocks": playback["clock"]["audio_startup_dropped"],
+        "epochs_with_bound_audio_but_no_scheduled_audio": sum(
+            "bound_audio_pcm_ms" in epoch and "first_audio_scheduled_ms" not in epoch
+            for epoch in epochs.values()),
+        "startup_qualified": False,
         "discovery_after_shutdown": playback["binding_discovery_after_shutdown"],
         "decoded_sources_created": mixer["sources_created"],
         "decoded_sources_destroyed": mixer["sources_destroyed"],
@@ -63,5 +74,7 @@ output = {
     "limits": "Sequential synthetic local runs, not an identical captured-input replay. Increased RTCP traffic; no Cloud, physical AEC or production qualification.",
     "g1_complete": False,
 }
-(LAB / "evidence/sfu-cadence-startup-comparison.json").write_text(json.dumps(output, indent=2) + "\n")
+if Path(args.output).name != args.output or not args.output.endswith(".json"):
+    raise RuntimeError("Output must be a JSON filename")
+(LAB / "evidence" / args.output).write_text(json.dumps(output, indent=2) + "\n")
 print(json.dumps(output, indent=2))

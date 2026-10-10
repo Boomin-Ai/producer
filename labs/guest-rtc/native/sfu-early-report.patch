@@ -1,0 +1,118 @@
+--- a/pkg/sfu/buffer/buffer.go
++++ b/pkg/sfu/buffer/buffer.go
+@@ -18,6 +18,8 @@
+ 	"encoding/binary"
+ 	"errors"
+ 	"io"
++	"os"
++	"time"
+ 
+ 	"github.com/pion/rtcp"
+ 	"github.com/pion/rtp"
+@@ -75,6 +77,7 @@
+ 
+ 	streamInfoProbe       *StreamInfoProbe
+ 	warnedPendingOverflow bool
++	labReportRequest      labSRRequest
+ }
+ 
+ // StreamInfoProbe identifies a stream from the mid/rid/rsid header extensions of its
+@@ -93,7 +96,7 @@
+ }
+ 
+ func NewBuffer(ssrc uint32, maxVideoPkts, maxAudioPkts int) *Buffer {
+-	b := &Buffer{}
++	b := &Buffer{labReportRequest: labSRRequest{enabled: os.Getenv("LIVEKIT_LAB_EARLY_AUDIO_SR") == "1"}}
+ 	b.BufferBase = NewBufferBase(BufferBaseParams{
+ 		SSRC:               ssrc,
+ 		MaxVideoPkts:       maxVideoPkts,
+@@ -451,6 +454,11 @@
+ 
+ func (b *Buffer) getRTCPPackets(arrivalTime int64) []rtcp.Packet {
+ 	var pkts []rtcp.Packet
++	if b.codecType == webrtc.RTPCodecTypeAudio && b.rtpStats != nil && b.BufferBase.SSRC() != 0 && b.labReportRequest.take(arrivalTime, b.rtpStats.GetRtcpSenderReportData() != nil) {
++		ssrc := b.BufferBase.SSRC()
++		pkts = append(pkts, &rtcp.RapidResynchronizationRequest{SenderSSRC: ssrc, MediaSSRC: ssrc})
++		b.logger.Debugw("lab early audio sender report request", "lab_wall_us", time.Now().UnixMicro(), "lab_publisher_ssrc", ssrc, "lab_request_number", b.labReportRequest.count)
++	}
+ 	if nackPkt := b.getNACKPacket(); nackPkt != nil {
+ 		pkts = append(pkts, nackPkt)
+ 	}
+--- /dev/null
++++ b/pkg/sfu/buffer/lab_sr_request.go
+@@ -0,0 +1,38 @@
++package buffer
++
++// Opt-in experiment: at most three requests, 250 ms apart, during the first
++// second of an audio SSRC. Called under the existing Buffer lock, with no timer
++// or goroutine. A received report or expiry permanently retires the policy.
++type labSRRequest struct {
++	enabled bool
++	started bool
++	first   int64
++	last    int64
++	count   int
++}
++
++func (r *labSRRequest) take(now int64, hasReport bool) bool {
++	if !r.enabled {
++		return false
++	}
++	if hasReport {
++		r.enabled = false
++		return false
++	}
++	if !r.started {
++		r.started = true
++		r.first = now
++	} else if now < r.last {
++		return false
++	}
++	if now-r.first >= 1_000_000_000 || r.count >= 3 {
++		r.enabled = false
++		return false
++	}
++	if r.count > 0 && now-r.last < 250_000_000 {
++		return false
++	}
++	r.last = now
++	r.count++
++	return true
++}
+--- /dev/null
++++ b/pkg/sfu/buffer/lab_sr_request_test.go
+@@ -0,0 +1,34 @@
++package buffer
++
++import "testing"
++
++func TestLabSRRequestBoundAndRetirement(t *testing.T) {
++	r := labSRRequest{enabled: true}
++	for _, tt := range []struct {
++		now  int64
++		want bool
++	}{
++		{0, true}, {1, false}, {249_999_999, false}, {250_000_000, true},
++		{249_000_000, false}, {500_000_000, true}, {750_000_000, false},
++		{2_000_000_000, false},
++	} {
++		if got := r.take(tt.now, false); got != tt.want {
++			t.Fatalf("%d: got %v want %v", tt.now, got, tt.want)
++		}
++	}
++	if r.count != 3 || r.enabled {
++		t.Fatal("Request budget did not retire")
++	}
++	r = labSRRequest{enabled: true}
++	if !r.take(0, false) || r.take(1_000_000_000, false) || r.enabled {
++		t.Fatal("Expired policy did not retire")
++	}
++	r = labSRRequest{enabled: true}
++	if !r.take(0, false) || r.take(100_000_000, true) || r.take(500_000_000, false) {
++		t.Fatal("Received report did not retire policy")
++	}
++	r = labSRRequest{}
++	if r.take(0, false) || r.count != 0 {
++		t.Fatal("Disabled policy emitted a request")
++	}
++}

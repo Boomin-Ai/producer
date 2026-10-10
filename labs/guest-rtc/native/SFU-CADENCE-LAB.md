@@ -39,3 +39,25 @@ Run native recording analysis, independent FFmpeg audio decoding, and queue,
 packet, discovery and source-retirement verifiers before reporting outcomes.
 Keep failed timing evidence. Neither arm proves physical speakerphone AEC,
 internet behavior, LiveKit Cloud behavior, cross-platform packaging, or G1.
+
+The later early-report experiment uses `--early-report` to additionally apply
+`sfu-early-report.patch`, verified by `sfu-early-report-provenance.json`, and
+build `runtime/livekit-server-early-report-lab`. Both comparison arms use this
+executable with faster downstream cadence; only the enabled arm sets
+`LIVEKIT_LAB_EARLY_AUDIO_SR=1`. This policy owns no thread, queue or timer:
+the existing audio buffer lock protects at most three attempts during one
+second, spaced by 250 ms, and a received report permanently stops requests.
+The actual recorded experiment emitted only one request per audio track.
+The retry timing is a diagnostic stress choice, not an accepted RFC 6051
+deployment policy; the RFC permits a repeat once per RTCP reporting interval.
+Any supported follow-up must use one request or obey that interval.
+
+This experiment failed startup acceptance: the initial selected guest never
+scheduled audio before its rejoin, and rejoined audio took 6.1 seconds. Preserve
+the result even though its later recorded marker pairs pass the local sync gate.
+The SFU requested the first report about 90 ms before each audio downtrack was
+added. The inspected AddDownTrack path does not seed its cached publisher SR.
+That source finding and event order motivate testing subscriber initialization;
+buffer receipt was not separately instrumented, so they do not prove every hop.
+The control was a 30-second one-guest republish run. A preceding three-guest
+control failed ENOSPC, has no native completion report, and is excluded.

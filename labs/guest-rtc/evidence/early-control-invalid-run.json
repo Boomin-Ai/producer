@@ -1,0 +1,7 @@
+{
+  "excluded": true,
+  "reason": "OBS mux write ENOSPC, native exit 1/OBS stop -8; no native completion report",
+  "log_sha256": "5e6467969850cb7722e59da0b911a08c86329f82b96069661a948a4c1917d12d",
+  "recording_sha256": "9891f3a9a851960d1f8101c9e408bc6c9f31df61430b3d426cf12a076cd243af",
+  "g1_complete": false
+}
