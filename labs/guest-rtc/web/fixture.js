@@ -1,8 +1,13 @@
 import {RecoveryProbe} from './generated-recovery-probe.js';
+import {SourceMarkerTrace} from './source-marker-trace.mjs';
 import { Room, RoomEvent, LocalAudioTrack, LocalVideoTrack, Track } from 'livekit-client';
 
 const recoveryProbe=new URLSearchParams(location.search).get("recoveryProbe")==="1"?new RecoveryProbe():null;
 window.recoveryProbe=recoveryProbe;
+const sourceMarkers=recoveryProbe?new SourceMarkerTrace():null;
+window.sourceMarkers=sourceMarkers;
+const sourcePhase=Number(new URLSearchParams(location.search).get('sourcePhase')??0);
+if(!Number.isFinite(sourcePhase)||sourcePhase<0||sourcePhase>=2)throw new Error('Invalid source phase');
 let room, context, timer, analyser, returnAudio, synthetic, silentOutput, guestGain, voiceRecorder;
 const voiceReview=new URLSearchParams(location.search).get("voiceReview")==="1";
 const cameraSync=new URLSearchParams(location.search).get("cameraSync")==="1";
@@ -102,12 +107,16 @@ export async function start() {
     }
     state.connected = true;
     const canvas = document.querySelector('#fixture'), paint = canvas.getContext('2d');
-    let active = false;
+    let active = false, sourceVideoActive = false;
     timer = setInterval(() => {
-      const phase = context.currentTime % 2;
+      const markerTime=context.currentTime+sourcePhase;
+      const phase = markerTime % 2;
       paint.fillStyle = phase >= 0.5 && phase < 0.62 ? '#fff' : '#000';
       paint.fillRect(0, 0, canvas.width, canvas.height);
-      if(recoveryProbe){const id=Math.floor(context.currentTime/2)%256;for(let bit=0;bit<8;bit++){paint.fillStyle=id&(1<<bit)?'#fff':'#000';paint.fillRect(bit*40,0,40,16);}}
+      const sourcePulse=phase>=0.5&&phase<0.62;
+      if(sourceMarkers&&sourcePulse&&!sourceVideoActive)sourceMarkers.push('video',Math.floor(markerTime/2)%256,context.currentTime);
+      sourceVideoActive=sourcePulse;
+      if(recoveryProbe){const id=Math.floor(markerTime/2)%256;for(let bit=0;bit<8;bit++){paint.fillStyle=id&(1<<bit)?'#fff':'#000';paint.fillRect(bit*40,0,40,16);}}
       if (analyser) {
         const samples = new Float32Array(analyser.fftSize); analyser.getFloatTimeDomainData(samples);
         const rms = Math.sqrt(samples.reduce((sum, value) => sum + value * value, 0) / samples.length);
@@ -122,7 +131,10 @@ export async function start() {
       const pcm=await context.decodeAudioData(await (await fetch('/monitor-speech.wav')).arrayBuffer());
       synthetic=context.createBufferSource();synthetic.buffer=pcm;synthetic.loop=true;synthetic.start();
       state.guestFixture='remote speech only; no browser microphone';
-    } else synthetic = new AudioWorkletNode(context, 'pulse',{processorOptions:{numbered:recoveryProbe!==null}});
+    } else synthetic = new AudioWorkletNode(context, 'pulse',{processorOptions:{numbered:recoveryProbe!==null,sourcePhase}});
+    if(sourceMarkers&&synthetic.port)synthetic.port.onmessage=event=>{
+      if(event.data?.kind==='source-marker')sourceMarkers.push('audio',event.data.id,event.data.context_time_seconds);
+    };
     const destination = context.createMediaStreamDestination(); guestGain=context.createGain();synthetic.connect(guestGain);guestGain.connect(destination);
     const video = new LocalVideoTrack(canvas.captureStream(30).getVideoTracks()[0]);
     const audio = new LocalAudioTrack(destination.stream.getAudioTracks()[0]);

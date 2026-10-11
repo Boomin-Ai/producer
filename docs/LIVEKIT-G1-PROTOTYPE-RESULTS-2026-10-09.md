@@ -2161,3 +2161,54 @@ Next characterize those transport-unavailable periods and any additional playbac
 loss before broad integration. Trial hashes/counters are indexed in
 `labs/guest-rtc/evidence/native-scheduled-output-drain-trials.json`.
 No production app or recovery checkout changed.
+
+
+### Source generation and reconnect phase diagnostics (2026-10-11)
+
+The generated browser fixture now retains at most 256 source audio onsets and
+256 painted video pulses per guest. Audio onsets are reported at their original
+AudioContext sample time from the worklet; canvas observations retain the same
+context clock. These traces establish generation/painting only, not encoder, SFU,
+decoder or native playback receipt. Worklet regression tests verify the generated
+PCM remains sample-for-sample identical at the default phase.
+
+The runner can shift guest source pulse phase with `--source-phase` in [0,2),
+using the same shift for audio and canvas labels. This changes the test stimulus
+relative to forced reconnect timing; native return fixture, presentation clocks,
+queue policy and all recording acceptance gates remain unchanged. Another test
+verifies the shifted tone and reported context time. All source traces are numeric;
+no additional media is captured.
+
+`native/analyze-reconnect-loss.py` joins missing recorded 8-bit labels to exact
+source labels (not modulo-16 audio identities) and retains per-binding readiness
+delays. It never subtracts AudioContext, native lifecycle or OBS PTS clocks.
+Missing source evidence remains unknown. Even both source pulses being generated
+cannot establish transport loss by itself: packet/decode evidence is still needed.
+The diagnostic does not modify acceptance or exempt reconnect loss. Three Python
+regressions cover missing evidence, exact label joins and binding clock separation.
+
+Validation passed: eight JavaScript tests (including default/shifted worklet
+sample equality), three loss-analysis regressions, sixteen existing recording-gate
+regressions, JavaScript syntax checks and git whitespace checks. Native source and
+linked binary are unchanged from the scheduled-output-drain checkpoint.
+
+- `1791744099055403000`: three connected guests, selected guest-1 recorded,
+  140 s, three full reconnects, default source phase. Full local OBS acceptance
+  passed: 70 pairs, 33.333 ms p95, no missing span labels or unmatched markers.
+  Every guest source trace stayed within capacity with no diagnostic errors.
+  Pending scheduled output drained to zero in 134.791 ms without timeout.
+- `1791744383046566000`: same envelope, guest source phase shifted by 1.5 s.
+  Full local OBS acceptance passed: 70 pairs, 40 ms p95, no missing span labels
+  or unmatched markers. Source diagnostics and shutdown drain passed.
+
+Replacement video scheduling still took about half a second after the final
+binding reset. Passing marker tests do not prove continuous media throughout a
+forced teardown, nor do they resolve the earlier missing labels. The original
+failed `1791738591686432000` remains retained and failed; it has no source trace,
+so its missing-marker causality cannot be established retrospectively. Arbitrary
+reconnect-phase, startup/tail, WAN, all-camera compositing and long-session
+qualification remain open. Next add deterministic reconnect/pulse overlap and
+packet/decode receipt attribution before broader integration. Numeric hashes,
+source counts and drain results are indexed in
+`labs/guest-rtc/evidence/native-source-reconnect-trials.json`. No production or
+installed app changed.

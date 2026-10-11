@@ -58,6 +58,7 @@ const server = http.createServer(async (request, response) => {
     };
     if (process.env.LIVEKIT_LAB_GUEST_MONITOR === '1') files['/monitor-speech.wav'] = [path.join(runtime, 'near-speech.wav'), 'audio/wav'];
     if(process.env.LIVEKIT_LAB_VOICE_REVIEW==='1') files['/voice-review-worklet.js']=[path.join(here,'voice-review-worklet.js'),'text/javascript'];
+    files['/source-marker-trace.mjs'] = [path.join(here, 'source-marker-trace.mjs'), 'text/javascript'];
     const file = files[url.pathname];
     if (!file) { response.writeHead(404).end(); return; }
     response.writeHead(200, { 'Content-Type': file[1], 'Cache-Control': 'no-store' });
