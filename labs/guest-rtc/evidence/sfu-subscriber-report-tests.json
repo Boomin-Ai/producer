@@ -1,0 +1,26 @@
+{
+  "sfu_binary_sha256": "462b296c94efeca28e170ac18ca5b2fc1cdb65a8f896845f5f0e371eaca6c40e",
+  "packages": [
+    "github.com/livekit/livekit-server/pkg/sfu/buffer",
+    "github.com/livekit/livekit-server/pkg/rtc"
+  ],
+  "passed_tests": [
+    "TestLabSRRequestBoundAndRetirement",
+    "TestLabDelayedSRRequest",
+    "TestSubscriberBufferAdmissionBeforeBind",
+    "TestSubscriberBufferDefaultAndVideoDoNotRequest",
+    "TestSubscriberDelayedAndFreshReport",
+    "TestSubscriberCachedAndRegressedReportsDoNotRetire",
+    "TestSubscriberBudgetCoalescesAdmissionStorm",
+    "TestSubscriberDeadlineNotExtendedByAdmission",
+    "TestSubscriberDisabledAndRegressedAdmission",
+    "TestSubscriberEarlyReportStillRequestsAfterDelay",
+    "TestSubscriberExpiryAndRepeatedRecovery",
+    "TestLabSenderReportCadenceIsOptIn",
+    "TestLabSubscriberRequestTraversesReceiverViews",
+    "TestSubscriberAsPrimary"
+  ],
+  "failed_tests": [],
+  "policy_recovery_cycles_tested": 100,
+  "full_upstream_suite_run": false
+}

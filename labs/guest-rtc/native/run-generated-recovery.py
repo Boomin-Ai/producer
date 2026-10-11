@@ -15,6 +15,9 @@ LAB=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--reconnect',choices=['none','signal','full'],default='full')
 parser.add_argument('--reconnect-count',type=int,choices=[1,2,3],default=1)
+timing=parser.add_mutually_exclusive_group()
+timing.add_argument('--subscriber-report',action='store_true',default=True,help='Use bounded fresh audio timing requests after forwarding begins (default)')
+timing.add_argument('--control-report',dest='subscriber_report',action='store_false',help='Reproduce the old admission-insensitive timing control')
 parser.add_argument('--require-obs-gates',action='store_true',help='Exit unsuccessfully if local OBS sync/readiness/loss acceptance fails')
 parser.add_argument('--obs-recording',action='store_true',help='Record generated guest-1 through native OBS audio-master presentation')
 parser.add_argument('--guests',type=int,choices=[1,3],default=1)
@@ -26,9 +29,11 @@ if args.reconnect!='none' and args.seconds<12+40*(args.reconnect_count-1)+20:par
 for port in (7880,8990):
     with socket.socket() as probe:probe.bind(('127.0.0.1',port))
 name='generated-recovery-'+str(time.time_ns())
+sfu=LAB/'runtime'/('livekit-server-subscriber-report-lab' if args.subscriber_report else 'livekit-server-delayed-report-lab')
 env={key:value for key,value in os.environ.items() if not key.startswith('LIVEKIT_LAB_')}
 env.update(LIVEKIT_LAB_RUN_NAME=name,LIVEKIT_LAB_GENERATED_RECONNECT_COUNT=str(args.reconnect_count),LIVEKIT_LAB_MARKER_IDS='1',LIVEKIT_LAB_SYNC_STREAMS='1',LIVEKIT_LAB_GUESTS=str(args.guests),LIVEKIT_LAB_SECONDS=str(args.seconds),LIVEKIT_LAB_URL='ws://127.0.0.1:7880')
 if args.reconnect!='none':env['LIVEKIT_LAB_GENERATED_RECONNECT']=args.reconnect
+if args.subscriber_report:env['LIVEKIT_LAB_SUBSCRIBER_AUDIO_SR']='1'
 recording=LAB/'runtime'/f'{name}-obs.mp4'
 if args.obs_recording:
     if shutil.disk_usage(LAB).free<1024**3:raise RuntimeError('Need 1 GiB free for generated OBS recording')
@@ -38,7 +43,18 @@ def digest(p):
     with p.open('rb') as stream:
         for chunk in iter(lambda:stream.read(1024*1024),b''):result.update(chunk)
     return result.hexdigest()
-report={'run':name,'status':'running','guests':args.guests,'seconds':args.seconds,'reconnect':args.reconnect,'reconnect_count':args.reconnect_count,'hardware_capture_used':False,'speaker_playback_used':False,'media_recorded':args.obs_recording,'media_scope':'generated selected guest-1 only' if args.obs_recording else 'none','obs_recording_requested':args.obs_recording,'g1_complete':False,'native_sha256':digest(LAB/'target/debug/producer-guest-rtc-lab'),'sfu_sha256':digest(LAB/'runtime/livekit-server-delayed-report-lab')}
+report={'run':name,'status':'running','guests':args.guests,'seconds':args.seconds,'reconnect':args.reconnect,'reconnect_count':args.reconnect_count,'hardware_capture_used':False,'speaker_playback_used':False,'media_recorded':args.obs_recording,'media_scope':'generated selected guest-1 only' if args.obs_recording else 'none','obs_recording_requested':args.obs_recording,'g1_complete':False,'native_sha256':digest(LAB/'target/debug/producer-guest-rtc-lab'),'sfu_sha256':digest(sfu),'subscriber_report_candidate':args.subscriber_report}
+if args.subscriber_report:
+    provenance=LAB/'evidence/sfu-subscriber-report-provenance.json'
+    expected=json.loads(provenance.read_text())
+    if not expected.get('full_server_build_passed') or expected.get('built_binary_sha256')!=report['sfu_sha256']:
+        raise RuntimeError('Subscriber SFU binary/provenance mismatch; rebuild the candidate first')
+    snapshot=LAB/'evidence'/f'{name}-sfu-provenance.json'
+    snapshot.write_bytes(provenance.read_bytes())
+    report['sfu_provenance_file']=snapshot.name
+    report['sfu_provenance_sha256']=digest(snapshot)
+    report['sfu_request_delay_ms']=expected['delay_ms']
+    report['sfu_request_trigger']=expected['trigger']
 conditions=LAB/'evidence'/f'{name}-conditions.json';conditions.write_text(json.dumps(report,indent=2)+'\n')
 owned=[];logs=[]
 def start(command,label,port):
@@ -53,7 +69,7 @@ def start(command,label,port):
         time.sleep(.1)
     raise RuntimeError(f'{label} readiness timed out')
 try:
-    start([str(LAB/'runtime/livekit-server-delayed-report-lab'),'--dev','--bind','127.0.0.1','--rtc.enable_loopback_candidate','--rtc.tcp_port','0'],'sfu',7880)
+    start([str(sfu),'--dev','--bind','127.0.0.1','--rtc.enable_loopback_candidate','--rtc.tcp_port','0'],'sfu',7880)
     start(['node','web/server.mjs'],'web',8990)
     fixture=subprocess.Popen(['node','web/generated-recovery-smoke.mjs'],cwd=LAB,env=env,start_new_session=True)
     try:

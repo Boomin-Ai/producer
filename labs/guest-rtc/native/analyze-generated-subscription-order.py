@@ -16,7 +16,7 @@ report_path = lab / 'evidence' / f'{args.run}.json'
 report = json.loads(report_path.read_text())
 rows = []
 for line in log.read_text().splitlines():
-    for kind in ('lab early audio sender report request', 'lab buffer sender report received', 'downtrack added', 'lab publisher sender report'):
+    for kind in ('lab early audio sender report request', 'lab subscriber audio sender report request', 'lab buffer sender report received', 'downtrack added', 'lab publisher sender report'):
         separator = '\t' + kind + '\t'
         if separator not in line: continue
         event = json.loads(line.split(separator, 1)[1])
@@ -36,6 +36,7 @@ for track in tracks:
     first = receipts[0]
     summaries.append({'track_id': track, 'publisher': first['participant'],
         'first_receipt_subscribers': first['lab_subscribers'],
+        'subscriber_requests': [{'sfu_wall_us': row['wall_us'], 'number_in_budget_window': row['lab_request_number']} for row in events if row['event'] == 'lab subscriber audio sender report request'],
         'first_receipt_sfu_wall_us': first['wall_us'],
         'first_native_forward_after_initial_receipt_ms': (forwards[0]['wall_us'] - first['wall_us']) / 1000 if forwards else None,
         'native_admissions': [{'added_sfu_wall_us': added['wall_us'],

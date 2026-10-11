@@ -1,0 +1,156 @@
+{
+  "audio_detector_window_max_ms" : 10,
+  "audio_marker_pts_ms" : [
+    7872,
+    12028,
+    14111.333333333332,
+    21813.333333333332,
+    24156.666666666664,
+    26184.666666666668,
+    28188.666666666664,
+    30101.333333333332,
+    32060,
+    34078,
+    36050.666666666664,
+    38036.666666666664,
+    40090,
+    41997.333333333336,
+    43876,
+    46049.333333333336
+  ],
+  "audio_samples_decoded" : 2283504,
+  "browser_source_paint_uncertainty_ms" : 33.333333333333336,
+  "decoder" : "macOS AVFoundation",
+  "duration_seconds" : 47.567,
+  "g1_complete" : false,
+  "late_minus_early_median_offset_ms" : 8.000000000007276,
+  "lip_sync_qualified" : false,
+  "network_impairment_qualified" : false,
+  "observed_marker_test_pass" : false,
+  "pairs" : [
+    {
+      "audio_pts_ms" : 7872,
+      "video_minus_audio_ms" : 94.66666666666697,
+      "video_pts_ms" : 7966.666666666667
+    },
+    {
+      "audio_pts_ms" : 12028,
+      "video_minus_audio_ms" : 5.3333333333339397,
+      "video_pts_ms" : 12033.333333333334
+    },
+    {
+      "audio_pts_ms" : 14111.333333333332,
+      "video_minus_audio_ms" : 22,
+      "video_pts_ms" : 14133.333333333332
+    },
+    {
+      "audio_pts_ms" : 26184.666666666668,
+      "video_minus_audio_ms" : 81.999999999996362,
+      "video_pts_ms" : 26266.666666666664
+    },
+    {
+      "audio_pts_ms" : 28188.666666666664,
+      "video_minus_audio_ms" : 44.666666666671517,
+      "video_pts_ms" : 28233.333333333336
+    },
+    {
+      "audio_pts_ms" : 30101.333333333332,
+      "video_minus_audio_ms" : 65.333333333335759,
+      "video_pts_ms" : 30166.666666666668
+    },
+    {
+      "audio_pts_ms" : 32060,
+      "video_minus_audio_ms" : 106.66666666666424,
+      "video_pts_ms" : 32166.666666666664
+    },
+    {
+      "audio_pts_ms" : 34078,
+      "video_minus_audio_ms" : 22,
+      "video_pts_ms" : 34100
+    },
+    {
+      "audio_pts_ms" : 36050.666666666664,
+      "video_minus_audio_ms" : 16.000000000007276,
+      "video_pts_ms" : 36066.666666666672
+    },
+    {
+      "audio_pts_ms" : 38036.666666666664,
+      "video_minus_audio_ms" : 30.000000000007276,
+      "video_pts_ms" : 38066.666666666672
+    },
+    {
+      "audio_pts_ms" : 40090,
+      "video_minus_audio_ms" : -23.333333333328483,
+      "video_pts_ms" : 40066.666666666672
+    },
+    {
+      "audio_pts_ms" : 41997.333333333336,
+      "video_minus_audio_ms" : 69.333333333335759,
+      "video_pts_ms" : 42066.666666666672
+    },
+    {
+      "audio_pts_ms" : 43876,
+      "video_minus_audio_ms" : 124,
+      "video_pts_ms" : 44000
+    }
+  ],
+  "pulse_recrossing_collapse_window_ms" : 150,
+  "raw_audio_threshold_crossings_ms" : [
+    7872,
+    12028,
+    14111.333333333332,
+    21813.333333333332,
+    24156.666666666664,
+    26184.666666666668,
+    28188.666666666664,
+    30101.333333333332,
+    32060,
+    34078,
+    36050.666666666664,
+    38036.666666666664,
+    40090,
+    41997.333333333336,
+    43876,
+    43936,
+    43996.666666666664,
+    46049.333333333336
+  ],
+  "raw_video_threshold_crossings_ms" : [
+    7966.666666666667,
+    12033.333333333334,
+    14133.333333333332,
+    26266.666666666664,
+    28233.333333333336,
+    30166.666666666668,
+    32166.666666666664,
+    34100,
+    36066.666666666672,
+    38066.666666666672,
+    40066.666666666672,
+    42066.666666666672,
+    44000
+  ],
+  "recorded_av_abs_p95_ms" : 106.66666666666424,
+  "recorded_video_minus_audio_median_ms" : 44.666666666671517,
+  "recording" : "generated-recovery-1791691914921806000-obs.mp4",
+  "schema_version" : 2,
+  "source_pulse_duration_ms" : 120,
+  "unmatched_audio_markers" : 3,
+  "unmatched_video_markers" : 0,
+  "video_frames_decoded" : 1427,
+  "video_marker_pts_ms" : [
+    7966.666666666667,
+    12033.333333333334,
+    14133.333333333332,
+    26266.666666666664,
+    28233.333333333336,
+    30166.666666666668,
+    32166.666666666664,
+    34100,
+    36066.666666666672,
+    38066.666666666672,
+    40066.666666666672,
+    42066.666666666672,
+    44000
+  ]
+}

@@ -20,13 +20,16 @@ class RecordingGates(unittest.TestCase):
 
     def test_complete_local_measurement(self):
         self.assertTrue(gates.evaluate(self.report(), self.markers(), 1)['local_obs_acceptance_passed'])
+        self.assertTrue(gates.evaluate(self.report(), self.markers(), 1)['local_readiness_gate_passed'])
 
     def test_good_sync_does_not_hide_slow_readiness(self):
         self.assertFalse(gates.evaluate(self.report(6000000), self.markers(), 1)['local_obs_acceptance_passed'])
+        self.assertFalse(gates.evaluate(self.report(6000000), self.markers(), 1)['local_readiness_gate_passed'])
 
     def test_missing_both_streams_is_not_loss_free(self):
         markers = self.markers(); markers['missing_video_labels_within_observed_span'] = [7, 8]
         self.assertFalse(gates.evaluate(self.report(), markers, 1)['local_obs_acceptance_passed'])
+        self.assertTrue(gates.evaluate(self.report(), markers, 1)['local_readiness_gate_passed'])
 
     def test_missing_recovery_epoch(self):
         self.assertFalse(gates.evaluate(self.report(), self.markers(), 2)['local_obs_acceptance_passed'])
@@ -43,6 +46,43 @@ class RecordingGates(unittest.TestCase):
         self.assertFalse(gates.evaluate(self.report(), {}, 1)['local_obs_acceptance_passed'])
         markers = self.markers(); markers['audio_pts_discontinuities'] = 1
         self.assertFalse(gates.evaluate(self.report(), markers, 1)['local_obs_acceptance_passed'])
+
+    def with_partial(self, later_binding=100001):
+        native = self.report()
+        for row in native['audio_master_playback']['startup_milestones']:
+            row['binding_since_us'] = later_binding
+        native['audio_master_playback']['startup_milestones'].insert(0, {
+            'binding_since_us': 1, 'milestone': 'audio_bound', 'since_binding_us': 0})
+        return native
+
+    def test_partial_pair_replacement_is_retained_and_coalesced(self):
+        result = gates.evaluate(self.with_partial(), self.markers(), 1)
+        self.assertTrue(result['local_readiness_gate_passed'])
+        self.assertEqual(result['superseded_binding_epochs'], [1])
+        self.assertEqual(result['binding_epochs'][0]['first_scheduled_ms']['audio'], 1100)
+
+    def test_reset_does_not_restart_latency_budget(self):
+        result = gates.evaluate(self.with_partial(2000001), self.markers(), 1)
+        self.assertFalse(result['local_readiness_gate_passed'])
+        self.assertEqual(result['binding_epochs'][0]['first_scheduled_ms']['audio'], 3000)
+
+    def test_unfinished_final_reset_cannot_hide_behind_earlier_output(self):
+        native = self.report()
+        native['audio_master_playback']['startup_milestones'].append({
+            'binding_since_us': 2000001, 'milestone': 'audio_bound', 'since_binding_us': 0})
+        self.assertFalse(gates.evaluate(native, self.markers(), 1)['local_readiness_gate_passed'])
+
+    def test_extra_completed_reset_is_not_silently_coalesced(self):
+        native = self.report()
+        native['audio_master_playback']['startup_milestones'] += [dict(row, binding_since_us=2000001)
+            for row in list(native['audio_master_playback']['startup_milestones'])]
+        self.assertFalse(gates.evaluate(native, self.markers(), 1)['local_readiness_gate_passed'])
+
+    def test_invalid_superseded_readiness_is_still_rejected(self):
+        native = self.with_partial()
+        native['audio_master_playback']['startup_milestones'].insert(0, {
+            'binding_since_us': 1, 'milestone': 'first_audio_scheduled', 'since_binding_us': -1})
+        self.assertFalse(gates.evaluate(native, self.markers(), 1)['local_readiness_gate_passed'])
 
 
 if __name__ == '__main__': unittest.main()

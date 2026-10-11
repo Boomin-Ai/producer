@@ -1721,3 +1721,91 @@ been implemented or claimed by these measurements.
 Evidence index: `labs/guest-rtc/evidence/native-numbered-recording-trials.json`.
 G1 and production rollout remain gated; production, recovery checkout and the
 installed Producer application are unchanged.
+
+### Subscriber timing stall repair — 2026-10-10
+
+Implemented an opt-in SFU repair in `native/sfu-subscriber-report.patch`, built
+separately by `native/build-sfu-subscriber-lab.py`. The unchanged control source
+and delayed-control binary remain available. The generated recovery runner now
+uses the repaired SFU by default; `--control-report` explicitly reproduces the
+old behavior. No Producer application, deployment or recovery worktree changed.
+
+A new audio downtrack arms the policy after its **first forwarded RTP packet**,
+after timestamp translation has started. A per-binding atomic latch prevents
+repeated arming and resets on bind/receiver replacement. The feature flag is
+captured at construction, keeping the default hot path free of environment
+lookups. The request follows existing selected/upgraded/regressed/RED receiver
+views to the publisher's existing buffer. Wrapper locks are released before
+entering the buffer policy. No callbacks, ownership edges, goroutines or timers
+are added. No cached sender report is installed downstream and the original
+forwarder timestamp-offset validity guard remains byte-for-byte unchanged.
+
+The packet-driven buffer policy waits 250 ms, emits at most three RFC 6051
+requests per publisher budget window, spaces retries by 250 ms and expires at
+2 seconds. A newer report retires the policy. Coalesced starts do not extend its
+deadline. The old publisher-start policy is disabled when this experiment is
+active, avoiding duplicate request budgets. Unmodified server behavior remains
+the default outside this isolated feature flag.
+
+Actual receiver views mattered: an intermediate forwarding implementation
+compiled but silently lost its request through a wrapper. Retained failed
+trials caught that defect. The final implementation explicitly forwards the
+request through WrappedReceiver, DummyReceiver, DummyRedReceiver,
+simulcastReceiver, RedReceiver and RedPrimaryReceiver. The new wrapper regression
+test covers selected, upgraded and regressed receiver chains and unready views.
+
+The final SFU binary SHA-256 is
+`462b296c94efeca28e170ac18ca5b2fc1cdb65a8f896845f5f0e371eaca6c40e`.
+The build checks the pinned compiler, patch, module files, all modified files
+and every other upstream Go source. The patch also passes a clean dry-run
+against the unchanged control tree. Fourteen targeted Go tests passed, including
+100 repeated policy recovery cycles, admission storms, cached/regressed reports,
+pre-bind buffer arming, disabled/video behavior and receiver routing. Full
+upstream tests were not run. Tests and build provenance are saved separately.
+
+The three-guest/three-full-rebuild trial `1791693336449804000` completed:
+
+| Output episode | Audio ready | Video ready |
+| --- | --- | --- |
+| Initial | 107 ms | 412 ms |
+| First reconnect | 488 ms | 641 ms |
+| Second reconnect | 878 ms | 904 ms |
+| Third reconnect | 849 ms | 850 ms |
+
+Each guest publisher made four fresh-report requests total (initial plus three
+rebuilds), each request numbered 1 within its budget window. Forwarded timing
+reached the native subscriber 266–341 ms after SFU admission across all guests
+and episodes. This replaces the earlier multi-second wait for the next natural
+publisher audio report. All browser return receivers recovered advancing audio
+and video markers, with four distinct publication SIDs for each kind.
+
+The readiness gate was corrected to account for paired media subscriptions:
+audio and video can each invalidate playback during the same replacement,
+producing partial epochs that are superseded before any complete output.
+Partial epochs remain in evidence; completed readiness is measured from the
+**earliest pending reset**, so another reset cannot restart the 1500 ms budget.
+An unfinished final epoch, extra completed episode, invalid numeric readiness
+or delayed replacement still fails. The three-guest trial has six raw epochs
+and four completed output episodes. Twelve Python gate tests and seven Node
+marker/recovery tests pass.
+
+This fixes the local SFU timing-report wait; it does not qualify the whole
+native pipeline. One final-binary single-guest trial (`1791692891810109000`)
+received timing around 212 ms after reset but bound tracks around 1592 ms,
+exceeding the complete-output readiness budget. The later repeated single-guest,
+three-guest and default baseline trials pass readiness, but overall recording
+acceptance still fails. The three-guest recording had 51 paired markers, p95
+106.7 ms and missing/unmatched markers; the final baseline also failed its
+recording gate. These failures remain retained and block broader G1/production
+integration. Do not describe these recordings as synchronized or loss-free.
+
+All diagnostics, including rejected intermediate candidates, are indexed in
+`labs/guest-rtc/evidence/subscriber-timing-fix-trials.json`. Generated media
+remains under ignored runtime storage. Per-run immutable provenance snapshots
+protect old binary/source evidence when the current build manifest changes.
+Owned listeners on 7880/8990 closed after testing.
+
+Managed LiveKit compatibility, WAN behavior, sustained operation, native binding
+latency, presentation late drops, capture-clock sync and full room integration
+remain open. This repair currently requires the custom self-hosted lab SFU;
+it cannot be enabled on LiveKit Cloud with an API key alone. G1 remains incomplete.
