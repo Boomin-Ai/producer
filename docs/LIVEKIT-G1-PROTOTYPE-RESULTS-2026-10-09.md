@@ -1989,3 +1989,123 @@ recovered or excluded. Full numeric provenance is retained in
 `labs/guest-rtc/evidence/native-publication-fencing-trial.json` and its run files.
 Only regenerable Chrome HTTP/code caches were cleared to satisfy the existing
 1 GiB recording preflight; projects, recordings, user data and installed app remain.
+
+
+### Selected playback coordinator candidate (2026-10-11)
+
+`labs/guest-rtc/src/playback_worker.rs` now owns selected guest-1's audio/video clock
+processing on a joined native thread, polling every 2 ms. It consumes the existing
+192-block/100 ms decoded PCM handoff and the existing two-frame/50 ms video observer
+queue directly. The room loop retains room events, binding discovery and unrelated
+participant diagnostics. Selected video diagnostics are collected by the coordinator
+and merged into the existing participant report after shutdown.
+
+RTCP collection/parsing remains on its existing report worker. The room forwards
+its latest report into a capacity-one mailbox; map application happens in the
+coordinator. Binding and reset updates synchronously serialize against the kernel.
+These controls can wait for an in-progress kernel tick; they do not move media
+processing back onto the room loop. Report application and native output can still
+stall, so worker isolation is a candidate improvement, not a guarantee of smoothness.
+
+Subscription changes fence both output queues before clearing/rebinding the kernel.
+Audio clock reanchors renew the coordinator's producer handles. A stale coordinator
+is forbidden from renewing/resetting a replacement publication's queue, covering
+the race between a room reset and an old audio reanchor. Every reset is retained
+as a startup milestone, including intermediate audio/video subscription epochs,
+so another reset cannot restart the readiness budget.
+
+Ownership: coordinator holds queue Arcs, enqueue handles and recording clock values;
+it retains no Room, RemoteTrack, Recorder or native output source pointer. Shutdown
+joins the coordinator and releases the selected queue before stopping decoded drain
+and native delivery workers; all threads finish before Recorder/source destruction.
+Worker Drop also joins after cancellation/early failure. The recording gate rejects
+a missing, active or failed coordinator when isolated mode is declared.
+
+The scheduled-handoff lab defaults to this candidate. The generated runner's
+`--room-loop-playback` flag preserves the prior control path. Neither path modifies
+the production app. Two additional native tests prove stale coordinator reset
+fencing and 100 coordinator start/process/reset/drop cycles, including PCM consumption
+without room polling and release of old video queues. The gate regression additionally
+rejects absent/failed/active clock worker evidence. Acceptance thresholds and bounded
+queue ages/capacities remain unchanged.
+
+
+First candidate three-guest/three-reconnect recording (140 seconds):
+`generated-recovery-1791733537194853000`. All four recovery groups passed the
+1500 ms budget measured from their earliest reset; maximum first audio/video was
+1249.683/1302.798 ms. Fifteen raw epochs, including intermediate subscription resets,
+were retained. All worker health/empty-queue gates passed. There were 65 matched
+numbered markers at 53.333 ms p95, within the unchanged 80 ms sync budget.
+Acceptance nevertheless failed: five missing video labels (12,32,55,56,57),
+three unmatched audio markers, zero uncertain tones and zero audio PTS gaps.
+
+Compared with the preceding room-loop run, stale PCM handoff drops were 3 versus
+277, overflow was 0 versus 12, and sync p95 was 53.333 versus 90 ms. These are
+single-run observations on the same machine, not controlled proof of sustained
+reliability. Coordinator tick gaps still reached 166.399 ms, RTCP map application
+64.406 ms and selected video processing 52.720 ms. Native audio/video submission
+elapsed time reached 53.767/49.856 ms; late output drops were 55/16. Thus isolation
+reduces one interference path but has not eliminated stalls or losses. Native
+thread QoS remains an observed lab setting, not a realtime scheduling guarantee.
+
+Numeric sources and hashes are indexed in
+`labs/guest-rtc/evidence/native-isolated-playback-trials.json`. Full G1, production
+integration, native packaging, cross-platform, WAN and speakerphone integration
+remain gated. Next investigate the remaining losses against clock-map application,
+native output waits and scheduling pressure, without changing lateness/loss budgets.
+
+
+Single-guest check of the initial coordinator candidate:
+`generated-recovery-1791733786278942000` failed recording acceptance: 19 pairs,
+103.333 ms p95, labels 15/16/17 missing, three unmatched audio markers. Readiness
+and worker health passed. The same binary with `--room-loop-playback`,
+`generated-recovery-1791733931772139000`, passed: 22 pairs, 43.333 ms p95, no missing
+span labels. These sequential runs do not control machine pressure, but they
+prevent treating the initial coordinator as a reliable replacement. Its sender
+report application reached 138.727 ms and its tick gap 201.186 ms.
+
+The candidate now prepares sorted typed incoming sender reports on the existing
+diagnostic collector. Its capacity-one generic mailbox transfers those records;
+the playback kernel applies them directly without JSON cloning/deserialization
+and sorting three times. The raw diagnostic/report path remains available to the
+room-loop control. Incoming direction, required fields, original observed times,
+report order and all SenderClock freshness/discontinuity checks are preserved.
+The coordinator still copies the prepared record vector into bounded DecodedOrigins
+state and updates clocks; application cost and scheduling stalls remain measurable.
+
+
+Prepared-report candidate validation: 59 native tests, 15 recording-gate regressions,
+combined-feature native build and strict all-target Clippy passed. Measurements:
+
+- `1791738196774571000`, single guest/full reconnect: 22 matched pairs, 43.333 ms
+  p95, no missing video span labels, but one unmatched audio marker at 45.980 s
+  failed the unchanged marker gate. Its matching video pulse was scheduled near
+  teardown; clipping already scheduled output is a hypothesis to test, not a
+  qualified explanation. Kernel report application max 2.071 ms, tick gap 50.789 ms;
+  one late drop on each native output worker, zero stale PCM handoff drops.
+- `1791738591686432000`, three guests/three full reconnects: 66 pairs, 40 ms p95,
+  no unmatched markers/uncertain tones/PTS gaps and no late native output drops.
+  The strict gate still failed for missing labels 7/27/47, corresponding to the
+  three forced disconnect periods. This is recorded loss, not excluded from the
+  gate. Kernel tick gap max 8.072 ms and report application max 0.883 ms.
+- `1791738893907394000`, continuous three guests/140 seconds: **full local OBS
+  acceptance passed**, 70 pairs, 40 ms p95, no missing labels, no unmatched markers,
+  no uncertain tones or PTS gaps; all worker health and readiness checks passed.
+
+This establishes one successful steady three-guest recording for the isolated
+playback candidate. Full reconnect recording acceptance, sustained reliability,
+startup/tail qualification and full G1 remain incomplete. Next verify the shutdown
+boundary by draining already scheduled output within a bounded budget before
+stopping recording, and distinguish transport-unavailable periods from additional
+playback loss without hiding or relaxing the existing reconnect loss gate.
+
+Resource checkpoint: the first prepared-run attempt was stopped by the existing
+1 GiB free-space preflight. After clearing regenerable Chrome HTTP/code caches,
+run `1791738009850121000` failed during OBS Metal initialization, before playback
+worker construction; conditions/provenance and the exact startup error are retained.
+The cause is unproven. Regenerable Rust `.rmeta` compilation metadata (392 MiB) was
+then cleared, preserving linked binaries, `.rlib` archives, native SDK archives,
+source, apps, recordings and git history. Subsequent recording initialization
+succeeded. Future Cargo checks may regenerate that metadata; do not mistake the
+missing cache for missing project work. Numeric trial index retains the startup
+failure separately from playback measurements. No production deployment occurred.

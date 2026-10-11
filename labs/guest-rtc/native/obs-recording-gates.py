@@ -49,6 +49,10 @@ def evaluate(native, markers, expected_epochs, readiness_budget_ms=1500):
         drain = playback.get('decoded_audio_drain_after_shutdown')
         if not isinstance(drain, dict) or drain.get('active_after_shutdown') is not False or drain.get('worker_failed') is not False or not isinstance(drain.get('queue'), dict) or drain['queue'].get('pending_frames') != 0:
             worker_reasons.append('decoded audio drain shutdown not established')
+    if playback.get('clock_on_dedicated_thread') is True:
+        clock = playback.get('dedicated_clock_worker')
+        if not isinstance(clock, dict) or clock.get('active_after_shutdown') is not False or clock.get('worker_failed') is not False:
+            worker_reasons.append('playback clock worker shutdown not established')
     reasons.extend(worker_reasons)
     if markers.get('local_numbered_marker_gate_passed') is not True:
         reasons.append('numbered recording marker gate failed')

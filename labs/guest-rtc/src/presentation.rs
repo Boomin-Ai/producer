@@ -436,21 +436,10 @@ impl SelectedPlayback {
         }
     }
     pub fn note_sender_reports(&mut self, rtcp: &Value) {
-        let mut reports: Vec<SenderReport> = rtcp["peers"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .flat_map(|log| {
-                log["sender_report_history"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-            })
-            .filter(|report| report["incoming"].as_bool() == Some(true))
-            .filter_map(|report| serde_json::from_value(report.clone()).ok())
-            .collect();
-        reports.sort_by_key(|report| report.observed_us);
-        for report in reports {
+        self.note_parsed_reports(&crate::sender_clock::incoming_reports(rtcp));
+    }
+    pub fn note_parsed_reports(&mut self, reports: &[SenderReport]) {
+        for &report in reports {
             if report.ntp_seconds == 0 || report.observed_us < self.since_us {
                 continue;
             }
@@ -471,24 +460,13 @@ impl SelectedPlayback {
         }
     }
     pub fn refresh(&mut self, rtcp: &Value) {
+        self.refresh_parsed_reports(&crate::sender_clock::incoming_reports(rtcp));
+    }
+    pub fn refresh_parsed_reports(&mut self, reports: &[SenderReport]) {
         let Some((_, ssrc, clock, seen)) = &mut self.video_binding else {
             return;
         };
-        let mut reports: Vec<SenderReport> = rtcp["peers"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .flat_map(|log| {
-                log["sender_report_history"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-            })
-            .filter(|report| report["incoming"].as_bool() == Some(true))
-            .filter_map(|report| serde_json::from_value(report.clone()).ok())
-            .collect();
-        reports.sort_by_key(|report| report.observed_us);
-        for report in reports {
+        for &report in reports {
             if report.ssrc == *ssrc && report.observed_us > *seen {
                 clock.observe(report);
                 *seen = report.observed_us;

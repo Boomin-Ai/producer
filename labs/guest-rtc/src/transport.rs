@@ -1,3 +1,6 @@
+#[cfg(feature = "obs-proof")]
+#[path = "playback_worker.rs"]
+mod playback_worker;
 use crate::queue::{Captured, Queue};
 use anyhow::{bail, Context, Result};
 use cxx::{SharedPtr, UniquePtr};
@@ -22,6 +25,11 @@ use std::{
 };
 use webrtc_sys::{audio_track as audio_sys, video_frame as frame_sys, video_track as video_sys};
 
+enum TimingSnapshot {
+    Raw(serde_json::Value),
+    #[cfg(feature = "obs-proof")]
+    Prepared(Vec<crate::sender_clock::SenderReport>),
+}
 #[derive(Clone)]
 struct AudioBlock {
     samples: [i16; 480],
@@ -718,14 +726,42 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
             },
         )?
     };
+    #[cfg(feature = "obs-proof")]
+    let mut isolated_playback = if scheduled_handoff
+        && std::env::var("LIVEKIT_LAB_ROOM_LOOP_PLAYBACK").as_deref() != Ok("1")
+    {
+        Some(playback_worker::Worker::start(
+            playback.since_us,
+            began,
+            audio_producer.as_ref().unwrap().clone(),
+            video_producer.as_ref().unwrap().clone(),
+            decoded_drain.queue(),
+            recorder.as_ref().unwrap().video_writer().timestamp_base(),
+        )?)
+    } else {
+        None
+    };
+    #[cfg(feature = "obs-proof")]
+    let mut isolated_reports = None;
     let mut tick = tokio::time::interval(Duration::from_millis(10));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut lifecycle = Vec::new();
     let mut decoded_origins = crate::sender_clock::DecodedOrigins::default();
-    let mut report_worker = crate::report_worker::Worker::start(Duration::from_millis(100), || {
-        serde_json::from_str(&webrtc_sys::webrtc::ffi::diagnostic_rtcp_exchange_report())
-            .map_err(|e| e.to_string())
-    });
+    #[cfg(feature = "obs-proof")]
+    let isolated_clock_enabled = isolated_playback.is_some();
+    let mut report_worker =
+        crate::report_worker::Worker::start(Duration::from_millis(100), move || {
+            let value: serde_json::Value =
+                serde_json::from_str(&webrtc_sys::webrtc::ffi::diagnostic_rtcp_exchange_report())
+                    .map_err(|e| e.to_string())?;
+            #[cfg(feature = "obs-proof")]
+            if isolated_clock_enabled {
+                return Ok(TimingSnapshot::Prepared(
+                    crate::sender_clock::incoming_reports(&value),
+                ));
+            }
+            Ok(TimingSnapshot::Raw(value))
+        });
     let mut loop_timing = crate::loop_timing::Timings::default();
     let mut reconnect_injected = 0usize;
     loop {
@@ -744,6 +780,9 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                             binding_discovery.invalidate();
                             if let Some(worker)=&scheduled_audio {worker.reset(); audio_producer=Some(worker.producer());}
                             if let Some(worker)=&scheduled_video {worker.reset(); video_producer=Some(worker.producer());}
+                            if let Some(worker)=&isolated_playback {
+                                worker.clear(playback.since_us,audio_producer.as_ref().unwrap().clone(),video_producer.as_ref().unwrap().clone());
+                            }
                         }
                         match track {
                             RemoteTrack::Audio(track) => {
@@ -774,6 +813,9 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                             binding_discovery.invalidate();
                             if let Some(worker)=&scheduled_audio {worker.reset(); audio_producer=Some(worker.producer());}
                             if let Some(worker)=&scheduled_video {worker.reset(); video_producer=Some(worker.producer());}
+                            if let Some(worker)=&isolated_playback {
+                                worker.clear(playback.since_us,audio_producer.as_ref().unwrap().clone(),video_producer.as_ref().unwrap().clone());
+                            }
                         }
                         // A late teardown from the old publication cannot retire its replacement.
                         match track {
@@ -850,10 +892,12 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                             let observed=audio_sys::ffi::diagnostic_webrtc_time_us();
                             if binding.kind=="audio" && audio.get("guest-1").is_some_and(|tap|tap.sid==binding.sid)
                                 && playback.audio_binding.is_none() {
+                                if let Some(worker)=&isolated_playback {worker.bind_audio(binding.sid.clone(),binding.ssrc,observed);}
                                 playback.audio_binding=Some((binding.sid,binding.ssrc));
                                 playback.startup_note("audio_bound",observed);
                             } else if binding.kind=="video" && video.get("guest-1").is_some_and(|tap|tap.sid==binding.sid)
                                 && playback.video_binding.is_none() {
+                                if let Some(worker)=&isolated_playback {worker.bind_video(binding.sid.clone(),binding.ssrc,observed,video.get("guest-1").unwrap().observer.queue.clone());}
                                 playback.video_binding=Some((binding.sid,binding.ssrc,crate::sender_clock::SenderClock::new(binding.ssrc,90000),playback.since_us.saturating_sub(1)));
                                 playback.startup_note("video_bound",observed);
                             }
@@ -894,6 +938,12 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                 }
                 let reports_started = Instant::now();
                 if let Some(rtcp) = report_worker.take() {
+                    let rtcp=match rtcp {
+                        TimingSnapshot::Raw(value)=>Some(value),
+                        #[cfg(feature = "obs-proof")]
+                        TimingSnapshot::Prepared(reports)=>{isolated_playback.as_ref().unwrap().sender_reports(reports);None}
+                    };
+                    if let Some(rtcp)=rtcp {
                     decoded_origins.refresh(&rtcp);
                     #[cfg(feature = "obs-proof")]
                     if use_sender_clock {
@@ -903,11 +953,12 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                         if playback.video_ready(observed) {playback.startup_note("video_clock_ready",observed);}
                     }
                 }
+                }
                 loop_timing.observe("sender_report_refresh", reports_started.elapsed());
                 let audio_started = Instant::now();
                 let decoded_at = audio_sys::ffi::diagnostic_webrtc_time_us();
                 #[cfg(feature = "obs-proof")]
-                let mut decoded_blocks=std::iter::from_fn(||decoded_drain.pop().map(|frame|frame.value));
+                let mut decoded_blocks=std::iter::from_fn(||if isolated_playback.is_some(){None}else{decoded_drain.pop().map(|frame|frame.value)});
                 #[cfg(not(feature = "obs-proof"))]
                 let mut decoded_blocks=webrtc_sys::webrtc::ffi::diagnostic_take_decoded_audio().into_iter();
                 for block in &mut decoded_blocks {
@@ -970,6 +1021,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                 loop_timing.observe("observer_audio",observer_audio_started.elapsed());
                 let observer_video_started=Instant::now();
                 for (id, tap) in &video {
+                    #[cfg(feature = "obs-proof")]
+                    if id=="guest-1" && isolated_playback.is_some(){continue;}
                     let m = metrics.entry(id.clone()).or_default();
                     while let Some(frame) = tap.observer.queue.pop(now) {
                         m.video_age.push(now.saturating_duration_since(frame.at).as_secs_f64() * 1000.0);
@@ -1016,6 +1069,10 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     report_worker.shutdown();
     #[cfg(feature = "obs-proof")]
     {
+        if let Some(worker) = &mut isolated_playback {
+            isolated_reports =
+                Some(worker.shutdown(metrics.entry("guest-1".to_owned()).or_default()));
+        }
         decoded_drain.shutdown();
         if let Some(worker) = &mut scheduled_audio {
             worker.shutdown();
@@ -1150,7 +1207,11 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     let worker_lifecycle: Option<serde_json::Value> = None;
     #[cfg(feature = "obs-proof")]
     let audio_master_playback = if use_sender_clock {
-        let mut report = playback.report();
+        let mut report = isolated_reports
+            .as_ref()
+            .map(|(p, _)| p.clone())
+            .unwrap_or_else(|| playback.report());
+        report["clock_on_dedicated_thread"] = json!(isolated_playback.is_some());
         report["scheduled_handoff"] = json!(scheduled_handoff);
         report["loop_timing"] = loop_timing.report();
         report["timing_report_worker_after_shutdown"] = report_worker.report();
@@ -1172,6 +1233,10 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     #[cfg(not(feature = "obs-proof"))]
     let audio_master_playback: Option<serde_json::Value> = None;
     let mut decoded_pcm_origin_handoff = decoded_origins.report();
+    #[cfg(feature = "obs-proof")]
+    if let Some((_, origins)) = isolated_reports {
+        decoded_pcm_origin_handoff = origins;
+    }
     #[cfg(feature = "obs-proof")]
     {
         decoded_pcm_origin_handoff["obs_connected"] = json!(use_sender_clock);

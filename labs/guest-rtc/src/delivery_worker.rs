@@ -14,7 +14,7 @@ use std::{
     time::{Duration, Instant},
 };
 // Existing lab shim changes only the disposable worker's macOS QoS.
-fn worker_qos() -> Option<(i32, i32, i32)> {
+pub(crate) fn worker_qos() -> Option<(i32, i32, i32)> {
     #[cfg(all(target_os = "macos", feature = "physical-aec"))]
     {
         unsafe extern "C" {
@@ -188,6 +188,25 @@ impl<T> Clone for Producer<T> {
     }
 }
 impl<T> Producer<T> {
+    pub fn reset_and_renew(&self) -> Self {
+        let _serial = self.shared.2.lock().unwrap();
+        let mut state = self.shared.0.lock().unwrap();
+        // A retired coordinator cannot reset its replacement publication.
+        if state.epoch != self.epoch || state.stopped {
+            return self.clone();
+        }
+        state.epoch = state
+            .epoch
+            .checked_add(1)
+            .expect("delivery epoch exhausted");
+        state.queue.clear();
+        Self {
+            shared: self.shared.clone(),
+            contention: self.contention.clone(),
+            retired: self.retired.clone(),
+            epoch: state.epoch,
+        }
+    }
     pub fn push(&self, stamp: Instant, value: T) -> bool {
         if let Ok(mut state) = self.shared.0.try_lock() {
             if state.epoch != self.epoch {
@@ -275,6 +294,9 @@ impl<T: Send + 'static> Drain<T> {
             max_poll_gap_us,
             qos,
         })
+    }
+    pub fn queue(&self) -> Arc<Queue<T>> {
+        self.queue.clone()
     }
     pub fn pop(&self) -> Option<Captured<T>> {
         self.queue.pop(Instant::now())
@@ -369,6 +391,32 @@ mod tests {
         }
         failed.shutdown();
         assert_eq!(failed.report()["worker_failed"], true);
+    }
+    #[test]
+    fn stale_coordinator_cannot_reset_a_replacement_producer() {
+        let (sent, received) = mpsc::channel();
+        let mut worker = Deadline::start("coordinator-fence", 2, move |_, v| {
+            sent.send(v).unwrap();
+        })
+        .unwrap();
+        let old = worker.producer();
+        worker.reset();
+        let replacement = worker.producer();
+        let stale = old.reset_and_renew();
+        assert_eq!(worker.report()["publication_epoch"], 1);
+        assert!(!stale.push(Instant::now(), 1));
+        while !replacement.push(Instant::now(), 2) {
+            thread::yield_now();
+        }
+        assert_eq!(received.recv_timeout(Duration::from_secs(1)).unwrap(), 2);
+        let fresh = replacement.reset_and_renew();
+        assert_eq!(worker.report()["publication_epoch"], 2);
+        assert!(!replacement.push(Instant::now(), 3));
+        while !fresh.push(Instant::now(), 4) {
+            thread::yield_now();
+        }
+        assert_eq!(received.recv_timeout(Duration::from_secs(1)).unwrap(), 4);
+        worker.shutdown();
     }
     #[test]
     fn retired_producer_cannot_enqueue_after_reset_or_owner_drop() {

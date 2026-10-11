@@ -132,6 +132,9 @@ pub struct VideoWriter {
     origin_ns: u64,
 }
 impl VideoWriter {
+    pub fn timestamp_base(&self) -> (Instant, u64) {
+        (self.origin, self.origin_ns)
+    }
     pub fn video(
         &self,
         planes: (&[u8], &[u8], &[u8]),

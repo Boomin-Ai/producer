@@ -21,6 +21,7 @@ timing.add_argument('--subscriber-report',action='store_true',default=True,help=
 timing.add_argument('--control-report',dest='subscriber_report',action='store_false',help='Reproduce the old admission-insensitive timing control')
 parser.add_argument('--require-obs-gates',action='store_true',help='Exit unsuccessfully if local OBS sync/readiness/loss acceptance fails')
 parser.add_argument('--obs-recording',action='store_true',help='Record generated guest-1 through native OBS audio-master presentation')
+parser.add_argument('--room-loop-playback',action='store_true',help='Control: keep clock processing on the room loop')
 parser.add_argument('--guests',type=int,choices=[1,3],default=1)
 parser.add_argument('--seconds',type=int,default=45)
 args=parser.parse_args()
@@ -32,6 +33,7 @@ name='generated-recovery-'+str(time.time_ns())
 sfu=LAB/'runtime'/('livekit-server-subscriber-report-lab' if args.subscriber_report else 'livekit-server-delayed-report-lab')
 env={key:value for key,value in os.environ.items() if not key.startswith('LIVEKIT_LAB_')}
 env.update(LIVEKIT_LAB_RUN_NAME=name,LIVEKIT_LAB_GENERATED_RECONNECT_COUNT=str(args.reconnect_count),LIVEKIT_LAB_MARKER_IDS='1',LIVEKIT_LAB_SYNC_STREAMS='1',LIVEKIT_LAB_GUESTS=str(args.guests),LIVEKIT_LAB_SECONDS=str(args.seconds),LIVEKIT_LAB_URL='ws://127.0.0.1:7880')
+if args.room_loop_playback:env['LIVEKIT_LAB_ROOM_LOOP_PLAYBACK']='1'
 if args.reconnect!='none':env['LIVEKIT_LAB_GENERATED_RECONNECT']=args.reconnect
 if args.subscriber_report:env['LIVEKIT_LAB_SUBSCRIBER_AUDIO_SR']='1'
 recording=LAB/'runtime'/f'{name}-obs.mp4'
@@ -43,7 +45,7 @@ def digest(p):
     with p.open('rb') as stream:
         for chunk in iter(lambda:stream.read(1024*1024),b''):result.update(chunk)
     return result.hexdigest()
-report={'run':name,'status':'running','guests':args.guests,'seconds':args.seconds,'reconnect':args.reconnect,'reconnect_count':args.reconnect_count,'hardware_capture_used':False,'speaker_playback_used':False,'media_recorded':args.obs_recording,'media_scope':'generated selected guest-1 only' if args.obs_recording else 'none','obs_recording_requested':args.obs_recording,'g1_complete':False,'native_sha256':digest(LAB/'target/debug/producer-guest-rtc-lab'),'sfu_sha256':digest(sfu),'subscriber_report_candidate':args.subscriber_report}
+report={'run':name,'status':'running','guests':args.guests,'isolated_playback_candidate':args.obs_recording and not args.room_loop_playback,'seconds':args.seconds,'reconnect':args.reconnect,'reconnect_count':args.reconnect_count,'hardware_capture_used':False,'speaker_playback_used':False,'media_recorded':args.obs_recording,'media_scope':'generated selected guest-1 only' if args.obs_recording else 'none','obs_recording_requested':args.obs_recording,'g1_complete':False,'native_sha256':digest(LAB/'target/debug/producer-guest-rtc-lab'),'sfu_sha256':digest(sfu),'subscriber_report_candidate':args.subscriber_report}
 if args.subscriber_report:
     provenance=LAB/'evidence/sfu-subscriber-report-provenance.json'
     expected=json.loads(provenance.read_text())

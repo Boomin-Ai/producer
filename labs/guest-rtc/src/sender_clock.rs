@@ -16,6 +16,24 @@ impl SenderReport {
         (i128::from(self.ntp_seconds) << 32) | i128::from(self.ntp_fraction)
     }
 }
+/// Parse and sort once on the diagnostic collector, before media scheduling.
+pub fn incoming_reports(rtcp: &Value) -> Vec<SenderReport> {
+    let mut reports: Vec<SenderReport> = rtcp["peers"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|peer| {
+            peer["sender_report_history"]
+                .as_array()
+                .into_iter()
+                .flatten()
+        })
+        .filter(|report| report["incoming"].as_bool() == Some(true))
+        .filter_map(|report| serde_json::from_value(report.clone()).ok())
+        .collect();
+    reports.sort_by_key(|report| report.observed_us);
+    reports
+}
 pub struct SenderClock {
     ssrc: u32,
     rate: u32,
@@ -190,20 +208,10 @@ impl DecodedSource {
 }
 impl DecodedOrigins {
     pub fn refresh(&mut self, rtcp: &Value) {
-        self.reports = rtcp["peers"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .flat_map(|log| {
-                log["sender_report_history"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-            })
-            .filter(|report| report["incoming"].as_bool() == Some(true))
-            .filter_map(|report| serde_json::from_value::<SenderReport>(report.clone()).ok())
-            .collect();
-        self.reports.sort_by_key(|report| report.observed_us);
+        self.refresh_reports(&incoming_reports(rtcp));
+    }
+    pub fn refresh_reports(&mut self, reports: &[SenderReport]) {
+        self.reports = reports.to_vec();
         for source in self.sources.values_mut() {
             source.refresh(&self.reports);
         }
@@ -306,6 +314,36 @@ impl DecodedOrigins {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn prepared_reports_filter_direction_and_malformed_entries_without_restamping() {
+        let value = serde_json::json!({"peers":[{"sender_report_history":[
+            {"incoming":true,"ssrc":1,"ntp_seconds":100,"ntp_fraction":3,"rtp_timestamp":90000,"observed_us":20},
+            {"incoming":false,"ssrc":9,"ntp_seconds":100,"ntp_fraction":0,"rtp_timestamp":0,"observed_us":30},
+            {"incoming":true,"ssrc":2,"ntp_seconds":99,"ntp_fraction":4,"rtp_timestamp":480,"observed_us":10},
+            {"incoming":true,"ssrc":3,"observed_us":40}
+        ]}]});
+        let reports = super::incoming_reports(&value);
+        assert_eq!(reports.len(), 2);
+        assert_eq!(
+            (
+                reports[0].ssrc,
+                reports[0].observed_us,
+                reports[0].rtp_timestamp,
+                reports[0].ntp_fraction
+            ),
+            (2, 10, 480, 4)
+        );
+        assert_eq!(
+            (
+                reports[1].ssrc,
+                reports[1].observed_us,
+                reports[1].rtp_timestamp,
+                reports[1].ntp_fraction
+            ),
+            (1, 20, 90000, 3)
+        );
+    }
+
     use super::*;
     fn sr(rtp: u32, seconds: u32, at: i64) -> SenderReport {
         SenderReport {

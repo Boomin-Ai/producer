@@ -26,6 +26,18 @@ class RecordingGates(unittest.TestCase):
         playback['decoded_audio_drain_after_shutdown'] = {'active_after_shutdown': False, 'worker_failed': False, 'queue': {'pending_frames': 0}}
         return native
 
+    def test_clock_worker_health_is_required_for_isolated_playback(self):
+        native = self.with_workers()
+        playback = native['audio_master_playback']
+        playback['clock_on_dedicated_thread'] = True
+        self.assertFalse(gates.evaluate(native, self.markers(), 1)['local_obs_acceptance_passed'])
+        playback['dedicated_clock_worker'] = {'active_after_shutdown': False, 'worker_failed': False}
+        self.assertTrue(gates.evaluate(native, self.markers(), 1)['local_obs_acceptance_passed'])
+        for field in ('active_after_shutdown', 'worker_failed'):
+            playback['dedicated_clock_worker'][field] = True
+            self.assertFalse(gates.evaluate(native, self.markers(), 1)['local_obs_acceptance_passed'])
+            playback['dedicated_clock_worker'][field] = False
+
     def test_delivery_workers_are_required_to_stop_cleanly(self):
         self.assertTrue(gates.evaluate(self.with_workers(), self.markers(), 1)['local_obs_acceptance_passed'])
         for stream in ('audio', 'video'):

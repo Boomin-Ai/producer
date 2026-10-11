@@ -6,25 +6,35 @@ use std::{
     thread::{self, JoinHandle},
     time::{Duration, Instant},
 };
-#[derive(Default)]
-struct Mailbox {
-    value: Option<Value>,
+struct Mailbox<T> {
+    value: Option<T>,
     collected: u64,
     replaced: u64,
     errors: u64,
     max_collection_us: u128,
 }
-pub struct Worker {
-    mailbox: Arc<Mutex<Mailbox>>,
+impl<T> Default for Mailbox<T> {
+    fn default() -> Self {
+        Self {
+            value: None,
+            collected: 0,
+            replaced: 0,
+            errors: 0,
+            max_collection_us: 0,
+        }
+    }
+}
+pub struct Worker<T: Send + 'static = Value> {
+    mailbox: Arc<Mutex<Mailbox<T>>>,
     stop: Option<mpsc::Sender<()>>,
     thread: Option<JoinHandle<()>>,
     consumed: u64,
     shutdown_us: u128,
 }
-impl Worker {
+impl<T: Send + 'static> Worker<T> {
     pub fn start(
         interval: Duration,
-        mut collect: impl FnMut() -> Result<Value, String> + Send + 'static,
+        mut collect: impl FnMut() -> Result<T, String> + Send + 'static,
     ) -> Self {
         assert!(!interval.is_zero());
         let mailbox = Arc::new(Mutex::new(Mailbox::default()));
@@ -66,7 +76,7 @@ impl Worker {
             shutdown_us: 0,
         }
     }
-    pub fn take(&mut self) -> Option<Value> {
+    pub fn take(&mut self) -> Option<T> {
         let value = self.mailbox.try_lock().ok()?.value.take();
         self.consumed += u64::from(value.is_some());
         value
@@ -90,7 +100,7 @@ impl Worker {
             "active_after_shutdown":self.thread.is_some(),"shutdown_us":self.shutdown_us,"presentation_waits_for_collection":false})
     }
 }
-impl Drop for Worker {
+impl<T: Send + 'static> Drop for Worker<T> {
     fn drop(&mut self) {
         self.shutdown();
     }
