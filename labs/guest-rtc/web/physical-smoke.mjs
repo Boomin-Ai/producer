@@ -49,7 +49,7 @@ try {
    button.onclick=()=>{window.physicalTestStarted=true;button.disabled=true;button.textContent='Test running';};document.body.prepend(button);
   },{seconds,voiceReview,cameraSync});
   console.log(`Ready: click Start ${seconds}-second ${cameraSync?'camera sync':voiceReview?'voice':'speaker'} test. Microphone is not running yet.`);
-  await page.waitForFunction(()=>window.physicalTestStarted,undefined,{timeout:300000});
+  await page.waitForFunction(()=>window.physicalTestStarted,undefined,{timeout:cameraSync?1800000:300000});
  }
  if(cameraSync) {
   console.log('Camera/microphone permission check — use Allow in the macOS dialog if requested. No capture starts before permission succeeds.');

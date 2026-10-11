@@ -82,7 +82,7 @@ try:
     start(['node','web/server.mjs'],'web',8990)
     fixture=subprocess.Popen(['node','web/physical-smoke.mjs','--publish-microphone'],cwd=LAB,env=env,start_new_session=True)
     try:
-        code=fixture.wait(timeout=args.seconds+600 if args.camera_sync else args.seconds+360 if args.wait_for_start else args.seconds+45)
+        code=fixture.wait(timeout=args.seconds+2100 if args.camera_sync else args.seconds+360 if args.wait_for_start else args.seconds+45)
         if code:raise RuntimeError(f'Physical fixture exited {code}; retain diagnostics')
     finally:
         if fixture.poll() is None:
