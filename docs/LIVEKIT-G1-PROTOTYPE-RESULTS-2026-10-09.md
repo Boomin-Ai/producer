@@ -1452,3 +1452,23 @@ error in the browser for up to 60 seconds (or until closed) after stopping nativ
 capture, instead of immediately closing the window. Live instructions distinguish
 camera preparation from received video. A new physical synchronization trial is
 awaiting Start; no successful synchronization result is asserted.
+
+### First completed physical camera/audio review — 2026-10-10
+
+Trial `1791685240269444000` completed 30.219 seconds with physical camera and
+microphone through the local SFU to the browser. Audio capture-to-SDK p95 was
+26 ms with zero deadline recoveries and zero native format/timeline errors.
+Camera captured 849 frames, submitted 707, and reported 141 SDK adapted/rejected
+frames and one application stale-frame discard. Camera handoff p95 was 38 ms;
+maximum observed age was 114.364 ms (the stale frame was discarded). Camera
+reported no native faults or ring overflow; all callbacks/owners retired and
+the publisher joined in 155.475 ms. Audio counted 731 clipped samples, so this
+trial must not be described as free of all audio artifacts.
+
+The browser observed 663 returned video frames and saved a 2,671,115-byte private
+VP8/Opus WebM. The operator reviewed claps and speech and confirmed: “They look
+and sound aligned.” This is a subjective sync pass for this 30-second Mac
+loopback trial, not a measured clap offset, source-to-RTP proof, OBS recording
+qualification, extended drift test or WAN/reconnect qualification. Numeric
+evidence is indexed in `labs/guest-rtc/evidence/camera-sync-first-physical-run.json`;
+private camera/audio media remains outside git. Production remains unchanged.
