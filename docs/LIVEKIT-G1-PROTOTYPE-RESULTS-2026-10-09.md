@@ -2445,3 +2445,70 @@ It validates the short local envelope, not Cloud readiness or three-guest load.
 The evidence index `native-marker-rejection-checkpoint.json` pins both the passed
 short run and invalid large run. Nine loss-analysis tests now pass, including
 explicit receipt rejection reporting without inventing historical reasons.
+
+Three-guest, 90-second follow-up `1791754759647749000` failed unchanged gates:
+41 pairs, 40 ms p95, missing video 21/22/23. Exact receipts distinguish causes.
+Marker 21 was accepted at its original target, then dropped by the video output
+worker as 124.840 ms late. Marker 22 was rejected at clock admission because its
+sender origin differed from the audio origin by 578.982 ms, above the existing
+500 ms bound. Marker 23 requested 457.019 ms video lead, above the existing 400 ms
+candidate bound. Neither is inferred transport loss. The injected reconnect
+markers were 9/31; neither was missing. Native worker tick gaps reached about
+195 ms, and the timing collector's maximum collection took 284.086 ms. Nine
+RTCP observations were skipped on callback-lock contention. The exact failed
+control and input hashes are retained in `native-clock-handoff-control.json`.
+
+The next candidate replaces repeated full RTCP JSON serialization/parsing on the
+isolated playback timing collector with a typed incoming-clock snapshot. It copies
+the same report fields and original observation times from the existing bounded
+16-log × 64-report rings. It filters outgoing reports, sorts incoming reports by
+observation time in Rust, and preserves sender freshness/reset rules. A busy
+probe lock returns an empty snapshot with an explicit contention counter; it
+does not fabricate a new observation time or block media callbacks. Full native
+diagnostic JSON is still saved after shutdown. This reduces avoidable collector
+work; it does not prove that collection caused the observed scheduler stalls.
+
+Ownership: factory → probe state, log wrapper → probe state; registry → weak
+probe state. The snapshot function temporarily upgrades that weak reference,
+copies numeric values and returns only values. The Rust timing worker keeps its
+existing capacity-one mailbox and joined owner. No thread, observer, callback or
+native handle is added. The expanded native workload runs 100 factory/log cycles,
+checks exact incoming fields/outgoing exclusion, nonblocking contention, bounded
+ring overwrite, partial logger failure and expired weak state after teardown.
+It passed with 201 mixer wrappers and 200 log observers destroyed and thread/FD
+counts back at baseline. Evidence is saved separately in
+`typed-clock-snapshot-lifecycle.json`; old lifecycle artifacts remain unchanged.
+The 74 native Rust tests passed. Live qualification of the smaller handoff is
+still required, separately on the local candidate and actual LiveKit Cloud.
+
+Typed-handoff local trial `1791757112564819000` passed the unchanged gates:
+three connected guests, selected guest-1 recorded, 90 seconds, two accepted-pulse
+full reconnects, 44 recorded pairs and 60 ms absolute p95, with no missing or
+unpaired markers. Initial scheduled audio/video took 529/546 ms; recovery took
+658/665 ms and 584/584 ms. Timing collection maximum was 417 µs, versus 284.086 ms
+in the preceding failed full-JSON control. Output worker maximum gaps were
+72/82 ms, versus 184/187 ms in that control. The candidate still counted four
+untagged late audio blocks and two late video frames; no flush/overflow occurred,
+and no generated marker was dropped. Snapshot contention was zero; one native
+RTCP callback observation was skipped. These are single-run measured improvements,
+not causal proof for every stall, no-drop playback or five-hour qualification.
+Clippy with both native features and warnings denied passed. The local result,
+control and lifecycle evidence are pinned by `native-typed-clock-local-trial.json`.
+The Cloud runner now also requires 2 GiB free before launching a recording.
+
+Typed-handoff Cloud trial `1791757273637421000` still failed: 23 pairs, 43.333 ms
+p95, missing markers 9–13. Initial scheduled audio/video arrived at 2.903/2.923 s;
+full-reconnect readiness at 9.968/9.992 s, including preceding resets. In the final
+new binding decoded audio arrived after 109.569 ms, but its first observed fresh
+incoming sender report arrived after 9.024 s (video report after 3.023 s). The
+collector maximum was only 129 µs, with no collector errors, separating this
+Cloud delay from the removed JSON overhead. The temporary room was deleted
+successfully. `native-typed-clock-cloud-trial.json` pins the failed result and
+input hashes. No budget or recording threshold changed.
+
+A reviewable reproduction and provider questions are prepared in
+[`LIVEKIT-CLOUD-SENDER-TIMING-REPRO-2026-10-11.md`](./LIVEKIT-CLOUD-SENDER-TIMING-REPRO-2026-10-11.md).
+Nothing was sent externally. Earlier Cloud failures, local controls and invalid
+resource-limited runs remain retained. Native/Cloud clock delivery is still a
+G1 blocker before broader integration; this turn does not qualify or deploy the
+refactor, remove the legacy guest path, or sign a new Producer release.

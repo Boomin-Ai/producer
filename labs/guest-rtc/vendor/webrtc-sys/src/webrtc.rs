@@ -80,6 +80,14 @@ pub mod ffi {
         pub muted: bool,
     }
 
+    pub struct IncomingClockReport {
+        pub ssrc: u32,
+        pub ntp_seconds: u32,
+        pub ntp_fraction: u32,
+        pub rtp_timestamp: u32,
+        pub observed_us: i64,
+    }
+
     unsafe extern "C++" {
         include!("livekit/webrtc.h");
 
@@ -89,6 +97,7 @@ pub mod ffi {
         fn diagnostic_timed_mixer_report() -> String;
         fn diagnostic_take_decoded_audio() -> Vec<DecodedAudioBlock>;
         fn diagnostic_rtcp_exchange_report() -> String;
+        fn diagnostic_incoming_clock_reports() -> Vec<IncomingClockReport>;
         fn video_encoder_backend_list() -> Vec<VideoEncoderBackend>;
         fn new_log_sink(fnc: fn(String, LoggingSeverity)) -> UniquePtr<LogSink>;
     }

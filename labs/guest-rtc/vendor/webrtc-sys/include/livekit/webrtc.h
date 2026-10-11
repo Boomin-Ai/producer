@@ -117,6 +117,7 @@ rust::String create_random_uuid();
 rust::String diagnostic_timed_mixer_report();
 rust::Vec<DecodedAudioBlock> diagnostic_take_decoded_audio();
 rust::String diagnostic_rtcp_exchange_report();
+rust::Vec<IncomingClockReport> diagnostic_incoming_clock_reports();
 
 rust::Vec<VideoEncoderBackend> video_encoder_backend_list();
 

@@ -796,15 +796,25 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     let isolated_clock_enabled = isolated_playback.is_some();
     let mut report_worker =
         crate::report_worker::Worker::start(Duration::from_millis(100), move || {
+            #[cfg(feature = "obs-proof")]
+            if isolated_clock_enabled {
+                let mut reports: Vec<_> =
+                    webrtc_sys::webrtc::ffi::diagnostic_incoming_clock_reports()
+                        .into_iter()
+                        .map(|r| crate::sender_clock::SenderReport {
+                            ssrc: r.ssrc,
+                            ntp_seconds: r.ntp_seconds,
+                            ntp_fraction: r.ntp_fraction,
+                            rtp_timestamp: r.rtp_timestamp,
+                            observed_us: r.observed_us,
+                        })
+                        .collect();
+                reports.sort_by_key(|r| r.observed_us);
+                return Ok(TimingSnapshot::Prepared(reports));
+            }
             let value: serde_json::Value =
                 serde_json::from_str(&webrtc_sys::webrtc::ffi::diagnostic_rtcp_exchange_report())
                     .map_err(|e| e.to_string())?;
-            #[cfg(feature = "obs-proof")]
-            if isolated_clock_enabled {
-                return Ok(TimingSnapshot::Prepared(
-                    crate::sender_clock::incoming_reports(&value),
-                ));
-            }
             Ok(TimingSnapshot::Raw(value))
         });
     let mut loop_timing = crate::loop_timing::Timings::default();
@@ -1291,6 +1301,15 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         &receiver_stats,
         audio_sys::ffi::diagnostic_webrtc_time_us(),
     );
+    let timing_report_status = report_worker.report();
+    #[cfg(feature = "obs-proof")]
+    let timing_report_status = {
+        let mut timing_report_status = timing_report_status;
+        timing_report_status["typed_incoming_clock_snapshot"] = json!(isolated_clock_enabled);
+        timing_report_status["clock_snapshot_capacity"] = json!(16 * 64);
+        timing_report_status["snapshot_retains_native_owner"] = json!(false);
+        timing_report_status
+    };
     #[cfg(feature = "obs-proof")]
     let worker_lifecycle = json!({"alive_after_retirement":AUDIO_WORKERS_ALIVE.load(Ordering::Acquire),
         "peak_alive":AUDIO_WORKERS_PEAK.load(Ordering::Relaxed),"scope":"application OBS audio ingest workers only","pipeline_probe_lifecycle":crate::obs_proof::pipeline_probe_lifecycle()});
@@ -1309,7 +1328,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         report["transport_audio_silence_tail_requested"] = json!(audio_transition_tail);
         report["same_authority_reconnect_output_preserved"] = json!(preserve_reconnect_output);
         report["loop_timing"] = loop_timing.report();
-        report["timing_report_worker_after_shutdown"] = report_worker.report();
+        report["timing_report_worker_after_shutdown"] = timing_report_status.clone();
         report["binding_discovery_after_shutdown"] = binding_discovery.report();
         report["binding_refresh_interval_ms"] = json!(100);
         report["audio_presentation_queue"] = json!(scheduled_audio.as_ref().map(|w| w.report()));
@@ -1348,7 +1367,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     }
     let report = json!({"generated_reconnect_requested":generated_reconnect,"generated_reconnect_count":if generated_reconnect.is_some(){generated_reconnect_count}else{0},"numbered_generated_markers":std::env::var("LIVEKIT_LAB_MARKER_IDS").as_deref()==Ok("1"),"audio_master_playback":audio_master_playback,"schema_version":1,"livekit":"0.9.4","topology":if cloud_test {"generated browser guests to native host through LiveKit Cloud"} else {"local browser guests to native host through loopback SFU"},
         "signaling_url":url,"publisher_error":publisher_error,
-        "receiver_loop_timing":loop_timing.report(),"timing_report_worker_after_shutdown":report_worker.report(),
+        "receiver_loop_timing":loop_timing.report(),"timing_report_worker_after_shutdown":timing_report_status,
         "capture_publication":capture_evidence.lock().unwrap_or_else(|p|p.into_inner()).clone(),
         "capture_publisher_owner":{"named_thread":true,"joined":publisher.thread.is_none(),"shutdown_ms":publisher_join_ms},
         "sync_streams_requested":std::env::var("LIVEKIT_LAB_SYNC_STREAMS").as_deref() == Ok("1"),

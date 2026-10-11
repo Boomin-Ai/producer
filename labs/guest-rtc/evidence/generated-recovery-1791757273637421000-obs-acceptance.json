@@ -1,0 +1,62 @@
+{
+  "local_obs_acceptance_passed": false,
+  "failure_reasons": [
+    "epoch 14567508723: audio readiness exceeded budget including preceding resets",
+    "epoch 14567508723: video readiness exceeded budget including preceding resets",
+    "epoch 14580347170: audio readiness exceeded budget including preceding resets",
+    "epoch 14580347170: video readiness exceeded budget including preceding resets",
+    "numbered recording marker gate failed",
+    "missing marker labels within observed recording span"
+  ],
+  "local_delivery_worker_gate_passed": true,
+  "delivery_worker_failure_reasons": [],
+  "local_readiness_gate_passed": false,
+  "readiness_failure_reasons": [
+    "epoch 14567508723: audio readiness exceeded budget including preceding resets",
+    "epoch 14567508723: video readiness exceeded budget including preceding resets",
+    "epoch 14580347170: audio readiness exceeded budget including preceding resets",
+    "epoch 14580347170: video readiness exceeded budget including preceding resets"
+  ],
+  "binding_epochs": [
+    {
+      "binding_since_us": 14567508723,
+      "recovery_started_us": 14567508011,
+      "superseded_binding_epochs": [
+        14567508011,
+        14567508318
+      ],
+      "first_scheduled_ms": {
+        "audio": 2903.316,
+        "video": 2923.096
+      }
+    },
+    {
+      "binding_since_us": 14580347170,
+      "recovery_started_us": 14579514024,
+      "superseded_binding_epochs": [
+        14579514024,
+        14579514060,
+        14580345688
+      ],
+      "first_scheduled_ms": {
+        "audio": 9967.54,
+        "video": 9991.718
+      }
+    }
+  ],
+  "raw_binding_epoch_count": 7,
+  "superseded_binding_epochs": [
+    14567508011,
+    14567508318,
+    14579514024,
+    14579514060,
+    14580345688
+  ],
+  "unfinished_binding_epochs": [],
+  "expected_binding_epochs": 2,
+  "readiness_budget_ms": 1500,
+  "budget_scope": "prototype local recovery from earliest pending reset, not WAN service guarantee",
+  "startup_and_tail_loss_qualified": false,
+  "lip_sync_qualified": false,
+  "g1_complete": false
+}

@@ -119,6 +119,20 @@ int main() {
       incoming->Log(std::make_unique<webrtc::RtcEventRtcpPacketIncoming>(sr));
       auto state=weak.lock();
       assert(state->peers[1].sr_size==1 && state->peers[1].sr[0].rtp_timestamp==48000 && state->peers[1].sr[0].ntp_seconds==1);
+      outgoing->Log(std::make_unique<webrtc::RtcEventRtcpPacketOutgoing>(sr));
+      auto clocks=incoming_clock_snapshot();
+      assert(clocks.size()==1 && clocks[0].incoming && clocks[0].ssrc==2
+        && clocks[0].ntp_seconds==1 && clocks[0].rtp_timestamp==48000
+        && clocks[0].observed_us==state->peers[1].sr[0].observed_us);
+      {
+        std::lock_guard<std::mutex> held(state->mutex);
+        std::thread collector([] { assert(incoming_clock_snapshot().empty()); });
+        collector.join();
+      }
+      assert(state->clock_snapshot_contention.load()==1);
+      for(int n=0;n<70;++n) incoming->Log(std::make_unique<webrtc::RtcEventRtcpPacketIncoming>(sr));
+      clocks=incoming_clock_snapshot();
+      assert(clocks.size()==64 && state->peers[1].sr_overwritten==7);
       assert(state && state->peers[0].outgoing_rrtr==1 && state->peers[1].incoming_dlrr==1);
       assert(state->peers[0].xr[0].last_rr==65536 && state->peers[1].xr[0].target==1);
       const std::array<uint8_t,4> bad={0x80,207,0,15};
@@ -133,6 +147,7 @@ int main() {
       assert(rtcp_logs_alive.load()==0 && !state->peers[0].active && !state->peers[1].active);
     }
     assert(weak.expired() && rtcp_registry.expired());
+    assert(incoming_clock_snapshot().empty());
   }
   assert(rtcp_logs_created.load()==200 && rtcp_logs_destroyed.load()==200);
   const auto final_threads=thread_count(), final_fds=fd_count();

@@ -6,6 +6,7 @@
 #include <mutex>
 #include <sstream>
 #include <span>
+#include <vector>
 #include "api/rtc_event_log/rtc_event_log_factory.h"
 #include "logging/rtc_event_log/events/rtc_event_rtcp_packet_incoming.h"
 #include "logging/rtc_event_log/events/rtc_event_rtcp_packet_outgoing.h"
@@ -31,7 +32,7 @@ struct RtcpPeerObservation {
 struct RtcpProbeState {
   std::mutex mutex;
   std::array<RtcpPeerObservation,16> peers{}; size_t size = 0;
-  std::atomic<uint64_t> contention{0}, capacity_exceeded{0};
+  std::atomic<uint64_t> contention{0}, capacity_exceeded{0}, clock_snapshot_contention{0};
 };
 inline std::mutex rtcp_registry_mutex;
 inline std::weak_ptr<RtcpProbeState> rtcp_registry;
@@ -144,6 +145,25 @@ class RtcpExchangeFactory final : public webrtc::RtcEventLogFactoryInterface {
  private:
   std::shared_ptr<RtcpProbeState> state_;
 };
+// Copy only numeric incoming clock reports. No JSON work or retained state owner
+// crosses the callback lock; a busy probe yields no snapshot, not a fresh clock.
+inline std::vector<SenderReportObservation> incoming_clock_snapshot() {
+  std::shared_ptr<RtcpProbeState> state;
+  { std::lock_guard<std::mutex> lock(rtcp_registry_mutex); state=rtcp_registry.lock(); }
+  if(!state) return {};
+  std::vector<SenderReportObservation> result;
+  result.reserve(16*64);
+  std::unique_lock<std::mutex> lock(state->mutex,std::try_to_lock);
+  if(!lock.owns_lock()) { state->clock_snapshot_contention.fetch_add(1); return {}; }
+  for(size_t i=0;i<state->size;++i) {
+    const auto& peer=state->peers[i];
+    for(size_t j=0;j<peer.sr_size;++j) {
+      const auto& sr=peer.sr[(peer.sr_next+peer.sr.size()-peer.sr_size+j)%peer.sr.size()];
+      if(sr.incoming) result.push_back(sr);
+    }
+  }
+  return result;
+}
 inline std::string rtcp_exchange_report() {
   std::shared_ptr<RtcpProbeState> state;
   { std::lock_guard<std::mutex> lock(rtcp_registry_mutex); state=rtcp_registry.lock(); }
@@ -176,7 +196,8 @@ inline std::string rtcp_exchange_report() {
       }
       out << "],\"sender_report_history_overwritten\":" << p.sr_overwritten << '}';
     }
-    out << "],\"contention_dropped\":" << state->contention.load() << ",\"capacity_exceeded\":" << state->capacity_exceeded.load();
+    out << "],\"contention_dropped\":" << state->contention.load() << ",\"capacity_exceeded\":" << state->capacity_exceeded.load()
+        << ",\"clock_snapshot_contention\":" << state->clock_snapshot_contention.load();
   } else out << ']';
   out << '}'; return out.str();
 }

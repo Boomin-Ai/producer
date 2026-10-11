@@ -183,6 +183,17 @@ rust::String diagnostic_rtcp_exchange_report() {
   return rtcp_exchange_report();
 }
 
+rust::Vec<IncomingClockReport> diagnostic_incoming_clock_reports() {
+  rust::Vec<IncomingClockReport> result;
+  const auto snapshot=incoming_clock_snapshot();
+  result.reserve(snapshot.size());
+  for(const auto& sr:snapshot) {
+    result.push_back(IncomingClockReport{sr.ssrc,sr.ntp_seconds,sr.ntp_fraction,
+      sr.rtp_timestamp,sr.observed_us});
+  }
+  return result;
+}
+
 rust::Vec<DecodedAudioBlock> diagnostic_take_decoded_audio() {
   rust::Vec<DecodedAudioBlock> result;
   for (const auto& block : take_timed_pcm_blocks(webrtc::TimeMicros())) {
