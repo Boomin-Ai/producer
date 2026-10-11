@@ -5,6 +5,7 @@ mod audio_continuity;
 mod binding_discovery;
 mod capture_fixture;
 mod capture_handoff;
+mod cloud_config;
 #[cfg(any(feature = "obs-proof", test))]
 mod delivery_worker;
 mod fixture;

@@ -2212,3 +2212,93 @@ packet/decode receipt attribution before broader integration. Numeric hashes,
 source counts and drain results are indexed in
 `labs/guest-rtc/evidence/native-source-reconnect-trials.json`. No production or
 installed app changed.
+
+### Accepted-output reconnect overlap and Cloud preparation (2026-10-11)
+
+The native selected-guest playback kernel now records bounded decoded video
+labels, audio tone identities, binding epochs and original scheduling targets.
+Audio receipts distinguish decoded-but-not-admitted from accepted output. Atomic
+pulse notifications let the generated fixture inject a full reconnect immediately
+following a decoded video pulse, or following matching accepted audio/video.
+The latter verifies exact receipts and a shared binding epoch; acceptance does
+not itself establish final output submission or survival in the MP4.
+
+The delivery queue has an explicit same-authority transport retirement operation:
+it fences old producers while keeping accepted bounded output at its original
+deadlines. Revocation/source removal still resets and clears output. Two tests
+verify preserved deadlines, old-producer fencing and subsequent authority reset.
+The fixture uses preservation only during a 1500 ms interval around its own
+forced full reconnect. This timing window is **not** a production authorization
+policy. Real-room integration needs explicit host/session/participant policy
+identity and revocation handling before using preservation.
+
+Five trials are retained, including every failure:
+
+- `1791747237611470000`: one guest, decoded-video overlap, original reset:
+  failed, missing video label 8, 21 pairs, 43.333 ms p95.
+- `1791747762449473000`: one guest, decoded-video overlap, preservation:
+  passed, 22 pairs, 46.667 ms p95, no unmatched/missing labels.
+- `1791747913221754000`: three guests, three decoded-video overlaps,
+  preservation: failed, 67 pairs, 70 ms p95, three unmatched video markers.
+  All video labels survived; audio receipt diagnostics were not yet available.
+- `1791749063616456000`: one guest, accepted audio/video overlap, original
+  reset: failed, missing label 8, 21 pairs, 40 ms p95. Matching audio and video
+  were decoded and accepted before reconnect. This establishes loss downstream
+  of native admission, rather than merely source generation.
+- `1791749203787864000`: three guests, three accepted audio/video overlaps,
+  preservation: failed, 68 pairs, 66.667 ms p95. Video labels 28 and 48 have
+  no matching recorded tones despite matching accepted native audio receipts.
+  Audio output reports eight flushed and 38 late blocks; video output reports
+  six flushed and ten late frames. Exact per-marker final-drop attribution is
+  still open. The preservation candidate alone has not fixed this envelope.
+
+All five shutdown drains completed without timeout. Recording loss/sync gates
+are unchanged, and failed trials remain failed. The index
+`labs/guest-rtc/evidence/native-accepted-output-reconnect-trials.json` pins each
+numeric artifact and binary hash. Three connected guests still means only
+selected guest-1 recorded, not simultaneous all-camera compositing.
+
+Cloud compatibility preparation adds explicit generated-media-only TLS project
+URLs, uniquely owned temporary rooms, server-only CLI credentials, short-lived
+room tokens, credential stripping from Chromium/native environments and numeric
+artifact credential checks. The Cloud runner uses the provider's service without
+the local custom SFU patch and cleans up only its uniquely named room. Local
+fixtures retain their default loopback behavior. Cloud compatibility is not
+proven by this preparation, nor are actual Producer-room integration, G1,
+production rollout or Apple signing complete.
+
+Validation: 67 native tests, Clippy with warnings denied, 15 JavaScript tests,
+seven reconnect-analysis tests, two CLI-profile tests and 16 existing recording
+acceptance tests passed. No installed Producer app or production room changed.
+
+### Actual LiveKit Cloud compatibility results (2026-10-11)
+
+CLI authentication succeeded for the existing `producer-boomin` project. Its
+server credentials were loaded locally into the fixture server; no API keys or
+secrets were sent to Chromium/native media processes or numeric evidence. Both
+temporary rooms were deleted successfully. No AI agent was deployed and no
+existing room was modified.
+
+- `1791750005387283000`: one guest, 60 seconds, baseline. Cloud connection,
+  bidirectional generated media and native OBS recording worked. The recording
+  has 29 matched markers, 53.333 ms p95 alignment, no missing labels within the
+  measured span, no unmatched markers and no output late/flush drops. Full
+  acceptance **failed**: first scheduled audio/video took 2922.573/2939.761 ms
+  against the unchanged 1500 ms prototype readiness gate. The first incoming
+  timing reports arrived 2852.558 ms after the final binding reset.
+- `1791750147698169000`: three guests, 60 seconds, one forced full reconnect,
+  selected guest-1 recorded. Browser receivers recovered. The native recording
+  has 26 matched markers and 86.667 ms p95 alignment; labels 9 and 10 are missing
+  during recovery. Initial scheduling took 2903.602/2910.376 ms; reconnect
+  scheduling took 4059.690/4093.946 ms. Full acceptance **failed** for readiness,
+  numbered-marker alignment and missing labels. No disconnection loss was
+  exempted or acceptance threshold increased.
+
+The hosted service supports this prototype's room/token/media/recording path,
+while the current native scheduling path is not qualified on Cloud. The local
+SFU's custom subscriber-driven sender-report request is unavailable on this
+provider. These measurements do not establish all loss causality, platform/WAN
+capacity, production guest-room integration or G1 completion. Next resolve
+provider-compatible early clock readiness and exact accepted-output drop
+attribution before broader media integration. The hashed numeric results are in
+`labs/guest-rtc/evidence/native-livekit-cloud-compatibility-trials.json`.

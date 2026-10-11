@@ -1,0 +1,300 @@
+{
+  "missing_recorded_labels": [
+    {
+      "label": 8,
+      "source_evidence_available": true,
+      "video_missing_from_recording": false,
+      "recorded_video_unpaired": true,
+      "cause": "unresolved; source generation alone does not prove delivery",
+      "source_audio_observations": [
+        {
+          "id": 8,
+          "context_time_seconds": 16.5
+        }
+      ],
+      "source_video_observations": [
+        {
+          "id": 8,
+          "context_time_seconds": 16.504
+        }
+      ],
+      "both_generated_at_source": true,
+      "native_video_receipts": [
+        {
+          "binding_since_us": 7614703881,
+          "label": 8,
+          "received_us": 7627671017,
+          "scheduled_target_ns": 7627808037958
+        }
+      ],
+      "native_video_received": true,
+      "native_video_scheduled_by_clock": true,
+      "audio_receipt_evidence_available": false,
+      "native_audio_receipts_near_video": []
+    },
+    {
+      "label": 28,
+      "source_evidence_available": true,
+      "video_missing_from_recording": false,
+      "recorded_video_unpaired": true,
+      "cause": "unresolved; source generation alone does not prove delivery",
+      "source_audio_observations": [
+        {
+          "id": 28,
+          "context_time_seconds": 56.5
+        }
+      ],
+      "source_video_observations": [
+        {
+          "id": 28,
+          "context_time_seconds": 56.501333333333335
+        }
+      ],
+      "both_generated_at_source": true,
+      "native_video_receipts": [
+        {
+          "binding_since_us": 7627757606,
+          "label": 28,
+          "received_us": 7667669222,
+          "scheduled_target_ns": 7667804423958
+        }
+      ],
+      "native_video_received": true,
+      "native_video_scheduled_by_clock": true,
+      "audio_receipt_evidence_available": false,
+      "native_audio_receipts_near_video": []
+    },
+    {
+      "label": 48,
+      "source_evidence_available": true,
+      "video_missing_from_recording": false,
+      "recorded_video_unpaired": true,
+      "cause": "unresolved; source generation alone does not prove delivery",
+      "source_audio_observations": [
+        {
+          "id": 48,
+          "context_time_seconds": 96.5
+        }
+      ],
+      "source_video_observations": [
+        {
+          "id": 48,
+          "context_time_seconds": 96.528
+        }
+      ],
+      "both_generated_at_source": true,
+      "native_video_receipts": [
+        {
+          "binding_since_us": 7667762622,
+          "label": 48,
+          "received_us": 7707752500,
+          "scheduled_target_ns": 7707902007958
+        }
+      ],
+      "native_video_received": true,
+      "native_video_scheduled_by_clock": true,
+      "audio_receipt_evidence_available": false,
+      "native_audio_receipts_near_video": []
+    }
+  ],
+  "binding_readiness": [
+    {
+      "binding_since_us": 7614676452,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 7614701770,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 7614703881,
+      "milestones_ms": {
+        "binding_reset": 0.0,
+        "audio_bound": 13.68,
+        "bound_audio_pcm": 12.534,
+        "video_bound": 118.146,
+        "first_incoming_audio_report": 431.364,
+        "first_incoming_video_report": 431.364,
+        "video_clock_ready": 495.544,
+        "audio_clock_ready": 498.018,
+        "first_audio_scheduled": 498.018,
+        "first_video_scheduled": 520.941
+      }
+    },
+    {
+      "binding_since_us": 7627680314,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 7627680403,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 7627739860,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 7627757606,
+      "milestones_ms": {
+        "binding_reset": 0.0,
+        "video_bound": 120.497,
+        "audio_bound": 120.514,
+        "bound_audio_pcm": 118.401,
+        "first_incoming_audio_report": 475.038,
+        "first_incoming_video_report": 475.038,
+        "video_clock_ready": 571.818,
+        "audio_clock_ready": 574.39,
+        "first_audio_scheduled": 574.39,
+        "first_video_scheduled": 622.625
+      }
+    },
+    {
+      "binding_since_us": 7667678963,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 7667679033,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 7667748572,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 7667762622,
+      "milestones_ms": {
+        "binding_reset": 0.0,
+        "video_bound": 4.46,
+        "audio_bound": 114.868,
+        "bound_audio_pcm": 113.922,
+        "first_incoming_video_report": 227.267,
+        "video_clock_ready": 236.843,
+        "first_incoming_audio_report": 477.372,
+        "audio_clock_ready": 555.853,
+        "first_audio_scheduled": 555.853,
+        "first_video_scheduled": 560.851
+      }
+    },
+    {
+      "binding_since_us": 7707758646,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 7707758725,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 7707823127,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 7707838278,
+      "milestones_ms": {
+        "binding_reset": 0.0,
+        "video_bound": 9.233,
+        "audio_bound": 9.258,
+        "bound_audio_pcm": 7.537,
+        "first_incoming_video_report": 562.761,
+        "first_incoming_audio_report": 562.761,
+        "video_clock_ready": 689.967,
+        "audio_clock_ready": 689.981,
+        "first_audio_scheduled": 689.981,
+        "first_video_scheduled": 692.161
+      }
+    }
+  ],
+  "pulse_trigger_receipts_verified": true,
+  "queued_av_trigger_receipts_verified": false,
+  "unmatched_recorded_video_labels": [
+    8,
+    28,
+    48
+  ],
+  "native_reconnect_events": [
+    {
+      "at_ms": 13002,
+      "event": "reconnect_injected",
+      "input_pulse_trigger": [
+        8,
+        7627671017
+      ],
+      "mode": "full"
+    },
+    {
+      "at_ms": 13004,
+      "event": "reconnecting"
+    },
+    {
+      "at_ms": 13066,
+      "event": "reconnected"
+    },
+    {
+      "at_ms": 53002,
+      "event": "reconnect_injected",
+      "input_pulse_trigger": [
+        28,
+        7667669222
+      ],
+      "mode": "full"
+    },
+    {
+      "at_ms": 53002,
+      "event": "reconnecting"
+    },
+    {
+      "at_ms": 53093,
+      "event": "reconnected"
+    },
+    {
+      "at_ms": 93081,
+      "event": "reconnect_injected",
+      "input_pulse_trigger": [
+        48,
+        7707752500
+      ],
+      "mode": "full"
+    },
+    {
+      "at_ms": 93082,
+      "event": "reconnecting"
+    },
+    {
+      "at_ms": 93147,
+      "event": "reconnected"
+    }
+  ],
+  "source_errors": [],
+  "loss_gate_relaxed": false,
+  "transport_loss_proven": false,
+  "g1_complete": false,
+  "clock_domains": "Label identity joins only. Readiness is within each native binding monotonic epoch. Source AudioContext, lifecycle and OBS PTS are not subtracted from one another.",
+  "scope": "Selected guest-1 only. A decoded receipt proves this video label reached the playback kernel; a clock target does not prove native submission or recording. Audio receipt and final drop causality remain separate.",
+  "run": "generated-recovery-1791747913221754000",
+  "input_sha256": {
+    "generated-recovery-1791747913221754000.json": "a27ddfd84128331cea5a1b24906595fad98dc7b3867c6b996e3a1e88abd294d4",
+    "generated-recovery-1791747913221754000-browser.json": "8fb7b09a83912cf17ae7b83af2a848e48fcac40e14f112b2e379d09d4d35c66d",
+    "generated-recovery-1791747913221754000-obs-numbered.json": "6c70fb06865027a43d3a73a26e121f6dc47523d571dc0c6ec2db68e2c0035542"
+  }
+}

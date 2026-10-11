@@ -11,10 +11,11 @@ const sourcePhase=Number(process.env.LIVEKIT_LAB_SOURCE_PHASE??0);
 if(!Number.isFinite(sourcePhase)||sourcePhase<0||sourcePhase>=2)throw new Error('Invalid source phase');
 if(!/^generated-recovery-[0-9]+$/.test(name??'')||![1,3].includes(guests)||!Number.isInteger(seconds)||seconds<35||seconds>300)throw new Error('Invalid generated recovery configuration');
 let browser,child,done,log='',exited=false;const pages=[],observations=[];
+const mediaEnv={...process.env};delete mediaEnv.LIVEKIT_API_KEY;delete mediaEnv.LIVEKIT_API_SECRET;
 try {
- browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true,args:['--autoplay-policy=no-user-gesture-required','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
+ browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true,env:mediaEnv,args:['--autoplay-policy=no-user-gesture-required','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
  for(let n=1;n<=guests;n++){const page=await browser.newPage();pages.push(page);await page.goto(`http://127.0.0.1:8990/?identity=guest-${n}&recoveryProbe=1&sourcePhase=${sourcePhase}`);await page.evaluate(()=>window.startLab());await page.waitForFunction(()=>window.labState.published,undefined,{timeout:10000});}
- child=spawn(path.join(lab,'target/debug/producer-guest-rtc-lab'),['transport',path.join(lab,'runtime/native-token'),path.join(lab,`evidence/${name}.json`),String(seconds)],{cwd:lab});
+ child=spawn(path.join(lab,'target/debug/producer-guest-rtc-lab'),['transport',path.join(lab,'runtime/native-token'),path.join(lab,`evidence/${name}.json`),String(seconds)],{cwd:lab,env:mediaEnv});
  done=new Promise((resolve,reject)=>{child.on('error',reject);child.on('exit',code=>{exited=true;resolve(code);});});
  child.stdout.on('data',d=>{log+=d;process.stdout.write(d);});child.stderr.on('data',d=>{log+=d;process.stderr.write(d);});
  const began=performance.now();

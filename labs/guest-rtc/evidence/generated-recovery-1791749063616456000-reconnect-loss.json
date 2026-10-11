@@ -1,0 +1,143 @@
+{
+  "missing_recorded_labels": [
+    {
+      "label": 8,
+      "source_evidence_available": true,
+      "video_missing_from_recording": true,
+      "recorded_video_unpaired": false,
+      "cause": "unresolved; source generation alone does not prove delivery",
+      "source_audio_observations": [
+        {
+          "id": 8,
+          "context_time_seconds": 16.5
+        }
+      ],
+      "source_video_observations": [
+        {
+          "id": 8,
+          "context_time_seconds": 16.528
+        }
+      ],
+      "both_generated_at_source": true,
+      "native_video_receipts": [
+        {
+          "binding_since_us": 8766482811,
+          "label": 8,
+          "output_accepted": true,
+          "received_us": 8780068202,
+          "scheduled_target_ns": 8780219760291
+        }
+      ],
+      "native_video_received": true,
+      "native_video_scheduled_by_clock": true,
+      "audio_receipt_evidence_available": true,
+      "native_audio_receipts_near_video": [
+        {
+          "binding_since_us": 8766482811,
+          "id_mod16": 8,
+          "output_accepted": true,
+          "received_us": 8780055702,
+          "scheduled_target_ns": 8780171061291
+        }
+      ]
+    }
+  ],
+  "binding_readiness": [
+    {
+      "binding_since_us": 8766469919,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 8766482718,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 8766482811,
+      "milestones_ms": {
+        "binding_reset": 0.0,
+        "audio_bound": 119.002,
+        "video_bound": 119.009,
+        "bound_audio_pcm": 118.395,
+        "first_incoming_audio_report": 224.466,
+        "audio_clock_ready": 311.119,
+        "first_incoming_video_report": 475.197,
+        "video_clock_ready": 519.38,
+        "first_audio_scheduled": 519.383,
+        "first_video_scheduled": 546.824
+      }
+    },
+    {
+      "binding_since_us": 8780071792,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 8780071859,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 8780122095,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 8780122397,
+      "milestones_ms": {
+        "binding_reset": 0.0,
+        "video_bound": 8.313,
+        "audio_bound": 118.627,
+        "bound_audio_pcm": 118.739,
+        "first_incoming_video_report": 235.053,
+        "video_clock_ready": 240.668,
+        "first_incoming_audio_report": 485.963,
+        "audio_clock_ready": 560.731,
+        "first_audio_scheduled": 560.731,
+        "first_video_scheduled": 578.263
+      }
+    }
+  ],
+  "pulse_trigger_receipts_verified": false,
+  "queued_av_trigger_receipts_verified": true,
+  "unmatched_recorded_video_labels": [],
+  "native_reconnect_events": [
+    {
+      "at_ms": 13601,
+      "event": "reconnect_injected",
+      "input_pulse_trigger": null,
+      "mode": "full",
+      "queued_av_pulse_trigger": [
+        8,
+        8780068202,
+        8780055702
+      ]
+    },
+    {
+      "at_ms": 13601,
+      "event": "reconnecting"
+    },
+    {
+      "at_ms": 13642,
+      "event": "reconnected"
+    }
+  ],
+  "source_errors": [],
+  "loss_gate_relaxed": false,
+  "transport_loss_proven": false,
+  "g1_complete": false,
+  "clock_domains": "Label identity joins only. Readiness is within each native binding monotonic epoch. Source AudioContext, lifecycle and OBS PTS are not subtracted from one another.",
+  "scope": "Selected guest-1 only. A decoded receipt proves this video label reached the playback kernel; a clock target does not prove native submission or recording. Audio receipt and final drop causality remain separate.",
+  "run": "generated-recovery-1791749063616456000",
+  "input_sha256": {
+    "generated-recovery-1791749063616456000.json": "af5b3632bdb41796ff25137bef11ca61a4546bb1e18f1ff445e5e65a872d9636",
+    "generated-recovery-1791749063616456000-browser.json": "083fc269146707792f3e024f554eb3cfc3ef3667b4ad24d22e154193d1b6807d",
+    "generated-recovery-1791749063616456000-obs-numbered.json": "72e7bda039d20cf4c06dac386b6e73b81f22c88ae3b9acb77c0b08803ec28261"
+  }
+}

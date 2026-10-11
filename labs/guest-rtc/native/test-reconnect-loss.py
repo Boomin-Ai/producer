@@ -28,6 +28,43 @@ class EvidenceTests(unittest.TestCase):
         result = loss.analyze({'audio_master_playback': {'startup_milestones': events}}, {}, {})
         self.assertEqual([r['milestones_ms']['audio_bound'] for r in result['binding_readiness']], [5, 8])
 
+    def test_decoded_receipt_and_clock_admission_are_separate(self):
+        native = {'audio_master_playback': {'decoded_video_marker_receipts': [
+            {'label': 7, 'scheduled_target_ns': None}, {'label': 23, 'scheduled_target_ns': 4000}]}}
+        result = loss.analyze(native, {}, {'missing_video_labels_within_observed_span': [7, 23, 24]})
+        rows = result['missing_recorded_labels']
+        self.assertTrue(rows[0]['native_video_received'])
+        self.assertFalse(rows[0]['native_video_scheduled_by_clock'])
+        self.assertTrue(rows[1]['native_video_scheduled_by_clock'])
+        self.assertFalse(rows[2]['native_video_received'])
+        self.assertFalse(result['transport_loss_proven'])
+
+    def test_pulse_trigger_must_match_exact_decoded_label_and_time(self):
+        native = {'audio_master_playback': {'decoded_video_marker_receipts': [{'label': 7, 'received_us': 200}]},
+                  'lifecycle': [{'event': 'reconnect_injected', 'input_pulse_trigger': [7, 200]}]}
+        self.assertTrue(loss.analyze(native, {}, {})['pulse_trigger_receipts_verified'])
+        native['lifecycle'][0]['input_pulse_trigger'] = [7, 201]
+        self.assertFalse(loss.analyze(native, {}, {})['pulse_trigger_receipts_verified'])
+
+    def test_queued_av_trigger_requires_acceptance_same_epoch_and_fresh_label_pair(self):
+        video={'label':23,'received_us':200000,'binding_since_us':100,'output_accepted':True}
+        audio={'id_mod16':7,'received_us':220000,'binding_since_us':100,'output_accepted':True}
+        native={'audio_master_playback':{'decoded_video_marker_receipts':[video],'decoded_audio_marker_receipts':[audio]},
+                'lifecycle':[{'event':'reconnect_injected','queued_av_pulse_trigger':[23,200000,220000]}]}
+        self.assertTrue(loss.analyze(native,{}, {})['queued_av_trigger_receipts_verified'])
+        for key,value in [('binding_since_us',101),('output_accepted',False),('id_mod16',8)]:
+            old=audio[key];audio[key]=value
+            self.assertFalse(loss.analyze(native,{}, {})['queued_av_trigger_receipts_verified'])
+            audio[key]=old
+
+    def test_unpaired_recorded_video_is_traced_without_being_called_missing(self):
+        result=loss.analyze({}, {}, {'video_markers':[{'id':7},{'id':8}],'pairs':[{'id':7}]})
+        row=result['missing_recorded_labels'][0]
+        self.assertEqual(row['label'],8)
+        self.assertFalse(row['video_missing_from_recording'])
+        self.assertTrue(row['recorded_video_unpaired'])
+        self.assertFalse(row['audio_receipt_evidence_available'])
+
 
 if __name__ == '__main__':
     unittest.main()

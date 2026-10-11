@@ -1,0 +1,164 @@
+{
+  "missing_recorded_labels": [
+    {
+      "label": 9,
+      "source_evidence_available": true,
+      "video_missing_from_recording": true,
+      "recorded_video_unpaired": false,
+      "cause": "unresolved; source generation alone does not prove delivery",
+      "source_audio_observations": [
+        {
+          "id": 9,
+          "context_time_seconds": 18.5
+        }
+      ],
+      "source_video_observations": [
+        {
+          "id": 9,
+          "context_time_seconds": 18.533333333333335
+        }
+      ],
+      "both_generated_at_source": true,
+      "native_video_receipts": [],
+      "native_video_received": false,
+      "native_video_scheduled_by_clock": false,
+      "audio_receipt_evidence_available": true,
+      "native_audio_receipts_near_video": []
+    },
+    {
+      "label": 10,
+      "source_evidence_available": true,
+      "video_missing_from_recording": true,
+      "recorded_video_unpaired": false,
+      "cause": "unresolved; source generation alone does not prove delivery",
+      "source_audio_observations": [
+        {
+          "id": 10,
+          "context_time_seconds": 20.5
+        }
+      ],
+      "source_video_observations": [
+        {
+          "id": 10,
+          "context_time_seconds": 20.512
+        }
+      ],
+      "both_generated_at_source": true,
+      "native_video_receipts": [
+        {
+          "binding_since_us": 9865999620,
+          "label": 10,
+          "output_accepted": false,
+          "received_us": 9867723549,
+          "scheduled_target_ns": null
+        }
+      ],
+      "native_video_received": true,
+      "native_video_scheduled_by_clock": false,
+      "audio_receipt_evidence_available": true,
+      "native_audio_receipts_near_video": [
+        {
+          "binding_since_us": 9865999620,
+          "id_mod16": 10,
+          "output_accepted": false,
+          "received_us": 9867758464,
+          "scheduled_target_ns": null
+        }
+      ]
+    }
+  ],
+  "binding_readiness": [
+    {
+      "binding_since_us": 9853119887,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 9853120634,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 9853121038,
+      "milestones_ms": {
+        "binding_reset": 0.0,
+        "audio_bound": 11.039,
+        "bound_audio_pcm": 10.254,
+        "video_bound": 111.127,
+        "first_incoming_video_report": 2896.606,
+        "first_incoming_audio_report": 2896.606,
+        "video_clock_ready": 2902.447,
+        "audio_clock_ready": 2902.451,
+        "first_audio_scheduled": 2902.451,
+        "first_video_scheduled": 2909.225
+      }
+    },
+    {
+      "binding_since_us": 9865125349,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 9865125441,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 9865998974,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 9865999620,
+      "milestones_ms": {
+        "binding_reset": 0.0,
+        "audio_bound": 112.777,
+        "bound_audio_pcm": 111.626,
+        "video_bound": 222.892,
+        "first_incoming_video_report": 3124.916,
+        "first_incoming_audio_report": 3124.916,
+        "video_clock_ready": 3175.84,
+        "audio_clock_ready": 3185.419,
+        "first_audio_scheduled": 3185.419,
+        "first_video_scheduled": 3219.675
+      }
+    }
+  ],
+  "pulse_trigger_receipts_verified": false,
+  "queued_av_trigger_receipts_verified": false,
+  "unmatched_recorded_video_labels": [],
+  "native_reconnect_events": [
+    {
+      "at_ms": 12002,
+      "event": "reconnect_injected",
+      "input_pulse_trigger": null,
+      "mode": "full",
+      "queued_av_pulse_trigger": null
+    },
+    {
+      "at_ms": 12005,
+      "event": "reconnecting"
+    },
+    {
+      "at_ms": 12947,
+      "event": "reconnected"
+    }
+  ],
+  "source_errors": [],
+  "loss_gate_relaxed": false,
+  "transport_loss_proven": false,
+  "g1_complete": false,
+  "clock_domains": "Label identity joins only. Readiness is within each native binding monotonic epoch. Source AudioContext, lifecycle and OBS PTS are not subtracted from one another.",
+  "scope": "Selected guest-1 only. A decoded receipt proves this video label reached the playback kernel; a clock target does not prove native submission or recording. Audio receipt and final drop causality remain separate.",
+  "run": "generated-recovery-1791750147698169000",
+  "input_sha256": {
+    "generated-recovery-1791750147698169000.json": "e3ad19cc274783ea135f6bffeb2f862cc747e94564b7f9b4e58671102a93231d",
+    "generated-recovery-1791750147698169000-browser.json": "daad195245deebd0a503311c76d68ff8ea68dc3a8764f0c611132f6f58c33483",
+    "generated-recovery-1791750147698169000-obs-numbered.json": "c8c5c25456b895c5f3fca9fe480d2d206e6648995ffb2406b02a3b582a3ae216"
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "local_obs_acceptance_passed": false,
+  "failure_reasons": [
+    "numbered recording marker gate failed"
+  ],
+  "local_delivery_worker_gate_passed": true,
+  "delivery_worker_failure_reasons": [],
+  "local_readiness_gate_passed": true,
+  "readiness_failure_reasons": [],
+  "binding_epochs": [
+    {
+      "binding_since_us": 7614703881,
+      "recovery_started_us": 7614676452,
+      "superseded_binding_epochs": [
+        7614676452,
+        7614701770
+      ],
+      "first_scheduled_ms": {
+        "audio": 525.447,
+        "video": 548.37
+      }
+    },
+    {
+      "binding_since_us": 7627757606,
+      "recovery_started_us": 7627680314,
+      "superseded_binding_epochs": [
+        7627680314,
+        7627680403,
+        7627739860
+      ],
+      "first_scheduled_ms": {
+        "audio": 651.682,
+        "video": 699.917
+      }
+    },
+    {
+      "binding_since_us": 7667762622,
+      "recovery_started_us": 7667678963,
+      "superseded_binding_epochs": [
+        7667678963,
+        7667679033,
+        7667748572
+      ],
+      "first_scheduled_ms": {
+        "audio": 639.512,
+        "video": 644.51
+      }
+    },
+    {
+      "binding_since_us": 7707838278,
+      "recovery_started_us": 7707758646,
+      "superseded_binding_epochs": [
+        7707758646,
+        7707758725,
+        7707823127
+      ],
+      "first_scheduled_ms": {
+        "audio": 769.613,
+        "video": 771.793
+      }
+    }
+  ],
+  "raw_binding_epoch_count": 15,
+  "superseded_binding_epochs": [
+    7614676452,
+    7614701770,
+    7627680314,
+    7627680403,
+    7627739860,
+    7667678963,
+    7667679033,
+    7667748572,
+    7707758646,
+    7707758725,
+    7707823127
+  ],
+  "unfinished_binding_epochs": [],
+  "expected_binding_epochs": 4,
+  "readiness_budget_ms": 1500,
+  "budget_scope": "prototype local recovery from earliest pending reset, not WAN service guarantee",
+  "startup_and_tail_loss_qualified": false,
+  "lip_sync_qualified": false,
+  "g1_complete": false
+}

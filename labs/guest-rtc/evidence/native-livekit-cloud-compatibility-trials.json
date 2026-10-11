@@ -1,0 +1,201 @@
+{
+  "g1_complete": false,
+  "production_deployed": false,
+  "provider": "LiveKit Cloud",
+  "custom_sfu_patch_available": false,
+  "credentials_in_numeric_evidence": false,
+  "credential_scan_passed": true,
+  "room_cleanup_succeeded": true,
+  "all_guest_compositing_qualified": false,
+  "loss_gate_relaxed": false,
+  "trials": [
+    {
+      "run": "generated-recovery-1791750005387283000",
+      "conditions": {
+        "run": "generated-recovery-1791750005387283000",
+        "provider": "LiveKit Cloud",
+        "project_url": "wss://producer-boomin-6h2iz2sq.livekit.cloud",
+        "room": "producer-g1-cloud-1791750005387283000",
+        "guests": 1,
+        "seconds": 60,
+        "reconnect": "none",
+        "reconnect_count": 1,
+        "native_sha256": "644c30729655ce8a6cf76c2dff8c27a1e12728a8a0d40b494c1c99af9815792e",
+        "custom_sfu_patch_available": false,
+        "hardware_capture_used": false,
+        "speaker_playback_used": false,
+        "media_scope": "generated selected guest-1 only",
+        "status": "completed",
+        "g1_complete": false,
+        "production_deployed": false,
+        "fixture_exit_code": 0,
+        "local_obs_acceptance_passed": false,
+        "recording_sha256": "0a30224a2ad4a944758454b54c00ec6af4f19304f325d4d497b900c159a29a4c",
+        "owned_room_delete_exit_code": 0
+      },
+      "acceptance": {
+        "local_obs_acceptance_passed": false,
+        "failure_reasons": [
+          "epoch 9712895252: audio readiness exceeded budget including preceding resets",
+          "epoch 9712895252: video readiness exceeded budget including preceding resets"
+        ],
+        "local_delivery_worker_gate_passed": true,
+        "delivery_worker_failure_reasons": [],
+        "local_readiness_gate_passed": false,
+        "readiness_failure_reasons": [
+          "epoch 9712895252: audio readiness exceeded budget including preceding resets",
+          "epoch 9712895252: video readiness exceeded budget including preceding resets"
+        ],
+        "binding_epochs": [
+          {
+            "binding_since_us": 9712895252,
+            "recovery_started_us": 9712892991,
+            "superseded_binding_epochs": [
+              9712892991,
+              9712893155
+            ],
+            "first_scheduled_ms": {
+              "audio": 2922.573,
+              "video": 2939.761
+            }
+          }
+        ],
+        "raw_binding_epoch_count": 3,
+        "superseded_binding_epochs": [
+          9712892991,
+          9712893155
+        ],
+        "unfinished_binding_epochs": [],
+        "expected_binding_epochs": 1,
+        "readiness_budget_ms": 1500,
+        "budget_scope": "prototype local recovery from earliest pending reset, not WAN service guarantee",
+        "startup_and_tail_loss_qualified": false,
+        "lip_sync_qualified": false,
+        "g1_complete": false
+      },
+      "recording_markers": {
+        "absolute_p95_ms": 53.33333333332848,
+        "missing_video_labels_within_observed_span": [],
+        "unmatched_audio": 0,
+        "unmatched_video": 0,
+        "matched_markers": 29
+      },
+      "input_sha256": {
+        "generated-recovery-1791750005387283000-browser.json": "dcdbddefbf610d95157ea26f8b749bbb81bae641f77ab684dafe94b933ed5f40",
+        "generated-recovery-1791750005387283000-conditions.json": "8ed7c0b89f2f8223dd914b8d31c637b1d93d06b08467056e1f2634d0c89def5d",
+        "generated-recovery-1791750005387283000-obs-acceptance.json": "d963323204bb233f7d5c81a1970dae3c5b51c97c50a1e309f1f4c61b6ba41f39",
+        "generated-recovery-1791750005387283000-obs-markers.json": "14e4b8ee1710ea224e04843a8733ccc1e27c95b11cdc9ba0a7aa1ff16a23af43",
+        "generated-recovery-1791750005387283000-obs-numbered.json": "36c020c9c1e09bd3192e21d65e416fd30584a9c39074fa3d9434598c769b3641",
+        "generated-recovery-1791750005387283000-reconnect-loss.json": "1d9787cf03a10107021ad4b69506a21d81330a899664a042a5a3f9d9232e3f0b",
+        "generated-recovery-1791750005387283000.json": "68332924816cfdc81cb668303a0661436fea7ebf62bdb462023330e94c54835b"
+      }
+    },
+    {
+      "run": "generated-recovery-1791750147698169000",
+      "conditions": {
+        "run": "generated-recovery-1791750147698169000",
+        "provider": "LiveKit Cloud",
+        "project_url": "wss://producer-boomin-6h2iz2sq.livekit.cloud",
+        "room": "producer-g1-cloud-1791750147698169000",
+        "guests": 3,
+        "seconds": 60,
+        "reconnect": "full",
+        "reconnect_count": 1,
+        "native_sha256": "644c30729655ce8a6cf76c2dff8c27a1e12728a8a0d40b494c1c99af9815792e",
+        "custom_sfu_patch_available": false,
+        "hardware_capture_used": false,
+        "speaker_playback_used": false,
+        "media_scope": "generated selected guest-1 only",
+        "status": "completed",
+        "g1_complete": false,
+        "production_deployed": false,
+        "fixture_exit_code": 0,
+        "local_obs_acceptance_passed": false,
+        "recording_sha256": "bf77febe75416a72a183130ec51206c5e0a9aeeb90c2d4da70e7a1d77f454891",
+        "owned_room_delete_exit_code": 0
+      },
+      "acceptance": {
+        "local_obs_acceptance_passed": false,
+        "failure_reasons": [
+          "epoch 9853121038: audio readiness exceeded budget including preceding resets",
+          "epoch 9853121038: video readiness exceeded budget including preceding resets",
+          "epoch 9865999620: audio readiness exceeded budget including preceding resets",
+          "epoch 9865999620: video readiness exceeded budget including preceding resets",
+          "numbered recording marker gate failed",
+          "missing marker labels within observed recording span"
+        ],
+        "local_delivery_worker_gate_passed": true,
+        "delivery_worker_failure_reasons": [],
+        "local_readiness_gate_passed": false,
+        "readiness_failure_reasons": [
+          "epoch 9853121038: audio readiness exceeded budget including preceding resets",
+          "epoch 9853121038: video readiness exceeded budget including preceding resets",
+          "epoch 9865999620: audio readiness exceeded budget including preceding resets",
+          "epoch 9865999620: video readiness exceeded budget including preceding resets"
+        ],
+        "binding_epochs": [
+          {
+            "binding_since_us": 9853121038,
+            "recovery_started_us": 9853119887,
+            "superseded_binding_epochs": [
+              9853119887,
+              9853120634
+            ],
+            "first_scheduled_ms": {
+              "audio": 2903.602,
+              "video": 2910.376
+            }
+          },
+          {
+            "binding_since_us": 9865999620,
+            "recovery_started_us": 9865125349,
+            "superseded_binding_epochs": [
+              9865125349,
+              9865125441,
+              9865998974
+            ],
+            "first_scheduled_ms": {
+              "audio": 4059.69,
+              "video": 4093.946
+            }
+          }
+        ],
+        "raw_binding_epoch_count": 7,
+        "superseded_binding_epochs": [
+          9853119887,
+          9853120634,
+          9865125349,
+          9865125441,
+          9865998974
+        ],
+        "unfinished_binding_epochs": [],
+        "expected_binding_epochs": 2,
+        "readiness_budget_ms": 1500,
+        "budget_scope": "prototype local recovery from earliest pending reset, not WAN service guarantee",
+        "startup_and_tail_loss_qualified": false,
+        "lip_sync_qualified": false,
+        "g1_complete": false
+      },
+      "recording_markers": {
+        "absolute_p95_ms": 86.66666666665697,
+        "missing_video_labels_within_observed_span": [
+          9,
+          10
+        ],
+        "unmatched_audio": 0,
+        "unmatched_video": 0,
+        "matched_markers": 26
+      },
+      "input_sha256": {
+        "generated-recovery-1791750147698169000-browser.json": "daad195245deebd0a503311c76d68ff8ea68dc3a8764f0c611132f6f58c33483",
+        "generated-recovery-1791750147698169000-conditions.json": "c218f46bbb5be66245c76960a07a80417e372056bc63f5a6207b19c042bb2db8",
+        "generated-recovery-1791750147698169000-obs-acceptance.json": "0a9029e25a7c72e43889803599316eec7d0b07b8e4bcaf6ad7c71fc05182944d",
+        "generated-recovery-1791750147698169000-obs-markers.json": "86619db34a4b203a1553f0438d131a1a1a3c0e42f0cfc8b7841aa9b3c24cd6d0",
+        "generated-recovery-1791750147698169000-obs-numbered.json": "c8c5c25456b895c5f3fca9fe480d2d206e6648995ffb2406b02a3b582a3ae216",
+        "generated-recovery-1791750147698169000-reconnect-loss.json": "4d1b9234c55f37e779830a2529721ba75095aafdb7ddf8e5152aff82a6827a58",
+        "generated-recovery-1791750147698169000.json": "e3ad19cc274783ea135f6bffeb2f862cc747e94564b7f9b4e58671102a93231d"
+      }
+    }
+  ],
+  "interpretation": "Real Cloud room creation, JWT authentication, generated bidirectional media, OBS recording and cleanup work. Baseline startup exceeded the unchanged 1500ms prototype readiness gate. Three-guest full reconnect exceeded readiness, lost a recording marker and failed marker sync acceptance. Broader integration and production readiness are not established."
+}

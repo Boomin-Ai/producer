@@ -4,9 +4,13 @@ use super::Measurements;
 use crate::{delivery_worker::Producer, queue::Queue};
 use cxx::UniquePtr;
 use livekit::webrtc::native::new_video_frame_buffer;
+use livekit::webrtc::video_frame::VideoBuffer;
 use serde_json::{json, Value};
 use std::{
-    sync::{mpsc, Arc, Mutex},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        mpsc, Arc, Mutex,
+    },
     thread::{self, JoinHandle},
     time::{Duration, Instant},
 };
@@ -26,6 +30,14 @@ struct Kernel {
     began: Instant,
     recording_clock: (Instant, u64),
     qos: Option<(i32, i32, i32)>,
+    input_pulse: Arc<AtomicU64>,
+    input_markers: Vec<Value>,
+    numbered_markers: bool,
+    accepted_video_pulse: Arc<AtomicU64>,
+    accepted_audio_pulse: Arc<AtomicU64>,
+    audio_markers: Vec<Value>,
+    audio_receipt_seen: bool,
+    audio_accepted_seen: bool,
 }
 pub struct Worker {
     kernel: Arc<Mutex<Kernel>>,
@@ -33,6 +45,9 @@ pub struct Worker {
     stop: Option<mpsc::Sender<()>>,
     thread: Option<JoinHandle<()>>,
     failed: bool,
+    input_pulse: Arc<AtomicU64>,
+    accepted_video_pulse: Arc<AtomicU64>,
+    accepted_audio_pulse: Arc<AtomicU64>,
 }
 impl Worker {
     pub fn start(
@@ -43,6 +58,9 @@ impl Worker {
         queue: Arc<Queue<DecodedAudioBlock>>,
         recording_clock: (Instant, u64),
     ) -> std::io::Result<Self> {
+        let input_pulse = Arc::new(AtomicU64::new(0));
+        let accepted_video_pulse = Arc::new(AtomicU64::new(0));
+        let accepted_audio_pulse = Arc::new(AtomicU64::new(0));
         let kernel = Arc::new(Mutex::new(Kernel {
             playback: crate::presentation::SelectedPlayback::new(since),
             origins: crate::sender_clock::DecodedOrigins::default(),
@@ -58,6 +76,14 @@ impl Worker {
             began,
             recording_clock,
             qos: None,
+            input_pulse: input_pulse.clone(),
+            input_markers: Vec::with_capacity(256),
+            numbered_markers: std::env::var("LIVEKIT_LAB_MARKER_IDS").as_deref() == Ok("1"),
+            accepted_video_pulse: accepted_video_pulse.clone(),
+            accepted_audio_pulse: accepted_audio_pulse.clone(),
+            audio_markers: Vec::with_capacity(512),
+            audio_receipt_seen: false,
+            audio_accepted_seen: false,
         }));
         kernel
             .lock()
@@ -95,6 +121,9 @@ impl Worker {
             stop: Some(stop),
             thread: Some(thread),
             failed: false,
+            input_pulse,
+            accepted_video_pulse,
+            accepted_audio_pulse,
         })
     }
     pub fn clear(&self, since: i64, audio: Producer<DecodedAudioBlock>, video: Producer<Frame>) {
@@ -105,6 +134,22 @@ impl Worker {
         k.video = video;
         k.video_queue = None;
         k.measurements.video_active = false;
+        k.input_pulse.store(0, Ordering::Release);
+        k.accepted_video_pulse.store(0, Ordering::Release);
+        k.accepted_audio_pulse.store(0, Ordering::Release);
+        k.audio_receipt_seen = false;
+        k.audio_accepted_seen = false;
+    }
+    /// Numeric lab receipt, atomically published without locking the media kernel.
+    pub fn latest_input_pulse(&self) -> Option<(u8, i64)> {
+        let packed = self.input_pulse.load(Ordering::Acquire);
+        (packed != 0).then_some((packed as u8, (packed >> 8) as i64))
+    }
+    pub fn latest_queued_av_pulse(&self) -> Option<(u8, i64, i64)> {
+        match_queued_pulses(
+            self.accepted_video_pulse.load(Ordering::Acquire),
+            self.accepted_audio_pulse.load(Ordering::Acquire),
+        )
     }
     pub fn bind_audio(&self, sid: String, ssrc: u32, observed: i64) {
         let mut k = self.kernel.lock().unwrap();
@@ -133,6 +178,10 @@ impl Worker {
         let mut k = self.kernel.lock().unwrap_or_else(|p| p.into_inner());
         k.video_queue = None;
         let mut report = k.playback.report();
+        report["decoded_video_marker_receipts"] = json!(k.input_markers);
+        report["decoded_video_marker_receipt_capacity"] = json!(256);
+        report["decoded_audio_marker_receipts"] = json!(k.audio_markers);
+        report["decoded_audio_marker_receipt_capacity"] = json!(512);
         report["dedicated_clock_worker"] = json!({"active_after_shutdown":false,"worker_failed":self.failed,"poll_interval_ms":2,"timings":k.timings.report(),"qos":k.qos});
         let m = &mut k.measurements;
         measurements.video_age = std::mem::take(&mut m.video_age);
@@ -218,7 +267,17 @@ impl Kernel {
                 self.video = self.video.reset_and_renew();
                 p.audio_reanchored();
             }
-            if let Some(stamp) = stamp {
+            let pcm = &block.samples[..480 * block.channels as usize];
+            let rms =
+                (pcm.iter().map(|s| (*s as f64).powi(2)).sum::<f64>() / pcm.len() as f64).sqrt();
+            let tone = (self.numbered_markers && rms > 2000.0)
+                .then(|| audio_label(pcm, block.channels as usize))
+                .flatten();
+            if rms <= 2000.0 {
+                self.audio_receipt_seen = false;
+                self.audio_accepted_seen = false;
+            }
+            let accepted = if let Some(stamp) = stamp {
                 p.startup_note("first_audio_scheduled", now);
                 if let Some(origin) = origin {
                     p.audio_label(
@@ -230,9 +289,6 @@ impl Kernel {
                         stamp,
                     );
                 }
-                let pcm = &block.samples[..480 * block.channels as usize];
-                let rms = (pcm.iter().map(|s| (*s as f64).powi(2)).sum::<f64>() / pcm.len() as f64)
-                    .sqrt();
                 p.marker(
                     false,
                     rms > 2000.0,
@@ -241,7 +297,23 @@ impl Kernel {
                     pull,
                     timestamp(self.recording_clock, stamp),
                 );
-                self.audio.push(stamp, block);
+                self.audio.push(stamp, block)
+            } else {
+                false
+            };
+            if let Some(label) = tone {
+                if accepted && !self.audio_accepted_seen {
+                    if let Some(packed) = pack_pulse(label, now) {
+                        self.accepted_audio_pulse.store(packed, Ordering::Release);
+                    }
+                }
+                if (!self.audio_receipt_seen || (accepted && !self.audio_accepted_seen))
+                    && self.audio_markers.len() < 512
+                {
+                    self.audio_markers.push(json!({"id_mod16":label,"received_us":now,"binding_since_us":p.since_us,"output_accepted":accepted,"scheduled_target_ns":stamp.map(|s| timestamp(self.recording_clock,s))}));
+                }
+                self.audio_receipt_seen = true;
+                self.audio_accepted_seen |= accepted;
             }
         }
         self.timings.observe("decoded_audio", stage.elapsed());
@@ -275,11 +347,22 @@ impl Kernel {
                 let (luma, _, _) = buffer.data();
                 let mean = luma.iter().map(|v| *v as u64).sum::<u64>() as f64 / luma.len() as f64;
                 let rtc = audio_sys::ffi::diagnostic_webrtc_time_us();
+                let label = (self.numbered_markers && mean > 180.0 && !m.video_active)
+                    .then(|| {
+                        decode_label(luma, buffer.width(), buffer.height(), buffer.strides().0)
+                    })
+                    .flatten();
+                if let Some(label) = label {
+                    if let Some(packed) = pack_pulse(label, rtc) {
+                        self.input_pulse.store(packed, Ordering::Release);
+                    }
+                }
                 let sid = self.playback.video_binding.as_ref().unwrap().0.clone();
                 let origin = self
                     .playback
                     .video_origin(&sid, frame.value.timestamp(), rtc);
-                if let Some(stamp) = self.playback.clock.video(origin, frame.at) {
+                let target = self.playback.clock.video(origin, frame.at);
+                let accepted = if let Some(stamp) = target {
                     self.playback.startup_note("first_video_scheduled", rtc);
                     self.playback.marker(
                         true,
@@ -289,7 +372,19 @@ impl Kernel {
                         frame.at,
                         timestamp(self.recording_clock, stamp),
                     );
-                    self.video.push(stamp, frame.value);
+                    self.video.push(stamp, frame.value)
+                } else {
+                    false
+                };
+                if let Some(label) = label {
+                    if accepted {
+                        if let Some(packed) = pack_pulse(label, rtc) {
+                            self.accepted_video_pulse.store(packed, Ordering::Release);
+                        }
+                    }
+                    if self.input_markers.len() < 256 {
+                        self.input_markers.push(json!({"label":label,"received_us":rtc,"binding_since_us":self.playback.since_us,"scheduled_target_ns":target.map(|s| timestamp(self.recording_clock,s)),"output_accepted":accepted}));
+                    }
                 }
                 let active = mean > 180.0;
                 m.video_frames += 1;
@@ -306,6 +401,55 @@ impl Kernel {
     }
 }
 
+fn pack_pulse(label: u8, rtc_us: i64) -> Option<u64> {
+    let rtc = u64::try_from(rtc_us).ok()?;
+    (rtc > 0 && rtc <= (u64::MAX >> 8)).then_some((rtc << 8) | u64::from(label))
+}
+
+fn match_queued_pulses(video: u64, audio: u64) -> Option<(u8, i64, i64)> {
+    if video == 0 || audio == 0 {
+        return None;
+    }
+    let (v, a) = ((video >> 8) as i64, (audio >> 8) as i64);
+    ((video as u8) % 16 == audio as u8 && v.abs_diff(a) <= 120_000).then_some((video as u8, v, a))
+}
+
+// Generated fixture tones only. No voice inference; ten-millisecond PCM retains
+// its original timestamp and is never changed by this diagnostic.
+fn audio_label(pcm: &[i16], channels: usize) -> Option<u8> {
+    if ![1, 2].contains(&channels) || pcm.len() != 480 * channels {
+        return None;
+    }
+    let mut scores = [0.0; 16];
+    for (id, score) in scores.iter_mut().enumerate() {
+        let coefficient =
+            2.0 * (2.0 * std::f64::consts::PI * (997.0 + 128.0 * id as f64) / 48000.0).cos();
+        let (mut s1, mut s2) = (0.0, 0.0);
+        for frame in pcm.chunks_exact(channels) {
+            let s0 = f64::from(frame[0]) + coefficient * s1 - s2;
+            s2 = s1;
+            s1 = s0;
+        }
+        *score = (s1 * s1 + s2 * s2 - coefficient * s1 * s2).max(0.0);
+    }
+    let mut ranked: Vec<_> = scores.iter().enumerate().collect();
+    ranked.sort_by(|a, b| b.1.total_cmp(a.1));
+    (*ranked[0].1 > 0.0 && *ranked[0].1 > 2.0 * ranked[1].1).then_some(ranked[0].0 as u8)
+}
+
+fn decode_label(luma: &[u8], width: u32, height: u32, stride: u32) -> Option<u8> {
+    if width != 320 || height != 180 || stride < width {
+        return None;
+    }
+    let mut label = 0;
+    for bit in 0..8 {
+        if *luma.get(8 * stride as usize + bit * 40 + 20)? > 180 {
+            label |= 1 << bit;
+        }
+    }
+    Some(label)
+}
+
 fn timestamp(base: (Instant, u64), at: Instant) -> u64 {
     base.1 + at.saturating_duration_since(base.0).as_nanos() as u64
 }
@@ -314,6 +458,65 @@ fn timestamp(base: (Instant, u64), at: Instant) -> u64 {
 mod tests {
     use super::*;
     use crate::{delivery_worker::Deadline, queue::Captured};
+    #[test]
+    fn marker_receipt_label_honors_stride_and_rejects_invalid_buffers() {
+        let mut luma = vec![16; 336 * 180];
+        for bit in [0, 2, 7] {
+            luma[8 * 336 + bit * 40 + 20] = 235;
+        }
+        assert_eq!(decode_label(&luma, 320, 180, 336), Some(133));
+        assert_eq!(decode_label(&luma, 640, 180, 336), None);
+        assert_eq!(decode_label(&luma[..20], 320, 180, 336), None);
+        assert_eq!(decode_label(&luma, 320, 180, 319), None);
+    }
+    #[test]
+    fn pulse_receipt_packing_is_coherent_and_rejects_invalid_time() {
+        assert_eq!(
+            pack_pulse(133, 9_000_000).map(|p| (p as u8, (p >> 8) as i64)),
+            Some((133, 9_000_000))
+        );
+        assert_eq!(pack_pulse(0, 0), None);
+        assert_eq!(pack_pulse(0, -1), None);
+        assert_eq!(pack_pulse(0, i64::MAX), None);
+    }
+    #[test]
+    fn queued_pulse_pairs_reject_other_labels_and_old_cycles() {
+        let v = pack_pulse(23, 1_000_000).unwrap();
+        assert_eq!(
+            match_queued_pulses(v, pack_pulse(7, 1_080_000).unwrap()),
+            Some((23, 1_000_000, 1_080_000))
+        );
+        assert_eq!(
+            match_queued_pulses(v, pack_pulse(8, 1_080_000).unwrap()),
+            None
+        );
+        assert_eq!(
+            match_queued_pulses(v, pack_pulse(7, 33_000_000).unwrap()),
+            None
+        );
+        assert_eq!(match_queued_pulses(v, 0), None);
+    }
+    #[test]
+    fn generated_audio_labels_are_exact_and_do_not_modify_pcm() {
+        for id in 0..16 {
+            let pcm: Vec<i16> = (0..480)
+                .map(|n| {
+                    (12000.0
+                        * (2.0 * std::f64::consts::PI * (997.0 + 128.0 * id as f64) * n as f64
+                            / 48000.0)
+                            .sin()) as i16
+                })
+                .collect();
+            let original = pcm.clone();
+            assert_eq!(audio_label(&pcm, 1), Some(id));
+            assert_eq!(pcm, original);
+            let stereo: Vec<i16> = pcm.iter().flat_map(|n| [*n, *n]).collect();
+            assert_eq!(audio_label(&stereo, 2), Some(id));
+        }
+        assert_eq!(audio_label(&[0; 480], 1), None);
+        assert_eq!(audio_label(&[0; 12], 1), None);
+        assert_eq!(audio_label(&[0; 480], 0), None);
+    }
     #[test]
     fn processing_continues_without_room_polling_and_releases_queues_over_100_cycles() {
         for _ in 0..100 {

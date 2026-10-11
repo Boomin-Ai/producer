@@ -447,3 +447,27 @@ observation offsets. Paint/analyser delay remains in those offsets, so this
 is transport recovery evidence, not native OBS synchronization qualification.
 The generated runner strips all inherited lab flags; physical capture is rejected
 by both the runner and the native generated-reconnect preflight.
+
+### Explicit LiveKit Cloud compatibility fixture
+
+Authenticate the existing project with `lk cloud auth`. The credentials stay in
+local CLI configuration; do not paste secrets into a command or chat. Build the
+native lab with `obs-proof physical-aec`, then run:
+
+```sh
+python3 native/run-cloud-generated-recovery.py --project producer-boomin --guests 1 --seconds 60 --require-obs-gates
+python3 native/run-cloud-generated-recovery.py --project producer-boomin --guests 3 --seconds 60 --reconnect full --require-obs-gates
+```
+
+This publishes generated media to a uniquely named temporary Cloud room,
+records selected guest-1 through native OBS, applies the existing strict gates,
+and deletes only that fixture room. It uses the actual provider, without local
+SFU patches. It captures no hardware camera/microphone and plays no speakers.
+API credentials stay in the local fixture server; browser/native media processes
+receive room tokens. Numeric evidence is scanned for credential leakage. Private
+runtime logs/media remain ignored by Git.
+
+Current Cloud baseline and three-guest reconnect results fail acceptance for
+startup/recovery timing; the latter also fails recording markers. See
+`evidence/native-livekit-cloud-compatibility-trials.json`. This is not an actual
+Producer room integration or production rollout.

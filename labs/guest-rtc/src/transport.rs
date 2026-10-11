@@ -569,22 +569,46 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         bail!("Generated reconnect count must be 1..3");
     }
     let generated_reconnect = std::env::var("LIVEKIT_LAB_GENERATED_RECONNECT").ok();
+    let reconnect_on_input_pulse =
+        std::env::var("LIVEKIT_LAB_RECONNECT_ON_INPUT_PULSE").as_deref() == Ok("1");
+    let reconnect_on_queued_pulse =
+        std::env::var("LIVEKIT_LAB_RECONNECT_ON_QUEUED_PULSE").as_deref() == Ok("1");
+    let preserve_reconnect_output =
+        std::env::var("LIVEKIT_LAB_PRESERVE_RECONNECT_OUTPUT").as_deref() == Ok("1");
+    if preserve_reconnect_output
+        && (generated_reconnect.as_deref() != Some("full") || !cfg!(feature = "obs-proof"))
+    {
+        bail!("Preserved output is restricted to the fixed-authority generated full reconnect fixture");
+    }
+    if (reconnect_on_input_pulse || reconnect_on_queued_pulse)
+        && (generated_reconnect.is_none() || !cfg!(feature = "obs-proof"))
+    {
+        bail!("Pulse-overlap reconnect requires generated reconnect and OBS playback");
+    }
     if let Some(mode) = generated_reconnect.as_deref() {
         if physical_capture_enabled() || !["signal", "full"].contains(&mode) {
             bail!("Generated reconnect requires generated capture and signal|full mode");
         }
     }
     let token = std::fs::read_to_string(token_path)
-        .context("Read loopback-only token file; start web/server.mjs first")?;
+        .context("Read fixture token file; start web/server.mjs first")?;
     let url = std::env::var("LIVEKIT_LAB_URL").unwrap_or_else(|_| "ws://127.0.0.1:7880".into());
+    let cloud_test = std::env::var("LIVEKIT_LAB_CLOUD_TEST").as_deref() == Ok("1");
+    if cloud_test
+        && (physical_capture_enabled()
+            || std::env::var("LIVEKIT_LAB_PHYSICAL_CAMERA").as_deref() == Ok("1"))
+    {
+        bail!("Cloud compatibility fixture is generated-media only");
+    }
     if ![
         "ws://127.0.0.1:7880",
         "ws://127.0.0.1:7885",
         "wss://localhost:7884",
     ]
     .contains(&url.as_str())
+        && !crate::cloud_config::allowed_url(&url, cloud_test)
     {
-        bail!("This fixture only connects to its loopback SFU");
+        bail!("Fixture URL must be loopback or an explicitly enabled LiveKit Cloud project");
     }
     if physical_capture_enabled() {
         #[cfg(not(feature = "physical-aec"))]
@@ -742,6 +766,13 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         None
     };
     #[cfg(feature = "obs-proof")]
+    if (reconnect_on_input_pulse || reconnect_on_queued_pulse)
+        && (isolated_playback.is_none()
+            || std::env::var("LIVEKIT_LAB_MARKER_IDS").as_deref() != Ok("1"))
+    {
+        bail!("Pulse-overlap reconnect requires isolated numbered-marker playback");
+    }
+    #[cfg(feature = "obs-proof")]
     let mut isolated_reports = None;
     #[cfg(feature = "obs-proof")]
     let mut scheduled_output_drain = None;
@@ -766,6 +797,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         });
     let mut loop_timing = crate::loop_timing::Timings::default();
     let mut reconnect_injected = 0usize;
+    #[cfg(feature = "obs-proof")]
+    let mut transport_recovery_until: Option<Instant> = None;
     loop {
         tokio::select! {
             event = events.recv() => {
@@ -780,8 +813,9 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                             playback.clear(audio_sys::ffi::diagnostic_webrtc_time_us());
                             next_binding_refresh=Instant::now();
                             binding_discovery.invalidate();
-                            if let Some(worker)=&scheduled_audio {worker.reset(); audio_producer=Some(worker.producer());}
-                            if let Some(worker)=&scheduled_video {worker.reset(); video_producer=Some(worker.producer());}
+                            let preserve = preserve_reconnect_output && transport_recovery_until.is_some_and(|until| Instant::now()<until);
+                            if let Some(worker)=&scheduled_audio {if preserve {worker.retire_preserving_queued();} else {worker.reset();} audio_producer=Some(worker.producer());}
+                            if let Some(worker)=&scheduled_video {if preserve {worker.retire_preserving_queued();} else {worker.reset();} video_producer=Some(worker.producer());}
                             if let Some(worker)=&isolated_playback {
                                 worker.clear(playback.since_us,audio_producer.as_ref().unwrap().clone(),video_producer.as_ref().unwrap().clone());
                             }
@@ -813,8 +847,9 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                             playback.clear(audio_sys::ffi::diagnostic_webrtc_time_us());
                             next_binding_refresh=Instant::now();
                             binding_discovery.invalidate();
-                            if let Some(worker)=&scheduled_audio {worker.reset(); audio_producer=Some(worker.producer());}
-                            if let Some(worker)=&scheduled_video {worker.reset(); video_producer=Some(worker.producer());}
+                            let preserve = preserve_reconnect_output && transport_recovery_until.is_some_and(|until| Instant::now()<until);
+                            if let Some(worker)=&scheduled_audio {if preserve {worker.retire_preserving_queued();} else {worker.reset();} audio_producer=Some(worker.producer());}
+                            if let Some(worker)=&scheduled_video {if preserve {worker.retire_preserving_queued();} else {worker.reset();} video_producer=Some(worker.producer());}
                             if let Some(worker)=&isolated_playback {
                                 worker.clear(playback.since_us,audio_producer.as_ref().unwrap().clone(),video_producer.as_ref().unwrap().clone());
                             }
@@ -867,7 +902,23 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                 if elapsed >= seconds as f64 { break; }
                 let reconnect_limit = if generated_reconnect.is_some() { generated_reconnect_count } else { 1 };
                 let next_reconnect_at = if generated_reconnect.is_some() { 12.0 + 40.0 * reconnect_injected as f64 } else { 5.0 };
+                #[cfg(feature = "obs-proof")]
+                let input_pulse = isolated_playback.as_ref().and_then(|worker| worker.latest_input_pulse()).filter(|(_,at)| {
+                    let age=audio_sys::ffi::diagnostic_webrtc_time_us().saturating_sub(*at);
+                    (0..=20_000).contains(&age)
+                });
+                #[cfg(not(feature = "obs-proof"))]
+                let input_pulse: Option<(u8,i64)> = None;
+                #[cfg(feature = "obs-proof")]
+                let queued_pulse = isolated_playback.as_ref().and_then(|worker| worker.latest_queued_av_pulse()).filter(|(_,v,a)| {
+                    let age=audio_sys::ffi::diagnostic_webrtc_time_us().saturating_sub((*v).max(*a));
+                    (0..=20_000).contains(&age)
+                });
+                #[cfg(not(feature = "obs-proof"))]
+                let queued_pulse: Option<(u8,i64,i64)> = None;
                 if reconnect_injected < reconnect_limit && elapsed >= next_reconnect_at
+                    && (!reconnect_on_input_pulse || input_pulse.is_some())
+                    && (!reconnect_on_queued_pulse || queued_pulse.is_some())
                     && (physical_capture_enabled() || generated_reconnect.is_some()) {
                     let requested = generated_reconnect.clone().unwrap_or_else(||
                         std::env::var("LIVEKIT_LAB_MONITOR_RECONNECT").unwrap_or_default());
@@ -878,9 +929,11 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                     };
                     if let Some(scenario)=scenario {
                         reconnect_injected += 1;
+                        #[cfg(feature = "obs-proof")]
+                        if preserve_reconnect_output {transport_recovery_until=Some(Instant::now()+Duration::from_millis(1500));}
                         // Timeout bounds the fixture control call, not reconnection itself.
                         tokio::time::timeout(Duration::from_secs(2),room.simulate_scenario(scenario)).await??;
-                        lifecycle.push(json!({"event":"reconnect_injected","mode":requested,"at_ms":began.elapsed().as_millis()}));
+                        lifecycle.push(json!({"event":"reconnect_injected","mode":requested,"at_ms":began.elapsed().as_millis(),"input_pulse_trigger":if reconnect_on_input_pulse {input_pulse}else{None},"queued_av_pulse_trigger":if reconnect_on_queued_pulse {queued_pulse}else{None}}));
                     }
                 }
                 if physical_capture_enabled() && publisher.thread.as_ref().is_some_and(|thread|thread.is_finished()) {
@@ -1239,6 +1292,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         report["scheduled_output_drain_required"] = json!(scheduled_handoff);
         report["scheduled_output_drain"] = json!(scheduled_output_drain);
         report["scheduled_handoff"] = json!(scheduled_handoff);
+        report["same_authority_reconnect_output_preserved"] = json!(preserve_reconnect_output);
         report["loop_timing"] = loop_timing.report();
         report["timing_report_worker_after_shutdown"] = report_worker.report();
         report["binding_discovery_after_shutdown"] = binding_discovery.report();
@@ -1271,7 +1325,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     {
         decoded_pcm_origin_handoff["obs_connected"] = json!(false);
     }
-    let report = json!({"generated_reconnect_requested":generated_reconnect,"generated_reconnect_count":if generated_reconnect.is_some(){generated_reconnect_count}else{0},"numbered_generated_markers":std::env::var("LIVEKIT_LAB_MARKER_IDS").as_deref()==Ok("1"),"audio_master_playback":audio_master_playback,"schema_version":1,"livekit":"0.9.4","topology":"local browser guests to native host through loopback SFU",
+    let report = json!({"generated_reconnect_requested":generated_reconnect,"generated_reconnect_count":if generated_reconnect.is_some(){generated_reconnect_count}else{0},"numbered_generated_markers":std::env::var("LIVEKIT_LAB_MARKER_IDS").as_deref()==Ok("1"),"audio_master_playback":audio_master_playback,"schema_version":1,"livekit":"0.9.4","topology":if cloud_test {"generated browser guests to native host through LiveKit Cloud"} else {"local browser guests to native host through loopback SFU"},
         "signaling_url":url,"publisher_error":publisher_error,
         "receiver_loop_timing":loop_timing.report(),"timing_report_worker_after_shutdown":report_worker.report(),
         "capture_publication":capture_evidence.lock().unwrap_or_else(|p|p.into_inner()).clone(),

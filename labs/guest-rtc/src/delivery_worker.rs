@@ -37,6 +37,7 @@ struct State<T> {
     max_submit_us: u128,
     epoch: u64,
     qos: Option<(i32, i32, i32)>,
+    transport_retirements: u64,
 }
 pub struct Deadline<T> {
     shared: Arc<(Mutex<State<T>>, Condvar, Mutex<()>)>,
@@ -60,6 +61,7 @@ impl<T: Send + 'static> Deadline<T> {
                 max_submit_us: 0,
                 epoch: 0,
                 qos: None,
+                transport_retirements: 0,
             }),
             Condvar::new(),
             Mutex::new(()),
@@ -140,6 +142,22 @@ impl<T: Send + 'static> Deadline<T> {
             .expect("delivery epoch exhausted");
         state.queue.clear();
     }
+    /// Same-authority transport recovery only: fence every old producer while
+    /// preserving already accepted bounded output at its original deadlines.
+    /// Authorization revocation/source removal must use reset, which clears.
+    pub fn retire_preserving_queued(&self) {
+        let _serial = self.shared.2.lock().unwrap();
+        let mut state = self.shared.0.lock().unwrap();
+        if state.stopped || state.sealed {
+            return;
+        }
+        state.epoch = state
+            .epoch
+            .checked_add(1)
+            .expect("delivery epoch exhausted");
+        state.transport_retirements += 1;
+        self.shared.1.notify_all();
+    }
     /// Stop enqueue while letting the owned output thread deliver queued frames
     /// at their original deadlines. The caller must bound the drain and join.
     pub fn seal(&self) {
@@ -185,6 +203,7 @@ impl<T: Send + 'static> Deadline<T> {
         report["max_native_submit_us"] = json!(state.max_submit_us);
         report["sealed_for_finish"] = json!(state.sealed);
         report["publication_epoch"] = json!(state.epoch);
+        report["same_authority_transport_retirements"] = json!(state.transport_retirements);
         report["retired_producer_dropped"] = json!(self.retired.load(Ordering::Relaxed));
         report["worker_qos_result_previous_effective"] = json!(state.qos);
         report
@@ -347,6 +366,50 @@ impl<T> Drop for Drain<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn transport_retirement_preserves_deadlines_but_fences_old_producers() {
+        let (tx, rx) = mpsc::channel();
+        let mut worker = Deadline::start("retirement-proof", 4, move |stamp, value| {
+            tx.send((stamp, value)).unwrap();
+        })
+        .unwrap();
+        let old = worker.producer();
+        let stamp = Instant::now() + Duration::from_millis(30);
+        assert!(old.push(stamp, 1));
+        worker.retire_preserving_queued();
+        assert!(!old.push(stamp, 2));
+        assert!(!old.reset_and_renew().push(stamp, 3));
+        let fresh = worker.producer();
+        assert!(fresh.push(stamp + Duration::from_millis(5), 4));
+        assert_eq!(rx.recv_timeout(Duration::from_secs(1)).unwrap(), (stamp, 1));
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+            (stamp + Duration::from_millis(5), 4)
+        );
+        worker.shutdown();
+        assert_eq!(worker.report()["flushed"], 0);
+        assert_eq!(worker.report()["same_authority_transport_retirements"], 1);
+        assert_eq!(worker.report()["publication_epoch"], 1);
+    }
+    #[test]
+    fn authority_reset_discards_previously_preserved_transport_output() {
+        let (tx, rx) = mpsc::channel();
+        let mut worker = Deadline::start("revocation-proof", 4, move |_, value| {
+            tx.send(value).unwrap();
+        })
+        .unwrap();
+        let old = worker.producer();
+        assert!(old.push(Instant::now() + Duration::from_secs(1), 1));
+        worker.retire_preserving_queued();
+        let transport = worker.producer();
+        worker.reset();
+        assert!(!old.push(Instant::now(), 2));
+        assert!(!transport.push(Instant::now(), 3));
+        assert_eq!(worker.pending(), 0);
+        worker.shutdown();
+        assert!(rx.try_recv().is_err());
+        assert_eq!(worker.report()["flushed"], 1);
+    }
     #[test]
     fn deadline_progresses_without_owner_polling_and_clear_waits_for_inflight_submission() {
         let (began, started) = mpsc::channel();
