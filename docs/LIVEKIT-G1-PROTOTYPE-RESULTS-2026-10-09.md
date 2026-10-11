@@ -2109,3 +2109,55 @@ source, apps, recordings and git history. Subsequent recording initialization
 succeeded. Future Cargo checks may regenerate that metadata; do not mistake the
 missing cache for missing project work. Numeric trial index retains the startup
 failure separately from playback measurements. No production deployment occurred.
+
+
+### Bounded scheduled-output shutdown candidate (2026-10-11)
+
+After joining the clock coordinator and decoded PCM drain, the room now seals
+both native output queues against further enqueue. Their dedicated workers keep
+submitting already queued audio/video at original deadlines. The owner pumps the
+native main loop and polls for empty queues every 2 ms, with one shared 450 ms
+budget (the existing 400 ms maximum presentation lead plus scheduling slack).
+Audio/video output workers continue concurrently during that wait, then both
+are stopped and joined before Recorder.finish/source release. A native call
+already in progress is still joined; the drain budget does not claim to forcibly
+interrupt a native call.
+
+Sealed producers cannot enqueue or renew/reset the closed publication. Shutdown
+reports include original queue depths, final depths, elapsed drain time and timeout.
+New recordings declare the drain requirement; acceptance rejects missing drain
+evidence, a timeout, unsealed input or retained scheduled output. Older reports
+remain comparable through their existing gates. No marker/loss thresholds, queue
+capacities, 30 ms late-frame rule or clock timestamps changed. The added native
+test proves delivery at the original future deadline and rejection of retained
+producer handles after sealing; a gate regression rejects failed drain evidence.
+
+This tests the hypothesis that stopping output before its pending presentation
+deadlines clips a final video pulse while its matching audio has already been
+recorded. It does not reconstruct missing media or remove forced-disconnect loss
+from acceptance. Production integration and startup/tail qualification remain open.
+
+
+Validation passed: 60 native tests, 16 recording-gate regressions, strict
+all-target combined-feature Clippy and the combined-feature native build.
+
+- `1791742532950268000`, one connected guest/full reconnect/45 s: full local OBS
+  acceptance passed, 23 pairs, 66.667 ms p95, no missing span labels or unmatched
+  markers. The original `[12 audio,5 video]` pending frames drained to `[0,0]` in
+  137.984 ms, below the 450 ms budget; neither output worker had late drops.
+  The previously observed ending discrepancy did not recur in this run. This
+  supports the shutdown fix but does not qualify arbitrary startup/tail boundaries.
+- `1791742669314440000`, three connected guests/no reconnect/60 s: full local OBS
+  acceptance passed, 30 pairs, 33.333 ms p95, no missing span labels or unmatched
+  markers; scheduled drain finished without timeout and all workers joined cleanly.
+
+All multi-guest prototype recording results here mean multiple connected/observed
+participants with **only guest-1 recorded through the selected playback pipeline**.
+They do not qualify simultaneous native compositing of every guest camera. Full
+production stage layouts, five-hour sessions, WAN behavior, private cue/AEC room
+integration, packaging and rollout require their separate gates. The earlier
+three-full-reconnect loss result remains failed; no disconnect gaps were excluded.
+Next characterize those transport-unavailable periods and any additional playback
+loss before broad integration. Trial hashes/counters are indexed in
+`labs/guest-rtc/evidence/native-scheduled-output-drain-trials.json`.
+No production app or recovery checkout changed.

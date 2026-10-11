@@ -53,6 +53,14 @@ def evaluate(native, markers, expected_epochs, readiness_budget_ms=1500):
         clock = playback.get('dedicated_clock_worker')
         if not isinstance(clock, dict) or clock.get('active_after_shutdown') is not False or clock.get('worker_failed') is not False:
             worker_reasons.append('playback clock worker shutdown not established')
+    if playback.get('scheduled_output_drain_required') is True:
+        drain = playback.get('scheduled_output_drain')
+        if not isinstance(drain, dict) or drain.get('timed_out') is not False or drain.get('new_input_sealed') is not True or drain.get('pending_after_audio_video') != [0, 0]:
+            worker_reasons.append('scheduled output drain did not finish before shutdown')
+        for stream in ('audio', 'video'):
+            output = playback.get(f'{stream}_presentation_queue_after_shutdown')
+            if not isinstance(output, dict) or output.get('sealed_for_finish') is not True:
+                worker_reasons.append(f'{stream} output sealing not established')
     reasons.extend(worker_reasons)
     if markers.get('local_numbered_marker_gate_passed') is not True:
         reasons.append('numbered recording marker gate failed')

@@ -743,6 +743,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     };
     #[cfg(feature = "obs-proof")]
     let mut isolated_reports = None;
+    #[cfg(feature = "obs-proof")]
+    let mut scheduled_output_drain = None;
     let mut tick = tokio::time::interval(Duration::from_millis(10));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut lifecycle = Vec::new();
@@ -1074,6 +1076,28 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                 Some(worker.shutdown(metrics.entry("guest-1".to_owned()).or_default()));
         }
         decoded_drain.shutdown();
+        if scheduled_handoff {
+            // The clock producer is joined before sealing either output. Both
+            // output threads continue concurrently; no new input can extend drain.
+            let audio = scheduled_audio.as_ref().unwrap();
+            let video = scheduled_video.as_ref().unwrap();
+            audio.seal();
+            video.seal();
+            let before = [audio.pending(), video.pending()];
+            let started = Instant::now();
+            let budget = Duration::from_millis(450); // existing 400 ms maximum lead + bounded scheduling slack
+            while (audio.pending() > 0 || video.pending() > 0) && started.elapsed() < budget {
+                crate::obs_proof::pump_main();
+                tokio::time::sleep(Duration::from_millis(2)).await;
+            }
+            let after = [audio.pending(), video.pending()];
+            scheduled_output_drain = Some(
+                json!({"budget_ms":450,"elapsed_us":started.elapsed().as_micros(),
+                "pending_before_audio_video":before,"pending_after_audio_video":after,
+                "timed_out":after!=[0,0],"new_input_sealed":true}),
+            );
+        }
+
         if let Some(worker) = &mut scheduled_audio {
             worker.shutdown();
         }
@@ -1212,6 +1236,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
             .map(|(p, _)| p.clone())
             .unwrap_or_else(|| playback.report());
         report["clock_on_dedicated_thread"] = json!(isolated_playback.is_some());
+        report["scheduled_output_drain_required"] = json!(scheduled_handoff);
+        report["scheduled_output_drain"] = json!(scheduled_output_drain);
         report["scheduled_handoff"] = json!(scheduled_handoff);
         report["loop_timing"] = loop_timing.report();
         report["timing_report_worker_after_shutdown"] = report_worker.report();

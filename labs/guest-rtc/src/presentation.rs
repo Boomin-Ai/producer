@@ -756,6 +756,9 @@ impl<T> Scheduled<T> {
         }
         None
     }
+    pub fn pending(&self) -> usize {
+        self.entries.len()
+    }
     pub fn clear(&mut self) {
         self.flushed += self.entries.len() as u64;
         self.entries.clear();

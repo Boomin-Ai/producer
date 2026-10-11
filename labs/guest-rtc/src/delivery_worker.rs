@@ -32,6 +32,7 @@ pub(crate) fn worker_qos() -> Option<(i32, i32, i32)> {
 struct State<T> {
     queue: Scheduled<T>,
     stopped: bool,
+    sealed: bool,
     max_tick_gap_us: u128,
     max_submit_us: u128,
     epoch: u64,
@@ -54,6 +55,7 @@ impl<T: Send + 'static> Deadline<T> {
             Mutex::new(State {
                 queue: Scheduled::new(capacity),
                 stopped: false,
+                sealed: false,
                 max_tick_gap_us: 0,
                 max_submit_us: 0,
                 epoch: 0,
@@ -138,6 +140,24 @@ impl<T: Send + 'static> Deadline<T> {
             .expect("delivery epoch exhausted");
         state.queue.clear();
     }
+    /// Stop enqueue while letting the owned output thread deliver queued frames
+    /// at their original deadlines. The caller must bound the drain and join.
+    pub fn seal(&self) {
+        self.shared
+            .0
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .sealed = true;
+        self.shared.1.notify_all();
+    }
+    pub fn pending(&self) -> usize {
+        self.shared
+            .0
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .queue
+            .pending()
+    }
     pub fn shutdown(&mut self) {
         self.shared
             .0
@@ -163,6 +183,7 @@ impl<T: Send + 'static> Deadline<T> {
         report["worker_failed"] = json!(self.failed);
         report["max_tick_gap_us"] = json!(state.max_tick_gap_us);
         report["max_native_submit_us"] = json!(state.max_submit_us);
+        report["sealed_for_finish"] = json!(state.sealed);
         report["publication_epoch"] = json!(state.epoch);
         report["retired_producer_dropped"] = json!(self.retired.load(Ordering::Relaxed));
         report["worker_qos_result_previous_effective"] = json!(state.qos);
@@ -192,7 +213,7 @@ impl<T> Producer<T> {
         let _serial = self.shared.2.lock().unwrap();
         let mut state = self.shared.0.lock().unwrap();
         // A retired coordinator cannot reset its replacement publication.
-        if state.epoch != self.epoch || state.stopped {
+        if state.epoch != self.epoch || state.stopped || state.sealed {
             return self.clone();
         }
         state.epoch = state
@@ -213,7 +234,7 @@ impl<T> Producer<T> {
                 self.retired.fetch_add(1, Ordering::Relaxed);
                 return false;
             }
-            if !state.stopped {
+            if !state.stopped && !state.sealed {
                 state.queue.push(stamp, value);
                 self.shared.1.notify_one();
                 return true;
@@ -391,6 +412,33 @@ mod tests {
         }
         failed.shutdown();
         assert_eq!(failed.report()["worker_failed"], true);
+    }
+    #[test]
+    fn sealed_output_drains_original_deadlines_and_rejects_producers() {
+        let (sent, received) = mpsc::channel();
+        let mut worker = Deadline::start("drain-deadlines", 4, move |at, v| {
+            sent.send((at, v)).unwrap();
+        })
+        .unwrap();
+        let producer = worker.producer();
+        let stamp = Instant::now() + Duration::from_millis(20);
+        while !producer.push(stamp, 1) {
+            thread::yield_now();
+        }
+        worker.seal();
+        assert!(!producer.push(stamp, 2));
+        assert!(!worker.producer().push(stamp, 3));
+        assert!(!producer.reset_and_renew().push(stamp, 4));
+        assert_eq!(worker.report()["publication_epoch"], 0);
+        assert_eq!(
+            received.recv_timeout(Duration::from_secs(1)).unwrap(),
+            (stamp, 1)
+        );
+        worker.shutdown();
+        assert_eq!(worker.pending(), 0);
+        assert_eq!(worker.report()["flushed"], 0);
+        assert_eq!(worker.report()["sealed_for_finish"], true);
+        assert!(received.try_recv().is_err());
     }
     #[test]
     fn stale_coordinator_cannot_reset_a_replacement_producer() {

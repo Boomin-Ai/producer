@@ -26,6 +26,26 @@ class RecordingGates(unittest.TestCase):
         playback['decoded_audio_drain_after_shutdown'] = {'active_after_shutdown': False, 'worker_failed': False, 'queue': {'pending_frames': 0}}
         return native
 
+    def test_declared_shutdown_drain_must_finish_with_input_sealed(self):
+        native = self.with_workers(); playback = native['audio_master_playback']
+        playback['scheduled_output_drain_required'] = True
+        for stream in ('audio', 'video'):
+            playback[f'{stream}_presentation_queue_after_shutdown']['sealed_for_finish'] = True
+        self.assertFalse(gates.evaluate(native, self.markers(), 1)['local_obs_acceptance_passed'])
+        valid = {'timed_out': False, 'new_input_sealed': True, 'pending_after_audio_video': [0, 0]}
+        playback['scheduled_output_drain'] = valid.copy()
+        self.assertTrue(gates.evaluate(native, self.markers(), 1)['local_obs_acceptance_passed'])
+        for field, value in [('timed_out', True), ('new_input_sealed', False), ('pending_after_audio_video', [1, 0])]:
+            playback['scheduled_output_drain'] = {**valid, field: value}
+            self.assertFalse(gates.evaluate(native, self.markers(), 1)['local_obs_acceptance_passed'])
+
+        playback['scheduled_output_drain'] = valid.copy()
+        for stream in ('audio', 'video'):
+            output = playback[f'{stream}_presentation_queue_after_shutdown']
+            output['sealed_for_finish'] = False
+            self.assertFalse(gates.evaluate(native, self.markers(), 1)['local_obs_acceptance_passed'])
+            output['sealed_for_finish'] = True
+
     def test_clock_worker_health_is_required_for_isolated_playback(self):
         native = self.with_workers()
         playback = native['audio_master_playback']
