@@ -1523,3 +1523,18 @@ signaling resume on loopback. It does not qualify full media reconnection, track
 replacement, WAN outages or quantitative A/V offset. The next physical test
 uses a no-impairment relay baseline before separate jitter/loss profiles.
 Production remains unchanged.
+
+### Physical relay routing baseline — 2026-10-10
+
+Trial `1791686827299744000` completed 30.160 seconds through the loopback
+signaling/UDP packet relay in baseline mode. Relay rewrote 90 candidates and
+forwarded audio/video in both directions with zero intentional delay/loss,
+send errors or queue overflow. Camera submitted 709 frames; browser observed
+688 return frames and saved a private 2,727,068-byte decoded AV WebM. Camera
+handoff p95 was 37 ms and audio p95 26 ms, with zero native format/timeline
+errors and zero audio publication deadline recoveries. Numeric index:
+`labs/guest-rtc/evidence/camera-network-baseline-physical-run.json`.
+
+This is the relay-routing control for the next video/audio jitter profiles.
+No subjective sync review or impairment result is asserted for this baseline;
+G1 and production integration remain unqualified.
