@@ -1946,3 +1946,46 @@ capture lip sync, startup/tail coverage, WAN and speakerphone integration remain
 gated. Next: isolate selected video scheduling and the audio-clock/mapping work
 from the room loop, then repeat the same strict multi-guest gate under recorded
 resource pressure. Do not mask the missing markers or relax the timing budgets.
+
+
+### Publication fencing prerequisite (2026-10-11)
+
+The dedicated scheduling coordinator will introduce another producer thread.
+Clearing a deadline queue alone is insufficient: that producer could finish an
+old frame after the clear and enqueue it into the replacement publication. The
+native delivery worker now exposes a cloneable enqueue handle tied to a monotonically
+increasing publication epoch. Reset serializes with in-flight native submission,
+increments the epoch and clears the queue. Enqueue checks the epoch under that same
+queue mutex; retired handles cannot publish after reset returns. Handles retain
+bounded queue state only, never the worker owner or its join handle. Owner teardown
+joins the thread and disables enqueue even if a handle survives.
+
+The existing room path now uses these handles and retires them on subscription
+replacement/removal and audio clock reanchor. This is a prerequisite for moving
+clock processing out of the room loop, not that migration itself. Queue capacity,
+late-frame policy, sample clock and acceptance thresholds are unchanged.
+
+Two new tests exercise 100 reset epochs with a delayed producer on another thread,
+a producer surviving owner teardown, and reset blocked by an in-flight native call.
+Native reports additionally record maximum elapsed native submission time, current
+epoch and retired-producer rejections. Submission elapsed time includes any OS
+preemption during that call; it does not by itself prove the source of a stall.
+Use it alongside worker/room tick gaps in the next strict three-guest recording.
+
+
+Validation passed: 56 native tests, combined-feature native build and strict
+all-target Clippy. Three guests/three full reconnects, 140 seconds, run
+`generated-recovery-1791726363495125000`: all four recovery epochs passed the unchanged 1500 ms
+readiness budget (slowest first video 1033.614 ms); workers joined with empty
+queues and no worker failures. The recording still failed: 65 matched pairs,
+90 ms p95 versus the unchanged 80 ms gate, and five missing video span labels.
+Audio/video maximum native submission elapsed time was 76.062/75.961 ms,
+versus 208.196/199.524 ms maximum worker tick gaps. PCM drain reached a
+213.567 ms gap; room tick reached 697.484 ms. This shows additional delay outside
+the maximum observed submission call; it does not isolate CPU scheduling,
+memory pressure or another cause. Both submission and overall processing need
+bounded scheduling in the coordinator experiment. No missing markers were
+recovered or excluded. Full numeric provenance is retained in
+`labs/guest-rtc/evidence/native-publication-fencing-trial.json` and its run files.
+Only regenerable Chrome HTTP/code caches were cleared to satisfy the existing
+1 GiB recording preflight; projects, recordings, user data and installed app remain.

@@ -1,5 +1,5 @@
 //! Owned native delivery workers. No detached task, unbounded command queue,
-//! retimestamping, or late-frame fallback. Clear linearizes with submission.
+//! retimestamping, or late-frame fallback. Reset fences concurrent producers.
 use crate::{
     presentation::Scheduled,
     queue::{Captured, Queue},
@@ -33,12 +33,15 @@ struct State<T> {
     queue: Scheduled<T>,
     stopped: bool,
     max_tick_gap_us: u128,
+    max_submit_us: u128,
+    epoch: u64,
     qos: Option<(i32, i32, i32)>,
 }
 pub struct Deadline<T> {
     shared: Arc<(Mutex<State<T>>, Condvar, Mutex<()>)>,
     thread: Option<JoinHandle<()>>,
-    contention: AtomicU64,
+    contention: Arc<AtomicU64>,
+    retired: Arc<AtomicU64>,
     failed: bool,
 }
 impl<T: Send + 'static> Deadline<T> {
@@ -52,6 +55,8 @@ impl<T: Send + 'static> Deadline<T> {
                 queue: Scheduled::new(capacity),
                 stopped: false,
                 max_tick_gap_us: 0,
+                max_submit_us: 0,
+                epoch: 0,
                 qos: None,
             }),
             Condvar::new(),
@@ -74,7 +79,7 @@ impl<T: Send + 'static> Deadline<T> {
                     state.queue.clear();
                     break;
                 }
-                // Hold the same lock as clear. Once clear returns, a retired
+                // Hold the same lock as reset. Once reset returns, a retired
                 // publication can no longer be submitted, even if previously due.
                 for _ in 0..capacity {
                     if state.stopped {
@@ -85,8 +90,11 @@ impl<T: Send + 'static> Deadline<T> {
                     };
                     // Writers remain free to enqueue while native output runs.
                     drop(state);
+                    let submit_started = Instant::now();
                     submit(stamp, value);
+                    let submit_us = submit_started.elapsed().as_micros();
                     state = lock.lock().unwrap();
+                    state.max_submit_us = state.max_submit_us.max(submit_us);
                 }
                 drop(serial);
                 let _ = wake.wait_timeout(state, Duration::from_millis(2)).unwrap();
@@ -95,25 +103,40 @@ impl<T: Send + 'static> Deadline<T> {
         Ok(Self {
             shared,
             thread: Some(thread),
-            contention: AtomicU64::new(0),
+            contention: Arc::new(AtomicU64::new(0)),
+            retired: Arc::new(AtomicU64::new(0)),
             failed: false,
         })
     }
-    pub fn push(&self, stamp: Instant, value: T) -> bool {
-        if let Ok(mut state) = self.shared.0.try_lock() {
-            if !state.stopped {
-                state.queue.push(stamp, value);
-                self.shared.1.notify_one();
-                return true;
-            }
-        } else {
-            self.contention.fetch_add(1, Ordering::Relaxed);
+    /// A producer is tied to the publication epoch observed when acquired.
+    /// Cloning it never retains the worker owner or its join handle.
+    pub fn producer(&self) -> Producer<T> {
+        Producer {
+            shared: self.shared.clone(),
+            contention: self.contention.clone(),
+            retired: self.retired.clone(),
+            epoch: self.shared.0.lock().unwrap().epoch,
         }
-        false
     }
+    #[cfg(test)]
+    pub fn push(&self, stamp: Instant, value: T) -> bool {
+        self.producer().push(stamp, value)
+    }
+    #[cfg(test)]
     pub fn clear(&self) {
         let _serial = self.shared.2.lock().unwrap();
         self.shared.0.lock().unwrap().queue.clear();
+    }
+    /// Retire every previously acquired producer, including one currently
+    /// computing a frame. Once reset returns, old output cannot be submitted.
+    pub fn reset(&self) {
+        let _serial = self.shared.2.lock().unwrap();
+        let mut state = self.shared.0.lock().unwrap();
+        state.epoch = state
+            .epoch
+            .checked_add(1)
+            .expect("delivery epoch exhausted");
+        state.queue.clear();
     }
     pub fn shutdown(&mut self) {
         self.shared
@@ -139,8 +162,47 @@ impl<T: Send + 'static> Deadline<T> {
         report["active_after_shutdown"] = json!(self.thread.is_some());
         report["worker_failed"] = json!(self.failed);
         report["max_tick_gap_us"] = json!(state.max_tick_gap_us);
+        report["max_native_submit_us"] = json!(state.max_submit_us);
+        report["publication_epoch"] = json!(state.epoch);
+        report["retired_producer_dropped"] = json!(self.retired.load(Ordering::Relaxed));
         report["worker_qos_result_previous_effective"] = json!(state.qos);
         report
+    }
+}
+/// Bounded enqueue handle. It cannot restart or own the delivery thread.
+/// Epoch comparison and enqueue occur under the same queue lock as reset.
+pub struct Producer<T> {
+    shared: Arc<(Mutex<State<T>>, Condvar, Mutex<()>)>,
+    contention: Arc<AtomicU64>,
+    retired: Arc<AtomicU64>,
+    epoch: u64,
+}
+impl<T> Clone for Producer<T> {
+    fn clone(&self) -> Self {
+        Self {
+            shared: self.shared.clone(),
+            contention: self.contention.clone(),
+            retired: self.retired.clone(),
+            epoch: self.epoch,
+        }
+    }
+}
+impl<T> Producer<T> {
+    pub fn push(&self, stamp: Instant, value: T) -> bool {
+        if let Ok(mut state) = self.shared.0.try_lock() {
+            if state.epoch != self.epoch {
+                self.retired.fetch_add(1, Ordering::Relaxed);
+                return false;
+            }
+            if !state.stopped {
+                state.queue.push(stamp, value);
+                self.shared.1.notify_one();
+                return true;
+            }
+        } else {
+            self.contention.fetch_add(1, Ordering::Relaxed);
+        }
+        false
     }
 }
 impl<T> Drop for Deadline<T> {
@@ -307,6 +369,82 @@ mod tests {
         }
         failed.shutdown();
         assert_eq!(failed.report()["worker_failed"], true);
+    }
+    #[test]
+    fn retired_producer_cannot_enqueue_after_reset_or_owner_drop() {
+        let (sent, received) = mpsc::channel();
+        let mut worker = Deadline::start("epoch-test", 2, move |_, value| {
+            let _ = sent.send(value);
+        })
+        .unwrap();
+        for n in 0..100 {
+            let old = worker.producer();
+            let delayed = old.clone();
+            while !old.push(Instant::now() + Duration::from_secs(60), n) {
+                thread::yield_now();
+            }
+            worker.reset();
+            let retired = worker.retired.clone();
+            thread::spawn(move || {
+                // A simultaneous queue read may cause a contention rejection;
+                // retry until the epoch check itself has rejected this producer.
+                while retired.load(Ordering::Relaxed) < n + 1 {
+                    assert!(!delayed.push(Instant::now(), n));
+                    thread::yield_now();
+                }
+            })
+            .join()
+            .unwrap();
+            let current = worker.producer();
+            while !current.push(Instant::now(), n + 1000) {
+                thread::yield_now();
+            }
+            assert_eq!(
+                received.recv_timeout(Duration::from_secs(1)).unwrap(),
+                n + 1000
+            );
+        }
+        assert_eq!(worker.report()["publication_epoch"], 100);
+        assert_eq!(worker.report()["retired_producer_dropped"], 100);
+        assert_eq!(worker.report()["flushed"], 100);
+        let remaining = worker.producer();
+        worker.shutdown();
+        drop(worker);
+        assert!(!remaining.push(Instant::now(), 9999));
+        assert!(received.try_recv().is_err());
+    }
+    #[test]
+    fn reset_waits_for_native_output_then_rejects_delayed_old_producer() {
+        let (sent, received) = mpsc::channel();
+        let (release, resume) = mpsc::channel();
+        let mut worker = Deadline::start("epoch-inflight", 2, move |_, value| {
+            sent.send(value).unwrap();
+            resume.recv().unwrap();
+        })
+        .unwrap();
+        let old = worker.producer();
+        while !old.push(Instant::now(), 1) {
+            thread::yield_now();
+        }
+        assert_eq!(received.recv_timeout(Duration::from_secs(1)).unwrap(), 1);
+        thread::scope(|scope| {
+            let (entered, waiting) = mpsc::channel();
+            let (done, finished) = mpsc::channel();
+            let owner = &worker;
+            scope.spawn(move || {
+                entered.send(()).unwrap();
+                owner.reset();
+                done.send(()).unwrap();
+            });
+            waiting.recv_timeout(Duration::from_secs(1)).unwrap();
+            assert!(finished.recv_timeout(Duration::from_millis(20)).is_err());
+            release.send(()).unwrap();
+            finished.recv_timeout(Duration::from_secs(1)).unwrap();
+        });
+        assert!(!old.push(Instant::now(), 2));
+        worker.shutdown();
+        assert!(worker.report()["max_native_submit_us"].as_u64().unwrap() >= 20_000);
+        assert_eq!(worker.report()["pending"], 0);
     }
     #[test]
     fn one_hundred_start_partial_use_drop_cycles_release_every_owner() {

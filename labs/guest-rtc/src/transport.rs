@@ -692,6 +692,10 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         None
     };
     #[cfg(feature = "obs-proof")]
+    let mut audio_producer = scheduled_audio.as_ref().map(|worker| worker.producer());
+    #[cfg(feature = "obs-proof")]
+    let mut video_producer = scheduled_video.as_ref().map(|worker| worker.producer());
+    #[cfg(feature = "obs-proof")]
     let mut decoded_drain = {
         let pull_clock = crate::playout_clock::VideoClock::new(
             audio_sys::ffi::diagnostic_webrtc_time_us(),
@@ -738,8 +742,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                             playback.clear(audio_sys::ffi::diagnostic_webrtc_time_us());
                             next_binding_refresh=Instant::now();
                             binding_discovery.invalidate();
-                            if let Some(worker)=&scheduled_audio {worker.clear();}
-                            if let Some(worker)=&scheduled_video {worker.clear();}
+                            if let Some(worker)=&scheduled_audio {worker.reset(); audio_producer=Some(worker.producer());}
+                            if let Some(worker)=&scheduled_video {worker.reset(); video_producer=Some(worker.producer());}
                         }
                         match track {
                             RemoteTrack::Audio(track) => {
@@ -768,8 +772,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                             playback.clear(audio_sys::ffi::diagnostic_webrtc_time_us());
                             next_binding_refresh=Instant::now();
                             binding_discovery.invalidate();
-                            if let Some(worker)=&scheduled_audio {worker.clear();}
-                            if let Some(worker)=&scheduled_video {worker.clear();}
+                            if let Some(worker)=&scheduled_audio {worker.reset(); audio_producer=Some(worker.producer());}
+                            if let Some(worker)=&scheduled_video {worker.reset(); video_producer=Some(worker.producer());}
                         }
                         // A late teardown from the old publication cannot retire its replacement.
                         match track {
@@ -920,15 +924,15 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                                 if bootstrap_used {playback.audio_bootstrap_blocks+=1;}
                                 let resets=playback.clock.reset_count();
                                 let stamp=playback.clock.audio(block.generation,block.sequence,origin,pull);
-                                if resets!=playback.clock.reset_count() {if let Some(worker)=&scheduled_audio {worker.clear();}
-                            if let Some(worker)=&scheduled_video {worker.clear();}playback.audio_reanchored();}
+                                if resets!=playback.clock.reset_count() {if let Some(worker)=&scheduled_audio {worker.reset(); audio_producer=Some(worker.producer());}
+                            if let Some(worker)=&scheduled_video {worker.reset(); video_producer=Some(worker.producer());}playback.audio_reanchored();}
                                 if let Some(stamp)=stamp {
                                     playback.startup_note("first_audio_scheduled",decoded_at);
                                     if let Some(origin)=origin {playback.audio_label(block.generation,block.sequence,block.rtp_timestamp,bootstrap_used,origin,stamp);}
                                     let pcm=&block.samples[..480*block.channels as usize];
                                     let rms=(pcm.iter().map(|sample|(*sample as f64).powi(2)).sum::<f64>()/pcm.len() as f64).sqrt();
                                     playback.marker(false,rms>2000.0,origin,stamp,pull,recorder.as_ref().unwrap().timestamp(stamp));
-                                    if let Some(worker)=&scheduled_audio {worker.push(stamp,block);}
+                                    if let Some(worker)=&audio_producer {worker.push(stamp,block);}
                                     else {recorder.as_ref().unwrap().audio_writer().write_interleaved(&block.samples[..480*block.channels as usize],block.channels,stamp);}
                                 }
                             } else {playback.invalid_audio_pull+=1;}
@@ -989,7 +993,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                                 if let Some(stamp)=playback.clock.video(origin,frame.at) {
                                     playback.startup_note("first_video_scheduled",audio_sys::ffi::diagnostic_webrtc_time_us());
                                     playback.marker(true,mean>180.0,origin,stamp,frame.at,recorder.timestamp(stamp));
-                                    if let Some(worker)=&scheduled_video {worker.push(stamp,frame.value);} else {
+                                    if let Some(worker)=&video_producer {worker.push(stamp,frame.value);} else {
                                         recorder.video((y,u,v),buffer.width(),buffer.height(),(ys,us,vs),stamp);
                                     }
                                 }
