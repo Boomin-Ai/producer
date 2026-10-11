@@ -8,6 +8,16 @@ spec.loader.exec_module(loss)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_final_outcome_join_requires_exact_clock_target_and_publication_epoch(self):
+        receipt = {'id_mod16':7, 'scheduled_target_ns':5000, 'publication_epoch':3}
+        events = [dict(label=7, scheduled_target_ns=5001, publication_epoch=3, disposition='submitted'),
+                  dict(label=7, scheduled_target_ns=5000, publication_epoch=4, disposition='submitted'),
+                  dict(label=7, scheduled_target_ns=5000, publication_epoch=3, disposition='clock_reanchor')]
+        result = loss.output_outcomes({'audio_output_marker_trace':{'events':events, 'overflow':0}}, 'audio', [receipt])
+        self.assertEqual(result['receipts'][0]['outcomes'], [events[2]])
+        self.assertEqual(result['trace_overflow'], 0)
+        self.assertEqual(loss.output_outcomes({}, 'audio', [receipt])['receipts'][0]['outcomes'], [])
+        self.assertFalse(loss.output_outcomes({}, 'audio', [receipt])['evidence_available'])
     def test_missing_source_is_unknown_not_transport_loss(self):
         result = loss.analyze({}, {}, {'missing_video_labels_within_observed_span': [7]})
         self.assertFalse(result['missing_recorded_labels'][0]['source_evidence_available'])

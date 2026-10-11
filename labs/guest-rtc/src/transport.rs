@@ -573,8 +573,13 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         std::env::var("LIVEKIT_LAB_RECONNECT_ON_INPUT_PULSE").as_deref() == Ok("1");
     let reconnect_on_queued_pulse =
         std::env::var("LIVEKIT_LAB_RECONNECT_ON_QUEUED_PULSE").as_deref() == Ok("1");
+    let audio_transition_tail =
+        std::env::var("LIVEKIT_LAB_AUDIO_TRANSITION_TAIL").as_deref() == Ok("1");
     let preserve_reconnect_output =
         std::env::var("LIVEKIT_LAB_PRESERVE_RECONNECT_OUTPUT").as_deref() == Ok("1");
+    if audio_transition_tail && !preserve_reconnect_output {
+        bail!("Audio tail requires the fixed-authority preservation fixture");
+    }
     if preserve_reconnect_output
         && (generated_reconnect.as_deref() != Some("full") || !cfg!(feature = "obs-proof"))
     {
@@ -623,7 +628,12 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         .transpose()?;
     let (room, mut events) = Room::connect(&url, token.trim(), RoomOptions::default()).await?;
     println!(
-        "Native host connected to local SFU; {}",
+        "Native host connected to {}; {}",
+        if cloud_test {
+            "LiveKit Cloud"
+        } else {
+            "local SFU"
+        },
         if physical_capture_enabled() {
             "explicit physical microphone publication enabled; reference scope recorded in evidence"
         } else {
@@ -679,6 +689,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     let audio_continuity = Arc::new(std::sync::Mutex::new(
         crate::audio_continuity::Continuity::default(),
     ));
+    #[cfg(feature = "obs-proof")]
+    let scheduled_trace_clock = recorder.as_ref().map(|r| r.video_writer().timestamp_base());
     #[cfg(feature = "obs-proof")]
     let mut scheduled_audio = if scheduled_handoff {
         let writer = recorder.as_ref().unwrap().audio_writer();
@@ -814,6 +826,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                             next_binding_refresh=Instant::now();
                             binding_discovery.invalidate();
                             let preserve = preserve_reconnect_output && transport_recovery_until.is_some_and(|until| Instant::now()<until);
+                            if preserve && audio_transition_tail {if let Some(worker)=&isolated_playback {worker.finish_transport_audio();}}
                             if let Some(worker)=&scheduled_audio {if preserve {worker.retire_preserving_queued();} else {worker.reset();} audio_producer=Some(worker.producer());}
                             if let Some(worker)=&scheduled_video {if preserve {worker.retire_preserving_queued();} else {worker.reset();} video_producer=Some(worker.producer());}
                             if let Some(worker)=&isolated_playback {
@@ -848,6 +861,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                             next_binding_refresh=Instant::now();
                             binding_discovery.invalidate();
                             let preserve = preserve_reconnect_output && transport_recovery_until.is_some_and(|until| Instant::now()<until);
+                            if preserve && audio_transition_tail {if let Some(worker)=&isolated_playback {worker.finish_transport_audio();}}
                             if let Some(worker)=&scheduled_audio {if preserve {worker.retire_preserving_queued();} else {worker.reset();} audio_producer=Some(worker.producer());}
                             if let Some(worker)=&scheduled_video {if preserve {worker.retire_preserving_queued();} else {worker.reset();} video_producer=Some(worker.producer());}
                             if let Some(worker)=&isolated_playback {
@@ -1292,6 +1306,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         report["scheduled_output_drain_required"] = json!(scheduled_handoff);
         report["scheduled_output_drain"] = json!(scheduled_output_drain);
         report["scheduled_handoff"] = json!(scheduled_handoff);
+        report["transport_audio_silence_tail_requested"] = json!(audio_transition_tail);
         report["same_authority_reconnect_output_preserved"] = json!(preserve_reconnect_output);
         report["loop_timing"] = loop_timing.report();
         report["timing_report_worker_after_shutdown"] = report_worker.report();
@@ -1299,6 +1314,12 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         report["binding_refresh_interval_ms"] = json!(100);
         report["audio_presentation_queue"] = json!(scheduled_audio.as_ref().map(|w| w.report()));
         report["video_presentation_queue"] = json!(scheduled_video.as_ref().map(|w| w.report()));
+        report["audio_output_marker_trace"] = json!(scheduled_audio
+            .as_ref()
+            .map(|w| w.marker_trace(scheduled_trace_clock.unwrap())));
+        report["video_output_marker_trace"] = json!(scheduled_video
+            .as_ref()
+            .map(|w| w.marker_trace(scheduled_trace_clock.unwrap())));
         report["audio_presentation_queue_after_shutdown"] =
             report["audio_presentation_queue"].clone();
         report["video_presentation_queue_after_shutdown"] =

@@ -2302,3 +2302,127 @@ capacity, production guest-room integration or G1 completion. Next resolve
 provider-compatible early clock readiness and exact accepted-output drop
 attribution before broader media integration. The hashed numeric results are in
 `labs/guest-rtc/evidence/native-livekit-cloud-compatibility-trials.json`.
+
+### Final native marker outcomes and conservative clock preservation (2026-10-11)
+
+The selected playback kernel tags generated video markers and every recognized
+10 ms tone block with the producer's publication epoch. Native output workers
+retain at most 4096 tagged final outcomes per stream, with explicit overflow
+counts. Each outcome preserves the original OBS-clock target and distinguishes
+submission, late deadline, overflow, authority reset, clock reanchor, conflicting
+clock target and shutdown. Collection uses preallocated structured entries;
+JSON conversion occurs when reporting. The analyzer joins exact label, original
+target and publication epoch, never timestamps from different clocks. A native
+submission entry means the submission closure returned, **not** that encoding or
+recording succeeded. Absent/evicted evidence is not retrospectively inferred.
+
+- Traced local control `1791751200931891000`: three guests, 140 seconds, three
+  full reconnects deliberately overlapping matching accepted audio/video pulses.
+  Existing transport preservation enabled, no clock-preservation change yet.
+  Full acceptance passed: 70 matched markers, 53.333 ms p95, no missing/unmatched
+  markers. All three trigger pairs have exact native submission outcomes.
+  All 820 tagged audio blocks and 70 tagged video markers were submitted, with
+  no trace overflow. Two untagged audio blocks were late; all queues drained and
+  workers joined. This pass does not explain the previous intermittent failures.
+- Traced Cloud control `1791751484589318000`: three guests, 60 seconds, one full
+  reconnect. Full acceptance failed: initial audio/video scheduling took
+  6012.919/6020.244 ms; recovery took 3959.952/4021.685 ms. There are 25 recorded
+  pairs, 40 ms p95, with missing video labels 9 and 10. **Both audio and video
+  for each missing label reached the bound playback kernel, but neither had a
+  scheduling target or was accepted for output while timing maps were unavailable.**
+  All 302 tagged admitted audio blocks and 25 admitted video markers subsequently
+  have submission outcomes, with zero trace overflow. The temporary Cloud room
+  was deleted. This trace attributes these two markers to clock admission, not
+  loss after accepted output; it does not resolve older untraced failures.
+
+The new clock-preservation candidate keeps accepted audio across a same-authority
+reanchor only if every queued 10 ms frame ends before or at the new audio frame's
+start. It checks every target, including an out-of-order entry. Conflicting
+queues still clear; missing new targets use the existing reset. Old producers
+are fenced under the existing submission/queue locks; a retired coordinator
+cannot preserve or clear its replacement. Authority reset still clears all
+output immediately. Video clock reset remains unchanged because the next video
+deadline is not yet known. The candidate is enabled only with the existing
+fixed-authority generated full-reconnect preservation flag; production behavior
+is unchanged. Its counter is separate from transport retirements.
+
+Five added native regressions cover exact discard outcomes, bounded trace
+retention, reset identity, nonoverlapping frame intervals and conflicting queued
+targets. Validation reached 72 native tests; Clippy, eight loss-analysis tests and
+16 unchanged recording-gate tests passed. Live results for the clock-preservation
+candidate must be assessed separately from the two traced controls above.
+
+Cloud readiness investigation: the current upstream server's subscriber RTCP
+worker has a three-second periodic send interval ([source](https://github.com/livekit/livekit/blob/master/pkg/rtc/participant.go)).
+This is consistent with the observed waits, but does not prove the hosted
+project runs that exact revision/configuration. An SDK upgrade is not a demonstrated
+shortcut: the inspected public Rust AudioFrame still exposes PCM shape without
+timing fields ([source](https://github.com/livekit/rust-sdks/blob/main/libwebrtc/src/audio_frame.rs));
+the newer frame metadata feature applies to video, not audio ([documentation](https://docs.livekit.io/transport/media/frame-metadata/)).
+Provider-compatible early clock delivery or an explicitly measured preparation
+phase before stage promotion remains necessary. Existing cold-path acceptance
+failures are retained; no readiness/loss gate was weakened.
+
+Clock-only preservation candidate `1791752019477394000` failed unchanged recording
+acceptance: 67 pairs, 43.333 ms p95, three video markers with no recorded audio
+(labels 8, 28, 48). Every corresponding accepted audio/video marker was submitted
+at the original target. Both output queues had **zero late, flush and overflow
+drops**. Each affected tone had only one tagged 10 ms block before disconnect.
+The new clock-preservation branch was not exercised (counter zero), so this run
+neither validates that branch live nor attributes this loss to it. Unit coverage
+establishes the guard; it is not the solution to this failure.
+
+`native/analyze-partial-tone.swift` performs supplemental bounded decoding of
+300 ms windows around those video markers and their preceding matched controls.
+It shifts 10 ms RMS windows by 1 ms and inspects tone identity at the strongest
+window, without changing the original acceptance analyzer. Controls 7/27/47 have
+peak RMS about 13k and the correct tone identities. Windows around 8/28/48 have
+RMS exactly zero throughout. Thus this case is not merely a detector threshold
+miss within the inspected windows: the submitted short blocks are absent there.
+The next hypothesis is OBS source/mixer handling of a final short PCM block when
+input stops. Exact raw-mixer/encoder loss attribution still needs qualification.
+
+A separate opt-in `--audio-transition-tail` candidate appends exactly two synthetic
+10 ms silence blocks following the last accepted audio frame, at its original
+sample positions, before fixed-authority transport retirement. This can complete
+a partial native audio buffer without replaying speech, stretching timestamps or
+inventing a sender clock. Synthetic blocks carry no source RTP or capture timing.
+The append is atomic and refuses insufficient capacity rather than evicting real
+media. It fences the old producer before releasing the queue lock, preventing a
+late writer from racing real PCM into the synthetic tail. Authority reset clears
+the whole tail, and rejected/retired/sealed producers cannot append one. The
+candidate is restricted to the generated preservation fixture; it does not run
+on ordinary Cloud tests or production. Native tests reached 74, including silent
+sample positions, overflow rejection and retirement fencing. Live results must
+establish whether this tail actually preserves the short submitted audio.
+
+The combined candidate trial `1791753532368911000` recorded all three injected
+reconnect pairs (9/29/49), with video-minus-audio offsets 23.333/-6.667/36.667 ms.
+It appended six synthetic silence blocks with no capacity rejection and exercised
+three guarded audio clock retirements. This is promising for the short-fragment
+case, but does not isolate padding from clock preservation or establish repeatable
+recovery. Overall acceptance **still failed**: 66 pairs, 70 ms p95, four missing
+video labels (43/67/70/71), zero unpaired recorded video markers. Each missing
+video marker reached the selected native binding but had no clock target and was
+not accepted into the output queue. There were also untagged output drops:
+audio 123 late/5 flushed, video 37 late/5 flushed, zero queue overflow. Output
+worker tick gaps reached about 233 ms. No queue capacity or deadline threshold
+was increased to mask these failures.
+
+`evidence/native-traced-output-candidates.json` pins the four traced trials,
+their binary hashes and every numeric input artifact, including the failed Cloud
+control and supplemental PCM-window analysis. Historical evidence remains intact.
+The next instrumentation records the exact rejection reason and numeric details
+beside each generated video marker receipt, rather than inferring a reason from
+coalesced clock history. Successful frames explicitly clear that observation;
+it does not change clock admission or retain video frames. The remaining blockers
+are reliable clock admission under scheduling stalls and provider-compatible
+Cloud readiness, followed by actual room integration. This remains isolated lab
+work; no Producer release, hosted guest rollout or Apple signing occurred here.
+
+Checkpoint validation: 74 native tests with `obs-proof,physical-aec` passed;
+Clippy with those same features and warnings denied passed. Eight loss-analysis
+and 16 recording-gate tests passed; all 32 indexed numeric artifact hashes verify.
+The exact marker-rejection observation is covered by the existing late-deadline
+test, including clearing it after a successful mapping. The earlier live binary
+hashes remain pinned; those runs predate this additional marker observation.

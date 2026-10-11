@@ -17,6 +17,7 @@ pub struct Presentation {
     audio_startup_dropped: u64,
     video_submitted: u64,
     video_rejected: u64,
+    last_video_rejection: Option<(&'static str, Value)>,
     resets: u64,
     began: Instant,
     reasons: BTreeMap<&'static str, u64>,
@@ -37,6 +38,7 @@ impl Presentation {
             audio_startup_dropped: 0,
             video_submitted: 0,
             video_rejected: 0,
+            last_video_rejection: None,
             resets: 0,
             began: Instant::now(),
             reasons: BTreeMap::new(),
@@ -88,6 +90,7 @@ impl Presentation {
         self.audio = None;
         self.origin = None;
         self.last_video = None;
+        self.last_video_rejection = None;
         self.resets += 1;
     }
     pub fn clear(&mut self) {
@@ -165,6 +168,7 @@ impl Presentation {
         Some(stamp)
     }
     pub fn video(&mut self, sender_us: Option<i64>, arrival: Instant) -> Option<Instant> {
+        self.last_video_rejection = None;
         let result: Result<Instant, (&'static str, Value)> = (|| {
             let (audio_origin, audio_stamp, observed) =
                 self.origin.ok_or(("video_no_audio_origin", Value::Null))?;
@@ -217,10 +221,16 @@ impl Presentation {
             }
             Err((reason, details)) => {
                 self.video_rejected += 1;
+                self.last_video_rejection = Some((reason, details.clone()));
                 self.note(reason, arrival, details);
                 None
             }
         }
+    }
+    pub fn last_video_rejection(&self) -> Option<Value> {
+        self.last_video_rejection
+            .as_ref()
+            .map(|(reason, details)| json!({"reason":reason,"details":details}))
     }
     pub fn report(&self) -> Value {
         json!({"audio_master":true,"presentation_delay_ms":self.delay.as_millis(),
@@ -648,6 +658,10 @@ mod tests {
             1
         );
         assert_eq!(clock.video(Some(840_000), now), None);
+        assert_eq!(
+            clock.last_video_rejection().unwrap()["reason"],
+            "video_deadline_late"
+        );
         assert_eq!(clock.report()["failure_reasons"]["video_deadline_late"], 1);
         for _ in 0..100 {
             clock.video(None, now);
@@ -658,6 +672,7 @@ mod tests {
             clock.video(Some(1_000_000), now),
             Some(now + Duration::from_millis(120))
         );
+        assert!(clock.last_video_rejection().is_none());
         assert_eq!(clock.video(Some(1_000_000), now), None);
         assert_eq!(
             clock.report()["failure_reasons"]["video_deadline_nonmonotonic"],
@@ -736,18 +751,37 @@ impl<T> Scheduled<T> {
             flushed: 0,
         }
     }
+    #[cfg(test)]
     pub fn push(&mut self, stamp: Instant, value: T) {
+        self.push_observed(stamp, value, |_, _, _| {});
+    }
+    pub fn push_observed(
+        &mut self,
+        stamp: Instant,
+        value: T,
+        mut discarded: impl FnMut(Instant, T, &'static str),
+    ) {
         self.pushed += 1;
         if self.entries.len() == self.capacity {
-            self.entries.pop_front();
+            let (at, old) = self.entries.pop_front().unwrap();
+            discarded(at, old, "overflow");
             self.overflow += 1;
         }
         self.entries.push_back((stamp, value));
     }
+    #[cfg(test)]
     pub fn pop_due(&mut self, now: Instant) -> Option<(Instant, T)> {
+        self.pop_due_observed(now, |_, _, _| {})
+    }
+    pub fn pop_due_observed(
+        &mut self,
+        now: Instant,
+        mut discarded: impl FnMut(Instant, T, &'static str),
+    ) -> Option<(Instant, T)> {
         while self.entries.front().is_some_and(|(stamp, _)| *stamp <= now) {
             let (stamp, value) = self.entries.pop_front().unwrap();
             if now.duration_since(stamp) > Duration::from_millis(30) {
+                discarded(stamp, value, "late");
                 self.late += 1;
             } else {
                 self.submitted += 1;
@@ -759,9 +793,21 @@ impl<T> Scheduled<T> {
     pub fn pending(&self) -> usize {
         self.entries.len()
     }
+    pub fn remaining_capacity(&self) -> usize {
+        self.capacity - self.entries.len()
+    }
+    pub fn all_targets_at_or_before(&self, next: Instant) -> bool {
+        self.entries.iter().all(|(target, _)| *target <= next)
+    }
+    #[cfg(test)]
     pub fn clear(&mut self) {
+        self.clear_observed(|_, _, _| {});
+    }
+    pub fn clear_observed(&mut self, mut discarded: impl FnMut(Instant, T, &'static str)) {
         self.flushed += self.entries.len() as u64;
-        self.entries.clear();
+        for (stamp, value) in self.entries.drain(..) {
+            discarded(stamp, value, "flushed");
+        }
     }
     pub fn report(&self) -> Value {
         json!({"capacity":self.capacity,"pushed":self.pushed,"submitted":self.submitted,
@@ -771,6 +817,37 @@ impl<T> Scheduled<T> {
 #[cfg(test)]
 mod scheduled_tests {
     use super::*;
+    #[test]
+    fn discard_observer_retains_exact_original_target_value_and_reason() {
+        let now = Instant::now();
+        let mut q = Scheduled::new(1);
+        let mut outcomes = Vec::new();
+        q.push_observed(now, 7, |at, value, reason| {
+            outcomes.push((at, value, reason))
+        });
+        q.push_observed(now + Duration::from_millis(10), 8, |at, value, reason| {
+            outcomes.push((at, value, reason))
+        });
+        assert!(q
+            .pop_due_observed(now + Duration::from_millis(41), |at, value, reason| {
+                outcomes.push((at, value, reason))
+            })
+            .is_none());
+        q.push_observed(now + Duration::from_millis(100), 9, |at, value, reason| {
+            outcomes.push((at, value, reason))
+        });
+        q.clear_observed(|at, value, reason| outcomes.push((at, value, reason)));
+        assert_eq!(
+            outcomes,
+            [
+                (now, 7, "overflow"),
+                (now + Duration::from_millis(10), 8, "late"),
+                (now + Duration::from_millis(100), 9, "flushed")
+            ]
+        );
+        assert_eq!(q.report()["submitted"], 0);
+        assert_eq!(q.report()["pending"], 0);
+    }
     #[test]
     fn presentation_queue_waits_for_deadline_and_discards_stalled_or_cancelled_frames() {
         let now = Instant::now();

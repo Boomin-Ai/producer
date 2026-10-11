@@ -5,6 +5,24 @@ import json
 from pathlib import Path
 
 
+def output_outcomes(playback, stream, receipts):
+    trace = playback.get(f'{stream}_output_marker_trace')
+    events = trace.get('events', []) if isinstance(trace, dict) else []
+    rows = []
+    for receipt in receipts:
+        label = receipt.get('label' if stream == 'video' else 'id_mod16')
+        target = receipt.get('scheduled_target_ns')
+        epoch = receipt.get('publication_epoch')
+        outcomes = [e for e in events if target is not None and epoch is not None
+            and e.get('label') == label and e.get('scheduled_target_ns') == target
+            and e.get('publication_epoch') == epoch]
+        rows.append({'receipt': receipt, 'outcomes': outcomes})
+    return {'evidence_available': isinstance(trace, dict),
+            'trace_overflow': trace.get('overflow') if isinstance(trace, dict) else None,
+            'receipts': rows,
+            'scope': 'Exact label, original OBS-clock target and publication epoch only. Native submission is not proof of successful recording.'}
+
+
 def analyze(native, browser, markers):
     selected = next((r for r in browser.get('reports', []) if r.get('identity') == 'guest-1'), {})
     source = selected.get('source_markers')
@@ -28,6 +46,8 @@ def analyze(native, browser, markers):
         row['audio_receipt_evidence_available'] = 'decoded_audio_marker_receipts' in playback
         row['native_audio_receipts_near_video'] = [a for a in playback.get('decoded_audio_marker_receipts', [])
             if a['id_mod16'] == label % 16 and any(a['binding_since_us'] == v['binding_since_us'] and abs(a['received_us']-v['received_us'])<=120000 for v in row['native_video_receipts'])]
+        row['native_video_output'] = output_outcomes(playback, 'video', row['native_video_receipts'])
+        row['native_audio_output'] = output_outcomes(playback, 'audio', row['native_audio_receipts_near_video'])
         lost.append(row)
     epochs = {}
     for event in native.get('audio_master_playback', {}).get('startup_milestones', []):
@@ -50,7 +70,18 @@ def analyze(native, browser, markers):
                 and abs(a['received_us']-v['received_us'])<=120000
                 for a in playback.get('decoded_audio_marker_receipts', [])) for v in receipts)
         for e in queued)
+    injection_outcomes = []
+    for e in queued:
+        pulse = e['queued_av_pulse_trigger']
+        if not isinstance(pulse, list) or len(pulse) != 3: continue
+        video = [v for v in receipts if [v['label'],v['received_us']] == pulse[:2]]
+        audio = [a for a in playback.get('decoded_audio_marker_receipts', [])
+                 if a['id_mod16'] == pulse[0]%16 and a['received_us'] == pulse[2]
+                 and any(a['binding_since_us'] == v['binding_since_us'] for v in video)]
+        injection_outcomes.append({'label': pulse[0], 'video': output_outcomes(playback, 'video', video),
+                                   'audio': output_outcomes(playback, 'audio', audio)})
     return {'missing_recorded_labels': lost, 'binding_readiness': list(epochs.values()),
+            'injected_marker_output_outcomes': injection_outcomes,
             'pulse_trigger_receipts_verified': pulse_verified,
             'queued_av_trigger_receipts_verified': queued_verified,
             'unmatched_recorded_video_labels': unpaired,

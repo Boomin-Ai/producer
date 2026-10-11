@@ -29,8 +29,54 @@ pub(crate) fn worker_qos() -> Option<(i32, i32, i32)> {
         None
     }
 }
+struct Delivery<T> {
+    value: T,
+    marker: Option<u8>,
+    epoch: u64,
+}
+struct Outcome {
+    label: u8,
+    epoch: u64,
+    target: Instant,
+    observed: Instant,
+    disposition: &'static str,
+}
+struct Trace {
+    entries: std::collections::VecDeque<Outcome>,
+    overflow: u64,
+}
+impl Trace {
+    fn new() -> Self {
+        Self {
+            entries: std::collections::VecDeque::with_capacity(4096),
+            overflow: 0,
+        }
+    }
+    fn record<T>(&mut self, target: Instant, value: &Delivery<T>, disposition: &'static str) {
+        if let Some(label) = value.marker {
+            if self.entries.len() == 4096 {
+                self.entries.pop_front();
+                self.overflow += 1;
+            }
+            self.entries.push_back(Outcome {
+                label,
+                epoch: value.epoch,
+                target,
+                observed: Instant::now(),
+                disposition,
+            });
+        }
+    }
+    fn report(&self, base: (Instant, u64)) -> Value {
+        json!({"capacity":4096,"overflow":self.overflow,"events":self.entries.iter().map(|e|json!({
+            "label":e.label,"publication_epoch":e.epoch,"scheduled_target_ns":base.1+e.target.saturating_duration_since(base.0).as_nanos() as u64,
+            "observed_ns":base.1+e.observed.saturating_duration_since(base.0).as_nanos() as u64,"disposition":e.disposition
+        })).collect::<Vec<_>>(),"scope":"Tagged generated marker blocks only. submitted means the native submission closure returned, not successful encoding or recording."})
+    }
+}
 struct State<T> {
-    queue: Scheduled<T>,
+    queue: Scheduled<Delivery<T>>,
+    trace: Trace,
     stopped: bool,
     sealed: bool,
     max_tick_gap_us: u128,
@@ -38,6 +84,13 @@ struct State<T> {
     epoch: u64,
     qos: Option<(i32, i32, i32)>,
     transport_retirements: u64,
+    clock_retirements: u64,
+}
+impl<T> State<T> {
+    fn clear_output(&mut self, reason: &'static str) {
+        let Self { queue, trace, .. } = self;
+        queue.clear_observed(|at, v, _| trace.record(at, &v, reason));
+    }
 }
 pub struct Deadline<T> {
     shared: Arc<(Mutex<State<T>>, Condvar, Mutex<()>)>,
@@ -55,6 +108,7 @@ impl<T: Send + 'static> Deadline<T> {
         let shared = Arc::new((
             Mutex::new(State {
                 queue: Scheduled::new(capacity),
+                trace: Trace::new(),
                 stopped: false,
                 sealed: false,
                 max_tick_gap_us: 0,
@@ -62,6 +116,7 @@ impl<T: Send + 'static> Deadline<T> {
                 epoch: 0,
                 qos: None,
                 transport_retirements: 0,
+                clock_retirements: 0,
             }),
             Condvar::new(),
             Mutex::new(()),
@@ -80,7 +135,7 @@ impl<T: Send + 'static> Deadline<T> {
                     .max(now.saturating_duration_since(previous).as_micros());
                 previous = now;
                 if state.stopped {
-                    state.queue.clear();
+                    state.clear_output("shutdown");
                     break;
                 }
                 // Hold the same lock as reset. Once reset returns, a retired
@@ -89,16 +144,32 @@ impl<T: Send + 'static> Deadline<T> {
                     if state.stopped {
                         break;
                     }
-                    let Some((stamp, value)) = state.queue.pop_due(Instant::now()) else {
+                    let State { queue, trace, .. } = &mut *state;
+                    let Some((stamp, value)) = queue
+                        .pop_due_observed(Instant::now(), |at, v, reason| {
+                            trace.record(at, &v, reason)
+                        })
+                    else {
                         break;
                     };
                     // Writers remain free to enqueue while native output runs.
                     drop(state);
                     let submit_started = Instant::now();
-                    submit(stamp, value);
+                    let marker = value.marker;
+                    let epoch = value.epoch;
+                    submit(stamp, value.value);
                     let submit_us = submit_started.elapsed().as_micros();
                     state = lock.lock().unwrap();
                     state.max_submit_us = state.max_submit_us.max(submit_us);
+                    state.trace.record(
+                        stamp,
+                        &Delivery {
+                            value: (),
+                            marker,
+                            epoch,
+                        },
+                        "submitted",
+                    );
                 }
                 drop(serial);
                 let _ = wake.wait_timeout(state, Duration::from_millis(2)).unwrap();
@@ -129,7 +200,7 @@ impl<T: Send + 'static> Deadline<T> {
     #[cfg(test)]
     pub fn clear(&self) {
         let _serial = self.shared.2.lock().unwrap();
-        self.shared.0.lock().unwrap().queue.clear();
+        self.shared.0.lock().unwrap().clear_output("test_clear");
     }
     /// Retire every previously acquired producer, including one currently
     /// computing a frame. Once reset returns, old output cannot be submitted.
@@ -140,7 +211,7 @@ impl<T: Send + 'static> Deadline<T> {
             .epoch
             .checked_add(1)
             .expect("delivery epoch exhausted");
-        state.queue.clear();
+        state.clear_output("authority_reset");
     }
     /// Same-authority transport recovery only: fence every old producer while
     /// preserving already accepted bounded output at its original deadlines.
@@ -190,8 +261,15 @@ impl<T: Send + 'static> Deadline<T> {
             .0
             .lock()
             .unwrap_or_else(|p| p.into_inner())
-            .queue
-            .clear();
+            .clear_output("shutdown");
+    }
+    pub fn marker_trace(&self, base: (Instant, u64)) -> Value {
+        self.shared
+            .0
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .trace
+            .report(base)
     }
     pub fn report(&self) -> Value {
         let state = self.shared.0.lock().unwrap_or_else(|p| p.into_inner());
@@ -204,6 +282,7 @@ impl<T: Send + 'static> Deadline<T> {
         report["sealed_for_finish"] = json!(state.sealed);
         report["publication_epoch"] = json!(state.epoch);
         report["same_authority_transport_retirements"] = json!(state.transport_retirements);
+        report["nonoverlapping_clock_retirements"] = json!(state.clock_retirements);
         report["retired_producer_dropped"] = json!(self.retired.load(Ordering::Relaxed));
         report["worker_qos_result_previous_effective"] = json!(state.qos);
         report
@@ -228,7 +307,19 @@ impl<T> Clone for Producer<T> {
     }
 }
 impl<T> Producer<T> {
+    pub fn epoch(&self) -> u64 {
+        self.epoch
+    }
     pub fn reset_and_renew(&self) -> Self {
+        self.renew_clock(None)
+    }
+    /// Same-authority clock reanchor only. Preserve accepted output if every
+    /// original frame ends before the new timeline, keeping deadlines and caps.
+    /// A revoked/retired handle cannot preserve, clear or renew its replacement.
+    pub fn reanchor_and_renew(&self, next_target: Instant, interval: Duration) -> Self {
+        self.renew_clock(next_target.checked_sub(interval))
+    }
+    fn renew_clock(&self, next_target: Option<Instant>) -> Self {
         let _serial = self.shared.2.lock().unwrap();
         let mut state = self.shared.0.lock().unwrap();
         // A retired coordinator cannot reset its replacement publication.
@@ -239,7 +330,15 @@ impl<T> Producer<T> {
             .epoch
             .checked_add(1)
             .expect("delivery epoch exhausted");
-        state.queue.clear();
+        if next_target.is_some_and(|target| state.queue.all_targets_at_or_before(target)) {
+            state.clock_retirements += 1;
+        } else {
+            state.clear_output(if next_target.is_some() {
+                "clock_target_conflict"
+            } else {
+                "clock_reanchor"
+            });
+        }
         Self {
             shared: self.shared.clone(),
             contention: self.contention.clone(),
@@ -248,13 +347,60 @@ impl<T> Producer<T> {
         }
     }
     pub fn push(&self, stamp: Instant, value: T) -> bool {
+        self.push_traced(stamp, value, None)
+    }
+    /// Fixed two-frame synthetic silence tail only. Never evict accepted media,
+    /// partially append a tail, or bypass producer retirement / shutdown fences.
+    pub fn push_tail_pair_and_retire(&self, tail: [(Instant, T); 2]) -> bool {
+        let _serial = self.shared.2.lock().unwrap();
+        let Ok(mut state) = self.shared.0.try_lock() else {
+            self.contention.fetch_add(1, Ordering::Relaxed);
+            return false;
+        };
+        if state.epoch != self.epoch
+            || state.stopped
+            || state.sealed
+            || state.queue.remaining_capacity() < 2
+        {
+            return false;
+        }
+        let State { queue, trace, .. } = &mut *state;
+        for (stamp, value) in tail {
+            queue.push_observed(
+                stamp,
+                Delivery {
+                    value,
+                    marker: None,
+                    epoch: self.epoch,
+                },
+                |at, v, reason| trace.record(at, &v, reason),
+            );
+        }
+        state.epoch = state
+            .epoch
+            .checked_add(1)
+            .expect("delivery epoch exhausted");
+        state.transport_retirements += 1;
+        self.shared.1.notify_one();
+        true
+    }
+    pub fn push_traced(&self, stamp: Instant, value: T, marker: Option<u8>) -> bool {
         if let Ok(mut state) = self.shared.0.try_lock() {
             if state.epoch != self.epoch {
                 self.retired.fetch_add(1, Ordering::Relaxed);
                 return false;
             }
             if !state.stopped && !state.sealed {
-                state.queue.push(stamp, value);
+                let State { queue, trace, .. } = &mut *state;
+                queue.push_observed(
+                    stamp,
+                    Delivery {
+                        value,
+                        marker,
+                        epoch: self.epoch,
+                    },
+                    |at, v, reason| trace.record(at, &v, reason),
+                );
                 self.shared.1.notify_one();
                 return true;
             }
@@ -366,6 +512,135 @@ impl<T> Drop for Drain<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn tail_is_atomic_non_evicting_and_fences_all_previous_producers() {
+        let mut worker = Deadline::start("tail-fence", 3, |_, _: u32| {}).unwrap();
+        let target = Instant::now() + Duration::from_secs(1);
+        let old = worker.producer();
+        while !old.push(target, 7) {
+            thread::yield_now();
+        }
+        assert!(old.push_tail_pair_and_retire([
+            (target + Duration::from_millis(10), 0),
+            (target + Duration::from_millis(20), 0)
+        ]));
+        assert!(!old.push(target, 8));
+        assert_eq!(worker.pending(), 3);
+        assert_eq!(worker.report()["overflow"], 0);
+        assert_eq!(worker.report()["publication_epoch"], 1);
+        assert!(!worker
+            .producer()
+            .push_tail_pair_and_retire([(target, 0), (target, 0)]));
+        assert_eq!(worker.pending(), 3);
+        assert_eq!(worker.report()["publication_epoch"], 1);
+        worker.reset();
+        assert_eq!(worker.pending(), 0);
+        assert!(!old.push_tail_pair_and_retire([(target, 0), (target, 0)]));
+        worker.shutdown();
+    }
+    #[test]
+    fn nonoverlapping_clock_reanchor_preserves_original_targets_and_fences_stale_handles() {
+        let now = Instant::now();
+        let mut worker = Deadline::start("clock-preservation", 2, |_, _: u32| {}).unwrap();
+        let old = worker.producer();
+        let target = now + Duration::from_secs(1);
+        while !old.push_traced(target, 7, Some(7)) {
+            thread::yield_now();
+        }
+        let replacement = old.reanchor_and_renew(
+            target + Duration::from_millis(10),
+            Duration::from_millis(10),
+        );
+        assert_eq!(worker.pending(), 1);
+        assert_eq!(worker.report()["nonoverlapping_clock_retirements"], 1);
+        assert!(!old
+            .reanchor_and_renew(target + Duration::from_secs(1), Duration::from_millis(10))
+            .push(target, 8));
+        assert_eq!(worker.pending(), 1);
+        assert_eq!(worker.report()["publication_epoch"], 1);
+        worker.reset();
+        assert!(!replacement.push(target, 9));
+        assert_eq!(worker.pending(), 0);
+        let trace = worker.marker_trace((now, 1000));
+        assert_eq!(trace["events"][0]["disposition"], "authority_reset");
+        assert_eq!(trace["events"][0]["scheduled_target_ns"], 1_000_001_000_u64);
+        worker.shutdown();
+    }
+    #[test]
+    fn conflicting_clock_timeline_clears_even_an_out_of_order_queued_target() {
+        let now = Instant::now();
+        let mut worker = Deadline::start("clock-conflict", 2, |_, _: u32| {}).unwrap();
+        let old = worker.producer();
+        let first = now + Duration::from_secs(2);
+        let last = now + Duration::from_secs(1);
+        while !old.push_traced(first, 7, Some(7)) {
+            thread::yield_now();
+        }
+        while !old.push_traced(last, 8, Some(8)) {
+            thread::yield_now();
+        }
+        let fresh =
+            old.reanchor_and_renew(last + Duration::from_millis(10), Duration::from_millis(10));
+        assert_eq!(fresh.epoch(), 1);
+        assert_eq!(worker.pending(), 0);
+        assert_eq!(worker.report()["nonoverlapping_clock_retirements"], 0);
+        let trace = worker.marker_trace((now, 1000));
+        for event in trace["events"].as_array().unwrap() {
+            assert_eq!(event["disposition"], "clock_target_conflict");
+        }
+        worker.shutdown();
+    }
+    #[test]
+    fn marker_outcomes_distinguish_original_epoch_reset_from_actual_submission() {
+        let now = Instant::now();
+        let mut worker = Deadline::start("marker-outcomes", 2, |_, _: u32| {}).unwrap();
+        let old = worker.producer();
+        let target = now + Duration::from_secs(1);
+        while !old.push_traced(target, 7, Some(7)) {
+            thread::yield_now();
+        }
+        let fresh = old.reset_and_renew();
+        while !fresh.push_traced(target, 8, Some(8)) {
+            thread::yield_now();
+        }
+        worker.reset();
+        worker.shutdown();
+        let trace = worker.marker_trace((now, 1000));
+        let events = trace["events"].as_array().unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0]["label"], 7);
+        assert_eq!(events[0]["publication_epoch"], 0);
+        assert_eq!(events[0]["disposition"], "clock_reanchor");
+        assert_eq!(events[1]["label"], 8);
+        assert_eq!(events[1]["publication_epoch"], 1);
+        assert_eq!(events[1]["disposition"], "authority_reset");
+        for e in events {
+            assert_eq!(e["scheduled_target_ns"], 1_000_001_000_u64);
+        }
+        assert_eq!(worker.report()["submitted"], 0);
+    }
+    #[test]
+    fn marker_trace_has_a_fixed_capacity_and_reports_evicted_evidence() {
+        let now = Instant::now();
+        let mut trace = Trace::new();
+        for epoch in 0..5000 {
+            trace.record(
+                now,
+                &Delivery {
+                    value: (),
+                    marker: Some(7),
+                    epoch,
+                },
+                "submitted",
+            );
+        }
+        let report = trace.report((now, 1000));
+        assert_eq!(report["overflow"], 904);
+        let events = report["events"].as_array().unwrap();
+        assert_eq!(events.len(), 4096);
+        assert_eq!(events[0]["publication_epoch"], 904);
+        assert_eq!(events.last().unwrap()["publication_epoch"], 4999);
+    }
     #[test]
     fn transport_retirement_preserves_deadlines_but_fences_old_producers() {
         let (tx, rx) = mpsc::channel();

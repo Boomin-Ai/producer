@@ -1,0 +1,394 @@
+{
+  "g1_complete": false,
+  "production_deployed": false,
+  "loss_gate_relaxed": false,
+  "all_guest_compositing_qualified": false,
+  "scope": "Generated media, three connected guests, guest-1 recorded only. Cloud and modified local SFU are separate targets. Native submission does not prove encoding.",
+  "trials": [
+    {
+      "run": "generated-recovery-1791751200931891000",
+      "kind": "local traced control",
+      "guests_connected": 3,
+      "selected_guest_recorded": "guest-1",
+      "seconds": 140,
+      "forced_full_reconnects": 3,
+      "native_sha256": "85999f94939badc42d6411c41167f1632d6494a193a042220e962db2d5fd9762",
+      "sfu_sha256": "462b296c94efeca28e170ac18ca5b2fc1cdb65a8f896845f5f0e371eaca6c40e",
+      "audio_transition_tail": false,
+      "local_obs_acceptance_passed": true,
+      "failure_reasons": [],
+      "matched_markers": 70,
+      "absolute_p95_ms": 53.33333333333394,
+      "missing_video_labels": [],
+      "unmatched_video": 0,
+      "audio_presentation_queue": {
+        "active_after_shutdown": false,
+        "capacity": 24,
+        "enqueue_contention_dropped": 40,
+        "flushed": 0,
+        "late": 2,
+        "max_native_submit_us": 1460,
+        "max_tick_gap_us": 49119,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 14,
+        "pushed": 13710,
+        "retired_producer_dropped": 0,
+        "same_authority_transport_retirements": 12,
+        "sealed_for_finish": true,
+        "submitted": 13708,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "video_presentation_queue": {
+        "active_after_shutdown": false,
+        "capacity": 14,
+        "enqueue_contention_dropped": 3,
+        "flushed": 0,
+        "late": 0,
+        "max_native_submit_us": 342,
+        "max_tick_gap_us": 49074,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 14,
+        "pushed": 3606,
+        "retired_producer_dropped": 0,
+        "same_authority_transport_retirements": 12,
+        "sealed_for_finish": true,
+        "submitted": 3606,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "transport_audio_silence_tail": null,
+      "injected_markers": [
+        8,
+        28,
+        48
+      ],
+      "injected_recorded_pairs": [
+        {
+          "audio_pts_ms": 13990.000000000002,
+          "id": 8,
+          "video_minus_audio_ms": 9.999999999998181,
+          "video_pts_ms": 14000
+        },
+        {
+          "audio_pts_ms": 53980,
+          "id": 28,
+          "video_minus_audio_ms": 20,
+          "video_pts_ms": 54000
+        },
+        {
+          "audio_pts_ms": 93980,
+          "id": 48,
+          "video_minus_audio_ms": 20,
+          "video_pts_ms": 94000
+        }
+      ],
+      "input_sha256": {
+        "generated-recovery-1791751200931891000-browser.json": "aae6401ed667b79b037bd2121801a3aefe62a05f83b00f4f9a09e706ca099990",
+        "generated-recovery-1791751200931891000-conditions.json": "f19622b06c61d3ee3c518828cbb7455ca6d690bdce3c5db190f28dc6b31e293f",
+        "generated-recovery-1791751200931891000-obs-acceptance.json": "7cca8472365e586b89ae5296a62f1c2cfff9732c6468d892c075c2e137e672e7",
+        "generated-recovery-1791751200931891000-obs-markers.json": "5ca4010a379e656f1215ac65987995022d2a411bd42b79e7402a679717961efb",
+        "generated-recovery-1791751200931891000-obs-numbered.json": "fc044600a55518f0f2fcda235bb8778064c3b8ed55aaa6e90df3240ea5a9e6a8",
+        "generated-recovery-1791751200931891000-reconnect-loss.json": "431bfeb09915de4123957ad5ad64daaf75126e188a1366cec2b745067932e8f9",
+        "generated-recovery-1791751200931891000-sfu-provenance.json": "c070e5dee50fe2fb6ab85eda727a8a66059f87135704df728602da75b78344f8",
+        "generated-recovery-1791751200931891000.json": "3236a146d1b8b623d4c2387395c13e998f3ed6fc82402e7a6d04ce6dedee1d80"
+      }
+    },
+    {
+      "run": "generated-recovery-1791751484589318000",
+      "kind": "LiveKit Cloud traced control",
+      "guests_connected": 3,
+      "selected_guest_recorded": "guest-1",
+      "seconds": 60,
+      "forced_full_reconnects": 1,
+      "native_sha256": "85999f94939badc42d6411c41167f1632d6494a193a042220e962db2d5fd9762",
+      "sfu_sha256": null,
+      "audio_transition_tail": false,
+      "local_obs_acceptance_passed": false,
+      "failure_reasons": [
+        "epoch 11018490577: audio readiness exceeded budget including preceding resets",
+        "epoch 11018490577: video readiness exceeded budget including preceding resets",
+        "epoch 11031219841: audio readiness exceeded budget including preceding resets",
+        "epoch 11031219841: video readiness exceeded budget including preceding resets",
+        "missing marker labels within observed recording span"
+      ],
+      "matched_markers": 25,
+      "absolute_p95_ms": 40,
+      "missing_video_labels": [
+        9,
+        10
+      ],
+      "unmatched_video": 0,
+      "audio_presentation_queue": {
+        "active_after_shutdown": false,
+        "capacity": 24,
+        "enqueue_contention_dropped": 20,
+        "flushed": 0,
+        "late": 1,
+        "max_native_submit_us": 1057,
+        "max_tick_gap_us": 42909,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 6,
+        "pushed": 4980,
+        "retired_producer_dropped": 0,
+        "same_authority_transport_retirements": 4,
+        "sealed_for_finish": true,
+        "submitted": 4979,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "video_presentation_queue": {
+        "active_after_shutdown": false,
+        "capacity": 14,
+        "enqueue_contention_dropped": 1,
+        "flushed": 0,
+        "late": 1,
+        "max_native_submit_us": 968,
+        "max_tick_gap_us": 42422,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 6,
+        "pushed": 1276,
+        "retired_producer_dropped": 0,
+        "same_authority_transport_retirements": 4,
+        "sealed_for_finish": true,
+        "submitted": 1275,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "transport_audio_silence_tail": null,
+      "injected_markers": [],
+      "injected_recorded_pairs": [],
+      "input_sha256": {
+        "generated-recovery-1791751484589318000-browser.json": "fd63efc7f30f1326e9e49fd304f04f0876b06279b13d76ad040471f310176cbf",
+        "generated-recovery-1791751484589318000-conditions.json": "9286bf82f91cbb4aa5c181267c4131ed31dee2aa01ab2c8bd833fd105c2278c6",
+        "generated-recovery-1791751484589318000-obs-acceptance.json": "48a44ae1d5c8243291adf7ab6942c98e33316b2ba76eb2dcbccb4a1f7c9a833b",
+        "generated-recovery-1791751484589318000-obs-markers.json": "8a5490136bf395053c318b58fe773f194560d62217c68dfd151ff1d1b92e4432",
+        "generated-recovery-1791751484589318000-obs-numbered.json": "9e3fdd1f90c4c5efbed0fd83759465c03cfe1fd016f6c49a1a23df836d6460bc",
+        "generated-recovery-1791751484589318000-reconnect-loss.json": "484157ea8689f223cc88ea666e33e5098e41b21f8eb8d6074d94c3ffe138c61c",
+        "generated-recovery-1791751484589318000.json": "10c4bf259881901ee24ee345042d8a0b0e49a61f937ab46261e90ab825e3db6a"
+      }
+    },
+    {
+      "run": "generated-recovery-1791752019477394000",
+      "kind": "guarded clock reanchor candidate",
+      "guests_connected": 3,
+      "selected_guest_recorded": "guest-1",
+      "seconds": 140,
+      "forced_full_reconnects": 3,
+      "native_sha256": "d90c3a97309a428f20626f31e2e17e6dbd263b963c02e955f032bd8d570b5bbc",
+      "sfu_sha256": "462b296c94efeca28e170ac18ca5b2fc1cdb65a8f896845f5f0e371eaca6c40e",
+      "audio_transition_tail": false,
+      "local_obs_acceptance_passed": false,
+      "failure_reasons": [
+        "numbered recording marker gate failed"
+      ],
+      "matched_markers": 67,
+      "absolute_p95_ms": 43.33333333332848,
+      "missing_video_labels": [],
+      "unmatched_video": 3,
+      "audio_presentation_queue": {
+        "active_after_shutdown": false,
+        "capacity": 24,
+        "enqueue_contention_dropped": 32,
+        "flushed": 0,
+        "late": 0,
+        "max_native_submit_us": 1153,
+        "max_tick_gap_us": 22799,
+        "nonoverlapping_clock_retirements": 0,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 14,
+        "pushed": 13725,
+        "retired_producer_dropped": 0,
+        "same_authority_transport_retirements": 12,
+        "sealed_for_finish": true,
+        "submitted": 13725,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "video_presentation_queue": {
+        "active_after_shutdown": false,
+        "capacity": 14,
+        "enqueue_contention_dropped": 2,
+        "flushed": 0,
+        "late": 0,
+        "max_native_submit_us": 441,
+        "max_tick_gap_us": 22798,
+        "nonoverlapping_clock_retirements": 0,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 14,
+        "pushed": 3567,
+        "retired_producer_dropped": 0,
+        "same_authority_transport_retirements": 12,
+        "sealed_for_finish": true,
+        "submitted": 3567,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "transport_audio_silence_tail": null,
+      "injected_markers": [
+        8,
+        28,
+        48
+      ],
+      "injected_recorded_pairs": [],
+      "input_sha256": {
+        "generated-recovery-1791752019477394000-browser.json": "a8205061ed0f3aa802423d59103cbec9d29350ea3daecfe7613691973db1a38e",
+        "generated-recovery-1791752019477394000-conditions.json": "52c227b43fc6b274c30412ceef124d562ed19b2a767f382ffc77e46c8d8dd5aa",
+        "generated-recovery-1791752019477394000-obs-acceptance.json": "b7816d24c013e3426966deabf572197d77426c2407949ba80b4c5e05a2021e2e",
+        "generated-recovery-1791752019477394000-obs-markers.json": "cb5f1f62213fff62d0201666ca6ad82ff5af5d56d26d3e525964f3347edd53ab",
+        "generated-recovery-1791752019477394000-obs-numbered.json": "a6b918d1ea9b3cb82133d20989d0f1101cde1def0372ba4203d061aae2154b61",
+        "generated-recovery-1791752019477394000-partial-tone.json": "d571fdbb0922ab0c683a222e08abd411ef3f3cb247e265156bf91d5809a8e27a",
+        "generated-recovery-1791752019477394000-reconnect-loss.json": "30eee9ee85743f5cb43bf79a9afaf8889ad4fab50e069308f1f0e9f3389c3860",
+        "generated-recovery-1791752019477394000-sfu-provenance.json": "c070e5dee50fe2fb6ab85eda727a8a66059f87135704df728602da75b78344f8",
+        "generated-recovery-1791752019477394000.json": "da7a5ac08a7b4dad24cfa7b6cf9a1f1440338fa9ad30283fe9c3229bab5fb412"
+      }
+    },
+    {
+      "run": "generated-recovery-1791753532368911000",
+      "kind": "guarded clock reanchor plus two-block audio tail candidate",
+      "guests_connected": 3,
+      "selected_guest_recorded": "guest-1",
+      "seconds": 140,
+      "forced_full_reconnects": 3,
+      "native_sha256": "90beeb1d27f6cf7bf7bc4216a477ed3137eb0b808b48dfe1a906147fc82378e0",
+      "sfu_sha256": "462b296c94efeca28e170ac18ca5b2fc1cdb65a8f896845f5f0e371eaca6c40e",
+      "audio_transition_tail": true,
+      "local_obs_acceptance_passed": false,
+      "failure_reasons": [
+        "numbered recording marker gate failed",
+        "missing marker labels within observed recording span"
+      ],
+      "matched_markers": 66,
+      "absolute_p95_ms": 70,
+      "missing_video_labels": [
+        43,
+        67,
+        70,
+        71
+      ],
+      "unmatched_video": 0,
+      "audio_presentation_queue": {
+        "active_after_shutdown": false,
+        "capacity": 24,
+        "enqueue_contention_dropped": 32,
+        "flushed": 5,
+        "late": 123,
+        "max_native_submit_us": 54967,
+        "max_tick_gap_us": 230158,
+        "nonoverlapping_clock_retirements": 3,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 21,
+        "pushed": 13332,
+        "retired_producer_dropped": 0,
+        "same_authority_transport_retirements": 15,
+        "sealed_for_finish": true,
+        "submitted": 13204,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "video_presentation_queue": {
+        "active_after_shutdown": false,
+        "capacity": 14,
+        "enqueue_contention_dropped": 4,
+        "flushed": 5,
+        "late": 37,
+        "max_native_submit_us": 95538,
+        "max_tick_gap_us": 233035,
+        "nonoverlapping_clock_retirements": 0,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 18,
+        "pushed": 3393,
+        "retired_producer_dropped": 0,
+        "same_authority_transport_retirements": 12,
+        "sealed_for_finish": true,
+        "submitted": 3351,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "transport_audio_silence_tail": {
+        "block_duration_ms": 10,
+        "blocks_per_transition": 2,
+        "fake_sender_timestamps_used": false,
+        "missing_pcm_recovered": false,
+        "synthetic_blocks_enqueued": 6,
+        "synthetic_blocks_rejected": 0
+      },
+      "injected_markers": [
+        9,
+        29,
+        49
+      ],
+      "injected_recorded_pairs": [
+        {
+          "audio_pts_ms": 13310,
+          "id": 9,
+          "video_minus_audio_ms": 23.33333333333394,
+          "video_pts_ms": 13333.333333333334
+        },
+        {
+          "audio_pts_ms": 53340,
+          "id": 29,
+          "video_minus_audio_ms": -6.666666666664241,
+          "video_pts_ms": 53333.333333333336
+        },
+        {
+          "audio_pts_ms": 93630,
+          "id": 49,
+          "video_minus_audio_ms": 36.66666666667152,
+          "video_pts_ms": 93666.66666666667
+        }
+      ],
+      "input_sha256": {
+        "generated-recovery-1791753532368911000-browser.json": "e5a33ecefb62f40756648b9e7bc33acd1ca5178b1aa39065ff08a091ec37c8f7",
+        "generated-recovery-1791753532368911000-conditions.json": "37cf015408cdcec8d45c923488b2ede5f7d067b4087d611fc53d1642d5a10d73",
+        "generated-recovery-1791753532368911000-obs-acceptance.json": "be43ad510483372721a7bde4b2267b4f52565cc1b94e4915969184facedf9e59",
+        "generated-recovery-1791753532368911000-obs-markers.json": "99fda0133dd0462de0e40c6dbd6f623caa4267b1a79f54249b91c3000fe8aca7",
+        "generated-recovery-1791753532368911000-obs-numbered.json": "e911bfa2ad59a6ee93646fdb0378ed6cc256238d994955352e7ab941694094f8",
+        "generated-recovery-1791753532368911000-reconnect-loss.json": "2f6a362a2d977b673b7085ce93beea613ca0e2e1eb44d3c4661284d1abe8b884",
+        "generated-recovery-1791753532368911000-sfu-provenance.json": "c070e5dee50fe2fb6ab85eda727a8a66059f87135704df728602da75b78344f8",
+        "generated-recovery-1791753532368911000.json": "78da336c9123a54d6fc42e76f12ff05a5841c70ca9d7cc3a94e373ab065423c1"
+      }
+    }
+  ],
+  "interpretation": "Local traced control passed. Cloud control failed clock readiness. Clock-only candidate submitted three isolated 10ms audio fragments that were absent in recording windows. Tail candidate recorded all three injected reconnect pairs, but failed overall on four video clock rejections, with additional untagged queue lateness and resets. This single run does not establish reliable recovery or causally isolate padding from reanchor preservation."
+}

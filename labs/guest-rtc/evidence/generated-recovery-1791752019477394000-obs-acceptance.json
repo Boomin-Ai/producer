@@ -1,0 +1,84 @@
+{
+  "local_obs_acceptance_passed": false,
+  "failure_reasons": [
+    "numbered recording marker gate failed"
+  ],
+  "local_delivery_worker_gate_passed": true,
+  "delivery_worker_failure_reasons": [],
+  "local_readiness_gate_passed": true,
+  "readiness_failure_reasons": [],
+  "binding_epochs": [
+    {
+      "binding_since_us": 11550897362,
+      "recovery_started_us": 11550871664,
+      "superseded_binding_epochs": [
+        11550871664,
+        11550892619
+      ],
+      "first_scheduled_ms": {
+        "audio": 525.158,
+        "video": 673.613
+      }
+    },
+    {
+      "binding_since_us": 11564598549,
+      "recovery_started_us": 11564543899,
+      "superseded_binding_epochs": [
+        11564543899,
+        11564543943,
+        11564597567
+      ],
+      "first_scheduled_ms": {
+        "audio": 632.302,
+        "video": 641.774
+      }
+    },
+    {
+      "binding_since_us": 11604605428,
+      "recovery_started_us": 11604544851,
+      "superseded_binding_epochs": [
+        11604544851,
+        11604544900,
+        11604605261
+      ],
+      "first_scheduled_ms": {
+        "audio": 631.754,
+        "video": 634.38
+      }
+    },
+    {
+      "binding_since_us": 11644599371,
+      "recovery_started_us": 11644544659,
+      "superseded_binding_epochs": [
+        11644544659,
+        11644544700,
+        11644590119
+      ],
+      "first_scheduled_ms": {
+        "audio": 564.112,
+        "video": 581.567
+      }
+    }
+  ],
+  "raw_binding_epoch_count": 15,
+  "superseded_binding_epochs": [
+    11550871664,
+    11550892619,
+    11564543899,
+    11564543943,
+    11564597567,
+    11604544851,
+    11604544900,
+    11604605261,
+    11644544659,
+    11644544700,
+    11644590119
+  ],
+  "unfinished_binding_epochs": [],
+  "expected_binding_epochs": 4,
+  "readiness_budget_ms": 1500,
+  "budget_scope": "prototype local recovery from earliest pending reset, not WAN service guarantee",
+  "startup_and_tail_loss_qualified": false,
+  "lip_sync_qualified": false,
+  "g1_complete": false
+}

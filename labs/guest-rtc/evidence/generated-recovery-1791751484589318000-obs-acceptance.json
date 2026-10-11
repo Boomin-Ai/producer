@@ -1,0 +1,61 @@
+{
+  "local_obs_acceptance_passed": false,
+  "failure_reasons": [
+    "epoch 11018490577: audio readiness exceeded budget including preceding resets",
+    "epoch 11018490577: video readiness exceeded budget including preceding resets",
+    "epoch 11031219841: audio readiness exceeded budget including preceding resets",
+    "epoch 11031219841: video readiness exceeded budget including preceding resets",
+    "missing marker labels within observed recording span"
+  ],
+  "local_delivery_worker_gate_passed": true,
+  "delivery_worker_failure_reasons": [],
+  "local_readiness_gate_passed": false,
+  "readiness_failure_reasons": [
+    "epoch 11018490577: audio readiness exceeded budget including preceding resets",
+    "epoch 11018490577: video readiness exceeded budget including preceding resets",
+    "epoch 11031219841: audio readiness exceeded budget including preceding resets",
+    "epoch 11031219841: video readiness exceeded budget including preceding resets"
+  ],
+  "binding_epochs": [
+    {
+      "binding_since_us": 11018490577,
+      "recovery_started_us": 11018490210,
+      "superseded_binding_epochs": [
+        11018490210,
+        11018490403
+      ],
+      "first_scheduled_ms": {
+        "audio": 6012.919,
+        "video": 6020.244
+      }
+    },
+    {
+      "binding_since_us": 11031219841,
+      "recovery_started_us": 11030492222,
+      "superseded_binding_epochs": [
+        11030492222,
+        11030492280,
+        11031219311
+      ],
+      "first_scheduled_ms": {
+        "audio": 3959.952,
+        "video": 4021.685
+      }
+    }
+  ],
+  "raw_binding_epoch_count": 7,
+  "superseded_binding_epochs": [
+    11018490210,
+    11018490403,
+    11030492222,
+    11030492280,
+    11031219311
+  ],
+  "unfinished_binding_epochs": [],
+  "expected_binding_epochs": 2,
+  "readiness_budget_ms": 1500,
+  "budget_scope": "prototype local recovery from earliest pending reset, not WAN service guarantee",
+  "startup_and_tail_loss_qualified": false,
+  "lip_sync_qualified": false,
+  "g1_complete": false
+}

@@ -26,9 +26,11 @@ parser.add_argument('--source-phase',type=float,default=0,help='Generated guest 
 parser.add_argument('--reconnect-on-input-pulse',action='store_true',help='Trigger forced reconnect on a freshly decoded selected-guest pulse, after each scheduled reconnect deadline')
 parser.add_argument('--reconnect-on-queued-pulse',action='store_true',help='Trigger after both matching decoded audio/video pulses have been accepted for output')
 parser.add_argument('--preserve-reconnect-output',action='store_true',help='Candidate: fence producers but preserve accepted queued output during fixed-authority full reconnect')
+parser.add_argument('--audio-transition-tail',action='store_true',help='Candidate: enqueue exactly two synthetic silence blocks to finish the OBS audio tail before fixed-authority reconnect')
 parser.add_argument('--guests',type=int,choices=[1,3],default=1)
 parser.add_argument('--seconds',type=int,default=45)
 args=parser.parse_args()
+if args.audio_transition_tail and (not args.preserve_reconnect_output or args.room_loop_playback):parser.error("Audio transition tail requires --preserve-reconnect-output")
 if not 0<=args.source_phase<2:parser.error('Source phase must be finite and 0 <= phase < 2')
 if args.require_obs_gates and not args.obs_recording:parser.error('--require-obs-gates requires --obs-recording')
 if (args.reconnect_on_input_pulse or args.reconnect_on_queued_pulse) and (not args.obs_recording or args.room_loop_playback or args.reconnect=='none'):parser.error('Pulse overlap requires isolated OBS playback and a reconnect mode')
@@ -46,6 +48,7 @@ env['LIVEKIT_LAB_SOURCE_PHASE']=str(args.source_phase)
 if args.reconnect_on_input_pulse:env['LIVEKIT_LAB_RECONNECT_ON_INPUT_PULSE']='1'
 if args.reconnect_on_queued_pulse:env['LIVEKIT_LAB_RECONNECT_ON_QUEUED_PULSE']='1'
 if args.preserve_reconnect_output:env['LIVEKIT_LAB_PRESERVE_RECONNECT_OUTPUT']='1'
+if args.audio_transition_tail:env['LIVEKIT_LAB_AUDIO_TRANSITION_TAIL']='1'
 if args.reconnect!='none':env['LIVEKIT_LAB_GENERATED_RECONNECT']=args.reconnect
 if args.subscriber_report:env['LIVEKIT_LAB_SUBSCRIBER_AUDIO_SR']='1'
 recording=LAB/'runtime'/f'{name}-obs.mp4'
@@ -73,6 +76,7 @@ report['source_phase_seconds']=args.source_phase
 report['reconnect_on_input_pulse']=args.reconnect_on_input_pulse
 report['reconnect_on_queued_pulse']=args.reconnect_on_queued_pulse
 report['preserve_reconnect_output']=args.preserve_reconnect_output
+report['audio_transition_tail']=args.audio_transition_tail
 conditions=LAB/'evidence'/f'{name}-conditions.json';conditions.write_text(json.dumps(report,indent=2)+'\n')
 owned=[];logs=[]
 def start(command,label,port):

@@ -18,6 +18,35 @@ use webrtc_sys::{
     audio_track as audio_sys, video_frame as frame_sys, webrtc::ffi::DecodedAudioBlock,
 };
 type Frame = UniquePtr<frame_sys::ffi::VideoFrame>;
+struct AudioTail {
+    stamp: Instant,
+    generation: u64,
+    sequence: u64,
+    channels: u32,
+    epoch: u64,
+}
+impl AudioTail {
+    fn frames(&self) -> Option<[(Instant, DecodedAudioBlock); 2]> {
+        let frame = |n: u64| -> Option<(Instant, DecodedAudioBlock)> {
+            Some((
+                self.stamp.checked_add(Duration::from_millis(n * 10))?,
+                DecodedAudioBlock {
+                    samples: [0; 960],
+                    generation: self.generation,
+                    sequence: self.sequence.checked_add(n)?,
+                    channels: self.channels,
+                    ssrc: 0,
+                    rtp_timestamp: 0,
+                    pull_us: 0,
+                    elapsed_ms: 0,
+                    speech_type: 0,
+                    muted: true,
+                },
+            ))
+        };
+        Some([frame(1)?, frame(2)?])
+    }
+}
 struct Kernel {
     playback: crate::presentation::SelectedPlayback,
     origins: crate::sender_clock::DecodedOrigins,
@@ -38,6 +67,10 @@ struct Kernel {
     audio_markers: Vec<Value>,
     audio_receipt_seen: bool,
     audio_accepted_seen: bool,
+    preserve_clock_output: bool,
+    last_audio: Option<AudioTail>,
+    transition_tail_enqueued: u64,
+    transition_tail_rejected: u64,
 }
 pub struct Worker {
     kernel: Arc<Mutex<Kernel>>,
@@ -84,6 +117,12 @@ impl Worker {
             audio_markers: Vec::with_capacity(512),
             audio_receipt_seen: false,
             audio_accepted_seen: false,
+            last_audio: None,
+            transition_tail_enqueued: 0,
+            transition_tail_rejected: 0,
+            preserve_clock_output: std::env::var("LIVEKIT_LAB_PRESERVE_RECONNECT_OUTPUT")
+                .as_deref()
+                == Ok("1"),
         }));
         kernel
             .lock()
@@ -126,10 +165,26 @@ impl Worker {
             accepted_audio_pulse,
         })
     }
+    pub fn finish_transport_audio(&self) {
+        let mut k = self.kernel.lock().unwrap();
+        let Some(last) = k.last_audio.take() else {
+            return;
+        };
+        if last.epoch == k.audio.epoch()
+            && last
+                .frames()
+                .is_some_and(|tail| k.audio.push_tail_pair_and_retire(tail))
+        {
+            k.transition_tail_enqueued += 2;
+        } else {
+            k.transition_tail_rejected += 2;
+        }
+    }
     pub fn clear(&self, since: i64, audio: Producer<DecodedAudioBlock>, video: Producer<Frame>) {
         let mut k = self.kernel.lock().unwrap();
         k.playback.clear(since);
         k.playback.startup_note("binding_reset", since);
+        k.last_audio = None;
         k.audio = audio;
         k.video = video;
         k.video_queue = None;
@@ -178,6 +233,9 @@ impl Worker {
         let mut k = self.kernel.lock().unwrap_or_else(|p| p.into_inner());
         k.video_queue = None;
         let mut report = k.playback.report();
+        report["nonoverlapping_audio_clock_preservation_requested"] =
+            json!(k.preserve_clock_output);
+        report["transport_audio_silence_tail"] = json!({"synthetic_blocks_enqueued":k.transition_tail_enqueued,"synthetic_blocks_rejected":k.transition_tail_rejected,"blocks_per_transition":2,"block_duration_ms":10,"fake_sender_timestamps_used":false,"missing_pcm_recovered":false});
         report["decoded_video_marker_receipts"] = json!(k.input_markers);
         report["decoded_video_marker_receipt_capacity"] = json!(256);
         report["decoded_audio_marker_receipts"] = json!(k.audio_markers);
@@ -263,7 +321,12 @@ impl Kernel {
                 .clock
                 .audio(block.generation, block.sequence, origin, pull);
             if resets != p.clock.reset_count() {
-                self.audio = self.audio.reset_and_renew();
+                self.audio = match stamp.filter(|_| self.preserve_clock_output) {
+                    Some(target) => self
+                        .audio
+                        .reanchor_and_renew(target, Duration::from_millis(10)),
+                    None => self.audio.reset_and_renew(),
+                };
                 self.video = self.video.reset_and_renew();
                 p.audio_reanchored();
             }
@@ -297,7 +360,18 @@ impl Kernel {
                     pull,
                     timestamp(self.recording_clock, stamp),
                 );
-                self.audio.push(stamp, block)
+                let tail = AudioTail {
+                    stamp,
+                    generation: block.generation,
+                    sequence: block.sequence,
+                    channels: block.channels,
+                    epoch: self.audio.epoch(),
+                };
+                let accepted = self.audio.push_traced(stamp, block, tone);
+                if accepted {
+                    self.last_audio = Some(tail);
+                }
+                accepted
             } else {
                 false
             };
@@ -310,7 +384,7 @@ impl Kernel {
                 if (!self.audio_receipt_seen || (accepted && !self.audio_accepted_seen))
                     && self.audio_markers.len() < 512
                 {
-                    self.audio_markers.push(json!({"id_mod16":label,"received_us":now,"binding_since_us":p.since_us,"output_accepted":accepted,"scheduled_target_ns":stamp.map(|s| timestamp(self.recording_clock,s))}));
+                    self.audio_markers.push(json!({"id_mod16":label,"publication_epoch":self.audio.epoch(),"received_us":now,"binding_since_us":p.since_us,"output_accepted":accepted,"scheduled_target_ns":stamp.map(|s| timestamp(self.recording_clock,s))}));
                 }
                 self.audio_receipt_seen = true;
                 self.audio_accepted_seen |= accepted;
@@ -372,7 +446,7 @@ impl Kernel {
                         frame.at,
                         timestamp(self.recording_clock, stamp),
                     );
-                    self.video.push(stamp, frame.value)
+                    self.video.push_traced(stamp, frame.value, label)
                 } else {
                     false
                 };
@@ -383,7 +457,7 @@ impl Kernel {
                         }
                     }
                     if self.input_markers.len() < 256 {
-                        self.input_markers.push(json!({"label":label,"received_us":rtc,"binding_since_us":self.playback.since_us,"scheduled_target_ns":target.map(|s| timestamp(self.recording_clock,s)),"output_accepted":accepted}));
+                        self.input_markers.push(json!({"label":label,"publication_epoch":self.video.epoch(),"received_us":rtc,"binding_since_us":self.playback.since_us,"scheduled_target_ns":target.map(|s| timestamp(self.recording_clock,s)),"output_accepted":accepted,"clock_rejection":self.playback.clock.last_video_rejection()}));
                     }
                 }
                 let active = mean > 180.0;
@@ -457,6 +531,35 @@ fn timestamp(base: (Instant, u64), at: Instant) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn transition_tail_contains_only_two_silent_frames_at_original_sample_positions() {
+        let now = Instant::now();
+        let last = AudioTail {
+            stamp: now,
+            generation: 7,
+            sequence: 100,
+            channels: 2,
+            epoch: 3,
+        };
+        let tail = last.frames().unwrap();
+        for (i, (target, block)) in tail.iter().enumerate() {
+            assert_eq!(*target, now + Duration::from_millis((i as u64 + 1) * 10));
+            assert_eq!(block.sequence, 101 + i as u64);
+            assert_eq!(block.generation, 7);
+            assert_eq!(block.channels, 2);
+            assert!(block.samples.iter().all(|s| *s == 0));
+            assert!(block.muted);
+            assert_eq!(block.ssrc, 0);
+            assert_eq!(block.rtp_timestamp, 0);
+            assert_eq!(block.pull_us, 0);
+        }
+        assert!(AudioTail {
+            sequence: u64::MAX,
+            ..last
+        }
+        .frames()
+        .is_none());
+    }
     use crate::{delivery_worker::Deadline, queue::Captured};
     #[test]
     fn marker_receipt_label_honors_stride_and_rejects_invalid_buffers() {
