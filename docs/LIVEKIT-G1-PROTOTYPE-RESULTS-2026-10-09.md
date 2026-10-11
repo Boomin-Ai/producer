@@ -1809,3 +1809,67 @@ Managed LiveKit compatibility, WAN behavior, sustained operation, native binding
 latency, presentation late drops, capture-clock sync and full room integration
 remain open. This repair currently requires the custom self-hosted lab SFU;
 it cannot be enabled on LiveKit Cloud with an API key alone. G1 remains incomplete.
+
+
+### Native playback report-worker experiment (2026-10-11)
+
+The subscriber timing repair remains enabled. This checkpoint addresses the
+application presentation loop, without changing sender-clock guards, 30 ms late
+frame rejection, queue capacities, the 1.5 s local readiness budget or the 80 ms
+numbered-marker acceptance limit.
+
+Due frames are serviced before report processing and again after frame processing.
+Each submission uses the current monotonic time. Missing track stats retry every
+100 ms with one cancellable discovery job and the existing 250 ms overall timeout.
+A new owned thread collects and parses RTCP diagnostics into a one-slot replaceable
+mailbox. Presentation tries the mailbox without waiting for collection; shutdown
+wakes and joins the worker before releasing the room. Bounded loop-stage counters
+record stalls, and worker counters preserve overwritten snapshots/errors.
+
+`1791699710269001000` (single guest/full reconnect, due-first instrumentation)
+failed local recording acceptance: timing-report work blocked up to 281.860 ms,
+41 late audio blocks and 28 late video frames, one uncertain tone/unmatched video.
+Readiness passed and numbered p95 was 66.7 ms.
+
+`1791699883886780000` (single guest/full reconnect, report worker) passed local
+acceptance: 22 numbered pairs, 30 ms p95, no unmatched markers or uncertain tones,
+zero audio PTS discontinuities. Initial audio/video readiness was 508.578/549.956 ms;
+reconnect was 577.587/586.493 ms. Main-loop work peaked at 18.305 ms, no work or gap
+over 100 ms, three late audio blocks and no late video frames. The worker stopped
+with zero errors and no active handle. This is a local generated selected-guest
+recording proof, not capture lip sync, WAN or speakerphone qualification.
+
+`1791700146098862000` (three guests/three full reconnects, worker, unoptimized lab)
+failed: 44 numbered pairs, 90 ms p95, five unmatched audio/two unmatched video and
+two uncertain tones; missing span labels also failed. All four readiness episodes
+passed (maximum first-video 1006.504 ms). Late audio/video were 743/224. Work across
+multiple stages was delayed: max observer-video 546.691 ms, report application
+611.405 ms, tick gap 795.749 ms. The worker mailbox remained bounded, stopped
+cleanly and had no collection errors, but isolation alone does not prove load
+reliability. These failed diagnostics remain alongside the passing single run.
+
+The next candidate optimizes only `producer-guest-rtc-lab` at dev opt-level 2,
+representing optimized application iterator/JSON work. SDK revisions and dependency
+optimization settings remain fixed; measurements from this candidate must be
+distinguished from earlier unoptimized lab results.
+
+`1791700619569791000` (three guests/three full reconnects, lab opt-level 2)
+also failed local acceptance: 56 numbered pairs, 150 ms p95, missing span labels.
+Average observer-video work fell from 3356 to 483 us and average report application
+from 1878 to 696 us, but long stalls remained: tick gap 1302.457 ms, work 281.889 ms,
+late audio/video 733/235. Worker stopped with zero errors and bounded capacity one.
+All browser receivers recovered current markers; this does not qualify native
+recorded synchronization. Post-run `vm.swapusage` reported 3681.56 MiB used on
+this 8 GiB Mac; that is an environment limitation, not established root cause.
+No unrelated user applications were terminated to obtain a favorable result.
+
+Final validation: 49 native unit tests (including blocked collector and 100
+start/shutdown cycles) passed on the optimized candidate. Twelve Python recording
+gate regressions and four Node numbered-marker regressions passed. Numeric run
+comparisons are in `labs/guest-rtc/evidence/native-playback-report-worker-trials.json`;
+generated videos remain ignored in runtime. Full G1 and production rollout remain
+gated on multi-guest native delivery/sync, startup/tail/capture qualification and
+the existing WAN/speaker-reference integration requirements. The next delivery
+investigation should separate periodic PCM draining and deadline submission from
+report application, receiver events and non-selected guest diagnostics, retain
+epoch/SID rejection, and test controlled resource pressure with unchanged gates.

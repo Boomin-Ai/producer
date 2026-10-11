@@ -36,3 +36,9 @@ incremental = false
 [profile.test]
 debug = 0
 incremental = false
+
+# Keep native timing experiments representative of the optimized application:
+# debug iterator/JSON traversal in this fixture must not dominate frame deadlines.
+# Optimize this lab only; retain the pinned SDK and all queue/sync limits.
+[profile.dev.package.producer-guest-rtc-lab]
+opt-level = 2

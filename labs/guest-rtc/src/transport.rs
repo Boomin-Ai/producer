@@ -22,6 +22,35 @@ use std::{
 };
 use webrtc_sys::{audio_track as audio_sys, video_frame as frame_sys, video_track as video_sys};
 
+// Service deadlines before diagnostics/conversion, and check time again after
+// each submission: processing one frame must not hide another frame's lateness.
+#[cfg(feature = "obs-proof")]
+fn submit_due(
+    recorder: &crate::obs_proof::Recorder,
+    audio: &mut crate::presentation::Scheduled<webrtc_sys::webrtc::ffi::DecodedAudioBlock>,
+    video: &mut crate::presentation::Scheduled<UniquePtr<frame_sys::ffi::VideoFrame>>,
+) {
+    while let Some((stamp, block)) = audio.pop_due(Instant::now()) {
+        recorder.audio_writer().write_interleaved(
+            &block.samples[..480 * block.channels as usize],
+            block.channels,
+            stamp,
+        );
+    }
+    while let Some((stamp, frame)) = video.pop_due(Instant::now()) {
+        let buffer = new_video_frame_buffer(unsafe { frame.video_frame_buffer() }).to_i420();
+        let (y, u, v) = buffer.data();
+        let (ys, us, vs) = buffer.strides();
+        recorder.video(
+            (y, u, v),
+            buffer.width(),
+            buffer.height(),
+            (ys, us, vs),
+            stamp,
+        );
+    }
+}
+
 #[derive(Clone)]
 struct AudioBlock {
     samples: [i16; 480],
@@ -429,9 +458,12 @@ async fn source_loop(
                 let t = n as f64 / 48000.0;
                 let phase = t % 2.0;
                 if (0.5..0.62).contains(&phase) {
-                    let hz = 997.0 + if numbered_markers {
-                        128.0 * ((t / 2.0).floor() as u64 % 16) as f64
-                    } else { 0.0 };
+                    let hz = 997.0
+                        + if numbered_markers {
+                            128.0 * ((t / 2.0).floor() as u64 % 16) as f64
+                        } else {
+                            0.0
+                        };
                     (13100.0 * (2.0 * std::f64::consts::PI * hz * t).sin()) as i16
                 } else {
                     0
@@ -551,7 +583,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         bail!("Fixture duration must be 5..300 seconds");
     }
     let generated_reconnect_count: usize = std::env::var("LIVEKIT_LAB_GENERATED_RECONNECT_COUNT")
-        .unwrap_or_else(|_| "1".into()).parse()
+        .unwrap_or_else(|_| "1".into())
+        .parse()
         .context("Generated reconnect count must be an integer")?;
     if !(1..=3).contains(&generated_reconnect_count) {
         bail!("Generated reconnect count must be 1..3");
@@ -647,7 +680,11 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut lifecycle = Vec::new();
     let mut decoded_origins = crate::sender_clock::DecodedOrigins::default();
-    let mut next_sender_report_refresh = Instant::now();
+    let mut report_worker = crate::report_worker::Worker::start(Duration::from_millis(100), || {
+        serde_json::from_str(&webrtc_sys::webrtc::ffi::diagnostic_rtcp_exchange_report())
+            .map_err(|e| e.to_string())
+    });
+    let mut loop_timing = crate::loop_timing::Timings::default();
     let mut reconnect_injected = 0usize;
     loop {
         tokio::select! {
@@ -737,6 +774,10 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
             }
             _ = tick.tick() => {
                 let now = Instant::now(); let elapsed = now.duration_since(began).as_secs_f64();
+                loop_timing.tick(now);
+                #[cfg(feature = "obs-proof")]
+                if scheduled_handoff {submit_due(recorder.as_ref().unwrap(), &mut scheduled_audio, &mut scheduled_video);}
+                let work_started = Instant::now();
                 if elapsed >= seconds as f64 { break; }
                 let reconnect_limit = if generated_reconnect.is_some() { generated_reconnect_count } else { 1 };
                 let next_reconnect_at = if generated_reconnect.is_some() { 12.0 + 40.0 * reconnect_injected as f64 } else { 5.0 };
@@ -804,12 +845,13 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                                 }
                                 bindings
                             });
-                            next_binding_refresh=now+Duration::from_millis(500);
+                            // Retry missing receiver stats promptly; capacity remains one owned job.
+                            next_binding_refresh=now+Duration::from_millis(100);
                         }
                     }
                 }
-                if now >= next_sender_report_refresh {
-                    let rtcp = serde_json::from_str(&webrtc_sys::webrtc::ffi::diagnostic_rtcp_exchange_report())?;
+                let reports_started = Instant::now();
+                if let Some(rtcp) = report_worker.take() {
                     decoded_origins.refresh(&rtcp);
                     #[cfg(feature = "obs-proof")]
                     if use_sender_clock {
@@ -818,8 +860,9 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                         let observed=audio_sys::ffi::diagnostic_webrtc_time_us();
                         if playback.video_ready(observed) {playback.startup_note("video_clock_ready",observed);}
                     }
-                    next_sender_report_refresh = now + Duration::from_millis(100);
                 }
+                loop_timing.observe("sender_report_refresh", reports_started.elapsed());
+                let audio_started = Instant::now();
                 let decoded_at = audio_sys::ffi::diagnostic_webrtc_time_us();
                 for block in webrtc_sys::webrtc::ffi::diagnostic_take_decoded_audio() {
                     decoded_origins.consume(&block, decoded_at);
@@ -849,11 +892,13 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                         } else {playback.unmatched_audio+=1;}
                     }
                 }
+                loop_timing.observe("decoded_audio", audio_started.elapsed());
                 // Stall the receiving application for 200 ms every five seconds,
                 // while WebRTC callbacks and publication continue independently.
                 #[cfg(feature = "obs-proof")]
                 if let Some(recorder) = &recorder { recorder.pump(); }
                 if pressure && elapsed >= 5.0 && elapsed % 5.0 < 0.2 { continue; }
+                let observer_audio_started=Instant::now();
                 for (id, tap) in &audio {
                     let m = metrics.entry(id.clone()).or_default();
                     while let Some(frame) = tap.observer.queue.pop(now) {
@@ -875,6 +920,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                         m.audio_active = active;
                     }
                 }
+                loop_timing.observe("observer_audio",observer_audio_started.elapsed());
+                let observer_video_started=Instant::now();
                 for (id, tap) in &video {
                     let m = metrics.entry(id.clone()).or_default();
                     while let Some(frame) = tap.observer.queue.pop(now) {
@@ -912,24 +959,18 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                         m.video_active = active;
                     }
                 }
+                loop_timing.observe("observer_video",observer_video_started.elapsed());
+                let due_started=Instant::now();
                 #[cfg(feature = "obs-proof")]
-                if scheduled_handoff {
-                    let due=Instant::now();
-                    let recorder=recorder.as_ref().unwrap();
-                    while let Some((stamp,block))=scheduled_audio.pop_due(due) {
-                        recorder.audio_writer().write_interleaved(&block.samples[..480*block.channels as usize],block.channels,stamp);
-                    }
-                    while let Some((stamp,frame))=scheduled_video.pop_due(due) {
-                        let buffer=new_video_frame_buffer(unsafe {frame.video_frame_buffer()}).to_i420();
-                        let (y,u,v)=buffer.data();let (ys,us,vs)=buffer.strides();
-                        recorder.video((y,u,v),buffer.width(),buffer.height(),(ys,us,vs),stamp);
-                    }
-                }
+                if scheduled_handoff {submit_due(recorder.as_ref().unwrap(), &mut scheduled_audio, &mut scheduled_video);}
+                loop_timing.observe("due_handoff",due_started.elapsed());
+                loop_timing.observe("tick_work", work_started.elapsed());
             }
         }
     }
     #[cfg(feature = "obs-proof")]
     binding_discovery.shutdown().await;
+    report_worker.shutdown();
     let publisher_join_started = Instant::now();
     let publisher_error = publisher.shutdown().err().map(|e| e.to_string());
     let publisher_join_ms = publisher_join_started.elapsed().as_secs_f64() * 1000.0;
@@ -1058,7 +1099,10 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     let audio_master_playback = if use_sender_clock {
         let mut report = playback.report();
         report["scheduled_handoff"] = json!(scheduled_handoff);
+        report["loop_timing"] = loop_timing.report();
+        report["timing_report_worker_after_shutdown"] = report_worker.report();
         report["binding_discovery_after_shutdown"] = binding_discovery.report();
+        report["binding_refresh_interval_ms"] = json!(100);
         report["audio_presentation_queue"] = scheduled_audio.report();
         report["video_presentation_queue"] = scheduled_video.report();
         scheduled_audio.clear();
@@ -1082,6 +1126,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     }
     let report = json!({"generated_reconnect_requested":generated_reconnect,"generated_reconnect_count":if generated_reconnect.is_some(){generated_reconnect_count}else{0},"numbered_generated_markers":std::env::var("LIVEKIT_LAB_MARKER_IDS").as_deref()==Ok("1"),"audio_master_playback":audio_master_playback,"schema_version":1,"livekit":"0.9.4","topology":"local browser guests to native host through loopback SFU",
         "signaling_url":url,"publisher_error":publisher_error,
+        "receiver_loop_timing":loop_timing.report(),"timing_report_worker_after_shutdown":report_worker.report(),
         "capture_publication":capture_evidence.lock().unwrap_or_else(|p|p.into_inner()).clone(),
         "capture_publisher_owner":{"named_thread":true,"joined":publisher.thread.is_none(),"shutdown_ms":publisher_join_ms},
         "sync_streams_requested":std::env::var("LIVEKIT_LAB_SYNC_STREAMS").as_deref() == Ok("1"),

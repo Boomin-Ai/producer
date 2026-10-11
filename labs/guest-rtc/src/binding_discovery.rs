@@ -15,6 +15,7 @@ pub struct Discovery {
     generation: u64,
     spawned: u64,
     completed: u64,
+    empty_results: u64,
     cancelled: u64,
     failed: u64,
     timed_out: u64,
@@ -63,6 +64,9 @@ impl Discovery {
                     self.stale += 1;
                     return None;
                 }
+                if bindings.as_ref().is_some_and(Vec::is_empty) {
+                    self.empty_results += 1;
+                }
                 if bindings.is_none() {
                     self.timed_out += 1;
                 }
@@ -91,7 +95,7 @@ impl Discovery {
     }
     pub fn report(&self) -> Value {
         json!({"capacity":1,"active":self.jobs.len(),"peak_active":self.peak,"spawned":self.spawned,
-            "completed":self.completed,"cancelled":self.cancelled,"failed":self.failed,"timed_out":self.timed_out,"stale_epoch_results":self.stale,
+            "completed":self.completed,"empty_results":self.empty_results,"cancelled":self.cancelled,"failed":self.failed,"timed_out":self.timed_out,"stale_epoch_results":self.stale,
             "overall_timeout_ms":250,"presentation_loop_awaits_stats":false})
     }
 }

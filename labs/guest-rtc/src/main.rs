@@ -6,6 +6,7 @@ mod capture_handoff;
 mod fixture;
 #[cfg(feature = "physical-aec")]
 mod guest_monitor;
+mod loop_timing;
 #[cfg(feature = "obs-proof")]
 mod obs_proof;
 #[cfg(feature = "physical-aec")]
@@ -18,6 +19,7 @@ mod playout_clock;
 #[cfg(any(feature = "obs-proof", test))]
 mod presentation;
 mod queue;
+mod report_worker;
 mod sender_clock;
 mod transport;
 
