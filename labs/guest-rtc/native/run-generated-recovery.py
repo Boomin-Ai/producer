@@ -10,6 +10,7 @@ import signal
 import socket
 import subprocess
 import time
+from port_preflight import check_ports
 
 LAB=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser(description=__doc__)
@@ -26,8 +27,7 @@ args=parser.parse_args()
 if args.require_obs_gates and not args.obs_recording:parser.error('--require-obs-gates requires --obs-recording')
 if not 35<=args.seconds<=300:parser.error('Duration must be 35..300 seconds')
 if args.reconnect!='none' and args.seconds<12+40*(args.reconnect_count-1)+20:parser.error('Allow 20 seconds after the last reconnect')
-for port in (7880,8990):
-    with socket.socket() as probe:probe.bind(('127.0.0.1',port))
+check_ports((7880,8990))
 name='generated-recovery-'+str(time.time_ns())
 sfu=LAB/'runtime'/('livekit-server-subscriber-report-lab' if args.subscriber_report else 'livekit-server-delayed-report-lab')
 env={key:value for key,value in os.environ.items() if not key.startswith('LIVEKIT_LAB_')}

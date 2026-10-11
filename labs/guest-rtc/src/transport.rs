@@ -22,35 +22,6 @@ use std::{
 };
 use webrtc_sys::{audio_track as audio_sys, video_frame as frame_sys, video_track as video_sys};
 
-// Service deadlines before diagnostics/conversion, and check time again after
-// each submission: processing one frame must not hide another frame's lateness.
-#[cfg(feature = "obs-proof")]
-fn submit_due(
-    recorder: &crate::obs_proof::Recorder,
-    audio: &mut crate::presentation::Scheduled<webrtc_sys::webrtc::ffi::DecodedAudioBlock>,
-    video: &mut crate::presentation::Scheduled<UniquePtr<frame_sys::ffi::VideoFrame>>,
-) {
-    while let Some((stamp, block)) = audio.pop_due(Instant::now()) {
-        recorder.audio_writer().write_interleaved(
-            &block.samples[..480 * block.channels as usize],
-            block.channels,
-            stamp,
-        );
-    }
-    while let Some((stamp, frame)) = video.pop_due(Instant::now()) {
-        let buffer = new_video_frame_buffer(unsafe { frame.video_frame_buffer() }).to_i420();
-        let (y, u, v) = buffer.data();
-        let (ys, us, vs) = buffer.strides();
-        recorder.video(
-            (y, u, v),
-            buffer.width(),
-            buffer.height(),
-            (ys, us, vs),
-            stamp,
-        );
-    }
-}
-
 #[derive(Clone)]
 struct AudioBlock {
     samples: [i16; 480],
@@ -673,9 +644,76 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         bail!("Scheduled handoff requires audio-master mode");
     }
     #[cfg(feature = "obs-proof")]
-    let mut scheduled_audio = crate::presentation::Scheduled::new(24);
+    let audio_continuity = Arc::new(std::sync::Mutex::new(
+        crate::audio_continuity::Continuity::default(),
+    ));
     #[cfg(feature = "obs-proof")]
-    let mut scheduled_video = crate::presentation::Scheduled::new(playback.clock.video_capacity());
+    let mut scheduled_audio = if scheduled_handoff {
+        let writer = recorder.as_ref().unwrap().audio_writer();
+        let continuity = audio_continuity.clone();
+        Some(crate::delivery_worker::Deadline::start(
+            "guest-audio-output",
+            24,
+            move |stamp, block: webrtc_sys::webrtc::ffi::DecodedAudioBlock| {
+                continuity.lock().unwrap().submit(
+                    block.generation,
+                    block.sequence,
+                    stamp,
+                    &block.samples[..480 * block.channels as usize],
+                    block.channels,
+                    |pcm, channels, at| writer.write_interleaved(pcm, channels, at),
+                );
+            },
+        )?)
+    } else {
+        None
+    };
+    #[cfg(feature = "obs-proof")]
+    let mut scheduled_video = if scheduled_handoff {
+        let writer = recorder.as_ref().unwrap().video_writer();
+        Some(crate::delivery_worker::Deadline::start(
+            "guest-video-output",
+            playback.clock.video_capacity(),
+            move |stamp, frame: UniquePtr<frame_sys::ffi::VideoFrame>| {
+                let buffer =
+                    new_video_frame_buffer(unsafe { frame.video_frame_buffer() }).to_i420();
+                let (y, u, v) = buffer.data();
+                let (ys, us, vs) = buffer.strides();
+                writer.video(
+                    (y, u, v),
+                    buffer.width(),
+                    buffer.height(),
+                    (ys, us, vs),
+                    stamp,
+                );
+            },
+        )?)
+    } else {
+        None
+    };
+    #[cfg(feature = "obs-proof")]
+    let mut decoded_drain = {
+        let pull_clock = crate::playout_clock::VideoClock::new(
+            audio_sys::ffi::diagnostic_webrtc_time_us(),
+            Instant::now(),
+        );
+        crate::delivery_worker::Drain::start(
+            "guest-decoded-pcm",
+            64 * 3,
+            Duration::from_millis(100),
+            move || {
+                webrtc_sys::webrtc::ffi::diagnostic_take_decoded_audio()
+                    .into_iter()
+                    .filter_map(|block| {
+                        // Preserve original SDK pull time; delivery age never becomes a new origin.
+                        pull_clock
+                            .deadline(block.pull_us, Instant::now())
+                            .map(|at| Captured { at, value: block })
+                    })
+                    .collect()
+            },
+        )?
+    };
     let mut tick = tokio::time::interval(Duration::from_millis(10));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut lifecycle = Vec::new();
@@ -700,7 +738,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                             playback.clear(audio_sys::ffi::diagnostic_webrtc_time_us());
                             next_binding_refresh=Instant::now();
                             binding_discovery.invalidate();
-                            scheduled_audio.clear();scheduled_video.clear();
+                            if let Some(worker)=&scheduled_audio {worker.clear();}
+                            if let Some(worker)=&scheduled_video {worker.clear();}
                         }
                         match track {
                             RemoteTrack::Audio(track) => {
@@ -729,7 +768,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                             playback.clear(audio_sys::ffi::diagnostic_webrtc_time_us());
                             next_binding_refresh=Instant::now();
                             binding_discovery.invalidate();
-                            scheduled_audio.clear();scheduled_video.clear();
+                            if let Some(worker)=&scheduled_audio {worker.clear();}
+                            if let Some(worker)=&scheduled_video {worker.clear();}
                         }
                         // A late teardown from the old publication cannot retire its replacement.
                         match track {
@@ -775,8 +815,6 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
             _ = tick.tick() => {
                 let now = Instant::now(); let elapsed = now.duration_since(began).as_secs_f64();
                 loop_timing.tick(now);
-                #[cfg(feature = "obs-proof")]
-                if scheduled_handoff {submit_due(recorder.as_ref().unwrap(), &mut scheduled_audio, &mut scheduled_video);}
                 let work_started = Instant::now();
                 if elapsed >= seconds as f64 { break; }
                 let reconnect_limit = if generated_reconnect.is_some() { generated_reconnect_count } else { 1 };
@@ -864,7 +902,11 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                 loop_timing.observe("sender_report_refresh", reports_started.elapsed());
                 let audio_started = Instant::now();
                 let decoded_at = audio_sys::ffi::diagnostic_webrtc_time_us();
-                for block in webrtc_sys::webrtc::ffi::diagnostic_take_decoded_audio() {
+                #[cfg(feature = "obs-proof")]
+                let mut decoded_blocks=std::iter::from_fn(||decoded_drain.pop().map(|frame|frame.value));
+                #[cfg(not(feature = "obs-proof"))]
+                let mut decoded_blocks=webrtc_sys::webrtc::ffi::diagnostic_take_decoded_audio().into_iter();
+                for block in &mut decoded_blocks {
                     decoded_origins.consume(&block, decoded_at);
                     #[cfg(feature = "obs-proof")]
                     if use_sender_clock {
@@ -878,14 +920,15 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                                 if bootstrap_used {playback.audio_bootstrap_blocks+=1;}
                                 let resets=playback.clock.reset_count();
                                 let stamp=playback.clock.audio(block.generation,block.sequence,origin,pull);
-                                if resets!=playback.clock.reset_count() {scheduled_audio.clear();scheduled_video.clear();playback.audio_reanchored();}
+                                if resets!=playback.clock.reset_count() {if let Some(worker)=&scheduled_audio {worker.clear();}
+                            if let Some(worker)=&scheduled_video {worker.clear();}playback.audio_reanchored();}
                                 if let Some(stamp)=stamp {
                                     playback.startup_note("first_audio_scheduled",decoded_at);
                                     if let Some(origin)=origin {playback.audio_label(block.generation,block.sequence,block.rtp_timestamp,bootstrap_used,origin,stamp);}
                                     let pcm=&block.samples[..480*block.channels as usize];
                                     let rms=(pcm.iter().map(|sample|(*sample as f64).powi(2)).sum::<f64>()/pcm.len() as f64).sqrt();
                                     playback.marker(false,rms>2000.0,origin,stamp,pull,recorder.as_ref().unwrap().timestamp(stamp));
-                                    if scheduled_handoff {scheduled_audio.push(stamp,block);}
+                                    if let Some(worker)=&scheduled_audio {worker.push(stamp,block);}
                                     else {recorder.as_ref().unwrap().audio_writer().write_interleaved(&block.samples[..480*block.channels as usize],block.channels,stamp);}
                                 }
                             } else {playback.invalid_audio_pull+=1;}
@@ -946,7 +989,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                                 if let Some(stamp)=playback.clock.video(origin,frame.at) {
                                     playback.startup_note("first_video_scheduled",audio_sys::ffi::diagnostic_webrtc_time_us());
                                     playback.marker(true,mean>180.0,origin,stamp,frame.at,recorder.timestamp(stamp));
-                                    if scheduled_handoff {scheduled_video.push(stamp,frame.value);} else {
+                                    if let Some(worker)=&scheduled_video {worker.push(stamp,frame.value);} else {
                                         recorder.video((y,u,v),buffer.width(),buffer.height(),(ys,us,vs),stamp);
                                     }
                                 }
@@ -960,10 +1003,6 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                     }
                 }
                 loop_timing.observe("observer_video",observer_video_started.elapsed());
-                let due_started=Instant::now();
-                #[cfg(feature = "obs-proof")]
-                if scheduled_handoff {submit_due(recorder.as_ref().unwrap(), &mut scheduled_audio, &mut scheduled_video);}
-                loop_timing.observe("due_handoff",due_started.elapsed());
                 loop_timing.observe("tick_work", work_started.elapsed());
             }
         }
@@ -971,6 +1010,16 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     #[cfg(feature = "obs-proof")]
     binding_discovery.shutdown().await;
     report_worker.shutdown();
+    #[cfg(feature = "obs-proof")]
+    {
+        decoded_drain.shutdown();
+        if let Some(worker) = &mut scheduled_audio {
+            worker.shutdown();
+        }
+        if let Some(worker) = &mut scheduled_video {
+            worker.shutdown();
+        }
+    }
     let publisher_join_started = Instant::now();
     let publisher_error = publisher.shutdown().err().map(|e| e.to_string());
     let publisher_join_ms = publisher_join_started.elapsed().as_secs_f64() * 1000.0;
@@ -1103,12 +1152,15 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         report["timing_report_worker_after_shutdown"] = report_worker.report();
         report["binding_discovery_after_shutdown"] = binding_discovery.report();
         report["binding_refresh_interval_ms"] = json!(100);
-        report["audio_presentation_queue"] = scheduled_audio.report();
-        report["video_presentation_queue"] = scheduled_video.report();
-        scheduled_audio.clear();
-        scheduled_video.clear();
-        report["audio_presentation_queue_after_shutdown"] = scheduled_audio.report();
-        report["video_presentation_queue_after_shutdown"] = scheduled_video.report();
+        report["audio_presentation_queue"] = json!(scheduled_audio.as_ref().map(|w| w.report()));
+        report["video_presentation_queue"] = json!(scheduled_video.as_ref().map(|w| w.report()));
+        report["audio_presentation_queue_after_shutdown"] =
+            report["audio_presentation_queue"].clone();
+        report["video_presentation_queue_after_shutdown"] =
+            report["video_presentation_queue"].clone();
+        report["decoded_audio_drain_after_shutdown"] = decoded_drain.report();
+        report["delivery_on_dedicated_threads"] = json!(scheduled_handoff);
+        report["audio_continuity"] = audio_continuity.lock().unwrap().report();
         Some(report)
     } else {
         None

@@ -124,6 +124,39 @@ impl AudioWriter {
     }
 }
 
+// Borrowed output handle: delivery workers must join before Recorder releases it.
+#[derive(Clone)]
+pub struct VideoWriter {
+    source: usize,
+    origin: Instant,
+    origin_ns: u64,
+}
+impl VideoWriter {
+    pub fn video(
+        &self,
+        planes: (&[u8], &[u8], &[u8]),
+        width: u32,
+        height: u32,
+        strides: (u32, u32, u32),
+        at: Instant,
+    ) {
+        unsafe {
+            guest_obs_video(
+                self.source as *mut ffi::obs_source_t,
+                planes.0.as_ptr(),
+                planes.1.as_ptr(),
+                planes.2.as_ptr(),
+                width,
+                height,
+                strides.0,
+                strides.1,
+                strides.2,
+                self.origin_ns + at.saturating_duration_since(self.origin).as_nanos() as u64,
+            );
+        }
+    }
+}
+
 static PIPELINE_PROBES_ALIVE: AtomicU64 = AtomicU64::new(0);
 static PIPELINE_PROBES_CREATED: AtomicU64 = AtomicU64::new(0);
 static PIPELINE_PROBES_DESTROYED: AtomicU64 = AtomicU64::new(0);
@@ -618,6 +651,13 @@ impl Recorder {
             origin_ns: self.origin_ns,
         }
     }
+    pub fn video_writer(&self) -> VideoWriter {
+        VideoWriter {
+            source: self.source as usize,
+            origin: self.origin,
+            origin_ns: self.origin_ns,
+        }
+    }
     pub fn video(
         &self,
         planes: (&[u8], &[u8], &[u8]),
@@ -626,20 +666,8 @@ impl Recorder {
         strides: (u32, u32, u32),
         at: Instant,
     ) {
-        unsafe {
-            guest_obs_video(
-                self.source,
-                planes.0.as_ptr(),
-                planes.1.as_ptr(),
-                planes.2.as_ptr(),
-                width,
-                height,
-                strides.0,
-                strides.1,
-                strides.2,
-                self.timestamp(at),
-            );
-        }
+        self.video_writer()
+            .video(planes, width, height, strides, at);
     }
     pub fn pump(&self) {
         unsafe {

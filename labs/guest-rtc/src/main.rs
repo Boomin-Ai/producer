@@ -1,8 +1,12 @@
 mod apm;
 #[cfg(any(feature = "obs-proof", test))]
+mod audio_continuity;
+#[cfg(any(feature = "obs-proof", test))]
 mod binding_discovery;
 mod capture_fixture;
 mod capture_handoff;
+#[cfg(any(feature = "obs-proof", test))]
+mod delivery_worker;
 mod fixture;
 #[cfg(feature = "physical-aec")]
 mod guest_monitor;

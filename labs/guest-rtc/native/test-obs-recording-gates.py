@@ -18,6 +18,33 @@ class RecordingGates(unittest.TestCase):
         return {'local_numbered_marker_gate_passed': True,
                 'missing_video_labels_within_observed_span': [], 'audio_pts_discontinuities': 0}
 
+    def with_workers(self):
+        native = self.report(); playback = native['audio_master_playback']
+        playback['delivery_on_dedicated_threads'] = True
+        for stream in ('audio', 'video'):
+            playback[f'{stream}_presentation_queue_after_shutdown'] = {'active_after_shutdown': False, 'worker_failed': False, 'pending': 0}
+        playback['decoded_audio_drain_after_shutdown'] = {'active_after_shutdown': False, 'worker_failed': False, 'queue': {'pending_frames': 0}}
+        return native
+
+    def test_delivery_workers_are_required_to_stop_cleanly(self):
+        self.assertTrue(gates.evaluate(self.with_workers(), self.markers(), 1)['local_obs_acceptance_passed'])
+        for stream in ('audio', 'video'):
+            for field, value in [('active_after_shutdown', True), ('worker_failed', True), ('pending', 1)]:
+                native = self.with_workers()
+                native['audio_master_playback'][f'{stream}_presentation_queue_after_shutdown'][field] = value
+                result = gates.evaluate(native, self.markers(), 1)
+                self.assertFalse(result['local_obs_acceptance_passed'])
+                self.assertTrue(result['local_readiness_gate_passed'])
+                self.assertFalse(result['local_delivery_worker_gate_passed'])
+
+    def test_missing_or_retained_decoded_drain_cannot_qualify(self):
+        for field, value in [('active_after_shutdown', True), ('worker_failed', True), ('queue', {'pending_frames': 1}), ('queue', None)]:
+            native = self.with_workers()
+            native['audio_master_playback']['decoded_audio_drain_after_shutdown'][field] = value
+            self.assertFalse(gates.evaluate(native, self.markers(), 1)['local_obs_acceptance_passed'])
+        native = self.with_workers(); native['audio_master_playback'].pop('decoded_audio_drain_after_shutdown')
+        self.assertFalse(gates.evaluate(native, self.markers(), 1)['local_obs_acceptance_passed'])
+
     def test_complete_local_measurement(self):
         self.assertTrue(gates.evaluate(self.report(), self.markers(), 1)['local_obs_acceptance_passed'])
         self.assertTrue(gates.evaluate(self.report(), self.markers(), 1)['local_readiness_gate_passed'])

@@ -1873,3 +1873,76 @@ the existing WAN/speaker-reference integration requirements. The next delivery
 investigation should separate periodic PCM draining and deadline submission from
 report application, receiver events and non-selected guest diagnostics, retain
 epoch/SID rejection, and test controlled resource pressure with unchanged gates.
+
+
+### Dedicated native delivery and audio gap handling checkpoint (2026-10-11)
+
+`delivery_worker.rs` adds three named, joined workers: SDK PCM draining at 5 ms,
+audio deadline submission, and video deadline submission. The latter two retain
+the existing 24/14 scheduled capacities and 30 ms late rejection. The SDK PCM
+queue remains three frames per source. A new application handoff is bounded at
+192 total frames (64 SDK source slots × three frames) and 100 ms age, using the
+original SDK pull time rather than retimestamping arrival. This preserves the
+existing video-clock conversion's 100 ms limit. The new handoff can still discard
+media under pressure; its counters are retained.
+
+Workers use the existing lab macOS QoS shim (effective class 33); this is not a
+real-time workgroup guarantee. Audio and video have separate workers, so conversion
+or submission of a video frame does not serialize audio submission. Enqueue never
+waits on native output. Reset serializes with in-flight output, clears the old
+queue, and returns only after the old submission has finished. A bounded batch
+prevents an endlessly refilled queue from monopolizing the reset lock.
+
+Ownership: transport owns workers and Recorder. Workers capture borrowed output
+handles, not Recorder; transport joins every worker before Recorder.finish/drop.
+A frame queue owns its native frame wrappers without pointing back to its owner.
+The SDK drain is joined before room/source retirement. Failure, future-frame reset,
+in-flight reset and 100 initialize/use/partial-drop cycles prove collector closure
+release and empty application queues. Recording acceptance now additionally rejects
+failed/active delivery workers or a retained decoded handoff at shutdown.
+
+A consecutive-run harness bug rejected closed TCP sessions in TIME_WAIT. Port
+preflight now uses SO_REUSEADDR while still refusing active listeners; tests exercise
+a real active listener and a just-closed TCP connection. No external processes are
+terminated or reused as lab-owned services.
+
+The local OBS source implementation in
+`producer-release-0.4.66/src-tauri/target/cutout-lab/engine-source/libobs/obs-source.c`,
+`source_output_audio_data`, smooths timestamp gaps below 70 ms by appending audio
+continuously. In the first three-guest worker recording, input marker deadlines
+stayed about 30 ms apart while recorded video-minus-audio grew to about 130 ms
+following short PCM gaps. This motivates explicit sample-clock gap handling, not
+an arbitrary A/V offset. `audio_continuity.rs` emits zeros for missing sequence
+positions only when the scheduled timestamps exactly match the same-generation
+10 ms sample clock, at most 12 missing blocks/120 ms. Later real PCM retains its
+original timestamp. Longer holes and reanchors are reported without padding.
+Missing PCM is not recovered: silence counts are separate from decoded delivery,
+and a missing tone still fails the numbered recording gate.
+
+Measured runs (native binary hashes and full counters in
+`labs/guest-rtc/evidence/native-delivery-worker-trials.json`):
+
+- `1791721777390020000`: one guest/full reconnect, workers before gap handling.
+  Local acceptance passed: 22 pairs, 66.7 ms p95, zero late audio/video submissions,
+  clean joined workers and empty queues.
+- `1791721953293564000`: three guests/three full reconnects before gap handling.
+  69 matched pairs, no missing span labels or stale labels, but 130 ms p95 failed
+  sync acceptance. Shutdown passed.
+- `1791722867222789000`: three guests/three full reconnects with bounded silence.
+  58 matched pairs and 76.7 ms p95, but ten unmatched audio markers, two uncertain
+  tones and missing span labels failed acceptance. Audio/video worker gaps reached
+  217.650/737.014 ms; SDK draining reached 368.159 ms and application handoff
+  discarded 292 stale frames. Clock resets and early/out-of-range video deadlines
+  remain observed. Gap handling emitted 1093 silence blocks, with 18 unfilled
+  gap/reanchor events; these are explicitly retained loss, not loss-free output.
+- `1791723727276372000`: final gap-handling candidate, one guest/full reconnect.
+  Local acceptance passed: 23 pairs, 60 ms p95, no stale labels and clean worker
+  shutdown. This does not resolve the failing multi-guest workload.
+
+Validation: 54 native tests, 14 recording-gate regressions, two TCP preflight tests,
+seven Node marker/reconnect tests and strict combined-feature/all-target Clippy
+passed. The production app/recovery checkout are unchanged. Full G1, recorded
+capture lip sync, startup/tail coverage, WAN and speakerphone integration remain
+gated. Next: isolate selected video scheduling and the audio-clock/mapping work
+from the room loop, then repeat the same strict multi-guest gate under recorded
+resource pressure. Do not mask the missing markers or relax the timing budgets.
