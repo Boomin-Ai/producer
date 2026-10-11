@@ -1655,3 +1655,69 @@ advancing numbered markers and no probe errors. No physical devices or private r
 Next synchronization proof must use the actual native render/recording path;
 WAN outages, sustained five-hour operation and room integration remain gated.
 Production unchanged.
+
+### Actual native OBS recordings and admission-order failure — 2026-10-10
+
+The generated recovery runner now supports `--obs-recording` through the actual
+native OBS Metal compositor, audio-master presentation and finalized H264/AAC
+MP4 writer. It reads ABI-compatible libraries from the installed app without
+changing that app. Only generated guest-1 media is recorded; cameras,
+microphones and speaker playback remain unused. The browser return probes
+measure a separate direction and are not treated as compositor proof.
+
+`analyze-numbered-recording.swift` decodes eight-bit video marker labels and
+sixteen generated tone frequencies from the saved recording. It matches
+labels one-to-one, retains unmatched/missing labels and rejects old video
+labels. Audio detection buffers continuous 10 ms PCM windows across decoder
+chunks; tone classification uses the complete bounded pulse. Media remains
+under ignored runtime storage; numeric evidence and recording hashes are saved.
+
+| Trial | Actual recording result | Acceptance |
+| --- | --- | --- |
+| `1791689246484476000`, uncoded baseline | 19 legacy marker pairs, absolute p95 50.7 ms | Numbered decoder negative control correctly rejects this unlabeled recording with zero matching pairs |
+| `1791689373777632000`, numbered full reconnect | 18 pairs, absolute p95 70.0 ms; no unmatched, uncertain, repeated or regressed labels | Local marker gate passes; combined acceptance fails: initial readiness 6003 ms, recovery 3273 ms, missing labels 7/8 |
+| `1791689912496953000`, numbered baseline regression | 15 pairs, absolute p95 60.0 ms; no missing labels within observed span | Local marker gate passes; combined acceptance fails: audio/video readiness 4780/4781 ms |
+
+These offsets include 33.3 ms browser source-paint uncertainty and 10 ms audio
+detection windows. They establish a local generated recording observation,
+not qualified capture-clock lip sync, WAN performance or five-hour stability.
+Missing labels in both streams cannot be hidden by a matched-only percentile.
+Startup and recording-tail loss remain explicitly unqualified.
+
+The new `native/obs-recording-gates.py` checks every expected binding epoch,
+requires both streams to start within a provisional local 1500 ms budget,
+checks numbered markers, observed-span loss and audio PTS continuity.
+`--require-obs-gates` makes the runner return failure when these checks fail;
+it still saves the completed capture and diagnostics. The final regression
+returned exit 2 as expected and shut down its owned SFU/browser/web processes.
+Seven gate tests and seven existing marker/recovery tests passed. The coded
+positive recording and uncoded negative recording verify the decoder on actual
+MP4 files. JavaScript syntax, Python compilation and git whitespace checks pass.
+
+`native/analyze-generated-subscription-order.py` correlates SFU trace events
+with native binding milestones without mixing wall and monotonic clocks.
+Both coded runs received the first guest audio sender report with **zero
+subscribers**. In the full-reconnect run, the native subscriber waited another
+5846 ms after initial admission and 3225 ms after readmission for the forwarded
+publisher audio report. In the final baseline it waited 4721 ms after admission.
+The one-shot 500 ms publisher-start request is therefore admission-order
+sensitive: it fires before the native host exists in the warm-guest scenario.
+Increasing downstream report cadence does not create missing upstream timing.
+
+The upstream forwarder also requires a sender report at or after its last
+incoming timestamp switch before marking the RTP timestamp offset valid
+(`pkg/sfu/forwarder.go`, `SetRefSenderReport` / `GetSenderReportParams`). Merely
+copying an old cached report into a new downtrack cannot safely bypass this
+requirement. Preserve that guard and generation isolation.
+
+Next implementation target is a bounded subscriber-aware request for fresh
+publisher timing after forwarding begins, covering initial admission and full
+reconnect. Keep it opt-in, rate-limited and scoped to the current publisher
+SSRC/binding; avoid unbounded timers and stale cached timestamp reuse. A local
+SFU patch would still need supported managed-LiveKit compatibility or an
+upstream solution before production integration. No admission timing fix has
+been implemented or claimed by these measurements.
+
+Evidence index: `labs/guest-rtc/evidence/native-numbered-recording-trials.json`.
+G1 and production rollout remain gated; production, recovery checkout and the
+installed Producer application are unchanged.

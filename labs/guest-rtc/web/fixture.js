@@ -107,6 +107,7 @@ export async function start() {
       const phase = context.currentTime % 2;
       paint.fillStyle = phase >= 0.5 && phase < 0.62 ? '#fff' : '#000';
       paint.fillRect(0, 0, canvas.width, canvas.height);
+      if(recoveryProbe){const id=Math.floor(context.currentTime/2)%256;for(let bit=0;bit<8;bit++){paint.fillStyle=id&(1<<bit)?'#fff':'#000';paint.fillRect(bit*40,0,40,16);}}
       if (analyser) {
         const samples = new Float32Array(analyser.fftSize); analyser.getFloatTimeDomainData(samples);
         const rms = Math.sqrt(samples.reduce((sum, value) => sum + value * value, 0) / samples.length);
@@ -121,7 +122,7 @@ export async function start() {
       const pcm=await context.decodeAudioData(await (await fetch('/monitor-speech.wav')).arrayBuffer());
       synthetic=context.createBufferSource();synthetic.buffer=pcm;synthetic.loop=true;synthetic.start();
       state.guestFixture='remote speech only; no browser microphone';
-    } else synthetic = new AudioWorkletNode(context, 'pulse');
+    } else synthetic = new AudioWorkletNode(context, 'pulse',{processorOptions:{numbered:recoveryProbe!==null}});
     const destination = context.createMediaStreamDestination(); guestGain=context.createGain();synthetic.connect(guestGain);guestGain.connect(destination);
     const video = new LocalVideoTrack(canvas.captureStream(30).getVideoTracks()[0]);
     const audio = new LocalAudioTrack(destination.stream.getAudioTracks()[0]);

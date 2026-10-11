@@ -40,14 +40,14 @@ try {
    reports[index].recovery_stages.push({stage:stage+1,resumed:resumes[stage],markers:markerOffsets(probes[index],first?.at_ms??Infinity,last?.at_ms??Infinity),video_growth:first&&last?last.state.returnVideoFrames-first.state.returnVideoFrames:0,audio_marker_growth:first&&last?last.markers.audio-first.markers.audio:0});
   }
  }
- const expected=Number(process.env.LIVEKIT_LAB_GENERATED_RECONNECT_COUNT??1);
+ const expected=process.env.LIVEKIT_LAB_GENERATED_RECONNECT?Number(process.env.LIVEKIT_LAB_GENERATED_RECONNECT_COUNT??1):0;
  const replacementVerified=probes.every(probe=>['audio','video'].every(kind=>new Set(probe.epochs.filter(e=>e.kind===kind).map(e=>e.sid)).size===expected+1));
  const expectedMarkerIds=Array.from({length:Math.ceil((seconds-.5)/2)},(_,id)=>id);
  for(const r of reports){r.expected_marker_ids=expectedMarkerIds;r.missing_video_labels=expectedMarkerIds.filter(id=>!r.probe.video.some(marker=>marker.id===id));r.missing_paired_labels=expectedMarkerIds.filter(id=>!r.whole.pairs.some(pair=>pair.id===id));}
- const report={guests,seconds,injections,resumes,replacement_verified:replacementVerified,native_exit_code:code,injected,resumed,observations,reports,hardware_capture_used:false,speaker_playback_used:false,media_recorded:false,g1_complete:false};
+ const report={guests,seconds,injections,resumes,replacement_verified:replacementVerified,native_exit_code:code,injected,resumed,observations,reports,hardware_capture_used:false,speaker_playback_used:false,media_recorded:process.env.LIVEKIT_LAB_OBS_RECORDING!==undefined,media_scope:process.env.LIVEKIT_LAB_OBS_RECORDING?'generated selected guest-1 through native OBS':'none',g1_complete:false};
  await writeFile(path.join(lab,`evidence/${name}-browser.json`),JSON.stringify(report,null,2)+'\n');
- if(code!==0||injections.length!==expected||resumes.length!==expected||(injected?.mode==='full'&&!replacementVerified)||probes.some(p=>p.errors.length)||reports.some(r=>r.sequence.repeated_labels||r.sequence.regressed_labels||r.recovery_stages.length!==expected||r.recovery_stages.some(stage=>stage.video_growth<20||stage.audio_marker_growth<3||stage.markers.paired_markers<3)))throw new Error('Generated reconnect did not prove fresh audio/video marker recovery; inspect retained evidence');
- console.log(`Generated ${injected.mode} reconnect: ${guests} receivers recovered current numbered audio/video markers`);
+ if(code!==0||injections.length!==expected||resumes.length!==expected||(injected?.mode==='full'&&!replacementVerified)||probes.some(p=>p.errors.length)||reports.some(r=>r.sequence.repeated_labels||r.sequence.regressed_labels||r.whole.paired_markers<3||r.recovery_stages.length!==expected||r.recovery_stages.some(stage=>stage.video_growth<20||stage.audio_marker_growth<3||stage.markers.paired_markers<3)))throw new Error('Generated reconnect did not prove fresh audio/video marker recovery; inspect retained evidence');
+ console.log(`Generated ${injected?.mode??'baseline'} reconnect: ${guests} receivers recovered current numbered audio/video markers`);
 } finally {
  if(child?.exitCode===null){child.kill('SIGTERM');await done.catch(()=>{});}await Promise.allSettled(pages.map(page=>page.evaluate(()=>window.stopLab())));await browser?.close();await writeFile(path.join(lab,`runtime/${name}.log`),log);
 }
