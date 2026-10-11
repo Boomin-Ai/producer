@@ -429,3 +429,21 @@ For a separate controlled local RTP jitter trial, substitute
 `--reconnect signal`. Start with `--network-profile baseline` to control for
 relay routing. Numeric proxy evidence must confirm that impairment took effect;
 private media never enters the repository. Physical results remain pending.
+
+## Automated generated media recovery
+
+No operator actions, camera, microphone, speakers or media files are required:
+
+```sh
+python3 native/run-generated-recovery.py --reconnect full --guests 1 --seconds 40
+python3 native/run-generated-recovery.py --reconnect full --reconnect-count 3 --guests 3 --seconds 180
+```
+
+This uses actual SDK full reconnect diagnostics and verifies replacement
+publication SIDs and continued reception of numbered generated flash/tone
+markers. Rebuilds occur at 12, 52 and 92 seconds when count is three. Numeric
+evidence preserves missing markers, epoch transitions and local browser
+observation offsets. Paint/analyser delay remains in those offsets, so this
+is transport recovery evidence, not native OBS synchronization qualification.
+The generated runner strips all inherited lab flags; physical capture is rejected
+by both the runner and the native generated-reconnect preflight.

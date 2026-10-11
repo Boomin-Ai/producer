@@ -415,6 +415,7 @@ async fn source_loop(
     if std::env::var("LIVEKIT_LAB_BATCHED_CAPTURE").as_deref() == Ok("1") {
         return crate::capture_fixture::run(audio, video, capture_evidence).await;
     }
+    let numbered_markers = std::env::var("LIVEKIT_LAB_MARKER_IDS").as_deref() == Ok("1");
     let began = Instant::now();
     let mut tick = tokio::time::interval(Duration::from_millis(10));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -428,7 +429,10 @@ async fn source_loop(
                 let t = n as f64 / 48000.0;
                 let phase = t % 2.0;
                 if (0.5..0.62).contains(&phase) {
-                    (13100.0 * (2.0 * std::f64::consts::PI * 997.0 * t).sin()) as i16
+                    let hz = 997.0 + if numbered_markers {
+                        128.0 * ((t / 2.0).floor() as u64 % 16) as f64
+                    } else { 0.0 };
+                    (13100.0 * (2.0 * std::f64::consts::PI * hz * t).sin()) as i16
                 } else {
                     0
                 }
@@ -452,6 +456,15 @@ async fn source_loop(
             } else {
                 16
             });
+            if numbered_markers {
+                let marker = (elapsed / 2.0).floor() as u64 % 256;
+                for bit in 0..8 {
+                    for row in 0..16 {
+                        y[row * 320 + bit * 40..row * 320 + (bit + 1) * 40]
+                            .fill(if marker & (1 << bit) != 0 { 235 } else { 16 });
+                    }
+                }
+            }
             u.fill(128);
             v.fill(128);
             video.capture_frame(&VideoFrame {
@@ -536,6 +549,18 @@ fn physical_capture_enabled() -> bool {
 pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool) -> Result<()> {
     if !(5..=300).contains(&seconds) {
         bail!("Fixture duration must be 5..300 seconds");
+    }
+    let generated_reconnect_count: usize = std::env::var("LIVEKIT_LAB_GENERATED_RECONNECT_COUNT")
+        .unwrap_or_else(|_| "1".into()).parse()
+        .context("Generated reconnect count must be an integer")?;
+    if !(1..=3).contains(&generated_reconnect_count) {
+        bail!("Generated reconnect count must be 1..3");
+    }
+    let generated_reconnect = std::env::var("LIVEKIT_LAB_GENERATED_RECONNECT").ok();
+    if let Some(mode) = generated_reconnect.as_deref() {
+        if physical_capture_enabled() || !["signal", "full"].contains(&mode) {
+            bail!("Generated reconnect requires generated capture and signal|full mode");
+        }
     }
     let token = std::fs::read_to_string(token_path)
         .context("Read loopback-only token file; start web/server.mjs first")?;
@@ -623,7 +648,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     let mut lifecycle = Vec::new();
     let mut decoded_origins = crate::sender_clock::DecodedOrigins::default();
     let mut next_sender_report_refresh = Instant::now();
-    let mut reconnect_injected = false;
+    let mut reconnect_injected = 0usize;
     loop {
         tokio::select! {
             event = events.recv() => {
@@ -713,15 +738,19 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
             _ = tick.tick() => {
                 let now = Instant::now(); let elapsed = now.duration_since(began).as_secs_f64();
                 if elapsed >= seconds as f64 { break; }
-                if physical_capture_enabled() && !reconnect_injected && elapsed>=5.0 {
-                    let requested=std::env::var("LIVEKIT_LAB_MONITOR_RECONNECT").unwrap_or_default();
+                let reconnect_limit = if generated_reconnect.is_some() { generated_reconnect_count } else { 1 };
+                let next_reconnect_at = if generated_reconnect.is_some() { 12.0 + 40.0 * reconnect_injected as f64 } else { 5.0 };
+                if reconnect_injected < reconnect_limit && elapsed >= next_reconnect_at
+                    && (physical_capture_enabled() || generated_reconnect.is_some()) {
+                    let requested = generated_reconnect.clone().unwrap_or_else(||
+                        std::env::var("LIVEKIT_LAB_MONITOR_RECONNECT").unwrap_or_default());
                     let scenario=match requested.as_str() {
                         "signal"=>Some(livekit::SimulateScenario::SignalReconnect),
                         "full"=>Some(livekit::SimulateScenario::FullReconnect),
                         _=>None,
                     };
                     if let Some(scenario)=scenario {
-                        reconnect_injected=true;
+                        reconnect_injected += 1;
                         // Timeout bounds the fixture control call, not reconnection itself.
                         tokio::time::timeout(Duration::from_secs(2),room.simulate_scenario(scenario)).await??;
                         lifecycle.push(json!({"event":"reconnect_injected","mode":requested,"at_ms":began.elapsed().as_millis()}));
@@ -1051,7 +1080,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     {
         decoded_pcm_origin_handoff["obs_connected"] = json!(false);
     }
-    let report = json!({"audio_master_playback":audio_master_playback,"schema_version":1,"livekit":"0.9.4","topology":"local browser guests to native host through loopback SFU",
+    let report = json!({"generated_reconnect_requested":generated_reconnect,"generated_reconnect_count":if generated_reconnect.is_some(){generated_reconnect_count}else{0},"numbered_generated_markers":std::env::var("LIVEKIT_LAB_MARKER_IDS").as_deref()==Ok("1"),"audio_master_playback":audio_master_playback,"schema_version":1,"livekit":"0.9.4","topology":"local browser guests to native host through loopback SFU",
         "signaling_url":url,"publisher_error":publisher_error,
         "capture_publication":capture_evidence.lock().unwrap_or_else(|p|p.into_inner()).clone(),
         "capture_publisher_owner":{"named_thread":true,"joined":publisher.thread.is_none(),"shutdown_ms":publisher_join_ms},

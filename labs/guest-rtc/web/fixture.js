@@ -1,5 +1,8 @@
+import {RecoveryProbe} from './generated-recovery-probe.js';
 import { Room, RoomEvent, LocalAudioTrack, LocalVideoTrack, Track } from 'livekit-client';
 
+const recoveryProbe=new URLSearchParams(location.search).get("recoveryProbe")==="1"?new RecoveryProbe():null;
+window.recoveryProbe=recoveryProbe;
 let room, context, timer, analyser, returnAudio, synthetic, silentOutput, guestGain, voiceRecorder;
 const voiceReview=new URLSearchParams(location.search).get("voiceReview")==="1";
 const cameraSync=new URLSearchParams(location.search).get("cameraSync")==="1";
@@ -60,17 +63,19 @@ export async function start() {
       if (track.kind === Track.Kind.Video) {
         const element = document.querySelector('#return');
         track.attach(element);
-        returnVideoTrack=track;beginAvReview();
-        const frame = () => { state.returnVideoFrames++; element.requestVideoFrameCallback(frame); };
+        returnVideoTrack=track;window.returnVideoTrack=track;beginAvReview();recoveryProbe?.attachVideo(track,publication,element);
+        const frame = () => { if(returnVideoTrack!==track)return;state.returnVideoFrames++; element.requestVideoFrameCallback(frame); };
         element.requestVideoFrameCallback(frame);
       } else {
+        returnAudio?.disconnect();analyser?.disconnect();silentOutput?.disconnect();
+        window.returnAudioTrack?.detach().forEach(element=>element.remove());
         window.returnAudioTrack = track;beginAvReview();
         const element = track.attach(); element.volume = 0; element.autoplay = true;
         document.body.append(element); element.play().catch(error => { state.error = String(error); });
         // Analyse the remote PCM without audibly playing it or a self preview.
         returnAudio = context.createMediaStreamSource(new MediaStream([track.mediaStreamTrack]));
         analyser = context.createAnalyser(); analyser.fftSize = 1024;
-        returnAudio.connect(analyser);
+        returnAudio.connect(analyser);recoveryProbe?.attachAudio(track,publication,context,returnAudio);
         // Keep the Web Audio graph running while output remains exactly silent.
         silentOutput = context.createGain(); silentOutput.gain.value = 0;
         analyser.connect(silentOutput); silentOutput.connect(context.destination);
@@ -128,6 +133,7 @@ export async function start() {
   } catch (error) { state.error = String(error); display(); throw error; }
 }
 export async function stop() {
+  recoveryProbe?.stop();
   if(avRecorder?.state!==undefined && avRecorder.state!=="inactive")avRecorder.stop();
   clearInterval(timer); synthetic?.disconnect(); guestGain?.disconnect(); voiceRecorder?.disconnect(); returnAudio?.disconnect();
   await room?.disconnect(); await context?.close(); room = null;

@@ -1587,3 +1587,71 @@ This passes subjective sync/voice review and transport survival for this
 separate video/audio jitter trials are now recorded. Full media reconnect/track
 replacement, measured A/V offsets, prolonged drift/load, WAN outages and other
 platforms remain unqualified. G1 incomplete; production unchanged.
+
+### Automated generated full-media recovery harness — 2026-10-10
+
+Added `native/run-generated-recovery.py` and a headless browser recovery fixture.
+The runner clears all inherited LIVEKIT_LAB flags and enables only generated
+media, shared stream identity, numbered markers and an explicit SDK reconnect
+scenario. It opens no camera/microphone, plays no speakers and saves no media.
+Native capture rejects simultaneous physical capture and generated reconnect
+before reading a token or opening hardware (verified with the actual binary).
+
+Native source flashes encode an 8-bit cycle number in a luminance band; tones
+encode its low four bits using separated frequencies. Browser detection records
+only marker IDs, receiver epochs and observation times. Label pairing is
+one-to-one within one second, so unrelated nearby flashes/clicks and distant
+cycles cannot appear synchronized. Missing labels and unmatched markers remain
+in the report. Epoch callbacks stop contributing when replaced; receiver RTP
+counters are not subtracted across SSRC changes. Full reconnect acceptance
+requires distinct audio/video publication SIDs and fresh paired markers after
+each SDK resume. Repeated/old video labels are checked separately.
+
+The first 40-second single-receiver full reconnect (`1791687845270238000`)
+passed: injected at 12.002 s, SDK resumed at 12.056 s; browser received new
+audio/video publication SIDs and detected 19 matching numbered markers overall,
+including 12 paired markers in the post-resume window. Browser-observed absolute
+p95 marker offset was 58.9 ms, including paint/analyser-window uncertainty.
+Marker 0 was absent at startup; no claim of loss-free startup or G1 sync is made.
+Native audio callback queue reported four oldest-frame drops after replacement;
+retired old audio sink was removed and publisher joined in 2.457 ms. No OBS
+audio writer was used by this trial.
+
+Seven Node regression tests passed for marker label mismatch, one-to-one
+pairing, stale-cycle exclusion, post-resume cutoffs, old/wrapped labels, absent
+shutdown stats, and receiver counter/SSRC replacement. The three-guest repeated full-reconnect result is recorded below. Quantitative OBS synchronization, long
+WAN outages, five-hour load, physical reconnect listening and broader room
+integration remain unqualified. Production and installed Producer unchanged.
+
+### Three guests, three full media rebuilds — 2026-10-10
+
+Generated trial `1791688035396240000` completed 180.143 seconds. Rebuilds
+were injected around 12, 52 and 92 seconds; native SDK resumed at 12.139,
+52.151 and 92.085 seconds. Each browser receiver observed four distinct audio
+and four distinct video publication SIDs, with fresh numbered markers after
+every rebuild. Each had 87 paired markers of 90 expected labels; video labels
+6, 26 and 46 were missing around rebuilds. No repeated/regressed video labels
+or probe errors were detected. Native publisher joined in 2.385 ms.
+
+The transport recovery acceptance passed. Browser marker timing remains
+unqualified: whole-run absolute p95 offsets were 109.3/101.3/87.1 ms for
+guests 1/2/3; the first recovery-stage p95 ranged 118.3–177.2 ms. These include
+paint, analyser-window and JS scheduling delay; the result cannot be treated
+as native OBS synchronization proof or a production latency budget. All
+missing markers and offsets are retained, rather than discarded as startup.
+
+Across all native receive epochs, guests 1/2/3 respectively had 59/62/59 audio
+oldest-frame overflow drops and 5/6/6 stale audio discards; video overflow drops
+were 6/6/5 and stale discards 1/1/0. Old audio sinks were removed on retirement.
+Bounded queue behavior is observable, but this was not loss-free delivery.
+The consolidated evidence index is
+`labs/guest-rtc/evidence/generated-full-recovery-trials.json`.
+
+46 root native tests, seven Node evidence tests and strict combined-feature
+all-targets Clippy passed. Receiver replacement now disconnects the old Web Audio
+graph and detaches old audio elements; the final single-receiver regression
+`1791688410266582000` passed after this cleanup, with new audio/video SIDs,
+advancing numbered markers and no probe errors. No physical devices or private recordings were used.
+Next synchronization proof must use the actual native render/recording path;
+WAN outages, sustained five-hour operation and room integration remain gated.
+Production unchanged.

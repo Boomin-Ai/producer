@@ -1,0 +1,13 @@
+{
+  "run": "generated-recovery-1791687845270238000",
+  "status": "completed",
+  "guests": 1,
+  "seconds": 40,
+  "reconnect": "full",
+  "hardware_capture_used": false,
+  "speaker_playback_used": false,
+  "media_recorded": false,
+  "g1_complete": false,
+  "native_sha256": "8d06c89b3713d4e4dc1e1fdba4d202a351220ccdef84f3b82fae4543d4c00bbe",
+  "sfu_sha256": "09d100f23cd3377edb8acb90496d63ed95a590b8524d6b33061bf9108fb31c09"
+}
