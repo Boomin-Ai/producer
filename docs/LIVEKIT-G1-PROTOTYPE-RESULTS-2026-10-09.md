@@ -2426,3 +2426,22 @@ and 16 recording-gate tests passed; all 32 indexed numeric artifact hashes verif
 The exact marker-rejection observation is covered by the existing late-deadline
 test, including clearing it after a successful mapping. The earlier live binary
 hashes remain pinned; those runs predate this additional marker observation.
+
+Exact-marker observation follow-up: three-guest trial `1791754355212659000`
+terminated with `ENOSPC` while saving output. Native evidence is incomplete; its
+conditions are explicitly retained as invalid, not a media acceptance result.
+After its owned processes exited, disk availability recovered to about 2.4 GiB.
+The local runner now refuses launch below 2 GiB free (3 GiB for three-guest tests
+of at least 100 seconds), before starting a room or device. This preflight is a
+resource guard, not a guarantee against another process exhausting the disk.
+
+Smaller follow-up `1791754594143926000` passed unchanged local gates: one guest,
+45 seconds, one accepted-A/V-pulse full reconnect, 22 pairs, 43.333 ms p95,
+no missing or unpaired markers. Initial scheduled A/V arrived at about 519 ms;
+reconnect audio/video at 550/560 ms. Two silence-tail blocks were enqueued with
+no rejection; output queues had zero late/flush/overflow drops, with maximum
+tick gaps about 15.7 ms. No generated video marker was rejected in this run.
+It validates the short local envelope, not Cloud readiness or three-guest load.
+The evidence index `native-marker-rejection-checkpoint.json` pins both the passed
+short run and invalid large run. Nine loss-analysis tests now pass, including
+explicit receipt rejection reporting without inventing historical reasons.

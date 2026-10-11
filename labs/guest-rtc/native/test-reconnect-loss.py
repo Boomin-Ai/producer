@@ -49,6 +49,16 @@ class EvidenceTests(unittest.TestCase):
         self.assertFalse(rows[2]['native_video_received'])
         self.assertFalse(result['transport_loss_proven'])
 
+    def test_clock_rejections_require_explicit_failed_marker_receipt(self):
+        rejection = {'reason':'video_stale_audio_origin','details':{'age_us':250001}}
+        receipts = [{'label':7,'scheduled_target_ns':None,'clock_rejection':rejection},
+                    {'label':8,'scheduled_target_ns':1000,'clock_rejection':rejection},
+                    {'label':9,'scheduled_target_ns':None}]
+        result = loss.analyze({'audio_master_playback':{'decoded_video_marker_receipts':receipts}},
+                              {}, {'missing_video_labels_within_observed_span':[7,8,9]})
+        self.assertEqual([r['native_video_clock_rejections'] for r in result['missing_recorded_labels']],
+                         [[rejection],[],[]])
+
     def test_pulse_trigger_must_match_exact_decoded_label_and_time(self):
         native = {'audio_master_playback': {'decoded_video_marker_receipts': [{'label': 7, 'received_us': 200}]},
                   'lifecycle': [{'event': 'reconnect_injected', 'input_pulse_trigger': [7, 200]}]}

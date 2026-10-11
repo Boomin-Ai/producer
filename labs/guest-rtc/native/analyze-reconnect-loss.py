@@ -43,6 +43,8 @@ def analyze(native, browser, markers):
         row['native_video_receipts'] = [r for r in receipts if r['label'] == label]
         row['native_video_received'] = bool(row['native_video_receipts'])
         row['native_video_scheduled_by_clock'] = any(r.get('scheduled_target_ns') is not None for r in row['native_video_receipts'])
+        row['native_video_clock_rejections'] = [r['clock_rejection'] for r in row['native_video_receipts']
+            if r.get('scheduled_target_ns') is None and isinstance(r.get('clock_rejection'), dict)]
         row['audio_receipt_evidence_available'] = 'decoded_audio_marker_receipts' in playback
         row['native_audio_receipts_near_video'] = [a for a in playback.get('decoded_audio_marker_receipts', [])
             if a['id_mod16'] == label % 16 and any(a['binding_since_us'] == v['binding_since_us'] and abs(a['received_us']-v['received_us'])<=120000 for v in row['native_video_receipts'])]

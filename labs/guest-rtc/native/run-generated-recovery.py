@@ -39,6 +39,10 @@ if args.preserve_reconnect_output and (not args.obs_recording or args.reconnect!
 if not 35<=args.seconds<=300:parser.error('Duration must be 35..300 seconds')
 if args.reconnect!='none' and args.seconds<12+40*(args.reconnect_count-1)+20:parser.error('Allow 20 seconds after the last reconnect')
 check_ports((7880,8990))
+free_bytes=shutil.disk_usage(LAB).free
+required_free_bytes=(3 if args.guests==3 and args.seconds>=100 else 2)*1024**3
+if free_bytes<required_free_bytes:
+    raise RuntimeError(f'Generated recovery needs {required_free_bytes/1024**3:.0f} GiB free before launch; available {free_bytes/1024**3:.2f} GiB. No devices or rooms started.')
 name='generated-recovery-'+str(time.time_ns())
 sfu=LAB/'runtime'/('livekit-server-subscriber-report-lab' if args.subscriber_report else 'livekit-server-delayed-report-lab')
 env={key:value for key,value in os.environ.items() if not key.startswith('LIVEKIT_LAB_')}
