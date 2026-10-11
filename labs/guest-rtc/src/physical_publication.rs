@@ -67,6 +67,9 @@ pub fn preflight() -> Result<()> {
     );
     ensure!(unsafe {lab_permission(0)}==1,"Physical microphone permission is required before connecting; this command will not prompt or start capture implicitly");
     speech()?;
+    if crate::physical_camera::enabled() {
+        crate::physical_camera::preflight()?;
+    }
     Ok(())
 }
 #[derive(Serialize)]
@@ -103,6 +106,7 @@ struct Owner {
     last_reference: Option<[i16; 480]>,
     monitor_evidence: Option<Arc<crate::guest_monitor::Monitor>>,
     monitor_progress: Vec<serde_json::Value>,
+    camera: Option<crate::physical_camera::Publisher>,
 }
 impl Owner {
     fn new(device: Device, processor: MicrophoneProcessor, evidence: Evidence) -> Self {
@@ -134,6 +138,7 @@ impl Owner {
             last_reference: None,
             monitor_evidence: None,
             monitor_progress: Vec::with_capacity(301),
+            camera: None,
         }
     }
 
@@ -217,7 +222,11 @@ impl Drop for Owner {
             monitor.stop();
             monitor.stats()
         });
+        if let Some(camera) = &self.camera {
+            camera.stop.store(true, Ordering::Release);
+        }
         let lifecycle = self.device.close();
+        let camera_report = self.camera.as_mut().map(|camera| camera.shutdown());
         self.handoff.retire();
         let target = (self.published * 95).div_ceil(100);
         let mut count = 0;
@@ -242,7 +251,7 @@ impl Drop for Owner {
             "capture_timing_last_blocks":self.capture_timing,"capture_timing_capacity":64,
             "first_capture_age_before_apm_us":self.first_capture_age_us,
             "maximum_reverse_apm_us":self.max_reverse_us,"maximum_capture_apm_us":self.max_capture_us,"sdk_submission_unconfirmed_at_shutdown":self.sdk_submission_unconfirmed,"handoff":self.handoff.report(),"native_lifecycle":lifecycle,
-            "video":"generated black frame, not a physical camera","capture_rtp_alignment_qualified":false,
+            "camera":camera_report,"video":if self.camera.is_some(){"native built-in physical camera"}else{"generated black frame, not a physical camera"},"capture_rtp_alignment_qualified":false,
             "full_monitor_reference_qualified":false,"physical_aec_qualified":false,"g1_complete":false});
         report
             .as_object_mut()
@@ -276,6 +285,9 @@ pub fn run(
     if monitor_enabled() {
         monitor.activate();
         owner.monitor_evidence = Some(monitor.clone());
+    }
+    if crate::physical_camera::enabled() {
+        owner.camera = Some(crate::physical_camera::Publisher::start(video.clone())?);
     }
     let mut pending: Option<Block> = None;
     let mut pending_since = Instant::now();
@@ -317,6 +329,13 @@ pub fn run(
                 unsafe { CStr::from_ptr(message.as_ptr()) }.to_string_lossy()
             );
         }
+        ensure!(
+            !owner
+                .camera
+                .as_ref()
+                .is_some_and(|camera| camera.failed.load(Ordering::Acquire)),
+            "Physical camera failed; inspect camera evidence"
+        );
         owner.submit_due(&audio)?;
         if owner.monitor_evidence.is_some() {
             // At most 30 ms queued in native output. Input callback copies only
@@ -446,7 +465,7 @@ pub fn run(
             }
         }
         let slot = (began.elapsed().as_secs_f64() * 30.0) as u64;
-        if last_video != Some(slot) {
+        if owner.camera.is_none() && last_video != Some(slot) {
             last_video = Some(slot);
             let video_started = Instant::now();
             video.capture_frame(&VideoFrame {

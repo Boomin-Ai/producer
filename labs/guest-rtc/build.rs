@@ -4,6 +4,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=LIVEKIT_LAB_LINK_EXTERNAL_ARCHIVE");
     println!("cargo:rerun-if-changed=src/obs_bridge.m");
     println!("cargo:rerun-if-changed=src/physical_audio.mm");
+    println!("cargo:rerun-if-changed=src/physical_camera.mm");
     if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
         println!("cargo:rustc-link-arg=-ObjC");
         if env::var("LIVEKIT_LAB_LINK_EXTERNAL_ARCHIVE").as_deref() == Ok("1") {
@@ -37,9 +38,34 @@ fn main() {
             .status()
             .unwrap()
             .success());
+        assert!(Command::new("clang++")
+            .args([
+                "-std=c++17",
+                "-mmacosx-version-min=13.0",
+                "-fobjc-arc",
+                "-fexceptions",
+                "-fobjc-arc-exceptions",
+                "-c",
+                "src/physical_camera.mm",
+                "-o"
+            ])
+            .arg(out.join("physical_camera.o"))
+            .status()
+            .unwrap()
+            .success());
+        assert!(Command::new("ar")
+            .arg("rcs")
+            .arg(out.join("libphysical_camera.a"))
+            .arg(out.join("physical_camera.o"))
+            .status()
+            .unwrap()
+            .success());
+        println!("cargo:rustc-link-lib=static=physical_camera");
         println!("cargo:rustc-link-search=native={}", out.display());
         println!("cargo:rustc-link-lib=static=physical_audio");
         for framework in [
+            "CoreMedia",
+            "CoreVideo",
             "AppKit",
             "AVFoundation",
             "AVFAudio",

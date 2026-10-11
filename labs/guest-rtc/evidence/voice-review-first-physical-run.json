@@ -46,6 +46,8 @@
       "peak": 0.8806
     }
   ],
-  "subjective_quality_qualified": false,
-  "g1_complete": false
+  "subjective_quality_qualified": true,
+  "g1_complete": false,
+  "human_listening_review": "sounds great",
+  "subjective_quality_scope": "this physical Mac trial only; not other devices, WAN or reconnect listening"
 }

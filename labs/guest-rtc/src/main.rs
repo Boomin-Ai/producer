@@ -9,6 +9,8 @@ mod guest_monitor;
 #[cfg(feature = "obs-proof")]
 mod obs_proof;
 #[cfg(feature = "physical-aec")]
+mod physical_camera;
+#[cfg(feature = "physical-aec")]
 mod physical_device;
 #[cfg(feature = "physical-aec")]
 mod physical_publication;
@@ -47,6 +49,8 @@ fn main() -> anyhow::Result<()> {
 async fn run() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);
     match args.next().as_deref() {
+        #[cfg(feature = "physical-aec")]
+        Some("camera-permissions")=>physical_camera::permissions(),
         Some("apm-fixture") => {
             let dir = args.next().unwrap_or_else(|| "evidence/apm".into());
             let speech = args.next();

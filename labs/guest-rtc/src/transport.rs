@@ -351,13 +351,22 @@ async fn publish(room: &Room) -> Result<(NativeAudioSource, NativeVideoSource)> 
         1,
         0,
     );
-    let video = NativeVideoSource::new(
-        VideoResolution {
-            width: 320,
-            height: 180,
-        },
-        false,
-    );
+    // The installed SDK's no-keepalive constructor creates the same raw-capable
+    // source. Avoid epoch-time black frames before host-clock camera frames.
+    let video = if std::env::var("LIVEKIT_LAB_PHYSICAL_CAMERA").as_deref() == Ok("1") {
+        NativeVideoSource::new_encoded(VideoResolution {
+            width: 640,
+            height: 480,
+        })
+    } else {
+        NativeVideoSource::new(
+            VideoResolution {
+                width: 320,
+                height: 180,
+            },
+            false,
+        )
+    };
     room.local_participant()
         .publish_track(
             LocalTrack::Audio(LocalAudioTrack::create_audio_track(
@@ -380,7 +389,11 @@ async fn publish(room: &Room) -> Result<(NativeAudioSource, NativeVideoSource)> 
     room.local_participant()
         .publish_track(
             LocalTrack::Video(LocalVideoTrack::create_video_track(
-                "synthetic-stage",
+                if std::env::var("LIVEKIT_LAB_PHYSICAL_CAMERA").as_deref() == Ok("1") {
+                    "physical-camera-lab"
+                } else {
+                    "synthetic-stage"
+                },
                 RtcVideoSource::Native(video.clone()),
             )),
             TrackPublishOptions {

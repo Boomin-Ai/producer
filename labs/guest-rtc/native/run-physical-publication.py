@@ -9,6 +9,7 @@ import subprocess
 import time
 LAB = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--camera-sync', action='store_true', help='Explicit built-in camera/mic and private decoded AV recording')
 parser.add_argument('--voice-review', action='store_true', help='Save a private decoded return WAV for end-to-end listening (requires explicit Start)')
 parser.add_argument('--publish-microphone', action='store_true')
 parser.add_argument('--play-guest', action='store_true', help='Play the remote speech fixture through native speakers (local microphone never monitored)')
@@ -27,6 +28,8 @@ if (args.reconnect or args.guest_rejoin) and (not args.play_guest or args.second
     parser.error("Reconnect/rejoin requires --play-guest and at least 20 seconds")
 if args.voice_review and (not args.play_guest or not args.wait_for_start or args.seconds>60 or args.seconds<35 or args.reconnect or args.guest_rejoin):
     parser.error("--voice-review requires --play-guest --wait-for-start, 35..60 seconds, and no reconnect/rejoin")
+if args.camera_sync and (not args.play_guest or not args.wait_for_start or args.voice_review or args.reconnect or args.guest_rejoin or not 20<=args.seconds<=60):
+    parser.error('--camera-sync requires --play-guest --wait-for-start, 20..60 seconds, no voice-review/reconnect/rejoin')
 for port in (7880,8990):
     with socket.socket() as probe:
         probe.bind(('127.0.0.1',port))
@@ -40,22 +43,27 @@ if args.guest_rejoin:env["LIVEKIT_LAB_GUEST_REJOIN"]="1"
 if args.reconnect:env["LIVEKIT_LAB_MONITOR_RECONNECT"]=args.reconnect
 if args.play_guest:env["LIVEKIT_LAB_GUEST_MONITOR"]="1"
 if args.wait_for_start:env["LIVEKIT_LAB_WAIT_FOR_START"]="1"
-if args.voice_review:
+if args.voice_review or args.camera_sync:
     private=Path.home()/'Library/Application Support/Producer Guest RTC Lab'/('voice-review-'+name)
     private.mkdir(parents=True,mode=0o700,exist_ok=False)
     private.chmod(0o700)
-    env['LIVEKIT_LAB_VOICE_REVIEW']='1'
+    if args.voice_review:env['LIVEKIT_LAB_VOICE_REVIEW']='1'
     env['LIVEKIT_LAB_VOICE_REVIEW_DIRECTORY']=str(private)
+native_binary=LAB/'target/debug/producer-guest-rtc-lab'
+if args.camera_sync:
+    native_binary=Path.home()/'Applications/Producer Camera Sync Lab.app/Contents/MacOS/producer-guest-rtc-lab'
+    if not native_binary.is_file():parser.error('Package the camera sync lab first')
+    env.update(LIVEKIT_LAB_PHYSICAL_CAMERA='1',LIVEKIT_LAB_SYNC_STREAMS='1',LIVEKIT_LAB_CAMERA_SYNC='1',LIVEKIT_LAB_EXECUTABLE=str(native_binary))
 owned=[]
 logs=[]
-report={'run_name':name,'status':'running','loopback_only':True,'physical_microphone_publication_requested':True,'browser_voice_recording_requested':args.voice_review,'voice_recording_scope':'decoded return WAV in private Application Support directory' if args.voice_review else 'none','seconds':args.seconds,'g1_complete':False,'guest_monitor_requested':args.play_guest,'wait_for_user_start':args.wait_for_start,'sdk_reconnect_requested':args.reconnect,'guest_rejoin_requested':args.guest_rejoin}
+report={'run_name':name,'status':'running','loopback_only':True,'physical_microphone_publication_requested':True,'browser_voice_recording_requested':args.voice_review,'private_av_recording_requested':args.camera_sync,'voice_recording_scope':'decoded return WAV in private Application Support directory' if args.voice_review else 'none','seconds':args.seconds,'g1_complete':False,'guest_monitor_requested':args.play_guest,'wait_for_user_start':args.wait_for_start,'sdk_reconnect_requested':args.reconnect,'guest_rejoin_requested':args.guest_rejoin}
 def digest_file(path):
     digest=hashlib.sha256()
     with path.open('rb') as stream:
         for chunk in iter(lambda:stream.read(1024*1024),b''):
             digest.update(chunk)
     return digest.hexdigest()
-report['native_binary_sha256']=digest_file(LAB/'target/debug/producer-guest-rtc-lab')
+report['native_binary_sha256']=digest_file(native_binary)
 report['sfu_binary_sha256']=digest_file(LAB/'runtime/livekit-server-delayed-report-lab')
 conditions=LAB/'evidence'/f'{name}-conditions.json'
 conditions.write_text(json.dumps(report,indent=2)+'\n')
@@ -74,7 +82,7 @@ try:
     start(['node','web/server.mjs'],'web',8990)
     fixture=subprocess.Popen(['node','web/physical-smoke.mjs','--publish-microphone'],cwd=LAB,env=env,start_new_session=True)
     try:
-        code=fixture.wait(timeout=args.seconds+360 if args.wait_for_start else args.seconds+45)
+        code=fixture.wait(timeout=args.seconds+600 if args.camera_sync else args.seconds+360 if args.wait_for_start else args.seconds+45)
         if code:raise RuntimeError(f'Physical fixture exited {code}; retain diagnostics')
     finally:
         if fixture.poll() is None:

@@ -1391,10 +1391,45 @@ zero active callbacks/owners after stop, joined publisher in 42.29 ms. This is
 not a fault-free trial. Approximate decoded RMS was -44.68 dBFS in 2–9 s,
 -25.42 dBFS in 12–28 s, and -19.97 dBFS in 32–38 s; these are output energy
 observations, not echo attenuation or voice suppression measurements without a
-raw reference/controlled speaker level. Listening review is pending.
+raw reference/controlled speaker level. The subsequent listening review is below.
 
 The WAV was opened in QuickTime; only numeric source/browser/condition reports
 and `labs/guest-rtc/evidence/voice-review-first-physical-run.json` are retained in
 git. The private WAV and review manifest remain in Application Support. An
 earlier unstarted trial (`1791665950205546000`) timed out waiting for Start;
 its failed conditions report is retained without a voice-quality result.
+
+The operator subsequently reviewed the decoded voice and reported “sounds great.”
+This qualifies subjective voice quality for this physical Mac trial only; other
+devices, reconnect listening and WAN conditions remain untested.
+
+### Physical camera synchronization candidate — 2026-10-10
+
+Added an opt-in `--camera-sync` trial using the built-in native camera alongside
+the existing native microphone publication. AVFoundation delivers 640×480 NV12;
+capture presentation timestamps are converted from the session synchronization
+clock to the host clock. A three-frame preallocated native ring hands I420 frames
+to a separate SDK publisher thread. Late callbacks are discarded; application
+frames older than 100 ms are rejected. Format, timestamp, queue and lifecycle
+counters are retained. SDK timestamp translation and internal encoder queues
+remain separate, unqualified boundaries.
+
+The disposable Camera Sync Lab bundle requests camera/microphone access after
+the visible Start action. It is ad-hoc signed for development, not notarized.
+Camera and microphone share the `program-av` stream identifier. This candidate
+uses the local SDK's raw-capable source constructor without black keepalive
+frames so placeholder frames cannot precede physical host-clock frames.
+
+The browser records the decoded camera/audio pair into a private, size-limited
+WebM for clap/lip-sync review. This involves browser re-encoding and muxing; it
+does not prove source-to-RTP timestamp alignment or OBS output synchronization.
+Review media stays outside git in a 0700 Application Support directory with
+0600 files. Returned microphone playback stays muted.
+
+46 native root tests passed, including generated NV12 conversion, bounded-ring
+and timestamp rejection checks. Strict combined-feature all-targets Clippy and
+Objective-C++ syntax checks passed. A generated browser canvas/tone test produced
+a playable 640×480 VP8/Opus WebM with both tracks and validated container header.
+No physical camera result is asserted yet. Camera shutdown drains its delegate
+queue, but a worst-case OS stop/join bound is not proven. G1 remains incomplete;
+production and the installed Producer application are unchanged.

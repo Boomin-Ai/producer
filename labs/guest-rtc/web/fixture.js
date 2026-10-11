@@ -2,6 +2,25 @@ import { Room, RoomEvent, LocalAudioTrack, LocalVideoTrack, Track } from 'liveki
 
 let room, context, timer, analyser, returnAudio, synthetic, silentOutput, guestGain, voiceRecorder;
 const voiceReview=new URLSearchParams(location.search).get("voiceReview")==="1";
+const cameraSync=new URLSearchParams(location.search).get("cameraSync")==="1";
+let returnVideoTrack,avRecorder,avChunks=[],avBytes=0,avError=null,avFinished;
+window.finishAvReview=async()=>{
+ if(!avRecorder)throw new Error("AV recorder never attached");
+ if(avRecorder.state!=="inactive")avRecorder.stop();
+ await Promise.race([avFinished,new Promise((_,reject)=>setTimeout(()=>reject(new Error("AV recorder finish timeout")),3000))]);
+ if(avError)throw new Error(avError);
+ const blob=new Blob(avChunks,{type:avRecorder.mimeType});
+ const bytes=new Uint8Array(await blob.arrayBuffer());let text="";for(let at=0;at<bytes.length;at+=16384)text+=String.fromCharCode(...bytes.subarray(at,at+16384));
+ avChunks=[];return {base64:btoa(text),bytes:bytes.length,mime:avRecorder.mimeType};
+};
+function beginAvReview(){
+ if(!cameraSync || avRecorder || !returnVideoTrack || !window.returnAudioTrack)return;
+ const mime="video/webm;codecs=vp8,opus";if(!MediaRecorder.isTypeSupported(mime))throw new Error("AV review codec unsupported");
+ avRecorder=new MediaRecorder(new MediaStream([returnVideoTrack.mediaStreamTrack,window.returnAudioTrack.mediaStreamTrack]),{mimeType:mime,videoBitsPerSecond:750000,audioBitsPerSecond:64000});
+ avFinished=new Promise((resolve,reject)=>{avRecorder.onstop=resolve;avRecorder.onerror=reject;});
+ avRecorder.ondataavailable=event=>{avBytes+=event.data.size;if(avBytes>20000000 || avChunks.length>=70){avError="AV review exceeded recording limit";if(avRecorder.state!=="inactive")avRecorder.stop();return;}if(event.data.size)avChunks.push(event.data);};
+ avRecorder.start(1000);
+}
 let voiceChunks=[],voiceSamples=0,voiceFinished,voiceResolve;
 window.finishVoiceReview=async()=>{
  if(!voiceRecorder)throw new Error("No decoded voice recorder attached");
@@ -41,10 +60,11 @@ export async function start() {
       if (track.kind === Track.Kind.Video) {
         const element = document.querySelector('#return');
         track.attach(element);
+        returnVideoTrack=track;beginAvReview();
         const frame = () => { state.returnVideoFrames++; element.requestVideoFrameCallback(frame); };
         element.requestVideoFrameCallback(frame);
       } else {
-        window.returnAudioTrack = track;
+        window.returnAudioTrack = track;beginAvReview();
         const element = track.attach(); element.volume = 0; element.autoplay = true;
         document.body.append(element); element.play().catch(error => { state.error = String(error); });
         // Analyse the remote PCM without audibly playing it or a self preview.
@@ -108,6 +128,7 @@ export async function start() {
   } catch (error) { state.error = String(error); display(); throw error; }
 }
 export async function stop() {
+  if(avRecorder?.state!==undefined && avRecorder.state!=="inactive")avRecorder.stop();
   clearInterval(timer); synthetic?.disconnect(); guestGain?.disconnect(); voiceRecorder?.disconnect(); returnAudio?.disconnect();
   await room?.disconnect(); await context?.close(); room = null;
   state.published = false; display();

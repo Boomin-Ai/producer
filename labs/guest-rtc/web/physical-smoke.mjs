@@ -15,41 +15,52 @@ if (!Number.isInteger(seconds)||seconds<5||seconds>300) throw new Error('Physica
 if (!/^physical-publication-[0-9]+$/.test(name??'')) throw new Error('Unique physical-publication run name required');
 const monitor=process.env.LIVEKIT_LAB_GUEST_MONITOR==='1';
 const voiceReview=process.env.LIVEKIT_LAB_VOICE_REVIEW==='1';
+const cameraSync=process.env.LIVEKIT_LAB_CAMERA_SYNC==='1';
+const nativeExecutable=process.env.LIVEKIT_LAB_EXECUTABLE??path.join(lab,'target/debug/producer-guest-rtc-lab');
 let privateDirectory;
-if(voiceReview) {
- if(!monitor || process.env.LIVEKIT_LAB_WAIT_FOR_START!=='1' || seconds<35 || seconds>60 || process.env.LIVEKIT_LAB_MONITOR_RECONNECT || process.env.LIVEKIT_LAB_GUEST_REJOIN)throw new Error('Invalid explicit voice-review configuration');
+if(voiceReview || cameraSync) {
+ if(!monitor || process.env.LIVEKIT_LAB_WAIT_FOR_START!=='1' || seconds<(cameraSync?20:35) || seconds>60 || process.env.LIVEKIT_LAB_MONITOR_RECONNECT || process.env.LIVEKIT_LAB_GUEST_REJOIN)throw new Error('Invalid explicit voice-review configuration');
  privateDirectory=path.join(os.homedir(),'Library/Application Support/Producer Guest RTC Lab',`voice-review-${name}`);
  if(process.env.LIVEKIT_LAB_VOICE_REVIEW_DIRECTORY!==privateDirectory)throw new Error('Unexpected private voice directory');
  const directory=await lstat(privateDirectory);
  if(!directory.isDirectory() || directory.isSymbolicLink() || (directory.mode&0o777)!==0o700)throw new Error('Private voice directory must be a real directory with mode 0700');
 }
 let exited=false;
-let child,done,log='',browser,page,connected=false,readyTimer;
+let child,done,log='',browser,page,connected=false,readyTimer,permission;
 try {
  // Warm generated guest + receiver before hardware starts. Browser startup
  // must not consume the physical trial or miss its short publication window.
  browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:false,args:['--autoplay-policy=no-user-gesture-required','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
- page=await browser.newPage();await page.goto(`http://127.0.0.1:8990/?identity=guest-1${monitor?'&monitorSpeech=1':''}${voiceReview?'&voiceReview=1':''}`);
- await page.evaluate(({seconds,monitor,voiceReview})=>{
-  document.title=voiceReview?'Producer — private voice review':'Producer — local LiveKit microphone test';
-  if(voiceReview){document.querySelector('h1').textContent='Producer voice test';document.querySelector('h1+p').textContent='Native mic starts after Start. Your decoded voice is saved privately for listening afterward.';document.querySelector('#start').hidden=true;document.querySelector('#stop').hidden=true;}
-  const notice=document.createElement('p');notice.id='voice-review-instructions';notice.textContent=voiceReview?`Private ${seconds}-second voice recording. Built-in speakers/mic near 50%. First 10 seconds quiet; 10–30 seconds talk over the clip; after 30 seconds keep talking with the clip silent. Decoded microphone WAV stays on this Mac. Your mic is never played during capture.`:`Local microphone timing test • ${seconds} seconds • Browser speakers stay silent. ${monitor ? "Native speakers play remote speech. Use built-in speakers and microphone, disconnect headphones. Talk over the clip to check double-talk." : "No speaking needed."}`;notice.style.fontWeight='bold';document.body.prepend(notice);
- },{seconds,monitor,voiceReview});
+ page=await browser.newPage();await page.goto(`http://127.0.0.1:8990/?identity=guest-1${monitor?'&monitorSpeech=1':''}${voiceReview?'&voiceReview=1':''}${cameraSync?'&cameraSync=1':''}`);
+ await page.evaluate(({seconds,monitor,voiceReview,cameraSync})=>{
+  document.title=cameraSync?'Producer — camera/audio sync':voiceReview?'Producer — private voice review':'Producer — local LiveKit microphone test';
+  if(voiceReview || cameraSync){document.querySelector('h1').textContent=cameraSync?'Producer camera/audio sync test':'Producer voice test';document.querySelector('h1+p').textContent=cameraSync?'Native camera and mic start after permission succeeds. Decoded video/audio are saved privately for sync review.':'Native mic starts after Start. Your decoded voice is saved privately for listening afterward.';document.querySelector('#start').hidden=true;document.querySelector('#stop').hidden=true;}
+  const notice=document.createElement('p');notice.id='voice-review-instructions';notice.textContent=cameraSync?`Private ${seconds}-second native camera/audio recording. Click Start, then Allow camera/mic if macOS asks. Wait for your video, clap three times with hands in view (three seconds apart), then speak clearly while looking at the camera. Guest clip is silent; microphone return is never played during capture.`:voiceReview?`Private ${seconds}-second voice recording. Built-in speakers/mic near 50%. First 10 seconds quiet; 10–30 seconds talk over the clip; after 30 seconds keep talking with the clip silent. Decoded microphone WAV stays on this Mac. Your mic is never played during capture.`:`Local microphone timing test • ${seconds} seconds • Browser speakers stay silent. ${monitor ? "Native speakers play remote speech. Use built-in speakers and microphone, disconnect headphones. Talk over the clip to check double-talk." : "No speaking needed."}`;notice.style.fontWeight='bold';document.body.prepend(notice);
+ },{seconds,monitor,voiceReview,cameraSync});
  await page.bringToFront();
  await page.evaluate(()=>window.startLab());
  await page.waitForFunction(()=>window.labState.published,undefined,{timeout:10000});
+ if(cameraSync)await page.evaluate(()=>window.setGuestSpeechEnabled(false));
  await new Promise(r=>setTimeout(r,2000));
  if(process.env.LIVEKIT_LAB_WAIT_FOR_START==='1') {
-  await page.evaluate(({seconds,voiceReview})=>{
+  await page.evaluate(({seconds,voiceReview,cameraSync})=>{
    window.physicalTestStarted=false;
-   const button=document.createElement('button');button.textContent=`Start ${seconds}-second ${voiceReview?'voice':'speaker'} test`;
+   const button=document.createElement('button');button.textContent=`Start ${seconds}-second ${cameraSync?'camera sync':voiceReview?'voice':'speaker'} test`;
    button.onclick=()=>{window.physicalTestStarted=true;button.disabled=true;button.textContent='Test running';};document.body.prepend(button);
-  },{seconds,voiceReview});
-  console.log(`Ready: click Start ${seconds}-second ${voiceReview?'voice':'speaker'} test. Microphone is not running yet.`);
+  },{seconds,voiceReview,cameraSync});
+  console.log(`Ready: click Start ${seconds}-second ${cameraSync?'camera sync':voiceReview?'voice':'speaker'} test. Microphone is not running yet.`);
   await page.waitForFunction(()=>window.physicalTestStarted,undefined,{timeout:300000});
  }
+ if(cameraSync) {
+  console.log('Camera/microphone permission check — use Allow in the macOS dialog if requested. No capture starts before permission succeeds.');
+  permission=spawn(nativeExecutable,['camera-permissions'],{cwd:lab,stdio:'inherit'});
+  page.once('close',()=>{if(permission?.exitCode===null)permission.kill('SIGTERM');});
+  const code=await new Promise((resolve,reject)=>{permission.on('error',reject);permission.on('exit',resolve);});
+  if(page.isClosed())throw new Error('Test window closed before camera capture');
+  if(code!==0)throw new Error('Camera/microphone permission not granted');
+ }
  console.log(`Browser receiver warm; starting native ${seconds}-second capture now`);
- child=spawn(path.join(lab,'target/debug/producer-guest-rtc-lab'),['transport',path.join(lab,'runtime/native-token'),path.join(lab,`evidence/${name}.json`),String(seconds)],{cwd:lab});
+ child=spawn(nativeExecutable,['transport',path.join(lab,'runtime/native-token'),path.join(lab,`evidence/${name}.json`),String(seconds)],{cwd:lab});
  done=new Promise(resolve=>child.on('exit',code=>{exited=true;resolve(code);}));
  const ready=new Promise((resolve,reject)=>{
   child.on('error',reject);
@@ -81,6 +92,10 @@ try {
  const code=await done;
  const native=JSON.parse(await readFile(path.join(lab,`evidence/${name}.json`),'utf8'));
  const recoveries=native.capture_publication?.deadline_recoveries??0;
+ let avCapture=null;
+ if(cameraSync){
+  try{const capture=await page.evaluate(()=>window.finishAvReview());const data=Buffer.from(capture.base64,"base64");if(data.length!==capture.bytes || data.length<1000 || data.length>20000000)throw new Error("Invalid private AV capture");await writeFile(path.join(privateDirectory,"decoded-av.webm"),data,{mode:0o600,flag:"wx"});avCapture={recorded:true,bytes:data.length,mime:capture.mime,scope:"private Application Support; decoded AV browser re-encode, not raw source media"};await writeFile(path.join(privateDirectory,"av-review.json"),JSON.stringify({run:name,...avCapture},null,2)+"\n",{mode:0o600,flag:"wx"});console.log(`Private AV recording ready: ${path.join(privateDirectory,"decoded-av.webm")}`);}catch(error){avCapture={recorded:false,error:String(error)};}
+ }
  let voiceCapture=null;
  if(voiceReview) {
   try {
@@ -94,8 +109,9 @@ try {
    console.log(`Private decoded voice WAV ready: ${file}`);
   } catch(error) {voiceCapture={recorded:false,error:String(error)};}
  }
- const report={voice_capture:voiceCapture,guest_rejoin_requested:process.env.LIVEKIT_LAB_GUEST_REJOIN==='1',guest_rejoin_completed:rejoinCompleted,sdk_reconnect_requested:process.env.LIVEKIT_LAB_MONITOR_RECONNECT??null,seconds,observations,deadline_recoveries:recoveries,source_fault_free:code===0&&recoveries===0,...snapshot,native_exit_code:code,receiver_warmed_before_native:true,physical_microphone_publication_requested:true,received_audio_recorded:voiceCapture?.recorded??false,browser_speaker_output_gain:0,reference_scope:monitor?'selected remote guest speech through final native speaker output':'native lab clip only; guest return not played',guest_monitor_requested:monitor,camera_sync_qualified:false,g1_complete:false};
+ const report={av_capture:avCapture,voice_capture:voiceCapture,guest_rejoin_requested:process.env.LIVEKIT_LAB_GUEST_REJOIN==='1',guest_rejoin_completed:rejoinCompleted,sdk_reconnect_requested:process.env.LIVEKIT_LAB_MONITOR_RECONNECT??null,seconds,observations,deadline_recoveries:recoveries,source_fault_free:code===0&&recoveries===0,...snapshot,native_exit_code:code,receiver_warmed_before_native:true,physical_microphone_publication_requested:true,received_audio_recorded:voiceCapture?.recorded||avCapture?.recorded||false,browser_speaker_output_gain:0,reference_scope:monitor?'selected remote guest speech through final native speaker output':'native lab clip only; guest return not played',guest_monitor_requested:monitor,camera_sync_qualified:false,g1_complete:false};
  await writeFile(path.join(lab,`evidence/${name}-browser.json`),JSON.stringify(report,null,2)+'\n');
+ if(cameraSync && (!avCapture?.recorded || !native.capture_publication?.camera?.submitted))throw new Error(`Physical camera/AV capture failed: ${avCapture?.error??"no native camera frames"}`);
  if(voiceReview && !voiceCapture?.recorded)throw new Error(`Decoded voice review failed: ${voiceCapture?.error}`);
  if(code!==0)throw new Error(`Native physical publication failed (${code}); retain reports`);
  if(snapshot.state.error || !snapshot.audio.some(s=>(s.packetsReceived??0)>100) || snapshot.state.returnVideoFrames<20)throw new Error('Browser did not receive expected physical audio RTP and placeholder video');
@@ -117,6 +133,7 @@ try {
  console.log(`Local physical audio RTP reception observed; ${recoveries} deadline recoveries; no camera-sync/full-AEC claim`);
 } finally {
  clearTimeout(readyTimer);
+ if(permission?.exitCode===null)permission.kill('SIGTERM');
  await page?.evaluate(()=>window.stopLab()).catch(()=>{});await browser?.close();
  if(child && child.exitCode===null){child.kill('SIGTERM');await done;}
  await writeFile(path.join(lab,`runtime/${name}.log`),log);
