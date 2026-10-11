@@ -1561,3 +1561,29 @@ Transport survival and applied impairment are proven for this local trial;
 operator reviewed the clip and confirmed “Aligned and reasonably smooth.” No
 quantitative A/V offset, actual
 WAN, full reconnection or production qualification is inferred.
+
+### Physical audio jitter/loss trial — 2026-10-10
+
+Trial `1791687160475252000` completed 40.123 seconds with audio-jitter profile.
+Relay delayed 3,880 client-to-SFU and 1,947 SFU-to-client audio-classified RTP
+packets (20–79 ms per leg), and deliberately dropped 60/37 respectively. Peak
+pending packets was eight; no relay overflow, send error or snapshot failure.
+Video and control packets were not deliberately impaired. Counts include all
+fixture participants; per-leg delays cannot be described as one end-to-end cap.
+
+Audio capture-to-SDK p95 remained 26 ms with zero native format/timeline errors
+and zero publication deadline recoveries. Native audio counted 566 clipped
+samples. Camera submitted 960 frames (p95 handoff 37 ms), no native faults,
+overflow or stale discards; browser observed 933 video frames. Audio receiver
+reported 37 lost packets, 35,407 concealed samples and 38 concealment events,
+showing this is not artifact-free delivery despite the positive listening
+review. Publisher joined in 108.729 ms and camera retired cleanly. Private
+3,625,647-byte decoded AV WebM saved; no media committed.
+
+Operator reviewed claps, speech and voice quality and confirmed “Clear and
+aligned.” Numeric index: `labs/guest-rtc/evidence/camera-audio-jitter-physical-run.json`.
+This passes subjective sync/voice review and transport survival for this
+40-second Mac loopback audio impairment trial. Baseline, signaling resume and
+separate video/audio jitter trials are now recorded. Full media reconnect/track
+replacement, measured A/V offsets, prolonged drift/load, WAN outages and other
+platforms remain unqualified. G1 incomplete; production unchanged.
