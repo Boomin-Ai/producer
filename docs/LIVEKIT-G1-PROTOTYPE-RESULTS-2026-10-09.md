@@ -1538,3 +1538,26 @@ errors and zero audio publication deadline recoveries. Numeric index:
 This is the relay-routing control for the next video/audio jitter profiles.
 No subjective sync review or impairment result is asserted for this baseline;
 G1 and production integration remain unqualified.
+
+### Physical video jitter/loss trial — 2026-10-10
+
+Trial `1791686945963206000` completed 40.140 seconds with video-jitter profile.
+The relay delayed 2,994 client-to-SFU and 4,359 SFU-to-client video-classified
+RTP packets (20–119 ms per leg) and deliberately dropped 48/79 respectively.
+There were no relay send errors or overflow; peak pending delayed packets was
+36. Audio and STUN/DTLS/RTCP were not deliberately impaired. Delay acts on both
+legs, so this is not a single end-to-end 119 ms ceiling. Snapshot accounting
+includes one pending video packet per leg at collection time.
+
+Camera submitted 958 frames with zero native faults/overflow/stale discards;
+browser observed 713 return frames and saved a private 3,298,079-byte decoded
+AV WebM. Audio capture-to-SDK p95 26 ms, zero native format/timeline errors,
+zero publication deadline recoveries; camera p95 37 ms. Native audio counted
+405 clipped samples. Receiver audio reported zero lost packets, 4,146 concealed
+samples/two concealment events. Camera retired cleanly and publisher joined
+in 94.405 ms. Numeric index: `labs/guest-rtc/evidence/camera-video-jitter-physical-run.json`.
+
+Transport survival and applied impairment are proven for this local trial;
+operator reviewed the clip and confirmed “Aligned and reasonably smooth.” No
+quantitative A/V offset, actual
+WAN, full reconnection or production qualification is inferred.

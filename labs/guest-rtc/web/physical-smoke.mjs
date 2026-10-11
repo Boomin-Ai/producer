@@ -17,6 +17,7 @@ if (!/^physical-publication-[0-9]+$/.test(name??'')) throw new Error('Unique phy
 const monitor=process.env.LIVEKIT_LAB_GUEST_MONITOR==='1';
 const voiceReview=process.env.LIVEKIT_LAB_VOICE_REVIEW==='1';
 const cameraSync=process.env.LIVEKIT_LAB_CAMERA_SYNC==='1';
+const networkProfile=process.env.LIVEKIT_LAB_PACKET_PROXY==='1'?process.env.LIVEKIT_LAB_PACKET_PROFILE:null;
 const cameraReconnect=cameraSync && process.env.LIVEKIT_LAB_MONITOR_RECONNECT==='signal';
 const nativeExecutable=process.env.LIVEKIT_LAB_EXECUTABLE??path.join(lab,'target/debug/producer-guest-rtc-lab');
 let privateDirectory;
@@ -34,12 +35,13 @@ try {
  // must not consume the physical trial or miss its short publication window.
  browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:false,args:['--autoplay-policy=no-user-gesture-required','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
  page=await browser.newPage();await page.goto(`http://127.0.0.1:8990/?identity=guest-1${monitor?'&monitorSpeech=1':''}${voiceReview?'&voiceReview=1':''}${cameraSync?'&cameraSync=1':''}`);
- await page.evaluate(({seconds,monitor,voiceReview,cameraSync,cameraReconnect})=>{
+ await page.evaluate(({seconds,monitor,voiceReview,cameraSync,cameraReconnect,networkProfile})=>{
   document.title=cameraSync?'Producer — camera/audio sync':voiceReview?'Producer — private voice review':'Producer — local LiveKit microphone test';
   if(voiceReview || cameraSync){document.querySelector('h1').textContent=cameraSync?'Producer camera/audio sync test':'Producer voice test';document.querySelector('h1+p').textContent=cameraSync?'Native camera and mic start after permission succeeds. Decoded video/audio are saved privately for sync review.':'Native mic starts after Start. Your decoded voice is saved privately for listening afterward.';document.querySelector('#start').hidden=true;document.querySelector('#stop').hidden=true;}
   const notice=document.createElement('p');notice.id='voice-review-instructions';notice.textContent=cameraSync?`Private ${seconds}-second native camera/audio recording. Click Start, then Allow camera/mic if macOS asks. Wait for your video, clap three times with hands in view (three seconds apart), then speak clearly while looking at the camera. Guest clip is silent; microphone return is never played during capture.`:voiceReview?`Private ${seconds}-second voice recording. Built-in speakers/mic near 50%. First 10 seconds quiet; 10–30 seconds talk over the clip; after 30 seconds keep talking with the clip silent. Decoded microphone WAV stays on this Mac. Your mic is never played during capture.`:`Local microphone timing test • ${seconds} seconds • Browser speakers stay silent. ${monitor ? "Native speakers play remote speech. Use built-in speakers and microphone, disconnect headphones. Talk over the clip to check double-talk." : "No speaking needed."}`;notice.style.fontWeight='bold';document.body.prepend(notice);
   if(cameraReconnect)notice.textContent=`Private ${seconds}-second reconnect sync test. Click Start, wait for video, and clap/speak before and after the connection check at about 5 seconds. Keep speaking during any freeze; repeat three claps after 15 seconds. Microphone return stays silent.`;
- },{seconds,monitor,voiceReview,cameraSync,cameraReconnect});
+  if(networkProfile){document.title=`Producer — ${networkProfile} camera/audio test`;document.querySelector('h1').textContent=`Producer camera/audio test: ${networkProfile}`;}
+ },{seconds,monitor,voiceReview,cameraSync,cameraReconnect,networkProfile});
  await page.bringToFront();
  await page.evaluate(()=>window.startLab());
  await page.waitForFunction(()=>window.labState.published,undefined,{timeout:10000});
