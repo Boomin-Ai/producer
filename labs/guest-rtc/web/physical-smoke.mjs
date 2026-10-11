@@ -16,10 +16,11 @@ if (!/^physical-publication-[0-9]+$/.test(name??'')) throw new Error('Unique phy
 const monitor=process.env.LIVEKIT_LAB_GUEST_MONITOR==='1';
 const voiceReview=process.env.LIVEKIT_LAB_VOICE_REVIEW==='1';
 const cameraSync=process.env.LIVEKIT_LAB_CAMERA_SYNC==='1';
+const cameraReconnect=cameraSync && process.env.LIVEKIT_LAB_MONITOR_RECONNECT==='signal';
 const nativeExecutable=process.env.LIVEKIT_LAB_EXECUTABLE??path.join(lab,'target/debug/producer-guest-rtc-lab');
 let privateDirectory;
 if(voiceReview || cameraSync) {
- if(!monitor || process.env.LIVEKIT_LAB_WAIT_FOR_START!=='1' || seconds<(cameraSync?20:35) || seconds>60 || process.env.LIVEKIT_LAB_MONITOR_RECONNECT || process.env.LIVEKIT_LAB_GUEST_REJOIN)throw new Error('Invalid explicit voice-review configuration');
+ if(!monitor || process.env.LIVEKIT_LAB_WAIT_FOR_START!=='1' || seconds<(cameraSync?20:35) || seconds>60 || (process.env.LIVEKIT_LAB_MONITOR_RECONNECT && (!cameraSync || process.env.LIVEKIT_LAB_MONITOR_RECONNECT!=='signal')) || process.env.LIVEKIT_LAB_GUEST_REJOIN)throw new Error('Invalid explicit voice-review configuration');
  privateDirectory=path.join(os.homedir(),'Library/Application Support/Producer Guest RTC Lab',`voice-review-${name}`);
  if(process.env.LIVEKIT_LAB_VOICE_REVIEW_DIRECTORY!==privateDirectory)throw new Error('Unexpected private voice directory');
  const directory=await lstat(privateDirectory);
@@ -32,11 +33,12 @@ try {
  // must not consume the physical trial or miss its short publication window.
  browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:false,args:['--autoplay-policy=no-user-gesture-required','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
  page=await browser.newPage();await page.goto(`http://127.0.0.1:8990/?identity=guest-1${monitor?'&monitorSpeech=1':''}${voiceReview?'&voiceReview=1':''}${cameraSync?'&cameraSync=1':''}`);
- await page.evaluate(({seconds,monitor,voiceReview,cameraSync})=>{
+ await page.evaluate(({seconds,monitor,voiceReview,cameraSync,cameraReconnect})=>{
   document.title=cameraSync?'Producer — camera/audio sync':voiceReview?'Producer — private voice review':'Producer — local LiveKit microphone test';
   if(voiceReview || cameraSync){document.querySelector('h1').textContent=cameraSync?'Producer camera/audio sync test':'Producer voice test';document.querySelector('h1+p').textContent=cameraSync?'Native camera and mic start after permission succeeds. Decoded video/audio are saved privately for sync review.':'Native mic starts after Start. Your decoded voice is saved privately for listening afterward.';document.querySelector('#start').hidden=true;document.querySelector('#stop').hidden=true;}
   const notice=document.createElement('p');notice.id='voice-review-instructions';notice.textContent=cameraSync?`Private ${seconds}-second native camera/audio recording. Click Start, then Allow camera/mic if macOS asks. Wait for your video, clap three times with hands in view (three seconds apart), then speak clearly while looking at the camera. Guest clip is silent; microphone return is never played during capture.`:voiceReview?`Private ${seconds}-second voice recording. Built-in speakers/mic near 50%. First 10 seconds quiet; 10–30 seconds talk over the clip; after 30 seconds keep talking with the clip silent. Decoded microphone WAV stays on this Mac. Your mic is never played during capture.`:`Local microphone timing test • ${seconds} seconds • Browser speakers stay silent. ${monitor ? "Native speakers play remote speech. Use built-in speakers and microphone, disconnect headphones. Talk over the clip to check double-talk." : "No speaking needed."}`;notice.style.fontWeight='bold';document.body.prepend(notice);
- },{seconds,monitor,voiceReview,cameraSync});
+  if(cameraReconnect)notice.textContent=`Private ${seconds}-second reconnect sync test. Click Start, wait for video, and clap/speak before and after the connection check at about 5 seconds. Keep speaking during any freeze; repeat three claps after 15 seconds. Microphone return stays silent.`;
+ },{seconds,monitor,voiceReview,cameraSync,cameraReconnect});
  await page.bringToFront();
  await page.evaluate(()=>window.startLab());
  await page.waitForFunction(()=>window.labState.published,undefined,{timeout:10000});
@@ -84,8 +86,9 @@ try {
    if(elapsed>=30 && !clipMuted) {await page.evaluate(()=>window.setGuestSpeechEnabled(false));clipMuted=true;}
    await page.evaluate(({elapsed,seconds})=>{document.querySelector('#voice-review-instructions').textContent=`${Math.floor(elapsed)} / ${seconds} seconds — ${elapsed<10?'Stay quiet; the guest clip is playing.':elapsed<30?'Talk over the guest clip.':'Keep talking; the guest clip is now silent.'} Your microphone return is recorded locally and stays silent during capture.`;},{elapsed,seconds});
   }
-  if(cameraSync)await page.evaluate(({elapsed,seconds})=>{document.querySelector('#voice-review-instructions').textContent=window.labState.returnVideoFrames>0?`${Math.floor(elapsed)} / ${seconds} seconds — Clap three times with hands visible, then speak toward the camera. Your microphone return stays silent.`:'Preparing native camera — wait for your video before clapping.';},{elapsed:(performance.now()-observationBegan)/1000,seconds});
+  if(cameraSync)await page.evaluate(({elapsed,seconds,cameraReconnect})=>{document.querySelector('#voice-review-instructions').textContent=window.labState.returnVideoFrames>0?cameraReconnect?`${Math.floor(elapsed)} / ${seconds} seconds — ${elapsed<5?"Clap and speak; reconnect check shortly.":elapsed<15?"Reconnect check: keep speaking and moving.":"Repeat three claps, then speak toward the camera."} Mic return stays silent.`:`${Math.floor(elapsed)} / ${seconds} seconds — Clap three times with hands visible, then speak toward the camera. Your microphone return stays silent.`:'Preparing native camera — wait for your video before clapping.';},{elapsed:(performance.now()-observationBegan)/1000,seconds,cameraReconnect});
   const observation=await page.evaluate(async()=>({state:window.labState,audio:[...((await window.returnAudioTrack?.getRTCStatsReport())?.values()??[])].filter(s=>s.type==='inbound-rtp'&&s.kind==='audio')}));
+  observation.at_ms=performance.now()-observationBegan;
   if(observations.length<300)observations.push(observation);
   if(observation.audio.length || !snapshot)snapshot=observation;
  }
@@ -110,8 +113,32 @@ try {
    console.log(`Private decoded voice WAV ready: ${file}`);
   } catch(error) {voiceCapture={recorded:false,error:String(error)};}
  }
- const report={av_capture:avCapture,voice_capture:voiceCapture,guest_rejoin_requested:process.env.LIVEKIT_LAB_GUEST_REJOIN==='1',guest_rejoin_completed:rejoinCompleted,sdk_reconnect_requested:process.env.LIVEKIT_LAB_MONITOR_RECONNECT??null,seconds,observations,deadline_recoveries:recoveries,source_fault_free:code===0&&recoveries===0,...snapshot,native_exit_code:code,receiver_warmed_before_native:true,physical_microphone_publication_requested:true,received_audio_recorded:voiceCapture?.recorded||avCapture?.recorded||false,browser_speaker_output_gain:0,reference_scope:monitor?'selected remote guest speech through final native speaker output':'native lab clip only; guest return not played',guest_monitor_requested:monitor,camera_sync_qualified:false,g1_complete:false};
+ let packetRelay=null;
+ if(process.env.LIVEKIT_LAB_PACKET_PROXY==='1') {
+  const response=await fetch('http://127.0.0.1:7885/stats',{signal:AbortSignal.timeout(3000)});
+  if(!response.ok)throw new Error('Packet relay counters unavailable');
+  packetRelay=await response.json();
+  await writeFile(path.join(lab,`evidence/${name}-packet.json`),JSON.stringify(packetRelay,null,2)+'\n');
+ }
+ let cameraReconnectGrowth=null;
+ if(cameraReconnect) {
+  const resumed=native.lifecycle?.find(event=>event.event==='reconnected');
+  const samples=resumed?observations.filter(item=>item.at_ms>Number(resumed.at_ms)+3000):[];
+  const packets=item=>item.audio.reduce((sum,s)=>sum+(s.packetsReceived??0),0);
+  cameraReconnectGrowth={resumed_at_ms:resumed?.at_ms??null,post_resume_samples:samples.length,video_frames:samples.length>1?samples.at(-1).state.returnVideoFrames-samples[0].state.returnVideoFrames:0,audio_packets:samples.length>1?packets(samples.at(-1))-packets(samples[0]):0,scope:'receiver growth after actual SDK signaling resume; does not establish WAN outage or lip-sync offset'};
+ }
+ const report={packet_relay:packetRelay,camera_reconnect_return_growth:cameraReconnectGrowth,av_capture:avCapture,voice_capture:voiceCapture,guest_rejoin_requested:process.env.LIVEKIT_LAB_GUEST_REJOIN==='1',guest_rejoin_completed:rejoinCompleted,sdk_reconnect_requested:process.env.LIVEKIT_LAB_MONITOR_RECONNECT??null,seconds,observations,deadline_recoveries:recoveries,source_fault_free:code===0&&recoveries===0,...snapshot,native_exit_code:code,receiver_warmed_before_native:true,physical_microphone_publication_requested:true,received_audio_recorded:voiceCapture?.recorded||avCapture?.recorded||false,browser_speaker_output_gain:0,reference_scope:monitor?'selected remote guest speech through final native speaker output':'native lab clip only; guest return not played',guest_monitor_requested:monitor,camera_sync_qualified:false,g1_complete:false};
  await writeFile(path.join(lab,`evidence/${name}-browser.json`),JSON.stringify(report,null,2)+'\n');
+ if(packetRelay) {
+  const requested=process.env.LIVEKIT_LAB_PACKET_PROFILE;
+  if(packetRelay.profile!==requested || packetRelay.signaling_rewrites<1 || packetRelay.snapshot_write_errors || packetRelay.send_errors || packetRelay.overflow_drops)throw new Error('Packet relay routing or accounting failed');
+  if(requested!=='baseline') {
+   const kind=requested==='audio-jitter'?'audio':'video';
+   const affected=Object.entries(packetRelay.packets).filter(([key])=>key.endsWith(`:${kind}`)).map(([,stats])=>stats);
+   if(!packetRelay.packet_profile_effect_observed || !affected.some(stats=>stats.delayed>50 && stats.max_delay_ms>=20))throw new Error('Requested RTP impairment was not observed');
+  }
+ }
+ if(cameraReconnect && (!cameraReconnectGrowth || cameraReconnectGrowth.video_frames<20 || cameraReconnectGrowth.audio_packets<100))throw new Error('Camera/audio return did not grow after SDK reconnect');
  if(cameraSync && (!avCapture?.recorded || !native.capture_publication?.camera?.submitted))throw new Error(`Physical camera/AV capture failed: ${avCapture?.error??"no native camera frames"}`);
  if(voiceReview && !voiceCapture?.recorded)throw new Error(`Decoded voice review failed: ${voiceCapture?.error}`);
  if(code!==0)throw new Error(`Native physical publication failed (${code}); retain reports`);

@@ -410,3 +410,22 @@ trusting Cargo's exit status. The lab linker already strips native DWARF. Overri
 stripping only for this final crate with
 `LIVEKIT_LAB_LINK_EXTERNAL_ARCHIVE=1 cargo rustc --locked --jobs 2 --features obs-proof -- -C strip=none`.
 Changing the whole Cargo profile instead rebuilds dependencies and uses more disk.
+
+## Physical camera recovery review
+
+After packaging the explicitly permissioned Camera Sync Lab, run:
+
+```sh
+python3 native/run-physical-publication.py --publish-microphone --play-guest --wait-for-start --camera-sync --reconnect signal --seconds 40
+```
+
+Click Start, clap/speak before reconnect injection at about five seconds, then
+repeat claps after 15 seconds. The browser records privately, with microphone
+return muted. This exercises signaling resume, not a media network outage.
+Camera full reconnect/track replacement is not yet supported by this recorder.
+
+For a separate controlled local RTP jitter trial, substitute
+`--network-profile video-jitter` or `--network-profile audio-jitter` for
+`--reconnect signal`. Start with `--network-profile baseline` to control for
+relay routing. Numeric proxy evidence must confirm that impairment took effect;
+private media never enters the repository. Physical results remain pending.

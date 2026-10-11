@@ -1472,3 +1472,29 @@ loopback trial, not a measured clap offset, source-to-RTP proof, OBS recording
 qualification, extended drift test or WAN/reconnect qualification. Numeric
 evidence is indexed in `labs/guest-rtc/evidence/camera-sync-first-physical-run.json`;
 private camera/audio media remains outside git. Production remains unchanged.
+
+### Physical camera recovery/impairment harness — 2026-10-10
+
+The camera review now accepts `--reconnect signal` and keeps the retained camera
+and audio tracks in the same private recording. Browser observations have local
+observation timestamps. Acceptance requires an actual native SDK Reconnected
+event, fresh native guest monitor output, and growth of both browser video-frame
+and audio-packet counters after resume. The observation and native lifecycle
+clocks start at different setup points; a three-second post-resume margin is
+used for this growth check, not a precise reconnect latency calculation.
+Full reconnect with camera capture remains rejected until private recording
+correctly handles receiver track replacement and output epochs.
+
+Prepared `--network-profile baseline|video-jitter|audio-jitter` for independent
+physical camera trials through the existing bounded loopback packet relay. Video
+jitter applies 20–119 ms delay and approximately 2% loss; audio jitter applies
+20–79 ms delay and approximately 2% loss. STUN/DTLS/RTCP are not impaired. These
+are controlled local RTP experiments, not WAN/server-failover qualification.
+Relay counters are saved; fixture acceptance checks candidate rewriting, actual
+delayed media packets, and relay errors/overflow. Profiles run separately from
+SDK reconnect injection to distinguish failure causes. Private review scope,
+size limits and default-off physical capture remain unchanged.
+
+Python compile and Node syntax checks passed. The signaling-reconnect camera
+trial is open awaiting Start; network-profile physical results are pending.
+Production and the installed Producer application remain unchanged.
