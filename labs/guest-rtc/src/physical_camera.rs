@@ -45,6 +45,13 @@ pub fn preflight() -> Result<()> {
     );
     Ok(())
 }
+pub fn probe() -> Result<()> {
+    preflight()?;
+    let mut device = Device::new()?;
+    std::thread::sleep(Duration::from_secs(2));
+    println!("{}", device.close());
+    Ok(())
+}
 struct Device {
     handle: *mut c_void,
 }
@@ -63,10 +70,10 @@ impl Device {
         if self.handle.is_null() {
             return json!({"already_closed":true});
         }
-        let mut stats = [0u64; 7];
+        let mut stats = [0u64; 11];
         unsafe { lab_camera_close(self.handle, stats.as_mut_ptr()) };
         self.handle = std::ptr::null_mut();
-        json!({"queued":stats[0],"consumed":stats[1],"overflow_newest_discarded":stats[2],"native_late_discarded":stats[3],"format_or_timestamp_errors":stats[4],"callbacks_active_after_stop":stats[5],"owners_retired":stats[6]!=0,"pending_retired":stats[0]-stats[1],"capacity_frames":3})
+        json!({"queued":stats[0],"consumed":stats[1],"overflow_newest_discarded":stats[2],"native_late_discarded":stats[3],"format_or_timestamp_errors":stats[4],"callbacks_active_after_stop":stats[5],"owners_retired":stats[6]!=0,"pending_retired":stats[0]-stats[1],"capacity_frames":3,"first_fault_code":stats[7],"fault_codes":"1 no pixel; 2 format/dimensions; 3 regressed timestamp; 4 pixel lock; 5 planes/strides; 6 absent clock; 7 invalid converted time; 8 runtime error","actual_pixel_format":stats[8],"actual_width":stats[9],"actual_height":stats[10]})
     }
 }
 impl Drop for Device {

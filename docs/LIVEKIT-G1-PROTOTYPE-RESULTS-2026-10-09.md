@@ -1433,3 +1433,22 @@ a playable 640×480 VP8/Opus WebM with both tracks and validated container heade
 No physical camera result is asserted yet. Camera shutdown drains its delegate
 queue, but a worst-case OS stop/join bound is not proven. G1 remains incomplete;
 production and the installed Producer application are unchanged.
+
+### Camera output dimension correction — 2026-10-10
+
+The first physical camera trial (`1791682598987271000`) stopped before any
+camera frame was submitted: output delivered 1280×720 despite the session's
+640×480 preset. Added first-fault codes and actual format/dimension counters.
+A two-second camera-only probe reproduced the mismatch (59 errors, fault 2).
+Explicit width/height keys in `videoSettings` corrected delivery to 640×480;
+the repeated probe reported zero format/timestamp errors and clean owner/callback
+retirement. Its ring filled to three frames and discarded 56 newer frames as
+expected because this diagnostic intentionally has no consumer. No media was
+recorded or published by either probe.
+
+Evidence is indexed in `labs/guest-rtc/evidence/camera-output-dimensions-fix.json`.
+46 native tests passed after this change. Camera trial failures now show their
+error in the browser for up to 60 seconds (or until closed) after stopping native
+capture, instead of immediately closing the window. Live instructions distinguish
+camera preparation from received video. A new physical synchronization trial is
+awaiting Start; no successful synchronization result is asserted.

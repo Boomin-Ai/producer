@@ -12,16 +12,21 @@ struct CameraState {
     std::array<CameraFrame,3> frames{};
     std::atomic<uint64_t> written{0},read{0},overflow{0},late{0},errors{0},callbacks{0};
     std::atomic<bool> stopping{false};uint64_t previous=0;
+    std::atomic<uint64_t> first_fault{0},actual_format{0},actual_width{0},actual_height{0};
+    void fault(uint64_t code){uint64_t expected=0;first_fault.compare_exchange_strong(expected,code);errors++;}
     bool push(CVPixelBufferRef pixel,uint64_t host_ns) {
-        if(!pixel || CVPixelBufferGetPixelFormatType(pixel)!=kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange || CVPixelBufferGetWidth(pixel)!=640 || CVPixelBufferGetHeight(pixel)!=480 || CVPixelBufferGetPlaneCount(pixel)!=2 || !host_ns || host_ns<=previous) {errors++;return false;}
+        if(!pixel){fault(1);return false;}
+        actual_format=CVPixelBufferGetPixelFormatType(pixel);actual_width=CVPixelBufferGetWidth(pixel);actual_height=CVPixelBufferGetHeight(pixel);
+        if(actual_format!=kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange || actual_width!=640 || actual_height!=480 || CVPixelBufferGetPlaneCount(pixel)!=2){fault(2);return false;}
+        if(!host_ns || host_ns<=previous){fault(3);return false;}
         previous=host_ns;
         auto w=written.load(std::memory_order_relaxed);
         if(w-read.load(std::memory_order_acquire)>=3){overflow++;return false;}
-        if(CVPixelBufferLockBaseAddress(pixel,kCVPixelBufferLock_ReadOnly)!=kCVReturnSuccess){errors++;return false;}
+        if(CVPixelBufferLockBaseAddress(pixel,kCVPixelBufferLock_ReadOnly)!=kCVReturnSuccess){fault(4);return false;}
         auto y=(const uint8_t*)CVPixelBufferGetBaseAddressOfPlane(pixel,0);
         auto uv=(const uint8_t*)CVPixelBufferGetBaseAddressOfPlane(pixel,1);
         auto ys=CVPixelBufferGetBytesPerRowOfPlane(pixel,0),uvs=CVPixelBufferGetBytesPerRowOfPlane(pixel,1);
-        if(!y || !uv || ys<640 || uvs<640) {CVPixelBufferUnlockBaseAddress(pixel,kCVPixelBufferLock_ReadOnly);errors++;return false;}
+        if(!y || !uv || ys<640 || uvs<640) {CVPixelBufferUnlockBaseAddress(pixel,kCVPixelBufferLock_ReadOnly);fault(5);return false;}
         auto &frame=frames[w%3];frame.host_ns=host_ns;
         for(size_t row=0;row<480;row++)memcpy(frame.pcm.data()+row*640,y+row*ys,640);
         auto u=frame.pcm.data()+640*480,v=u+320*240;
@@ -49,10 +54,10 @@ struct CameraState {
     (void)output;(void)connection;_state->callbacks++;
     if(!_state->stopping) {
         auto session=_session;auto clock=session.synchronizationClock;
-        if(!clock)_state->errors++;
+        if(!clock)_state->fault(6);
         else {
             CMTime converted=CMSyncConvertTime(CMSampleBufferGetPresentationTimeStamp(sample),clock,CMClockGetHostTimeClock());
-            if(!CMTIME_IS_NUMERIC(converted) || converted.value<0)_state->errors++;
+            if(!CMTIME_IS_NUMERIC(converted) || converted.value<0)_state->fault(7);
             else {converted=CMTimeConvertScale(converted,1000000000,kCMTimeRoundingMethod_RoundHalfAwayFromZero);_state->push(CMSampleBufferGetImageBuffer(sample),(uint64_t)converted.value);}
         }
     }
@@ -98,13 +103,13 @@ extern "C" void *lab_camera_create(char *error,size_t length) {
         if(![owner->session canSetSessionPreset:AVCaptureSessionPreset640x480])return fail(@"Camera does not support 640x480");
         owner->session.sessionPreset=AVCaptureSessionPreset640x480;
         owner->output=[[AVCaptureVideoDataOutput alloc]init];owner->output.alwaysDiscardsLateVideoFrames=YES;
-        owner->output.videoSettings=@{(id)kCVPixelBufferPixelFormatTypeKey:@(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)};
+        owner->output.videoSettings=@{(id)kCVPixelBufferPixelFormatTypeKey:@(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange),(id)kCVPixelBufferWidthKey:@640,(id)kCVPixelBufferHeightKey:@480};
         if(![owner->session canAddOutput:owner->output])return fail(@"Camera output unavailable");
         [owner->session addOutput:owner->output];
         owner->delegate=[[ProducerCameraDelegate alloc]initWithState:owner->state session:owner->session];
         [owner->output setSampleBufferDelegate:owner->delegate queue:owner->delivery];
         auto state=owner->state;
-        owner->observer=[[NSNotificationCenter defaultCenter]addObserverForName:AVCaptureSessionRuntimeErrorNotification object:owner->session queue:nil usingBlock:^(NSNotification*){state->errors++;}];
+        owner->observer=[[NSNotificationCenter defaultCenter]addObserverForName:AVCaptureSessionRuntimeErrorNotification object:owner->session queue:nil usingBlock:^(NSNotification*){state->fault(8);}];
         [owner->session startRunning];
         if(!owner->session.running)return fail(@"Camera session did not start");
         snprintf(error,length,"%s; 640x480 NV12 video range",device.localizedName.UTF8String);
@@ -116,6 +121,7 @@ extern "C" int lab_camera_pop(void *handle,uint8_t *y,uint8_t *u,uint8_t *v,uint
 extern "C" uint64_t lab_camera_errors(void *handle) {return ((CameraOwner*)handle)->state->errors;}
 extern "C" void lab_camera_close(void *handle,uint64_t *stats) {
     auto owner=(CameraOwner*)handle;auto state=owner->state;std::weak_ptr<CameraState> weak=state;delete owner;
+    stats[7]=state->first_fault;stats[8]=state->actual_format;stats[9]=state->actual_width;stats[10]=state->actual_height;
     stats[0]=state->written;stats[1]=state->read;stats[2]=state->overflow;stats[3]=state->late;stats[4]=state->errors;stats[5]=state->callbacks;
     state.reset();stats[6]=weak.expired();
 }

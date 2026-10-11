@@ -51,6 +51,8 @@ async fn run() -> anyhow::Result<()> {
     match args.next().as_deref() {
         #[cfg(feature = "physical-aec")]
         Some("camera-permissions")=>physical_camera::permissions(),
+        #[cfg(feature = "physical-aec")]
+        Some("camera-probe")=>physical_camera::probe(),
         Some("apm-fixture") => {
             let dir = args.next().unwrap_or_else(|| "evidence/apm".into());
             let speech = args.next();

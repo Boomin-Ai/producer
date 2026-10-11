@@ -84,6 +84,7 @@ try {
    if(elapsed>=30 && !clipMuted) {await page.evaluate(()=>window.setGuestSpeechEnabled(false));clipMuted=true;}
    await page.evaluate(({elapsed,seconds})=>{document.querySelector('#voice-review-instructions').textContent=`${Math.floor(elapsed)} / ${seconds} seconds — ${elapsed<10?'Stay quiet; the guest clip is playing.':elapsed<30?'Talk over the guest clip.':'Keep talking; the guest clip is now silent.'} Your microphone return is recorded locally and stays silent during capture.`;},{elapsed,seconds});
   }
+  if(cameraSync)await page.evaluate(({elapsed,seconds})=>{document.querySelector('#voice-review-instructions').textContent=window.labState.returnVideoFrames>0?`${Math.floor(elapsed)} / ${seconds} seconds — Clap three times with hands visible, then speak toward the camera. Your microphone return stays silent.`:'Preparing native camera — wait for your video before clapping.';},{elapsed:(performance.now()-observationBegan)/1000,seconds});
   const observation=await page.evaluate(async()=>({state:window.labState,audio:[...((await window.returnAudioTrack?.getRTCStatsReport())?.values()??[])].filter(s=>s.type==='inbound-rtp'&&s.kind==='audio')}));
   if(observations.length<300)observations.push(observation);
   if(observation.audio.length || !snapshot)snapshot=observation;
@@ -131,6 +132,15 @@ try {
   if(after.length<2 || after.at(-1).native.played_blocks-after[0].native.played_blocks<100)throw new Error('Native monitor did not play new guest PCM after reconnect');
  }
  console.log(`Local physical audio RTP reception observed; ${recoveries} deadline recoveries; no camera-sync/full-AEC claim`);
+} catch(error) {
+ if(permission?.exitCode===null)permission.kill('SIGTERM');
+ if(child?.exitCode===null){child.kill('SIGTERM');await done;}
+ if(cameraSync && page && !page.isClosed()) {
+  await page.evaluate(message=>{document.querySelector('#voice-review-instructions').textContent=`Test stopped: ${message}. Diagnostics saved. You can close this window.`;document.querySelector('#voice-review-instructions').style.color='#b00020';},String(error)).catch(()=>{});
+  console.error(error);
+  await Promise.race([new Promise(resolve=>page.once('close',resolve)),new Promise(resolve=>setTimeout(resolve,60000))]);
+ }
+ throw error;
 } finally {
  clearTimeout(readyTimer);
  if(permission?.exitCode===null)permission.kill('SIGTERM');
