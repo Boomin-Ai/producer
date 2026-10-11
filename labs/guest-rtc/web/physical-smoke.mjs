@@ -5,6 +5,7 @@ import { writeFile, readFile, lstat } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {decodedVoiceWav} from './voice-review-wav.mjs';
+import {reconnectReturnGrowth} from './reconnect-evidence.mjs';
 import { fileURLToPath } from 'node:url';
 if (process.argv[2] !== '--publish-microphone') throw new Error('Explicit --publish-microphone is required; this sends your microphone to the local SFU');
 if (process.env.LIVEKIT_LAB_PHYSICAL_CAPTURE !== '1' || !process.env.LIVEKIT_LAB_PHYSICAL_SPEECH) throw new Error('Explicit physical capture/reference configuration required');
@@ -123,9 +124,7 @@ try {
  let cameraReconnectGrowth=null;
  if(cameraReconnect) {
   const resumed=native.lifecycle?.find(event=>event.event==='reconnected');
-  const samples=resumed?observations.filter(item=>item.at_ms>Number(resumed.at_ms)+3000):[];
-  const packets=item=>item.audio.reduce((sum,s)=>sum+(s.packetsReceived??0),0);
-  cameraReconnectGrowth={resumed_at_ms:resumed?.at_ms??null,post_resume_samples:samples.length,video_frames:samples.length>1?samples.at(-1).state.returnVideoFrames-samples[0].state.returnVideoFrames:0,audio_packets:samples.length>1?packets(samples.at(-1))-packets(samples[0]):0,scope:'receiver growth after actual SDK signaling resume; does not establish WAN outage or lip-sync offset'};
+  cameraReconnectGrowth=reconnectReturnGrowth(observations,resumed?.at_ms);
  }
  const report={packet_relay:packetRelay,camera_reconnect_return_growth:cameraReconnectGrowth,av_capture:avCapture,voice_capture:voiceCapture,guest_rejoin_requested:process.env.LIVEKIT_LAB_GUEST_REJOIN==='1',guest_rejoin_completed:rejoinCompleted,sdk_reconnect_requested:process.env.LIVEKIT_LAB_MONITOR_RECONNECT??null,seconds,observations,deadline_recoveries:recoveries,source_fault_free:code===0&&recoveries===0,...snapshot,native_exit_code:code,receiver_warmed_before_native:true,physical_microphone_publication_requested:true,received_audio_recorded:voiceCapture?.recorded||avCapture?.recorded||false,browser_speaker_output_gain:0,reference_scope:monitor?'selected remote guest speech through final native speaker output':'native lab clip only; guest return not played',guest_monitor_requested:monitor,camera_sync_qualified:false,g1_complete:false};
  await writeFile(path.join(lab,`evidence/${name}-browser.json`),JSON.stringify(report,null,2)+'\n');
@@ -138,7 +137,7 @@ try {
    if(!packetRelay.packet_profile_effect_observed || !affected.some(stats=>stats.delayed>50 && stats.max_delay_ms>=20))throw new Error('Requested RTP impairment was not observed');
   }
  }
- if(cameraReconnect && (!cameraReconnectGrowth || cameraReconnectGrowth.video_frames<20 || cameraReconnectGrowth.audio_packets<100))throw new Error('Camera/audio return did not grow after SDK reconnect');
+ if(cameraReconnect && (!cameraReconnectGrowth || cameraReconnectGrowth.error || cameraReconnectGrowth.video_frames<20 || cameraReconnectGrowth.audio_packets<100))throw new Error('Camera/audio return did not grow after SDK reconnect');
  if(cameraSync && (!avCapture?.recorded || !native.capture_publication?.camera?.submitted))throw new Error(`Physical camera/AV capture failed: ${avCapture?.error??"no native camera frames"}`);
  if(voiceReview && !voiceCapture?.recorded)throw new Error(`Decoded voice review failed: ${voiceCapture?.error}`);
  if(code!==0)throw new Error(`Native physical publication failed (${code}); retain reports`);

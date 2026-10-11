@@ -1498,3 +1498,28 @@ size limits and default-off physical capture remain unchanged.
 Python compile and Node syntax checks passed. The signaling-reconnect camera
 trial is open awaiting Start; network-profile physical results are pending.
 Production and the installed Producer application remain unchanged.
+
+### Camera/audio signaling resume — 2026-10-10
+
+Trial `1791686330531080000` ran 40.233 seconds. Native SDK Reconnecting at
+5.001 s was followed by Reconnected/monitor rebound at 8.047 s. Camera submitted
+960 frames, with no native format/timestamp faults, ring overflow or stale-frame
+discards. Camera capture-to-SDK p95 was 37 ms; audio p95 26 ms, zero publication
+deadline recoveries. Publisher joined in 186.047 ms and camera owners/callbacks
+retired. A private 3,610,366-byte decoded AV clip saved successfully. The operator
+reviewed post-reconnect claps/speech and confirmed “Still aligned.”
+
+The original fixture incorrectly treated terminal absent RTP stats as zero,
+reporting -516 packets and failing. Original failed conditions/browser evidence
+is preserved. Corrected analysis uses finite counters within one receiver
+ID/SSRC epoch, rejects counter regressions/epoch replacement, and explicitly
+counts absent reports. Thirty valid post-resume observations show +1,448 audio
+packets and +704 video frames; one terminal report was absent. Three regression
+tests cover shutdown absence, absent receiver stats and counter/SSRC resets.
+Evidence index: `labs/guest-rtc/evidence/camera-signaling-reconnect-physical-run.json`.
+
+This qualifies subjective sync and retained media receipt across this SDK
+signaling resume on loopback. It does not qualify full media reconnection, track
+replacement, WAN outages or quantitative A/V offset. The next physical test
+uses a no-impairment relay baseline before separate jitter/loss profiles.
+Production remains unchanged.
