@@ -28,6 +28,7 @@ ACT trials; the mode is recorded in each conditions file.
 | `1791760736611968000` | Three guests, 60 s, one forced full reconnect; ACT scheduling, audio initially waited for video | Initial 0.658 / 0.691 s; recovery 2.023 / 2.035 s | 28 pairs, 63.333 ms p95; missing label 10 and unpaired label 33 | Failed readiness and marker coverage |
 | `1791761280229261000` | Three guests, 35 s; ACT audio starts independently | 0.015 / 1.203 s | 17 pairs, 43.333 ms p95; no missing markers | Passed unchanged short recording gates |
 | `1791761403217547000` | Same latest binary, three guests, 60 s, one forced full reconnect | Initial 0.021 / 0.933 s; recovery 1.036 / 1.234 s | 29 pairs, 63.333 ms p95; missing label 10 | Timing and local marker offset gates passed; overall acceptance still failed coverage |
+| `1791765809316667000` | Bounded decoder-ingress trace, three guests, 60 s, one forced full reconnect | Initial 0.020 / 0.766 s; recovery 0.959 / 2.144 s | 28 pairs, 63.333 ms p95; missing label 9, final video label 33 unpaired | Failed video recovery budget and coverage; all six video observer weak references expired |
 
 These tests receive three guests but record **only selected guest-1**, using
 generated media. They do not prove three-person composition, live capture lip
@@ -37,6 +38,25 @@ The latest forced-reconnect loss has no selected native video receipt for label
 alone is not delivery proof. The preceding candidate's label 33 reached both
 output queues but was dropped late. All failed evidence remains retained and the
 existing 1.5-second prototype budget/coverage gates were not relaxed.
+
+The decoder-ingress follow-up measures generated 320×180 marker frames before
+the application queue, with 256 receipts per sink, nonblocking diagnostic writes,
+and no retained frames. Label 9 was absent at both installed guest-1 sinks, with
+zero trace overflow/contention. Counts match the input queue's received counts
+(336 retired / 1,301 current), so this narrows that gap to before the queue or a
+period without an installed sink. It does **not** distinguish network loss from
+decoder replacement or prove source packets were delivered. Label 10 reached
+the replacement sink with raw capture metadata zero before video scheduling
+became ready. Label 33 reached the playback kernel and native video submission,
+but had no corresponding selected audio marker receipt before shutdown. Tail
+completion and capture-metadata recovery remain separate next investigations.
+The follow-up does not reproduce the earlier candidate's 1.234 s video recovery;
+that successful measurement must not be presented as a consistent bound.
+
+Next deliverable: finish those recovery/shutdown proofs, then an authenticated
+native-room pilot with stable guest sources, normal guest links, program return
+and the conference speaker reference. Production migration and Apple release
+follow the remaining device, control, soak and rollback gates below.
 
 All owned Cloud trial rooms were deleted successfully. No physical devices or
 audible playback were used. Server credentials stayed server-side; retained
@@ -73,3 +93,14 @@ mixer source wrappers and 200 event logs were destroyed; threads stayed 1→1 an
 file descriptors 4→4. Capture metadata adds no retained media owners, threads or
 observers; transceiver references are temporary and mixer state keeps its weak
 registry backlink.
+
+Decoder-ingress follow-up: 79 native tests, Clippy with warnings denied, and 11
+loss-analysis tests pass. The three-guest reconnect workload created and retired
+six video sinks; all six observer weak references expired after room shutdown.
+The new trace owns numeric receipts only; the strong ownership remains
+track → registered sink → observer, with explicit sink removal at retirement.
+Its evidence and source hashes are in
+`labs/guest-rtc/evidence/native-decoder-ingress-checkpoint.json`. The earlier
+capture-clock checkpoint describes its pinned parent commit, not these new
+diagnostic sources. The Cloud room was deleted successfully; no production room
+or physical device was used.

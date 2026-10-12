@@ -8,6 +8,20 @@ spec.loader.exec_module(loss)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_prequeue_receipt_is_preserved_across_retired_video_sinks(self):
+        trace = {'receipts':[{'label':7,'received_us':200,'packet_capture_ntp_us':900}], 'overflow':0,'contention':0}
+        native = {'participants':[{'identity':'guest-1','retired_queues':[{'kind':'video','decoder_ingress':trace}]}]}
+        row = loss.analyze(native, {}, {'missing_video_labels_within_observed_span':[7]})['missing_recorded_labels'][0]
+        self.assertEqual(row['decoder_ingress_receipts'], trace['receipts'])
+        self.assertFalse(row['native_video_received'])
+        self.assertIn('Not a network-only loss', row['cause'])
+
+    def test_truncated_prequeue_trace_cannot_exclude_queue_loss(self):
+        trace = {'receipts':[], 'overflow':1,'contention':0}
+        native = {'participants':[{'identity':'guest-1','video_decoder_ingress':trace}]}
+        row = loss.analyze(native, {}, {'missing_video_labels_within_observed_span':[7]})['missing_recorded_labels'][0]
+        self.assertTrue(row['decoder_ingress_trace_truncated'])
+        self.assertTrue(row['cause'].startswith('unresolved'))
     def test_final_outcome_join_requires_exact_clock_target_and_publication_epoch(self):
         receipt = {'id_mod16':7, 'scheduled_target_ns':5000, 'publication_epoch':3}
         events = [dict(label=7, scheduled_target_ns=5001, publication_epoch=3, disposition='submitted'),

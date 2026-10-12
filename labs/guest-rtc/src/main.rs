@@ -28,6 +28,7 @@ mod queue;
 mod report_worker;
 mod sender_clock;
 mod transport;
+mod video_ingress;
 
 #[cfg(not(feature = "obs-proof"))]
 #[tokio::main(worker_threads = 2)]

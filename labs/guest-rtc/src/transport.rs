@@ -255,11 +255,30 @@ impl Drop for AudioTap {
 struct VideoObserver {
     queue: Arc<Queue<UniquePtr<frame_sys::ffi::VideoFrame>>>,
     discarded: AtomicU64,
+    ingress: Option<crate::video_ingress::Trace>,
 }
 impl video_sys::VideoSink for VideoObserver {
     fn on_frame(&self, frame: UniquePtr<frame_sys::ffi::VideoFrame>) {
         let at = Instant::now();
         if !frame.is_null() {
+            if let Some(trace) = &self.ingress {
+                if frame.width() == 320 && frame.height() == 180 {
+                    // SAFETY: the owned wrapper remains local to this callback.
+                    let buffer =
+                        new_video_frame_buffer(unsafe { frame.video_frame_buffer() }).to_i420();
+                    let label = crate::video_ingress::pulse_label(
+                        buffer.data().0,
+                        buffer.width(),
+                        buffer.height(),
+                        buffer.strides().0,
+                    );
+                    trace.observe(
+                        label,
+                        audio_sys::ffi::diagnostic_webrtc_time_us(),
+                        frame.packet_capture_ntp_us(),
+                    );
+                }
+            }
             self.queue.push(Captured { at, value: frame });
         }
     }
@@ -269,16 +288,21 @@ impl video_sys::VideoSink for VideoObserver {
     fn on_constraints_changed(&self, _: video_sys::ffi::VideoTrackSourceConstraints) {}
 }
 struct VideoTap {
+    registered: bool,
     sid: String,
     track: SharedPtr<video_sys::ffi::VideoTrack>,
     sink: SharedPtr<video_sys::ffi::NativeVideoSink>,
     observer: Arc<VideoObserver>,
 }
 impl VideoTap {
-    fn new(track: &RemoteVideoTrack) -> Self {
+    fn new(track: &RemoteVideoTrack, selected: bool) -> Self {
         let observer = Arc::new(VideoObserver {
             queue: Arc::new(Queue::new(2, Duration::from_millis(50))),
             discarded: AtomicU64::new(0),
+            ingress: (selected
+                && std::env::var("LIVEKIT_LAB_VIDEO_INGRESS_TRACE").as_deref() == Ok("1")
+                && std::env::var("LIVEKIT_LAB_MARKER_IDS").as_deref() == Ok("1"))
+            .then(crate::video_ingress::Trace::new),
         });
         let sink = video_sys::ffi::new_native_video_sink(Box::new(
             video_sys::VideoSinkWrapper::new(observer.clone()),
@@ -289,16 +313,25 @@ impl VideoTap {
             unsafe { video_sys::ffi::media_to_video(track.rtc_track().native_sys_handle()) };
         track.add_sink(&sink);
         Self {
+            registered: true,
             sid,
             track,
             sink,
             observer,
         }
     }
+    fn retire_evidence(mut self) -> serde_json::Value {
+        self.track.remove_sink(&self.sink);
+        self.registered = false;
+        json!({"kind":"video","sid":self.sid,"stats":self.observer.queue.stats(),
+            "decoder_ingress":self.observer.ingress.as_ref().map(|t|t.report()),"sink_removed":true})
+    }
 }
 impl Drop for VideoTap {
     fn drop(&mut self) {
-        self.track.remove_sink(&self.sink);
+        if self.registered {
+            self.track.remove_sink(&self.sink);
+        }
     }
 }
 
@@ -792,6 +825,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     let mut tick = tokio::time::interval(Duration::from_millis(10));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut lifecycle = Vec::new();
+    let mut video_observer_owners = Vec::with_capacity(256);
+    let mut video_observer_owner_overflow = 0u64;
     let mut decoded_origins = crate::sender_clock::DecodedOrigins::default();
     #[cfg(feature = "obs-proof")]
     let isolated_clock_enabled = isolated_playback.is_some();
@@ -852,8 +887,11 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                                 m.next_sample = None; m.last_capture_timestamp_ms = None; m.audio_active = false;
                             },
                             RemoteTrack::Video(track) => {
-                                if let Some(old) = video.insert(id.clone(), VideoTap::new(&track)) {
-                                    m.retired_queues.push(json!({"kind":"video","sid":old.sid,"stats":old.observer.queue.stats()}));
+                                let tap=VideoTap::new(&track, id=="guest-1");
+                                if video_observer_owners.len()<256 {video_observer_owners.push(Arc::downgrade(&tap.observer));}
+                                else {video_observer_owner_overflow+=1;}
+                                if let Some(old) = video.insert(id.clone(), tap) {
+                                    m.retired_queues.push(old.retire_evidence());
                                 }
                                 m.video_active = false;
                             },
@@ -889,7 +927,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
                             },
                             RemoteTrack::Video(_) if video.get(&id).is_some_and(|tap| tap.sid == sid) => {
                                 let old = video.remove(&id).unwrap();
-                                m.retired_queues.push(json!({"kind":"video","sid":old.sid,"stats":old.observer.queue.stats()}));
+                                m.retired_queues.push(old.retire_evidence());
                             },
                             _ => {}
                         }
@@ -1229,6 +1267,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
             "audio_callback_to_consumer_p95_ms":p95(&m.audio_age),"video_callback_to_consumer_p95_ms":p95(&m.video_age),
             "audio_sample_discontinuities":m.audio_gaps,"audio_queue":audio.get(id).map(|tap| tap.observer.queue.stats()),
             "video_queue":video.get(id).map(|tap| tap.observer.queue.stats()),
+            "video_decoder_ingress":video.get(id).and_then(|tap|tap.observer.ingress.as_ref()).map(|t|t.report()),
             "audio_bad_format":audio.get(id).map(|tap| tap.observer.bad_format.load(Ordering::Relaxed)),
             "audio_pulses_ms":m.audio_pulses,"video_pulses_ms":m.video_pulses,
             "paired_callback_video_minus_audio_ms":offsets,"callback_av_abs_p95_ms":p95(&abs),
@@ -1292,6 +1331,9 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
     video.clear();
     room.close().await?;
     drop(room); // Release native peer owners before collecting observer destruction evidence.
+    let video_observer_lifecycle = json!({"tracked":video_observer_owners.len(),
+        "expired":video_observer_owners.iter().filter(|owner|owner.upgrade().is_none()).count(),
+        "untracked_overflow":video_observer_owner_overflow,"capacity":256,"weak_references_only":true});
     let mut rtcp_exchange_probe: serde_json::Value =
         serde_json::from_str(&webrtc_sys::webrtc::ffi::diagnostic_rtcp_exchange_report())?;
     rtcp_exchange_probe["scope"] = json!("factory event-log instances; one instance may cover multiple peer connections; factory lifetime extends beyond room close");
@@ -1377,7 +1419,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         "duration_seconds":seconds,"actual_duration_seconds":began.elapsed().as_secs_f64(),"consumer_stall_ms":if pressure {200} else {0},"stall_period_seconds":5,
         "native_publish_audio_internal_queue_ms":0,"callback_timestamps_are_capture_timestamps":false,
         "obs_recorded_av_qualified":false,"physical_speaker_reference_connected":false,"g1_complete":false,
-        "participants":participants,"lifecycle":lifecycle});
+        "participants":participants,"lifecycle":lifecycle,"video_observer_lifecycle":video_observer_lifecycle});
     if let Some(parent) = output.parent() {
         std::fs::create_dir_all(parent)?;
     }

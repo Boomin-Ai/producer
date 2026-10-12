@@ -26,6 +26,7 @@ parser.add_argument('--sync-streams', action=argparse.BooleanOptionalAction, def
 parser.add_argument('--encoded-clock-probe', action='store_true', help='Observe browser encoded-frame timing without changing media')
 parser.add_argument('--capture-extension', action='store_true', help='Opt-in per-packet capture timestamp negotiation experiment')
 parser.add_argument('--capture-scheduling', action='store_true', help='Opt-in scheduling from normalized current packet capture metadata')
+parser.add_argument('--video-ingress-trace', action='store_true', help='Bounded generated-marker trace before the native application queue')
 args = parser.parse_args()
 if args.capture_scheduling and not args.capture_extension: parser.error('Capture scheduling requires explicit --capture-extension')
 if not 35 <= args.seconds <= 300: parser.error('Duration must be 35..300 seconds')
@@ -49,6 +50,7 @@ env.update(LIVEKIT_LAB_RUN_NAME=name, LIVEKIT_LAB_GUESTS=str(args.guests), LIVEK
 if args.encoded_clock_probe: env['LIVEKIT_LAB_ENCODED_CLOCK_PROBE'] = '1'
 if args.capture_extension: env['LIVEKIT_LAB_CAPTURE_EXTENSION'] = '1'
 if args.capture_scheduling: env['LIVEKIT_LAB_CAPTURE_SCHEDULING'] = '1'
+if args.video_ingress_trace: env['LIVEKIT_LAB_VIDEO_INGRESS_TRACE'] = '1'
 if args.reconnect != 'none': env['LIVEKIT_LAB_GENERATED_RECONNECT'] = args.reconnect
 if args.reconnect == 'full': env['LIVEKIT_LAB_PRESERVE_RECONNECT_OUTPUT'] = '1'
 server_env = {**env, **settings}
@@ -65,6 +67,7 @@ report = {'run':name, 'provider':'LiveKit Cloud', 'project_url':settings['LIVEKI
           'encoded_clock_probe':args.encoded_clock_probe,
           'capture_extension':args.capture_extension,
           'capture_scheduling':args.capture_scheduling,
+          'video_ingress_trace':args.video_ingress_trace,
           'native_sha256':digest(LAB/'target/debug/producer-guest-rtc-lab'), 'custom_sfu_patch_available':False,
           'hardware_capture_used':False, 'speaker_playback_used':False, 'media_scope':'generated selected guest-1 only',
           'status':'running', 'g1_complete':False, 'production_deployed':False}

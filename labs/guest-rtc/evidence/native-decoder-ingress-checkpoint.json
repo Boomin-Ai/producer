@@ -1,0 +1,63 @@
+{
+  "parent_commit": "9754b74",
+  "status": "decoder-ingress diagnostic; not deployed",
+  "g1_complete": false,
+  "production_deployed": false,
+  "apple_submission_performed": false,
+  "scope": "Three subscribed Chrome 155 generated guests through actual LiveKit Cloud; guest-1 recorded only; no hardware or speaker playback",
+  "strict_gates_unchanged": true,
+  "run": "generated-recovery-1791765809316667000",
+  "native_sha256": "cd3de8c1aa734dfaeb0645a25ae64fab2fc0f64a4fc577cbd4045812cf77d64b",
+  "validation": {
+    "rust_tests_passed": 79,
+    "clippy_warnings_denied_passed": true,
+    "loss_analysis_tests_passed": 11,
+    "video_observer_weak_references_expired": 6,
+    "owned_cloud_room_deleted": true
+  },
+  "results": {
+    "initial_audio_video_ms": [
+      20.282,
+      765.681
+    ],
+    "recovery_audio_video_ms": [
+      958.513,
+      2143.503
+    ],
+    "recorded_pairs": 28,
+    "recording_av_abs_p95_ms": 63.33333333333576,
+    "missing_video_labels": [
+      9
+    ],
+    "unpaired_final_video_labels": [
+      33
+    ],
+    "decoder_ingress_trace_overflow_or_contention": 0,
+    "missing_label9_observed_before_input_queue": false,
+    "network_loss_proven": false,
+    "local_obs_acceptance_passed": false
+  },
+  "artifacts": {
+    "labs/guest-rtc/evidence/generated-recovery-1791765809316667000-browser.json": "96e10f45c89ad132c36ec64b083457fa3c1b2f78fece5d38dd0ae89c09633426",
+    "labs/guest-rtc/evidence/generated-recovery-1791765809316667000-conditions.json": "2395d5a6907d88caae0bb04c2983bb1a9469337cc607696c54eea8edae5b6a76",
+    "labs/guest-rtc/evidence/generated-recovery-1791765809316667000-obs-acceptance.json": "7a9e438e2a345e618e74b149a0137d6ed283a278657e0a9928aff1641383bbf7",
+    "labs/guest-rtc/evidence/generated-recovery-1791765809316667000-obs-markers.json": "cd620d4d42ca83bc00eef771661dee2047b86bf56354b17bf4a2b52cbdb24b90",
+    "labs/guest-rtc/evidence/generated-recovery-1791765809316667000-obs-numbered.json": "7271915e79ac77cb542834f407069f531af65db63d6764e32c926f37f8627029",
+    "labs/guest-rtc/evidence/generated-recovery-1791765809316667000-reconnect-loss.json": "30177c7beaa53515b041dc1c222afe52c9455b295708604545564040eb3d3f87",
+    "labs/guest-rtc/evidence/generated-recovery-1791765809316667000.json": "87822a1f82bcfefbabbcdc334dfdaf6cd84a1f4e2cfec308ea5893b873705a16"
+  },
+  "sources": {
+    "labs/guest-rtc/src/video_ingress.rs": "e861652ce9983c4f838092e3b02e35dcbd29ad1eef04b865da888b019635d14c",
+    "labs/guest-rtc/src/main.rs": "029bfd862e958f32784913ebd2195e91100d631592d8f92f0cceedf2090822c8",
+    "labs/guest-rtc/src/transport.rs": "177530699dba56b61212e1058597064cdf835951656190f03e5616ff72cbee2f",
+    "labs/guest-rtc/native/run-cloud-generated-recovery.py": "73699e07b2d76f678543cf8eb6e936ac88ee926b8c7a838f783f5102cdc7d0d5",
+    "labs/guest-rtc/native/analyze-reconnect-loss.py": "5398db002695bd146d740083a224ec37c1f3ae62f245010343fbac470b70c1da",
+    "labs/guest-rtc/native/test-reconnect-loss.py": "eea1209b16b408ca238e99908a6bc4cb1387a318389c4b8fb4e791923a039e1d"
+  },
+  "remaining": [
+    "Capture metadata readiness after receiver recreation varies beyond 1.5 seconds",
+    "Missing reconnect pulse predates the application queue or falls outside installed sink lifetime; upstream cause not proven",
+    "Final video label submitted without corresponding selected audio marker receipt before shutdown",
+    "Native application and admission integration still outstanding"
+  ]
+}

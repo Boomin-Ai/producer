@@ -1,0 +1,56 @@
+{
+  "local_obs_acceptance_passed": false,
+  "failure_reasons": [
+    "epoch 20033268307: video readiness exceeded budget including preceding resets",
+    "numbered recording marker gate failed",
+    "missing marker labels within observed recording span"
+  ],
+  "local_delivery_worker_gate_passed": true,
+  "delivery_worker_failure_reasons": [],
+  "local_readiness_gate_passed": false,
+  "readiness_failure_reasons": [
+    "epoch 20033268307: video readiness exceeded budget including preceding resets"
+  ],
+  "binding_epochs": [
+    {
+      "binding_since_us": 20020442118,
+      "recovery_started_us": 20020441620,
+      "superseded_binding_epochs": [
+        20020441620,
+        20020441838
+      ],
+      "first_scheduled_ms": {
+        "audio": 20.282,
+        "video": 765.681
+      }
+    },
+    {
+      "binding_since_us": 20033268307,
+      "recovery_started_us": 20032443383,
+      "superseded_binding_epochs": [
+        20032443383,
+        20032443456,
+        20033266232
+      ],
+      "first_scheduled_ms": {
+        "audio": 958.513,
+        "video": 2143.503
+      }
+    }
+  ],
+  "raw_binding_epoch_count": 7,
+  "superseded_binding_epochs": [
+    20020441620,
+    20020441838,
+    20032443383,
+    20032443456,
+    20033266232
+  ],
+  "unfinished_binding_epochs": [],
+  "expected_binding_epochs": 2,
+  "readiness_budget_ms": 1500,
+  "budget_scope": "prototype local recovery from earliest pending reset, not WAN service guarantee",
+  "startup_and_tail_loss_qualified": false,
+  "lip_sync_qualified": false,
+  "g1_complete": false
+}

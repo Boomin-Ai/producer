@@ -31,6 +31,12 @@ def analyze(native, browser, markers):
     unpaired = sorted({v['id'] for v in markers.get('video_markers', []) if v['id'] not in paired})
     lost = []
     playback = native.get('audio_master_playback', {})
+    participant = next((p for p in native.get('participants', []) if p.get('identity') == 'guest-1'), {})
+    ingress = [q['decoder_ingress'] for q in participant.get('retired_queues', [])
+               if q.get('kind') == 'video' and isinstance(q.get('decoder_ingress'), dict)]
+    if isinstance(participant.get('video_decoder_ingress'), dict):
+        ingress.append(participant['video_decoder_ingress'])
+    ingress_receipts = [r for trace in ingress for r in trace.get('receipts', [])]
     for label in sorted(set(missing) | set(unpaired)):
         row = {'label': label, 'source_evidence_available': isinstance(source, dict),
                'video_missing_from_recording': label in missing, 'recorded_video_unpaired': label in unpaired,
@@ -42,6 +48,14 @@ def analyze(native, browser, markers):
         receipts = native.get('audio_master_playback', {}).get('decoded_video_marker_receipts', [])
         row['native_video_receipts'] = [r for r in receipts if r['label'] == label]
         row['native_video_received'] = bool(row['native_video_receipts'])
+        row['decoder_ingress_evidence_available'] = bool(ingress)
+        row['decoder_ingress_trace_truncated'] = any(t.get('overflow', 0) or t.get('contention', 0) for t in ingress)
+        row['decoder_ingress_receipts'] = [r for r in ingress_receipts if r.get('label') == label]
+        row['decoder_ingress_adjacent_labels'] = [r for r in ingress_receipts if r.get('label') in (label-1, label+1)]
+        if row['decoder_ingress_receipts'] and not row['native_video_received']:
+            row['cause'] = 'Decoded at the installed SDK sink, absent from the playback trace; inspect input queue and binding replacement. Not a network-only loss.'
+        elif ingress and not row['decoder_ingress_trace_truncated'] and not row['decoder_ingress_receipts']:
+            row['cause'] = 'Not observed at installed SDK sinks before the application queue. Network, decoder and periods without a sink remain distinct unresolved possibilities.'
         row['native_video_scheduled_by_clock'] = any(r.get('scheduled_target_ns') is not None for r in row['native_video_receipts'])
         row['native_video_clock_rejections'] = [r['clock_rejection'] for r in row['native_video_receipts']
             if r.get('scheduled_target_ns') is None and isinstance(r.get('clock_rejection'), dict)]
@@ -91,7 +105,7 @@ def analyze(native, browser, markers):
             'source_errors': source.get('errors') if isinstance(source, dict) else None,
             'loss_gate_relaxed': False, 'transport_loss_proven': False, 'g1_complete': False,
             'clock_domains': 'Label identity joins only. Readiness is within each native binding monotonic epoch. Source AudioContext, lifecycle and OBS PTS are not subtracted from one another.',
-            'scope': 'Selected guest-1 only. A decoded receipt proves this video label reached the playback kernel; a clock target does not prove native submission or recording. Audio receipt and final drop causality remain separate.'}
+            'scope': 'Selected guest-1 only. Optional decoder-ingress receipts precede the application queue; absence does not prove network loss or cover periods without a sink. Playback receipts prove kernel arrival; a clock target does not prove native submission or recording. Audio receipt and final drop causality remain separate.'}
 
 
 def main():
