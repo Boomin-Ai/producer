@@ -8,7 +8,7 @@ repository = "https://github.com/Boomin-Ai/producer"
 edition = "2021"
 
 [features]
-# Compiles native media/session boundaries only; no room/UI rollout.
+# Compiles session and native scene endpoints only; no SDK owner or room/UI rollout.
 guest-rtc-pilot = ["dep:producer-guest-session"]
 
 [lib]

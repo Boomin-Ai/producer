@@ -444,6 +444,8 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
     unsafe {
         ffi::producer_person_mask_register();
         ffi::producer_source_appearance_register();
+        #[cfg(feature = "guest-rtc-pilot")]
+        super::rtc_ingest::register_type();
     };
 
     #[cfg(target_os = "macos")]

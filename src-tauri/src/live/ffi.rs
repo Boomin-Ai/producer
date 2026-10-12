@@ -791,7 +791,6 @@ extern "C" {
     pub fn obs_register_source_s(info: *const c_void, size: usize);
     // The opt-in guest ingress C boundary needs these Windows import stubs.
     // Frame/audio layouts stay in guest_ingest.c, pinned to the engine ABI.
-    #[cfg(target_os = "windows")]
     pub fn obs_source_output_video(source: *mut obs_source_t, frame: *const c_void);
     #[cfg(target_os = "windows")]
     pub fn obs_source_output_audio(source: *mut obs_source_t, audio: *const c_void);

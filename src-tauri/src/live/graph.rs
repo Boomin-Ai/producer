@@ -474,6 +474,9 @@ pub enum OverlaySpec {
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ExtraSpec {
+    /// Opt-in native transport. Stable IDs retain existing stage transforms.
+    #[cfg(feature = "guest-rtc-pilot")]
+    RtcGuest { participant_id: String },
     /// Video/audio file via obs-ffmpeg (stingers, BRB loops, pre-rolls).
     Media {
         path: String,
@@ -545,6 +548,8 @@ struct ExtraItem {
     src: *mut ffi::obs_source_t,
     /// Capture kinds only: the device the source is on.
     device: Option<String>,
+    #[cfg(feature = "guest-rtc-pilot")]
+    native_rtc: Option<std::sync::Arc<super::rtc_ingest::Endpoint>>,
 }
 
 /// Extras whose audio the mixer meters (own strip in the UI).
@@ -1327,6 +1332,15 @@ impl SceneGraph {
         let mut device: Option<String> = None;
         unsafe {
             let (type_id, kind, settings): (&str, &'static str, *mut ffi::obs_data_t) = match spec {
+                #[cfg(feature = "guest-rtc-pilot")]
+                ExtraSpec::RtcGuest { participant_id } => {
+                    if uuid::Uuid::parse_str(participant_id).is_err()
+                        || id != format!("guest-{participant_id}")
+                    {
+                        return Err("Native guest source identity does not match".into());
+                    }
+                    ("producer_guest_ingest", "guest", ffi::obs_data_create())
+                }
                 ExtraSpec::Camera { device: want } => {
                     // mac-avcapture needs an explicit device id (same lesson
                     // as SCK's display_uuid): resolve the default ourselves.
@@ -1525,6 +1539,8 @@ impl SceneGraph {
                 ));
             }
             let remote = matches!(spec, ExtraSpec::Guest { .. } | ExtraSpec::Mod { .. });
+            #[cfg(feature = "guest-rtc-pilot")]
+            let remote = remote || matches!(spec, ExtraSpec::RtcGuest { .. });
             let born_visible = visible && !remote;
             if !born_visible {
                 ffi::obs_source_set_muted(src, true);
@@ -1565,6 +1581,19 @@ impl SceneGraph {
                 super::filters::set_mod_video_visible(src, false)?;
             }
             ffi::obs_sceneitem_set_visible(item, born_visible);
+            #[cfg(feature = "guest-rtc-pilot")]
+            let native_rtc = if matches!(spec, ExtraSpec::RtcGuest { .. }) {
+                match super::rtc_ingest::Endpoint::attach(id, src) {
+                    Ok(endpoint) => Some(endpoint),
+                    Err(error) => {
+                        ffi::obs_sceneitem_remove(item);
+                        ffi::obs_source_release(src);
+                        return Err(error);
+                    }
+                }
+            } else {
+                None
+            };
             // Meter every audio-bearing extra the mixer shows a strip for.
             if metered(kind) {
                 peak_slot_register(src);
@@ -1577,6 +1606,8 @@ impl SceneGraph {
                 item,
                 src,
                 device,
+                #[cfg(feature = "guest-rtc-pilot")]
+                native_rtc,
             });
         }
         Ok(())
@@ -1749,6 +1780,10 @@ impl SceneGraph {
             .position(|e| e.id == id)
             .ok_or_else(|| format!("no item named {id}"))?;
         let e = self.extras.remove(idx);
+        #[cfg(feature = "guest-rtc-pilot")]
+        if let Some(endpoint) = &e.native_rtc {
+            endpoint.retire();
+        }
         if metered(e.kind) {
             unsafe {
                 ffi::obs_source_remove_audio_capture_callback(
