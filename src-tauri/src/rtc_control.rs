@@ -59,12 +59,24 @@ impl Control {
                 self.operator.room_id
             ))
             .bearer_auth(&self.operator.token)
+            // A permission response must fit inside the receiver's 3.5-second
+            // freshness window. Control mutations retain their five-second limit.
+            .timeout(Duration::from_millis(if suffix == "media-authority" {
+                2500
+            } else {
+                5000
+            }))
             .json(&body)
             .send()
             .await
             .map_err(|_| "RTC request failed")?;
         if response.status() == reqwest::StatusCode::CONFLICT {
             return Err("RTC authority changed");
+        }
+        if response.status().is_server_error()
+            || response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS
+        {
+            return Err("RTC authority temporarily unavailable");
         }
         if !response.status().is_success() {
             return Err("RTC authority rejected request");

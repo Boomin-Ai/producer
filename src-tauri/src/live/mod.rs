@@ -20,6 +20,8 @@ mod presentation_probe;
 pub mod program_audio;
 #[cfg(all(have_engine, feature = "guest-rtc-pilot"))]
 pub mod rtc_ingest;
+#[cfg(all(have_engine, feature = "guest-rtc-pilot"))]
+pub mod rtc_media;
 pub mod shaders;
 
 /// The virtual camera's label, identical on both platforms: macOS bakes it

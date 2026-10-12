@@ -14,6 +14,13 @@ use tokio::{
 mod subscriptions;
 pub use subscriptions::GuestMedia;
 pub mod authority;
+pub mod media;
+mod timing {
+    pub mod playout_clock;
+    pub mod presentation;
+    pub mod queue;
+    pub mod sender_clock;
+}
 
 pub struct Connection {
     room: Option<Room>,

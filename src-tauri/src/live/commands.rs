@@ -597,6 +597,7 @@ pub async fn live_restore_room(
     state: State<'_, AppState>,
     restore: serde_json::Value,
 ) -> EngineResult<serde_json::Value> {
+    crate::rtc_ipc::stop_host(&state).await?;
     state.live.restore_room(restore).map_err(EngineError::Other)
 }
 

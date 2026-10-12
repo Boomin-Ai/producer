@@ -11,6 +11,7 @@ mod outbox;
 mod recordings;
 #[cfg(feature = "guest-rtc-pilot")]
 mod rtc_control;
+mod rtc_ipc;
 #[cfg(feature = "guest-rtc-pilot")]
 mod rtc_owner;
 mod set_library;
@@ -27,6 +28,8 @@ use std::sync::Mutex;
 use tauri::Manager;
 
 pub struct AppState {
+    #[cfg(feature = "guest-rtc-pilot")]
+    pub rtc_host: tokio::sync::Mutex<Option<rtc_owner::HostOwner>>,
     pub db: Mutex<rusqlite::Connection>,
     /// Mid-sign-in hosted auth (api_root, token) held engine-side between
     /// OTP verification and workspace selection — never enters the webview.
@@ -114,6 +117,8 @@ pub fn run() {
             };
 
             app.manage(AppState {
+                #[cfg(feature = "guest-rtc-pilot")]
+                rtc_host: tokio::sync::Mutex::new(None),
                 db: Mutex::new(conn),
                 pending_auth: Mutex::new(None),
                 live,
@@ -131,6 +136,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            rtc_ipc::live_rtc_start,
+            rtc_ipc::live_rtc_stop,
             set_media::set_media_import,
             set_media::set_media_resolve,
             set_library::set_library_list,
@@ -313,6 +320,33 @@ pub fn run() {
                 // §5.5: no daemon — closing Producer ends the stream. The
                 // engine bounds the stop wait itself (≤ ~15s with an active
                 // session).
+                #[cfg(feature = "guest-rtc-pilot")]
+                tauri::RunEvent::ExitRequested { api, .. } => {
+                    static CLOSING: std::sync::atomic::AtomicU8 =
+                        std::sync::atomic::AtomicU8::new(0);
+                    if CLOSING.load(std::sync::atomic::Ordering::Acquire) != 2 {
+                        api.prevent_exit();
+                        if CLOSING
+                            .compare_exchange(
+                                0,
+                                1,
+                                std::sync::atomic::Ordering::AcqRel,
+                                std::sync::atomic::Ordering::Acquire,
+                            )
+                            .is_ok()
+                        {
+                            let app = app.clone();
+                            // Await native observers/SDK close off the macOS main
+                            // thread before the existing engine shutdown path.
+                            tauri::async_runtime::spawn(async move {
+                                let state = app.state::<AppState>();
+                                let _ = rtc_ipc::stop_host(&state).await;
+                                CLOSING.store(2, std::sync::atomic::Ordering::Release);
+                                app.exit(0);
+                            });
+                        }
+                    }
+                }
                 tauri::RunEvent::Exit => {
                     let state = app.state::<AppState>();
                     state.chat.disconnect_all();

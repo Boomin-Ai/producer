@@ -1650,6 +1650,7 @@ dependencies = [
 name = "producer-guest-runtime"
 version = "0.1.0"
 dependencies = [
+ "cxx",
  "livekit",
  "producer-guest-session",
  "reqwest",
@@ -1657,6 +1658,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "uuid",
+ "webrtc-sys",
 ]
 
 [[package]]

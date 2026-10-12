@@ -1,5 +1,5 @@
 //! Single serialized owner of the native host connection and room lease.
-//! Media attachment is deliberately not available until its authority adapter exists.
+//! Incoming media is supplied by an independently authorized receiver adapter.
 use crate::rtc_control::{Control, Operator};
 use producer_guest_runtime::Connection;
 use std::sync::{Arc, Weak};
@@ -18,6 +18,11 @@ fn now() -> u64 {
         .unwrap_or(u64::MAX)
 }
 impl HostOwner {
+    #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
+    pub async fn start_scene(control: Control) -> Result<Self, &'static str> {
+        let receiver = crate::live::rtc_media::SceneOutputs::receiver()?;
+        Self::start_with_media(control, Box::new(receiver)).await
+    }
     pub async fn start(control: Control) -> Result<Self, &'static str> {
         let (mut owner, connected) = Self::spawn(control, None);
         match connected.await {
@@ -112,6 +117,7 @@ impl HostOwner {
             let mut authority_poll = tokio::time::interval(Duration::from_secs(1));
             authority_poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             let mut failure = None;
+            let mut authority_failures = 0u8;
             loop {
                 tokio::select! {
                     biased;
@@ -128,8 +134,24 @@ impl HostOwner {
                     }
                     _ = authority_poll.tick() => {
                         match control.media_authority().await {
-                            Ok(snapshot) => {if connection.media_authority(snapshot).is_err(){failure=Some("Native media authority handoff failed");break;}},
-                            Err(_) => {failure=Some("Native media authority refresh failed");break;}
+                            Ok(snapshot) => {
+                                if connection.media_authority(snapshot).is_err(){failure=Some("Native media authority handoff failed");break;}
+                                authority_failures=0;
+                            },
+                            Err(error) => {
+                                // Read-only refresh failures do not invalidate the
+                                // owned run. Incoming permissions still expire in
+                                // the independent receiver: retries cannot extend
+                                // a stale permit or keep delivering old media.
+                                // Rejections and malformed authority remain fatal.
+                                authority_failures=authority_failures.saturating_add(1);
+                                if authority_failures>=3 || !matches!(error,
+                                    "RTC request failed" | "RTC response failed" |
+                                    "RTC authority temporarily unavailable" |
+                                    "Native guest authority response expired") {
+                                    failure=Some(error);break;
+                                }
+                            }
                         }
                     }
                 }
