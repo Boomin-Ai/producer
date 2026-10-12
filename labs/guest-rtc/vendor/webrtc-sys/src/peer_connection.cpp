@@ -15,6 +15,7 @@
  */
 
 #include "livekit/peer_connection.h"
+#include "livekit/capture_time_probe.h"
 #include "livekit/lab_rrtr_sdp.h"
 #include <cstdlib>
 #include "livekit/peer_connection_factory.h"
@@ -33,6 +34,21 @@
 #include "rtc_base/logging.h"
 
 namespace livekit_ffi {
+namespace {
+webrtc::RTCError lab_enable_capture_time_headers(
+    const webrtc::scoped_refptr<webrtc::PeerConnectionInterface>& peer) {
+  const char* enabled = std::getenv("LIVEKIT_LAB_CAPTURE_EXTENSION");
+  if (!enabled || std::string(enabled) != "1") return webrtc::RTCError::OK();
+  for (const auto& transceiver : peer->GetTransceivers()) {
+    if (transceiver->stopped()) continue;
+    auto headers = transceiver->GetHeaderExtensionsToNegotiate();
+    if (!enable_capture_time_headers(headers)) continue;
+    auto result = transceiver->SetHeaderExtensionsToNegotiate(headers);
+    if (!result.ok()) return result;
+  }
+  return webrtc::RTCError::OK();
+}
+}
 
 webrtc::PeerConnectionInterface::RTCConfiguration to_native_rtc_configuration(
     RtcConfiguration config) {
@@ -120,6 +136,11 @@ void PeerConnection::create_offer(
     rust::Fn<void(rust::Box<PeerContext>, std::unique_ptr<SessionDescription>)>
         on_success,
     rust::Fn<void(rust::Box<PeerContext>, RtcError)> on_error) const {
+  auto capture_result = lab_enable_capture_time_headers(peer_connection_);
+  if (!capture_result.ok()) {
+    on_error(std::move(ctx), to_error(capture_result));
+    return;
+  }
   webrtc::scoped_refptr<NativeCreateSdpObserver> observer =
       webrtc::make_ref_counted<NativeCreateSdpObserver>(std::move(ctx), on_success,
                                                      on_error);
@@ -134,6 +155,11 @@ void PeerConnection::create_answer(
     rust::Fn<void(rust::Box<PeerContext>, std::unique_ptr<SessionDescription>)>
         on_success,
     rust::Fn<void(rust::Box<PeerContext>, RtcError)> on_error) const {
+  auto capture_result = lab_enable_capture_time_headers(peer_connection_);
+  if (!capture_result.ok()) {
+    on_error(std::move(ctx), to_error(capture_result));
+    return;
+  }
   webrtc::scoped_refptr<NativeCreateSdpObserver> observer =
       webrtc::make_ref_counted<NativeCreateSdpObserver>(std::move(ctx), on_success,
                                                      on_error);

@@ -1,0 +1,426 @@
+{
+  "status": "prototype only; not deployed",
+  "g1_complete": false,
+  "production_deployed": false,
+  "apple_submission_performed": false,
+  "parent_commit": "2bb40390f61a82b37bb322df9d29ea1dadd71f7f",
+  "scope": "Chrome 155 generated media; three subscribed guests where configured; selected guest-1 recorded only",
+  "strict_gates_unchanged": true,
+  "hardware_capture_used": false,
+  "speaker_playback_used": false,
+  "latest_candidate_sha256": "359f10c9eb2a91603dc97f25ec9e484b3109914bb41a8e48b6acd7cde41c1ef8",
+  "validation": {
+    "rust_tests_passed": 77,
+    "clippy_warnings_denied_passed": true,
+    "recording_gate_tests_passed": 16,
+    "loss_analysis_tests_passed": 9,
+    "credential_tests_passed": 2,
+    "native_lifecycle_cycles_passed": 100
+  },
+  "trials": [
+    {
+      "run": "generated-recovery-1791758409007048000",
+      "guests": 3,
+      "seconds": 60,
+      "reconnect": "full",
+      "native_sha256": "d741e5bfae81c976ccadfdcdbccce3c6e5ed7c80171ed7aaeac4eca62309af8b",
+      "capture_extension": false,
+      "capture_scheduling": false,
+      "sync_streams_requested": false,
+      "passed": false,
+      "failures": [
+        "epoch 15678655725: audio readiness exceeded budget including preceding resets",
+        "epoch 15678655725: video readiness exceeded budget including preceding resets",
+        "epoch 15691502197: audio readiness exceeded budget including preceding resets",
+        "epoch 15691502197: video readiness exceeded budget including preceding resets",
+        "missing marker labels within observed recording span"
+      ],
+      "first_scheduled_epochs": [
+        {
+          "binding_since_us": 15678655725,
+          "recovery_started_us": 15678655038,
+          "superseded_binding_epochs": [
+            15678655038,
+            15678655424
+          ],
+          "first_scheduled_ms": {
+            "audio": 6008.002,
+            "video": 6022.564
+          }
+        },
+        {
+          "binding_since_us": 15691502197,
+          "recovery_started_us": 15690659668,
+          "superseded_binding_epochs": [
+            15690659668,
+            15690659767,
+            15691499431
+          ],
+          "first_scheduled_ms": {
+            "audio": 3935.462,
+            "video": 3942.78
+          }
+        }
+      ],
+      "pairs": 25,
+      "absolute_p95_ms": 50.00000000000364,
+      "missing_labels": [
+        9,
+        10
+      ],
+      "owned_room_delete_exit_code": 0,
+      "metadata_observer_invalid": false
+    },
+    {
+      "run": "generated-recovery-1791758721850656000",
+      "guests": 1,
+      "seconds": 35,
+      "reconnect": "none",
+      "native_sha256": "d741e5bfae81c976ccadfdcdbccce3c6e5ed7c80171ed7aaeac4eca62309af8b",
+      "capture_extension": false,
+      "capture_scheduling": false,
+      "sync_streams_requested": true,
+      "passed": false,
+      "failures": [
+        "epoch 15988915245: audio readiness exceeded budget including preceding resets",
+        "epoch 15988915245: video readiness exceeded budget including preceding resets"
+      ],
+      "first_scheduled_epochs": [
+        {
+          "binding_since_us": 15988915245,
+          "recovery_started_us": 15988914893,
+          "superseded_binding_epochs": [
+            15988914893,
+            15988915150
+          ],
+          "first_scheduled_ms": {
+            "audio": 3007.582,
+            "video": 3012.748
+          }
+        }
+      ],
+      "pairs": 16,
+      "absolute_p95_ms": 56.66666666666788,
+      "missing_labels": [],
+      "owned_room_delete_exit_code": 0,
+      "metadata_observer_invalid": true
+    },
+    {
+      "run": "generated-recovery-1791758862738032000",
+      "guests": 1,
+      "seconds": 35,
+      "reconnect": "none",
+      "native_sha256": "d741e5bfae81c976ccadfdcdbccce3c6e5ed7c80171ed7aaeac4eca62309af8b",
+      "capture_extension": false,
+      "capture_scheduling": false,
+      "sync_streams_requested": true,
+      "passed": false,
+      "failures": [
+        "epoch 16129824076: audio readiness exceeded budget including preceding resets",
+        "epoch 16129824076: video readiness exceeded budget including preceding resets"
+      ],
+      "first_scheduled_epochs": [
+        {
+          "binding_since_us": 16129824076,
+          "recovery_started_us": 16129823146,
+          "superseded_binding_epochs": [
+            16129823146,
+            16129823355
+          ],
+          "first_scheduled_ms": {
+            "audio": 2907.645,
+            "video": 2922.122
+          }
+        }
+      ],
+      "pairs": 16,
+      "absolute_p95_ms": 76.66666666666788,
+      "missing_labels": [],
+      "owned_room_delete_exit_code": 0,
+      "metadata_observer_invalid": true
+    },
+    {
+      "run": "generated-recovery-1791759546952591000",
+      "guests": 1,
+      "seconds": 35,
+      "reconnect": "none",
+      "native_sha256": "d741e5bfae81c976ccadfdcdbccce3c6e5ed7c80171ed7aaeac4eca62309af8b",
+      "capture_extension": true,
+      "capture_scheduling": false,
+      "sync_streams_requested": false,
+      "passed": false,
+      "failures": [
+        "epoch 16813290325: audio readiness exceeded budget including preceding resets",
+        "epoch 16813290325: video readiness exceeded budget including preceding resets"
+      ],
+      "first_scheduled_epochs": [
+        {
+          "binding_since_us": 16813290325,
+          "recovery_started_us": 16813289824,
+          "superseded_binding_epochs": [
+            16813289824,
+            16813290128
+          ],
+          "first_scheduled_ms": {
+            "audio": 3008.462,
+            "video": 3033.187
+          }
+        }
+      ],
+      "pairs": 16,
+      "absolute_p95_ms": 73.33333333333212,
+      "missing_labels": [],
+      "owned_room_delete_exit_code": 0,
+      "metadata_observer_invalid": true
+    },
+    {
+      "run": "generated-recovery-1791760183325409000",
+      "guests": 1,
+      "seconds": 35,
+      "reconnect": "none",
+      "native_sha256": "8b896b2e611798200f377df2689e40d44efc5647419cf53ef4648ed2b8bd78b8",
+      "capture_extension": true,
+      "capture_scheduling": false,
+      "sync_streams_requested": false,
+      "passed": false,
+      "failures": [
+        "epoch 17451772233: audio readiness exceeded budget including preceding resets",
+        "epoch 17451772233: video readiness exceeded budget including preceding resets"
+      ],
+      "first_scheduled_epochs": [
+        {
+          "binding_since_us": 17451772233,
+          "recovery_started_us": 17451771866,
+          "superseded_binding_epochs": [
+            17451771866,
+            17451772160
+          ],
+          "first_scheduled_ms": {
+            "audio": 9009.258,
+            "video": 9031.391
+          }
+        }
+      ],
+      "pairs": 13,
+      "absolute_p95_ms": 43.33333333333212,
+      "missing_labels": [],
+      "owned_room_delete_exit_code": 0,
+      "metadata_observer_invalid": false
+    },
+    {
+      "run": "generated-recovery-1791760736611968000",
+      "guests": 3,
+      "seconds": 60,
+      "reconnect": "full",
+      "native_sha256": "d6cf532de3be3e41110a355ac660934f61f34812773e10939337c8d63717a60e",
+      "capture_extension": true,
+      "capture_scheduling": true,
+      "sync_streams_requested": false,
+      "passed": false,
+      "failures": [
+        "epoch 18022910566: audio readiness exceeded budget including preceding resets",
+        "epoch 18022910566: video readiness exceeded budget including preceding resets",
+        "numbered recording marker gate failed",
+        "missing marker labels within observed recording span"
+      ],
+      "first_scheduled_epochs": [
+        {
+          "binding_since_us": 18010140295,
+          "recovery_started_us": 18010139957,
+          "superseded_binding_epochs": [
+            18010139957,
+            18010140224
+          ],
+          "first_scheduled_ms": {
+            "audio": 658.462,
+            "video": 691.186
+          }
+        },
+        {
+          "binding_since_us": 18022910566,
+          "recovery_started_us": 18022142747,
+          "superseded_binding_epochs": [
+            18022142747,
+            18022142829,
+            18022910237
+          ],
+          "first_scheduled_ms": {
+            "audio": 2022.559,
+            "video": 2034.806
+          }
+        }
+      ],
+      "pairs": 28,
+      "absolute_p95_ms": 63.33333333333394,
+      "missing_labels": [
+        10
+      ],
+      "owned_room_delete_exit_code": 0,
+      "metadata_observer_invalid": false
+    },
+    {
+      "run": "generated-recovery-1791761280229261000",
+      "guests": 3,
+      "seconds": 35,
+      "reconnect": "none",
+      "native_sha256": "359f10c9eb2a91603dc97f25ec9e484b3109914bb41a8e48b6acd7cde41c1ef8",
+      "capture_extension": true,
+      "capture_scheduling": true,
+      "sync_streams_requested": false,
+      "passed": true,
+      "failures": [],
+      "first_scheduled_epochs": [
+        {
+          "binding_since_us": 18555109066,
+          "recovery_started_us": 18555108736,
+          "superseded_binding_epochs": [
+            18555108736,
+            18555108976
+          ],
+          "first_scheduled_ms": {
+            "audio": 14.904,
+            "video": 1202.713
+          }
+        }
+      ],
+      "pairs": 17,
+      "absolute_p95_ms": 43.33333333333212,
+      "missing_labels": [],
+      "owned_room_delete_exit_code": 0,
+      "metadata_observer_invalid": false
+    },
+    {
+      "run": "generated-recovery-1791761403217547000",
+      "guests": 3,
+      "seconds": 60,
+      "reconnect": "full",
+      "native_sha256": "359f10c9eb2a91603dc97f25ec9e484b3109914bb41a8e48b6acd7cde41c1ef8",
+      "capture_extension": true,
+      "capture_scheduling": true,
+      "sync_streams_requested": false,
+      "passed": false,
+      "failures": [
+        "missing marker labels within observed recording span"
+      ],
+      "first_scheduled_epochs": [
+        {
+          "binding_since_us": 18674630993,
+          "recovery_started_us": 18674629444,
+          "superseded_binding_epochs": [
+            18674629444,
+            18674630724
+          ],
+          "first_scheduled_ms": {
+            "audio": 20.843,
+            "video": 933.143
+          }
+        },
+        {
+          "binding_since_us": 18687542458,
+          "recovery_started_us": 18686636211,
+          "superseded_binding_epochs": [
+            18686636211,
+            18686636308,
+            18687541762
+          ],
+          "first_scheduled_ms": {
+            "audio": 1036.062,
+            "video": 1234.168
+          }
+        }
+      ],
+      "pairs": 29,
+      "absolute_p95_ms": 63.33333333332848,
+      "missing_labels": [
+        10
+      ],
+      "owned_room_delete_exit_code": 0,
+      "metadata_observer_invalid": false
+    }
+  ],
+  "input_sha256": {
+    "evidence/generated-recovery-1791758409007048000-obs-numbered.json": "4c449815db0d7e3907cbd6afccba5ab95fa1dbe3e4212f1fe325abd9e9f09482",
+    "evidence/generated-recovery-1791758409007048000-obs-acceptance.json": "4ce450953404e872c6524ed32a51078b7721042b1aff18d96f8caf062ef75e90",
+    "evidence/generated-recovery-1791758409007048000-obs-markers.json": "204285ba1c48ee9327c8dce5e7de76bc311038a397b8b4d1746154a2d2ac025d",
+    "evidence/generated-recovery-1791758409007048000-conditions.json": "35efd5c1d30514c5ab3b4b470fbb268da00b2382bcd229b49798cf751b3cd869",
+    "evidence/generated-recovery-1791758409007048000-browser.json": "1706f861d43f27ee1131da2288429700fec9457bd05c31d6db3a060613407298",
+    "evidence/generated-recovery-1791758409007048000.json": "a08de2c50934facdd2d449ff9fda79c039c8fb7c8eb4fbb2709ad2098bddf98f",
+    "evidence/generated-recovery-1791758409007048000-reconnect-loss.json": "c749d022ea9c4f99af4c396eeeb3893049f75b11d9d96bd471a129bfe2a1e5f7",
+    "evidence/generated-recovery-1791758721850656000-obs-acceptance.json": "716b5a593378521970602996683c67af2c78e5b36a3070636fa36be6fca0da58",
+    "evidence/generated-recovery-1791758721850656000-conditions.json": "1443717f58f29a9cb2d498a08c7ef72a1ae12a0dde7d26ecfac58d64f4a8743c",
+    "evidence/generated-recovery-1791758721850656000-obs-markers.json": "0e38c5f4d667f11147d1fee84e63aa9e7fa9cd2ca9aae42361622a61b21ffcf1",
+    "evidence/generated-recovery-1791758721850656000-obs-numbered.json": "ed31791fdc59cf4a0c7511206668ef048a897d1d0c3f76ffec83cec58f9cbeed",
+    "evidence/generated-recovery-1791758721850656000-reconnect-loss.json": "8ccd42a8fe27c81c3bc01917f4eab4051626eb99f34ffdf7deca8cdc73eecbe1",
+    "evidence/generated-recovery-1791758721850656000-browser.json": "9262126effdf54566f839dec8a2bbf9ee9b46d26ad02c36a33ea78da7345aa57",
+    "evidence/generated-recovery-1791758721850656000.json": "c0ae21b8cf4272d35f4fc7749f3a7d9e5adb66ec18804ec065251ede7ee4f3be",
+    "evidence/generated-recovery-1791758862738032000-obs-acceptance.json": "791f537c4be4cc75b86e324318823702aca4448fb259959af1273ff4c4b3d662",
+    "evidence/generated-recovery-1791758862738032000-obs-markers.json": "1c7beb1d45e9cc882bad0ff81c3a06918b53c5fca83e8a8c74414e490c157057",
+    "evidence/generated-recovery-1791758862738032000-browser.json": "f87030eb927889b7fc7369f0ef4040045cda74ee12647ce109a1f6c36b67d9d2",
+    "evidence/generated-recovery-1791758862738032000-obs-numbered.json": "f0fe5300053a5ef33a6fa3344cdd259349808d5f8f0551a60922414fb54d4f7d",
+    "evidence/generated-recovery-1791758862738032000-reconnect-loss.json": "5373813cd27f9b120ce383517067de6ea7a015a2122b933c7e576ab1effa920c",
+    "evidence/generated-recovery-1791758862738032000-conditions.json": "840993075caec8e5f6a6ac93bce32d4878f1b31766d66e112f4898ff7f991177",
+    "evidence/generated-recovery-1791758862738032000.json": "d9eff6afb2d036ebfee7548e20d424ae4c242679d0b9d18f9c8154489f32fb14",
+    "evidence/generated-recovery-1791759546952591000.json": "64422ff755a9d51a3bff7769edf871a126a6a8111b3db8ba6377c452404666b2",
+    "evidence/generated-recovery-1791759546952591000-obs-numbered.json": "b5f045212c338b77087362d5548d408028249781b2175a5b3fe514364fc23c77",
+    "evidence/generated-recovery-1791759546952591000-conditions.json": "9f155364d24177ae33196b31733160c31d0b40538993c89a487a4cb4a40135de",
+    "evidence/generated-recovery-1791759546952591000-obs-acceptance.json": "7c71bee14f1fc1ba02816e2b796f9ca7b4589d6af9faf02c5a65c7180d77f044",
+    "evidence/generated-recovery-1791759546952591000-reconnect-loss.json": "f3d56739480a7193445ee01a51eafcbcb70da4ea8a4cdaaa2f8c13ec9ab88cba",
+    "evidence/generated-recovery-1791759546952591000-browser.json": "cdb58fd8222144cb8f0bf686465c2e6c8290f980ac75852a7bfc0875dff59f97",
+    "evidence/generated-recovery-1791759546952591000-obs-markers.json": "d7bf38deaf03a859af628f680652059b8786f69e8dea2ee15f47f65749d764cd",
+    "evidence/generated-recovery-1791760183325409000-obs-markers.json": "9fa66648cc3c5715844529929fbfc0b8254272cf107e92ed0d0bb2992519ee5c",
+    "evidence/generated-recovery-1791760183325409000-obs-acceptance.json": "14a03cf3e8706d54964d74b44831e5a52a9bfe3924a66b8bc8fd164a0a0e4eaa",
+    "evidence/generated-recovery-1791760183325409000-conditions.json": "a5afaea05cec63f1a10f5284abc297a554ec38a5131c1a46309c4f30fa7e79f6",
+    "evidence/generated-recovery-1791760183325409000-browser.json": "99df250ddbf78d78574f52dacda7f5261f98651837b19fdedd29a5c77e54dc09",
+    "evidence/generated-recovery-1791760183325409000-reconnect-loss.json": "195c84b2044af16a2371d7ded50e13282548ab5ff36303a0ad8a24c46b8d69a9",
+    "evidence/generated-recovery-1791760183325409000.json": "36530efca04c14f85821830899d944bef75a9e1747b82d1d757986b7266944e8",
+    "evidence/generated-recovery-1791760183325409000-obs-numbered.json": "ac0715a539216093073a15a50b4886de88c46ce61fa5e1c4d7b9137da5231a9b",
+    "evidence/generated-recovery-1791760736611968000-obs-acceptance.json": "34550e2de64a22305826e6ef978dc48c5211613fdbfb0786a57533a533430156",
+    "evidence/generated-recovery-1791760736611968000-browser.json": "e3098da191c11a109c57c5480b496de8cf098ccb93cbf3c847ef65c8f23cf6e0",
+    "evidence/generated-recovery-1791760736611968000.json": "474f086b76e020827d69341dac6297b7865d9079aa08486592ec47d3040295ac",
+    "evidence/generated-recovery-1791760736611968000-conditions.json": "7fabbe6d68c39eb3f925fcb96c79cb010a160e15ba30420a6397d27284e690fd",
+    "evidence/generated-recovery-1791760736611968000-obs-markers.json": "02b9f175fb20176a3470717f5cba3f77a195a1b3c128406c532d618f501d9a31",
+    "evidence/generated-recovery-1791760736611968000-reconnect-loss.json": "6a6930938ae6c5776929772b79a3e5a4b8c0798f0e24d75bf9156e8f4331658f",
+    "evidence/generated-recovery-1791760736611968000-obs-numbered.json": "0e671293b68ca8df77f06b4acd230ee9c55992e3bf7bcd5c8b75de0c72d84826",
+    "evidence/generated-recovery-1791761280229261000-obs-numbered.json": "cfa7f0953ca2824ce564bde2efb7df7ca5fc915e3bb0afd2de1bcc2de3a18012",
+    "evidence/generated-recovery-1791761280229261000-browser.json": "8eac1a73365b7fca36c1867ea8a2286dd01f1337ce9761da76bf45784d1cdc46",
+    "evidence/generated-recovery-1791761280229261000-obs-markers.json": "24f7bbb19206ac1e6fbd885eb7342e710758e58f68bd5f2ccb233677c0772441",
+    "evidence/generated-recovery-1791761280229261000-reconnect-loss.json": "9c28c0532f5db76908eb1a256f032268bca70704a8b932d6a9815dfadfda1b30",
+    "evidence/generated-recovery-1791761280229261000-conditions.json": "6852275958fcdf6ca8aff0484a8a05fb5c0fc3e8fc6d84dbfa0eb443ed73ba90",
+    "evidence/generated-recovery-1791761280229261000.json": "f1e9cb5bda00c499f78dff6b0dcd6968cbdbeb2064cacf1d6dfcdceee4916ea4",
+    "evidence/generated-recovery-1791761280229261000-obs-acceptance.json": "c1f564ff2ec40dac3e115f9877355b6db05750ee9979f804b58493b1ae4b98cd",
+    "evidence/generated-recovery-1791761403217547000-reconnect-loss.json": "5d19242b267deeb197cd22ab511d545748d67592cf157c03f77a191b4ac7ce53",
+    "evidence/generated-recovery-1791761403217547000.json": "88708900f980cf1804dce9f60d3d9ffd6c1c074bdaa7ef497ed84c6add5b6de0",
+    "evidence/generated-recovery-1791761403217547000-obs-markers.json": "64708ca31c3ca4bb82b91afe17b741ec9eddd66ffdfb8325f45bf227b70c19af",
+    "evidence/generated-recovery-1791761403217547000-obs-acceptance.json": "2ca292176a7d9ad2e452b5c0c01d81d4fe78f2f91dfcc4ebef563d5f4c31041d",
+    "evidence/generated-recovery-1791761403217547000-obs-numbered.json": "943fd557119c2437e7efda2909d60dfea9e4bea858e63ba0768d62de2298afd7",
+    "evidence/generated-recovery-1791761403217547000-conditions.json": "d54538e2f60fb065751638355a73377c1348b3b7845eb529d1e88f04c448e199",
+    "evidence/generated-recovery-1791761403217547000-browser.json": "99f9ffad45ec04a77b415b844e27ad63bc09dfc23cf5ee3732ef08d91f174fe5",
+    "evidence/browser-encoded-clock-api-control.json": "0107d7d654ef7e9d06f0796c1324c62b129239a8ba8170817c3fe770fa3db0e1",
+    "evidence/capture-extension-lifecycle.json": "6beb91850b2bdb2cf202c8b40802767282570a4cf3a05b8b89ea7523e7f63041",
+    "evidence/capture-scheduling-lifecycle.json": "247da4265ad69dca4fabc11c999b746e9755c8befaba7f09b77a9ecf8d44af10"
+  },
+  "source_sha256": {
+    "labs/guest-rtc/native/run-cloud-generated-recovery.py": "419ec875a1f8916133c4c47b6ba0d6300f4cc9005213975dfa1f5ab45fb2f3ef",
+    "labs/guest-rtc/native/test-timed-mixer.py": "cbe97c4beef5ded712461c538103ab7195a325882d2f8c5c3715cf649dc7fec3",
+    "labs/guest-rtc/native/timed-mixer-lifecycle.cpp": "4b3a7dbd2558960bf7dd52b4632e9939bbee9749d8b694ac8fdd55b60f24f534",
+    "labs/guest-rtc/src/main.rs": "00fd72049121f5d1c5a292ebc6d58d736ae0e1057066faf02af1e341865b2a73",
+    "labs/guest-rtc/src/playback_worker.rs": "28235c629cf40992815a07f871d72d7ccd10f691c50af69ac4361ae72f73df30",
+    "labs/guest-rtc/src/sender_clock.rs": "35f3f383311ce5ddaa9628804578359a4d0a437abe8073e50fb1eabd5b0d0cbc",
+    "labs/guest-rtc/src/transport.rs": "d63f4ae5698c9c9ba5bf3c12970105745b29f7d72f5becd7233e37d669509621",
+    "labs/guest-rtc/vendor/webrtc-sys/include/livekit/timed_mixer_probe.h": "302b2b2156219bece73c8bb7b00118d0bf529aed7adb2124c50c366d70a67b26",
+    "labs/guest-rtc/vendor/webrtc-sys/include/livekit/video_frame.h": "fc0180108a00d1472862567ac80b3a88d99860410fe48f965e30f2dfb97e738f",
+    "labs/guest-rtc/vendor/webrtc-sys/src/peer_connection.cpp": "bfee60079b123815d6f37b43c57a8e68022182dcbf696429ab52547f7d10fb06",
+    "labs/guest-rtc/vendor/webrtc-sys/src/video_frame.cpp": "37634178a6a4014c3507fe587307ab64ba0b2547ff48683eb333c57f25c1e912",
+    "labs/guest-rtc/vendor/webrtc-sys/src/video_frame.rs": "86e31142f9a885b988efca35e128dc37c5cad09e0645722c919158030a7b02f3",
+    "labs/guest-rtc/vendor/webrtc-sys/src/webrtc.cpp": "42aaddd6388d6c62ac2b51d7410bce834f02558451df587a9db4971194383234",
+    "labs/guest-rtc/vendor/webrtc-sys/src/webrtc.rs": "0a0eea1674af842483415f00b9c1ace292a082fb08d1fddb71a915c6553b2a10",
+    "labs/guest-rtc/web/fixture.js": "b1e6e470cfb5c58c92f709966ca61a1eb8a05717057aaa022f9b29e4101c71e3",
+    "labs/guest-rtc/web/generated-recovery-smoke.mjs": "16ed91f4fd78856c0ecd1dbce039411835e01ed2198be076b506d1488e396eb1",
+    "labs/guest-rtc/web/server.mjs": "21df1b0db990c641dc4a693f841ba9102f5952b0eb8583f156cd817e17c0d917",
+    "labs/guest-rtc/src/capture_clock.rs": "20e583a21bef062fcf8313112a70a9ec2ec0c94d19067cd8d2770e84eedc7779",
+    "labs/guest-rtc/vendor/webrtc-sys/include/livekit/capture_time_probe.h": "d74cc7a14300ba0238ad5be38052b6974e65a2a5db7f78fba366e0b9ff103905",
+    "labs/guest-rtc/web/capture-extension-probe.js": "7763362dad74e7b5a0152330316aaf826599aeafa482b549c2c3d12989b13503",
+    "labs/guest-rtc/web/encoded-clock-worker.js": "255a67f7264af6f6551802b141c6751cc8bf8fad72ec005042f2c5cfd62f1738",
+    "labs/guest-rtc/web/probe-browser-encoded-clock.mjs": "286dbea320e1c56d4a0a628178bc4f8b15a1eb3e4069ed2963e48dd642569e49"
+  }
+}

@@ -1,7 +1,10 @@
 # LiveKit Cloud native guest timing: reproducible readiness gap
 
-Status: local native scheduling improvement validated in one three-guest run;
-Cloud media readiness remains unqualified. This is a prepared diagnostic report,
+Status: the original sender-report readiness gap below remains reproducible.
+An opt-in ACT candidate now passes the short Cloud timing test and the latest
+full-reconnect readiness check; recovery recording coverage remains unqualified.
+See [the current release status](./LIVEKIT-PRODUCTION-READINESS-2026-10-11.md).
+This is a prepared diagnostic report,
 not a submitted support ticket or public issue. No production room was changed.
 
 ## Observed behavior

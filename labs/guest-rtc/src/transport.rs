@@ -323,6 +323,7 @@ struct Measurements {
     audio_gaps: u64,
     next_sample: Option<u64>,
     video_ntp_nonzero: u64,
+    video_packet_capture_nonzero: u64,
     retired_queues: Vec<serde_json::Value>,
 }
 fn p95(values: &[f64]) -> Option<f64> {
@@ -1232,6 +1233,7 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
             "audio_pulses_ms":m.audio_pulses,"video_pulses_ms":m.video_pulses,
             "paired_callback_video_minus_audio_ms":offsets,"callback_av_abs_p95_ms":p95(&abs),
             "video_frames_with_ntp_metadata":m.video_ntp_nonzero,
+            "video_frames_with_packet_capture_metadata":m.video_packet_capture_nonzero,
             "video_local_deadline_valid":m.video_deadline_valid,"video_local_deadline_invalid":m.video_deadline_invalid,
             "video_deadline_minus_arrival_p95_ms":p95(&m.video_deadline_minus_arrival_ms),
 

@@ -12,6 +12,7 @@
 #include "api/make_ref_counted.h"
 #include "modules/audio_mixer/audio_mixer_impl.h"
 #include "rtc_base/time_utils.h"
+#include "livekit/capture_time_probe.h"
 
 namespace livekit_ffi {
 inline std::atomic<uint64_t> timed_sources_alive{0}, timed_sources_created{0}, timed_sources_destroyed{0};
@@ -19,12 +20,14 @@ struct TimedPcmBlock {
   std::array<int16_t, 960> pcm{};
   uint64_t generation = 0, sequence = 0;
   uint32_t ssrc = 0, rtp_timestamp = 0, channels = 0;
-  int64_t pull_us = 0, elapsed_ms = -1;
+  int64_t pull_us = 0, elapsed_ms = -1, capture_sender_ntp_us = 0;
   int speech_type = 0;
   bool muted = false;
 };
 struct TimedMixerRecord {
   uint64_t generation = 0, frames = 0, ntp_valid_frames = 0, packet_info_frames = 0;
+  uint64_t packet_capture_time_frames = 0;
+  int64_t first_packet_capture_ntp_us = 0;
   uint32_t ssrc = 0, rtp_timestamp = 0;
   int64_t ntp_ms = -1, elapsed_ms = -1, pull_us = 0;
   size_t samples = 0, channels = 0;
@@ -75,6 +78,11 @@ class TimedMixerSource final : public webrtc::AudioMixer::Source {
         auto& record = state_->records[slot_];
         record.frames++; record.ntp_valid_frames += frame->ntp_time_ms_ > 0;
         record.packet_info_frames += !frame->packet_infos_.empty();
+        const auto capture_us = first_packet_capture_ntp_us(frame->packet_infos_);
+        if (capture_us > 0) {
+          ++record.packet_capture_time_frames;
+          if (record.first_packet_capture_ntp_us == 0) record.first_packet_capture_ntp_us = capture_us;
+        }
         record.rtp_timestamp = frame->timestamp_; record.ntp_ms = frame->ntp_time_ms_;
         record.elapsed_ms = frame->elapsed_time_ms_; record.pull_us = webrtc::TimeMicros();
         record.samples = frame->samples_per_channel_; record.channels = frame->num_channels_;
@@ -92,6 +100,7 @@ class TimedMixerSource final : public webrtc::AudioMixer::Source {
           block.generation = record.generation; block.sequence = sequence_;
           block.ssrc = record.ssrc; block.rtp_timestamp = record.rtp_timestamp;
           block.pull_us = record.pull_us; block.elapsed_ms = record.elapsed_ms;
+          block.capture_sender_ntp_us = packet_capture_sender_ntp_us(frame->packet_infos_, record.rtp_timestamp, 48000, record.ssrc);
           block.speech_type = record.speech_type; block.muted = result == AudioFrameInfo::kMuted;
           ++record.pcm_size;
         } else ++record.pcm_format_rejected;
@@ -180,6 +189,8 @@ inline std::string timed_mixer_probe_report() {
       out << "{\"generation\":" << r.generation << ",\"ssrc\":" << r.ssrc
           << ",\"active\":" << (r.active ? "true" : "false") << ",\"frames\":" << r.frames
           << ",\"ntp_valid_frames\":" << r.ntp_valid_frames << ",\"packet_info_frames\":" << r.packet_info_frames
+          << ",\"packet_capture_time_frames\":" << r.packet_capture_time_frames
+          << ",\"first_packet_capture_ntp_us\":" << r.first_packet_capture_ntp_us
           << ",\"rtp_timestamp\":" << r.rtp_timestamp << ",\"ntp_ms\":" << r.ntp_ms
           << ",\"elapsed_ms\":" << r.elapsed_ms << ",\"pull_us\":" << r.pull_us
           << ",\"samples_per_channel\":" << r.samples << ",\"channels\":" << r.channels

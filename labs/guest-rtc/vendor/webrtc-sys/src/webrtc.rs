@@ -76,6 +76,7 @@ pub mod ffi {
         pub rtp_timestamp: u32,
         pub pull_us: i64,
         pub elapsed_ms: i64,
+        pub capture_sender_ntp_us: i64,
         pub speech_type: i32,
         pub muted: bool,
     }

@@ -21,7 +21,13 @@ parser.add_argument('--seconds', type=int, default=60)
 parser.add_argument('--reconnect', choices=['none', 'signal', 'full'], default='none')
 parser.add_argument('--reconnect-count', type=int, choices=[1, 2, 3], default=1)
 parser.add_argument('--require-obs-gates', action='store_true')
+parser.add_argument('--sync-streams', action=argparse.BooleanOptionalAction, default=True,
+                    help='Explicit Cloud room synchronization setting; default preserves the existing fixture')
+parser.add_argument('--encoded-clock-probe', action='store_true', help='Observe browser encoded-frame timing without changing media')
+parser.add_argument('--capture-extension', action='store_true', help='Opt-in per-packet capture timestamp negotiation experiment')
+parser.add_argument('--capture-scheduling', action='store_true', help='Opt-in scheduling from normalized current packet capture metadata')
 args = parser.parse_args()
+if args.capture_scheduling and not args.capture_extension: parser.error('Capture scheduling requires explicit --capture-extension')
 if not 35 <= args.seconds <= 300: parser.error('Duration must be 35..300 seconds')
 if args.reconnect != 'none' and args.seconds < 32 + 40*(args.reconnect_count-1): parser.error('Allow 20 seconds after the last reconnect')
 check_ports((8990,))
@@ -32,7 +38,7 @@ room = 'producer-g1-cloud-' + name.removeprefix('generated-recovery-')
 recording = LAB/'runtime'/f'{name}-obs.mp4'
 env = {k:v for k,v in os.environ.items() if not k.startswith('LIVEKIT_LAB_')}
 env.update(LIVEKIT_LAB_RUN_NAME=name, LIVEKIT_LAB_GUESTS=str(args.guests), LIVEKIT_LAB_SECONDS=str(args.seconds),
-           LIVEKIT_LAB_GENERATED_RECONNECT_COUNT=str(args.reconnect_count), LIVEKIT_LAB_SYNC_STREAMS='1',
+           LIVEKIT_LAB_GENERATED_RECONNECT_COUNT=str(args.reconnect_count), LIVEKIT_LAB_SYNC_STREAMS='1' if args.sync_streams else '0',
            LIVEKIT_LAB_MARKER_IDS='1', LIVEKIT_LAB_CLOUD_TEST='1', LIVEKIT_LAB_CLOUD_ROOM=room,
            LIVEKIT_LAB_URL=settings['LIVEKIT_URL'], LIVEKIT_LAB_TIMED_MIXER='1', LIVEKIT_LAB_RTCP_PROBE='1',
            LIVEKIT_LAB_AUDIO_MASTER='1', LIVEKIT_LAB_SCHEDULE_HANDOFF='1', LIVEKIT_LAB_OBS_PIPELINE_PROBE='1',
@@ -40,6 +46,9 @@ env.update(LIVEKIT_LAB_RUN_NAME=name, LIVEKIT_LAB_GUESTS=str(args.guests), LIVEK
            LIVEKIT_LAB_EXTENDED_VIDEO_BUFFER='1', LIVEKIT_LAB_FAST_RTCP='1', LIVEKIT_LAB_RTCP_TRACE='1',
            LIVEKIT_LAB_OBS_RECORDING=str(recording), DYLD_FRAMEWORK_PATH='/Applications/Producer.app/Contents/Frameworks',
            DYLD_LIBRARY_PATH='/Applications/Producer.app/Contents/Frameworks')
+if args.encoded_clock_probe: env['LIVEKIT_LAB_ENCODED_CLOCK_PROBE'] = '1'
+if args.capture_extension: env['LIVEKIT_LAB_CAPTURE_EXTENSION'] = '1'
+if args.capture_scheduling: env['LIVEKIT_LAB_CAPTURE_SCHEDULING'] = '1'
 if args.reconnect != 'none': env['LIVEKIT_LAB_GENERATED_RECONNECT'] = args.reconnect
 if args.reconnect == 'full': env['LIVEKIT_LAB_PRESERVE_RECONNECT_OUTPUT'] = '1'
 server_env = {**env, **settings}
@@ -52,6 +61,10 @@ def digest(path):
     return result.hexdigest()
 report = {'run':name, 'provider':'LiveKit Cloud', 'project_url':settings['LIVEKIT_URL'], 'room':room,
           'guests':args.guests, 'seconds':args.seconds, 'reconnect':args.reconnect, 'reconnect_count':args.reconnect_count,
+          'sync_streams_requested':args.sync_streams,
+          'encoded_clock_probe':args.encoded_clock_probe,
+          'capture_extension':args.capture_extension,
+          'capture_scheduling':args.capture_scheduling,
           'native_sha256':digest(LAB/'target/debug/producer-guest-rtc-lab'), 'custom_sfu_patch_available':False,
           'hardware_capture_used':False, 'speaker_playback_used':False, 'media_scope':'generated selected guest-1 only',
           'status':'running', 'g1_complete':False, 'production_deployed':False}

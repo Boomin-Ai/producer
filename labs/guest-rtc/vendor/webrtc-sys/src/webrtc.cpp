@@ -199,7 +199,7 @@ rust::Vec<DecodedAudioBlock> diagnostic_take_decoded_audio() {
   for (const auto& block : take_timed_pcm_blocks(webrtc::TimeMicros())) {
     result.push_back(DecodedAudioBlock{block.pcm, block.generation, block.sequence,
       block.channels, block.ssrc, block.rtp_timestamp, block.pull_us, block.elapsed_ms,
-      block.speech_type, block.muted});
+      block.capture_sender_ntp_us, block.speech_type, block.muted});
   }
   return result;
 }

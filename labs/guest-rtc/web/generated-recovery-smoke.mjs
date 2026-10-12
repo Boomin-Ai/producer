@@ -14,7 +14,7 @@ let browser,child,done,log='',exited=false;const pages=[],observations=[];
 const mediaEnv={...process.env};delete mediaEnv.LIVEKIT_API_KEY;delete mediaEnv.LIVEKIT_API_SECRET;
 try {
  browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true,env:mediaEnv,args:['--autoplay-policy=no-user-gesture-required','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
- for(let n=1;n<=guests;n++){const page=await browser.newPage();pages.push(page);await page.goto(`http://127.0.0.1:8990/?identity=guest-${n}&recoveryProbe=1&sourcePhase=${sourcePhase}`);await page.evaluate(()=>window.startLab());await page.waitForFunction(()=>window.labState.published,undefined,{timeout:10000});}
+ for(let n=1;n<=guests;n++){const page=await browser.newPage();pages.push(page);await page.goto(`http://127.0.0.1:8990/?identity=guest-${n}&recoveryProbe=1&sourcePhase=${sourcePhase}&encodedClock=${process.env.LIVEKIT_LAB_ENCODED_CLOCK_PROBE==='1'?'1':'0'}&captureExtension=${process.env.LIVEKIT_LAB_CAPTURE_EXTENSION==='1'?'1':'0'}`);await page.evaluate(()=>window.startLab());await page.waitForFunction(()=>window.labState.published,undefined,{timeout:10000});}
  child=spawn(path.join(lab,'target/debug/producer-guest-rtc-lab'),['transport',path.join(lab,'runtime/native-token'),path.join(lab,`evidence/${name}.json`),String(seconds)],{cwd:lab,env:mediaEnv});
  done=new Promise((resolve,reject)=>{child.on('error',reject);child.on('exit',code=>{exited=true;resolve(code);});});
  child.stdout.on('data',d=>{log+=d;process.stdout.write(d);});child.stderr.on('data',d=>{log+=d;process.stderr.write(d);});
@@ -23,6 +23,8 @@ try {
  const code=await done,native=JSON.parse(await readFile(path.join(lab,`evidence/${name}.json`)));
  const probes=await Promise.all(pages.map(page=>page.evaluate(()=>window.recoveryProbe.snapshot())));
  const sources=await Promise.all(pages.map(page=>page.evaluate(()=>window.sourceMarkers.snapshot())));
+ const encodedClocks=await Promise.all(pages.map(page=>page.evaluate(()=>window.encodedClockReports)));
+ const captureExtensions=await Promise.all(pages.map(page=>page.evaluate(()=>window.captureExtensionProbe)));
  const resumes=native.lifecycle.filter(e=>e.event==='reconnected'),injections=native.lifecycle.filter(e=>e.event==='reconnect_injected');
  const resumed=resumes[0],injected=injections[0];
  const reports=probes.map((probe,index)=>({identity:`guest-${index+1}`,source_phase_seconds:sourcePhase,source_markers:sources[index],probe,whole:markerOffsets(probe),sequence:videoSequenceHealth(probe),post_resume:null,recovery_stages:[]}));
@@ -48,7 +50,7 @@ try {
  const replacementVerified=probes.every(probe=>['audio','video'].every(kind=>new Set(probe.epochs.filter(e=>e.kind===kind).map(e=>e.sid)).size===expected+1));
  const expectedMarkerIds=Array.from({length:Math.ceil((seconds-.5)/2)},(_,id)=>id);
  for(const r of reports){r.expected_marker_ids=expectedMarkerIds;r.missing_video_labels=expectedMarkerIds.filter(id=>!r.probe.video.some(marker=>marker.id===id));r.missing_paired_labels=expectedMarkerIds.filter(id=>!r.whole.pairs.some(pair=>pair.id===id));}
- const report={guests,seconds,injections,resumes,replacement_verified:replacementVerified,native_exit_code:code,injected,resumed,observations,reports,hardware_capture_used:false,speaker_playback_used:false,media_recorded:process.env.LIVEKIT_LAB_OBS_RECORDING!==undefined,media_scope:process.env.LIVEKIT_LAB_OBS_RECORDING?'generated selected guest-1 through native OBS':'none',g1_complete:false};
+ const report={guests,seconds,injections,resumes,replacement_verified:replacementVerified,native_exit_code:code,injected,resumed,observations,reports,encoded_clock_probe:process.env.LIVEKIT_LAB_ENCODED_CLOCK_PROBE==='1',encoded_clocks:encodedClocks,capture_extensions:captureExtensions,hardware_capture_used:false,speaker_playback_used:false,media_recorded:process.env.LIVEKIT_LAB_OBS_RECORDING!==undefined,media_scope:process.env.LIVEKIT_LAB_OBS_RECORDING?'generated selected guest-1 through native OBS':'none',g1_complete:false};
  await writeFile(path.join(lab,`evidence/${name}-browser.json`),JSON.stringify(report,null,2)+'\n');
  if(code!==0||injections.length!==expected||resumes.length!==expected||(injected?.mode==='full'&&!replacementVerified)||probes.some(p=>p.errors.length)||sources.some(s=>s.errors.length)||reports.some(r=>r.sequence.repeated_labels||r.sequence.regressed_labels||r.whole.paired_markers<3||r.recovery_stages.length!==expected||r.recovery_stages.some(stage=>stage.video_growth<20||stage.audio_marker_growth<3||stage.markers.paired_markers<3)))throw new Error('Generated reconnect did not prove fresh audio/video marker recovery; inspect retained evidence');
  console.log(`Generated ${injected?.mode??'baseline'} reconnect: ${guests} receivers recovered current numbered audio/video markers`);

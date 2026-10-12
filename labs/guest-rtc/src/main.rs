@@ -3,6 +3,7 @@ mod apm;
 mod audio_continuity;
 #[cfg(any(feature = "obs-proof", test))]
 mod binding_discovery;
+mod capture_clock;
 mod capture_fixture;
 mod capture_handoff;
 mod cloud_config;

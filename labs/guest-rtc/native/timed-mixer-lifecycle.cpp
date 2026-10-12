@@ -15,6 +15,7 @@ class FakeSource final : public webrtc::AudioMixer::Source {
   uint32_t timestamp = 48000;
   int16_t marker = 123;
   size_t channels = 1;
+  bool capture = false;
   int Ssrc() const override { return 123; }
   int PreferredSampleRate() const override { return 48000; }
   AudioFrameInfo GetAudioFrameWithInfo(int rate, webrtc::AudioFrame* frame) override {
@@ -23,6 +24,14 @@ class FakeSource final : public webrtc::AudioMixer::Source {
     frame->UpdateFrame(timestamp, pcm.data(), 480, rate, webrtc::AudioFrame::kNormalSpeech,
                       webrtc::AudioFrame::kVadUnknown, channels);
     frame->ntp_time_ms_ = 123456; frame->elapsed_time_ms_ = 1000;
+    frame->packet_infos_ = webrtc::RtpPacketInfos();
+    if (capture) {
+      webrtc::RtpPacketInfo packet;
+      packet.set_ssrc(123);
+      packet.set_rtp_timestamp(timestamp);
+      packet.set_absolute_capture_time(webrtc::AbsoluteCaptureTime{uint64_t{1} << 32, std::nullopt});
+      frame->packet_infos_ = webrtc::RtpPacketInfos(std::vector<webrtc::RtpPacketInfo>{packet});
+    }
     return AudioFrameInfo::kNormal;
   }
 };
@@ -79,6 +88,37 @@ int main() {
     assert(state->records[0].pcm_format_rejected == 0);
     blocks = take_timed_pcm_blocks(state->records[0].pull_us);
     assert(blocks.size() == 1 && blocks[0].channels == 2 && blocks[0].pcm[959] == 456 && blocks[0].sequence == 9);
+    assert(state->records[0].packet_capture_time_frames == 0);
+    source.capture = true; mixer->Mix(1, &output);
+    assert(first_packet_capture_ntp_us(output.packet_infos_) == 1000000);
+    assert(state->records[0].packet_capture_time_frames == 1 && state->records[0].first_packet_capture_ntp_us == 1000000);
+    blocks = take_timed_pcm_blocks(state->records[0].pull_us);
+    assert(blocks.size() == 1 && blocks[0].capture_sender_ntp_us == 1000000);
+    source.capture = false; mixer->Mix(1, &output);
+    assert(first_packet_capture_ntp_us(output.packet_infos_) == 0);
+    assert(state->records[0].packet_capture_time_frames == 1);
+    blocks = take_timed_pcm_blocks(state->records[0].pull_us);
+    assert(blocks.size() == 1 && blocks[0].capture_sender_ntp_us == 0);
+    webrtc::RtpPacketInfo packet;
+    packet.set_ssrc(123);packet.set_rtp_timestamp(UINT32_MAX - 239);
+    packet.set_absolute_capture_time(webrtc::AbsoluteCaptureTime{uint64_t{2} << 32, int64_t{1} << 31});
+    auto packets = [&] { return webrtc::RtpPacketInfos(std::vector<webrtc::RtpPacketInfo>{packet}); };
+    assert(packet_capture_sender_ntp_us(packets(), 240, 48000, 123) == 1510000);
+    assert(packet_capture_sender_ntp_us(packets(), 240, 48000, 124) == 0);
+    assert(packet_capture_sender_ntp_us(packets(), 240, 0, 123) == 0);
+    assert(packet_capture_sender_ntp_us(packets(), 10000, 48000, 123) == 0);
+    packet.set_absolute_capture_time(webrtc::AbsoluteCaptureTime{uint64_t{2} << 32, -(int64_t{1} << 31)});
+    assert(packet_capture_sender_ntp_us(packets(), 240, 48000, 123) == 2510000);
+    packet.set_csrcs(std::vector<uint32_t>{456});
+    assert(packet_capture_sender_ntp_us(packets(), 240, 48000, 123) == 0);
+    std::vector<webrtc::RtpHeaderExtensionCapability> headers{
+      {"urn:ietf:params:rtp-hdrext:sdes:mid", 1, webrtc::RtpTransceiverDirection::kSendRecv},
+      {"http://www.webrtc.org/experiments/rtp-hdrext/abs-capture-time", 2, webrtc::RtpTransceiverDirection::kStopped}};
+    assert(enable_capture_time_headers(headers));
+    assert(headers[0].uri == "urn:ietf:params:rtp-hdrext:sdes:mid" && headers[0].preferred_id == 1);
+    assert(headers[1].direction == webrtc::RtpTransceiverDirection::kSendRecv && headers[1].preferred_id == 2);
+    assert(enable_capture_time_headers(headers));
+    headers.pop_back();assert(!enable_capture_time_headers(headers));
     // Exercise removal serialized against an in-flight audio pull.
     std::thread pull([&] { for (int i = 0; i < 20; ++i) mixer->Mix(1,&output); });
     mixer->RemoveSource(&source); pull.join();

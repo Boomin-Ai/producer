@@ -441,6 +441,7 @@ mod tests {
             rtp_timestamp: rtp,
             pull_us: if generation == 1 { 0 } else { 3_000_000 },
             elapsed_ms: 10,
+            capture_sender_ntp_us: 0,
             speech_type: 0,
             muted: false,
         };

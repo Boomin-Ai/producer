@@ -2512,3 +2512,45 @@ Nothing was sent externally. Earlier Cloud failures, local controls and invalid
 resource-limited runs remain retained. Native/Cloud clock delivery is still a
 G1 blocker before broader integration; this turn does not qualify or deploy the
 refactor, remove the legacy guest path, or sign a new Producer release.
+
+### October 11: Cloud ACT candidate and release boundary
+
+The unchanged `syncStreams=false` control `1791758409007048000` did not fix
+sender-report scheduling: initial readiness was 6.008/6.023 s and full recovery
+3.935/3.943 s; marker coverage failed. Browser encoded metadata probes
+`1791758721850656000`, `1791758862738032000` and `1791759546952591000` saw no
+encoded frames because the fixture put the legacy insertable-stream flag in
+Room options instead of connect options. These are invalid metadata-availability
+observers, not proof that the browser or SDK cannot expose capture time. The
+configuration is corrected, but no SDK encoded-frame timing path is qualified.
+A separate direct-PC control with the flag explicitly set observes audio capture
+metadata and absent canvas-video captureTime; it is only an API/source control.
+
+Native and browser transceiver APIs can negotiate ACT, which defaults stopped in
+the pinned native WebRTC capability lists. Cloud trial `1791760183325409000`
+observed 1,760 decoded audio pulls and 1,020 selected video frames carrying ACT.
+It still used sender reports for scheduling and failed readiness, as expected.
+The normalized ACT scheduling experiment labels the exact PCM RTP position,
+subtracts the signed capture-clock offset, bounds interpolation and retires maps
+with the binding/generation. It does not reuse network arrival or legacy SR maps.
+
+The first scheduling candidate `1791760736611968000` improved readiness but still
+waited for video before starting audio. Initial readiness was 0.658/0.691 s,
+recovery 2.023/2.035 s. It failed coverage: label 10 had no native selected-video
+receipt; label 33 reached both delivery queues but was dropped late. The updated
+candidate starts correctly labeled audio independently. Its three-guest 35-second
+steady Cloud trial `1791761280229261000` passed: 17 pairs, 43.333 ms absolute p95,
+no missing labels, audio 14.904 ms and video 1,202.713 ms. The same binary's full
+reconnect trial `1791761403217547000` met readiness (audio 1.036 s, video 1.234 s)
+and offset gates (29 pairs, 63.333 ms p95), but overall acceptance remains failed
+for missing label 10. No gate was relaxed. All three receive guests; only guest-1
+is recorded, and no physical capture/speaker playback is exercised.
+
+The [production readiness record](./LIVEKIT-PRODUCTION-READINESS-2026-10-11.md)
+separates the measured prototype from the still-unimplemented native room and
+server admission integration. No production deployment/signing occurred.
+`native-capture-clock-checkpoint.json` pins binary/source and numeric input hashes.
+Validation: 77 Rust tests, Clippy with warnings denied, 16 recording-gate tests,
+nine loss-analysis tests, two credential tests, and 100 mixer/log lifecycle cycles
+with observable destruction and thread/FD baselines recovered. Negotiation and
+scheduling are opt-in lab flags; this does not change shipping guest behavior.

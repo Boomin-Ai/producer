@@ -1,5 +1,6 @@
 import {RecoveryProbe} from './generated-recovery-probe.js';
 import {SourceMarkerTrace} from './source-marker-trace.mjs';
+import {installCaptureExtensionProbe} from './capture-extension-probe.js';
 import { Room, RoomEvent, LocalAudioTrack, LocalVideoTrack, Track } from 'livekit-client';
 
 const recoveryProbe=new URLSearchParams(location.search).get("recoveryProbe")==="1"?new RecoveryProbe():null;
@@ -7,6 +8,25 @@ window.recoveryProbe=recoveryProbe;
 const sourceMarkers=recoveryProbe?new SourceMarkerTrace():null;
 window.sourceMarkers=sourceMarkers;
 const sourcePhase=Number(new URLSearchParams(location.search).get('sourcePhase')??0);
+const encodedClockProbe=new URLSearchParams(location.search).get('encodedClock')==='1';
+window.captureExtensionProbe=new URLSearchParams(location.search).get('captureExtension')==='1'?installCaptureExtensionProbe():null;
+const encodedClockWorkers=[];
+window.encodedClockReports={};
+function observeEncodedClock(track, publication, receiver=false) {
+  if (!encodedClockProbe) return;
+  const endpoint=receiver?track.receiver:track.sender;
+  const kind=`${receiver?'receive':'send'}-${track.kind}`;
+  if (typeof RTCRtpScriptTransform!=='function' || !endpoint || !('transform' in endpoint)) {
+    window.encodedClockReports[kind]={supported:false};
+    return;
+  }
+  const worker=new Worker('/encoded-clock-worker.js');
+  encodedClockWorkers.push(worker);
+  window.encodedClockReports[kind]={supported:true,waiting_for_worker:true};
+  worker.onmessage=event=>{window.encodedClockReports[kind]={...window.encodedClockReports[kind],supported:true,...event.data};};
+  worker.onerror=event=>{window.encodedClockReports[kind]={supported:true,error:event.message};};
+  endpoint.transform=new RTCRtpScriptTransform(worker,{kind,publication:publication.trackSid});
+}
 if(!Number.isFinite(sourcePhase)||sourcePhase<0||sourcePhase>=2)throw new Error('Invalid source phase');
 let room, context, timer, analyser, returnAudio, synthetic, silentOutput, guestGain, voiceRecorder;
 const voiceReview=new URLSearchParams(location.search).get("voiceReview")==="1";
@@ -64,6 +84,7 @@ export async function start() {
     room.on(RoomEvent.Disconnected, () => { state.connected = false; state.events.push('disconnected'); display(); });
     room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
       if (participant.identity !== 'native-host') return;
+      observeEncodedClock(track,publication,true);
       state.events.push(`return-${track.kind}`);
       if (track.kind === Track.Kind.Video) {
         const element = document.querySelector('#return');
@@ -101,7 +122,8 @@ export async function start() {
       }
       display();
     });
-    await room.connect(credentials.url, credentials.token, { autoSubscribe: false });
+    await room.connect(credentials.url, credentials.token, { autoSubscribe: false,
+      rtcConfig:encodedClockProbe?{encodedInsertableStreams:true}:undefined });
     for (const participant of room.remoteParticipants.values()) {
       for (const publication of participant.trackPublications.values()) subscribe(publication, participant);
     }
@@ -138,10 +160,12 @@ export async function start() {
     const destination = context.createMediaStreamDestination(); guestGain=context.createGain();synthetic.connect(guestGain);guestGain.connect(destination);
     const video = new LocalVideoTrack(canvas.captureStream(30).getVideoTracks()[0]);
     const audio = new LocalAudioTrack(destination.stream.getAudioTracks()[0]);
-    await room.localParticipant.publishTrack(video, { stream, source: Track.Source.Camera, simulcast: false,
+    const videoPublication=await room.localParticipant.publishTrack(video, { stream, source: Track.Source.Camera, simulcast: false,
       videoCodec: 'vp8', videoEncoding: { maxBitrate: 250000, maxFramerate: 30 } });
-    await room.localParticipant.publishTrack(audio, { stream, source: Track.Source.Microphone, dtx: false,
+    observeEncodedClock(video,videoPublication);
+    const audioPublication=await room.localParticipant.publishTrack(audio, { stream, source: Track.Source.Microphone, dtx: false,
       red: false, audioPreset: { maxBitrate: 64000 }, forceStereo: false });
+    observeEncodedClock(audio,audioPublication);
     state.published = true; display();
   } catch (error) { state.error = String(error); display(); throw error; }
 }
@@ -150,6 +174,7 @@ export async function stop() {
   if(avRecorder?.state!==undefined && avRecorder.state!=="inactive")avRecorder.stop();
   clearInterval(timer); synthetic?.disconnect(); guestGain?.disconnect(); voiceRecorder?.disconnect(); returnAudio?.disconnect();
   await room?.disconnect(); await context?.close(); room = null;
+  encodedClockWorkers.splice(0).forEach(worker=>worker.terminate());
   state.published = false; display();
 }
 window.startLab = start; window.stopLab = stop;

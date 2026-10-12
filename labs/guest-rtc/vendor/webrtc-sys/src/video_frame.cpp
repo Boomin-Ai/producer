@@ -15,6 +15,7 @@
  */
 
 #include "livekit/video_frame.h"
+#include "livekit/capture_time_probe.h"
 
 #include <memory>
 
@@ -41,6 +42,12 @@ int64_t VideoFrame::timestamp_us() const {
 }
 int64_t VideoFrame::ntp_time_ms() const {
   return frame_.ntp_time_ms();
+}
+int64_t VideoFrame::packet_capture_ntp_us() const {
+  return first_packet_capture_ntp_us(frame_.packet_infos());
+}
+int64_t VideoFrame::packet_capture_sender_ntp_us(uint32_t ssrc) const {
+  return livekit_ffi::packet_capture_sender_ntp_us(frame_.packet_infos(), frame_.rtp_timestamp(), 90000, ssrc);
 }
 uint32_t VideoFrame::timestamp() const {
   return frame_.rtp_timestamp();

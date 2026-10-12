@@ -1,0 +1,49 @@
+{
+  "missing_recorded_labels": [],
+  "binding_readiness": [
+    {
+      "binding_since_us": 16813289824,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 16813290128,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 16813290325,
+      "milestones_ms": {
+        "binding_reset": 0.0,
+        "audio_bound": 11.397,
+        "bound_audio_pcm": 11.525,
+        "video_bound": 110.964,
+        "first_incoming_video_report": 2926.227,
+        "first_incoming_audio_report": 2926.227,
+        "video_clock_ready": 3002.944,
+        "audio_clock_ready": 3007.961,
+        "first_audio_scheduled": 3007.961,
+        "first_video_scheduled": 3032.686
+      }
+    }
+  ],
+  "injected_marker_output_outcomes": [],
+  "pulse_trigger_receipts_verified": false,
+  "queued_av_trigger_receipts_verified": false,
+  "unmatched_recorded_video_labels": [],
+  "native_reconnect_events": [],
+  "source_errors": [],
+  "loss_gate_relaxed": false,
+  "transport_loss_proven": false,
+  "g1_complete": false,
+  "clock_domains": "Label identity joins only. Readiness is within each native binding monotonic epoch. Source AudioContext, lifecycle and OBS PTS are not subtracted from one another.",
+  "scope": "Selected guest-1 only. A decoded receipt proves this video label reached the playback kernel; a clock target does not prove native submission or recording. Audio receipt and final drop causality remain separate.",
+  "run": "generated-recovery-1791759546952591000",
+  "input_sha256": {
+    "generated-recovery-1791759546952591000.json": "64422ff755a9d51a3bff7769edf871a126a6a8111b3db8ba6377c452404666b2",
+    "generated-recovery-1791759546952591000-browser.json": "cdb58fd8222144cb8f0bf686465c2e6c8290f980ac75852a7bfc0875dff59f97",
+    "generated-recovery-1791759546952591000-obs-numbered.json": "b5f045212c338b77087362d5548d408028249781b2175a5b3fe514364fc23c77"
+  }
+}

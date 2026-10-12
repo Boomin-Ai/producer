@@ -42,6 +42,8 @@ pub mod ffi {
         fn id(self: &VideoFrame) -> u16;
         fn timestamp_us(self: &VideoFrame) -> i64;
         fn ntp_time_ms(self: &VideoFrame) -> i64;
+        fn packet_capture_ntp_us(self: &VideoFrame) -> i64;
+        fn packet_capture_sender_ntp_us(self: &VideoFrame, ssrc: u32) -> i64;
         fn timestamp(self: &VideoFrame) -> u32;
         fn rotation(self: &VideoFrame) -> VideoRotation;
         unsafe fn video_frame_buffer(self: &VideoFrame) -> UniquePtr<VideoFrameBuffer>;

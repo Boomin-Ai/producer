@@ -9,6 +9,7 @@ import {fixtureConnection} from './cloud-profile.mjs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const runtime = path.resolve(here, '../runtime');
 const syncStreams = process.env.LIVEKIT_LAB_SYNC_STREAMS === '1';
+const explicitRoomConfig = syncStreams || process.env.LIVEKIT_LAB_CLOUD_TEST === '1';
 const connection=fixtureConnection(process.env);
 const roomName = connection.roomName;
 await mkdir(runtime, { recursive: true });
@@ -20,16 +21,16 @@ export function token(identity, videoGrant) {
   const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
   const now = Math.floor(Date.now() / 1000);
   const body = `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ iss: connection.key, sub: identity,
-    nbf: now - 10, exp: now + (process.env.LIVEKIT_LAB_CLOUD_TEST==='1'?600:3600), roomConfig: syncStreams ? { name: roomName, syncStreams: true, departureTimeout: 1 } : undefined, video: videoGrant ?? { roomJoin: true, room: roomName,
+    nbf: now - 10, exp: now + (process.env.LIVEKIT_LAB_CLOUD_TEST==='1'?600:3600), roomConfig: explicitRoomConfig ? { name: roomName, syncStreams, departureTimeout: 1 } : undefined, video: videoGrant ?? { roomJoin: true, room: roomName,
       canPublish: true, canSubscribe: true, canPublishData: false } })}`;
   return `${body}.${createHmac('sha256', connection.secret).update(body).digest('base64url')}`;
 }
-if (syncStreams) {
+if (explicitRoomConfig) {
   // Provision only the isolated fixture room selected by the validated configuration.
   const response = await fetch(connection.url.replace(/^wss:/,'https:').replace(/^ws:/,'http:')+'/twirp/livekit.RoomService/CreateRoom', {
     method: 'POST', headers: { 'Content-Type': 'application/json',
       Authorization: `Bearer ${token('fixture-admin', { roomCreate: true })}` },
-    body: JSON.stringify({ name: roomName, syncStreams: true, departureTimeout: 1 }),
+    body: JSON.stringify({ name: roomName, syncStreams, departureTimeout: 1 }),
     signal: AbortSignal.timeout(5000),
   });
   if (!response.ok) throw new Error(`RTC test room creation failed: ${response.status}`);
@@ -59,6 +60,7 @@ const server = http.createServer(async (request, response) => {
       '/fixture.js': [path.join(runtime, 'fixture.js'), 'text/javascript'],
       '/pulse-worklet.js': [path.join(here, 'pulse-worklet.js'), 'text/javascript'],
     };
+    if(process.env.LIVEKIT_LAB_ENCODED_CLOCK_PROBE==='1') files['/encoded-clock-worker.js']=[path.join(here,'encoded-clock-worker.js'),'text/javascript'];
     if (process.env.LIVEKIT_LAB_GUEST_MONITOR === '1') files['/monitor-speech.wav'] = [path.join(runtime, 'near-speech.wav'), 'audio/wav'];
     if(process.env.LIVEKIT_LAB_VOICE_REVIEW==='1') files['/voice-review-worklet.js']=[path.join(here,'voice-review-worklet.js'),'text/javascript'];
     files['/source-marker-trace.mjs'] = [path.join(here, 'source-marker-trace.mjs'), 'text/javascript'];

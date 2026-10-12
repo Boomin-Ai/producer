@@ -39,6 +39,7 @@ impl AudioTail {
                     rtp_timestamp: 0,
                     pull_us: 0,
                     elapsed_ms: 0,
+                    capture_sender_ntp_us: 0,
                     speech_type: 0,
                     muted: true,
                 },
@@ -48,6 +49,8 @@ impl AudioTail {
     }
 }
 struct Kernel {
+    capture_clock: crate::capture_clock::AudioClock,
+    capture_scheduling: bool,
     playback: crate::presentation::SelectedPlayback,
     origins: crate::sender_clock::DecodedOrigins,
     clock: crate::playout_clock::VideoClock,
@@ -95,6 +98,9 @@ impl Worker {
         let accepted_video_pulse = Arc::new(AtomicU64::new(0));
         let accepted_audio_pulse = Arc::new(AtomicU64::new(0));
         let kernel = Arc::new(Mutex::new(Kernel {
+            capture_clock: crate::capture_clock::AudioClock::default(),
+            capture_scheduling: std::env::var("LIVEKIT_LAB_CAPTURE_SCHEDULING").as_deref()
+                == Ok("1"),
             playback: crate::presentation::SelectedPlayback::new(since),
             origins: crate::sender_clock::DecodedOrigins::default(),
             clock: crate::playout_clock::VideoClock::new(
@@ -183,6 +189,7 @@ impl Worker {
     pub fn clear(&self, since: i64, audio: Producer<DecodedAudioBlock>, video: Producer<Frame>) {
         let mut k = self.kernel.lock().unwrap();
         k.playback.clear(since);
+        k.capture_clock.clear();
         k.playback.startup_note("binding_reset", since);
         k.last_audio = None;
         k.audio = audio;
@@ -233,6 +240,8 @@ impl Worker {
         let mut k = self.kernel.lock().unwrap_or_else(|p| p.into_inner());
         k.video_queue = None;
         let mut report = k.playback.report();
+        report["packet_capture_scheduling_requested"] = json!(k.capture_scheduling);
+        report["packet_capture_audio_clock"] = k.capture_clock.report();
         report["nonoverlapping_audio_clock_preservation_requested"] =
             json!(k.preserve_clock_output);
         report["transport_audio_silence_tail"] = json!({"synthetic_blocks_enqueued":k.transition_tail_enqueued,"synthetic_blocks_rejected":k.transition_tail_rejected,"blocks_per_transition":2,"block_duration_ms":10,"fake_sender_timestamps_used":false,"missing_pcm_recovered":false});
@@ -248,6 +257,7 @@ impl Worker {
             std::mem::take(&mut m.video_deadline_minus_arrival_ms);
         measurements.video_frames = m.video_frames;
         measurements.video_ntp_nonzero = m.video_ntp_nonzero;
+        measurements.video_packet_capture_nonzero = m.video_packet_capture_nonzero;
         measurements.video_deadline_valid = m.video_deadline_valid;
         measurements.video_deadline_invalid = m.video_deadline_invalid;
         (report, k.origins.report())
@@ -275,7 +285,7 @@ impl Kernel {
             self.playback.note_parsed_reports(&report);
             self.playback.refresh_parsed_reports(&report);
             let now = audio_sys::ffi::diagnostic_webrtc_time_us();
-            if self.playback.video_ready(now) {
+            if !self.capture_scheduling && self.playback.video_ready(now) {
                 self.playback.startup_note("video_clock_ready", now);
             }
         }
@@ -305,12 +315,24 @@ impl Kernel {
                 continue;
             };
             p.startup_note("bound_audio_pcm", block.pull_us);
-            let audio_origin = self.origins.origin_for(&block, now, p.bootstrap);
+            let audio_origin = if self.capture_scheduling {
+                self.capture_clock.origin(&block)
+            } else {
+                self.origins.origin_for(&block, now, p.bootstrap)
+            };
             if audio_origin.is_some() {
                 p.startup_note("audio_clock_ready", now);
             }
-            let origin = p.video_ready(now).then_some(audio_origin).flatten();
+            let video_ready = if self.capture_scheduling {
+                // ACT already labels audio in the shared publisher clock. Keep
+                // conversation audio moving while the first video frame warms up.
+                true
+            } else {
+                p.video_ready(now)
+            };
+            let origin = video_ready.then_some(audio_origin).flatten();
             let bootstrap = origin.is_some()
+                && !self.capture_scheduling
                 && p.bootstrap
                 && self.origins.origin_for(&block, now, false).is_none();
             if bootstrap {
@@ -404,6 +426,9 @@ impl Kernel {
                 if frame.value.ntp_time_ms() > 0 {
                     m.video_ntp_nonzero += 1;
                 }
+                if frame.value.packet_capture_ntp_us() > 0 {
+                    m.video_packet_capture_nonzero += 1;
+                }
                 if let Some(deadline) = self.clock.deadline(frame.value.timestamp_us(), frame.at) {
                     m.video_deadline_valid += 1;
                     let offset = if deadline > frame.at {
@@ -432,9 +457,19 @@ impl Kernel {
                     }
                 }
                 let sid = self.playback.video_binding.as_ref().unwrap().0.clone();
-                let origin = self
-                    .playback
-                    .video_origin(&sid, frame.value.timestamp(), rtc);
+                let origin = if self.capture_scheduling {
+                    let ssrc = self.playback.video_binding.as_ref().unwrap().1;
+                    let origin = frame.value.packet_capture_sender_ntp_us(ssrc);
+                    if origin > 0 {
+                        self.playback.startup_note("video_clock_ready", rtc);
+                        Some(origin)
+                    } else {
+                        None
+                    }
+                } else {
+                    self.playback
+                        .video_origin(&sid, frame.value.timestamp(), rtc)
+                };
                 let target = self.playback.clock.video(origin, frame.at);
                 let accepted = if let Some(stamp) = target {
                     self.playback.startup_note("first_video_scheduled", rtc);
@@ -651,6 +686,7 @@ mod tests {
                     rtp_timestamp: 480,
                     pull_us: since,
                     elapsed_ms: 0,
+                    capture_sender_ntp_us: 0,
                     speech_type: 0,
                     muted: false,
                 },

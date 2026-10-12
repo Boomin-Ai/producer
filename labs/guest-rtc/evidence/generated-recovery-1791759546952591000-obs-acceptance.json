@@ -1,0 +1,40 @@
+{
+  "local_obs_acceptance_passed": false,
+  "failure_reasons": [
+    "epoch 16813290325: audio readiness exceeded budget including preceding resets",
+    "epoch 16813290325: video readiness exceeded budget including preceding resets"
+  ],
+  "local_delivery_worker_gate_passed": true,
+  "delivery_worker_failure_reasons": [],
+  "local_readiness_gate_passed": false,
+  "readiness_failure_reasons": [
+    "epoch 16813290325: audio readiness exceeded budget including preceding resets",
+    "epoch 16813290325: video readiness exceeded budget including preceding resets"
+  ],
+  "binding_epochs": [
+    {
+      "binding_since_us": 16813290325,
+      "recovery_started_us": 16813289824,
+      "superseded_binding_epochs": [
+        16813289824,
+        16813290128
+      ],
+      "first_scheduled_ms": {
+        "audio": 3008.462,
+        "video": 3033.187
+      }
+    }
+  ],
+  "raw_binding_epoch_count": 3,
+  "superseded_binding_epochs": [
+    16813289824,
+    16813290128
+  ],
+  "unfinished_binding_epochs": [],
+  "expected_binding_epochs": 1,
+  "readiness_budget_ms": 1500,
+  "budget_scope": "prototype local recovery from earliest pending reset, not WAN service guarantee",
+  "startup_and_tail_loss_qualified": false,
+  "lip_sync_qualified": false,
+  "g1_complete": false
+}

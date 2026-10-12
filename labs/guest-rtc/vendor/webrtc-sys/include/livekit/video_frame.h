@@ -38,6 +38,8 @@ class VideoFrame {
   uint16_t id() const;
   int64_t timestamp_us() const;
   int64_t ntp_time_ms() const;
+  int64_t packet_capture_ntp_us() const;
+  int64_t packet_capture_sender_ntp_us(uint32_t ssrc) const;
   uint32_t timestamp() const;
 
   VideoRotation rotation() const;
