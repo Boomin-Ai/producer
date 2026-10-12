@@ -6,6 +6,8 @@ pub mod animation;
 pub mod bridge;
 pub mod commands;
 pub mod creds;
+#[cfg(feature = "guest-rtc-pilot")]
+pub use producer_guest_session as guest_session;
 #[cfg(have_engine)]
 pub mod dj;
 #[cfg(all(have_engine, target_os = "macos"))]

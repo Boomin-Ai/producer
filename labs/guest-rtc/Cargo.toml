@@ -15,6 +15,7 @@ path = "src/bin/speakerphone.rs"
 required-features = ["physical-aec"]
 
 [dependencies]
+producer-guest-session = { path = "../../crates/guest-session" }
 livekit = { version = "=0.9.4", default-features = false, features = ["native", "rustls-tls-native-roots"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "signal"] }
 futures-util = "0.3"

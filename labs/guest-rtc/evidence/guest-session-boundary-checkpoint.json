@@ -1,0 +1,54 @@
+{
+  "producer_parent_commit": "95fe01491e3eca1e8e33d8374fec6dd1839958a5",
+  "api_parent_commit": "07991feadfc2a9236d62d30d311c146d73569abc",
+  "status": "inactive-session-boundary-proven",
+  "current_qualified_cloud_evidence": "guest-session-cloud-1791780177345685000.json",
+  "tests": {
+    "native_boundary": 9,
+    "native_lab": 83,
+    "api_relevant": 50,
+    "native_clippy_warnings_denied": true,
+    "api_typecheck": true
+  },
+  "cloud_scope": "three empty browser SDK connections and native manifest checks; no media or physical devices",
+  "original_token_authorization_denial_confirmed": true,
+  "refreshed_token_replay_tested": false,
+  "g1_complete": false,
+  "g2_complete": false,
+  "normal_guest_routes_integrated": false,
+  "native_room_owner_integrated": false,
+  "production_deployed": false,
+  "apple_release_submitted": false,
+  "credentials_found_in_retained_evidence": false,
+  "owned_rooms_deleted": 5,
+  "producer_source_sha256": {
+    "crates/guest-session/Cargo.toml": "b6349a2c062d8e7b47826b58a76d07adaf81dca88e0ebf4b29f0917044342383",
+    "crates/guest-session/Cargo.lock": "44e75b5f38b494366228fef793373996be7407d99a3459a73b08dc8951eb0c3e",
+    "crates/guest-session/src/lib.rs": "d593caeff745aa24218ea35705b7088f9bfa34055225712a8b79244c18ddabde",
+    "crates/guest-session/examples/session-check.rs": "5ca0b349e1bab43237495a5f31a658f90baca155730a9d66c61459435a3005d6",
+    "crates/guest-session/fixtures/session-v1.json": "7716c99a88a4b1ebf032fd250cd266138f247181a2ce4a3f77597bdeb1032e90",
+    "src-tauri/Cargo.toml": "c7ceb7b845980966a2bcd2575f642dafd4927a3f0940d8881c8593ffbcfd7c92",
+    "src-tauri/Cargo.lock": "3d89396f3e4466e242ad3b38969d6ee8c04b0982fc45135e8838a18efbc06c1e",
+    "src-tauri/src/live/mod.rs": "9b7d9492ef09696165bfe0ffab7b0fc4fff4a4cea1c60f1b4e6ae6b656cf1d53",
+    "labs/guest-rtc/Cargo.toml": "5eb87e693b111e9642c5d64612e271136f06ca23999fc1f4ba330585c28cb861",
+    "labs/guest-rtc/Cargo.lock": "cdcf3c4bd0d5c6c4f00c0daa19eff332914c00c1d6870716b294780e62ed7631",
+    "labs/guest-rtc/src/cloud_config.rs": "f335e9765f262bf2fb1574ad440403b66cca222f4f7802a06ba70e76891fdc5b"
+  },
+  "api_source_sha256": {
+    "src/services/live/participant-grants.ts": "523643a309abeb9bcf57d80eaa9eedffb75973b977a906bf0ba5754cab859c1e",
+    "src/services/live/guest-session-contract.ts": "bb1f70a8f0c81cbbf33b2e1207b12dc8598b27fdcccd8ab86a435d51282676ef",
+    "src/services/live/livekit-session.ts": "9b29af9aa2ca0c91e23570da1ed6f473c5785e6a8ad5848dbb9b0e98cd00c4b6",
+    "src/services/live/guest-session-contract.test.ts": "518faf4c6bddff96bfd786c29f7bd40df5b27147a5b21863948f967085906de8",
+    "src/services/live/fixtures/guest-session-v1.json": "7716c99a88a4b1ebf032fd250cd266138f247181a2ce4a3f77597bdeb1032e90",
+    "scripts/guest-grants-sql-smoke.ts": "092b7bfec6ddf773cc3c321096a4ac90ba22d8995d3d3b37583ffac193e82c8e",
+    "scripts/livekit-session-cloud-smoke.ts": "083a93ced5935471866b541167b06fc7ba453498b41c841bc5e79889ceca7b89"
+  },
+  "artifacts_sha256": {
+    "guest-session-cloud-1791779597224683000.json": "0d800a020b90b295c7811df2517b0e5a57720267b4df3262416d93817772a293",
+    "guest-session-cloud-1791779695535633000.json": "fc56e9a3d376d5b95594aad30f4ebe9835a4c37ce3481e66101dcbf12eb11bf6",
+    "guest-session-cloud-1791779788298653000.json": "8632a84c90d5a78832e7f7bb270a710f7d46f7183cf3b5b555699a0620d8c629",
+    "guest-session-cloud-1791780100323583000.json": "50aff700ade18d63bada52acd466b67aca9a8d53cef0a74f22c7c3b39be30784",
+    "guest-session-cloud-1791780177345685000.json": "75a29977444086f37141d91a5fb1b9c709983e7b3a2d35f35a022e51dd3a78f6"
+  },
+  "earlier_evidence_note": "First two fail the permission JSON casing assertion. Earlier successful replay checks did not distinguish authorization rejection from other connection failures; the latest does."
+}

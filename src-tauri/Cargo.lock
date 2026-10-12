@@ -3128,6 +3128,7 @@ dependencies = [
 name = "producer"
 version = "0.4.69"
 dependencies = [
+ "producer-guest-session",
  "base64 0.22.1",
  "cc",
  "futures-util",
@@ -3154,6 +3155,14 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "uuid",
+]
+
+[[package]]
+name = "producer-guest-session"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

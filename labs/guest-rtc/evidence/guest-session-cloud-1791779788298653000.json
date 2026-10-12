@@ -1,0 +1,48 @@
+{
+  "status": "passed",
+  "provider": "LiveKit Cloud",
+  "room": "b_dc04843d-e8b6-4c03-b31f-4f3d35a72a61_r_ee1dcdb3-43b5-484b-9fd3-3d7f60711d97_run_04cc40ac-ade7-418d-9a12-6c10a4d1990c_stage",
+  "production_routes_used": false,
+  "production_database_used": false,
+  "physical_capture_used": false,
+  "speaker_playback_used": false,
+  "refreshed_token_replay_tested": false,
+  "broader_g2_complete": false,
+  "production_deployed": false,
+  "stage": "complete",
+  "native_contract_checks": 3,
+  "participant_lookup_status": 200,
+  "observed_permission": {
+    "can_publish": false,
+    "can_subscribe": true,
+    "publish_data": false,
+    "update_metadata": false,
+    "publish_sources": []
+  },
+  "cloud_participant_permissions": {
+    "producer": {
+      "can_publish": true,
+      "can_subscribe": true,
+      "publish_data": false,
+      "update_metadata": false,
+      "source_grant_verified": true
+    },
+    "guest": {
+      "can_publish": true,
+      "can_subscribe": true,
+      "publish_data": false,
+      "update_metadata": false,
+      "source_grant_verified": true
+    },
+    "monitor": {
+      "can_publish": false,
+      "can_subscribe": true,
+      "publish_data": false,
+      "update_metadata": false,
+      "source_grant_verified": false
+    }
+  },
+  "monitor_admin_escalation_status": 401,
+  "original_monitor_token_replay_rejected": true,
+  "owned_room_deleted": true
+}

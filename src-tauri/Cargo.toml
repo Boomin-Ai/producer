@@ -8,8 +8,8 @@ repository = "https://github.com/Boomin-Ai/producer"
 edition = "2021"
 
 [features]
-# Compiles the shared media boundary only. No session/admission or UI rollout.
-guest-rtc-pilot = []
+# Compiles native media/session boundaries only; no room/UI rollout.
+guest-rtc-pilot = ["dep:producer-guest-session"]
 
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary
@@ -25,6 +25,7 @@ tauri-build = { version = "2", features = [] }
 cc = "1"
 
 [dependencies]
+producer-guest-session = { path = "../crates/guest-session", optional = true }
 # macos-private-api is declared PLAIN and macOSPrivateApi lives in the BASE
 # config: tauri-build's feature/config check parses Cargo.toml textually and
 # cannot see target-scoped features (macOS build broke), while a feature

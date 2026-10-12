@@ -1667,6 +1667,7 @@ dependencies = [
 name = "producer-guest-rtc-lab"
 version = "0.1.0"
 dependencies = [
+ "producer-guest-session",
  "anyhow",
  "cxx",
  "futures-util",
@@ -1676,6 +1677,14 @@ dependencies = [
  "serde_json",
  "tokio",
  "webrtc-sys",
+]
+
+[[package]]
+name = "producer-guest-session"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -5,6 +5,13 @@ app and Boomin guest session routes still use the existing guest transport. The
 LiveKit work is an isolated native prototype; publishing its branch does not
 change users' rooms. No new Apple signing or notarization submission occurred.
 
+The subsequent [session boundary checkpoint](./LIVEKIT-GUEST-SESSION-CONTRACT-2026-10-11.md)
+adds an inactive native manifest consumer and an isolated API signer. Actual
+Cloud joins confirm three role policies and rejection of the original revoked
+monitor token. The signer has no route callers or coordinated durable resolver;
+ordinary links, native ownership and program return remain unintegrated. The
+G1 startup/reconnect failures below remain release gates.
+
 ## What the latest candidate proves
 
 Opt-in Absolute Capture Time (ACT) negotiation works between the tested Chrome
