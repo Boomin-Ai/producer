@@ -1,0 +1,291 @@
+{
+  "absolute_p95_ms" : 40,
+  "audio_detector_window_ms" : 10,
+  "audio_markers" : [
+    {
+      "id_mod16" : 3,
+      "pts_ms" : 1170,
+      "tone_confidence_ratio" : 623.14208847761563
+    },
+    {
+      "id_mod16" : 4,
+      "pts_ms" : 3260,
+      "tone_confidence_ratio" : 2818.8725241178881
+    },
+    {
+      "id_mod16" : 5,
+      "pts_ms" : 5270,
+      "tone_confidence_ratio" : 2758.2494392999693
+    },
+    {
+      "id_mod16" : 6,
+      "pts_ms" : 7270,
+      "tone_confidence_ratio" : 2510.508001173795
+    },
+    {
+      "id_mod16" : 7,
+      "pts_ms" : 9260,
+      "tone_confidence_ratio" : 2574.8171383749386
+    },
+    {
+      "id_mod16" : 8,
+      "pts_ms" : 11260,
+      "tone_confidence_ratio" : 2550.2435370454223
+    },
+    {
+      "id_mod16" : 9,
+      "pts_ms" : 13270,
+      "tone_confidence_ratio" : 3058.3232549252234
+    },
+    {
+      "id_mod16" : 10,
+      "pts_ms" : 15270,
+      "tone_confidence_ratio" : 3122.2803486694861
+    },
+    {
+      "id_mod16" : 11,
+      "pts_ms" : 17270,
+      "tone_confidence_ratio" : 3002.007947481593
+    },
+    {
+      "id_mod16" : 12,
+      "pts_ms" : 19270,
+      "tone_confidence_ratio" : 2862.887475033267
+    },
+    {
+      "id_mod16" : 13,
+      "pts_ms" : 21270,
+      "tone_confidence_ratio" : 2642.0271423193981
+    },
+    {
+      "id_mod16" : 14,
+      "pts_ms" : 23270,
+      "tone_confidence_ratio" : 814.68961177991832
+    },
+    {
+      "id_mod16" : 15,
+      "pts_ms" : 25400,
+      "tone_confidence_ratio" : 2710.084767742901
+    },
+    {
+      "id_mod16" : 0,
+      "pts_ms" : 27400.000000000004,
+      "tone_confidence_ratio" : 3865.6765082534621
+    },
+    {
+      "id_mod16" : 1,
+      "pts_ms" : 29380,
+      "tone_confidence_ratio" : 2581.3416972337359
+    },
+    {
+      "id_mod16" : 2,
+      "pts_ms" : 31389.999999999996,
+      "tone_confidence_ratio" : 2239.2658082471407
+    },
+    {
+      "id_mod16" : 3,
+      "pts_ms" : 33379.999999999993,
+      "tone_confidence_ratio" : 2524.1659533475495
+    },
+    {
+      "id_mod16" : 4,
+      "pts_ms" : 35380,
+      "tone_confidence_ratio" : 2873.6409475406958
+    }
+  ],
+  "audio_pts_discontinuities" : 0,
+  "audio_samples" : 1742832,
+  "decoder" : "macOS AVFoundation",
+  "duration_seconds" : 36.299999999999997,
+  "g1_complete" : false,
+  "lip_sync_qualified" : false,
+  "local_numbered_marker_gate_passed" : false,
+  "missing_video_labels_within_observed_span" : [
+
+  ],
+  "pairs" : [
+    {
+      "audio_pts_ms" : 3260,
+      "id" : 4,
+      "video_minus_audio_ms" : 40,
+      "video_pts_ms" : 3300
+    },
+    {
+      "audio_pts_ms" : 5270,
+      "id" : 5,
+      "video_minus_audio_ms" : 30,
+      "video_pts_ms" : 5300
+    },
+    {
+      "audio_pts_ms" : 7270,
+      "id" : 6,
+      "video_minus_audio_ms" : -3.3333333333330302,
+      "video_pts_ms" : 7266.666666666667
+    },
+    {
+      "audio_pts_ms" : 9260,
+      "id" : 7,
+      "video_minus_audio_ms" : 6.6666666666678793,
+      "video_pts_ms" : 9266.6666666666679
+    },
+    {
+      "audio_pts_ms" : 11260,
+      "id" : 8,
+      "video_minus_audio_ms" : 6.6666666666678793,
+      "video_pts_ms" : 11266.666666666668
+    },
+    {
+      "audio_pts_ms" : 13270,
+      "id" : 9,
+      "video_minus_audio_ms" : 30,
+      "video_pts_ms" : 13300
+    },
+    {
+      "audio_pts_ms" : 15270,
+      "id" : 10,
+      "video_minus_audio_ms" : 30,
+      "video_pts_ms" : 15300
+    },
+    {
+      "audio_pts_ms" : 17270,
+      "id" : 11,
+      "video_minus_audio_ms" : 30,
+      "video_pts_ms" : 17300
+    },
+    {
+      "audio_pts_ms" : 19270,
+      "id" : 12,
+      "video_minus_audio_ms" : -3.3333333333357587,
+      "video_pts_ms" : 19266.666666666664
+    },
+    {
+      "audio_pts_ms" : 21270,
+      "id" : 13,
+      "video_minus_audio_ms" : 30,
+      "video_pts_ms" : 21300
+    },
+    {
+      "audio_pts_ms" : 23270,
+      "id" : 14,
+      "video_minus_audio_ms" : 30,
+      "video_pts_ms" : 23300
+    },
+    {
+      "audio_pts_ms" : 25400,
+      "id" : 15,
+      "video_minus_audio_ms" : 0,
+      "video_pts_ms" : 25400
+    },
+    {
+      "audio_pts_ms" : 27400.000000000004,
+      "id" : 16,
+      "video_minus_audio_ms" : -3.637978807091713e-12,
+      "video_pts_ms" : 27400
+    },
+    {
+      "audio_pts_ms" : 29380,
+      "id" : 17,
+      "video_minus_audio_ms" : -13.333333333332121,
+      "video_pts_ms" : 29366.666666666668
+    },
+    {
+      "audio_pts_ms" : 31389.999999999996,
+      "id" : 18,
+      "video_minus_audio_ms" : 10.000000000003638,
+      "video_pts_ms" : 31400
+    },
+    {
+      "audio_pts_ms" : 33379.999999999993,
+      "id" : 19,
+      "video_minus_audio_ms" : 20.000000000007276,
+      "video_pts_ms" : 33400
+    },
+    {
+      "audio_pts_ms" : 35380,
+      "id" : 20,
+      "video_minus_audio_ms" : -13.333333333335759,
+      "video_pts_ms" : 35366.666666666664
+    }
+  ],
+  "raw_audio_crossings" : 19,
+  "raw_video_crossings" : 17,
+  "recording" : "generated-recovery-1791777427816921000-obs.mp4",
+  "regressed_video_labels" : 0,
+  "repeated_video_labels" : 0,
+  "source_paint_uncertainty_ms" : 33.333333333333336,
+  "startup_and_tail_loss_qualified" : false,
+  "uncertain_tones" : 0,
+  "unmatched_audio" : 1,
+  "unmatched_video" : 0,
+  "video_frames" : 1089,
+  "video_markers" : [
+    {
+      "id" : 4,
+      "pts_ms" : 3300
+    },
+    {
+      "id" : 5,
+      "pts_ms" : 5300
+    },
+    {
+      "id" : 6,
+      "pts_ms" : 7266.666666666667
+    },
+    {
+      "id" : 7,
+      "pts_ms" : 9266.6666666666679
+    },
+    {
+      "id" : 8,
+      "pts_ms" : 11266.666666666668
+    },
+    {
+      "id" : 9,
+      "pts_ms" : 13300
+    },
+    {
+      "id" : 10,
+      "pts_ms" : 15300
+    },
+    {
+      "id" : 11,
+      "pts_ms" : 17300
+    },
+    {
+      "id" : 12,
+      "pts_ms" : 19266.666666666664
+    },
+    {
+      "id" : 13,
+      "pts_ms" : 21300
+    },
+    {
+      "id" : 14,
+      "pts_ms" : 23300
+    },
+    {
+      "id" : 15,
+      "pts_ms" : 25400
+    },
+    {
+      "id" : 16,
+      "pts_ms" : 27400
+    },
+    {
+      "id" : 17,
+      "pts_ms" : 29366.666666666668
+    },
+    {
+      "id" : 18,
+      "pts_ms" : 31400
+    },
+    {
+      "id" : 19,
+      "pts_ms" : 33400
+    },
+    {
+      "id" : 20,
+      "pts_ms" : 35366.666666666664
+    }
+  ]
+}

@@ -29,15 +29,18 @@ ACT trials; the mode is recorded in each conditions file.
 | `1791761280229261000` | Three guests, 35 s; ACT audio starts independently | 0.015 / 1.203 s | 17 pairs, 43.333 ms p95; no missing markers | Passed unchanged short recording gates |
 | `1791761403217547000` | Same latest binary, three guests, 60 s, one forced full reconnect | Initial 0.021 / 0.933 s; recovery 1.036 / 1.234 s | 29 pairs, 63.333 ms p95; missing label 10 | Timing and local marker offset gates passed; overall acceptance still failed coverage |
 | `1791765809316667000` | Bounded decoder-ingress trace, three guests, 60 s, one forced full reconnect | Initial 0.020 / 0.766 s; recovery 0.959 / 2.144 s | 28 pairs, 63.333 ms p95; missing label 9, final video label 33 unpaired | Failed video recovery budget and coverage; all six video observer weak references expired |
+| `1791776477539938000` | Bounded capture finish, three guests, 60 s, one full reconnect; before shared ingest extraction | Initial 0.042 / 0.742 s; recovery 1.061 / 2.004 s | 27 pairs, 90 ms p95; missing video 10/27 and unpaired mid-run video 26 | Finish completed in 117.703 ms; overall failed recovery and marker coverage |
+| `1791777427816921000` | Shared native ingest and hardened finish, three guests, 35 s, no reconnect | Initial 0.027 / 0.963 s | 17 pairs, 40 ms p95; no missing video in observed span or unpaired final video; one unmatched startup audio marker | Finish completed in 171.799 ms; readiness/delivery gates passed, overall failed startup marker coverage |
 
 These tests receive three guests but record **only selected guest-1**, using
 generated media. They do not prove three-person composition, live capture lip
 sync, phone compatibility, five-hour stability or a complete conference AEC path.
-The latest forced-reconnect loss has no selected native video receipt for label
-10. Its exact source-to-delivery cause remains unresolved; source generation
-alone is not delivery proof. The preceding candidate's label 33 reached both
-output queues but was dropped late. All failed evidence remains retained and the
-existing 1.5-second prototype budget/coverage gates were not relaxed.
+The newest full-reconnect trial misses video label 10 before the installed SDK
+sinks; the exact source-to-delivery cause is unresolved. Label 26 reached both
+native queues but was dropped late. Label 27 reached the sink and kernel but
+was rejected for a 421 ms lead, beyond the unchanged 400 ms bound. These are
+separate from shutdown. All failed evidence remains retained; the 1.5-second
+prototype recovery budget and marker coverage gates were not relaxed.
 
 The decoder-ingress follow-up measures generated 320×180 marker frames before
 the application queue, with 256 receipts per sink, nonblocking diagnostic writes,
@@ -49,14 +52,51 @@ decoder replacement or prove source packets were delivered. Label 10 reached
 the replacement sink with raw capture metadata zero before video scheduling
 became ready. Label 33 reached the playback kernel and native video submission,
 but had no corresponding selected audio marker receipt before shutdown. Tail
-completion and capture-metadata recovery remain separate next investigations.
+completion and capture-metadata recovery are separate investigations.
 The follow-up does not reproduce the earlier candidate's 1.234 s video recovery;
 that successful measurement must not be presented as a consistent bound.
 
-Next deliverable: finish those recovery/shutdown proofs, then an authenticated
-native-room pilot with stable guest sources, normal guest links, program return
-and the conference speaker reference. Production migration and Apple release
-follow the remaining device, control, soak and rollback gates below.
+The replacement sink in the new full-reconnect trace receives its first decoded
+frame 175.245 ms after the final binding; its first capture metadata arrives
+980.385 ms later, then video scheduling follows about 1.4 ms after that. The
+preceding reconnect/reset time still counts toward the 2.004 s readiness result.
+These measurements use the same native clock. They separate decoding from
+metadata acquisition; they do not establish a consistent recovery bound.
+
+Capture finish closes new video input first and admits actual decoded audio only
+through the last accepted video's presentation horizon, with a 450 ms budget.
+Completion now requires a successful audio output enqueue whose 10 ms block
+covers that horizon; rejected queues or future blocks cannot claim completion.
+No new synthetic PCM is added by this finish step. Existing continuity silence
+concealment is separately counted and is not recovered source audio. Output
+queues are sealed and drained before worker join and OBS release. The two
+numeric runs show successful finish windows and no unpaired final video, but
+startup loss and unrelated late/rejected media still prevent full qualification.
+
+The OBS input source now lives in `src-tauri/src/live/guest_ingest.c`; the lab
+links that same C implementation, rather than its own source/frame bridge. It
+validates plane sizes, odd-dimension chroma, stride limits, PCM channels/counts
+and timestamps before calling OBS. The app's opt-in `guest-rtc-pilot` feature
+compiles this boundary when an engine is present. **It does not register a source
+in ordinary rooms, connect to LiveKit, enable a cohort or change guest links.**
+There are no new SDK dependencies in the app, and no integrated Tauri build or
+Windows runtime qualification is claimed by the lab linkage tests.
+
+Real OBS checks complete three recording/finish cycles, one active-output
+cancellation and one failed initialization. All five guest-source destruction
+messages were observed, all five callback probe owners were destroyed, and
+threads/file descriptors stay at the warmed baseline (12/14). This proves the
+shared boundary's tested Apple Silicon linkage and cleanup, not a production
+room's lifetime or conference audio routing. Buffer rejection checks, 83 Rust
+tests, Clippy with warnings denied, 17 recording-gate tests and 11 loss-analysis
+tests pass. The checkpoint is
+`labs/guest-rtc/evidence/native-ingest-shutdown-checkpoint.json`.
+
+Next product deliverable: an authenticated native-room pilot with stable guest
+source IDs, normal guest links, program return and the conference speaker
+reference. The G1 recovery/startup failures remain explicit gates on activation.
+Production migration and Apple release follow the remaining device, control,
+soak and rollback gates below.
 
 All owned Cloud trial rooms were deleted successfully. No physical devices or
 audible playback were used. Server credentials stayed server-side; retained

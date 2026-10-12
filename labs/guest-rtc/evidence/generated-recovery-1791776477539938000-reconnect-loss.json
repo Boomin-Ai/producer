@@ -1,0 +1,387 @@
+{
+  "missing_recorded_labels": [
+    {
+      "label": 10,
+      "source_evidence_available": true,
+      "video_missing_from_recording": true,
+      "recorded_video_unpaired": false,
+      "cause": "Not observed at installed SDK sinks before the application queue. Network, decoder and periods without a sink remain distinct unresolved possibilities.",
+      "source_audio_observations": [
+        {
+          "id": 10,
+          "context_time_seconds": 20.5
+        }
+      ],
+      "source_video_observations": [
+        {
+          "id": 10,
+          "context_time_seconds": 20.528
+        }
+      ],
+      "both_generated_at_source": true,
+      "native_video_receipts": [],
+      "native_video_received": false,
+      "decoder_ingress_evidence_available": true,
+      "decoder_ingress_trace_truncated": false,
+      "decoder_ingress_receipts": [],
+      "decoder_ingress_adjacent_labels": [
+        {
+          "label": 9,
+          "packet_capture_ntp_us": 4000765301024000,
+          "received_us": 21474771875
+        },
+        {
+          "label": 11,
+          "packet_capture_ntp_us": 4000765305027000,
+          "received_us": 21478776945
+        }
+      ],
+      "native_video_scheduled_by_clock": false,
+      "native_video_clock_rejections": [],
+      "audio_receipt_evidence_available": true,
+      "native_audio_receipts_near_video": [],
+      "native_video_output": {
+        "evidence_available": true,
+        "trace_overflow": 0,
+        "receipts": [],
+        "scope": "Exact label, original OBS-clock target and publication epoch only. Native submission is not proof of successful recording."
+      },
+      "native_audio_output": {
+        "evidence_available": true,
+        "trace_overflow": 0,
+        "receipts": [],
+        "scope": "Exact label, original OBS-clock target and publication epoch only. Native submission is not proof of successful recording."
+      }
+    },
+    {
+      "label": 26,
+      "source_evidence_available": true,
+      "video_missing_from_recording": false,
+      "recorded_video_unpaired": true,
+      "cause": "unresolved; source generation alone does not prove delivery",
+      "source_audio_observations": [
+        {
+          "id": 26,
+          "context_time_seconds": 52.5
+        }
+      ],
+      "source_video_observations": [
+        {
+          "id": 26,
+          "context_time_seconds": 52.50666666666667
+        }
+      ],
+      "both_generated_at_source": true,
+      "native_video_receipts": [
+        {
+          "binding_since_us": 21476907846,
+          "clock_rejection": null,
+          "label": 26,
+          "output_accepted": true,
+          "publication_epoch": 6,
+          "received_us": 21508886538,
+          "scheduled_target_ns": 21509047494291
+        }
+      ],
+      "native_video_received": true,
+      "decoder_ingress_evidence_available": true,
+      "decoder_ingress_trace_truncated": false,
+      "decoder_ingress_receipts": [
+        {
+          "label": 26,
+          "packet_capture_ntp_us": 4000765335026000,
+          "received_us": 21508884458
+        }
+      ],
+      "decoder_ingress_adjacent_labels": [
+        {
+          "label": 25,
+          "packet_capture_ntp_us": 4000765333057000,
+          "received_us": 21506903216
+        },
+        {
+          "label": 27,
+          "packet_capture_ntp_us": 4000765337029000,
+          "received_us": 21510895931
+        }
+      ],
+      "native_video_scheduled_by_clock": true,
+      "native_video_clock_rejections": [],
+      "audio_receipt_evidence_available": true,
+      "native_audio_receipts_near_video": [
+        {
+          "binding_since_us": 21476907846,
+          "id_mod16": 10,
+          "output_accepted": true,
+          "publication_epoch": 6,
+          "received_us": 21508909792,
+          "scheduled_target_ns": 21509025182291
+        }
+      ],
+      "native_video_output": {
+        "evidence_available": true,
+        "trace_overflow": 0,
+        "receipts": [
+          {
+            "receipt": {
+              "binding_since_us": 21476907846,
+              "clock_rejection": null,
+              "label": 26,
+              "output_accepted": true,
+              "publication_epoch": 6,
+              "received_us": 21508886538,
+              "scheduled_target_ns": 21509047494291
+            },
+            "outcomes": [
+              {
+                "disposition": "late",
+                "label": 26,
+                "observed_ns": 21509172607000,
+                "publication_epoch": 6,
+                "scheduled_target_ns": 21509047494291
+              }
+            ]
+          }
+        ],
+        "scope": "Exact label, original OBS-clock target and publication epoch only. Native submission is not proof of successful recording."
+      },
+      "native_audio_output": {
+        "evidence_available": true,
+        "trace_overflow": 0,
+        "receipts": [
+          {
+            "receipt": {
+              "binding_since_us": 21476907846,
+              "id_mod16": 10,
+              "output_accepted": true,
+              "publication_epoch": 6,
+              "received_us": 21508909792,
+              "scheduled_target_ns": 21509025182291
+            },
+            "outcomes": [
+              {
+                "disposition": "late",
+                "label": 10,
+                "observed_ns": 21509253969125,
+                "publication_epoch": 6,
+                "scheduled_target_ns": 21509025182291
+              }
+            ]
+          }
+        ],
+        "scope": "Exact label, original OBS-clock target and publication epoch only. Native submission is not proof of successful recording."
+      }
+    },
+    {
+      "label": 27,
+      "source_evidence_available": true,
+      "video_missing_from_recording": true,
+      "recorded_video_unpaired": false,
+      "cause": "unresolved; source generation alone does not prove delivery",
+      "source_audio_observations": [
+        {
+          "id": 27,
+          "context_time_seconds": 54.5
+        }
+      ],
+      "source_video_observations": [
+        {
+          "id": 27,
+          "context_time_seconds": 54.51733333333333
+        }
+      ],
+      "both_generated_at_source": true,
+      "native_video_receipts": [
+        {
+          "binding_since_us": 21476907846,
+          "clock_rejection": {
+            "details": {
+              "audio_origin_us": 4000765336741188,
+              "delta_us": 287812,
+              "late_us": 0,
+              "lead_us": 421148,
+              "origin_age_us": 82,
+              "sender_us": 4000765337029000
+            },
+            "reason": "video_deadline_too_early"
+          },
+          "label": 27,
+          "output_accepted": false,
+          "publication_epoch": 8,
+          "received_us": 21510896305,
+          "scheduled_target_ns": null
+        }
+      ],
+      "native_video_received": true,
+      "decoder_ingress_evidence_available": true,
+      "decoder_ingress_trace_truncated": false,
+      "decoder_ingress_receipts": [
+        {
+          "label": 27,
+          "packet_capture_ntp_us": 4000765337029000,
+          "received_us": 21510895931
+        }
+      ],
+      "decoder_ingress_adjacent_labels": [
+        {
+          "label": 26,
+          "packet_capture_ntp_us": 4000765335026000,
+          "received_us": 21508884458
+        },
+        {
+          "label": 28,
+          "packet_capture_ntp_us": 4000765339025000,
+          "received_us": 21512962355
+        }
+      ],
+      "native_video_scheduled_by_clock": false,
+      "native_video_clock_rejections": [
+        {
+          "details": {
+            "audio_origin_us": 4000765336741188,
+            "delta_us": 287812,
+            "late_us": 0,
+            "lead_us": 421148,
+            "origin_age_us": 82,
+            "sender_us": 4000765337029000
+          },
+          "reason": "video_deadline_too_early"
+        }
+      ],
+      "audio_receipt_evidence_available": true,
+      "native_audio_receipts_near_video": [],
+      "native_video_output": {
+        "evidence_available": true,
+        "trace_overflow": 0,
+        "receipts": [
+          {
+            "receipt": {
+              "binding_since_us": 21476907846,
+              "clock_rejection": {
+                "details": {
+                  "audio_origin_us": 4000765336741188,
+                  "delta_us": 287812,
+                  "late_us": 0,
+                  "lead_us": 421148,
+                  "origin_age_us": 82,
+                  "sender_us": 4000765337029000
+                },
+                "reason": "video_deadline_too_early"
+              },
+              "label": 27,
+              "output_accepted": false,
+              "publication_epoch": 8,
+              "received_us": 21510896305,
+              "scheduled_target_ns": null
+            },
+            "outcomes": []
+          }
+        ],
+        "scope": "Exact label, original OBS-clock target and publication epoch only. Native submission is not proof of successful recording."
+      },
+      "native_audio_output": {
+        "evidence_available": true,
+        "trace_overflow": 0,
+        "receipts": [],
+        "scope": "Exact label, original OBS-clock target and publication epoch only. Native submission is not proof of successful recording."
+      }
+    }
+  ],
+  "binding_readiness": [
+    {
+      "binding_since_us": 21464058232,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 21464058566,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 21464058704,
+      "milestones_ms": {
+        "binding_reset": 0.0,
+        "video_bound": 10.353,
+        "audio_bound": 10.361,
+        "bound_audio_pcm": 6.58,
+        "audio_clock_ready": 41.265,
+        "first_audio_scheduled": 41.265,
+        "video_clock_ready": 741.835,
+        "first_video_scheduled": 741.835,
+        "first_incoming_video_report": 2996.62,
+        "first_incoming_audio_report": 2996.62
+      }
+    },
+    {
+      "binding_since_us": 21476061032,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 21476061078,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 21476905683,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 21476907846,
+      "milestones_ms": {
+        "binding_reset": 0.0,
+        "video_bound": 211.994,
+        "audio_bound": 212.01,
+        "bound_audio_pcm": 207.336,
+        "audio_clock_ready": 214.444,
+        "first_audio_scheduled": 214.444,
+        "video_clock_ready": 1157.047,
+        "first_video_scheduled": 1157.047,
+        "first_incoming_video_report": 3062.715,
+        "first_incoming_audio_report": 6063.739
+      }
+    }
+  ],
+  "injected_marker_output_outcomes": [],
+  "pulse_trigger_receipts_verified": false,
+  "queued_av_trigger_receipts_verified": false,
+  "unmatched_recorded_video_labels": [
+    26
+  ],
+  "native_reconnect_events": [
+    {
+      "at_ms": 12002,
+      "event": "reconnect_injected",
+      "input_pulse_trigger": null,
+      "mode": "full",
+      "queued_av_pulse_trigger": null
+    },
+    {
+      "at_ms": 12002,
+      "event": "reconnecting"
+    },
+    {
+      "at_ms": 12962,
+      "event": "reconnected"
+    }
+  ],
+  "source_errors": [],
+  "loss_gate_relaxed": false,
+  "transport_loss_proven": false,
+  "g1_complete": false,
+  "clock_domains": "Label identity joins only. Readiness is within each native binding monotonic epoch. Source AudioContext, lifecycle and OBS PTS are not subtracted from one another.",
+  "scope": "Selected guest-1 only. Optional decoder-ingress receipts precede the application queue; absence does not prove network loss or cover periods without a sink. Playback receipts prove kernel arrival; a clock target does not prove native submission or recording. Audio receipt and final drop causality remain separate.",
+  "run": "generated-recovery-1791776477539938000",
+  "input_sha256": {
+    "generated-recovery-1791776477539938000.json": "fe2d784c68934996d240da0851143cebb4e315a1ab0b6a89dda4b1ebc9adc24e",
+    "generated-recovery-1791776477539938000-browser.json": "5bef5cfd26e1bb3e6aab95cefc262a13be9984bf6c3713dfd3e8a247c0dfcbf2",
+    "generated-recovery-1791776477539938000-obs-numbered.json": "0de3a8fd18f47a77d4ae0797565593905461dca775acd9befbd5c6ee7046723b"
+  }
+}

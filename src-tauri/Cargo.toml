@@ -7,6 +7,10 @@ license = "AGPL-3.0-only"
 repository = "https://github.com/Boomin-Ai/producer"
 edition = "2021"
 
+[features]
+# Compiles the shared media boundary only. No session/admission or UI rollout.
+guest-rtc-pilot = []
+
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.

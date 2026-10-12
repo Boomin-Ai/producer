@@ -19,6 +19,8 @@ struct State {
     active: bool,
     receipts: Vec<Receipt>,
     overflow: u64,
+    first_frame_us: Option<i64>,
+    first_capture_us: Option<i64>,
 }
 pub struct Trace {
     state: Mutex<State>,
@@ -34,6 +36,8 @@ impl Trace {
                 active: false,
                 receipts: Vec::with_capacity(CAPACITY),
                 overflow: 0,
+                first_frame_us: None,
+                first_capture_us: None,
             }),
             contention: AtomicU64::new(0),
         }
@@ -45,6 +49,10 @@ impl Trace {
             return;
         };
         state.frames += 1;
+        state.first_frame_us.get_or_insert(received_us);
+        if packet_capture_ntp_us > 0 {
+            state.first_capture_us.get_or_insert(received_us);
+        }
         if let Some(last) = state.last_us {
             state.max_gap_us = state.max_gap_us.max(received_us.saturating_sub(last));
         }
@@ -73,6 +81,7 @@ impl Trace {
             })
             .collect();
         json!({"frames_observed":state.frames,"max_callback_gap_us":state.max_gap_us,
+            "first_frame_us":state.first_frame_us,"first_capture_us":state.first_capture_us,
             "receipts":receipts,"capacity":CAPACITY,"overflow":state.overflow,
             "contention":self.contention.load(Ordering::Relaxed),
             "scope":"Generated 320x180 frames at the SDK sink, before the application queue. Capture NTP is raw metadata, not mapped to local callback time."})

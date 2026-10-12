@@ -789,6 +789,20 @@ extern "C" {
     // stubs this block synthesises, so every obs symbol shim_win.c calls
     // must be declared here or the release link fails at `__imp_*`.
     pub fn obs_register_source_s(info: *const c_void, size: usize);
+    // The opt-in guest ingress C boundary needs these Windows import stubs.
+    // Frame/audio layouts stay in guest_ingest.c, pinned to the engine ABI.
+    #[cfg(target_os = "windows")]
+    pub fn obs_source_output_video(source: *mut obs_source_t, frame: *const c_void);
+    #[cfg(target_os = "windows")]
+    pub fn obs_source_output_audio(source: *mut obs_source_t, audio: *const c_void);
+    #[cfg(target_os = "windows")]
+    pub fn video_format_get_parameters(
+        colorspace: c_int,
+        range: c_int,
+        matrix: *mut f32,
+        min: *mut f32,
+        max: *mut f32,
+    ) -> bool;
     pub fn obs_source_skip_video_filter(filter: *mut obs_source_t);
     pub fn obs_data_set_default_string(
         data: *mut obs_data_t,

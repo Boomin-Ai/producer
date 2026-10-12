@@ -8,6 +8,15 @@ spec.loader.exec_module(gates)
 
 
 class RecordingGates(unittest.TestCase):
+    def test_capture_finish_cannot_pass_with_timeout_missing_completion_or_open_video(self):
+        native=self.with_workers(); native['capture_shutdown_tail_requested']=True
+        tail={'timed_out':False,'audio_reached_horizon':True,'new_video_input_closed':True,'synthetic_pcm_added':False,'budget_ms':450,'elapsed_us':120000}
+        native['audio_master_playback']['capture_shutdown_tail']=tail
+        self.assertTrue(gates.evaluate(native,self.markers(),1)['local_delivery_worker_gate_passed'])
+        for key,value in [('timed_out',True),('audio_reached_horizon',False),('new_video_input_closed',False),('synthetic_pcm_added',True),('elapsed_us',500001),('elapsed_us',None)]:
+            original=tail[key];tail[key]=value
+            self.assertFalse(gates.evaluate(native,self.markers(),1)['local_delivery_worker_gate_passed'])
+            tail[key]=original
     def report(self, delay=1000000):
         return {'audio_master_playback': {'startup_milestones': [
             {'binding_since_us': 1, 'milestone': 'audio_bound', 'since_binding_us': 0},

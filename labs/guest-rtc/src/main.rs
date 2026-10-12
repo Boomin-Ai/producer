@@ -27,6 +27,8 @@ mod presentation;
 mod queue;
 mod report_worker;
 mod sender_clock;
+#[cfg(any(feature = "obs-proof", test))]
+mod shutdown_tail;
 mod transport;
 mod video_ingress;
 

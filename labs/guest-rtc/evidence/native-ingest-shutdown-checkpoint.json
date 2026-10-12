@@ -1,0 +1,230 @@
+{
+  "parent_commit": "2211f4e",
+  "status": "shared native ingest boundary and bounded finish; not deployed",
+  "g1_complete": false,
+  "production_deployed": false,
+  "apple_submission_performed": false,
+  "scope": "Three subscribed Chrome 155 generated guests, actual LiveKit Cloud; selected guest-1 recorded only; no physical capture or speaker playback",
+  "strict_gates_unchanged": true,
+  "runs": [
+    {
+      "run": "generated-recovery-1791776477539938000",
+      "native_sha256": "12a2ddacc61d3b56dacdd9ea1c57a772d77b3f7f0dfe1ef7905f74fd4d5261c1",
+      "source_scope": "preceding diagnostic candidate; current source hashes do not describe this earlier binary",
+      "acceptance": {
+        "local_obs_acceptance_passed": false,
+        "failure_reasons": [
+          "epoch 21476907846: video readiness exceeded budget including preceding resets",
+          "numbered recording marker gate failed",
+          "missing marker labels within observed recording span"
+        ],
+        "local_delivery_worker_gate_passed": true,
+        "delivery_worker_failure_reasons": [],
+        "local_readiness_gate_passed": false,
+        "readiness_failure_reasons": [
+          "epoch 21476907846: video readiness exceeded budget including preceding resets"
+        ],
+        "binding_epochs": [
+          {
+            "binding_since_us": 21464058704,
+            "recovery_started_us": 21464058232,
+            "superseded_binding_epochs": [
+              21464058232,
+              21464058566
+            ],
+            "first_scheduled_ms": {
+              "audio": 41.737,
+              "video": 742.307
+            }
+          },
+          {
+            "binding_since_us": 21476907846,
+            "recovery_started_us": 21476061032,
+            "superseded_binding_epochs": [
+              21476061032,
+              21476061078,
+              21476905683
+            ],
+            "first_scheduled_ms": {
+              "audio": 1061.258,
+              "video": 2003.861
+            }
+          }
+        ],
+        "raw_binding_epoch_count": 7,
+        "superseded_binding_epochs": [
+          21464058232,
+          21464058566,
+          21476061032,
+          21476061078,
+          21476905683
+        ],
+        "unfinished_binding_epochs": [],
+        "expected_binding_epochs": 2,
+        "readiness_budget_ms": 1500,
+        "budget_scope": "prototype local recovery from earliest pending reset, not WAN service guarantee",
+        "startup_and_tail_loss_qualified": false,
+        "lip_sync_qualified": false,
+        "g1_complete": false
+      },
+      "capture_finish": {
+        "admitted_audio_blocks": 11,
+        "audio_reached_horizon": true,
+        "beyond_horizon_audio_blocks": 1,
+        "budget_ms": 450,
+        "elapsed_us": 117703,
+        "final_video_horizon_ns": 21524302609291,
+        "new_video_input_closed": true,
+        "synthetic_pcm_added": false,
+        "timed_out": false
+      },
+      "recording": {
+        "pairs": 27,
+        "absolute_p95_ms": 90,
+        "unmatched_audio": 1,
+        "unmatched_video": 1,
+        "missing_video_labels": [
+          10,
+          27
+        ]
+      },
+      "video_observer_lifecycle": {
+        "capacity": 256,
+        "expired": 6,
+        "tracked": 6,
+        "untracked_overflow": 0,
+        "weak_references_only": true
+      },
+      "owned_cloud_room_delete_exit_code": 0
+    },
+    {
+      "run": "generated-recovery-1791777427816921000",
+      "native_sha256": "e27b0c50ff625033732796d1ce719f16f2c04aa107a99056f297b8f6d9f26447",
+      "source_scope": "shared ingest and hardened finish; source hashes below",
+      "acceptance": {
+        "local_obs_acceptance_passed": false,
+        "failure_reasons": [
+          "numbered recording marker gate failed"
+        ],
+        "local_delivery_worker_gate_passed": true,
+        "delivery_worker_failure_reasons": [],
+        "local_readiness_gate_passed": true,
+        "readiness_failure_reasons": [],
+        "binding_epochs": [
+          {
+            "binding_since_us": 22412083831,
+            "recovery_started_us": 22412083364,
+            "superseded_binding_epochs": [
+              22412083364,
+              22412083715
+            ],
+            "first_scheduled_ms": {
+              "audio": 26.545,
+              "video": 963.028
+            }
+          }
+        ],
+        "raw_binding_epoch_count": 3,
+        "superseded_binding_epochs": [
+          22412083364,
+          22412083715
+        ],
+        "unfinished_binding_epochs": [],
+        "expected_binding_epochs": 1,
+        "readiness_budget_ms": 1500,
+        "budget_scope": "prototype local recovery from earliest pending reset, not WAN service guarantee",
+        "startup_and_tail_loss_qualified": false,
+        "lip_sync_qualified": false,
+        "g1_complete": false
+      },
+      "capture_finish": {
+        "admitted_audio_blocks": 18,
+        "audio_reached_horizon": true,
+        "beyond_horizon_audio_blocks": 0,
+        "budget_ms": 450,
+        "elapsed_us": 171799,
+        "final_video_horizon_ns": 22447381577584,
+        "new_video_input_closed": true,
+        "synthetic_pcm_added": false,
+        "timed_out": false
+      },
+      "recording": {
+        "pairs": 17,
+        "absolute_p95_ms": 40,
+        "unmatched_audio": 1,
+        "unmatched_video": 0,
+        "missing_video_labels": []
+      },
+      "video_observer_lifecycle": {
+        "capacity": 256,
+        "expired": 3,
+        "tracked": 3,
+        "untracked_overflow": 0,
+        "weak_references_only": true
+      },
+      "owned_cloud_room_delete_exit_code": 0
+    }
+  ],
+  "validation": {
+    "rust_tests_passed": 83,
+    "clippy_warnings_denied_passed": true,
+    "recording_gate_tests_passed": 17,
+    "loss_analysis_tests_passed": 11,
+    "standalone_c_buffer_rejection_passed": true,
+    "obs_recording_finish_cycles": 3,
+    "obs_active_cancel_cycles": 1,
+    "obs_partial_initialization_cycles": 1,
+    "obs_guest_source_destruction_log_messages": 5,
+    "obs_callback_probe_owners_destroyed": 5,
+    "warmed_threads_and_fds": [
+      12,
+      14
+    ],
+    "credential_scan_passed": true,
+    "integrated_tauri_app_build_performed": false,
+    "windows_packaging_qualified": false
+  },
+  "artifacts": {
+    "labs/guest-rtc/evidence/generated-recovery-1791776477539938000-browser.json": "5bef5cfd26e1bb3e6aab95cefc262a13be9984bf6c3713dfd3e8a247c0dfcbf2",
+    "labs/guest-rtc/evidence/generated-recovery-1791776477539938000-conditions.json": "17c62f92b5fa40006c5d2975279c1dfdb60aaf7ed7cb36d8770f108a173ce0be",
+    "labs/guest-rtc/evidence/generated-recovery-1791776477539938000-obs-acceptance.json": "84cb420eb9446547952dae7566faa9c9b079033daf21d3ab42f36ce63cd92c67",
+    "labs/guest-rtc/evidence/generated-recovery-1791776477539938000-obs-markers.json": "95aaeecdb82ca490f4c5a05cb1f95c75571b13e1de9fa7222e0aef7e748953b1",
+    "labs/guest-rtc/evidence/generated-recovery-1791776477539938000-obs-numbered.json": "0de3a8fd18f47a77d4ae0797565593905461dca775acd9befbd5c6ee7046723b",
+    "labs/guest-rtc/evidence/generated-recovery-1791776477539938000-reconnect-loss.json": "0724bcd1f9bd799b26d83511c2030adab32de7b5f32436e2335a9db96282b41e",
+    "labs/guest-rtc/evidence/generated-recovery-1791776477539938000.json": "fe2d784c68934996d240da0851143cebb4e315a1ab0b6a89dda4b1ebc9adc24e",
+    "labs/guest-rtc/evidence/generated-recovery-1791777427816921000-browser.json": "44a19c92c6fdf89c778ccd929699349f472b47d42e12a559d0d000afbb232f23",
+    "labs/guest-rtc/evidence/generated-recovery-1791777427816921000-conditions.json": "ba3ab7702a5cf616ccfedf6878128ed1a1749c466c3ea94319805a80b62cd569",
+    "labs/guest-rtc/evidence/generated-recovery-1791777427816921000-obs-acceptance.json": "5272462fb7c65c46fb21196702e9bd6224b7007403f6e4369444d23f9ae20394",
+    "labs/guest-rtc/evidence/generated-recovery-1791777427816921000-obs-markers.json": "d2cf1e200310fb141a761f7773504d34edae7f9ee1379847dd1905a6ac4f31eb",
+    "labs/guest-rtc/evidence/generated-recovery-1791777427816921000-obs-numbered.json": "c4a3f8ddcfd4eee7e39f3aa1d2854294f1cabd503d03ccc8ca1bef3c88f8e0be",
+    "labs/guest-rtc/evidence/generated-recovery-1791777427816921000-reconnect-loss.json": "bcfcd76c44bb95070abfaf735d6ef7e1cc4337e41cccb09f0bbefb57e19ed1d2",
+    "labs/guest-rtc/evidence/generated-recovery-1791777427816921000.json": "c835298e87e1cb2dfee3b0b68e32bfcd0b66f4500dda0c1d3745382b60c9f02f",
+    "labs/guest-rtc/evidence/shared-native-ingest-lifecycle.json": "c983a8b5c3f05fefebab749b7a8fb201a699b0a7dfc9ee00bc4ad0b6207f9cc3"
+  },
+  "sources_for_shared_ingest_candidate": {
+    "src-tauri/src/live/guest_ingest.c": "1a348d487636c832a56ec3338e3778f17f7570b7283c463a6f1728ba019332dc",
+    "src-tauri/src/live/guest_ingest.h": "6664160473e007866a3f8e45832165aa23fe0ed856a6a9921645aaac6413e32b",
+    "src-tauri/src/live/ffi.rs": "79be4d9fce3211c755b4f94ed9abcbe3e72853e02be23a44c24b38e9db941eae",
+    "src-tauri/build.rs": "80b274b4a5c1c0fc420a1f07a10c4392d588f07d4233a71585e26a01fc15b743",
+    "src-tauri/Cargo.toml": "6dfaa1f9620494fa5ccaec9c90066feef72a9d1626a296095948cd49c6e398c0",
+    "labs/guest-rtc/src/shutdown_tail.rs": "d34181d0c17381801730bda20f84f8025bce29014afb1e7619aaed1eea003fc9",
+    "labs/guest-rtc/src/playback_worker.rs": "6246bcf8e4ce2f3fec7b26fde5f4cc212dbd0cc6f578cb0ade76e5544a2b9cc3",
+    "labs/guest-rtc/src/video_ingress.rs": "00e5472a2b8677c844e9560bdfe1807e29c1bbc856f32abac382499de90c463d",
+    "labs/guest-rtc/src/transport.rs": "0425fc536633a3749b72f08f111ccc211bbfa5ceb9abbc517677504c19eb6904",
+    "labs/guest-rtc/src/obs_proof.rs": "33ef004bcdaf98a2ed0885ef79d5fc0de4b4845e578d3efa87c2ec2f430edd8b",
+    "labs/guest-rtc/src/obs_bridge.m": "901d2242e941ac28efc6890ad7d65c55deab3b05aab69a0234360e7b0853e60a",
+    "labs/guest-rtc/src/main.rs": "6edd28151fad876e93c65fd24ab05aa44ab8b72c0014354d26ae8acb384bba83",
+    "labs/guest-rtc/build.rs": "502da7bbbc55dbf156aaf7ae7720ef1416f870864829afdcaeba8298c829d9d4",
+    "labs/guest-rtc/native/test-guest-ingest.c": "2a66caf49c8c2f325b908af07f46ff861285856e7dc0d21bc417703af7539395",
+    "labs/guest-rtc/native/run-cloud-generated-recovery.py": "8472d60d91d7344f1de37c85f5eda07bb8d7ce96959c654ead38e2f8bd33ee99",
+    "labs/guest-rtc/native/obs-recording-gates.py": "6a6b178e03723a59d1b5d7530479488ba05ed85110266bd7e6732b8003ac239e",
+    "labs/guest-rtc/native/test-obs-recording-gates.py": "566505b6d2ec3560f4d99110b52f45f47d1522c2910e372b5101a677c567050e"
+  },
+  "remaining": [
+    "Current source/controller/session/admission integration remains unimplemented",
+    "Reconnect video readiness still exceeds 1.5 seconds in full trial",
+    "Startup audio marker without ready video remains a strict gate failure",
+    "Mid-recording late output and video lead rejection remain separate faults",
+    "Conference speaker reference and native program return still need production integration"
+  ]
+}

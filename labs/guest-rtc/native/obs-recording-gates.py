@@ -41,6 +41,10 @@ def evaluate(native, markers, expected_epochs, readiness_budget_ms=1500):
     readiness_reasons = list(reasons)
     playback = native.get('audio_master_playback', {})
     worker_reasons = []
+    if native.get('capture_shutdown_tail_requested') is True:
+        tail = playback.get('capture_shutdown_tail')
+        if not isinstance(tail, dict) or tail.get('timed_out') is not False or tail.get('audio_reached_horizon') is not True or tail.get('new_video_input_closed') is not True or tail.get('synthetic_pcm_added') is not False or tail.get('budget_ms') != 450 or not valid_delay(tail.get('elapsed_us')) or tail['elapsed_us'] > 500000:
+            worker_reasons.append('capture shutdown tail did not complete within its bounded window')
     if playback.get('delivery_on_dedicated_threads') is True:
         for stream in ('audio', 'video'):
             report = playback.get(f'{stream}_presentation_queue_after_shutdown')

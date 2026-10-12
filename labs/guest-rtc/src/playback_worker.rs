@@ -74,6 +74,9 @@ struct Kernel {
     last_audio: Option<AudioTail>,
     transition_tail_enqueued: u64,
     transition_tail_rejected: u64,
+    last_video_stamp: Option<Instant>,
+    finish: Option<crate::shutdown_tail::Tail>,
+    finish_elapsed_us: Option<u128>,
 }
 pub struct Worker {
     kernel: Arc<Mutex<Kernel>>,
@@ -126,6 +129,9 @@ impl Worker {
             last_audio: None,
             transition_tail_enqueued: 0,
             transition_tail_rejected: 0,
+            last_video_stamp: None,
+            finish: None,
+            finish_elapsed_us: None,
             preserve_clock_output: std::env::var("LIVEKIT_LAB_PRESERVE_RECONNECT_OUTPUT")
                 .as_deref()
                 == Ok("1"),
@@ -192,6 +198,7 @@ impl Worker {
         k.capture_clock.clear();
         k.playback.startup_note("binding_reset", since);
         k.last_audio = None;
+        k.last_video_stamp = None;
         k.audio = audio;
         k.video = video;
         k.video_queue = None;
@@ -232,6 +239,29 @@ impl Worker {
     pub fn sender_reports(&self, report: Vec<crate::sender_clock::SenderReport>) {
         *self.reports.lock().unwrap() = Some(report);
     }
+    pub fn begin_finish_input(&self) {
+        let mut k = self.kernel.lock().unwrap();
+        k.video_queue = None;
+        let audio_end = k
+            .last_audio
+            .as_ref()
+            .and_then(|a| a.stamp.checked_add(Duration::from_millis(10)));
+        k.finish = Some(crate::shutdown_tail::Tail::new(
+            Instant::now(),
+            k.last_video_stamp,
+            audio_end,
+        ));
+    }
+    pub fn finish_input_ready(&self) -> bool {
+        let k = self.kernel.lock().unwrap();
+        k.finish
+            .as_ref()
+            .is_none_or(|tail| tail.done() || tail.expired(Instant::now()))
+    }
+    pub fn end_finish_input(&self) {
+        let mut k = self.kernel.lock().unwrap();
+        k.finish_elapsed_us = k.finish.as_ref().map(|t| t.began.elapsed().as_micros());
+    }
     pub fn shutdown(&mut self, measurements: &mut Measurements) -> (Value, Value) {
         self.stop.take();
         if let Some(thread) = self.thread.take() {
@@ -242,6 +272,12 @@ impl Worker {
         let mut report = k.playback.report();
         report["packet_capture_scheduling_requested"] = json!(k.capture_scheduling);
         report["packet_capture_audio_clock"] = k.capture_clock.report();
+        report["capture_shutdown_tail"] = json!(k.finish.as_ref().map(|t|json!({
+            "budget_ms":crate::shutdown_tail::BUDGET.as_millis(),"elapsed_us":k.finish_elapsed_us,
+            "final_video_horizon_ns":t.horizon.map(|h|timestamp(k.recording_clock,h)),
+            "audio_reached_horizon":t.done(),"timed_out":!t.done() && t.expired(Instant::now()),
+            "admitted_audio_blocks":t.admitted_audio_blocks,"beyond_horizon_audio_blocks":t.beyond_horizon_audio_blocks,
+            "new_video_input_closed":true,"synthetic_pcm_added":false})));
         report["nonoverlapping_audio_clock_preservation_requested"] =
             json!(k.preserve_clock_output);
         report["transport_audio_silence_tail"] = json!({"synthetic_blocks_enqueued":k.transition_tail_enqueued,"synthetic_blocks_rejected":k.transition_tail_rejected,"blocks_per_transition":2,"block_duration_ms":10,"fake_sender_timestamps_used":false,"missing_pcm_recovered":false});
@@ -362,7 +398,12 @@ impl Kernel {
                 self.audio_receipt_seen = false;
                 self.audio_accepted_seen = false;
             }
-            let accepted = if let Some(stamp) = stamp {
+            let in_finish_window = stamp.is_none_or(|s| {
+                self.finish
+                    .as_mut()
+                    .is_none_or(|tail| tail.allows(s, Instant::now()))
+            });
+            let accepted = if let Some(stamp) = stamp.filter(|_| in_finish_window) {
                 p.startup_note("first_audio_scheduled", now);
                 if let Some(origin) = origin {
                     p.audio_label(
@@ -391,6 +432,9 @@ impl Kernel {
                 };
                 let accepted = self.audio.push_traced(stamp, block, tone);
                 if accepted {
+                    if let Some(finish) = &mut self.finish {
+                        finish.submitted(stamp);
+                    }
                     self.last_audio = Some(tail);
                 }
                 accepted
@@ -481,7 +525,11 @@ impl Kernel {
                         frame.at,
                         timestamp(self.recording_clock, stamp),
                     );
-                    self.video.push_traced(stamp, frame.value, label)
+                    let accepted = self.video.push_traced(stamp, frame.value, label);
+                    if accepted {
+                        self.last_video_stamp = Some(stamp);
+                    }
+                    accepted
                 } else {
                     false
                 };

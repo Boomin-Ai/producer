@@ -1183,6 +1183,19 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         }
     }
     #[cfg(feature = "obs-proof")]
+    if std::env::var("LIVEKIT_LAB_CAPTURE_SHUTDOWN_TAIL").as_deref() == Ok("1") {
+        if let Some(worker) = &isolated_playback {
+            // Keep the decoder and audio clock alive long enough to cover video
+            // already accepted. New video is closed before the bounded wait.
+            worker.begin_finish_input();
+            while !worker.finish_input_ready() {
+                crate::obs_proof::pump_main();
+                tokio::time::sleep(Duration::from_millis(2)).await;
+            }
+            worker.end_finish_input();
+        }
+    }
+    #[cfg(feature = "obs-proof")]
     binding_discovery.shutdown().await;
     report_worker.shutdown();
     #[cfg(feature = "obs-proof")]
@@ -1419,7 +1432,8 @@ pub async fn run(token_path: &Path, output: &Path, seconds: u64, pressure: bool)
         "duration_seconds":seconds,"actual_duration_seconds":began.elapsed().as_secs_f64(),"consumer_stall_ms":if pressure {200} else {0},"stall_period_seconds":5,
         "native_publish_audio_internal_queue_ms":0,"callback_timestamps_are_capture_timestamps":false,
         "obs_recorded_av_qualified":false,"physical_speaker_reference_connected":false,"g1_complete":false,
-        "participants":participants,"lifecycle":lifecycle,"video_observer_lifecycle":video_observer_lifecycle});
+        "participants":participants,"lifecycle":lifecycle,"video_observer_lifecycle":video_observer_lifecycle,
+        "capture_shutdown_tail_requested":std::env::var("LIVEKIT_LAB_CAPTURE_SHUTDOWN_TAIL").as_deref()==Ok("1")});
     if let Some(parent) = output.parent() {
         std::fs::create_dir_all(parent)?;
     }

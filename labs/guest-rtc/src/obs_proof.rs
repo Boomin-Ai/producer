@@ -20,25 +20,28 @@ extern "C" {
     fn guest_obs_now_ns() -> u64;
     fn guest_obs_thread_count() -> u64;
     fn guest_obs_fd_count() -> u64;
-    fn guest_obs_video(
+    fn producer_guest_ingest_video(
         source: *mut ffi::obs_source_t,
         y: *const u8,
+        y_len: usize,
         u: *const u8,
+        u_len: usize,
         v: *const u8,
+        v_len: usize,
         width: u32,
         height: u32,
         ys: u32,
         us: u32,
         vs: u32,
         timestamp: u64,
-    );
-    fn guest_obs_audio(
+    ) -> bool;
+    fn producer_guest_ingest_audio(
         source: *mut ffi::obs_source_t,
         pcm: *const i16,
-        samples: u32,
+        sample_count: usize,
         channels: u32,
         timestamp: u64,
-    );
+    ) -> bool;
     fn obs_source_set_async_unbuffered(source: *mut ffi::obs_source_t, unbuffered: bool);
     fn obs_source_set_async_decoupled(source: *mut ffi::obs_source_t, decoupled: bool);
     fn obs_add_safe_module(name: *const std::ffi::c_char);
@@ -113,12 +116,15 @@ impl AudioWriter {
         let timestamp =
             self.origin_ns + at.saturating_duration_since(self.origin).as_nanos() as u64;
         unsafe {
-            guest_obs_audio(
-                self.source as *mut ffi::obs_source_t,
-                pcm.as_ptr(),
-                pcm.len() as u32 / channels,
-                channels,
-                timestamp,
+            assert!(
+                producer_guest_ingest_audio(
+                    self.source as *mut ffi::obs_source_t,
+                    pcm.as_ptr(),
+                    pcm.len(),
+                    channels,
+                    timestamp,
+                ),
+                "Invalid native guest PCM submission"
             );
         }
     }
@@ -144,17 +150,23 @@ impl VideoWriter {
         at: Instant,
     ) {
         unsafe {
-            guest_obs_video(
-                self.source as *mut ffi::obs_source_t,
-                planes.0.as_ptr(),
-                planes.1.as_ptr(),
-                planes.2.as_ptr(),
-                width,
-                height,
-                strides.0,
-                strides.1,
-                strides.2,
-                self.origin_ns + at.saturating_duration_since(self.origin).as_nanos() as u64,
+            assert!(
+                producer_guest_ingest_video(
+                    self.source as *mut ffi::obs_source_t,
+                    planes.0.as_ptr(),
+                    planes.0.len(),
+                    planes.1.as_ptr(),
+                    planes.1.len(),
+                    planes.2.as_ptr(),
+                    planes.2.len(),
+                    width,
+                    height,
+                    strides.0,
+                    strides.1,
+                    strides.2,
+                    self.origin_ns + at.saturating_duration_since(self.origin).as_nanos() as u64,
+                ),
+                "Invalid native guest I420 submission"
             );
         }
     }
@@ -515,7 +527,7 @@ impl Recorder {
             ffi::obs_module_failure_info_free(&mut failed);
             ffi::obs_post_load_modules();
             r.source = ffi::obs_source_create(
-                c("producer_guest_timing_proof").as_ptr(),
+                c("producer_guest_ingest").as_ptr(),
                 c("Guest proof").as_ptr(),
                 ptr::null_mut(),
                 ptr::null_mut(),
@@ -551,17 +563,23 @@ impl Recorder {
             r.origin_ns = guest_obs_now_ns();
             let y = vec![16u8; 320 * 180];
             let uv = vec![128u8; 160 * 90];
-            guest_obs_video(
-                r.source,
-                y.as_ptr(),
-                uv.as_ptr(),
-                uv.as_ptr(),
-                320,
-                180,
-                320,
-                160,
-                160,
-                r.origin_ns,
+            ensure!(
+                producer_guest_ingest_video(
+                    r.source,
+                    y.as_ptr(),
+                    y.len(),
+                    uv.as_ptr(),
+                    uv.len(),
+                    uv.as_ptr(),
+                    uv.len(),
+                    320,
+                    180,
+                    320,
+                    160,
+                    160,
+                    r.origin_ns,
+                ),
+                "Native guest initial frame rejected"
             );
             let settings = ffi::obs_data_create();
             ffi::obs_data_set_int(settings, c("bitrate").as_ptr(), 1000);

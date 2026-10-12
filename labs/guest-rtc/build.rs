@@ -3,6 +3,8 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=LIVEKIT_LAB_LINK_EXTERNAL_ARCHIVE");
     println!("cargo:rerun-if-changed=src/obs_bridge.m");
+    println!("cargo:rerun-if-changed=../../src-tauri/src/live/guest_ingest.c");
+    println!("cargo:rerun-if-changed=../../src-tauri/src/live/guest_ingest.h");
     println!("cargo:rerun-if-changed=src/physical_audio.mm");
     println!("cargo:rerun-if-changed=src/physical_camera.mm");
     if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
@@ -89,9 +91,23 @@ fn main() {
             .status()
             .unwrap()
             .success());
+        assert!(Command::new("clang")
+            .args([
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-c",
+                "../../src-tauri/src/live/guest_ingest.c",
+                "-o"
+            ])
+            .arg(out.join("guest_ingest.o"))
+            .status()
+            .unwrap()
+            .success());
         assert!(Command::new("ar")
             .arg("rcs")
             .arg(out.join("libguest_obs_bridge.a"))
+            .arg(out.join("guest_ingest.o"))
             .arg(out.join("obs_bridge.o"))
             .status()
             .unwrap()
