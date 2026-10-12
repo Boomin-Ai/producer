@@ -1,6 +1,12 @@
 use std::path::PathBuf;
 
 fn main() {
+    if std::env::var_os("CARGO_FEATURE_GUEST_RTC_PILOT").is_some()
+        && std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos")
+    {
+        // Required by the native SDK's static Objective-C categories.
+        println!("cargo:rustc-link-arg=-ObjC");
+    }
     println!("cargo:rustc-check-cfg=cfg(have_engine)");
     link_window_vibrancy_macos();
     link_live_engine();

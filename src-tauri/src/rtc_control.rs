@@ -6,25 +6,15 @@ use serde_json::{json, Value};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 const API: &str = "https://boomin-rtc-pilot.kleveland-bishop.workers.dev";
 const ENDPOINT: &str = "wss://producer-boomin-6h2iz2sq.livekit.cloud";
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Operator {
     pub brand_id: String,
     pub room_id: String,
     pub token: String,
 }
-#[derive(Clone, Deserialize)]
-pub struct Receipt {
-    pub brand_id: String,
-    pub room_id: String,
-    pub run_id: String,
-    pub host_participant_id: String,
-    pub host_lease_epoch: u64,
-    pub control_revision: u64,
-    pub endpoint: String,
-    pub state: String,
-    pub host_lease_expires_at_ms: u64,
-}
+pub use producer_guest_runtime::authority::HostReceipt as Receipt;
+
 fn now() -> Result<u64, &'static str> {
     Ok(SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -35,6 +25,7 @@ pub struct Control {
     http: reqwest::Client,
     operator: Operator,
     ticket: String,
+    connection_id: Option<String>,
     receipt: Option<Receipt>,
     ticket_renewed_ms: u64,
 }
@@ -55,6 +46,7 @@ impl Control {
             http,
             operator,
             ticket: String::new(),
+            connection_id: None,
             receipt: None,
             ticket_renewed_ms: 0,
         })
@@ -71,6 +63,9 @@ impl Control {
             .send()
             .await
             .map_err(|_| "RTC request failed")?;
+        if response.status() == reqwest::StatusCode::CONFLICT {
+            return Err("RTC authority changed");
+        }
         if !response.status().is_success() {
             return Err("RTC authority rejected request");
         }
@@ -97,8 +92,24 @@ impl Control {
             serde_json::from_slice(body).map_err(|_| "Invalid connection response")?;
         let ticket = value["connection_ticket"]
             .as_str()
-            .filter(|s| !s.is_empty() && s.len() <= 8192)
+            .filter(|s| !s.is_empty() && s.len() <= 4096)
             .ok_or("Missing connection ticket")?;
+        let connection = &value["connection"];
+        let id = connection["connection_id"]
+            .as_str()
+            .ok_or("Missing connection identity")?;
+        uuid::Uuid::parse_str(id).map_err(|_| "Invalid connection identity")?;
+        if connection["kind"] != "host"
+            || connection["brand_id"] != self.operator.brand_id
+            || connection["room_id"] != self.operator.room_id
+            || self
+                .connection_id
+                .as_ref()
+                .is_some_and(|previous| previous != id)
+        {
+            return Err("Native RTC connection binding changed");
+        }
+        self.connection_id = Some(id.to_owned());
         self.ticket = ticket.to_owned();
         self.ticket_renewed_ms = now()?;
         Ok(())
@@ -140,6 +151,10 @@ impl Control {
         if receipt.brand_id != self.operator.brand_id
             || receipt.room_id != self.operator.room_id
             || receipt.endpoint != ENDPOINT
+            || receipt.transport != "livekit"
+            || self.connection_id.as_deref() != Some(receipt.host_process_id.as_str())
+            || receipt.host_lease_epoch > 9_007_199_254_740_991
+            || receipt.control_revision > 9_007_199_254_740_991
             || receipt.host_lease_epoch == 0
             || receipt.control_revision == 0
         {
@@ -176,9 +191,70 @@ impl Control {
                 .await?;
             self.accept_ticket(&body)?;
         }
-        self.command("renew").await.map(|_| ())
+        let previous = self.receipt.clone().ok_or("No owned RTC run")?;
+        match self.command("renew").await {
+            Ok(_) => Ok(()),
+            Err("RTC authority changed") => {
+                // A coordinated stage/grant change may advance revision between
+                // polls. Recheck this SAME connection/run/epoch independently;
+                // never reclaim or mint from the failed command's old receipt.
+                let snapshot = self.read_media_authority(&previous).await?;
+                self.receipt = Some(snapshot.receipt().clone());
+                self.command("renew").await.map(|_| ())
+            }
+            Err(error) => Err(error),
+        }
     }
-    pub async fn session(&self) -> Result<Session, &'static str> {
+    pub async fn end(&mut self) -> Result<(), &'static str> {
+        let previous = self.receipt.clone().ok_or("No owned RTC run")?;
+        match self.command("end").await {
+            Ok(_) => Ok(()),
+            Err("RTC authority changed") => {
+                let snapshot = self.read_media_authority(&previous).await?;
+                self.receipt = Some(snapshot.receipt().clone());
+                self.command("end").await.map(|_| ())
+            }
+            Err(error) => Err(error),
+        }
+    }
+    pub fn lease_expires_at_ms(&self) -> Option<u64> {
+        self.receipt.as_ref().map(|r| r.host_lease_expires_at_ms)
+    }
+    pub async fn media_authority(
+        &mut self,
+    ) -> Result<producer_guest_runtime::authority::Snapshot, &'static str> {
+        let expected = self.receipt.as_ref().ok_or("No owned RTC run")?.clone();
+        let snapshot = self.read_media_authority(&expected).await?;
+        self.receipt = Some(snapshot.receipt().clone());
+        Ok(snapshot)
+    }
+    async fn read_media_authority(
+        &self,
+        expected: &Receipt,
+    ) -> Result<producer_guest_runtime::authority::Snapshot, &'static str> {
+        let started = std::time::Instant::now();
+        let body = self.post("media-authority", json!({"connection_ticket":self.ticket,"expected":{
+            "run_id":expected.run_id,"control_revision":expected.control_revision,"host_lease_epoch":expected.host_lease_epoch}})).await?;
+        let snapshot = producer_guest_runtime::authority::Snapshot::parse(
+            &body,
+            &expected,
+            now()?,
+            started,
+            std::time::Instant::now(),
+        )?;
+        Ok(snapshot)
+    }
+    pub async fn session(&mut self) -> Result<Session, &'static str> {
+        match self.issue_session().await {
+            Ok(session) => Ok(session),
+            Err("RTC authority changed") => {
+                self.media_authority().await?;
+                self.issue_session().await
+            }
+            Err(error) => Err(error),
+        }
+    }
+    async fn issue_session(&self) -> Result<Session, &'static str> {
         let r = self
             .receipt
             .as_ref()
