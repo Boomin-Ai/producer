@@ -192,6 +192,28 @@ fn main() {
             let seconds = if media.is_some() { 90 } else { 60 };
             let until = Instant::now() + Duration::from_secs(seconds);
             while Instant::now() < until {
+                if std::env::var("PRODUCER_RTC_COMMAND_PROOF").as_deref()==Ok("1") {
+                    const INPUT:&str="/private/tmp/producer-rtc-staging/native-room-command.json";
+                    if let Ok(bytes)=std::fs::read(INPUT) {
+                        let _=std::fs::remove_file(INPUT);
+                        #[derive(serde::Deserialize)]
+                        #[serde(deny_unknown_fields)]
+                        struct Request {request_id:String,command:rtc_control::RoomCommand}
+                        if bytes.len()>16384 {return Err("Native proof command too large");}
+                        let request:Request=serde_json::from_slice(&bytes).map_err(|_|"Invalid native proof command")?;
+                        uuid::Uuid::parse_str(&request.request_id).map_err(|_|"Invalid native proof request ID")?;
+                        let result=owner.room_command(request.command).await;
+                        let value=match result {
+                            Ok(body)=>serde_json::json!({"request_id":request.request_id,"status":200,"body":body}),
+                            Err(error)=>serde_json::json!({"request_id":request.request_id,"status":409,"error":error}),
+                        };
+                        use std::{io::Write,os::unix::fs::OpenOptionsExt};
+                        let pending="/private/tmp/producer-rtc-staging/native-room-reply.pending";
+                        let mut file=std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(pending).map_err(|_|"Native proof reply unavailable")?;
+                        file.write_all(value.to_string().as_bytes()).map_err(|_|"Native proof reply failed")?;drop(file);
+                        std::fs::rename(pending,"/private/tmp/producer-rtc-staging/native-room-reply.json").map_err(|_|"Native proof reply failed")?;
+                    }
+                }
                 write(&counts, media.as_deref(), None, None);
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }

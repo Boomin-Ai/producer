@@ -1,5 +1,5 @@
 //! Native-only staging authority owner. Credentials never cross the IPC boundary.
-//! Callers must serialize access (all mutating operations require &mut self).
+//! The native owner serializes control mutations, renewal and authority reads.
 use producer_guest_session::{ExpectedAuthority, PublishSource, Role, Scope, Session};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -14,6 +14,94 @@ pub struct Operator {
     pub token: String,
 }
 pub use producer_guest_runtime::authority::HostReceipt as Receipt;
+
+#[derive(Deserialize)]
+#[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
+pub enum RoomCommand {
+    Admit {
+        participant_id: String,
+    },
+    Revoke {
+        participant_id: String,
+    },
+    Stage {
+        on_stage: Vec<String>,
+    },
+    Grant {
+        participant_id: String,
+        grant: String,
+        enabled: bool,
+    },
+    Link {
+        rotate: bool,
+    },
+}
+impl RoomCommand {
+    fn route(&self, room: &str) -> Result<(String, Value), &'static str> {
+        let valid = |id: &str| {
+            uuid::Uuid::parse_str(id)
+                .map(|_| ())
+                .map_err(|_| "Invalid RTC participant")
+        };
+        match self {
+            Self::Admit { participant_id } | Self::Revoke { participant_id } => {
+                valid(participant_id)?;
+                let action = if matches!(self, Self::Admit { .. }) {
+                    "admit"
+                } else {
+                    "revoke"
+                };
+                Ok((
+                    format!("/v1/app/live/guests/{participant_id}/{action}"),
+                    json!({}),
+                ))
+            }
+            Self::Stage { on_stage } => {
+                if on_stage.len() > 25 {
+                    return Err("RTC stage capacity exceeded");
+                }
+                let mut unique = std::collections::HashSet::new();
+                for id in on_stage {
+                    valid(id)?;
+                    if !unique.insert(id) {
+                        return Err("Duplicate RTC participant");
+                    }
+                }
+                Ok((
+                    format!("/v1/app/live/rooms/{room}/stage"),
+                    json!({"on_stage":on_stage}),
+                ))
+            }
+            Self::Grant {
+                participant_id,
+                grant,
+                enabled,
+            } => {
+                valid(participant_id)?;
+                if !matches!(
+                    grant.as_str(),
+                    "media.camera"
+                        | "media.mic"
+                        | "media.screen"
+                        | "media.return_feed"
+                        | "input.vote"
+                        | "input.text"
+                        | "input.hand"
+                ) {
+                    return Err("Unsupported RTC grant");
+                }
+                Ok((
+                    format!("/v1/app/live/guests/{participant_id}/grants"),
+                    json!({"grant":grant,"enabled":enabled}),
+                ))
+            }
+            Self::Link { rotate } => Ok((
+                format!("/v1/app/live/rooms/{room}/guest-link"),
+                json!({"enabled":true,"auto_admit":false,"rotate":rotate}),
+            )),
+        }
+    }
+}
 
 fn now() -> Result<u64, &'static str> {
     Ok(SystemTime::now()
@@ -30,6 +118,9 @@ pub struct Control {
     ticket_renewed_ms: u64,
 }
 impl Control {
+    pub fn room_id(&self) -> &str {
+        &self.operator.room_id
+    }
     pub fn new(operator: Operator) -> Result<Self, &'static str> {
         for id in [&operator.brand_id, &operator.room_id] {
             uuid::Uuid::parse_str(id).map_err(|_| "Invalid staging room")?;
@@ -52,16 +143,26 @@ impl Control {
         })
     }
     async fn post(&self, suffix: &str, body: Value) -> Result<Vec<u8>, &'static str> {
+        self.post_route(
+            &format!("/v1/app/live/rooms/{}/rtc/{suffix}", self.operator.room_id),
+            body,
+            suffix == "media-authority",
+        )
+        .await
+    }
+    async fn post_route(
+        &self,
+        route: &str,
+        body: Value,
+        permission_read: bool,
+    ) -> Result<Vec<u8>, &'static str> {
         let mut response = self
             .http
-            .post(format!(
-                "{API}/v1/app/live/rooms/{}/rtc/{suffix}",
-                self.operator.room_id
-            ))
+            .post(format!("{API}{route}"))
             .bearer_auth(&self.operator.token)
             // A permission response must fit inside the receiver's 3.5-second
             // freshness window. Control mutations retain their five-second limit.
-            .timeout(Duration::from_millis(if suffix == "media-authority" {
+            .timeout(Duration::from_millis(if permission_read {
                 2500
             } else {
                 5000
@@ -89,6 +190,33 @@ impl Control {
             bytes.extend_from_slice(&chunk);
         }
         Ok(bytes)
+    }
+    pub async fn room_command(&self, command: RoomCommand) -> Result<Value, &'static str> {
+        let (route, mut body) = command.route(&self.operator.room_id)?;
+        let receipt = self
+            .receipt
+            .as_ref()
+            .filter(|r| r.host_lease_expires_at_ms > now().unwrap_or(u64::MAX))
+            .ok_or("No owned RTC run")?;
+        body["rtc"] = json!({"request_id":uuid::Uuid::new_v4().to_string(),"expected":{
+            "run_id":receipt.run_id,"control_revision":receipt.control_revision,"host_lease_epoch":receipt.host_lease_epoch}});
+        let bytes = self.post_route(&route, body, false).await?;
+        let value: Value =
+            serde_json::from_slice(&bytes).map_err(|_| "Invalid RTC room control response")?;
+        let next: Receipt = serde_json::from_value(value["rtc"]["run"].clone())
+            .map_err(|_| "Missing RTC room control receipt")?;
+        if next.room_id != receipt.room_id
+            || next.brand_id != receipt.brand_id
+            || next.run_id != receipt.run_id
+            || next.host_process_id != receipt.host_process_id
+            || next.host_lease_epoch != receipt.host_lease_epoch
+            || next.control_revision < receipt.control_revision
+            || next.endpoint != receipt.endpoint
+            || next.state != "active"
+        {
+            return Err("RTC room control authority mismatch");
+        }
+        Ok(value)
     }
     pub async fn open(&mut self) -> Result<(), &'static str> {
         if !self.ticket.is_empty() {
@@ -323,4 +451,50 @@ pub fn selftest(path: &std::path::Path) -> Result<(), &'static str> {
         println!("RTC authority proof passed: open, start, validated session, renew, end");
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod room_command_tests {
+    use super::*;
+    const ID: &str = "11111111-1111-4111-8111-111111111111";
+    #[test]
+    fn webview_cannot_supply_routes_authority_or_change_grant_duration() {
+        for command in [
+            json!({"operation":"grant","participant_id":ID,"grant":"media.mic","enabled":true,"expires_at_ms":123}),
+            json!({"operation":"admit","participant_id":ID,"rtc":{"expected":{"run_id":ID}}}),
+            json!({"operation":"stage","on_stage":[],"endpoint":"https://other.invalid"}),
+            json!({"operation":"post","path":"/v1/private"}),
+        ] {
+            assert!(serde_json::from_value::<RoomCommand>(command).is_err());
+        }
+    }
+    #[test]
+    fn participant_paths_capacity_and_duplicates_are_bounded() {
+        assert!(RoomCommand::Admit {
+            participant_id: "../other".into()
+        }
+        .route(ID)
+        .is_err());
+        assert!(RoomCommand::Stage {
+            on_stage: vec![ID.into(), ID.into()]
+        }
+        .route(ID)
+        .is_err());
+        assert!(RoomCommand::Stage {
+            on_stage: vec![ID.into(); 26]
+        }
+        .route(ID)
+        .is_err());
+        assert!(RoomCommand::Grant {
+            participant_id: ID.into(),
+            grant: "room.admin".into(),
+            enabled: true
+        }
+        .route(ID)
+        .is_err());
+        assert_eq!(
+            RoomCommand::Stage { on_stage: vec![] }.route(ID).unwrap().1,
+            json!({"on_stage":[]})
+        );
+    }
 }

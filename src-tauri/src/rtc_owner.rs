@@ -1,15 +1,25 @@
 //! Single serialized owner of the native host connection and room lease.
 //! Incoming media is supplied by an independently authorized receiver adapter.
-use crate::rtc_control::{Control, Operator};
+use crate::rtc_control::{Control, Operator, RoomCommand};
 use producer_guest_runtime::Connection;
 use std::sync::{Arc, Weak};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::{sync::oneshot, task::JoinHandle};
+use tokio::{
+    sync::{mpsc, oneshot},
+    task::JoinHandle,
+};
+
+struct RoomRequest {
+    command: RoomCommand,
+    reply: oneshot::Sender<Result<serde_json::Value, &'static str>>,
+}
 
 pub struct HostOwner {
     stop: Option<oneshot::Sender<()>>,
     task: Option<JoinHandle<Result<(), &'static str>>>,
     lifetime: Weak<()>,
+    room_id: String,
+    commands: mpsc::Sender<RoomRequest>,
 }
 fn now() -> u64 {
     SystemTime::now()
@@ -60,6 +70,8 @@ impl HostOwner {
     ) -> (Self, oneshot::Receiver<Result<(), &'static str>>) {
         let (stop, mut stopped) = oneshot::channel();
         let (ready, connected) = oneshot::channel();
+        let room_id = control.room_id().to_owned();
+        let (commands, mut requests) = mpsc::channel::<RoomRequest>(8);
         let lifetime = Arc::new(());
         let probe = Arc::downgrade(&lifetime);
         // The task, rather than the caller's cancellable start future, owns
@@ -154,6 +166,24 @@ impl HostOwner {
                             }
                         }
                     }
+                    request = requests.recv() => {
+                        let Some(request)=request else {break;};
+                        // The same task owns commands, renewal and permission
+                        // reads. No GUI request races a cached host revision.
+                        let result=async {
+                            let before=control.media_authority().await?;
+                            connection.media_authority(before)?;
+                            let result=control.room_command(request.command).await;
+                            // Even an ambiguous POST may have committed. Never
+                            // extend old permits or blindly replay the POST.
+                            // If this read fails, their independent expiry
+                            // remains in force while the poll loop recovers.
+                            let after=control.media_authority().await?;
+                            connection.media_authority(after)?;
+                            result
+                        }.await;
+                        let _=request.reply.send(result);
+                    }
                 }
             }
             // Close SDK before ending authority; queue/media adapters must retire
@@ -172,12 +202,27 @@ impl HostOwner {
                 stop: Some(stop),
                 task: Some(task),
                 lifetime: probe,
+                room_id,
+                commands,
             },
             connected,
         )
     }
     pub fn task_lifetime(&self) -> Weak<()> {
         self.lifetime.clone()
+    }
+    pub fn room_id(&self) -> &str {
+        &self.room_id
+    }
+    pub async fn room_command(
+        &self,
+        command: RoomCommand,
+    ) -> Result<serde_json::Value, &'static str> {
+        let (reply, result) = oneshot::channel();
+        self.commands
+            .try_send(RoomRequest { command, reply })
+            .map_err(|_| "Native RTC control queue unavailable")?;
+        result.await.map_err(|_| "Native RTC room owner stopped")?
     }
     pub async fn close(&mut self) -> Result<(), &'static str> {
         if let Some(stop) = self.stop.take() {

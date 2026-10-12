@@ -1,7 +1,7 @@
 /** Opt-in isolated hosted proof. Actual browser guest + native SDK owner.
  * Qualifies permission/subscription retirement, NOT OBS frames or AV timing. */
 import assert from 'node:assert/strict';
-import {readFile,writeFile,open,unlink} from 'node:fs/promises';
+import {readFile,writeFile,open,unlink,rename} from 'node:fs/promises';
 import {createHmac,randomUUID,createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 assert.equal(process.env.PRODUCER_RTC_STAGING_PRIVATE,'/private/tmp/producer-rtc-staging');
@@ -21,6 +21,17 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms));
  const report={qualification:'Actual guest page + native host authority polling and owned SDK subscriptions; optional timed decode/OBS copy boundary. No ordinary-room rendering or AV synchronization qualification.',production_changed:false,started_at:new Date().toISOString(),steps:[]};
 let run,browser,native,nativeExit,page;
 async function request(name,p,body){
+ if(process.env.PRODUCER_RTC_COMMAND_PROOF==='1' && ['fixture_revoke','link','admit','stage','mute','unmute','revoke'].includes(name)) {
+  const participant_id=p.split('/')[5];
+  const command=name==='link'?{operation:'link',rotate:body.rotate}:name==='stage'?{operation:'stage',on_stage:body.on_stage}:
+   name==='mute'||name==='unmute'?{operation:'grant',participant_id,grant:body.grant,enabled:body.enabled}:
+   {operation:name==='fixture_revoke'?'revoke':name,participant_id};
+  const request_id=randomUUID();
+  await writeFile(directory+'/native-room-command.pending',JSON.stringify({request_id,command}),{mode:0o600});
+  await rename(directory+'/native-room-command.pending',directory+'/native-room-command.json');
+  let reply;await until(async()=>{reply=await readFile(directory+'/native-room-reply.json','utf8').then(JSON.parse).catch(()=>null);return reply?.request_id===request_id;},20000);
+  report.steps.push({name,status:reply.status,native_owner:true});if(reply.status!==200)throw Error('native_room_control_rejected');return reply.body;
+ }
  const r=await fetch(base+p,{method:body===undefined?'GET':'POST',headers:{Authorization:`Bearer ${operator.token}`,...(body===undefined?{}:{'Content-Type':'application/json'})},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(10000),redirect:'error'});
  if(!r.ok)throw new Error(`step:${name}:http:${r.status}`);
  const v=await r.json();report.steps.push({name,status:r.status});return v;
@@ -32,6 +43,8 @@ async function until(check,timeout=12000){const end=performance.now()+timeout;wh
 try {
  const prior=await fresh();assert(!prior||prior.state==='ended','Isolated room must be idle');
  await unlink(directory+'/native-subscription-owner-result.json').catch(()=>{});
+ await unlink(directory+'/native-room-command.json').catch(()=>{});
+ await unlink(directory+'/native-room-reply.json').catch(()=>{});
  const log=await open(directory+'/native-subscription-owner.log','w',0o600);
  native=spawn('/private/tmp/producer-native-sdk-target/debug/examples/subscription_owner',[],{stdio:['ignore',log.fd,log.fd]});
  nativeExit=new Promise(resolve=>native.once('exit',resolve));await log.close();

@@ -398,6 +398,16 @@ pub async fn room_guest_admit(
     guest_id: String,
 ) -> EngineResult<Value> {
     let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    if let Some(result) = crate::rtc_ipc::room_command(
+        &state,
+        &base_url,
+        Some(&room_id),
+        serde_json::json!({"operation":"admit","participant_id":guest_id}),
+    )
+    .await
+    {
+        return result;
+    }
     ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)
         .admit_guest(&room_id, &guest_id)
@@ -411,6 +421,16 @@ pub async fn room_guest_revoke(
     guest_id: String,
 ) -> EngineResult<Value> {
     let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    if let Some(result) = crate::rtc_ipc::room_command(
+        &state,
+        &base_url,
+        None,
+        serde_json::json!({"operation":"revoke","participant_id":guest_id}),
+    )
+    .await
+    {
+        return result;
+    }
     ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)
         .revoke_guest(&guest_id)
@@ -425,6 +445,16 @@ pub async fn room_set_stage(
     on_stage: Vec<String>,
 ) -> EngineResult<Value> {
     let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    if let Some(result) = crate::rtc_ipc::room_command(
+        &state,
+        &base_url,
+        Some(&room_id),
+        serde_json::json!({"operation":"stage","on_stage":on_stage}),
+    )
+    .await
+    {
+        return result;
+    }
     ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)
         .set_stage(&room_id, &on_stage)
@@ -472,6 +502,24 @@ pub async fn endpoint_request(
         ));
     }
     let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    if method == "POST" {
+        if let Some(guest) = path
+            .strip_prefix("/v1/app/live/guests/")
+            .and_then(|p| p.strip_suffix("/grants"))
+            .filter(|id| uuid::Uuid::parse_str(id).is_ok())
+        {
+            // Preserve all supplied fields for strict native validation. Never
+            // turn a timed grant into a permanent grant by discarding its expiry.
+            let mut command=body.clone().unwrap_or(Value::Null);
+            if let Value::Object(fields)=&mut command {
+                fields.insert("operation".into(),Value::String("grant".into()));
+                fields.insert("participant_id".into(),Value::String(guest.into()));
+            }
+            if let Some(result)=crate::rtc_ipc::room_command(&state,&base_url,None,command).await {
+                return result.map(|body|serde_json::json!({"available":true,"status":200,"body":body}));
+            }
+        }
+    }
     ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)
         .access_request(&method, &path, body)
@@ -677,6 +725,16 @@ pub async fn room_join_link(
     rotate: Option<bool>,
 ) -> EngineResult<Value> {
     let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    if let Some(result) = crate::rtc_ipc::room_command(
+        &state,
+        &base_url,
+        Some(&room_id),
+        serde_json::json!({"operation":"link","rotate":rotate.unwrap_or(false)}),
+    )
+    .await
+    {
+        return result;
+    }
     ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)
         .room_join_link(&room_id, rotate.unwrap_or(false))

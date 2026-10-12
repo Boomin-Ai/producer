@@ -5,6 +5,41 @@ use crate::{
 };
 use tauri::State;
 
+/// Existing room controls select this path only for an explicitly enabled
+/// staging pilot. A stopped owner never falls back to unfenced legacy writes.
+pub async fn room_command(
+    state: &State<'_, AppState>,
+    api: &str,
+    room_id: Option<&str>,
+    command: serde_json::Value,
+) -> Option<EngineResult<serde_json::Value>> {
+    #[cfg(feature = "guest-rtc-pilot")]
+    if api.trim_end_matches('/') == "https://boomin-rtc-pilot.kleveland-bishop.workers.dev"
+        && std::env::var("PRODUCER_RTC_NATIVE_PILOT").as_deref() == Ok("1")
+    {
+        let result = async {
+            let command = serde_json::from_value(command)
+                .map_err(|_| EngineError::Other("Invalid native RTC room command".into()))?;
+            let owner = state.rtc_host.lock().await;
+            let host = owner.as_ref().ok_or_else(|| {
+                EngineError::Other(
+                    "Start the native guest room before changing guest controls".into(),
+                )
+            })?;
+            if room_id.is_some_and(|room| room != host.room_id()) {
+                return Err(EngineError::Other("Native RTC room binding changed".into()));
+            }
+            host.room_command(command)
+                .await
+                .map_err(|e| EngineError::Other(e.into()))
+        }
+        .await;
+        return Some(result);
+    }
+    let _ = (state, api, room_id, command);
+    None
+}
+
 #[tauri::command]
 pub async fn live_rtc_start(
     state: State<'_, AppState>,
