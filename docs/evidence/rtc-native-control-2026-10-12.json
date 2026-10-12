@@ -1,0 +1,24 @@
+{
+  "passed": true,
+  "date": "2026-10-12",
+  "target": "dedicated Boomin RTC staging Worker and existing LiveKit Cloud project",
+  "application_executable": true,
+  "checks": [
+    "open authenticated host connection",
+    "start isolated room run",
+    "validate producer session against independently held receipt",
+    "renew host lease",
+    "validate renewed producer session",
+    "end room run",
+    "database confirms all 11 selected-room runs ended"
+  ],
+  "sdk_connected": false,
+  "camera_or_microphone_opened": false,
+  "ordinary_room_media_qualified": false,
+  "source_sha256": {
+    "src-tauri/src/rtc_control.rs": "674d931be15574cbaa6619e93cf26961729edb75fb2d378441dec909fd9a89b3",
+    "src-tauri/src/lib.rs": "23ab31ebf9238312b0762dcf7b88b36b768af445425b1ea26ce908e1be722c63",
+    "crates/guest-session/src/lib.rs": "d593caeff745aa24218ea35705b7088f9bfa34055225712a8b79244c18ddabde"
+  },
+  "build_note": "Native dev executable built without redundant staticlib output to fit disk; repository Cargo crate-types restored afterward."
+}

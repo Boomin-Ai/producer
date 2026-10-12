@@ -9,6 +9,8 @@ mod ipc;
 mod live;
 mod outbox;
 mod recordings;
+#[cfg(feature = "guest-rtc-pilot")]
+mod rtc_control;
 mod set_library;
 mod set_media;
 mod storage;
@@ -36,6 +38,14 @@ pub struct AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(all(feature = "guest-rtc-pilot", debug_assertions))]
+    if let Some(path) = std::env::var_os("PRODUCER_RTC_CONTROL_PROOF") {
+        if let Err(message) = rtc_control::selftest(std::path::Path::new(&path)) {
+            eprintln!("{message}");
+            std::process::exit(1);
+        }
+        return;
+    }
     #[cfg(all(have_engine, debug_assertions))]
     if std::env::var_os("PRODUCER_PROGRAM_SELFTEST").is_some() {
         live::program_audio::verification::run();
