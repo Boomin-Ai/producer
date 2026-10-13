@@ -34,3 +34,9 @@ test('native admission does not depend on a legacy renderer capability', () => {
   assert.equal(sources.size, 1);
   assert.equal(sources.get('guest-12345678').guest.state, 'admitted');
 });
+
+test('accepted guests keep their native source across connected heartbeats', () => {
+  const connected = { ...guest, state: 'connected', render_url: null };
+  assert.equal(nativeGuestSources([connected]).get('guest-12345678').guest, connected);
+  for (const state of ['waiting', 'invited', 'left']) assert.equal(nativeGuestSources([{ ...guest, state }]).size, 0);
+});

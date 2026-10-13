@@ -5,6 +5,12 @@ use crate::{
 };
 use tauri::State;
 
+#[cfg(feature = "guest-rtc-pilot")]
+fn pilot_origin_matches(base: &str) -> bool {
+    crate::ipc::api_root_of(base).trim_end_matches('/') == "https://boomin-rtc-pilot.kleveland-bishop.workers.dev"
+}
+
+
 #[tauri::command]
 pub async fn live_rtc_enabled(
     state: State<'_, AppState>,
@@ -15,7 +21,8 @@ pub async fn live_rtc_enabled(
         if std::env::var("PRODUCER_RTC_NATIVE_PILOT").as_deref() != Ok("1") {
             return Ok(false);
         }
-        let (base, _, _) = crate::ipc::endpoint_access(&state, &endpoint_id)?;
+        let base: String = state.db.lock().map_err(|_| EngineError::Other("Room database unavailable".into()))?
+            .query_row("SELECT base_url FROM endpoints WHERE id=?1", rusqlite::params![endpoint_id], |row| row.get(0))?;
         let api = crate::ipc::api_root_of(&base);
         return Ok(
             std::env::var("PRODUCER_RTC_NATIVE_PILOT").as_deref() == Ok("1")
@@ -39,13 +46,18 @@ pub async fn room_command(
     command: serde_json::Value,
 ) -> Option<EngineResult<serde_json::Value>> {
     #[cfg(feature = "guest-rtc-pilot")]
-    if api.trim_end_matches('/') == "https://boomin-rtc-pilot.kleveland-bishop.workers.dev"
+    if pilot_origin_matches(api)
         && std::env::var("PRODUCER_RTC_NATIVE_PILOT").as_deref() == Ok("1")
     {
         let result = async {
             let command = serde_json::from_value(command)
                 .map_err(|_| EngineError::Other("Invalid native RTC room command".into()))?;
-            let owner = state.rtc_host.lock().await;
+            #[cfg(debug_assertions)]
+            eprintln!("Native RTC room control dispatched");
+            let owner = tokio::time::timeout(std::time::Duration::from_secs(5), state.rtc_host.lock())
+                .await.map_err(|_| EngineError::Other("Native guest controls are busy; refresh room state and try again".into()))?;
+            #[cfg(debug_assertions)]
+            eprintln!("Native RTC room control owner acquired");
             let host = owner.as_ref().ok_or_else(|| {
                 EngineError::Other(
                     "Start the native guest room before changing guest controls".into(),
@@ -177,4 +189,16 @@ pub fn seed_dev_room(db: &rusqlite::Connection, identifier: &str) -> Result<(), 
     tx.execute("INSERT OR IGNORE INTO live_rooms(id,name,config,endpoint_id) VALUES(?1,'LiveKit staging call',?2,?3)", rusqlite::params![room,config,endpoint]).map_err(|_| "RTC development room unavailable")?;
     tx.commit().map_err(|_| "RTC development setup failed")?;
     Ok(())
+}
+
+#[cfg(all(test, feature = "guest-rtc-pilot"))]
+mod routing_tests {
+    use super::pilot_origin_matches;
+    #[test]
+    fn controls_accept_the_normal_producer_endpoint_base() {
+        assert!(pilot_origin_matches("https://boomin-rtc-pilot.kleveland-bishop.workers.dev/v1/app/producer"));
+        assert!(pilot_origin_matches("https://boomin-rtc-pilot.kleveland-bishop.workers.dev/"));
+        assert!(!pilot_origin_matches("https://api.boomin.ai/v1/app/producer"));
+        assert!(!pilot_origin_matches("https://boomin-rtc-pilot.kleveland-bishop.workers.dev.evil.invalid/v1/app/producer"));
+    }
 }

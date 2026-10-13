@@ -177,6 +177,7 @@ extern "C" {
     pub fn gs_enable_framebuffer_srgb(enable: bool);
     pub fn gs_framebuffer_srgb_enabled() -> bool;
     pub fn gs_matrix_push();
+    pub fn gs_matrix_identity();
     pub fn gs_matrix_pop();
     pub fn gs_matrix_translate3f(x: f32, y: f32, z: f32);
     pub fn gs_get_render_target() -> *mut c_void;

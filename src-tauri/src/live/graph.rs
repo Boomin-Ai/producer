@@ -2486,6 +2486,10 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
                     w: 1.0,
                 };
                 ffi::gs_clear(1, &clear, 0.0, 0);
+                // Main-render callbacks inherit the compositor's transform.
+                // A roster tile renders source pixels, not its stage placement.
+                ffi::gs_matrix_push();
+                ffi::gs_matrix_identity();
                 ffi::gs_ortho(0.0, sw as f32, 0.0, sh as f32, -100.0, 100.0);
                 // NEVER trust ambient blend state for a standalone source
                 // render — a leftover (ZERO, x) function multiplies every
@@ -2495,6 +2499,7 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
                 ffi::gs_blend_function(ffi::GS_BLEND_ONE, ffi::GS_BLEND_ZERO);
                 ffi::obs_source_video_render(t.src);
                 ffi::gs_blend_state_pop();
+                ffi::gs_matrix_pop();
                 ffi::gs_texrender_end(ring.rt);
                 ffi::gs_stage_texture(ring.surfs[ring.idx], ffi::gs_texrender_get_texture(ring.rt));
                 ring.pending[ring.idx] = true;
@@ -2546,6 +2551,53 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
     }
     *hub.wake_flag.lock().unwrap() = true;
     hub.wake.notify_one();
+}
+
+
+/// Synthetic, hidden native source: no camera, network, room data or credentials.
+#[cfg(all(feature = "guest-rtc-pilot", debug_assertions, target_os = "macos"))]
+pub fn thumbnail_selftest() {
+    extern "C" { fn os_gettime_ns() -> u64; }
+    let temp = std::env::temp_dir().join(format!("producer-thumb-proof-{}", std::process::id()));
+    super::engine::bootstrap_with_config(&temp);
+    let mut graph = SceneGraph::create().unwrap();
+    let participant = "12345678-1234-1234-1234-123456789abc";
+    let id = "guest-12345678";
+    graph.add_extra(id, "Synthetic thumbnail", &ExtraSpec::RtcGuest { participant_id: participant.into() }).unwrap();
+    let endpoint = super::rtc_ingest::endpoint(&format!("guest-{participant}")).unwrap();
+    let delivery = endpoint.replace().unwrap();
+    let hub = ThumbHub::new();
+    hub.fps.store(15, std::sync::atomic::Ordering::Relaxed);
+    hub.publish_targets(&graph);
+    let param = &hub as *const ThumbHub as *mut std::os::raw::c_void;
+    unsafe { ffi::obs_add_main_render_callback(thumb_render_cb, param); }
+    let y = vec![145u8; 320 * 180];
+    let u = vec![54u8; 160 * 90];
+    let v = vec![34u8; 160 * 90];
+    for _ in 0..90 {
+        assert!(delivery.video(super::rtc_ingest::Video { planes: (&y, &u, &v), width: 320, height: 180, strides: (320, 160, 160) }, unsafe { os_gettime_ns() }));
+        std::thread::sleep(std::time::Duration::from_millis(33));
+    }
+    unsafe { ffi::obs_remove_main_render_callback(thumb_render_cb, param); }
+    let (frames, colored) = {
+        let slots = hub.slots.lock().unwrap();
+        let slot = slots.get(id).expect("No thumbnail frames");
+        (slot.seq, slot.rgba.chunks_exact(4).filter(|p| p[1] > 80 && p[1] > p[0].saturating_add(30)).count())
+    };
+    assert!(frames >= 5 && colored > 1000, "Black native thumbnail: frames={frames}, colored={colored}");
+    graph.clear_room().unwrap();
+    hub.publish_targets(&graph);
+    unsafe {
+        ffi::obs_enter_graphics();
+        for (_, ring) in hub.rings.lock().unwrap().drain() {
+            ffi::gs_texrender_destroy(ring.rt);
+            for surface in ring.surfs { ffi::gs_stagesurface_destroy(surface); }
+        }
+        ffi::obs_leave_graphics();
+        ffi::obs_shutdown();
+    }
+    let _ = std::fs::remove_dir_all(temp);
+    println!("{}", serde_json::json!({"passed":true,"hidden_native_guest":true,"thumbnail_frames":frames,"green_pixels":colored}));
 }
 
 #[cfg(test)]

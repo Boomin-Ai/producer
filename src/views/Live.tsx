@@ -1,3 +1,4 @@
+import { admitGuestThroughTransport, revokeGuestAndConfirm } from "../lib/guestAdmission";
 import {PortraitCanvas} from '../features/presentation/PortraitCanvas';
 import { OutputSettings, RoomOutputView, type OutputView, type PortraitMonitor } from '../features/presentation/OutputSettings';
 import { fetchMe } from '../lib/access';
@@ -777,6 +778,7 @@ export function GuestPanel({
   role,
   stage,
   onAdmit,
+  admissionPending,
   onRemove,
   onMute,
   onShow,
@@ -801,6 +803,7 @@ export function GuestPanel({
   stage: string[];
   stageState?: ModStageState;
   onAdmit: (id: string) => void;
+  admissionPending?: ReadonlySet<string>;
   onRemove: (id: string) => void;
   onMute: (sourceId: string, muted: boolean) => void;
   onShow: (sourceId: string, show: boolean) => void;
@@ -849,11 +852,11 @@ export function GuestPanel({
             {canAdmit ? (
               <button
                 className="rm-guest-admit"
-                disabled={live.length >= ROOM_CAP}
+                disabled={live.length >= ROOM_CAP || admissionPending?.has(g.id)}
                 title={live.length >= ROOM_CAP ? `Room is full (${ROOM_CAP})` : "Bring them into the room"}
                 onClick={() => onAdmit(g.id)}
               >
-                Admit
+                {admissionPending?.has(g.id) ? "Admitting…" : "Admit"}
               </button>
             ) : (
               <span className="rm-guest-wait-note">waiting</span>
@@ -922,11 +925,11 @@ export function GuestPanel({
               <>
                   {canAdmit && <button
                     className="rm-guest-admit"
-                    disabled={live.length >= ROOM_CAP}
+                    disabled={live.length >= ROOM_CAP || admissionPending?.has(g.id)}
                     title={live.length >= ROOM_CAP ? `Room is full (${ROOM_CAP})` : "Bring them into the room"}
                     onClick={() => onAdmit(g.id)}
                   >
-                    Admit
+                    {admissionPending?.has(g.id) ? "Admitting…" : "Admit"}
                   </button>}
                   {canRemove && <button className="rm-row-edit" title="Remove" onClick={() => onRemove(g.id)}>
                     {ic.x}
@@ -3667,27 +3670,67 @@ export function LiveView({
     writeCfg({ ...cfgRef.current, mod_feeds: rememberModFeed(cfgRef.current.mod_feeds, String(owner.row.producer_ref ?? owner.row.id), owner.track, rect) });
   };
 
+  const [admissionPending, setAdmissionPending] = useState<Set<string>>(() => new Set());
+  const admissionInFlight = useRef(new Set<string>());
   const admitGuest = async (id: string) => {
-    if (!endpointRef.current || !cfg.server_room_id) return;
-    // The guest's return video IS the virtual camera — the render page opens
-    // it as a capture device and sends it down the peer connection it already
-    // holds. Start it on admit so nobody discovers it was off after someone
-    // is already talking into oblivion.
-    if (roomRoleRef.current === "host" && !vcamOn && vcamState?.installed) {
-      await vcamIpc.output(true).catch(() => {});
+    const endpoint = endpointRef.current;
+    const serverRoom = cfgRef.current.server_room_id;
+    if (!endpoint || !serverRoom) {
+      notifyError(new Error("Room connection is not ready. Reopen the room and try again."), { key: "guests" });
+      return;
     }
-    await guestsIpc.admit(endpointRef.current, cfg.server_room_id, id).catch((e) =>
-      notifyError(e, { key: "guests" }),
-    );
+    if (admissionInFlight.current.has(id)) return;
+    admissionInFlight.current.add(id);
+    setAdmissionPending(new Set(admissionInFlight.current));
+    try {
+      monitorLog("guest admission: selecting return transport");
+      const nativeRtc = await ipc.liveRtcEnabled(endpoint);
+      monitorLog(`guest admission: ${nativeRtc ? "native RTC" : "legacy"} transport selected`);
+      await admitGuestThroughTransport({
+        nativeRtc,
+        host: roomRoleRef.current === "host",
+        virtualCameraOn: vcamOn,
+        virtualCameraInstalled: !!vcamState?.installed,
+        startVirtualCamera: () => vcamIpc.output(true),
+        admit: () => {
+          monitorLog("guest admission: sending room control");
+          return guestsIpc.admit(endpoint, serverRoom, id);
+        },
+      });
+      rosterTickRef.current?.();
+    } catch (error) {
+      notifyError(error, { key: "guests" });
+    } finally {
+      admissionInFlight.current.delete(id);
+      setAdmissionPending(new Set(admissionInFlight.current));
+    }
   };
 
   const removeGuest = async (id: string) => {
-    if (!endpointRef.current || !cfg.server_room_id) return;
+    const endpoint = endpointRef.current;
+    const serverRoom = cfgRef.current.server_room_id;
+    if (!endpoint || !serverRoom) {
+      notifyError("Guest removal requires an active room connection.", { key: "guests" });
+      return;
+    }
     try {
-      await guestsIpc.revoke(endpointRef.current, id);
-      rosterTickRef.current?.();
+      await revokeGuestAndConfirm({
+        revoke: () => guestsIpc.revoke(endpoint, id),
+        isRemoved: async () => {
+          const response = await guestsIpc.roster(endpoint, serverRoom);
+          return !(response.guests ?? []).some(g => g.id === id && !["revoked", "ended", "declined"].includes(g.state));
+        },
+      });
+      if (endpointRef.current !== endpoint || cfgRef.current.server_room_id !== serverRoom) return;
+      liveRowsRef.current = liveRowsRef.current.filter(g => g.id !== id);
+      setRoster(previous => previous.filter(g => g.id !== id));
+      for (const source of [sourceIdsFor(id).camera, sourceIdsFor(id).screen]) {
+        hideGuestFromSlot(source);
+      }
     } catch (e) {
       notifyError(e, { key: "guests" });
+    } finally {
+      rosterTickRef.current?.();
     }
   };
 
@@ -7215,6 +7258,7 @@ export function LiveView({
             stage={modStage.confirmed}
             stageState={modStage}
             onAdmit={admitGuest}
+            admissionPending={admissionPending}
             onRemove={removeGuest}
             onMute={(id, muted) => setSourceAudio(id, undefined, muted).catch(() => {})}
             onShow={(id, show) => (show ? void showGuestInSlot(id) : hideGuestFromSlot(id))}

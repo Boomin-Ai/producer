@@ -2167,7 +2167,10 @@ pub fn start(
                             .is_ok()
                         {
                             #[cfg(debug_assertions)]
-                            if dumped.insert(id.clone()) {
+                            // First async-source frames can be black before decoding.
+                            // Save the first image containing pixels for diagnostics.
+                            if rgba.chunks_exact(4).any(|p| p[0] > 12 || p[1] > 12 || p[2] > 12)
+                                && dumped.insert(id.clone()) {
                                 let _ = std::fs::create_dir_all("/tmp/producer-thumbs");
                                 let _ =
                                     std::fs::write(format!("/tmp/producer-thumbs/{id}.jpg"), &jpg);
