@@ -43,6 +43,19 @@ pub struct AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(all(
+        feature = "guest-rtc-pilot",
+        have_engine,
+        debug_assertions,
+        target_os = "macos"
+    ))]
+    if std::env::var("PRODUCER_RTC_PROGRAM_PROOF").as_deref() == Ok("1") {
+        if let Err(message) = rtc_owner::program_selftest() {
+            eprintln!("{message}");
+            std::process::exit(1);
+        }
+        return;
+    }
     #[cfg(all(feature = "guest-rtc-pilot", debug_assertions))]
     if let Some(path) = std::env::var_os("PRODUCER_RTC_CONNECTION_PROOF") {
         if let Err(message) = rtc_owner::selftest(std::path::Path::new(&path)) {
@@ -99,11 +112,20 @@ pub fn run() {
                     }
                 }
             }
+            #[cfg(all(feature = "guest-rtc-pilot", debug_assertions))]
+            if std::env::var("PRODUCER_RTC_ROOM_DEV_FIXTURE").as_deref() == Ok("1")
+                && app.config().identifier != "ai.boomin.producer.rtc-pilot"
+            {
+                return Err(std::io::Error::other("RTC development requires its isolated app identifier").into());
+            }
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let conn = store::open(&data_dir.join("producer.db"))
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
             recordings::recover(&conn).map_err(|e| std::io::Error::other(e.to_string()))?;
+            #[cfg(all(feature = "guest-rtc-pilot", debug_assertions))]
+            rtc_ipc::seed_dev_room(&conn, &app.config().identifier)
+                .map_err(std::io::Error::other)?;
 
             // Live engine. Legacy evidence harnesses (--live-capture-probe /
             // --live-first-light) bootstrap on a bare thread; every other
@@ -137,6 +159,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             rtc_ipc::live_rtc_start,
+            rtc_ipc::live_rtc_enabled,
             rtc_ipc::live_rtc_stop,
             set_media::set_media_import,
             set_media::set_media_resolve,

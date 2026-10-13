@@ -339,6 +339,7 @@ pub struct ItemState {
     /// Capture sources (camera / screen / mic): the device they are pointed
     /// at, as libobs names it. None for everything else.
     pub device: Option<String>,
+    pub rtc_source_id: Option<String>,
 }
 
 /// Patch semantics: only present fields are applied — the stage editor
@@ -926,6 +927,20 @@ impl SceneGraph {
                 },
                 muted: !src.is_null() && ffi::obs_source_muted(src),
                 device,
+                rtc_source_id: {
+                    #[cfg(feature = "guest-rtc-pilot")]
+                    {
+                        self.extras
+                            .iter()
+                            .find(|extra| extra.id == id)
+                            .and_then(|extra| extra.native_rtc.as_ref())
+                            .map(|endpoint| endpoint.source_id().to_owned())
+                    }
+                    #[cfg(not(feature = "guest-rtc-pilot"))]
+                    {
+                        None
+                    }
+                },
             });
         };
         if let Some((item, _, _)) = self.overlay.as_ref() {
@@ -1334,8 +1349,10 @@ impl SceneGraph {
             let (type_id, kind, settings): (&str, &'static str, *mut ffi::obs_data_t) = match spec {
                 #[cfg(feature = "guest-rtc-pilot")]
                 ExtraSpec::RtcGuest { participant_id } => {
-                    if uuid::Uuid::parse_str(participant_id).is_err()
-                        || id != format!("guest-{participant_id}")
+                    if !uuid::Uuid::parse_str(participant_id)
+                        .is_ok_and(|value| value.to_string() == *participant_id)
+                        || (id != format!("guest-{participant_id}")
+                            && id != format!("guest-{}", &participant_id[..8]))
                     {
                         return Err("Native guest source identity does not match".into());
                     }
@@ -1582,8 +1599,8 @@ impl SceneGraph {
             }
             ffi::obs_sceneitem_set_visible(item, born_visible);
             #[cfg(feature = "guest-rtc-pilot")]
-            let native_rtc = if matches!(spec, ExtraSpec::RtcGuest { .. }) {
-                match super::rtc_ingest::Endpoint::attach(id, src) {
+            let native_rtc = if let ExtraSpec::RtcGuest { participant_id } = spec {
+                match super::rtc_ingest::Endpoint::attach(&format!("guest-{participant_id}"), src) {
                     Ok(endpoint) => Some(endpoint),
                     Err(error) => {
                         ffi::obs_sceneitem_remove(item);
@@ -2534,6 +2551,72 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
 #[cfg(test)]
 mod scene_restoration_tests {
     use super::*;
+
+    #[cfg(feature = "guest-rtc-pilot")]
+    #[test]
+    #[ignore = "requires the bundled native engine and graphics device"]
+    fn native_guest_conversion_preserves_scene_and_full_identity_binding() {
+        let temp = std::env::temp_dir().join(format!(
+            "producer-native-guest-layout-{}",
+            std::process::id()
+        ));
+        super::super::engine::bootstrap_with_config(&temp);
+        let mut graph = SceneGraph::create().unwrap();
+        let participant = "12345678-1234-1234-1234-123456789abc";
+        let id = "guest-12345678";
+        graph
+            .add_extra(
+                id,
+                "Guest fixture",
+                &ExtraSpec::Color {
+                    color: "#123456".into(),
+                },
+            )
+            .unwrap();
+        graph
+            .set_transform(
+                id,
+                &TransformPatch {
+                    x: Some(107.),
+                    y: Some(83.),
+                    w: Some(320.),
+                    h: Some(180.),
+                    visible: Some(true),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        graph.set_source_audio(id, Some(0.42), Some(true)).unwrap();
+        graph
+            .replace_extra(
+                id,
+                "Native guest fixture",
+                &ExtraSpec::RtcGuest {
+                    participant_id: participant.into(),
+                },
+                None,
+            )
+            .unwrap();
+        let item = graph
+            .state()
+            .items
+            .into_iter()
+            .find(|item| item.id == id)
+            .unwrap();
+        assert_eq!((item.x, item.y, item.w, item.h), (107., 83., 320., 180.));
+        assert!(item.visible && item.muted);
+        assert_eq!(item.rtc_source_id.as_deref(), Some(format!("guest-{participant}").as_str()));
+        assert!((item.volume - 0.42).abs() < 0.001);
+        assert!(super::super::rtc_ingest::endpoint(&format!("guest-{participant}")).is_some());
+        assert!(super::super::rtc_ingest::endpoint(id).is_none());
+        graph.remove_extra(id).unwrap();
+        assert!(super::super::rtc_ingest::endpoint(&format!("guest-{participant}")).is_none());
+        graph.clear_room().unwrap();
+        drop(graph);
+        unsafe {
+            ffi::obs_shutdown();
+        }
+    }
 
     fn change(id: &str, visible: bool) -> SceneChange {
         SceneChange {

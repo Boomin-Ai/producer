@@ -66,6 +66,7 @@ import {
 import { filterEditQueue, withSourceFilters } from "../lib/sourceFilters";
 import { DEMO_CHAT, DEMO_VIDEO_URL, demoOn } from "../lib/demo";
 import { activeEndpointId, isBoomin, resolveActiveEndpoint } from "../lib/workspace";
+import { nativeGuestSources } from "../lib/nativeGuestSources";
 import { BugSheet } from "./BugSheet";
 import { dismiss, dismissKey, notify, notifyError } from "../lib/notices";
 import { NoticeHost } from "../components/Notice";
@@ -2623,6 +2624,11 @@ export function LiveView({
     roomEngineRef.current = session;
     return () => {
       void session.close(async () => {
+        const serverRoom = cfgRef.current.server_room_id;
+        // An active output keeps its room engine and native guest owner.
+        if (serverRoom && (await ipc.liveEngineStatus()).session_state === "idle") {
+          await ipc.liveRtcStop(serverRoom).catch(() => {});
+        }
         if (await ipc.liveReleaseIdleRoom()) {
           sharedProgramCapture.setPortrait(false);
           engineHeldRoom = null;
@@ -6228,6 +6234,16 @@ export function LiveView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room?.id]);
 
+  const nativeRtcLifetime = useRef({ closed: false, serverRoom: null as string | null, converted: new Set<string>() });
+  const rosterTickBusy = useRef(false);
+  useEffect(() => {
+    const lifetime = { closed: false, serverRoom: null as string | null, converted: new Set<string>() };
+    nativeRtcLifetime.current = lifetime;
+    return () => {
+      lifetime.closed = true;
+    };
+  }, [room?.id]);
+
   // Poll the roster and reconcile browser sources against it. Not while we
   // hold a SEAT elsewhere: the poll is also the room-open heartbeat, and a
   // guest's own stage must not read as open on the network.
@@ -6235,6 +6251,8 @@ export function LiveView({
     if (!room?.id || !cfg.server_room_id || seat) return;
     let alive = true;
     const tick = async () => {
+      if (rosterTickBusy.current) return;
+      rosterTickBusy.current = true;
       try {
         const epId = await ensureEndpoint();
         if (!epId) return;
@@ -6311,6 +6329,28 @@ export function LiveView({
           }
           return;
         }
+        const nativeRtc = await ipc.liveRtcEnabled(epId);
+        if (!alive) return;
+        if (nativeRtc) {
+          if (!roomApplied.current) return;
+          const lifetime = nativeRtcLifetime.current;
+          if (lifetime.closed) return;
+          const brand = await team.brandId(epId);
+          if (!brand) throw new Error("Native guest room requires a workspace brand.");
+          if (!alive || lifetime.closed) return;
+          lifetime.serverRoom = cfg.server_room_id!;
+          await roomEngineRef.current?.run(async () => {
+            if (lifetime.closed || !alive) return;
+            const started = await ipc.liveRtcStart(epId, brand, cfg.server_room_id!);
+            if (started) lifetime.converted.clear();
+          });
+          if (lifetime.closed) {
+            // The queued session close or next room restoration owns teardown.
+            // A late completion must not stop a newly reopened identical room.
+            return;
+          }
+          if (!alive) return;
+        }
         // Seats (monitor rows) for the Mods panel — and the set's candidate
         // list: guests plus seats the host handed media (isMediaSeat).
         // One row per member (dedupeSeatRows): ended rows hidden, the newest
@@ -6323,7 +6363,7 @@ export function LiveView({
         // run ended) — or when the seat gained media: its render page's
         // return leg carries the program then, and a second host peer on
         // the same channel would collide. The engine never sees these.
-        if (endpointBaseRef.current) {
+        if (!nativeRtc && endpointBaseRef.current) {
           const wantedMonitors = new Map(full.filter((g) => resolveGrants(g).has("media.return_feed") && !!g.render_url).map((g) => [g.id, g] as const));
           for (const [id, sender] of monitorSenders.current) {
             const row = wantedMonitors.get(id);
@@ -6424,10 +6464,30 @@ export function LiveView({
         // "<name> · screen" source for a guest who holds media.screen. The
         // screen page shares the guest's signaling channel and receives only
         // the share, so the host frames it independently of the person.
-        const wanted = wantedSourceIds(live);
+        const wanted = nativeRtc ? nativeGuestSources(live.filter(g => !isMonitor(g))) : wantedSourceIds(live);
 
         for (const [id, { guest: g, track }] of wanted) {
+          if (nativeRtc && (sources.items ?? []).some(item => item.id === id && item.rtc_source_id === `guest-${g.id}`)) {
+            nativeRtcLifetime.current.converted.add(id);
+            continue;
+          }
+          if (nativeRtc && !nativeRtcLifetime.current.converted.has(id)) {
+            if (!alive || nativeRtcLifetime.current.closed) return;
+            const spec = { kind: "rtc_guest" as const, participant_id: g.id };
+            const lifetime = nativeRtcLifetime.current;
+            await roomEngineRef.current?.run(async () => {
+              if (!alive || lifetime.closed) return;
+              if (present.has(id)) await extraSources.replace(id, g.display_name || "Guest", spec);
+              else await extraSources.add(id, g.display_name || "Guest", spec);
+              lifetime.converted.add(id);
+            });
+            continue;
+          }
           if (!present.has(id)) {
+            if (nativeRtc) {
+              await extraSources.add(id, g.display_name || "Guest", { kind: "rtc_guest", participant_id: g.id });
+              continue;
+            }
             const u = new URL(g.render_url!);
             if (track === "screen") {
               u.searchParams.set("track", "screen");
@@ -6468,6 +6528,7 @@ export function LiveView({
         }
         for (const id of present) {
           if (!wanted.has(id)) {
+            nativeRtcLifetime.current.converted.delete(id);
             // Someone whose laptop died shouldn't blink off the broadcast.
             // Fade first, then destroy — and only if they were on screen.
             const it = (sources.items ?? []).find((i) => i.id === id);
@@ -6485,7 +6546,7 @@ export function LiveView({
         // their own kind, born hidden at their remembered rect on the mod
         // layer, never a guest slot. Dropped when the grant goes or the
         // seat leaves (the ledger interval closes with it).
-        {
+        if (!nativeRtc) {
           const presentMods = new Set((sources.items ?? []).filter((i) => i.kind === "mod").map((i) => i.id));
           const wantedMods = wantedModSourceIds(seats.filter((g) => !!g.render_url));
           for (const [id, { seat, track }] of wantedMods) {
@@ -6575,6 +6636,8 @@ export function LiveView({
         }
       } catch (e) {
         if (alive) notifyError(e, { key: "guests" });
+      } finally {
+        rosterTickBusy.current = false;
       }
     };
     rosterTickRef.current = () => void tick();

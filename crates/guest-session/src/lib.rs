@@ -300,6 +300,7 @@ mod tests {
         v["role"] = json!("monitor");
         v["publish_sources"] = json!([]);
         canonicalize(&mut v);
+        assert!(!parse(&v, &authority(&v)).unwrap().can_publish_program());
         assert!(parse(&v, &authority(&v))
             .unwrap()
             .guest_source_id()
@@ -312,6 +313,7 @@ mod tests {
         v["role"] = json!("producer");
         v["publish_sources"] = json!(["camera", "microphone"]);
         canonicalize(&mut v);
+        assert!(parse(&v, &authority(&v)).unwrap().can_publish_program());
         assert!(parse(&v, &authority(&v))
             .unwrap()
             .guest_source_id()
@@ -571,6 +573,11 @@ impl Session {
     }
     pub fn expires_at_ms(&self) -> u64 {
         self.0.expires_at_ms
+    }
+    pub fn can_publish_program(&self) -> bool {
+        self.0.role == Role::Producer && self.0.scope == Scope::Stage
+            && self.0.publish_sources.contains(&PublishSource::Camera)
+            && self.0.publish_sources.contains(&PublishSource::Microphone)
     }
 
     /// Preserve Producer's existing guest source ID across token/track changes.

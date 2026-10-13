@@ -63,6 +63,9 @@ pub struct Video<'a> {
 }
 
 impl Endpoint {
+    pub fn source_id(&self) -> &str {
+        &self.id
+    }
     /// Engine thread only, after source creation and before exposing the item.
     pub unsafe fn attach(id: &str, source: *mut ffi::obs_source_t) -> Result<Arc<Self>, String> {
         if source.is_null() {

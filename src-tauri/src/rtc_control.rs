@@ -170,7 +170,13 @@ impl Control {
             .json(&body)
             .send()
             .await
-            .map_err(|_| "RTC request failed")?;
+            .map_err(|error| {
+                if error.is_timeout() {
+                    "RTC request timed out"
+                } else {
+                    "RTC request failed"
+                }
+            })?;
         if response.status() == reqwest::StatusCode::CONFLICT {
             return Err("RTC authority changed");
         }
@@ -222,10 +228,26 @@ impl Control {
         if !self.ticket.is_empty() {
             return Err("RTC connection already opened");
         }
-        let body = self
-            .post("connection", json!({"session_version":1}))
-            .await?;
-        self.accept_ticket(&body)
+        // Opening a ticket does not acquire a run or publish an identity.
+        // A lost response may leave an expiring unused connection record.
+        for attempt in 0..3 {
+            match self.post("connection", json!({"session_version":1})).await {
+                Ok(body) => return self.accept_ticket(&body),
+                Err(error)
+                    if attempt < 2
+                        && matches!(
+                            error,
+                            "RTC request timed out"
+                                | "RTC request failed"
+                                | "RTC authority temporarily unavailable"
+                        ) =>
+                {
+                    tokio::time::sleep(Duration::from_millis(200 * (attempt + 1))).await;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Err("RTC connection opening failed")
     }
     fn accept_ticket(&mut self, body: &[u8]) -> Result<(), &'static str> {
         let value: Value =
@@ -269,12 +291,27 @@ impl Control {
         }
         let previous = self.receipt.clone();
         self.receipt = None;
-        let result = self
-            .post(
-                "control",
-                json!({"connection_ticket":self.ticket,"command":command}),
-            )
-            .await;
+        let payload = json!({"connection_ticket":self.ticket,"command":command});
+        let mut result = self.post("control", payload.clone()).await;
+        // The deployed SQL atomically stores (room, requestId, exact request)
+        // and replays only its immutable receipt. Retry START with the same
+        // key and body, never a fresh mutation. Other transitions stay fenced
+        // on ambiguity; old media permits are never extended by this retry.
+        if operation == "start" {
+            for attempt in 0..2 {
+                if !matches!(
+                    result,
+                    Err("RTC request timed out"
+                        | "RTC request failed"
+                        | "RTC response failed"
+                        | "RTC authority temporarily unavailable")
+                ) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(200 * (attempt + 1))).await;
+                result = self.post("control", payload.clone()).await;
+            }
+        }
         // Any ambiguous control failure immediately invalidates local publication authority.
         let bytes = match result {
             Ok(v) => v,

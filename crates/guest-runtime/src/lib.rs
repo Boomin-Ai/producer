@@ -15,6 +15,7 @@ mod subscriptions;
 pub use subscriptions::GuestMedia;
 pub mod authority;
 pub mod media;
+pub mod program;
 mod timing {
     pub mod playout_clock;
     pub mod presentation;
@@ -28,6 +29,9 @@ pub struct Connection {
     stop: Option<oneshot::Sender<()>>,
     healthy: Arc<AtomicBool>,
     authority: watch::Sender<Option<Arc<authority::Snapshot>>>,
+    program_allowed: bool,
+    program_started: bool,
+    program_ids: Option<(livekit::id::TrackSid, livekit::id::TrackSid)>,
 }
 impl Connection {
     pub async fn connect(session: &Session) -> Result<Self, &'static str> {
@@ -101,7 +105,30 @@ impl Connection {
             stop: Some(stop),
             healthy,
             authority,
+            program_allowed: session.can_publish_program(),
+            program_started: false,
+            program_ids: None,
         })
+    }
+    pub async fn publish_program(&mut self) -> Result<program::Sources, &'static str> {
+        if !self.healthy() || !self.program_allowed || self.program_started {
+            return Err("Native program publication unauthorized or already started");
+        }
+        self.program_started = true;
+        let (sources, ids) = program::Sources::publish(self.room.as_ref().ok_or("Native RTC room unavailable")?).await?;
+        self.program_ids = Some(ids);
+        Ok(sources)
+    }
+    /// Only the pair this connection itself published may be retired here.
+    pub async fn retire_program(&mut self) -> Result<(), &'static str> {
+        let room = self.room.as_ref().ok_or("Native RTC room unavailable")?;
+        let (audio, video) = self.program_ids.take().ok_or("Native program publication unavailable")?;
+        let audio = room.local_participant().unpublish_track(&audio).await;
+        let video = room.local_participant().unpublish_track(&video).await;
+        audio.map_err(|_| "Native program audio retirement failed")?;
+        video.map_err(|_| "Native program video retirement failed")?;
+        self.program_started = false;
+        Ok(())
     }
     pub fn media_authority(&self, snapshot: authority::Snapshot) -> Result<(), &'static str> {
         if !self.healthy() {

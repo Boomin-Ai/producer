@@ -1,0 +1,36 @@
+{
+  "passed": true,
+  "frontend_identity_tests": 3,
+  "native_graph_conversion_tests": 1,
+  "native_graph_actual_obs": true,
+  "frontend_build_passed": true,
+  "native_pilot_compile_passed": true,
+  "checks": [
+    "saved short scene ID preserved",
+    "full participant identity registered separately",
+    "position and size preserved",
+    "volume and mute preserved",
+    "removal clears full identity registration",
+    "colliding scene prefixes rejected",
+    "noncanonical participant identities rejected",
+    "room session queue regression passed",
+    "native binding exposed in source state for normal room reconciliation"
+  ],
+  "ordinary_room_ui_exercised": false,
+  "host_return_exercised": false,
+  "production_changed": false,
+  "source_sha256": {
+    "src/views/Live.tsx": "25f65eb5e229327b6433ad83e5f6b8702e1b7e9dc2763941229543f2e3502215",
+    "src/lib/nativeGuestSources.ts": "2c95a0913c9a6d9f737b46188be60268e0667999317797b8ec2acd74ba7cda46",
+    "src/lib/ipc.ts": "6b7fd8e0a6d7050bd6d6b8b90f3419dcc6630b9bc2195b7d1d93e991dbfb9cd3",
+    "src-tauri/src/rtc_ipc.rs": "a2fa48b2f29f31545ae67f578288ed21188563107eddf01d8ccd2eda92347d3c",
+    "src-tauri/src/rtc_owner.rs": "9673de306a95181733fcf6e1eb394da658f251bc3165b6651ac4651718d2fa33",
+    "src-tauri/src/live/graph.rs": "e68724c2163e5f512bad2f5ebee7b797ae4558bddf4ffd3826d5107dcda5bcb3",
+    "scripts/test-native-guest-sources.mjs": "782a1dafee0ecfac6b1ccdfb4ecb8b6993616c309fe48c26b5c58f9477fa3df2"
+  },
+  "qualification": "Native graph source conversion and frontend identity/session primitives; no actual Tauri room UI, full host return, or physical AEC qualification.",
+  "native_app_unit_tests": 63,
+  "guest_session_unit_tests": 9,
+  "staging_read_tests": 34,
+  "staging_worker_version": "5f3dc5c0-57c2-4379-bf6d-be1692f6089a"
+}

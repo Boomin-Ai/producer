@@ -305,7 +305,7 @@ pub async fn boomin_add_brand(
 
 /// The API origin an endpoint's producer base was derived from (see
 /// boomin::producer_base_for_root): everything before "/v1/".
-fn api_root_of(base_url: &str) -> String {
+pub(crate) fn api_root_of(base_url: &str) -> String {
     match base_url.find("/v1/") {
         Some(i) => base_url[..i].to_string(),
         None => base_url.trim_end_matches('/').to_string(),
@@ -510,13 +510,16 @@ pub async fn endpoint_request(
         {
             // Preserve all supplied fields for strict native validation. Never
             // turn a timed grant into a permanent grant by discarding its expiry.
-            let mut command=body.clone().unwrap_or(Value::Null);
-            if let Value::Object(fields)=&mut command {
-                fields.insert("operation".into(),Value::String("grant".into()));
-                fields.insert("participant_id".into(),Value::String(guest.into()));
+            let mut command = body.clone().unwrap_or(Value::Null);
+            if let Value::Object(fields) = &mut command {
+                fields.insert("operation".into(), Value::String("grant".into()));
+                fields.insert("participant_id".into(), Value::String(guest.into()));
             }
-            if let Some(result)=crate::rtc_ipc::room_command(&state,&base_url,None,command).await {
-                return result.map(|body|serde_json::json!({"available":true,"status":200,"body":body}));
+            if let Some(result) =
+                crate::rtc_ipc::room_command(&state, &base_url, None, command).await
+            {
+                return result
+                    .map(|body| serde_json::json!({"available":true,"status":200,"body":body}));
             }
         }
     }
