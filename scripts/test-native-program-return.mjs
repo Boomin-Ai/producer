@@ -75,7 +75,7 @@ try {
   video.cancelVideoFrameCallback(callback);draw.drawImage(video,0,0,8,8);const pixel=[...draw.getImageData(4,4,1,1).data].slice(0,3);source.disconnect();await context.close();
   return {width:video.videoWidth,height:video.videoHeight,decoded_frames:frames,stream_changes:streamChanges,maximum_rms:maximumRms,center_rgb:pixel,maximum_frame_gap_ms:Math.round(maximumFrameGap),maximum_silent_window_ms:maximumSilentWindows*50};
  },observationMs);
- assert(report.return_media.decoded_frames>=10);assert(report.return_media.maximum_rms>0.01);if(observationMs===2000)assert(report.return_media.center_rgb[0]>150&&report.return_media.center_rgb[1]<80&&report.return_media.center_rgb[2]<80);
+ assert(report.return_media.decoded_frames>=10);assert(report.return_media.maximum_rms>0.01);assert(report.return_media.center_rgb[0]>150&&report.return_media.center_rgb[1]<80&&report.return_media.center_rgb[2]<80);
  if(process.env.PRODUCER_RTC_PROGRAM_DELAY_PROOF!=='1'){assert(report.return_media.maximum_frame_gap_ms<1000);assert(report.return_media.maximum_silent_window_ms<1000);}
  await command('revoke',{operation:'revoke',participant_id:guest.id});await browser.close();browser=null;
  report.checkpoint='owner_shutdown';assert.equal(await nativeExit,0);report.final=await counts();assert.equal(report.final.passed,true);assert.equal(errors,0);

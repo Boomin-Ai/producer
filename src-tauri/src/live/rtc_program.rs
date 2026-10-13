@@ -18,6 +18,9 @@ use std::{
 const LEAD_NS: u64 = 200_000_000;
 // Covers the shared lead at up to 60 fps, with bounded scheduling headroom.
 const VIDEO_QUEUE_CAPACITY: usize = 14;
+// Holds a 220 ms catch-up burst of standard 1024-sample OBS blocks,
+// plus one block of headroom. Publication still enforces its own deadlines.
+const CAPTURE_AUDIO_BLOCKS: usize = 12;
 const MAX_LATE_NS: u64 = 20_000_000;
 static RECOVERIES: AtomicU64 = AtomicU64::new(0);
 #[cfg(debug_assertions)]
@@ -319,7 +322,7 @@ extern "C" fn video_callback(param: *mut c_void, data: *mut ffi::video_data) {
 }
 impl Tap {
     fn start() -> Result<Self, &'static str> {
-        let (audio_sender, audio_frames) = sync_channel(8);
+        let (audio_sender, audio_frames) = sync_channel(CAPTURE_AUDIO_BLOCKS);
         let (video_sender, video_frames) = sync_channel(2);
         let mut tap = Self {
             shared: Box::new(Shared {
@@ -376,7 +379,11 @@ impl Tap {
             return Err("Native program capture queue or format fault");
         }
         Ok(Queues {
-            audio: self.audio_frames.try_iter().take(8).collect(),
+            audio: self
+                .audio_frames
+                .try_iter()
+                .take(CAPTURE_AUDIO_BLOCKS)
+                .collect(),
             video: self.video_frames.try_iter().take(2).collect(),
         })
     }
@@ -486,68 +493,137 @@ impl Drop for Publisher {
 mod tests {
     use super::*;
     #[test]
-    #[ignore = "requires the bundled native engine and graphics device"]
-    fn obs_program_tap_copies_timestamped_video_and_stage_audio_then_disconnects() {
-        let temp =
-            std::env::temp_dir().join(format!("producer-program-tap-{}", std::process::id()));
-        super::super::engine::bootstrap_with_config(&temp);
-        let mut graph = super::super::graph::SceneGraph::create().unwrap();
-        graph
-            .add_extra(
-                "program-tap-color",
-                "Synthetic program",
-                &super::super::graph::ExtraSpec::Color {
-                    color: "#ff0000".into(),
-                },
-            )
-            .unwrap();
-        graph
-            .set_transform(
-                "program-tap-color",
-                &super::super::graph::TransformPatch {
-                    x: Some(0.),
-                    y: Some(0.),
-                    w: Some(1920.),
-                    h: Some(1080.),
-                    visible: Some(true),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-        let tap = Tap::start().unwrap();
-        tap.shared.ready.store(true, Ordering::Release);
-        let until = std::time::Instant::now() + Duration::from_secs(2);
-        let (mut audio, mut video, mut audio_timestamp, mut video_timestamp) = (0, 0, 0, 0);
-        while std::time::Instant::now() < until {
-            let queues = tap.drain().unwrap();
-            for (timestamp, samples) in queues.audio {
-                assert!(timestamp > audio_timestamp && !samples.is_empty());
-                audio_timestamp = timestamp;
-                audio += 1;
-            }
-            for picture in queues.video {
-                assert!(picture.timestamp > video_timestamp);
-                video_timestamp = picture.timestamp;
-                video += 1;
-                assert_eq!(picture.planes.0.len(), (WIDTH * HEIGHT) as usize);
-                assert_eq!(picture.planes.1.len(), (WIDTH * HEIGHT / 4) as usize);
-                assert_eq!(picture.planes.2.len(), picture.planes.1.len());
-            }
-            thread::sleep(Duration::from_millis(5));
+    fn audio_capture_accepts_a_burst_within_the_program_latency_budget() {
+        let (sender, receiver) = sync_channel(CAPTURE_AUDIO_BLOCKS);
+        let (video, _) = sync_channel(2);
+        let shared = Shared {
+            audio: sender,
+            video,
+            failed: AtomicBool::new(false),
+            ready: AtomicBool::new(true),
+        };
+        let mut left = [0.25f32; 1024];
+        let mut right = [0.25f32; 1024];
+        let mut data = ffi::audio_data {
+            data: [std::ptr::null_mut(); 8],
+            frames: 1024,
+            timestamp: 1_000_000_000,
+        };
+        data.data[0] = left.as_mut_ptr().cast();
+        data.data[1] = right.as_mut_ptr().cast();
+        // Ten OBS blocks cover 213 ms, within the 200 ms lead plus 20 ms
+        // late cutoff. Callback catch-up can deliver this as a single burst.
+        for _ in 0..10 {
+            audio_callback((&shared as *const Shared).cast_mut().cast(), 1, &mut data);
+            data.timestamp += 21_333_333;
         }
         assert!(
-            audio >= 20 && video >= 10,
-            "Program callbacks absent: audio={audio}, video={video}"
+            !shared.failed.load(Ordering::Acquire),
+            "Valid OBS callback burst overflowed the capture queue"
         );
-        drop(tap);
-        // SceneGraph is engine-owned and has no Drop teardown. Explicitly
-        // release its sources before forcing global shutdown in this fixture.
-        graph.clear_room().unwrap();
-        unsafe {
-            ffi::obs_shutdown();
+        let blocks: Vec<_> = receiver.try_iter().collect();
+        assert_eq!(blocks.len(), 10);
+        assert!(blocks
+            .iter()
+            .all(|(_, samples)| samples.len() == 1024
+                && samples.iter().all(|sample| *sample == 8191)));
+    }
+    #[test]
+    fn audio_capture_still_fails_closed_on_excessive_backlog() {
+        let (sender, _receiver) = sync_channel(CAPTURE_AUDIO_BLOCKS);
+        let (video, _) = sync_channel(2);
+        let shared = Shared {
+            audio: sender,
+            video,
+            failed: AtomicBool::new(false),
+            ready: AtomicBool::new(true),
+        };
+        let mut plane = [0.0f32; 1024];
+        let mut data = ffi::audio_data {
+            data: [std::ptr::null_mut(); 8],
+            frames: 1024,
+            timestamp: 1_000_000_000,
+        };
+        data.data[0] = plane.as_mut_ptr().cast();
+        data.data[1] = plane.as_mut_ptr().cast();
+        for _ in 0..100 {
+            audio_callback((&shared as *const Shared).cast_mut().cast(), 1, &mut data);
+            data.timestamp += 21_333_333;
         }
+        assert!(shared.failed.load(Ordering::Acquire));
+    }
+    #[test]
+    #[ignore = "requires the bundled native engine and graphics device"]
+    fn obs_program_tap_copies_timestamped_video_and_stage_audio_then_disconnects() {
+        super::tap_selftest();
     }
 }
+#[cfg(debug_assertions)]
+pub fn tap_selftest() {
+    let temp = std::env::temp_dir().join(format!("producer-program-tap-{}", std::process::id()));
+    super::engine::bootstrap_with_config(&temp);
+    let mut graph = super::graph::SceneGraph::create().unwrap();
+    graph
+        .add_extra(
+            "program-tap-color",
+            "Synthetic program",
+            &super::graph::ExtraSpec::Color {
+                color: "#ff0000".into(),
+            },
+        )
+        .unwrap();
+    graph
+        .set_transform(
+            "program-tap-color",
+            &super::graph::TransformPatch {
+                x: Some(0.),
+                y: Some(0.),
+                w: Some(1920.),
+                h: Some(1080.),
+                visible: Some(true),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let tap = Tap::start().unwrap();
+    tap.shared.ready.store(true, Ordering::Release);
+    let until = std::time::Instant::now() + Duration::from_secs(2);
+    let (mut audio, mut video, mut audio_timestamp, mut video_timestamp) = (0, 0, 0, 0);
+    while std::time::Instant::now() < until {
+        let queues = tap.drain().unwrap();
+        for (timestamp, samples) in queues.audio {
+            assert!(timestamp > audio_timestamp && !samples.is_empty());
+            audio_timestamp = timestamp;
+            audio += 1;
+        }
+        for picture in queues.video {
+            assert!(picture.timestamp > video_timestamp);
+            video_timestamp = picture.timestamp;
+            video += 1;
+            assert_eq!(picture.planes.0.len(), (WIDTH * HEIGHT) as usize);
+            assert_eq!(picture.planes.1.len(), (WIDTH * HEIGHT / 4) as usize);
+            assert_eq!(picture.planes.2.len(), picture.planes.1.len());
+        }
+        thread::sleep(Duration::from_millis(5));
+    }
+    assert!(
+        audio >= 20 && video >= 10,
+        "Program callbacks absent: audio={audio}, video={video}"
+    );
+    drop(tap);
+    // SceneGraph is engine-owned and has no Drop teardown. Explicitly
+    // release its sources before forcing global shutdown in this fixture.
+    graph.clear_room().unwrap();
+    unsafe {
+        ffi::obs_shutdown();
+    }
+    println!(
+        "{}",
+        serde_json::json!({"passed":true,"audio_blocks":audio,"video_frames":video})
+    );
+    let _ = std::fs::remove_dir_all(temp);
+}
+
 fn publish_loop(
     tap: &Tap,
     sources: &Sources,
