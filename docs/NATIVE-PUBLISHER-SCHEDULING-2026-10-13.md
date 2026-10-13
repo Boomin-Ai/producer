@@ -1,0 +1,17 @@
+The staging publisher missed audio deadlines even when SDK submissions completed quickly. An instrumented baseline observed a 36 ms publisher loop gap and two recoveries in one minute; the preceding committed recovery proof observed three recoveries. Replacing relative sleeps with Mach clock waits alone still produced a recovery.
+
+The macOS publisher now requests a 10 ms time-constrained scheduling period, with a 4 ms computation budget and 8 ms constraint. It waits on the Mach clock between bounded queue drains. Measured work must be reviewed alongside loop gaps; successful policy configuration does not guarantee scheduling under arbitrary load. The policy thread's Mach send right is released immediately.
+
+OBS also delivered audio roughly 160 ms behind its capture timestamp after publication began. The shared audio/video publishing lead increases from 120 to 200 ms, adding 80 ms of local buffering. Original capture timestamps remain unchanged. The 20 ms late cutoff and zero SDK audio queue remain unchanged. The bounded video staging queue increases to 14 frames to cover the lead at up to 60 fps. Before the first audio submission, stale pre-roll may be discarded with a five-second startup limit; once playback starts, stale audio remains a fault requiring recovery. Capture callbacks accept data only after both hooks and the worker are initialized.
+
+Two separate full-minute runs completed with zero recoveries. The second observed actual 1280×720 guest playback for 20 seconds: 462 rendered frames, a maximum 200 ms frame gap, no silent observation windows, and clean shutdown. Publisher lateness peaked at 1.05 ms; loop gap 2.01 ms; work 1.00 ms. This is generated media, not physical lip-sync or speakerphone qualification. Evidence: `docs/evidence/native-publisher-steady-2026-10-13.json`.
+
+An earlier extended run overlapped a separate native OBS tap test and stopped with an unclassified capture fault. That failure is retained in `docs/evidence/native-publisher-concurrent-capture-failure-2026-10-13.json`. New diagnostics distinguish callback failures numerically; this concurrency failure must be investigated before calling the entire capture path production-qualified.
+
+The standalone real OBS tap test passed after the startup gate change. Production endpoints and the installed production app are unchanged.
+
+The deliberate 120 ms publisher stall test completed successfully with exactly one recovery, no capture fault, and clean shutdown. Maximum loop gap was 121.04 ms and the rejected audio deadline miss was 111.54 ms, confirming the strict ongoing deadline still triggers recovery. Evidence: `docs/evidence/native-publisher-forced-stall-2026-10-13.json`.
+
+A targeted concurrent OBS test attempt was inconclusive: the separate tap-test process timed out while initializing Metal. Its launcher also initially selected an application executable instead of the library test executable; that selection was corrected. These attempts are not counted as passing load qualifications. The original concurrent capture failure remains open.
+
+Capture fault codes: 1 missing audio callback data; 2 invalid audio bus/format; 3 nonfinite audio; 4 audio callback queue full or disconnected; 5 missing video callback data; 6 invalid video timestamp; 7 invalid video planes/stride; 8 disconnected video callback queue.

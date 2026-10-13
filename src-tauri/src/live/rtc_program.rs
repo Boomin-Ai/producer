@@ -15,7 +15,9 @@ use std::{
 };
 
 // Leave scheduling headroom while retaining the strict stale-audio cutoff.
-const LEAD_NS: u64 = 120_000_000;
+const LEAD_NS: u64 = 200_000_000;
+// Covers the shared lead at up to 60 fps, with bounded scheduling headroom.
+const VIDEO_QUEUE_CAPACITY: usize = 14;
 const MAX_LATE_NS: u64 = 20_000_000;
 static RECOVERIES: AtomicU64 = AtomicU64::new(0);
 #[cfg(debug_assertions)]
@@ -25,6 +27,12 @@ static VIDEO_SUBMITTED: AtomicU64 = AtomicU64::new(0);
 static MAX_AUDIO_LATE: AtomicU64 = AtomicU64::new(0);
 static MIN_AUDIO_SPACING: AtomicU64 = AtomicU64::new(u64::MAX);
 static MAX_AUDIO_CALL: AtomicU64 = AtomicU64::new(0);
+static CAPTURE_FAULT: AtomicU64 = AtomicU64::new(0);
+static STARTUP_DROPPED: AtomicU64 = AtomicU64::new(0);
+static MAX_WORK: AtomicU64 = AtomicU64::new(0);
+static REALTIME: AtomicBool = AtomicBool::new(false);
+static MAX_LOOP_GAP: AtomicU64 = AtomicU64::new(0);
+static MAX_CAPTURE_AGE: AtomicU64 = AtomicU64::new(0);
 static MAX_VIDEO_CALL: AtomicU64 = AtomicU64::new(0);
 pub fn note_recovery() {
     RECOVERIES.fetch_add(1, Ordering::Relaxed);
@@ -39,6 +47,12 @@ pub fn reset_diagnostics() {
     MIN_AUDIO_SPACING.store(u64::MAX, Ordering::Release);
     MAX_AUDIO_CALL.store(0, Ordering::Release);
     MAX_VIDEO_CALL.store(0, Ordering::Release);
+    MAX_LOOP_GAP.store(0, Ordering::Release);
+    MAX_WORK.store(0, Ordering::Release);
+    STARTUP_DROPPED.store(0, Ordering::Release);
+    CAPTURE_FAULT.store(0, Ordering::Release);
+    REALTIME.store(false, Ordering::Release);
+    MAX_CAPTURE_AGE.store(0, Ordering::Release);
 }
 pub fn counts() -> (u64, u64) {
     (
@@ -48,7 +62,7 @@ pub fn counts() -> (u64, u64) {
 }
 pub fn timing() -> serde_json::Value {
     let spacing = MIN_AUDIO_SPACING.load(Ordering::Acquire);
-    serde_json::json!({"publisher_recoveries":RECOVERIES.load(Ordering::Acquire),"maximum_audio_late_us":MAX_AUDIO_LATE.load(Ordering::Acquire)/1000,"minimum_audio_spacing_us":(spacing!=u64::MAX).then_some(spacing/1000),"maximum_audio_call_us":MAX_AUDIO_CALL.load(Ordering::Acquire),"maximum_video_call_us":MAX_VIDEO_CALL.load(Ordering::Acquire)})
+    serde_json::json!({"capture_fault_code":CAPTURE_FAULT.load(Ordering::Acquire),"program_buffer_ms":LEAD_NS/1_000_000,"publisher_recoveries":RECOVERIES.load(Ordering::Acquire),"maximum_audio_late_us":MAX_AUDIO_LATE.load(Ordering::Acquire)/1000,"minimum_audio_spacing_us":(spacing!=u64::MAX).then_some(spacing/1000),"maximum_audio_call_us":MAX_AUDIO_CALL.load(Ordering::Acquire),"startup_audio_blocks_discarded":STARTUP_DROPPED.load(Ordering::Acquire),"time_constrained_scheduling":REALTIME.load(Ordering::Acquire),"maximum_work_us":MAX_WORK.load(Ordering::Acquire)/1000,"maximum_loop_gap_us":MAX_LOOP_GAP.load(Ordering::Acquire)/1000,"maximum_capture_age_us":MAX_CAPTURE_AGE.load(Ordering::Acquire)/1000,"maximum_video_call_us":MAX_VIDEO_CALL.load(Ordering::Acquire)})
 }
 #[repr(C)]
 struct VideoScale {
@@ -84,6 +98,74 @@ extern "C" {
 #[cfg(target_os = "macos")]
 extern "C" {
     fn pthread_set_qos_class_self_np(class: u32, relative_priority: i32) -> i32;
+    fn mach_thread_self() -> u32;
+    static mach_task_self_: u32;
+    fn mach_port_deallocate(task: u32, name: u32) -> i32;
+    fn thread_policy_set(thread: u32, flavor: i32, policy: *const i32, count: u32) -> i32;
+    fn mach_absolute_time() -> u64;
+    fn mach_timebase_info(info: *mut MachTimebase) -> i32;
+    fn mach_wait_until(deadline: u64) -> i32;
+
+}
+#[cfg(target_os = "macos")]
+#[repr(C)]
+struct MachTimebase {
+    numer: u32,
+    denom: u32,
+}
+#[cfg(target_os = "macos")]
+fn configure_publisher_schedule() -> Result<(), &'static str> {
+    let mut info = MachTimebase { numer: 0, denom: 0 };
+    if unsafe { mach_timebase_info(&mut info) } != 0 || info.numer == 0 || info.denom == 0 {
+        return Err("Native program clock setup failed");
+    }
+    let ticks = |ns: u64| -> Result<i32, &'static str> {
+        let value = ns * u64::from(info.denom) / u64::from(info.numer);
+        i32::try_from(value).map_err(|_| "Native program scheduling period invalid")
+    };
+    // Four integer fields from THREAD_TIME_CONSTRAINT_POLICY: period,
+    // computation, constraint and preemptible. The loop sleeps between work,
+    // drains bounded queues, and never performs network requests.
+    let policy = [ticks(10_000_000)?, ticks(4_000_000)?, ticks(8_000_000)?, 1];
+    let thread = unsafe { mach_thread_self() };
+    let result = unsafe { thread_policy_set(thread, 2, policy.as_ptr(), 4) };
+    unsafe {
+        mach_port_deallocate(mach_task_self_, thread);
+    }
+    if result != 0 {
+        return Err("Native program time-constrained scheduling unavailable");
+    }
+    REALTIME.store(true, Ordering::Release);
+    Ok(())
+}
+/// Use the kernel absolute clock directly instead of the generic relative
+/// nanosleep timer used by thread::sleep on macOS.
+fn wait_publisher_tick() -> Result<(), &'static str> {
+    #[cfg(target_os = "macos")]
+    {
+        static TIMEBASE: std::sync::OnceLock<(u32, u32)> = std::sync::OnceLock::new();
+        let &(numer, denom) = TIMEBASE.get_or_init(|| {
+            let mut info = MachTimebase { numer: 0, denom: 0 };
+            if unsafe { mach_timebase_info(&mut info) } != 0 {
+                return (0, 0);
+            }
+            (info.numer, info.denom)
+        });
+        if numer == 0 || denom == 0 {
+            return Err("Native program clock setup failed");
+        }
+        let ticks = 1_000_000u64 * u64::from(denom) / u64::from(numer);
+        let deadline = unsafe { mach_absolute_time() }
+            .checked_add(ticks)
+            .ok_or("Native program clock overflow")?;
+        // Interrupts are harmless: the loop checks authority and due frames again.
+        unsafe {
+            mach_wait_until(deadline);
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    thread::sleep(Duration::from_millis(1));
+    Ok(())
 }
 struct Picture {
     timestamp: u64,
@@ -98,6 +180,7 @@ struct Shared {
     audio: SyncSender<(u64, Vec<i16>)>,
     video: SyncSender<Picture>,
     failed: AtomicBool,
+    ready: AtomicBool,
 }
 struct Tap {
     shared: Box<Shared>,
@@ -113,8 +196,16 @@ extern "C" fn audio_callback(param: *mut c_void, bus: usize, data: *mut ffi::aud
         return;
     }
     let shared = unsafe { &*(param as *const Shared) };
+    if !shared.ready.load(Ordering::Acquire) {
+        return;
+    }
     let Some(data) = (unsafe { data.as_ref() }) else {
-        shared.failed.store(true, Ordering::Release);
+        CAPTURE_FAULT
+            .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+            .ok();
+        shared
+            .failed
+            .store(true, Ordering::Release /* classified */);
         return;
     };
     if bus != 1
@@ -124,7 +215,12 @@ extern "C" fn audio_callback(param: *mut c_void, bus: usize, data: *mut ffi::aud
         || data.data[0].is_null()
         || data.data[1].is_null()
     {
-        shared.failed.store(true, Ordering::Release);
+        CAPTURE_FAULT
+            .compare_exchange(0, 2, Ordering::AcqRel, Ordering::Acquire)
+            .ok();
+        shared
+            .failed
+            .store(true, Ordering::Release /* classified */);
         return;
     }
     let (left, right) = unsafe {
@@ -136,13 +232,23 @@ extern "C" fn audio_callback(param: *mut c_void, bus: usize, data: *mut ffi::aud
     let mut samples = Vec::with_capacity(left.len());
     for (left, right) in left.iter().zip(right) {
         if !left.is_finite() || !right.is_finite() {
-            shared.failed.store(true, Ordering::Release);
+            CAPTURE_FAULT
+                .compare_exchange(0, 3, Ordering::AcqRel, Ordering::Acquire)
+                .ok();
+            shared
+                .failed
+                .store(true, Ordering::Release /* classified */);
             return;
         }
         samples.push(((left + right) * 0.5 * 32767.).clamp(-32768., 32767.) as i16);
     }
     if shared.audio.try_send((data.timestamp, samples)).is_err() {
-        shared.failed.store(true, Ordering::Release);
+        CAPTURE_FAULT
+            .compare_exchange(0, 4, Ordering::AcqRel, Ordering::Acquire)
+            .ok();
+        shared
+            .failed
+            .store(true, Ordering::Release /* classified */);
     }
 }
 extern "C" fn video_callback(param: *mut c_void, data: *mut ffi::video_data) {
@@ -150,12 +256,25 @@ extern "C" fn video_callback(param: *mut c_void, data: *mut ffi::video_data) {
         return;
     }
     let shared = unsafe { &*(param as *const Shared) };
+    if !shared.ready.load(Ordering::Acquire) {
+        return;
+    }
     let Some(data) = (unsafe { data.as_ref() }) else {
-        shared.failed.store(true, Ordering::Release);
+        CAPTURE_FAULT
+            .compare_exchange(0, 5, Ordering::AcqRel, Ordering::Acquire)
+            .ok();
+        shared
+            .failed
+            .store(true, Ordering::Release /* classified */);
         return;
     };
     if data.timestamp == 0 {
-        shared.failed.store(true, Ordering::Release);
+        CAPTURE_FAULT
+            .compare_exchange(0, 6, Ordering::AcqRel, Ordering::Acquire)
+            .ok();
+        shared
+            .failed
+            .store(true, Ordering::Release /* classified */);
         return;
     }
     let mut planes = Vec::with_capacity(3);
@@ -166,7 +285,12 @@ extern "C" fn video_callback(param: *mut c_void, data: *mut ffi::video_data) {
     ] {
         let stride = data.linesize[index];
         if data.data[index].is_null() || stride < width || stride > 8192 {
-            shared.failed.store(true, Ordering::Release);
+            CAPTURE_FAULT
+                .compare_exchange(0, 7, Ordering::AcqRel, Ordering::Acquire)
+                .ok();
+            shared
+                .failed
+                .store(true, Ordering::Release /* classified */);
             return;
         }
         let mut plane = Vec::with_capacity((width * height) as usize);
@@ -185,7 +309,12 @@ extern "C" fn video_callback(param: *mut c_void, data: *mut ffi::video_data) {
         planes: (planes.remove(0), planes.remove(0), planes.remove(0)),
     };
     if let Err(TrySendError::Disconnected(_)) = shared.video.try_send(picture) {
-        shared.failed.store(true, Ordering::Release);
+        CAPTURE_FAULT
+            .compare_exchange(0, 8, Ordering::AcqRel, Ordering::Acquire)
+            .ok();
+        shared
+            .failed
+            .store(true, Ordering::Release /* classified */);
     }
 }
 impl Tap {
@@ -197,6 +326,7 @@ impl Tap {
                 audio: audio_sender,
                 video: video_sender,
                 failed: AtomicBool::new(false),
+                ready: AtomicBool::new(false),
             }),
             audio_frames,
             video_frames,
@@ -294,6 +424,15 @@ impl Publisher {
                     fault.store(true, Ordering::Release);
                     return Err("Native program scheduling setup failed");
                 }
+                #[cfg(target_os = "macos")]
+                if let Err(error) = configure_publisher_schedule() {
+                    fault.store(true, Ordering::Release);
+                    return Err(error);
+                }
+                // Both callbacks are registered before accepting a timeline.
+                // Audio produced while video registration/thread setup blocks is
+                // startup pre-roll, not queued live program audio.
+                tap.shared.ready.store(true, Ordering::Release);
                 let result = publish_loop(&tap, &sources, &done, &expires);
                 sources.clear();
                 if result == Err("Native program audio publication deadline missed") {
@@ -376,6 +515,7 @@ mod tests {
             )
             .unwrap();
         let tap = Tap::start().unwrap();
+        tap.shared.ready.store(true, Ordering::Release);
         let until = std::time::Instant::now() + Duration::from_secs(2);
         let (mut audio, mut video, mut audio_timestamp, mut video_timestamp) = (0, 0, 0, 0);
         while std::time::Instant::now() < until {
@@ -414,6 +554,7 @@ fn publish_loop(
     stop: &AtomicBool,
     lease: &AtomicU64,
 ) -> Result<(), &'static str> {
+    let startup_deadline = std::time::Instant::now() + Duration::from_secs(5);
     let mut carry = VecDeque::new();
     let mut carry_at = 0;
     let mut audio_end = None;
@@ -421,6 +562,7 @@ fn publish_loop(
     let mut video = VecDeque::<Picture>::new();
     let mut last_audio = None;
     let mut last_video = 0;
+    let mut last_loop = unsafe { os_gettime_ns() };
     #[cfg(debug_assertions)]
     let delay_proof = std::env::var("PRODUCER_RTC_PROGRAM_DELAY_PROOF").as_deref() == Ok("1")
         && std::env::var("PRODUCER_RTC_PROGRAM_PROOF").as_deref() == Ok("1");
@@ -435,8 +577,12 @@ fn publish_loop(
         if wall_ms() >= lease.load(Ordering::Acquire) {
             return Err("Native program lease expired");
         }
+        let loop_now = unsafe { os_gettime_ns() };
+        MAX_LOOP_GAP.fetch_max(loop_now.saturating_sub(last_loop), Ordering::Relaxed);
+        last_loop = loop_now;
         let mut captured = tap.drain()?;
         for (timestamp, samples) in captured.audio.drain(..) {
+            MAX_CAPTURE_AGE.fetch_max(loop_now.saturating_sub(timestamp), Ordering::Relaxed);
             if audio_end.is_some_and(|end: u64| timestamp.abs_diff(end) > 2_000_000) {
                 return Err("Native program audio timestamp discontinuity");
             }
@@ -472,11 +618,26 @@ fn publish_loop(
             }
             last_video = frame.timestamp;
             video.push_back(frame);
-            while video.len() > 4 {
+            while video.len() > VIDEO_QUEUE_CAPACITY {
                 video.pop_front();
             }
         }
         let now = unsafe { os_gettime_ns() };
+        if last_audio.is_none() {
+            // No audio RTP timeline has been submitted yet. Drain stale OBS
+            // pre-roll instead of restarting two newly published tracks for it.
+            // Once started, stale audio is always a fault, never silently dropped.
+            while audio
+                .front()
+                .is_some_and(|(due, _)| now.saturating_sub(*due) > MAX_LATE_NS)
+            {
+                audio.pop_front();
+                STARTUP_DROPPED.fetch_add(1, Ordering::Relaxed);
+            }
+            if std::time::Instant::now() >= startup_deadline {
+                return Err("Native program audio startup remained stale");
+            }
+        }
         if audio.front().is_some_and(|(due, _)| *due <= now)
             && last_audio.is_none_or(|last| now - last >= 8_000_000)
         {
@@ -507,7 +668,10 @@ fn publish_loop(
             latest = video.pop_front();
         }
         if let Some(frame) = latest {
-            if now - (frame.timestamp + LEAD_NS) <= MAX_LATE_NS && !stop.load(Ordering::Acquire) {
+            if last_audio.is_some()
+                && now - (frame.timestamp + LEAD_NS) <= MAX_LATE_NS
+                && !stop.load(Ordering::Acquire)
+            {
                 let call = std::time::Instant::now();
                 if sources.video(
                     (&frame.planes.0, &frame.planes.1, &frame.planes.2),
@@ -518,7 +682,11 @@ fn publish_loop(
                 MAX_VIDEO_CALL.fetch_max(call.elapsed().as_micros() as u64, Ordering::Relaxed);
             }
         }
-        thread::sleep(Duration::from_millis(1));
+        MAX_WORK.fetch_max(
+            unsafe { os_gettime_ns() }.saturating_sub(loop_now),
+            Ordering::Relaxed,
+        );
+        wait_publisher_tick()?;
     }
     Ok(())
 }

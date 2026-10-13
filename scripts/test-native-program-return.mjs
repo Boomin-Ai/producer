@@ -20,6 +20,9 @@ await writeFile(directory+'/operator.json',JSON.stringify(operator),{mode:0o600}
 const base='https://boomin-rtc-pilot.kleveland-bishop.workers.dev',path='/v1/app/live/rooms/'+operator.roomId;
 const binary=process.env.PRODUCER_RTC_PROOF_BINARY ?? '/Users/klevelandbishop/Library/Caches/producer-rtc-build/debug/producer';
 const report={passed:false,production_changed:false,ordinary_room_ui_exercised:false,qualification:'Generated OBS program through actual native publisher, LiveKit Cloud and the existing guest page; no physical AEC or audiovisual synchronization qualification.',steps:[]};
+const observationMs=Number(process.env.PRODUCER_RTC_RETURN_OBSERVE_MS??2000);
+assert(Number.isInteger(observationMs)&&observationMs>=2000&&observationMs<=20000);
+report.guest_observation_ms=observationMs;
 let native,nativeExit,browser,page,watchdog;
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function until(check,ms=15000){const end=performance.now()+ms;while(performance.now()<end){if(await check())return;await wait(150);}throw Error('native_program_timeout');}
@@ -55,24 +58,25 @@ try {
   const audio=document.getElementById('host-audio');const video=document.querySelector('.guest-room-stage > video');
   return !!audio?.srcObject?.getAudioTracks().length&&!!video&&video.videoWidth>0;
  }),20000);
- report.return_media=await page.evaluate(async()=>{
+ report.return_media=await page.evaluate(async(observationMs)=>{
   const audio=document.getElementById('host-audio');let video=document.querySelector('.guest-room-stage > video');
   const context=new AudioContext();await context.resume();let stream=audio.srcObject;let source=context.createMediaStreamSource(stream);const analyser=context.createAnalyser();analyser.fftSize=2048;source.connect(analyser);
-  const samples=new Float32Array(analyser.fftSize);let maximumRms=0,frames=0,streamChanges=0;
+  const samples=new Float32Array(analyser.fftSize);let maximumRms=0,frames=0,streamChanges=0,maximumFrameGap=0,lastFrame=performance.now(),silentWindows=0,maximumSilentWindows=0;
   // HTML playback counters reset when a fenced generation replaces srcObject.
   // Count rendered callbacks instead of subtracting two resettable counters.
-  let callback;const rendered=()=>{frames++;callback=video.requestVideoFrameCallback(rendered);};callback=video.requestVideoFrameCallback(rendered);
+  let callback;const rendered=()=>{const now=performance.now();maximumFrameGap=Math.max(maximumFrameGap,now-lastFrame);lastFrame=now;frames++;callback=video.requestVideoFrameCallback(rendered);};callback=video.requestVideoFrameCallback(rendered);
   const canvas=document.createElement('canvas');canvas.width=8;canvas.height=8;const draw=canvas.getContext('2d');
-  for(let i=0;i<40;i++){
+  for(let i=0;i<Math.ceil(observationMs/50);i++){
    await new Promise(r=>setTimeout(r,50));
    const current=document.querySelector('.guest-room-stage > video');if(current&&current!==video){video.cancelVideoFrameCallback(callback);video=current;callback=video.requestVideoFrameCallback(rendered);}
    if(audio.srcObject&&audio.srcObject!==stream){source.disconnect();stream=audio.srcObject;source=context.createMediaStreamSource(stream);source.connect(analyser);streamChanges++;}
-   analyser.getFloatTimeDomainData(samples);maximumRms=Math.max(maximumRms,Math.sqrt(samples.reduce((sum,value)=>sum+value*value,0)/samples.length));
+   analyser.getFloatTimeDomainData(samples);const rms=Math.sqrt(samples.reduce((sum,value)=>sum+value*value,0)/samples.length);maximumRms=Math.max(maximumRms,rms);silentWindows=rms<0.01?silentWindows+1:0;maximumSilentWindows=Math.max(maximumSilentWindows,silentWindows);
   }
   video.cancelVideoFrameCallback(callback);draw.drawImage(video,0,0,8,8);const pixel=[...draw.getImageData(4,4,1,1).data].slice(0,3);source.disconnect();await context.close();
-  return {width:video.videoWidth,height:video.videoHeight,decoded_frames:frames,stream_changes:streamChanges,maximum_rms:maximumRms,center_rgb:pixel};
- });
- assert(report.return_media.decoded_frames>=10);assert(report.return_media.maximum_rms>0.01);assert(report.return_media.center_rgb[0]>150&&report.return_media.center_rgb[1]<80&&report.return_media.center_rgb[2]<80);
+  return {width:video.videoWidth,height:video.videoHeight,decoded_frames:frames,stream_changes:streamChanges,maximum_rms:maximumRms,center_rgb:pixel,maximum_frame_gap_ms:Math.round(maximumFrameGap),maximum_silent_window_ms:maximumSilentWindows*50};
+ },observationMs);
+ assert(report.return_media.decoded_frames>=10);assert(report.return_media.maximum_rms>0.01);if(observationMs===2000)assert(report.return_media.center_rgb[0]>150&&report.return_media.center_rgb[1]<80&&report.return_media.center_rgb[2]<80);
+ if(process.env.PRODUCER_RTC_PROGRAM_DELAY_PROOF!=='1'){assert(report.return_media.maximum_frame_gap_ms<1000);assert(report.return_media.maximum_silent_window_ms<1000);}
  await command('revoke',{operation:'revoke',participant_id:guest.id});await browser.close();browser=null;
  report.checkpoint='owner_shutdown';assert.equal(await nativeExit,0);report.final=await counts();assert.equal(report.final.passed,true);assert.equal(errors,0);
  if(process.env.PRODUCER_RTC_PROGRAM_DELAY_PROOF==='1')assert(report.final.timing.publisher_recoveries>=1);
