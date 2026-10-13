@@ -232,8 +232,8 @@ impl HostOwner {
                         }
                     }
                     _ = heartbeat.tick() => {
-                        if control.renew().await.is_err() {
-                            failure = Some("Native RTC renewal failed"); break;
+                        if let Err(error) = control.renew().await {
+                            failure = Some(error); break;
                         }
                         #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
                         if let Some(program) = program.as_ref() { program.renew(control.lease_expires_at_ms().unwrap_or(0)); }

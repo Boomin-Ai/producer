@@ -368,17 +368,17 @@ impl State {
             }
             while guest.audio.front().is_some_and(|(at, _)| *at <= now) {
                 let (at, block) = guest.audio.pop_front().unwrap();
+                // Keep the audio clock warm for preview synchronization, but
+                // never submit backstage PCM to OBS/program/recording mixers.
+                if !guest.permission.on_stage() { continue; }
                 if now.saturating_duration_since(at) <= Duration::from_millis(30)
                     && guest.permission.allows(
                         guest.permission.rtc_identity(),
                         PublishSource::Microphone,
                         now,
                     )
-                    && guest.output.audio(
-                        &block.samples[..480 * block.channels as usize],
-                        block.channels,
-                        at,
-                    )
+                    && submit_program_audio(&guest.permission, guest.output.as_ref(),
+                        &block.samples[..480 * block.channels as usize], block.channels, at, now)
                 {
                     self.counters.audio.fetch_add(1, Ordering::Relaxed);
                 } else {
@@ -759,5 +759,40 @@ mod tests {
                 std::env::remove_var(name);
             }
         }
+    }
+}
+
+fn submit_program_audio(permission: &Permission, output: &dyn Output, samples: &[i16], channels: u32, at: Instant, now: Instant) -> bool {
+    permission.on_stage()
+        && permission.allows(permission.rtc_identity(), PublishSource::Microphone, now)
+        && output.audio(samples, channels, at)
+}
+
+#[cfg(test)]
+mod backstage_audio_tests {
+    use super::*;
+    use crate::authority::{HostReceipt, Snapshot};
+    use serde_json::json;
+    struct Probe(std::sync::atomic::AtomicUsize);
+    impl Output for Probe {
+        fn video(&self, _: Video<'_>, _: Instant) -> bool { true }
+        fn audio(&self, _: &[i16], _: u32, _: Instant) -> bool { self.0.fetch_add(1,Ordering::Relaxed);true }
+        fn invalidate(&self) {}
+    }
+    #[test]
+    fn backstage_pcm_never_reaches_program_output_but_on_stage_pcm_does() {
+        let id="11111111-1111-4111-8111-111111111111";let now=Instant::now();let wall=1791800000000u64;
+        let receipt=json!({"brand_id":id,"room_id":id,"run_id":id,"host_process_id":id,"host_participant_id":id,
+          "transport":"livekit","endpoint":"wss://fixture.livekit.cloud","state":"active","host_lease_epoch":1,"control_revision":1,"host_lease_expires_at_ms":wall+45000});
+        let expected:HostReceipt=serde_json::from_value(receipt.clone()).unwrap();let identity=format!("guest-{id}-e1-g1");
+        let probe=Probe(std::sync::atomic::AtomicUsize::new(0));
+        for on_stage in [false,true] {
+            let wire=json!({"schema_version":1,"receipt":receipt,"observed_at_ms":wall,"guests":[{"participant_id":id,"rtc_identity":identity,"authorization_generation":1,"publish_sources":["camera","microphone"],"on_stage":on_stage,"expires_at_ms":wall+45000}]});
+            let snapshot=Snapshot::parse(&serde_json::to_vec(&wire).unwrap(),&expected,wall,now,now).unwrap();
+            let permission=snapshot.permission(&identity,PublishSource::Microphone,now).unwrap();
+            assert_eq!(submit_program_audio(permission,&probe,&[123;480],1,now,now),on_stage);
+            assert!(!submit_program_audio(permission,&probe,&[123;480],1,now,now+Duration::from_secs(5)));
+        }
+        assert_eq!(probe.0.load(Ordering::Relaxed),1);
     }
 }

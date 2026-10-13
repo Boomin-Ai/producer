@@ -117,6 +117,10 @@ pub struct Control {
     receipt: Option<Receipt>,
     ticket_renewed_ms: u64,
 }
+fn renewable_after_read(error: &str) -> bool {
+    matches!(error, "RTC authority changed" | "RTC request timed out" | "RTC request failed" | "RTC response failed" | "RTC authority temporarily unavailable")
+}
+
 impl Control {
     pub fn room_id(&self) -> &str {
         &self.operator.room_id
@@ -478,9 +482,11 @@ impl Control {
         let previous = self.receipt.clone().ok_or("No owned RTC run")?;
         match self.command("renew").await {
             Ok(_) => Ok(()),
-            Err("RTC authority changed") => {
-                // A coordinated stage/grant change may advance revision between
-                // polls. Recheck this SAME connection/run/epoch independently;
+            Err(error) if renewable_after_read(error) => {
+                #[cfg(debug_assertions)]
+                eprintln!("Native RTC renewal reconciliation: {error}");
+                // A stale CAS or lost response can accompany an already committed
+                // renewal. Recheck this SAME connection/run/epoch independently;
                 // never reclaim or mint from the failed command's old receipt.
                 let snapshot = self.read_media_authority(&previous).await?;
                 self.receipt = Some(snapshot.receipt().clone());
@@ -601,6 +607,12 @@ pub fn selftest(path: &std::path::Path) -> Result<(), &'static str> {
 mod room_command_tests {
     use super::*;
     const ID: &str = "11111111-1111-4111-8111-111111111111";
+    #[test]
+    fn renewal_recovery_requires_a_fresh_owned_read_and_excludes_rejections() {
+        for error in ["RTC authority changed", "RTC request timed out", "RTC request failed", "RTC response failed", "RTC authority temporarily unavailable"] { assert!(renewable_after_read(error)); }
+        for error in ["RTC authority rejected request", "Native guest authority response expired", "RTC room control authority mismatch", "Invalid control response"] { assert!(!renewable_after_read(error)); }
+    }
+
     #[test]
     fn webview_cannot_supply_routes_authority_or_change_grant_duration() {
         for command in [

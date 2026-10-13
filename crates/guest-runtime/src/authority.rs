@@ -31,6 +31,8 @@ struct WirePermission {
     authorization_generation: u64,
     publish_sources: Vec<PublishSource>,
     expires_at_ms: u64,
+    #[serde(default = "default_on_stage")]
+    on_stage: bool,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -40,14 +42,18 @@ struct WireSnapshot {
     observed_at_ms: u64,
     guests: Vec<WirePermission>,
 }
+fn default_on_stage() -> bool { true }
+
 #[derive(Clone)]
 pub struct Permission {
     participant_id: String,
     identity: String,
     sources: Vec<PublishSource>,
     deadline: Instant,
+    on_stage: bool,
 }
 impl Permission {
+    pub fn on_stage(&self) -> bool { self.on_stage }
     pub fn rtc_identity(&self) -> &str {
         &self.identity
     }
@@ -154,6 +160,7 @@ impl Snapshot {
                 identity: p.rtc_identity,
                 sources: p.publish_sources,
                 deadline: guest_deadline,
+                on_stage: p.on_stage,
             });
         }
         Ok(Self {
@@ -208,6 +215,21 @@ mod tests {
             identity,
         )
     }
+    #[test]
+    fn backstage_permission_keeps_camera_warm_but_does_not_allow_program_audio() {
+        let (expected, mut wire, identity) = fixture();
+        wire["guests"][0]["on_stage"] = json!(false);
+        let start = Instant::now();
+        let snapshot = parse(&expected, &wire, start, start).unwrap();
+        let permission = snapshot.permission(&identity, PublishSource::Camera, start).unwrap();
+        assert!(!permission.on_stage());
+        wire["guests"][0]["on_stage"] = json!(true);
+        let snapshot = parse(&expected, &wire, start, start).unwrap();
+        let permission = snapshot.permission(&identity, PublishSource::Microphone, start).unwrap();
+        assert!(permission.on_stage());
+        assert_eq!(permission.rtc_identity(), identity);
+    }
+
     fn parse(
         expected: &HostReceipt,
         wire: &Value,

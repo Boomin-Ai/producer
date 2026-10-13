@@ -69,7 +69,7 @@ import { DEMO_CHAT, DEMO_VIDEO_URL, demoOn } from "../lib/demo";
 import { activeEndpointId, isBoomin, resolveActiveEndpoint } from "../lib/workspace";
 import { nativeGuestSources } from "../lib/nativeGuestSources";
 import { BugSheet } from "./BugSheet";
-import { dismiss, dismissKey, notify, notifyError } from "../lib/notices";
+import { dismiss, dismissKey, errText, notify, notifyError } from "../lib/notices";
 import { NoticeHost } from "../components/Notice";
 import { PlacementButton } from "../components/PlacementButton";
 import { PLACEMENTS } from "../lib/placement";
@@ -6279,9 +6279,11 @@ export function LiveView({
 
   const nativeRtcLifetime = useRef({ closed: false, serverRoom: null as string | null, converted: new Set<string>() });
   const rosterTickBusy = useRef(false);
+  const rosterFailure = useRef<string | null>(null);
   useEffect(() => {
     const lifetime = { closed: false, serverRoom: null as string | null, converted: new Set<string>() };
     nativeRtcLifetime.current = lifetime;
+    rosterFailure.current = null;
     return () => {
       lifetime.closed = true;
     };
@@ -6345,8 +6347,9 @@ export function LiveView({
         const list = full.filter((g) => !isMonitor(g));
         // Reconcile, never replace-on-equal: an identical roster is not news.
         setRoster((prev) => (JSON.stringify(prev) === JSON.stringify(list) ? prev : list));
-        dismissKey("guests");
         if (roomRoleRef.current !== "host") {
+          dismissKey("guests");
+          rosterFailure.current = null;
           // Not the host: the roster is all we do. No render pages (they would
           // be a second host peer on every guest's channel), no stage post
           // from our engine (we have none for this room). What we DO want is
@@ -6676,8 +6679,16 @@ export function LiveView({
         if (stageKey !== stagePostedRef.current && endpointRef.current && cfg.server_room_id) {
           void postStageTruth(stageIds, "roster");
         }
+        // Clear the incident only after the entire host reconciliation succeeds.
+        // A successful roster HTTP response alone does not restore a stopped SDK.
+        dismissKey("guests");
+        rosterFailure.current = null;
       } catch (e) {
-        if (alive) notifyError(e, { key: "guests" });
+        const message = errText(e);
+        if (alive && rosterFailure.current !== message) {
+          rosterFailure.current = message;
+          notifyError(e, { key: "guests" });
+        }
       } finally {
         rosterTickBusy.current = false;
       }
