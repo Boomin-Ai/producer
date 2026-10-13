@@ -240,6 +240,8 @@ impl State {
                 changed |= track.bind(ssrc, &mut self.retired_ssrc);
             }
             if changed {
+                #[cfg(debug_assertions)]
+                eprintln!("Native RTC receiver clock reset: binding changed");
                 guest.clear();
                 if let Some(output) = self.outputs.open(&guest.permission.source_id()) {
                     guest.output = output;
@@ -505,6 +507,8 @@ impl GuestMedia for Receiver {
                 if valid {
                     guest.permission = next.unwrap().clone();
                 } else if let Some(guest) = state.remove(&id) {
+                    #[cfg(debug_assertions)]
+                    eprintln!("Native RTC receive permission retired");
                     retired.push(guest);
                 }
             }
@@ -546,7 +550,7 @@ impl GuestMedia for Receiver {
                 counters.workers.fetch_add(1, Ordering::AcqRel);
                 while !stopped.load(Ordering::Acquire) {
                     let result = runtime.block_on(async {
-                        tokio::time::timeout(Duration::from_millis(100), track.get_stats()).await
+                        tokio::time::timeout(Duration::from_millis(500), track.get_stats()).await
                     });
                     if let Ok(Ok(stats)) = result {
                         let streams: Vec<_> = stats
@@ -556,16 +560,16 @@ impl GuestMedia for Receiver {
                                 _ => None,
                             })
                             .collect();
-                        binding.store(
-                            if streams.len() == 1 && streams[0].kind == kind {
-                                streams[0].ssrc
-                            } else {
-                                0
-                            },
-                            Ordering::Release,
-                        );
+                        let next = if streams.len() == 1 && streams[0].kind == kind { streams[0].ssrc } else { 0 };
+                        let previous = binding.swap(next, Ordering::AcqRel);
+                        #[cfg(debug_assertions)]
+                        if previous != next {
+                            eprintln!("Native RTC binding observed: kind={kind} available={} inbound={}", next != 0, streams.len());
+                        }
                     } else {
-                        binding.store(0, Ordering::Release);
+                        let previous = binding.swap(0, Ordering::AcqRel);
+                        #[cfg(debug_assertions)]
+                        if previous != 0 { eprintln!("Native RTC receiver binding unavailable: stats deadline or failure"); }
                     }
                     for _ in 0..25 {
                         if stopped.load(Ordering::Acquire) {

@@ -109,6 +109,7 @@ fn now() -> Result<u64, &'static str> {
         .map_err(|_| "Clock unavailable")?
         .as_millis() as u64)
 }
+#[derive(Clone)]
 pub struct Control {
     http: reqwest::Client,
     operator: Operator,

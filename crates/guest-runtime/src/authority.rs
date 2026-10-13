@@ -169,6 +169,14 @@ impl Snapshot {
             deadline,
         })
     }
+    pub fn supersedes(&self, previous: &Self) -> bool {
+        let a = &self.receipt; let b = &previous.receipt;
+        a.brand_id == b.brand_id && a.room_id == b.room_id && a.run_id == b.run_id
+            && a.host_process_id == b.host_process_id && a.host_participant_id == b.host_participant_id
+            && a.host_lease_epoch == b.host_lease_epoch && a.endpoint == b.endpoint
+            && (a.control_revision > b.control_revision ||
+                (a.control_revision == b.control_revision && self.deadline > previous.deadline))
+    }
     pub fn receipt(&self) -> &HostReceipt {
         &self.receipt
     }

@@ -23,6 +23,26 @@ mod timing {
     pub mod sender_clock;
 }
 
+#[derive(Clone)]
+pub struct MediaAuthorityUpdater {
+    authority: watch::Sender<Option<Arc<authority::Snapshot>>>,
+    healthy: Arc<AtomicBool>,
+}
+impl MediaAuthorityUpdater {
+    pub fn publish(&self, snapshot: authority::Snapshot) -> Result<bool, &'static str> {
+        if !snapshot.current(std::time::Instant::now()) { return Err("Native guest authority response expired"); }
+        let mut closed = false;
+        let changed = self.authority.send_if_modified(|current| {
+            // Check inside the watch write lock: close cannot be followed by a
+            // late read restoring media permissions to a stopped connection.
+            if !self.healthy.load(Ordering::Acquire) { closed = true; return false; }
+            if current.as_ref().is_some_and(|old| !snapshot.supersedes(old)) { return false; }
+            *current = Some(Arc::new(snapshot)); true
+        });
+        if closed { Err("Native RTC connection unavailable") } else { Ok(changed) }
+    }
+}
+
 pub struct Connection {
     room: Option<Room>,
     events: Option<JoinHandle<()>>,
@@ -134,9 +154,10 @@ impl Connection {
         if !self.healthy() {
             return Err("Native RTC connection unavailable");
         }
-        self.authority
-            .send(Some(Arc::new(snapshot)))
-            .map_err(|_| "Native RTC event owner unavailable")
+        self.media_authority_updater().publish(snapshot).map(|_| ())
+    }
+    pub fn media_authority_updater(&self) -> MediaAuthorityUpdater {
+        MediaAuthorityUpdater { authority: self.authority.clone(), healthy: self.healthy.clone() }
     }
     pub fn healthy(&self) -> bool {
         self.healthy.load(Ordering::Acquire)
@@ -183,5 +204,46 @@ impl Drop for Connection {
                 });
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod authority_update_tests {
+    use super::*;
+    use serde_json::json;
+    fn snapshot(revision: u64, on_stage: bool, age: Duration) -> authority::Snapshot {
+        let id="11111111-1111-4111-8111-111111111111";
+        let wall=1791800000000u64;let start=std::time::Instant::now()-age;
+        let receipt=json!({"brand_id":id,"room_id":id,"run_id":id,"host_process_id":id,"host_participant_id":id,"transport":"livekit","endpoint":"wss://fixture.livekit.cloud","state":"active","host_lease_epoch":1,"control_revision":revision,"host_lease_expires_at_ms":wall+45000});
+        let expected:authority::HostReceipt=serde_json::from_value(receipt.clone()).unwrap();
+        let wire=json!({"schema_version":1,"receipt":receipt,"observed_at_ms":wall,"guests":[{"participant_id":id,"rtc_identity":format!("guest-{id}-e1-g1"),"authorization_generation":1,"publish_sources":["camera","microphone"],"on_stage":on_stage,"expires_at_ms":wall+45000}]});
+        authority::Snapshot::parse(&serde_json::to_vec(&wire).unwrap(),&expected,wall,start,std::time::Instant::now()).unwrap()
+    }
+    #[test]
+    fn delayed_old_revision_cannot_restore_broadcast_audio() {
+        let (sender,_receiver)=watch::channel(None);
+        let updater=MediaAuthorityUpdater { authority: sender.clone(), healthy:Arc::new(AtomicBool::new(true)) };
+        assert!(updater.publish(snapshot(9,false,Duration::ZERO)).unwrap());
+        assert!(!updater.publish(snapshot(8,true,Duration::ZERO)).unwrap());
+        let value=sender.borrow();let snapshot=value.as_ref().unwrap();
+        let id="guest-11111111-1111-4111-8111-111111111111-e1-g1";
+        assert!(!snapshot.permission(id,producer_guest_session::PublishSource::Microphone,std::time::Instant::now()).unwrap().on_stage());
+    }
+    #[test]
+    fn older_same_revision_response_cannot_reduce_freshness() {
+        let (sender,_receiver)=watch::channel(None);
+        let updater=MediaAuthorityUpdater { authority:sender.clone(), healthy:Arc::new(AtomicBool::new(true)) };
+        assert!(updater.publish(snapshot(9,true,Duration::ZERO)).unwrap());
+        assert!(!updater.publish(snapshot(9,true,Duration::from_secs(1))).unwrap());
+    }
+    #[test]
+    fn closed_connection_cannot_be_revived_by_pending_read() {
+        let (sender,_receiver)=watch::channel(None);
+        let health=Arc::new(AtomicBool::new(true));
+        let updater=MediaAuthorityUpdater { authority:sender.clone(),healthy:health.clone() };
+        assert!(updater.publish(snapshot(9,true,Duration::ZERO)).unwrap());
+        health.store(false,Ordering::Release);sender.send_replace(None);
+        assert!(updater.publish(snapshot(10,true,Duration::ZERO)).is_err());
+        assert!(sender.borrow().is_none());
     }
 }

@@ -5,9 +5,67 @@ use producer_guest_runtime::Connection;
 use std::sync::{Arc, Weak};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::{
-    sync::{mpsc, oneshot},
-    task::JoinHandle,
+    sync::{mpsc, oneshot, watch},
+    task::{JoinHandle, JoinSet},
 };
+
+/// Permission reads do not share the mutation queue or renew its lease.
+/// At most two reads overlap; request-start expiry and monotonic revision
+/// publication prevent slow responses from reviving old grants.
+struct AuthorityReader {
+    updates: watch::Sender<Control>,
+    failed: watch::Receiver<Option<&'static str>>,
+    stop: Option<oneshot::Sender<()>>,
+    task: Option<JoinHandle<()>>,
+}
+impl AuthorityReader {
+    fn start(control: Control, updater: producer_guest_runtime::MediaAuthorityUpdater) -> Self {
+        let (updates, contexts) = watch::channel(control);
+        let (failure, failed) = watch::channel(None);
+        let (stop, mut stopped) = oneshot::channel();
+        let task = tokio::spawn(async move {
+            let mut tick = tokio::time::interval(Duration::from_millis(500));
+            tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            let mut pending = JoinSet::new();
+            let mut failures = 0u8;
+            loop {
+                tokio::select! {
+                    biased;
+                    _ = &mut stopped => break,
+                    result = pending.join_next(), if !pending.is_empty() => {
+                        let result = result.unwrap().unwrap_or(Err("Native authority read task failed"));
+                        match result.and_then(|snapshot| updater.publish(snapshot)) {
+                            Ok(_) => failures = 0,
+                            Err(error) => {
+                                failures = failures.saturating_add(1);
+                                if failures >= 3 || !matches!(error,
+                                    "RTC request failed" | "RTC request timed out" | "RTC response failed" |
+                                    "RTC authority temporarily unavailable" | "Native guest authority response expired") {
+                                    let _ = failure.send(Some(error)); break;
+                                }
+                            }
+                        }
+                    }
+                    _ = tick.tick(), if pending.len() < 2 => {
+                        let mut reader = contexts.borrow().clone();
+                        pending.spawn(async move { reader.media_authority().await });
+                    }
+                }
+            }
+            pending.abort_all();
+            while pending.join_next().await.is_some() {}
+        });
+        Self { updates, failed, stop: Some(stop), task: Some(task) }
+    }
+    fn update(&self, control: &Control) { let _ = self.updates.send(control.clone()); }
+    async fn close(&mut self) {
+        if let Some(stop) = self.stop.take() { let _ = stop.send(()); }
+        if let Some(task) = self.task.take() { let _ = task.await; }
+    }
+}
+impl Drop for AuthorityReader {
+    fn drop(&mut self) { if let Some(stop) = self.stop.take() { let _ = stop.send(()); } }
+}
 
 struct RoomRequest {
     command: RoomCommand,
@@ -176,10 +234,8 @@ impl HostOwner {
             heartbeat.tick().await;
             let mut safety = tokio::time::interval(Duration::from_millis(100));
             safety.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-            let mut authority_poll = tokio::time::interval(Duration::from_secs(1));
-            authority_poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            let mut authority_reader = AuthorityReader::start(control.clone(), connection.media_authority_updater());
             let mut failure = None;
-            let mut authority_failures = 0u8;
             #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
             let mut program_recoveries = std::collections::VecDeque::<std::time::Instant>::new();
             loop {
@@ -235,6 +291,7 @@ impl HostOwner {
                         if let Err(error) = control.renew().await {
                             failure = Some(error); break;
                         }
+                        authority_reader.update(&control);
                         #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
                         if let Some(program) = program.as_ref() { program.renew(control.lease_expires_at_ms().unwrap_or(0)); }
                     }
@@ -258,33 +315,18 @@ impl HostOwner {
                             connection.media_authority(after)?;
                             result
                         }.await;
+                        authority_reader.update(&control);
                         let _=request.reply.send(result);
                     }
-                    _ = authority_poll.tick() => {
-                        match control.media_authority().await {
-                            Ok(snapshot) => {
-                                if connection.media_authority(snapshot).is_err(){failure=Some("Native media authority handoff failed");break;}
-                                authority_failures=0;
-                            },
-                            Err(error) => {
-                                // Read-only refresh failures do not invalidate the
-                                // owned run. Incoming permissions still expire in
-                                // the independent receiver: retries cannot extend
-                                // a stale permit or keep delivering old media.
-                                // Rejections and malformed authority remain fatal.
-                                authority_failures=authority_failures.saturating_add(1);
-                                if authority_failures>=3 || !matches!(error,
-                                    "RTC request failed" | "RTC request timed out" | "RTC response failed" |
-                                    "RTC authority temporarily unavailable" |
-                                    "Native guest authority response expired") {
-                                    failure=Some(error);break;
-                                }
-                            }
-                        }
+                    changed = authority_reader.failed.changed() => {
+                        failure = Some(if changed.is_err() { "Native authority reader stopped" }
+                            else { authority_reader.failed.borrow().unwrap_or("Native authority reader stopped") });
+                        break;
                     }
 
                 }
             }
+            authority_reader.close().await;
             // Close SDK before ending authority; queue/media adapters must retire
             // before this boundary once they are installed. All normal exits join.
             #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
