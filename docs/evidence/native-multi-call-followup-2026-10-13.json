@@ -40,6 +40,41 @@
     "stale_audio_cutoff_ms": 20,
     "candidate_live_verification": "pending",
     "capture_queue_tests_passed": 2,
-    "native_engine_test_ignored": 1
+    "native_engine_test_ignored": 1,
+    "candidate_400ms_alone": "failed: capture age reached 548636 us"
+  },
+  "fixed_mixer_candidate": {
+    "api": "obs_reset_audio2",
+    "pilot_only": true,
+    "max_buffering_ms_requested": 200,
+    "fixed_buffering": true,
+    "first_observation": {
+      "maximum_audio_late_us": 1026,
+      "publisher_recoveries": 0,
+      "audio_submitted": 3463,
+      "video_submitted": 1032
+    },
+    "first_test": "failed report persistence; not a complete pass",
+    "repeat_test": "passed 60-second generated-program proof",
+    "repeat_result": {
+      "passed": true,
+      "audio_submitted": 6065,
+      "video_submitted": 1813,
+      "timing": {
+        "capture_fault_code": 0,
+        "maximum_audio_call_us": 2704,
+        "maximum_audio_late_us": 1031,
+        "maximum_capture_age_us": 274038,
+        "maximum_loop_gap_us": 3715,
+        "maximum_video_call_us": 1236,
+        "maximum_work_us": 2707,
+        "minimum_audio_spacing_us": 9075,
+        "program_buffer_ms": 400,
+        "publisher_recoveries": 0,
+        "startup_audio_blocks_discarded": 0,
+        "time_constrained_scheduling": true
+      }
+    },
+    "remaining": "Real four-slot scene, reconnect/removal and synchronization qualification"
   }
 }
