@@ -15,12 +15,12 @@ use std::{
 };
 
 // Leave scheduling headroom while retaining the strict stale-audio cutoff.
-const LEAD_NS: u64 = 200_000_000;
+const LEAD_NS: u64 = 400_000_000;
 // Covers the shared lead at up to 60 fps, with bounded scheduling headroom.
-const VIDEO_QUEUE_CAPACITY: usize = 14;
-// Holds a 220 ms catch-up burst of standard 1024-sample OBS blocks,
+const VIDEO_QUEUE_CAPACITY: usize = 26;
+// Holds a 400 ms catch-up burst of standard 1024-sample OBS blocks,
 // plus one block of headroom. Publication still enforces its own deadlines.
-const CAPTURE_AUDIO_BLOCKS: usize = 12;
+const CAPTURE_AUDIO_BLOCKS: usize = 20;
 const MAX_LATE_NS: u64 = 20_000_000;
 static RECOVERIES: AtomicU64 = AtomicU64::new(0);
 #[cfg(debug_assertions)]
@@ -513,9 +513,9 @@ mod tests {
         };
         data.data[0] = left.as_mut_ptr().cast();
         data.data[1] = right.as_mut_ptr().cast();
-        // Ten OBS blocks cover 213 ms, within the 200 ms lead plus 20 ms
+        // Nineteen OBS blocks cover 405 ms, within the 400 ms lead plus 20 ms
         // late cutoff. Callback catch-up can deliver this as a single burst.
-        for _ in 0..10 {
+        for _ in 0..19 {
             audio_callback((&shared as *const Shared).cast_mut().cast(), 1, &mut data);
             data.timestamp += 21_333_333;
         }
@@ -524,7 +524,7 @@ mod tests {
             "Valid OBS callback burst overflowed the capture queue"
         );
         let blocks: Vec<_> = receiver.try_iter().collect();
-        assert_eq!(blocks.len(), 10);
+        assert_eq!(blocks.len(), 19);
         assert!(blocks
             .iter()
             .all(|(_, samples)| samples.len() == 1024
@@ -674,7 +674,7 @@ fn publish_loop(
             }
             carry.extend(samples);
             while carry.len() >= 480 {
-                if audio.len() >= 32 {
+                if audio.len() >= 64 {
                     return Err("Native program audio publication queue overflow");
                 }
                 let mut block = [0; 480];

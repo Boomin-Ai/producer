@@ -28,5 +28,18 @@
     "shutdown_reason": "Native program capture or publication stopped",
     "receiver_stats_timeouts_observed": true,
     "production_qualified": false
+  },
+  "publisher_diagnosis": {
+    "capture_age_max_us": 302271,
+    "publisher_loop_gap_max_us": 3145,
+    "sdk_audio_call_max_us": 159,
+    "sdk_video_call_max_us": 1645,
+    "fault": "audio publication deadline missed",
+    "previous_capture_buffer_ms": 200,
+    "candidate_capture_buffer_ms": 400,
+    "stale_audio_cutoff_ms": 20,
+    "candidate_live_verification": "pending",
+    "capture_queue_tests_passed": 2,
+    "native_engine_test_ignored": 1
   }
 }
