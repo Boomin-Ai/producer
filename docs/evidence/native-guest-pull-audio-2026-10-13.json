@@ -1,0 +1,33 @@
+{
+  "candidate": "bounded guest pull audio",
+  "tests": [
+    "eight-second gap resumes on continuous clock",
+    "queue overflow bounded",
+    "invalidation discards queued audio",
+    "render returns silence on lock contention"
+  ],
+  "sanitizers": [
+    "address",
+    "undefined"
+  ],
+  "frontend_build": "passed",
+  "native_build": "passed",
+  "development_signature": "verified",
+  "four_guest_disconnect": {
+    "passed": true,
+    "all_on_stage": true,
+    "all_return_received_after_recovery": true,
+    "unaffected_guest_connect_counts_unchanged": true,
+    "disrupted_guest_connect_count_delta": 1,
+    "publisher_faults": 0,
+    "host_stops_during_sample": 0
+  },
+  "removal": "blocked by staging operator JWT expiry; not passed",
+  "later_host_stop": "RTC authority rejected request",
+  "production_deployed": false,
+  "remaining": [
+    "native removal",
+    "speakerphone and AV synchronization regression",
+    "production integration"
+  ]
+}

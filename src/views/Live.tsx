@@ -788,7 +788,9 @@ export function GuestPanel({
   permissions,
   stageState,
   form = "column",
+  transportStopped = false,
 }: {
+  transportStopped?: boolean;
   thumbs: Record<string, string>;
   roster: RoomGuest[];
   error: string | null;
@@ -868,16 +870,16 @@ export function GuestPanel({
             const ids = sourceIdsFor(g.id);
             const item = items.find((i) => i.id === ids.camera);
             return (
-              <div key={g.id} className={`rm-gtile${item?.visible ? " on" : ""}`}>
+              <div key={g.id} className={`rm-gtile${(item?.visible && !transportStopped) ? " on" : ""}`}>
                 {thumbs[ids.camera] ? <img className="rm-gtile-img" src={thumbs[ids.camera]} alt="" /> : <span className="rm-gtile-img empty" />}
                 <span className="rm-gtile-name">{g.display_name || "Guest"}</span>
                 <button
-                  className={`rm-guest-stage${item?.visible ? " on" : ""}`}
-                  disabled={!item}
-                  title={item?.visible ? "Take off screen (stays in the room)" : "Pop into the next free guest slot"}
+                  className={`rm-guest-stage${(item?.visible && !transportStopped) ? " on" : ""}`}
+                  disabled={!item || transportStopped}
+                  title={transportStopped ? "Guest connection stopped" : item?.visible ? "Take off screen (stays in the room)" : "Pop into the next free guest slot"}
                   onClick={() => item && onShow(item.id, !item.visible)}
                 >
-                  {item?.visible ? "On" : "Show"}
+                  {transportStopped ? "Disconnected" : item?.visible ? "On" : "Show"}
                 </button>
               </div>
             );
@@ -991,7 +993,7 @@ export function GuestPanel({
             const muted = item?.muted ?? false;
             const q = (g.quality ?? g.connection_quality ?? "unknown") as string;
             return (
-              <div key={g.id} className={`rm-gcard${item?.visible ? " on" : ""}`}>
+              <div key={g.id} className={`rm-gcard${(item?.visible && !transportStopped) ? " on" : ""}`}>
                 {thumbs[ids.camera] ? (
                   <img className="rm-gcard-img" src={thumbs[ids.camera]} alt="" />
                 ) : (
@@ -1008,18 +1010,18 @@ export function GuestPanel({
                   } />
                   <span className="rm-gcard-name">{g.display_name || "Guest"}</span>
                   <span className={`rm-kind ${participantKind(g)}`}>{kindBadge(g)}</span>
-                  {item?.visible && <span className="rm-gcard-live">ON</span>}
+                  {transportStopped ? <span className="rm-gcard-live">Disconnected</span> : item?.visible && <span className="rm-gcard-live">ON</span>}
                 </div>
                 {/* Controls: the card is the feed; hands appear on hover. */}
                 <div className="rm-gcard-ctl">
                   <button
-                    className={`rm-guest-stage${item?.visible ? " on" : ""}`}
-                    title={item?.visible ? "Take off screen (stays in the room)" : "Pop into the next free guest slot"}
-                    disabled={!item}
+                    className={`rm-guest-stage${(item?.visible && !transportStopped) ? " on" : ""}`}
+                    title={transportStopped ? "Guest connection stopped" : item?.visible ? "Take off screen (stays in the room)" : "Pop into the next free guest slot"}
+                    disabled={!item || transportStopped}
                     data-warn={!item?.visible && q === "failing" ? "1" : undefined}
                     onClick={() => item && onShow(item.id, !item.visible)}
                   >
-                    {item?.visible ? "On screen" : "Show"}
+                    {transportStopped ? "Disconnected" : item?.visible ? "On screen" : "Show"}
                   </button>
                   {screenItem && (
                     <button
@@ -1033,7 +1035,7 @@ export function GuestPanel({
                   <button
                     className={`rm-row-edit${muted ? " muted" : ""}`}
                     title={muted ? "Unmute" : "Mute"}
-                    disabled={!item}
+                    disabled={!item || transportStopped}
                     onClick={() => item && onMute(item.id, !muted)}
                   >
                     {ic.mic}
@@ -6280,10 +6282,12 @@ export function LiveView({
   const nativeRtcLifetime = useRef({ closed: false, serverRoom: null as string | null, converted: new Set<string>() });
   const rosterTickBusy = useRef(false);
   const rosterFailure = useRef<string | null>(null);
+  const [guestTransportStopped, setGuestTransportStopped] = useState(false);
   useEffect(() => {
     const lifetime = { closed: false, serverRoom: null as string | null, converted: new Set<string>() };
     nativeRtcLifetime.current = lifetime;
     rosterFailure.current = null;
+    setGuestTransportStopped(false);
     return () => {
       lifetime.closed = true;
     };
@@ -6389,6 +6393,7 @@ export function LiveView({
             if (lifetime.closed || !alive) return;
             const started = await ipc.liveRtcStart(epId, brand, cfg.server_room_id!);
             if (started) lifetime.converted.clear();
+            setGuestTransportStopped(false);
           });
           if (lifetime.closed) {
             // The queued session close or next room restoration owns teardown.
@@ -6685,6 +6690,7 @@ export function LiveView({
         rosterFailure.current = null;
       } catch (e) {
         const message = errText(e);
+        if (alive && message.includes("Native guest connection stopped")) setGuestTransportStopped(true);
         if (alive && rosterFailure.current !== message) {
           rosterFailure.current = message;
           notifyError(e, { key: "guests" });
@@ -7260,7 +7266,8 @@ export function LiveView({
               send: sendAudienceFrame, share: () => void copyAudienceLink(), openSocial: site => void openAudienceSocial(site),
               invite: id => void inviteAudience(id), error: audienceError }}>
           <GuestPanel
-            thumbs={guestThumbs}
+            transportStopped={guestTransportStopped}
+            thumbs={guestTransportStopped ? {} : guestThumbs}
             roster={roster}
             error={null}
             items={(sources.items ?? []).filter((i) => i.kind === "guest")}

@@ -24,6 +24,7 @@ extern "C" {
         vs: u32,
         timestamp: u64,
     ) -> bool;
+    fn producer_guest_ingest_clear_audio(source: *mut ffi::obs_source_t);
     fn producer_guest_ingest_audio(
         source: *mut ffi::obs_source_t,
         pcm: *const i16,
@@ -102,6 +103,7 @@ impl Endpoint {
         state.video_timestamp = 0;
         state.audio_timestamp = 0;
         unsafe {
+            producer_guest_ingest_clear_audio(source as *mut ffi::obs_source_t);
             ffi::obs_source_output_video(source as *mut ffi::obs_source_t, std::ptr::null());
         }
         Some(Delivery {
@@ -115,6 +117,7 @@ impl Endpoint {
         if let Ok(mut state) = self.state.lock() {
             if let Some(source) = state.source.take() {
                 unsafe {
+                    producer_guest_ingest_clear_audio(source as *mut ffi::obs_source_t);
                     ffi::obs_source_output_video(
                         source as *mut ffi::obs_source_t,
                         std::ptr::null(),

@@ -1,6 +1,7 @@
 /* Internal native RTC media boundary. No tokens, room control or device owners.
  * Caller owns a live OBS source until all delivery calls/workers have stopped.
- * OBS copies submitted media; these functions retain no buffers or callbacks. */
+ * Video is copied by OBS. Audio is copied into a bounded per-source queue
+ * and pulled by the OBS mixer; invalidation must clear that queue. */
 #ifndef PRODUCER_GUEST_INGEST_H
 #define PRODUCER_GUEST_INGEST_H
 #include "obs_min.h"
@@ -9,6 +10,7 @@ extern "C" {
 #endif
 #define PRODUCER_GUEST_INGEST_ID "producer_guest_ingest"
 void producer_guest_ingest_register(void);
+void producer_guest_ingest_clear_audio(obs_source_t *source);
 bool producer_guest_ingest_video(obs_source_t *source,
     const uint8_t *y, size_t y_len, const uint8_t *u, size_t u_len,
     const uint8_t *v, size_t v_len, uint32_t width, uint32_t height,
