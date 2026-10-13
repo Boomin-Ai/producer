@@ -81,8 +81,10 @@ impl SenderClock {
         }
         self.latest = Some(report);
     }
-    /// Lab-only first-report bootstrap at the explicit fixture clock rate.
-    /// Never use it to bypass a detected discontinuity; a fresh pair is then required.
+    /// First-report bootstrap at an explicitly known RTP codec clock rate.
+    /// Native guest input is pinned to 48 kHz Opus and 90 kHz VP8. A fresh
+    /// report supplies the shared sender NTP origin without waiting for a second
+    /// periodic report. Discontinuities still require a validated fresh pair.
     pub fn playback_origin(&self, rtp: u32, now_us: i64, bootstrap: bool) -> Option<i64> {
         if self.previous.is_some() {
             return self.origin_ntp_us(rtp, now_us);
@@ -400,6 +402,18 @@ mod tests {
         let fresh = SenderClock::new(7, 48000);
         assert_eq!(fresh.origin_ntp_us(144000, 4_000_000), None);
     }
+    #[test]
+    fn first_reports_align_opus_and_vp8_on_shared_sender_time() {
+        let mut audio = SenderClock::new(7, 48000);
+        let mut video = SenderClock::new(8, 90000);
+        audio.observe(SenderReport { ssrc: 7, ntp_seconds: 100, ntp_fraction: 0, rtp_timestamp: 0, observed_us: 1_000_000 });
+        video.observe(SenderReport { ssrc: 8, ntp_seconds: 100, ntp_fraction: 0, rtp_timestamp: 0, observed_us: 1_000_000 });
+        assert_eq!(audio.playback_origin(48000, 2_000_000, true), Some(101_000_000));
+        assert_eq!(video.playback_origin(90000, 2_000_000, true), Some(101_000_000));
+        assert_eq!(audio.origin_ntp_us(48000, 2_000_000), None);
+        assert_eq!(video.origin_ntp_us(90000, 2_000_000), None);
+    }
+
     #[test]
     fn bootstrap_is_opt_in_bounded_and_cannot_hide_a_discontinuity() {
         let mut clock = SenderClock::new(7, 48000);

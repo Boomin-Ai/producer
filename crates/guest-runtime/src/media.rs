@@ -299,7 +299,7 @@ impl State {
             let origin = guest
                 .audio_clock
                 .as_ref()
-                .and_then(|c| c.origin_ntp_us(block.rtp_timestamp, rtc));
+                .and_then(|c| c.playback_origin(block.rtp_timestamp, rtc, true));
             if origin.is_none() {
                 continue;
             }
@@ -340,7 +340,7 @@ impl State {
                     let origin = guest
                         .video_clock
                         .as_ref()
-                        .and_then(|c| c.origin_ntp_us(frame.value.timestamp(), rtc));
+                        .and_then(|c| c.playback_origin(frame.value.timestamp(), rtc, true));
                     // A camera-only grant has no audio master. Use its actual SDK
                     // render deadline only after its sender mapping is qualified.
                     let at = if guest.permission.allows(

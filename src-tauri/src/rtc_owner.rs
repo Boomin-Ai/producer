@@ -298,6 +298,10 @@ impl HostOwner {
             let ended = control.end().await;
             program_closed?;
             if let Some(error) = failure {
+                // Errors here are fixed application messages, never provider
+                // responses, credentials or invitation capabilities.
+                #[cfg(debug_assertions)]
+                eprintln!("Native RTC owner stopped: {error}");
                 return Err(error);
             }
             closed?;
