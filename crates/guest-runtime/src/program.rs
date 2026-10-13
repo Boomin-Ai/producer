@@ -17,6 +17,7 @@ use std::{
 pub const WIDTH: u32 = 1280;
 pub const HEIGHT: u32 = 720;
 
+#[derive(Clone)]
 pub struct Sources {
     audio: NativeAudioSource,
     video: NativeVideoSource,
@@ -38,7 +39,8 @@ impl Sources {
             width: WIDTH,
             height: HEIGHT,
         });
-        let audio_publication = room.local_participant()
+        let audio_publication = room
+            .local_participant()
             .publish_track(
                 LocalTrack::Audio(LocalAudioTrack::create_audio_track(
                     "producer-stage-audio",
@@ -54,7 +56,8 @@ impl Sources {
             )
             .await
             .map_err(|_| "Native program audio publication failed")?;
-        let video_publication = room.local_participant()
+        let video_publication = room
+            .local_participant()
             .publish_track(
                 LocalTrack::Video(LocalVideoTrack::create_video_track(
                     "producer-program-video",
@@ -70,7 +73,10 @@ impl Sources {
             )
             .await
             .map_err(|_| "Native program video publication failed")?;
-        Ok((Self { audio, video }, (audio_publication.sid(), video_publication.sid())))
+        Ok((
+            Self { audio, video },
+            (audio_publication.sid(), video_publication.sid()),
+        ))
     }
     pub fn audio(&self, samples: &[i16; 480]) -> Result<(), &'static str> {
         let frame = AudioFrame {

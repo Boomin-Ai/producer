@@ -55,16 +55,31 @@ impl AuthorityReader {
             pending.abort_all();
             while pending.join_next().await.is_some() {}
         });
-        Self { updates, failed, stop: Some(stop), task: Some(task) }
+        Self {
+            updates,
+            failed,
+            stop: Some(stop),
+            task: Some(task),
+        }
     }
-    fn update(&self, control: &Control) { let _ = self.updates.send(control.clone()); }
+    fn update(&self, control: &Control) {
+        let _ = self.updates.send(control.clone());
+    }
     async fn close(&mut self) {
-        if let Some(stop) = self.stop.take() { let _ = stop.send(()); }
-        if let Some(task) = self.task.take() { let _ = task.await; }
+        if let Some(stop) = self.stop.take() {
+            let _ = stop.send(());
+        }
+        if let Some(task) = self.task.take() {
+            let _ = task.await;
+        }
     }
 }
 impl Drop for AuthorityReader {
-    fn drop(&mut self) { if let Some(stop) = self.stop.take() { let _ = stop.send(()); } }
+    fn drop(&mut self) {
+        if let Some(stop) = self.stop.take() {
+            let _ = stop.send(());
+        }
+    }
 }
 
 struct RoomRequest {
@@ -234,7 +249,8 @@ impl HostOwner {
             heartbeat.tick().await;
             let mut safety = tokio::time::interval(Duration::from_millis(100));
             safety.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-            let mut authority_reader = AuthorityReader::start(control.clone(), connection.media_authority_updater());
+            let mut authority_reader =
+                AuthorityReader::start(control.clone(), connection.media_authority_updater());
             let mut failure = None;
             #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
             let mut program_recoveries = std::collections::VecDeque::<std::time::Instant>::new();
@@ -466,6 +482,92 @@ pub fn program_selftest() -> Result<(), &'static str> {
         )
         .map_err(|_| "Native program report failed")
     }
+    struct GuestLoad {
+        id: String,
+        stop: Arc<std::sync::atomic::AtomicBool>,
+        worker: Option<std::thread::JoinHandle<()>>,
+    }
+    impl GuestLoad {
+        fn close(&mut self) {
+            self.stop.store(true, std::sync::atomic::Ordering::Release);
+            if let Some(worker) = self.worker.take() {
+                let _ = worker.join();
+            }
+        }
+    }
+    impl Drop for GuestLoad {
+        fn drop(&mut self) {
+            self.close();
+        }
+    }
+    fn guest_load(graph: &mut SceneGraph, index: usize) -> Result<GuestLoad, &'static str> {
+        let participant = uuid::Uuid::new_v4().to_string();
+        let id = format!("guest-{participant}");
+        graph
+            .add_extra(
+                &id,
+                "Generated guest load",
+                &ExtraSpec::RtcGuest {
+                    participant_id: participant,
+                },
+            )
+            .map_err(|_| "Native lifecycle source unavailable")?;
+        graph
+            .set_transform(
+                &id,
+                &TransformPatch {
+                    x: Some((index % 2) as f32 * 960.),
+                    y: Some((index / 2) as f32 * 540.),
+                    w: Some(960.),
+                    h: Some(540.),
+                    visible: Some(true),
+                    ..Default::default()
+                },
+            )
+            .map_err(|_| "Native lifecycle placement failed")?;
+        graph
+            .set_source_audio(&id, Some(0.25), Some(false))
+            .map_err(|_| "Native lifecycle audio unavailable")?;
+        let delivery = crate::live::rtc_ingest::endpoint(&id)
+            .and_then(|endpoint| endpoint.replace())
+            .ok_or("Native lifecycle delivery unavailable")?;
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let stopped = stop.clone();
+        let worker = std::thread::Builder::new()
+            .name("rtc-lifecycle-fixture".into())
+            .spawn(move || {
+                extern "C" {
+                    fn os_gettime_ns() -> u64;
+                }
+                let y = vec![64 + index as u8 * 16; 1280 * 720];
+                let uv = vec![128; 640 * 360];
+                let pcm = [2048i16; 480];
+                let mut tick = 0;
+                while !stopped.load(std::sync::atomic::Ordering::Acquire) {
+                    let at = unsafe { os_gettime_ns() };
+                    let _ = delivery.audio(&pcm, 1, at);
+                    if tick % 3 == 0 {
+                        let _ = delivery.video(
+                            crate::live::rtc_ingest::Video {
+                                planes: (&y, &uv, &uv),
+                                width: 1280,
+                                height: 720,
+                                strides: (1280, 640, 640),
+                            },
+                            at,
+                        );
+                    }
+                    tick += 1;
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            })
+            .map_err(|_| "Native lifecycle worker unavailable")?;
+        Ok(GuestLoad {
+            id,
+            stop,
+            worker: Some(worker),
+        })
+    }
     let bytes = std::fs::read(format!("{ROOT}/operator.json"))
         .map_err(|_| "Native program operator unavailable")?;
     if bytes.len() > 32768 {
@@ -528,15 +630,29 @@ pub fn program_selftest() -> Result<(), &'static str> {
     graph
         .set_source_audio("generated-program-audio", Some(0.5), Some(false))
         .map_err(|_| "Native program tone routing failed")?;
+    let lifecycle = std::env::var("PRODUCER_RTC_LIFECYCLE_PROOF").as_deref() == Ok("1");
+    let mut loads = Vec::new();
+    if lifecycle {
+        for index in 0..4 {
+            loads.push(guest_load(&mut graph, index)?);
+        }
+    }
     let runtime =
         tokio::runtime::Runtime::new().map_err(|_| "Native program runtime unavailable")?;
     let result = runtime.block_on(async {
         let receiver = crate::live::rtc_media::SceneOutputs::receiver()?;
         let mut owner = HostOwner::start_with_options(Control::new(operator)?, Box::new(receiver), true).await?;
         let lifetime = owner.task_lifetime();
-        let until = std::time::Instant::now() + Duration::from_secs(60);
+        let began = std::time::Instant::now();
+        let until = began + Duration::from_secs(60);
+        let mut lifecycle_cycles=0;
         let outcome = async {
         while std::time::Instant::now() < until && owner.running() {
+            if lifecycle && lifecycle_cycles<2 && began.elapsed()>=Duration::from_secs(20*(lifecycle_cycles+1)) {
+                for mut load in std::mem::take(&mut loads) {load.close();graph.remove_extra(&load.id).map_err(|_|"Native lifecycle removal failed")?;}
+                for index in 0..4 {loads.push(guest_load(&mut graph,index)?);}
+                lifecycle_cycles+=1;
+            }
             let (audio,video) = rtc_program::counts(); save(serde_json::json!({"passed":null,"audio_submitted":audio,"video_submitted":video,"timing":rtc_program::timing()}))?;
             if let Ok(bytes) = std::fs::read(format!("{ROOT}/native-room-command.json")) {
                 let _ = std::fs::remove_file(format!("{ROOT}/native-room-command.json"));
@@ -554,6 +670,7 @@ pub fn program_selftest() -> Result<(), &'static str> {
         }
         Ok::<(), &'static str>(())
         }.await;
+        for load in &mut loads {load.close();}
         let closed = owner.close().await;
         owner.close().await?;
         if outcome.is_err() || closed.is_err() {
@@ -562,8 +679,11 @@ pub fn program_selftest() -> Result<(), &'static str> {
         }
         outcome?; closed?;
         let (audio,video)=rtc_program::counts();
-        if lifetime.strong_count()!=0 || audio<100 || video<20 { return Err("Native program lifecycle or submission proof failed"); }
-        save(serde_json::json!({"passed":true,"audio_submitted":audio,"video_submitted":video,"timing":rtc_program::timing(),"owner_expired":true,"repeated_close_passed":true}))
+        if lifetime.strong_count()!=0 || audio<100 || video<20
+            || (lifecycle && (lifecycle_cycles!=2 || audio<4500 || rtc_program::timing()["publisher_recoveries"]!=0)) {
+            return Err("Native program lifecycle or submission proof failed");
+        }
+        save(serde_json::json!({"passed":true,"audio_submitted":audio,"video_submitted":video,"timing":rtc_program::timing(),"owner_expired":true,"repeated_close_passed":true,"generated_guest_sources":if lifecycle {4}else{0},"source_recreation_cycles":lifecycle_cycles}))
     });
     graph
         .clear_room()

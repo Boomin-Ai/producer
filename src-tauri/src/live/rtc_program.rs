@@ -25,6 +25,8 @@ const MAX_LATE_NS: u64 = 20_000_000;
 static RECOVERIES: AtomicU64 = AtomicU64::new(0);
 #[cfg(debug_assertions)]
 static INJECTED: AtomicBool = AtomicBool::new(false);
+#[cfg(debug_assertions)]
+static VIDEO_INJECTED: AtomicBool = AtomicBool::new(false);
 static AUDIO_SUBMITTED: AtomicU64 = AtomicU64::new(0);
 static VIDEO_SUBMITTED: AtomicU64 = AtomicU64::new(0);
 static MAX_AUDIO_LATE: AtomicU64 = AtomicU64::new(0);
@@ -44,6 +46,8 @@ pub fn reset_diagnostics() {
     RECOVERIES.store(0, Ordering::Release);
     #[cfg(debug_assertions)]
     INJECTED.store(false, Ordering::Release);
+    #[cfg(debug_assertions)]
+    VIDEO_INJECTED.store(false, Ordering::Release);
     AUDIO_SUBMITTED.store(0, Ordering::Release);
     VIDEO_SUBMITTED.store(0, Ordering::Release);
     MAX_AUDIO_LATE.store(0, Ordering::Release);
@@ -65,7 +69,11 @@ pub fn counts() -> (u64, u64) {
 }
 pub fn timing() -> serde_json::Value {
     let spacing = MIN_AUDIO_SPACING.load(Ordering::Acquire);
-    serde_json::json!({"capture_fault_code":CAPTURE_FAULT.load(Ordering::Acquire),"program_buffer_ms":LEAD_NS/1_000_000,"publisher_recoveries":RECOVERIES.load(Ordering::Acquire),"maximum_audio_late_us":MAX_AUDIO_LATE.load(Ordering::Acquire)/1000,"minimum_audio_spacing_us":(spacing!=u64::MAX).then_some(spacing/1000),"maximum_audio_call_us":MAX_AUDIO_CALL.load(Ordering::Acquire),"startup_audio_blocks_discarded":STARTUP_DROPPED.load(Ordering::Acquire),"time_constrained_scheduling":REALTIME.load(Ordering::Acquire),"maximum_work_us":MAX_WORK.load(Ordering::Acquire)/1000,"maximum_loop_gap_us":MAX_LOOP_GAP.load(Ordering::Acquire)/1000,"maximum_capture_age_us":MAX_CAPTURE_AGE.load(Ordering::Acquire)/1000,"maximum_video_call_us":MAX_VIDEO_CALL.load(Ordering::Acquire)})
+    #[cfg(debug_assertions)]
+    let video_stall_injected = VIDEO_INJECTED.load(Ordering::Acquire);
+    #[cfg(not(debug_assertions))]
+    let video_stall_injected = false;
+    serde_json::json!({"video_worker_stall_injected":video_stall_injected,"capture_fault_code":CAPTURE_FAULT.load(Ordering::Acquire),"program_buffer_ms":LEAD_NS/1_000_000,"publisher_recoveries":RECOVERIES.load(Ordering::Acquire),"maximum_audio_late_us":MAX_AUDIO_LATE.load(Ordering::Acquire)/1000,"minimum_audio_spacing_us":(spacing!=u64::MAX).then_some(spacing/1000),"maximum_audio_call_us":MAX_AUDIO_CALL.load(Ordering::Acquire),"startup_audio_blocks_discarded":STARTUP_DROPPED.load(Ordering::Acquire),"time_constrained_scheduling":REALTIME.load(Ordering::Acquire),"maximum_work_us":MAX_WORK.load(Ordering::Acquire)/1000,"maximum_loop_gap_us":MAX_LOOP_GAP.load(Ordering::Acquire)/1000,"maximum_capture_age_us":MAX_CAPTURE_AGE.load(Ordering::Acquire)/1000,"maximum_video_call_us":MAX_VIDEO_CALL.load(Ordering::Acquire)})
 }
 #[repr(C)]
 struct VideoScale {
@@ -179,6 +187,103 @@ struct Queues {
     audio: VecDeque<(u64, Vec<i16>)>,
     video: VecDeque<Picture>,
 }
+/// A slow video SDK call must never hold the audio publication clock.
+/// Capacity one bounds pending video; the worker drops late pictures.
+struct VideoLane {
+    sender: Option<SyncSender<Picture>>,
+    worker: Option<JoinHandle<Result<(), &'static str>>>,
+    failed: Arc<AtomicBool>,
+    stop: Arc<AtomicBool>,
+}
+impl VideoLane {
+    fn start(sources: Sources) -> Result<Self, &'static str> {
+        Self::start_with(move |frame| {
+            sources.video(
+                (&frame.planes.0, &frame.planes.1, &frame.planes.2),
+                frame.timestamp,
+            )
+        })
+    }
+    fn start_with(
+        mut publish: impl FnMut(Picture) -> Result<bool, &'static str> + Send + 'static,
+    ) -> Result<Self, &'static str> {
+        let (sender, receiver) = sync_channel::<Picture>(1);
+        let failed = Arc::new(AtomicBool::new(false));
+        let fault = failed.clone();
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopped = stop.clone();
+        let worker = thread::Builder::new()
+            .name("rtc-program-video".into())
+            .spawn(move || {
+                #[cfg(debug_assertions)]
+                let inject_video = std::env::var("PRODUCER_RTC_PROGRAM_PROOF").as_deref()
+                    == Ok("1")
+                    && std::env::var("PRODUCER_RTC_VIDEO_DELAY_PROOF").as_deref() == Ok("1");
+                while let Ok(frame) = receiver.recv() {
+                    #[cfg(debug_assertions)]
+                    if inject_video
+                        && AUDIO_SUBMITTED.load(Ordering::Acquire) > 1500
+                        && !VIDEO_INJECTED.swap(true, Ordering::AcqRel)
+                    {
+                        thread::sleep(Duration::from_millis(120));
+                    }
+                    if stopped.load(Ordering::Acquire) {
+                        break;
+                    }
+                    let now = unsafe { os_gettime_ns() };
+                    let Some(due) = frame.timestamp.checked_add(LEAD_NS) else {
+                        fault.store(true, Ordering::Release);
+                        return Err("Native program video timestamp overflow");
+                    };
+                    if now.saturating_sub(due) > MAX_LATE_NS {
+                        continue;
+                    }
+                    let call = std::time::Instant::now();
+                    let result = publish(frame);
+                    MAX_VIDEO_CALL.fetch_max(call.elapsed().as_micros() as u64, Ordering::Relaxed);
+                    match result {
+                        Ok(true) => {
+                            VIDEO_SUBMITTED.fetch_add(1, Ordering::Relaxed);
+                        }
+                        Ok(false) => {}
+                        Err(error) => {
+                            fault.store(true, Ordering::Release);
+                            return Err(error);
+                        }
+                    }
+                }
+                Ok(())
+            })
+            .map_err(|_| "Native program video worker creation failed")?;
+        Ok(Self {
+            sender: Some(sender),
+            worker: Some(worker),
+            failed,
+            stop,
+        })
+    }
+    fn submit(&self, frame: Picture) -> bool {
+        self.sender
+            .as_ref()
+            .is_some_and(|sender| sender.try_send(frame).is_ok())
+    }
+    fn close(&mut self) -> Result<(), &'static str> {
+        self.stop.store(true, Ordering::Release);
+        self.sender.take();
+        if let Some(worker) = self.worker.take() {
+            worker
+                .join()
+                .map_err(|_| "Native program video worker failed")??;
+        }
+        Ok(())
+    }
+}
+impl Drop for VideoLane {
+    fn drop(&mut self) {
+        let _ = self.close();
+    }
+}
+
 struct Shared {
     audio: SyncSender<(u64, Vec<i16>)>,
     video: SyncSender<Picture>,
@@ -440,14 +545,22 @@ impl Publisher {
                 // Audio produced while video registration/thread setup blocks is
                 // startup pre-roll, not queued live program audio.
                 tap.shared.ready.store(true, Ordering::Release);
-                let result = publish_loop(&tap, &sources, &done, &expires);
+                let mut video_lane = VideoLane::start(sources.clone())?;
+                let result = publish_loop(&tap, &sources, &video_lane, &done, &expires);
+                // Retire pending video and join its SDK call before clearing
+                // sources or releasing capture callbacks.
+                let video_closed = video_lane.close();
+                let result = result.and(video_closed);
                 sources.clear();
                 if result == Err("Native program audio publication deadline missed") {
                     recovery_fault.store(true, Ordering::Release);
                 }
                 if let Err(error) = result {
                     #[cfg(debug_assertions)]
-                    eprintln!("Native program publisher failed: {error}; timing={}", timing());
+                    eprintln!(
+                        "Native program publisher failed: {error}; timing={}",
+                        timing()
+                    );
                     fault.store(true, Ordering::Release);
                 }
                 // Tap disconnects both callbacks before its stable userdata dies.
@@ -494,6 +607,35 @@ impl Drop for Publisher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn blocked_video_sdk_call_cannot_block_audio_lane_and_pending_video_is_retired() {
+        let (entered, entered_rx) = sync_channel(1);
+        let (release, release_rx) = sync_channel(1);
+        let calls = Arc::new(AtomicU64::new(0));
+        let observed = calls.clone();
+        let mut lane = VideoLane::start_with(move |_| {
+            entered.send(()).unwrap();
+            release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            observed.fetch_add(1, Ordering::Relaxed);
+            Ok(true)
+        })
+        .unwrap();
+        let frame = || Picture {
+            timestamp: unsafe { os_gettime_ns() },
+            planes: (vec![], vec![], vec![]),
+        };
+        assert!(lane.submit(frame()));
+        entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(lane.submit(frame()));
+        // The third picture is discarded immediately while the SDK callback
+        // is deliberately held. The audio publisher never waits for this lane.
+        assert!(!lane.submit(frame()));
+        lane.stop.store(true, Ordering::Release);
+        release.send(()).unwrap();
+        lane.close().unwrap();
+        assert_eq!(calls.load(Ordering::Acquire), 1);
+    }
+
     #[test]
     fn audio_capture_accepts_a_burst_within_the_program_latency_budget() {
         let (sender, receiver) = sync_channel(CAPTURE_AUDIO_BLOCKS);
@@ -629,6 +771,7 @@ pub fn tap_selftest() {
 fn publish_loop(
     tap: &Tap,
     sources: &Sources,
+    video_lane: &VideoLane,
     stop: &AtomicBool,
     lease: &AtomicU64,
 ) -> Result<(), &'static str> {
@@ -651,6 +794,9 @@ fn publish_loop(
             && !INJECTED.swap(true, Ordering::AcqRel)
         {
             thread::sleep(Duration::from_millis(120));
+        }
+        if video_lane.failed.load(Ordering::Acquire) {
+            return Err("Native program video publication stopped");
         }
         if wall_ms() >= lease.load(Ordering::Acquire) {
             return Err("Native program lease expired");
@@ -750,14 +896,9 @@ fn publish_loop(
                 && now - (frame.timestamp + LEAD_NS) <= MAX_LATE_NS
                 && !stop.load(Ordering::Acquire)
             {
-                let call = std::time::Instant::now();
-                if sources.video(
-                    (&frame.planes.0, &frame.planes.1, &frame.planes.2),
-                    frame.timestamp,
-                )? {
-                    VIDEO_SUBMITTED.fetch_add(1, Ordering::Relaxed);
-                }
-                MAX_VIDEO_CALL.fetch_max(call.elapsed().as_micros() as u64, Ordering::Relaxed);
+                // Never wait behind a stalled video encoder. A skipped frame
+                // retains its original timeline; no stale frame is replayed.
+                let _ = video_lane.submit(frame);
             }
         }
         MAX_WORK.fetch_max(

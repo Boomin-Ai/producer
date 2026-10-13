@@ -1,0 +1,43 @@
+{
+  "change": "bounded video submission worker independent of audio pacing",
+  "pending_video_capacity": 1,
+  "unit_tests": {
+    "passed": 3,
+    "ignored_engine_graphics_test": 1
+  },
+  "frontend_unchanged": true,
+  "native_build": "passed",
+  "development_signature": "verified",
+  "automated_native_lifecycle": {
+    "passed": true,
+    "audio_submitted": 6081,
+    "video_submitted": 1814,
+    "timing": {
+      "capture_fault_code": 0,
+      "maximum_audio_call_us": 112,
+      "maximum_audio_late_us": 1036,
+      "maximum_capture_age_us": 263762,
+      "maximum_loop_gap_us": 1167,
+      "maximum_video_call_us": 544,
+      "maximum_work_us": 154,
+      "minimum_audio_spacing_us": 9059,
+      "program_buffer_ms": 400,
+      "publisher_recoveries": 0,
+      "startup_audio_blocks_discarded": 0,
+      "time_constrained_scheduling": true,
+      "video_worker_stall_injected": true
+    },
+    "generated_guest_sources": 4,
+    "source_recreation_cycles": 2,
+    "owner_expired": true,
+    "repeated_close_passed": true
+  },
+  "scope": "Generated native guest sources, host SDK publication and two remove/recreate cycles; not browser admission or native UI proof",
+  "injected_video_stall_ms": 120,
+  "production_deployed": false,
+  "remaining": [
+    "real browser guest cleanup/rejoin",
+    "AV and speakerphone regression",
+    "production integration and distribution signing"
+  ]
+}
