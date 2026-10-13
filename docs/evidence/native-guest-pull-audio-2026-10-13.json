@@ -22,12 +22,20 @@
     "publisher_faults": 0,
     "host_stops_during_sample": 0
   },
-  "removal": "blocked by staging operator JWT expiry; not passed",
+  "removal": "API revoke committed; surviving-call verification incomplete; later cleanup/rejoin stress failed",
   "later_host_stop": "RTC authority rejected request",
   "production_deployed": false,
   "remaining": [
     "native removal",
     "speakerphone and AV synchronization regression",
     "production integration"
-  ]
+  ],
+  "subsequent_cleanup_rejoin": {
+    "passed": false,
+    "publisher_faults": 4,
+    "stop_reason": "Native program capture or publication stopped",
+    "maximum_capture_age_us": 609597,
+    "maximum_video_call_us": 23960,
+    "notes": "One disconnect sample passed; removal/recreation stress still stops the shared publisher."
+  }
 }
