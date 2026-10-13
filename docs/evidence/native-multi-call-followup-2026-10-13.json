@@ -76,5 +76,17 @@
       }
     },
     "remaining": "Real four-slot scene, reconnect/removal and synchronization qualification"
+  },
+  "fixed_mixer_full_scene_disconnect": {
+    "passed": false,
+    "connected_guests": 4,
+    "all_on_stage": true,
+    "user_confirmed_all_visible": true,
+    "publisher_faults": 4,
+    "host_stop_reason": "Native program capture or publication stopped",
+    "audio_capture_age_us_observed": 539872,
+    "guest_audio_timestamp_jump_ns_observed": 170000000,
+    "lease_conflict_stop_observed": false,
+    "notes": "Fixed mixer and generated-program proof do not qualify all-on-stage remote audio gaps."
   }
 }
