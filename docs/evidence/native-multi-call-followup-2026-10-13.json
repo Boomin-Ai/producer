@@ -1,0 +1,32 @@
+{
+  "scope": "isolated staging only",
+  "status": "incomplete",
+  "earlier_user_confirmation": "four feeds visible",
+  "followup_findings": [
+    "test driver rotated invitations separately for each guest; corrected to share one private invitation",
+    "native renewal stopped on authority conflict during repeated room mutations; bounded retries installed in dev",
+    "shared-invitation four-guest rerun not yet completed"
+  ],
+  "verification": {
+    "native_build": "passed",
+    "development_signature": "verified",
+    "rtc_control_tests": {
+      "passed": 3,
+      "failed": 0
+    }
+  },
+  "limitations": [
+    "no multi-person audio qualification",
+    "no completed reconnect/removal soak",
+    "no production deployment"
+  ],
+  "clean_run": {
+    "guests": 4,
+    "user_confirmed_all_four_visible": true,
+    "return_video_advanced_all_four": true,
+    "disconnect_test": "failed",
+    "shutdown_reason": "Native program capture or publication stopped",
+    "receiver_stats_timeouts_observed": true,
+    "production_qualified": false
+  }
+}

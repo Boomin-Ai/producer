@@ -338,7 +338,8 @@ impl HostOwner {
             let program_closed: Result<(), &'static str> = Ok(());
             let closed = connection.close().await;
             let ended = control.end().await;
-            program_closed?;
+            // Preserve the initiating failure even when publisher teardown
+            // also reports its already-known deadline fault.
             if let Some(error) = failure {
                 // Errors here are fixed application messages, never provider
                 // responses, credentials or invitation capabilities.
@@ -346,6 +347,7 @@ impl HostOwner {
                 eprintln!("Native RTC owner stopped: {error}");
                 return Err(error);
             }
+            program_closed?;
             closed?;
             ended?;
             Ok(())

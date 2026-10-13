@@ -445,7 +445,9 @@ impl Publisher {
                 if result == Err("Native program audio publication deadline missed") {
                     recovery_fault.store(true, Ordering::Release);
                 }
-                if result.is_err() {
+                if let Err(error) = result {
+                    #[cfg(debug_assertions)]
+                    eprintln!("Native program publisher failed: {error}; timing={}", timing());
                     fault.store(true, Ordering::Release);
                 }
                 // Tap disconnects both callbacks before its stable userdata dies.

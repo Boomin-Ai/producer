@@ -481,21 +481,24 @@ impl Control {
             self.accept_ticket(&body)?;
         }
         let previous = self.receipt.clone().ok_or("No owned RTC run")?;
-        match self.command("renew").await {
-            Ok(_) => Ok(()),
-            Err(error) if renewable_after_read(error) => {
-                #[cfg(debug_assertions)]
-                eprintln!("Native RTC renewal reconciliation: {error}");
-                // A stale CAS or lost response can accompany an already committed
-                // renewal. Recheck this SAME connection/run/epoch independently;
-                // never reclaim or mint from the failed command's old receipt.
-                let snapshot = self.read_media_authority(&previous).await?;
-                self.receipt = Some(snapshot.receipt().clone());
-                self.command("renew").await.map(|_| ())
+        // Several admissions can advance the revision between the independent
+        // read and the renewal CAS. Bound contention retries and verify the
+        // same owner with a fresh read before every retry.
+        for attempt in 0..3 {
+            match self.command("renew").await {
+                Ok(_) => return Ok(()),
+                Err(error) if renewable_after_read(error) && attempt < 2 => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("Native RTC renewal reconciliation: {error}");
+                    let snapshot = self.read_media_authority(&previous).await?;
+                    self.receipt = Some(snapshot.receipt().clone());
+                }
+                Err(error) => return Err(error),
             }
-            Err(error) => Err(error),
         }
+        Err("RTC authority changed")
     }
+
     pub async fn end(&mut self) -> Result<(), &'static str> {
         let previous = self.receipt.clone().ok_or("No owned RTC run")?;
         match self.command("end").await {
