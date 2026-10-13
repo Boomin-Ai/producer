@@ -31,13 +31,16 @@ async function command(name,command){
  report.steps.push({name,status:reply.status,elapsed_ms:Math.round(performance.now()-begun)});assert.equal(reply.status,200);return reply.body;
 }
 try {
- report.checkpoint='idle_guard';const prior=(await get(path+'/rtc-control')).rtc;assert(!prior||prior.state==='ended');
+ report.checkpoint='idle_guard';const prior=(await get(path+'/rtc-control')).rtc;assert(!prior||prior.state==='ended'||(process.env.PRODUCER_RTC_EXPIRED_RECOVERY_PROOF==='1'&&['active','fencing'].includes(prior.state)&&prior.host_lease_expires_at_ms<=Date.now()));
+ if(prior){report.expired_recovery_expected={run_id:prior.run_id,epoch:prior.host_lease_epoch};}
  for(const file of ['native-program-owner.json','native-room-command.json','native-room-reply.json'])await unlink(directory+'/'+file).catch(()=>{});
  const log=await open(directory+'/native-program-owner.log','w',0o600);
  native=spawn(binary,[],{env:{...process.env,PRODUCER_RTC_PROGRAM_PROOF:'1',PRODUCER_ENGINE_PLUGINS:directory+'/obs-fixture-plugins',LIVEKIT_LAB_TIMED_MIXER:'1',LIVEKIT_LAB_RTCP_PROBE:'1',RUST_LOG:'off'},stdio:['ignore',log.fd,log.fd]});
  nativeExit=new Promise(resolve=>native.once('exit',resolve));await log.close();
  watchdog=setTimeout(()=>{report.fixture_watchdog_fired=true;native.kill('SIGTERM');},120000);watchdog.unref();
  report.checkpoint='owner_ready';await until(async()=>{const c=await counts().catch(()=>null);return c?.passed===null&&c.audio_submitted>0&&c.video_submitted>0;},45000);
+ const active=(await get(path+'/rtc-control')).rtc;
+ if(report.expired_recovery_expected){assert.equal(active.run_id,report.expired_recovery_expected.run_id);assert.equal(active.host_lease_epoch,report.expired_recovery_expected.epoch+1);assert.equal(active.state,'active');report.expired_recovery_verified=true;}
  const old=(await get(path+'/guests')).guests??[];
  for(const guest of old.filter(g=>/^Native (subscription|program) [0-9a-f]{8}$/.test(g.display_name??'')&&g.state==='admitted'))await command('fixture_revoke',{operation:'revoke',participant_id:guest.id});
  const link=await command('link',{operation:'link',rotate:true});const joinUrl=new URL(link.join_url);assert.equal(joinUrl.origin,'http://localhost:5175');
@@ -79,7 +82,7 @@ finally{
  if(browser)await browser.close();if(native&&native.exitCode===null)await nativeExit;
  clearTimeout(watchdog);
  report.owner=await counts().catch(()=>null);
- report.source_sha256=Object.fromEntries(await Promise.all(['crates/guest-runtime/src/lib.rs','crates/guest-runtime/src/program.rs','crates/guest-session/src/lib.rs','src-tauri/src/rtc_owner.rs','src-tauri/src/live/rtc_program.rs','scripts/test-native-program-return.mjs'].map(async file=>[file,createHash('sha256').update(await readFile(file)).digest('hex')])));
+ report.source_sha256=Object.fromEntries(await Promise.all(['crates/guest-runtime/src/lib.rs','crates/guest-runtime/src/program.rs','crates/guest-session/src/lib.rs','src-tauri/src/rtc_owner.rs','src-tauri/src/rtc_control.rs','src-tauri/src/live/rtc_program.rs','scripts/test-native-program-return.mjs'].map(async file=>[file,createHash('sha256').update(await readFile(file)).digest('hex')])));
  report.binary_sha256=createHash('sha256').update(await readFile(binary)).digest('hex');
  await writeFile(directory+'/native-program-proof.json',JSON.stringify(report,null,2)+'\n',{mode:0o600});console.log(JSON.stringify(report));
 }

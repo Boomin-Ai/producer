@@ -6464,7 +6464,7 @@ export function LiveView({
         // "<name> · screen" source for a guest who holds media.screen. The
         // screen page shares the guest's signaling channel and receives only
         // the share, so the host frames it independently of the person.
-        const wanted = nativeRtc ? nativeGuestSources(live.filter(g => !isMonitor(g))) : wantedSourceIds(live);
+        const wanted = nativeRtc ? nativeGuestSources(liveRowsRef.current.filter(g => !isMonitor(g))) : wantedSourceIds(live);
 
         for (const [id, { guest: g, track }] of wanted) {
           if (nativeRtc && (sources.items ?? []).some(item => item.id === id && item.rtc_source_id === `guest-${g.id}`)) {
@@ -6483,11 +6483,10 @@ export function LiveView({
             });
             continue;
           }
+          // A converted native source can be ahead of the event snapshot.
+          // Wait for that snapshot rather than creating a duplicate source.
+          if (nativeRtc) continue;
           if (!present.has(id)) {
-            if (nativeRtc) {
-              await extraSources.add(id, g.display_name || "Guest", { kind: "rtc_guest", participant_id: g.id });
-              continue;
-            }
             const u = new URL(g.render_url!);
             if (track === "screen") {
               u.searchParams.set("track", "screen");

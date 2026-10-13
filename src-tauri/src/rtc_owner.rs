@@ -98,7 +98,7 @@ impl HostOwner {
             let mut control = control;
             let started = async {
                 control.open().await?;
-                control.command("start").await?;
+                control.start_or_recover().await?;
                 let session = control.session().await?;
                 let mut connection = Connection::connect_with_media(&session, media).await?;
                 if control.lease_expires_at_ms().unwrap_or(0) <= now() || !connection.healthy() {

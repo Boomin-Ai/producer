@@ -9,7 +9,7 @@ const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.Scri
 const exports = {};
 vm.runInNewContext(compiled, { exports });
 const { nativeGuestSources } = exports;
-const guest = { id: '12345678-1234-1234-1234-123456789abc', display_name: 'Guest' };
+const guest = { id: '12345678-1234-1234-1234-123456789abc', display_name: 'Guest', state: 'admitted' };
 
 test('saved scene key survives while native binding retains full participant identity', () => {
   const sources = nativeGuestSources([guest]);
@@ -18,12 +18,19 @@ test('saved scene key survives while native binding retains full participant ide
   assert.equal(sources.get('guest-12345678').track, 'camera');
 });
 test('two full identities cannot share one saved scene key', () => {
-  assert.throws(() => nativeGuestSources([guest, { id: '12345678-ffff-ffff-ffff-ffffffffffff' }]), /collide/);
+  assert.throws(() => nativeGuestSources([guest, { id: '12345678-ffff-ffff-ffff-ffffffffffff', state: 'admitted' }]), /collide/);
   assert.throws(() => nativeGuestSources([guest, guest]), /collide/);
 });
 test('noncanonical or malformed identities never reach the native graph', () => {
   for (const id of ['../guest', guest.id.toUpperCase(), guest.id.replaceAll('-', ''), '']) {
-    assert.throws(() => nativeGuestSources([{ id }]), /invalid/);
+    assert.throws(() => nativeGuestSources([{ id, state: "admitted" }]), /invalid/);
   }
   assert.equal(nativeGuestSources([]).size, 0);
+});
+
+test('native admission does not depend on a legacy renderer capability', () => {
+  const waiting = { ...guest, state: 'waiting', render_url: 'https://untrusted.invalid' };
+  const sources = nativeGuestSources([waiting, { ...guest, render_url: null }]);
+  assert.equal(sources.size, 1);
+  assert.equal(sources.get('guest-12345678').guest.state, 'admitted');
 });

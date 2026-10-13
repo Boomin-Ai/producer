@@ -1,7 +1,8 @@
 /** Preserve saved scene keys while binding native media to full identities. */
-export function nativeGuestSources<T extends { id: string }>(guests: readonly T[]): Map<string, { guest: T; track: "camera" }> {
+export function nativeGuestSources<T extends { id: string; state: string }>(guests: readonly T[]): Map<string, { guest: T; track: "camera" }> {
   const sources = new Map<string, { guest: T; track: "camera" }>();
   for (const guest of guests) {
+    if (guest.state !== "admitted") continue;
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(guest.id)) {
       throw new Error("Native guest identity is invalid.");
     }

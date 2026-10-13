@@ -276,6 +276,113 @@ impl Control {
         self.ticket_renewed_ms = now()?;
         Ok(())
     }
+    async fn read_run(&self) -> Result<Receipt, &'static str> {
+        let mut response = self
+            .http
+            .get(format!(
+                "{API}/v1/app/live/rooms/{}/rtc-control",
+                self.operator.room_id
+            ))
+            .bearer_auth(&self.operator.token)
+            .timeout(Duration::from_secs(5))
+            .send()
+            .await
+            .map_err(|_| "RTC recovery state unavailable")?;
+        if !response.status().is_success() {
+            return Err("RTC recovery state rejected");
+        }
+        let mut bytes = Vec::new();
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|_| "RTC recovery state unavailable")?
+        {
+            if bytes.len() + chunk.len() > 32768 {
+                return Err("RTC recovery response too large");
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        let value: Value =
+            serde_json::from_slice(&bytes).map_err(|_| "Invalid RTC recovery state")?;
+        let receipt: Receipt = serde_json::from_value(value["rtc"].clone())
+            .map_err(|_| "Missing RTC recovery state")?;
+        if receipt.brand_id != self.operator.brand_id
+            || receipt.room_id != self.operator.room_id
+            || receipt.endpoint != ENDPOINT
+            || receipt.transport != "livekit"
+            || receipt.control_revision == 0
+            || receipt.control_revision > 9_007_199_254_740_991
+            || receipt.host_lease_epoch == 0
+            || receipt.host_lease_epoch > 9_007_199_254_740_991
+        {
+            return Err("RTC recovery state mismatch");
+        }
+        for id in [
+            &receipt.run_id,
+            &receipt.host_process_id,
+            &receipt.host_participant_id,
+        ] {
+            uuid::Uuid::parse_str(id).map_err(|_| "Invalid RTC recovery identity")?;
+        }
+        Ok(receipt)
+    }
+    pub async fn start_or_recover(&mut self) -> Result<(), &'static str> {
+        match self.command("start").await {
+            Ok(_) => return Ok(()),
+            Err("RTC authority changed") => {}
+            Err(error) => return Err(error),
+        }
+        let old = self.read_run().await?;
+        if !matches!(old.state.as_str(), "active" | "fencing")
+            || old.host_lease_expires_at_ms > now()?
+        {
+            return Err("Another host session still controls this room");
+        }
+        // The server checks account ownership and expiry atomically under the room
+        // lock. Never substitute the unrestricted explicit takeover operation.
+        let bytes = self.post("control", json!({"connection_ticket":self.ticket,"command":{
+            "operation":"reclaim_expired","requestId":uuid::Uuid::new_v4().to_string(),
+            "expectedRunId":old.run_id,"expectedRevision":old.control_revision,"expectedEpoch":old.host_lease_epoch}})).await?;
+        let value: Value =
+            serde_json::from_slice(&bytes).map_err(|_| "Invalid RTC recovery receipt")?;
+        let pending: Receipt = serde_json::from_value(value["receipt"].clone())
+            .map_err(|_| "Missing RTC recovery receipt")?;
+        if pending.run_id != old.run_id
+            || pending.brand_id != old.brand_id
+            || pending.room_id != old.room_id
+            || pending.endpoint != ENDPOINT
+            || pending.transport != "livekit"
+            || self.connection_id.as_deref() != Some(pending.host_process_id.as_str())
+            || pending.host_lease_epoch != old.host_lease_epoch + 1
+            || pending.control_revision != old.control_revision + 1
+            || !matches!(pending.state.as_str(), "fencing" | "active")
+        {
+            return Err("RTC recovery ownership mismatch");
+        }
+        // No SDK session or media capture exists until an independent read proves
+        // retirement completed for exactly this replacement connection and epoch.
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+        loop {
+            let current = self.read_run().await?;
+            if current.run_id != pending.run_id
+                || current.host_process_id != pending.host_process_id
+                || current.host_participant_id != pending.host_participant_id
+                || current.host_lease_epoch != pending.host_lease_epoch
+                || current.control_revision != pending.control_revision + u64::from(pending.state == "fencing" && current.state == "active")
+                || current.host_lease_expires_at_ms <= now()?
+            {
+                return Err("RTC recovery ownership changed");
+            }
+            if current.state == "active" {
+                self.receipt = Some(current);
+                return Ok(());
+            }
+            if current.state != "fencing" || tokio::time::Instant::now() >= deadline {
+                return Err("RTC previous media retirement is not complete");
+            }
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+    }
     pub async fn command(&mut self, operation: &str) -> Result<Receipt, &'static str> {
         let mut command =
             json!({"operation":operation,"requestId":uuid::Uuid::new_v4().to_string()});
