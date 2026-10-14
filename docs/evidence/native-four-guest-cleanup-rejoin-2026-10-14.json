@@ -1,0 +1,144 @@
+{
+  "passed": true,
+  "scope": "Real signed native staging app with four synthetic browser guests and user-confirmed native stage visibility",
+  "synthetic_browser_playback_muted": true,
+  "user_confirmed_all_four_visible": true,
+  "user_confirmed_replacement_guest_slot_visible": true,
+  "eight_second_network_disconnect_completed": true,
+  "disconnected_guest_reconnected": true,
+  "other_three_did_not_reconnect": true,
+  "removed_guest_absent_from_roster": true,
+  "replacement_guest_admitted_and_shown": true,
+  "final_guests": [
+    {
+      "name": "Multi call 1 92303a89",
+      "on_stage": true,
+      "frame_delta": 14780,
+      "connects_before": 1,
+      "connects_now": 1,
+      "report_age_ms": 447
+    },
+    {
+      "name": "Multi call 3 c7d56698",
+      "on_stage": true,
+      "frame_delta": 14712,
+      "connects_before": 1,
+      "connects_now": 1,
+      "report_age_ms": 498
+    },
+    {
+      "name": "Multi call 4 4191e9c1",
+      "on_stage": true,
+      "frame_delta": 14692,
+      "connects_before": 1,
+      "connects_now": 1,
+      "report_age_ms": 1391
+    },
+    {
+      "name": "Multi call 2 3affa0f8",
+      "on_stage": true,
+      "frame_delta": 14795,
+      "connects_before": 1,
+      "connects_now": 1,
+      "report_age_ms": 504
+    }
+  ],
+  "faults": {
+    "publisher_faults": 0,
+    "owner_stops": 0,
+    "binding_timeouts": 6
+  },
+  "disconnect_sample": {
+    "sample_at_ms": 1791973708913,
+    "guests": [
+      {
+        "name": "Multi call 1 92303a89",
+        "on_stage": true,
+        "frame_delta": 4264,
+        "frames": 9963,
+        "connects_before": 1,
+        "connects_now": 1,
+        "network_disruption_completed": false,
+        "report_age_ms": 918
+      },
+      {
+        "name": "Multi call 3 c7d56698",
+        "on_stage": true,
+        "frame_delta": 4263,
+        "frames": 7792,
+        "connects_before": 1,
+        "connects_now": 1,
+        "network_disruption_completed": false,
+        "report_age_ms": 854
+      },
+      {
+        "name": "Multi call 4 8d4ede34",
+        "on_stage": true,
+        "frame_delta": 680,
+        "frames": 3915,
+        "connects_before": 1,
+        "connects_now": 2,
+        "network_disruption_completed": true,
+        "report_age_ms": 801
+      },
+      {
+        "name": "Multi call 2 3affa0f8",
+        "on_stage": true,
+        "frame_delta": 4339,
+        "frames": 8973,
+        "connects_before": 1,
+        "connects_now": 1,
+        "network_disruption_completed": false,
+        "report_age_ms": 992
+      }
+    ]
+  },
+  "removal_sample": {
+    "sample_at_ms": 1791974093172,
+    "guests": [
+      {
+        "name": "Multi call 1 92303a89",
+        "on_stage": true,
+        "frames": 19342,
+        "frame_delta": 9379,
+        "connects": 1,
+        "retires": 0,
+        "report_age_ms": 1921
+      },
+      {
+        "name": "Multi call 3 c7d56698",
+        "on_stage": true,
+        "frames": 17172,
+        "frame_delta": 9380,
+        "connects": 1,
+        "retires": 0,
+        "report_age_ms": 1926
+      },
+      {
+        "name": "Multi call 4 8d4ede34",
+        "on_stage": false,
+        "frames": 0,
+        "frame_delta": -3915,
+        "connects": 2,
+        "retires": 6,
+        "report_age_ms": 2507
+      },
+      {
+        "name": "Multi call 2 3affa0f8",
+        "on_stage": true,
+        "frames": 18353,
+        "frame_delta": 9380,
+        "connects": 1,
+        "retires": 0,
+        "report_age_ms": 1963
+      }
+    ],
+    "faults": {
+      "publisher_faults": 0,
+      "owner_stops": 0,
+      "binding_timeouts": 6
+    }
+  },
+  "production_ready": false,
+  "remaining": "AV synchronization and speakerphone regressions, production configuration and packaging/signing."
+}
