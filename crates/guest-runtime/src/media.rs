@@ -550,7 +550,10 @@ impl GuestMedia for Receiver {
                 counters.workers.fetch_add(1, Ordering::AcqRel);
                 while !stopped.load(Ordering::Acquire) {
                     let result = runtime.block_on(async {
-                        tokio::time::timeout(Duration::from_millis(500), track.get_stats()).await
+                        // Stats are a decoder-binding proof, not a 4 Hz media poll.
+                        // Eight concurrent tracks otherwise overload the SDK stats lane.
+                        // Deadline/failure still invalidates the binding below.
+                        tokio::time::timeout(Duration::from_millis(1500), track.get_stats()).await
                     });
                     if let Ok(Ok(stats)) = result {
                         let streams: Vec<_> = stats
@@ -571,7 +574,7 @@ impl GuestMedia for Receiver {
                         #[cfg(debug_assertions)]
                         if previous != 0 { eprintln!("Native RTC receiver binding unavailable: stats deadline or failure"); }
                     }
-                    for _ in 0..25 {
+                    for _ in 0..100 {
                         if stopped.load(Ordering::Acquire) {
                             break;
                         }

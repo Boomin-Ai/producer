@@ -899,6 +899,7 @@ impl AudioTimeline {
         if now < due {
             return Ok(None);
         }
+        MAX_AUDIO_LATE.fetch_max(now - due, Ordering::Relaxed);
         if now - due > MAX_LATE_NS {
             return Err("Native program audio publication deadline missed");
         }
