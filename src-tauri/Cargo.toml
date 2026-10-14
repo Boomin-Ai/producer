@@ -10,6 +10,7 @@ edition = "2021"
 [features]
 # Opt-in staging authority, SDK connection, scene endpoints and room controls.
 guest-rtc-pilot = ["dep:producer-guest-session", "dep:producer-guest-runtime"]
+guest-rtc-production = ["guest-rtc-pilot"]
 
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary

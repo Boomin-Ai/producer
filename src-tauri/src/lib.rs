@@ -43,6 +43,13 @@ pub struct AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(feature = "guest-rtc-production")]
+    {
+        // Configure the timestamped SDK adapter before any native factory is
+        // created. Production users do not need shell environment flags.
+        std::env::set_var("LIVEKIT_LAB_TIMED_MIXER", "1");
+        std::env::set_var("LIVEKIT_LAB_RTCP_PROBE", "1");
+    }
     #[cfg(all(feature = "guest-rtc-pilot", have_engine, debug_assertions, target_os = "macos"))]
     if std::env::var("PRODUCER_RTC_THUMB_PROOF").as_deref() == Ok("1") {
         live::graph::thumbnail_selftest();

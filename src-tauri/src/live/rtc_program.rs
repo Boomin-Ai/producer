@@ -678,7 +678,7 @@ impl Tap {
                 failed: AtomicBool::new(false),
                 ready: AtomicBool::new(false),
                 raise_priority: cfg!(target_os = "macos")
-                    && std::env::var("PRODUCER_RTC_PROGRAM_PILOT").as_deref() == Ok("1"),
+                    && (cfg!(feature = "guest-rtc-production") || std::env::var("PRODUCER_RTC_PROGRAM_PILOT").as_deref() == Ok("1")),
                 priority_attempted: AtomicBool::new(false),
             }),
             audio_frames,

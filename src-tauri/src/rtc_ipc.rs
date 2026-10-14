@@ -6,10 +6,14 @@ use crate::{
 use tauri::State;
 
 #[cfg(feature = "guest-rtc-pilot")]
+fn runtime_enabled() -> bool {
+    cfg!(feature = "guest-rtc-production") || std::env::var("PRODUCER_RTC_NATIVE_PILOT").as_deref() == Ok("1")
+}
+#[cfg(feature = "guest-rtc-pilot")]
 fn pilot_origin_matches(base: &str) -> bool {
     let api = crate::ipc::api_root_of(base);
     api.trim_end_matches('/') == "https://boomin-rtc-pilot.kleveland-bishop.workers.dev"
-        || (std::env::var("PRODUCER_RTC_PRODUCTION").as_deref() == Ok("1")
+        || ((cfg!(feature = "guest-rtc-production") || std::env::var("PRODUCER_RTC_PRODUCTION").as_deref() == Ok("1"))
             && api.trim_end_matches('/') == crate::boomin::DEFAULT_BOOMIN_API_ROOT)
 }
 
@@ -18,23 +22,31 @@ fn pilot_origin_matches(base: &str) -> bool {
 pub async fn live_rtc_enabled(
     state: State<'_, AppState>,
     endpoint_id: String,
+    room_id: String,
 ) -> EngineResult<bool> {
     #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
     {
-        if std::env::var("PRODUCER_RTC_NATIVE_PILOT").as_deref() != Ok("1") {
+        if !runtime_enabled() {
             return Ok(false);
         }
         let base: String = state.db.lock().map_err(|_| EngineError::Other("Room database unavailable".into()))?
             .query_row("SELECT base_url FROM endpoints WHERE id=?1", rusqlite::params![endpoint_id], |row| row.get(0))?;
         let api = crate::ipc::api_root_of(&base);
-        return Ok(
-            std::env::var("PRODUCER_RTC_NATIVE_PILOT").as_deref() == Ok("1")
-                && pilot_origin_matches(&api),
-        );
+        if !pilot_origin_matches(&api) {return Ok(false);}
+        if api.trim_end_matches('/') != crate::boomin::DEFAULT_BOOMIN_API_ROOT {return Ok(true);}
+        uuid::Uuid::parse_str(&room_id).map_err(|_| EngineError::Other("Invalid hosted room".into()))?;
+        let (_,_,token)=crate::ipc::endpoint_access(&state,&endpoint_id)?;
+        let response=reqwest::Client::new().get(format!("{api}/v1/app/live/rooms/{room_id}/rtc"))
+            .bearer_auth(token).timeout(std::time::Duration::from_secs(5)).send().await?;
+        if response.status()==reqwest::StatusCode::NOT_FOUND {return Ok(false);}
+        if !response.status().is_success() {return Err(EngineError::Other("Could not confirm hosted guest transport".into()));}
+        let body:serde_json::Value=response.json().await?;
+        return Ok(body.get("enabled").and_then(|v|v.as_bool())==Some(true)
+            && body.get("transport").and_then(|v|v.as_str())==Some("livekit"));
     }
     #[cfg(not(all(feature = "guest-rtc-pilot", have_engine)))]
     {
-        let _ = (state, endpoint_id);
+        let _ = (state, endpoint_id, room_id);
         Ok(false)
     }
 }
@@ -49,8 +61,16 @@ pub async fn room_command(
 ) -> Option<EngineResult<serde_json::Value>> {
     #[cfg(feature = "guest-rtc-pilot")]
     if pilot_origin_matches(api)
-        && std::env::var("PRODUCER_RTC_NATIVE_PILOT").as_deref() == Ok("1")
+        && runtime_enabled()
     {
+        if crate::ipc::api_root_of(api).trim_end_matches('/') == crate::boomin::DEFAULT_BOOMIN_API_ROOT {
+            let owner=state.rtc_host.lock().await;
+            if owner.as_ref().is_none_or(|host|room_id.is_some_and(|room|room!=host.room_id())) {
+                // Unselected legacy rooms keep their existing controls. The API
+                // rejects unfenced writes to selected LiveKit rooms itself.
+                return None;
+            }
+        }
         let result = async {
             let command = serde_json::from_value(command)
                 .map_err(|_| EngineError::Other("Invalid native RTC room command".into()))?;
@@ -88,7 +108,7 @@ pub async fn live_rtc_start(
 ) -> EngineResult<bool> {
     #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
     {
-        if std::env::var("PRODUCER_RTC_NATIVE_PILOT").as_deref() != Ok("1") {
+        if !runtime_enabled() {
             return Err(EngineError::Other("Native guest pilot is disabled".into()));
         }
         let (base, _, token) = crate::ipc::endpoint_access(&state, &endpoint_id)?;
@@ -200,7 +220,7 @@ mod routing_tests {
     fn controls_accept_the_normal_producer_endpoint_base() {
         assert!(pilot_origin_matches("https://boomin-rtc-pilot.kleveland-bishop.workers.dev/v1/app/producer"));
         assert!(pilot_origin_matches("https://boomin-rtc-pilot.kleveland-bishop.workers.dev/"));
-        assert!(!pilot_origin_matches("https://api.boomin.ai/v1/app/producer"));
+        assert_eq!(pilot_origin_matches("https://api.boomin.ai/v1/app/producer"),cfg!(feature="guest-rtc-production"));
         assert!(!pilot_origin_matches("https://boomin-rtc-pilot.kleveland-bishop.workers.dev.evil.invalid/v1/app/producer"));
     }
 }

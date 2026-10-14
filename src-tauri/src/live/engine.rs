@@ -540,7 +540,7 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
     // can grow its mixer delay to 960 ms, exceeding our publication budget.
     // Keep this candidate restricted to the explicit native RTC pilot.
     let rtc_audio = cfg!(feature = "guest-rtc-pilot")
-        && std::env::var("PRODUCER_RTC_PROGRAM_PILOT").as_deref() == Ok("1");
+        && (cfg!(feature = "guest-rtc-production") || std::env::var("PRODUCER_RTC_PROGRAM_PILOT").as_deref() == Ok("1"));
     let audio_ready = if rtc_audio {
         let bounded = ffi::obs_audio_info2 {
             samples_per_sec: oai.samples_per_sec,

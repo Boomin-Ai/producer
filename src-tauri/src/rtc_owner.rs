@@ -110,7 +110,7 @@ impl HostOwner {
         Self::start_with_options(
             control,
             Box::new(receiver),
-            std::env::var("PRODUCER_RTC_PROGRAM_PILOT").as_deref() == Ok("1"),
+            cfg!(feature = "guest-rtc-production") || std::env::var("PRODUCER_RTC_PROGRAM_PILOT").as_deref() == Ok("1"),
         )
         .await
     }
@@ -571,7 +571,8 @@ pub fn program_selftest() -> Result<(), &'static str> {
             worker: Some(worker),
         })
     }
-    let bytes = std::fs::read(format!("{ROOT}/operator.json"))
+    let profile=std::env::var("PRODUCER_RTC_PROGRAM_OPERATOR_PROFILE").unwrap_or_else(|_|format!("{ROOT}/operator.json"));
+    let bytes = std::fs::read(profile)
         .map_err(|_| "Native program operator unavailable")?;
     if bytes.len() > 32768 {
         return Err("Native program operator too large");
@@ -659,7 +660,8 @@ pub fn program_selftest() -> Result<(), &'static str> {
         tokio::runtime::Runtime::new().map_err(|_| "Native program runtime unavailable")?;
     let result = runtime.block_on(async {
         let receiver = crate::live::rtc_media::SceneOutputs::receiver()?;
-        let mut owner = HostOwner::start_with_options(Control::new(operator)?, Box::new(receiver), true).await?;
+        let api=std::env::var("PRODUCER_RTC_PROGRAM_API").unwrap_or_else(|_|"https://boomin-rtc-pilot.kleveland-bishop.workers.dev".into());
+        let mut owner = HostOwner::start_with_options(Control::for_api(operator,&api)?, Box::new(receiver), true).await?;
         let lifetime = owner.task_lifetime();
         let began = std::time::Instant::now();
         let until = began + Duration::from_secs(60);

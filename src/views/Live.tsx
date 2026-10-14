@@ -3686,7 +3686,7 @@ export function LiveView({
     setAdmissionPending(new Set(admissionInFlight.current));
     try {
       monitorLog("guest admission: selecting return transport");
-      const nativeRtc = await ipc.liveRtcEnabled(endpoint);
+      const nativeRtc = await ipc.liveRtcEnabled(endpoint,serverRoom);
       monitorLog(`guest admission: ${nativeRtc ? "native RTC" : "legacy"} transport selected`);
       await admitGuestThroughTransport({
         nativeRtc,
@@ -6379,7 +6379,7 @@ export function LiveView({
           }
           return;
         }
-        const nativeRtc = await ipc.liveRtcEnabled(epId);
+        const nativeRtc = await ipc.liveRtcEnabled(epId,cfg.server_room_id!);
         if (!alive) return;
         if (nativeRtc) {
           if (!roomApplied.current) return;

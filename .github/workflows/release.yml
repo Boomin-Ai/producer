@@ -228,7 +228,7 @@ jobs:
           INCLUDE_NATIVE_GUEST: ${{ inputs.native_guest && '1' || '0' }}
         run: |
           if [ "$INCLUDE_NATIVE_GUEST" = "1" ]; then
-            bun run tauri build --target aarch64-apple-darwin --features guest-rtc-pilot
+            bun run tauri build --target aarch64-apple-darwin --features guest-rtc-production
           else
             bun run tauri build --target aarch64-apple-darwin
           fi
