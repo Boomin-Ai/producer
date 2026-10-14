@@ -299,8 +299,11 @@ impl HostOwner {
                                 Err(error) => { failure = Some(error); break; }
                             }
                         }
-                        if !connection.healthy() || control.lease_expires_at_ms().unwrap_or(0) <= now() {
-                            failure = Some("Native RTC connection or lease lost"); break;
+                        if !connection.healthy() {
+                            failure = Some("Native RTC transport stopped"); break;
+                        }
+                        if control.lease_expires_at_ms().unwrap_or(0) <= now() {
+                            failure = Some("Native RTC host lease expired"); break;
                         }
                     }
                     _ = heartbeat.tick() => {
@@ -597,6 +600,19 @@ pub fn program_selftest() -> Result<(), &'static str> {
     wave.finalize()
         .map_err(|_| "Native program fixture failed")?;
     let mut graph = SceneGraph::create().map_err(|_| "Native program scene unavailable")?;
+    let generated_av = std::env::var("PRODUCER_RTC_AV_PROOF").as_deref() == Ok("1");
+    if generated_av {
+        let av_path = std::path::Path::new(ROOT).join("generated-program-av.mov");
+        if !av_path.is_file() { return Err("Generated AV fixture unavailable"); }
+        graph.add_extra("generated-program-av", "Generated numbered AV", &ExtraSpec::Media {
+            path: av_path.to_string_lossy().into_owned(), looping: false,
+        }).map_err(|_| "Generated AV source unavailable")?;
+        graph.set_transform("generated-program-av", &TransformPatch {
+            w: Some(1280.), h: Some(720.), visible: Some(true), ..Default::default()
+        }).map_err(|_| "Generated AV transform failed")?;
+        graph.set_source_audio("generated-program-av", Some(1.0), Some(false))
+            .map_err(|_| "Generated AV audio routing failed")?;
+    } else {
     graph
         .add_extra(
             "generated-program-color",
@@ -630,7 +646,9 @@ pub fn program_selftest() -> Result<(), &'static str> {
     graph
         .set_source_audio("generated-program-audio", Some(0.5), Some(false))
         .map_err(|_| "Native program tone routing failed")?;
+    }
     let lifecycle = std::env::var("PRODUCER_RTC_LIFECYCLE_PROOF").as_deref() == Ok("1");
+    if generated_av && lifecycle { return Err("AV recording and generated source lifecycle modes are exclusive"); }
     let mut loads = Vec::new();
     if lifecycle {
         for index in 0..4 {
@@ -653,7 +671,7 @@ pub fn program_selftest() -> Result<(), &'static str> {
                 for index in 0..4 {loads.push(guest_load(&mut graph,index)?);}
                 lifecycle_cycles+=1;
             }
-            let (audio,video) = rtc_program::counts(); save(serde_json::json!({"passed":null,"audio_submitted":audio,"video_submitted":video,"timing":rtc_program::timing()}))?;
+            let (audio,video) = rtc_program::counts(); save(serde_json::json!({"passed":null,"audio_submitted":audio,"video_submitted":video,"timing":rtc_program::timing(),"generated_av_fixture":generated_av}))?;
             if let Ok(bytes) = std::fs::read(format!("{ROOT}/native-room-command.json")) {
                 let _ = std::fs::remove_file(format!("{ROOT}/native-room-command.json"));
                 #[derive(serde::Deserialize)] #[serde(deny_unknown_fields)]
@@ -690,7 +708,7 @@ pub fn program_selftest() -> Result<(), &'static str> {
                 || timing["silence_blocks_submitted"].as_u64().unwrap_or(u64::MAX)>if capture_injection {180} else {50})) {
             return Err("Native program lifecycle or submission proof failed");
         }
-        save(serde_json::json!({"passed":true,"audio_submitted":audio,"video_submitted":video,"timing":rtc_program::timing(),"owner_expired":true,"repeated_close_passed":true,"generated_guest_sources":if lifecycle {4}else{0},"source_recreation_cycles":lifecycle_cycles}))
+        save(serde_json::json!({"passed":true,"audio_submitted":audio,"video_submitted":video,"timing":rtc_program::timing(),"owner_expired":true,"repeated_close_passed":true,"generated_av_fixture":generated_av,"generated_guest_sources":if lifecycle {4}else{0},"source_recreation_cycles":lifecycle_cycles}))
     });
     graph
         .clear_room()

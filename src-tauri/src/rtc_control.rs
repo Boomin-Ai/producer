@@ -112,6 +112,7 @@ fn now() -> Result<u64, &'static str> {
 #[derive(Clone)]
 pub struct Control {
     http: reqwest::Client,
+    api: String,
     operator: Operator,
     ticket: String,
     connection_id: Option<String>,
@@ -127,6 +128,15 @@ impl Control {
         &self.operator.room_id
     }
     pub fn new(operator: Operator) -> Result<Self, &'static str> {
+        Self::for_api(operator, API)
+    }
+    /// Bind all authority reads and writes to the endpoint used to open the room.
+    /// Never move an existing ticket between staging and production.
+    pub fn for_api(operator: Operator, api: &str) -> Result<Self, &'static str> {
+        let api = api.trim_end_matches('/');
+        if !matches!(api, API | crate::boomin::DEFAULT_BOOMIN_API_ROOT) {
+            return Err("Unsupported native RTC authority endpoint");
+        }
         for id in [&operator.brand_id, &operator.room_id] {
             uuid::Uuid::parse_str(id).map_err(|_| "Invalid staging room")?;
         }
@@ -140,6 +150,7 @@ impl Control {
             .map_err(|_| "HTTP setup failed")?;
         Ok(Self {
             http,
+            api: api.to_owned(),
             operator,
             ticket: String::new(),
             connection_id: None,
@@ -163,7 +174,7 @@ impl Control {
     ) -> Result<Vec<u8>, &'static str> {
         let mut response = self
             .http
-            .post(format!("{API}{route}"))
+            .post(format!("{}{route}", self.api))
             .bearer_auth(&self.operator.token)
             // A permission response must fit inside the receiver's 3.5-second
             // freshness window. Control mutations retain their five-second limit.
@@ -285,8 +296,8 @@ impl Control {
         let mut response = self
             .http
             .get(format!(
-                "{API}/v1/app/live/rooms/{}/rtc-control",
-                self.operator.room_id
+                "{}/v1/app/live/rooms/{}/rtc-control",
+                self.api, self.operator.room_id
             ))
             .bearer_auth(&self.operator.token)
             .timeout(Duration::from_secs(5))
@@ -611,6 +622,14 @@ pub fn selftest(path: &std::path::Path) -> Result<(), &'static str> {
 mod room_command_tests {
     use super::*;
     const ID: &str = "11111111-1111-4111-8111-111111111111";
+    #[test]
+    fn authority_endpoint_is_explicit_and_pinned() {
+        let operator = || Operator { brand_id: ID.into(), room_id: ID.into(), token: "fixture".into() };
+        assert_eq!(Control::new(operator()).unwrap().api, API);
+        assert_eq!(Control::for_api(operator(), "https://api.boomin.ai/").unwrap().api, "https://api.boomin.ai");
+        assert!(Control::for_api(operator(), "https://api.boomin.ai.evil.invalid").is_err());
+        assert!(Control::for_api(operator(), "http://api.boomin.ai").is_err());
+    }
     #[test]
     fn renewal_recovery_requires_a_fresh_owned_read_and_excludes_rejections() {
         for error in ["RTC authority changed", "RTC request timed out", "RTC request failed", "RTC response failed", "RTC authority temporarily unavailable"] { assert!(renewable_after_read(error)); }

@@ -101,8 +101,9 @@ impl Connection {
                         subscriptions.authority(permissions.borrow_and_update().clone());
                     }
                     event = events.recv() => match event {
-                        None | Some(RoomEvent::Disconnected { .. }) => break,
-                        Some(RoomEvent::Reconnecting) => { health.store(false, Ordering::Release); subscriptions.authority(None); }
+                        None => { eprintln!("Native RTC event stream ended"); break; }
+                        Some(RoomEvent::Disconnected { reason, .. }) => { eprintln!("Native RTC disconnected: {reason:?}"); break; }
+                        Some(RoomEvent::Reconnecting) => { eprintln!("Native RTC reconnect requires fresh owner authorization"); health.store(false, Ordering::Release); subscriptions.authority(None); }
                         // A reconnect does not restore publication authorization. The
                         // room adapter must obtain fresh independent authority first.
                         Some(RoomEvent::Reconnected) => { health.store(false, Ordering::Release); }

@@ -39,13 +39,14 @@ let (videoReader, videoOutput) = try reader(asset, videoTrack, [kCVPixelBufferPi
 while let sample = videoOutput.copyNextSampleBuffer() {
     guard let image = CMSampleBufferGetImageBuffer(sample) else { fail("Missing pixels") }
     CVPixelBufferLockBaseAddress(image, .readOnly)
-    guard CVPixelBufferGetWidth(image) == 320, CVPixelBufferGetHeight(image) == 180,
-          let bytes = CVPixelBufferGetBaseAddress(image)?.assumingMemoryBound(to: UInt8.self) else { fail("Expected 320x180 generated recording") }
+    let width = CVPixelBufferGetWidth(image), height = CVPixelBufferGetHeight(image)
+    guard width >= 320, height >= 180, width * 9 == height * 16,
+          let bytes = CVPixelBufferGetBaseAddress(image)?.assumingMemoryBound(to: UInt8.self) else { fail("Expected generated 16:9 recording") }
     let stride = CVPixelBufferGetBytesPerRow(image)
-    let active = bytes[90 * stride + 160 * 4] > 180
+    let active = bytes[(height / 2) * stride + (width / 2) * 4] > 180
     if active && !videoActive {
         var id = 0
-        for bit in 0..<8 { if bytes[8 * stride + (bit * 40 + 20) * 4] > 180 { id |= 1 << bit } }
+        for bit in 0..<8 { if bytes[(height * 8 / 180) * stride + ((bit * 40 + 20) * width / 320) * 4] > 180 { id |= 1 << bit } }
         video.append(Marker(id: id, pts: CMSampleBufferGetPresentationTimeStamp(sample).seconds * 1000, confidence: 1))
     }
     videoActive = active; videoFrames += 1

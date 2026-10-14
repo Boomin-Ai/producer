@@ -7,7 +7,10 @@ use tauri::State;
 
 #[cfg(feature = "guest-rtc-pilot")]
 fn pilot_origin_matches(base: &str) -> bool {
-    crate::ipc::api_root_of(base).trim_end_matches('/') == "https://boomin-rtc-pilot.kleveland-bishop.workers.dev"
+    let api = crate::ipc::api_root_of(base);
+    api.trim_end_matches('/') == "https://boomin-rtc-pilot.kleveland-bishop.workers.dev"
+        || (std::env::var("PRODUCER_RTC_PRODUCTION").as_deref() == Ok("1")
+            && api.trim_end_matches('/') == crate::boomin::DEFAULT_BOOMIN_API_ROOT)
 }
 
 
@@ -26,8 +29,7 @@ pub async fn live_rtc_enabled(
         let api = crate::ipc::api_root_of(&base);
         return Ok(
             std::env::var("PRODUCER_RTC_NATIVE_PILOT").as_deref() == Ok("1")
-                && api.trim_end_matches('/')
-                    == "https://boomin-rtc-pilot.kleveland-bishop.workers.dev",
+                && pilot_origin_matches(&api),
         );
     }
     #[cfg(not(all(feature = "guest-rtc-pilot", have_engine)))]
@@ -91,16 +93,16 @@ pub async fn live_rtc_start(
         }
         let (base, _, token) = crate::ipc::endpoint_access(&state, &endpoint_id)?;
         let api = crate::ipc::api_root_of(&base);
-        if api.trim_end_matches('/') != "https://boomin-rtc-pilot.kleveland-bishop.workers.dev" {
+        if !pilot_origin_matches(&api) {
             return Err(EngineError::Other(
                 "Native guest pilot requires the isolated staging endpoint".into(),
             ));
         }
-        let control = crate::rtc_control::Control::new(crate::rtc_control::Operator {
+        let control = crate::rtc_control::Control::for_api(crate::rtc_control::Operator {
             brand_id,
             room_id,
             token,
-        })
+        }, &api)
         .map_err(|e| EngineError::Other(e.into()))?;
         let mut owner = state.rtc_host.lock().await;
         if owner
