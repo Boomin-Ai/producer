@@ -1,0 +1,30 @@
+{
+  "passed": false,
+  "scope": "Combined native lifecycle and injected capture/video stalls after teardown ordering fix",
+  "result": {
+    "passed": null,
+    "audio_submitted": 5864,
+    "video_submitted": 1731,
+    "timing": {
+      "capture_blocks_discarded": 25,
+      "capture_fault_code": 0,
+      "capture_gap_injected": true,
+      "maximum_audio_call_us": 3706,
+      "maximum_audio_late_us": 31537,
+      "maximum_callback_age_us": 636541,
+      "maximum_capture_age_us": 418957,
+      "maximum_capture_queue_wait_us": 1929,
+      "maximum_loop_gap_us": 8178,
+      "maximum_video_call_us": 43603,
+      "maximum_work_us": 33513,
+      "minimum_audio_spacing_us": 9069,
+      "program_buffer_ms": 400,
+      "publisher_recoveries": 1,
+      "silence_blocks_submitted": 179,
+      "startup_audio_blocks_discarded": 0,
+      "time_constrained_scheduling": true,
+      "video_worker_stall_injected": true
+    }
+  },
+  "finding": "A 31.5 ms publication deadline miss occurred inside the audio loop despite separate video capture handling; audio storage still used heap allocation."
+}

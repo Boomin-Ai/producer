@@ -1,0 +1,42 @@
+{
+  "passed": true,
+  "audio_submitted": 6053,
+  "video_submitted": 1805,
+  "timing": {
+    "capture_blocks_discarded": 0,
+    "capture_fault_code": 0,
+    "capture_gap_injected": true,
+    "capture_priority_enabled": true,
+    "maximum_audio_call_us": 53,
+    "maximum_audio_late_us": 1045,
+    "maximum_callback_age_us": 257029,
+    "maximum_capture_age_us": 257595,
+    "maximum_capture_queue_wait_us": 4157,
+    "maximum_loop_gap_us": 1116,
+    "maximum_video_call_us": 1004,
+    "maximum_work_us": 106,
+    "minimum_audio_spacing_us": 9065,
+    "program_buffer_ms": 400,
+    "publisher_recoveries": 0,
+    "silence_blocks_submitted": 131,
+    "startup_audio_blocks_discarded": 0,
+    "time_constrained_scheduling": true,
+    "video_worker_stall_injected": true
+  },
+  "source_recreation_cycles": 2,
+  "scope": "Native SDK publisher, four generated guest sources, two source recreation cycles, injected 1.3-second capture loss and 120 ms video stall",
+  "unit_tests_passed": 8,
+  "graphics_unit_test_ignored": 1,
+  "quality_bounds": {
+    "minimum_video_frames": 1500,
+    "maximum_silence_blocks_with_injection": 180,
+    "maximum_publisher_recoveries": 0,
+    "maximum_capture_fault_code": 0
+  },
+  "production_ready": false,
+  "remaining": "Real browser guest admission/stage continuity/cleanup/rejoin; physical AV sync and speakerphone regression; production integration and distribution signing.",
+  "references": [
+    "https://github.com/rust-lang/rust/blob/1.98.1/library/std/src/sync/mpmc/array.rs#L195",
+    "https://github.com/obsproject/obs-studio/blob/32.1.2/libobs/media-io/audio-io.c#L191"
+  ]
+}

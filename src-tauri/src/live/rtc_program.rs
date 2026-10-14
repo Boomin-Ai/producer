@@ -6,7 +6,7 @@ use std::{
     collections::VecDeque,
     ffi::c_void,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         mpsc::{sync_channel, Receiver, SyncSender, TrySendError},
         Arc,
     },
@@ -45,6 +45,7 @@ static REALTIME: AtomicBool = AtomicBool::new(false);
 static MAX_LOOP_GAP: AtomicU64 = AtomicU64::new(0);
 static MAX_CAPTURE_AGE: AtomicU64 = AtomicU64::new(0);
 static MAX_CALLBACK_AGE: AtomicU64 = AtomicU64::new(0);
+static CAPTURE_PRIORITY: AtomicBool = AtomicBool::new(false);
 static MAX_CAPTURE_QUEUE_WAIT: AtomicU64 = AtomicU64::new(0);
 static MAX_VIDEO_CALL: AtomicU64 = AtomicU64::new(0);
 pub fn note_recovery() {
@@ -73,6 +74,7 @@ pub fn reset_diagnostics() {
     REALTIME.store(false, Ordering::Release);
     MAX_CAPTURE_AGE.store(0, Ordering::Release);
     MAX_CALLBACK_AGE.store(0, Ordering::Release);
+    CAPTURE_PRIORITY.store(false, Ordering::Release);
     MAX_CAPTURE_QUEUE_WAIT.store(0, Ordering::Release);
 }
 pub fn counts() -> (u64, u64) {
@@ -91,7 +93,7 @@ pub fn timing() -> serde_json::Value {
     let capture_gap_injected = CAPTURE_GAP_UNTIL.load(Ordering::Acquire) != 0;
     #[cfg(not(debug_assertions))]
     let capture_gap_injected = false;
-    serde_json::json!({"capture_gap_injected":capture_gap_injected,"capture_blocks_discarded":CAPTURE_DROPPED.load(Ordering::Acquire),"silence_blocks_submitted":SILENCE_SUBMITTED.load(Ordering::Acquire),"video_worker_stall_injected":video_stall_injected,"capture_fault_code":CAPTURE_FAULT.load(Ordering::Acquire),"program_buffer_ms":LEAD_NS/1_000_000,"publisher_recoveries":RECOVERIES.load(Ordering::Acquire),"maximum_audio_late_us":MAX_AUDIO_LATE.load(Ordering::Acquire)/1000,"minimum_audio_spacing_us":(spacing!=u64::MAX).then_some(spacing/1000),"maximum_audio_call_us":MAX_AUDIO_CALL.load(Ordering::Acquire),"startup_audio_blocks_discarded":STARTUP_DROPPED.load(Ordering::Acquire),"time_constrained_scheduling":REALTIME.load(Ordering::Acquire),"maximum_work_us":MAX_WORK.load(Ordering::Acquire)/1000,"maximum_loop_gap_us":MAX_LOOP_GAP.load(Ordering::Acquire)/1000,"maximum_callback_age_us":MAX_CALLBACK_AGE.load(Ordering::Acquire)/1000,"maximum_capture_queue_wait_us":MAX_CAPTURE_QUEUE_WAIT.load(Ordering::Acquire)/1000,"maximum_capture_age_us":MAX_CAPTURE_AGE.load(Ordering::Acquire)/1000,"maximum_video_call_us":MAX_VIDEO_CALL.load(Ordering::Acquire)})
+    serde_json::json!({"capture_priority_enabled":CAPTURE_PRIORITY.load(Ordering::Acquire),"capture_gap_injected":capture_gap_injected,"capture_blocks_discarded":CAPTURE_DROPPED.load(Ordering::Acquire),"silence_blocks_submitted":SILENCE_SUBMITTED.load(Ordering::Acquire),"video_worker_stall_injected":video_stall_injected,"capture_fault_code":CAPTURE_FAULT.load(Ordering::Acquire),"program_buffer_ms":LEAD_NS/1_000_000,"publisher_recoveries":RECOVERIES.load(Ordering::Acquire),"maximum_audio_late_us":MAX_AUDIO_LATE.load(Ordering::Acquire)/1000,"minimum_audio_spacing_us":(spacing!=u64::MAX).then_some(spacing/1000),"maximum_audio_call_us":MAX_AUDIO_CALL.load(Ordering::Acquire),"startup_audio_blocks_discarded":STARTUP_DROPPED.load(Ordering::Acquire),"time_constrained_scheduling":REALTIME.load(Ordering::Acquire),"maximum_work_us":MAX_WORK.load(Ordering::Acquire)/1000,"maximum_loop_gap_us":MAX_LOOP_GAP.load(Ordering::Acquire)/1000,"maximum_callback_age_us":MAX_CALLBACK_AGE.load(Ordering::Acquire)/1000,"maximum_capture_queue_wait_us":MAX_CAPTURE_QUEUE_WAIT.load(Ordering::Acquire)/1000,"maximum_capture_age_us":MAX_CAPTURE_AGE.load(Ordering::Acquire)/1000,"maximum_video_call_us":MAX_VIDEO_CALL.load(Ordering::Acquire)})
 }
 #[repr(C)]
 struct VideoScale {
@@ -200,9 +202,98 @@ struct Picture {
     timestamp: u64,
     planes: (Vec<u8>, Vec<u8>, Vec<u8>),
 }
+#[derive(Clone, Copy)]
+struct AudioCapture {
+    timestamp: u64,
+    received_at: u64,
+    frames: usize,
+    samples: [i16; 4096],
+}
+// OBS serializes this tap's audio callback on its single audio-output thread.
+// The publisher is the only consumer. A slot becomes visible only AFTER the
+// entire PCM copy, so preempting a producer cannot make the real-time consumer
+// spin waiting for an incomplete reservation. Both methods have bounded work.
+struct AudioCaptureQueue {
+    slots:
+        Box<[std::cell::UnsafeCell<std::mem::MaybeUninit<AudioCapture>>; CAPTURE_AUDIO_BLOCKS + 1]>,
+    read: AtomicUsize,
+    write: AtomicUsize,
+    reader_busy: AtomicBool,
+    writer_busy: AtomicBool,
+}
+// SAFETY: only the OBS callback writes slots; only the publisher reads slots.
+// Non-waiting ownership guards serialize accidental concurrent callers too.
+// Release/Acquire indices hand off initialized slots and prevent reuse until
+// the reader finishes copying. Tap disconnect quiesces callbacks before drop.
+unsafe impl Sync for AudioCaptureQueue {}
+struct QueueOwnership<'a>(&'a AtomicBool);
+impl Drop for QueueOwnership<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+impl AudioCaptureQueue {
+    fn new() -> Self {
+        Self {
+            slots: Box::new(std::array::from_fn(|_| {
+                std::cell::UnsafeCell::new(std::mem::MaybeUninit::uninit())
+            })),
+            read: AtomicUsize::new(0),
+            write: AtomicUsize::new(0),
+            reader_busy: AtomicBool::new(false),
+            writer_busy: AtomicBool::new(false),
+        }
+    }
+    fn try_push(&self, frame: AudioCapture) -> bool {
+        self.push_with(frame, || {})
+    }
+    fn push_with(&self, frame: AudioCapture, before_publish: impl FnOnce()) -> bool {
+        if self
+            .writer_busy
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
+            return false;
+        }
+        let _guard = QueueOwnership(&self.writer_busy);
+        let write = self.write.load(Ordering::Relaxed);
+        let next = (write + 1) % self.slots.len();
+        if next == self.read.load(Ordering::Acquire) {
+            return false;
+        }
+        // SAFETY: sole producer, and this slot is outside the reader's owned
+        // interval until the completed payload is published below.
+        unsafe {
+            (*self.slots[write].get()).write(frame);
+        }
+        before_publish();
+        self.write.store(next, Ordering::Release);
+        true
+    }
+    fn try_pop(&self) -> Option<AudioCapture> {
+        if self
+            .reader_busy
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
+            return None;
+        }
+        let _guard = QueueOwnership(&self.reader_busy);
+        let read = self.read.load(Ordering::Relaxed);
+        if read == self.write.load(Ordering::Acquire) {
+            return None;
+        }
+        // SAFETY: the acquired index proves initialization. The producer cannot
+        // reuse this slot until the copy completes and the read index advances.
+        let frame = unsafe { (*self.slots[read].get()).assume_init_read() };
+        self.read
+            .store((read + 1) % self.slots.len(), Ordering::Release);
+        Some(frame)
+    }
+}
 #[derive(Default)]
 struct Queues {
-    audio: VecDeque<(u64, u64, Vec<i16>)>,
+    audio: VecDeque<AudioCapture>,
     video: VecDeque<Picture>,
 }
 /// A slow video SDK call must never hold the audio publication clock.
@@ -210,6 +301,8 @@ struct Queues {
 struct VideoLane {
     sender: Option<SyncSender<Picture>>,
     worker: Option<JoinHandle<Result<(), &'static str>>>,
+    capture_worker: Option<JoinHandle<Result<(), &'static str>>>,
+    audio_ready: Arc<AtomicBool>,
     failed: Arc<AtomicBool>,
     stop: Arc<AtomicBool>,
 }
@@ -276,9 +369,75 @@ impl VideoLane {
         Ok(Self {
             sender: Some(sender),
             worker: Some(worker),
+            capture_worker: None,
+            audio_ready: Arc::new(AtomicBool::new(false)),
             failed,
             stop,
         })
+    }
+    fn capture(&mut self, receiver: Receiver<Picture>) -> Result<(), &'static str> {
+        let sender = self
+            .sender
+            .as_ref()
+            .ok_or("Native video lane closed")?
+            .clone();
+        let stop = self.stop.clone();
+        let failed = self.failed.clone();
+        let audio_ready = self.audio_ready.clone();
+        self.capture_worker = Some(
+            thread::Builder::new()
+                .name("rtc-program-video-capture".into())
+                .spawn(move || {
+                    let result = (|| {
+                        let mut frames = VecDeque::new();
+                        let mut last_timestamp = 0;
+                        while !stop.load(Ordering::Acquire) {
+                            match receiver.recv_timeout(Duration::from_millis(1)) {
+                                Ok(frame) => {
+                                    if frame.timestamp <= last_timestamp {
+                                        return Err("Native program video timestamp regressed");
+                                    }
+                                    last_timestamp = frame.timestamp;
+                                    frames.push_back(frame);
+                                    while frames.len() > VIDEO_QUEUE_CAPACITY {
+                                        frames.pop_front();
+                                    }
+                                }
+                                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                            }
+                            let now = unsafe { os_gettime_ns() };
+                            let mut latest = None;
+                            while frames.front().is_some_and(|frame: &Picture| {
+                                frame.timestamp.saturating_add(LEAD_NS) <= now
+                            }) {
+                                latest = frames.pop_front();
+                            }
+                            if let Some(frame) = latest {
+                                let due = frame
+                                    .timestamp
+                                    .checked_add(LEAD_NS)
+                                    .ok_or("Native program video timestamp overflow")?;
+                                if audio_ready.load(Ordering::Acquire)
+                                    && now.saturating_sub(due) <= MAX_LATE_NS
+                                    && !stop.load(Ordering::Acquire)
+                                {
+                                    // Only the video dispatcher handles capture queue locks,
+                                    // frame destruction and video backlog. Audio never enters it.
+                                    let _ = sender.try_send(frame);
+                                }
+                            }
+                        }
+                        Ok(())
+                    })();
+                    if result.is_err() {
+                        failed.store(true, Ordering::Release);
+                    }
+                    result
+                })
+                .map_err(|_| "Native video capture worker unavailable")?,
+        );
+        Ok(())
     }
     fn submit(&self, frame: Picture) -> bool {
         self.sender
@@ -288,12 +447,25 @@ impl VideoLane {
     fn close(&mut self) -> Result<(), &'static str> {
         self.stop.store(true, Ordering::Release);
         self.sender.take();
-        if let Some(worker) = self.worker.take() {
-            worker
-                .join()
-                .map_err(|_| "Native program video worker failed")??;
-        }
-        Ok(())
+        let capture = self
+            .capture_worker
+            .take()
+            .map(|worker| {
+                worker
+                    .join()
+                    .unwrap_or(Err("Native video capture worker failed"))
+            })
+            .unwrap_or(Ok(()));
+        let publication = self
+            .worker
+            .take()
+            .map(|worker| {
+                worker
+                    .join()
+                    .unwrap_or(Err("Native program video worker failed"))
+            })
+            .unwrap_or(Ok(()));
+        capture.and(publication)
     }
 }
 impl Drop for VideoLane {
@@ -303,15 +475,17 @@ impl Drop for VideoLane {
 }
 
 struct Shared {
-    audio: SyncSender<(u64, u64, Vec<i16>)>,
+    raise_priority: bool,
+    priority_attempted: AtomicBool,
+    audio: Arc<AudioCaptureQueue>,
     video: SyncSender<Picture>,
     failed: AtomicBool,
     ready: AtomicBool,
 }
 struct Tap {
     shared: Box<Shared>,
-    audio_frames: Receiver<(u64, u64, Vec<i16>)>,
-    video_frames: Receiver<Picture>,
+    audio_frames: Arc<AudioCaptureQueue>,
+    video_frames: Option<Receiver<Picture>>,
     audio: usize,
     video: usize,
     audio_connected: bool,
@@ -349,6 +523,21 @@ extern "C" fn audio_callback(param: *mut c_void, bus: usize, data: *mut ffi::aud
             .store(true, Ordering::Release /* classified */);
         return;
     }
+    #[cfg(target_os = "macos")]
+    if shared.raise_priority && !shared.priority_attempted.swap(true, Ordering::AcqRel) {
+        // This callback executes on OBS's audio-output thread, not the RTC
+        // publisher thread. Keep its capture clock responsive too; priority
+        // applies only to the explicitly enabled native RTC pilot.
+        let success = unsafe { pthread_set_qos_class_self_np(0x21, 0) } == 0;
+        CAPTURE_PRIORITY.store(success, Ordering::Release);
+        if !success {
+            CAPTURE_FAULT
+                .compare_exchange(0, 9, Ordering::AcqRel, Ordering::Acquire)
+                .ok();
+            shared.failed.store(true, Ordering::Release);
+            return;
+        }
+    }
     let received_at = unsafe { os_gettime_ns() };
     #[cfg(debug_assertions)]
     if CAPTURE_GAP_PROOF.load(Ordering::Relaxed) && AUDIO_SUBMITTED.load(Ordering::Relaxed) > 1500 {
@@ -378,8 +567,8 @@ extern "C" fn audio_callback(param: *mut c_void, bus: usize, data: *mut ffi::aud
             std::slice::from_raw_parts(data.data[1] as *const f32, data.frames as usize),
         )
     };
-    let mut samples = Vec::with_capacity(left.len());
-    for (left, right) in left.iter().zip(right) {
+    let mut samples = [0; 4096];
+    for (index, (left, right)) in left.iter().zip(right).enumerate() {
         if !left.is_finite() || !right.is_finite() {
             CAPTURE_FAULT
                 .compare_exchange(0, 3, Ordering::AcqRel, Ordering::Acquire)
@@ -389,13 +578,14 @@ extern "C" fn audio_callback(param: *mut c_void, bus: usize, data: *mut ffi::aud
                 .store(true, Ordering::Release /* classified */);
             return;
         }
-        samples.push(((left + right) * 0.5 * 32767.).clamp(-32768., 32767.) as i16);
+        samples[index] = ((left + right) * 0.5 * 32767.).clamp(-32768., 32767.) as i16;
     }
-    if shared
-        .audio
-        .try_send((data.timestamp, received_at, samples))
-        .is_err()
-    {
+    if !shared.audio.try_push(AudioCapture {
+        timestamp: data.timestamp,
+        received_at,
+        frames: data.frames as usize,
+        samples,
+    }) {
         CAPTURE_FAULT
             .compare_exchange(0, 4, Ordering::AcqRel, Ordering::Acquire)
             .ok();
@@ -478,7 +668,8 @@ impl Tap {
                 && std::env::var("PRODUCER_RTC_PROGRAM_PROOF").as_deref() == Ok("1"),
             Ordering::Release,
         );
-        let (audio_sender, audio_frames) = sync_channel(CAPTURE_AUDIO_BLOCKS);
+        let audio_sender = Arc::new(AudioCaptureQueue::new());
+        let audio_frames = audio_sender.clone();
         let (video_sender, video_frames) = sync_channel(2);
         let mut tap = Self {
             shared: Box::new(Shared {
@@ -486,9 +677,12 @@ impl Tap {
                 video: video_sender,
                 failed: AtomicBool::new(false),
                 ready: AtomicBool::new(false),
+                raise_priority: cfg!(target_os = "macos")
+                    && std::env::var("PRODUCER_RTC_PROGRAM_PILOT").as_deref() == Ok("1"),
+                priority_attempted: AtomicBool::new(false),
             }),
             audio_frames,
-            video_frames,
+            video_frames: Some(video_frames),
             audio: unsafe { ffi::obs_get_audio() } as usize,
             video: unsafe { ffi::obs_get_video() } as usize,
             audio_connected: false,
@@ -535,26 +729,36 @@ impl Tap {
             return Err("Native program capture queue or format fault");
         }
         Ok(Queues {
-            audio: self
-                .audio_frames
-                .try_iter()
+            audio: std::iter::from_fn(|| self.audio_frames.try_pop())
                 .take(CAPTURE_AUDIO_BLOCKS)
                 .collect(),
-            video: self.video_frames.try_iter().take(2).collect(),
+            video: self
+                .video_frames
+                .as_ref()
+                .map(|frames| frames.try_iter().take(2).collect())
+                .unwrap_or_default(),
         })
     }
 }
-impl Drop for Tap {
-    fn drop(&mut self) {
+impl Tap {
+    fn disconnect(&mut self) {
+        self.shared.ready.store(false, Ordering::Release);
         let param = (&*self.shared as *const Shared).cast_mut().cast();
         unsafe {
             if self.video_connected {
                 ffi::obs_remove_raw_video_callback(video_callback, param);
+                self.video_connected = false;
             }
             if self.audio_connected {
                 audio_output_disconnect(self.audio as *mut _, 1, audio_callback, param);
+                self.audio_connected = false;
             }
         }
+    }
+}
+impl Drop for Tap {
+    fn drop(&mut self) {
+        self.disconnect();
     }
 }
 fn wall_ms() -> u64 {
@@ -572,7 +776,7 @@ pub struct Publisher {
 }
 impl Publisher {
     pub fn start(sources: Sources, deadline: u64) -> Result<Self, &'static str> {
-        let tap = Tap::start()?;
+        let mut tap = Tap::start()?;
         let stop = Arc::new(AtomicBool::new(false));
         let failed = Arc::new(AtomicBool::new(false));
         let recoverable = Arc::new(AtomicBool::new(false));
@@ -597,9 +801,17 @@ impl Publisher {
                 // startup pre-roll, not queued live program audio.
                 tap.shared.ready.store(true, Ordering::Release);
                 let mut video_lane = VideoLane::start(sources.clone())?;
+                video_lane.capture(
+                    tap.video_frames
+                        .take()
+                        .ok_or("Native video capture receiver absent")?,
+                )?;
                 let result = publish_loop(&tap, &sources, &video_lane, &done, &expires);
                 // Retire pending video and join its SDK call before clearing
                 // sources or releasing capture callbacks.
+                // Quiesce callbacks before retiring their receiving queues.
+                // Otherwise an intentional close is misclassified as capture failure.
+                tap.disconnect();
                 let video_closed = video_lane.close();
                 let result = result.and(video_closed);
                 sources.clear();
@@ -688,14 +900,116 @@ mod tests {
     }
 
     #[test]
+    fn captured_video_waits_for_audio_and_capture_worker_joins_on_close() {
+        let (published, observed) = sync_channel(2);
+        let mut lane = VideoLane::start_with(move |_| {
+            published.send(()).unwrap();
+            Ok(true)
+        })
+        .unwrap();
+        let (capture, receiver) = sync_channel(2);
+        lane.capture(receiver).unwrap();
+        let frame = || Picture {
+            timestamp: unsafe { os_gettime_ns() }.saturating_sub(LEAD_NS),
+            planes: (vec![], vec![], vec![]),
+        };
+        capture.send(frame()).unwrap();
+        assert!(
+            observed.recv_timeout(Duration::from_millis(40)).is_err(),
+            "Video published before the audio timeline started"
+        );
+        lane.audio_ready.store(true, Ordering::Release);
+        capture.send(frame()).unwrap();
+        observed.recv_timeout(Duration::from_secs(5)).unwrap();
+        lane.close().unwrap();
+        assert!(lane.capture_worker.is_none());
+        assert!(lane.worker.is_none());
+        assert!(capture.send(frame()).is_err());
+    }
+    #[test]
+    fn preempted_capture_producer_never_makes_audio_consumer_wait() {
+        let queue = Arc::new(AudioCaptureQueue::new());
+        let producer = queue.clone();
+        let (entered, checkpoint) = sync_channel(1);
+        let (release, resume) = sync_channel(1);
+        let worker = thread::spawn(move || {
+            assert!(producer.push_with(
+                AudioCapture {
+                    timestamp: 42,
+                    received_at: 43,
+                    frames: 480,
+                    samples: [7; 4096]
+                },
+                || {
+                    entered.send(()).unwrap();
+                    resume.recv_timeout(Duration::from_secs(5)).unwrap();
+                }
+            ));
+        });
+        checkpoint.recv_timeout(Duration::from_secs(5)).unwrap();
+        let consumer = queue.clone();
+        let (finished, result) = sync_channel(1);
+        let reader = thread::spawn(move || {
+            finished.send(consumer.try_pop().is_none()).unwrap();
+        });
+        assert!(
+            result.recv_timeout(Duration::from_secs(2)).unwrap(),
+            "Consumer waited behind an unfinished producer slot"
+        );
+        release.send(()).unwrap();
+        worker.join().unwrap();
+        reader.join().unwrap();
+        let frame = queue.try_pop().unwrap();
+        assert_eq!(frame.timestamp, 42);
+        assert_eq!(frame.frames, 480);
+        assert!(frame.samples[..480].iter().all(|sample| *sample == 7));
+        assert!(queue.try_pop().is_none());
+    }
+    #[test]
+    fn capture_ring_preserves_pcm_and_order_across_concurrent_wraparound() {
+        let queue = Arc::new(AudioCaptureQueue::new());
+        let producer = queue.clone();
+        let worker = thread::spawn(move || {
+            for sequence in 1..=1000 {
+                let frame = AudioCapture {
+                    timestamp: sequence,
+                    received_at: sequence + 1,
+                    frames: 1024,
+                    samples: [sequence as i16; 4096],
+                };
+                while !producer.try_push(frame) {
+                    thread::yield_now();
+                }
+            }
+        });
+        for sequence in 1..=1000 {
+            let frame = loop {
+                if let Some(frame) = queue.try_pop() {
+                    break frame;
+                }
+                thread::yield_now();
+            };
+            assert_eq!(frame.timestamp, sequence);
+            assert_eq!(frame.received_at, sequence + 1);
+            assert!(frame.samples[..1024]
+                .iter()
+                .all(|sample| *sample == sequence as i16));
+        }
+        worker.join().unwrap();
+        assert!(queue.try_pop().is_none());
+    }
+    #[test]
     fn audio_capture_accepts_a_burst_within_the_program_latency_budget() {
-        let (sender, receiver) = sync_channel(CAPTURE_AUDIO_BLOCKS);
+        let sender = Arc::new(AudioCaptureQueue::new());
+        let receiver = sender.clone();
         let (video, _) = sync_channel(2);
         let shared = Shared {
             audio: sender,
             video,
             failed: AtomicBool::new(false),
             ready: AtomicBool::new(true),
+            raise_priority: false,
+            priority_attempted: AtomicBool::new(false),
         };
         let mut left = [0.25f32; 1024];
         let mut right = [0.25f32; 1024];
@@ -716,22 +1030,24 @@ mod tests {
             !shared.failed.load(Ordering::Acquire),
             "Valid OBS callback burst overflowed the capture queue"
         );
-        let blocks: Vec<_> = receiver.try_iter().collect();
+        let blocks: Vec<_> = std::iter::from_fn(|| receiver.try_pop()).collect();
         assert_eq!(blocks.len(), 19);
-        assert!(blocks
-            .iter()
-            .all(|(_, _, samples)| samples.len() == 1024
-                && samples.iter().all(|sample| *sample == 8191)));
+        assert!(blocks.iter().all(|frame| frame.frames == 1024
+            && frame.samples[..frame.frames]
+                .iter()
+                .all(|sample| *sample == 8191)));
     }
     #[test]
     fn audio_capture_still_fails_closed_on_excessive_backlog() {
-        let (sender, _receiver) = sync_channel(CAPTURE_AUDIO_BLOCKS);
+        let sender = Arc::new(AudioCaptureQueue::new());
         let (video, _) = sync_channel(2);
         let shared = Shared {
             audio: sender,
             video,
             failed: AtomicBool::new(false),
             ready: AtomicBool::new(true),
+            raise_priority: false,
+            priority_attempted: AtomicBool::new(false),
         };
         let mut plane = [0.0f32; 1024];
         let mut data = ffi::audio_data {
@@ -836,9 +1152,9 @@ pub fn tap_selftest() {
     let (mut audio, mut video, mut audio_timestamp, mut video_timestamp) = (0, 0, 0, 0);
     while std::time::Instant::now() < until {
         let queues = tap.drain().unwrap();
-        for (timestamp, _, samples) in queues.audio {
-            assert!(timestamp > audio_timestamp && !samples.is_empty());
-            audio_timestamp = timestamp;
+        for frame in queues.audio {
+            assert!(frame.timestamp > audio_timestamp && frame.frames > 0);
+            audio_timestamp = frame.timestamp;
             audio += 1;
         }
         for picture in queues.video {
@@ -941,14 +1257,12 @@ fn publish_loop(
     lease: &AtomicU64,
 ) -> Result<(), &'static str> {
     let startup_deadline = std::time::Instant::now() + Duration::from_secs(5);
-    let mut carry = VecDeque::new();
+    let mut carry = VecDeque::with_capacity(4096 + 480);
     let mut carry_at = 0;
     let mut audio_end = None;
-    let mut audio = VecDeque::<(u64, [i16; 480])>::new();
-    let mut video = VecDeque::<Picture>::new();
+    let mut audio = VecDeque::<(u64, [i16; 480])>::with_capacity(64);
     let mut last_audio = None;
     let mut timeline = AudioTimeline::default();
-    let mut last_video = 0;
     let mut last_loop = unsafe { os_gettime_ns() };
     #[cfg(debug_assertions)]
     let delay_proof = std::env::var("PRODUCER_RTC_PROGRAM_DELAY_PROOF").as_deref() == Ok("1")
@@ -970,8 +1284,18 @@ fn publish_loop(
         let loop_now = unsafe { os_gettime_ns() };
         MAX_LOOP_GAP.fetch_max(loop_now.saturating_sub(last_loop), Ordering::Relaxed);
         last_loop = loop_now;
-        let mut captured = tap.drain()?;
-        for (timestamp, received_at, samples) in captured.audio.drain(..) {
+        if tap.shared.failed.load(Ordering::Acquire) {
+            return Err("Native program capture queue or format fault");
+        }
+        // The audio worker consumes inline fixed-size PCM directly. It never
+        // allocates a callback batch or frees an OBS-owned PCM vector.
+        for frame in std::iter::from_fn(|| tap.audio_frames.try_pop()).take(CAPTURE_AUDIO_BLOCKS) {
+            let AudioCapture {
+                timestamp,
+                received_at,
+                frames,
+                samples,
+            } = frame;
             MAX_CAPTURE_QUEUE_WAIT
                 .fetch_max(loop_now.saturating_sub(received_at), Ordering::Relaxed);
             MAX_CAPTURE_AGE.fetch_max(loop_now.saturating_sub(timestamp), Ordering::Relaxed);
@@ -987,13 +1311,13 @@ fn publish_loop(
             }
             audio_end = Some(
                 timestamp
-                    .checked_add(samples.len() as u64 * 1_000_000_000 / 48000)
+                    .checked_add(frames as u64 * 1_000_000_000 / 48000)
                     .ok_or("Native program timestamp overflow")?,
             );
             if carry.is_empty() {
                 carry_at = timestamp;
             }
-            carry.extend(samples);
+            carry.extend(samples[..frames].iter().copied());
             while carry.len() >= 480 {
                 if audio.len() >= 64 {
                     return Err("Native program audio publication queue overflow");
@@ -1011,22 +1335,20 @@ fn publish_loop(
                 carry_at += 10_000_000;
             }
         }
-        for frame in captured.video.drain(..) {
-            if frame.timestamp <= last_video {
-                return Err("Native program video timestamp regressed");
-            }
-            last_video = frame.timestamp;
-            video.push_back(frame);
-            while video.len() > VIDEO_QUEUE_CAPACITY {
-                video.pop_front();
-            }
-        }
         let now = unsafe { os_gettime_ns() };
         if timeline.next_due.is_none() && std::time::Instant::now() >= startup_deadline {
             return Err("Native program audio startup remained stale");
         }
         if last_audio.is_none_or(|last| now - last >= 8_000_000) {
-            if let Some((due, block, silence)) = timeline.next(now, &mut audio)? {
+            if let Some((due, block, silence)) =
+                timeline.next(now, &mut audio).map_err(|error| {
+                    MAX_WORK.fetch_max(
+                        unsafe { os_gettime_ns() }.saturating_sub(loop_now),
+                        Ordering::Relaxed,
+                    );
+                    error
+                })?
+            {
                 MAX_AUDIO_LATE.fetch_max(now - due, Ordering::Relaxed);
                 if stop.load(Ordering::Acquire) {
                     break;
@@ -1042,25 +1364,7 @@ fn publish_loop(
                     SILENCE_SUBMITTED.fetch_add(1, Ordering::Relaxed);
                 }
                 last_audio = Some(now);
-            }
-        }
-        let mut latest = None;
-        while video.front().is_some_and(|frame| {
-            frame
-                .timestamp
-                .checked_add(LEAD_NS)
-                .is_some_and(|due| due <= now)
-        }) {
-            latest = video.pop_front();
-        }
-        if let Some(frame) = latest {
-            if last_audio.is_some()
-                && now - (frame.timestamp + LEAD_NS) <= MAX_LATE_NS
-                && !stop.load(Ordering::Acquire)
-            {
-                // Never wait behind a stalled video encoder. A skipped frame
-                // retains its original timeline; no stale frame is replayed.
-                let _ = video_lane.submit(frame);
+                video_lane.audio_ready.store(true, Ordering::Release);
             }
         }
         MAX_WORK.fetch_max(

@@ -679,8 +679,15 @@ pub fn program_selftest() -> Result<(), &'static str> {
         }
         outcome?; closed?;
         let (audio,video)=rtc_program::counts();
-        if lifetime.strong_count()!=0 || audio<100 || video<20
-            || (lifecycle && (lifecycle_cycles!=2 || audio<4500 || rtc_program::timing()["publisher_recoveries"]!=0)) {
+        let timing = rtc_program::timing();
+        let capture_injection = std::env::var("PRODUCER_RTC_CAPTURE_GAP_PROOF").as_deref()==Ok("1");
+        let video_injection = std::env::var("PRODUCER_RTC_VIDEO_DELAY_PROOF").as_deref()==Ok("1");
+        if lifetime.strong_count()!=0 || audio<100 || video<20 || timing["capture_fault_code"]!=0
+            || (capture_injection && timing["capture_gap_injected"]!=true)
+            || (video_injection && timing["video_worker_stall_injected"]!=true)
+            || (lifecycle && (lifecycle_cycles!=2 || audio<4500 || video<1500
+                || timing["publisher_recoveries"]!=0
+                || timing["silence_blocks_submitted"].as_u64().unwrap_or(u64::MAX)>if capture_injection {180} else {50})) {
             return Err("Native program lifecycle or submission proof failed");
         }
         save(serde_json::json!({"passed":true,"audio_submitted":audio,"video_submitted":video,"timing":rtc_program::timing(),"owner_expired":true,"repeated_close_passed":true,"generated_guest_sources":if lifecycle {4}else{0},"source_recreation_cycles":lifecycle_cycles}))
