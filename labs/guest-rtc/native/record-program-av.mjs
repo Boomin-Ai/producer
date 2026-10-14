@@ -10,6 +10,8 @@ if(!['https://api.boomin.ai','https://boomin-rtc-pilot.kleveland-bishop.workers.
 const room = '/v1/app/live/rooms/' + operator.roomId;
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 let browser;
+let observerId=null;
+const recoveryProof=process.env.PRODUCER_RTC_RETURN_RECOVERY_PROOF==='1';
 let phase="waiting_host";
 
 async function request(path, body) {
@@ -61,7 +63,10 @@ try {
       if(typeof link.join_url!=='string')throw Error('No readable generated room link');
       await fs.writeFile(root+'/production-livekit-shared-link.json',JSON.stringify(link),{mode:0o600});
     }
-  }else link=JSON.parse(await fs.readFile(root + '/multi-shared-link.json', 'utf8'));
+   }else {
+    control=(await request(room+'/rtc-control')).rtc;
+    link=await request(room+'/guest-link',{enabled:true,auto_admit:false,rotate:true,rtc:{request_id:randomUUID(),expected:{run_id:control.run_id,control_revision:control.control_revision,host_lease_epoch:control.host_lease_epoch}}});
+  }
   const target = new URL(link.join_url);
   const local = base==='https://api.boomin.ai' ? target.toString() : 'http://localhost:5175' + target.pathname + target.search;
   const {chromium} = await import(root + '/browser/node_modules/playwright-core/index.mjs');
@@ -80,6 +85,7 @@ try {
   await page.getByText("You're in the queue", {exact: true}).waitFor({timeout: 20000});
   const guest = (await request(room + '/guests')).guests.find(g => g.display_name === name);
   if (!guest) throw Error('Generated observer unavailable');
+  observerId=guest.id;
   if(base==='https://api.boomin.ai')await fs.writeFile(root+'/production-smoke-guest.json',JSON.stringify({id:guest.id,roomId:operator.roomId}),{mode:0o600});
   control = (await request(room + '/rtc-control')).rtc;
   phase='admit';
@@ -94,6 +100,33 @@ try {
     return video?.videoWidth > 0 && audio?.srcObject?.getAudioTracks().length;
   }, undefined, {timeout: 20000});
   if (!(await fixtureLive())) throw Error('Generated source authorization expired');
+  if(recoveryProof){
+    phase='recovery_observation';
+    const baseline=JSON.parse(await fs.readFile(root+'/native-program-owner.json','utf8'));
+    if(baseline.transport_recoveries!==0)throw Error('Recovery began before observer');
+    await fs.writeFile(root+'/return-recovery-ready','ready',{mode:0o600});
+    const samples=await page.evaluate(async()=>{
+      const samples=[];const start=performance.now();
+      while(performance.now()-start<45000){
+        const v=document.querySelector('.guest-room-stage > video'),a=document.getElementById('host-audio');
+        samples.push({at_ms:Math.round(performance.now()-start),video_time:v?.currentTime??0,width:v?.videoWidth??0,
+          video_id:v?.srcObject?.getVideoTracks()[0]?.id??null,audio_id:a?.srcObject?.getAudioTracks()[0]?.id??null,
+          audio_live:a?.srcObject?.getAudioTracks()[0]?.readyState==='live'});
+        await new Promise(r=>setTimeout(r,250));
+      }return samples;
+    });
+    const native=JSON.parse(await fs.readFile(root+'/native-program-owner.json','utf8'));
+    const windows=[samples.filter(s=>s.at_ms<8000),samples.filter(s=>s.at_ms>=17000&&s.at_ms<20000),samples.filter(s=>s.at_ms>=30000)];
+    const advancing=windows.map(window=>window.filter(s=>s.audio_live&&s.width===1280).length>=10 && window.some((s,i)=>i>0&&s.video_id===window[i-1].video_id&&s.video_time>window[i-1].video_time));
+    const report={passed:advancing.every(Boolean)&&native.transport_recoveries===2,advancing_windows:advancing,native_recoveries:native.transport_recoveries,
+      initial_recoveries:baseline.transport_recoveries,video_tracks:new Set(samples.map(s=>s.video_id).filter(Boolean)).size,audio_tracks:new Set(samples.map(s=>s.audio_id).filter(Boolean)).size,samples,
+      qualification:'Actual browser host-return tracks across two forced native SDK closes; generated AV, muted playback; staging only'};
+    await fs.writeFile(root+'/native-return-recovery.json',JSON.stringify(report,null,2),{mode:0o600});
+    control=(await request(room+'/rtc-control')).rtc;
+    await request('/v1/app/live/guests/'+guest.id+'/revoke',{rtc:{request_id:randomUUID(),expected:{run_id:control.run_id,control_revision:control.control_revision,host_lease_epoch:control.host_lease_epoch}}});
+    console.log(JSON.stringify({passed:report.passed,advancing_windows:advancing,native_recoveries:native.transport_recoveries,video_tracks:report.video_tracks,audio_tracks:report.audio_tracks}));
+    if(!report.passed)process.exitCode=1;
+  }else {
   phase='record';
   const result = await page.evaluate(async () => {
     const video = document.querySelector('.guest-room-stage > video');
@@ -137,8 +170,20 @@ try {
     production_stage_and_removal_verified:stageAndRemoval,
   }), {mode: 0o600});
   console.log(JSON.stringify({saved: true, bytes: result.bytes.length, width: result.width, height: result.height}));
+  }
 } catch(error) {
   await fs.writeFile(root+'/native-program-observer-error.json',JSON.stringify({phase,message:String(error),stack:error?.stack}),{mode:0o600});
   console.log(JSON.stringify({saved: false, phase, reason: 'Generated AV setup or capture failed; recording not accepted'}));
   process.exitCode = 1;
-} finally { await browser?.close(); }
+} finally {
+  await browser?.close();
+  if(recoveryProof && observerId){
+    try{
+      const roster=(await request(room+'/guests')).guests;
+      if(roster.some(g=>g.id===observerId)){
+        const rtc=(await request(room+'/rtc-control')).rtc;
+        if(rtc?.state==='active')await request('/v1/app/live/guests/'+observerId+'/revoke',{rtc:{request_id:randomUUID(),expected:{run_id:rtc.run_id,control_revision:rtc.control_revision,host_lease_epoch:rtc.host_lease_epoch}}});
+      }
+    }catch{console.log(JSON.stringify({observer_cleanup_unconfirmed:true}));}
+  }
+}

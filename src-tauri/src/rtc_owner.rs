@@ -742,13 +742,17 @@ pub fn program_selftest() -> Result<(), &'static str> {
         let mut owner = HostOwner::start_with_recovery(Control::for_api(operator,&api)?, Box::new(receiver), true,
             Some(||Ok(Box::new(crate::live::rtc_media::SceneOutputs::receiver()?)))).await?;
         let mut injected=0;
+        let observer_driven=std::env::var("PRODUCER_RTC_RETURN_RECOVERY_PROOF").as_deref()==Ok("1");
+        let mut observation_started=None;
         let lifetime = owner.task_lifetime();
         let began = std::time::Instant::now();
-        let until = began + Duration::from_secs(60);
+        let until = began + Duration::from_secs(if recovery_proof {90}else{60});
         let mut lifecycle_cycles=0;
         let outcome = async {
         while std::time::Instant::now() < until && owner.running() {
-            if recovery_proof && injected<2 && began.elapsed()>=Duration::from_secs(15*(injected+1)){
+            if observer_driven && observation_started.is_none() && std::path::Path::new(&format!("{ROOT}/return-recovery-ready")).exists(){observation_started=Some(std::time::Instant::now());}
+            let fault_elapsed=if observer_driven {observation_started.map(|at|at.elapsed()).unwrap_or(Duration::ZERO)}else{began.elapsed()};
+            if recovery_proof && injected<2 && fault_elapsed>=Duration::from_secs(10*(injected+1)){
                 owner.fault.store(true,std::sync::atomic::Ordering::Release);injected+=1;
             }
             if lifecycle && lifecycle_cycles<2 && began.elapsed()>=Duration::from_secs(20*(lifecycle_cycles+1)) {
