@@ -54,6 +54,7 @@ try {
       await fs.unlink(journal);
     }
     link=await fs.readFile(root+'/production-livekit-shared-link.json','utf8').then(JSON.parse).catch(()=>null);
+    if(link?.rtc?.run?.room_id!==operator.roomId)link=null;
     if(!link?.join_url){
       control=(await request(room+'/rtc-control')).rtc;
       link=await request(room+'/guest-link',{enabled:true,auto_admit:false,rotate:true,rtc:{request_id:randomUUID(),expected:{run_id:control.run_id,control_revision:control.control_revision,host_lease_epoch:control.host_lease_epoch}}});
