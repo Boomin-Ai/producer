@@ -13,6 +13,18 @@ on:
         description: "Include the native LiveKit guest runtime in the Apple Silicon candidate"
         type: boolean
         default: false
+      promote_run:
+        description: "Completed Release run to promote without rebuilding (blank = normal build)"
+        type: string
+        default: ""
+      candidate_tag:
+        description: "Existing draft LiveKit candidate tag for promotion"
+        type: string
+        default: ""
+      expected_mac_sha256:
+        description: "Verified notarized installer SHA-256 for promotion"
+        type: string
+        default: ""
 
 # One release run at a time, newest wins. Re-pushing a tag otherwise leaves
 # TWO complete runs racing as writers on the same release — v0.4.0 shipped a
@@ -23,13 +35,68 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  promote-signed-candidate:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.promote_run != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN: ${{ inputs.promote_run }}
+      CANDIDATE_TAG: ${{ inputs.candidate_tag }}
+      EXPECTED_MAC_SHA256: ${{ inputs.expected_mac_sha256 }}
+    steps:
+      - name: Verify completed build and draft target
+        run: |
+          python3 - <<'PY'
+          import os, re, json, subprocess
+          run_id = os.environ['SOURCE_RUN']; tag = os.environ['CANDIDATE_TAG']
+          assert re.fullmatch(r'[0-9]+', run_id)
+          assert re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+-livekit\.[0-9]+', tag)
+          assert re.fullmatch(r'[0-9a-f]{64}', os.environ['EXPECTED_MAC_SHA256'])
+          def api(path): return json.loads(subprocess.check_output(['gh','api','repos/Boomin-Ai/producer/'+path]))
+          build = api('actions/runs/'+run_id)
+          assert build['name'] == 'Release' and build['conclusion'] == 'success'
+          release = next(r for r in api('releases?per_page=30') if r['tag_name'] == tag)
+          assert release['draft'] and release['prerelease']
+          assert release['target_commitish'] == build['head_sha']
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: Producer-macos-arm64-live
+          run-id: ${{ inputs.promote_run }}
+          github-token: ${{ github.token }}
+          path: candidate
+      - name: Verify exact signed installer bytes and retain other platforms
+        run: |
+          python3 - <<'PY'
+          import pathlib, hashlib, os
+          files = list(pathlib.Path('candidate').glob('*.dmg'))
+          assert len(files) == 1
+          assert hashlib.sha256(files[0].read_bytes()).hexdigest() == os.environ['EXPECTED_MAC_SHA256']
+          PY
+          gh release download v0.4.69 --repo Boomin-Ai/producer -p 'Producer_0.4.69_x64.dmg' -p 'Producer_0.4.69_x64-setup.exe' -p 'Producer_0.4.69_amd64.AppImage' -D candidate
+          (cd candidate && sha256sum * > SHA256SUMS.txt)
+      - name: Upload complete candidate and publish
+        run: |
+          gh release upload "$CANDIDATE_TAG" candidate/* --clobber --repo Boomin-Ai/producer
+          python3 - <<'PY'
+          import os, json, pathlib, subprocess
+          tag = os.environ['CANDIDATE_TAG']
+          releases = json.loads(subprocess.check_output(['gh','api','repos/Boomin-Ai/producer/releases?per_page=30']))
+          release = next(r for r in releases if r['tag_name'] == tag)
+          for file in pathlib.Path('candidate').iterdir():
+            assert any(a['name'] == file.name and a['state'] == 'uploaded' and a['size'] == file.stat().st_size for a in release['assets'])
+          PY
+          gh release edit "$CANDIDATE_TAG" --draft=false --prerelease --latest=false --repo Boomin-Ai/producer
   # ── Linux / Intel-mac (engine-less, unchanged path) ────────────────────────
   # Skipped on dry-runs so a dispatch can't clobber public release assets.
   # Windows left this matrix when build-windows-live landed: an engine-less
   # Windows exe here would race the live one for the same asset names, and
   # tauri-action's latest.json entry would point updaters at a stub build.
   build:
-    if: ${{ github.event_name == 'push' || inputs.publish }}
+    if: ${{ inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) }}
     permissions:
       contents: write
     strategy:
@@ -121,6 +188,7 @@ jobs:
   #     absent artifact = silent stub build — guarded below with otool)
   #   engine inside the .app BEFORE notarization    (Apple scans nested Mach-Os)
   build-macos-arm64-live:
+    if: ${{ inputs.promote_run == '' }}
     permissions:
       contents: write
     runs-on: macos-latest
@@ -400,6 +468,7 @@ jobs:
   # + scripts/build-windows.ps1) so CI ships exactly what that box verified.
   # There is no Windows code-signing certificate wired; the installer is unsigned.
   build-windows-live:
+    if: ${{ inputs.promote_run == '' }}
     permissions:
       contents: write
     runs-on: windows-2022

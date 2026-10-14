@@ -1,0 +1,310 @@
+{
+  "date": "2026-10-14",
+  "environment": "production",
+  "api": "https://api.boomin.ai",
+  "hosted_guest": "https://boomin.ai (production guest bundle)",
+  "room_title": "LiveKit room",
+  "room_id": "fc45ec40-2b57-42fa-92aa-bd95fb8777af",
+  "native_program": {
+    "audio_submitted": 6065,
+    "generated_av_fixture": true,
+    "generated_guest_sources": 0,
+    "owner_expired": true,
+    "passed": true,
+    "repeated_close_passed": true,
+    "source_recreation_cycles": 0,
+    "timing": {
+      "capture_blocks_discarded": 19,
+      "capture_fault_code": 0,
+      "capture_gap_injected": false,
+      "capture_priority_enabled": true,
+      "maximum_audio_call_us": 82,
+      "maximum_audio_late_us": 1082,
+      "maximum_callback_age_us": 520319,
+      "maximum_capture_age_us": 414429,
+      "maximum_capture_queue_wait_us": 6379,
+      "maximum_loop_gap_us": 1614,
+      "maximum_video_call_us": 14421,
+      "maximum_work_us": 599,
+      "minimum_audio_spacing_us": 9061,
+      "program_buffer_ms": 400,
+      "publisher_recoveries": 0,
+      "silence_blocks_submitted": 36,
+      "startup_audio_blocks_discarded": 0,
+      "time_constrained_scheduling": true,
+      "video_worker_stall_injected": false
+    },
+    "video_submitted": 1773
+  },
+  "browser_return": {
+    "saved": true,
+    "bytes": 363241,
+    "width": 1280,
+    "height": 720,
+    "mime": "video/mp4;codecs=avc1.42001E,mp4a.40.2",
+    "duration_seconds": 30,
+    "source": "standalone native generated numbered AV",
+    "observer_synthetic_camera_microphone": true,
+    "playback_muted": true,
+    "production_stage_and_removal_verified": true
+  },
+  "recorded_av_sync": {
+    "absolute_p95_ms": 312.90000000000146,
+    "audio_detector_window_ms": 10,
+    "audio_markers": [
+      {
+        "id_mod16": 13,
+        "pts_ms": 1780,
+        "tone_confidence_ratio": 2302.535124259331
+      },
+      {
+        "id_mod16": 14,
+        "pts_ms": 3830,
+        "tone_confidence_ratio": 4131.334616275087
+      },
+      {
+        "id_mod16": 15,
+        "pts_ms": 5850,
+        "tone_confidence_ratio": 3701.3316357184904
+      },
+      {
+        "id_mod16": 0,
+        "pts_ms": 7859.999999999999,
+        "tone_confidence_ratio": 3905.1070877533807
+      },
+      {
+        "id_mod16": 1,
+        "pts_ms": 9860,
+        "tone_confidence_ratio": 4066.365970382658
+      },
+      {
+        "id_mod16": 2,
+        "pts_ms": 11880,
+        "tone_confidence_ratio": 4522.368446521206
+      },
+      {
+        "id_mod16": 3,
+        "pts_ms": 13880,
+        "tone_confidence_ratio": 4197.153468652296
+      },
+      {
+        "id_mod16": 4,
+        "pts_ms": 15880,
+        "tone_confidence_ratio": 4286.176222541957
+      },
+      {
+        "id_mod16": 5,
+        "pts_ms": 17880,
+        "tone_confidence_ratio": 4008.002290551827
+      },
+      {
+        "id_mod16": 6,
+        "pts_ms": 19880.000000000004,
+        "tone_confidence_ratio": 3668.27956763527
+      },
+      {
+        "id_mod16": 7,
+        "pts_ms": 21880,
+        "tone_confidence_ratio": 3913.572134148329
+      },
+      {
+        "id_mod16": 8,
+        "pts_ms": 23879.999999999996,
+        "tone_confidence_ratio": 1874.673118833474
+      },
+      {
+        "id_mod16": 9,
+        "pts_ms": 25880,
+        "tone_confidence_ratio": 4819.437177393706
+      },
+      {
+        "id_mod16": 10,
+        "pts_ms": 27879.999999999996,
+        "tone_confidence_ratio": 3076.2717816664554
+      },
+      {
+        "id_mod16": 11,
+        "pts_ms": 29880,
+        "tone_confidence_ratio": 662.2118411949729
+      }
+    ],
+    "audio_pts_discontinuities": 0,
+    "audio_samples": 1437632,
+    "decoder": "macOS AVFoundation",
+    "duration_seconds": 30.000708333333332,
+    "g1_complete": false,
+    "lip_sync_qualified": false,
+    "local_numbered_marker_gate_passed": false,
+    "missing_video_labels_within_observed_span": [],
+    "pairs": [
+      {
+        "audio_pts_ms": 1780,
+        "id": 13,
+        "video_minus_audio_ms": -135,
+        "video_pts_ms": 1645
+      },
+      {
+        "audio_pts_ms": 3830,
+        "id": 14,
+        "video_minus_audio_ms": -165.70000000000027,
+        "video_pts_ms": 3664.2999999999997
+      },
+      {
+        "audio_pts_ms": 5850,
+        "id": 15,
+        "video_minus_audio_ms": -280.6999999999998,
+        "video_pts_ms": 5569.3
+      },
+      {
+        "audio_pts_ms": 7859.999999999999,
+        "id": 16,
+        "video_minus_audio_ms": -290.3999999999987,
+        "video_pts_ms": 7569.6
+      },
+      {
+        "audio_pts_ms": 9860,
+        "id": 17,
+        "video_minus_audio_ms": -291.39999999999964,
+        "video_pts_ms": 9568.6
+      },
+      {
+        "audio_pts_ms": 11880,
+        "id": 18,
+        "video_minus_audio_ms": -311.10000000000036,
+        "video_pts_ms": 11568.9
+      },
+      {
+        "audio_pts_ms": 13880,
+        "id": 19,
+        "video_minus_audio_ms": -310.10000000000036,
+        "video_pts_ms": 13569.9
+      },
+      {
+        "audio_pts_ms": 15880,
+        "id": 20,
+        "video_minus_audio_ms": -303.7999999999993,
+        "video_pts_ms": 15576.2
+      },
+      {
+        "audio_pts_ms": 17880,
+        "id": 21,
+        "video_minus_audio_ms": -311.5,
+        "video_pts_ms": 17568.5
+      },
+      {
+        "audio_pts_ms": 19880.000000000004,
+        "id": 22,
+        "video_minus_audio_ms": -311.50000000000364,
+        "video_pts_ms": 19568.5
+      },
+      {
+        "audio_pts_ms": 21880,
+        "id": 23,
+        "video_minus_audio_ms": -312.2000000000007,
+        "video_pts_ms": 21567.8
+      },
+      {
+        "audio_pts_ms": 23879.999999999996,
+        "id": 24,
+        "video_minus_audio_ms": -312.1999999999971,
+        "video_pts_ms": 23567.8
+      },
+      {
+        "audio_pts_ms": 25880,
+        "id": 25,
+        "video_minus_audio_ms": -312.90000000000146,
+        "video_pts_ms": 25567.1
+      },
+      {
+        "audio_pts_ms": 27879.999999999996,
+        "id": 26,
+        "video_minus_audio_ms": -306.59999999999854,
+        "video_pts_ms": 27573.399999999998
+      },
+      {
+        "audio_pts_ms": 29880,
+        "id": 27,
+        "video_minus_audio_ms": -303.6000000000022,
+        "video_pts_ms": 29576.399999999998
+      }
+    ],
+    "raw_audio_crossings": 15,
+    "raw_video_crossings": 15,
+    "recording": "native-program-av-return.mp4",
+    "regressed_video_labels": 0,
+    "repeated_video_labels": 0,
+    "source_paint_uncertainty_ms": 33.333333333333336,
+    "startup_and_tail_loss_qualified": false,
+    "uncertain_tones": 0,
+    "unmatched_audio": 0,
+    "unmatched_video": 0,
+    "video_frames": 883,
+    "video_markers": [
+      {
+        "id": 13,
+        "pts_ms": 1645
+      },
+      {
+        "id": 14,
+        "pts_ms": 3664.2999999999997
+      },
+      {
+        "id": 15,
+        "pts_ms": 5569.3
+      },
+      {
+        "id": 16,
+        "pts_ms": 7569.6
+      },
+      {
+        "id": 17,
+        "pts_ms": 9568.6
+      },
+      {
+        "id": 18,
+        "pts_ms": 11568.9
+      },
+      {
+        "id": 19,
+        "pts_ms": 13569.9
+      },
+      {
+        "id": 20,
+        "pts_ms": 15576.2
+      },
+      {
+        "id": 21,
+        "pts_ms": 17568.5
+      },
+      {
+        "id": 22,
+        "pts_ms": 19568.5
+      },
+      {
+        "id": 23,
+        "pts_ms": 21567.8
+      },
+      {
+        "id": 24,
+        "pts_ms": 23567.8
+      },
+      {
+        "id": 25,
+        "pts_ms": 25567.1
+      },
+      {
+        "id": 26,
+        "pts_ms": 27573.399999999998
+      },
+      {
+        "id": 27,
+        "pts_ms": 29576.399999999998
+      }
+    ]
+  },
+  "recording_sha256": "6fd441a6a380e3894bb9bfe57a85dc0c31bf0b97faa7392d759828f43393a350",
+  "aec_qualified": false,
+  "full_mix_minus_qualified": false,
+  "automatic_host_reconnection_implemented": false,
+  "scope": "Generated native OBS media, real production authority and LiveKit Cloud, synthetic browser guest, muted playback. Admission, stage control and revoke verified; not a physical device or native UI walkthrough."
+}
