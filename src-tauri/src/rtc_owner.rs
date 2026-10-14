@@ -87,12 +87,18 @@ struct RoomRequest {
     reply: oneshot::Sender<Result<serde_json::Value, &'static str>>,
 }
 
+type MediaFactory = fn() -> Result<Box<dyn producer_guest_runtime::GuestMedia>, &'static str>;
+
 pub struct HostOwner {
     stop: Option<oneshot::Sender<()>>,
     task: Option<JoinHandle<Result<(), &'static str>>>,
     lifetime: Weak<()>,
     room_id: String,
     commands: mpsc::Sender<RoomRequest>,
+    #[cfg(debug_assertions)]
+    fault: Arc<std::sync::atomic::AtomicBool>,
+    #[cfg(debug_assertions)]
+    recoveries: Arc<std::sync::atomic::AtomicUsize>,
 }
 fn now() -> u64 {
     SystemTime::now()
@@ -107,15 +113,16 @@ impl HostOwner {
     #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
     pub async fn start_scene(control: Control) -> Result<Self, &'static str> {
         let receiver = crate::live::rtc_media::SceneOutputs::receiver()?;
-        Self::start_with_options(
+        Self::start_with_recovery(
             control,
             Box::new(receiver),
             cfg!(feature = "guest-rtc-production") || std::env::var("PRODUCER_RTC_PROGRAM_PILOT").as_deref() == Ok("1"),
+            Some(|| Ok(Box::new(crate::live::rtc_media::SceneOutputs::receiver()?))),
         )
         .await
     }
     pub async fn start(control: Control) -> Result<Self, &'static str> {
-        let (mut owner, connected) = Self::spawn(control, None, false);
+        let (mut owner, connected) = Self::spawn(control, None, false, None);
         match connected.await {
             Ok(Ok(())) => Ok(owner),
             Ok(Err(error)) => {
@@ -139,7 +146,10 @@ impl HostOwner {
         media: Box<dyn producer_guest_runtime::GuestMedia>,
         program_requested: bool,
     ) -> Result<Self, &'static str> {
-        let (mut owner, connected) = Self::spawn(control, Some(media), program_requested);
+        Self::start_with_recovery(control,media,program_requested,None).await
+    }
+    async fn start_with_recovery(control:Control,media:Box<dyn producer_guest_runtime::GuestMedia>,program_requested:bool,recovery_media:Option<MediaFactory>) -> Result<Self,&'static str> {
+        let (mut owner, connected) = Self::spawn(control, Some(media), program_requested,recovery_media);
         match connected.await {
             Ok(Ok(())) => Ok(owner),
             Ok(Err(error)) => {
@@ -156,6 +166,7 @@ impl HostOwner {
         control: Control,
         media: Option<Box<dyn producer_guest_runtime::GuestMedia>>,
         program_requested: bool,
+        recovery_media: Option<MediaFactory>,
     ) -> (Self, oneshot::Receiver<Result<(), &'static str>>) {
         let (stop, mut stopped) = oneshot::channel();
         let (ready, connected) = oneshot::channel();
@@ -166,6 +177,14 @@ impl HostOwner {
         // The task, rather than the caller's cancellable start future, owns
         // connection initialization. Cancellation signals stop; it never drops
         // Room::connect halfway through native initialization.
+        #[cfg(debug_assertions)]
+        let fault=Arc::new(std::sync::atomic::AtomicBool::new(false));
+        #[cfg(debug_assertions)]
+        let fault_task=fault.clone();
+        #[cfg(debug_assertions)]
+        let recoveries=Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        #[cfg(debug_assertions)]
+        let recovered_count=recoveries.clone();
         let task = tokio::spawn(async move {
             let _lifetime = lifetime;
             let mut control = control;
@@ -252,6 +271,7 @@ impl HostOwner {
             let mut authority_reader =
                 AuthorityReader::start(control.clone(), connection.media_authority_updater());
             let mut failure = None;
+            let mut transport_recoveries = std::collections::VecDeque::<std::time::Instant>::new();
             #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
             let mut program_recoveries = std::collections::VecDeque::<std::time::Instant>::new();
             loop {
@@ -259,6 +279,58 @@ impl HostOwner {
                     biased;
                     _ = &mut stopped => break,
                     _ = safety.tick() => {
+                        #[cfg(debug_assertions)]
+                        if fault_task.swap(false,std::sync::atomic::Ordering::AcqRel){connection.disconnect_for_test().await;}
+                        if !connection.healthy() {
+                            let instant=std::time::Instant::now();
+                            while transport_recoveries.front().is_some_and(|at| instant.duration_since(*at)>=Duration::from_secs(60)){transport_recoveries.pop_front();}
+                            let Some(factory)=recovery_media else {failure=Some("Native RTC transport stopped");break;};
+                            if transport_recoveries.len()>=3 || control.lease_expires_at_ms().unwrap_or(0)<=now(){failure=Some("Native RTC transport recovery exhausted");break;}
+                            transport_recoveries.push_back(instant);
+                            // The old permission reader must join before a new SDK
+                            // owner can receive authority. Capture queues and media
+                            // outputs retire before fresh session issuance.
+                            authority_reader.close().await;
+                            #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
+                            if let Some(mut retired)=program.take(){
+                                if let Err(error)=retired.close(){
+                                    if error!="Native program audio publication deadline missed"{failure=Some(error);break;}
+                                }
+                            }
+                            if let Err(error)=connection.close().await{failure=Some(error);break;}
+                            let recovered=async {
+                                control.media_authority().await?;
+                                control.renew().await?;
+                                let session=control.session().await?;
+                                // The owner awaits SDK initialization through its own
+                                // bounded connect timeout, including exit requests.
+                                let mut next=Connection::connect_with_media(&session,Some(factory()?)).await?;
+                                let checked=async {
+                                    let snapshot=control.media_authority().await?;
+                                    if control.lease_expires_at_ms().unwrap_or(0)<=now(){return Err("Native RTC recovery lease expired");}
+                                    next.media_authority(snapshot)?;
+                                    Ok(())
+                                }.await;
+                                if let Err(error)=checked{let _=next.close().await;return Err(error);}
+                                Ok(next)
+                            }.await;
+                            match recovered {
+                                Ok(next)=>connection=next,
+                                Err(error)=>{failure=Some(error);break;}
+                            }
+                            #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
+                            if program_requested {
+                                let resumed=async {
+                                    let sources=connection.publish_program().await?;
+                                    crate::live::rtc_program::Publisher::start(sources,control.lease_expires_at_ms().unwrap_or(0))
+                                }.await;
+                                match resumed{Ok(publisher)=>program=Some(publisher),Err(error)=>{failure=Some(error);break;}}
+                            }
+                            authority_reader=AuthorityReader::start(control.clone(),connection.media_authority_updater());
+                            #[cfg(debug_assertions)]
+                            recovered_count.fetch_add(1,std::sync::atomic::Ordering::AcqRel);
+                            continue;
+                        }
                         #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
                         if program.as_ref().is_some_and(|program| program.failed()) {
                             let instant = std::time::Instant::now();
@@ -338,6 +410,7 @@ impl HostOwner {
                         let _=request.reply.send(result);
                     }
                     changed = authority_reader.failed.changed() => {
+                        if !connection.healthy() {continue;}
                         failure = Some(if changed.is_err() { "Native authority reader stopped" }
                             else { authority_reader.failed.borrow().unwrap_or("Native authority reader stopped") });
                         break;
@@ -378,6 +451,10 @@ impl HostOwner {
                 lifetime: probe,
                 room_id,
                 commands,
+                #[cfg(debug_assertions)]
+                fault,
+                #[cfg(debug_assertions)]
+                recoveries,
             },
             connected,
         )
@@ -439,7 +516,7 @@ pub fn selftest(path: &std::path::Path) -> Result<(), &'static str> {
         owner.close().await?;
         // Drop while startup is still pending. The owning task must finish its
         // initialization and clean up, rather than dropping Room::connect.
-        let (pending,ready)=HostOwner::spawn(Control::new(operator)?,None,false);
+        let (pending,ready)=HostOwner::spawn(Control::new(operator)?,None,false,None);
         let lifetime=pending.task_lifetime();
         tokio::time::sleep(Duration::from_millis(50)).await;
         drop(pending);drop(ready);
@@ -661,19 +738,25 @@ pub fn program_selftest() -> Result<(), &'static str> {
     let result = runtime.block_on(async {
         let receiver = crate::live::rtc_media::SceneOutputs::receiver()?;
         let api=std::env::var("PRODUCER_RTC_PROGRAM_API").unwrap_or_else(|_|"https://boomin-rtc-pilot.kleveland-bishop.workers.dev".into());
-        let mut owner = HostOwner::start_with_options(Control::for_api(operator,&api)?, Box::new(receiver), true).await?;
+        let recovery_proof=std::env::var("PRODUCER_RTC_TRANSPORT_RECOVERY_PROOF").as_deref()==Ok("1");
+        let mut owner = HostOwner::start_with_recovery(Control::for_api(operator,&api)?, Box::new(receiver), true,
+            Some(||Ok(Box::new(crate::live::rtc_media::SceneOutputs::receiver()?)))).await?;
+        let mut injected=0;
         let lifetime = owner.task_lifetime();
         let began = std::time::Instant::now();
         let until = began + Duration::from_secs(60);
         let mut lifecycle_cycles=0;
         let outcome = async {
         while std::time::Instant::now() < until && owner.running() {
+            if recovery_proof && injected<2 && began.elapsed()>=Duration::from_secs(15*(injected+1)){
+                owner.fault.store(true,std::sync::atomic::Ordering::Release);injected+=1;
+            }
             if lifecycle && lifecycle_cycles<2 && began.elapsed()>=Duration::from_secs(20*(lifecycle_cycles+1)) {
                 for mut load in std::mem::take(&mut loads) {load.close();graph.remove_extra(&load.id).map_err(|_|"Native lifecycle removal failed")?;}
                 for index in 0..4 {loads.push(guest_load(&mut graph,index)?);}
                 lifecycle_cycles+=1;
             }
-            let (audio,video) = rtc_program::counts(); save(serde_json::json!({"passed":null,"audio_submitted":audio,"video_submitted":video,"timing":rtc_program::timing(),"generated_av_fixture":generated_av}))?;
+            let (audio,video) = rtc_program::counts(); save(serde_json::json!({"passed":null,"audio_submitted":audio,"video_submitted":video,"timing":rtc_program::timing(),"generated_av_fixture":generated_av,"transport_recoveries":owner.recoveries.load(std::sync::atomic::Ordering::Acquire)}))?;
             if let Ok(bytes) = std::fs::read(format!("{ROOT}/native-room-command.json")) {
                 let _ = std::fs::remove_file(format!("{ROOT}/native-room-command.json"));
                 #[derive(serde::Deserialize)] #[serde(deny_unknown_fields)]
@@ -702,7 +785,7 @@ pub fn program_selftest() -> Result<(), &'static str> {
         let timing = rtc_program::timing();
         let capture_injection = std::env::var("PRODUCER_RTC_CAPTURE_GAP_PROOF").as_deref()==Ok("1");
         let video_injection = std::env::var("PRODUCER_RTC_VIDEO_DELAY_PROOF").as_deref()==Ok("1");
-        if lifetime.strong_count()!=0 || audio<100 || video<20 || timing["capture_fault_code"]!=0
+        if (recovery_proof && (injected!=2 || owner.recoveries.load(std::sync::atomic::Ordering::Acquire)!=2)) || lifetime.strong_count()!=0 || audio<100 || video<20 || timing["capture_fault_code"]!=0
             || (capture_injection && timing["capture_gap_injected"]!=true)
             || (video_injection && timing["video_worker_stall_injected"]!=true)
             || (lifecycle && (lifecycle_cycles!=2 || audio<4500 || video<1500
@@ -710,7 +793,7 @@ pub fn program_selftest() -> Result<(), &'static str> {
                 || timing["silence_blocks_submitted"].as_u64().unwrap_or(u64::MAX)>if capture_injection {180} else {50})) {
             return Err("Native program lifecycle or submission proof failed");
         }
-        save(serde_json::json!({"passed":true,"audio_submitted":audio,"video_submitted":video,"timing":rtc_program::timing(),"owner_expired":true,"repeated_close_passed":true,"generated_av_fixture":generated_av,"generated_guest_sources":if lifecycle {4}else{0},"source_recreation_cycles":lifecycle_cycles}))
+        save(serde_json::json!({"passed":true,"audio_submitted":audio,"video_submitted":video,"timing":rtc_program::timing(),"owner_expired":true,"repeated_close_passed":true,"generated_av_fixture":generated_av,"generated_guest_sources":if lifecycle {4}else{0},"source_recreation_cycles":lifecycle_cycles,"transport_recoveries":owner.recoveries.load(std::sync::atomic::Ordering::Acquire)}))
     });
     graph
         .clear_room()

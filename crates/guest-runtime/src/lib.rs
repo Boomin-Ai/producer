@@ -160,6 +160,13 @@ impl Connection {
     pub fn media_authority_updater(&self) -> MediaAuthorityUpdater {
         MediaAuthorityUpdater { authority: self.authority.clone(), healthy: self.healthy.clone() }
     }
+    /// Debug proof hook: close the actual SDK transport, not just an app flag.
+    #[cfg(debug_assertions)]
+    pub async fn disconnect_for_test(&self) {
+        self.healthy.store(false,Ordering::Release);
+        self.authority.send_replace(None);
+        if let Some(room)=self.room.as_ref(){let _=room.close().await;}
+    }
     pub fn healthy(&self) -> bool {
         self.healthy.load(Ordering::Acquire)
     }
@@ -175,7 +182,10 @@ impl Connection {
             Ok(())
         };
         let closed = if let Some(room) = self.room.take() {
-            room.close().await.map_err(|_| "Native RTC close failed")
+            match room.close().await {
+                Ok(()) | Err(livekit::RoomError::AlreadyClosed) => Ok(()),
+                Err(_) => Err("Native RTC close failed"),
+            }
         } else {
             Ok(())
         };
