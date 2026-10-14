@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-14",
+  "release": "v0.4.69-livekit.1",
+  "source_commit": "4357e3312a32f47dd2d49ed803456763c3656d65",
+  "build_url": "https://github.com/Boomin-Ai/producer/actions/runs/38560588805",
+  "release_url": "https://github.com/Boomin-Ai/producer/releases/tag/v0.4.69-livekit.1",
+  "producer_dev_metadata_version": "v0.4.69-livekit.1",
+  "public_macos_download_hash_matches_signed_artifact": true,
+  "installer_sha256": "f36bd71b6a2072ecbc4f6fdb47f62ba87cdb6e0d9627842619953dda31f2f507",
+  "installer_bytes": 195327060,
+  "signature_verified": true,
+  "staple_validated": true,
+  "platform_download_http_status": {
+    "macos": 200,
+    "macos-intel": 200,
+    "windows": 200,
+    "linux": 200
+  },
+  "other_platforms": "Existing v0.4.69 installers retained",
+  "stable_updater_release": "v0.4.69",
+  "native_guest_feature_included": "Apple Silicon only",
+  "hosted_production_integration_enabled": false,
+  "known_issues": [
+    "Host automatic reconnect not yet implemented",
+    "Return-feed video leads audio about 190 ms after startup",
+    "Integrated speakerphone AEC and full mix-minus path unqualified"
+  ]
+}
