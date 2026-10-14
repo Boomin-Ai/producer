@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-14",
+  "release": "v0.4.69-livekit.2",
+  "release_source": "3c55708171201c9b4312df8b39993b3b9303b876",
+  "signed_build_run": 38567837168,
+  "artifact_promotion_run": 38570955007,
+  "mac_sha256": "93359f534cb1d91706f73e0b5eb2c57dacbc31030692be8091a9726224ddb97e",
+  "mac_size": 194172997,
+  "producer_dev_download_matches_verified_signed_artifact": true,
+  "producer_dev_metadata_version": "v0.4.69-livekit.2",
+  "api_worker_version": "8647464e-ecb2-4f5b-a7ea-7e7629baaaeb",
+  "api_main_commit": "93c1bce99a0fbc1a1f6ae65032d98471fdeecaba",
+  "web_commit": "4e0f17c5636d2673515d5e779129e28870565f22",
+  "room_title": "LiveKit room",
+  "room_id": "fc45ec40-2b57-42fa-92aa-bd95fb8777af",
+  "workspace": "Kleveland",
+  "capability_enabled": true,
+  "capability_transport": "livekit",
+  "existing_demo_transport": "legacy",
+  "production_guest_door_http_status": 200,
+  "cleanup": {
+    "runs": [
+      {
+        "state": "ended",
+        "count": 4
+      }
+    ],
+    "operations": [
+      {
+        "status": "succeeded",
+        "count": 5
+      }
+    ],
+    "remaining_guests": 0
+  },
+  "native_platform_scope": [
+    "Apple Silicon macOS"
+  ],
+  "stable_updater_unchanged_by_this_publication": true
+}
