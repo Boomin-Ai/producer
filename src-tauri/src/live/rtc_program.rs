@@ -22,6 +22,12 @@ const VIDEO_QUEUE_CAPACITY: usize = 26;
 // plus one block of headroom. Publication still enforces its own deadlines.
 const CAPTURE_AUDIO_BLOCKS: usize = 20;
 const MAX_LATE_NS: u64 = 20_000_000;
+static CAPTURE_DROPPED: AtomicU64 = AtomicU64::new(0);
+static SILENCE_SUBMITTED: AtomicU64 = AtomicU64::new(0);
+#[cfg(debug_assertions)]
+static CAPTURE_GAP_PROOF: AtomicBool = AtomicBool::new(false);
+#[cfg(debug_assertions)]
+static CAPTURE_GAP_UNTIL: AtomicU64 = AtomicU64::new(0);
 static RECOVERIES: AtomicU64 = AtomicU64::new(0);
 #[cfg(debug_assertions)]
 static INJECTED: AtomicBool = AtomicBool::new(false);
@@ -46,6 +52,10 @@ pub fn note_recovery() {
 }
 pub fn reset_diagnostics() {
     RECOVERIES.store(0, Ordering::Release);
+    CAPTURE_DROPPED.store(0, Ordering::Release);
+    SILENCE_SUBMITTED.store(0, Ordering::Release);
+    #[cfg(debug_assertions)]
+    CAPTURE_GAP_UNTIL.store(0, Ordering::Release);
     #[cfg(debug_assertions)]
     INJECTED.store(false, Ordering::Release);
     #[cfg(debug_assertions)]
@@ -77,7 +87,11 @@ pub fn timing() -> serde_json::Value {
     let video_stall_injected = VIDEO_INJECTED.load(Ordering::Acquire);
     #[cfg(not(debug_assertions))]
     let video_stall_injected = false;
-    serde_json::json!({"video_worker_stall_injected":video_stall_injected,"capture_fault_code":CAPTURE_FAULT.load(Ordering::Acquire),"program_buffer_ms":LEAD_NS/1_000_000,"publisher_recoveries":RECOVERIES.load(Ordering::Acquire),"maximum_audio_late_us":MAX_AUDIO_LATE.load(Ordering::Acquire)/1000,"minimum_audio_spacing_us":(spacing!=u64::MAX).then_some(spacing/1000),"maximum_audio_call_us":MAX_AUDIO_CALL.load(Ordering::Acquire),"startup_audio_blocks_discarded":STARTUP_DROPPED.load(Ordering::Acquire),"time_constrained_scheduling":REALTIME.load(Ordering::Acquire),"maximum_work_us":MAX_WORK.load(Ordering::Acquire)/1000,"maximum_loop_gap_us":MAX_LOOP_GAP.load(Ordering::Acquire)/1000,"maximum_callback_age_us":MAX_CALLBACK_AGE.load(Ordering::Acquire)/1000,"maximum_capture_queue_wait_us":MAX_CAPTURE_QUEUE_WAIT.load(Ordering::Acquire)/1000,"maximum_capture_age_us":MAX_CAPTURE_AGE.load(Ordering::Acquire)/1000,"maximum_video_call_us":MAX_VIDEO_CALL.load(Ordering::Acquire)})
+    #[cfg(debug_assertions)]
+    let capture_gap_injected = CAPTURE_GAP_UNTIL.load(Ordering::Acquire) != 0;
+    #[cfg(not(debug_assertions))]
+    let capture_gap_injected = false;
+    serde_json::json!({"capture_gap_injected":capture_gap_injected,"capture_blocks_discarded":CAPTURE_DROPPED.load(Ordering::Acquire),"silence_blocks_submitted":SILENCE_SUBMITTED.load(Ordering::Acquire),"video_worker_stall_injected":video_stall_injected,"capture_fault_code":CAPTURE_FAULT.load(Ordering::Acquire),"program_buffer_ms":LEAD_NS/1_000_000,"publisher_recoveries":RECOVERIES.load(Ordering::Acquire),"maximum_audio_late_us":MAX_AUDIO_LATE.load(Ordering::Acquire)/1000,"minimum_audio_spacing_us":(spacing!=u64::MAX).then_some(spacing/1000),"maximum_audio_call_us":MAX_AUDIO_CALL.load(Ordering::Acquire),"startup_audio_blocks_discarded":STARTUP_DROPPED.load(Ordering::Acquire),"time_constrained_scheduling":REALTIME.load(Ordering::Acquire),"maximum_work_us":MAX_WORK.load(Ordering::Acquire)/1000,"maximum_loop_gap_us":MAX_LOOP_GAP.load(Ordering::Acquire)/1000,"maximum_callback_age_us":MAX_CALLBACK_AGE.load(Ordering::Acquire)/1000,"maximum_capture_queue_wait_us":MAX_CAPTURE_QUEUE_WAIT.load(Ordering::Acquire)/1000,"maximum_capture_age_us":MAX_CAPTURE_AGE.load(Ordering::Acquire)/1000,"maximum_video_call_us":MAX_VIDEO_CALL.load(Ordering::Acquire)})
 }
 #[repr(C)]
 struct VideoScale {
@@ -336,10 +350,28 @@ extern "C" fn audio_callback(param: *mut c_void, bus: usize, data: *mut ffi::aud
         return;
     }
     let received_at = unsafe { os_gettime_ns() };
+    #[cfg(debug_assertions)]
+    if CAPTURE_GAP_PROOF.load(Ordering::Relaxed) && AUDIO_SUBMITTED.load(Ordering::Relaxed) > 1500 {
+        let _ = CAPTURE_GAP_UNTIL.compare_exchange(
+            0,
+            received_at + 1_300_000_000,
+            Ordering::AcqRel,
+            Ordering::Relaxed,
+        );
+        if received_at < CAPTURE_GAP_UNTIL.load(Ordering::Relaxed) {
+            return;
+        }
+    }
     MAX_CALLBACK_AGE.fetch_max(
         received_at.saturating_sub(data.timestamp),
         Ordering::Relaxed,
     );
+    // A delayed OBS catch-up burst must not fill the bounded capture queue
+    // with PCM whose original publication slots have already elapsed.
+    if received_at.saturating_sub(data.timestamp) > LEAD_NS + MAX_LATE_NS {
+        CAPTURE_DROPPED.fetch_add(1, Ordering::Relaxed);
+        return;
+    }
     let (left, right) = unsafe {
         (
             std::slice::from_raw_parts(data.data[0] as *const f32, data.frames as usize),
@@ -440,6 +472,12 @@ extern "C" fn video_callback(param: *mut c_void, data: *mut ffi::video_data) {
 }
 impl Tap {
     fn start() -> Result<Self, &'static str> {
+        #[cfg(debug_assertions)]
+        CAPTURE_GAP_PROOF.store(
+            std::env::var("PRODUCER_RTC_CAPTURE_GAP_PROOF").as_deref() == Ok("1")
+                && std::env::var("PRODUCER_RTC_PROGRAM_PROOF").as_deref() == Ok("1"),
+            Ordering::Release,
+        );
         let (audio_sender, audio_frames) = sync_channel(CAPTURE_AUDIO_BLOCKS);
         let (video_sender, video_frames) = sync_channel(2);
         let mut tap = Self {
@@ -664,7 +702,7 @@ mod tests {
         let mut data = ffi::audio_data {
             data: [std::ptr::null_mut(); 8],
             frames: 1024,
-            timestamp: 1_000_000_000,
+            timestamp: unsafe { os_gettime_ns() },
         };
         data.data[0] = left.as_mut_ptr().cast();
         data.data[1] = right.as_mut_ptr().cast();
@@ -699,7 +737,7 @@ mod tests {
         let mut data = ffi::audio_data {
             data: [std::ptr::null_mut(); 8],
             frames: 1024,
-            timestamp: 1_000_000_000,
+            timestamp: unsafe { os_gettime_ns() },
         };
         data.data[0] = plane.as_mut_ptr().cast();
         data.data[1] = plane.as_mut_ptr().cast();
@@ -708,6 +746,56 @@ mod tests {
             data.timestamp += 21_333_333;
         }
         assert!(shared.failed.load(Ordering::Acquire));
+    }
+    #[test]
+    fn capture_gap_keeps_cadence_discards_backlog_and_recovers_without_replay() {
+        let began = 1_000_000_000;
+        let mut timeline = AudioTimeline::default();
+        let mut queue = VecDeque::from([(began, [7; 480])]);
+        assert_eq!(
+            timeline.next(began, &mut queue).unwrap().unwrap(),
+            (began, [7; 480], false)
+        );
+        for tick in 1..=130 {
+            let at = began + tick * 10_000_000;
+            let (due, block, silence) = timeline.next(at, &mut queue).unwrap().unwrap();
+            assert_eq!(due, at);
+            assert!(silence);
+            assert_eq!(block, [0; 480]);
+        }
+        let recovered = began + 131 * 10_000_000;
+        // Simulate delayed PCM plus fresh PCM after a 1.3 second capture stall.
+        queue.push_back((began + 10_000_000, [99; 480]));
+        queue.push_back((recovered, [11; 480]));
+        assert_eq!(
+            timeline.next(recovered, &mut queue).unwrap().unwrap(),
+            (recovered, [11; 480], false)
+        );
+        assert!(queue.is_empty());
+        assert_eq!(timeline.missing, 0);
+    }
+    #[test]
+    fn prolonged_capture_loss_and_publisher_clock_stalls_remain_bounded() {
+        let began = 1_000_000_000;
+        let mut queue = VecDeque::from([(began, [7; 480])]);
+        let mut timeline = AudioTimeline::default();
+        timeline.next(began, &mut queue).unwrap();
+        for tick in 1..=300 {
+            timeline
+                .next(began + tick * 10_000_000, &mut queue)
+                .unwrap();
+        }
+        assert_eq!(
+            timeline.next(began + 301 * 10_000_000, &mut queue),
+            Err("Native program audio capture remained absent")
+        );
+        let mut timeline = AudioTimeline::default();
+        let mut queue = VecDeque::from([(began, [7; 480])]);
+        timeline.next(began, &mut queue).unwrap();
+        assert_eq!(
+            timeline.next(began + 40_000_000, &mut queue),
+            Err("Native program audio publication deadline missed")
+        );
     }
     #[test]
     #[ignore = "requires the bundled native engine and graphics device"]
@@ -781,6 +869,69 @@ pub fn tap_selftest() {
     let _ = std::fs::remove_dir_all(temp);
 }
 
+// Preserve one 10 ms RTP cadence even when OBS capture pauses. Late PCM is
+// discarded; missing slots carry silence, and recovered PCM keeps its original
+// position within 5 ms of the established timeline. Never replay a backlog.
+#[derive(Default)]
+struct AudioTimeline {
+    next_due: Option<u64>,
+    missing: u32,
+}
+impl AudioTimeline {
+    fn next(
+        &mut self,
+        now: u64,
+        audio: &mut VecDeque<(u64, [i16; 480])>,
+    ) -> Result<Option<(u64, [i16; 480], bool)>, &'static str> {
+        if self.next_due.is_none() {
+            while audio
+                .front()
+                .is_some_and(|(due, _)| now.saturating_sub(*due) > MAX_LATE_NS)
+            {
+                audio.pop_front();
+                STARTUP_DROPPED.fetch_add(1, Ordering::Relaxed);
+            }
+            self.next_due = audio.front().map(|(due, _)| *due);
+        }
+        let Some(due) = self.next_due else {
+            return Ok(None);
+        };
+        if now < due {
+            return Ok(None);
+        }
+        if now - due > MAX_LATE_NS {
+            return Err("Native program audio publication deadline missed");
+        }
+        while audio
+            .front()
+            .is_some_and(|(at, _)| at.saturating_add(5_000_000) < due)
+        {
+            audio.pop_front();
+            CAPTURE_DROPPED.fetch_add(1, Ordering::Relaxed);
+        }
+        let present = audio
+            .front()
+            .is_some_and(|(at, _)| *at <= due.saturating_add(5_000_000));
+        let block = if present {
+            audio.pop_front().unwrap().1
+        } else {
+            [0; 480]
+        };
+        self.missing = if present { 0 } else { self.missing + 1 };
+        // Short capture stalls retain the owned media session. A capture that
+        // stays absent for three seconds still fails closed, rather than hiding
+        // a permanently broken audio device behind unbounded silence.
+        if self.missing > 300 {
+            return Err("Native program audio capture remained absent");
+        }
+        self.next_due = Some(
+            due.checked_add(10_000_000)
+                .ok_or("Native program timestamp overflow")?,
+        );
+        Ok(Some((due, block, !present)))
+    }
+}
+
 fn publish_loop(
     tap: &Tap,
     sources: &Sources,
@@ -795,6 +946,7 @@ fn publish_loop(
     let mut audio = VecDeque::<(u64, [i16; 480])>::new();
     let mut video = VecDeque::<Picture>::new();
     let mut last_audio = None;
+    let mut timeline = AudioTimeline::default();
     let mut last_video = 0;
     let mut last_loop = unsafe { os_gettime_ns() };
     #[cfg(debug_assertions)]
@@ -822,8 +974,15 @@ fn publish_loop(
             MAX_CAPTURE_QUEUE_WAIT
                 .fetch_max(loop_now.saturating_sub(received_at), Ordering::Relaxed);
             MAX_CAPTURE_AGE.fetch_max(loop_now.saturating_sub(timestamp), Ordering::Relaxed);
-            if audio_end.is_some_and(|end: u64| timestamp.abs_diff(end) > 2_000_000) {
-                return Err("Native program audio timestamp discontinuity");
+            if let Some(end) = audio_end {
+                if timestamp + 2_000_000 < end {
+                    return Err("Native program audio timestamp discontinuity");
+                }
+                if timestamp > end + 2_000_000 {
+                    // Forward gaps follow discarded stale capture. Do not splice
+                    // the remaining partial old block into fresh PCM.
+                    carry.clear();
+                }
             }
             audio_end = Some(
                 timestamp
@@ -862,40 +1021,27 @@ fn publish_loop(
             }
         }
         let now = unsafe { os_gettime_ns() };
-        if last_audio.is_none() {
-            // No audio RTP timeline has been submitted yet. Drain stale OBS
-            // pre-roll instead of restarting two newly published tracks for it.
-            // Once started, stale audio is always a fault, never silently dropped.
-            while audio
-                .front()
-                .is_some_and(|(due, _)| now.saturating_sub(*due) > MAX_LATE_NS)
-            {
-                audio.pop_front();
-                STARTUP_DROPPED.fetch_add(1, Ordering::Relaxed);
-            }
-            if std::time::Instant::now() >= startup_deadline {
-                return Err("Native program audio startup remained stale");
-            }
+        if timeline.next_due.is_none() && std::time::Instant::now() >= startup_deadline {
+            return Err("Native program audio startup remained stale");
         }
-        if audio.front().is_some_and(|(due, _)| *due <= now)
-            && last_audio.is_none_or(|last| now - last >= 8_000_000)
-        {
-            let (due, block) = audio.pop_front().unwrap();
-            MAX_AUDIO_LATE.fetch_max(now - due, Ordering::Relaxed);
-            if now - due > MAX_LATE_NS {
-                return Err("Native program audio publication deadline missed");
+        if last_audio.is_none_or(|last| now - last >= 8_000_000) {
+            if let Some((due, block, silence)) = timeline.next(now, &mut audio)? {
+                MAX_AUDIO_LATE.fetch_max(now - due, Ordering::Relaxed);
+                if stop.load(Ordering::Acquire) {
+                    break;
+                }
+                let call = std::time::Instant::now();
+                sources.audio(&block)?;
+                MAX_AUDIO_CALL.fetch_max(call.elapsed().as_micros() as u64, Ordering::Relaxed);
+                if let Some(last) = last_audio {
+                    MIN_AUDIO_SPACING.fetch_min(now - last, Ordering::Relaxed);
+                }
+                AUDIO_SUBMITTED.fetch_add(1, Ordering::Relaxed);
+                if silence {
+                    SILENCE_SUBMITTED.fetch_add(1, Ordering::Relaxed);
+                }
+                last_audio = Some(now);
             }
-            if stop.load(Ordering::Acquire) {
-                break;
-            }
-            let call = std::time::Instant::now();
-            sources.audio(&block)?;
-            MAX_AUDIO_CALL.fetch_max(call.elapsed().as_micros() as u64, Ordering::Relaxed);
-            if let Some(last) = last_audio {
-                MIN_AUDIO_SPACING.fetch_min(now - last, Ordering::Relaxed);
-            }
-            AUDIO_SUBMITTED.fetch_add(1, Ordering::Relaxed);
-            last_audio = Some(now);
         }
         let mut latest = None;
         while video.front().is_some_and(|frame| {
