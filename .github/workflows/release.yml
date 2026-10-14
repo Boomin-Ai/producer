@@ -152,17 +152,14 @@ jobs:
           tagName: v__VERSION__
           releaseName: "Producer v__VERSION__"
           releaseBody: |
-            Camera filters now survive room exits and source replacement.
-            Browser guests reconnect with fresh signaling credentials while
-            keeping their camera and microphone tracks running.
-            Recording writes recoverable MP4 indexes during capture and
-            reports failed recording helpers instead of silently losing media.
+            Apple Silicon hosted guest rooms use LiveKit with automatic native transport recovery.
+            Staged guests can hear one another through microphone-only hosted subscriptions.
+            Settings now includes Check for updates and distinguishes failed checks from up to date.
+            Native recovery tests measured approximately 6.3 seconds of interruption.
+            Private cue and integrated native speakerphone AEC remain unfinished.
+            Windows retains its native Live engine; Intel macOS and Linux remain engine-less.
+            Native LiveKit hosting is currently available on Apple Silicon only.
 
-            Apple Silicon app and installers are Developer ID signed and
-            Apple notarized. Windows retains its native Live engine;
-            Intel macOS and Linux retain their existing engine-less builds.
-
-            Full release details: https://github.com/Boomin-Ai/producer/blob/main/docs/RELEASE-0.4.69.md
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
