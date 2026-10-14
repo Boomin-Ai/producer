@@ -11,3 +11,9 @@ Known limitations: a host SDK reconnect still requires leaving and reopening the
 Evidence: [production smoke](evidence/hosted-livekit-production-smoke-2026-10-14.json), [publication](evidence/hosted-livekit-production-launch-2026-10-14.json).
 
 The one-room rollout restriction was removed in API commit c72ffccb28e573ead2f546263fad591c20587100 (Worker e4bd9b49-28d8-47eb-8c73-d77bc647fdc7). All 1,130 API tests and CI pass. Existing room capabilities and an end-to-end new-room production run were verified. [Broad rollout evidence](evidence/hosted-livekit-all-rooms-2026-10-14.json).
+
+## Guest conversation audio rollout
+
+On October 14, the hosted API and browser runtime gained direct microphone-only subscriptions between independently authorized on-stage guests. Each guest excludes its own identity. Backstage cameras remain host-only; backstage guests do not enter the stage conversation. Host/media return audio remains on the separate program bus, which excludes remote guest voices. Hide and revoke remove peer playback and narrow publisher subscription permissions. Older cached guest pages retain the original response schema unless they explicitly request the stage-audio roster.
+
+Production API main `570510061c0dcaf2fe9908acf60589f353aa8765`, Worker version `48333192-315c-45a0-8f60-6f985a6b60c0`; web main `3072d0b7dbe7fd222cad218713dcfa7a812cd29e`, deployment run `38581465794`. All 1,135 API tests, 18 browser policy/lifecycle/startup tests and the production browser build passed. A generated-tone two-browser LiveKit Cloud proof verified backstage silence, mutual stage audio, hide, restage, revoke, and cleanup of its temporary production room. See `docs/evidence/hosted-livekit-conversation-production-2026-10-14.json`. This proof does not qualify physical speakerphone AEC, private cue, or automatic native recovery.
