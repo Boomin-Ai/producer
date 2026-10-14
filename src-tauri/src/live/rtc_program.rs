@@ -38,6 +38,8 @@ static MAX_WORK: AtomicU64 = AtomicU64::new(0);
 static REALTIME: AtomicBool = AtomicBool::new(false);
 static MAX_LOOP_GAP: AtomicU64 = AtomicU64::new(0);
 static MAX_CAPTURE_AGE: AtomicU64 = AtomicU64::new(0);
+static MAX_CALLBACK_AGE: AtomicU64 = AtomicU64::new(0);
+static MAX_CAPTURE_QUEUE_WAIT: AtomicU64 = AtomicU64::new(0);
 static MAX_VIDEO_CALL: AtomicU64 = AtomicU64::new(0);
 pub fn note_recovery() {
     RECOVERIES.fetch_add(1, Ordering::Relaxed);
@@ -60,6 +62,8 @@ pub fn reset_diagnostics() {
     CAPTURE_FAULT.store(0, Ordering::Release);
     REALTIME.store(false, Ordering::Release);
     MAX_CAPTURE_AGE.store(0, Ordering::Release);
+    MAX_CALLBACK_AGE.store(0, Ordering::Release);
+    MAX_CAPTURE_QUEUE_WAIT.store(0, Ordering::Release);
 }
 pub fn counts() -> (u64, u64) {
     (
@@ -73,7 +77,7 @@ pub fn timing() -> serde_json::Value {
     let video_stall_injected = VIDEO_INJECTED.load(Ordering::Acquire);
     #[cfg(not(debug_assertions))]
     let video_stall_injected = false;
-    serde_json::json!({"video_worker_stall_injected":video_stall_injected,"capture_fault_code":CAPTURE_FAULT.load(Ordering::Acquire),"program_buffer_ms":LEAD_NS/1_000_000,"publisher_recoveries":RECOVERIES.load(Ordering::Acquire),"maximum_audio_late_us":MAX_AUDIO_LATE.load(Ordering::Acquire)/1000,"minimum_audio_spacing_us":(spacing!=u64::MAX).then_some(spacing/1000),"maximum_audio_call_us":MAX_AUDIO_CALL.load(Ordering::Acquire),"startup_audio_blocks_discarded":STARTUP_DROPPED.load(Ordering::Acquire),"time_constrained_scheduling":REALTIME.load(Ordering::Acquire),"maximum_work_us":MAX_WORK.load(Ordering::Acquire)/1000,"maximum_loop_gap_us":MAX_LOOP_GAP.load(Ordering::Acquire)/1000,"maximum_capture_age_us":MAX_CAPTURE_AGE.load(Ordering::Acquire)/1000,"maximum_video_call_us":MAX_VIDEO_CALL.load(Ordering::Acquire)})
+    serde_json::json!({"video_worker_stall_injected":video_stall_injected,"capture_fault_code":CAPTURE_FAULT.load(Ordering::Acquire),"program_buffer_ms":LEAD_NS/1_000_000,"publisher_recoveries":RECOVERIES.load(Ordering::Acquire),"maximum_audio_late_us":MAX_AUDIO_LATE.load(Ordering::Acquire)/1000,"minimum_audio_spacing_us":(spacing!=u64::MAX).then_some(spacing/1000),"maximum_audio_call_us":MAX_AUDIO_CALL.load(Ordering::Acquire),"startup_audio_blocks_discarded":STARTUP_DROPPED.load(Ordering::Acquire),"time_constrained_scheduling":REALTIME.load(Ordering::Acquire),"maximum_work_us":MAX_WORK.load(Ordering::Acquire)/1000,"maximum_loop_gap_us":MAX_LOOP_GAP.load(Ordering::Acquire)/1000,"maximum_callback_age_us":MAX_CALLBACK_AGE.load(Ordering::Acquire)/1000,"maximum_capture_queue_wait_us":MAX_CAPTURE_QUEUE_WAIT.load(Ordering::Acquire)/1000,"maximum_capture_age_us":MAX_CAPTURE_AGE.load(Ordering::Acquire)/1000,"maximum_video_call_us":MAX_VIDEO_CALL.load(Ordering::Acquire)})
 }
 #[repr(C)]
 struct VideoScale {
@@ -184,7 +188,7 @@ struct Picture {
 }
 #[derive(Default)]
 struct Queues {
-    audio: VecDeque<(u64, Vec<i16>)>,
+    audio: VecDeque<(u64, u64, Vec<i16>)>,
     video: VecDeque<Picture>,
 }
 /// A slow video SDK call must never hold the audio publication clock.
@@ -285,14 +289,14 @@ impl Drop for VideoLane {
 }
 
 struct Shared {
-    audio: SyncSender<(u64, Vec<i16>)>,
+    audio: SyncSender<(u64, u64, Vec<i16>)>,
     video: SyncSender<Picture>,
     failed: AtomicBool,
     ready: AtomicBool,
 }
 struct Tap {
     shared: Box<Shared>,
-    audio_frames: Receiver<(u64, Vec<i16>)>,
+    audio_frames: Receiver<(u64, u64, Vec<i16>)>,
     video_frames: Receiver<Picture>,
     audio: usize,
     video: usize,
@@ -331,6 +335,11 @@ extern "C" fn audio_callback(param: *mut c_void, bus: usize, data: *mut ffi::aud
             .store(true, Ordering::Release /* classified */);
         return;
     }
+    let received_at = unsafe { os_gettime_ns() };
+    MAX_CALLBACK_AGE.fetch_max(
+        received_at.saturating_sub(data.timestamp),
+        Ordering::Relaxed,
+    );
     let (left, right) = unsafe {
         (
             std::slice::from_raw_parts(data.data[0] as *const f32, data.frames as usize),
@@ -350,7 +359,11 @@ extern "C" fn audio_callback(param: *mut c_void, bus: usize, data: *mut ffi::aud
         }
         samples.push(((left + right) * 0.5 * 32767.).clamp(-32768., 32767.) as i16);
     }
-    if shared.audio.try_send((data.timestamp, samples)).is_err() {
+    if shared
+        .audio
+        .try_send((data.timestamp, received_at, samples))
+        .is_err()
+    {
         CAPTURE_FAULT
             .compare_exchange(0, 4, Ordering::AcqRel, Ordering::Acquire)
             .ok();
@@ -669,7 +682,7 @@ mod tests {
         assert_eq!(blocks.len(), 19);
         assert!(blocks
             .iter()
-            .all(|(_, samples)| samples.len() == 1024
+            .all(|(_, _, samples)| samples.len() == 1024
                 && samples.iter().all(|sample| *sample == 8191)));
     }
     #[test]
@@ -735,7 +748,7 @@ pub fn tap_selftest() {
     let (mut audio, mut video, mut audio_timestamp, mut video_timestamp) = (0, 0, 0, 0);
     while std::time::Instant::now() < until {
         let queues = tap.drain().unwrap();
-        for (timestamp, samples) in queues.audio {
+        for (timestamp, _, samples) in queues.audio {
             assert!(timestamp > audio_timestamp && !samples.is_empty());
             audio_timestamp = timestamp;
             audio += 1;
@@ -805,7 +818,9 @@ fn publish_loop(
         MAX_LOOP_GAP.fetch_max(loop_now.saturating_sub(last_loop), Ordering::Relaxed);
         last_loop = loop_now;
         let mut captured = tap.drain()?;
-        for (timestamp, samples) in captured.audio.drain(..) {
+        for (timestamp, received_at, samples) in captured.audio.drain(..) {
+            MAX_CAPTURE_QUEUE_WAIT
+                .fetch_max(loop_now.saturating_sub(received_at), Ordering::Relaxed);
             MAX_CAPTURE_AGE.fetch_max(loop_now.saturating_sub(timestamp), Ordering::Relaxed);
             if audio_end.is_some_and(|end: u64| timestamp.abs_diff(end) > 2_000_000) {
                 return Err("Native program audio timestamp discontinuity");

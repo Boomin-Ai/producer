@@ -1,0 +1,25 @@
+{
+  "passed": true,
+  "audio_submitted": 6091,
+  "video_submitted": 1818,
+  "timing": {
+    "capture_fault_code": 0,
+    "maximum_audio_call_us": 319,
+    "maximum_audio_late_us": 1041,
+    "maximum_callback_age_us": 265074,
+    "maximum_capture_age_us": 265966,
+    "maximum_capture_queue_wait_us": 1077,
+    "maximum_loop_gap_us": 1394,
+    "maximum_video_call_us": 433,
+    "maximum_work_us": 384,
+    "minimum_audio_spacing_us": 9060,
+    "program_buffer_ms": 400,
+    "publisher_recoveries": 0,
+    "startup_audio_blocks_discarded": 0,
+    "time_constrained_scheduling": true,
+    "video_worker_stall_injected": false
+  },
+  "source_recreation_cycles": 2,
+  "scope": "Automatic native generated-source lifecycle; no browser guest playback or physical AEC qualification",
+  "production_ready": false
+}
