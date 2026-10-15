@@ -77,12 +77,23 @@
       "missing_video_labels_within_observed_span": [],
       "audio_pts_discontinuities": 0,
       "local_numbered_marker_gate_passed": true
+    },
+    {
+      "name": "cloud_fragmented_signed_cts_latest_video",
+      "matched_pairs": 15,
+      "absolute_p95_ms": 63.33333333332848,
+      "unmatched_audio": 1,
+      "unmatched_video": 0,
+      "missing_video_labels_within_observed_span": [],
+      "audio_pts_discontinuities": 0,
+      "local_numbered_marker_gate_passed": false
     }
   ],
   "notes": [
     "One latest-video cloud attempt failed on host API timeout before guest connection; excluded from media comparison.",
     "Latest-video reduced observed paired offset but did not pass coverage.",
     "Browser source trace painted missing labels 13\u201318; accepted handoff trace omitted them.",
-    "Signed CTS local control retains fragmented MP4; full Cloud confirmation unfinished."
+    "Signed CTS local control retains fragmented MP4; full Cloud confirmation unfinished.",
+    "Signed CTS + latest video Cloud repeat matched 15 pairs, 63.333 ms p95, no missing video labels within span; one leading unmatched audio marker keeps strict overall gate false."
   ]
 }

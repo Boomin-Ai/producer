@@ -121,3 +121,20 @@ for reordered video: https://www.ffmpeg.org/ffmpeg-formats.html
 Debug proof diagnostics now include bounded, once-per-second presentation and
 capture-clock snapshots (up to 25 guests, no identities/media/secrets) to identify
 why source-painted labels fail to reach native submission. Runtime tests: 41 pass.
+
+The full Cloud signed-CTS + latest-video run matched 15 consecutive video labels
+6–20 at 63.333 ms absolute p95. No labels were missing within the observed video
+span and PCM PTS was continuous. Audio label 5 preceded the first video marker,
+so there was one unmatched audio marker and the strict overall gate remains
+false. This is evidence of promising paired synchronization, not full startup
+coverage or a released fix. During the active run, clock diagnostics showed only
+initial binding/no-audio-origin transitions; the earlier missing interval did not
+recur. The final snapshot clears when the participant is removed, so it cannot
+be used as retained post-removal clock history. Further qualification must include
+startup and repeatability. This run preserves fragmented MP4 rather than adopting
+the ordinary-MP4 diagnostic for production.
+
+Checkpoint: all Cloud test rooms deleted; private recordings retained. The native
+build and 41 runtime tests passed. The diagnostic build initially ran out of disk
+space; deleting 513 MiB of regenerable files from the dedicated build cache allowed
+the rebuild to finish. User recordings and application data were preserved.
