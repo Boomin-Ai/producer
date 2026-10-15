@@ -129,11 +129,28 @@ impl Recorder {
             // Write the index up front and persist complete keyframe fragments.
             // A full disk or crashed process can lose the final fragment without
             // making all earlier footage depend on a trailer that never arrived.
-            ffi::obs_data_set_string(
-                settings,
-                cstr("muxer_settings").as_ptr(),
-                cstr("movflags=frag_keyframe+empty_moov+default_base_moof").as_ptr(),
-            );
+            let fragmented = {
+                #[cfg(debug_assertions)]
+                {
+                    std::env::var("PRODUCER_RTC_FLAT_MP4_PROOF").as_deref() != Ok("1")
+                }
+                #[cfg(not(debug_assertions))]
+                {
+                    true
+                }
+            };
+            if fragmented {
+                let flags = "movflags=frag_keyframe+empty_moov+default_base_moof";
+                #[cfg(debug_assertions)]
+                let flags = if std::env::var("PRODUCER_RTC_SIGNED_CTS_PROOF").as_deref() == Ok("1") {
+                    "movflags=frag_keyframe+empty_moov+default_base_moof+negative_cts_offsets"
+                } else { flags };
+                ffi::obs_data_set_string(
+                    settings,
+                    cstr("muxer_settings").as_ptr(),
+                    cstr(flags).as_ptr(),
+                );
+            }
             let output = ffi::obs_output_create(
                 cstr("ffmpeg_muxer").as_ptr(),
                 cstr("Producer Recording").as_ptr(),

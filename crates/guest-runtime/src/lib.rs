@@ -19,6 +19,8 @@ pub mod program;
 mod timing {
     #[cfg(debug_assertions)]
     pub mod capture_clock;
+    #[cfg(debug_assertions)]
+    pub mod markers;
     pub mod playout_clock;
     pub mod presentation;
     pub mod queue;

@@ -28,6 +28,9 @@ struct obs_source_audio {
     int speakers, format; uint32_t samples_per_sec; uint64_t timestamp;
 };
 OBS_IMPORT void obs_source_output_video(obs_source_t *, const struct obs_source_frame *);
+#ifdef PRODUCER_INGRESS_DIAGNOSTICS
+OBS_IMPORT void obs_source_set_async_unbuffered(obs_source_t *, bool);
+#endif
 OBS_IMPORT void obs_source_output_audio(obs_source_t *, const struct obs_source_audio *);
 OBS_IMPORT bool video_format_get_parameters(int, int, float[16], float[3], float[3]);
 /* OBS pulls a continuous clock from each guest, including silence during
@@ -76,6 +79,8 @@ static void *create(obs_data_t *settings, obs_source_t *source) {
     if (!state) return NULL;
     if (pthread_mutex_init(&state->lock, NULL)) { free(state); return NULL; }
 #ifdef PRODUCER_INGRESS_DIAGNOSTICS
+    const char *latest=getenv("PRODUCER_RTC_LATEST_VIDEO_PROOF");
+    if (latest && !strcmp(latest,"1")) obs_source_set_async_unbuffered(source,true);
     const char *proof=getenv("PRODUCER_RTC_PULL_CLOCK_PROOF");
     state->proof_clock=proof && !strcmp(proof,"1");
     if (state->proof_clock) {

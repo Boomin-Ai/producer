@@ -60,18 +60,29 @@ pub struct Counters {
     pub sender_reports: AtomicU64,
     pub pcm_received: AtomicU64,
     pub video_received: AtomicU64,
-    #[cfg(debug_assertions)] pub decoded_pcm_peak: AtomicU64,
-    #[cfg(debug_assertions)] pub submitted_pcm_peak: AtomicU64,
-    #[cfg(debug_assertions)] pub first_binding_ms:AtomicU64,
-    #[cfg(debug_assertions)] pub first_audio_clock_ms:AtomicU64,
-    #[cfg(debug_assertions)] pub first_video_clock_ms:AtomicU64,
-    #[cfg(debug_assertions)] pub first_audio_schedule_ms:AtomicU64,
-    #[cfg(debug_assertions)] pub first_video_schedule_ms:AtomicU64,
+    #[cfg(debug_assertions)]
+    marker_trace: Mutex<crate::timing::markers::Trace>,
+    #[cfg(debug_assertions)]
+    presentation_reports: Mutex<serde_json::Value>,
+    #[cfg(debug_assertions)]
+    pub decoded_pcm_peak: AtomicU64,
+    #[cfg(debug_assertions)]
+    pub submitted_pcm_peak: AtomicU64,
+    #[cfg(debug_assertions)]
+    pub first_binding_ms: AtomicU64,
+    #[cfg(debug_assertions)]
+    pub first_audio_clock_ms: AtomicU64,
+    #[cfg(debug_assertions)]
+    pub first_video_clock_ms: AtomicU64,
+    #[cfg(debug_assertions)]
+    pub first_audio_schedule_ms: AtomicU64,
+    #[cfg(debug_assertions)]
+    pub first_video_schedule_ms: AtomicU64,
 }
 impl Counters {
     pub fn report(&self) -> serde_json::Value {
         #[allow(unused_mut)]
-        let mut report=serde_json::json!({"video_submitted":self.video.load(Ordering::Acquire),
+        let mut report = serde_json::json!({"video_submitted":self.video.load(Ordering::Acquire),
             "audio_submitted":self.audio.load(Ordering::Acquire),
             "rejected":self.rejected.load(Ordering::Acquire),
             "video_observers":self.observers.load(Ordering::Acquire),
@@ -79,17 +90,42 @@ impl Counters {
             "bindings":self.bindings.load(Ordering::Acquire),"sender_reports":self.sender_reports.load(Ordering::Acquire),
             "pcm_received":self.pcm_received.load(Ordering::Acquire),"video_received":self.video_received.load(Ordering::Acquire)});
         #[cfg(debug_assertions)]
-        for (key,value) in [("first_binding_ms",&self.first_binding_ms),("first_audio_clock_ms",&self.first_audio_clock_ms),("first_video_clock_ms",&self.first_video_clock_ms),("first_audio_schedule_ms",&self.first_audio_schedule_ms),("first_video_schedule_ms",&self.first_video_schedule_ms)]{report[key]=value.load(Ordering::Acquire).into();}
+        for (key, value) in [
+            ("first_binding_ms", &self.first_binding_ms),
+            ("first_audio_clock_ms", &self.first_audio_clock_ms),
+            ("first_video_clock_ms", &self.first_video_clock_ms),
+            ("first_audio_schedule_ms", &self.first_audio_schedule_ms),
+            ("first_video_schedule_ms", &self.first_video_schedule_ms),
+        ] {
+            report[key] = value.load(Ordering::Acquire).into();
+        }
         #[cfg(debug_assertions)]
-        for (key,value) in [("decoded_pcm_peak",&self.decoded_pcm_peak),("submitted_pcm_peak",&self.submitted_pcm_peak)]{report[key]=value.load(Ordering::Acquire).into();}
+        for (key, value) in [
+            ("decoded_pcm_peak", &self.decoded_pcm_peak),
+            ("submitted_pcm_peak", &self.submitted_pcm_peak),
+        ] {
+            report[key] = value.load(Ordering::Acquire).into();
+        }
+        #[cfg(debug_assertions)]
+        if crate::timing::markers::enabled() {
+            if let Ok(trace) = self.marker_trace.lock() {
+                report["submitted_markers"] = trace.report();
+            }
+            if let Ok(clocks) = self.presentation_reports.lock() {
+                report["presentation_clocks"] = clocks.clone();
+            }
+        }
         report
     }
 }
 #[cfg(debug_assertions)]
-fn stamp_once(counter:&AtomicU64){
-    if counter.load(Ordering::Relaxed)==0{
-        let wall=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d|d.as_millis() as u64).unwrap_or(0);
-        let _=counter.compare_exchange(0,wall,Ordering::Release,Ordering::Relaxed);
+fn stamp_once(counter: &AtomicU64) {
+    if counter.load(Ordering::Relaxed) == 0 {
+        let wall = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        let _ = counter.compare_exchange(0, wall, Ordering::Release, Ordering::Relaxed);
     }
 }
 struct Observer {
@@ -190,6 +226,8 @@ struct Guest {
     since: i64,
     clock: Presentation,
     #[cfg(debug_assertions)]
+    markers: crate::timing::markers::Detector,
+    #[cfg(debug_assertions)]
     capture_clock: crate::timing::capture_clock::AudioClock,
     audio_clock: Option<SenderClock>,
     video_clock: Option<SenderClock>,
@@ -203,6 +241,10 @@ impl Guest {
         self.video.clear();
         self.clock.clear();
         #[cfg(debug_assertions)]
+        {
+            self.markers = Default::default();
+        }
+        #[cfg(debug_assertions)]
         self.capture_clock.clear();
         self.audio_clock = None;
         self.video_clock = None;
@@ -214,6 +256,8 @@ struct State {
     outputs: Arc<dyn Outputs>,
     counters: Arc<Counters>,
     rtc_clock: VideoClock,
+    #[cfg(debug_assertions)]
+    next_proof_report: Instant,
 }
 impl State {
     fn remove(&mut self, id: &str) -> Option<Guest> {
@@ -264,7 +308,8 @@ impl State {
                 changed |= track.bind(ssrc, &mut self.retired_ssrc);
             }
             if changed {
-                #[cfg(debug_assertions)] stamp_once(&self.counters.first_binding_ms);
+                #[cfg(debug_assertions)]
+                stamp_once(&self.counters.first_binding_ms);
                 #[cfg(debug_assertions)]
                 eprintln!("Native RTC receiver clock reset: binding changed");
                 guest.clear();
@@ -285,11 +330,17 @@ impl State {
             for report in reports.iter().filter(|r| r.observed_us >= guest.since) {
                 if let Some(clock) = &mut guest.audio_clock {
                     clock.observe(*report);
-                    #[cfg(debug_assertions)] if clock.playback_ready(rtc,true){stamp_once(&self.counters.first_audio_clock_ms);}
+                    #[cfg(debug_assertions)]
+                    if clock.playback_ready(rtc, true) {
+                        stamp_once(&self.counters.first_audio_clock_ms);
+                    }
                 }
                 if let Some(clock) = &mut guest.video_clock {
                     clock.observe(*report);
-                    #[cfg(debug_assertions)] if clock.playback_ready(rtc,true){stamp_once(&self.counters.first_video_clock_ms);}
+                    #[cfg(debug_assertions)]
+                    if clock.playback_ready(rtc, true) {
+                        stamp_once(&self.counters.first_video_clock_ms);
+                    }
                 }
             }
         }
@@ -299,7 +350,9 @@ impl State {
             .fetch_add(blocks.len() as u64, Ordering::Relaxed);
         for block in blocks {
             #[cfg(debug_assertions)]
-            self.counters.decoded_pcm_peak.fetch_max(pcm_peak(&block),Ordering::Relaxed);
+            self.counters
+                .decoded_pcm_peak
+                .fetch_max(pcm_peak(&block), Ordering::Relaxed);
             if !matches!(block.channels, 1 | 2)
                 || block.pull_us <= 0
                 || block.ssrc == 0
@@ -346,7 +399,8 @@ impl State {
                 .clock
                 .audio(block.generation, block.sequence, origin, pull)
             {
-                #[cfg(debug_assertions)] stamp_once(&self.counters.first_audio_schedule_ms);
+                #[cfg(debug_assertions)]
+                stamp_once(&self.counters.first_audio_schedule_ms);
                 if guest.audio.len() < 24 {
                     guest.audio.push_back((at, block));
                 } else {
@@ -405,7 +459,8 @@ impl State {
                             .and_then(|at| at.checked_add(Duration::from_millis(120)))
                     };
                     if let Some(at) = at {
-                        #[cfg(debug_assertions)] stamp_once(&self.counters.first_video_schedule_ms);
+                        #[cfg(debug_assertions)]
+                        stamp_once(&self.counters.first_video_schedule_ms);
                         if guest.video.len() < 8 {
                             guest.video.push_back((at, frame.value));
                         } else {
@@ -418,18 +473,39 @@ impl State {
                 let (at, block) = guest.audio.pop_front().unwrap();
                 // Keep the audio clock warm for preview synchronization, but
                 // never submit backstage PCM to OBS/program/recording mixers.
-                if !guest.permission.on_stage() { continue; }
+                if !guest.permission.on_stage() {
+                    continue;
+                }
                 if now.saturating_duration_since(at) <= Duration::from_millis(30)
                     && guest.permission.allows(
                         guest.permission.rtc_identity(),
                         PublishSource::Microphone,
                         now,
                     )
-                    && submit_program_audio(&guest.permission, guest.output.as_ref(),
-                        &block.samples[..480 * block.channels as usize], block.channels, at, now)
+                    && submit_program_audio(
+                        &guest.permission,
+                        guest.output.as_ref(),
+                        &block.samples[..480 * block.channels as usize],
+                        block.channels,
+                        at,
+                        now,
+                    )
                 {
                     #[cfg(debug_assertions)]
-                    self.counters.submitted_pcm_peak.fetch_max(pcm_peak(&block),Ordering::Relaxed);
+                    self.counters
+                        .submitted_pcm_peak
+                        .fetch_max(pcm_peak(&block), Ordering::Relaxed);
+                    #[cfg(debug_assertions)]
+                    if crate::timing::markers::enabled() {
+                        if let Some(id) = guest.markers.audio(
+                            &block.samples[..480 * block.channels as usize],
+                            block.channels as usize,
+                        ) {
+                            if let Ok(mut trace) = self.counters.marker_trace.lock() {
+                                trace.push("audio", id, at);
+                            }
+                        }
+                    }
                     self.counters.audio.fetch_add(1, Ordering::Relaxed);
                 } else {
                     self.counters.rejected.fetch_add(1, Ordering::Relaxed);
@@ -457,10 +533,36 @@ impl State {
                     },
                     at,
                 ) {
+                    #[cfg(debug_assertions)]
+                    if crate::timing::markers::enabled() {
+                        if let Some(id) = guest.markers.video(
+                            buffer.data().0,
+                            buffer.width(),
+                            buffer.height(),
+                            buffer.strides().0,
+                        ) {
+                            if let Ok(mut trace) = self.counters.marker_trace.lock() {
+                                trace.push("video", id, at);
+                            }
+                        }
+                    }
                     self.counters.video.fetch_add(1, Ordering::Relaxed);
                 } else {
                     self.counters.rejected.fetch_add(1, Ordering::Relaxed);
                 }
+            }
+        }
+        #[cfg(debug_assertions)]
+        if crate::timing::markers::enabled() && now >= self.next_proof_report {
+            self.next_proof_report = now + Duration::from_secs(1);
+            // Numeric bounded snapshots only: no identities, media or credentials.
+            let clocks: Vec<_> = self.guests.values().take(25).map(|guest| {
+                serde_json::json!({"presentation":guest.clock.report(),
+                    "capture":guest.capture_clock.report(),
+                    "queued_audio":guest.audio.len(),"queued_video":guest.video.len()})
+            }).collect();
+            if let Ok(mut report) = self.counters.presentation_reports.lock() {
+                *report = serde_json::json!(clocks);
             }
         }
     }
@@ -491,6 +593,8 @@ impl Receiver {
             outputs,
             counters: counters.clone(),
             rtc_clock: VideoClock::new(audio_sys::ffi::diagnostic_webrtc_time_us(), Instant::now()),
+            #[cfg(debug_assertions)]
+            next_proof_report: Instant::now(),
         }));
         let stop = Arc::new(AtomicBool::new(false));
         let stopped = stop.clone();
@@ -657,6 +761,8 @@ impl GuestMedia for Receiver {
                 Guest {
                     #[cfg(debug_assertions)]
                     capture_clock: Default::default(),
+                    #[cfg(debug_assertions)]
+                    markers: Default::default(),
                     permission: p.clone(),
                     output,
                     tracks: Vec::new(),
@@ -819,7 +925,14 @@ mod tests {
     }
 }
 
-fn submit_program_audio(permission: &Permission, output: &dyn Output, samples: &[i16], channels: u32, at: Instant, now: Instant) -> bool {
+fn submit_program_audio(
+    permission: &Permission,
+    output: &dyn Output,
+    samples: &[i16],
+    channels: u32,
+    at: Instant,
+    now: Instant,
+) -> bool {
     permission.on_stage()
         && permission.allows(permission.rtc_identity(), PublishSource::Microphone, now)
         && output.audio(samples, channels, at)
@@ -832,25 +945,52 @@ mod backstage_audio_tests {
     use serde_json::json;
     struct Probe(std::sync::atomic::AtomicUsize);
     impl Output for Probe {
-        fn video(&self, _: Video<'_>, _: Instant) -> bool { true }
-        fn audio(&self, _: &[i16], _: u32, _: Instant) -> bool { self.0.fetch_add(1,Ordering::Relaxed);true }
+        fn video(&self, _: Video<'_>, _: Instant) -> bool {
+            true
+        }
+        fn audio(&self, _: &[i16], _: u32, _: Instant) -> bool {
+            self.0.fetch_add(1, Ordering::Relaxed);
+            true
+        }
         fn invalidate(&self) {}
     }
     #[test]
     fn backstage_pcm_never_reaches_program_output_but_on_stage_pcm_does() {
-        let id="11111111-1111-4111-8111-111111111111";let now=Instant::now();let wall=1791800000000u64;
-        let receipt=json!({"brand_id":id,"room_id":id,"run_id":id,"host_process_id":id,"host_participant_id":id,
+        let id = "11111111-1111-4111-8111-111111111111";
+        let now = Instant::now();
+        let wall = 1791800000000u64;
+        let receipt = json!({"brand_id":id,"room_id":id,"run_id":id,"host_process_id":id,"host_participant_id":id,
           "transport":"livekit","endpoint":"wss://fixture.livekit.cloud","state":"active","host_lease_epoch":1,"control_revision":1,"host_lease_expires_at_ms":wall+45000});
-        let expected:HostReceipt=serde_json::from_value(receipt.clone()).unwrap();let identity=format!("guest-{id}-e1-g1");
-        let probe=Probe(std::sync::atomic::AtomicUsize::new(0));
-        for on_stage in [false,true] {
-            let wire=json!({"schema_version":1,"receipt":receipt,"observed_at_ms":wall,"guests":[{"participant_id":id,"rtc_identity":identity,"authorization_generation":1,"publish_sources":["camera","microphone"],"on_stage":on_stage,"expires_at_ms":wall+45000}]});
-            let snapshot=Snapshot::parse(&serde_json::to_vec(&wire).unwrap(),&expected,wall,now,now).unwrap();
-            let permission=snapshot.permission(&identity,PublishSource::Microphone,now).unwrap();
-            assert_eq!(submit_program_audio(permission,&probe,&[123;480],1,now,now),on_stage);
-            assert!(!submit_program_audio(permission,&probe,&[123;480],1,now,now+Duration::from_secs(5)));
+        let expected: HostReceipt = serde_json::from_value(receipt.clone()).unwrap();
+        let identity = format!("guest-{id}-e1-g1");
+        let probe = Probe(std::sync::atomic::AtomicUsize::new(0));
+        for on_stage in [false, true] {
+            let wire = json!({"schema_version":1,"receipt":receipt,"observed_at_ms":wall,"guests":[{"participant_id":id,"rtc_identity":identity,"authorization_generation":1,"publish_sources":["camera","microphone"],"on_stage":on_stage,"expires_at_ms":wall+45000}]});
+            let snapshot = Snapshot::parse(
+                &serde_json::to_vec(&wire).unwrap(),
+                &expected,
+                wall,
+                now,
+                now,
+            )
+            .unwrap();
+            let permission = snapshot
+                .permission(&identity, PublishSource::Microphone, now)
+                .unwrap();
+            assert_eq!(
+                submit_program_audio(permission, &probe, &[123; 480], 1, now, now),
+                on_stage
+            );
+            assert!(!submit_program_audio(
+                permission,
+                &probe,
+                &[123; 480],
+                1,
+                now,
+                now + Duration::from_secs(5)
+            ));
         }
-        assert_eq!(probe.0.load(Ordering::Relaxed),1);
+        assert_eq!(probe.0.load(Ordering::Relaxed), 1);
     }
 }
 
@@ -861,6 +1001,11 @@ fn capture_clock_experiment() -> bool {
 }
 
 #[cfg(debug_assertions)]
-fn pcm_peak(block:&DecodedAudioBlock)->u64 {
-    block.samples.iter().map(|sample|u64::from(sample.unsigned_abs())).max().unwrap_or(0)
+fn pcm_peak(block: &DecodedAudioBlock) -> u64 {
+    block
+        .samples
+        .iter()
+        .map(|sample| u64::from(sample.unsigned_abs()))
+        .max()
+        .unwrap_or(0)
 }

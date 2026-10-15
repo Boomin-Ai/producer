@@ -63,3 +63,61 @@ buffer override was removed. Neither failed run was relabeled as a sync pass.
 All owned Cloud rooms were deleted; recordings and detailed numeric traces remain
 private. The sanitized evidence is in
 `docs/evidence/numbered-native-ingress-2026-10-15.json`.
+
+## Source and handoff controls
+
+A direct browser recording of the generated source passed: seven matched pairs,
+28.367 ms absolute p95, no unmatched or missing labels. The existing generated
+MOV independently measured 64 pairs with effectively zero offset.
+
+Debug-only bounded marker tracing now records accepted audio/video submissions
+and their scheduled Instants immediately before the OBS handoff. Partial audio
+onsets are retried until their tone identity is confident; three new tests cover
+partial onset, barcode/tone identity and bounded trace storage (41 runtime tests
+pass). The first trace had a detector onset defect and remains invalid evidence.
+The corrected repeat contained 14 audio and 11 video events, no trace overflow.
+Several submission pairs were within 13 ms, while their recorded video lag was
+107–233 ms; one recorded pair reached 533 ms. Other handoff pairs themselves
+had 39–69 ms offsets. This establishes substantial additional delay after
+handoff without establishing that every input pair was aligned. The recording
+failed synchronization and coverage qualification.
+
+An ordinary local OBS Media source, with no LiveKit or custom guest source,
+recorded the known synchronized MOV through the ordinary Recorder. All seven
+labels matched, but video lag measured 83.333–116.667 ms (p95 116.667 ms).
+Therefore a shared playback/recording-path offset contributes to these results;
+the guest source cannot yet be assigned the entire measured offset. Detailed
+recordings and traces remain private. Production behavior remains unchanged.
+
+A debug-only regular-MP4 control, changing only the Recorder muxer option,
+measured seven matched pairs at 26.667 ms absolute p95 and passed the marker
+gate, with no unmatched/missing labels or PCM PTS discontinuities. Fragmented
+MP4 timestamp handling is a confirmed contributor in this local control.
+Cloud guest confirmation remains required; no production muxer setting changed.
+
+The full Cloud repeat with regular MP4 failed: nine matched pairs, 536.667 ms
+absolute p95, six unmatched audio markers and missing video labels 13–18.
+Accepted handoff offsets ranged from -18 to +87 ms; video submission lateness
+was below 3 ms for observed markers. OBS reported one rendering-lag frame.
+Regular MP4 alone is not a guest sync fix. A bounded latest-video diagnostic
+is being compared under the same regular-MP4 condition; it remains debug-only.
+
+The latest-video + regular-MP4 Cloud retry measured nine matched pairs at 40 ms
+absolute p95. It still had six unmatched audio markers and missing video labels
+13–18, so the full gate failed. The browser source trace painted all of those
+labels, while accepted native submission omitted them. This narrows the missing
+interval to between generated source painting and native submission; it does not
+identify whether transport, decode metadata or presentation rejection caused it.
+The preceding attempt timed out during host setup and provides no media result.
+All temporary rooms were removed.
+
+A local fragmented-MP4 control with `negative_cts_offsets` measured seven pairs,
+26.667 ms absolute p95, no unmatched/missing labels or PCM PTS discontinuities,
+and passed. This is a promising container correction that preserves fragmentation,
+not a released change or a full guest qualification. FFmpeg documents signed CTS
+offsets as permitting initial DTS/CTS zero and reducing edit-list requirements
+for reordered video: https://www.ffmpeg.org/ffmpeg-formats.html
+
+Debug proof diagnostics now include bounded, once-per-second presentation and
+capture-clock snapshots (up to 25 guests, no identities/media/secrets) to identify
+why source-painted labels fail to reach native submission. Runtime tests: 41 pass.
