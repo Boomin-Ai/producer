@@ -65,11 +65,19 @@ pub struct Counters {
     #[cfg(debug_assertions)]
     presentation_reports: Mutex<serde_json::Value>,
     #[cfg(debug_assertions)]
+    decoder_stats: Mutex<VecDeque<serde_json::Value>>,
+    #[cfg(debug_assertions)]
     pub decoded_pcm_peak: AtomicU64,
     #[cfg(debug_assertions)]
     pub submitted_pcm_peak: AtomicU64,
     #[cfg(debug_assertions)]
     pub first_binding_ms: AtomicU64,
+    #[cfg(debug_assertions)]
+    pub first_video_binding_ms: AtomicU64,
+    #[cfg(debug_assertions)]
+    pub first_audio_binding_ms: AtomicU64,
+    #[cfg(debug_assertions)]
+    pub first_frame_binding_retries: AtomicU64,
     #[cfg(debug_assertions)]
     pub first_audio_clock_ms: AtomicU64,
     #[cfg(debug_assertions)]
@@ -92,6 +100,9 @@ impl Counters {
         #[cfg(debug_assertions)]
         for (key, value) in [
             ("first_binding_ms", &self.first_binding_ms),
+            ("first_video_binding_ms", &self.first_video_binding_ms),
+            ("first_audio_binding_ms", &self.first_audio_binding_ms),
+            ("first_frame_binding_retries", &self.first_frame_binding_retries),
             ("first_audio_clock_ms", &self.first_audio_clock_ms),
             ("first_video_clock_ms", &self.first_video_clock_ms),
             ("first_audio_schedule_ms", &self.first_audio_schedule_ms),
@@ -114,6 +125,9 @@ impl Counters {
             if let Ok(clocks) = self.presentation_reports.lock() {
                 report["presentation_clocks"] = clocks.clone();
             }
+            if let Ok(stats) = self.decoder_stats.lock() {
+                report["decoder_stats"] = serde_json::json!(*stats);
+            }
         }
         report
     }
@@ -129,12 +143,16 @@ fn stamp_once(counter: &AtomicU64) {
     }
 }
 struct Observer {
+    #[cfg(debug_assertions)]
+    first_frame: Arc<AtomicBool>,
     queue: Arc<Queue<Frame>>,
     counters: Arc<Counters>,
 }
 impl video_sys::VideoSink for Observer {
     fn on_frame(&self, frame: Frame) {
         if !frame.is_null() {
+            #[cfg(debug_assertions)]
+            self.first_frame.store(true, Ordering::Release);
             self.counters.video_received.fetch_add(1, Ordering::Relaxed);
             self.queue.push(Captured {
                 at: Instant::now(),
@@ -146,6 +164,8 @@ impl video_sys::VideoSink for Observer {
     fn on_constraints_changed(&self, _: video_sys::ffi::VideoTrackSourceConstraints) {}
 }
 struct VideoTap {
+    #[cfg(debug_assertions)]
+    first_frame: Arc<AtomicBool>,
     track: SharedPtr<video_sys::ffi::VideoTrack>,
     sink: SharedPtr<video_sys::ffi::NativeVideoSink>,
     queue: Arc<Queue<Frame>>,
@@ -153,9 +173,13 @@ struct VideoTap {
 }
 impl VideoTap {
     fn new(track: &livekit::prelude::RemoteVideoTrack, counters: Arc<Counters>) -> Self {
+        #[cfg(debug_assertions)]
+        let first_frame = Arc::new(AtomicBool::new(false));
         let queue = Arc::new(Queue::new(2, Duration::from_millis(50)));
         let sink = video_sys::ffi::new_native_video_sink(Box::new(
             video_sys::VideoSinkWrapper::new(Arc::new(Observer {
+                #[cfg(debug_assertions)]
+                first_frame: first_frame.clone(),
                 queue: queue.clone(),
                 counters: counters.clone(),
             })),
@@ -166,6 +190,8 @@ impl VideoTap {
         track.add_sink(&sink);
         counters.observers.fetch_add(1, Ordering::AcqRel);
         Self {
+            #[cfg(debug_assertions)]
+            first_frame,
             track,
             sink,
             queue,
@@ -561,8 +587,12 @@ impl State {
                     "capture":guest.capture_clock.report(),
                     "queued_audio":guest.audio.len(),"queued_video":guest.video.len()})
             }).collect();
-            if let Ok(mut report) = self.counters.presentation_reports.lock() {
-                *report = serde_json::json!(clocks);
+            if !clocks.is_empty() {
+                if let Ok(mut report) = self.counters.presentation_reports.lock() {
+                    // Retain the last bounded diagnostic snapshot after test
+                    // removal; this report is never consulted for authorization.
+                    *report = serde_json::json!(clocks);
+                }
             }
         }
     }
@@ -695,11 +725,15 @@ impl GuestMedia for Receiver {
         } else {
             "audio"
         };
+        #[cfg(debug_assertions)]
+        let first_frame = video.as_ref().map(|tap| tap.first_frame.clone());
         let counters = self.counters.clone();
         let stats = thread::Builder::new()
             .name("rtc-receiver-binding".into())
             .spawn(move || {
                 counters.workers.fetch_add(1, Ordering::AcqRel);
+                #[cfg(debug_assertions)]
+                let mut frame_retry_available = std::env::var("PRODUCER_RTC_FIRST_FRAME_BINDING_PROOF").as_deref() == Ok("1");
                 while !stopped.load(Ordering::Acquire) {
                     let result = runtime.block_on(async {
                         // Stats are a decoder-binding proof, not a 4 Hz media poll.
@@ -711,12 +745,40 @@ impl GuestMedia for Receiver {
                         let streams: Vec<_> = stats
                             .into_iter()
                             .filter_map(|s| match s {
-                                livekit::webrtc::stats::RtcStats::InboundRtp(s) => Some(s.stream),
+                                livekit::webrtc::stats::RtcStats::InboundRtp(s) => {
+                                    #[cfg(debug_assertions)]
+                                    if crate::timing::markers::enabled() {
+                                        if let Ok(mut rows) = counters.decoder_stats.lock() {
+                                            if rows.len() == 128 { rows.pop_front(); }
+                                            rows.push_back(serde_json::json!({
+                                                "observed_unix_ms":std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d|d.as_millis()).unwrap_or(0),
+                                                "kind":s.stream.kind,"frames_decoded":s.inbound.frames_decoded,
+                                                "frames_received":s.inbound.frames_received,"frames_dropped":s.inbound.frames_dropped,
+                                                "bytes_received":s.inbound.bytes_received,"packets_lost":s.received.packets_lost,
+                                                "nack_count":s.inbound.nack_count,"pli_count":s.inbound.pli_count,
+                                                "total_decode_time":s.inbound.total_decode_time,
+                                                "total_processing_delay":s.inbound.total_processing_delay,
+                                                "jitter_buffer_delay":s.inbound.jitter_buffer_delay,
+                                                "jitter_buffer_target_delay":s.inbound.jitter_buffer_target_delay,
+                                                "jitter_buffer_emitted_count":s.inbound.jitter_buffer_emitted_count,
+                                                "jitter_buffer_minimum_delay":s.inbound.jitter_buffer_minimum_delay,
+                                                "freeze_count":s.inbound.freeze_count,
+                                                "total_freeze_duration":s.inbound.total_freeze_duration,
+                                                "frame_width":s.inbound.frame_width,"frame_height":s.inbound.frame_height
+                                            }));
+                                        }
+                                    }
+                                    Some(s.stream)
+                                },
                                 _ => None,
                             })
                             .collect();
                         let next = if streams.len() == 1 && streams[0].kind == kind { streams[0].ssrc } else { 0 };
                         let previous = binding.swap(next, Ordering::AcqRel);
+                        #[cfg(debug_assertions)]
+                        if next != 0 {
+                            stamp_once(if kind == "video" { &counters.first_video_binding_ms } else { &counters.first_audio_binding_ms });
+                        }
                         #[cfg(debug_assertions)]
                         if previous != next {
                             eprintln!("Native RTC binding observed: kind={kind} available={} inbound={}", next != 0, streams.len());
@@ -726,8 +788,21 @@ impl GuestMedia for Receiver {
                         #[cfg(debug_assertions)]
                         if previous != 0 { eprintln!("Native RTC receiver binding unavailable: stats deadline or failure"); }
                     }
+                    #[cfg(debug_assertions)]
+                    if binding.load(Ordering::Acquire) != 0 {
+                        frame_retry_available = false;
+                    }
                     for _ in 0..100 {
                         if stopped.load(Ordering::Acquire) {
+                            break;
+                        }
+                        #[cfg(debug_assertions)]
+                        if frame_retry_available && binding.load(Ordering::Acquire) == 0
+                            && first_frame.as_ref().is_some_and(|ready| ready.load(Ordering::Acquire)) {
+                            // One event-triggered retry per attached track, never a faster
+                            // steady-state stats poll or a substitute for decoder ownership.
+                            frame_retry_available = false;
+                            counters.first_frame_binding_retries.fetch_add(1, Ordering::Relaxed);
                             break;
                         }
                         thread::sleep(Duration::from_millis(10));
