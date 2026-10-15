@@ -185,6 +185,8 @@ struct Guest {
     tracks: Vec<Track>,
     since: i64,
     clock: Presentation,
+    #[cfg(debug_assertions)]
+    capture_clock: crate::timing::capture_clock::AudioClock,
     audio_clock: Option<SenderClock>,
     video_clock: Option<SenderClock>,
     audio: VecDeque<(Instant, DecodedAudioBlock)>,
@@ -196,6 +198,8 @@ impl Guest {
         self.audio.clear();
         self.video.clear();
         self.clock.clear();
+        #[cfg(debug_assertions)]
+        self.capture_clock.clear();
         self.audio_clock = None;
         self.video_clock = None;
     }
@@ -321,6 +325,14 @@ impl State {
                 .audio_clock
                 .as_ref()
                 .and_then(|c| c.playback_origin(block.rtp_timestamp, rtc, true));
+            // Isolated opt-in experiment: never invent capture time from arrival,
+            // and never mix ACT and sender-report clock domains in one session.
+            #[cfg(debug_assertions)]
+            let origin = if capture_clock_experiment() {
+                guest.capture_clock.origin(&block)
+            } else {
+                origin
+            };
             if origin.is_none() {
                 continue;
             }
@@ -363,8 +375,15 @@ impl State {
                         .video_clock
                         .as_ref()
                         .and_then(|c| c.playback_origin(frame.value.timestamp(), rtc, true));
+                    #[cfg(debug_assertions)]
+                    let origin = if capture_clock_experiment() {
+                        let capture = frame.value.packet_capture_sender_ntp_us(track.bound);
+                        (capture > 0).then_some(capture)
+                    } else {
+                        origin
+                    };
                     // A camera-only grant has no audio master. Use its actual SDK
-                    // render deadline only after its sender mapping is qualified.
+                    // render deadline only after sender timing is available.
                     let at = if guest.permission.allows(
                         guest.permission.rtc_identity(),
                         PublishSource::Microphone,
@@ -628,6 +647,8 @@ impl GuestMedia for Receiver {
             state.guests.insert(
                 id.clone(),
                 Guest {
+                    #[cfg(debug_assertions)]
+                    capture_clock: Default::default(),
                     permission: p.clone(),
                     output,
                     tracks: Vec::new(),
@@ -823,4 +844,10 @@ mod backstage_audio_tests {
         }
         assert_eq!(probe.0.load(Ordering::Relaxed),1);
     }
+}
+
+#[cfg(debug_assertions)]
+fn capture_clock_experiment() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var("PRODUCER_RTC_CAPTURE_CLOCK_PROOF").as_deref() == Ok("1"))
 }

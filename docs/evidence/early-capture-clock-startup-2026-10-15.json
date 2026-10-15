@@ -1,0 +1,82 @@
+{
+  "status": "isolated debug candidate; not live",
+  "date": "2026-10-15",
+  "runtime_tests_passed": 38,
+  "baseline_decoded_to_ingest_ms": 4146,
+  "baseline_admit_to_thumbnail_ms": 11466,
+  "trials": [
+    {
+      "trial": 1,
+      "native_fixture_passed": true,
+      "owner_expired": true,
+      "repeated_close_passed": true,
+      "browser_exit": 0,
+      "native_exit": 0,
+      "admit_response_ms": 1076.0794580000002,
+      "timeline_from_admit_start_ms": {
+        "first_decoded_video_ms": 7110,
+        "first_ingested_video_ms": 7937,
+        "first_color_thumbnail_ms": 8143
+      },
+      "decoded_to_ingest_ms": 827,
+      "first_video_scheduled_before_sender_report_ready_ms": 2360,
+      "capture_negotiation": {
+        "attempts": 35,
+        "enabled": 35,
+        "unsupported": 0,
+        "errors": [],
+        "negotiated": [
+          {
+            "kind": "audio",
+            "direction": "sendrecv"
+          },
+          {
+            "kind": "video",
+            "direction": "sendrecv"
+          }
+        ]
+      }
+    },
+    {
+      "trial": 2,
+      "native_fixture_passed": true,
+      "owner_expired": true,
+      "repeated_close_passed": true,
+      "browser_exit": 0,
+      "native_exit": 0,
+      "admit_response_ms": 1121.7479160000003,
+      "timeline_from_admit_start_ms": {
+        "first_decoded_video_ms": 6461,
+        "first_ingested_video_ms": 7701,
+        "first_color_thumbnail_ms": 7905
+      },
+      "decoded_to_ingest_ms": 1240,
+      "first_video_scheduled_before_sender_report_ready_ms": 2260,
+      "capture_negotiation": {
+        "attempts": 35,
+        "enabled": 35,
+        "unsupported": 0,
+        "errors": [],
+        "negotiated": [
+          {
+            "kind": "audio",
+            "direction": "sendrecv"
+          },
+          {
+            "kind": "video",
+            "direction": "sendrecv"
+          }
+        ]
+      }
+    }
+  ],
+  "binary_sha256": "18fa634ba2a3694cfd2dc0e53e5ca227d9cc0640005beaea658945298eb9c343",
+  "qualification": "Two sequential generated-camera/microphone Chrome guests, each in a new temporary production API/LiveKit Cloud room. Signed isolated debug native app. Counters sampled about 100ms; native GPU thumbnail, not final webview paint. Not controlled latency distribution or proof of incoming AV sync. Browser capture negotiation is a test-only pre-offer hook, not deployed guest code.",
+  "remaining_before_release": [
+    "Recorded correlated incoming audio/video marker acceptance",
+    "Missing capture metadata and unsupported browser fallback without mixing clock domains",
+    "Disconnect/rejoin and multi-guest capture-clock validation",
+    "Supported browser negotiation integration and release enablement"
+  ],
+  "temporary_rooms_removed": true
+}

@@ -17,6 +17,8 @@ pub mod authority;
 pub mod media;
 pub mod program;
 mod timing {
+    #[cfg(debug_assertions)]
+    pub mod capture_clock;
     pub mod playout_clock;
     pub mod presentation;
     pub mod queue;
