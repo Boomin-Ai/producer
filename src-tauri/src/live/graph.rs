@@ -3590,3 +3590,36 @@ impl SceneGraph {
         Ok(self.presentation_status())
     }
 }
+
+/// Debug-only timing observer for the existing native thumbnail render path.
+#[cfg(debug_assertions)]
+pub struct IngressThumbnailProbe(Box<ThumbHub>);
+#[cfg(debug_assertions)]
+impl IngressThumbnailProbe {
+    pub fn start(graph:&SceneGraph)->Self {
+        let hub=Box::new(ThumbHub::new());
+        hub.fps.store(15,std::sync::atomic::Ordering::Relaxed);
+        hub.publish_targets(graph);
+        unsafe{ffi::obs_add_main_render_callback(thumb_render_cb,&*hub as *const ThumbHub as *mut std::os::raw::c_void);}
+        Self(hub)
+    }
+    pub fn has_color(&self,id:&str)->bool {
+        self.0.slots.lock().is_ok_and(|slots|slots.get(id).is_some_and(|slot|slot.seq>0&&slot.rgba.chunks_exact(4).filter(|p|p[1]>80&&p[1]>p[0].saturating_add(30)).take(101).count()>100))
+    }
+}
+#[cfg(debug_assertions)]
+impl Drop for IngressThumbnailProbe {
+    fn drop(&mut self){unsafe{
+        ffi::obs_remove_main_render_callback(thumb_render_cb,&*self.0 as *const ThumbHub as *mut std::os::raw::c_void);
+        ffi::obs_enter_graphics();
+        for (_,ring) in self.0.rings.lock().unwrap().drain(){
+            ffi::gs_texrender_destroy(ring.rt);
+            for surface in ring.surfs{ffi::gs_stagesurface_destroy(surface);}
+        }
+        ffi::obs_leave_graphics();
+        for target in self.0.targets.lock().unwrap().drain(..){
+            ffi::obs_source_dec_showing(target.src);
+            ffi::obs_source_release(target.src);
+        }
+    }}
+}

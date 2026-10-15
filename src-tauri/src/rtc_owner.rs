@@ -737,6 +737,7 @@ pub fn program_selftest() -> Result<(), &'static str> {
         tokio::runtime::Runtime::new().map_err(|_| "Native program runtime unavailable")?;
     let result = runtime.block_on(async {
         let receiver = crate::live::rtc_media::SceneOutputs::receiver()?;
+        let ingress_counters=receiver.counters();
         let api=std::env::var("PRODUCER_RTC_PROGRAM_API").unwrap_or_else(|_|"https://boomin-rtc-pilot.kleveland-bishop.workers.dev".into());
         let recovery_proof=std::env::var("PRODUCER_RTC_TRANSPORT_RECOVERY_PROOF").as_deref()==Ok("1");
         let mut owner = HostOwner::start_with_recovery(Control::for_api(operator,&api)?, Box::new(receiver), true,
@@ -748,8 +749,31 @@ pub fn program_selftest() -> Result<(), &'static str> {
         let began = std::time::Instant::now();
         let until = began + Duration::from_secs(if recovery_proof {90}else{60});
         let mut lifecycle_cycles=0;
+        let ingress_proof=std::env::var("PRODUCER_RTC_INGRESS_TIMING_PROOF").as_deref()==Ok("1");
+        let mut ingress_probe=None;
+        let mut ingress_report=serde_json::json!({});
         let outcome = async {
         while std::time::Instant::now() < until && owner.running() {
+            if ingress_proof {
+                if ingress_probe.is_none(){
+                    if let Ok(bytes)=std::fs::read(format!("{ROOT}/ingress-participant.json")){
+                        let value:serde_json::Value=serde_json::from_slice(&bytes).map_err(|_|"Invalid ingress timing participant")?;
+                        let participant=value["participant_id"].as_str().ok_or("Missing timing participant")?;
+                        uuid::Uuid::parse_str(participant).map_err(|_|"Invalid timing participant")?;
+                        let source_id=format!("guest-{participant}");
+                        graph.add_extra(&source_id,"Timing guest",&ExtraSpec::RtcGuest{participant_id:participant.into()}).map_err(|_|"Timing source unavailable")?;
+                        ingress_probe=Some(crate::live::graph::IngressThumbnailProbe::start(&graph));
+                        ingress_report["source_created_ms"]=now().into();
+                        ingress_report["source_id"]=source_id.into();
+                    }
+                }
+                use std::sync::atomic::Ordering;
+                for (name,ready) in [("first_decoded_video_ms",ingress_counters.video_received.load(Ordering::Acquire)>0),("first_ingested_video_ms",ingress_counters.video.load(Ordering::Acquire)>0),("first_color_thumbnail_ms",ingress_probe.as_ref().is_some_and(|probe|probe.has_color(ingress_report["source_id"].as_str().unwrap_or(""))))]{
+                    if ready && ingress_report[name].is_null(){ingress_report[name]=now().into();}
+                }
+                ingress_report["counters"]=ingress_counters.report();
+                std::fs::write(format!("{ROOT}/ingress-timing.json"),ingress_report.to_string()).map_err(|_|"Timing report unavailable")?;
+            }
             if observer_driven && observation_started.is_none() && std::path::Path::new(&format!("{ROOT}/return-recovery-ready")).exists(){observation_started=Some(std::time::Instant::now());}
             let fault_elapsed=if observer_driven {observation_started.map(|at|at.elapsed()).unwrap_or(Duration::ZERO)}else{began.elapsed()};
             if recovery_proof && injected<2 && fault_elapsed>=Duration::from_secs(10*(injected+1)){
@@ -777,6 +801,8 @@ pub fn program_selftest() -> Result<(), &'static str> {
         }
         Ok::<(), &'static str>(())
         }.await;
+        let ingress_complete=!ingress_proof || ingress_report["first_color_thumbnail_ms"].as_u64().is_some();
+        drop(ingress_probe);
         for load in &mut loads {load.close();}
         let closed = owner.close().await;
         owner.close().await?;
@@ -785,6 +811,7 @@ pub fn program_selftest() -> Result<(), &'static str> {
             let _=save(serde_json::json!({"passed":false,"audio_submitted":audio,"video_submitted":video,"timing":rtc_program::timing()}));
         }
         outcome?; closed?;
+        if !ingress_complete{return Err("Native ingress timing did not reach a colored thumbnail");}
         let (audio,video)=rtc_program::counts();
         let timing = rtc_program::timing();
         let capture_injection = std::env::var("PRODUCER_RTC_CAPTURE_GAP_PROOF").as_deref()==Ok("1");
