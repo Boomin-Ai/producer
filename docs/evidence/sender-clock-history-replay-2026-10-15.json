@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-15",
+  "status": "built and tested; not live",
+  "change": "Ignore sender reports older than the latest observed report when retained history is replayed. Preserve fresh discontinuity fencing.",
+  "runtime_tests_passed": 35,
+  "native_fixture_passed": true,
+  "browser_exit": 0,
+  "native_exit": 0,
+  "admit_response_ms": 1375.3835,
+  "timeline_from_admit_start_ms": {
+    "first_decoded_video_ms": 6907,
+    "first_ingested_video_ms": 11053,
+    "first_color_thumbnail_ms": 11466
+  },
+  "decoded_to_clock_ready_ms": 3911,
+  "startup_improvement_demonstrated": false,
+  "qualification": "One generated-camera browser guest against production API and LiveKit Cloud, isolated signed debug native app and temporary room. Counters sampled around 100ms. Native GPU thumbnail, not webview paint. Not a latency distribution.",
+  "temporary_room_removed": true
+}

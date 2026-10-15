@@ -60,6 +60,12 @@ impl SenderClock {
             return;
         }
         if let Some(old) = self.latest {
+            // The collector supplies retained history on every poll. Older
+            // observations are not new sender discontinuities and must never
+            // roll a qualified clock backward or disable first-report bootstrap.
+            if report.observed_us < old.observed_us {
+                return;
+            }
             if old.rtp_timestamp == report.rtp_timestamp && old.ntp_ticks() == report.ntp_ticks() {
                 return; // Repeated reports must not refresh mapping freshness.
             }
@@ -352,6 +358,30 @@ mod tests {
             rtp_timestamp: rtp,
             observed_us: at,
         }
+    }
+    #[test]
+    fn retained_history_cannot_rewind_a_clock_or_invent_discontinuities() {
+        let first = sr(0, 100, 1_000_000);
+        let second = sr(48000, 101, 2_000_000);
+        let mut clock = SenderClock::new(7, 48000);
+        for _ in 0..10 {
+            clock.observe(first);
+            clock.observe(second);
+        }
+        assert_eq!(clock.resets, 0);
+        assert_eq!(clock.origin_ntp_us(96000, 3_000_000), Some(102_000_000));
+
+        // A genuinely newer discontinuity still fences playback, even when
+        // earlier retained history is replayed on the following poll.
+        let jump = sr(96000, 104, 3_000_000);
+        clock.observe(jump);
+        for report in [first, second, jump] {
+            clock.observe(report);
+        }
+        assert_eq!(clock.resets, 1);
+        assert_eq!(clock.playback_origin(96000, 3_000_000, true), None);
+        clock.observe(sr(144000, 105, 4_000_000));
+        assert_eq!(clock.origin_ntp_us(144000, 4_000_000), Some(105_000_000));
     }
     #[test]
     fn rtp_wrap_and_frame_before_latest_report_preserve_origin() {
