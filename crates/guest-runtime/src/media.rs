@@ -60,6 +60,8 @@ pub struct Counters {
     pub sender_reports: AtomicU64,
     pub pcm_received: AtomicU64,
     pub video_received: AtomicU64,
+    #[cfg(debug_assertions)] pub decoded_pcm_peak: AtomicU64,
+    #[cfg(debug_assertions)] pub submitted_pcm_peak: AtomicU64,
     #[cfg(debug_assertions)] pub first_binding_ms:AtomicU64,
     #[cfg(debug_assertions)] pub first_audio_clock_ms:AtomicU64,
     #[cfg(debug_assertions)] pub first_video_clock_ms:AtomicU64,
@@ -78,6 +80,8 @@ impl Counters {
             "pcm_received":self.pcm_received.load(Ordering::Acquire),"video_received":self.video_received.load(Ordering::Acquire)});
         #[cfg(debug_assertions)]
         for (key,value) in [("first_binding_ms",&self.first_binding_ms),("first_audio_clock_ms",&self.first_audio_clock_ms),("first_video_clock_ms",&self.first_video_clock_ms),("first_audio_schedule_ms",&self.first_audio_schedule_ms),("first_video_schedule_ms",&self.first_video_schedule_ms)]{report[key]=value.load(Ordering::Acquire).into();}
+        #[cfg(debug_assertions)]
+        for (key,value) in [("decoded_pcm_peak",&self.decoded_pcm_peak),("submitted_pcm_peak",&self.submitted_pcm_peak)]{report[key]=value.load(Ordering::Acquire).into();}
         report
     }
 }
@@ -294,6 +298,8 @@ impl State {
             .pcm_received
             .fetch_add(blocks.len() as u64, Ordering::Relaxed);
         for block in blocks {
+            #[cfg(debug_assertions)]
+            self.counters.decoded_pcm_peak.fetch_max(pcm_peak(&block),Ordering::Relaxed);
             if !matches!(block.channels, 1 | 2)
                 || block.pull_us <= 0
                 || block.ssrc == 0
@@ -422,6 +428,8 @@ impl State {
                     && submit_program_audio(&guest.permission, guest.output.as_ref(),
                         &block.samples[..480 * block.channels as usize], block.channels, at, now)
                 {
+                    #[cfg(debug_assertions)]
+                    self.counters.submitted_pcm_peak.fetch_max(pcm_peak(&block),Ordering::Relaxed);
                     self.counters.audio.fetch_add(1, Ordering::Relaxed);
                 } else {
                     self.counters.rejected.fetch_add(1, Ordering::Relaxed);
@@ -850,4 +858,9 @@ mod backstage_audio_tests {
 fn capture_clock_experiment() -> bool {
     static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ENABLED.get_or_init(|| std::env::var("PRODUCER_RTC_CAPTURE_CLOCK_PROOF").as_deref() == Ok("1"))
+}
+
+#[cfg(debug_assertions)]
+fn pcm_peak(block:&DecodedAudioBlock)->u64 {
+    block.samples.iter().map(|sample|u64::from(sample.unsigned_abs())).max().unwrap_or(0)
 }

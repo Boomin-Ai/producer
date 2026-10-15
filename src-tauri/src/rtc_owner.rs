@@ -613,6 +613,7 @@ pub fn program_selftest() -> Result<(), &'static str> {
             .ok_or("Native lifecycle delivery unavailable")?;
         let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let stopped = stop.clone();
+        let local_ingress = std::env::var("PRODUCER_RTC_LOCAL_INGEST_PROOF").as_deref()==Ok("1");
         let worker = std::thread::Builder::new()
             .name("rtc-lifecycle-fixture".into())
             .spawn(move || {
@@ -621,10 +622,11 @@ pub fn program_selftest() -> Result<(), &'static str> {
                 }
                 let y = vec![64 + index as u8 * 16; 1280 * 720];
                 let uv = vec![128; 640 * 360];
-                let pcm = [2048i16; 480];
+                let mut pcm = [2048i16; 480];
                 let mut tick = 0;
                 while !stopped.load(std::sync::atomic::Ordering::Acquire) {
                     let at = unsafe { os_gettime_ns() };
+                    if local_ingress {for (n,sample) in pcm.iter_mut().enumerate(){*sample=(((tick*480+n) as f64*997.*2.*std::f64::consts::PI/48000.).sin()*12000.) as i16;}}
                     let _ = delivery.audio(&pcm, 1, at);
                     if tick % 3 == 0 {
                         let _ = delivery.video(
@@ -647,6 +649,23 @@ pub fn program_selftest() -> Result<(), &'static str> {
             stop,
             worker: Some(worker),
         })
+    }
+    if std::env::var("PRODUCER_RTC_LOCAL_INGEST_PROOF").as_deref()==Ok("1") {
+        engine::bootstrap_with_config(&std::path::Path::new(ROOT).join("obs-program-config"));
+        let mut graph=SceneGraph::create().map_err(|_|"Local ingress scene unavailable")?;
+        let mut load=guest_load(&mut graph,0)?;
+        if let Some(source)=graph.source_by_id(&load.id){unsafe {ffi::obs_source_set_monitoring_type(source,0);}}
+        let recording=crate::live::ProofRecorder::start_proof(std::path::Path::new(ROOT).join("local-ingress-tone.mp4"),1000).map_err(|_|"Local ingress recording unavailable")?;
+        std::thread::sleep(Duration::from_secs(7));
+        load.close();let path=recording.stop();
+        graph.clear_room().map_err(|_|"Local ingress cleanup failed")?;
+        std::thread::sleep(Duration::from_millis(100));
+        extern "C" {fn producer_guest_ingest_debug_counter(kind:i32)->u64;fn obs_wait_for_destroy_queue()->bool;}
+        unsafe {obs_wait_for_destroy_queue();}
+        let report=serde_json::json!({"render_calls":unsafe {producer_guest_ingest_debug_counter(0)},"rendered_nonzero_samples":unsafe {producer_guest_ingest_debug_counter(1)},"clock_callbacks_attached":unsafe {producer_guest_ingest_debug_counter(2)},"clock_callbacks_detached":unsafe {producer_guest_ingest_debug_counter(3)}});
+        std::fs::write(format!("{ROOT}/local-ingress-pull.json"),report.to_string()).map_err(|_|"Local ingress report failed")?;
+        crate::recordings::validate_mp4(std::path::Path::new(&path)).map_err(|_|"Local ingress MP4 invalid")?;
+        return Ok(());
     }
     let profile=std::env::var("PRODUCER_RTC_PROGRAM_OPERATOR_PROFILE").unwrap_or_else(|_|format!("{ROOT}/operator.json"));
     let bytes = std::fs::read(profile)
@@ -679,6 +698,7 @@ pub fn program_selftest() -> Result<(), &'static str> {
         .map_err(|_| "Native program fixture failed")?;
     let mut graph = SceneGraph::create().map_err(|_| "Native program scene unavailable")?;
     let generated_av = std::env::var("PRODUCER_RTC_AV_PROOF").as_deref() == Ok("1");
+    let marker_recording = std::env::var("PRODUCER_RTC_INGRESS_MARKER_PROOF").as_deref() == Ok("1");
     if generated_av {
         let av_path = std::path::Path::new(ROOT).join("generated-program-av.mov");
         if !av_path.is_file() { return Err("Generated AV fixture unavailable"); }
@@ -735,6 +755,15 @@ pub fn program_selftest() -> Result<(), &'static str> {
     }
     let runtime =
         tokio::runtime::Runtime::new().map_err(|_| "Native program runtime unavailable")?;
+    let recording = if marker_recording {
+        graph.set_transform("generated-program-av", &TransformPatch {visible:Some(false),..Default::default()})
+            .map_err(|_| "Generated background hide failed")?;
+        graph.set_source_audio("generated-program-av",Some(0.0),Some(true))
+            .map_err(|_| "Generated background mute failed")?;
+        Some(crate::live::ProofRecorder::start_proof(
+            std::path::Path::new(ROOT).join("native-ingress-markers.mp4"), 4000,
+        ).map_err(|_| "Ingress marker recording unavailable")?)
+    } else { None };
     let result = runtime.block_on(async {
         let receiver = crate::live::rtc_media::SceneOutputs::receiver()?;
         let ingress_counters=receiver.counters();
@@ -747,7 +776,7 @@ pub fn program_selftest() -> Result<(), &'static str> {
         let mut observation_started=None;
         let lifetime = owner.task_lifetime();
         let began = std::time::Instant::now();
-        let until = began + Duration::from_secs(if recovery_proof {90}else{60});
+        let until = began + Duration::from_secs(if recovery_proof || marker_recording {90}else{60});
         let mut lifecycle_cycles=0;
         let ingress_proof=std::env::var("PRODUCER_RTC_INGRESS_TIMING_PROOF").as_deref()==Ok("1");
         let mut ingress_probe=None;
@@ -762,6 +791,13 @@ pub fn program_selftest() -> Result<(), &'static str> {
                         uuid::Uuid::parse_str(participant).map_err(|_|"Invalid timing participant")?;
                         let source_id=format!("guest-{participant}");
                         graph.add_extra(&source_id,"Timing guest",&ExtraSpec::RtcGuest{participant_id:participant.into()}).map_err(|_|"Timing source unavailable")?;
+                        if marker_recording {
+                            let mut info:ffi::obs_video_info=unsafe {std::mem::zeroed()};
+                            if !unsafe {ffi::obs_get_video_info(&mut info)} {return Err("Ingress video dimensions unavailable");}
+                            graph.set_transform(&source_id,&TransformPatch {w:Some(info.base_width as f32),h:Some(info.base_height as f32),visible:Some(true),..Default::default()}).map_err(|_|"Ingress marker stage unavailable")?;
+                            graph.set_source_audio("generated-program-av",Some(0.0),Some(true)).map_err(|_|"Generated background audio mute failed")?;
+                            graph.set_source_audio(&source_id,Some(1.0),Some(false)).map_err(|_|"Ingress marker audio unavailable")?;
+                        }
                         ingress_probe=Some(crate::live::graph::IngressThumbnailProbe::start(&graph));
                         ingress_report["source_created_ms"]=now().into();
                         ingress_report["source_id"]=source_id.into();
@@ -826,9 +862,14 @@ pub fn program_selftest() -> Result<(), &'static str> {
         }
         save(serde_json::json!({"passed":true,"audio_submitted":audio,"video_submitted":video,"timing":rtc_program::timing(),"owner_expired":true,"repeated_close_passed":true,"generated_av_fixture":generated_av,"generated_guest_sources":if lifecycle {4}else{0},"source_recreation_cycles":lifecycle_cycles,"transport_recoveries":owner.recoveries.load(std::sync::atomic::Ordering::Acquire)}))
     });
+    let recording_result=if let Some(recording)=recording {
+        let path=recording.stop();
+        crate::recordings::validate_mp4(std::path::Path::new(&path)).map_err(|_|"Ingress marker recording finalization failed")
+    } else { Ok(()) };
     graph
         .clear_room()
         .map_err(|_| "Native program scene cleanup failed")?;
+    recording_result?;
     // Match the app's process-exit contract; it does not globally unload OBS.
     result
 }

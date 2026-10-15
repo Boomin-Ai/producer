@@ -59,6 +59,8 @@ pub mod multi;
 pub mod encoders;
 #[cfg(have_engine)]
 mod record;
+#[cfg(debug_assertions)]
+pub(crate) use record::Recorder as ProofRecorder;
 #[cfg(have_engine)]
 pub mod stream;
 // Studio output (v0.4.37): the studio scene, the room-only mix, and the

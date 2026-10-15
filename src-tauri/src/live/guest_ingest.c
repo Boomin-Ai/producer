@@ -4,6 +4,17 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef PRODUCER_INGRESS_DIAGNOSTICS
+#include <stdio.h>
+#include <stdatomic.h>
+static _Atomic uint64_t proof_calls, proof_nonzero;
+static _Atomic uint64_t proof_attached, proof_detached;
+uint64_t producer_guest_ingest_debug_counter(int kind) {
+    if (kind==2) return atomic_load_explicit(&proof_attached,memory_order_relaxed);
+    if (kind==3) return atomic_load_explicit(&proof_detached,memory_order_relaxed);
+    return atomic_load_explicit(kind ? &proof_nonzero : &proof_calls,memory_order_relaxed);
+}
+#endif
 #define MAX_AV_PLANES 8
 struct obs_source_frame {
     uint8_t *data[MAX_AV_PLANES]; uint32_t linesize[MAX_AV_PLANES];
@@ -21,7 +32,11 @@ OBS_IMPORT void obs_source_output_audio(obs_source_t *, const struct obs_source_
 OBS_IMPORT bool video_format_get_parameters(int, int, float[16], float[3], float[3]);
 /* OBS pulls a continuous clock from each guest, including silence during
  * packet gaps. Guest push timestamps never control the shared mixer clock. */
+#ifdef PRODUCER_INGRESS_DIAGNOSTICS
+#define GUEST_AUDIO_QUEUE 32
+#else
 #define GUEST_AUDIO_QUEUE 16
+#endif
 #define GUEST_AUDIO_FRAMES 4800
 #define GUEST_RENDER_FRAMES 1024
 #define GUEST_RENDER_DELAY_NS 60000000ULL
@@ -31,27 +46,65 @@ struct guest_state {
     struct guest_audio_block blocks[GUEST_AUDIO_QUEUE];
     size_t head, count;
     uint64_t anchor, rendered;
+#ifdef PRODUCER_INGRESS_DIAGNOSTICS
+    uint64_t proof_render_calls, proof_nonzero_samples;
+    size_t proof_rate, proof_channels;
+    uint32_t proof_mixers;
+    bool proof_clock;
+    _Atomic uint64_t proof_next_timestamp;
+#endif
 };
 struct guest_audio_plane { float *data[8]; };
 struct guest_audio_mix { struct guest_audio_plane output[6]; };
 OBS_IMPORT void *obs_obj_get_data(void *);
 OBS_IMPORT uint64_t os_gettime_ns(void);
+#ifdef PRODUCER_INGRESS_DIAGNOSTICS
+struct proof_audio_data { uint8_t *data[8]; uint32_t frames; uint64_t timestamp; };
+OBS_IMPORT void obs_add_raw_audio_callback(size_t, const void *, void (*)(void *,size_t,struct proof_audio_data *),void *);
+OBS_IMPORT void obs_remove_raw_audio_callback(size_t, void (*)(void *,size_t,struct proof_audio_data *),void *);
+static void proof_clock_callback(void *data,size_t mix,struct proof_audio_data *audio) {
+    (void)mix;
+    struct guest_state *state=data;
+    if (state && audio && audio->timestamp && audio->frames)
+        atomic_store_explicit(&state->proof_next_timestamp,audio->timestamp+(uint64_t)audio->frames*1000000000ULL/48000,memory_order_release);
+}
+#endif
 static const char *name(void *unused) { (void)unused; return "Producer guest"; }
 static void *create(obs_data_t *settings, obs_source_t *source) {
     (void)settings; (void)source;
     struct guest_state *state = calloc(1, sizeof(*state));
     if (!state) return NULL;
     if (pthread_mutex_init(&state->lock, NULL)) { free(state); return NULL; }
+#ifdef PRODUCER_INGRESS_DIAGNOSTICS
+    const char *proof=getenv("PRODUCER_RTC_PULL_CLOCK_PROOF");
+    state->proof_clock=proof && !strcmp(proof,"1");
+    if (state->proof_clock) {
+        obs_add_raw_audio_callback(0,NULL,proof_clock_callback,state);
+        atomic_fetch_add_explicit(&proof_attached,1,memory_order_relaxed);
+    }
+#endif
     return state;
 }
 static void destroy(void *data) {
     struct guest_state *state = data;
-    if (state) { pthread_mutex_destroy(&state->lock); free(state); }
+    if (state) {
+#ifdef PRODUCER_INGRESS_DIAGNOSTICS
+        if (state->proof_clock) {obs_remove_raw_audio_callback(0,proof_clock_callback,state);atomic_fetch_add_explicit(&proof_detached,1,memory_order_relaxed);}
+        if (getenv("PRODUCER_RTC_INGRESS_MARKER_PROOF"))
+            fprintf(stderr,"Ingress pull proof: calls=%llu nonzero=%llu rate=%zu channels=%zu mixers=%u\n",
+                (unsigned long long)state->proof_render_calls,(unsigned long long)state->proof_nonzero_samples,
+                state->proof_rate,state->proof_channels,state->proof_mixers);
+#endif
+        pthread_mutex_destroy(&state->lock); free(state);
+    }
 }
 static uint64_t frames_ns(uint64_t frames) { return frames / 48000 * 1000000000ULL + frames % 48000 * 1000000000ULL / 48000; }
 static bool render_audio(void *data, uint64_t *ts, void *output, uint32_t mixers, size_t channels, size_t rate) {
     struct guest_state *state = data;
     struct guest_audio_mix *mix = output;
+#ifdef PRODUCER_INGRESS_DIAGNOSTICS
+    if (state) {atomic_fetch_add_explicit(&proof_calls,1,memory_order_relaxed);state->proof_render_calls++;state->proof_rate=rate;state->proof_channels=channels;state->proof_mixers|=mixers;}
+#endif
     if (!state || !ts || !mix || rate != 48000 || !channels || channels > 8) return false;
     uint64_t now = os_gettime_ns();
     uint64_t base = now > GUEST_RENDER_DELAY_NS ? now - GUEST_RENDER_DELAY_NS : 1;
@@ -60,6 +113,12 @@ static bool render_audio(void *data, uint64_t *ts, void *output, uint32_t mixers
     }
     *ts = state->anchor + frames_ns(state->rendered);
     state->rendered += GUEST_RENDER_FRAMES;
+#ifdef PRODUCER_INGRESS_DIAGNOSTICS
+    if (state->proof_clock) {
+        *ts=atomic_load_explicit(&state->proof_next_timestamp,memory_order_acquire);
+        if (!*ts) return false;
+    }
+#endif
     /* No allocation, blocking locks, or SDK calls on the OBS audio thread. */
     for (size_t m = 0; m < 6; m++) if (mixers & (1U << m))
         for (size_t c = 0; c < channels; c++) if (mix->output[m].data[c])
@@ -82,6 +141,9 @@ static bool render_audio(void *data, uint64_t *ts, void *output, uint32_t mixers
                 float value = block->pcm[frame * block->channels + (block->channels == 2 && c == 1 ? 1 : 0)] / 32768.0f;
                 if (channels == 1 && block->channels == 2) value = (block->pcm[frame*2] + block->pcm[frame*2+1]) / 65536.0f;
                 mix->output[m].data[c][i] = c < 2 ? value : 0.0f;
+#ifdef PRODUCER_INGRESS_DIAGNOSTICS
+                if (value!=0.0f) {state->proof_nonzero_samples++;atomic_fetch_add_explicit(&proof_nonzero,1,memory_order_relaxed);}
+#endif
             }
     }
     pthread_mutex_unlock(&state->lock);

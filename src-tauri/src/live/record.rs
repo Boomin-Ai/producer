@@ -79,6 +79,19 @@ impl Recorder {
         video: *mut ffi::video_t,
     ) -> Result<Recorder, String> {
         let path = recordings_dir().join(filename(stamp));
+        unsafe { Self::start_video_path(path, bitrate, video) }
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn start_proof(path: PathBuf, bitrate: i64) -> Result<Recorder, String> {
+        unsafe { Self::start_video_path(path, bitrate, ffi::obs_get_video()) }
+    }
+
+    unsafe fn start_video_path(
+        path: PathBuf,
+        bitrate: i64,
+        video: *mut ffi::video_t,
+    ) -> Result<Recorder, String> {
         unsafe {
             // Quality-first: high CBR, 2s keyframes for scrubbing, on the
             // encoder the boot probe chose (hardware where the box has it,

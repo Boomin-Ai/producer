@@ -224,8 +224,11 @@ fn link_live_engine_windows() {
 
 fn compile_guest_ingest() {
     if std::env::var_os("CARGO_FEATURE_GUEST_RTC_PILOT").is_some() {
-        cc::Build::new()
-            .file("src/live/guest_ingest.c")
-            .compile("producer_guest_ingest");
+        let mut build=cc::Build::new();
+        build.file("src/live/guest_ingest.c");
+        if std::env::var("PROFILE").as_deref()==Ok("debug") {
+            build.define("PRODUCER_INGRESS_DIAGNOSTICS",None);
+        }
+        build.compile("producer_guest_ingest");
     }
 }

@@ -1,0 +1,85 @@
+{
+  "date": "2026-10-15",
+  "status": "built and tested diagnostic harness; candidate audio correction not live; full sync acceptance failed",
+  "physical_camera_or_microphone_used": false,
+  "runtime_tests_passed": 38,
+  "source_control": {
+    "audio_tracks": 1,
+    "video_tracks": 1,
+    "peak_rms": 0.2829521975681684,
+    "observed_video_minus_scheduled_audio_ms": [
+      18.66666666666672,
+      2.666666666666817,
+      13.333333333333641
+    ],
+    "qualification": "Small generated-source control; planned PCM samples and observed canvas paints, not downstream receipt."
+  },
+  "initial_cloud_recording": {
+    "summary": {
+      "pairs": 0,
+      "median_signed_video_minus_audio_ms": null,
+      "absolute_p95_ms": null,
+      "unmatched_audio": 0,
+      "unmatched_video": 15,
+      "missing_video_labels_within_observed_span": [],
+      "audio_pts_discontinuities": 0,
+      "numbered_marker_gate_passed": false
+    },
+    "recorded_max_10ms_audio_rms": 0.0,
+    "thumbnail_fixture_failed": true,
+    "thumbnail_failure_reason": "Source dark green below existing detector threshold; corrected in later source."
+  },
+  "additional_cloud_silence_controls": {
+    "count": 2,
+    "native_fixture_passed": true,
+    "recorded_max_10ms_audio_rms": 0.0,
+    "native_decoded_and_submitted_peak": 16456
+  },
+  "local_bridge_baseline": {
+    "render_calls": 360,
+    "rendered_nonzero_channel_samples": 523614,
+    "recorded_max_10ms_audio_rms": 0.0
+  },
+  "local_observed_mixer_clock_candidate": {
+    "render_calls": 352,
+    "rendered_nonzero_channel_samples": 540876,
+    "recorded_max_10ms_audio_rms": 2999.065016453739,
+    "callbacks_attached": 1,
+    "callbacks_detached": 1
+  },
+  "cloud_observed_mixer_clock_candidate": {
+    "pairs": 16,
+    "median_signed_video_minus_audio_ms": 113.33333333332848,
+    "absolute_p95_ms": 146.6666666666788,
+    "unmatched_audio": 1,
+    "unmatched_video": 0,
+    "missing_video_labels_within_observed_span": [],
+    "audio_pts_discontinuities": 0,
+    "numbered_marker_gate_passed": false
+  },
+  "removed_unbuffered_video_candidate": {
+    "result": {
+      "pairs": 15,
+      "median_signed_video_minus_audio_ms": 83.33333333334303,
+      "absolute_p95_ms": 150,
+      "unmatched_audio": 1,
+      "unmatched_video": 0,
+      "missing_video_labels_within_observed_span": [
+        23
+      ],
+      "audio_pts_discontinuities": 0,
+      "numbered_marker_gate_passed": false
+    },
+    "reason": "No passing alignment or coverage result; async-unbuffered override removed from source.",
+    "tested_binary_sha256": "3705649e54fe612951949bb520c70c0c8ba4ee30247e76962ade2db8df8026be"
+  },
+  "temporary_rooms_removed": true,
+  "production_changed": false,
+  "qualification": "Owned production API/LiveKit Cloud rooms and signed isolated debug native app. Generated media in actual native OBS MP4; existing AVFoundation label decoder and unchanged >=5 pairs / <=80ms p95 gate. These runs do not qualify hardware capture, speakerphone AEC, network capacity, long-term drift or cross-platform behavior. Browser playback muted; native monitor default retained in cloud tests.",
+  "remaining": [
+    "Correct measured native output AV offset",
+    "Resolve unmatched startup audio and missing labels without relaxing the gate",
+    "Repeat callback lifecycle and full reconnect/multiple guests",
+    "Implement supported browser negotiation and missing-metadata fallback before release"
+  ]
+}
