@@ -37,8 +37,15 @@ impl Trace {
         };
         self.events.push(json!({"kind":kind,"id":id,"scheduled_us":relative(scheduled),"observed_us":relative(Instant::now())}));
     }
+    pub fn push_decoded(&mut self, kind: &str, id: u8, arrived: Instant, origin: Option<i64>) {
+        let before = self.events.len();
+        self.push(kind, id, arrived);
+        if self.events.len() > before {
+            self.events.last_mut().unwrap()["sender_origin_us"] = json!(origin);
+        }
+    }
     pub fn report(&self) -> Value {
-        json!({"events":self.events,"overflow":self.overflow,"clock":"same native Instant origin; accepted submission only, not recorded output"})
+        json!({"events":self.events,"overflow":self.overflow,"clock":"same native Instant origin; decoded arrival and accepted submission, not recorded output"})
     }
 }
 #[derive(Default)]

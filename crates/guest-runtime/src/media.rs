@@ -254,6 +254,8 @@ struct Guest {
     #[cfg(debug_assertions)]
     markers: crate::timing::markers::Detector,
     #[cfg(debug_assertions)]
+    decoded_markers: crate::timing::markers::Detector,
+    #[cfg(debug_assertions)]
     capture_clock: crate::timing::capture_clock::AudioClock,
     audio_clock: Option<SenderClock>,
     video_clock: Option<SenderClock>,
@@ -269,6 +271,7 @@ impl Guest {
         #[cfg(debug_assertions)]
         {
             self.markers = Default::default();
+            self.decoded_markers = Default::default();
         }
         #[cfg(debug_assertions)]
         self.capture_clock.clear();
@@ -418,6 +421,14 @@ impl State {
             } else {
                 origin
             };
+            #[cfg(debug_assertions)]
+            if crate::timing::markers::enabled() {
+                if let Some(id) = guest.decoded_markers.audio(&block.samples[..480 * block.channels as usize], block.channels as usize) {
+                    if let Ok(mut trace) = self.counters.marker_trace.lock() {
+                        trace.push_decoded("decoded_audio", id, pull, origin);
+                    }
+                }
+            }
             if origin.is_none() {
                 continue;
             }
@@ -468,6 +479,15 @@ impl State {
                     } else {
                         origin
                     };
+                    #[cfg(debug_assertions)]
+                    if crate::timing::markers::enabled() {
+                        let buffer = new_video_frame_buffer(unsafe { frame.value.video_frame_buffer() }).to_i420();
+                        if let Some(id) = guest.decoded_markers.video(buffer.data().0, buffer.width(), buffer.height(), buffer.strides().0) {
+                            if let Ok(mut trace) = self.counters.marker_trace.lock() {
+                                trace.push_decoded("decoded_video", id, frame.at, origin);
+                            }
+                        }
+                    }
                     // A camera-only grant has no audio master. Use its actual SDK
                     // render deadline only after sender timing is available.
                     let at = if guest.permission.allows(
@@ -487,7 +507,7 @@ impl State {
                     if let Some(at) = at {
                         #[cfg(debug_assertions)]
                         stamp_once(&self.counters.first_video_schedule_ms);
-                        if guest.video.len() < 8 {
+                        if guest.video.len() < guest.clock.video_capacity() {
                             guest.video.push_back((at, frame.value));
                         } else {
                             self.counters.rejected.fetch_add(1, Ordering::Relaxed);
@@ -838,11 +858,19 @@ impl GuestMedia for Receiver {
                     capture_clock: Default::default(),
                     #[cfg(debug_assertions)]
                     markers: Default::default(),
+                    #[cfg(debug_assertions)]
+                    decoded_markers: Default::default(),
                     permission: p.clone(),
                     output,
                     tracks: Vec::new(),
                     since: audio_sys::ffi::diagnostic_webrtc_time_us(),
-                    clock: Presentation::new(Duration::from_millis(120)),
+                    clock: {
+                        #[cfg(debug_assertions)]
+                        { Presentation::with_video_buffer(Duration::from_millis(120),
+                            std::env::var("PRODUCER_RTC_VIDEO_HOLD_PROOF").as_deref() == Ok("1")) }
+                        #[cfg(not(debug_assertions))]
+                        { Presentation::new(Duration::from_millis(120)) }
+                    },
                     audio_clock: None,
                     video_clock: None,
                     audio: VecDeque::with_capacity(24),

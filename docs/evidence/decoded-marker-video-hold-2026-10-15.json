@@ -1,0 +1,295 @@
+{
+  "date": "2026-10-15",
+  "live": false,
+  "marker_trace_overflow": 0,
+  "decoded_pairs": [
+    {
+      "id": 4,
+      "decoded_video_minus_audio_ms": -7.488,
+      "sender_video_minus_audio_ms": 13.401
+    },
+    {
+      "id": 5,
+      "decoded_video_minus_audio_ms": 22.053,
+      "sender_video_minus_audio_ms": -7.599
+    },
+    {
+      "id": 6,
+      "decoded_video_minus_audio_ms": -9.39,
+      "sender_video_minus_audio_ms": 6.276
+    },
+    {
+      "id": 7,
+      "decoded_video_minus_audio_ms": 12.927,
+      "sender_video_minus_audio_ms": 19.276
+    },
+    {
+      "id": 8,
+      "decoded_video_minus_audio_ms": -8.399,
+      "sender_video_minus_audio_ms": 0.276
+    },
+    {
+      "id": 9,
+      "decoded_video_minus_audio_ms": -0.541,
+      "sender_video_minus_audio_ms": 12.276
+    },
+    {
+      "id": 10,
+      "decoded_video_minus_audio_ms": -113.782,
+      "sender_video_minus_audio_ms": -7.724
+    },
+    {
+      "id": 11,
+      "decoded_video_minus_audio_ms": -89.085,
+      "sender_video_minus_audio_ms": 6.276
+    },
+    {
+      "id": 12,
+      "decoded_video_minus_audio_ms": -137.078,
+      "sender_video_minus_audio_ms": 20.277
+    },
+    {
+      "id": 13,
+      "decoded_video_minus_audio_ms": -162.53,
+      "sender_video_minus_audio_ms": -1.724
+    },
+    {
+      "id": 14,
+      "decoded_video_minus_audio_ms": -157.447,
+      "sender_video_minus_audio_ms": 13.277
+    },
+    {
+      "id": 15,
+      "decoded_video_minus_audio_ms": -159.219,
+      "sender_video_minus_audio_ms": -7.724
+    },
+    {
+      "id": 16,
+      "decoded_video_minus_audio_ms": -173.971,
+      "sender_video_minus_audio_ms": 4.277
+    },
+    {
+      "id": 17,
+      "decoded_video_minus_audio_ms": -165.391,
+      "sender_video_minus_audio_ms": 17.277
+    },
+    {
+      "id": 18,
+      "decoded_video_minus_audio_ms": -183.478,
+      "sender_video_minus_audio_ms": -2.723
+    }
+  ],
+  "presentation": [
+    {
+      "capture": {
+        "arrival_time_fallback": false,
+        "clock_discontinuities": 0,
+        "clock_domain": "publishing sender NTP; capture offset subtracted",
+        "interpolated_blocks": 1454,
+        "maximum_mapping_age_ms": 200,
+        "maximum_rtp_distance_ms": 200,
+        "metadata_blocks": 1433,
+        "rejected_blocks": 1
+      },
+      "presentation": {
+        "audio_master": true,
+        "audio_startup_dropped": 0,
+        "audio_submitted": 2887,
+        "clock_resets": 2,
+        "diagnostics": [
+          {
+            "details": null,
+            "first_local_us": 355455,
+            "last_local_us": 355455,
+            "reason": "binding_clear",
+            "repetitions": 1
+          },
+          {
+            "details": null,
+            "first_local_us": 344705,
+            "last_local_us": 1146462,
+            "reason": "video_no_audio_origin",
+            "repetitions": 24
+          },
+          {
+            "details": null,
+            "first_local_us": 1165219,
+            "last_local_us": 1165219,
+            "reason": "binding_clear",
+            "repetitions": 1
+          },
+          {
+            "details": {
+              "audio_origin_us": 4001083729950723,
+              "delta_us": 182276,
+              "late_us": 0,
+              "lead_us": 301004,
+              "origin_age_us": 2191,
+              "sender_us": 4001083730132999
+            },
+            "first_local_us": 13370950,
+            "last_local_us": 30046649,
+            "reason": "video_deadline_too_early",
+            "repetitions": 492
+          }
+        ],
+        "failure_reasons": {
+          "binding_clear": 2,
+          "video_deadline_too_early": 492,
+          "video_no_audio_origin": 24
+        },
+        "presentation_delay_ms": 120,
+        "sender_capture_time_qualified": false,
+        "video_max_lead_ms": 250,
+        "video_mean_lead_us": 134437,
+        "video_observed_max_lead_us": 249268,
+        "video_rejected": 516,
+        "video_submitted": 367
+      },
+      "queued_audio": 12,
+      "queued_video": 0
+    }
+  ],
+  "conclusion": "A valid approximately 300 ms lead exceeded native 250 ms holding bound. Test bounded 400 ms/14-frame window, preserving lateness and permission checks.",
+  "trials": [
+    {
+      "name": "wider_hold",
+      "matched_pairs": 13,
+      "absolute_p95_ms": 53.33333333333576,
+      "unmatched_audio": 0,
+      "unmatched_video": 0,
+      "uncertain_tones": 3,
+      "missing_video_labels_within_observed_span": [],
+      "local_numbered_marker_gate_passed": false
+    },
+    {
+      "name": "reduced_audio_diagnostic_lock_work",
+      "matched_pairs": 14,
+      "absolute_p95_ms": 36.66666666666788,
+      "unmatched_audio": 0,
+      "unmatched_video": 0,
+      "uncertain_tones": 0,
+      "missing_video_labels_within_observed_span": [],
+      "local_numbered_marker_gate_passed": true
+    },
+    {
+      "name": "unchanged_passing_candidate_repeat",
+      "matched_pairs": 4,
+      "absolute_p95_ms": 16.66666666666424,
+      "unmatched_audio": 11,
+      "unmatched_video": 0,
+      "uncertain_tones": 2,
+      "missing_video_labels_within_observed_span": [
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "local_numbered_marker_gate_passed": false
+    },
+    {
+      "name": "zero_video_playout_delay",
+      "matched_pairs": 14,
+      "absolute_p95_ms": 86.66666666666424,
+      "unmatched_audio": 1,
+      "unmatched_video": 0,
+      "uncertain_tones": 3,
+      "missing_video_labels_within_observed_span": [],
+      "local_numbered_marker_gate_passed": false
+    }
+  ],
+  "pull_diagnostics": {
+    "nonzero_channel_samples": 778522,
+    "push_contention": 38,
+    "queue_full": 0,
+    "render_calls": 3591,
+    "render_contention": 0
+  },
+  "limitations": [
+    "One generated-media pass is not a production qualification.",
+    "Incoming audio try-lock contention still rejects blocks; 38 observed in passing run.",
+    "Capture metadata fallback, reconnect, multi-guest and release integration remain unfinished.",
+    "Zero-video-delay run also failed; do not enable it in production based on this evidence."
+  ],
+  "failed_repeat_decoded_pairs": [
+    {
+      "id": 3,
+      "decoded_video_minus_audio_ms": -31.253,
+      "sender_video_minus_audio_ms": null
+    },
+    {
+      "id": 4,
+      "decoded_video_minus_audio_ms": -35.02,
+      "sender_video_minus_audio_ms": 2.053
+    },
+    {
+      "id": 5,
+      "decoded_video_minus_audio_ms": -77.313,
+      "sender_video_minus_audio_ms": -17.948
+    },
+    {
+      "id": 6,
+      "decoded_video_minus_audio_ms": -57.334,
+      "sender_video_minus_audio_ms": -2.947
+    },
+    {
+      "id": 7,
+      "decoded_video_minus_audio_ms": 214.071,
+      "sender_video_minus_audio_ms": 10.927
+    },
+    {
+      "id": 8,
+      "decoded_video_minus_audio_ms": 681.947,
+      "sender_video_minus_audio_ms": -10.073
+    },
+    {
+      "id": 9,
+      "decoded_video_minus_audio_ms": 859.058,
+      "sender_video_minus_audio_ms": 3.928
+    },
+    {
+      "id": 10,
+      "decoded_video_minus_audio_ms": 1038.725,
+      "sender_video_minus_audio_ms": -18.072
+    },
+    {
+      "id": 11,
+      "decoded_video_minus_audio_ms": 1238.851,
+      "sender_video_minus_audio_ms": -4.072
+    },
+    {
+      "id": 13,
+      "decoded_video_minus_audio_ms": 60.451,
+      "sender_video_minus_audio_ms": -11.072
+    },
+    {
+      "id": 14,
+      "decoded_video_minus_audio_ms": 224.111,
+      "sender_video_minus_audio_ms": 1.928
+    },
+    {
+      "id": 15,
+      "decoded_video_minus_audio_ms": 367.032,
+      "sender_video_minus_audio_ms": -19.072
+    },
+    {
+      "id": 16,
+      "decoded_video_minus_audio_ms": 565.639,
+      "sender_video_minus_audio_ms": -3.073
+    },
+    {
+      "id": 17,
+      "decoded_video_minus_audio_ms": 787.999,
+      "sender_video_minus_audio_ms": 7.928
+    }
+  ],
+  "zero_delay_pull_diagnostics": {
+    "nonzero_channel_samples": 803992,
+    "push_contention": 44,
+    "queue_full": 5,
+    "render_calls": 3612,
+    "render_contention": 0
+  }
+}

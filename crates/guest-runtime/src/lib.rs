@@ -11,6 +11,10 @@ use tokio::{
     sync::{oneshot, watch},
     task::JoinHandle,
 };
+#[cfg(debug_assertions)]
+pub fn enable_low_delay_video_proof() -> Result<(), &'static str> {
+    livekit::webrtc::enable_zero_playout_delay().map_err(|_| "Low-delay runtime already initialized")
+}
 mod subscriptions;
 pub use subscriptions::GuestMedia;
 pub mod authority;

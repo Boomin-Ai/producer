@@ -9,9 +9,13 @@
 #include <stdatomic.h>
 static _Atomic uint64_t proof_calls, proof_nonzero;
 static _Atomic uint64_t proof_attached, proof_detached;
+static _Atomic uint64_t proof_render_busy, proof_push_busy, proof_queue_full;
 uint64_t producer_guest_ingest_debug_counter(int kind) {
     if (kind==2) return atomic_load_explicit(&proof_attached,memory_order_relaxed);
     if (kind==3) return atomic_load_explicit(&proof_detached,memory_order_relaxed);
+    if (kind==4) return atomic_load_explicit(&proof_render_busy,memory_order_relaxed);
+    if (kind==5) return atomic_load_explicit(&proof_push_busy,memory_order_relaxed);
+    if (kind==6) return atomic_load_explicit(&proof_queue_full,memory_order_relaxed);
     return atomic_load_explicit(kind ? &proof_nonzero : &proof_calls,memory_order_relaxed);
 }
 #endif
@@ -128,7 +132,15 @@ static bool render_audio(void *data, uint64_t *ts, void *output, uint32_t mixers
     for (size_t m = 0; m < 6; m++) if (mixers & (1U << m))
         for (size_t c = 0; c < channels; c++) if (mix->output[m].data[c])
             memset(mix->output[m].data[c], 0, GUEST_RENDER_FRAMES * sizeof(float));
-    if (pthread_mutex_trylock(&state->lock)) return true;
+    if (pthread_mutex_trylock(&state->lock)) {
+#ifdef PRODUCER_INGRESS_DIAGNOSTICS
+        atomic_fetch_add_explicit(&proof_render_busy,1,memory_order_relaxed);
+#endif
+        return true;
+    }
+#ifdef PRODUCER_INGRESS_DIAGNOSTICS
+    uint64_t nonzero=0;
+#endif
     for (size_t i = 0; i < GUEST_RENDER_FRAMES; i++) {
         uint64_t at = *ts + frames_ns(i);
         while (state->count) {
@@ -147,11 +159,17 @@ static bool render_audio(void *data, uint64_t *ts, void *output, uint32_t mixers
                 if (channels == 1 && block->channels == 2) value = (block->pcm[frame*2] + block->pcm[frame*2+1]) / 65536.0f;
                 mix->output[m].data[c][i] = c < 2 ? value : 0.0f;
 #ifdef PRODUCER_INGRESS_DIAGNOSTICS
-                if (value!=0.0f) {state->proof_nonzero_samples++;atomic_fetch_add_explicit(&proof_nonzero,1,memory_order_relaxed);}
+                if (value!=0.0f) nonzero++;
 #endif
             }
     }
+#ifdef PRODUCER_INGRESS_DIAGNOSTICS
+    state->proof_nonzero_samples+=nonzero;
+#endif
     pthread_mutex_unlock(&state->lock);
+#ifdef PRODUCER_INGRESS_DIAGNOSTICS
+    if (nonzero) atomic_fetch_add_explicit(&proof_nonzero,nonzero,memory_order_relaxed);
+#endif
     return true;
 }
 void producer_guest_ingest_clear_audio(obs_source_t *source) {
@@ -199,8 +217,19 @@ bool producer_guest_ingest_audio(obs_source_t *source, const int16_t *pcm,
         !sample_count || sample_count % channels || sample_count / channels > 4800)
         return false; /* 48 kHz, at most 100 ms per submission. */
     struct guest_state *state = obs_obj_get_data(source);
-    if (!state || pthread_mutex_trylock(&state->lock)) return false;
-    if (state->count == GUEST_AUDIO_QUEUE) { pthread_mutex_unlock(&state->lock); return false; }
+    if (!state) return false;
+    if (pthread_mutex_trylock(&state->lock)) {
+#ifdef PRODUCER_INGRESS_DIAGNOSTICS
+        atomic_fetch_add_explicit(&proof_push_busy,1,memory_order_relaxed);
+#endif
+        return false;
+    }
+    if (state->count == GUEST_AUDIO_QUEUE) {
+#ifdef PRODUCER_INGRESS_DIAGNOSTICS
+        atomic_fetch_add_explicit(&proof_queue_full,1,memory_order_relaxed);
+#endif
+        pthread_mutex_unlock(&state->lock); return false;
+    }
     struct guest_audio_block *block = &state->blocks[(state->head + state->count) % GUEST_AUDIO_QUEUE];
     block->timestamp = timestamp; block->frames = sample_count / channels; block->channels = channels;
     memcpy(block->pcm, pcm, sample_count * sizeof(int16_t)); state->count++;

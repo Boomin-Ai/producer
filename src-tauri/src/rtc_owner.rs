@@ -552,6 +552,9 @@ pub fn program_selftest() -> Result<(), &'static str> {
     };
     use std::{io::Write, os::unix::fs::OpenOptionsExt};
     const ROOT: &str = "/private/tmp/producer-rtc-staging";
+    if std::env::var("PRODUCER_RTC_ZERO_VIDEO_DELAY_PROOF").as_deref() == Ok("1") {
+        producer_guest_runtime::enable_low_delay_video_proof()?;
+    }
     fn save(value: serde_json::Value) -> Result<(), &'static str> {
         let mut file = std::fs::OpenOptions::new()
             .write(true)
@@ -968,6 +971,15 @@ pub fn program_selftest() -> Result<(), &'static str> {
     } else {
         Ok(())
     };
+    if marker_recording {
+        extern "C" {fn producer_guest_ingest_debug_counter(kind:i32)->u64;}
+        let diagnostics=unsafe {serde_json::json!({"render_calls":producer_guest_ingest_debug_counter(0),
+            "nonzero_channel_samples":producer_guest_ingest_debug_counter(1),
+            "render_contention":producer_guest_ingest_debug_counter(4),
+            "push_contention":producer_guest_ingest_debug_counter(5),
+            "queue_full":producer_guest_ingest_debug_counter(6)})};
+        std::fs::write(format!("{ROOT}/ingress-pull-diagnostics.json"),diagnostics.to_string()).map_err(|_|"Pull diagnostics unavailable")?;
+    }
     graph
         .clear_room()
         .map_err(|_| "Native program scene cleanup failed")?;

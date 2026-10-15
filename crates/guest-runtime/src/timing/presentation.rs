@@ -45,7 +45,7 @@ impl Presentation {
             diagnostics: VecDeque::with_capacity(64),
         }
     }
-    fn with_video_buffer(delay: Duration, extended: bool) -> Self {
+    pub(crate) fn with_video_buffer(delay: Duration, extended: bool) -> Self {
         let mut clock = Self::new(delay);
         if extended {
             clock.max_video_lead = Duration::from_millis(400);
