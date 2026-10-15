@@ -60,16 +60,32 @@ pub struct Counters {
     pub sender_reports: AtomicU64,
     pub pcm_received: AtomicU64,
     pub video_received: AtomicU64,
+    #[cfg(debug_assertions)] pub first_binding_ms:AtomicU64,
+    #[cfg(debug_assertions)] pub first_audio_clock_ms:AtomicU64,
+    #[cfg(debug_assertions)] pub first_video_clock_ms:AtomicU64,
+    #[cfg(debug_assertions)] pub first_audio_schedule_ms:AtomicU64,
+    #[cfg(debug_assertions)] pub first_video_schedule_ms:AtomicU64,
 }
 impl Counters {
     pub fn report(&self) -> serde_json::Value {
-        serde_json::json!({"video_submitted":self.video.load(Ordering::Acquire),
+        #[allow(unused_mut)]
+        let mut report=serde_json::json!({"video_submitted":self.video.load(Ordering::Acquire),
             "audio_submitted":self.audio.load(Ordering::Acquire),
             "rejected":self.rejected.load(Ordering::Acquire),
             "video_observers":self.observers.load(Ordering::Acquire),
             "workers":self.workers.load(Ordering::Acquire),
             "bindings":self.bindings.load(Ordering::Acquire),"sender_reports":self.sender_reports.load(Ordering::Acquire),
-            "pcm_received":self.pcm_received.load(Ordering::Acquire),"video_received":self.video_received.load(Ordering::Acquire)})
+            "pcm_received":self.pcm_received.load(Ordering::Acquire),"video_received":self.video_received.load(Ordering::Acquire)});
+        #[cfg(debug_assertions)]
+        for (key,value) in [("first_binding_ms",&self.first_binding_ms),("first_audio_clock_ms",&self.first_audio_clock_ms),("first_video_clock_ms",&self.first_video_clock_ms),("first_audio_schedule_ms",&self.first_audio_schedule_ms),("first_video_schedule_ms",&self.first_video_schedule_ms)]{report[key]=value.load(Ordering::Acquire).into();}
+        report
+    }
+}
+#[cfg(debug_assertions)]
+fn stamp_once(counter:&AtomicU64){
+    if counter.load(Ordering::Relaxed)==0{
+        let wall=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d|d.as_millis() as u64).unwrap_or(0);
+        let _=counter.compare_exchange(0,wall,Ordering::Release,Ordering::Relaxed);
     }
 }
 struct Observer {
@@ -240,6 +256,7 @@ impl State {
                 changed |= track.bind(ssrc, &mut self.retired_ssrc);
             }
             if changed {
+                #[cfg(debug_assertions)] stamp_once(&self.counters.first_binding_ms);
                 #[cfg(debug_assertions)]
                 eprintln!("Native RTC receiver clock reset: binding changed");
                 guest.clear();
@@ -260,9 +277,11 @@ impl State {
             for report in reports.iter().filter(|r| r.observed_us >= guest.since) {
                 if let Some(clock) = &mut guest.audio_clock {
                     clock.observe(*report);
+                    #[cfg(debug_assertions)] if clock.playback_ready(rtc,true){stamp_once(&self.counters.first_audio_clock_ms);}
                 }
                 if let Some(clock) = &mut guest.video_clock {
                     clock.observe(*report);
+                    #[cfg(debug_assertions)] if clock.playback_ready(rtc,true){stamp_once(&self.counters.first_video_clock_ms);}
                 }
             }
         }
@@ -309,6 +328,7 @@ impl State {
                 .clock
                 .audio(block.generation, block.sequence, origin, pull)
             {
+                #[cfg(debug_assertions)] stamp_once(&self.counters.first_audio_schedule_ms);
                 if guest.audio.len() < 24 {
                     guest.audio.push_back((at, block));
                 } else {
@@ -360,6 +380,7 @@ impl State {
                             .and_then(|at| at.checked_add(Duration::from_millis(120)))
                     };
                     if let Some(at) = at {
+                        #[cfg(debug_assertions)] stamp_once(&self.counters.first_video_schedule_ms);
                         if guest.video.len() < 8 {
                             guest.video.push_back((at, frame.value));
                         } else {
