@@ -977,7 +977,9 @@ pub fn program_selftest() -> Result<(), &'static str> {
             "nonzero_channel_samples":producer_guest_ingest_debug_counter(1),
             "render_contention":producer_guest_ingest_debug_counter(4),
             "push_contention":producer_guest_ingest_debug_counter(5),
-            "queue_full":producer_guest_ingest_debug_counter(6)})};
+            "queue_full":producer_guest_ingest_debug_counter(6),
+            "push_wait_total_ns":producer_guest_ingest_debug_counter(7),
+            "push_wait_max_ns":producer_guest_ingest_debug_counter(8)})};
         std::fs::write(format!("{ROOT}/ingress-pull-diagnostics.json"),diagnostics.to_string()).map_err(|_|"Pull diagnostics unavailable")?;
     }
     graph

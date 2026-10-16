@@ -10,12 +10,15 @@
 static _Atomic uint64_t proof_calls, proof_nonzero;
 static _Atomic uint64_t proof_attached, proof_detached;
 static _Atomic uint64_t proof_render_busy, proof_push_busy, proof_queue_full;
+static _Atomic uint64_t proof_push_wait_ns, proof_push_wait_max_ns;
 uint64_t producer_guest_ingest_debug_counter(int kind) {
     if (kind==2) return atomic_load_explicit(&proof_attached,memory_order_relaxed);
     if (kind==3) return atomic_load_explicit(&proof_detached,memory_order_relaxed);
     if (kind==4) return atomic_load_explicit(&proof_render_busy,memory_order_relaxed);
     if (kind==5) return atomic_load_explicit(&proof_push_busy,memory_order_relaxed);
     if (kind==6) return atomic_load_explicit(&proof_queue_full,memory_order_relaxed);
+    if (kind==7) return atomic_load_explicit(&proof_push_wait_ns,memory_order_relaxed);
+    if (kind==8) return atomic_load_explicit(&proof_push_wait_max_ns,memory_order_relaxed);
     return atomic_load_explicit(kind ? &proof_nonzero : &proof_calls,memory_order_relaxed);
 }
 #endif
@@ -40,7 +43,7 @@ OBS_IMPORT bool video_format_get_parameters(int, int, float[16], float[3], float
 /* OBS pulls a continuous clock from each guest, including silence during
  * packet gaps. Guest push timestamps never control the shared mixer clock. */
 #ifdef PRODUCER_INGRESS_DIAGNOSTICS
-#define GUEST_AUDIO_QUEUE 32
+#define GUEST_AUDIO_QUEUE 48
 #else
 #define GUEST_AUDIO_QUEUE 16
 #endif
@@ -57,7 +60,7 @@ struct guest_state {
     uint64_t proof_render_calls, proof_nonzero_samples;
     size_t proof_rate, proof_channels;
     uint32_t proof_mixers;
-    bool proof_clock;
+    bool proof_clock, proof_wait_push;
     _Atomic uint64_t proof_next_timestamp;
 #endif
 };
@@ -85,6 +88,8 @@ static void *create(obs_data_t *settings, obs_source_t *source) {
 #ifdef PRODUCER_INGRESS_DIAGNOSTICS
     const char *latest=getenv("PRODUCER_RTC_LATEST_VIDEO_PROOF");
     if (latest && !strcmp(latest,"1")) obs_source_set_async_unbuffered(source,true);
+    const char *wait_push=getenv("PRODUCER_RTC_AUDIO_PUSH_WAIT_PROOF");
+    state->proof_wait_push=wait_push && !strcmp(wait_push,"1");
     const char *proof=getenv("PRODUCER_RTC_PULL_CLOCK_PROOF");
     state->proof_clock=proof && !strcmp(proof,"1");
     if (state->proof_clock) {
@@ -221,8 +226,18 @@ bool producer_guest_ingest_audio(obs_source_t *source, const int16_t *pcm,
     if (pthread_mutex_trylock(&state->lock)) {
 #ifdef PRODUCER_INGRESS_DIAGNOSTICS
         atomic_fetch_add_explicit(&proof_push_busy,1,memory_order_relaxed);
-#endif
+        if (state->proof_wait_push) {
+            /* Media worker only. The OBS render callback still uses trylock. */
+            uint64_t began=os_gettime_ns();
+            if (pthread_mutex_lock(&state->lock)) return false;
+            uint64_t waited=os_gettime_ns()-began;
+            atomic_fetch_add_explicit(&proof_push_wait_ns,waited,memory_order_relaxed);
+            uint64_t previous=atomic_load_explicit(&proof_push_wait_max_ns,memory_order_relaxed);
+            while (waited>previous && !atomic_compare_exchange_weak_explicit(&proof_push_wait_max_ns,&previous,waited,memory_order_relaxed,memory_order_relaxed)) {}
+        } else return false;
+#else
         return false;
+#endif
     }
     if (state->count == GUEST_AUDIO_QUEUE) {
 #ifdef PRODUCER_INGRESS_DIAGNOSTICS
