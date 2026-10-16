@@ -49,6 +49,23 @@ impl Trace {
     }
 }
 #[derive(Default)]
+pub struct AudioTrace {
+    began: Option<Instant>,
+    rows: Vec<Value>,
+}
+impl AudioTrace {
+    pub fn observe(&mut self, kind: &str, sequence: u64, samples: &[i16], at: Instant, accepted: Option<bool>) {
+        let peak = samples.iter().map(|x| i32::from(*x).unsigned_abs()).max().unwrap_or(0);
+        if self.began.is_none() && peak > 2000 { self.began = Some(at); }
+        let Some(began) = self.began else { return; };
+        if at.saturating_duration_since(began).as_secs() >= 16 || self.rows.len() >= 4096 { return; }
+        let relative = if at >= began { at.duration_since(began).as_micros() as i128 } else { -(began.duration_since(at).as_micros() as i128) };
+        self.rows.push(json!({"kind":kind,"sequence":sequence,"relative_us":relative,"peak":peak,
+            "nonzero_samples":samples.iter().filter(|x| **x != 0).count(),"accepted":accepted}));
+    }
+    pub fn report(&self) -> Value { json!({"rows":self.rows,"maximum_rows":4096,"maximum_seconds":16,"raw_pcm_retained":false}) }
+}
+#[derive(Default)]
 pub struct Detector {
     audio_active: bool,
     video_active: bool,
@@ -149,6 +166,20 @@ mod tests {
             })
             .collect();
         assert_eq!(d.audio(&tone, 1), Some(7));
+    }
+    #[test]
+    fn audio_trace_ignores_initial_silence_and_bounds_retention() {
+        let now = Instant::now();
+        let mut trace = AudioTrace::default();
+        trace.observe("decoded",1,&[0;480],now,None);
+        assert!(trace.rows.is_empty());
+        trace.observe("decoded",2,&[3000;480],now,None);
+        trace.observe("submission",2,&[3000;480],now+std::time::Duration::from_millis(120),Some(false));
+        trace.observe("decoded",3,&[3000;480],now+std::time::Duration::from_secs(16),None);
+        assert_eq!(trace.rows.len(),2);
+        assert_eq!(trace.rows[1]["accepted"],false);
+        for i in 0..4200 { trace.observe("decoded",i,&[3000;480],now,None); }
+        assert_eq!(trace.rows.len(),4096);
     }
     #[test]
     fn trace_is_bounded_and_preserves_signed_scheduling_offsets() {

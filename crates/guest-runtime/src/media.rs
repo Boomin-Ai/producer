@@ -63,6 +63,8 @@ pub struct Counters {
     #[cfg(debug_assertions)]
     marker_trace: Mutex<crate::timing::markers::Trace>,
     #[cfg(debug_assertions)]
+    audio_trace: Mutex<crate::timing::markers::AudioTrace>,
+    #[cfg(debug_assertions)]
     presentation_reports: Mutex<serde_json::Value>,
     #[cfg(debug_assertions)]
     decoder_stats: Mutex<VecDeque<serde_json::Value>>,
@@ -122,6 +124,7 @@ impl Counters {
             if let Ok(trace) = self.marker_trace.lock() {
                 report["submitted_markers"] = trace.report();
             }
+            if let Ok(trace) = self.audio_trace.lock() { report["audio_block_trace"] = trace.report(); }
             if let Ok(clocks) = self.presentation_reports.lock() {
                 report["presentation_clocks"] = clocks.clone();
             }
@@ -429,6 +432,12 @@ impl State {
                     }
                 }
             }
+            #[cfg(debug_assertions)]
+            if crate::timing::markers::enabled() {
+                if let Ok(mut trace) = self.counters.audio_trace.lock() {
+                    trace.observe("decoded",block.sequence,&block.samples[..480 * block.channels as usize],pull,None);
+                }
+            }
             if origin.is_none() {
                 continue;
             }
@@ -553,8 +562,20 @@ impl State {
                         }
                     }
                     self.counters.audio.fetch_add(1, Ordering::Relaxed);
+                    #[cfg(debug_assertions)]
+                    if crate::timing::markers::enabled() {
+                        if let Ok(mut trace) = self.counters.audio_trace.lock() {
+                            trace.observe("submission",block.sequence,&block.samples[..480 * block.channels as usize],at,Some(true));
+                        }
+                    }
                 } else {
                     self.counters.rejected.fetch_add(1, Ordering::Relaxed);
+                    #[cfg(debug_assertions)]
+                    if crate::timing::markers::enabled() {
+                        if let Ok(mut trace) = self.counters.audio_trace.lock() {
+                            trace.observe("submission",block.sequence,&block.samples[..480 * block.channels as usize],at,Some(false));
+                        }
+                    }
                 }
             }
             while guest.video.front().is_some_and(|(at, _)| *at <= now) {
