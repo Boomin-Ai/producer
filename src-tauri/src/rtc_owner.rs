@@ -398,19 +398,46 @@ impl HostOwner {
                         if request.reply.is_closed() { continue; }
                         // Controls precede polling: a slow authority read must
                         // not make an overdue poll starve the bounded queue.
-                        // Each command independently refreshes authority too.
+                        // A diagnostic candidate may reuse a still-current
+                        // independently read snapshot; otherwise refresh first.
                         // The same task owns commands, renewal and permission
                         // reads. No GUI request races a cached host revision.
                         let result=async {
-                            let before=control.media_authority().await?;
-                            connection.media_authority(before)?;
-                            let result=control.room_command(request.command).await;
+                            #[cfg(debug_assertions)]
+                            let control_began=std::time::Instant::now();
+                            #[allow(unused_mut)]
+                            let mut reused=false;
+                            #[cfg(debug_assertions)]
+                            if std::env::var("PRODUCER_RTC_REUSE_AUTHORITY_PROOF").as_deref()==Ok("1") {
+                                if let Some(snapshot)=connection.media_authority_updater().current_snapshot() {
+                                    reused=control.use_current_authority(&snapshot);
+                                }
+                            }
+                            if !reused {
+                                let before=control.media_authority().await?;
+                                connection.media_authority(before)?;
+                            }
+                            #[cfg(debug_assertions)]
+                            let pre_ms=control_began.elapsed().as_millis();
+                            #[allow(unused_mut)]
+                            let mut result=control.room_command(request.command).await;
+                            #[cfg(debug_assertions)]
+                            let mutation_end_ms=control_began.elapsed().as_millis();
                             // Even an ambiguous POST may have committed. Never
                             // extend old permits or blindly replay the POST.
                             // If this read fails, their independent expiry
                             // remains in force while the poll loop recovers.
                             let after=control.media_authority().await?;
                             connection.media_authority(after)?;
+                            #[cfg(debug_assertions)]
+                            if std::env::var("PRODUCER_RTC_INGRESS_MARKER_PROOF").as_deref()==Ok("1") {
+                                if let Ok(value)=result.as_mut() {
+                                    value["native_control_timing"]=serde_json::json!({"pre_read_ms":pre_ms,
+                                        "mutation_ms":mutation_end_ms-pre_ms,
+                                        "post_read_ms":control_began.elapsed().as_millis()-mutation_end_ms,
+                                        "reused_current_snapshot":reused});
+                                }
+                            }
                             result
                         }.await;
                         authority_reader.update(&control);
@@ -906,9 +933,12 @@ pub fn program_selftest() -> Result<(), &'static str> {
                     }
                 }
                 use std::sync::atomic::Ordering;
-                for (name,ready) in [("first_decoded_video_ms",ingress_counters.video_received.load(Ordering::Acquire)>0),("first_ingested_video_ms",ingress_counters.video.load(Ordering::Acquire)>0),("first_color_thumbnail_ms",ingress_probe.as_ref().is_some_and(|probe|probe.has_color(ingress_report["source_id"].as_str().unwrap_or(""))))]{
-                    if ready && ingress_report[name].is_null(){ingress_report[name]=now().into();}
+                for (name,at) in [("first_decoded_video_ms",ingress_counters.first_decoded_video_ms.load(Ordering::Acquire)),
+                    ("first_ingested_video_ms",ingress_counters.first_video_submit_ms.load(Ordering::Acquire)),
+                    ("first_color_thumbnail_ms",ingress_probe.as_ref().and_then(|probe|probe.first_color_ms(ingress_report["source_id"].as_str().unwrap_or(""))).unwrap_or(0))]{
+                    if at>0 && ingress_report[name].is_null(){ingress_report[name]=at.into();}
                 }
+                ingress_report["timestamp_method"]="decoder/submission/graphics callbacks; independent of control-loop polling".into();
                 ingress_report["counters"]=ingress_counters.report();
                 std::fs::write(format!("{ROOT}/ingress-timing.json"),ingress_report.to_string()).map_err(|_|"Timing report unavailable")?;
             }

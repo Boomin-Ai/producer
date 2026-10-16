@@ -37,6 +37,16 @@ pub struct MediaAuthorityUpdater {
     healthy: Arc<AtomicBool>,
 }
 impl MediaAuthorityUpdater {
+    /// Read-only reuse of an independently refreshed authority snapshot. This
+    /// never changes its deadline or publishes/extends permissions.
+    pub fn current_snapshot(&self) -> Option<Arc<authority::Snapshot>> {
+        self.current_snapshot_at(std::time::Instant::now())
+    }
+    fn current_snapshot_at(&self, now: std::time::Instant) -> Option<Arc<authority::Snapshot>> {
+        if !self.healthy.load(Ordering::Acquire) { return None; }
+        let value = self.authority.borrow().clone()?;
+        (value.current(now) && self.healthy.load(Ordering::Acquire)).then_some(value)
+    }
     pub fn publish(&self, snapshot: authority::Snapshot) -> Result<bool, &'static str> {
         if !snapshot.current(std::time::Instant::now()) { return Err("Native guest authority response expired"); }
         let mut closed = false;
@@ -237,6 +247,19 @@ mod authority_update_tests {
         let expected:authority::HostReceipt=serde_json::from_value(receipt.clone()).unwrap();
         let wire=json!({"schema_version":1,"receipt":receipt,"observed_at_ms":wall,"guests":[{"participant_id":id,"rtc_identity":format!("guest-{id}-e1-g1"),"authorization_generation":1,"publish_sources":["camera","microphone"],"on_stage":on_stage,"expires_at_ms":wall+45000}]});
         authority::Snapshot::parse(&serde_json::to_vec(&wire).unwrap(),&expected,wall,start,std::time::Instant::now()).unwrap()
+    }
+    #[test]
+    fn reused_snapshot_never_extends_freshness_or_survives_close() {
+        let (sender,_receiver)=watch::channel(None);
+        let health=Arc::new(AtomicBool::new(true));
+        let updater=MediaAuthorityUpdater { authority:sender,healthy:health.clone() };
+        assert!(updater.current_snapshot().is_none());
+        updater.publish(snapshot(9,true,Duration::ZERO)).unwrap();
+        let current=updater.current_snapshot().unwrap();
+        assert_eq!(current.receipt().control_revision,9);
+        assert!(updater.current_snapshot_at(std::time::Instant::now()+Duration::from_millis(3500)).is_none());
+        health.store(false,Ordering::Release);
+        assert!(updater.current_snapshot().is_none());
     }
     #[test]
     fn delayed_old_revision_cannot_restore_broadcast_audio() {

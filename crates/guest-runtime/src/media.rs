@@ -75,6 +75,10 @@ pub struct Counters {
     #[cfg(debug_assertions)]
     pub first_binding_ms: AtomicU64,
     #[cfg(debug_assertions)]
+    pub first_decoded_video_ms: AtomicU64,
+    #[cfg(debug_assertions)]
+    pub first_video_submit_ms: AtomicU64,
+    #[cfg(debug_assertions)]
     pub first_video_binding_ms: AtomicU64,
     #[cfg(debug_assertions)]
     pub first_audio_binding_ms: AtomicU64,
@@ -102,6 +106,8 @@ impl Counters {
         #[cfg(debug_assertions)]
         for (key, value) in [
             ("first_binding_ms", &self.first_binding_ms),
+            ("first_decoded_video_ms", &self.first_decoded_video_ms),
+            ("first_video_submit_ms", &self.first_video_submit_ms),
             ("first_video_binding_ms", &self.first_video_binding_ms),
             ("first_audio_binding_ms", &self.first_audio_binding_ms),
             ("first_frame_binding_retries", &self.first_frame_binding_retries),
@@ -156,6 +162,8 @@ impl video_sys::VideoSink for Observer {
         if !frame.is_null() {
             #[cfg(debug_assertions)]
             self.first_frame.store(true, Ordering::Release);
+            #[cfg(debug_assertions)]
+            stamp_once(&self.counters.first_decoded_video_ms);
             self.counters.video_received.fetch_add(1, Ordering::Relaxed);
             self.queue.push(Captured {
                 at: Instant::now(),
@@ -613,6 +621,8 @@ impl State {
                             }
                         }
                     }
+                    #[cfg(debug_assertions)]
+                    stamp_once(&self.counters.first_video_submit_ms);
                     self.counters.video.fetch_add(1, Ordering::Relaxed);
                 } else {
                     self.counters.rejected.fetch_add(1, Ordering::Relaxed);

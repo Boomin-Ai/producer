@@ -2273,6 +2273,8 @@ pub struct ThumbTarget {
 unsafe impl Send for ThumbTarget {}
 
 pub struct ThumbSlot {
+    #[cfg(debug_assertions)]
+    first_color_ms: u64,
     pub seq: u64,
     pub ready: bool,
     pub rgba: Vec<u8>,
@@ -2286,6 +2288,8 @@ struct ThumbRing {
 }
 
 pub struct ThumbHub {
+    #[cfg(debug_assertions)]
+    ingress_timing: std::sync::atomic::AtomicBool,
     pub targets: std::sync::Mutex<Vec<ThumbTarget>>,
     pub fps: std::sync::atomic::AtomicU32,
     /// A seat's program monitor asked for the program thumb (host side of
@@ -2308,6 +2312,8 @@ unsafe impl Sync for ThumbHub {}
 impl ThumbHub {
     pub fn new() -> Self {
         ThumbHub {
+            #[cfg(debug_assertions)]
+            ingress_timing: std::sync::atomic::AtomicBool::new(false),
             targets: std::sync::Mutex::new(Vec::new()),
             fps: std::sync::atomic::AtomicU32::new(0),
             program_wanted: std::sync::atomic::AtomicBool::new(false),
@@ -2527,6 +2533,8 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
                     }
                     if let Ok(mut slots) = hub.slots.try_lock() {
                         let slot = slots.entry(t.id.clone()).or_insert_with(|| ThumbSlot {
+                            #[cfg(debug_assertions)]
+                            first_color_ms: 0,
                             seq: 0,
                             ready: false,
                             rgba: Vec::with_capacity((tw * th * 4) as usize),
@@ -2538,6 +2546,11 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
                                 src_row,
                                 (tw * 4) as usize,
                             ));
+                        }
+                        #[cfg(debug_assertions)]
+                        if hub.ingress_timing.load(std::sync::atomic::Ordering::Relaxed) && slot.first_color_ms==0
+                            && slot.rgba.chunks_exact(4).filter(|p|p[1]>80&&p[1]>p[0].saturating_add(30)).take(101).count()>100 {
+                            slot.first_color_ms=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d|d.as_millis() as u64).unwrap_or(0);
                         }
                         slot.seq += 1;
                         slot.ready = true;
@@ -3598,10 +3611,14 @@ pub struct IngressThumbnailProbe(Box<ThumbHub>);
 impl IngressThumbnailProbe {
     pub fn start(graph:&SceneGraph)->Self {
         let hub=Box::new(ThumbHub::new());
+        hub.ingress_timing.store(true,std::sync::atomic::Ordering::Relaxed);
         hub.fps.store(15,std::sync::atomic::Ordering::Relaxed);
         hub.publish_targets(graph);
         unsafe{ffi::obs_add_main_render_callback(thumb_render_cb,&*hub as *const ThumbHub as *mut std::os::raw::c_void);}
         Self(hub)
+    }
+    pub fn first_color_ms(&self,id:&str)->Option<u64> {
+        self.0.slots.lock().ok()?.get(id).map(|slot|slot.first_color_ms).filter(|at|*at>0)
     }
     pub fn has_color(&self,id:&str)->bool {
         self.0.slots.lock().is_ok_and(|slots|slots.get(id).is_some_and(|slot|slot.seq>0&&slot.rgba.chunks_exact(4).filter(|p|p[1]>80&&p[1]>p[0].saturating_add(30)).take(101).count()>100))
