@@ -7,10 +7,14 @@
 #ifdef PRODUCER_INGRESS_DIAGNOSTICS
 #include <stdio.h>
 #include <stdatomic.h>
+#include <math.h>
+#include <sys/stat.h>
 static _Atomic uint64_t proof_calls, proof_nonzero;
 static _Atomic uint64_t proof_attached, proof_detached;
 static _Atomic uint64_t proof_render_busy, proof_push_busy, proof_queue_full;
 static _Atomic uint64_t proof_push_wait_ns, proof_push_wait_max_ns;
+static _Atomic uint64_t proof_clock_repeat, proof_clock_skip, proof_clock_back, proof_clock_max_error_ns;
+static _Atomic uint64_t proof_samples_missing, proof_samples_covered;
 uint64_t producer_guest_ingest_debug_counter(int kind) {
     if (kind==2) return atomic_load_explicit(&proof_attached,memory_order_relaxed);
     if (kind==3) return atomic_load_explicit(&proof_detached,memory_order_relaxed);
@@ -19,6 +23,12 @@ uint64_t producer_guest_ingest_debug_counter(int kind) {
     if (kind==6) return atomic_load_explicit(&proof_queue_full,memory_order_relaxed);
     if (kind==7) return atomic_load_explicit(&proof_push_wait_ns,memory_order_relaxed);
     if (kind==8) return atomic_load_explicit(&proof_push_wait_max_ns,memory_order_relaxed);
+    if (kind==9) return atomic_load_explicit(&proof_clock_repeat,memory_order_relaxed);
+    if (kind==10) return atomic_load_explicit(&proof_clock_skip,memory_order_relaxed);
+    if (kind==11) return atomic_load_explicit(&proof_clock_back,memory_order_relaxed);
+    if (kind==12) return atomic_load_explicit(&proof_clock_max_error_ns,memory_order_relaxed);
+    if (kind==13) return atomic_load_explicit(&proof_samples_missing,memory_order_relaxed);
+    if (kind==14) return atomic_load_explicit(&proof_samples_covered,memory_order_relaxed);
     return atomic_load_explicit(kind ? &proof_nonzero : &proof_calls,memory_order_relaxed);
 }
 #endif
@@ -57,11 +67,16 @@ struct guest_state {
     size_t head, count;
     uint64_t anchor, rendered;
 #ifdef PRODUCER_INGRESS_DIAGNOSTICS
-    uint64_t proof_render_calls, proof_nonzero_samples;
+    uint64_t proof_render_calls, proof_nonzero_samples, proof_previous_render_timestamp;
     size_t proof_rate, proof_channels;
     uint32_t proof_mixers;
     bool proof_clock, proof_wait_push;
     _Atomic uint64_t proof_next_timestamp;
+    bool proof_mix_started;
+    size_t proof_mix_count,proof_mix_samples,proof_mix_nonzero;
+    float proof_mix_peak;
+    uint64_t proof_mix_window_ts;
+    struct {uint64_t timestamp; float peak; size_t nonzero;} proof_mix_windows[1600];
 #endif
 };
 struct guest_audio_plane { float *data[8]; };
@@ -75,8 +90,33 @@ OBS_IMPORT void obs_remove_raw_audio_callback(size_t, void (*)(void *,size_t,str
 static void proof_clock_callback(void *data,size_t mix,struct proof_audio_data *audio) {
     (void)mix;
     struct guest_state *state=data;
-    if (state && audio && audio->timestamp && audio->frames)
-        atomic_store_explicit(&state->proof_next_timestamp,audio->timestamp+(uint64_t)audio->frames*1000000000ULL/48000,memory_order_release);
+    if (state && audio && audio->timestamp && audio->frames) {
+        /* OBS mix_audio excludes an entire custom-source block if its ts is
+         * even 1 ns before the current window. Round the next-window duration
+         * up: accumulated 48 kHz windows alternate fractional ns. This is at
+         * most 1 ns ahead (zero whole samples), never an early stale block. */
+        atomic_store_explicit(&state->proof_next_timestamp,audio->timestamp+((uint64_t)audio->frames*1000000000ULL+47999)/48000,memory_order_release);
+        if (audio->data[0] && state->proof_mix_count<1600) {
+            const float *pcm=(const float *)audio->data[0];
+            for (size_t i=0;i<audio->frames && state->proof_mix_count<1600;i++) {
+                float value=fabsf(pcm[i]);
+                if (!state->proof_mix_started) {
+                    if (value<0.02f) continue;
+                    state->proof_mix_started=true;
+                }
+                if (!state->proof_mix_samples) state->proof_mix_window_ts=audio->timestamp+(uint64_t)i*1000000000ULL/48000;
+                if (value>state->proof_mix_peak) state->proof_mix_peak=value;
+                if (value>0.0001f) state->proof_mix_nonzero++;
+                if (++state->proof_mix_samples==480) {
+                    size_t n=state->proof_mix_count++;
+                    state->proof_mix_windows[n].timestamp=state->proof_mix_window_ts;
+                    state->proof_mix_windows[n].peak=state->proof_mix_peak;
+                    state->proof_mix_windows[n].nonzero=state->proof_mix_nonzero;
+                    state->proof_mix_samples=state->proof_mix_nonzero=0;state->proof_mix_peak=0;
+                }
+            }
+        }
+    }
 }
 #endif
 static const char *name(void *unused) { (void)unused; return "Producer guest"; }
@@ -104,6 +144,16 @@ static void destroy(void *data) {
     if (state) {
 #ifdef PRODUCER_INGRESS_DIAGNOSTICS
         if (state->proof_clock) {obs_remove_raw_audio_callback(0,proof_clock_callback,state);atomic_fetch_add_explicit(&proof_detached,1,memory_order_relaxed);}
+        if (getenv("PRODUCER_RTC_INGRESS_MARKER_PROOF") && state->proof_mix_count) {
+            const char *path="/private/tmp/producer-rtc-staging/ingress-mix-windows.json";
+            FILE *file=fopen(path,"w");
+            if (file) {
+                chmod(path,0600);fputs("[",file);
+                for(size_t i=0;i<state->proof_mix_count;i++)
+                    fprintf(file,"%s{\"timestamp_ns\":%llu,\"peak\":%.7f,\"nonzero\":%zu}",i ? "," : "",(unsigned long long)state->proof_mix_windows[i].timestamp,state->proof_mix_windows[i].peak,state->proof_mix_windows[i].nonzero);
+                fputs("]",file);fclose(file);
+            }
+        }
         if (getenv("PRODUCER_RTC_INGRESS_MARKER_PROOF"))
             fprintf(stderr,"Ingress pull proof: calls=%llu nonzero=%llu rate=%zu channels=%zu mixers=%u\n",
                 (unsigned long long)state->proof_render_calls,(unsigned long long)state->proof_nonzero_samples,
@@ -133,6 +183,19 @@ static bool render_audio(void *data, uint64_t *ts, void *output, uint32_t mixers
         if (!*ts) return false;
     }
 #endif
+#ifdef PRODUCER_INGRESS_DIAGNOSTICS
+    if (state->proof_previous_render_timestamp) {
+        uint64_t previous=state->proof_previous_render_timestamp;
+        uint64_t expected=previous+frames_ns(GUEST_RENDER_FRAMES);
+        if (*ts==previous) atomic_fetch_add_explicit(&proof_clock_repeat,1,memory_order_relaxed);
+        else if (*ts<previous) atomic_fetch_add_explicit(&proof_clock_back,1,memory_order_relaxed);
+        else if (*ts>expected+1000) atomic_fetch_add_explicit(&proof_clock_skip,1,memory_order_relaxed);
+        uint64_t error=*ts>expected ? *ts-expected : expected-*ts;
+        uint64_t old=atomic_load_explicit(&proof_clock_max_error_ns,memory_order_relaxed);
+        while(error>old && !atomic_compare_exchange_weak_explicit(&proof_clock_max_error_ns,&old,error,memory_order_relaxed,memory_order_relaxed)) {}
+    }
+    state->proof_previous_render_timestamp=*ts;
+#endif
     /* No allocation, blocking locks, or SDK calls on the OBS audio thread. */
     for (size_t m = 0; m < 6; m++) if (mixers & (1U << m))
         for (size_t c = 0; c < channels; c++) if (mix->output[m].data[c])
@@ -144,7 +207,7 @@ static bool render_audio(void *data, uint64_t *ts, void *output, uint32_t mixers
         return true;
     }
 #ifdef PRODUCER_INGRESS_DIAGNOSTICS
-    uint64_t nonzero=0;
+    uint64_t nonzero=0,covered=0;
 #endif
     for (size_t i = 0; i < GUEST_RENDER_FRAMES; i++) {
         uint64_t at = *ts + frames_ns(i);
@@ -158,6 +221,9 @@ static bool render_audio(void *data, uint64_t *ts, void *output, uint32_t mixers
         if (at < block->timestamp) continue;
         size_t frame = (size_t)(((at - block->timestamp) * 48000 + 500000000ULL) / 1000000000ULL);
         if (frame >= block->frames) continue;
+#ifdef PRODUCER_INGRESS_DIAGNOSTICS
+        covered++;
+#endif
         for (size_t m = 0; m < 6; m++) if (mixers & (1U << m))
             for (size_t c = 0; c < channels; c++) if (mix->output[m].data[c]) {
                 float value = block->pcm[frame * block->channels + (block->channels == 2 && c == 1 ? 1 : 0)] / 32768.0f;
@@ -170,6 +236,8 @@ static bool render_audio(void *data, uint64_t *ts, void *output, uint32_t mixers
     }
 #ifdef PRODUCER_INGRESS_DIAGNOSTICS
     state->proof_nonzero_samples+=nonzero;
+    atomic_fetch_add_explicit(&proof_samples_covered,covered,memory_order_relaxed);
+    atomic_fetch_add_explicit(&proof_samples_missing,GUEST_RENDER_FRAMES-covered,memory_order_relaxed);
 #endif
     pthread_mutex_unlock(&state->lock);
 #ifdef PRODUCER_INGRESS_DIAGNOSTICS

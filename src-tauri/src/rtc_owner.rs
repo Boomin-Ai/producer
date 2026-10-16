@@ -979,12 +979,22 @@ pub fn program_selftest() -> Result<(), &'static str> {
             "push_contention":producer_guest_ingest_debug_counter(5),
             "queue_full":producer_guest_ingest_debug_counter(6),
             "push_wait_total_ns":producer_guest_ingest_debug_counter(7),
-            "push_wait_max_ns":producer_guest_ingest_debug_counter(8)})};
+            "push_wait_max_ns":producer_guest_ingest_debug_counter(8),
+            "render_clock_repeats":producer_guest_ingest_debug_counter(9),
+            "render_clock_skips":producer_guest_ingest_debug_counter(10),
+            "render_clock_backwards":producer_guest_ingest_debug_counter(11),
+            "render_clock_max_error_ns":producer_guest_ingest_debug_counter(12),
+            "render_samples_without_queued_pcm":producer_guest_ingest_debug_counter(13),
+            "render_samples_with_queued_pcm":producer_guest_ingest_debug_counter(14)})};
         std::fs::write(format!("{ROOT}/ingress-pull-diagnostics.json"),diagnostics.to_string()).map_err(|_|"Pull diagnostics unavailable")?;
     }
     graph
         .clear_room()
         .map_err(|_| "Native program scene cleanup failed")?;
+    if marker_recording {
+        extern "C" {fn obs_wait_for_destroy_queue()->bool;}
+        unsafe {obs_wait_for_destroy_queue();}
+    }
     recording_result?;
     // Match the app's process-exit contract; it does not globally unload OBS.
     result
