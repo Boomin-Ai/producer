@@ -1,0 +1,74 @@
+{
+  "live": true,
+  "scope": "Production guest API and deployed guest webpage; generated tracks; diagnostic native receiver with unreleased timing flags, not the stable desktop build",
+  "api_commit": "eada625a86affa57cef608971ab006575e8843c6",
+  "api_worker_version": "4c82ccd5-8e8d-4c78-ad17-4cea9e707265",
+  "web_commit": "f1d99d3a4b062c6b85d935acf3289db67b2c83bf",
+  "api_deploy_run": 38850446545,
+  "web_deploy_run": 38850786814,
+  "deploy_workflows_passed": true,
+  "admit_to_preview_ms": 7006,
+  "admit_to_outbound_observation_ms": 5568,
+  "outbound_observation_to_decode_ms": 290,
+  "decode_to_preview_ms": 1148,
+  "startup_requests": [
+    {
+      "phase": "guest_startup",
+      "status": 409,
+      "at_ms": 24344.362416,
+      "started_wall_ms": 1792125095800,
+      "duration_ms": 256.12029099999927,
+      "error_code": "rtc_guest_not_ready"
+    },
+    {
+      "phase": "guest_startup",
+      "status": 409,
+      "at_ms": 25586.498916,
+      "started_wall_ms": 1792125097063,
+      "duration_ms": 235.17291599999953,
+      "error_code": "rtc_guest_not_ready"
+    },
+    {
+      "phase": "guest_startup",
+      "status": 409,
+      "at_ms": 26833.266166,
+      "started_wall_ms": 1792125098341,
+      "duration_ms": 203.97087499999907
+    },
+    {
+      "phase": "guest_startup",
+      "status": 201,
+      "at_ms": 28223.934541,
+      "started_wall_ms": 1792125099560,
+      "duration_ms": 375.12395800000013
+    }
+  ],
+  "return_video_width": 1280,
+  "return_video_height": 720,
+  "stage_and_removal_verified": true,
+  "recording": {
+    "local_numbered_marker_gate_passed": false,
+    "absolute_p95_ms": 86.66666666667152,
+    "unmatched_audio": 1,
+    "uncertain_tones": 1,
+    "missing_video_labels_within_observed_span": [
+      7,
+      8,
+      17,
+      19,
+      20,
+      21,
+      22
+    ]
+  },
+  "cleanup": {
+    "rooms": 3,
+    "removed": 3,
+    "failures": 0
+  },
+  "limitations": [
+    "One production observation, not a latency percentile. Four-to-five-second target not established.",
+    "Production desktop binary and native media candidates were not released by these API/web PRs.",
+    "Full recording gate failed; does not qualify continuous native AV behavior."
+  ]
+}
