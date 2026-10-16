@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-15",
+  "live": false,
+  "scope": "Fresh isolated same candidate repeat; Admit plus automatic Show to native thumbnail",
+  "previous_run_ms": 4747,
+  "repeat": {
+    "admit_api_ms": 1432.5871250000018,
+    "control_and_stage_ms": 1978,
+    "stage_end_to_decode_ms": 823,
+    "decode_to_preview_ms": 1457,
+    "admit_to_preview_ms": 5690
+  },
+  "recording": {
+    "matched_pairs": 16,
+    "absolute_p95_ms": 36.66666666667152,
+    "local_numbered_marker_gate_passed": true,
+    "uncertain_tones": 0,
+    "unmatched_audio": 0,
+    "unmatched_video": 0,
+    "missing_video_labels_within_observed_span": []
+  },
+  "limitations": [
+    "Individual runs, not p95 startup latency.",
+    "Control requests and media startup overlap; phase differences are elapsed boundaries, not exclusive causal costs.",
+    "Isolated candidate is not live; measurements do not establish production latency."
+  ]
+}
