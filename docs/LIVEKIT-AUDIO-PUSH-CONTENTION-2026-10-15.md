@@ -25,3 +25,18 @@ delays are unchanged. Release builds retain 16 queue blocks and incoming trylock
 The candidate uses 48 blocks only in diagnostic builds. The desktop diagnostic
 built successfully with a temporary rlib-only manifest, restored after the build.
 All owned Cloud test rooms were deleted; recordings and numeric traces retained.
+
+Waveform follow-up: the ambiguous fragment begins at recorded PTS 25,390 ms.
+The 25,400–25,410 ms window is exactly zero PCM, and the 25,460–25,470 ms window
+has peak amplitude 2 (16-bit PCM), between substantial tone segments. This is real
+recorded fragmentation, not grounds to relax the detector. The point at which
+samples become silent remains unproven: decoded PCM, submission scheduling and
+mixer consumption need separate observations.
+
+Speed accounting for that individual candidate run: Admit API 1,009 ms,
+Admit request start to native thumbnail 4,747 ms, first decoded frame to first
+ingest 1,036 ms. The earlier measured baseline was 11,466 ms to thumbnail, so
+this individual comparison is approximately 59% shorter (6.7 seconds saved).
+These are isolated run observations, not latency percentiles or live guarantees.
+Audio/video sync p95 43.333 ms measures alignment, not join speed. Candidate is
+not live and has not passed repeatable qualification.

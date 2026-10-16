@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-15",
+  "live": false,
+  "candidate_measurements": {
+    "admit_api_ms": 1009.4299170000013,
+    "admit_to_native_thumbnail_ms": 4747,
+    "decoded_to_ingest_ms": 1036
+  },
+  "earlier_baseline_admit_to_thumbnail_ms": 11466,
+  "comparison_limitation": "Individual isolated runs, not a distribution or production speed guarantee",
+  "fragment": {
+    "recorded_start_ms": 25390,
+    "uncertain_window_ms": 10,
+    "silent_window_start_ms": 25400,
+    "silent_window_ms": 10,
+    "near_silent_window_start_ms": 25460,
+    "near_silent_window_peak_i16": 2,
+    "conclusion": "Actual recorded PCM gaps. Detector gate remains unchanged. Upstream decoded PCM versus scheduling/mixer cause not yet established."
+  }
+}
