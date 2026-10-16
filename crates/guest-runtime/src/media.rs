@@ -83,6 +83,10 @@ pub struct Counters {
     #[cfg(debug_assertions)]
     pub first_audio_binding_ms: AtomicU64,
     #[cfg(debug_assertions)]
+    pub first_video_attach_ms: AtomicU64,
+    #[cfg(debug_assertions)]
+    pub first_audio_attach_ms: AtomicU64,
+    #[cfg(debug_assertions)]
     pub first_frame_binding_retries: AtomicU64,
     #[cfg(debug_assertions)]
     pub first_audio_clock_ms: AtomicU64,
@@ -110,6 +114,8 @@ impl Counters {
             ("first_video_submit_ms", &self.first_video_submit_ms),
             ("first_video_binding_ms", &self.first_video_binding_ms),
             ("first_audio_binding_ms", &self.first_audio_binding_ms),
+            ("first_video_attach_ms", &self.first_video_attach_ms),
+            ("first_audio_attach_ms", &self.first_audio_attach_ms),
             ("first_frame_binding_retries", &self.first_frame_binding_retries),
             ("first_audio_clock_ms", &self.first_audio_clock_ms),
             ("first_video_clock_ms", &self.first_video_clock_ms),
@@ -227,6 +233,9 @@ struct Track {
     video: Option<VideoTap>,
 }
 impl Track {
+    fn is_initial_binding(&self, ssrc: u32) -> bool {
+        self.bound == 0 && self.last_ssrc == 0 && ssrc != 0
+    }
     fn bind(&mut self, ssrc: u32, retired: &mut HashSet<u32>) -> bool {
         if ssrc == self.bound {
             return false;
@@ -343,25 +352,44 @@ impl State {
             .store(counts.len() as u64, Ordering::Relaxed);
         for guest in self.guests.values_mut() {
             let mut changed = false;
+            let mut initial_only = true;
             for track in &mut guest.tracks {
                 let ssrc = track.ssrc.load(Ordering::Acquire);
-                changed |= track.bind(ssrc, &mut self.retired_ssrc);
+                let initial = track.is_initial_binding(ssrc)
+                    && counts.get(&ssrc) == Some(&1)
+                    && !self.retired_ssrc.contains(&ssrc);
+                if track.bind(ssrc, &mut self.retired_ssrc) {
+                    changed = true;
+                    initial_only &= initial;
+                }
             }
+            #[cfg(debug_assertions)]
+            let preserve_initial = changed && initial_only
+                && std::env::var("PRODUCER_RTC_INITIAL_BINDING_PROOF").as_deref() == Ok("1");
+            #[cfg(not(debug_assertions))]
+            let preserve_initial = { let _ = initial_only; false };
             if changed {
                 #[cfg(debug_assertions)]
                 stamp_once(&self.counters.first_binding_ms);
                 #[cfg(debug_assertions)]
-                eprintln!("Native RTC receiver clock reset: binding changed");
-                guest.clear();
-                if let Some(output) = self.outputs.open(&guest.permission.source_id()) {
-                    guest.output = output;
+                eprintln!("Native RTC receiver binding changed; preserved initial timing={preserve_initial}");
+                if !preserve_initial {
+                    guest.clear();
+                    if let Some(output) = self.outputs.open(&guest.permission.source_id()) {
+                        guest.output = output;
+                    }
+                    guest.since = rtc;
                 }
-                guest.since = rtc;
+                // Adding the other track for the first time cannot replace an
+                // existing decoder. Preserve its already-qualified clock; any
+                // binding loss, reproof or replacement takes the full reset above.
                 for track in &guest.tracks {
                     if track.bound != 0 {
                         if track.source == PublishSource::Camera {
-                            guest.video_clock = Some(SenderClock::new(track.bound, 90000));
-                        } else {
+                            if guest.video_clock.is_none() {
+                                guest.video_clock = Some(SenderClock::new(track.bound, 90000));
+                            }
+                        } else if guest.audio_clock.is_none() {
                             guest.audio_clock = Some(SenderClock::new(track.bound, 48000));
                         }
                     }
@@ -778,6 +806,8 @@ impl GuestMedia for Receiver {
         };
         #[cfg(debug_assertions)]
         let first_frame = video.as_ref().map(|tap| tap.first_frame.clone());
+        #[cfg(debug_assertions)]
+        stamp_once(if kind == "video" { &self.counters.first_video_attach_ms } else { &self.counters.first_audio_attach_ms });
         let counters = self.counters.clone();
         let stats = thread::Builder::new()
             .name("rtc-receiver-binding".into())
@@ -785,6 +815,9 @@ impl GuestMedia for Receiver {
                 counters.workers.fetch_add(1, Ordering::AcqRel);
                 #[cfg(debug_assertions)]
                 let mut frame_retry_available = std::env::var("PRODUCER_RTC_FIRST_FRAME_BINDING_PROOF").as_deref() == Ok("1");
+                #[cfg(debug_assertions)]
+                let mut startup_audio_retries = if kind == "audio"
+                    && std::env::var("PRODUCER_RTC_AUDIO_STARTUP_STATS_PROOF").as_deref() == Ok("1") { 3 } else { 0 };
                 while !stopped.load(Ordering::Acquire) {
                     let result = runtime.block_on(async {
                         // Stats are a decoder-binding proof, not a 4 Hz media poll.
@@ -842,8 +875,10 @@ impl GuestMedia for Receiver {
                     #[cfg(debug_assertions)]
                     if binding.load(Ordering::Acquire) != 0 {
                         frame_retry_available = false;
+                        startup_audio_retries = 0;
                     }
-                    for _ in 0..100 {
+                    for wait_tick in 0..100 {
+                        let _ = wait_tick;
                         if stopped.load(Ordering::Acquire) {
                             break;
                         }
@@ -854,6 +889,14 @@ impl GuestMedia for Receiver {
                             // steady-state stats poll or a substitute for decoder ownership.
                             frame_retry_available = false;
                             counters.first_frame_binding_retries.fetch_add(1, Ordering::Relaxed);
+                            break;
+                        }
+                        #[cfg(debug_assertions)]
+                        if wait_tick == 10 && startup_audio_retries > 0
+                            && binding.load(Ordering::Acquire) == 0 {
+                            // At most three extra, sequential startup queries.
+                            // Never accelerate steady-state stats or reproof after loss.
+                            startup_audio_retries -= 1;
                             break;
                         }
                         thread::sleep(Duration::from_millis(10));
@@ -1003,8 +1046,13 @@ mod tests {
             video: None,
         };
         let mut retired = HashSet::new();
+        assert!(!track.is_initial_binding(0));
+        assert!(track.is_initial_binding(7));
         assert!(track.bind(7, &mut retired));
+        assert!(!track.is_initial_binding(7));
         assert!(track.bind(0, &mut retired));
+        assert!(!track.is_initial_binding(7));
+        assert!(!track.is_initial_binding(8));
         assert!(retired.is_empty());
         assert!(track.bind(7, &mut retired));
         assert!(!track.bind(7, &mut retired));
