@@ -391,12 +391,16 @@ impl HostOwner {
                         if request.reply.is_closed() { continue; }
                         // Controls precede polling: a slow authority read must
                         // not make an overdue poll starve the bounded queue.
-                        // Each command independently refreshes authority too.
+                        // Reuse only independently refreshed current authority; otherwise fetch.
                         // The same task owns commands, renewal and permission
                         // reads. No GUI request races a cached host revision.
                         let result=async {
-                            let before=control.media_authority().await?;
-                            connection.media_authority(before)?;
+                            let reused = connection.media_authority_updater().current_snapshot()
+                                .is_some_and(|snapshot| control.use_current_authority(&snapshot));
+                            if !reused {
+                                let before=control.media_authority().await?;
+                                connection.media_authority(before)?;
+                            }
                             let result=control.room_command(request.command).await;
                             // Even an ambiguous POST may have committed. Never
                             // extend old permits or blindly replay the POST.

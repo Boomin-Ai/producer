@@ -152,6 +152,9 @@ jobs:
           tagName: v__VERSION__
           releaseName: "Producer v__VERSION__"
           releaseBody: |
+            Native LiveKit Admit/Show commands now reuse fresh verified authority to avoid a redundant network read.
+            The guest browser and hosted API also use combined startup requests, deployed separately.
+            No experimental native media timing or buffering changes are included in this release.
             Apple Silicon hosted guest rooms use LiveKit with automatic native transport recovery.
             Staged guests can hear one another through microphone-only hosted subscriptions.
             Settings now includes Check for updates and distinguishes failed checks from up to date.
