@@ -444,6 +444,8 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
     unsafe {
         ffi::producer_person_mask_register();
         ffi::producer_source_appearance_register();
+        #[cfg(feature = "guest-rtc-pilot")]
+        super::rtc_ingest::register_type();
     };
 
     #[cfg(target_os = "macos")]
@@ -534,7 +536,23 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
         samples_per_sec: 48000,
         speakers: ffi::SPEAKERS_STEREO,
     };
-    if !unsafe { ffi::obs_reset_audio(&oai) } {
+    // The RTC publisher needs a bounded capture timeline. Legacy OBS audio
+    // can grow its mixer delay to 960 ms, exceeding our publication budget.
+    // Keep this candidate restricted to the explicit native RTC pilot.
+    let rtc_audio = cfg!(feature = "guest-rtc-pilot")
+        && (cfg!(feature = "guest-rtc-production") || std::env::var("PRODUCER_RTC_PROGRAM_PILOT").as_deref() == Ok("1"));
+    let audio_ready = if rtc_audio {
+        let bounded = ffi::obs_audio_info2 {
+            samples_per_sec: oai.samples_per_sec,
+            speakers: oai.speakers,
+            max_buffering_ms: 200,
+            fixed_buffering: true,
+        };
+        unsafe { ffi::obs_reset_audio2(&bounded) }
+    } else {
+        unsafe { ffi::obs_reset_audio(&oai) }
+    };
+    if !audio_ready {
         report.errors.push("obs_reset_audio failed".into());
         return report;
     }
@@ -2165,7 +2183,10 @@ pub fn start(
                             .is_ok()
                         {
                             #[cfg(debug_assertions)]
-                            if dumped.insert(id.clone()) {
+                            // First async-source frames can be black before decoding.
+                            // Save the first image containing pixels for diagnostics.
+                            if rgba.chunks_exact(4).any(|p| p[0] > 12 || p[1] > 12 || p[2] > 12)
+                                && dumped.insert(id.clone()) {
                                 let _ = std::fs::create_dir_all("/tmp/producer-thumbs");
                                 let _ =
                                     std::fs::write(format!("/tmp/producer-thumbs/{id}.jpg"), &jpg);

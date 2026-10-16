@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-15",
+  "live": false,
+  "scope": "Unchanged isolated candidate; Admit plus automatic Show",
+  "repeat": {
+    "admit_api_ms": 1282.6598330000015,
+    "control_and_stage_ms": 2552,
+    "stage_end_to_decode_ms": 2416,
+    "decode_to_preview_ms": 1459,
+    "admit_to_preview_ms": 7710
+  },
+  "recording": {
+    "matched_pairs": 5,
+    "absolute_p95_ms": 60,
+    "local_numbered_marker_gate_passed": false,
+    "uncertain_tones": 0,
+    "unmatched_audio": 10,
+    "unmatched_video": 0,
+    "missing_video_labels_within_observed_span": [
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      14,
+      15,
+      16,
+      17
+    ]
+  }
+}

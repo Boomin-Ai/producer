@@ -1,6 +1,12 @@
 use std::path::PathBuf;
 
 fn main() {
+    if std::env::var_os("CARGO_FEATURE_GUEST_RTC_PILOT").is_some()
+        && std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos")
+    {
+        // Required by the native SDK's static Objective-C categories.
+        println!("cargo:rustc-link-arg=-ObjC");
+    }
     println!("cargo:rustc-check-cfg=cfg(have_engine)");
     link_window_vibrancy_macos();
     link_live_engine();
@@ -27,6 +33,8 @@ fn link_window_vibrancy_macos() {
 /// engine/obs.lock and LIVE-REVIEW.md). When no artifact is present the app
 /// still builds — live features compile to stubs.
 fn link_live_engine() {
+    println!("cargo:rerun-if-changed=src/live/guest_ingest.c");
+    println!("cargo:rerun-if-changed=src/live/guest_ingest.h");
     println!("cargo:rerun-if-changed=src/live/source_appearance.c");
     println!("cargo:rerun-if-changed=src/live/source_appearance.effect.h");
     // The one seam that decides whether this is a live build. Each supported OS
@@ -61,6 +69,7 @@ fn link_live_engine_macos() {
     }
 
     println!("cargo:rustc-cfg=have_engine");
+    compile_guest_ingest();
     println!("cargo:rustc-link-search=framework={}", frameworks.display());
     println!("cargo:rustc-link-lib=framework=libobs");
     println!("cargo:rustc-link-lib=framework=CoreFoundation");
@@ -187,6 +196,7 @@ fn link_live_engine_windows() {
     };
 
     println!("cargo:rustc-cfg=have_engine");
+    compile_guest_ingest();
     println!("cargo:rustc-link-search=native={}", libdir.display());
 
     // NO link-lib directive for obs here, deliberately. Cargo's build-script
@@ -210,4 +220,15 @@ fn link_live_engine_windows() {
     println!("cargo:rustc-link-lib=dylib=user32");
     println!("cargo:rustc-link-lib=dylib=gdi32");
     println!("cargo:rustc-link-lib=dylib=ole32");
+}
+
+fn compile_guest_ingest() {
+    if std::env::var_os("CARGO_FEATURE_GUEST_RTC_PILOT").is_some() {
+        let mut build=cc::Build::new();
+        build.file("src/live/guest_ingest.c");
+        if std::env::var("PROFILE").as_deref()==Ok("debug") {
+            build.define("PRODUCER_INGRESS_DIAGNOSTICS",None);
+        }
+        build.compile("producer_guest_ingest");
+    }
 }

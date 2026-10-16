@@ -1,0 +1,31 @@
+{
+  "passed": false,
+  "scope": "Native source lifecycle with capture thread QoS, fixed PCM and combined injected stalls",
+  "result": {
+    "passed": null,
+    "audio_submitted": 5872,
+    "video_submitted": 1735,
+    "timing": {
+      "capture_blocks_discarded": 2,
+      "capture_fault_code": 0,
+      "capture_gap_injected": true,
+      "capture_priority_enabled": true,
+      "maximum_audio_call_us": 80,
+      "maximum_audio_late_us": 21978,
+      "maximum_callback_age_us": 420506,
+      "maximum_capture_age_us": 401469,
+      "maximum_capture_queue_wait_us": 4937,
+      "maximum_loop_gap_us": 7220,
+      "maximum_video_call_us": 32052,
+      "maximum_work_us": 29240,
+      "minimum_audio_spacing_us": 8076,
+      "program_buffer_ms": 400,
+      "publisher_recoveries": 1,
+      "silence_blocks_submitted": 136,
+      "startup_audio_blocks_discarded": 0,
+      "time_constrained_scheduling": true,
+      "video_worker_stall_injected": true
+    }
+  },
+  "finding": "Capture age improved, but a publisher deadline miss remained. Standard bounded mpsc channel internals can spin waiting for a sender-reserved slot."
+}

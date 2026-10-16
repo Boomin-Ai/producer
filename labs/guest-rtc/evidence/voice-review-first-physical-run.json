@@ -1,0 +1,53 @@
+{
+  "run": "physical-publication-1791667205311786000",
+  "seconds": 40.085007583,
+  "p95_ms": 27,
+  "recoveries": 1,
+  "native_errors": 0,
+  "owners_retired": true,
+  "callbacks_remaining": 0,
+  "join": {
+    "joined": true,
+    "named_thread": true,
+    "shutdown_ms": 42.28825
+  },
+  "voice_capture": {
+    "recorded": true,
+    "rate": 48000,
+    "samples": 1920000,
+    "duration_seconds": 40,
+    "bytes": 3840044,
+    "scope": "private Application Support decoded return; no PCM in repository",
+    "guest_clip_muted_after_30_seconds": true
+  },
+  "wav": {
+    "rate": 48000,
+    "channels": 1,
+    "sample_width": 2,
+    "frames": 1920000,
+    "duration": 40.0,
+    "mode": "0o600",
+    "directory_mode": "0o700"
+  },
+  "phase_energy_approximate_harness_clock": [
+    {
+      "phase": "quiet",
+      "rms_dbfs": -44.68,
+      "peak": 0.0879
+    },
+    {
+      "phase": "over_guest",
+      "rms_dbfs": -25.42,
+      "peak": 0.6731
+    },
+    {
+      "phase": "alone",
+      "rms_dbfs": -19.97,
+      "peak": 0.8806
+    }
+  ],
+  "subjective_quality_qualified": true,
+  "g1_complete": false,
+  "human_listening_review": "sounds great",
+  "subjective_quality_scope": "this physical Mac trial only; not other devices, WAN or reconnect listening"
+}

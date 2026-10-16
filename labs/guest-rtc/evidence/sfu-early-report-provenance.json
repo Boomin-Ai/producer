@@ -1,0 +1,24 @@
+{
+  "base_manifest": "sfu-build-provenance.json",
+  "base_sfu_commit": "6fbe7f7e648aab4b2f734d6044a416bc2cbc482c",
+  "upstream_buffer_sha256": "cabe995e69a10ba0a3937766e0b33215074600c5d7f4c17bdae1fb9d8e181e25",
+  "patch_sha256": "9e779c408240e18a61175c0047f49f220b74bfc8edd2f0ee0c30f6ec9d27efb1",
+  "patched_files_sha256": {
+    "pkg/sfu/buffer/buffer.go": "1abacc2f10bf4014ebccf5e2ae971f87cc4c11c16fcf3848052171af309eff10",
+    "pkg/sfu/buffer/lab_sr_request.go": "46628f61cc5ce699063b07d09dd74fc8e6f0e1e6b102709283956fc0b37fa5e8",
+    "pkg/sfu/buffer/lab_sr_request_test.go": "55755b3782dd0a4b37ac18ea32daf180b3e0026fd11ac48777c908bbdb1ecda7"
+  },
+  "built_binary_sha256": "3dd25c3833c1c433664027f922502db137dea05570d072bc9d4e9b37d81c58fe",
+  "default_enabled": false,
+  "maximum_requests_per_audio_ssrc": 3,
+  "minimum_spacing_ms": 250,
+  "deadline_ms": 1000,
+  "extra_threads_or_timers": 0,
+  "server_build_completed": true,
+  "request_policy_test_passed": true,
+  "live_experiment_completed": true,
+  "g1_complete": false,
+  "startup_acceptance_passed": false,
+  "observed_requests_per_audio_track": 1,
+  "retry_policy_release_qualified": false
+}

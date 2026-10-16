@@ -1,0 +1,99 @@
+{
+  "date": "2026-10-15",
+  "status": "isolated debug evidence; not live",
+  "scope": "numbered source, local OBS control, Cloud guest recording",
+  "gate_absolute_p95_ms": 80,
+  "trials": [
+    {
+      "name": "direct_browser_source",
+      "matched_pairs": 7,
+      "absolute_p95_ms": 28.366666666666788,
+      "unmatched_audio": 0,
+      "unmatched_video": 0,
+      "missing_video_labels_within_observed_span": [],
+      "audio_pts_discontinuities": 0,
+      "local_numbered_marker_gate_passed": true
+    },
+    {
+      "name": "local_obs_fragmented",
+      "matched_pairs": 7,
+      "absolute_p95_ms": 116.66666666666606,
+      "unmatched_audio": 0,
+      "unmatched_video": 0,
+      "missing_video_labels_within_observed_span": [],
+      "audio_pts_discontinuities": 0,
+      "local_numbered_marker_gate_passed": false
+    },
+    {
+      "name": "local_obs_regular_mp4",
+      "matched_pairs": 7,
+      "absolute_p95_ms": 26.66666666666788,
+      "unmatched_audio": 0,
+      "unmatched_video": 0,
+      "missing_video_labels_within_observed_span": [],
+      "audio_pts_discontinuities": 0,
+      "local_numbered_marker_gate_passed": true
+    },
+    {
+      "name": "cloud_regular_mp4",
+      "matched_pairs": 9,
+      "absolute_p95_ms": 536.6666666666642,
+      "unmatched_audio": 6,
+      "unmatched_video": 0,
+      "missing_video_labels_within_observed_span": [
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "audio_pts_discontinuities": 0,
+      "local_numbered_marker_gate_passed": false
+    },
+    {
+      "name": "cloud_regular_mp4_latest_video",
+      "matched_pairs": 9,
+      "absolute_p95_ms": 40,
+      "unmatched_audio": 6,
+      "unmatched_video": 0,
+      "missing_video_labels_within_observed_span": [
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "audio_pts_discontinuities": 0,
+      "local_numbered_marker_gate_passed": false
+    },
+    {
+      "name": "local_obs_fragmented_signed_cts",
+      "matched_pairs": 7,
+      "absolute_p95_ms": 26.66666666666697,
+      "unmatched_audio": 0,
+      "unmatched_video": 0,
+      "missing_video_labels_within_observed_span": [],
+      "audio_pts_discontinuities": 0,
+      "local_numbered_marker_gate_passed": true
+    },
+    {
+      "name": "cloud_fragmented_signed_cts_latest_video",
+      "matched_pairs": 15,
+      "absolute_p95_ms": 63.33333333332848,
+      "unmatched_audio": 1,
+      "unmatched_video": 0,
+      "missing_video_labels_within_observed_span": [],
+      "audio_pts_discontinuities": 0,
+      "local_numbered_marker_gate_passed": false
+    }
+  ],
+  "notes": [
+    "One latest-video cloud attempt failed on host API timeout before guest connection; excluded from media comparison.",
+    "Latest-video reduced observed paired offset but did not pass coverage.",
+    "Browser source trace painted missing labels 13\u201318; accepted handoff trace omitted them.",
+    "Signed CTS local control retains fragmented MP4; full Cloud confirmation unfinished.",
+    "Signed CTS + latest video Cloud repeat matched 15 pairs, 63.333 ms p95, no missing video labels within span; one leading unmatched audio marker keeps strict overall gate false."
+  ]
+}

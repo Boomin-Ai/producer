@@ -1,0 +1,229 @@
+{
+  "audio_detector_window_max_ms" : 10,
+  "audio_marker_pts_ms" : [
+    1876,
+    3870,
+    5871.333333333333,
+    7868,
+    9870.6666666666679,
+    11868.666666666668,
+    13881.333333333332,
+    15878,
+    17880.666666666668,
+    19878.666666666664,
+    21881.333333333332,
+    23878,
+    25870.666666666668,
+    27868.666666666664,
+    29871.333333333332,
+    31880.666666666664,
+    33923.333333333336,
+    35910,
+    37882.666666666664,
+    39890.666666666672,
+    41883.333333333336,
+    43890
+  ],
+  "audio_samples_decoded" : 2174976,
+  "browser_source_paint_uncertainty_ms" : 33.333333333333336,
+  "decoder" : "macOS AVFoundation",
+  "duration_seconds" : 45.299999999999997,
+  "g1_complete" : false,
+  "late_minus_early_median_offset_ms" : -2.000000000003638,
+  "lip_sync_qualified" : false,
+  "network_impairment_qualified" : false,
+  "observed_marker_test_pass" : true,
+  "pairs" : [
+    {
+      "audio_pts_ms" : 1876,
+      "video_minus_audio_ms" : -9.3333333333332575,
+      "video_pts_ms" : 1866.6666666666667
+    },
+    {
+      "audio_pts_ms" : 3870,
+      "video_minus_audio_ms" : 30,
+      "video_pts_ms" : 3900
+    },
+    {
+      "audio_pts_ms" : 5871.333333333333,
+      "video_minus_audio_ms" : 28.66666666666697,
+      "video_pts_ms" : 5900
+    },
+    {
+      "audio_pts_ms" : 7868,
+      "video_minus_audio_ms" : -1.3333333333339397,
+      "video_pts_ms" : 7866.6666666666661
+    },
+    {
+      "audio_pts_ms" : 9870.6666666666679,
+      "video_minus_audio_ms" : 29.333333333332121,
+      "video_pts_ms" : 9900
+    },
+    {
+      "audio_pts_ms" : 11868.666666666668,
+      "video_minus_audio_ms" : -2,
+      "video_pts_ms" : 11866.666666666668
+    },
+    {
+      "audio_pts_ms" : 13881.333333333332,
+      "video_minus_audio_ms" : 18.666666666667879,
+      "video_pts_ms" : 13900
+    },
+    {
+      "audio_pts_ms" : 15878,
+      "video_minus_audio_ms" : 22,
+      "video_pts_ms" : 15900
+    },
+    {
+      "audio_pts_ms" : 17880.666666666668,
+      "video_minus_audio_ms" : 19.333333333332121,
+      "video_pts_ms" : 17900
+    },
+    {
+      "audio_pts_ms" : 19878.666666666664,
+      "video_minus_audio_ms" : 21.333333333335759,
+      "video_pts_ms" : 19900
+    },
+    {
+      "audio_pts_ms" : 21881.333333333332,
+      "video_minus_audio_ms" : 18.666666666667879,
+      "video_pts_ms" : 21900
+    },
+    {
+      "audio_pts_ms" : 23878,
+      "video_minus_audio_ms" : 22,
+      "video_pts_ms" : 23900
+    },
+    {
+      "audio_pts_ms" : 25870.666666666668,
+      "video_minus_audio_ms" : 29.333333333332121,
+      "video_pts_ms" : 25900
+    },
+    {
+      "audio_pts_ms" : 27868.666666666664,
+      "video_minus_audio_ms" : 31.333333333335759,
+      "video_pts_ms" : 27900
+    },
+    {
+      "audio_pts_ms" : 29871.333333333332,
+      "video_minus_audio_ms" : 28.666666666667879,
+      "video_pts_ms" : 29900
+    },
+    {
+      "audio_pts_ms" : 31880.666666666664,
+      "video_minus_audio_ms" : 19.333333333335759,
+      "video_pts_ms" : 31900
+    },
+    {
+      "audio_pts_ms" : 33923.333333333336,
+      "video_minus_audio_ms" : 9.999999999992724,
+      "video_pts_ms" : 33933.333333333328
+    },
+    {
+      "audio_pts_ms" : 35910,
+      "video_minus_audio_ms" : 23.333333333328483,
+      "video_pts_ms" : 35933.333333333328
+    },
+    {
+      "audio_pts_ms" : 37882.666666666664,
+      "video_minus_audio_ms" : 17.333333333335759,
+      "video_pts_ms" : 37900
+    },
+    {
+      "audio_pts_ms" : 39890.666666666672,
+      "video_minus_audio_ms" : 9.3333333333284827,
+      "video_pts_ms" : 39900
+    },
+    {
+      "audio_pts_ms" : 41883.333333333336,
+      "video_minus_audio_ms" : 16.666666666664241,
+      "video_pts_ms" : 41900
+    },
+    {
+      "audio_pts_ms" : 43890,
+      "video_minus_audio_ms" : 10,
+      "video_pts_ms" : 43900
+    }
+  ],
+  "pulse_recrossing_collapse_window_ms" : 150,
+  "raw_audio_threshold_crossings_ms" : [
+    1876,
+    3870,
+    5871.333333333333,
+    7868,
+    9870.6666666666679,
+    11868.666666666668,
+    13881.333333333332,
+    15878,
+    17880.666666666668,
+    19878.666666666664,
+    21881.333333333332,
+    23878,
+    25870.666666666668,
+    27868.666666666664,
+    29871.333333333332,
+    31880.666666666664,
+    33923.333333333336,
+    35910,
+    37882.666666666664,
+    39890.666666666672,
+    41883.333333333336,
+    43890
+  ],
+  "raw_video_threshold_crossings_ms" : [
+    1866.6666666666667,
+    3900,
+    5900,
+    7866.6666666666661,
+    9900,
+    11866.666666666668,
+    13900,
+    15900,
+    17900,
+    19900,
+    21900,
+    23900,
+    25900,
+    27900,
+    29900,
+    31900,
+    33933.333333333328,
+    35933.333333333328,
+    37900,
+    39900,
+    41900,
+    43900
+  ],
+  "recorded_av_abs_p95_ms" : 30,
+  "recorded_video_minus_audio_median_ms" : 19.333333333335759,
+  "recording" : "generated-recovery-1791699883886780000-obs.mp4",
+  "schema_version" : 2,
+  "source_pulse_duration_ms" : 120,
+  "unmatched_audio_markers" : 0,
+  "unmatched_video_markers" : 0,
+  "video_frames_decoded" : 1359,
+  "video_marker_pts_ms" : [
+    1866.6666666666667,
+    3900,
+    5900,
+    7866.6666666666661,
+    9900,
+    11866.666666666668,
+    13900,
+    15900,
+    17900,
+    19900,
+    21900,
+    23900,
+    25900,
+    27900,
+    29900,
+    31900,
+    33933.333333333328,
+    35933.333333333328,
+    37900,
+    39900,
+    41900,
+    43900
+  ]
+}

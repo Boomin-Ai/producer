@@ -1,0 +1,153 @@
+{
+  "run_label": "speakerphone-1791646556419804000",
+  "report": {
+    "additional_capture_hold_capacity": 1,
+    "agc": false,
+    "apm_channels": 1,
+    "apm_delay_estimate_ms": {
+      "acoustic_delay_calibrated": false,
+      "maximum": 115,
+      "minimum": 5
+    },
+    "capture_hold_limit_ms": 80,
+    "capture_hold_retired": false,
+    "devices": "CADefaultDeviceAggregate-57436-0 \u2192 CADefaultDeviceAggregate-57436-0",
+    "duration_seconds": 60.030076416,
+    "g1_complete": false,
+    "hardware_capture_used": true,
+    "high_pass": false,
+    "invalid_delay_blocks": 0,
+    "lifecycle": {
+      "callbacks_active": 0,
+      "clipped_samples": 0,
+      "format_or_timeline_errors": 0,
+      "maximum_tap_frames": {
+        "microphone": 4800,
+        "speaker": 4800
+      },
+      "microphone": {
+        "capacity": 32,
+        "consumed": 5990,
+        "overflow": 0,
+        "pending_retired": 0,
+        "queued": 5990
+      },
+      "owners_and_callback_state_retired": true,
+      "speaker": {
+        "capacity": 32,
+        "consumed": 5990,
+        "overflow": 0,
+        "pending_retired": 0,
+        "queued": 5990
+      }
+    },
+    "microphone_blocks": 5990,
+    "microphone_played_or_published": false,
+    "ns": false,
+    "physical_aec_qualified": false,
+    "physical_speaker_reference_connected": true,
+    "processing_both_apms_p95_us": 517,
+    "provisional_far_only_attenuation_db": {
+      "median": 31.25881834862847,
+      "p10": 12.265329786221804,
+      "windows": 84
+    },
+    "reference_scope": "This engine's final stereo mixer output, downmixed to mono; excludes other apps and hardware-volume calibration",
+    "sample_rate": 48000,
+    "schema_version": 1,
+    "source_gain": 0.2,
+    "speaker_blocks": 5990,
+    "speech_intelligibility_qualified": false,
+    "stop_reason": "completed",
+    "system_voice_processing": false,
+    "user_phase_compliance_verified": false
+  },
+  "continuity": {
+    "speaker": {
+      "blocks": 5990,
+      "minimum_delta_ms": 10.0,
+      "maximum_delta_ms": 10.007167,
+      "maximum_deviation_from_10ms": 0.007167
+    },
+    "microphone": {
+      "blocks": 5990,
+      "minimum_delta_ms": 10.0,
+      "maximum_delta_ms": 10.006917,
+      "maximum_deviation_from_10ms": 0.006917
+    }
+  },
+  "phase_signal_levels": {
+    "microphone-raw": {
+      "baseline": {
+        "rms_dbfs": -51.96201968344529,
+        "peak_pcm": 1475
+      },
+      "far_only": {
+        "rms_dbfs": -28.661978950054625,
+        "peak_pcm": 8484
+      },
+      "double_talk": {
+        "rms_dbfs": -27.58877117494425,
+        "peak_pcm": 8546
+      },
+      "near_only": {
+        "rms_dbfs": -43.15306649472425,
+        "peak_pcm": 5291
+      }
+    },
+    "processed-on": {
+      "baseline": {
+        "rms_dbfs": -52.3604085311823,
+        "peak_pcm": 1458
+      },
+      "far_only": {
+        "rms_dbfs": -45.86259094970397,
+        "peak_pcm": 5598
+      },
+      "double_talk": {
+        "rms_dbfs": -56.82773914067827,
+        "peak_pcm": 1134
+      },
+      "near_only": {
+        "rms_dbfs": -43.393039456241624,
+        "peak_pcm": 5118
+      }
+    },
+    "processed-off": {
+      "baseline": {
+        "rms_dbfs": -51.96201968344529,
+        "peak_pcm": 1475
+      },
+      "far_only": {
+        "rms_dbfs": -28.661978950054625,
+        "peak_pcm": 8484
+      },
+      "double_talk": {
+        "rms_dbfs": -27.58877117494425,
+        "peak_pcm": 8546
+      },
+      "near_only": {
+        "rms_dbfs": -43.15306649472425,
+        "peak_pcm": 5291
+      }
+    }
+  },
+  "phase_interpretation": "Time windows reflect instructions, not verified human compliance. Level differences alone do not prove speech intelligibility.",
+  "wav_sha256": {
+    "microphone-raw.wav": "fc902441907e06b1853be9ff501252694dcce29db8405c7483ecaad6df4e0c2b",
+    "processed-on.wav": "61985106abd3d3f0ea306679e3a5a240c55a4db922f735d3dd372b0d5534dd0b",
+    "processed-off.wav": "fc902441907e06b1853be9ff501252694dcce29db8405c7483ecaad6df4e0c2b",
+    "speaker-reference.wav": "ded61c0e64201d9ca0ff81e486664e8f940955c459c11a9bcc8b03bb2206b034"
+  },
+  "user_reported_phase_compliance": {
+    "speech_phases": "User reported: I forgot to talk.",
+    "double_talk_tested": false,
+    "near_speech_intelligibility_tested": false,
+    "speaker_volume": "Instructed 50%; not independently measured"
+  },
+  "configuration_correction": {
+    "legacy_high_pass_field": "Requested explicit high-pass=false; not effective processing status",
+    "aec_enforces_high_pass_by_default": true,
+    "basis": "Pinned WebRTC Config.echo_canceller.enforce_high_pass_filtering defaults true; original SDK wrapper did not override it."
+  }
+}

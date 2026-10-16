@@ -1,0 +1,137 @@
+{
+  "g1_complete": false,
+  "production_deployed": false,
+  "all_guest_compositing_qualified": false,
+  "arbitrary_reconnect_phase_qualified": false,
+  "historical_failed_trial_retained": "generated-recovery-1791738591686432000",
+  "historical_loss_cause_proven": false,
+  "validation": {
+    "javascript_tests_passed": 8,
+    "loss_analysis_tests_passed": 3,
+    "recording_gate_tests_passed": 16,
+    "native_source_unchanged_since": "87c4420"
+  },
+  "trials": [
+    {
+      "run": "generated-recovery-1791744099055403000",
+      "guests_connected": 3,
+      "selected_guest_recorded": "guest-1",
+      "seconds": 140,
+      "forced_full_reconnects": 3,
+      "source_phase_seconds": 0,
+      "native_sha256": "b4fae3bab40f9ca52616e3452ad2fca4355838cf3d8011a76210811d102b217b",
+      "sfu_sha256": "462b296c94efeca28e170ac18ca5b2fc1cdb65a8f896845f5f0e371eaca6c40e",
+      "local_obs_acceptance_passed": true,
+      "matched_markers": 70,
+      "absolute_p95_ms": 33.33333333333576,
+      "missing_video_labels": [],
+      "unmatched_audio": 0,
+      "unmatched_video": 0,
+      "source_counts": [
+        {
+          "identity": "guest-1",
+          "audio": 72,
+          "video": 72,
+          "errors": []
+        },
+        {
+          "identity": "guest-2",
+          "audio": 72,
+          "video": 72,
+          "errors": []
+        },
+        {
+          "identity": "guest-3",
+          "audio": 71,
+          "video": 71,
+          "errors": []
+        }
+      ],
+      "shutdown_drain": {
+        "budget_ms": 450,
+        "elapsed_us": 134791,
+        "new_input_sealed": true,
+        "pending_after_audio_video": [
+          0,
+          0
+        ],
+        "pending_before_audio_video": [
+          11,
+          3
+        ],
+        "timed_out": false
+      },
+      "input_sha256": {
+        "generated-recovery-1791744099055403000-browser.json": "8fc494e71f8ef996a84dade545d8694dab9359a7ba29315f1c8dc8cc66c74b29",
+        "generated-recovery-1791744099055403000-conditions.json": "d4ab5d3b354563382608e5bf5dbc9a32fe6fbdf145f87238974534a123141f52",
+        "generated-recovery-1791744099055403000-obs-acceptance.json": "1aa915f84eafe61ca1127e16c7e1f8e97ed14769efefd15f4235468cb22b2c51",
+        "generated-recovery-1791744099055403000-obs-markers.json": "5639812a1145922f0f2ad2294c68cac3b868266f20392b63c24d910be2209794",
+        "generated-recovery-1791744099055403000-obs-numbered.json": "c7d53f7a532e54eb7489f8f6e210f1f974e88d6b8faa63c06bd3846435acb0f2",
+        "generated-recovery-1791744099055403000-reconnect-loss.json": "0e7ae0b4c1c7891688159b2e05c4c62fbdc5a11260775423dc03588addd2291e",
+        "generated-recovery-1791744099055403000-sfu-provenance.json": "c070e5dee50fe2fb6ab85eda727a8a66059f87135704df728602da75b78344f8",
+        "generated-recovery-1791744099055403000.json": "fe880592757918ec05adecc8fe065cc03c0d39fa1750db9dec7e7c0e64ea6729"
+      }
+    },
+    {
+      "run": "generated-recovery-1791744383046566000",
+      "guests_connected": 3,
+      "selected_guest_recorded": "guest-1",
+      "seconds": 140,
+      "forced_full_reconnects": 3,
+      "source_phase_seconds": 1.5,
+      "native_sha256": "b4fae3bab40f9ca52616e3452ad2fca4355838cf3d8011a76210811d102b217b",
+      "sfu_sha256": "462b296c94efeca28e170ac18ca5b2fc1cdb65a8f896845f5f0e371eaca6c40e",
+      "local_obs_acceptance_passed": true,
+      "matched_markers": 70,
+      "absolute_p95_ms": 40.00000000001455,
+      "missing_video_labels": [],
+      "unmatched_audio": 0,
+      "unmatched_video": 0,
+      "source_counts": [
+        {
+          "identity": "guest-1",
+          "audio": 73,
+          "video": 73,
+          "errors": []
+        },
+        {
+          "identity": "guest-2",
+          "audio": 72,
+          "video": 72,
+          "errors": []
+        },
+        {
+          "identity": "guest-3",
+          "audio": 72,
+          "video": 72,
+          "errors": []
+        }
+      ],
+      "shutdown_drain": {
+        "budget_ms": 450,
+        "elapsed_us": 128267,
+        "new_input_sealed": true,
+        "pending_after_audio_video": [
+          0,
+          0
+        ],
+        "pending_before_audio_video": [
+          12,
+          4
+        ],
+        "timed_out": false
+      },
+      "input_sha256": {
+        "generated-recovery-1791744383046566000-browser.json": "758c54aafb5f888f8181fa659083c9e5f616e28bd21b721ca50fed5497de67f8",
+        "generated-recovery-1791744383046566000-conditions.json": "e30b62512ed9277a7de97d79009148c36db25596016159bd9ea4e640277786f4",
+        "generated-recovery-1791744383046566000-obs-acceptance.json": "9657606fe1096db6688e9338acf67104baba87465b286daf2b052b842d67ca1b",
+        "generated-recovery-1791744383046566000-obs-markers.json": "32ab1946e9ee0e7bda4d602922507863a67254de8d74259a9b9873e599a4a154",
+        "generated-recovery-1791744383046566000-obs-numbered.json": "adba2439dcc4109e88730d6db40a692f5d51819613cb17161e4e43dac7e13f08",
+        "generated-recovery-1791744383046566000-reconnect-loss.json": "bb02768e3880cae0806635127ae616726659ce0616986796034831fdfe21533a",
+        "generated-recovery-1791744383046566000-sfu-provenance.json": "c070e5dee50fe2fb6ab85eda727a8a66059f87135704df728602da75b78344f8",
+        "generated-recovery-1791744383046566000.json": "079cc0bb55a3a8d684f48e8cfe08cebc0afdd7c669643b4b3a197536e7686dc9"
+      }
+    }
+  ],
+  "interpretation": "Both runs pass existing recording gates. Source phase changes test stimulus only. These passes do not resolve historical failures or prove arbitrary disconnect timing. Source generation is not transport/decode receipt."
+}

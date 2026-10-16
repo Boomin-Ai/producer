@@ -1,0 +1,132 @@
+{
+  "run": "generated-recovery-1791757112564819000",
+  "g1_complete": false,
+  "production_deployed": false,
+  "loss_gate_relaxed": false,
+  "guests": 3,
+  "seconds": 90,
+  "reconnects": 2,
+  "selected_guest_recorded": "guest-1",
+  "native_sha256": "d741e5bfae81c976ccadfdcdbccce3c6e5ed7c80171ed7aaeac4eca62309af8b",
+  "local_obs_acceptance_passed": true,
+  "pairs": 44,
+  "absolute_p95_ms": 60,
+  "missing_video_labels": [],
+  "unmatched_video": 0,
+  "collector": {
+    "active_after_shutdown": false,
+    "capacity": 1,
+    "clock_snapshot_capacity": 1024,
+    "collected": 872,
+    "consumed": 872,
+    "errors": 0,
+    "max_collection_us": 417,
+    "pending": 0,
+    "presentation_waits_for_collection": false,
+    "replaced": 0,
+    "shutdown_us": 893,
+    "snapshot_retains_native_owner": false,
+    "typed_incoming_clock_snapshot": true
+  },
+  "audio_queue": {
+    "active_after_shutdown": false,
+    "capacity": 24,
+    "enqueue_contention_dropped": 27,
+    "flushed": 0,
+    "late": 4,
+    "max_native_submit_us": 1366,
+    "max_tick_gap_us": 72251,
+    "nonoverlapping_clock_retirements": 0,
+    "overflow": 0,
+    "pending": 0,
+    "publication_epoch": 12,
+    "pushed": 8783,
+    "retired_producer_dropped": 0,
+    "same_authority_transport_retirements": 10,
+    "sealed_for_finish": true,
+    "submitted": 8779,
+    "worker_failed": false,
+    "worker_qos_result_previous_effective": [
+      0,
+      21,
+      33
+    ]
+  },
+  "video_queue": {
+    "active_after_shutdown": false,
+    "capacity": 14,
+    "enqueue_contention_dropped": 1,
+    "flushed": 0,
+    "late": 2,
+    "max_native_submit_us": 645,
+    "max_tick_gap_us": 81970,
+    "nonoverlapping_clock_retirements": 0,
+    "overflow": 0,
+    "pending": 0,
+    "publication_epoch": 10,
+    "pushed": 2248,
+    "retired_producer_dropped": 0,
+    "same_authority_transport_retirements": 8,
+    "sealed_for_finish": true,
+    "submitted": 2246,
+    "worker_failed": false,
+    "worker_qos_result_previous_effective": [
+      0,
+      21,
+      33
+    ]
+  },
+  "binding_epochs": [
+    {
+      "binding_since_us": 14403436302,
+      "recovery_started_us": 14403407703,
+      "superseded_binding_epochs": [
+        14403407703,
+        14403430698
+      ],
+      "first_scheduled_ms": {
+        "audio": 528.703,
+        "video": 545.76
+      }
+    },
+    {
+      "binding_since_us": 14415842922,
+      "recovery_started_us": 14415759507,
+      "superseded_binding_epochs": [
+        14415759507,
+        14415759559,
+        14415841243
+      ],
+      "first_scheduled_ms": {
+        "audio": 657.58,
+        "video": 665.001
+      }
+    },
+    {
+      "binding_since_us": 14455854319,
+      "recovery_started_us": 14455770934,
+      "superseded_binding_epochs": [
+        14455770934,
+        14455771011,
+        14455852783
+      ],
+      "first_scheduled_ms": {
+        "audio": 583.837,
+        "video": 583.908
+      }
+    }
+  ],
+  "input_sha256": {
+    "generated-recovery-1791757112564819000-browser.json": "b98560b39119fc5d9b9b901bff50496b7ec1d78e33e94e970d1a86363b238977",
+    "generated-recovery-1791757112564819000-conditions.json": "3474b0c58932d29181ee3766c71de3632a4cd1fde644acdef76eed5fd7d0a545",
+    "generated-recovery-1791757112564819000-obs-acceptance.json": "eee5bba3cc89e8cce42398f9fc144a0b26ab4dc5d3e8e8e1a0b6292ba66c1930",
+    "generated-recovery-1791757112564819000-obs-markers.json": "54be990689e2daddb0607a88d001a4a41979e924204ec501a5147f0efe6af3db",
+    "generated-recovery-1791757112564819000-obs-numbered.json": "196853a4dc02324140788ad3c2c23849db8c9840d4642fa5fc82c97bfe411392",
+    "generated-recovery-1791757112564819000-reconnect-loss.json": "8305f611b27840d9b0a8589cf2deba66d3cfec7597daecba23bd0350b8b9e8c9",
+    "generated-recovery-1791757112564819000-sfu-provenance.json": "c070e5dee50fe2fb6ab85eda727a8a66059f87135704df728602da75b78344f8",
+    "generated-recovery-1791757112564819000.json": "6f337d91fd3f570455754923286cb3ca3a79173a0dad20483800565529ed2c9d",
+    "typed-clock-snapshot-lifecycle.json": "6beb91850b2bdb2cf202c8b40802767282570a4cf3a05b8b89ea7523e7f63041",
+    "native-clock-handoff-control.json": "9378010237bb2587cdb967c2020b15dca29f13c6c0d7aecd048912df99b75227"
+  },
+  "scope": "One local modified-SFU trial, three connected guests, guest-1 recorded. Full control failure retained. Improvements are encouraging, not long-duration or Cloud qualification."
+}

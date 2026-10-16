@@ -1,0 +1,69 @@
+{
+  "browser": "154.0.8037.98",
+  "guests": 1,
+  "mode": "normal",
+  "states": [
+    {
+      "identity": "guest-1",
+      "connected": true,
+      "published": true,
+      "returnAudioBlocks": 671,
+      "returnAudioPulses": 11,
+      "returnVideoFrames": 261,
+      "events": [
+        "return-audio",
+        "return-video"
+      ],
+      "audioMaxRms": 0.29493963839914206,
+      "error": null,
+      "syncStreams": true
+    }
+  ],
+  "audioStats": [
+    [
+      {
+        "id": "IT01A4134866443",
+        "timestamp": 1791605969041.939,
+        "type": "inbound-rtp",
+        "codecId": "CIT01_111_minptime=10;stereo=1;useinbandfec=1",
+        "kind": "audio",
+        "mediaType": "audio",
+        "ssrc": 4134866443,
+        "transportId": "T01",
+        "jitter": 0.019,
+        "packetsLost": 5,
+        "packetsReceived": 191,
+        "packetsReceivedWithCe": 0,
+        "packetsReceivedWithEct1": 0,
+        "audioLevel": 0,
+        "bytesReceived": 2498,
+        "concealedSamples": 14250,
+        "concealmentEvents": 10,
+        "fecPacketsDiscarded": 0,
+        "fecPacketsReceived": 0,
+        "headerBytesReceived": 2292,
+        "insertedSamplesForDeceleration": 240,
+        "jitterBufferDelay": 8918.4,
+        "jitterBufferEmittedCount": 179520,
+        "jitterBufferMinimumDelay": 19142.4,
+        "jitterBufferTargetDelay": 19142.4,
+        "lastPacketReceivedTimestamp": 1791605969037.727,
+        "mid": "8",
+        "packetsDiscarded": 1,
+        "playoutId": "AP",
+        "removedSamplesForAcceleration": 0,
+        "silentConcealedSamples": 3360,
+        "totalAudioEnergy": 0,
+        "totalProcessingDelay": 8097.64896,
+        "totalSamplesDuration": 4.079999999999957,
+        "totalSamplesReceived": 192960,
+        "trackIdentifier": "30d77c67-9d3e-485a-9b6a-dc34246d978b"
+      }
+    ]
+  ],
+  "impairments": [],
+  "packetProbe": [],
+  "return_transport_observed": true,
+  "hardware_capture_used": false,
+  "physical_speaker_playout_used": false
+}

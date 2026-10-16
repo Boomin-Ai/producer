@@ -1,0 +1,75 @@
+{
+  "acceptance_threshold_changed" : false,
+  "decoder" : "AVFoundation",
+  "recording_acceptance_overridden" : false,
+  "scope" : "Unpaired video markers and preceding matched controls. Rolling RMS diagnostics do not redefine the original numbered-recording gate.",
+  "supplemental_diagnostics_only" : true,
+  "windows" : [
+    {
+      "expected_tone_id_mod16" : 7,
+      "label" : 7,
+      "paired_by_original_detector" : true,
+      "peak_10ms_rms" : 13463.866813159584,
+      "peak_tone_id_mod16" : 7,
+      "peak_window_pts_ms" : 12021,
+      "search_radius_ms" : 150,
+      "tone_confidence_ratio" : 25.469511991584039,
+      "video_pts_ms" : 12000
+    },
+    {
+      "expected_tone_id_mod16" : 8,
+      "label" : 8,
+      "paired_by_original_detector" : false,
+      "peak_10ms_rms" : 0,
+      "peak_tone_id_mod16" : 0,
+      "peak_window_pts_ms" : 13850,
+      "search_radius_ms" : 150,
+      "tone_confidence_ratio" : 0,
+      "video_pts_ms" : 14000
+    },
+    {
+      "expected_tone_id_mod16" : 11,
+      "label" : 27,
+      "paired_by_original_detector" : true,
+      "peak_10ms_rms" : 13372.506632079117,
+      "peak_tone_id_mod16" : 11,
+      "peak_window_pts_ms" : 52002.333333333336,
+      "search_radius_ms" : 150,
+      "tone_confidence_ratio" : 25.92037454115836,
+      "video_pts_ms" : 52033.333333333328
+    },
+    {
+      "expected_tone_id_mod16" : 12,
+      "label" : 28,
+      "paired_by_original_detector" : false,
+      "peak_10ms_rms" : 0,
+      "peak_tone_id_mod16" : 0,
+      "peak_window_pts_ms" : 53850,
+      "search_radius_ms" : 150,
+      "tone_confidence_ratio" : 0,
+      "video_pts_ms" : 54000
+    },
+    {
+      "expected_tone_id_mod16" : 15,
+      "label" : 47,
+      "paired_by_original_detector" : true,
+      "peak_10ms_rms" : 13101.599968849225,
+      "peak_tone_id_mod16" : 15,
+      "peak_window_pts_ms" : 92096,
+      "search_radius_ms" : 150,
+      "tone_confidence_ratio" : 27.189690423051402,
+      "video_pts_ms" : 92000
+    },
+    {
+      "expected_tone_id_mod16" : 0,
+      "label" : 48,
+      "paired_by_original_detector" : false,
+      "peak_10ms_rms" : 0,
+      "peak_tone_id_mod16" : 0,
+      "peak_window_pts_ms" : 93850,
+      "search_radius_ms" : 150,
+      "tone_confidence_ratio" : 0,
+      "video_pts_ms" : 94000
+    }
+  ]
+}

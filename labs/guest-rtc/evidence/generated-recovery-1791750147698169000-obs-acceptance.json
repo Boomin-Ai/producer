@@ -1,0 +1,62 @@
+{
+  "local_obs_acceptance_passed": false,
+  "failure_reasons": [
+    "epoch 9853121038: audio readiness exceeded budget including preceding resets",
+    "epoch 9853121038: video readiness exceeded budget including preceding resets",
+    "epoch 9865999620: audio readiness exceeded budget including preceding resets",
+    "epoch 9865999620: video readiness exceeded budget including preceding resets",
+    "numbered recording marker gate failed",
+    "missing marker labels within observed recording span"
+  ],
+  "local_delivery_worker_gate_passed": true,
+  "delivery_worker_failure_reasons": [],
+  "local_readiness_gate_passed": false,
+  "readiness_failure_reasons": [
+    "epoch 9853121038: audio readiness exceeded budget including preceding resets",
+    "epoch 9853121038: video readiness exceeded budget including preceding resets",
+    "epoch 9865999620: audio readiness exceeded budget including preceding resets",
+    "epoch 9865999620: video readiness exceeded budget including preceding resets"
+  ],
+  "binding_epochs": [
+    {
+      "binding_since_us": 9853121038,
+      "recovery_started_us": 9853119887,
+      "superseded_binding_epochs": [
+        9853119887,
+        9853120634
+      ],
+      "first_scheduled_ms": {
+        "audio": 2903.602,
+        "video": 2910.376
+      }
+    },
+    {
+      "binding_since_us": 9865999620,
+      "recovery_started_us": 9865125349,
+      "superseded_binding_epochs": [
+        9865125349,
+        9865125441,
+        9865998974
+      ],
+      "first_scheduled_ms": {
+        "audio": 4059.69,
+        "video": 4093.946
+      }
+    }
+  ],
+  "raw_binding_epoch_count": 7,
+  "superseded_binding_epochs": [
+    9853119887,
+    9853120634,
+    9865125349,
+    9865125441,
+    9865998974
+  ],
+  "unfinished_binding_epochs": [],
+  "expected_binding_epochs": 2,
+  "readiness_budget_ms": 1500,
+  "budget_scope": "prototype local recovery from earliest pending reset, not WAN service guarantee",
+  "startup_and_tail_loss_qualified": false,
+  "lip_sync_qualified": false,
+  "g1_complete": false
+}

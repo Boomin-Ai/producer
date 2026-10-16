@@ -1,0 +1,587 @@
+{
+  "sync_streams_requested": true,
+  "sdp_group_observations": [
+    {
+      "participant": "native-host",
+      "description": "offer",
+      "audio_stream_ids": [
+        "-"
+      ],
+      "video_stream_ids": [
+        "-"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "guest-1",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_65expaMvJgCp|program-av"
+      ],
+      "video_stream_ids": [
+        "PA_65expaMvJgCp|program-av"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "native-host",
+      "description": "offer",
+      "audio_stream_ids": [
+        "-"
+      ],
+      "video_stream_ids": [
+        "-"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "guest-1",
+      "description": "offer",
+      "audio_stream_ids": [
+        "4cf77aee-0c32-419c-b209-76d0326f1e41"
+      ],
+      "video_stream_ids": [
+        "4b7bd28c-521e-4da6-8363-511d370689ed"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "guest-1",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_65expaMvJgCp|program-av"
+      ],
+      "video_stream_ids": [
+        "PA_65expaMvJgCp|program-av"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "native-host",
+      "description": "offer",
+      "audio_stream_ids": [
+        "-"
+      ],
+      "video_stream_ids": [
+        "-"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "native-host",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_xhgepvrAPrDf|camera-av"
+      ],
+      "video_stream_ids": [
+        "PA_xhgepvrAPrDf|camera-av"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "native-host",
+      "description": "offer",
+      "audio_stream_ids": [
+        "-"
+      ],
+      "video_stream_ids": [
+        "-"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "guest-1",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_tUneTLZeaQD3|TR_AMmaY4Gp9sKdzk"
+      ],
+      "video_stream_ids": [
+        "PA_tUneTLZeaQD3|TR_VCS6ZqcNLBphPN"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "native-host",
+      "description": "offer",
+      "audio_stream_ids": [
+        "-"
+      ],
+      "video_stream_ids": [
+        "-"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "guest-1",
+      "description": "offer",
+      "audio_stream_ids": [
+        "5196c258-2609-4e4f-abd0-6a5b21ad59bf"
+      ],
+      "video_stream_ids": [
+        "c7d6defe-8624-41b6-80ec-3baee456d722"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "guest-1",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_tUneTLZeaQD3|TR_AMmaY4Gp9sKdzk"
+      ],
+      "video_stream_ids": [
+        "PA_tUneTLZeaQD3|TR_VCS6ZqcNLBphPN"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "native-host",
+      "description": "offer",
+      "audio_stream_ids": [
+        "-"
+      ],
+      "video_stream_ids": [
+        "-"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "native-host",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_ZgJDEXgpSrxa|TR_AMKCtaLv999grj"
+      ],
+      "video_stream_ids": [
+        "PA_ZgJDEXgpSrxa|TR_VCToF8h3Fr6K88"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "guest-2",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_tUneTLZeaQD3|TR_AMmaY4Gp9sKdzk"
+      ],
+      "video_stream_ids": [
+        "PA_tUneTLZeaQD3|TR_VCS6ZqcNLBphPN"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "native-host",
+      "description": "offer",
+      "audio_stream_ids": [
+        "-"
+      ],
+      "video_stream_ids": [
+        "-"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "native-host",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_ZgJDEXgpSrxa|TR_AMKCtaLv999grj"
+      ],
+      "video_stream_ids": [
+        "PA_ZgJDEXgpSrxa|TR_VCToF8h3Fr6K88",
+        "PA_sEDGtvNRE8cw|TR_VCQA5xytugKh9D"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "guest-2",
+      "description": "offer",
+      "audio_stream_ids": [
+        "29aae29e-c524-442c-b765-449aa1bc3dc5"
+      ],
+      "video_stream_ids": [
+        "b58f6c06-0190-492a-957f-97238f729d56"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "guest-2",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_tUneTLZeaQD3|TR_AMmaY4Gp9sKdzk"
+      ],
+      "video_stream_ids": [
+        "PA_tUneTLZeaQD3|TR_VCS6ZqcNLBphPN"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "native-host",
+      "description": "offer",
+      "audio_stream_ids": [
+        "-"
+      ],
+      "video_stream_ids": [
+        "-"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "native-host",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_ZgJDEXgpSrxa|TR_AMKCtaLv999grj",
+        "PA_sEDGtvNRE8cw|TR_AMKAiXj7yky2Yw"
+      ],
+      "video_stream_ids": [
+        "PA_ZgJDEXgpSrxa|TR_VCToF8h3Fr6K88",
+        "PA_sEDGtvNRE8cw|TR_VCQA5xytugKh9D"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "guest-3",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_tUneTLZeaQD3|TR_AMmaY4Gp9sKdzk"
+      ],
+      "video_stream_ids": [
+        "PA_tUneTLZeaQD3|TR_VCS6ZqcNLBphPN"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "native-host",
+      "description": "offer",
+      "audio_stream_ids": [
+        "-"
+      ],
+      "video_stream_ids": [
+        "-"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "native-host",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_ZgJDEXgpSrxa|TR_AMKCtaLv999grj",
+        "PA_sEDGtvNRE8cw|TR_AMKAiXj7yky2Yw"
+      ],
+      "video_stream_ids": [
+        "PA_ZgJDEXgpSrxa|TR_VCToF8h3Fr6K88",
+        "PA_sEDGtvNRE8cw|TR_VCQA5xytugKh9D",
+        "PA_ux2fjbKJDtef|TR_VCCobZzmGQztCk"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "guest-3",
+      "description": "offer",
+      "audio_stream_ids": [
+        "32b21ccd-30f6-4888-a410-4bd1eea5b3e7"
+      ],
+      "video_stream_ids": [
+        "83068bda-1db9-427f-a49c-da8c3fbec29c"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "guest-3",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_tUneTLZeaQD3|TR_AMmaY4Gp9sKdzk"
+      ],
+      "video_stream_ids": [
+        "PA_tUneTLZeaQD3|TR_VCS6ZqcNLBphPN"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "native-host",
+      "description": "offer",
+      "audio_stream_ids": [
+        "-"
+      ],
+      "video_stream_ids": [
+        "-"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "native-host",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_ZgJDEXgpSrxa|TR_AMKCtaLv999grj",
+        "PA_sEDGtvNRE8cw|TR_AMKAiXj7yky2Yw",
+        "PA_ux2fjbKJDtef|TR_AM2cUozTvPWtjN"
+      ],
+      "video_stream_ids": [
+        "PA_ZgJDEXgpSrxa|TR_VCToF8h3Fr6K88",
+        "PA_sEDGtvNRE8cw|TR_VCQA5xytugKh9D",
+        "PA_ux2fjbKJDtef|TR_VCCobZzmGQztCk"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "native-host",
+      "description": "offer",
+      "audio_stream_ids": [
+        "-"
+      ],
+      "video_stream_ids": [
+        "-"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "native-host",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_sEDGtvNRE8cw|TR_AMKAiXj7yky2Yw",
+        "PA_ux2fjbKJDtef|TR_AM2cUozTvPWtjN"
+      ],
+      "video_stream_ids": [
+        "PA_sEDGtvNRE8cw|TR_VCQA5xytugKh9D",
+        "PA_ux2fjbKJDtef|TR_VCCobZzmGQztCk"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "guest-1",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_tUneTLZeaQD3|TR_AMmaY4Gp9sKdzk"
+      ],
+      "video_stream_ids": [
+        "PA_tUneTLZeaQD3|TR_VCS6ZqcNLBphPN"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "native-host",
+      "description": "offer",
+      "audio_stream_ids": [
+        "-"
+      ],
+      "video_stream_ids": [
+        "-"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "native-host",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_sEDGtvNRE8cw|TR_AMKAiXj7yky2Yw",
+        "PA_ux2fjbKJDtef|TR_AM2cUozTvPWtjN"
+      ],
+      "video_stream_ids": [
+        "PA_H6V6VHDho9uv|TR_VCngxWrC8FWoxh",
+        "PA_sEDGtvNRE8cw|TR_VCQA5xytugKh9D",
+        "PA_ux2fjbKJDtef|TR_VCCobZzmGQztCk"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "guest-1",
+      "description": "offer",
+      "audio_stream_ids": [
+        "b9eaac29-5d38-4d87-982b-a0669ac1dc51"
+      ],
+      "video_stream_ids": [
+        "60a81e0d-7d12-432e-ae99-badcb95581a2"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "guest-1",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_tUneTLZeaQD3|TR_AMmaY4Gp9sKdzk"
+      ],
+      "video_stream_ids": [
+        "PA_tUneTLZeaQD3|TR_VCS6ZqcNLBphPN"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "native-host",
+      "description": "offer",
+      "audio_stream_ids": [
+        "-"
+      ],
+      "video_stream_ids": [
+        "-"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "native-host",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_H6V6VHDho9uv|TR_AMHZsqgaBBJnpH",
+        "PA_sEDGtvNRE8cw|TR_AMKAiXj7yky2Yw",
+        "PA_ux2fjbKJDtef|TR_AM2cUozTvPWtjN"
+      ],
+      "video_stream_ids": [
+        "PA_H6V6VHDho9uv|TR_VCngxWrC8FWoxh",
+        "PA_sEDGtvNRE8cw|TR_VCQA5xytugKh9D",
+        "PA_ux2fjbKJDtef|TR_VCCobZzmGQztCk"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "native-host",
+      "description": "offer",
+      "audio_stream_ids": [
+        "-"
+      ],
+      "video_stream_ids": [
+        "-"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "guest-1",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_GDMosXwHrLaL|TR_AMugBtqFLVtzeY"
+      ],
+      "video_stream_ids": [
+        "PA_GDMosXwHrLaL|TR_VC5gw8ZvMJXSLz"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "native-host",
+      "description": "offer",
+      "audio_stream_ids": [
+        "-"
+      ],
+      "video_stream_ids": [
+        "-"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "guest-1",
+      "description": "offer",
+      "audio_stream_ids": [
+        "bdd3f1a7-8ff0-4fe1-8450-19cf675e57c5"
+      ],
+      "video_stream_ids": [
+        "8735ede1-7858-4375-90ee-0bd9bd43b348"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "guest-1",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_GDMosXwHrLaL|TR_AMugBtqFLVtzeY"
+      ],
+      "video_stream_ids": [
+        "PA_GDMosXwHrLaL|TR_VC5gw8ZvMJXSLz"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "native-host",
+      "description": "offer",
+      "audio_stream_ids": [
+        "-"
+      ],
+      "video_stream_ids": [
+        "-"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "native-host",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_6T8tCkGFpciU|TR_AMk3bM4AsUAwDx"
+      ],
+      "video_stream_ids": [
+        "PA_6T8tCkGFpciU|TR_VCovdPPvAhnCew"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "native-host",
+      "description": "offer",
+      "audio_stream_ids": [
+        "-"
+      ],
+      "video_stream_ids": [
+        "-"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "guest-1",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_hJm5buLDYEmv|TR_AMEjMrRABtDPZa"
+      ],
+      "video_stream_ids": [
+        "PA_hJm5buLDYEmv|TR_VCuNrYjedEn2zt"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "native-host",
+      "description": "offer",
+      "audio_stream_ids": [
+        "-"
+      ],
+      "video_stream_ids": [
+        "-"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "guest-1",
+      "description": "offer",
+      "audio_stream_ids": [
+        "f74f21dc-87f4-4dbb-bd19-2d445959d3b1"
+      ],
+      "video_stream_ids": [
+        "033aff43-5a39-49a7-ac0e-a48f04a1cc09"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "guest-1",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_hJm5buLDYEmv|TR_AMEjMrRABtDPZa"
+      ],
+      "video_stream_ids": [
+        "PA_hJm5buLDYEmv|TR_VCuNrYjedEn2zt"
+      ],
+      "all_groups_paired": false
+    },
+    {
+      "participant": "native-host",
+      "description": "offer",
+      "audio_stream_ids": [
+        "-"
+      ],
+      "video_stream_ids": [
+        "-"
+      ],
+      "all_groups_paired": true
+    },
+    {
+      "participant": "native-host",
+      "description": "answer",
+      "audio_stream_ids": [
+        "PA_nwQQq86Lo5Qr|TR_AMHSxtXCkQDA2R"
+      ],
+      "video_stream_ids": [
+        "PA_nwQQq86Lo5Qr|TR_VCr5ZPxqTVjFeB"
+      ],
+      "all_groups_paired": false
+    }
+  ],
+  "no_sdp_credentials_retained": true,
+  "lip_sync_qualified": false
+}

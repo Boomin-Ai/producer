@@ -1,0 +1,30 @@
+{
+  "browser": "154.0.8037.98",
+  "guests": 1,
+  "mode": "hard-loss",
+  "states": [
+    {
+      "identity": "guest-1",
+      "connected": true,
+      "published": true,
+      "returnAudioBlocks": 664,
+      "returnAudioPulses": 0,
+      "returnVideoFrames": 0,
+      "events": [
+        "return-audio",
+        "return-video"
+      ],
+      "audioMaxRms": 0,
+      "error": null,
+      "syncStreams": true
+    }
+  ],
+  "audioStats": [
+    []
+  ],
+  "impairments": [],
+  "packetProbe": [],
+  "return_transport_observed": false,
+  "hardware_capture_used": false,
+  "physical_speaker_playout_used": false
+}

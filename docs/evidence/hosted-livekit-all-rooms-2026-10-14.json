@@ -1,0 +1,102 @@
+{
+  "date": "2026-10-14",
+  "api_worker_version": "e4bd9b49-28d8-47eb-8c73-d77bc647fdc7",
+  "api_main_commit": "c72ffccb28e573ead2f546263fad591c20587100",
+  "capabilities": [
+    {
+      "id": "580a401e-396b-435f-bb91-78232d7455cc",
+      "title": "Producer Demo",
+      "status": 200,
+      "enabled": true,
+      "transport": "livekit"
+    },
+    {
+      "id": "9736bc42-6a4d-4cb6-b24d-868987f59ea9",
+      "title": "AIC",
+      "status": 200,
+      "enabled": true,
+      "transport": "livekit"
+    },
+    {
+      "id": "fc45ec40-2b57-42fa-92aa-bd95fb8777af",
+      "title": "LiveKit room",
+      "status": 200,
+      "enabled": true,
+      "transport": "livekit"
+    },
+    {
+      "id": "5137e837-44b9-4779-96a1-8f449839cdff",
+      "title": "LiveKit rollout check",
+      "status": 200,
+      "enabled": true,
+      "transport": "livekit"
+    }
+  ],
+  "new_room_before_rollout": {
+    "enabled": false,
+    "transport": "legacy",
+    "endpoint": null
+  },
+  "native_host": {
+    "audio_submitted": 6092,
+    "generated_av_fixture": true,
+    "generated_guest_sources": 0,
+    "owner_expired": true,
+    "passed": true,
+    "repeated_close_passed": true,
+    "source_recreation_cycles": 0,
+    "timing": {
+      "capture_blocks_discarded": 0,
+      "capture_fault_code": 0,
+      "capture_gap_injected": false,
+      "capture_priority_enabled": true,
+      "maximum_audio_call_us": 45,
+      "maximum_audio_late_us": 1040,
+      "maximum_callback_age_us": 295014,
+      "maximum_capture_age_us": 295410,
+      "maximum_capture_queue_wait_us": 1949,
+      "maximum_loop_gap_us": 2662,
+      "maximum_video_call_us": 2140,
+      "maximum_work_us": 1655,
+      "minimum_audio_spacing_us": 9054,
+      "program_buffer_ms": 400,
+      "publisher_recoveries": 0,
+      "silence_blocks_submitted": 0,
+      "startup_audio_blocks_discarded": 0,
+      "time_constrained_scheduling": true,
+      "video_worker_stall_injected": false
+    },
+    "video_submitted": 1820
+  },
+  "browser_observer": {
+    "saved": true,
+    "bytes": 352559,
+    "width": 1280,
+    "height": 720,
+    "mime": "video/mp4;codecs=avc1.42001E,mp4a.40.2",
+    "duration_seconds": 30,
+    "source": "standalone native generated numbered AV",
+    "observer_synthetic_camera_microphone": true,
+    "playback_muted": true,
+    "production_stage_and_removal_verified": true
+  },
+  "existing_and_future_rooms_available": true,
+  "native_platform_scope": [
+    "Apple Silicon macOS"
+  ],
+  "client_release": "v0.4.69-livekit.2",
+  "older_clients": "Legacy until a native-capable host adopts the room",
+  "automatic_host_reconnect": false,
+  "integrated_native_aec_qualified": false,
+  "full_mix_minus_qualified": false,
+  "scope": "Automatic generated-media proof against a newly created production room outside the former allowlist; not a new physical-device qualification.",
+  "cleanup": {
+    "operations": [
+      {
+        "status": "succeeded",
+        "count": 2
+      }
+    ],
+    "temporary_room_removed": true
+  }
+}

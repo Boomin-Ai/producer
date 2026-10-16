@@ -1,0 +1,26 @@
+{
+  "environment": "isolated native staging",
+  "admitted_preview_while_off_stage": true,
+  "user_confirmed_show_within_1_to_3_seconds": true,
+  "connect_attempts": 1,
+  "camera_and_microphone_publish_completions": 2,
+  "cold_admit_to_first_thumbnail_ms": 17712,
+  "cold_start_target_met": false,
+  "non_host_subscriber_test": {
+    "guest_publications": 2,
+    "subscribed_guest_tracks": 0
+  },
+  "cpu_runtime_tests": 31,
+  "api_contract_tests": 41,
+  "browser_authority_tests": 8,
+  "postgres_checks": {
+    "waiting_denied": true,
+    "backstage_admission": true,
+    "show_hide_preserves_generation": true,
+    "show_hide_no_retirement": true,
+    "revoke_retires": true
+  },
+  "program_audio_gate_test": "backstage: zero output calls; on-stage: one; stale authority: zero",
+  "staging_worker_version": "c00ec548-0d5f-4ac9-8e33-b731c326517e",
+  "production_changed": false
+}

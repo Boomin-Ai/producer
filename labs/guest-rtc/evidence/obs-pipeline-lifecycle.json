@@ -1,0 +1,126 @@
+{
+  "cycles": [
+    {
+      "cancelled": false,
+      "cycle": 0,
+      "fds_after_shutdown": 14,
+      "finish": {
+        "async_video_unbuffered": false,
+        "clock": "shared OBS monotonic anchor + callback Instant elapsed; sender clock unqualified",
+        "frames": 11,
+        "qualified": false,
+        "raw_video_pipeline_probe": {
+          "callbacks_quiescent_after_unregister": true,
+          "capacity": 64,
+          "contention_dropped": 0,
+          "frames": 19,
+          "markers": [
+            {
+              "observed_ns": 30871195222250,
+              "timestamp_ns": 30871148753249
+            }
+          ],
+          "overflow": 0,
+          "registered": false
+        },
+        "recorded_av_analyzed": false,
+        "stop_code": 0
+      },
+      "probe_lifecycle": {
+        "alive": 0,
+        "created": 1,
+        "destroyed": 1
+      },
+      "recording": "pipeline-lifecycle-0-30870785225166.mp4",
+      "threads_after_shutdown": 11
+    },
+    {
+      "cancelled": false,
+      "cycle": 1,
+      "fds_after_shutdown": 14,
+      "finish": {
+        "async_video_unbuffered": false,
+        "clock": "shared OBS monotonic anchor + callback Instant elapsed; sender clock unqualified",
+        "frames": 11,
+        "qualified": false,
+        "raw_video_pipeline_probe": {
+          "callbacks_quiescent_after_unregister": true,
+          "capacity": 64,
+          "contention_dropped": 0,
+          "frames": 18,
+          "markers": [
+            {
+              "observed_ns": 30872280762750,
+              "timestamp_ns": 30872244819291
+            }
+          ],
+          "overflow": 0,
+          "registered": false
+        },
+        "recorded_av_analyzed": false,
+        "stop_code": 0
+      },
+      "probe_lifecycle": {
+        "alive": 0,
+        "created": 2,
+        "destroyed": 2
+      },
+      "recording": "pipeline-lifecycle-1-30871988830041.mp4",
+      "threads_after_shutdown": 11
+    },
+    {
+      "cancelled": false,
+      "cycle": 2,
+      "fds_after_shutdown": 14,
+      "finish": {
+        "async_video_unbuffered": false,
+        "clock": "shared OBS monotonic anchor + callback Instant elapsed; sender clock unqualified",
+        "frames": 11,
+        "qualified": false,
+        "raw_video_pipeline_probe": {
+          "callbacks_quiescent_after_unregister": true,
+          "capacity": 64,
+          "contention_dropped": 0,
+          "frames": 18,
+          "markers": [
+            {
+              "observed_ns": 30873344568041,
+              "timestamp_ns": 30873305680957
+            }
+          ],
+          "overflow": 0,
+          "registered": false
+        },
+        "recorded_av_analyzed": false,
+        "stop_code": 0
+      },
+      "probe_lifecycle": {
+        "alive": 0,
+        "created": 3,
+        "destroyed": 3
+      },
+      "recording": "pipeline-lifecycle-2-30873054442958.mp4",
+      "threads_after_shutdown": 11
+    },
+    {
+      "cancelled": true,
+      "cycle": 3,
+      "fds_after_shutdown": 14,
+      "finish": null,
+      "probe_lifecycle": {
+        "alive": 0,
+        "created": 4,
+        "destroyed": 4
+      },
+      "recording": "pipeline-lifecycle-3-30874134753833.mp4",
+      "threads_after_shutdown": 11
+    }
+  ],
+  "hardware_capture": false,
+  "initial_fds": 10,
+  "initial_threads": 10,
+  "speaker_playout": false,
+  "success_and_drop_cancellation": true,
+  "warm_fds": 14,
+  "warm_threads": 11
+}

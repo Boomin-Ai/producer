@@ -1,0 +1,1339 @@
+{
+  "g1_complete": false,
+  "production_deployed": false,
+  "isolated_scheduling_coordinator_implemented": true,
+  "three_guest_reliability_passed": false,
+  "native_tests": 59,
+  "recording_gate_tests": 15,
+  "strict_clippy_passed": true,
+  "trials": [
+    {
+      "run": "generated-recovery-1791733537194853000",
+      "guests": 3,
+      "reconnect_count": 3,
+      "native_sha256": "2fe962eec9dc7897e097aa11fb7b67f5652a89bc526988764ed717eaac19b227",
+      "local_acceptance_passed": false,
+      "failure_reasons": [
+        "numbered recording marker gate failed",
+        "missing marker labels within observed recording span"
+      ],
+      "readiness": [
+        {
+          "binding_since_us": 96464778720,
+          "recovery_started_us": 96464778250,
+          "superseded_binding_epochs": [
+            96464778250,
+            96464778564
+          ],
+          "first_scheduled_ms": {
+            "audio": 623.085,
+            "video": 652.943
+          }
+        },
+        {
+          "binding_since_us": 96477479470,
+          "recovery_started_us": 96476781054,
+          "superseded_binding_epochs": [
+            96476781054,
+            96476781141,
+            96477477654
+          ],
+          "first_scheduled_ms": {
+            "audio": 1156.021,
+            "video": 1225.624
+          }
+        },
+        {
+          "binding_since_us": 96517964100,
+          "recovery_started_us": 96516780935,
+          "superseded_binding_epochs": [
+            96516780935,
+            96516781123,
+            96517557802
+          ],
+          "first_scheduled_ms": {
+            "audio": 1249.683,
+            "video": 1302.798
+          }
+        },
+        {
+          "binding_since_us": 96557009629,
+          "recovery_started_us": 96556782919,
+          "superseded_binding_epochs": [
+            96556782919,
+            96556783107,
+            96556958486
+          ],
+          "first_scheduled_ms": {
+            "audio": 724.032,
+            "video": 749.516
+          }
+        }
+      ],
+      "delivery_worker_gate_passed": true,
+      "numbered_pairs": 65,
+      "numbered_p95_ms": 53.33333333332848,
+      "missing_video_labels": [
+        12,
+        32,
+        55,
+        56,
+        57
+      ],
+      "unmatched_audio": 3,
+      "unmatched_video": 0,
+      "uncertain_tones": 0,
+      "audio_pts_discontinuities": 0,
+      "clock_worker": {
+        "active_after_shutdown": false,
+        "poll_interval_ms": 2,
+        "qos": [
+          0,
+          21,
+          33
+        ],
+        "timings": {
+          "decoded_audio": {
+            "count": 47653,
+            "max_us": 24265,
+            "mean_us": 43,
+            "over_100_ms": 0,
+            "over_10_ms": 11,
+            "over_30_ms": 0
+          },
+          "observer_video": {
+            "count": 47653,
+            "max_us": 52720,
+            "mean_us": 26,
+            "over_100_ms": 0,
+            "over_10_ms": 8,
+            "over_30_ms": 3
+          },
+          "sender_report_refresh": {
+            "count": 47653,
+            "max_us": 64406,
+            "mean_us": 68,
+            "over_100_ms": 0,
+            "over_10_ms": 23,
+            "over_30_ms": 9
+          },
+          "tick_gap": {
+            "count": 47652,
+            "max_us": 166399,
+            "mean_us": 2937,
+            "over_100_ms": 4,
+            "over_10_ms": 394,
+            "over_30_ms": 59
+          },
+          "tick_work": {
+            "count": 47653,
+            "max_us": 88662,
+            "mean_us": 145,
+            "over_100_ms": 0,
+            "over_10_ms": 47,
+            "over_30_ms": 13
+          }
+        },
+        "worker_failed": false
+      },
+      "room_timings": {
+        "decoded_audio": {
+          "count": 13384,
+          "max_us": 1663,
+          "mean_us": 1,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "observer_audio": {
+          "count": 13384,
+          "max_us": 19405,
+          "mean_us": 20,
+          "over_100_ms": 0,
+          "over_10_ms": 1,
+          "over_30_ms": 0
+        },
+        "observer_video": {
+          "count": 13384,
+          "max_us": 124269,
+          "mean_us": 132,
+          "over_100_ms": 1,
+          "over_10_ms": 6,
+          "over_30_ms": 2
+        },
+        "sender_report_refresh": {
+          "count": 13384,
+          "max_us": 3232,
+          "mean_us": 0,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "tick_gap": {
+          "count": 13384,
+          "max_us": 364921,
+          "mean_us": 10459,
+          "over_100_ms": 10,
+          "over_10_ms": 7369,
+          "over_30_ms": 82
+        },
+        "tick_work": {
+          "count": 13384,
+          "max_us": 124289,
+          "mean_us": 176,
+          "over_100_ms": 1,
+          "over_10_ms": 8,
+          "over_30_ms": 2
+        }
+      },
+      "audio_output": {
+        "active_after_shutdown": false,
+        "capacity": 24,
+        "enqueue_contention_dropped": 98,
+        "flushed": 59,
+        "late": 55,
+        "max_native_submit_us": 53767,
+        "max_tick_gap_us": 166364,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 18,
+        "pushed": 13310,
+        "retired_producer_dropped": 0,
+        "submitted": 13196,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "video_output": {
+        "active_after_shutdown": false,
+        "capacity": 14,
+        "enqueue_contention_dropped": 8,
+        "flushed": 14,
+        "late": 16,
+        "max_native_submit_us": 49856,
+        "max_tick_gap_us": 158914,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 18,
+        "pushed": 3591,
+        "retired_producer_dropped": 0,
+        "submitted": 3561,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "decoded_drain": {
+        "active_after_shutdown": false,
+        "discarded_shutdown": 0,
+        "max_poll_gap_us": 169921,
+        "poll_interval_ms": 5,
+        "queue": {
+          "callback_contention_dropped": 11,
+          "capacity_frames": 192,
+          "consumed": 40656,
+          "max_age_ms": 100,
+          "overflow_oldest_dropped": 0,
+          "pending_frames": 0,
+          "received": 40670,
+          "stale_dropped": 3
+        },
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "audio_continuity": {
+        "gap_events": 194,
+        "maximum_fill_blocks": 12,
+        "maximum_gap_blocks": 21,
+        "missing_pcm_recovered": false,
+        "silence_gap_blocks": 289,
+        "unfilled_gap_or_reanchor_events": 4
+      },
+      "variant": "isolated clock, sender reports parsed in kernel"
+    },
+    {
+      "run": "generated-recovery-1791733786278942000",
+      "variant": "isolated clock, sender reports parsed in kernel",
+      "guests": 1,
+      "reconnect_count": 1,
+      "native_sha256": "2fe962eec9dc7897e097aa11fb7b67f5652a89bc526988764ed717eaac19b227",
+      "local_acceptance_passed": false,
+      "failure_reasons": [
+        "numbered recording marker gate failed",
+        "missing marker labels within observed recording span"
+      ],
+      "readiness": [
+        {
+          "binding_since_us": 96705071716,
+          "recovery_started_us": 96705070977,
+          "superseded_binding_epochs": [
+            96705070977,
+            96705071265
+          ],
+          "first_scheduled_ms": {
+            "audio": 534.768,
+            "video": 595.075
+          }
+        },
+        {
+          "binding_since_us": 96717130169,
+          "recovery_started_us": 96717075581,
+          "superseded_binding_epochs": [
+            96717075581,
+            96717075673,
+            96717129769
+          ],
+          "first_scheduled_ms": {
+            "audio": 859.404,
+            "video": 861.861
+          }
+        }
+      ],
+      "delivery_worker_gate_passed": true,
+      "numbered_pairs": 19,
+      "numbered_p95_ms": 103.33333333332848,
+      "missing_video_labels": [
+        15,
+        16,
+        17
+      ],
+      "unmatched_audio": 3,
+      "unmatched_video": 0,
+      "uncertain_tones": 0,
+      "audio_pts_discontinuities": 0,
+      "clock_worker": {
+        "active_after_shutdown": false,
+        "poll_interval_ms": 2,
+        "qos": [
+          0,
+          21,
+          33
+        ],
+        "timings": {
+          "decoded_audio": {
+            "count": 15446,
+            "max_us": 123772,
+            "mean_us": 39,
+            "over_100_ms": 1,
+            "over_10_ms": 11,
+            "over_30_ms": 2
+          },
+          "observer_video": {
+            "count": 15446,
+            "max_us": 38448,
+            "mean_us": 25,
+            "over_100_ms": 0,
+            "over_10_ms": 8,
+            "over_30_ms": 2
+          },
+          "sender_report_refresh": {
+            "count": 15446,
+            "max_us": 138727,
+            "mean_us": 85,
+            "over_100_ms": 2,
+            "over_10_ms": 25,
+            "over_30_ms": 12
+          },
+          "tick_gap": {
+            "count": 15445,
+            "max_us": 201186,
+            "mean_us": 2913,
+            "over_100_ms": 4,
+            "over_10_ms": 232,
+            "over_30_ms": 44
+          },
+          "tick_work": {
+            "count": 15446,
+            "max_us": 139415,
+            "mean_us": 154,
+            "over_100_ms": 3,
+            "over_10_ms": 45,
+            "over_30_ms": 17
+          }
+        },
+        "worker_failed": false
+      },
+      "room_timings": {
+        "decoded_audio": {
+          "count": 4071,
+          "max_us": 1201,
+          "mean_us": 0,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "observer_audio": {
+          "count": 4071,
+          "max_us": 2965,
+          "mean_us": 5,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "observer_video": {
+          "count": 4071,
+          "max_us": 16968,
+          "mean_us": 4,
+          "over_100_ms": 0,
+          "over_10_ms": 1,
+          "over_30_ms": 0
+        },
+        "sender_report_refresh": {
+          "count": 4071,
+          "max_us": 5462,
+          "mean_us": 1,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "tick_gap": {
+          "count": 4071,
+          "max_us": 260308,
+          "mean_us": 11053,
+          "over_100_ms": 7,
+          "over_10_ms": 2416,
+          "over_30_ms": 67
+        },
+        "tick_work": {
+          "count": 4071,
+          "max_us": 17016,
+          "mean_us": 29,
+          "over_100_ms": 0,
+          "over_10_ms": 1,
+          "over_30_ms": 0
+        }
+      },
+      "audio_output": {
+        "active_after_shutdown": false,
+        "capacity": 24,
+        "enqueue_contention_dropped": 22,
+        "flushed": 24,
+        "late": 37,
+        "max_native_submit_us": 25053,
+        "max_tick_gap_us": 190235,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 8,
+        "pushed": 4128,
+        "retired_producer_dropped": 0,
+        "submitted": 4067,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "video_output": {
+        "active_after_shutdown": false,
+        "capacity": 14,
+        "enqueue_contention_dropped": 0,
+        "flushed": 7,
+        "late": 14,
+        "max_native_submit_us": 55340,
+        "max_tick_gap_us": 175359,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 8,
+        "pushed": 1104,
+        "retired_producer_dropped": 0,
+        "submitted": 1083,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "decoded_drain": {
+        "active_after_shutdown": false,
+        "discarded_shutdown": 0,
+        "max_poll_gap_us": 176974,
+        "poll_interval_ms": 5,
+        "queue": {
+          "callback_contention_dropped": 0,
+          "capacity_frames": 192,
+          "consumed": 4287,
+          "max_age_ms": 100,
+          "overflow_oldest_dropped": 0,
+          "pending_frames": 0,
+          "received": 4299,
+          "stale_dropped": 12
+        },
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "audio_continuity": {
+        "gap_events": 75,
+        "maximum_fill_blocks": 12,
+        "maximum_gap_blocks": 26,
+        "missing_pcm_recovered": false,
+        "silence_gap_blocks": 158,
+        "unfilled_gap_or_reanchor_events": 3
+      }
+    },
+    {
+      "run": "generated-recovery-1791733931772139000",
+      "variant": "room-loop control, same binary",
+      "guests": 1,
+      "reconnect_count": 1,
+      "native_sha256": "2fe962eec9dc7897e097aa11fb7b67f5652a89bc526988764ed717eaac19b227",
+      "local_acceptance_passed": true,
+      "failure_reasons": [],
+      "readiness": [
+        {
+          "binding_since_us": 96853677662,
+          "recovery_started_us": 96853677662,
+          "superseded_binding_epochs": [],
+          "first_scheduled_ms": {
+            "audio": 521.197,
+            "video": 531.485
+          }
+        },
+        {
+          "binding_since_us": 96865797613,
+          "recovery_started_us": 96865797613,
+          "superseded_binding_epochs": [],
+          "first_scheduled_ms": {
+            "audio": 561.57,
+            "video": 581.047
+          }
+        }
+      ],
+      "delivery_worker_gate_passed": true,
+      "numbered_pairs": 22,
+      "numbered_p95_ms": 43.33333333333394,
+      "missing_video_labels": [],
+      "unmatched_audio": 0,
+      "unmatched_video": 0,
+      "uncertain_tones": 0,
+      "audio_pts_discontinuities": 0,
+      "clock_worker": null,
+      "room_timings": {
+        "decoded_audio": {
+          "count": 4479,
+          "max_us": 3561,
+          "mean_us": 27,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "observer_audio": {
+          "count": 4479,
+          "max_us": 180,
+          "mean_us": 3,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "observer_video": {
+          "count": 4479,
+          "max_us": 1440,
+          "mean_us": 19,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "sender_report_refresh": {
+          "count": 4479,
+          "max_us": 3039,
+          "mean_us": 48,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "tick_gap": {
+          "count": 4479,
+          "max_us": 66343,
+          "mean_us": 10046,
+          "over_100_ms": 0,
+          "over_10_ms": 2475,
+          "over_30_ms": 4
+        },
+        "tick_work": {
+          "count": 4479,
+          "max_us": 3576,
+          "mean_us": 108,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        }
+      },
+      "audio_output": {
+        "active_after_shutdown": false,
+        "capacity": 24,
+        "enqueue_contention_dropped": 13,
+        "flushed": 23,
+        "late": 3,
+        "max_native_submit_us": 533,
+        "max_tick_gap_us": 63762,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 6,
+        "pushed": 4352,
+        "retired_producer_dropped": 0,
+        "submitted": 4326,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "video_output": {
+        "active_after_shutdown": false,
+        "capacity": 14,
+        "enqueue_contention_dropped": 0,
+        "flushed": 7,
+        "late": 0,
+        "max_native_submit_us": 4592,
+        "max_tick_gap_us": 64308,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 6,
+        "pushed": 922,
+        "retired_producer_dropped": 0,
+        "submitted": 915,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "decoded_drain": {
+        "active_after_shutdown": false,
+        "discarded_shutdown": 1,
+        "max_poll_gap_us": 63444,
+        "poll_interval_ms": 5,
+        "queue": {
+          "callback_contention_dropped": 0,
+          "capacity_frames": 192,
+          "consumed": 4476,
+          "max_age_ms": 100,
+          "overflow_oldest_dropped": 0,
+          "pending_frames": 0,
+          "received": 4476,
+          "stale_dropped": 0
+        },
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "audio_continuity": {
+        "gap_events": 25,
+        "maximum_fill_blocks": 12,
+        "maximum_gap_blocks": 5,
+        "missing_pcm_recovered": false,
+        "silence_gap_blocks": 32,
+        "unfilled_gap_or_reanchor_events": 0
+      }
+    },
+    {
+      "run": "generated-recovery-1791738196774571000",
+      "variant": "isolated clock, reports prepared on diagnostic collector",
+      "guests": 1,
+      "reconnect": "full",
+      "reconnect_count": 1,
+      "native_sha256": "9789ae83056a4cb3fd89f833d275a6b6d0be4397dc1f7cce403aef183fed5ac8",
+      "local_acceptance_passed": false,
+      "failure_reasons": [
+        "numbered recording marker gate failed"
+      ],
+      "readiness": [
+        {
+          "binding_since_us": 101083652085,
+          "recovery_started_us": 101083651034,
+          "superseded_binding_epochs": [
+            101083651034,
+            101083651643
+          ],
+          "first_scheduled_ms": {
+            "audio": 743.843,
+            "video": 809.847
+          }
+        },
+        {
+          "binding_since_us": 101095841875,
+          "recovery_started_us": 101095663487,
+          "superseded_binding_epochs": [
+            101095663487,
+            101095664884,
+            101095840774
+          ],
+          "first_scheduled_ms": {
+            "audio": 682.457,
+            "video": 695.034
+          }
+        }
+      ],
+      "delivery_worker_gate_passed": true,
+      "numbered_pairs": 22,
+      "numbered_p95_ms": 43.33333333333212,
+      "missing_video_labels": [],
+      "unmatched_audio": 1,
+      "unmatched_video": 0,
+      "uncertain_tones": 0,
+      "audio_pts_discontinuities": 0,
+      "clock_worker": {
+        "active_after_shutdown": false,
+        "poll_interval_ms": 2,
+        "qos": [
+          0,
+          21,
+          33
+        ],
+        "timings": {
+          "decoded_audio": {
+            "count": 18004,
+            "max_us": 7042,
+            "mean_us": 9,
+            "over_100_ms": 0,
+            "over_10_ms": 0,
+            "over_30_ms": 0
+          },
+          "observer_video": {
+            "count": 18004,
+            "max_us": 1302,
+            "mean_us": 8,
+            "over_100_ms": 0,
+            "over_10_ms": 0,
+            "over_30_ms": 0
+          },
+          "sender_report_refresh": {
+            "count": 18004,
+            "max_us": 2071,
+            "mean_us": 6,
+            "over_100_ms": 0,
+            "over_10_ms": 0,
+            "over_30_ms": 0
+          },
+          "tick_gap": {
+            "count": 18003,
+            "max_us": 50789,
+            "mean_us": 2499,
+            "over_100_ms": 0,
+            "over_10_ms": 8,
+            "over_30_ms": 2
+          },
+          "tick_work": {
+            "count": 18004,
+            "max_us": 7045,
+            "mean_us": 24,
+            "over_100_ms": 0,
+            "over_10_ms": 0,
+            "over_30_ms": 0
+          }
+        },
+        "worker_failed": false
+      },
+      "room_timings": {
+        "decoded_audio": {
+          "count": 4485,
+          "max_us": 1603,
+          "mean_us": 0,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "observer_audio": {
+          "count": 4485,
+          "max_us": 489,
+          "mean_us": 4,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "observer_video": {
+          "count": 4485,
+          "max_us": 32,
+          "mean_us": 0,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "sender_report_refresh": {
+          "count": 4485,
+          "max_us": 461,
+          "mean_us": 0,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "tick_gap": {
+          "count": 4485,
+          "max_us": 59604,
+          "mean_us": 10033,
+          "over_100_ms": 0,
+          "over_10_ms": 2504,
+          "over_30_ms": 3
+        },
+        "tick_work": {
+          "count": 4485,
+          "max_us": 1811,
+          "mean_us": 15,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        }
+      },
+      "audio_output": {
+        "active_after_shutdown": false,
+        "capacity": 24,
+        "enqueue_contention_dropped": 14,
+        "flushed": 23,
+        "late": 1,
+        "max_native_submit_us": 14582,
+        "max_tick_gap_us": 43935,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 6,
+        "pushed": 4335,
+        "retired_producer_dropped": 0,
+        "submitted": 4311,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "video_output": {
+        "active_after_shutdown": false,
+        "capacity": 14,
+        "enqueue_contention_dropped": 0,
+        "flushed": 9,
+        "late": 1,
+        "max_native_submit_us": 7133,
+        "max_tick_gap_us": 43219,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 6,
+        "pushed": 1293,
+        "retired_producer_dropped": 0,
+        "submitted": 1283,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "decoded_drain": {
+        "active_after_shutdown": false,
+        "discarded_shutdown": 0,
+        "max_poll_gap_us": 54761,
+        "poll_interval_ms": 5,
+        "queue": {
+          "callback_contention_dropped": 1,
+          "capacity_frames": 192,
+          "consumed": 4477,
+          "max_age_ms": 100,
+          "overflow_oldest_dropped": 0,
+          "pending_frames": 0,
+          "received": 4478,
+          "stale_dropped": 0
+        },
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "audio_continuity": {
+        "gap_events": 23,
+        "maximum_fill_blocks": 12,
+        "maximum_gap_blocks": 3,
+        "missing_pcm_recovered": false,
+        "silence_gap_blocks": 25,
+        "unfilled_gap_or_reanchor_events": 0
+      }
+    },
+    {
+      "run": "generated-recovery-1791738591686432000",
+      "variant": "isolated clock, reports prepared on diagnostic collector",
+      "guests": 3,
+      "reconnect": "full",
+      "reconnect_count": 3,
+      "native_sha256": "9789ae83056a4cb3fd89f833d275a6b6d0be4397dc1f7cce403aef183fed5ac8",
+      "local_acceptance_passed": false,
+      "failure_reasons": [
+        "missing marker labels within observed recording span"
+      ],
+      "readiness": [
+        {
+          "binding_since_us": 209956211,
+          "recovery_started_us": 209922271,
+          "superseded_binding_epochs": [
+            209922271,
+            209954237
+          ],
+          "first_scheduled_ms": {
+            "audio": 524.549,
+            "video": 547.042
+          }
+        },
+        {
+          "binding_since_us": 221985949,
+          "recovery_started_us": 221926034,
+          "superseded_binding_epochs": [
+            221926034,
+            221926273,
+            221985478
+          ],
+          "first_scheduled_ms": {
+            "audio": 632.196,
+            "video": 668.295
+          }
+        },
+        {
+          "binding_since_us": 261983569,
+          "recovery_started_us": 261924163,
+          "superseded_binding_epochs": [
+            261924163,
+            261924220,
+            261974079
+          ],
+          "first_scheduled_ms": {
+            "audio": 564.167,
+            "video": 581.236
+          }
+        },
+        {
+          "binding_since_us": 301974428,
+          "recovery_started_us": 301923766,
+          "superseded_binding_epochs": [
+            301923766,
+            301923859,
+            301962699
+          ],
+          "first_scheduled_ms": {
+            "audio": 642.867,
+            "video": 652.623
+          }
+        }
+      ],
+      "delivery_worker_gate_passed": true,
+      "numbered_pairs": 66,
+      "numbered_p95_ms": 40.00000000000364,
+      "missing_video_labels": [
+        7,
+        27,
+        47
+      ],
+      "unmatched_audio": 0,
+      "unmatched_video": 0,
+      "uncertain_tones": 0,
+      "audio_pts_discontinuities": 0,
+      "clock_worker": {
+        "active_after_shutdown": false,
+        "poll_interval_ms": 2,
+        "qos": [
+          0,
+          21,
+          33
+        ],
+        "timings": {
+          "decoded_audio": {
+            "count": 56995,
+            "max_us": 500,
+            "mean_us": 8,
+            "over_100_ms": 0,
+            "over_10_ms": 0,
+            "over_30_ms": 0
+          },
+          "observer_video": {
+            "count": 56995,
+            "max_us": 575,
+            "mean_us": 5,
+            "over_100_ms": 0,
+            "over_10_ms": 0,
+            "over_30_ms": 0
+          },
+          "sender_report_refresh": {
+            "count": 56995,
+            "max_us": 883,
+            "mean_us": 2,
+            "over_100_ms": 0,
+            "over_10_ms": 0,
+            "over_30_ms": 0
+          },
+          "tick_gap": {
+            "count": 56994,
+            "max_us": 8072,
+            "mean_us": 2455,
+            "over_100_ms": 0,
+            "over_10_ms": 0,
+            "over_30_ms": 0
+          },
+          "tick_work": {
+            "count": 56995,
+            "max_us": 886,
+            "mean_us": 18,
+            "over_100_ms": 0,
+            "over_10_ms": 0,
+            "over_30_ms": 0
+          }
+        },
+        "worker_failed": false
+      },
+      "room_timings": {
+        "decoded_audio": {
+          "count": 13999,
+          "max_us": 216,
+          "mean_us": 0,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "observer_audio": {
+          "count": 13999,
+          "max_us": 399,
+          "mean_us": 6,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "observer_video": {
+          "count": 13999,
+          "max_us": 565,
+          "mean_us": 27,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "sender_report_refresh": {
+          "count": 13999,
+          "max_us": 192,
+          "mean_us": 0,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "tick_gap": {
+          "count": 13999,
+          "max_us": 22817,
+          "mean_us": 10000,
+          "over_100_ms": 0,
+          "over_10_ms": 8114,
+          "over_30_ms": 0
+        },
+        "tick_work": {
+          "count": 13999,
+          "max_us": 613,
+          "mean_us": 41,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        }
+      },
+      "audio_output": {
+        "active_after_shutdown": false,
+        "capacity": 24,
+        "enqueue_contention_dropped": 57,
+        "flushed": 46,
+        "late": 0,
+        "max_native_submit_us": 1560,
+        "max_tick_gap_us": 8155,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 14,
+        "pushed": 13691,
+        "retired_producer_dropped": 1,
+        "submitted": 13645,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "video_output": {
+        "active_after_shutdown": false,
+        "capacity": 14,
+        "enqueue_contention_dropped": 5,
+        "flushed": 15,
+        "late": 0,
+        "max_native_submit_us": 440,
+        "max_tick_gap_us": 6426,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 14,
+        "pushed": 3864,
+        "retired_producer_dropped": 0,
+        "submitted": 3849,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "decoded_drain": {
+        "active_after_shutdown": false,
+        "discarded_shutdown": 0,
+        "max_poll_gap_us": 10211,
+        "poll_interval_ms": 5,
+        "queue": {
+          "callback_contention_dropped": 6,
+          "capacity_frames": 192,
+          "consumed": 41902,
+          "max_age_ms": 100,
+          "overflow_oldest_dropped": 0,
+          "pending_frames": 0,
+          "received": 41908,
+          "stale_dropped": 0
+        },
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "audio_continuity": {
+        "gap_events": 75,
+        "maximum_fill_blocks": 12,
+        "maximum_gap_blocks": 1,
+        "missing_pcm_recovered": false,
+        "silence_gap_blocks": 75,
+        "unfilled_gap_or_reanchor_events": 0
+      }
+    },
+    {
+      "run": "generated-recovery-1791738893907394000",
+      "variant": "isolated clock, reports prepared on diagnostic collector",
+      "guests": 3,
+      "reconnect": "none",
+      "reconnect_count": 0,
+      "native_sha256": "9789ae83056a4cb3fd89f833d275a6b6d0be4397dc1f7cce403aef183fed5ac8",
+      "local_acceptance_passed": true,
+      "failure_reasons": [],
+      "readiness": [
+        {
+          "binding_since_us": 518134194,
+          "recovery_started_us": 518091766,
+          "superseded_binding_epochs": [
+            518091766,
+            518128476
+          ],
+          "first_scheduled_ms": {
+            "audio": 528.953,
+            "video": 662.389
+          }
+        }
+      ],
+      "delivery_worker_gate_passed": true,
+      "numbered_pairs": 70,
+      "numbered_p95_ms": 40.00000000001455,
+      "missing_video_labels": [],
+      "unmatched_audio": 0,
+      "unmatched_video": 0,
+      "uncertain_tones": 0,
+      "audio_pts_discontinuities": 0,
+      "clock_worker": {
+        "active_after_shutdown": false,
+        "poll_interval_ms": 2,
+        "qos": [
+          0,
+          21,
+          33
+        ],
+        "timings": {
+          "decoded_audio": {
+            "count": 56601,
+            "max_us": 13289,
+            "mean_us": 6,
+            "over_100_ms": 0,
+            "over_10_ms": 1,
+            "over_30_ms": 0
+          },
+          "observer_video": {
+            "count": 56601,
+            "max_us": 1090,
+            "mean_us": 4,
+            "over_100_ms": 0,
+            "over_10_ms": 0,
+            "over_30_ms": 0
+          },
+          "sender_report_refresh": {
+            "count": 56601,
+            "max_us": 2268,
+            "mean_us": 1,
+            "over_100_ms": 0,
+            "over_10_ms": 0,
+            "over_30_ms": 0
+          },
+          "tick_gap": {
+            "count": 56600,
+            "max_us": 67992,
+            "mean_us": 2473,
+            "over_100_ms": 0,
+            "over_10_ms": 37,
+            "over_30_ms": 4
+          },
+          "tick_work": {
+            "count": 56601,
+            "max_us": 14162,
+            "mean_us": 14,
+            "over_100_ms": 0,
+            "over_10_ms": 1,
+            "over_30_ms": 0
+          }
+        },
+        "worker_failed": false
+      },
+      "room_timings": {
+        "decoded_audio": {
+          "count": 13954,
+          "max_us": 117,
+          "mean_us": 0,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "observer_audio": {
+          "count": 13954,
+          "max_us": 21892,
+          "mean_us": 9,
+          "over_100_ms": 0,
+          "over_10_ms": 2,
+          "over_30_ms": 0
+        },
+        "observer_video": {
+          "count": 13954,
+          "max_us": 3606,
+          "mean_us": 29,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "sender_report_refresh": {
+          "count": 13954,
+          "max_us": 138,
+          "mean_us": 0,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "tick_gap": {
+          "count": 13954,
+          "max_us": 57260,
+          "mean_us": 10032,
+          "over_100_ms": 0,
+          "over_10_ms": 7812,
+          "over_30_ms": 8
+        },
+        "tick_work": {
+          "count": 13954,
+          "max_us": 21903,
+          "mean_us": 49,
+          "over_100_ms": 0,
+          "over_10_ms": 3,
+          "over_30_ms": 0
+        }
+      },
+      "audio_output": {
+        "active_after_shutdown": false,
+        "capacity": 24,
+        "enqueue_contention_dropped": 85,
+        "flushed": 11,
+        "late": 6,
+        "max_native_submit_us": 8280,
+        "max_tick_gap_us": 67935,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 2,
+        "pushed": 13839,
+        "retired_producer_dropped": 0,
+        "submitted": 13822,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "video_output": {
+        "active_after_shutdown": false,
+        "capacity": 14,
+        "enqueue_contention_dropped": 1,
+        "flushed": 4,
+        "late": 2,
+        "max_native_submit_us": 2678,
+        "max_tick_gap_us": 67686,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 2,
+        "pushed": 3613,
+        "retired_producer_dropped": 0,
+        "submitted": 3607,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "decoded_drain": {
+        "active_after_shutdown": false,
+        "discarded_shutdown": 0,
+        "max_poll_gap_us": 67495,
+        "poll_interval_ms": 5,
+        "queue": {
+          "callback_contention_dropped": 5,
+          "capacity_frames": 192,
+          "consumed": 41908,
+          "max_age_ms": 100,
+          "overflow_oldest_dropped": 0,
+          "pending_frames": 0,
+          "received": 41913,
+          "stale_dropped": 0
+        },
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "audio_continuity": {
+        "gap_events": 107,
+        "maximum_fill_blocks": 12,
+        "maximum_gap_blocks": 4,
+        "missing_pcm_recovered": false,
+        "silence_gap_blocks": 115,
+        "unfilled_gap_or_reanchor_events": 0
+      }
+    }
+  ],
+  "continuous_three_guest_acceptance_passed": true,
+  "full_reconnect_recording_acceptance_passed": false,
+  "startup_failures": [
+    {
+      "run": "generated-recovery-1791738009850121000",
+      "native_sha256": "9789ae83056a4cb3fd89f833d275a6b6d0be4397dc1f7cce403aef183fed5ac8",
+      "phase": "OBS video initialization, before playback worker construction",
+      "error": "Unable to create MetalDevice wrapper instance; OBS video reset failed",
+      "native_media_report_available": false,
+      "performance_qualification_available": false
+    }
+  ]
+}

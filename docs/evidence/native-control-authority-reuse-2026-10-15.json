@@ -1,0 +1,164 @@
+{
+  "date": "2026-10-15",
+  "live": false,
+  "runtime_tests_passed": 43,
+  "native_control_tests_passed": 5,
+  "trials": [
+    {
+      "name": "baseline",
+      "commands": [
+        {
+          "operation": "native/admit",
+          "elapsed_ms": 2801.388708999999,
+          "timing": {
+            "mutation_ms": 1078,
+            "post_read_ms": 810,
+            "pre_read_ms": 873,
+            "reused_current_snapshot": false
+          }
+        },
+        {
+          "operation": "native/stage",
+          "elapsed_ms": 4082.093499999999,
+          "timing": {
+            "mutation_ms": 2186,
+            "post_read_ms": 871,
+            "pre_read_ms": 898,
+            "reused_current_snapshot": false
+          }
+        }
+      ],
+      "observed_preview_ms": 8721,
+      "recording": {
+        "matched_pairs": 9,
+        "absolute_p95_ms": 46.66666666666424,
+        "local_numbered_marker_gate_passed": false,
+        "uncertain_tones": 0,
+        "unmatched_audio": 5,
+        "unmatched_video": 0,
+        "missing_video_labels_within_observed_span": [
+          13,
+          14,
+          15,
+          16,
+          17
+        ]
+      }
+    },
+    {
+      "name": "reuse_1",
+      "commands": [
+        {
+          "operation": "native/admit",
+          "elapsed_ms": 1929.5093330000018,
+          "timing": {
+            "mutation_ms": 1130,
+            "post_read_ms": 783,
+            "pre_read_ms": 0,
+            "reused_current_snapshot": true
+          }
+        },
+        {
+          "operation": "native/stage",
+          "elapsed_ms": 2793.6091669999987,
+          "timing": {
+            "mutation_ms": 1894,
+            "post_read_ms": 763,
+            "pre_read_ms": 0,
+            "reused_current_snapshot": true
+          }
+        }
+      ],
+      "observed_preview_ms": 7808,
+      "recording": {
+        "matched_pairs": 14,
+        "absolute_p95_ms": 36.66666666667152,
+        "local_numbered_marker_gate_passed": false,
+        "uncertain_tones": 0,
+        "unmatched_audio": 1,
+        "unmatched_video": 0,
+        "missing_video_labels_within_observed_span": [
+          11
+        ]
+      }
+    },
+    {
+      "name": "reuse_2",
+      "commands": [
+        {
+          "operation": "native/admit",
+          "elapsed_ms": 1827.9518749999988,
+          "timing": {
+            "mutation_ms": 976,
+            "post_read_ms": 791,
+            "pre_read_ms": 0,
+            "reused_current_snapshot": true
+          }
+        },
+        {
+          "operation": "native/stage",
+          "elapsed_ms": 2086.664667000001,
+          "timing": {
+            "mutation_ms": 1086,
+            "post_read_ms": 909,
+            "pre_read_ms": 0,
+            "reused_current_snapshot": true
+          }
+        }
+      ],
+      "observed_preview_ms": 5334,
+      "recording": {
+        "matched_pairs": 14,
+        "absolute_p95_ms": 43.33333333333576,
+        "local_numbered_marker_gate_passed": true,
+        "uncertain_tones": 0,
+        "unmatched_audio": 0,
+        "unmatched_video": 0,
+        "missing_video_labels_within_observed_span": []
+      }
+    },
+    {
+      "name": "reuse_callback",
+      "commands": [
+        {
+          "operation": "native/admit",
+          "elapsed_ms": 2038.8144580000007,
+          "timing": {
+            "mutation_ms": 1066,
+            "post_read_ms": 939,
+            "pre_read_ms": 0,
+            "reused_current_snapshot": true
+          }
+        },
+        {
+          "operation": "native/stage",
+          "elapsed_ms": 2100.535042000003,
+          "timing": {
+            "mutation_ms": 1054,
+            "post_read_ms": 942,
+            "pre_read_ms": 0,
+            "reused_current_snapshot": true
+          }
+        }
+      ],
+      "callback_preview_from_admit_start_ms": 8537,
+      "stage_response_to_decode_ms": 3201,
+      "decode_to_submission_ms": 1035,
+      "submission_to_preview_ms": 162,
+      "recording": {
+        "absolute_p95_ms": 26.66666666666424,
+        "local_numbered_marker_gate_passed": false,
+        "uncertain_tones": 0,
+        "unmatched_audio": 3,
+        "unmatched_video": 0
+      }
+    }
+  ],
+  "limitations": [
+    "One baseline and three candidate runs; not latency percentiles.",
+    "Native commands include pre-read, mutation and post-read; earlier direct-API trials exercised a different path.",
+    "Preview timestamps in these three runs were control-loop observations and can be delayed while a native command is pending. Do not treat them as exact first-render timestamps.",
+    "Fourth run uses decoder, submission and graphics callback timestamps; earlier three preview observations are not directly comparable.",
+    "Candidate remains debug-flagged; release behavior still refreshes before each command."
+  ]
+}

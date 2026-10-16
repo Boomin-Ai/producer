@@ -1,0 +1,304 @@
+{
+  "date": "2026-10-15",
+  "live": false,
+  "runtime_tests_passed": 41,
+  "startup_candidate": "one first-decoded-frame-triggered binding verification before first valid binding; no accelerated steady-state polling",
+  "first_frame_binding_retries": 1,
+  "timings_unix_ms": {
+    "first_audio_binding_ms": 1792093760594,
+    "first_audio_schedule_ms": 1792093760615,
+    "first_video_binding_ms": 1792093759753,
+    "first_video_schedule_ms": 1792093760636
+  },
+  "first_decoded_video_unix_ms": 1792093759762,
+  "matched_pairs": 9,
+  "absolute_p95_ms": 43.33333333333576,
+  "unmatched_audio": 5,
+  "unmatched_video": 0,
+  "missing_video_labels_within_observed_span": [
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "local_numbered_marker_gate_passed": false,
+  "last_active_presentation": {
+    "audio_master": true,
+    "audio_startup_dropped": 0,
+    "audio_submitted": 2803,
+    "clock_resets": 2,
+    "diagnostics": [
+      {
+        "details": null,
+        "first_local_us": 320877,
+        "last_local_us": 320877,
+        "reason": "binding_clear",
+        "repetitions": 1
+      },
+      {
+        "details": null,
+        "first_local_us": 309205,
+        "last_local_us": 1135327,
+        "reason": "video_no_audio_origin",
+        "repetitions": 25
+      },
+      {
+        "details": null,
+        "first_local_us": 1160832,
+        "last_local_us": 1160832,
+        "reason": "binding_clear",
+        "repetitions": 1
+      },
+      {
+        "details": null,
+        "first_local_us": 1166431,
+        "last_local_us": 1166431,
+        "reason": "video_no_audio_origin",
+        "repetitions": 1
+      },
+      {
+        "details": {
+          "audio_origin_us": 4001082574131349,
+          "delta_us": -498349,
+          "late_us": 381618,
+          "lead_us": 0,
+          "origin_age_us": 3069,
+          "sender_us": 4001082573633000
+        },
+        "first_local_us": 14765441,
+        "last_local_us": 14943258,
+        "reason": "video_deadline_late",
+        "repetitions": 3
+      },
+      {
+        "details": {
+          "audio_origin_us": 4001082575674349,
+          "delta_us": -522349,
+          "origin_age_us": 7809,
+          "sender_us": 4001082575152000
+        },
+        "first_local_us": 15130163,
+        "last_local_us": 16486327,
+        "reason": "video_origin_delta_out_of_bounds",
+        "repetitions": 40
+      },
+      {
+        "details": {
+          "audio_origin_us": 4001082575674349,
+          "delta_us": -486349,
+          "late_us": 372740,
+          "lead_us": 0,
+          "origin_age_us": 7861,
+          "sender_us": 4001082575188000
+        },
+        "first_local_us": 16486379,
+        "last_local_us": 16486379,
+        "reason": "video_deadline_late",
+        "repetitions": 1
+      },
+      {
+        "details": {
+          "audio_origin_us": 4001082575721349,
+          "delta_us": -503349,
+          "origin_age_us": 2628,
+          "sender_us": 4001082575218000
+        },
+        "first_local_us": 16532164,
+        "last_local_us": 16532164,
+        "reason": "video_origin_delta_out_of_bounds",
+        "repetitions": 1
+      },
+      {
+        "details": {
+          "audio_origin_us": 4001082575941349,
+          "delta_us": -460349,
+          "late_us": 343006,
+          "lead_us": 0,
+          "origin_age_us": 3703,
+          "sender_us": 4001082575481000
+        },
+        "first_local_us": 16532220,
+        "last_local_us": 16752646,
+        "reason": "video_deadline_late",
+        "repetitions": 8
+      },
+      {
+        "details": {
+          "audio_origin_us": 4001082585231349,
+          "delta_us": -872349,
+          "origin_age_us": 10810,
+          "sender_us": 4001082584359000
+        },
+        "first_local_us": 16987803,
+        "last_local_us": 26048813,
+        "reason": "video_origin_delta_out_of_bounds",
+        "repetitions": 233
+      },
+      {
+        "details": {
+          "audio_origin_us": 4001082588084349,
+          "delta_us": -456349,
+          "late_us": 336268,
+          "lead_us": 0,
+          "origin_age_us": 805,
+          "sender_us": 4001082587628000
+        },
+        "first_local_us": 28724032,
+        "last_local_us": 28919908,
+        "reason": "video_deadline_late",
+        "repetitions": 3
+      },
+      {
+        "details": {
+          "audio_origin_us": 4001082588371349,
+          "delta_us": -513349,
+          "origin_age_us": 0,
+          "sender_us": 4001082587858000
+        },
+        "first_local_us": 29038392,
+        "last_local_us": 29206340,
+        "reason": "video_origin_delta_out_of_bounds",
+        "repetitions": 7
+      },
+      {
+        "details": {
+          "audio_origin_us": 4001082588371349,
+          "delta_us": -482349,
+          "late_us": 358776,
+          "lead_us": 0,
+          "origin_age_us": 0,
+          "sender_us": 4001082587889000
+        },
+        "first_local_us": 29206416,
+        "last_local_us": 29206416,
+        "reason": "video_deadline_late",
+        "repetitions": 1
+      },
+      {
+        "details": {
+          "audio_origin_us": 4001082588431349,
+          "delta_us": -508349,
+          "origin_age_us": 7099,
+          "sender_us": 4001082587923000
+        },
+        "first_local_us": 29275556,
+        "last_local_us": 29275556,
+        "reason": "video_origin_delta_out_of_bounds",
+        "repetitions": 1
+      },
+      {
+        "details": {
+          "audio_origin_us": 4001082588431349,
+          "delta_us": -474349,
+          "late_us": 359970,
+          "lead_us": 0,
+          "origin_age_us": 7153,
+          "sender_us": 4001082587957000
+        },
+        "first_local_us": 29275609,
+        "last_local_us": 29275609,
+        "reason": "video_deadline_late",
+        "repetitions": 1
+      },
+      {
+        "details": {
+          "audio_origin_us": 4001082588501349,
+          "delta_us": -512349,
+          "origin_age_us": 1322,
+          "sender_us": 4001082587989000
+        },
+        "first_local_us": 29339483,
+        "last_local_us": 29339483,
+        "reason": "video_origin_delta_out_of_bounds",
+        "repetitions": 1
+      },
+      {
+        "details": {
+          "audio_origin_us": 4001082588501349,
+          "delta_us": -479349,
+          "late_us": 358921,
+          "lead_us": 0,
+          "origin_age_us": 1399,
+          "sender_us": 4001082588022000
+        },
+        "first_local_us": 29339561,
+        "last_local_us": 29339561,
+        "reason": "video_deadline_late",
+        "repetitions": 1
+      },
+      {
+        "details": {
+          "audio_origin_us": 4001082588601349,
+          "delta_us": -513349,
+          "origin_age_us": 7630,
+          "sender_us": 4001082588088000
+        },
+        "first_local_us": 29446050,
+        "last_local_us": 29446169,
+        "reason": "video_origin_delta_out_of_bounds",
+        "repetitions": 2
+      }
+    ],
+    "failure_reasons": {
+      "binding_clear": 2,
+      "video_deadline_late": 18,
+      "video_no_audio_origin": 26,
+      "video_origin_delta_out_of_bounds": 285
+    },
+    "presentation_delay_ms": 120,
+    "sender_capture_time_qualified": false,
+    "video_max_lead_ms": 250,
+    "video_mean_lead_us": 181513,
+    "video_observed_max_lead_us": 239874,
+    "video_rejected": 329,
+    "video_submitted": 447
+  },
+  "source_control_50_seconds": {
+    "absolute_p95_ms": 23.899999999999636,
+    "local_numbered_marker_gate_passed": true,
+    "missing_video_labels_within_observed_span": [],
+    "unmatched_audio": 0,
+    "unmatched_video": 0
+  },
+  "comparisons": [
+    {
+      "name": "capture_clock_with_receiver_stats",
+      "matched_pairs": 13,
+      "absolute_p95_ms": 43.33333333333212,
+      "unmatched_audio": 2,
+      "unmatched_video": 0,
+      "missing_video_labels_within_observed_span": [],
+      "local_numbered_marker_gate_passed": false
+    },
+    {
+      "name": "sender_report_clock",
+      "matched_pairs": 8,
+      "absolute_p95_ms": 133.33333333333576,
+      "unmatched_audio": 4,
+      "unmatched_video": 0,
+      "missing_video_labels_within_observed_span": [
+        13,
+        14,
+        15,
+        18
+      ],
+      "local_numbered_marker_gate_passed": false
+    }
+  ],
+  "notes": [
+    "First-frame retry exercised once. Candidate remains debug-only.",
+    "Later stale/too-early video rejection persists; switching to sender reports also failed.",
+    "Decoder stats use existing queries only; bounded 128 numeric rows, no identities or credentials.",
+    "An empty receiver now retains its last numeric presentation snapshot for diagnosis only; authorization never reads it.",
+    "First browser loopback attempt recorded before both remote tracks were ready and was rejected; rerun waits for connected, unmuted tracks and decoded video."
+  ],
+  "browser_loopback_control": {
+    "matched_pairs": 25,
+    "absolute_p95_ms": 113.5,
+    "unmatched_audio": 0,
+    "unmatched_video": 0,
+    "missing_video_labels_within_observed_span": [],
+    "local_numbered_marker_gate_passed": false
+  }
+}

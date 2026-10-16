@@ -1,0 +1,82 @@
+{
+  "local_obs_acceptance_passed": true,
+  "failure_reasons": [],
+  "local_delivery_worker_gate_passed": true,
+  "delivery_worker_failure_reasons": [],
+  "local_readiness_gate_passed": true,
+  "readiness_failure_reasons": [],
+  "binding_epochs": [
+    {
+      "binding_since_us": 10732315540,
+      "recovery_started_us": 10732226903,
+      "superseded_binding_epochs": [
+        10732226903,
+        10732307326
+      ],
+      "first_scheduled_ms": {
+        "audio": 541.975,
+        "video": 640.048
+      }
+    },
+    {
+      "binding_since_us": 10745966017,
+      "recovery_started_us": 10745909705,
+      "superseded_binding_epochs": [
+        10745909705,
+        10745909794,
+        10745965410
+      ],
+      "first_scheduled_ms": {
+        "audio": 643.252,
+        "video": 650.842
+      }
+    },
+    {
+      "binding_since_us": 10785929426,
+      "recovery_started_us": 10785878957,
+      "superseded_binding_epochs": [
+        10785878957,
+        10785878987,
+        10785916963
+      ],
+      "first_scheduled_ms": {
+        "audio": 578.51,
+        "video": 578.589
+      }
+    },
+    {
+      "binding_since_us": 10825944434,
+      "recovery_started_us": 10825889134,
+      "superseded_binding_epochs": [
+        10825889134,
+        10825889202,
+        10825943947
+      ],
+      "first_scheduled_ms": {
+        "audio": 558.044,
+        "video": 567.459
+      }
+    }
+  ],
+  "raw_binding_epoch_count": 15,
+  "superseded_binding_epochs": [
+    10732226903,
+    10732307326,
+    10745909705,
+    10745909794,
+    10745965410,
+    10785878957,
+    10785878987,
+    10785916963,
+    10825889134,
+    10825889202,
+    10825943947
+  ],
+  "unfinished_binding_epochs": [],
+  "expected_binding_epochs": 4,
+  "readiness_budget_ms": 1500,
+  "budget_scope": "prototype local recovery from earliest pending reset, not WAN service guarantee",
+  "startup_and_tail_loss_qualified": false,
+  "lip_sync_qualified": false,
+  "g1_complete": false
+}

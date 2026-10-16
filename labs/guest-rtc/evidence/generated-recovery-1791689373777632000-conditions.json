@@ -1,0 +1,19 @@
+{
+  "run": "generated-recovery-1791689373777632000",
+  "status": "completed",
+  "guests": 1,
+  "seconds": 45,
+  "reconnect": "full",
+  "reconnect_count": 1,
+  "hardware_capture_used": false,
+  "speaker_playback_used": false,
+  "media_recorded": true,
+  "media_scope": "generated selected guest-1 only",
+  "obs_recording_requested": true,
+  "g1_complete": false,
+  "native_sha256": "4e5fad2ae80c3901d435f001eca9a367c07e97ec6f4445f1542f7ce6d169ffde",
+  "sfu_sha256": "09d100f23cd3377edb8acb90496d63ed95a590b8524d6b33061bf9108fb31c09",
+  "recording_sha256": "ed8906f93fbf5135789302e4a3945ce58163908979d04878370e27f9c061987a",
+  "recording_bytes": 5797353,
+  "marker_analysis": "generated-recovery-1791689373777632000-obs-markers.json"
+}

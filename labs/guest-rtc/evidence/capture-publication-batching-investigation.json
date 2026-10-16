@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-10",
+  "runs": [
+    {
+      "report": "transport-obs-audio-master-delayed-candidate-capture-handoff-rejoin.json",
+      "sha256": "f68ea328285ca455f017888ad25e8da85d8b52c4416446eb3fe6e29850555e18",
+      "failure": "Microphone publisher missed its bounded deadline",
+      "capture_publication": {
+        "aec_enforced_high_pass": false,
+        "aec_reference": "generated silence; no physical AEC claim",
+        "capture_rtp_alignment_qualified": false,
+        "enabled": true,
+        "fixture_content_delay_ms": 110,
+        "g1_complete": false,
+        "handoff": {
+          "accepted": 100,
+          "capacity_blocks": 32,
+          "closed": true,
+          "emitted": 94,
+          "faults": 1,
+          "maximum_lateness_ms": 20,
+          "maximum_lateness_us": 1251,
+          "minimum_spacing_ms": 8,
+          "minimum_spacing_us": 8956,
+          "peak_pending": 11,
+          "pending": 0,
+          "retired_pending": 6,
+          "sdk_external_capture_timestamp_supported": false,
+          "sdk_internal_queue_ms": 0
+        },
+        "hardware_capture_used": false,
+        "input": "generated 48k mono PCM in ten-block batches",
+        "maximum_apm_processing_us": 325,
+        "physical_speaker_playout_used": false,
+        "processed": 100,
+        "published": 94,
+        "sdk_aec_ns_agc": false
+      },
+      "publisher_owner": null,
+      "decoded_sources_retired": true
+    },
+    {
+      "report": "transport-obs-audio-master-delayed-candidate-capture-handoff-isolated-owner-rejoin.json",
+      "sha256": "6dda24dc416927a511621b87f5748cc23a6911d981bdc81439c1d47ed00bc402",
+      "failure": "Microphone publisher missed its bounded deadline",
+      "capture_publication": {
+        "aec_enforced_high_pass": false,
+        "aec_reference": "generated silence; no physical AEC claim",
+        "capture_rtp_alignment_qualified": false,
+        "enabled": true,
+        "fixture_content_delay_ms": 110,
+        "g1_complete": false,
+        "handoff": {
+          "accepted": 160,
+          "capacity_blocks": 32,
+          "closed": true,
+          "emitted": 144,
+          "faults": 1,
+          "maximum_lateness_ms": 20,
+          "maximum_lateness_us": 13509,
+          "minimum_spacing_ms": 8,
+          "minimum_spacing_us": 8361,
+          "peak_pending": 16,
+          "pending": 0,
+          "retired_pending": 16,
+          "sdk_external_capture_timestamp_supported": false,
+          "sdk_internal_queue_ms": 0
+        },
+        "hardware_capture_used": false,
+        "input": "generated 48k mono PCM in ten-block batches",
+        "maximum_apm_processing_us": 4811,
+        "maximum_sdk_capture_us": 87,
+        "maximum_video_capture_us": 1500,
+        "physical_speaker_playout_used": false,
+        "processed": 160,
+        "published": 144,
+        "sdk_aec_ns_agc": false
+      },
+      "publisher_owner": {
+        "joined": true,
+        "named_thread": true,
+        "shutdown_ms": 0.45399999999999996
+      },
+      "decoded_sources_retired": true
+    },
+    {
+      "report": "transport-obs-audio-master-delayed-candidate-capture-handoff-interactive-owner-rejoin.json",
+      "sha256": "e8be618e1aefe563d4d050f1c707c04767b6fbbf6c20f7066acf33bfea9ed8f0",
+      "failure": "Microphone publisher missed its bounded deadline",
+      "capture_publication": {
+        "aec_enforced_high_pass": false,
+        "aec_reference": "generated silence; no physical AEC claim",
+        "capture_rtp_alignment_qualified": false,
+        "enabled": true,
+        "fixture_content_delay_ms": 110,
+        "g1_complete": false,
+        "handoff": {
+          "accepted": 1810,
+          "capacity_blocks": 32,
+          "closed": true,
+          "emitted": 1801,
+          "faults": 1,
+          "maximum_lateness_ms": 20,
+          "maximum_lateness_us": 24110,
+          "minimum_spacing_ms": 8,
+          "minimum_spacing_us": 8012,
+          "peak_pending": 11,
+          "pending": 0,
+          "retired_pending": 9,
+          "sdk_external_capture_timestamp_supported": false,
+          "sdk_internal_queue_ms": 0
+        },
+        "hardware_capture_used": false,
+        "input": "generated 48k mono PCM in ten-block batches",
+        "maximum_apm_processing_us": 1342,
+        "maximum_batch_processing_us": 4291,
+        "maximum_owner_tick_gap_us": 28131,
+        "maximum_sdk_capture_us": 807,
+        "maximum_video_capture_us": 306,
+        "physical_speaker_playout_used": false,
+        "processed": 1810,
+        "published": 1801,
+        "sdk_aec_ns_agc": false
+      },
+      "publisher_owner": {
+        "joined": true,
+        "named_thread": true,
+        "shutdown_ms": 0.314125
+      },
+      "decoded_sources_retired": true
+    },
+    {
+      "report": "transport-obs-audio-master-delayed-candidate-capture-handoff-interactive-idle-repeat-rejoin.json",
+      "sha256": "7c6c8b56066bf5f19aa0d3bbba0f48bb28a20a5401723c9c55df53a9f796cf9a",
+      "failure": "Microphone publisher missed its bounded deadline",
+      "capture_publication": {
+        "aec_enforced_high_pass": false,
+        "aec_reference": "generated silence; no physical AEC claim",
+        "capture_rtp_alignment_qualified": false,
+        "enabled": true,
+        "fixture_content_delay_ms": 110,
+        "g1_complete": false,
+        "handoff": {
+          "accepted": 60,
+          "capacity_blocks": 32,
+          "closed": true,
+          "emitted": 50,
+          "faults": 1,
+          "maximum_lateness_ms": 20,
+          "maximum_lateness_us": 32386,
+          "minimum_spacing_ms": 8,
+          "minimum_spacing_us": 8945,
+          "peak_pending": 11,
+          "pending": 0,
+          "retired_pending": 10,
+          "sdk_external_capture_timestamp_supported": false,
+          "sdk_internal_queue_ms": 0
+        },
+        "hardware_capture_used": false,
+        "input": "generated 48k mono PCM in ten-block batches",
+        "maximum_apm_processing_us": 328,
+        "maximum_batch_processing_us": 969,
+        "maximum_owner_tick_gap_us": 27008,
+        "maximum_sdk_capture_us": 399,
+        "maximum_video_capture_us": 44,
+        "physical_speaker_playout_used": false,
+        "processed": 60,
+        "published": 50,
+        "sdk_aec_ns_agc": false
+      },
+      "publisher_owner": {
+        "joined": true,
+        "named_thread": true,
+        "shutdown_ms": 0.942458
+      },
+      "decoded_sources_retired": true
+    }
+  ],
+  "control": {
+    "report": "transport-obs-audio-master-delayed-candidate-publisher-owner-control-rejoin.json",
+    "sha256": "63ea14099eaf4b7c817147318a2aebfd30ba0cd5ab3830809a1db92f757889f8",
+    "return_transport_observed": true,
+    "publisher_owner": {
+      "joined": true,
+      "named_thread": true,
+      "shutdown_ms": 0.16504200000000002
+    },
+    "capture_publication": {
+      "enabled": false
+    }
+  },
+  "deterministic_batched_queue_age_p95_ms": 100,
+  "queue_age_source": "deterministic handoff test, not measured hardware or failed SFU runs",
+  "initial_adapter_queue_age_target_ms": 30,
+  "diagnosis": "100 ms input batches cannot meet the adapter queue target through one-block pacing. Interactive QoS did not remove scheduler misses.",
+  "limits": "Sequential synthetic loopback runs. First and first interactive runs overlapped lab compilation; idle-repeat used no simultaneous build. No physical microphone publication, physical playback, Cloud or WAN proof.",
+  "current_code": "Shared refined AEC, bounded diagnostic handoff and explicitly joined publisher thread retained. Experimental QoS override removed. Original generated source remains default.",
+  "next_gate": "Measure low-latency native capture and final-speaker reference callbacks; prove capture-origin mapping into SDK/RTP before integrated physical RTC test.",
+  "g1_complete": false,
+  "production_deployed": false
+}

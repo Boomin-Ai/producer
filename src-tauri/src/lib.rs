@@ -9,6 +9,11 @@ mod ipc;
 mod live;
 mod outbox;
 mod recordings;
+#[cfg(feature = "guest-rtc-pilot")]
+mod rtc_control;
+mod rtc_ipc;
+#[cfg(feature = "guest-rtc-pilot")]
+mod rtc_owner;
 mod set_library;
 mod set_media;
 mod storage;
@@ -23,6 +28,8 @@ use std::sync::Mutex;
 use tauri::Manager;
 
 pub struct AppState {
+    #[cfg(feature = "guest-rtc-pilot")]
+    pub rtc_host: tokio::sync::Mutex<Option<rtc_owner::HostOwner>>,
     pub db: Mutex<rusqlite::Connection>,
     /// Mid-sign-in hosted auth (api_root, token) held engine-side between
     /// OTP verification and workspace selection — never enters the webview.
@@ -36,6 +43,53 @@ pub struct AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(feature = "guest-rtc-production")]
+    {
+        // Configure the timestamped SDK adapter before any native factory is
+        // created. Production users do not need shell environment flags.
+        std::env::set_var("LIVEKIT_LAB_TIMED_MIXER", "1");
+        std::env::set_var("LIVEKIT_LAB_RTCP_PROBE", "1");
+    }
+    #[cfg(all(feature = "guest-rtc-pilot", have_engine, debug_assertions, target_os = "macos"))]
+    if std::env::var("PRODUCER_RTC_THUMB_PROOF").as_deref() == Ok("1") {
+        live::graph::thumbnail_selftest();
+        return;
+    }
+    #[cfg(all(feature = "guest-rtc-pilot", have_engine, debug_assertions, target_os = "macos"))]
+    if std::env::var("PRODUCER_RTC_TAP_PROOF").as_deref() == Ok("1") {
+        live::rtc_program::tap_selftest();
+        return;
+    }
+
+    #[cfg(all(
+        feature = "guest-rtc-pilot",
+        have_engine,
+        debug_assertions,
+        target_os = "macos"
+    ))]
+    if std::env::var("PRODUCER_RTC_PROGRAM_PROOF").as_deref() == Ok("1") {
+        if let Err(message) = rtc_owner::program_selftest() {
+            eprintln!("{message}");
+            std::process::exit(1);
+        }
+        return;
+    }
+    #[cfg(all(feature = "guest-rtc-pilot", debug_assertions))]
+    if let Some(path) = std::env::var_os("PRODUCER_RTC_CONNECTION_PROOF") {
+        if let Err(message) = rtc_owner::selftest(std::path::Path::new(&path)) {
+            eprintln!("{message}");
+            std::process::exit(1);
+        }
+        return;
+    }
+    #[cfg(all(feature = "guest-rtc-pilot", debug_assertions))]
+    if let Some(path) = std::env::var_os("PRODUCER_RTC_CONTROL_PROOF") {
+        if let Err(message) = rtc_control::selftest(std::path::Path::new(&path)) {
+            eprintln!("{message}");
+            std::process::exit(1);
+        }
+        return;
+    }
     #[cfg(all(have_engine, debug_assertions))]
     if std::env::var_os("PRODUCER_PROGRAM_SELFTEST").is_some() {
         live::program_audio::verification::run();
@@ -76,11 +130,20 @@ pub fn run() {
                     }
                 }
             }
+            #[cfg(all(feature = "guest-rtc-pilot", debug_assertions))]
+            if std::env::var("PRODUCER_RTC_ROOM_DEV_FIXTURE").as_deref() == Ok("1")
+                && app.config().identifier != "ai.boomin.producer.rtc-pilot"
+            {
+                return Err(std::io::Error::other("RTC development requires its isolated app identifier").into());
+            }
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let conn = store::open(&data_dir.join("producer.db"))
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
             recordings::recover(&conn).map_err(|e| std::io::Error::other(e.to_string()))?;
+            #[cfg(all(feature = "guest-rtc-pilot", debug_assertions))]
+            rtc_ipc::seed_dev_room(&conn, &app.config().identifier)
+                .map_err(std::io::Error::other)?;
 
             // Live engine. Legacy evidence harnesses (--live-capture-probe /
             // --live-first-light) bootstrap on a bare thread; every other
@@ -94,6 +157,8 @@ pub fn run() {
             };
 
             app.manage(AppState {
+                #[cfg(feature = "guest-rtc-pilot")]
+                rtc_host: tokio::sync::Mutex::new(None),
                 db: Mutex::new(conn),
                 pending_auth: Mutex::new(None),
                 live,
@@ -111,6 +176,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            rtc_ipc::live_rtc_start,
+            rtc_ipc::live_rtc_enabled,
+            rtc_ipc::live_rtc_stop,
             set_media::set_media_import,
             set_media::set_media_resolve,
             set_library::set_library_list,
@@ -293,6 +361,33 @@ pub fn run() {
                 // §5.5: no daemon — closing Producer ends the stream. The
                 // engine bounds the stop wait itself (≤ ~15s with an active
                 // session).
+                #[cfg(feature = "guest-rtc-pilot")]
+                tauri::RunEvent::ExitRequested { api, .. } => {
+                    static CLOSING: std::sync::atomic::AtomicU8 =
+                        std::sync::atomic::AtomicU8::new(0);
+                    if CLOSING.load(std::sync::atomic::Ordering::Acquire) != 2 {
+                        api.prevent_exit();
+                        if CLOSING
+                            .compare_exchange(
+                                0,
+                                1,
+                                std::sync::atomic::Ordering::AcqRel,
+                                std::sync::atomic::Ordering::Acquire,
+                            )
+                            .is_ok()
+                        {
+                            let app = app.clone();
+                            // Await native observers/SDK close off the macOS main
+                            // thread before the existing engine shutdown path.
+                            tauri::async_runtime::spawn(async move {
+                                let state = app.state::<AppState>();
+                                let _ = rtc_ipc::stop_host(&state).await;
+                                CLOSING.store(2, std::sync::atomic::Ordering::Release);
+                                app.exit(0);
+                            });
+                        }
+                    }
+                }
                 tauri::RunEvent::Exit => {
                     let state = app.state::<AppState>();
                     state.chat.disconnect_all();

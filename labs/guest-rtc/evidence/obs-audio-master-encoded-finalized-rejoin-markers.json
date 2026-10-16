@@ -1,0 +1,87 @@
+{
+  "audio_detector_window_max_ms" : 10,
+  "audio_marker_pts_ms" : [
+    10666.666666666666,
+    35174.666666666664,
+    37177.333333333336,
+    39174,
+    41176.666666666672,
+    43144.666666666664,
+    45258
+  ],
+  "audio_samples_decoded" : 2186208,
+  "browser_source_paint_uncertainty_ms" : 33.333333333333336,
+  "decoder" : "macOS AVFoundation",
+  "duration_seconds" : 45.533999999999999,
+  "g1_complete" : false,
+  "late_minus_early_median_offset_ms" : 23.333333333328483,
+  "lip_sync_qualified" : false,
+  "network_impairment_qualified" : false,
+  "observed_marker_test_pass" : false,
+  "pairs" : [
+    {
+      "audio_pts_ms" : 10666.666666666666,
+      "video_minus_audio_ms" : 0,
+      "video_pts_ms" : 10666.666666666666
+    },
+    {
+      "audio_pts_ms" : 35174.666666666664,
+      "video_minus_audio_ms" : -8,
+      "video_pts_ms" : 35166.666666666664
+    },
+    {
+      "audio_pts_ms" : 37177.333333333336,
+      "video_minus_audio_ms" : -10.666666666671517,
+      "video_pts_ms" : 37166.666666666664
+    },
+    {
+      "audio_pts_ms" : 39174,
+      "video_minus_audio_ms" : 26,
+      "video_pts_ms" : 39200
+    },
+    {
+      "audio_pts_ms" : 41176.666666666672,
+      "video_minus_audio_ms" : 23.333333333328483,
+      "video_pts_ms" : 41200
+    },
+    {
+      "audio_pts_ms" : 43144.666666666664,
+      "video_minus_audio_ms" : 88.666666666671517,
+      "video_pts_ms" : 43233.333333333336
+    }
+  ],
+  "pulse_recrossing_collapse_window_ms" : 150,
+  "raw_audio_threshold_crossings_ms" : [
+    10666.666666666666,
+    35174.666666666664,
+    37177.333333333336,
+    39174,
+    41176.666666666672,
+    43144.666666666664,
+    45258
+  ],
+  "raw_video_threshold_crossings_ms" : [
+    10666.666666666666,
+    35166.666666666664,
+    37166.666666666664,
+    39200,
+    41200,
+    43233.333333333336
+  ],
+  "recorded_av_abs_p95_ms" : 88.666666666671517,
+  "recorded_video_minus_audio_median_ms" : 23.333333333328483,
+  "recording" : "obs-audio-master-encoded-finalized-rejoin.mp4",
+  "schema_version" : 2,
+  "source_pulse_duration_ms" : 120,
+  "unmatched_audio_markers" : 1,
+  "unmatched_video_markers" : 0,
+  "video_frames_decoded" : 1366,
+  "video_marker_pts_ms" : [
+    10666.666666666666,
+    35166.666666666664,
+    37166.666666666664,
+    39200,
+    41200,
+    43233.333333333336
+  ]
+}

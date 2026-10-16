@@ -1,0 +1,90 @@
+{
+  "date": "2026-10-15",
+  "live": false,
+  "scope": "debug observed mixer clock rounding; no release behavior changes",
+  "official_obs_source": "https://github.com/obsproject/obs-studio/blob/32.1.2/libobs/obs-audio.c",
+  "rounding_proof": {
+    "steps_checked": 100000,
+    "floor_prediction_early_steps": 33333,
+    "ceil_maximum_ahead_ns": 1,
+    "ceil_early_steps": 0
+  },
+  "trials": [
+    {
+      "name": "floor",
+      "mixed_windows": 1600,
+      "mixed_short_gap_times_ms": [
+        30.000001,
+        90.000001,
+        2010.000001,
+        2070.000001,
+        4060.000001,
+        6040.000001,
+        6110.000001,
+        8090.000001,
+        10070.000001,
+        12060.000001,
+        12120.000001,
+        14040.000001,
+        14110.000001
+      ],
+      "matched_pairs": 15,
+      "absolute_p95_ms": 46.66666666666424,
+      "uncertain_tones": 0,
+      "unmatched_audio": 0,
+      "unmatched_video": 0,
+      "missing_video_labels_within_observed_span": [],
+      "local_numbered_marker_gate_passed": true,
+      "pull_diagnostics": {
+        "nonzero_channel_samples": 826996,
+        "push_contention": 33,
+        "push_wait_max_ns": 152458,
+        "push_wait_total_ns": 1651543,
+        "queue_full": 0,
+        "render_calls": 3660,
+        "render_clock_backwards": 0,
+        "render_clock_max_error_ns": 1,
+        "render_clock_repeats": 0,
+        "render_clock_skips": 0,
+        "render_contention": 0,
+        "render_samples_with_queued_pcm": 1436518,
+        "render_samples_without_queued_pcm": 2310298
+      }
+    },
+    {
+      "name": "ceil",
+      "mixed_windows": 1600,
+      "mixed_short_gap_times_ms": [],
+      "matched_pairs": 13,
+      "absolute_p95_ms": 59.999999999992724,
+      "uncertain_tones": 0,
+      "unmatched_audio": 2,
+      "unmatched_video": 0,
+      "missing_video_labels_within_observed_span": [
+        11
+      ],
+      "local_numbered_marker_gate_passed": false,
+      "pull_diagnostics": {
+        "nonzero_channel_samples": 836208,
+        "push_contention": 42,
+        "push_wait_max_ns": 83375,
+        "push_wait_total_ns": 2117045,
+        "queue_full": 0,
+        "render_calls": 3734,
+        "render_clock_backwards": 0,
+        "render_clock_max_error_ns": 1,
+        "render_clock_repeats": 0,
+        "render_clock_skips": 0,
+        "render_contention": 2,
+        "render_samples_with_queued_pcm": 1434847,
+        "render_samples_without_queued_pcm": 2385697
+      }
+    }
+  ],
+  "limitations": [
+    "Single before/after hosted trials, not repeatability proof.",
+    "Marker gate can pass despite within-tone PCM gaps; mixed waveform summaries add coverage.",
+    "Ceil trial still failed full gate because of video coverage.",
+    "Integrated production audio path and cross-platform qualification unfinished."
+  ]
+}

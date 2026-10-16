@@ -1,0 +1,25 @@
+{
+  "sdk": "LiveKit Rust 0.9.4",
+  "obs": "32.1.2",
+  "topology": "loopback synthetic browser -> SFU -> native callback -> OBS async source -> x264/AAC fragmented MP4",
+  "runs": [
+    {
+      "transport": "transport-obs-sync.json",
+      "analysis": "obs-sync-recorded-markers.json",
+      "async_video_unbuffered": false
+    },
+    {
+      "transport": "transport-obs-unbuffered.json",
+      "analysis": "obs-unbuffered-recorded-markers.json",
+      "async_video_unbuffered": true
+    }
+  ],
+  "recording_sha256": {
+    "obs-sync-normal.mp4": "07b7a22ebe02a862e1950aa429b9f273063068898b22164e35efa246b9cfe5c0",
+    "obs-sync-unbuffered.mp4": "0124821e0fef788c978c3ea95adf58ca3a2bfe3ef7d2376035d2bdfd8e5d52fb"
+  },
+  "obs_recorded_av_qualified": false,
+  "g1_complete": false,
+  "comparison_is_controlled_load_equivalent": false,
+  "unmatched_audio_detections_are_not_proven_lost_source_markers": true
+}

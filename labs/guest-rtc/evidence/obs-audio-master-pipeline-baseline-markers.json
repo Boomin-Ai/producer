@@ -1,0 +1,97 @@
+{
+  "audio_detector_window_max_ms" : 10,
+  "audio_marker_pts_ms" : [
+    13211.333333333334,
+    15209.333333333334,
+    17206.666666666668,
+    19466,
+    21463.333333333332,
+    23350.666666666668,
+    25278.666666666668,
+    27206,
+    29204
+  ],
+  "audio_samples_decoded" : 1465280,
+  "browser_source_paint_uncertainty_ms" : 33.333333333333336,
+  "decoder" : "macOS AVFoundation",
+  "duration_seconds" : 30.5546875,
+  "g1_complete" : false,
+  "lip_sync_qualified" : false,
+  "network_impairment_qualified" : false,
+  "observed_marker_test_pass" : false,
+  "pairs" : [
+    {
+      "audio_pts_ms" : 13211.333333333334,
+      "video_minus_audio_ms" : 76.687499999998181,
+      "video_pts_ms" : 13288.020833333332
+    },
+    {
+      "audio_pts_ms" : 15209.333333333334,
+      "video_minus_audio_ms" : 45.35416666666606,
+      "video_pts_ms" : 15254.6875
+    },
+    {
+      "audio_pts_ms" : 17206.666666666668,
+      "video_minus_audio_ms" : 48.020833333332121,
+      "video_pts_ms" : 17254.6875
+    },
+    {
+      "audio_pts_ms" : 23350.666666666668,
+      "video_minus_audio_ms" : 70.6875,
+      "video_pts_ms" : 23421.354166666668
+    },
+    {
+      "audio_pts_ms" : 25278.666666666668,
+      "video_minus_audio_ms" : 76.020833333332121,
+      "video_pts_ms" : 25354.6875
+    },
+    {
+      "audio_pts_ms" : 27206,
+      "video_minus_audio_ms" : 48.6875,
+      "video_pts_ms" : 27254.6875
+    },
+    {
+      "audio_pts_ms" : 29204,
+      "video_minus_audio_ms" : 50.6875,
+      "video_pts_ms" : 29254.6875
+    }
+  ],
+  "pulse_recrossing_collapse_window_ms" : 150,
+  "raw_audio_threshold_crossings_ms" : [
+    13211.333333333334,
+    15209.333333333334,
+    17206.666666666668,
+    19466,
+    21463.333333333332,
+    23350.666666666668,
+    25278.666666666668,
+    27206,
+    29204
+  ],
+  "raw_video_threshold_crossings_ms" : [
+    13288.020833333332,
+    15254.6875,
+    17254.6875,
+    23421.354166666668,
+    25354.6875,
+    27254.6875,
+    29254.6875
+  ],
+  "recorded_av_abs_p95_ms" : 76.687499999998181,
+  "recorded_video_minus_audio_median_ms" : 50.6875,
+  "recording" : "obs-audio-master-pipeline-baseline.mp4",
+  "schema_version" : 2,
+  "source_pulse_duration_ms" : 120,
+  "unmatched_audio_markers" : 2,
+  "unmatched_video_markers" : 0,
+  "video_frames_decoded" : 916,
+  "video_marker_pts_ms" : [
+    13288.020833333332,
+    15254.6875,
+    17254.6875,
+    23421.354166666668,
+    25354.6875,
+    27254.6875,
+    29254.6875
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "browser": "154.0.8037.98",
+  "guests": 1,
+  "mode": "network",
+  "states": [
+    {
+      "identity": "guest-1",
+      "connected": true,
+      "published": true,
+      "returnAudioBlocks": 699,
+      "returnAudioPulses": 12,
+      "returnVideoFrames": 345,
+      "events": [
+        "return-audio",
+        "return-video"
+      ],
+      "audioMaxRms": 0.2929870838344484,
+      "error": null,
+      "syncStreams": true
+    }
+  ],
+  "audioStats": [
+    [
+      {
+        "id": "IT01A172461271",
+        "timestamp": 1791604923966.17,
+        "type": "inbound-rtp",
+        "codecId": "CIT01_111_minptime=10;stereo=1;useinbandfec=1",
+        "kind": "audio",
+        "mediaType": "audio",
+        "ssrc": 172461271,
+        "transportId": "T01",
+        "jitter": 0.001,
+        "packetsLost": 0,
+        "packetsReceived": 204,
+        "packetsReceivedWithCe": 0,
+        "packetsReceivedWithEct1": 0,
+        "audioLevel": 0,
+        "bytesReceived": 2740,
+        "concealedSamples": 0,
+        "concealmentEvents": 0,
+        "fecPacketsDiscarded": 0,
+        "fecPacketsReceived": 0,
+        "headerBytesReceived": 2448,
+        "insertedSamplesForDeceleration": 1080,
+        "jitterBufferDelay": 6854.4,
+        "jitterBufferEmittedCount": 194880,
+        "jitterBufferMinimumDelay": 5510.4,
+        "jitterBufferTargetDelay": 5510.4,
+        "lastPacketReceivedTimestamp": 1791604923948.954,
+        "mid": "0",
+        "packetsDiscarded": 0,
+        "playoutId": "AP",
+        "remoteId": "ROA172461271",
+        "removedSamplesForAcceleration": 0,
+        "silentConcealedSamples": 0,
+        "totalAudioEnergy": 0,
+        "totalProcessingDelay": 5593.89312,
+        "totalSamplesDuration": 4.069999999999958,
+        "totalSamplesReceived": 195360,
+        "trackIdentifier": "62a3d928-ce42-4d07-aca7-7608f4725f04"
+      }
+    ]
+  ],
+  "impairments": [
+    {
+      "identity": "guest-1",
+      "conditions": {
+        "urlPattern": "",
+        "latency": 60,
+        "downloadThroughput": 250000,
+        "uploadThroughput": 250000,
+        "packetLoss": 100,
+        "packetQueueLength": 50,
+        "packetReordering": true
+      },
+      "ruleAccepted": true,
+      "mediaPathEffectVerified": false
+    }
+  ],
+  "packetProbe": [
+    {
+      "identity": "guest-1",
+      "returnAudioPacketsInFourSeconds": 199,
+      "zero_packet_loss_control": true,
+      "hard_loss_effect_observed": false
+    }
+  ],
+  "return_transport_observed": true,
+  "hardware_capture_used": false,
+  "physical_speaker_playout_used": false
+}

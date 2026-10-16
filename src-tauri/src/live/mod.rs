@@ -6,6 +6,8 @@ pub mod animation;
 pub mod bridge;
 pub mod commands;
 pub mod creds;
+#[cfg(feature = "guest-rtc-pilot")]
+pub use producer_guest_session as guest_session;
 #[cfg(have_engine)]
 pub mod dj;
 #[cfg(all(have_engine, target_os = "macos"))]
@@ -16,6 +18,12 @@ pub mod presentation;
 mod presentation_probe;
 #[cfg(have_engine)]
 pub mod program_audio;
+#[cfg(all(have_engine, feature = "guest-rtc-pilot"))]
+pub mod rtc_ingest;
+#[cfg(all(have_engine, feature = "guest-rtc-pilot"))]
+pub mod rtc_media;
+#[cfg(all(have_engine, feature = "guest-rtc-pilot"))]
+pub mod rtc_program;
 pub mod shaders;
 
 /// The virtual camera's label, identical on both platforms: macOS bakes it
@@ -51,6 +59,8 @@ pub mod multi;
 pub mod encoders;
 #[cfg(have_engine)]
 mod record;
+#[cfg(debug_assertions)]
+pub(crate) use record::Recorder as ProofRecorder;
 #[cfg(have_engine)]
 pub mod stream;
 // Studio output (v0.4.37): the studio scene, the room-only mix, and the

@@ -22,3 +22,6 @@
 *.cmake     text eol=lf
 *.json      text eol=lf
 *.yml       text eol=lf
+
+# Unified diff context preserves a leading space before Go tabs/empty lines.
+labs/guest-rtc/native/sfu-subscriber-report.patch whitespace=-blank-at-eol,-space-before-tab

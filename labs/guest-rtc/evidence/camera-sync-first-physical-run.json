@@ -1,0 +1,64 @@
+{
+  "run": "physical-publication-1791685240269444000",
+  "native_exit_code": 0,
+  "requested_seconds": 30,
+  "audio_capture_to_sdk_p95_ms": 26,
+  "audio_deadline_recoveries": 0,
+  "audio_native_errors": 0,
+  "native_clipped_samples": 731,
+  "camera": {
+    "av_sync_qualified": false,
+    "capture_timestamp_domain": "AVCaptureSession synchronizationClock converted to CMClockGetHostTimeClock",
+    "capture_to_sdk_p95_ms_upper_bucket": 38,
+    "enabled": true,
+    "error": null,
+    "lifecycle": {
+      "actual_height": 480,
+      "actual_pixel_format": 875704438,
+      "actual_width": 640,
+      "callbacks_active_after_stop": 0,
+      "capacity_frames": 3,
+      "consumed": 849,
+      "fault_codes": "1 no pixel; 2 format/dimensions; 3 regressed timestamp; 4 pixel lock; 5 planes/strides; 6 absent clock; 7 invalid converted time; 8 runtime error",
+      "first_fault_code": 0,
+      "format_or_timestamp_errors": 0,
+      "native_late_discarded": 0,
+      "overflow_newest_discarded": 0,
+      "owners_retired": true,
+      "pending_retired": 0,
+      "queued": 849
+    },
+    "maximum_capture_to_sdk_us": 114364,
+    "pixel_format": "NV12 video range to I420",
+    "resolution": {
+      "height": 480,
+      "width": 640
+    },
+    "sdk_adapted_or_rejected": 141,
+    "sdk_video_timestamp_alignment": "SDK TimestampAligner still translates host capture timestamps; cross-media RTP alignment not qualified",
+    "shutdown_ms": 130.288709,
+    "stale_discarded": 1,
+    "submitted": 707,
+    "thread_joined": true,
+    "video_recorded_by_native": false
+  },
+  "browser_received_video_frames": 663,
+  "private_av_capture": {
+    "recorded": true,
+    "bytes": 2671115,
+    "mime": "video/webm;codecs=vp8,opus",
+    "scope": "private Application Support; decoded AV browser re-encode, not raw source media"
+  },
+  "human_sync_review": "They look and sound aligned",
+  "subjective_sync_scope": "30-second built-in camera/microphone Mac loopback trial; claps and speech reviewed by operator",
+  "measured_clap_offset_ms": null,
+  "quantitative_sync_qualified": false,
+  "g1_complete": false,
+  "production_changed": false,
+  "actual_duration_seconds": 30.219277917,
+  "publisher_shutdown": {
+    "joined": true,
+    "named_thread": true,
+    "shutdown_ms": 155.47491699999998
+  }
+}

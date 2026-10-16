@@ -1,0 +1,532 @@
+{
+  "g1_complete": false,
+  "production_deployed": false,
+  "three_guest_reliability_passed": false,
+  "tests": {
+    "native_unit_tests": 49,
+    "python_recording_gate_tests": 12,
+    "node_marker_tests": 4,
+    "strict_combined_feature_all_targets_clippy_passed": true
+  },
+  "trials": [
+    {
+      "run": "generated-recovery-1791699710269001000",
+      "variant": "due-first; inline reports; unoptimized lab",
+      "native_sha256": "9dd2061f39159139f750fa1f2fdbfeb5725f153d9b6cd36b83e0b64087222c58",
+      "local_obs_acceptance_passed": false,
+      "readiness_passed": true,
+      "failure_reasons": [
+        "numbered recording marker gate failed"
+      ],
+      "numbered_p95_ms": 66.66666666667152,
+      "unmatched_audio": 0,
+      "unmatched_video": 1,
+      "uncertain_tones": 1,
+      "readiness_epochs": [
+        {
+          "binding_since_us": 81819924447,
+          "recovery_started_us": 81819924447,
+          "superseded_binding_epochs": [],
+          "first_scheduled_ms": {
+            "audio": 299.575,
+            "video": 350.701
+          }
+        },
+        {
+          "binding_since_us": 81831961316,
+          "recovery_started_us": 81831961316,
+          "superseded_binding_epochs": [],
+          "first_scheduled_ms": {
+            "audio": 554.29,
+            "video": 573.197
+          }
+        }
+      ],
+      "loop_timing": {
+        "decoded_audio": {
+          "count": 4319,
+          "max_us": 8586,
+          "mean_us": 71,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "due_handoff": {
+          "count": 4319,
+          "max_us": 377,
+          "mean_us": 1,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "observer_audio": {
+          "count": 4319,
+          "max_us": 1883,
+          "mean_us": 19,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "observer_video": {
+          "count": 4319,
+          "max_us": 132284,
+          "mean_us": 253,
+          "over_100_ms": 1,
+          "over_10_ms": 3,
+          "over_30_ms": 2
+        },
+        "sender_report_refresh": {
+          "count": 4319,
+          "max_us": 281860,
+          "mean_us": 604,
+          "over_100_ms": 5,
+          "over_10_ms": 18,
+          "over_30_ms": 11
+        },
+        "tick_gap": {
+          "count": 4319,
+          "max_us": 286447,
+          "mean_us": 10418,
+          "over_100_ms": 6,
+          "over_10_ms": 2374,
+          "over_30_ms": 17
+        },
+        "tick_work": {
+          "count": 4319,
+          "max_us": 286281,
+          "mean_us": 965,
+          "over_100_ms": 6,
+          "over_10_ms": 21,
+          "over_30_ms": 13
+        }
+      },
+      "audio_queue": {
+        "capacity": 24,
+        "flushed": 12,
+        "late": 41,
+        "overflow": 0,
+        "pending": 12,
+        "pushed": 4194,
+        "submitted": 4129
+      },
+      "video_queue": {
+        "capacity": 14,
+        "flushed": 5,
+        "late": 28,
+        "overflow": 0,
+        "pending": 1,
+        "pushed": 1178,
+        "submitted": 1144
+      },
+      "worker": null
+    },
+    {
+      "run": "generated-recovery-1791699883886780000",
+      "variant": "single guest; report worker; unoptimized lab",
+      "native_sha256": "b46ebb8fa0e0771da8f9b0c880f48914c86a53d87318e66ccb90d532a3b37a38",
+      "local_obs_acceptance_passed": true,
+      "readiness_passed": true,
+      "failure_reasons": [],
+      "numbered_p95_ms": 30,
+      "unmatched_audio": 0,
+      "unmatched_video": 0,
+      "uncertain_tones": 0,
+      "readiness_epochs": [
+        {
+          "binding_since_us": 81982870598,
+          "recovery_started_us": 81982870598,
+          "superseded_binding_epochs": [],
+          "first_scheduled_ms": {
+            "audio": 508.578,
+            "video": 549.956
+          }
+        },
+        {
+          "binding_since_us": 81994912475,
+          "recovery_started_us": 81994912475,
+          "superseded_binding_epochs": [],
+          "first_scheduled_ms": {
+            "audio": 577.587,
+            "video": 586.493
+          }
+        }
+      ],
+      "loop_timing": {
+        "decoded_audio": {
+          "count": 4480,
+          "max_us": 2241,
+          "mean_us": 72,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "due_handoff": {
+          "count": 4480,
+          "max_us": 410,
+          "mean_us": 0,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "observer_audio": {
+          "count": 4480,
+          "max_us": 1440,
+          "mean_us": 18,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "observer_video": {
+          "count": 4480,
+          "max_us": 17962,
+          "mean_us": 208,
+          "over_100_ms": 0,
+          "over_10_ms": 1,
+          "over_30_ms": 0
+        },
+        "sender_report_refresh": {
+          "count": 4480,
+          "max_us": 5936,
+          "mean_us": 128,
+          "over_100_ms": 0,
+          "over_10_ms": 0,
+          "over_30_ms": 0
+        },
+        "tick_gap": {
+          "count": 4480,
+          "max_us": 68214,
+          "mean_us": 10044,
+          "over_100_ms": 0,
+          "over_10_ms": 2489,
+          "over_30_ms": 4
+        },
+        "tick_work": {
+          "count": 4480,
+          "max_us": 18305,
+          "mean_us": 441,
+          "over_100_ms": 0,
+          "over_10_ms": 1,
+          "over_30_ms": 0
+        }
+      },
+      "audio_queue": {
+        "capacity": 24,
+        "flushed": 12,
+        "late": 3,
+        "overflow": 0,
+        "pending": 11,
+        "pushed": 4379,
+        "submitted": 4353
+      },
+      "video_queue": {
+        "capacity": 14,
+        "flushed": 4,
+        "late": 0,
+        "overflow": 0,
+        "pending": 4,
+        "pushed": 1241,
+        "submitted": 1233
+      },
+      "worker": {
+        "active_after_shutdown": false,
+        "capacity": 1,
+        "collected": 430,
+        "consumed": 430,
+        "errors": 0,
+        "max_collection_us": 25450,
+        "pending": 0,
+        "presentation_waits_for_collection": false,
+        "replaced": 0,
+        "shutdown_us": 84
+      }
+    },
+    {
+      "run": "generated-recovery-1791700146098862000",
+      "variant": "three guests; report worker; unoptimized lab",
+      "native_sha256": "1b187f497430aafb487e81a250650bb68880da6afb1619b61c7562e663355276",
+      "local_obs_acceptance_passed": false,
+      "readiness_passed": true,
+      "failure_reasons": [
+        "numbered recording marker gate failed",
+        "missing marker labels within observed recording span"
+      ],
+      "numbered_p95_ms": 90,
+      "unmatched_audio": 5,
+      "unmatched_video": 2,
+      "uncertain_tones": 2,
+      "readiness_epochs": [
+        {
+          "binding_since_us": 82260999912,
+          "recovery_started_us": 82260918397,
+          "superseded_binding_epochs": [
+            82260918397
+          ],
+          "first_scheduled_ms": {
+            "audio": 496.004,
+            "video": 648.236
+          }
+        },
+        {
+          "binding_since_us": 82273777902,
+          "recovery_started_us": 82273777902,
+          "superseded_binding_epochs": [],
+          "first_scheduled_ms": {
+            "audio": 639.813,
+            "video": 659.474
+          }
+        },
+        {
+          "binding_since_us": 82314169982,
+          "recovery_started_us": 82314169982,
+          "superseded_binding_epochs": [],
+          "first_scheduled_ms": {
+            "audio": 617.105,
+            "video": 619.007
+          }
+        },
+        {
+          "binding_since_us": 82354954635,
+          "recovery_started_us": 82354954635,
+          "superseded_binding_epochs": [],
+          "first_scheduled_ms": {
+            "audio": 962.726,
+            "video": 1006.504
+          }
+        }
+      ],
+      "loop_timing": {
+        "decoded_audio": {
+          "count": 9122,
+          "max_us": 227424,
+          "mean_us": 535,
+          "over_100_ms": 6,
+          "over_10_ms": 47,
+          "over_30_ms": 19
+        },
+        "due_handoff": {
+          "count": 9122,
+          "max_us": 61150,
+          "mean_us": 26,
+          "over_100_ms": 0,
+          "over_10_ms": 2,
+          "over_30_ms": 1
+        },
+        "observer_audio": {
+          "count": 9122,
+          "max_us": 127847,
+          "mean_us": 203,
+          "over_100_ms": 1,
+          "over_10_ms": 21,
+          "over_30_ms": 12
+        },
+        "observer_video": {
+          "count": 9122,
+          "max_us": 546691,
+          "mean_us": 3356,
+          "over_100_ms": 47,
+          "over_10_ms": 352,
+          "over_30_ms": 137
+        },
+        "sender_report_refresh": {
+          "count": 9122,
+          "max_us": 611405,
+          "mean_us": 1878,
+          "over_100_ms": 32,
+          "over_10_ms": 261,
+          "over_30_ms": 89
+        },
+        "tick_gap": {
+          "count": 9122,
+          "max_us": 795749,
+          "mean_us": 15347,
+          "over_100_ms": 132,
+          "over_10_ms": 5073,
+          "over_30_ms": 414
+        },
+        "tick_work": {
+          "count": 9122,
+          "max_us": 761842,
+          "mean_us": 6063,
+          "over_100_ms": 96,
+          "over_10_ms": 690,
+          "over_30_ms": 225
+        }
+      },
+      "audio_queue": {
+        "capacity": 24,
+        "flushed": 40,
+        "late": 743,
+        "overflow": 0,
+        "pending": 9,
+        "pushed": 9635,
+        "submitted": 8843
+      },
+      "video_queue": {
+        "capacity": 14,
+        "flushed": 20,
+        "late": 224,
+        "overflow": 0,
+        "pending": 1,
+        "pushed": 2518,
+        "submitted": 2273
+      },
+      "worker": {
+        "active_after_shutdown": false,
+        "capacity": 1,
+        "collected": 1049,
+        "consumed": 1017,
+        "errors": 0,
+        "max_collection_us": 1158112,
+        "pending": 1,
+        "presentation_waits_for_collection": false,
+        "replaced": 31,
+        "shutdown_us": 64346
+      }
+    },
+    {
+      "run": "generated-recovery-1791700619569791000",
+      "variant": "three guests; report worker; lab opt-level 2",
+      "native_sha256": "4e20e6cedbb72742bb115eca2df807eb59f8586c4e92ce1d3697aa7f7ab160a3",
+      "local_obs_acceptance_passed": false,
+      "readiness_passed": true,
+      "failure_reasons": [
+        "numbered recording marker gate failed",
+        "missing marker labels within observed recording span"
+      ],
+      "numbered_p95_ms": 150,
+      "unmatched_audio": 4,
+      "unmatched_video": 2,
+      "uncertain_tones": 1,
+      "readiness_epochs": [
+        {
+          "binding_since_us": 82759675731,
+          "recovery_started_us": 82759675731,
+          "superseded_binding_epochs": [],
+          "first_scheduled_ms": {
+            "audio": 113.282,
+            "video": 611.336
+          }
+        },
+        {
+          "binding_since_us": 82776472711,
+          "recovery_started_us": 82776472711,
+          "superseded_binding_epochs": [],
+          "first_scheduled_ms": {
+            "audio": 339.294,
+            "video": 404.524
+          }
+        },
+        {
+          "binding_since_us": 82813094112,
+          "recovery_started_us": 82813094112,
+          "superseded_binding_epochs": [],
+          "first_scheduled_ms": {
+            "audio": 341.211,
+            "video": 475.359
+          }
+        },
+        {
+          "binding_since_us": 82853784562,
+          "recovery_started_us": 82853416594,
+          "superseded_binding_epochs": [
+            82853416594
+          ],
+          "first_scheduled_ms": {
+            "audio": 533.036,
+            "video": 570.94
+          }
+        }
+      ],
+      "loop_timing": {
+        "decoded_audio": {
+          "count": 9425,
+          "max_us": 172901,
+          "mean_us": 482,
+          "over_100_ms": 4,
+          "over_10_ms": 68,
+          "over_30_ms": 19
+        },
+        "due_handoff": {
+          "count": 9425,
+          "max_us": 101838,
+          "mean_us": 38,
+          "over_100_ms": 1,
+          "over_10_ms": 8,
+          "over_30_ms": 1
+        },
+        "observer_audio": {
+          "count": 9425,
+          "max_us": 35404,
+          "mean_us": 48,
+          "over_100_ms": 0,
+          "over_10_ms": 5,
+          "over_30_ms": 3
+        },
+        "observer_video": {
+          "count": 9425,
+          "max_us": 204743,
+          "mean_us": 483,
+          "over_100_ms": 4,
+          "over_10_ms": 68,
+          "over_30_ms": 20
+        },
+        "sender_report_refresh": {
+          "count": 9425,
+          "max_us": 159311,
+          "mean_us": 696,
+          "over_100_ms": 2,
+          "over_10_ms": 134,
+          "over_30_ms": 42
+        },
+        "tick_gap": {
+          "count": 9425,
+          "max_us": 1302457,
+          "mean_us": 14853,
+          "over_100_ms": 87,
+          "over_10_ms": 5619,
+          "over_30_ms": 547
+        },
+        "tick_work": {
+          "count": 9425,
+          "max_us": 281889,
+          "mean_us": 1842,
+          "over_100_ms": 14,
+          "over_10_ms": 307,
+          "over_30_ms": 97
+        }
+      },
+      "audio_queue": {
+        "capacity": 24,
+        "flushed": 35,
+        "late": 733,
+        "overflow": 0,
+        "pending": 10,
+        "pushed": 10468,
+        "submitted": 9690
+      },
+      "video_queue": {
+        "capacity": 14,
+        "flushed": 4,
+        "late": 235,
+        "overflow": 0,
+        "pending": 5,
+        "pushed": 2861,
+        "submitted": 2617
+      },
+      "worker": {
+        "active_after_shutdown": false,
+        "capacity": 1,
+        "collected": 1170,
+        "consumed": 1124,
+        "errors": 0,
+        "max_collection_us": 713903,
+        "pending": 0,
+        "presentation_waits_for_collection": false,
+        "replaced": 46,
+        "shutdown_us": 8427
+      }
+    }
+  ],
+  "post_run_swap_usage": "vm.swapusage: total = 4096.00M  used = 3665.56M  free = 430.44M  (encrypted)",
+  "environment_limitation": "Post-run swap observation does not prove the cause of the recording failures; no user applications were closed to force a favorable run."
+}

@@ -1,0 +1,85 @@
+{
+  "local_obs_acceptance_passed": false,
+  "failure_reasons": [
+    "numbered recording marker gate failed",
+    "missing marker labels within observed recording span"
+  ],
+  "local_delivery_worker_gate_passed": true,
+  "delivery_worker_failure_reasons": [],
+  "local_readiness_gate_passed": true,
+  "readiness_failure_reasons": [],
+  "binding_epochs": [
+    {
+      "binding_since_us": 96464778720,
+      "recovery_started_us": 96464778250,
+      "superseded_binding_epochs": [
+        96464778250,
+        96464778564
+      ],
+      "first_scheduled_ms": {
+        "audio": 623.085,
+        "video": 652.943
+      }
+    },
+    {
+      "binding_since_us": 96477479470,
+      "recovery_started_us": 96476781054,
+      "superseded_binding_epochs": [
+        96476781054,
+        96476781141,
+        96477477654
+      ],
+      "first_scheduled_ms": {
+        "audio": 1156.021,
+        "video": 1225.624
+      }
+    },
+    {
+      "binding_since_us": 96517964100,
+      "recovery_started_us": 96516780935,
+      "superseded_binding_epochs": [
+        96516780935,
+        96516781123,
+        96517557802
+      ],
+      "first_scheduled_ms": {
+        "audio": 1249.683,
+        "video": 1302.798
+      }
+    },
+    {
+      "binding_since_us": 96557009629,
+      "recovery_started_us": 96556782919,
+      "superseded_binding_epochs": [
+        96556782919,
+        96556783107,
+        96556958486
+      ],
+      "first_scheduled_ms": {
+        "audio": 724.032,
+        "video": 749.516
+      }
+    }
+  ],
+  "raw_binding_epoch_count": 15,
+  "superseded_binding_epochs": [
+    96464778250,
+    96464778564,
+    96476781054,
+    96476781141,
+    96477477654,
+    96516780935,
+    96516781123,
+    96517557802,
+    96556782919,
+    96556783107,
+    96556958486
+  ],
+  "unfinished_binding_epochs": [],
+  "expected_binding_epochs": 4,
+  "readiness_budget_ms": 1500,
+  "budget_scope": "prototype local recovery from earliest pending reset, not WAN service guarantee",
+  "startup_and_tail_loss_qualified": false,
+  "lip_sync_qualified": false,
+  "g1_complete": false
+}

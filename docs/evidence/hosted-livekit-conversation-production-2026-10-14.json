@@ -1,0 +1,158 @@
+{
+  "qualification": "Two real LiveKit browser clients with generated tones; muted output. No physical AEC or native recovery qualification.",
+  "production_changed": true,
+  "started_at": "2026-10-14T14:35:48.261Z",
+  "steps": [
+    {
+      "label": "create-proof-room",
+      "status": 200
+    },
+    {
+      "label": "connection",
+      "status": 201
+    },
+    {
+      "label": "state",
+      "status": 200
+    },
+    {
+      "label": "state",
+      "status": 200
+    },
+    {
+      "label": "start",
+      "status": 200
+    },
+    {
+      "label": "cleanup-roster",
+      "status": 200
+    },
+    {
+      "label": "link",
+      "status": 200
+    },
+    {
+      "label": "intent",
+      "status": 200
+    },
+    {
+      "label": "join",
+      "status": 201
+    },
+    {
+      "label": "state",
+      "status": 200
+    },
+    {
+      "label": "admit",
+      "status": 200
+    },
+    {
+      "label": "intent",
+      "status": 200
+    },
+    {
+      "label": "join",
+      "status": 201
+    },
+    {
+      "label": "state",
+      "status": 200
+    },
+    {
+      "label": "admit",
+      "status": 200
+    },
+    {
+      "label": "state",
+      "status": 200
+    },
+    {
+      "label": "renew",
+      "status": 200
+    },
+    {
+      "label": "state",
+      "status": 200
+    },
+    {
+      "label": "stage",
+      "status": 200
+    },
+    {
+      "label": "state",
+      "status": 200
+    },
+    {
+      "label": "stage",
+      "status": 200
+    },
+    {
+      "label": "state",
+      "status": 200
+    },
+    {
+      "label": "stage",
+      "status": 200
+    },
+    {
+      "label": "state",
+      "status": 200
+    },
+    {
+      "label": "revoke",
+      "status": 200
+    },
+    {
+      "label": "state",
+      "status": 200
+    },
+    {
+      "label": "cleanup-roster",
+      "status": 200
+    },
+    {
+      "label": "cleanup-revoke",
+      "status": 200
+    },
+    {
+      "label": "state",
+      "status": 200
+    },
+    {
+      "label": "cleanup-roster",
+      "status": 200
+    },
+    {
+      "label": "state",
+      "status": 200
+    },
+    {
+      "label": "end",
+      "status": 200
+    }
+  ],
+  "backstage_silent": true,
+  "staged_peer_counts": [
+    1,
+    1
+  ],
+  "peer_audio_rms": [
+    [
+      0.13794248192148717
+    ],
+    [
+      0.14060582069306854
+    ]
+  ],
+  "hide_removes_audio": true,
+  "restage_restores_audio": true,
+  "revoke_removes_audio": true,
+  "passed": true,
+  "temporary_room_removed": true,
+  "deployed_api_commit": "570510061c0dcaf2fe9908acf60589f353aa8765",
+  "deployed_web_commit": "3072d0b7dbe7fd222cad218713dcfa7a812cd29e",
+  "worker_version": "48333192-315c-45a0-8f60-6f985a6b60c0",
+  "api_tests_passed": 1135,
+  "browser_policy_lifecycle_tests_passed": 18
+}

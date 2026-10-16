@@ -1,0 +1,84 @@
+{
+  "passed": true,
+  "production_changed": false,
+  "ordinary_room_ui_exercised": false,
+  "qualification": "Generated OBS program through actual native publisher, LiveKit Cloud and the existing guest page; no physical AEC or audiovisual synchronization qualification.",
+  "steps": [
+    {
+      "name": "link",
+      "status": 200,
+      "elapsed_ms": 2886
+    },
+    {
+      "name": "admit",
+      "status": 200,
+      "elapsed_ms": 3474
+    },
+    {
+      "name": "stage",
+      "status": 200,
+      "elapsed_ms": 3928
+    },
+    {
+      "name": "revoke",
+      "status": 200,
+      "elapsed_ms": 2719
+    }
+  ],
+  "checkpoint": "owner_shutdown",
+  "expired_recovery_expected": {
+    "run_id": "79d75a78-90bb-486b-954d-724fc28957e7",
+    "epoch": 2
+  },
+  "expired_recovery_verified": true,
+  "return_media": {
+    "width": 1280,
+    "height": 720,
+    "decoded_frames": 38,
+    "stream_changes": 0,
+    "maximum_rms": 0.087270297328354,
+    "center_rgb": [
+      243,
+      3,
+      9
+    ]
+  },
+  "final": {
+    "audio_submitted": 5554,
+    "owner_expired": true,
+    "passed": true,
+    "repeated_close_passed": true,
+    "timing": {
+      "maximum_audio_call_us": 2637,
+      "maximum_audio_late_us": 30710,
+      "maximum_video_call_us": 1183,
+      "minimum_audio_spacing_us": 8037,
+      "publisher_recoveries": 3
+    },
+    "video_submitted": 1641
+  },
+  "run_ended": true,
+  "owner": {
+    "audio_submitted": 5554,
+    "owner_expired": true,
+    "passed": true,
+    "repeated_close_passed": true,
+    "timing": {
+      "maximum_audio_call_us": 2637,
+      "maximum_audio_late_us": 30710,
+      "maximum_video_call_us": 1183,
+      "minimum_audio_spacing_us": 8037,
+      "publisher_recoveries": 3
+    },
+    "video_submitted": 1641
+  },
+  "source_sha256": {
+    "crates/guest-runtime/src/lib.rs": "bd2553b716f377eb97775724fff972a8c799c454cce9707b263ebc504519330b",
+    "crates/guest-runtime/src/program.rs": "07aad9f91da1ad5721175ab870d071709c8e1106f8e084e192f249748b1aa868",
+    "crates/guest-session/src/lib.rs": "c4e9498c2022b931a5e08c17a26c34fd47812a10a3bb9b79761fb81e827bfd1b",
+    "src-tauri/src/rtc_owner.rs": "1256d53e2eb782f993d2c675bf13e9ec03e6480dc55c6c4fc96d9ef36b5a3dbd",
+    "src-tauri/src/live/rtc_program.rs": "284a263d2274f0dd68195a0ecf6309a50757b437c28834f20a93c37f3681b6ae",
+    "scripts/test-native-program-return.mjs": "0e3f6d8b55112ee6acbe6d152985dc2c5cc467844eb686447a8f990b0102387b"
+  },
+  "binary_sha256": "5abb1fd3948dff2555ba6c5454c32b3bc12a61e46eacd75212e1d0e3922b60a1"
+}

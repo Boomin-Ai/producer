@@ -940,7 +940,7 @@ function SettingsPanel({
   destinations: LiveDestination[];
   channels: Channel[];
   onChannelsChanged: () => void;
-  updater: { state: string; version: string | null; restart: () => void };
+  updater: { state: string; version: string | null; restart: () => void; checkNow: () => void };
   onClose: () => void;
 }) {
   const [appVersion, setAppVersion] = useState<string | null>(null);
@@ -1056,8 +1056,11 @@ function SettingsPanel({
               <>An update is ready. <button className="linkish" onClick={updater.restart}>Restart to install{updater.version ? ` ${updater.version}` : ""}</button></>
             ) : updater.state === "downloading" ? (
               "Downloading an update…"
+            ) : updater.state === "checking" ? (
+              "Checking for updates…"
             ) : (
-              "Up to date. Updates install themselves."
+              <>{updater.state === "current" ? "Up to date." : updater.state === "error" ? "Could not check for updates." : "Updates download automatically."}{" "}
+                <button className="linkish" onClick={updater.checkNow}>Check for updates</button></>
             )}
           </div>
           {Array.isArray(releases) && releases[0] && (() => {

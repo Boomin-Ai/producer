@@ -1,0 +1,52 @@
+{
+  "scope": "decoded mixer metadata and wrapper lifetime; OBS adapter unchanged",
+  "runs": [
+    {
+      "run": "transport-timed-mixer-churn",
+      "evidence_sha256": "409ac5f1433344a78e06220fc84894bf0d2e428055df44d4ec7a8727e8004ef9",
+      "generations": 6,
+      "frames": 7400,
+      "ntp_valid_frames": 0,
+      "source_to_publication_match": null,
+      "remaining_source_wrappers": 0,
+      "rrtr_experiment_requested": false
+    },
+    {
+      "run": "transport-timed-mixer-90s",
+      "evidence_sha256": "5baf42e44fb94d7b2cae3e627c282e0e67bce2adb2a5dd8883f45e945af96350",
+      "generations": 1,
+      "frames": 8682,
+      "ntp_valid_frames": 0,
+      "source_to_publication_match": null,
+      "remaining_source_wrappers": 0,
+      "rrtr_experiment_requested": false
+    },
+    {
+      "run": "transport-timed-mixer-video-jitter",
+      "evidence_sha256": "e6e8c073405e4eebf530a41f2e30e6cbe6313aabed6c4ba7f0df7bde5a35bc07",
+      "generations": 1,
+      "frames": 2166,
+      "ntp_valid_frames": 0,
+      "source_to_publication_match": {
+        "identity": "guest-1",
+        "publication_sid": "TR_AMGahhoWgsfQzx",
+        "ssrc": 1170866365
+      },
+      "remaining_source_wrappers": 0,
+      "rrtr_experiment_requested": false
+    },
+    {
+      "run": "transport-timed-mixer-rrtr-churn",
+      "evidence_sha256": "64ddd2053000210d4fc5da52eb0276db84c3f1b2242acf7751ce331594dfd5b1",
+      "generations": 6,
+      "frames": 8913,
+      "ntp_valid_frames": 0,
+      "source_to_publication_match": null,
+      "remaining_source_wrappers": 0,
+      "rrtr_experiment_requested": true
+    }
+  ],
+  "native_archive_rebuild_required_for_probe": false,
+  "common_clock_qualified": false,
+  "g1_complete": false
+}

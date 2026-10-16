@@ -1,0 +1,31 @@
+{
+  "runs": [
+    {
+      "run": "generated-recovery-1791689246484476000",
+      "conditions": "generated-recovery-1791689246484476000-conditions.json",
+      "marker_analysis": "generated-recovery-1791689246484476000-obs-markers.json",
+      "numbered_analysis": "generated-recovery-1791689246484476000-numbered-negative-control.json",
+      "acceptance": null,
+      "recording_sha256": "ede8b3f31160f703c142bafcee6d634571cc09d059ccc777b897e7d99354806e"
+    },
+    {
+      "run": "generated-recovery-1791689373777632000",
+      "conditions": "generated-recovery-1791689373777632000-conditions.json",
+      "marker_analysis": "generated-recovery-1791689373777632000-obs-markers.json",
+      "numbered_analysis": "generated-recovery-1791689373777632000-obs-numbered.json",
+      "acceptance": "generated-recovery-1791689373777632000-obs-acceptance.json",
+      "recording_sha256": "ed8906f93fbf5135789302e4a3945ce58163908979d04878370e27f9c061987a"
+    },
+    {
+      "run": "generated-recovery-1791689912496953000",
+      "conditions": "generated-recovery-1791689912496953000-conditions.json",
+      "marker_analysis": "generated-recovery-1791689912496953000-obs-markers.json",
+      "numbered_analysis": "generated-recovery-1791689912496953000-obs-numbered.json",
+      "acceptance": "generated-recovery-1791689912496953000-obs-acceptance.json",
+      "recording_sha256": "1e330357e41ab1f98ac157144056aaf547f7addf0dd8b0b01e5e2a2d94d4c8b9"
+    }
+  ],
+  "g1_complete": false,
+  "production_changed": false,
+  "notes": "Actual generated guest-1 native OBS recordings. Baseline uncoded recording is numbered detector negative control. Good marker sync does not qualify startup/recovery; full and final coded trials failed combined local acceptance."
+}

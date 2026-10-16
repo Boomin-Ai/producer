@@ -1,0 +1,139 @@
+{
+  "run": "generated-recovery-1791693336449804000",
+  "sfu_trace_sha256": "fda261645e5fb5961f30b71f356878bda89cfbeee975723e3ca16d41f42cf5e8",
+  "native_report_sha256": "6e929ae320793b204cf066f658add29011c1d74d67de92f5f7b4849fb12d26cb",
+  "guest_audio_tracks": [
+    {
+      "track_id": "TR_AMDfQpdSHVVa5L",
+      "publisher": "guest-2",
+      "first_receipt_subscribers": 0,
+      "subscriber_requests": [
+        {
+          "sfu_wall_us": 1791693369445556,
+          "number_in_budget_window": 1
+        },
+        {
+          "sfu_wall_us": 1791693382832745,
+          "number_in_budget_window": 1
+        },
+        {
+          "sfu_wall_us": 1791693424478086,
+          "number_in_budget_window": 1
+        },
+        {
+          "sfu_wall_us": 1791693462784286,
+          "number_in_budget_window": 1
+        }
+      ],
+      "first_receipt_sfu_wall_us": 1791693357089989,
+      "first_native_forward_after_initial_receipt_ms": 12373.327,
+      "native_admissions": [
+        {
+          "added_sfu_wall_us": 1791693369173000,
+          "first_forward_after_add_ms": 290.316
+        },
+        {
+          "added_sfu_wall_us": 1791693382559000,
+          "first_forward_after_add_ms": 282.383
+        },
+        {
+          "added_sfu_wall_us": 1791693424181000,
+          "first_forward_after_add_ms": 340.713
+        },
+        {
+          "added_sfu_wall_us": 1791693462494000,
+          "first_forward_after_add_ms": 310.48
+        }
+      ]
+    },
+    {
+      "track_id": "TR_AMZS3LXYK8Tibw",
+      "publisher": "guest-1",
+      "first_receipt_subscribers": 0,
+      "subscriber_requests": [
+        {
+          "sfu_wall_us": 1791693369423150,
+          "number_in_budget_window": 1
+        },
+        {
+          "sfu_wall_us": 1791693382832414,
+          "number_in_budget_window": 1
+        },
+        {
+          "sfu_wall_us": 1791693424325755,
+          "number_in_budget_window": 1
+        },
+        {
+          "sfu_wall_us": 1791693462766157,
+          "number_in_budget_window": 1
+        }
+      ],
+      "first_receipt_sfu_wall_us": 1791693349377630,
+      "first_native_forward_after_initial_receipt_ms": 20047.709,
+      "native_admissions": [
+        {
+          "added_sfu_wall_us": 1791693369159000,
+          "first_forward_after_add_ms": 266.339
+        },
+        {
+          "added_sfu_wall_us": 1791693382558000,
+          "first_forward_after_add_ms": 285.976
+        },
+        {
+          "added_sfu_wall_us": 1791693424046000,
+          "first_forward_after_add_ms": 312.711
+        },
+        {
+          "added_sfu_wall_us": 1791693462491000,
+          "first_forward_after_add_ms": 296.237
+        }
+      ]
+    },
+    {
+      "track_id": "TR_AMnWx9wFws4v74",
+      "publisher": "guest-3",
+      "first_receipt_subscribers": 0,
+      "subscriber_requests": [
+        {
+          "sfu_wall_us": 1791693369924509,
+          "number_in_budget_window": 1
+        },
+        {
+          "sfu_wall_us": 1791693382849394,
+          "number_in_budget_window": 1
+        },
+        {
+          "sfu_wall_us": 1791693424480191,
+          "number_in_budget_window": 1
+        },
+        {
+          "sfu_wall_us": 1791693462789379,
+          "number_in_budget_window": 1
+        }
+      ],
+      "first_receipt_sfu_wall_us": 1791693366741205,
+      "first_native_forward_after_initial_receipt_ms": 3195.968,
+      "native_admissions": [
+        {
+          "added_sfu_wall_us": 1791693369617000,
+          "first_forward_after_add_ms": 320.173
+        },
+        {
+          "added_sfu_wall_us": 1791693382565000,
+          "first_forward_after_add_ms": 309.878
+        },
+        {
+          "added_sfu_wall_us": 1791693424183000,
+          "first_forward_after_add_ms": 334.741
+        },
+        {
+          "added_sfu_wall_us": 1791693462496000,
+          "first_forward_after_add_ms": 297.222
+        }
+      ]
+    }
+  ],
+  "clock_domains": "Receipt/admission deltas use SFU wall time only. Native readiness uses per-binding monotonic intervals only. No subtraction across clock domains.",
+  "interpretation": "Reports received without subscribers cannot initialize a subsequently bound downstream. A fresh post-switch report is still required by the upstream timestamp-offset validity guard; cached report seeding alone is insufficient.",
+  "g1_complete": false
+}

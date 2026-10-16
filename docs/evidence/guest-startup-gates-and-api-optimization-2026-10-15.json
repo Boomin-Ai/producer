@@ -1,0 +1,61 @@
+{
+  "qualification": "Debug native generated-fixture measurement against production API/LiveKit. Same-machine timestamps, ~100 ms sampling for ingest and thumbnail counters. No human camera/microphone. Not the released native webview paint.",
+  "timeline_from_admit_start_ms": {
+    "admit_response": 1550.8662499999991,
+    "first_binding": 5355,
+    "first_decoded_video": 6100,
+    "audio_sender_clock_ready": 9514,
+    "video_sender_clock_ready": 9514,
+    "first_video_scheduled": 9548,
+    "first_ingested_video": 9737,
+    "first_colored_thumbnail": 9944
+  },
+  "decoded_to_clock_ready_ms": 3414,
+  "clock_ready_to_scheduled_ms": 34,
+  "candidate_removed": {
+    "change": "Preserve reports arriving between publication attachment and first stats binding",
+    "observed_decoded_to_ingest_ms": 3985,
+    "reason": "No measured startup improvement; restored existing production behavior"
+  },
+  "api_optimization": {
+    "before_database_requests": 19,
+    "after_database_requests": 15,
+    "before_local_admit_ms": 1036,
+    "after_local_admit_ms": 868,
+    "qualification": "Individual local diagnostic route executions against production DB, not controlled Cloudflare latency distribution",
+    "live_commit": "eb732fd83c51da6b0554709bd1e0085cb6c98c36",
+    "worker_version": "6dc532f9-65ec-4b6b-b14e-7d1967e0c3e1",
+    "api_ci_tests_passed": 1140
+  },
+  "native_tests_passed": 34,
+  "native_behavior_fix_live": false,
+  "post_deploy_browser_test": {
+    "passed": true,
+    "temporary_room_removed": true,
+    "host_api": {
+      "state": {
+        "samples": 12,
+        "median_ms": 1144.5,
+        "min_ms": 1048,
+        "max_ms": 3110
+      },
+      "admit": {
+        "samples": 2,
+        "median_ms": 1333.5,
+        "min_ms": 1328,
+        "max_ms": 1339
+      },
+      "stage": {
+        "samples": 3,
+        "median_ms": 1467,
+        "min_ms": 1350,
+        "max_ms": 1915
+      }
+    },
+    "qualification": "Single two-client production trial, generated media; comparisons are exploratory, not a controlled latency distribution."
+  },
+  "cleanup": {
+    "native_test_room_removed": true,
+    "post_deploy_test_room_removed": true
+  }
+}

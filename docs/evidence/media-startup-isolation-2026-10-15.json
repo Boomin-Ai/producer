@@ -1,0 +1,211 @@
+{
+  "date": "2026-10-15",
+  "live": false,
+  "runtime_tests_passed": 43,
+  "trials": [
+    {
+      "name": "media-startup-baseline",
+      "admit_to_preview_ms": 5188,
+      "admit_start_to_outbound_observation_ms": 3559,
+      "outbound_observation_to_decode_ms": 185,
+      "decode_to_preview_ms": 1444,
+      "audio_attach_to_binding_ms": 1184,
+      "commands": [
+        {
+          "operation": "native/admit",
+          "elapsed_ms": 1904.507458,
+          "timing": {
+            "mutation_ms": 1004,
+            "post_read_ms": 812,
+            "pre_read_ms": 0,
+            "reused_current_snapshot": true
+          }
+        },
+        {
+          "operation": "native/stage",
+          "elapsed_ms": 2019.9410000000062,
+          "timing": {
+            "mutation_ms": 1122,
+            "post_read_ms": 806,
+            "pre_read_ms": 0,
+            "reused_current_snapshot": true
+          }
+        }
+      ],
+      "recording": {
+        "absolute_p95_ms": 63.33333333333576,
+        "local_numbered_marker_gate_passed": true,
+        "unmatched_audio": 0,
+        "unmatched_video": 0,
+        "uncertain_tones": 0,
+        "missing_video_labels_within_observed_span": []
+      }
+    },
+    {
+      "name": "media-audio-wakeup-1",
+      "admit_to_preview_ms": 8426,
+      "admit_start_to_outbound_observation_ms": 6673,
+      "outbound_observation_to_decode_ms": 467,
+      "decode_to_preview_ms": 1286,
+      "audio_attach_to_binding_ms": 1161,
+      "commands": [
+        {
+          "operation": "native/admit",
+          "elapsed_ms": 2750.9350840000006,
+          "timing": {
+            "mutation_ms": 1826,
+            "post_read_ms": 802,
+            "pre_read_ms": 0,
+            "reused_current_snapshot": true
+          }
+        },
+        {
+          "operation": "native/stage",
+          "elapsed_ms": 2095.3132499999992,
+          "timing": {
+            "mutation_ms": 1145,
+            "post_read_ms": 879,
+            "pre_read_ms": 0,
+            "reused_current_snapshot": true
+          }
+        }
+      ],
+      "recording": {
+        "absolute_p95_ms": 43.33333333333576,
+        "local_numbered_marker_gate_passed": false,
+        "unmatched_audio": 0,
+        "unmatched_video": 0,
+        "uncertain_tones": 1,
+        "missing_video_labels_within_observed_span": []
+      }
+    },
+    {
+      "name": "media-queued-startup",
+      "admit_to_preview_ms": 5843,
+      "admit_start_to_outbound_observation_ms": 4334,
+      "outbound_observation_to_decode_ms": 178,
+      "decode_to_preview_ms": 1331,
+      "audio_attach_to_binding_ms": 8,
+      "commands": [
+        {
+          "operation": "native/admit",
+          "elapsed_ms": 1937.029375000002,
+          "timing": {
+            "mutation_ms": 1049,
+            "post_read_ms": 797,
+            "pre_read_ms": 0,
+            "reused_current_snapshot": true
+          }
+        },
+        {
+          "operation": "native/stage",
+          "elapsed_ms": 4150.172707999998,
+          "timing": {
+            "mutation_ms": 2580,
+            "post_read_ms": 803,
+            "pre_read_ms": 0,
+            "reused_current_snapshot": true
+          }
+        }
+      ],
+      "recording": {
+        "absolute_p95_ms": 40,
+        "local_numbered_marker_gate_passed": true,
+        "unmatched_audio": 0,
+        "unmatched_video": 0,
+        "uncertain_tones": 0,
+        "missing_video_labels_within_observed_span": []
+      }
+    },
+    {
+      "name": "media-initial-binding",
+      "admit_to_preview_ms": 7058,
+      "admit_start_to_outbound_observation_ms": 5587,
+      "outbound_observation_to_decode_ms": 390,
+      "decode_to_preview_ms": 1081,
+      "audio_attach_to_binding_ms": 1167,
+      "commands": [
+        {
+          "operation": "native/admit",
+          "elapsed_ms": 2033.5052499999983,
+          "timing": {
+            "mutation_ms": 1127,
+            "post_read_ms": 824,
+            "pre_read_ms": 0,
+            "reused_current_snapshot": true
+          }
+        },
+        {
+          "operation": "native/stage",
+          "elapsed_ms": 2139.1515419999996,
+          "timing": {
+            "mutation_ms": 1173,
+            "post_read_ms": 872,
+            "pre_read_ms": 0,
+            "reused_current_snapshot": true
+          }
+        }
+      ],
+      "recording": {
+        "absolute_p95_ms": 83.33333333333576,
+        "local_numbered_marker_gate_passed": false,
+        "unmatched_audio": 0,
+        "unmatched_video": 0,
+        "uncertain_tones": 0,
+        "missing_video_labels_within_observed_span": []
+      }
+    },
+    {
+      "name": "media-startup-stats",
+      "admit_to_preview_ms": 7648,
+      "admit_start_to_outbound_observation_ms": 6261,
+      "outbound_observation_to_decode_ms": 329,
+      "decode_to_preview_ms": 1058,
+      "audio_attach_to_binding_ms": 118,
+      "commands": [
+        {
+          "operation": "native/admit",
+          "elapsed_ms": 2040.5384589999994,
+          "timing": {
+            "mutation_ms": 1112,
+            "post_read_ms": 834,
+            "pre_read_ms": 0,
+            "reused_current_snapshot": true
+          }
+        },
+        {
+          "operation": "native/stage",
+          "elapsed_ms": 2088.2803749999985,
+          "timing": {
+            "mutation_ms": 1158,
+            "post_read_ms": 818,
+            "pre_read_ms": 0,
+            "reused_current_snapshot": true
+          }
+        }
+      ],
+      "recording": {
+        "absolute_p95_ms": 36.66666666666424,
+        "local_numbered_marker_gate_passed": false,
+        "unmatched_audio": 5,
+        "unmatched_video": 0,
+        "uncertain_tones": 0,
+        "missing_video_labels_within_observed_span": [
+          12,
+          13,
+          14,
+          15,
+          16
+        ]
+      }
+    }
+  ],
+  "limitations": [
+    "Individual runs, not latency percentiles. Server and startup variation prevent attributing whole-run differences to a candidate.",
+    "Outbound timestamps are first positive browser getStats observations, sampled at 100 ms, not actual packet timestamps. Receiver timestamps are callback based.",
+    "Baseline, immediate audio wakeup, initial-binding preservation and bounded startup-stats trials use the production browser guest bundle with an isolated native candidate. Queued startup used a local development browser bundle and is not a clean production-bundle A/B.",
+    "Queued browser polling experiment was removed: no clear end-to-end benefit and increased queued control requests. Immediate PCM wakeup was removed after failing to improve audio binding.",
+    "Initial-binding preservation and bounded startup stats remain debug-flagged, not released. Full media coverage still fails in latest trial.",
+    "Owned temporary rooms were deleted; synthetic media only; no physical microphone/camera test."
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "browser": "154.0.8037.98",
+  "guests": 1,
+  "mode": "normal",
+  "states": [
+    {
+      "identity": "guest-1",
+      "connected": true,
+      "published": true,
+      "returnAudioBlocks": 546,
+      "returnAudioPulses": 9,
+      "returnVideoFrames": 258,
+      "events": [
+        "return-audio",
+        "return-video"
+      ],
+      "audioMaxRms": 0.29109838397570825,
+      "error": null,
+      "syncStreams": true
+    }
+  ],
+  "audioStats": [
+    [
+      {
+        "id": "IT01A2050009534",
+        "timestamp": 1791608299630.891,
+        "type": "inbound-rtp",
+        "codecId": "CIT01_111_minptime=10;stereo=1;useinbandfec=1",
+        "kind": "audio",
+        "mediaType": "audio",
+        "ssrc": 2050009534,
+        "transportId": "T01",
+        "jitter": 0.001,
+        "packetsLost": 0,
+        "packetsReceived": 208,
+        "packetsReceivedWithCe": 0,
+        "packetsReceivedWithEct1": 0,
+        "audioLevel": 0,
+        "bytesReceived": 2870,
+        "concealedSamples": 1800,
+        "concealmentEvents": 1,
+        "fecPacketsDiscarded": 0,
+        "fecPacketsReceived": 0,
+        "headerBytesReceived": 2496,
+        "insertedSamplesForDeceleration": 1632,
+        "jitterBufferDelay": 11740.8,
+        "jitterBufferEmittedCount": 196800,
+        "jitterBufferMinimumDelay": 15744,
+        "jitterBufferTargetDelay": 15744,
+        "lastPacketReceivedTimestamp": 1791608299609.468,
+        "mid": "8",
+        "packetsDiscarded": 0,
+        "playoutId": "AP",
+        "removedSamplesForAcceleration": 0,
+        "silentConcealedSamples": 240,
+        "totalAudioEnergy": 0,
+        "totalProcessingDelay": 10849.2768,
+        "totalSamplesDuration": 4.1699999999999555,
+        "totalSamplesReceived": 200160,
+        "trackIdentifier": "bad0d0bf-fac4-452e-af9d-4e74005b76fb"
+      }
+    ]
+  ],
+  "impairments": [],
+  "packetProbe": [],
+  "return_transport_observed": true,
+  "hardware_capture_used": false,
+  "physical_speaker_playout_used": false
+}

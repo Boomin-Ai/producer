@@ -1,0 +1,502 @@
+--- a/pkg/sfu/buffer/buffer.go
++++ b/pkg/sfu/buffer/buffer.go
+@@ -75,9 +75,10 @@
+ 	primaryBufferForRTX *Buffer
+ 	rtxPktBuf           []byte
+ 
+-	streamInfoProbe       *StreamInfoProbe
+-	warnedPendingOverflow bool
+-	labReportRequest      labSRRequest
++	streamInfoProbe            *StreamInfoProbe
++	warnedPendingOverflow      bool
++	labReportRequest           labSRRequest
++	labSubscriberReportRequest labSubscriberSRRequest
+ }
+ 
+ // StreamInfoProbe identifies a stream from the mid/rid/rsid header extensions of its
+@@ -97,6 +98,10 @@
+ 
+ func NewBuffer(ssrc uint32, maxVideoPkts, maxAudioPkts int) *Buffer {
+ 	b := &Buffer{labReportRequest: labSRRequest{enabled: os.Getenv("LIVEKIT_LAB_EARLY_AUDIO_SR") == "1" || os.Getenv("LIVEKIT_LAB_DELAYED_AUDIO_SR") == "1", delayed: os.Getenv("LIVEKIT_LAB_DELAYED_AUDIO_SR") == "1"}}
++	b.labSubscriberReportRequest.enabled = os.Getenv("LIVEKIT_LAB_SUBSCRIBER_AUDIO_SR") == "1"
++	if b.labSubscriberReportRequest.enabled {
++		b.labReportRequest.enabled = false
++	}
+ 	b.BufferBase = NewBufferBase(BufferBaseParams{
+ 		SSRC:               ssrc,
+ 		MaxVideoPkts:       maxVideoPkts,
+@@ -459,6 +464,17 @@
+ 		pkts = append(pkts, &rtcp.RapidResynchronizationRequest{SenderSSRC: ssrc, MediaSSRC: ssrc})
+ 		b.logger.Debugw("lab early audio sender report request", "lab_wall_us", time.Now().UnixMicro(), "lab_publisher_ssrc", ssrc, "lab_request_number", b.labReportRequest.count)
+ 	}
++	if b.labSubscriberReportRequest.enabled && b.codecType == webrtc.RTPCodecTypeAudio && b.rtpStats != nil && b.BufferBase.SSRC() != 0 {
++		var ntp uint64
++		if sr := b.rtpStats.GetRtcpSenderReportData(); sr != nil {
++			ntp = sr.NtpTimestamp
++		}
++		if b.labSubscriberReportRequest.take(arrivalTime, ntp) {
++			ssrc := b.BufferBase.SSRC()
++			pkts = append(pkts, &rtcp.RapidResynchronizationRequest{SenderSSRC: ssrc, MediaSSRC: ssrc})
++			b.logger.Debugw("lab subscriber audio sender report request", "lab_wall_us", time.Now().UnixMicro(), "lab_publisher_ssrc", ssrc, "lab_request_number", b.labSubscriberReportRequest.spent)
++		}
++	}
+ 	if nackPkt := b.getNACKPacket(); nackPkt != nil {
+ 		pkts = append(pkts, nackPkt)
+ 	}
+@@ -547,3 +563,20 @@
+ 
+ 	return b.onNotifyRTX
+ }
++
++// Arm only the opt-in audio policy, under the buffer lock. The buffer already
++// owns the publisher SSRC and report state. No old report is installed downstream.
++func (b *Buffer) LabArmSubscriberSenderReport() {
++	b.Lock()
++	defer b.Unlock()
++	if !b.labSubscriberReportRequest.enabled {
++		return
++	}
++	var ntp uint64
++	if b.rtpStats != nil {
++		if sr := b.rtpStats.GetRtcpSenderReportData(); sr != nil {
++			ntp = sr.NtpTimestamp
++		}
++	}
++	b.labSubscriberReportRequest.arm(mono.UnixNano(), ntp)
++}
+--- a/pkg/sfu/receiver_base.go
++++ b/pkg/sfu/receiver_base.go
+@@ -1250,3 +1250,19 @@
+ 	}
+ 	wg.Wait()
+ }
++
++// Called only after the new audio downtrack forwards its first packet. Snapshot
++// buffers without retaining subscriber references or holding locks across layers.
++func (r *ReceiverBase) LabArmSubscriberSenderReport() {
++	if r.params.Kind != webrtc.RTPCodecTypeAudio {
++		return
++	}
++	r.bufferMu.RLock()
++	buffers := r.buffers
++	r.bufferMu.RUnlock()
++	for _, buff := range buffers {
++		if requester, ok := buff.(interface{ LabArmSubscriberSenderReport() }); ok {
++			requester.LabArmSubscriberSenderReport()
++		}
++	}
++}
+--- /dev/null
++++ b/pkg/sfu/buffer/lab_subscriber_sr_request.go
+@@ -0,0 +1,59 @@
++package buffer
++
++// Packet-driven, bounded per-publisher policy. Caller holds the existing Buffer
++// lock. Admissions share a three-request/two-second budget; coalescing does not
++// extend the active deadline. No timers, goroutines or subscriber references.
++type labSubscriberSRRequest struct {
++	enabled       bool
++	active        bool
++	windowStarted bool
++	windowStart   int64
++	first         int64
++	lastObserved  int64
++	lastRequest   int64
++	baselineNTP   uint64
++	spent         int
++	sentSinceArm  bool
++}
++
++func (r *labSubscriberSRRequest) arm(now int64, ntp uint64) bool {
++	if !r.enabled || (r.windowStarted && now < r.lastObserved) {
++		return false
++	}
++	if !r.windowStarted || now-r.windowStart >= 2_000_000_000 {
++		r.windowStarted = true
++		r.windowStart = now
++		r.spent = 0
++	}
++	if r.spent >= 3 {
++		return false
++	}
++	if !r.active || now-r.first >= 2_000_000_000 {
++		r.first = now
++		r.active = true
++	}
++	r.lastObserved = now
++	r.baselineNTP = ntp
++	r.sentSinceArm = false
++	return true
++}
++
++func (r *labSubscriberSRRequest) take(now int64, ntp uint64) bool {
++	if !r.active || now < r.lastObserved {
++		return false
++	}
++	r.lastObserved = now
++	if now-r.first >= 2_000_000_000 || r.spent >= 3 || (r.sentSinceArm && ntp > r.baselineNTP) {
++		r.active = false
++		return false
++	}
++	if now-r.first < 250_000_000 || (r.spent > 0 && now-r.lastRequest < 250_000_000) {
++		return false
++	}
++	r.spent++
++	r.lastRequest = now
++	r.sentSinceArm = true
++	// Only a report newer than this request's snapshot can retire the request.
++	r.baselineNTP = ntp
++	return true
++}
+--- /dev/null
++++ b/pkg/sfu/buffer/lab_subscriber_sr_request_test.go
+@@ -0,0 +1,85 @@
++package buffer
++
++import "testing"
++
++func TestSubscriberDelayedAndFreshReport(t *testing.T) {
++	r := labSubscriberSRRequest{enabled: true}
++	if !r.arm(0, 100) || r.take(249_999_999, 100) || !r.take(250_000_000, 100) {
++		t.Fatal("admission delay")
++	}
++	if r.take(600_000_000, 101) || r.active || r.take(800_000_000, 101) {
++		t.Fatal("fresh report did not retire")
++	}
++	if !r.arm(900_000_000, 101) || r.take(1_149_999_999, 101) || !r.take(1_150_000_000, 101) {
++		t.Fatal("readmission did not rearm")
++	}
++}
++func TestSubscriberCachedAndRegressedReportsDoNotRetire(t *testing.T) {
++	r := labSubscriberSRRequest{enabled: true}
++	r.arm(0, 100)
++	if !r.take(250_000_000, 100) || r.take(300_000_000, 99) || !r.take(500_000_000, 100) {
++		t.Fatal("old cached report")
++	}
++	if r.take(499_000_000, 101) {
++		t.Fatal("clock regression")
++	}
++}
++func TestSubscriberBudgetCoalescesAdmissionStorm(t *testing.T) {
++	r := labSubscriberSRRequest{enabled: true}
++	r.arm(0, 0)
++	emitted := 0
++	for now := int64(0); now < 2_000_000_000; now += 10_000_000 {
++		r.arm(now, 0)
++		if r.take(now, 0) {
++			emitted++
++		}
++	}
++	if emitted != 3 || r.arm(1_999_999_999, 0) {
++		t.Fatalf("unbounded admission requests %d", emitted)
++	}
++	if !r.arm(2_000_000_000, 0) || !r.take(2_250_000_000, 0) {
++		t.Fatal("new budget window")
++	}
++}
++func TestSubscriberDeadlineNotExtendedByAdmission(t *testing.T) {
++	r := labSubscriberSRRequest{enabled: true}
++	r.arm(0, 0)
++	r.arm(1_900_000_000, 1)
++	if r.take(2_000_000_000, 1) || r.active {
++		t.Fatal("admission extended deadline")
++	}
++}
++func TestSubscriberDisabledAndRegressedAdmission(t *testing.T) {
++	r := labSubscriberSRRequest{}
++	if r.arm(0, 0) || r.take(250_000_000, 0) {
++		t.Fatal("disabled requested")
++	}
++	r.enabled = true
++	r.arm(100, 1)
++	if r.arm(99, 2) || r.baselineNTP != 1 {
++		t.Fatal("regressed arm changed state")
++	}
++}
++func TestSubscriberEarlyReportStillRequestsAfterDelay(t *testing.T) {
++	r := labSubscriberSRRequest{enabled: true}
++	r.arm(0, 0)
++	if r.take(100_000_000, 5) || !r.take(250_000_000, 5) || r.baselineNTP != 5 {
++		t.Fatal("early report suppressed post-admission request")
++	}
++}
++func TestSubscriberExpiryAndRepeatedRecovery(t *testing.T) {
++	r := labSubscriberSRRequest{enabled: true}
++	for cycle := int64(0); cycle < 100; cycle++ {
++		start := cycle * 3_000_000_000
++		if !r.arm(start, uint64(cycle)) || !r.take(start+250_000_000, uint64(cycle)) {
++			t.Fatal("recovery failed")
++		}
++		if r.take(start+600_000_000, uint64(cycle+1)) || r.active {
++			t.Fatal("recovery not retired")
++		}
++	}
++	r.arm(301_000_000_000, 101)
++	if r.take(303_000_000_000, 101) || r.active {
++		t.Fatal("expiry")
++	}
++}
+--- /dev/null
++++ b/pkg/sfu/buffer/lab_subscriber_sr_buffer_test.go
+@@ -0,0 +1,69 @@
++package buffer
++
++import (
++	"github.com/pion/rtcp"
++	"github.com/pion/webrtc/v4"
++	"testing"
++)
++
++func TestSubscriberBufferAdmissionBeforeBind(t *testing.T) {
++	t.Setenv("LIVEKIT_LAB_SUBSCRIBER_AUDIO_SR", "1")
++	t.Setenv("LIVEKIT_LAB_DELAYED_AUDIO_SR", "1")
++	b := NewBuffer(123, 100, 100)
++	b.LabArmSubscriberSenderReport()
++	if !b.labSubscriberReportRequest.active || b.labReportRequest.enabled {
++		t.Fatal("pending admission or old-policy exclusivity")
++	}
++	codec := webrtc.RTPCodecParameters{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "audio/opus", ClockRate: 48000}, PayloadType: 111}
++	if err := b.Bind(webrtc.RTPParameters{Codecs: []webrtc.RTPCodecParameters{codec}}, codec.RTPCodecCapability, 0); err != nil {
++		t.Fatal(err)
++	}
++	defer b.Close()
++	first := b.labSubscriberReportRequest.first
++	b.Lock()
++	packets := b.getRTCPPackets(first + 500_000_000)
++	b.Unlock()
++	requests := 0
++	for _, packet := range packets {
++		if r, ok := packet.(*rtcp.RapidResynchronizationRequest); ok {
++			requests++
++			if r.MediaSSRC != 123 {
++				t.Fatal("request escaped publisher SSRC")
++			}
++		}
++	}
++	if requests != 1 {
++		t.Fatalf("expected single request after bind, got %d", requests)
++	}
++}
++
++func TestSubscriberBufferDefaultAndVideoDoNotRequest(t *testing.T) {
++	for _, video := range []bool{false, true} {
++		t.Setenv("LIVEKIT_LAB_SUBSCRIBER_AUDIO_SR", "0")
++		t.Setenv("LIVEKIT_LAB_DELAYED_AUDIO_SR", "0")
++		t.Setenv("LIVEKIT_LAB_EARLY_AUDIO_SR", "0")
++		if video {
++			t.Setenv("LIVEKIT_LAB_SUBSCRIBER_AUDIO_SR", "1")
++		}
++		b := NewBuffer(123, 100, 100)
++		b.LabArmSubscriberSenderReport()
++		codec := webrtc.RTPCodecParameters{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "audio/opus", ClockRate: 48000}, PayloadType: 111}
++		if video {
++			codec.MimeType = "video/vp8"
++			codec.ClockRate = 90000
++			codec.PayloadType = 96
++		}
++		if err := b.Bind(webrtc.RTPParameters{Codecs: []webrtc.RTPCodecParameters{codec}}, codec.RTPCodecCapability, 0); err != nil {
++			t.Fatal(err)
++		}
++		b.Lock()
++		packets := b.getRTCPPackets(b.labSubscriberReportRequest.first + 500_000_000)
++		b.Unlock()
++		for _, packet := range packets {
++			if _, ok := packet.(*rtcp.RapidResynchronizationRequest); ok {
++				t.Fatal("default/video emitted audio timing request")
++			}
++		}
++		b.Close()
++	}
++}
+--- a/pkg/sfu/downtrack.go
++++ b/pkg/sfu/downtrack.go
+@@ -266,8 +266,10 @@
+ 	sequencer         *sequencer
+ 	rtxSequenceNumber atomic.Uint64
+ 
+-	receiverLock sync.RWMutex
+-	receiver     TrackReceiver
++	receiverLock               sync.RWMutex
++	receiver                   TrackReceiver
++	labSubscriberTimingEnabled bool
++	labAudioTimingRequested    atomic.Bool
+ 
+ 	forwarder *Forwarder
+ 
+@@ -365,17 +367,18 @@
+ 
+ 	codec := params.Codecs[0].RTPCodecCapability
+ 	d := &DownTrack{
+-		params:              params,
+-		id:                  params.Receiver.TrackID(),
+-		upstreamCodecs:      params.Codecs,
+-		kind:                kind,
+-		clockRate:           codec.ClockRate,
+-		pacer:               params.Pacer,
+-		maxLayerNotifierCh:  make(chan string, 1),
+-		keyFrameRequesterCh: make(chan struct{}, 1),
+-		retransmitCh:        make(chan struct{}, 1),
+-		createdAt:           time.Now().UnixNano(),
+-		receiver:            params.Receiver,
++		params:                     params,
++		id:                         params.Receiver.TrackID(),
++		upstreamCodecs:             params.Codecs,
++		kind:                       kind,
++		clockRate:                  codec.ClockRate,
++		pacer:                      params.Pacer,
++		maxLayerNotifierCh:         make(chan string, 1),
++		keyFrameRequesterCh:        make(chan struct{}, 1),
++		retransmitCh:               make(chan struct{}, 1),
++		createdAt:                  time.Now().UnixNano(),
++		receiver:                   params.Receiver,
++		labSubscriberTimingEnabled: os.Getenv("LIVEKIT_LAB_SUBSCRIBER_AUDIO_SR") == "1",
+ 	}
+ 	d.lastUnmutedAt.Store(time.Now())
+ 
+@@ -451,6 +454,8 @@
+ 		d.bindLock.Unlock()
+ 		return webrtc.RTPCodecParameters{}, errDownTrackAlreadyBound
+ 	}
++
++	d.labAudioTimingRequested.Store(false)
+ 
+ 	// the TrackLocalContext's codec parameters will be set to the bound codec after Bind returns,
+ 	// so keep a copy of the codec parameters here to use it later
+@@ -797,6 +802,7 @@
+ 	d.receiverLock.Lock()
+ 	old := d.receiver
+ 	d.receiver = r
++	d.labAudioTimingRequested.Store(false)
+ 	d.receiverLock.Unlock()
+ 
+ 	old.DeleteDownTrack(d.SubscriberID())
+@@ -1178,6 +1184,13 @@
+ 		extPkt.IsOutOfOrder,
+ 	)
+ 	d.pacer.Enqueue(pacerPacket)
++	// Wait until timestamp translation and first forwarding have started; an
++	// admission-time report can precede the RTP offset's validity boundary.
++	if d.labSubscriberTimingEnabled && d.kind == webrtc.RTPCodecTypeAudio && d.labAudioTimingRequested.CompareAndSwap(false, true) {
++		if requester, ok := d.Receiver().(interface{ LabArmSubscriberSenderReport() }); ok {
++			requester.LabArmSubscriberSenderReport()
++		}
++	}
+ 
+ 	if extPkt.IsKeyFrame {
+ 		d.isNACKThrottled.Store(false)
+--- a/pkg/sfu/redprimaryreceiver.go
++++ b/pkg/sfu/redprimaryreceiver.go
+@@ -385,3 +385,10 @@
+ 
+ 	return payload[blockLength:], nil
+ }
++
++// Route the timing request to the publisher buffer, not the decoded RED view.
++func (r *RedPrimaryReceiver) LabArmSubscriberSenderReport() {
++	if requester, ok := r.TrackReceiver.(interface{ LabArmSubscriberSenderReport() }); ok {
++		requester.LabArmSubscriberSenderReport()
++	}
++}
+--- a/pkg/rtc/wrappedreceiver.go
++++ b/pkg/rtc/wrappedreceiver.go
+@@ -574,3 +574,24 @@
+ 	d.downTracks = make(map[livekit.ParticipantID]sfu.TrackSender)
+ 	d.downTrackLock.Unlock()
+ }
++
++// Follow existing selected receiver state. Release wrapper locks before entering
++// the underlying buffer policy; no new callbacks or receiver ownership edges.
++func (r *WrappedReceiver) LabArmSubscriberSenderReport() {
++	r.lock.Lock()
++	receiver := r.TrackReceiver
++	r.lock.Unlock()
++	if requester, ok := receiver.(interface{ LabArmSubscriberSenderReport() }); ok {
++		requester.LabArmSubscriberSenderReport()
++	}
++}
++func (d *DummyReceiver) LabArmSubscriberSenderReport() {
++	if requester, ok := d.Receiver().(interface{ LabArmSubscriberSenderReport() }); ok {
++		requester.LabArmSubscriberSenderReport()
++	}
++}
++func (d *DummyRedReceiver) LabArmSubscriberSenderReport() {
++	if requester, ok := d.redReceiver.Load().(interface{ LabArmSubscriberSenderReport() }); ok {
++		requester.LabArmSubscriberSenderReport()
++	}
++}
+--- a/pkg/rtc/mediatrackreceiver.go
++++ b/pkg/rtc/mediatrackreceiver.go
+@@ -1245,3 +1245,15 @@
+ 
+ 	return rtpstats.AggregateRTPStats(stats)
+ }
++
++func (r *simulcastReceiver) LabArmSubscriberSenderReport() {
++	r.lock.Lock()
++	receiver := r.TrackReceiver
++	if r.regressTo != nil {
++		receiver = r.regressTo
++	}
++	r.lock.Unlock()
++	if requester, ok := receiver.(interface{ LabArmSubscriberSenderReport() }); ok {
++		requester.LabArmSubscriberSenderReport()
++	}
++}
+--- a/pkg/sfu/redreceiver.go
++++ b/pkg/sfu/redreceiver.go
+@@ -272,3 +272,9 @@
+ 	}
+ 	return index, nil
+ }
++
++func (r *RedReceiver) LabArmSubscriberSenderReport() {
++	if requester, ok := r.TrackReceiver.(interface{ LabArmSubscriberSenderReport() }); ok {
++		requester.LabArmSubscriberSenderReport()
++	}
++}
+--- /dev/null
++++ b/pkg/rtc/lab_subscriber_sr_wrapper_test.go
+@@ -0,0 +1,43 @@
++package rtc
++
++import (
++	"github.com/livekit/livekit-server/pkg/sfu"
++	"sync/atomic"
++	"testing"
++)
++
++type labSRReceiverProbe struct {
++	sfu.TrackReceiver
++	calls atomic.Int32
++}
++
++func (p *labSRReceiverProbe) LabArmSubscriberSenderReport() { p.calls.Add(1) }
++func TestLabSubscriberRequestTraversesReceiverViews(t *testing.T) {
++	primary := &labSRReceiverProbe{}
++	other := &labSRReceiverProbe{}
++	selected := &simulcastReceiver{TrackReceiver: primary}
++	dummy := &DummyReceiver{}
++	dummy.receiver.Store(sfu.TrackReceiver(selected))
++	wrapped := &WrappedReceiver{TrackReceiver: dummy}
++	wrapped.LabArmSubscriberSenderReport()
++	if primary.calls.Load() != 1 {
++		t.Fatal("selected wrapper swallowed request")
++	}
++	selected.lock.Lock()
++	selected.regressTo = other
++	selected.lock.Unlock()
++	wrapped.LabArmSubscriberSenderReport()
++	if primary.calls.Load() != 1 || other.calls.Load() != 1 {
++		t.Fatal("request did not follow regression")
++	}
++	red := &DummyRedReceiver{DummyReceiver: dummy}
++	red.redReceiver.Store(sfu.TrackReceiver(primary))
++	red.LabArmSubscriberSenderReport()
++	if primary.calls.Load() != 2 {
++		t.Fatal("RED view swallowed request")
++	}
++	// Not-yet-upgraded views have no source to arm, and must not panic or allocate.
++	(&WrappedReceiver{}).LabArmSubscriberSenderReport()
++	(&DummyReceiver{}).LabArmSubscriberSenderReport()
++	(&DummyRedReceiver{}).LabArmSubscriberSenderReport()
++}

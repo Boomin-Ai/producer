@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "replay_binary_sha256": "9e2025fd884d3a5f572f8e85a899234d33783d8592ea3cda5e273408484272e5",
+  "offline_comparison": true,
+  "candidate_change": "Disable AEC enforced high-pass before processing; AEC/NS/AGC/explicit high-pass settings otherwise unchanged.",
+  "speech_run_quiet_protocol_contaminated": true,
+  "results": [
+    {
+      "run_label": "speakerphone-1791646556419804000",
+      "echo_window_metrics": {
+        "baseline_attenuation_db": {
+          "median": 31.077826723196388,
+          "p10": 12.265329786221804,
+          "windows": 83
+        },
+        "candidate_attenuation_db": {
+          "median": 29.83345740698665,
+          "p10": 12.100679806328312,
+          "windows": 83
+        }
+      },
+      "near_only_gain_db": {
+        "baseline": -0.23997296151737654,
+        "candidate": -0.0054641945256291985
+      },
+      "baseline_vs_recorded_rms_error_pcm": 0.0,
+      "aec_enabled_in_both": true,
+      "baseline_high_pass_enforced": true,
+      "candidate_high_pass_enforced": false,
+      "physical_aec_qualified": false,
+      "g1_complete": false
+    },
+    {
+      "run_label": "speakerphone-1791646774935151000",
+      "echo_window_metrics": {
+        "baseline_attenuation_db": {
+          "median": 30.48516641638777,
+          "p10": 1.0722938757934486,
+          "windows": 83
+        },
+        "candidate_attenuation_db": {
+          "median": 30.675909853040316,
+          "p10": 0.9352226121804861,
+          "windows": 83
+        }
+      },
+      "near_only_gain_db": {
+        "baseline": -0.1986804514741333,
+        "candidate": -0.00858721754202718
+      },
+      "baseline_vs_recorded_rms_error_pcm": 0.0,
+      "aec_enabled_in_both": true,
+      "baseline_high_pass_enforced": true,
+      "candidate_high_pass_enforced": false,
+      "physical_aec_qualified": false,
+      "g1_complete": false
+    }
+  ],
+  "human_comparison_feedback": {
+    "candidate": "User reported second version a little better, slightly.",
+    "candidate_selected_for_next_physical_run": true,
+    "physical_aec_qualified": false
+  }
+}

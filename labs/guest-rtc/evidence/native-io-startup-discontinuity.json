@@ -1,0 +1,92 @@
+{
+  "failed_run": {
+    "additional_capture_hold_capacity": 1,
+    "aec_enforced_high_pass": false,
+    "aec_profile": "no_forced_high_pass",
+    "agc": false,
+    "apm_channels": 1,
+    "apm_delay_estimate_ms": {
+      "acoustic_delay_calibrated": false,
+      "maximum": 25,
+      "minimum": 25
+    },
+    "capture_age_at_apm_us": {
+      "capacity": 6100,
+      "count": 1,
+      "maximum": 44402,
+      "minimum": 44402,
+      "p95": 44402,
+      "scope": "device host timestamp to processing; includes owner scheduling and reference wait; signed, not calibrated acoustic latency"
+    },
+    "capture_hold_limit_ms": 80,
+    "capture_hold_retired": false,
+    "default_output_volume_percent": {
+      "acoustic_spl_calibrated": false,
+      "continuous_verification": false,
+      "end": 56.25,
+      "start": 56.25
+    },
+    "device_callback_mode": "input_sink_and_output_render_notification",
+    "devices": "CADefaultDeviceAggregate-62776-0 \u2192 CADefaultDeviceAggregate-62776-0",
+    "duration_seconds": 0.073017667,
+    "g1_complete": false,
+    "hardware_capture_used": true,
+    "high_pass": false,
+    "high_pass_requested": false,
+    "invalid_delay_blocks": 0,
+    "lifecycle": {
+      "callbacks_active": 0,
+      "clipped_samples": 0,
+      "first_io_fault": {
+        "codes": "0 none; 1 timestamp/layout; 2 buffer; 3 timeline; 4 nonfinite sample; 5 post-render error; 6 configuration change",
+        "microphone": 3,
+        "speaker": 3
+      },
+      "format_or_timeline_errors": 2,
+      "maximum_tap_frames": {
+        "microphone": 512,
+        "speaker": 512
+      },
+      "microphone": {
+        "capacity": 32,
+        "consumed": 1,
+        "overflow": 0,
+        "pending_retired": 0,
+        "queued": 1
+      },
+      "owners_and_callback_state_retired": true,
+      "render_notifications_alive": 0,
+      "speaker": {
+        "capacity": 32,
+        "consumed": 1,
+        "overflow": 0,
+        "pending_retired": 0,
+        "queued": 1
+      }
+    },
+    "microphone_blocks": 1,
+    "microphone_played_or_published": false,
+    "ns": false,
+    "physical_aec_qualified": false,
+    "physical_speaker_reference_connected": true,
+    "processing_both_apms_p95_us": 335,
+    "provisional_far_only_attenuation_db": {
+      "median": null,
+      "p10": null,
+      "windows": 0
+    },
+    "reference_scope": "Engine output AudioUnit post-render bus 0, downmixed to mono; actual buffers/timing require physical verification; excludes other apps and calibrated hardware volume",
+    "sample_rate": 48000,
+    "schema_version": 1,
+    "source_gain": 0.2,
+    "speaker_blocks": 1,
+    "speech_intelligibility_qualified": false,
+    "stop_reason": "invalid: Audio stopped: native errors=2, speaker overflow=0, microphone overflow=0 (capacity=32 blocks), first speaker/mic fault=3/3",
+    "system_voice_processing": false,
+    "user_phase_compliance_verified": false
+  },
+  "candidate": "fixed 250ms initial I/O quarantine; validate all callback continuity after deadline, including full block boundaries",
+  "candidate_physical_verified": false,
+  "synthetic_checks": "20 lifecycle cycles include quarantined startup discontinuities and post-deadline full-block gap rejection",
+  "capture_recordings_committed": false
+}

@@ -1,0 +1,7 @@
+{
+  "fault": "snapshot path replaced by temporary directory",
+  "stats_endpoint_alive": true,
+  "error_code": "EISDIR",
+  "snapshot_write_errors": 1,
+  "media_forwarding_qualified": false
+}

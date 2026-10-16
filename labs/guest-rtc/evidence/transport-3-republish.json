@@ -1,0 +1,315 @@
+{
+  "callback_timestamps_are_capture_timestamps": false,
+  "consumer_stall_ms": 0,
+  "duration_seconds": 25,
+  "g1_complete": false,
+  "lifecycle": [
+    {
+      "at_ms": 1066,
+      "event": "subscribed",
+      "identity": "guest-1",
+      "sid": "TR_VC3wMY5AM3PLDw"
+    },
+    {
+      "at_ms": 1261,
+      "event": "subscribed",
+      "identity": "guest-1",
+      "sid": "TR_AMAGPnteAVZNKE"
+    },
+    {
+      "at_ms": 1478,
+      "event": "subscribed",
+      "identity": "guest-2",
+      "sid": "TR_VCR3B4YNj4DYKr"
+    },
+    {
+      "at_ms": 1710,
+      "event": "subscribed",
+      "identity": "guest-2",
+      "sid": "TR_AMBGT67tRPcnWb"
+    },
+    {
+      "at_ms": 1934,
+      "event": "subscribed",
+      "identity": "guest-3",
+      "sid": "TR_VCKAppfCRP2AQQ"
+    },
+    {
+      "at_ms": 2121,
+      "event": "subscribed",
+      "identity": "guest-3",
+      "sid": "TR_AMqDu5wwwXsDwd"
+    },
+    {
+      "at_ms": 8982,
+      "event": "unsubscribed",
+      "identity": "guest-1",
+      "sid": "TR_VC3wMY5AM3PLDw"
+    },
+    {
+      "at_ms": 8982,
+      "event": "unsubscribed",
+      "identity": "guest-1",
+      "sid": "TR_AMAGPnteAVZNKE"
+    },
+    {
+      "at_ms": 10151,
+      "event": "subscribed",
+      "identity": "guest-1",
+      "sid": "TR_VCNHacmvsGzkba"
+    },
+    {
+      "at_ms": 10330,
+      "event": "subscribed",
+      "identity": "guest-1",
+      "sid": "TR_AM75Wpk56jc5ES"
+    }
+  ],
+  "livekit": "0.9.4",
+  "native_publish_audio_internal_queue_ms": 0,
+  "obs_recorded_av_qualified": false,
+  "participants": [
+    {
+      "audio_bad_format": 0,
+      "audio_blocks": 2327,
+      "audio_callback_to_consumer_p95_ms": 6.97125,
+      "audio_pulses_ms": [
+        1875.5459999999998,
+        3875.761875,
+        5875.963875,
+        7875.082792,
+        9877.039792,
+        11875.182499999999,
+        13877.094417,
+        15876.908374999999,
+        17875.783625,
+        19875.056042,
+        21875.845167000003,
+        23876.886959
+      ],
+      "audio_queue": {
+        "callback_contention_dropped": 1,
+        "capacity_frames": 3,
+        "max_age_ms": 30,
+        "overflow_oldest_dropped": 0,
+        "received": 2329,
+        "stale_dropped": 0
+      },
+      "audio_sample_discontinuities": 1,
+      "callback_av_abs_p95_ms": 42.129124999999476,
+      "identity": "guest-2",
+      "original_audio_capture_timestamp_available": false,
+      "paired_callback_video_minus_audio_ms": [
+        6.741125000000238,
+        -10.1706250000002,
+        6.573583999999755,
+        -8.32208300000002,
+        -43.73979200000031,
+        -26.601582999999664,
+        -12.51733299999978,
+        -27.62199999999939,
+        -27.048125000001164,
+        -42.129124999999476,
+        -26.52558300000237,
+        -21.64558400000169
+      ],
+      "retired_queues": [],
+      "video_callback_to_consumer_p95_ms": 9.855583,
+      "video_frames": 646,
+      "video_frames_with_ntp_metadata": 0,
+      "video_pulses_ms": [
+        1882.287125,
+        3865.59125,
+        5882.537459,
+        7866.760709,
+        9833.3,
+        11848.580917,
+        13864.577084,
+        15849.286375,
+        17848.7355,
+        19832.926917,
+        21849.319584,
+        23855.241374999998
+      ],
+      "video_queue": {
+        "callback_contention_dropped": 0,
+        "capacity_frames": 2,
+        "max_age_ms": 50,
+        "overflow_oldest_dropped": 0,
+        "received": 646,
+        "stale_dropped": 0
+      }
+    },
+    {
+      "audio_bad_format": 0,
+      "audio_blocks": 2238,
+      "audio_callback_to_consumer_p95_ms": 6.922499999999999,
+      "audio_pulses_ms": [
+        1386.9894590000001,
+        3416.2806250000003,
+        5416.309166999999,
+        7416.3475,
+        10557.102,
+        12557.331209000002,
+        14536.276375,
+        16536.210625,
+        18535.84275,
+        20536.032375000003,
+        22536.281084,
+        24535.904375000002
+      ],
+      "audio_queue": {
+        "callback_contention_dropped": 0,
+        "capacity_frames": 3,
+        "max_age_ms": 30,
+        "overflow_oldest_dropped": 0,
+        "received": 1467,
+        "stale_dropped": 0
+      },
+      "audio_sample_discontinuities": 0,
+      "callback_av_abs_p95_ms": 33.84325000000035,
+      "identity": "guest-1",
+      "original_audio_capture_timestamp_available": false,
+      "paired_callback_video_minus_audio_ms": [
+        -13.505542000000105,
+        -33.84325000000035,
+        -10.328957999999147,
+        -28.953166000000238,
+        -23.33679200000188,
+        -24.18933300000026,
+        0.3187920000018494,
+        1.610292000001209,
+        -15.61779100000058,
+        -2.6102499999979045,
+        -24.620708000002196
+      ],
+      "retired_queues": [
+        {
+          "kind": "video",
+          "sid": "TR_VC3wMY5AM3PLDw",
+          "stats": {
+            "callback_contention_dropped": 0,
+            "capacity_frames": 2,
+            "max_age_ms": 50,
+            "overflow_oldest_dropped": 0,
+            "received": 225,
+            "stale_dropped": 0
+          }
+        },
+        {
+          "kind": "audio",
+          "sid": "TR_AMAGPnteAVZNKE",
+          "stats": {
+            "callback_contention_dropped": 0,
+            "capacity_frames": 3,
+            "max_age_ms": 30,
+            "overflow_oldest_dropped": 0,
+            "received": 772,
+            "stale_dropped": 0
+          }
+        }
+      ],
+      "video_callback_to_consumer_p95_ms": 9.756375,
+      "video_frames": 636,
+      "video_frames_with_ntp_metadata": 0,
+      "video_pulses_ms": [
+        1373.483917,
+        3382.437375,
+        5405.980209,
+        7387.394334,
+        12533.994417,
+        14512.087042,
+        16536.529417,
+        18537.453042,
+        20520.414584000002,
+        22533.670834,
+        24511.283667
+      ],
+      "video_queue": {
+        "callback_contention_dropped": 0,
+        "capacity_frames": 2,
+        "max_age_ms": 50,
+        "overflow_oldest_dropped": 0,
+        "received": 411,
+        "stale_dropped": 0
+      }
+    },
+    {
+      "audio_bad_format": 0,
+      "audio_blocks": 2287,
+      "audio_callback_to_consumer_p95_ms": 6.946917,
+      "audio_pulses_ms": [
+        2325.775709,
+        4326.184917,
+        6306.716959,
+        8307.412084,
+        10307.025709,
+        12306.058292,
+        14305.521125000001,
+        16307.212167,
+        18307.053292,
+        20306.151416999997,
+        22305.148917,
+        24307.194084
+      ],
+      "audio_queue": {
+        "callback_contention_dropped": 0,
+        "capacity_frames": 3,
+        "max_age_ms": 30,
+        "overflow_oldest_dropped": 0,
+        "received": 2289,
+        "stale_dropped": 0
+      },
+      "audio_sample_discontinuities": 0,
+      "callback_av_abs_p95_ms": 20.619166999998924,
+      "identity": "guest-3",
+      "original_audio_capture_timestamp_available": false,
+      "paired_callback_video_minus_audio_ms": [
+        -21.582584000000224,
+        -15.431499999999687,
+        -11.789750000000822,
+        -4.296666999998706,
+        -20.619166999998924,
+        -1.4407920000012382,
+        5.124041999999463,
+        15.72783299999901,
+        -3.6123330000009446,
+        -18.107082999998966,
+        -1.6784999999981665,
+        0.24012500000026193
+      ],
+      "retired_queues": [],
+      "video_callback_to_consumer_p95_ms": 9.324209,
+      "video_frames": 597,
+      "video_frames_with_ntp_metadata": 0,
+      "video_pulses_ms": [
+        2304.193125,
+        4310.753417,
+        6294.9272089999995,
+        8303.115417,
+        10286.406542,
+        12304.617499999998,
+        14310.645167,
+        16322.939999999999,
+        18303.440959,
+        20288.044334,
+        22303.470417,
+        24307.434209
+      ],
+      "video_queue": {
+        "callback_contention_dropped": 0,
+        "capacity_frames": 2,
+        "max_age_ms": 50,
+        "overflow_oldest_dropped": 0,
+        "received": 598,
+        "stale_dropped": 0
+      }
+    }
+  ],
+  "physical_speaker_reference_connected": false,
+  "publisher_error": null,
+  "schema_version": 1,
+  "signaling_url": "ws://127.0.0.1:7880",
+  "stall_period_seconds": 5,
+  "topology": "local browser guests to native host through loopback SFU"
+}

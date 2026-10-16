@@ -1,0 +1,58 @@
+{
+  "local_obs_acceptance_passed": false,
+  "failure_reasons": [
+    "epoch 18022910566: audio readiness exceeded budget including preceding resets",
+    "epoch 18022910566: video readiness exceeded budget including preceding resets",
+    "numbered recording marker gate failed",
+    "missing marker labels within observed recording span"
+  ],
+  "local_delivery_worker_gate_passed": true,
+  "delivery_worker_failure_reasons": [],
+  "local_readiness_gate_passed": false,
+  "readiness_failure_reasons": [
+    "epoch 18022910566: audio readiness exceeded budget including preceding resets",
+    "epoch 18022910566: video readiness exceeded budget including preceding resets"
+  ],
+  "binding_epochs": [
+    {
+      "binding_since_us": 18010140295,
+      "recovery_started_us": 18010139957,
+      "superseded_binding_epochs": [
+        18010139957,
+        18010140224
+      ],
+      "first_scheduled_ms": {
+        "audio": 658.462,
+        "video": 691.186
+      }
+    },
+    {
+      "binding_since_us": 18022910566,
+      "recovery_started_us": 18022142747,
+      "superseded_binding_epochs": [
+        18022142747,
+        18022142829,
+        18022910237
+      ],
+      "first_scheduled_ms": {
+        "audio": 2022.559,
+        "video": 2034.806
+      }
+    }
+  ],
+  "raw_binding_epoch_count": 7,
+  "superseded_binding_epochs": [
+    18010139957,
+    18010140224,
+    18022142747,
+    18022142829,
+    18022910237
+  ],
+  "unfinished_binding_epochs": [],
+  "expected_binding_epochs": 2,
+  "readiness_budget_ms": 1500,
+  "budget_scope": "prototype local recovery from earliest pending reset, not WAN service guarantee",
+  "startup_and_tail_loss_qualified": false,
+  "lip_sync_qualified": false,
+  "g1_complete": false
+}

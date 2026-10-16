@@ -1,0 +1,17 @@
+{
+  "created_at": "2026-10-10T20:44:08.556800+00:00",
+  "scope": "selected remote guest native monitor prototype",
+  "native_binary_sha256": "dbdb738a05e28ff8e3ca32e9eabc8776f0c01f65c33d2407f910b5d485c0c2f3",
+  "rust_tests_passed": 45,
+  "strict_combined_features_clippy": "passed",
+  "objc_warning_as_error_syntax_check": "passed",
+  "native_monitor_selftest": "20 rounds as part of root Rust test",
+  "physical_guest_monitor_qualified": false,
+  "g1_complete": false,
+  "production_changed": false,
+  "startup_monitor_admission": "closed until native device creation/start succeeds",
+  "default_features_cargo_check": "passed",
+  "local_sdk_reconnect_and_guest_rejoin_trials": "passed",
+  "wan_outage_qualified": false,
+  "voice_quality_qualified": false
+}

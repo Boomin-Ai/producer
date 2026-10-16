@@ -1,0 +1,68 @@
+{
+  "browser": "154.0.8037.98",
+  "guests": 1,
+  "mode": "normal",
+  "states": [
+    {
+      "identity": "guest-1",
+      "connected": true,
+      "published": true,
+      "returnAudioBlocks": 701,
+      "returnAudioPulses": 12,
+      "returnVideoFrames": 337,
+      "events": [
+        "return-audio",
+        "return-video"
+      ],
+      "audioMaxRms": 0.2930934251025245,
+      "error": null,
+      "syncStreams": true
+    }
+  ],
+  "audioStats": [
+    [
+      {
+        "id": "IT01A1310102985",
+        "timestamp": 1791604302942.081,
+        "type": "inbound-rtp",
+        "codecId": "CIT01_111_minptime=10;stereo=1;useinbandfec=1",
+        "kind": "audio",
+        "mediaType": "audio",
+        "ssrc": 1310102985,
+        "transportId": "T01",
+        "jitter": 0,
+        "packetsLost": 0,
+        "packetsReceived": 204,
+        "packetsReceivedWithCe": 0,
+        "packetsReceivedWithEct1": 0,
+        "audioLevel": 0,
+        "bytesReceived": 2976,
+        "concealedSamples": 1920,
+        "concealmentEvents": 1,
+        "fecPacketsDiscarded": 0,
+        "fecPacketsReceived": 0,
+        "headerBytesReceived": 2448,
+        "insertedSamplesForDeceleration": 1137,
+        "jitterBufferDelay": 6528,
+        "jitterBufferEmittedCount": 193920,
+        "jitterBufferMinimumDelay": 5376,
+        "jitterBufferTargetDelay": 5376,
+        "lastPacketReceivedTimestamp": 1791604302929.007,
+        "mid": "0",
+        "packetsDiscarded": 0,
+        "playoutId": "AP",
+        "remoteId": "ROA1310102985",
+        "removedSamplesForAcceleration": 1320,
+        "silentConcealedSamples": 360,
+        "totalAudioEnergy": 0,
+        "totalProcessingDelay": 5809.56864,
+        "totalSamplesDuration": 4.059999999999958,
+        "totalSamplesReceived": 194880,
+        "trackIdentifier": "9469dd62-a960-44da-8243-50c94fa0f9be"
+      }
+    ]
+  ],
+  "return_transport_observed": true,
+  "hardware_capture_used": false,
+  "physical_speaker_playout_used": false
+}

@@ -15,6 +15,8 @@ export type ExtraSpec =
   /** An audio input by libobs device id (absent = system default input). */
   | { kind: "mic"; device?: string }
   | { kind: "guest"; url: string }
+  /** Opt-in native guest pilot; the compiled engine must support this kind. */
+  | { kind: "rtc_guest"; participant_id: string }
   /** A seated MOD's feed (v0.4.32): the same render page a guest uses, but
    * its own source kind — own label, layer, placement; never a guest slot. */
   | { kind: "mod"; url: string }

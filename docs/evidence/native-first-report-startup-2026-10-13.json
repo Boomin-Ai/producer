@@ -1,0 +1,20 @@
+{
+  "environment": "isolated native staging",
+  "change": "Bootstrap receiver audio/video from the first fresh sender report at known RTP clock rates; discontinuities still require a validated pair",
+  "earlier_two_report_stage_to_thumbnail_ms": [
+    10423,
+    16379,
+    11738
+  ],
+  "first_report_stage_to_thumbnail_ms": [
+    10461,
+    6589
+  ],
+  "latest_breakdown_ms": {
+    "connection_finished": 2908,
+    "publication_finished": 3772,
+    "first_thumbnail": 6589
+  },
+  "physical_lip_sync_after_this_change": "not yet qualified",
+  "production_deployed": false
+}

@@ -1,0 +1,84 @@
+{
+  "local_obs_acceptance_passed": false,
+  "failure_reasons": [
+    "numbered recording marker gate failed"
+  ],
+  "local_delivery_worker_gate_passed": true,
+  "delivery_worker_failure_reasons": [],
+  "local_readiness_gate_passed": true,
+  "readiness_failure_reasons": [],
+  "binding_epochs": [
+    {
+      "binding_since_us": 8904960651,
+      "recovery_started_us": 8904934061,
+      "superseded_binding_epochs": [
+        8904934061,
+        8904959324
+      ],
+      "first_scheduled_ms": {
+        "audio": 521.855,
+        "video": 534.523
+      }
+    },
+    {
+      "binding_since_us": 8918422662,
+      "recovery_started_us": 8918340069,
+      "superseded_binding_epochs": [
+        8918340069,
+        8918340119,
+        8918419323
+      ],
+      "first_scheduled_ms": {
+        "audio": 635.084,
+        "video": 657.954
+      }
+    },
+    {
+      "binding_since_us": 8958412437,
+      "recovery_started_us": 8958327334,
+      "superseded_binding_epochs": [
+        8958327334,
+        8958327379,
+        8958409602
+      ],
+      "first_scheduled_ms": {
+        "audio": 626.716,
+        "video": 636.947
+      }
+    },
+    {
+      "binding_since_us": 8998458222,
+      "recovery_started_us": 8998347675,
+      "superseded_binding_epochs": [
+        8998347675,
+        8998347746,
+        8998416841
+      ],
+      "first_scheduled_ms": {
+        "audio": 664.668,
+        "video": 677.038
+      }
+    }
+  ],
+  "raw_binding_epoch_count": 15,
+  "superseded_binding_epochs": [
+    8904934061,
+    8904959324,
+    8918340069,
+    8918340119,
+    8918419323,
+    8958327334,
+    8958327379,
+    8958409602,
+    8998347675,
+    8998347746,
+    8998416841
+  ],
+  "unfinished_binding_epochs": [],
+  "expected_binding_epochs": 4,
+  "readiness_budget_ms": 1500,
+  "budget_scope": "prototype local recovery from earliest pending reset, not WAN service guarantee",
+  "startup_and_tail_loss_qualified": false,
+  "lip_sync_qualified": false,
+  "g1_complete": false
+}

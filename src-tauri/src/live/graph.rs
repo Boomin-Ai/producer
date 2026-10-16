@@ -339,6 +339,7 @@ pub struct ItemState {
     /// Capture sources (camera / screen / mic): the device they are pointed
     /// at, as libobs names it. None for everything else.
     pub device: Option<String>,
+    pub rtc_source_id: Option<String>,
 }
 
 /// Patch semantics: only present fields are applied — the stage editor
@@ -474,6 +475,9 @@ pub enum OverlaySpec {
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ExtraSpec {
+    /// Opt-in native transport. Stable IDs retain existing stage transforms.
+    #[cfg(feature = "guest-rtc-pilot")]
+    RtcGuest { participant_id: String },
     /// Video/audio file via obs-ffmpeg (stingers, BRB loops, pre-rolls).
     Media {
         path: String,
@@ -545,6 +549,8 @@ struct ExtraItem {
     src: *mut ffi::obs_source_t,
     /// Capture kinds only: the device the source is on.
     device: Option<String>,
+    #[cfg(feature = "guest-rtc-pilot")]
+    native_rtc: Option<std::sync::Arc<super::rtc_ingest::Endpoint>>,
 }
 
 /// Extras whose audio the mixer meters (own strip in the UI).
@@ -921,6 +927,20 @@ impl SceneGraph {
                 },
                 muted: !src.is_null() && ffi::obs_source_muted(src),
                 device,
+                rtc_source_id: {
+                    #[cfg(feature = "guest-rtc-pilot")]
+                    {
+                        self.extras
+                            .iter()
+                            .find(|extra| extra.id == id)
+                            .and_then(|extra| extra.native_rtc.as_ref())
+                            .map(|endpoint| endpoint.source_id().to_owned())
+                    }
+                    #[cfg(not(feature = "guest-rtc-pilot"))]
+                    {
+                        None
+                    }
+                },
             });
         };
         if let Some((item, _, _)) = self.overlay.as_ref() {
@@ -1327,6 +1347,17 @@ impl SceneGraph {
         let mut device: Option<String> = None;
         unsafe {
             let (type_id, kind, settings): (&str, &'static str, *mut ffi::obs_data_t) = match spec {
+                #[cfg(feature = "guest-rtc-pilot")]
+                ExtraSpec::RtcGuest { participant_id } => {
+                    if !uuid::Uuid::parse_str(participant_id)
+                        .is_ok_and(|value| value.to_string() == *participant_id)
+                        || (id != format!("guest-{participant_id}")
+                            && id != format!("guest-{}", &participant_id[..8]))
+                    {
+                        return Err("Native guest source identity does not match".into());
+                    }
+                    ("producer_guest_ingest", "guest", ffi::obs_data_create())
+                }
                 ExtraSpec::Camera { device: want } => {
                     // mac-avcapture needs an explicit device id (same lesson
                     // as SCK's display_uuid): resolve the default ourselves.
@@ -1525,6 +1556,8 @@ impl SceneGraph {
                 ));
             }
             let remote = matches!(spec, ExtraSpec::Guest { .. } | ExtraSpec::Mod { .. });
+            #[cfg(feature = "guest-rtc-pilot")]
+            let remote = remote || matches!(spec, ExtraSpec::RtcGuest { .. });
             let born_visible = visible && !remote;
             if !born_visible {
                 ffi::obs_source_set_muted(src, true);
@@ -1565,6 +1598,19 @@ impl SceneGraph {
                 super::filters::set_mod_video_visible(src, false)?;
             }
             ffi::obs_sceneitem_set_visible(item, born_visible);
+            #[cfg(feature = "guest-rtc-pilot")]
+            let native_rtc = if let ExtraSpec::RtcGuest { participant_id } = spec {
+                match super::rtc_ingest::Endpoint::attach(&format!("guest-{participant_id}"), src) {
+                    Ok(endpoint) => Some(endpoint),
+                    Err(error) => {
+                        ffi::obs_sceneitem_remove(item);
+                        ffi::obs_source_release(src);
+                        return Err(error);
+                    }
+                }
+            } else {
+                None
+            };
             // Meter every audio-bearing extra the mixer shows a strip for.
             if metered(kind) {
                 peak_slot_register(src);
@@ -1577,6 +1623,8 @@ impl SceneGraph {
                 item,
                 src,
                 device,
+                #[cfg(feature = "guest-rtc-pilot")]
+                native_rtc,
             });
         }
         Ok(())
@@ -1749,6 +1797,10 @@ impl SceneGraph {
             .position(|e| e.id == id)
             .ok_or_else(|| format!("no item named {id}"))?;
         let e = self.extras.remove(idx);
+        #[cfg(feature = "guest-rtc-pilot")]
+        if let Some(endpoint) = &e.native_rtc {
+            endpoint.retire();
+        }
         if metered(e.kind) {
             unsafe {
                 ffi::obs_source_remove_audio_capture_callback(
@@ -2221,6 +2273,8 @@ pub struct ThumbTarget {
 unsafe impl Send for ThumbTarget {}
 
 pub struct ThumbSlot {
+    #[cfg(debug_assertions)]
+    first_color_ms: u64,
     pub seq: u64,
     pub ready: bool,
     pub rgba: Vec<u8>,
@@ -2234,6 +2288,8 @@ struct ThumbRing {
 }
 
 pub struct ThumbHub {
+    #[cfg(debug_assertions)]
+    ingress_timing: std::sync::atomic::AtomicBool,
     pub targets: std::sync::Mutex<Vec<ThumbTarget>>,
     pub fps: std::sync::atomic::AtomicU32,
     /// A seat's program monitor asked for the program thumb (host side of
@@ -2256,6 +2312,8 @@ unsafe impl Sync for ThumbHub {}
 impl ThumbHub {
     pub fn new() -> Self {
         ThumbHub {
+            #[cfg(debug_assertions)]
+            ingress_timing: std::sync::atomic::AtomicBool::new(false),
             targets: std::sync::Mutex::new(Vec::new()),
             fps: std::sync::atomic::AtomicU32::new(0),
             program_wanted: std::sync::atomic::AtomicBool::new(false),
@@ -2434,6 +2492,10 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
                     w: 1.0,
                 };
                 ffi::gs_clear(1, &clear, 0.0, 0);
+                // Main-render callbacks inherit the compositor's transform.
+                // A roster tile renders source pixels, not its stage placement.
+                ffi::gs_matrix_push();
+                ffi::gs_matrix_identity();
                 ffi::gs_ortho(0.0, sw as f32, 0.0, sh as f32, -100.0, 100.0);
                 // NEVER trust ambient blend state for a standalone source
                 // render — a leftover (ZERO, x) function multiplies every
@@ -2443,6 +2505,7 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
                 ffi::gs_blend_function(ffi::GS_BLEND_ONE, ffi::GS_BLEND_ZERO);
                 ffi::obs_source_video_render(t.src);
                 ffi::gs_blend_state_pop();
+                ffi::gs_matrix_pop();
                 ffi::gs_texrender_end(ring.rt);
                 ffi::gs_stage_texture(ring.surfs[ring.idx], ffi::gs_texrender_get_texture(ring.rt));
                 ring.pending[ring.idx] = true;
@@ -2470,6 +2533,8 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
                     }
                     if let Ok(mut slots) = hub.slots.try_lock() {
                         let slot = slots.entry(t.id.clone()).or_insert_with(|| ThumbSlot {
+                            #[cfg(debug_assertions)]
+                            first_color_ms: 0,
                             seq: 0,
                             ready: false,
                             rgba: Vec::with_capacity((tw * th * 4) as usize),
@@ -2481,6 +2546,11 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
                                 src_row,
                                 (tw * 4) as usize,
                             ));
+                        }
+                        #[cfg(debug_assertions)]
+                        if hub.ingress_timing.load(std::sync::atomic::Ordering::Relaxed) && slot.first_color_ms==0
+                            && slot.rgba.chunks_exact(4).filter(|p|p[1]>80&&p[1]>p[0].saturating_add(30)).take(101).count()>100 {
+                            slot.first_color_ms=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d|d.as_millis() as u64).unwrap_or(0);
                         }
                         slot.seq += 1;
                         slot.ready = true;
@@ -2496,9 +2566,122 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
     hub.wake.notify_one();
 }
 
+
+/// Synthetic, hidden native source: no camera, network, room data or credentials.
+#[cfg(all(feature = "guest-rtc-pilot", debug_assertions, target_os = "macos"))]
+pub fn thumbnail_selftest() {
+    extern "C" { fn os_gettime_ns() -> u64; }
+    let temp = std::env::temp_dir().join(format!("producer-thumb-proof-{}", std::process::id()));
+    super::engine::bootstrap_with_config(&temp);
+    let mut graph = SceneGraph::create().unwrap();
+    let participant = "12345678-1234-1234-1234-123456789abc";
+    let id = "guest-12345678";
+    graph.add_extra(id, "Synthetic thumbnail", &ExtraSpec::RtcGuest { participant_id: participant.into() }).unwrap();
+    let endpoint = super::rtc_ingest::endpoint(&format!("guest-{participant}")).unwrap();
+    let delivery = endpoint.replace().unwrap();
+    let hub = ThumbHub::new();
+    hub.fps.store(15, std::sync::atomic::Ordering::Relaxed);
+    hub.publish_targets(&graph);
+    let param = &hub as *const ThumbHub as *mut std::os::raw::c_void;
+    unsafe { ffi::obs_add_main_render_callback(thumb_render_cb, param); }
+    let y = vec![145u8; 320 * 180];
+    let u = vec![54u8; 160 * 90];
+    let v = vec![34u8; 160 * 90];
+    for _ in 0..90 {
+        assert!(delivery.video(super::rtc_ingest::Video { planes: (&y, &u, &v), width: 320, height: 180, strides: (320, 160, 160) }, unsafe { os_gettime_ns() }));
+        std::thread::sleep(std::time::Duration::from_millis(33));
+    }
+    unsafe { ffi::obs_remove_main_render_callback(thumb_render_cb, param); }
+    let (frames, colored) = {
+        let slots = hub.slots.lock().unwrap();
+        let slot = slots.get(id).expect("No thumbnail frames");
+        (slot.seq, slot.rgba.chunks_exact(4).filter(|p| p[1] > 80 && p[1] > p[0].saturating_add(30)).count())
+    };
+    assert!(frames >= 5 && colored > 1000, "Black native thumbnail: frames={frames}, colored={colored}");
+    graph.clear_room().unwrap();
+    hub.publish_targets(&graph);
+    unsafe {
+        ffi::obs_enter_graphics();
+        for (_, ring) in hub.rings.lock().unwrap().drain() {
+            ffi::gs_texrender_destroy(ring.rt);
+            for surface in ring.surfs { ffi::gs_stagesurface_destroy(surface); }
+        }
+        ffi::obs_leave_graphics();
+        ffi::obs_shutdown();
+    }
+    let _ = std::fs::remove_dir_all(temp);
+    println!("{}", serde_json::json!({"passed":true,"hidden_native_guest":true,"thumbnail_frames":frames,"green_pixels":colored}));
+}
+
 #[cfg(test)]
 mod scene_restoration_tests {
     use super::*;
+
+    #[cfg(feature = "guest-rtc-pilot")]
+    #[test]
+    #[ignore = "requires the bundled native engine and graphics device"]
+    fn native_guest_conversion_preserves_scene_and_full_identity_binding() {
+        let temp = std::env::temp_dir().join(format!(
+            "producer-native-guest-layout-{}",
+            std::process::id()
+        ));
+        super::super::engine::bootstrap_with_config(&temp);
+        let mut graph = SceneGraph::create().unwrap();
+        let participant = "12345678-1234-1234-1234-123456789abc";
+        let id = "guest-12345678";
+        graph
+            .add_extra(
+                id,
+                "Guest fixture",
+                &ExtraSpec::Color {
+                    color: "#123456".into(),
+                },
+            )
+            .unwrap();
+        graph
+            .set_transform(
+                id,
+                &TransformPatch {
+                    x: Some(107.),
+                    y: Some(83.),
+                    w: Some(320.),
+                    h: Some(180.),
+                    visible: Some(true),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        graph.set_source_audio(id, Some(0.42), Some(true)).unwrap();
+        graph
+            .replace_extra(
+                id,
+                "Native guest fixture",
+                &ExtraSpec::RtcGuest {
+                    participant_id: participant.into(),
+                },
+                None,
+            )
+            .unwrap();
+        let item = graph
+            .state()
+            .items
+            .into_iter()
+            .find(|item| item.id == id)
+            .unwrap();
+        assert_eq!((item.x, item.y, item.w, item.h), (107., 83., 320., 180.));
+        assert!(item.visible && item.muted);
+        assert_eq!(item.rtc_source_id.as_deref(), Some(format!("guest-{participant}").as_str()));
+        assert!((item.volume - 0.42).abs() < 0.001);
+        assert!(super::super::rtc_ingest::endpoint(&format!("guest-{participant}")).is_some());
+        assert!(super::super::rtc_ingest::endpoint(id).is_none());
+        graph.remove_extra(id).unwrap();
+        assert!(super::super::rtc_ingest::endpoint(&format!("guest-{participant}")).is_none());
+        graph.clear_room().unwrap();
+        drop(graph);
+        unsafe {
+            ffi::obs_shutdown();
+        }
+    }
 
     fn change(id: &str, visible: bool) -> SceneChange {
         SceneChange {
@@ -3419,4 +3602,41 @@ impl SceneGraph {
         }
         Ok(self.presentation_status())
     }
+}
+
+/// Debug-only timing observer for the existing native thumbnail render path.
+#[cfg(debug_assertions)]
+pub struct IngressThumbnailProbe(Box<ThumbHub>);
+#[cfg(debug_assertions)]
+impl IngressThumbnailProbe {
+    pub fn start(graph:&SceneGraph)->Self {
+        let hub=Box::new(ThumbHub::new());
+        hub.ingress_timing.store(true,std::sync::atomic::Ordering::Relaxed);
+        hub.fps.store(15,std::sync::atomic::Ordering::Relaxed);
+        hub.publish_targets(graph);
+        unsafe{ffi::obs_add_main_render_callback(thumb_render_cb,&*hub as *const ThumbHub as *mut std::os::raw::c_void);}
+        Self(hub)
+    }
+    pub fn first_color_ms(&self,id:&str)->Option<u64> {
+        self.0.slots.lock().ok()?.get(id).map(|slot|slot.first_color_ms).filter(|at|*at>0)
+    }
+    pub fn has_color(&self,id:&str)->bool {
+        self.0.slots.lock().is_ok_and(|slots|slots.get(id).is_some_and(|slot|slot.seq>0&&slot.rgba.chunks_exact(4).filter(|p|p[1]>80&&p[1]>p[0].saturating_add(30)).take(101).count()>100))
+    }
+}
+#[cfg(debug_assertions)]
+impl Drop for IngressThumbnailProbe {
+    fn drop(&mut self){unsafe{
+        ffi::obs_remove_main_render_callback(thumb_render_cb,&*self.0 as *const ThumbHub as *mut std::os::raw::c_void);
+        ffi::obs_enter_graphics();
+        for (_,ring) in self.0.rings.lock().unwrap().drain(){
+            ffi::gs_texrender_destroy(ring.rt);
+            for surface in ring.surfs{ffi::gs_stagesurface_destroy(surface);}
+        }
+        ffi::obs_leave_graphics();
+        for target in self.0.targets.lock().unwrap().drain(..){
+            ffi::obs_source_dec_showing(target.src);
+            ffi::obs_source_release(target.src);
+        }
+    }}
 }

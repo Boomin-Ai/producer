@@ -1,0 +1,58 @@
+{
+  "additional_capture_hold_capacity": 1,
+  "agc": false,
+  "apm_channels": 1,
+  "apm_delay_estimate_ms": {
+    "acoustic_delay_calibrated": false,
+    "maximum": 0,
+    "minimum": 500
+  },
+  "capture_hold_limit_ms": 80,
+  "capture_hold_retired": false,
+  "devices": "CADefaultDeviceAggregate-56997-0 → CADefaultDeviceAggregate-56997-0",
+  "duration_seconds": 0.130647834,
+  "g1_complete": false,
+  "hardware_capture_used": false,
+  "high_pass": false,
+  "invalid_delay_blocks": 0,
+  "lifecycle": {
+    "callbacks_active": 0,
+    "clipped_samples": 0,
+    "format_or_timeline_errors": 0,
+    "microphone": {
+      "capacity": 8,
+      "consumed": 0,
+      "overflow": 2,
+      "pending_retired": 8,
+      "queued": 8
+    },
+    "owners_and_callback_state_retired": true,
+    "speaker": {
+      "capacity": 8,
+      "consumed": 0,
+      "overflow": 2,
+      "pending_retired": 8,
+      "queued": 8
+    }
+  },
+  "microphone_blocks": 0,
+  "microphone_played_or_published": false,
+  "ns": false,
+  "physical_aec_qualified": false,
+  "physical_speaker_reference_connected": false,
+  "processing_both_apms_p95_us": null,
+  "provisional_far_only_attenuation_db": {
+    "median": null,
+    "p10": null,
+    "windows": 0
+  },
+  "reference_scope": "This engine's final stereo mixer output, downmixed to mono; excludes other apps and hardware-volume calibration",
+  "sample_rate": 48000,
+  "schema_version": 1,
+  "source_gain": 0.2,
+  "speaker_blocks": 0,
+  "speech_intelligibility_qualified": false,
+  "stop_reason": "invalid: Device configuration, format, timestamp or bounded-queue fault; test stopped",
+  "system_voice_processing": false,
+  "user_phase_compliance_verified": false
+}

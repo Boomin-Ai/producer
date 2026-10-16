@@ -1,0 +1,592 @@
+{
+  "qualification": "Two debug native generated-fixture runs using real production authority and browser guest page. Timing-only fixture; no production behavior deployed. Native colored thumbnail capture is measured, not final webview tile paint. Same-machine wall clocks; native counters polled at ~100 ms.",
+  "runs": [
+    {
+      "run": "first",
+      "admit_response_ms": 1640.5,
+      "first_decoded_video_ms": 6207,
+      "first_obs_delivery_ms": 9329,
+      "first_colored_native_thumbnail_ms": 9745,
+      "decoded_to_delivery_ms": 3122,
+      "delivery_to_thumbnail_ms": 416,
+      "counters": {
+        "audio_submitted": 299,
+        "bindings": 0,
+        "pcm_received": 1630,
+        "rejected": 5,
+        "sender_reports": 4,
+        "video_observers": 0,
+        "video_received": 312,
+        "video_submitted": 249,
+        "workers": 1
+      }
+    },
+    {
+      "run": "second",
+      "admit_response_ms": 2436.1,
+      "first_decoded_video_ms": 6413,
+      "first_obs_delivery_ms": 10248,
+      "first_colored_native_thumbnail_ms": 10665,
+      "decoded_to_delivery_ms": 3835,
+      "delivery_to_thumbnail_ms": 417,
+      "counters": {
+        "audio_submitted": 289,
+        "bindings": 0,
+        "pcm_received": 1551,
+        "rejected": 9,
+        "sender_reports": 4,
+        "video_observers": 0,
+        "video_received": 297,
+        "video_submitted": 219,
+        "workers": 1
+      }
+    }
+  ],
+  "api_read_traces": [
+    {
+      "trial": 1,
+      "qualification": "Local Node execution of production GET route and actual account authorization against production database. Not Cloudflare execution; read only.",
+      "queries": [
+        {
+          "duration_ms": 192.1303330000003,
+          "tables": [
+            "users"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 42.589416999999685,
+          "tables": [
+            "organization_members",
+            "organizations"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 52.002707999999984,
+          "tables": [
+            "brand_members",
+            "brands",
+            "organizations"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 41.858332999999675,
+          "tables": [
+            "brands",
+            "organizations"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 35.8920420000004,
+          "tables": [
+            "organization_members"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 39.63383300000032,
+          "tables": [
+            "organizations"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 34.92033300000003,
+          "tables": [
+            "org_subscriptions"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 46.66679199999999,
+          "tables": [
+            "org_subscriptions"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 49.7677920000001,
+          "tables": [
+            "surfaces",
+            "brand_surface_states"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 38.17629100000022,
+          "tables": [
+            "live_room_rtc_runs"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 40.26587500000005,
+          "tables": [
+            "live_rooms"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 34.193874999999935,
+          "tables": [
+            "brands"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 42.28620799999999,
+          "tables": [
+            "organization_members"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 88.07245899999998,
+          "tables": [
+            "brand_members"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 49.706125000000156,
+          "tables": [
+            "brand_member_grants"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 84.18095800000037,
+          "tables": [
+            "live_room_rtc_runs"
+          ],
+          "status": 200
+        }
+      ],
+      "context_ms": 570.664166,
+      "status": 200,
+      "total_ms": 967.6147500000002
+    },
+    {
+      "trial": 2,
+      "qualification": "Local Node execution of production GET route and actual account authorization against production database. Not Cloudflare execution; read only.",
+      "queries": [
+        {
+          "duration_ms": 144.06354199999987,
+          "tables": [
+            "users"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 124.94445899999982,
+          "tables": [
+            "organization_members",
+            "organizations"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 49.79100000000017,
+          "tables": [
+            "brand_members",
+            "brands",
+            "organizations"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 44.40387499999997,
+          "tables": [
+            "brands",
+            "organizations"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 32.8325420000001,
+          "tables": [
+            "organization_members"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 42.48225000000002,
+          "tables": [
+            "organizations"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 46.211083000000144,
+          "tables": [
+            "org_subscriptions"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 49.661375000000135,
+          "tables": [
+            "org_subscriptions"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 46.21616700000004,
+          "tables": [
+            "surfaces",
+            "brand_surface_states"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 41.31129099999998,
+          "tables": [
+            "live_room_rtc_runs"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 39.62945800000034,
+          "tables": [
+            "live_rooms"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 38.7507499999997,
+          "tables": [
+            "brands"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 39.19787499999984,
+          "tables": [
+            "organization_members"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 40.03883300000007,
+          "tables": [
+            "brand_members"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 38.43654199999992,
+          "tables": [
+            "brand_member_grants"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 42.94954200000029,
+          "tables": [
+            "live_room_rtc_runs"
+          ],
+          "status": 200
+        }
+      ],
+      "context_ms": 591.3288749999997,
+      "status": 200,
+      "total_ms": 883.1658339999999
+    },
+    {
+      "trial": 3,
+      "qualification": "Local Node execution of production GET route and actual account authorization against production database. Not Cloudflare execution; read only.",
+      "queries": [
+        {
+          "duration_ms": 33.426708999999846,
+          "tables": [
+            "users"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 51.8589579999998,
+          "tables": [
+            "organization_members",
+            "organizations"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 51.41966700000012,
+          "tables": [
+            "brand_members",
+            "brands",
+            "organizations"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 49.18637499999977,
+          "tables": [
+            "brands",
+            "organizations"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 35.05045800000016,
+          "tables": [
+            "organization_members"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 37.835083999999824,
+          "tables": [
+            "organizations"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 45.096457999999984,
+          "tables": [
+            "org_subscriptions"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 38.83999999999969,
+          "tables": [
+            "org_subscriptions"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 49.6713749999999,
+          "tables": [
+            "surfaces",
+            "brand_surface_states"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 36.541041999999834,
+          "tables": [
+            "live_room_rtc_runs"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 39.29441699999916,
+          "tables": [
+            "live_rooms"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 35.36454099999992,
+          "tables": [
+            "brands"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 40.14795799999956,
+          "tables": [
+            "organization_members"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 44.55774999999994,
+          "tables": [
+            "brand_members"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 36.17566700000043,
+          "tables": [
+            "brand_member_grants"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 39.97270800000024,
+          "tables": [
+            "live_room_rtc_runs"
+          ],
+          "status": 200
+        }
+      ],
+      "context_ms": 401.82408399999986,
+      "status": 200,
+      "total_ms": 684.0282090000001
+    }
+  ],
+  "api_admit_trace": [
+    {
+      "qualification": "Local diagnostic execution of the real Admit route against an owned production fixture; local-only credential after hosted identity verification; not Cloudflare execution.",
+      "queries": [
+        {
+          "duration_ms": 154.33104099999946,
+          "tables": [
+            "users"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 41.82629200000156,
+          "tables": [
+            "organization_members",
+            "organizations"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 50.19383299999936,
+          "tables": [
+            "brand_members",
+            "brands",
+            "organizations"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 47.11029099999905,
+          "tables": [
+            "brands",
+            "organizations"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 37.30025000000023,
+          "tables": [
+            "organization_members"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 35.20395800000006,
+          "tables": [
+            "organizations"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 34.49524999999994,
+          "tables": [
+            "org_subscriptions"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 43.55562500000087,
+          "tables": [
+            "org_subscriptions"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 45.981291000000056,
+          "tables": [
+            "surfaces",
+            "brand_surface_states"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 37.16766599999937,
+          "tables": [
+            "live_room_guests"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 34.53587499999958,
+          "tables": [
+            "live_room_rtc_runs"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 39.799542000000656,
+          "tables": [
+            "live_room_guests"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 45.13841599999978,
+          "tables": [
+            "live_rooms"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 40.72075000000041,
+          "tables": [
+            "brands"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 42.63945800000147,
+          "tables": [
+            "organization_members"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 35.206208000001425,
+          "tables": [
+            "brand_members"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 45.56620899999871,
+          "tables": [
+            "brand_member_grants"
+          ],
+          "status": 200
+        },
+        {
+          "duration_ms": 49.87787500000013,
+          "tables": [],
+          "status": 200
+        },
+        {
+          "duration_ms": 44.419958999998926,
+          "tables": [
+            "live_room_guests"
+          ],
+          "status": 200
+        }
+      ],
+      "context_ms": 554.6914579999993,
+      "status": 200,
+      "total_ms": 1035.7889160000013,
+      "admission_observed": false,
+      "fixture_removed": true
+    }
+  ],
+  "api_trace_limit": "Local Node route execution and production DB, not on-Cloudflare spans. Hosted identity was verified; a process-local diagnostic credential was used only in memory to run the local same authorization route. No token was logged or persisted.",
+  "failures": [
+    "Initial fixture used a noncanonical guest source ID and was rejected before media observation; fixed in debug fixture only.",
+    "Initial read trace credential mismatch rejected authorization; excluded from query measurements."
+  ],
+  "findings": [
+    "Native decoded video waited 3.12\u20133.84 seconds before first OBS delivery in these runs. Sender-clock/binding/scheduling is the narrowed component; exact sub-gate not yet instrumented.",
+    "Admit had 19 DB requests in local diagnostic execution; coordinated command around 50 ms, context roughly 555 ms.",
+    "First native thumbnail capture was 9.75 and 10.67 seconds from Admit request start. These are diagnostic runs, not a population benchmark."
+  ],
+  "cleanup": {
+    "timing_fixture_room_removed": true,
+    "admit_trace_fixture_room_removed": true
+  },
+  "native_fixture_teardown": {
+    "passed": true,
+    "owner_expired": true,
+    "repeated_close_passed": true
+  }
+}

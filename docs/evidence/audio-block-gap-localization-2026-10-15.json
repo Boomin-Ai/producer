@@ -1,0 +1,126 @@
+{
+  "date": "2026-10-15",
+  "live": false,
+  "runtime_tests_passed": 42,
+  "trace_bounds": {
+    "maximum_rows": 4096,
+    "maximum_seconds": 16,
+    "raw_pcm_retained": false
+  },
+  "traced_decoded_blocks": 1600,
+  "traced_submission_blocks": 1599,
+  "rejected_submission_blocks": [
+    {
+      "accepted": false,
+      "kind": "submission",
+      "nonzero_samples": 0,
+      "peak": 0,
+      "relative_us": 13201185,
+      "sequence": 1610
+    },
+    {
+      "accepted": false,
+      "kind": "submission",
+      "nonzero_samples": 0,
+      "peak": 0,
+      "relative_us": 13211185,
+      "sequence": 1611
+    }
+  ],
+  "affected_tone_examples": [
+    {
+      "first_sequence": 702,
+      "last_sequence": 714,
+      "decoded_peaks": [
+        13602,
+        13368,
+        12980,
+        12972,
+        13092,
+        13131,
+        12865,
+        13514,
+        13505,
+        13792,
+        13861,
+        13884,
+        14904
+      ],
+      "all_accepted": true,
+      "submission_steps_us": [
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000
+      ]
+    },
+    {
+      "first_sequence": 1502,
+      "last_sequence": 1514,
+      "decoded_peaks": [
+        12960,
+        12944,
+        12865,
+        12943,
+        12855,
+        13298,
+        13374,
+        13380,
+        12922,
+        13060,
+        13106,
+        14305,
+        14483
+      ],
+      "all_accepted": true,
+      "submission_steps_us": [
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000
+      ]
+    }
+  ],
+  "recorded_uncertain_tone_times_ms": [
+    33140,
+    41140,
+    49140
+  ],
+  "recorded_result": {
+    "matched_pairs": 13,
+    "absolute_p95_ms": 26.666666666671517,
+    "uncertain_tones": 3,
+    "unmatched_audio": 1,
+    "unmatched_video": 0,
+    "missing_video_labels_within_observed_span": [
+      12
+    ],
+    "local_numbered_marker_gate_passed": false
+  },
+  "pull_diagnostics": {
+    "nonzero_channel_samples": 798580,
+    "push_contention": 28,
+    "push_wait_max_ns": 717458,
+    "push_wait_total_ns": 1871123,
+    "queue_full": 2,
+    "render_calls": 3652,
+    "render_contention": 2
+  },
+  "conclusion": "Affected tones had substantial decoded signal and accepted continuous 10 ms submission. Recorded fragmentation occurs downstream; OBS render/mix/record boundary not yet distinguished."
+}

@@ -1,0 +1,36 @@
+{
+  "production_api_and_web": true,
+  "native_host": "Same diagnostic candidate and flags as previous production smoke; not stable desktop qualification",
+  "admit_to_preview_ms": 4854,
+  "previous_ms": 7006,
+  "admit_to_outbound_observation_ms": 3301,
+  "outbound_observation_to_decode_ms": 330,
+  "decode_to_preview_ms": 1223,
+  "stage_and_removal_verified": true,
+  "recording": {
+    "local_numbered_marker_gate_passed": false,
+    "absolute_p95_ms": 50.000000000007276,
+    "unmatched_audio": 8,
+    "unmatched_video": 0,
+    "uncertain_tones": 1,
+    "missing_video_labels_within_observed_span": [
+      6,
+      7,
+      8,
+      11,
+      12,
+      13,
+      14,
+      16,
+      17,
+      18,
+      19,
+      20
+    ]
+  },
+  "cleanup": {
+    "removed": 3,
+    "failed": 0
+  },
+  "qualification": "Single repeat; no consistency guarantee; sync on matched pairs is separate from marker coverage"
+}

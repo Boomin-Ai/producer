@@ -1,0 +1,18 @@
+{
+  "environment": "isolated native staging",
+  "change": "Reset and restore the model matrix around standalone roster-thumbnail rendering",
+  "synthetic_hidden_native_source": {
+    "passed": true,
+    "thumbnail_frames": 24,
+    "green_pixels": 36864
+  },
+  "native_build": "passed",
+  "development_signature_verification": "passed",
+  "physical_roster_card_check": "User screenshot confirms green live guest thumbnail",
+  "production_changed": false,
+  "user_reported_video_start_delay_seconds": [
+    10,
+    15
+  ],
+  "stage_video_confirmation": "Initially black; final stage visibility not yet confirmed"
+}

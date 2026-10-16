@@ -1,0 +1,33 @@
+{
+  "local_obs_acceptance_passed": false,
+  "failure_reasons": [
+    "numbered recording marker gate failed",
+    "missing marker labels within observed recording span"
+  ],
+  "local_readiness_gate_passed": true,
+  "readiness_failure_reasons": [],
+  "binding_epochs": [
+    {
+      "binding_since_us": 79244517726,
+      "recovery_started_us": 79244485025,
+      "superseded_binding_epochs": [
+        79244485025
+      ],
+      "first_scheduled_ms": {
+        "audio": 560.68,
+        "video": 603.299
+      }
+    }
+  ],
+  "raw_binding_epoch_count": 2,
+  "superseded_binding_epochs": [
+    79244485025
+  ],
+  "unfinished_binding_epochs": [],
+  "expected_binding_epochs": 1,
+  "readiness_budget_ms": 1500,
+  "budget_scope": "prototype local recovery from earliest pending reset, not WAN service guarantee",
+  "startup_and_tail_loss_qualified": false,
+  "lip_sync_qualified": false,
+  "g1_complete": false
+}

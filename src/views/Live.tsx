@@ -1,3 +1,4 @@
+import { admitGuestThroughTransport, revokeGuestAndConfirm } from "../lib/guestAdmission";
 import {PortraitCanvas} from '../features/presentation/PortraitCanvas';
 import { OutputSettings, RoomOutputView, type OutputView, type PortraitMonitor } from '../features/presentation/OutputSettings';
 import { fetchMe } from '../lib/access';
@@ -66,8 +67,9 @@ import {
 import { filterEditQueue, withSourceFilters } from "../lib/sourceFilters";
 import { DEMO_CHAT, DEMO_VIDEO_URL, demoOn } from "../lib/demo";
 import { activeEndpointId, isBoomin, resolveActiveEndpoint } from "../lib/workspace";
+import { nativeGuestSources } from "../lib/nativeGuestSources";
 import { BugSheet } from "./BugSheet";
-import { dismiss, dismissKey, notify, notifyError } from "../lib/notices";
+import { dismiss, dismissKey, errText, notify, notifyError } from "../lib/notices";
 import { NoticeHost } from "../components/Notice";
 import { PlacementButton } from "../components/PlacementButton";
 import { PLACEMENTS } from "../lib/placement";
@@ -776,6 +778,7 @@ export function GuestPanel({
   role,
   stage,
   onAdmit,
+  admissionPending,
   onRemove,
   onMute,
   onShow,
@@ -785,7 +788,9 @@ export function GuestPanel({
   permissions,
   stageState,
   form = "column",
+  transportStopped = false,
 }: {
+  transportStopped?: boolean;
   thumbs: Record<string, string>;
   roster: RoomGuest[];
   error: string | null;
@@ -800,6 +805,7 @@ export function GuestPanel({
   stage: string[];
   stageState?: ModStageState;
   onAdmit: (id: string) => void;
+  admissionPending?: ReadonlySet<string>;
   onRemove: (id: string) => void;
   onMute: (sourceId: string, muted: boolean) => void;
   onShow: (sourceId: string, show: boolean) => void;
@@ -848,11 +854,11 @@ export function GuestPanel({
             {canAdmit ? (
               <button
                 className="rm-guest-admit"
-                disabled={live.length >= ROOM_CAP}
+                disabled={live.length >= ROOM_CAP || admissionPending?.has(g.id)}
                 title={live.length >= ROOM_CAP ? `Room is full (${ROOM_CAP})` : "Bring them into the room"}
                 onClick={() => onAdmit(g.id)}
               >
-                Admit
+                {admissionPending?.has(g.id) ? "Admitting…" : "Admit"}
               </button>
             ) : (
               <span className="rm-guest-wait-note">waiting</span>
@@ -864,16 +870,16 @@ export function GuestPanel({
             const ids = sourceIdsFor(g.id);
             const item = items.find((i) => i.id === ids.camera);
             return (
-              <div key={g.id} className={`rm-gtile${item?.visible ? " on" : ""}`}>
+              <div key={g.id} className={`rm-gtile${(item?.visible && !transportStopped) ? " on" : ""}`}>
                 {thumbs[ids.camera] ? <img className="rm-gtile-img" src={thumbs[ids.camera]} alt="" /> : <span className="rm-gtile-img empty" />}
                 <span className="rm-gtile-name">{g.display_name || "Guest"}</span>
                 <button
-                  className={`rm-guest-stage${item?.visible ? " on" : ""}`}
-                  disabled={!item}
-                  title={item?.visible ? "Take off screen (stays in the room)" : "Pop into the next free guest slot"}
+                  className={`rm-guest-stage${(item?.visible && !transportStopped) ? " on" : ""}`}
+                  disabled={!item || transportStopped}
+                  title={transportStopped ? "Guest connection stopped" : item?.visible ? "Take off screen (stays in the room)" : "Pop into the next free guest slot"}
                   onClick={() => item && onShow(item.id, !item.visible)}
                 >
-                  {item?.visible ? "On" : "Show"}
+                  {transportStopped ? "Disconnected" : item?.visible ? "On" : "Show"}
                 </button>
               </div>
             );
@@ -921,11 +927,11 @@ export function GuestPanel({
               <>
                   {canAdmit && <button
                     className="rm-guest-admit"
-                    disabled={live.length >= ROOM_CAP}
+                    disabled={live.length >= ROOM_CAP || admissionPending?.has(g.id)}
                     title={live.length >= ROOM_CAP ? `Room is full (${ROOM_CAP})` : "Bring them into the room"}
                     onClick={() => onAdmit(g.id)}
                   >
-                    Admit
+                    {admissionPending?.has(g.id) ? "Admitting…" : "Admit"}
                   </button>}
                   {canRemove && <button className="rm-row-edit" title="Remove" onClick={() => onRemove(g.id)}>
                     {ic.x}
@@ -987,7 +993,7 @@ export function GuestPanel({
             const muted = item?.muted ?? false;
             const q = (g.quality ?? g.connection_quality ?? "unknown") as string;
             return (
-              <div key={g.id} className={`rm-gcard${item?.visible ? " on" : ""}`}>
+              <div key={g.id} className={`rm-gcard${(item?.visible && !transportStopped) ? " on" : ""}`}>
                 {thumbs[ids.camera] ? (
                   <img className="rm-gcard-img" src={thumbs[ids.camera]} alt="" />
                 ) : (
@@ -1004,18 +1010,18 @@ export function GuestPanel({
                   } />
                   <span className="rm-gcard-name">{g.display_name || "Guest"}</span>
                   <span className={`rm-kind ${participantKind(g)}`}>{kindBadge(g)}</span>
-                  {item?.visible && <span className="rm-gcard-live">ON</span>}
+                  {transportStopped ? <span className="rm-gcard-live">Disconnected</span> : item?.visible && <span className="rm-gcard-live">ON</span>}
                 </div>
                 {/* Controls: the card is the feed; hands appear on hover. */}
                 <div className="rm-gcard-ctl">
                   <button
-                    className={`rm-guest-stage${item?.visible ? " on" : ""}`}
-                    title={item?.visible ? "Take off screen (stays in the room)" : "Pop into the next free guest slot"}
-                    disabled={!item}
+                    className={`rm-guest-stage${(item?.visible && !transportStopped) ? " on" : ""}`}
+                    title={transportStopped ? "Guest connection stopped" : item?.visible ? "Take off screen (stays in the room)" : "Pop into the next free guest slot"}
+                    disabled={!item || transportStopped}
                     data-warn={!item?.visible && q === "failing" ? "1" : undefined}
                     onClick={() => item && onShow(item.id, !item.visible)}
                   >
-                    {item?.visible ? "On screen" : "Show"}
+                    {transportStopped ? "Disconnected" : item?.visible ? "On screen" : "Show"}
                   </button>
                   {screenItem && (
                     <button
@@ -1029,7 +1035,7 @@ export function GuestPanel({
                   <button
                     className={`rm-row-edit${muted ? " muted" : ""}`}
                     title={muted ? "Unmute" : "Mute"}
-                    disabled={!item}
+                    disabled={!item || transportStopped}
                     onClick={() => item && onMute(item.id, !muted)}
                   >
                     {ic.mic}
@@ -2623,6 +2629,11 @@ export function LiveView({
     roomEngineRef.current = session;
     return () => {
       void session.close(async () => {
+        const serverRoom = cfgRef.current.server_room_id;
+        // An active output keeps its room engine and native guest owner.
+        if (serverRoom && (await ipc.liveEngineStatus()).session_state === "idle") {
+          await ipc.liveRtcStop(serverRoom).catch(() => {});
+        }
         if (await ipc.liveReleaseIdleRoom()) {
           sharedProgramCapture.setPortrait(false);
           engineHeldRoom = null;
@@ -3661,27 +3672,67 @@ export function LiveView({
     writeCfg({ ...cfgRef.current, mod_feeds: rememberModFeed(cfgRef.current.mod_feeds, String(owner.row.producer_ref ?? owner.row.id), owner.track, rect) });
   };
 
+  const [admissionPending, setAdmissionPending] = useState<Set<string>>(() => new Set());
+  const admissionInFlight = useRef(new Set<string>());
   const admitGuest = async (id: string) => {
-    if (!endpointRef.current || !cfg.server_room_id) return;
-    // The guest's return video IS the virtual camera — the render page opens
-    // it as a capture device and sends it down the peer connection it already
-    // holds. Start it on admit so nobody discovers it was off after someone
-    // is already talking into oblivion.
-    if (roomRoleRef.current === "host" && !vcamOn && vcamState?.installed) {
-      await vcamIpc.output(true).catch(() => {});
+    const endpoint = endpointRef.current;
+    const serverRoom = cfgRef.current.server_room_id;
+    if (!endpoint || !serverRoom) {
+      notifyError(new Error("Room connection is not ready. Reopen the room and try again."), { key: "guests" });
+      return;
     }
-    await guestsIpc.admit(endpointRef.current, cfg.server_room_id, id).catch((e) =>
-      notifyError(e, { key: "guests" }),
-    );
+    if (admissionInFlight.current.has(id)) return;
+    admissionInFlight.current.add(id);
+    setAdmissionPending(new Set(admissionInFlight.current));
+    try {
+      monitorLog("guest admission: selecting return transport");
+      const nativeRtc = await ipc.liveRtcEnabled(endpoint,serverRoom);
+      monitorLog(`guest admission: ${nativeRtc ? "native RTC" : "legacy"} transport selected`);
+      await admitGuestThroughTransport({
+        nativeRtc,
+        host: roomRoleRef.current === "host",
+        virtualCameraOn: vcamOn,
+        virtualCameraInstalled: !!vcamState?.installed,
+        startVirtualCamera: () => vcamIpc.output(true),
+        admit: () => {
+          monitorLog("guest admission: sending room control");
+          return guestsIpc.admit(endpoint, serverRoom, id);
+        },
+      });
+      rosterTickRef.current?.();
+    } catch (error) {
+      notifyError(error, { key: "guests" });
+    } finally {
+      admissionInFlight.current.delete(id);
+      setAdmissionPending(new Set(admissionInFlight.current));
+    }
   };
 
   const removeGuest = async (id: string) => {
-    if (!endpointRef.current || !cfg.server_room_id) return;
+    const endpoint = endpointRef.current;
+    const serverRoom = cfgRef.current.server_room_id;
+    if (!endpoint || !serverRoom) {
+      notifyError("Guest removal requires an active room connection.", { key: "guests" });
+      return;
+    }
     try {
-      await guestsIpc.revoke(endpointRef.current, id);
-      rosterTickRef.current?.();
+      await revokeGuestAndConfirm({
+        revoke: () => guestsIpc.revoke(endpoint, id),
+        isRemoved: async () => {
+          const response = await guestsIpc.roster(endpoint, serverRoom);
+          return !(response.guests ?? []).some(g => g.id === id && !["revoked", "ended", "declined"].includes(g.state));
+        },
+      });
+      if (endpointRef.current !== endpoint || cfgRef.current.server_room_id !== serverRoom) return;
+      liveRowsRef.current = liveRowsRef.current.filter(g => g.id !== id);
+      setRoster(previous => previous.filter(g => g.id !== id));
+      for (const source of [sourceIdsFor(id).camera, sourceIdsFor(id).screen]) {
+        hideGuestFromSlot(source);
+      }
     } catch (e) {
       notifyError(e, { key: "guests" });
+    } finally {
+      rosterTickRef.current?.();
     }
   };
 
@@ -6228,6 +6279,20 @@ export function LiveView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room?.id]);
 
+  const nativeRtcLifetime = useRef({ closed: false, serverRoom: null as string | null, converted: new Set<string>() });
+  const rosterTickBusy = useRef(false);
+  const rosterFailure = useRef<string | null>(null);
+  const [guestTransportStopped, setGuestTransportStopped] = useState(false);
+  useEffect(() => {
+    const lifetime = { closed: false, serverRoom: null as string | null, converted: new Set<string>() };
+    nativeRtcLifetime.current = lifetime;
+    rosterFailure.current = null;
+    setGuestTransportStopped(false);
+    return () => {
+      lifetime.closed = true;
+    };
+  }, [room?.id]);
+
   // Poll the roster and reconcile browser sources against it. Not while we
   // hold a SEAT elsewhere: the poll is also the room-open heartbeat, and a
   // guest's own stage must not read as open on the network.
@@ -6235,6 +6300,8 @@ export function LiveView({
     if (!room?.id || !cfg.server_room_id || seat) return;
     let alive = true;
     const tick = async () => {
+      if (rosterTickBusy.current) return;
+      rosterTickBusy.current = true;
       try {
         const epId = await ensureEndpoint();
         if (!epId) return;
@@ -6284,8 +6351,9 @@ export function LiveView({
         const list = full.filter((g) => !isMonitor(g));
         // Reconcile, never replace-on-equal: an identical roster is not news.
         setRoster((prev) => (JSON.stringify(prev) === JSON.stringify(list) ? prev : list));
-        dismissKey("guests");
         if (roomRoleRef.current !== "host") {
+          dismissKey("guests");
+          rosterFailure.current = null;
           // Not the host: the roster is all we do. No render pages (they would
           // be a second host peer on every guest's channel), no stage post
           // from our engine (we have none for this room). What we DO want is
@@ -6311,6 +6379,29 @@ export function LiveView({
           }
           return;
         }
+        const nativeRtc = await ipc.liveRtcEnabled(epId,cfg.server_room_id!);
+        if (!alive) return;
+        if (nativeRtc) {
+          if (!roomApplied.current) return;
+          const lifetime = nativeRtcLifetime.current;
+          if (lifetime.closed) return;
+          const brand = await team.brandId(epId);
+          if (!brand) throw new Error("Native guest room requires a workspace brand.");
+          if (!alive || lifetime.closed) return;
+          lifetime.serverRoom = cfg.server_room_id!;
+          await roomEngineRef.current?.run(async () => {
+            if (lifetime.closed || !alive) return;
+            const started = await ipc.liveRtcStart(epId, brand, cfg.server_room_id!);
+            if (started) lifetime.converted.clear();
+            setGuestTransportStopped(false);
+          });
+          if (lifetime.closed) {
+            // The queued session close or next room restoration owns teardown.
+            // A late completion must not stop a newly reopened identical room.
+            return;
+          }
+          if (!alive) return;
+        }
         // Seats (monitor rows) for the Mods panel — and the set's candidate
         // list: guests plus seats the host handed media (isMediaSeat).
         // One row per member (dedupeSeatRows): ended rows hidden, the newest
@@ -6323,7 +6414,7 @@ export function LiveView({
         // run ended) — or when the seat gained media: its render page's
         // return leg carries the program then, and a second host peer on
         // the same channel would collide. The engine never sees these.
-        if (endpointBaseRef.current) {
+        if (!nativeRtc && endpointBaseRef.current) {
           const wantedMonitors = new Map(full.filter((g) => resolveGrants(g).has("media.return_feed") && !!g.render_url).map((g) => [g.id, g] as const));
           for (const [id, sender] of monitorSenders.current) {
             const row = wantedMonitors.get(id);
@@ -6424,9 +6515,28 @@ export function LiveView({
         // "<name> · screen" source for a guest who holds media.screen. The
         // screen page shares the guest's signaling channel and receives only
         // the share, so the host frames it independently of the person.
-        const wanted = wantedSourceIds(live);
+        const wanted = nativeRtc ? nativeGuestSources(liveRowsRef.current.filter(g => !isMonitor(g))) : wantedSourceIds(live);
 
         for (const [id, { guest: g, track }] of wanted) {
+          if (nativeRtc && (sources.items ?? []).some(item => item.id === id && item.rtc_source_id === `guest-${g.id}`)) {
+            nativeRtcLifetime.current.converted.add(id);
+            continue;
+          }
+          if (nativeRtc && !nativeRtcLifetime.current.converted.has(id)) {
+            if (!alive || nativeRtcLifetime.current.closed) return;
+            const spec = { kind: "rtc_guest" as const, participant_id: g.id };
+            const lifetime = nativeRtcLifetime.current;
+            await roomEngineRef.current?.run(async () => {
+              if (!alive || lifetime.closed) return;
+              if (present.has(id)) await extraSources.replace(id, g.display_name || "Guest", spec);
+              else await extraSources.add(id, g.display_name || "Guest", spec);
+              lifetime.converted.add(id);
+            });
+            continue;
+          }
+          // A converted native source can be ahead of the event snapshot.
+          // Wait for that snapshot rather than creating a duplicate source.
+          if (nativeRtc) continue;
           if (!present.has(id)) {
             const u = new URL(g.render_url!);
             if (track === "screen") {
@@ -6468,6 +6578,7 @@ export function LiveView({
         }
         for (const id of present) {
           if (!wanted.has(id)) {
+            nativeRtcLifetime.current.converted.delete(id);
             // Someone whose laptop died shouldn't blink off the broadcast.
             // Fade first, then destroy — and only if they were on screen.
             const it = (sources.items ?? []).find((i) => i.id === id);
@@ -6485,7 +6596,7 @@ export function LiveView({
         // their own kind, born hidden at their remembered rect on the mod
         // layer, never a guest slot. Dropped when the grant goes or the
         // seat leaves (the ledger interval closes with it).
-        {
+        if (!nativeRtc) {
           const presentMods = new Set((sources.items ?? []).filter((i) => i.kind === "mod").map((i) => i.id));
           const wantedMods = wantedModSourceIds(seats.filter((g) => !!g.render_url));
           for (const [id, { seat, track }] of wantedMods) {
@@ -6573,8 +6684,19 @@ export function LiveView({
         if (stageKey !== stagePostedRef.current && endpointRef.current && cfg.server_room_id) {
           void postStageTruth(stageIds, "roster");
         }
+        // Clear the incident only after the entire host reconciliation succeeds.
+        // A successful roster HTTP response alone does not restore a stopped SDK.
+        dismissKey("guests");
+        rosterFailure.current = null;
       } catch (e) {
-        if (alive) notifyError(e, { key: "guests" });
+        const message = errText(e);
+        if (alive && message.includes("Native guest connection stopped")) setGuestTransportStopped(true);
+        if (alive && rosterFailure.current !== message) {
+          rosterFailure.current = message;
+          notifyError(e, { key: "guests" });
+        }
+      } finally {
+        rosterTickBusy.current = false;
       }
     };
     rosterTickRef.current = () => void tick();
@@ -7144,7 +7266,8 @@ export function LiveView({
               send: sendAudienceFrame, share: () => void copyAudienceLink(), openSocial: site => void openAudienceSocial(site),
               invite: id => void inviteAudience(id), error: audienceError }}>
           <GuestPanel
-            thumbs={guestThumbs}
+            transportStopped={guestTransportStopped}
+            thumbs={guestTransportStopped ? {} : guestThumbs}
             roster={roster}
             error={null}
             items={(sources.items ?? []).filter((i) => i.kind === "guest")}
@@ -7153,6 +7276,7 @@ export function LiveView({
             stage={modStage.confirmed}
             stageState={modStage}
             onAdmit={admitGuest}
+            admissionPending={admissionPending}
             onRemove={removeGuest}
             onMute={(id, muted) => setSourceAudio(id, undefined, muted).catch(() => {})}
             onShow={(id, show) => (show ? void showGuestInSlot(id) : hideGuestFromSlot(id))}

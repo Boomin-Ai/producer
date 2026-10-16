@@ -1,0 +1,84 @@
+{
+  "native_executable_sha256": "973b51bb4045ce70e289408f51a48251f95d906cba0252fb473f77df8fcac57d",
+  "bridge_source_sha256": {
+    "src/audio_track.rs": "c9eac6867843e3cedb4fc3a6a70892fb27e369c8b57e71b1fb8853c97d5221bf",
+    "src/audio_track.cpp": "6666f6a537a3b80485fb6910fdf4b3790a5baf25d5525e159fae55fb6d6e7f27",
+    "include/livekit/audio_track.h": "3a66055b70d18b050e0d1af1685c9c7c9744ab7a0ade215dcdf46141b8cee307"
+  },
+  "runs": [
+    {
+      "run": "transport-timed-sink",
+      "participants": [
+        {
+          "identity": "guest-1",
+          "audio_blocks": 2244,
+          "audio_blocks_with_capture_timestamp": 0,
+          "audio_resampled_blocks": 2244,
+          "video_frames": 584,
+          "video_frames_with_ntp_metadata": 0,
+          "retired_queues": []
+        }
+      ]
+    },
+    {
+      "run": "transport-timed-republish",
+      "participants": [
+        {
+          "identity": "guest-3",
+          "audio_blocks": 2183,
+          "audio_blocks_with_capture_timestamp": 0,
+          "audio_resampled_blocks": 2183,
+          "video_frames": 592,
+          "video_frames_with_ntp_metadata": 0,
+          "retired_queues": []
+        },
+        {
+          "identity": "guest-1",
+          "audio_blocks": 2133,
+          "audio_blocks_with_capture_timestamp": 0,
+          "audio_resampled_blocks": 2131,
+          "video_frames": 563,
+          "video_frames_with_ntp_metadata": 0,
+          "retired_queues": [
+            {
+              "kind": "video",
+              "sid": "TR_VCBr5e6bRGhH48",
+              "stats": {
+                "callback_contention_dropped": 0,
+                "capacity_frames": 2,
+                "max_age_ms": 50,
+                "overflow_oldest_dropped": 0,
+                "received": 198,
+                "stale_dropped": 0
+              }
+            },
+            {
+              "kind": "audio",
+              "sid": "TR_AMmYaENzj7j3BJ",
+              "stats": {
+                "callback_contention_dropped": 0,
+                "capacity_frames": 3,
+                "max_age_ms": 30,
+                "overflow_oldest_dropped": 0,
+                "received": 773,
+                "stale_dropped": 0
+              }
+            }
+          ]
+        },
+        {
+          "identity": "guest-2",
+          "audio_blocks": 2226,
+          "audio_blocks_with_capture_timestamp": 0,
+          "audio_resampled_blocks": 2226,
+          "video_frames": 624,
+          "video_frames_with_ntp_metadata": 0,
+          "retired_queues": []
+        }
+      ]
+    }
+  ],
+  "obs_recorded_av_qualified": false,
+  "g1_complete": false,
+  "format_conversion_note": "audio_resampled_blocks counts rate OR channel conversion (including remix); resampler delay was not measured"
+}

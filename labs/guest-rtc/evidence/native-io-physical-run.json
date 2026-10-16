@@ -1,0 +1,191 @@
+{
+  "completed_run_report": {
+    "additional_capture_hold_capacity": 1,
+    "aec_enforced_high_pass": false,
+    "aec_profile": "no_forced_high_pass",
+    "agc": false,
+    "apm_channels": 1,
+    "apm_delay_estimate_ms": {
+      "acoustic_delay_calibrated": false,
+      "maximum": 35,
+      "minimum": 25
+    },
+    "capture_age_at_apm_us": {
+      "capacity": 6100,
+      "count": 6000,
+      "maximum": 30402,
+      "minimum": 13185,
+      "p95": 24104,
+      "scope": "device host timestamp to processing; includes owner scheduling and reference wait; signed, not calibrated acoustic latency"
+    },
+    "capture_hold_limit_ms": 80,
+    "capture_hold_retired": false,
+    "default_output_volume_percent": {
+      "acoustic_spl_calibrated": false,
+      "continuous_verification": false,
+      "end": 56.25,
+      "start": 56.25
+    },
+    "device_callback_mode": "input_sink_and_output_render_notification",
+    "devices": "CADefaultDeviceAggregate-62130-0 \u2192 CADefaultDeviceAggregate-62130-0",
+    "duration_seconds": 60.042874125,
+    "g1_complete": false,
+    "hardware_capture_used": true,
+    "high_pass": false,
+    "high_pass_requested": false,
+    "invalid_delay_blocks": 0,
+    "lifecycle": {
+      "callbacks_active": 0,
+      "clipped_samples": 0,
+      "format_or_timeline_errors": 0,
+      "maximum_tap_frames": {
+        "microphone": 512,
+        "speaker": 512
+      },
+      "microphone": {
+        "capacity": 32,
+        "consumed": 6000,
+        "overflow": 0,
+        "pending_retired": 0,
+        "queued": 6000
+      },
+      "owners_and_callback_state_retired": true,
+      "render_notifications_alive": 0,
+      "speaker": {
+        "capacity": 32,
+        "consumed": 6000,
+        "overflow": 0,
+        "pending_retired": 0,
+        "queued": 6000
+      }
+    },
+    "microphone_blocks": 6000,
+    "microphone_played_or_published": false,
+    "ns": false,
+    "physical_aec_qualified": false,
+    "physical_speaker_reference_connected": true,
+    "processing_both_apms_p95_us": 323,
+    "provisional_far_only_attenuation_db": {
+      "median": 28.321859839637156,
+      "p10": 17.63449184339035,
+      "windows": 83
+    },
+    "reference_scope": "Engine output AudioUnit post-render bus 0, downmixed to mono; actual buffers/timing require physical verification; excludes other apps and calibrated hardware volume",
+    "sample_rate": 48000,
+    "schema_version": 1,
+    "source_gain": 0.2,
+    "speaker_blocks": 6000,
+    "speech_intelligibility_qualified": false,
+    "stop_reason": "completed",
+    "system_voice_processing": false,
+    "user_phase_compliance_verified": false
+  },
+  "previous_startup_failure": {
+    "additional_capture_hold_capacity": 1,
+    "aec_enforced_high_pass": false,
+    "aec_profile": "no_forced_high_pass",
+    "agc": false,
+    "apm_channels": 1,
+    "apm_delay_estimate_ms": {
+      "acoustic_delay_calibrated": false,
+      "maximum": 25,
+      "minimum": 25
+    },
+    "capture_age_at_apm_us": {
+      "capacity": 6100,
+      "count": 1,
+      "maximum": 33459,
+      "minimum": 33459,
+      "p95": 33459,
+      "scope": "device host timestamp to processing; includes owner scheduling and reference wait; signed, not calibrated acoustic latency"
+    },
+    "capture_hold_limit_ms": 80,
+    "capture_hold_retired": false,
+    "default_output_volume_percent": {
+      "acoustic_spl_calibrated": false,
+      "continuous_verification": false,
+      "end": 56.25,
+      "start": 56.25
+    },
+    "device_callback_mode": "input_sink_and_output_render_notification",
+    "devices": "CADefaultDeviceAggregate-62130-0 \u2192 CADefaultDeviceAggregate-62130-0",
+    "duration_seconds": 0.068673541,
+    "g1_complete": false,
+    "hardware_capture_used": true,
+    "high_pass": false,
+    "high_pass_requested": false,
+    "invalid_delay_blocks": 0,
+    "lifecycle": {
+      "callbacks_active": 0,
+      "clipped_samples": 0,
+      "format_or_timeline_errors": 2,
+      "maximum_tap_frames": {
+        "microphone": 512,
+        "speaker": 512
+      },
+      "microphone": {
+        "capacity": 32,
+        "consumed": 1,
+        "overflow": 0,
+        "pending_retired": 0,
+        "queued": 1
+      },
+      "owners_and_callback_state_retired": true,
+      "render_notifications_alive": 0,
+      "speaker": {
+        "capacity": 32,
+        "consumed": 1,
+        "overflow": 0,
+        "pending_retired": 0,
+        "queued": 1
+      }
+    },
+    "microphone_blocks": 1,
+    "microphone_played_or_published": false,
+    "ns": false,
+    "physical_aec_qualified": false,
+    "physical_speaker_reference_connected": true,
+    "processing_both_apms_p95_us": 344,
+    "provisional_far_only_attenuation_db": {
+      "median": null,
+      "p10": null,
+      "windows": 0
+    },
+    "reference_scope": "Engine output AudioUnit post-render bus 0, downmixed to mono; actual buffers/timing require physical verification; excludes other apps and calibrated hardware volume",
+    "sample_rate": 48000,
+    "schema_version": 1,
+    "source_gain": 0.2,
+    "speaker_blocks": 1,
+    "speech_intelligibility_qualified": false,
+    "stop_reason": "invalid: Audio stopped: native errors=2, speaker overflow=0, microphone overflow=0 (capacity=32 blocks)",
+    "system_voice_processing": false,
+    "user_phase_compliance_verified": false
+  },
+  "voice_review_windows_seconds": [
+    [
+      35,
+      42
+    ],
+    [
+      52,
+      57
+    ]
+  ],
+  "voice_review_order": "raw then cleaned per window, 1 second silence between excerpts",
+  "window_levels_dbfs": {
+    "double_talk": {
+      "raw": -29.952,
+      "cleaned": -49.444,
+      "reference": -29.553
+    },
+    "near_only": {
+      "raw": -26.413,
+      "cleaned": -26.32,
+      "reference": -240.0
+    }
+  },
+  "user_voice_review_pending": false,
+  "private_audio_committed": false,
+  "report_sha256": "eb19f740c76be3a3647b1e59d75ea7763efda0948e0e5a59f719ecd71f5d167c",
+  "user_voice_review": "User confirmed speaking during double talk and clear preserved voice in the cleaned excerpt; replied yes it does, continue."
+}

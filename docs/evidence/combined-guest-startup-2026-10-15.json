@@ -1,0 +1,171 @@
+{
+  "live": false,
+  "scope": "Existing isolated hosted pilot API and database, local browser bundle, native diagnostic app; generated media only",
+  "api_tests": 1146,
+  "browser_tests": 11,
+  "api_typecheck": true,
+  "browser_typecheck": true,
+  "trials": [
+    {
+      "run": 1,
+      "admit_to_preview_ms": 3659,
+      "admit_to_outbound_observed_ms": 2275,
+      "outbound_observation_to_decode_ms": 362,
+      "decode_to_preview_ms": 1022,
+      "startup_requests": [
+        {
+          "phase": "guest_startup",
+          "status": 409,
+          "at_ms": 17709.89975
+        },
+        {
+          "phase": "guest_startup",
+          "status": 409,
+          "at_ms": 18804.529375000002
+        },
+        {
+          "phase": "guest_startup",
+          "status": 201,
+          "at_ms": 20112.163167000002
+        }
+      ],
+      "recording": {
+        "absolute_p95_ms": 36.66666666667152,
+        "local_numbered_marker_gate_passed": false,
+        "unmatched_audio": 6,
+        "unmatched_video": 0,
+        "uncertain_tones": 1
+      },
+      "loaded_machine_regression_checks": false
+    },
+    {
+      "run": 2,
+      "admit_to_preview_ms": 5897,
+      "admit_to_outbound_observed_ms": 4490,
+      "outbound_observation_to_decode_ms": 145,
+      "decode_to_preview_ms": 1262,
+      "startup_requests": [
+        {
+          "phase": "guest_startup",
+          "status": 409,
+          "at_ms": 15741.394708
+        },
+        {
+          "phase": "guest_startup",
+          "status": 409,
+          "at_ms": 16880.017249999997
+        },
+        {
+          "phase": "guest_startup",
+          "status": 409,
+          "at_ms": 18012.107708
+        },
+        {
+          "phase": "guest_startup",
+          "status": 409,
+          "at_ms": 19404.335708
+        },
+        {
+          "phase": "guest_startup",
+          "status": 201,
+          "at_ms": 20754.431875
+        }
+      ],
+      "recording": {
+        "absolute_p95_ms": 60,
+        "local_numbered_marker_gate_passed": false,
+        "unmatched_audio": 0,
+        "unmatched_video": 0,
+        "uncertain_tones": 1
+      },
+      "loaded_machine_regression_checks": false
+    },
+    {
+      "run": 3,
+      "admit_to_preview_ms": 3701,
+      "admit_to_outbound_observed_ms": 2275,
+      "outbound_observation_to_decode_ms": 301,
+      "decode_to_preview_ms": 1125,
+      "startup_requests": [
+        {
+          "phase": "guest_startup",
+          "status": 409,
+          "at_ms": 14936.752333,
+          "started_wall_ms": 1792123102561,
+          "duration_ms": 238.63808299999982,
+          "error_code": "rtc_guest_not_ready"
+        },
+        {
+          "phase": "guest_startup",
+          "status": 409,
+          "at_ms": 16045.334583000002,
+          "started_wall_ms": 1792123103806,
+          "duration_ms": 102.39437499999985,
+          "error_code": "rtc_guest_not_ready"
+        },
+        {
+          "phase": "guest_startup",
+          "status": 201,
+          "at_ms": 17410.171167,
+          "started_wall_ms": 1792123104912,
+          "duration_ms": 360.74220799999966
+        }
+      ],
+      "recording": {
+        "absolute_p95_ms": 36.66666666667152,
+        "local_numbered_marker_gate_passed": false,
+        "unmatched_audio": 1,
+        "unmatched_video": 0,
+        "uncertain_tones": 0
+      },
+      "loaded_machine_regression_checks": false
+    },
+    {
+      "run": 4,
+      "admit_to_preview_ms": 4161,
+      "admit_to_outbound_observed_ms": 2684,
+      "outbound_observation_to_decode_ms": 196,
+      "decode_to_preview_ms": 1281,
+      "startup_requests": [
+        {
+          "phase": "guest_startup",
+          "status": 409,
+          "at_ms": 21207.150792,
+          "started_wall_ms": 1792124207148,
+          "duration_ms": 235.56816700000127,
+          "error_code": "rtc_guest_not_ready"
+        },
+        {
+          "phase": "guest_startup",
+          "status": 409,
+          "at_ms": 22371.672042,
+          "started_wall_ms": 1792124208427,
+          "duration_ms": 120.39229200000045,
+          "error_code": "rtc_guest_not_ready"
+        },
+        {
+          "phase": "guest_startup",
+          "status": 201,
+          "at_ms": 23793.006624999998,
+          "started_wall_ms": 1792124209578,
+          "duration_ms": 390.9754580000008
+        }
+      ],
+      "recording": {
+        "absolute_p95_ms": 146.66666666666424,
+        "local_numbered_marker_gate_passed": false,
+        "unmatched_audio": 8,
+        "unmatched_video": 0,
+        "uncertain_tones": 0
+      },
+      "loaded_machine_regression_checks": true
+    }
+  ],
+  "limitations": [
+    "No matched same-environment baseline; do not attribute comparison with production API trials solely to startup batching.",
+    "Four observations cannot establish a production latency percentile or five-second upper bound.",
+    "Fourth trial overlapped regression/type checks and is a loaded-machine observation.",
+    "All four recordings failed the full marker gate. Startup improvement does not qualify media continuity.",
+    "Existing SQL reservation/finalization fences and post-connect authority read remain; waiting responses mint no media session."
+  ]
+}

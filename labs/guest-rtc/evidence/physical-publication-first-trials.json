@@ -1,0 +1,27 @@
+{
+  "runs": [
+    {
+      "run": "physical-publication-1791655199906643000",
+      "result": "failed publication-arrival deadline; do not qualify",
+      "sdk_submitted_blocks": 321,
+      "capture_to_sdk_p95_ms_upper_bucket": 26,
+      "maximum_owner_tick_gap_us": 34543,
+      "maximum_sdk_capture_us": 1015,
+      "browser_inbound_audio_packets": 0,
+      "native_and_handoff_shutdown_verified": true
+    },
+    {
+      "run": "physical-publication-1791655288467726000",
+      "result": "failed publication-arrival deadline; do not qualify",
+      "sdk_submitted_blocks": 1460,
+      "capture_to_sdk_p95_ms_upper_bucket": 26,
+      "maximum_owner_tick_gap_us": 17997,
+      "maximum_sdk_capture_us": 2328,
+      "browser_inbound_audio_packets": 564,
+      "native_and_handoff_shutdown_verified": true
+    }
+  ],
+  "completed_trial": false,
+  "browser_received_voice_recorded": false,
+  "g1_complete": false
+}

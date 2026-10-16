@@ -1,0 +1,774 @@
+{
+  "qualification": "Actual guest page + native host authority polling and owned SDK subscriptions; optional timed decode/OBS copy boundary. No ordinary-room rendering or AV synchronization qualification.",
+  "production_changed": false,
+  "started_at": "2026-10-12T23:18:19.121Z",
+  "steps": [
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "fixture_roster",
+      "status": 200
+    },
+    {
+      "name": "link",
+      "status": 200,
+      "native_owner": true
+    },
+    {
+      "name": "roster",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "admit",
+      "status": 200,
+      "native_owner": true
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "stage",
+      "status": 200,
+      "native_owner": true
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "mute",
+      "status": 200,
+      "native_owner": true
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "unmute",
+      "status": 200,
+      "native_owner": true
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "revoke",
+      "status": 200,
+      "native_owner": true
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    }
+  ],
+  "fixture_seats_retired": 0,
+  "guest_api": [
+    {
+      "operation": "guest_entry",
+      "status": 201
+    },
+    {
+      "operation": "guest_entry",
+      "status": 200
+    },
+    {
+      "operation": "state",
+      "status": 409
+    },
+    {
+      "operation": "state",
+      "status": 409
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 3
+    },
+    {
+      "operation": "connection",
+      "status": 201
+    },
+    {
+      "operation": "session",
+      "status": 200
+    },
+    {
+      "operation": "guest_entry",
+      "status": 200
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 3
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 3
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 3
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 3
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 3
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 3
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 3
+    },
+    {
+      "operation": "state",
+      "status": 409
+    },
+    {
+      "operation": "state",
+      "status": 409
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera"
+      ],
+      "generation": 4
+    },
+    {
+      "operation": "session",
+      "status": 200
+    },
+    {
+      "operation": "guest_entry",
+      "status": 200
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera"
+      ],
+      "generation": 4
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera"
+      ],
+      "generation": 4
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera"
+      ],
+      "generation": 4
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera"
+      ],
+      "generation": 4
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera"
+      ],
+      "generation": 4
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera"
+      ],
+      "generation": 4
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera"
+      ],
+      "generation": 4
+    },
+    {
+      "operation": "state",
+      "status": 409
+    },
+    {
+      "operation": "state",
+      "status": 409
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 5
+    },
+    {
+      "operation": "session",
+      "status": 200
+    },
+    {
+      "operation": "guest_entry",
+      "status": 200
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 5
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 5
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 5
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 5
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 5
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 5
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 5
+    },
+    {
+      "operation": "state",
+      "status": 410
+    }
+  ],
+  "checkpoint": "owner_shutdown",
+  "initial": {
+    "alive": 2,
+    "camera_attached": 1,
+    "capture_devices_used": false,
+    "decoded_media": {
+      "audio_submitted": 24,
+      "bindings": 2,
+      "pcm_received": 604,
+      "rejected": 0,
+      "sender_reports": 4,
+      "video_observers": 1,
+      "video_received": 105,
+      "video_submitted": 4,
+      "workers": 3
+    },
+    "error": null,
+    "microphone_attached": 1,
+    "obs_endpoint_used": true,
+    "obs_rendering_qualified": false,
+    "passed": null,
+    "retired": 0,
+    "sink_closed": 0
+  },
+  "muted": {
+    "alive": 1,
+    "camera_attached": 2,
+    "capture_devices_used": false,
+    "decoded_media": {
+      "audio_submitted": 212,
+      "bindings": 1,
+      "pcm_received": 837,
+      "rejected": 0,
+      "sender_reports": 6,
+      "video_observers": 1,
+      "video_received": 249,
+      "video_submitted": 42,
+      "workers": 2
+    },
+    "error": null,
+    "microphone_attached": 1,
+    "obs_endpoint_used": true,
+    "obs_rendering_qualified": false,
+    "passed": null,
+    "retired": 2,
+    "sink_closed": 0
+  },
+  "mute_to_camera_ms": 5140,
+  "restored": {
+    "alive": 2,
+    "camera_attached": 3,
+    "capture_devices_used": false,
+    "decoded_media": {
+      "audio_submitted": 223,
+      "bindings": 2,
+      "pcm_received": 1479,
+      "rejected": 0,
+      "sender_reports": 10,
+      "video_observers": 1,
+      "video_received": 410,
+      "video_submitted": 82,
+      "workers": 3
+    },
+    "error": null,
+    "microphone_attached": 2,
+    "obs_endpoint_used": true,
+    "obs_rendering_qualified": false,
+    "passed": null,
+    "retired": 3,
+    "sink_closed": 0
+  },
+  "unmute_to_pair_ms": 5295,
+  "removal_to_zero_owned_tracks_ms": 1213,
+  "removed": {
+    "alive": 0,
+    "camera_attached": 3,
+    "capture_devices_used": false,
+    "decoded_media": {
+      "audio_submitted": 375,
+      "bindings": 0,
+      "pcm_received": 1646,
+      "rejected": 0,
+      "sender_reports": 10,
+      "video_observers": 0,
+      "video_received": 440,
+      "video_submitted": 112,
+      "workers": 1
+    },
+    "error": null,
+    "microphone_attached": 2,
+    "obs_endpoint_used": true,
+    "obs_rendering_qualified": false,
+    "passed": null,
+    "retired": 5,
+    "sink_closed": 0
+  },
+  "browser_phases": [
+    {
+      "phase": "poll",
+      "ms": 4569
+    },
+    {
+      "phase": "retire_start",
+      "ms": 4689
+    },
+    {
+      "phase": "retire_end",
+      "ms": 4690
+    },
+    {
+      "phase": "poll",
+      "ms": 5693
+    },
+    {
+      "phase": "retire_start",
+      "ms": 5811
+    },
+    {
+      "phase": "retire_end",
+      "ms": 5812
+    },
+    {
+      "phase": "poll",
+      "ms": 6814
+    },
+    {
+      "phase": "connect_start",
+      "ms": 7411
+    },
+    {
+      "phase": "connect_end",
+      "ms": 8206
+    },
+    {
+      "phase": "publish_start",
+      "ms": 8314
+    },
+    {
+      "phase": "publish_end",
+      "ms": 8447
+    },
+    {
+      "phase": "publish_start",
+      "ms": 8447
+    },
+    {
+      "phase": "publish_end",
+      "ms": 8649
+    },
+    {
+      "phase": "poll",
+      "ms": 9653
+    },
+    {
+      "phase": "poll",
+      "ms": 10764
+    },
+    {
+      "phase": "poll",
+      "ms": 12080
+    },
+    {
+      "phase": "poll",
+      "ms": 13244
+    },
+    {
+      "phase": "poll",
+      "ms": 14399
+    },
+    {
+      "phase": "poll",
+      "ms": 15508
+    },
+    {
+      "phase": "poll",
+      "ms": 16630
+    },
+    {
+      "phase": "retire_start",
+      "ms": 16778
+    },
+    {
+      "phase": "retire_end",
+      "ms": 16840
+    },
+    {
+      "phase": "poll",
+      "ms": 17843
+    },
+    {
+      "phase": "retire_start",
+      "ms": 18006
+    },
+    {
+      "phase": "retire_end",
+      "ms": 18007
+    },
+    {
+      "phase": "poll",
+      "ms": 19007
+    },
+    {
+      "phase": "connect_start",
+      "ms": 19341
+    },
+    {
+      "phase": "connect_end",
+      "ms": 19960
+    },
+    {
+      "phase": "publish_start",
+      "ms": 20107
+    },
+    {
+      "phase": "publish_end",
+      "ms": 20223
+    },
+    {
+      "phase": "poll",
+      "ms": 21227
+    },
+    {
+      "phase": "poll",
+      "ms": 22335
+    },
+    {
+      "phase": "poll",
+      "ms": 23439
+    },
+    {
+      "phase": "poll",
+      "ms": 24548
+    },
+    {
+      "phase": "poll",
+      "ms": 25955
+    },
+    {
+      "phase": "poll",
+      "ms": 27078
+    },
+    {
+      "phase": "poll",
+      "ms": 28247
+    },
+    {
+      "phase": "retire_start",
+      "ms": 28363
+    },
+    {
+      "phase": "retire_end",
+      "ms": 28494
+    },
+    {
+      "phase": "poll",
+      "ms": 29499
+    },
+    {
+      "phase": "retire_start",
+      "ms": 29643
+    },
+    {
+      "phase": "retire_end",
+      "ms": 29643
+    },
+    {
+      "phase": "poll",
+      "ms": 30648
+    },
+    {
+      "phase": "connect_start",
+      "ms": 30959
+    },
+    {
+      "phase": "connect_end",
+      "ms": 31707
+    },
+    {
+      "phase": "publish_start",
+      "ms": 31811
+    },
+    {
+      "phase": "publish_end",
+      "ms": 31931
+    },
+    {
+      "phase": "publish_start",
+      "ms": 31931
+    },
+    {
+      "phase": "publish_end",
+      "ms": 32061
+    },
+    {
+      "phase": "poll",
+      "ms": 33062
+    },
+    {
+      "phase": "poll",
+      "ms": 34213
+    },
+    {
+      "phase": "poll",
+      "ms": 35368
+    },
+    {
+      "phase": "poll",
+      "ms": 36462
+    },
+    {
+      "phase": "poll",
+      "ms": 37561
+    },
+    {
+      "phase": "poll",
+      "ms": 38663
+    },
+    {
+      "phase": "poll",
+      "ms": 39791
+    },
+    {
+      "phase": "retire_start",
+      "ms": 39879
+    },
+    {
+      "phase": "retire_end",
+      "ms": 40028
+    }
+  ],
+  "final": {
+    "alive": 0,
+    "camera_attached": 3,
+    "capture_devices_used": false,
+    "decoded_media": {
+      "audio_submitted": 375,
+      "bindings": 0,
+      "pcm_received": 1652,
+      "rejected": 0,
+      "sender_reports": 10,
+      "video_observers": 0,
+      "video_received": 440,
+      "video_submitted": 112,
+      "workers": 0
+    },
+    "error": null,
+    "microphone_attached": 2,
+    "obs_endpoint_used": true,
+    "obs_rendering_qualified": false,
+    "passed": true,
+    "retired": 5,
+    "sink_closed": 1
+  },
+  "run_ended": true,
+  "passed": true,
+  "source_sha256": {
+    "crates/guest-runtime/src/authority.rs": "656cc4901ea2d338fad0a7d23bc0c2f8f40ae8ff39c614fee4d4bc2ea5295f9d",
+    "crates/guest-runtime/src/subscriptions.rs": "a772a45a5ed7f7646d8851a8b6b86692ad7b3e72b5b593c0e43cc11a41c84f81",
+    "crates/guest-runtime/src/lib.rs": "dfcce72dafc5c21f7768e830f9750031c368514dde11c3e985109b355ef32c67",
+    "crates/guest-runtime/src/media.rs": "07680c63b1962496968afea5ba890c33466d66c5162de914876d7868de30488c",
+    "crates/guest-runtime/src/timing/queue.rs": "0875713aa10ac97e5a004c62d455425515def0d105b0b386ddd4e1ebf8b00fb6",
+    "crates/guest-runtime/src/timing/sender_clock.rs": "22e54df1f94ba8533f21e0ea9d0b571c6ead8e18b266f574e047fa9a6f990ce3",
+    "crates/guest-runtime/src/timing/presentation.rs": "8b369811867db8624d16eaa17389783567910d95491145440ddc92200de934a4",
+    "crates/guest-runtime/src/timing/playout_clock.rs": "6723b2497c4388b6070a3d86fb939bb77807b160a742857de7606b83f13276d1",
+    "crates/guest-runtime/examples/subscription_owner.rs": "c9d91a1e040a21245942429168836fc9719537202e80abbc476558b90a815d46",
+    "crates/guest-runtime/examples/support/obs_scene.rs": "9127e8cceadae90583e536058b492b626473a9af2d00b8828192f96862b1b40b",
+    "crates/guest-runtime/Cargo.lock": "d5ded5987a23e698419739da89cc0cdf326a7611b963bf7b62c5baf651ec91c6",
+    "src-tauri/src/live/rtc_media.rs": "5d08bab316ae28f3823f331e30cde5135429bc7de2638998c6f6dbeb598a922f",
+    "src-tauri/src/live/rtc_ingest.rs": "cbf20aec834f89a3a606a81a6c9bd0c019767782b73aa3e16f7faac1efae6045",
+    "src-tauri/src/live/guest_ingest.c": "1a348d487636c832a56ec3338e3778f17f7570b7283c463a6f1728ba019332dc",
+    "src-tauri/src/rtc_control.rs": "ab19f138d9531118585a3052b27451a875cece5ac76e9286594ee31fbc43ec23",
+    "src-tauri/src/rtc_owner.rs": "cd7f18679210295669a2efd0c5906f64c03fa87b9fb63c7feead0cd25dcc7719",
+    "scripts/test-native-guest-subscriptions.mjs": "0a6efad0232e05206a7e5dab15287cf72ba4aee5815d800759068415e32fb539"
+  },
+  "binary_sha256": "46d0d6e5259b4b24dc9f424da93e33ccc83ba896d9ab8d875312b3aa7d5b5fe1",
+  "native_owner_commands_exercised": true,
+  "app_ipc_exercised": false,
+  "ordinary_room_ui_exercised": false
+}

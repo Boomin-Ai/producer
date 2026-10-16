@@ -1,0 +1,78 @@
+{
+  "block_ms": 10,
+  "channels": 1,
+  "echo_paths": [
+    {
+      "delay_ms": 40,
+      "gain": 0.55
+    },
+    {
+      "delay_ms": 67,
+      "gain": 0.12
+    }
+  ],
+  "fixture": "synthetic linear acoustic path; no device capture",
+  "g1_complete": false,
+  "livekit": "0.9.4",
+  "near_fixture": "independent shaped noise",
+  "physical_speakerphone_qualified": false,
+  "rate": 48000,
+  "runs": [
+    {
+      "aec_enabled": false,
+      "double_talk_measured_seconds": [
+        14,
+        20
+      ],
+      "double_talk_near_signal": {
+        "aligned_correlation": 0.7270380356867363,
+        "aligned_signal_projection_gain": 0.9943241687864215,
+        "best_lag_ms": 0.0,
+        "best_lag_samples": 0,
+        "output_to_near_reference_rms_ratio": 1.367637069836677,
+        "projection_is_not_perceived_volume_or_intelligibility": true,
+        "search_max_lag_ms": 200,
+        "speech_intelligibility_qualified": false
+      },
+      "far_end_attenuation_median_db": 0.0,
+      "far_end_attenuation_p10_db": 0.0,
+      "far_only_measured_seconds": [
+        5,
+        12
+      ],
+      "processing_p95_us_per_10ms": 1.334
+    },
+    {
+      "aec_enabled": true,
+      "double_talk_measured_seconds": [
+        14,
+        20
+      ],
+      "double_talk_near_signal": {
+        "aligned_correlation": 0.20901132640794756,
+        "aligned_signal_projection_gain": 0.0334843524676705,
+        "best_lag_ms": 8.895833333333334,
+        "best_lag_samples": 427,
+        "output_to_near_reference_rms_ratio": 0.16020353079964605,
+        "projection_is_not_perceived_volume_or_intelligibility": true,
+        "search_max_lag_ms": 200,
+        "speech_intelligibility_qualified": false
+      },
+      "far_end_attenuation_median_db": 55.93831858035898,
+      "far_end_attenuation_p10_db": 52.23349435833602,
+      "far_only_measured_seconds": [
+        5,
+        12
+      ],
+      "processing_p95_us_per_10ms": 180.666
+    }
+  ],
+  "schema_version": 1,
+  "speech_processing": {
+    "agc": false,
+    "high_pass": false,
+    "ns": false
+  },
+  "stream_delay_ms": 40,
+  "synthetic_attenuation_target_met": true
+}

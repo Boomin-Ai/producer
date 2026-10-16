@@ -1,0 +1,18 @@
+{
+  "verified": true,
+  "generations": 4,
+  "all_generations_reconcile": true,
+  "worker_count_after_retirement": 0,
+  "overlapping_writers_observed": false,
+  "shutdown_tail_counted_as_pending_not_consumed": true,
+  "session_totals": {
+    "received": 2606,
+    "consumed": 2501,
+    "overflow_oldest_dropped": 99,
+    "callback_contention_dropped": 2,
+    "stale_dropped": 4,
+    "pending_frames": 0,
+    "clock_resets": 11
+  },
+  "scope": "application OBS audio ingest only; SDK/device resources and privacy flush remain unqualified"
+}

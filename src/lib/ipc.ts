@@ -157,6 +157,9 @@ export const ipc = {
   liveDeleteDestination: (id: string) => invoke("live_delete_destination", { id }),
   liveGoLive: (endpointId?: string, serverRoomId?: string) => invoke("live_go_live", { endpointId, serverRoomId }),
   liveStop: () => invoke("live_stop"),
+  liveRtcStart: (endpointId:string,brandId:string,roomId:string) => invoke<boolean>("live_rtc_start",{endpointId,brandId,roomId}),
+  liveRtcEnabled: (endpointId:string,roomId:string) => invoke<boolean>("live_rtc_enabled",{endpointId,roomId}),
+  liveRtcStop: (roomId?:string) => invoke<void>("live_rtc_stop",{roomId}),
   liveEngineStatus: () => invoke<LiveSnapshot>("live_engine_status"),
   liveAttachPreview: (x: number, y: number, w: number, h: number) =>
     invoke<boolean>("live_attach_preview", { x, y, w, h }),
@@ -292,6 +295,7 @@ export interface LiveItem {
   /** Capture kinds (camera / screen / mic): the device the source is on,
    * as libobs names it. Absent for everything else. */
   device?: string | null;
+  rtc_source_id?: string | null;
 }
 
 export type { LiveTransformPatch } from "./sourceSpec";

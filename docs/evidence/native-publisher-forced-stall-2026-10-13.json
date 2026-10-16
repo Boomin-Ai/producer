@@ -1,0 +1,97 @@
+{
+  "passed": true,
+  "production_changed": false,
+  "ordinary_room_ui_exercised": false,
+  "qualification": "Generated OBS program through actual native publisher, LiveKit Cloud and the existing guest page; no physical AEC or audiovisual synchronization qualification.",
+  "steps": [
+    {
+      "name": "link",
+      "status": 200,
+      "elapsed_ms": 2426
+    },
+    {
+      "name": "admit",
+      "status": 200,
+      "elapsed_ms": 2572
+    },
+    {
+      "name": "stage",
+      "status": 200,
+      "elapsed_ms": 2869
+    },
+    {
+      "name": "revoke",
+      "status": 200,
+      "elapsed_ms": 2866
+    }
+  ],
+  "guest_observation_ms": 2000,
+  "checkpoint": "owner_shutdown",
+  "return_media": {
+    "width": 1280,
+    "height": 720,
+    "decoded_frames": 51,
+    "stream_changes": 0,
+    "maximum_rms": 0.08694470885289259,
+    "center_rgb": [
+      248,
+      1,
+      0
+    ],
+    "maximum_frame_gap_ms": 101,
+    "maximum_silent_window_ms": 0
+  },
+  "final": {
+    "audio_submitted": 5914,
+    "owner_expired": true,
+    "passed": true,
+    "repeated_close_passed": true,
+    "timing": {
+      "capture_fault_code": 0,
+      "maximum_audio_call_us": 65,
+      "maximum_audio_late_us": 111537,
+      "maximum_capture_age_us": 194208,
+      "maximum_loop_gap_us": 121039,
+      "maximum_video_call_us": 543,
+      "maximum_work_us": 549,
+      "minimum_audio_spacing_us": 9070,
+      "program_buffer_ms": 200,
+      "publisher_recoveries": 1,
+      "startup_audio_blocks_discarded": 0,
+      "time_constrained_scheduling": true
+    },
+    "video_submitted": 1773
+  },
+  "run_ended": true,
+  "owner": {
+    "audio_submitted": 5914,
+    "owner_expired": true,
+    "passed": true,
+    "repeated_close_passed": true,
+    "timing": {
+      "capture_fault_code": 0,
+      "maximum_audio_call_us": 65,
+      "maximum_audio_late_us": 111537,
+      "maximum_capture_age_us": 194208,
+      "maximum_loop_gap_us": 121039,
+      "maximum_video_call_us": 543,
+      "maximum_work_us": 549,
+      "minimum_audio_spacing_us": 9070,
+      "program_buffer_ms": 200,
+      "publisher_recoveries": 1,
+      "startup_audio_blocks_discarded": 0,
+      "time_constrained_scheduling": true
+    },
+    "video_submitted": 1773
+  },
+  "source_sha256": {
+    "crates/guest-runtime/src/lib.rs": "bd2553b716f377eb97775724fff972a8c799c454cce9707b263ebc504519330b",
+    "crates/guest-runtime/src/program.rs": "07aad9f91da1ad5721175ab870d071709c8e1106f8e084e192f249748b1aa868",
+    "crates/guest-session/src/lib.rs": "c4e9498c2022b931a5e08c17a26c34fd47812a10a3bb9b79761fb81e827bfd1b",
+    "src-tauri/src/rtc_owner.rs": "1256d53e2eb782f993d2c675bf13e9ec03e6480dc55c6c4fc96d9ef36b5a3dbd",
+    "src-tauri/src/rtc_control.rs": "cc9d5f2aea6946809d5f3f56a3eb1c16e4e6193ca766358e2b368042da9e902b",
+    "src-tauri/src/live/rtc_program.rs": "0417d4c6b4a9d93bf8b6778a848b30bd43edabb142f412acf77e78ab3ab13d14",
+    "scripts/test-native-program-return.mjs": "decc594a97376b12f9650d3d13fa1eb6181b0f2a8ab961fdaba01388c8ac623d"
+  },
+  "binary_sha256": "4dbcfd956142cc871d1a6c22a9c673bf21afaf83eb0dbb0d31bc1de4decf54bf"
+}

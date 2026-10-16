@@ -1,0 +1,13 @@
+{
+  "explicit_physical_flag": true,
+  "missing_reference_path": true,
+  "rejected_before_room_connection": true,
+  "hardware_capture_started": false,
+  "result": "Error: Physical capture requires explicit LIVEKIT_LAB_PHYSICAL_SPEECH",
+  "physical_publication_verified": false,
+  "tests": {
+    "receiver_and_handoff": 33,
+    "speakerphone_and_handoff": 6,
+    "native_lifecycle_cycles": 20
+  }
+}

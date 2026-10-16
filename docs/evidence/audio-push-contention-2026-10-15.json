@@ -1,0 +1,64 @@
+{
+  "date": "2026-10-15",
+  "live": false,
+  "scope": "debug-only incoming audio mutex wait and bounded queue comparison",
+  "release_queue_blocks": 16,
+  "candidate_queue_blocks": 48,
+  "audio_callback_nonblocking": true,
+  "trials": [
+    {
+      "name": "worker_wait_queue32",
+      "matched_pairs": 5,
+      "absolute_p95_ms": 106.66666666666788,
+      "unmatched_audio": 9,
+      "unmatched_video": 0,
+      "uncertain_tones": 2,
+      "missing_video_labels_within_observed_span": [
+        8,
+        9,
+        10,
+        11,
+        12,
+        14,
+        15,
+        16,
+        17
+      ],
+      "local_numbered_marker_gate_passed": false,
+      "pull_diagnostics": {
+        "nonzero_channel_samples": 763994,
+        "push_contention": 36,
+        "push_wait_max_ns": 425458,
+        "push_wait_total_ns": 1734047,
+        "queue_full": 8,
+        "render_calls": 3673,
+        "render_contention": 1
+      }
+    },
+    {
+      "name": "worker_wait_queue48",
+      "matched_pairs": 14,
+      "absolute_p95_ms": 43.33333333333212,
+      "unmatched_audio": 0,
+      "unmatched_video": 0,
+      "uncertain_tones": 1,
+      "missing_video_labels_within_observed_span": [],
+      "local_numbered_marker_gate_passed": false,
+      "pull_diagnostics": {
+        "nonzero_channel_samples": 779296,
+        "push_contention": 56,
+        "push_wait_max_ns": 6285166,
+        "push_wait_total_ns": 8262494,
+        "queue_full": 0,
+        "render_calls": 3654,
+        "render_contention": 0
+      }
+    }
+  ],
+  "limitations": [
+    "Neither trial passed strict overall gate.",
+    "Worker blocking is diagnostic only; unbounded mutex waiting is not yet a qualified production design.",
+    "48 blocks removed full queue failures in one run; repeatability, reconnect, multi-guest remain unproven.",
+    "Video lateness remains separate from incoming audio lock contention."
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "audio_detector_window_max_ms" : 10,
+  "audio_marker_pts_ms" : [
+    8016,
+    10014,
+    12092,
+    14089.333333333334,
+    16077.333333333334,
+    18025.333333333332,
+    20022.666666666664,
+    22030.666666666668,
+    24028.666666666664
+  ],
+  "audio_samples_decoded" : 1221568,
+  "browser_source_paint_uncertainty_ms" : 33.333333333333336,
+  "decoder" : "macOS AVFoundation",
+  "duration_seconds" : 25.521000000000001,
+  "g1_complete" : false,
+  "late_minus_early_median_offset_ms" : -14.66666666666606,
+  "lip_sync_qualified" : false,
+  "network_impairment_qualified" : false,
+  "observed_marker_test_pass" : false,
+  "pairs" : [
+    {
+      "audio_pts_ms" : 8016,
+      "video_minus_audio_ms" : 105.35416666666606,
+      "video_pts_ms" : 8121.3541666666661
+    },
+    {
+      "audio_pts_ms" : 10014,
+      "video_minus_audio_ms" : 74.02083333333394,
+      "video_pts_ms" : 10088.020833333334
+    },
+    {
+      "audio_pts_ms" : 12092,
+      "video_minus_audio_ms" : -3.9791666666660603,
+      "video_pts_ms" : 12088.020833333334
+    },
+    {
+      "audio_pts_ms" : 14089.333333333334,
+      "video_minus_audio_ms" : -34.64583333333394,
+      "video_pts_ms" : 14054.6875
+    },
+    {
+      "audio_pts_ms" : 16077.333333333334,
+      "video_minus_audio_ms" : 44.020833333332121,
+      "video_pts_ms" : 16121.354166666666
+    },
+    {
+      "audio_pts_ms" : 18025.333333333332,
+      "video_minus_audio_ms" : 62.687500000003638,
+      "video_pts_ms" : 18088.020833333336
+    },
+    {
+      "audio_pts_ms" : 20022.666666666664,
+      "video_minus_audio_ms" : 98.687500000003638,
+      "video_pts_ms" : 20121.354166666668
+    },
+    {
+      "audio_pts_ms" : 22030.666666666668,
+      "video_minus_audio_ms" : 90.6875,
+      "video_pts_ms" : 22121.354166666668
+    },
+    {
+      "audio_pts_ms" : 24028.666666666664,
+      "video_minus_audio_ms" : 26.020833333335759,
+      "video_pts_ms" : 24054.6875
+    }
+  ],
+  "recorded_av_abs_p95_ms" : 105.35416666666606,
+  "recorded_video_minus_audio_median_ms" : 62.687500000003638,
+  "recording" : "obs-playout-normal.mp4",
+  "schema_version" : 1,
+  "unmatched_audio_markers" : 0,
+  "unmatched_video_markers" : 0,
+  "video_frames_decoded" : 765,
+  "video_marker_pts_ms" : [
+    8121.3541666666661,
+    10088.020833333334,
+    12088.020833333334,
+    14054.6875,
+    16121.354166666666,
+    18088.020833333336,
+    20121.354166666668,
+    22121.354166666668,
+    24054.6875
+  ]
+}

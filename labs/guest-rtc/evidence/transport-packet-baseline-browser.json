@@ -1,0 +1,69 @@
+{
+  "browser": "154.0.8037.98",
+  "guests": 1,
+  "mode": "normal",
+  "states": [
+    {
+      "identity": "guest-1",
+      "connected": true,
+      "published": true,
+      "returnAudioBlocks": 639,
+      "returnAudioPulses": 11,
+      "returnVideoFrames": 315,
+      "events": [
+        "return-audio",
+        "return-video"
+      ],
+      "audioMaxRms": 0.2852767909927542,
+      "error": null,
+      "syncStreams": true
+    }
+  ],
+  "audioStats": [
+    [
+      {
+        "id": "IT01A2893707020",
+        "timestamp": 1791605799741.597,
+        "type": "inbound-rtp",
+        "codecId": "CIT01_111_minptime=10;stereo=1;useinbandfec=1",
+        "kind": "audio",
+        "mediaType": "audio",
+        "ssrc": 2893707020,
+        "transportId": "T01",
+        "jitter": 0.001,
+        "packetsLost": 0,
+        "packetsReceived": 206,
+        "packetsReceivedWithCe": 0,
+        "packetsReceivedWithEct1": 0,
+        "audioLevel": 0,
+        "bytesReceived": 2982,
+        "concealedSamples": 1080,
+        "concealmentEvents": 2,
+        "fecPacketsDiscarded": 0,
+        "fecPacketsReceived": 0,
+        "headerBytesReceived": 2472,
+        "insertedSamplesForDeceleration": 1560,
+        "jitterBufferDelay": 6115.2,
+        "jitterBufferEmittedCount": 195840,
+        "jitterBufferMinimumDelay": 8179.2,
+        "jitterBufferTargetDelay": 8179.2,
+        "lastPacketReceivedTimestamp": 1791605799726.1,
+        "mid": "0",
+        "packetsDiscarded": 0,
+        "playoutId": "AP",
+        "removedSamplesForAcceleration": 1152,
+        "silentConcealedSamples": 0,
+        "totalAudioEnergy": 0,
+        "totalProcessingDelay": 5605.89024,
+        "totalSamplesDuration": 4.109999999999957,
+        "totalSamplesReceived": 197280,
+        "trackIdentifier": "c77df5db-449a-43c3-b7bb-6913c8329cf9"
+      }
+    ]
+  ],
+  "impairments": [],
+  "packetProbe": [],
+  "return_transport_observed": true,
+  "hardware_capture_used": false,
+  "physical_speaker_playout_used": false
+}

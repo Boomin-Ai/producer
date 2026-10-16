@@ -1,0 +1,20 @@
+{
+  "sources_alive": 0,
+  "sources_created": 200,
+  "sources_destroyed": 200,
+  "registry_expired": true,
+  "observations_only": true,
+  "sources": [],
+  "cycles": 100,
+  "checks": [
+    "decoded metadata preserved",
+    "error frames excluded",
+    "duplicate/null registration rejected",
+    "concurrent pull/remove",
+    "explicit unregister",
+    "cancel/partial teardown",
+    "weak state expired",
+    "RRTR rewrite idempotent",
+    "video SDP unchanged"
+  ]
+}

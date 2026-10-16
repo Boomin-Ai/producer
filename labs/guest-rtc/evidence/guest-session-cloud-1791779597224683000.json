@@ -1,0 +1,15 @@
+{
+  "status": "failed",
+  "provider": "LiveKit Cloud",
+  "room": "b_7abe1d1c-f76c-4c30-9ffa-dea775bbc3db_r_884d2d26-0529-4672-9852-d6f94276413e_run_3deee91f-c469-4dff-8b31-0983abc43052_stage",
+  "production_routes_used": false,
+  "production_database_used": false,
+  "physical_capture_used": false,
+  "speaker_playback_used": false,
+  "refreshed_token_replay_tested": false,
+  "broader_g2_complete": false,
+  "production_deployed": false,
+  "stage": "permissions_producer",
+  "native_contract_checks": 3,
+  "owned_room_deleted": true
+}

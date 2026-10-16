@@ -1,0 +1,16 @@
+{
+  "name": "producer-guest-rtc-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "node server.mjs",
+    "test": "node smoke.mjs"
+  },
+  "dependencies": {
+    "@livekit/protocol": "1.52.1",
+    "esbuild": "0.25.12",
+    "livekit-client": "2.22.4",
+    "playwright-core": "1.64.0",
+    "ws": "8.22.0"
+  }
+}
