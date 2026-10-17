@@ -743,7 +743,7 @@ fn drop_own_vcam(kind: &str, opts: Vec<DeviceOption>) -> Vec<DeviceOption> {
         return opts;
     }
     opts.into_iter()
-        .filter(|o| !o.name.contains(VCAM_DEVICE_NAME))
+        .filter(|o| !o.name.contains(VCAM_DEVICE_NAME) && !o.name.contains("Producer Portrait Camera"))
         .collect()
 }
 
@@ -2616,6 +2616,16 @@ pub fn thumbnail_selftest() {
 #[cfg(test)]
 mod scene_restoration_tests {
     use super::*;
+
+    #[test]
+    fn camera_picker_excludes_both_producer_output_devices() {
+        let options = || ["MacBook Camera", "Producer Virtual Camera", "Producer Portrait Camera", "USB Capture"]
+            .into_iter().map(|name| DeviceOption {id:name.into(), name:name.into(), disabled:false}).collect();
+        let cameras = drop_own_vcam("camera", options());
+        assert_eq!(cameras.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(), ["MacBook Camera", "USB Capture"]);
+        assert_eq!(drop_own_vcam("mic", options()).len(), 4);
+    }
+
 
     #[cfg(feature = "guest-rtc-pilot")]
     #[test]
