@@ -2,6 +2,8 @@
 //! artifact when present (`have_engine` cfg set by build.rs); otherwise the
 //! stubs keep the app building and the IPC surface truthful about it.
 
+#[cfg(all(have_engine, target_os = "macos", feature = "portrait-camera-dev"))]
+pub(crate) mod portrait_camera_probe;
 pub mod animation;
 pub mod bridge;
 pub mod commands;

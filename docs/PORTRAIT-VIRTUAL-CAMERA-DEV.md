@@ -18,5 +18,3 @@ Verified locally so far: Swift extension and Objective-C++ plugin compile; nativ
 Chromium acceptance passed for landscape/portrait/both switching, aspect ratios, native-display ownership, and independent portrait gestures. The existing harness needed its missing `liveSelectOutput` IPC mock. WebKit could not run because its Playwright binary is not installed; no WebKit pass is claimed.
 
 `PRODUCER_PORTRAIT_CAMERA_PROBE=/private/tmp/portrait-camera-probe.json` opts the dev-only native build into a synthetic 60-second feed and an active-camera canvas-switch guard check. It creates temporary colored room sources in the isolated engine and removes them afterwards. `scripts/portrait-camera-proof/observe.mjs` opens only the exact `Producer Portrait Camera` device with audio disabled, captures a frame, checks 1080×1920, orientation markers, and advancing video time. No hardware camera or microphone is requested.
-
-The camera-input exclusion regression test passed: both Producer output cameras are excluded, normal camera/capture-card choices remain available, and audio-device choices are unaffected. The default-camera fallback also excludes both output cameras.

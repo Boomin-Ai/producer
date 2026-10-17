@@ -167,6 +167,11 @@ pub fn run() {
                 chat: chat::ChatHub::new(app.handle().clone()),
             });
 
+            #[cfg(all(have_engine, target_os = "macos", feature = "portrait-camera-dev"))]
+            if let Some(report) = std::env::var_os("PRODUCER_PORTRAIT_CAMERA_PROBE") {
+                live::portrait_camera_probe::start(app.handle().clone(), report.into());
+            }
+
             // Resume any submissions a crash left unacknowledged.
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
