@@ -240,6 +240,9 @@ s=s.replace(old,old+"""
 open(p,'w').write(s)
 PYVIDEO
 
+# Add the portrait sink and validate its actual input video dimensions.
+python3 scripts/patch-portrait-virtualcam.py "$WORK/plugin-main.mm"
+
 # Rebrand the rendezvous identifiers. Fail loudly if upstream renames them.
 grep -q 'com.obsproject.obs-studio.mac-camera-extension' "$WORK/plugin-main.mm" \
   || { echo "FATAL: extension id string moved upstream" >&2; exit 1; }

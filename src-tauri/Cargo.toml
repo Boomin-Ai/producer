@@ -8,6 +8,8 @@ repository = "https://github.com/Boomin-Ai/producer"
 edition = "2021"
 
 [features]
+# Isolated local room/storage for the signed portrait-camera candidate.
+portrait-camera-dev = []
 # Opt-in staging authority, SDK connection, scene endpoints and room controls.
 guest-rtc-pilot = ["dep:producer-guest-session", "dep:producer-guest-runtime"]
 guest-rtc-production = ["guest-rtc-pilot"]
