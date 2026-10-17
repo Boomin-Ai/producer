@@ -8,6 +8,7 @@ import {ipc,type LiveSources} from '../src/lib/ipc';
 import type {SetOutputControls} from '../src/features/presentation/useSetOutput';
 import '../src/App.css';
 const proof={requests:[] as unknown[],stops:0,previews:[] as unknown[],transforms:[] as unknown[],roomStarts:0,jpegCalls:0,landscapeEdits:0};Object.assign(window,{portraitProof:proof});
+ipc.liveSelectOutput=async()=>{};
 ipc.liveSetStatus=async()=>({generation:3,lease:null,revision:0});
 ipc.livePortraitApply=async request=>{proof.requests.push(request);};
 ipc.livePortraitFrame=async()=>{proof.jpegCalls++;throw new Error('JPEG polling must not render the room');};
