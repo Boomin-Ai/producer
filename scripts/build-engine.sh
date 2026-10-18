@@ -104,6 +104,7 @@ done
 # Build and stage the rebranded virtual-camera plugin + camera extension.
 "$(dirname "${BASH_SOURCE[0]}")/build-virtualcam-plugin.sh" --stage "$STAGE"
 "$(dirname "${BASH_SOURCE[0]}")/build-camera-extension.sh"
+"$(dirname "${BASH_SOURCE[0]}")/build-retired-camera-extension.sh"
 # Release CI only downloads STAGE, not this build runner's working tree.
 # Keep both halves of the virtual camera in the engine archive.
 CAMERA_EXT="$REPO_ROOT/engine/camera-extension/ai.boomin.producer.camera-extension.systemextension"
