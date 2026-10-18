@@ -1,193 +1,15 @@
-name: Release
-
+# Dev-only signing harness on fix/portrait-virtual-camera. Never publish.
+name: Single camera dev
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
-    inputs:
-      publish:
-        description: "Upload assets to the public GitHub release (false = dry-run: build, notarize, verify, upload as Actions artifact only)"
-        type: boolean
-        default: false
-      native_guest:
-        description: "Include the native LiveKit guest runtime in the Apple Silicon candidate"
-        type: boolean
-        default: false
-      promote_run:
-        description: "Completed Release run to promote without rebuilding (blank = normal build)"
-        type: string
-        default: ""
-      candidate_tag:
-        description: "Existing draft LiveKit candidate tag for promotion"
-        type: string
-        default: ""
-      expected_mac_sha256:
-        description: "Verified notarized installer SHA-256 for promotion"
-        type: string
-        default: ""
-
-# One release run at a time, newest wins. Re-pushing a tag otherwise leaves
-# TWO complete runs racing as writers on the same release — v0.4.0 shipped a
-# latest.json whose darwin-aarch64 signature came from run A over run B's
-# tar.gz, and every updater correctly refused the mismatch.
 concurrency:
-  group: release
+  group: portrait-camera-dev
   cancel-in-progress: true
-
 jobs:
-  promote-signed-candidate:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.promote_run != '' }}
-    runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      SOURCE_RUN: ${{ inputs.promote_run }}
-      CANDIDATE_TAG: ${{ inputs.candidate_tag }}
-      EXPECTED_MAC_SHA256: ${{ inputs.expected_mac_sha256 }}
-    steps:
-      - name: Verify completed build and draft target
-        run: |
-          python3 - <<'PY'
-          import os, re, json, subprocess
-          run_id = os.environ['SOURCE_RUN']; tag = os.environ['CANDIDATE_TAG']
-          assert re.fullmatch(r'[0-9]+', run_id)
-          assert re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+-livekit\.[0-9]+', tag)
-          assert re.fullmatch(r'[0-9a-f]{64}', os.environ['EXPECTED_MAC_SHA256'])
-          def api(path): return json.loads(subprocess.check_output(['gh','api','repos/Boomin-Ai/producer/'+path]))
-          build = api('actions/runs/'+run_id)
-          assert build['name'] == 'Release' and build['conclusion'] == 'success'
-          release = next(r for r in api('releases?per_page=30') if r['tag_name'] == tag)
-          assert release['draft'] and release['prerelease']
-          assert release['target_commitish'] == build['head_sha']
-          PY
-      - uses: actions/download-artifact@v4
-        with:
-          name: Producer-macos-arm64-live
-          run-id: ${{ inputs.promote_run }}
-          github-token: ${{ github.token }}
-          path: candidate
-      - name: Verify exact signed installer bytes and retain other platforms
-        run: |
-          python3 - <<'PY'
-          import pathlib, hashlib, os
-          files = list(pathlib.Path('candidate').glob('*.dmg'))
-          assert len(files) == 1
-          assert hashlib.sha256(files[0].read_bytes()).hexdigest() == os.environ['EXPECTED_MAC_SHA256']
-          PY
-          gh release download v0.4.69 --repo Boomin-Ai/producer -p 'Producer_0.4.69_x64.dmg' -p 'Producer_0.4.69_x64-setup.exe' -p 'Producer_0.4.69_amd64.AppImage' -D candidate
-          (cd candidate && sha256sum * > SHA256SUMS.txt)
-      - name: Upload complete candidate and publish
-        run: |
-          gh release upload "$CANDIDATE_TAG" candidate/* --clobber --repo Boomin-Ai/producer
-          python3 - <<'PY'
-          import os, json, pathlib, subprocess
-          tag = os.environ['CANDIDATE_TAG']
-          releases = json.loads(subprocess.check_output(['gh','api','repos/Boomin-Ai/producer/releases?per_page=30']))
-          release = next(r for r in releases if r['tag_name'] == tag)
-          for file in pathlib.Path('candidate').iterdir():
-            assert any(a['name'] == file.name and a['state'] == 'uploaded' and a['size'] == file.stat().st_size for a in release['assets'])
-          PY
-          gh release edit "$CANDIDATE_TAG" --draft=false --prerelease --latest=false --repo Boomin-Ai/producer
-  # ── Linux / Intel-mac (engine-less, unchanged path) ────────────────────────
-  # Skipped on dry-runs so a dispatch can't clobber public release assets.
-  # Windows left this matrix when build-windows-live landed: an engine-less
-  # Windows exe here would race the live one for the same asset names, and
-  # tauri-action's latest.json entry would point updaters at a stub build.
-  build:
-    if: ${{ inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) }}
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macos-latest
-            args: "--target x86_64-apple-darwin"
-            targets: x86_64-apple-darwin
-          - platform: ubuntu-latest
-            args: ""
-            targets: ""
-    runs-on: ${{ matrix.platform }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Linux system deps
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libclang-dev
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.targets }}
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-
-      - run: bun install --frozen-lockfile
-
-      - uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # The bundled tempo engine is linked into Tauri's shared library.
-          CXXFLAGS: ${{ runner.os == 'Linux' && '-fPIC' || '' }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Auto-update: tauri-action emits .sig files + latest.json for this
-          # matrix's platforms; the arm64 job merges its own entry afterwards.
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: v__VERSION__
-          releaseName: "Producer v__VERSION__"
-          releaseCommitish: ${{ github.sha }}
-          releaseBody: |
-            Adds a native 1080×1920 Producer Portrait Camera on Apple Silicon for vertical apps.
-            Output settings includes Mirror virtual camera: flip the entire outgoing image, including text, without restarting the camera.
-            Portrait output follows paired portrait set layouts and fits the complete active set when no portrait layout exists.
-            Preserves the shipped LiveKit guest startup and recovery fixes.
-            Windows retains its native Live engine; Intel macOS and Linux retain their existing engine-less scope.
-            Portrait virtual camera and mirror are macOS features. Native LiveKit hosting remains Apple Silicon only.
-
-          releaseDraft: false
-          prerelease: false
-          args: ${{ matrix.args }}
-
-      - name: Notarize and staple Intel installer image
-        if: runner.os == 'macOS'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          NOTARY_ID: ${{ secrets.APPLE_ID }}
-          NOTARY_PW: ${{ secrets.APPLE_PASSWORD }}
-          NOTARY_TEAM: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          set -euo pipefail
-          VERSION="$(python3 -c "import json;print(json.load(open('src-tauri/tauri.conf.json'))['version'])")"
-          DMG="Producer_${VERSION}_x64.dmg"
-          gh release download "v$VERSION" --pattern "$DMG"
-          bash scripts/notarize-intel-dmg.sh "$DMG"
-          gh release upload "v$VERSION" "$DMG" --clobber
-
-  # ── macOS arm64 + Live engine (Producer Live) ──────────────────────────────
-  # Ordering is load-bearing (see docs/LIVE-REVIEW.md §5.2/D5):
-  #   engine artifact on disk BEFORE tauri build   (build.rs links libobs then;
-  #     absent artifact = silent stub build — guarded below with otool)
-  #   engine inside the .app BEFORE notarization    (Apple scans nested Mach-Os)
   build-macos-arm64-live:
-    if: ${{ inputs.promote_run == '' }}
     permissions:
-      contents: write
+      contents: read
+      actions: read
     runs-on: macos-latest
     # Deliberately NOT named APPLE_* at job scope: tauri's bundler reads those
     # names and would sign/notarize the engine-less intermediate build.
@@ -260,6 +82,18 @@ jobs:
           bash scripts/build-camera-extension.sh
           bash scripts/build-virtualcam-plugin.sh --stage "engine/artifacts/$ENGINE_NAME"
 
+      - name: Isolate the dev webview and disable public updater
+        run: |
+          python3 - <<'PYCONFIG'
+          import json
+          p='src-tauri/tauri.conf.json'
+          c=json.load(open(p))
+          c['app']['windows'][0]['title']='Producer Camera Dev'
+          c['app']['windows'][0]['dataStoreIdentifier']=[94,18,153,167,141,198,69,96,170,65,45,19,138,51,77,191]
+          c['plugins']['updater']['endpoints']=[]
+          open(p,'w').write(json.dumps(c,indent=2)+'\n')
+          PYCONFIG
+
       - name: Require Apple signing and notarization credentials
         run: |
           set -euo pipefail
@@ -305,21 +139,24 @@ jobs:
           INCLUDE_NATIVE_GUEST: ${{ inputs.native_guest && '1' || '0' }}
         run: |
           if [ "$INCLUDE_NATIVE_GUEST" = "1" ]; then
-            bun run tauri build --target aarch64-apple-darwin --features guest-rtc-production
+            bun run tauri build --target aarch64-apple-darwin --features portrait-camera-dev
           else
-            bun run tauri build --target aarch64-apple-darwin
+            bun run tauri build --target aarch64-apple-darwin --features portrait-camera-dev
           fi
 
       - name: Guard — refuse stub build
         run: |
           APP="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Producer.app"
           test -d "$APP" || { echo "FATAL: app bundle not found" >&2; exit 1; }
-          otool -L "$APP/Contents/MacOS/Producer" | grep -q libobs \
+          otool -L "$APP/Contents/MacOS/producer" | grep -q libobs \
             || { echo "FATAL: binary not linked against libobs — stub build (have_engine cfg absent)" >&2; exit 1; }
           echo "APP=$APP" >> "$GITHUB_ENV"
 
       - name: Assemble engine into bundle + sign inner→outer
         run: CODESIGN_IDENT="${SIGN_IDENT:--}" ./scripts/assemble-engine-bundle.sh "$APP"
+
+      - name: Label the isolated candidate
+        run: /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName Producer Camera Dev' "$APP/Contents/Info.plist"
 
       - name: Re-sign app with hardened runtime entitlements
         if: env.SIGN_IDENT != ''
@@ -356,247 +193,10 @@ jobs:
           xcrun stapler staple "$APP"
           spctl -a -t exec -vv "$APP"
 
-      - name: Package DMG (+ sign, notarize, staple)
-        run: |
-          set -euo pipefail
-          VERSION="$(python3 -c "import json;print(json.load(open('src-tauri/tauri.conf.json'))['version'])")"
-          DMG="Producer_${VERSION}_aarch64.dmg"
-          ROOT=/tmp/dmgroot
-          rm -rf "$ROOT" && mkdir -p "$ROOT"
-          cp -R "$APP" "$ROOT/"
-          ln -s /Applications "$ROOT/Applications"
-          hdiutil create -volname "Producer" -srcfolder "$ROOT" -ov -format UDZO "$DMG"
-          if [ -n "${SIGN_IDENT:-}" ]; then
-            codesign --force --timestamp --sign "$SIGN_IDENT" "$DMG"
-            xcrun notarytool submit "$DMG" \
-              --apple-id "$NOTARY_ID" --password "$NOTARY_PW" --team-id "$NOTARY_TEAM" \
-              --wait
-            xcrun stapler staple "$DMG"
-          fi
-          echo "DMG=$DMG" >> "$GITHUB_ENV"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-
-      - name: Upload DMG as Actions artifact (dry-run proof)
-        uses: actions/upload-artifact@v4
+      - name: Upload signed dev app only
+        run: ditto -c -k --keepParent "$APP" /tmp/Producer-Camera-Dev.zip
+      - uses: actions/upload-artifact@v4
         with:
-          name: Producer-macos-arm64-live
-          path: ${{ env.DMG }}
-
-      - name: Publish to GitHub release
-        if: ${{ github.event_name == 'push' || inputs.publish }}
-        run: |
-          set -euo pipefail
-          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "Producer v$VERSION" --notes "Producer v$VERSION" 2>/dev/null || true
-          gh release upload "v$VERSION" "$DMG" --clobber
-
-      # Auto-update leg: the updater archive must contain the ASSEMBLED,
-      # notarized app (tauri's auto-generated one is the engine-less
-      # intermediate — never ship that). This job is the single writer of the
-      # published latest.json: it merges its darwin-aarch64 entry into the
-      # manifest tauri-action uploaded for the other platforms.
-      - name: Updater artifact + manifest merge
-        if: ${{ github.event_name == 'push' || inputs.publish }}
-        run: |
-          set -euo pipefail
-          UPD="Producer_${VERSION}_aarch64.app.tar.gz"
-          tar -czf "$UPD" -C "$(dirname "$APP")" "$(basename "$APP")"
-          bun run tauri signer sign "$UPD" --password "" >/dev/null
-          test -f "$UPD.sig" || { echo "FATAL: updater signature not produced" >&2; exit 1; }
-          gh release upload "v$VERSION" "$UPD" "$UPD.sig" --clobber
-
-          # Single-writer guarantee: wait until every other job in this run is
-          # done, so nothing (tauri-action's own latest.json upload included)
-          # can land after our merged manifest.
-          for i in $(seq 1 120); do
-            PENDING="$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs" --paginate \
-              --jq '[.jobs[] | select(.name != "build-macos-arm64-live") | select(.status != "completed")] | length')"
-            [ "$PENDING" = "0" ] && break
-            echo "waiting on $PENDING sibling job(s)… ($i)"
-            sleep 30
-          done
-
-          MANIFEST=/tmp/latest.json
-          if ! gh release download "v$VERSION" -p "latest.json" -O "$MANIFEST" --clobber 2>/dev/null; then
-            echo "WARN: matrix latest.json missing — publishing manifest without linux/intel-mac entries" >&2
-            printf '{"version":"%s","platforms":{}}' "$VERSION" > "$MANIFEST"
-          fi
-          SIG="$(cat "$UPD.sig")" REPO="${{ github.repository }}" \
-            python3 scripts/merge-update-manifest.py "$MANIFEST" "$VERSION" "$UPD"
-
-          # Windows leg: build-windows-live (waited on above) uploaded the
-          # engine-bundled installer(s) + .sig; since windows-latest left the
-          # tauri-action matrix, its updater entries are written HERE, from
-          # those sigs, with the same key names tauri-action used to emit
-          # (windows-x86_64 + -nsis, and -msi when the MSI was produced).
-          rm -rf /tmp/winsig && mkdir -p /tmp/winsig
-          WIN_EXE="Producer_${VERSION}_x64-setup.exe"
-          WIN_MSI="Producer_${VERSION}_x64_en-US.msi"
-          for A in "$WIN_EXE" "$WIN_MSI"; do
-            gh release download "v$VERSION" -p "$A.sig" -D /tmp/winsig --clobber 2>/dev/null || true
-          done
-          REPO="${{ github.repository }}" VERSION="$VERSION" WIN_EXE="$WIN_EXE" WIN_MSI="$WIN_MSI" \
-            python3 - "$MANIFEST" <<'EOF'
-          import json, os, sys
-          path = sys.argv[1]
-          repo, version = os.environ["REPO"], os.environ["VERSION"]
-          m = json.load(open(path))
-          plats = m.setdefault("platforms", {})
-          def entry(asset):
-              sig = f"/tmp/winsig/{asset}.sig"
-              if not os.path.exists(sig):
-                  return None
-              return {"signature": open(sig).read().strip(),
-                      "url": f"https://github.com/{repo}/releases/download/v{version}/{asset}"}
-          exe = entry(os.environ["WIN_EXE"])
-          msi = entry(os.environ["WIN_MSI"])
-          for k in [k for k in plats if k.startswith("windows-")]:
-              del plats[k]
-          if exe:
-              plats["windows-x86_64"] = exe
-              plats["windows-x86_64-nsis"] = exe
-          else:
-              print("::warning::Windows installer .sig not on the release — build-windows-live failed? "
-                    "latest.json ships WITHOUT a windows-x86_64 entry (Windows updaters see no update).")
-          if msi:
-              plats["windows-x86_64-msi"] = msi
-          json.dump(m, open(path, "w"), indent=2)
-          print("manifest platforms:", sorted(plats))
-          EOF
-          gh release upload "v$VERSION" "$MANIFEST" --clobber
-
-  # ── Windows x64 + Live engine (Producer Live) ──────────────────────────────
-  # Mirror of build-macos-arm64-live for the Windows engine. Same rule set:
-  #   engine artifact on disk BEFORE tauri build   (build.rs::link_live_engine_windows
-  #     sets cfg(have_engine) only when PRODUCER_ENGINE_DIR/bin/obs.dll exists;
-  #     absent artifact = silent stub build — build-windows.ps1 refuses an exe
-  #     that does not import obs.dll)
-  #   engine staged FLAT beside producer.exe       (src-tauri/windows-bundle/ →
-  #     install root; the loader only searches the exe's own directory, and
-  #     obs-*-test.exe encoder probes run relative to it)
-  # The whole body is the Windows session's local path (scripts/windows-engine.ps1
-  # + scripts/build-windows.ps1) so CI ships exactly what that box verified.
-  # There is no Windows code-signing certificate wired; the installer is unsigned.
-  build-windows-live:
-    if: ${{ inputs.promote_run == '' }}
-    permissions:
-      contents: write
-    runs-on: windows-2022
-    timeout-minutes: 120
-    env:
-      GH_TOKEN: ${{ github.token }}
-      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-    defaults:
-      run:
-        # Windows PowerShell 5.1 - what the scripts were written and verified
-        # against (build-windows.ps1 works around a 5.1 quoting quirk).
-        shell: powershell
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-
-      - run: bun install --frozen-lockfile
-
-      # v0.2.0 postmortem applies here too: NO fallbacks, NO stale artifacts.
-      # Get-EngineDir resolves producer-libobs-windows-x64-<sha256(obs.lock)[0:12]>
-      # from the last 10 green engine.yml runs, checks the sha256 sidecar, and
-      # throws "no engine artifact matches the current obs.lock (...)" on a
-      # miss - run engine.yml for this lock first, then re-run the release.
-      - name: Fetch engine artifact (current obs.lock hash - fail hard on miss)
-        run: |
-          # The script probes `python -c "import zstandard"`; under
-          # $ErrorActionPreference=Stop a missing module's traceback on stderr
-          # is a terminating NativeCommandError. Satisfy the probe up front.
-          python -m pip install --quiet zstandard
-          . .\scripts\windows-engine.ps1
-          $name = Get-EngineName
-          Write-Host "want: $name"
-          # Last pipeline element: pip/extract output from inside the function
-          # must not turn the path into an array.
-          $dir = @(Get-EngineDir)[-1]
-          if (-not (Test-Path (Join-Path $dir "bin\obs.dll"))) {
-            throw "FATAL: engine artifact missing after fetch - refusing to ship a stub build"
-          }
-          Write-Host "engine: CI source-build artifact at $dir"
-          "ENGINE_NAME=$name" >> $env:GITHUB_ENV
-          # Pin the artifact for every later cargo invocation in this job so
-          # build.rs never falls back to mtime resolution.
-          "PRODUCER_ENGINE_DIR=$dir" >> $env:GITHUB_ENV
-
-      # engine-closure-windows.sh: zero-Qt + full PE import closure + every
-      # allowlisted plugin, obs-browser and its CEF payload present.
-      - name: Gate - engine closure
-        run: |
-          . .\scripts\windows-engine.ps1
-          Test-EngineGate $env:PRODUCER_ENGINE_DIR
-
-      # Stages windows-bundle/, builds producer.exe against the engine, bundles
-      # the NSIS installer with the engine flattened into the install root, and
-      # refuses to continue if the exe does not import obs.dll. Updater .sig is
-      # emitted because TAURI_SIGNING_PRIVATE_KEY is set.
-      - name: Build NSIS installer (engine linked + staged beside producer.exe)
-        run: .\scripts\build-windows.ps1
-
-      # The MSI is a courtesy asset (the updater leg is the NSIS exe); the
-      # Windows session has only ever verified the NSIS path, so a WiX failure
-      # must not sink the release. Same build-only config the script wrote, so
-      # the resources map identically; cargo sees no change and just re-bundles.
-      - name: Build MSI installer (best-effort)
-        id: msi
-        continue-on-error: true
-        run: |
-          $cfg = Join-Path $env:TEMP "producer-local-build.json"
-          if (-not (Test-Path $cfg)) { throw "build-only config from build-windows.ps1 not found at $cfg" }
-          bun run tauri build --bundles msi --config $cfg
-          if ($LASTEXITCODE -ne 0) { throw "msi bundle failed" }
-
-      - name: Collect release assets
-        run: |
-          $version = (Get-Content src-tauri\tauri.conf.json -Raw | ConvertFrom-Json).version
-          $exe = "src-tauri\target\release\bundle\nsis\Producer_${version}_x64-setup.exe"
-          foreach ($f in $exe, "$exe.sig") {
-            if (-not (Test-Path $f)) { throw "FATAL: $f not produced" }
-          }
-          New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item $exe, "$exe.sig" dist\
-          $msi = "src-tauri\target\release\bundle\msi\Producer_${version}_x64_en-US.msi"
-          if ((Test-Path $msi) -and (Test-Path "$msi.sig")) {
-            Copy-Item $msi, "$msi.sig" dist\
-          } else {
-            Write-Host "::warning::MSI not produced (msi step outcome: ${{ steps.msi.outcome }}) - shipping the NSIS installer only"
-          }
-          Get-ChildItem dist | ForEach-Object { "{0,12:N0}  {1}" -f $_.Length, $_.Name }
-          "VERSION=$version" >> $env:GITHUB_ENV
-
-      - name: Upload installers as Actions artifact (dry-run proof)
-        uses: actions/upload-artifact@v4
-        with:
-          name: Producer-windows-x64-live
-          path: dist/*
-          if-no-files-found: error
-
-      # build-macos-arm64-live is the single writer of latest.json; it waits
-      # for this job, then reads the .sig files uploaded here to write the
-      # windows-x86_64 entries. Only the installers + sigs are published here.
-      - name: Publish to GitHub release
-        if: ${{ github.event_name == 'push' || inputs.publish }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "Producer v$VERSION" --notes "Producer v$VERSION" 2>/dev/null || true
-          # Only the installers and their updater signatures. `dist/` is the
-          # web bundle's own output dir too (index.html, assets/), and a
-          # directory in the upload list fails the whole step.
-          for f in dist/Producer_*_x64-setup.exe dist/Producer_*_x64-setup.exe.sig dist/Producer_*_x64_en-US.msi dist/Producer_*_x64_en-US.msi.sig; do
-            [ -f "$f" ] || continue
-            gh release upload "v$VERSION" "$f" --clobber
-          done
+          name: Producer-Camera-Dev
+          path: /tmp/Producer-Camera-Dev.zip
+          retention-days: 7
