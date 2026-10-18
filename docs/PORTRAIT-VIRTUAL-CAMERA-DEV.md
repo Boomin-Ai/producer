@@ -23,3 +23,10 @@ The camera-input exclusion regression test passed: both Producer output cameras 
 
 
 Signed candidate: https://github.com/Boomin-Ai/producer/actions/runs/39060954397 — success, commit `3e8b0b0e5aeb22b51c068f59f58dfc8f832830fe`. Installed alongside the main app at `/Applications/Producer Portrait Dev.app`. Local deep/strict codesign, stapler validation, Gatekeeper (Notarized Developer ID), and both camera bundle/signing checks passed. macOS has registered the new portrait extension and reports `activated waiting for user`; actual camera capture and TikTok checks remain pending that approval. The first probe hit a cold Metal bootstrap timeout; a warm restart completed engine startup and reached the extension-approval gate.
+
+
+## Set routing follow-up
+
+Head to Head contains only landscape layouts (`conversation`, `host-focus`, `solo`). Previously Follow set silently selected room-camera sources instead, while the main controls still reported the set on output. The follow-up fits the full landscape set into the native portrait canvas; matching portrait layouts remain preferred. Explicit Room canvas remains available. Output settings explains when a set has no matching portrait design. Paired layouts now support both `foo-landscape` / `foo-portrait` and `foo` / `foo-portrait`; switching packages resets pinned layout selection. Portrait bindings use the same stale-camera-ID resolution as the main output. Landscape-only sets do not start an extra portrait compositor until the portrait/both view is needed.
+
+Chromium regression passes Head to Head fitted output, explicit Room canvas, returning to Follow set, and paired segment transitions. TypeScript, production frontend build, and native desktop compilation pass. Actual user-room camera capture now advances at 1080×1920; no synthetic marker-orientation claim is made for that capture. The set-routing follow-up still needs installation and native visual verification.

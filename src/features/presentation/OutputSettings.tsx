@@ -3,7 +3,7 @@ import {useEffect,useRef,useState,useSyncExternalStore,type ReactNode} from 'rea
 import {ipc} from '../../lib/ipc';
 import {sharedProgramCapture} from '../../lib/programCapture';
 import {RehearsalSession} from './rehearsal';
-import {setOutputProjection,nextSetProjection,type SetOutputControls} from './useSetOutput';
+import {setOutputProjection,nextSetProjection,resolveRoomBindings,type SetOutputControls} from './useSetOutput';
 
 export type OutputView = 'landscape'|'portrait'|'both';
 export type PortraitMonitor = {busy:boolean;error:string;sources?:import('../../lib/ipc').LiveSources;editing?:boolean};
@@ -23,10 +23,15 @@ export function OutputSettings({icon,session,output,sourceNames,view='landscape'
  const checkGeneration=(generation:number)=>{if(cacheGeneration.current!==generation){media.current.clear();warmed.current='';cacheGeneration.current=generation;}};
  const lease=useRef(crypto.randomUUID()),revision=useRef(0),flight=useRef(false),fingerprint=useRef('');
  const portraits=session.package.set.layouts.filter(l=>l.height>l.width);
- const pairedId=state.layoutId.replace(/-landscape$/,'-portrait');
- const matched=portraits.find(l=>l.id===pairedId)?.id??(portraits.length===1?portraits[0].id:undefined);
- const effectiveLayout=layout==='auto'?matched:layout;
- const authored=output.active&&effectiveLayout!=='room'&&portraits.some(l=>l.id===effectiveLayout);
+ const pairedId=state.layoutId.endsWith('-landscape')?state.layoutId.replace(/-landscape$/,'-portrait'):`${state.layoutId}-portrait`;
+ const matched=portraits.find(l=>l.id===state.layoutId||l.id===pairedId)?.id??(portraits.length===1?portraits[0].id:undefined);
+ // Never silently substitute the room camera for a set that's on output.
+ // The compositor fits an unmatched landscape composition into the portrait canvas.
+ const effectiveLayout=layout==='room'?'room':portraits.some(l=>l.id===layout)?layout:matched??state.layoutId;
+ const usingSet=output.active&&effectiveLayout!=='room';
+ const authored=usingSet&&(active||view!=='landscape'||portraits.some(l=>l.id===effectiveLayout));
+ const fitted=usingSet&&!portraits.some(l=>l.id===effectiveLayout);
+ useEffect(()=>{setLayout('auto');fingerprint.current='';media.current.clear();},[session.package.id]);
  const warmed=useRef('');
  const wake=useRef<()=>void>(()=>{}),pending=useRef(false);
  const latest=useRef({session,output,layout:effectiveLayout,state,authored});latest.current={session,output,layout:effectiveLayout,state,authored};
@@ -43,9 +48,9 @@ export function OutputSettings({icon,session,output,sourceNames,view='landscape'
     if(!current.authored){
      if(fingerprint.current!=='room'){setBusy(true);const sources=await ipc.livePortraitRoom();if(alive){setSources(sources);fingerprint.current='room';media.current.clear();}}
      else{const sources=await ipc.livePortraitState();if(alive)setSources(sources);}
-     if(!current.output.active&&current.layout&&current.session.package.set.layouts.some(l=>l.id===current.layout&&l.height>l.width)&&alive){
+     if(!current.output.active&&current.layout&&current.session.package.set.layouts.some(l=>l.id===current.layout)&&alive){
       const projection=setOutputProjection(current.session,0,current.layout),visible=new Set<string>();if(projection.timeline)projection.timeline={...projection.timeline,clock:{...projection.timeline.clock,running:false}};const visit=(n:typeof projection.root)=>{if(n.slotId)visible.add(n.slotId);n.children.forEach(visit);};visit(projection.root);
-      const bindings=Object.fromEntries(Object.entries(current.output.bindings).filter(([slot,id])=>visible.has(slot)&&current.output.sources.items?.some(s=>s.id===id&&s.has_frame&&s.visible)));
+      const bindings=Object.fromEntries(Object.entries(resolveRoomBindings(current.output.bindings,current.output.sources)).filter(([slot,id])=>visible.has(slot)&&current.output.sources.items?.some(s=>s.id===id&&s.has_frame&&s.visible)));
       const key=JSON.stringify({projection:media.current.signature(projection),bindings});
       if(key!==warmed.current){const status=await ipc.liveSetStatus();checkGeneration(status.generation);warmed.current=key;projection.revision=++revision.current;const preload=nextSetProjection(current.session,current.layout,current.output.framing);if(preload)preload.revision=projection.revision;
        await ipc.livePortraitWarm({assetIds:Object.keys(current.session.package.set.assets??{}),generation:status.generation,lease:lease.current,projection:media.current.compact(projection),preload:preload?media.current.compact(preload):undefined,bindings});media.current.acknowledge(projection);if(preload)media.current.acknowledge(preload);
@@ -54,7 +59,7 @@ export function OutputSettings({icon,session,output,sourceNames,view='landscape'
     }else{
      const projection=setOutputProjection(current.session,0,current.layout!);
      const visible=new Set<string>();const visit=(n:typeof projection.root)=>{if(n.slotId){visible.add(n.slotId);if(current.output.framing[n.slotId])n.framing=current.output.framing[n.slotId];}n.children.forEach(visit);};visit(projection.root);
-     const bindings=Object.fromEntries(Object.entries(current.output.bindings).filter(([slot])=>visible.has(slot)));
+     const bindings=Object.fromEntries(Object.entries(resolveRoomBindings(current.output.bindings,current.output.sources)).filter(([slot])=>visible.has(slot)));
      const next=JSON.stringify({projection:media.current.signature(projection),bindings});
      if(next!==fingerprint.current){setBusy(true);const status=await ipc.liveSetStatus();checkGeneration(status.generation);projection.revision=++revision.current;const preload=nextSetProjection(current.session,current.layout,current.output.framing);if(preload)preload.revision=projection.revision;await ipc.livePortraitApply({assetIds:Object.keys(current.session.package.set.assets??{}),generation:status.generation,lease:lease.current,projection:media.current.compact(projection),preload:preload?media.current.compact(preload):undefined,bindings});media.current.acknowledge(projection);if(preload)media.current.acknowledge(preload);if(alive){fingerprint.current=next;setSources(undefined);}}
     }
@@ -72,8 +77,8 @@ export function OutputSettings({icon,session,output,sourceNames,view='landscape'
    <header><strong>Output settings</strong><button aria-label="Close output settings" onClick={()=>pop.current?.hidePopover()}>×</button></header>
    {<>
     <div className="rm-output-views" role="group" aria-label="Room output view">{(['landscape','portrait','both'] as const).map(mode=><button key={mode} aria-pressed={view===mode} onClick={()=>choose(mode)}>{mode==='landscape'?'Landscape':mode==='portrait'?'Portrait':'Both'}</button>)}</div>
-    {output.active&&portraits.length>0&&<label>Portrait composition<select aria-label="Portrait layout" value={layout} onChange={e=>setLayout(e.target.value)}><option value="auto">Follow set / segment</option><option value="room">Room canvas</option>{portraits.map(l=><option key={l.id} value={l.id}>{l.label}</option>)}</select></label>}
-    <p className="rm-output-settings-note">{authored?(layout==='auto'?'Portrait follows the matching set / segment layout.':'Portrait uses the selected set layout.'):'Portrait uses room sources. Drag, resize, crop and arrange them directly on its canvas.'}</p>
+    {output.active&&<label>Portrait composition<select aria-label="Portrait layout" value={layout==='room'||portraits.some(l=>l.id===layout)?layout:'auto'} onChange={e=>setLayout(e.target.value)}><option value="auto">Follow set / segment</option><option value="room">Room canvas</option>{portraits.map(l=><option key={l.id} value={l.id}>{l.label}</option>)}</select></label>}
+    <p className="rm-output-settings-note">{usingSet?(fitted?`${session.package.name} has no matching portrait layout. The complete set is fitted into portrait; add a portrait layout for a full-height design.`:layout==='auto'?'Portrait follows the matching set / segment layout.':'Portrait uses the selected set layout.'):'Portrait uses room sources. Drag, resize, crop and arrange them directly on its canvas.'}</p>
     {active&&!authored&&sources?.items?.length?<details className="rm-portrait-sources"><summary>Portrait sources</summary>{sources.items.map(source=><button key={source.id} aria-pressed={source.visible} aria-label={`${source.visible?'Hide':'Show'} ${sourceNames[source.id]??source.label} on portrait`} onClick={()=>void ipc.livePortraitTransform(source.id,{visible:!source.visible}).then(setSources).catch(e=>setError(String(e)))}><span>{sourceNames[source.id]??source.label}</span><span>{source.visible?'Shown':'Hidden'}</span></button>)}</details>:null}
     {busy&&<p role="status">Preparing portrait…</p>}{error&&<p role="alert">{error}</p>}
     <p className="rm-output-settings-note">Virtual camera follows the selected canvas. For vertical apps, choose Portrait, start Virtual cam, then select “Producer Portrait Camera” in the other app. Stop Virtual cam before switching canvases. Camera video does not include show audio.</p>

@@ -1,6 +1,7 @@
 // Observe the real virtual camera. Permission is granted only for video;
 // select the exact portrait device before getUserMedia, never a default mic/cam.
 import {writeFile} from 'node:fs/promises';
+const live=process.argv.includes('--live');
 const {chromium}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??'playwright');
 const browser=await chromium.launch({channel:'chrome',headless:true});
 try {
@@ -28,5 +29,5 @@ try {
  await writeFile(process.argv[2]??'/private/tmp/producer-portrait-camera-frame.png',Buffer.from(png,'base64'));
  await writeFile('/private/tmp/producer-portrait-camera-capture.json',JSON.stringify(result,null,2));
  console.log(JSON.stringify(result));
- if(result.width!==1080||result.height!==1920||!result.upright||!result.advancing)throw Error('Portrait camera acceptance failed');
+ if(result.width!==1080||result.height!==1920||(!live&&!result.upright)||!result.advancing)throw Error('Portrait camera acceptance failed');
 } finally {await browser.close();}
