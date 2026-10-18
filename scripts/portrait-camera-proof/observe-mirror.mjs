@@ -26,11 +26,16 @@ try{
  await page.goto(process.env.PRODUCER_PREVIEW_ORIGIN??'http://127.0.0.1:1432/scripts/native-probe.html');
  await page.evaluate(value=>{window.allowRetired=value;},process.env.PRODUCER_CAMERA_ALLOW_RETIRED==='1');
  async function connect(width,height) {
+  if(process.env.PRODUCER_CAMERA_ALLOW_RETIRED!=='1')await page.waitForFunction(async()=>{
+   const devices=await navigator.mediaDevices.enumerateDevices();
+   return !devices.some(d=>d.kind==='videoinput'&&d.label==='Producer Portrait Camera');
+  },null,{timeout:8000});
   await page.evaluate(async({width,height})=>{
    window.mirrorProof?.stream.getTracks().forEach(t=>t.stop());
    const devices=await navigator.mediaDevices.enumerateDevices();
    const device=devices.find(d=>d.kind==='videoinput'&&d.label==='Producer Virtual Camera');
    if(!device)throw Error('Single Producer camera is unavailable');
+   if(!window.allowRetired&&devices.filter(d=>d.kind==='videoinput'&&/^Producer (Virtual|Portrait) Camera$/.test(d.label)).length!==1)throw Error('Expected exactly one selectable Producer camera');
    if(window.singleCameraId&&window.singleCameraId!==device.deviceId)throw Error('Camera identity changed across orientations');
    window.singleCameraId=device.deviceId;
    if(!window.allowRetired&&devices.some(d=>d.kind==='videoinput'&&d.label==='Producer Portrait Camera'))throw Error('Retired portrait device is still registered');

@@ -1,0 +1,242 @@
+{
+  "passed": true,
+  "samples": [
+    {
+      "width": 1920,
+      "height": 1080,
+      "time": 1.518524,
+      "sameTrack": true,
+      "tl": [
+        251,
+        0,
+        1
+      ],
+      "tr": [
+        0,
+        0,
+        250
+      ],
+      "bl": [
+        0,
+        0,
+        250
+      ],
+      "br": [
+        0,
+        254,
+        0
+      ],
+      "center": [
+        0,
+        0,
+        250
+      ],
+      "mirrored": false,
+      "phase": 0
+    },
+    {
+      "width": 1920,
+      "height": 1080,
+      "time": 11.722131,
+      "sameTrack": true,
+      "tl": [
+        0,
+        0,
+        250
+      ],
+      "tr": [
+        251,
+        0,
+        1
+      ],
+      "bl": [
+        0,
+        254,
+        0
+      ],
+      "br": [
+        0,
+        0,
+        250
+      ],
+      "center": [
+        0,
+        0,
+        250
+      ],
+      "mirrored": true,
+      "phase": 1
+    },
+    {
+      "width": 1920,
+      "height": 1080,
+      "time": 26.742723,
+      "sameTrack": true,
+      "tl": [
+        251,
+        0,
+        1
+      ],
+      "tr": [
+        0,
+        0,
+        250
+      ],
+      "bl": [
+        0,
+        0,
+        250
+      ],
+      "br": [
+        0,
+        254,
+        0
+      ],
+      "center": [
+        0,
+        0,
+        250
+      ],
+      "mirrored": false,
+      "phase": 2
+    },
+    {
+      "width": 1080,
+      "height": 1920,
+      "time": 1.505659,
+      "sameTrack": true,
+      "tl": [
+        251,
+        0,
+        1
+      ],
+      "tr": [
+        0,
+        0,
+        250
+      ],
+      "bl": [
+        0,
+        0,
+        250
+      ],
+      "br": [
+        0,
+        254,
+        0
+      ],
+      "center": [
+        0,
+        0,
+        250
+      ],
+      "mirrored": false,
+      "phase": 3
+    },
+    {
+      "width": 1080,
+      "height": 1920,
+      "time": 16.370716,
+      "sameTrack": true,
+      "tl": [
+        0,
+        0,
+        250
+      ],
+      "tr": [
+        251,
+        0,
+        1
+      ],
+      "bl": [
+        0,
+        254,
+        0
+      ],
+      "br": [
+        0,
+        0,
+        250
+      ],
+      "center": [
+        0,
+        0,
+        250
+      ],
+      "mirrored": true,
+      "phase": 4
+    },
+    {
+      "width": 1080,
+      "height": 1920,
+      "time": 31.383343,
+      "sameTrack": true,
+      "tl": [
+        251,
+        0,
+        1
+      ],
+      "tr": [
+        0,
+        0,
+        250
+      ],
+      "bl": [
+        0,
+        0,
+        250
+      ],
+      "br": [
+        0,
+        254,
+        0
+      ],
+      "center": [
+        0,
+        0,
+        250
+      ],
+      "mirrored": false,
+      "phase": 5
+    },
+    {
+      "width": 1920,
+      "height": 1080,
+      "time": 1.507615,
+      "sameTrack": true,
+      "tl": [
+        251,
+        0,
+        1
+      ],
+      "tr": [
+        0,
+        0,
+        250
+      ],
+      "bl": [
+        0,
+        0,
+        250
+      ],
+      "br": [
+        0,
+        254,
+        0
+      ],
+      "center": [
+        0,
+        0,
+        250
+      ],
+      "mirrored": false,
+      "phase": 6
+    }
+  ],
+  "source_run": 39156009668,
+  "retired_device_allowed_for_core_diagnostic": false,
+  "selectable_producer_cameras": [
+    "Producer Virtual Camera"
+  ],
+  "production_published": false
+}
