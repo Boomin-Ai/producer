@@ -9,8 +9,8 @@ try {
  const page=await context.newPage();
  await page.goto(process.env.PRODUCER_PREVIEW_ORIGIN??'http://127.0.0.1:1432/scripts/native-probe.html');
  const result=await page.evaluate(async()=>{
-  const device=(await navigator.mediaDevices.enumerateDevices()).find(d=>d.kind==='videoinput'&&d.label==='Producer Portrait Camera');
-  if(!device)throw Error('Producer Portrait Camera is not installed/approved yet');
+  const device=(await navigator.mediaDevices.enumerateDevices()).find(d=>d.kind==='videoinput'&&d.label==='Producer Virtual Camera');
+  if(!device)throw Error('Producer Virtual Camera is not installed/approved yet');
   const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{deviceId:{exact:device.deviceId},width:{ideal:1080},height:{ideal:1920},frameRate:{ideal:30}}});
   try{
    const video=document.createElement('video');video.muted=true;video.srcObject=stream;document.body.append(video);await video.play();

@@ -8492,7 +8492,7 @@ export function LiveView({
               : vcamOn
                 ? "Cam on"
                 : vcamState?.installed
-                  ? (outputView === "portrait" ? "Portrait cam" : "Virtual cam")
+                  ? "Virtual cam"
                   : "Install cam"}
           </button>
 

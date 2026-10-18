@@ -40,17 +40,7 @@ cp "$SRC"/*.swift "$WORK/"
 /usr/bin/sed -i '' "s/OBS Virtual Camera/$DEVICE_NAME/g" "$WORK"/*.swift
 /usr/bin/sed -i '' "s/OBS Camera Extension Stream/Producer Camera Stream/g" "$WORK"/*.swift
 
-# The portrait device has its own extension/UUID, so clients always negotiate
-# vertical dimensions. Never rotate or stretch the landscape camera in place.
-python3 - "$WORK/OBSCameraDeviceSource.swift" "${PRODUCER_VCAM_WIDTH:-1920}" "${PRODUCER_VCAM_HEIGHT:-1080}" <<'PYFORMAT'
-import sys
-from pathlib import Path
-p=Path(sys.argv[1]); width,height=map(int,sys.argv[2:])
-assert (width,height) in ((1920,1080),(1080,1920)), "Unsupported camera format"
-s=p.read_text(); old="CMVideoDimensions(width: 1920, height: 1080)"
-assert s.count(old)==1
-p.write_text(s.replace(old,f"CMVideoDimensions(width: {width}, height: {height})"))
-PYFORMAT
+python3 "$REPO_ROOT/scripts/patch-single-camera-extension.py" "$WORK"
 
 swiftc -O -swift-version 5 \
   -target "arm64-apple-macos13.0" \
@@ -92,12 +82,12 @@ cat > "$BUNDLE/Contents/Info.plist" <<PLIST
 	<key>CFBundlePackageType</key>
 	<string>SYSX</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.2</string>
+	<string>1.3</string>
 	<!-- 🔴 BUMP THIS whenever the extension changes. macOS will NOT replace an
 	     installed system extension that carries the same version, so a fixed
 	     build silently keeps running the broken copy already registered. -->
 	<key>CFBundleVersion</key>
-	<string>3</string>
+	<string>4</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 	<key>NSSystemExtensionUsageDescription</key>
@@ -107,10 +97,8 @@ cat > "$BUNDLE/Contents/Info.plist" <<PLIST
 		<key>CMIOExtensionMachServiceName</key>
 		<string>$TEAM_ID.$EXT_ID</string>
 	</dict>
-	<key>ProducerCameraWidth</key>
-	<integer>${PRODUCER_VCAM_WIDTH:-1920}</integer>
-	<key>ProducerCameraHeight</key>
-	<integer>${PRODUCER_VCAM_HEIGHT:-1080}</integer>
+	<key>ProducerCameraFormats</key>
+	<array><string>1920x1080</string><string>1080x1920</string></array>
 	<key>OBSCameraDeviceUUID</key>
 	<string>$DEVICE_UUID</string>
 	<key>OBSCameraSourceUUID</key>

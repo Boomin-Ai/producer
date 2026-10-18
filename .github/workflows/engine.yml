@@ -28,8 +28,8 @@ on:
       # change to either must be validated like any other engine change.
       - "scripts/build-virtualcam-plugin.sh"
       - "scripts/build-camera-extension.sh"
-      - "scripts/build-portrait-camera-extension.sh"
-      - "scripts/patch-portrait-virtualcam.py"
+      - "scripts/patch-single-camera-extension.py"
+      - "scripts/patch-single-virtualcam.py"
       - "scripts/virtualcam-mirror.h"
   workflow_dispatch:
 

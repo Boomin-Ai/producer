@@ -240,9 +240,9 @@ s=s.replace(old,old+"""
 open(p,'w').write(s)
 PYVIDEO
 
-# Add the portrait sink and validate its actual input video dimensions.
+# Select the canvas format on one device and validate native input dimensions.
 cp scripts/virtualcam-mirror.h "$WORK/"
-python3 scripts/patch-portrait-virtualcam.py "$WORK/plugin-main.mm"
+python3 scripts/patch-single-virtualcam.py "$WORK/plugin-main.mm"
 
 # Rebrand the rendezvous identifiers. Fail loudly if upstream renames them.
 grep -q 'com.obsproject.obs-studio.mac-camera-extension' "$WORK/plugin-main.mm" \
@@ -308,7 +308,8 @@ cat > "$OUT/Contents/Info.plist" <<EOF
 	<string>1.2</string>
 	<key>CFBundleVersion</key>
 	<string>3</string>
-	<key>ProducerMirrorSupported</key>
+	<key>ProducerSingleCamera</key><true/>
+    <key>ProducerMirrorSupported</key>
 	<true/>
 	<key>OBSCameraDeviceUUID</key>
 	<string>$DEV_UUID</string>

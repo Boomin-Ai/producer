@@ -48,17 +48,8 @@ with tempfile.TemporaryDirectory(prefix='producer-camera-signing-') as tmp:
     assert cert in profile['DeveloperCertificates'], 'Profile does not authorize the signing certificate'
     output('codesign', '-d', '--extract-certificates=' + prefix, str(ext))
     assert pathlib.Path(prefix + '0').read_bytes() == cert, 'App and camera signed with different certificates'
-portrait_id = app_id + '.portrait-camera-extension'
-portrait = contents / 'Library' / 'SystemExtensions' / (portrait_id + '.systemextension')
-pinfo = plist(portrait / 'Contents' / 'Info.plist')
-assert pinfo['CFBundleIdentifier'] == portrait_id
-assert pinfo['ProducerCameraWidth'] == 1080 and pinfo['ProducerCameraHeight'] == 1920
-assert pinfo['OBSCameraDeviceUUID'] == '6D782D10-8F31-4BD0-B6B5-F171B337D328'
-assert pinfo['OBSCameraDeviceUUID'] != ext_info['OBSCameraDeviceUUID']
-assert pinfo['CMIOExtension']['CMIOExtensionMachServiceName'] == team + '.' + portrait_id
-assert (portrait / 'Contents' / 'Resources' / 'placeholder.png').is_file()
-with tempfile.TemporaryDirectory(prefix='producer-portrait-signing-') as tmp:
-    prefix = str(pathlib.Path(tmp) / 'cert')
-    output('codesign', '-d', '--extract-certificates=' + prefix, str(portrait))
-    assert pathlib.Path(prefix + '0').read_bytes() == cert, 'Portrait camera signing mismatch'
-print('PASS: landscape and portrait camera bundles, dimensions, signing, provisioning, and pairing')
+assert ext_info.get('ProducerCameraFormats') == ['1920x1080', '1080x1920'], 'Camera must support both orientations'
+assert ext_info['CFBundleVersion'] == '4', 'Stale single-camera extension'
+assert len(list((contents / 'Library' / 'SystemExtensions').glob('*.systemextension'))) == 1, 'Bundle must contain one camera extension'
+assert plugin.get('ProducerSingleCamera') is True, 'Stale two-device camera plugin'
+print('PASS: one camera bundle, both formats, native mirroring, signing and provisioning')

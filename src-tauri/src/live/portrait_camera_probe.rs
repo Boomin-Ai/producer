@@ -73,18 +73,36 @@ pub fn start(app: tauri::AppHandle, report: PathBuf) {
                     },
                 )?;
             }
+            for (id, x, y, w, h, z) in [
+                (ids[0], 0., 0., 1280., 720., 0),
+                (ids[1], 0., 0., 180., 180., 1),
+                (ids[2], 1100., 540., 180., 180., 2),
+            ] {
+                let source = sources.items.iter().find(|item| item.id == id).ok_or("Missing landscape fixture")?;
+                let crop_right = if z == 0 { 0 } else { source.src_w.saturating_sub(source.src_h) as i32 };
+                live.set_transform(id.into(), TransformPatch { x: Some(x), y: Some(y), w: Some(w), h: Some(h),
+                    z: Some(z), crop_right: Some(crop_right), visible: Some(true), ..Default::default() }, false)?;
+            }
             live.select_output(true)?;
             live.set_virtual_cam(true)?;
             // Actual output ownership must reject a canvas switch.
             if live.select_output(false).is_ok() {
                 return Err("Canvas changed while the camera was active".into());
             }
-            for (phase, mirrored) in [false, true, false].into_iter().enumerate() {
+            live.set_virtual_cam(false)?;
+            for phase in 0..7 {
+                let portrait = (3..6).contains(&phase);
+                if phase == 0 || phase == 3 || phase == 6 {
+                    live.set_virtual_cam(false)?;
+                    live.select_output(portrait)?;
+                    live.set_virtual_cam(true)?;
+                }
+                let mirrored = phase == 1 || phase == 4;
                 live.virtual_cam_mirror(Some(mirrored))?;
-                write(
-                    serde_json::json!({"stage":"camera_running", "phase":phase, "mirrored":mirrored, "camera":"Producer Portrait Camera", "expected_width":1080,"expected_height":1920,"switch_guard":true}),
-                );
-                std::thread::sleep(Duration::from_secs(20));
+                write(serde_json::json!({"stage":"camera_running", "phase":phase, "mirrored":mirrored,
+                    "camera":"Producer Virtual Camera", "expected_width":if portrait {1080} else {1920},
+                    "expected_height":if portrait {1920} else {1080}, "switch_guard":true}));
+                std::thread::sleep(Duration::from_secs(15));
             }
             Ok(())
         })();
