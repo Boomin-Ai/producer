@@ -50,6 +50,14 @@ with tempfile.TemporaryDirectory(prefix='producer-camera-signing-') as tmp:
     assert pathlib.Path(prefix + '0').read_bytes() == cert, 'App and camera signed with different certificates'
 assert ext_info.get('ProducerCameraFormats') == ['1920x1080', '1080x1920'], 'Camera must support both orientations'
 assert ext_info['CFBundleVersion'] == '4', 'Stale single-camera extension'
-assert len(list((contents / 'Library' / 'SystemExtensions').glob('*.systemextension'))) == 1, 'Bundle must contain one camera extension'
+bundles = list((contents / 'Library' / 'SystemExtensions').glob('*.systemextension'))
+active_bundles = [b for b in bundles if not plist(b / 'Contents' / 'Info.plist').get('ProducerRetiredCamera')]
+assert active_bundles == [ext], 'Bundle must expose one camera provider'
+retired = contents / 'Library' / 'SystemExtensions' / (app_id + '.portrait-camera-extension.systemextension')
+assert retired in bundles and plist(retired / 'Contents' / 'Info.plist').get('ProducerRetiredCamera') is True
+with tempfile.TemporaryDirectory(prefix='producer-migration-signing-') as tmp:
+    prefix = str(pathlib.Path(tmp) / 'cert')
+    output('codesign', '-d', '--extract-certificates=' + prefix, str(retired))
+    assert pathlib.Path(prefix + '0').read_bytes() == cert, 'Migration helper signing mismatch'
 assert plugin.get('ProducerSingleCamera') is True, 'Stale two-device camera plugin'
 print('PASS: one camera bundle, both formats, native mirroring, signing and provisioning')

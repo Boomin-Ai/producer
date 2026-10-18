@@ -66,8 +66,13 @@ fi
 
 # A camera plugin without its device extension cannot work on a fresh Mac.
 # Do not let an old engine archive silently produce another broken release.
-# Remove the retired portrait-device bundle from old engine archives.
-rm -rf "$CONTENTS/Library/SystemExtensions/ai.boomin.producer.portrait-camera-extension.systemextension"
+# macOS requires the retired identifier in the app to authorize deactivation.
+# This helper publishes no devices and is never activated.
+RETIRED_ID="ai.boomin.producer.portrait-camera-extension"
+RETIRED_EXT="$(cd "$(dirname "$0")/.." && pwd)/engine/camera-extension/$RETIRED_ID.systemextension"
+[[ -d "$RETIRED_EXT" ]] || { echo "Build the removal-only camera helper first" >&2; exit 1; }
+rm -rf "$CONTENTS/Library/SystemExtensions/$RETIRED_ID.systemextension"
+cp -R "$RETIRED_EXT" "$CONTENTS/Library/SystemExtensions/"
 
 [[ -x "$CONTENTS/Library/SystemExtensions/$VCAM_EXT_ID.systemextension/Contents/MacOS/$VCAM_EXT_ID" ]] \
   || { echo "FATAL: camera extension missing from engine artifact — rebuild with build-engine.sh" >&2; exit 1; }

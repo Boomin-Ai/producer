@@ -258,6 +258,7 @@ jobs:
           git -C engine/obs-studio fetch --depth 1 origin "$PIN"
           git -C engine/obs-studio checkout --detach FETCH_HEAD
           bash scripts/build-camera-extension.sh
+          bash scripts/build-retired-camera-extension.sh
           bash scripts/build-virtualcam-plugin.sh --stage "engine/artifacts/$ENGINE_NAME"
 
       - name: Require Apple signing and notarization credentials

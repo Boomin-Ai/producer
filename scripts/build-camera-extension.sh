@@ -42,6 +42,15 @@ cp "$SRC"/*.swift "$WORK/"
 
 python3 "$REPO_ROOT/scripts/patch-single-camera-extension.py" "$WORK"
 
+if [[ ${PRODUCER_VCAM_RETIRED:-0} == 1 ]]; then
+  python3 - "$WORK/OBSCameraProviderSource.swift" <<'PYRETIRED'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1]);s=p.read_text();a=s.index('        deviceSource = OBSCameraDeviceSource(');b=s.index('\n    func connect(',a)
+s=s[:a]+'    }\n'+s[b:];p.write_text(s)
+PYRETIRED
+fi
+
 swiftc -O -swift-version 5 \
   -target "arm64-apple-macos13.0" \
   -framework CoreMediaIO -framework CoreMedia -framework Foundation \
@@ -109,5 +118,8 @@ cat > "$BUNDLE/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
+if [[ ${PRODUCER_VCAM_RETIRED:-0} == 1 ]]; then
+  /usr/libexec/PlistBuddy -c 'Add :ProducerRetiredCamera bool true' "$BUNDLE/Contents/Info.plist"
+fi
 rm -rf "$WORK"
 echo "built: $BUNDLE"
