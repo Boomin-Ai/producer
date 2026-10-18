@@ -24,6 +24,7 @@ const browser=await chromium.launch({channel:'chrome',headless:true});
 try{
  const context=await browser.newContext({permissions:['camera']});const page=await context.newPage();
  await page.goto(process.env.PRODUCER_PREVIEW_ORIGIN??'http://127.0.0.1:1432/scripts/native-probe.html');
+ await page.evaluate(value=>{window.allowRetired=value;},process.env.PRODUCER_CAMERA_ALLOW_RETIRED==='1');
  async function connect(width,height) {
   await page.evaluate(async({width,height})=>{
    window.mirrorProof?.stream.getTracks().forEach(t=>t.stop());
