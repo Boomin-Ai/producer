@@ -93,6 +93,14 @@ pub fn start(app: tauri::AppHandle, report: PathBuf) {
             for phase in 0..7 {
                 let portrait = (3..6).contains(&phase);
                 if phase == 0 || phase == 3 || phase == 6 {
+                    if phase != 0 {
+                        write(serde_json::json!({"stage":"reconnect_required", "phase":phase}));
+                        let until = std::time::Instant::now() + Duration::from_secs(30);
+                        while std::fs::read_to_string(report.with_extension("receiver-ready")).ok().as_deref() != Some(&phase.to_string()) {
+                            if std::time::Instant::now() >= until { return Err("Receiver did not release its camera before orientation switch".into()); }
+                            std::thread::sleep(Duration::from_millis(100));
+                        }
+                    }
                     live.set_virtual_cam(false)?;
                     live.select_output(portrait)?;
                     live.set_virtual_cam(true)?;
