@@ -135,15 +135,14 @@ jobs:
 
       # No APPLE_* env here on purpose: tauri must NOT sign/notarize the
       # engine-less intermediate app; signing happens after engine assembly.
-      - name: Build app (engine linked, unsigned)
-        env:
-          INCLUDE_NATIVE_GUEST: ${{ inputs.native_guest && '1' || '0' }}
+      - name: Reuse verified native dev binary for migration metadata correction
         run: |
-          if [ "$INCLUDE_NATIVE_GUEST" = "1" ]; then
-            bun run tauri build --target aarch64-apple-darwin --features portrait-camera-dev
-          else
-            bun run tauri build --target aarch64-apple-darwin --features portrait-camera-dev
-          fi
+          set -euo pipefail
+          test "$(gh api repos/Boomin-Ai/producer/actions/runs/39154873188 --jq .conclusion)" = success
+          test "$(gh api repos/Boomin-Ai/producer/actions/runs/39154873188 --jq .head_sha)" = "54dd7d1$(git rev-parse 54dd7d1 | cut -c8-)"
+          gh run download 39154873188 -n Producer-Camera-Dev -D /tmp/reuse-dev
+          mkdir -p src-tauri/target/aarch64-apple-darwin/release/bundle/macos
+          ditto -x -k /tmp/reuse-dev/Producer-Camera-Dev.zip src-tauri/target/aarch64-apple-darwin/release/bundle/macos
 
       - name: Guard — refuse stub build
         run: |
