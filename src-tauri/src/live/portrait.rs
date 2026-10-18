@@ -476,9 +476,9 @@ impl Portrait {
         mut request: Request,
         captures: HashMap<String, *mut ffi::obs_source_t>,
     ) -> Result<Arc<Bridge>, String> {
-        if request.projection.width >= request.projection.height {
-            return Err("Choose a portrait set layout first".into());
-        }
+        // Composition::build_sized fits the complete composition into this
+        // canvas. Landscape-only sets remain on output with letterboxing,
+        // instead of falling back to unrelated room sources.
         if let Some(active) = &self.active {
             if request.lease != active.request.lease
                 || request.projection.revision
