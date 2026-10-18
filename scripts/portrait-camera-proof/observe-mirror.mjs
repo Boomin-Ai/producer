@@ -30,6 +30,8 @@ try{
    const devices=await navigator.mediaDevices.enumerateDevices();
    const device=devices.find(d=>d.kind==='videoinput'&&d.label==='Producer Virtual Camera');
    if(!device)throw Error('Single Producer camera is unavailable');
+   if(window.singleCameraId&&window.singleCameraId!==device.deviceId)throw Error('Camera identity changed across orientations');
+   window.singleCameraId=device.deviceId;
    if(devices.some(d=>d.kind==='videoinput'&&d.label==='Producer Portrait Camera'))throw Error('Retired portrait device is still registered');
    const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{deviceId:{exact:device.deviceId},width:{exact:width},height:{exact:height}}});
    const video=document.createElement('video');video.muted=true;video.srcObject=stream;document.body.append(video);await video.play();
