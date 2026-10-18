@@ -3197,6 +3197,8 @@ export function LiveView({
   const [vcamState, setVcamState] = useState<VcamStatus | null>(null);
   const guestSeat = useGuestSeat(seat, vcamState?.device_name);
   const [vcamOn, setVcamOn] = useState(false);
+  const [vcamPending, setVcamPending] = useState<'installing'|'starting'|'stopping'|null>(null);
+  const vcamFlight = useRef(false);
   /** Studio output (lib/studioOutput.ts): the room doc holds the wish, the
    * engine holds the truth; `studioOn` is what the engine last confirmed. */
   const [studioOn, setStudioOn] = useState(false);
@@ -3232,6 +3234,7 @@ export function LiveView({
    * not by the host: it stops when the last monitor leaves. A manual toggle
    * takes ownership back. */
   const vcamAutoRef = useRef(false);
+  const vcamManuallyStopped = useRef(false);
   const vcamAutoNextTry = useRef(0);
 
   useEffect(() => {
@@ -3249,13 +3252,28 @@ export function LiveView({
     };
   }, []);
 
+  const setCameraOutput = async (target: boolean): Promise<boolean> => {
+    if (vcamFlight.current) throw new Error("Wait for the camera operation to finish.");
+    vcamFlight.current = true;
+    setVcamPending(target ? 'starting' : 'stopping');
+    try {
+      const on = await vcamIpc.output(target);
+      vcamOnRef.current = on;
+      setVcamOn(on);
+      if (on !== target) throw new Error(target ? "The virtual camera did not start." : "The virtual camera did not stop.");
+      return on;
+    } finally {
+      vcamFlight.current = false;
+      setVcamPending(null);
+    }
+  };
   const toggleVcam = async () => {
-    // The host's own hand on the switch: whatever a monitor started, the
-    // host owns it from here.
+    if (vcamFlight.current) return;
     vcamAutoRef.current = false;
-    // Not installed yet → the first click is the install request, not a
-    // toggle. macOS then asks the user to approve it in Settings.
     if (!vcamState?.installed && vcamState?.state !== "active") {
+      vcamFlight.current = true;
+      setVcamPending('installing');
+      try {
       await vcamIpc.activate().catch(() => {});
       // Poll briefly: activation answers on a delegate, and when macOS
       // refuses it the reason is the only thing worth showing.
@@ -3279,10 +3297,15 @@ export function LiveView({
       }
       notify("Still waiting on macOS for the camera extension.", { key: "banner", tone: "warning" });
       return;
+      } finally {
+        vcamFlight.current = false;
+        setVcamPending(null);
+      }
     }
     try {
-      const on = await vcamIpc.output(!vcamOn);
-      setVcamOn(on);
+      const target = !vcamOnRef.current;
+      vcamManuallyStopped.current = !target;
+      await setCameraOutput(target);
     } catch (e) {
       notifyError(e, { key: "banner" });
     }
@@ -3693,7 +3716,7 @@ export function LiveView({
         host: roomRoleRef.current === "host",
         virtualCameraOn: vcamOn,
         virtualCameraInstalled: !!vcamState?.installed,
-        startVirtualCamera: () => vcamIpc.output(true),
+        startVirtualCamera: () => {vcamManuallyStopped.current=false;return setCameraOutput(true);},
         admit: () => {
           monitorLog("guest admission: sending room control");
           return guestsIpc.admit(endpoint, serverRoom, id);
@@ -6463,14 +6486,13 @@ export function LiveView({
           if (audienceStateRef.current.enabled) wantsProgram.push({} as RoomGuest);
           const wantVcam = wantedMonitors.size > 0 || wantsProgram.length > 0;
           const vs = vcamStateRef.current;
-          if (wantVcam && !vcamOnRef.current && Date.now() > vcamAutoNextTry.current) {
+          if (wantVcam && !vcamOnRef.current && !vcamManuallyStopped.current && !vcamFlight.current && Date.now() > vcamAutoNextTry.current) {
             vcamAutoNextTry.current = Date.now() + 10_000;
             if (vs?.installed || vs?.state === "active") {
               monitorLog(
                 `host: ${wantedMonitors.size} monitor seat(s) + ${wantsProgram.length} return-feed viewer(s) — starting the virtual camera`,
               );
-              vcamIpc
-                .output(true)
+              setCameraOutput(true)
                 .then((on) => {
                   vcamOnRef.current = on;
                   setVcamOn(on);
@@ -6482,12 +6504,11 @@ export function LiveView({
               monitorLog(`host: virtual camera not installed (state=${vs?.state ?? "unknown"}) — the seat falls back to the 8 fps preview`);
             }
           }
-          if (!wantVcam && vcamAutoRef.current) {
+          if (!wantVcam && vcamAutoRef.current && !vcamFlight.current) {
             vcamAutoRef.current = false;
             if (vcamOnRef.current) {
               monitorLog("host: nobody needs the program any more — stopping the virtual camera we started");
-              vcamIpc
-                .output(false)
+              setCameraOutput(false)
                 .then((on) => {
                   vcamOnRef.current = on;
                   setVcamOn(on);
@@ -8479,7 +8500,8 @@ export function LiveView({
           <button
             className={`hd-chip${vcamOn ? " on" : ""}`}
             onClick={toggleVcam}
-            disabled={!engineOk}
+            disabled={!engineOk || vcamPending !== null}
+            aria-busy={vcamPending !== null}
             title={
               vcamState?.installed
                 ? "Appear as a webcam in Zoom, Meet and Discord"
@@ -8487,7 +8509,9 @@ export function LiveView({
             }
           >
             {ic.cam}
-            {vcamState?.state === "needs_approval"
+            {vcamPending
+              ? (vcamPending === "starting" ? "Starting…" : vcamPending === "stopping" ? "Stopping…" : "Installing…")
+              : vcamState?.state === "needs_approval"
               ? "Approve"
               : vcamOn
                 ? "Cam on"
@@ -8809,7 +8833,7 @@ export function LiveView({
                   </button>
                 ) : null;
               })()}
-              <OutputSettings icon={ic.gear} session={setRehearsal} output={setOutput} sourceNames={setSourceNames} view={outputView} onViewChange={setOutputView} onMonitor={setPortraitMonitor} />
+              <OutputSettings cameraOn={vcamOn} cameraBusy={vcamPending !== null} onStopCamera={async()=>{vcamAutoRef.current=false;vcamManuallyStopped.current=true;await setCameraOutput(false);}} icon={ic.gear} session={setRehearsal} output={setOutput} sourceNames={setSourceNames} view={outputView} onViewChange={setOutputView} onMonitor={setPortraitMonitor} />
               <button
                 className={`stg-btn${recPath ? " rec" : ""}`}
                 title={recPath ? "Stop recording" : "Record"}
