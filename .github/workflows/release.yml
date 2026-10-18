@@ -151,17 +151,14 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: "Producer v__VERSION__"
+          releaseCommitish: ${{ github.sha }}
           releaseBody: |
-            Native LiveKit Admit/Show commands now reuse fresh verified authority to avoid a redundant network read.
-            The guest browser and hosted API also use combined startup requests, deployed separately.
-            No experimental native media timing or buffering changes are included in this release.
-            Apple Silicon hosted guest rooms use LiveKit with automatic native transport recovery.
-            Staged guests can hear one another through microphone-only hosted subscriptions.
-            Settings now includes Check for updates and distinguishes failed checks from up to date.
-            Native recovery tests measured approximately 6.3 seconds of interruption.
-            Private cue and integrated native speakerphone AEC remain unfinished.
-            Windows retains its native Live engine; Intel macOS and Linux remain engine-less.
-            Native LiveKit hosting is currently available on Apple Silicon only.
+            Adds a native 1080×1920 Producer Portrait Camera on Apple Silicon for vertical apps.
+            Output settings includes Mirror virtual camera: flip the entire outgoing image, including text, without restarting the camera.
+            Portrait output follows paired portrait set layouts and fits the complete active set when no portrait layout exists.
+            Preserves the shipped LiveKit guest startup and recovery fixes.
+            Windows retains its native Live engine; Intel macOS and Linux retain their existing engine-less scope.
+            Portrait virtual camera and mirror are macOS features. Native LiveKit hosting remains Apple Silicon only.
 
           releaseDraft: false
           prerelease: false
@@ -250,6 +247,18 @@ jobs:
           test -d "engine/artifacts/$NAME/Frameworks/libobs.framework" \
             || { echo "FATAL: engine artifact missing after fetch — refusing to ship a stub build" >&2; exit 1; }
           echo "ENGINE_NAME=$NAME" >> "$GITHUB_ENV"
+
+      - name: Build the portrait camera pair from pinned source
+        run: |
+          set -euo pipefail
+          brew install simde
+          PIN="$(python3 -c "import json;print(json.load(open('engine/obs.lock'))['obs']['commit'])")"
+          git init engine/obs-studio
+          git -C engine/obs-studio remote add origin https://github.com/obsproject/obs-studio.git
+          git -C engine/obs-studio fetch --depth 1 origin "$PIN"
+          git -C engine/obs-studio checkout --detach FETCH_HEAD
+          bash scripts/build-portrait-camera-extension.sh
+          bash scripts/build-virtualcam-plugin.sh --stage "engine/artifacts/$ENGINE_NAME"
 
       - name: Require Apple signing and notarization credentials
         run: |
@@ -377,7 +386,7 @@ jobs:
         if: ${{ github.event_name == 'push' || inputs.publish }}
         run: |
           set -euo pipefail
-          gh release create "v$VERSION" --title "Producer v$VERSION" --notes "Producer v$VERSION" 2>/dev/null || true
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "Producer v$VERSION" --notes "Producer v$VERSION" 2>/dev/null || true
           gh release upload "v$VERSION" "$DMG" --clobber
 
       # Auto-update leg: the updater archive must contain the ASSEMBLED,
@@ -583,7 +592,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release create "v$VERSION" --title "Producer v$VERSION" --notes "Producer v$VERSION" 2>/dev/null || true
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "Producer v$VERSION" --notes "Producer v$VERSION" 2>/dev/null || true
           # Only the installers and their updater signatures. `dist/` is the
           # web bundle's own output dir too (index.html, assets/), and a
           # directory in the upload list fails the whole step.
