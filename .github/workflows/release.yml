@@ -153,12 +153,12 @@ jobs:
           releaseName: "Producer v__VERSION__"
           releaseCommitish: ${{ github.sha }}
           releaseBody: |
-            One Producer Virtual Camera supports both landscape and portrait canvases on Apple Silicon.
-            Output settings includes Mirror virtual camera: flip the entire outgoing image, including text, without restarting the camera.
-            Portrait output follows paired portrait set layouts and fits the complete active set when no portrait layout exists.
-            Preserves the shipped LiveKit guest startup and recovery fixes.
+            One Producer Virtual Camera now supports landscape 1920×1080 and portrait 1080×1920 on Apple Silicon.
+            The camera follows Producer's selected canvas; stop it before switching orientation and reconnect receiving apps that lock their format.
+            Fixes whole-picture mirroring by keeping camera frames BGRA instead of silently falling back to NV12.
+            Retires the separate Producer Portrait Camera through macOS extension removal.
+            Keeps portrait set routing, saved mirror preference, and existing guest startup/recovery improvements.
             Windows retains its native Live engine; Intel macOS and Linux retain their existing engine-less scope.
-            Portrait virtual camera and mirror are macOS features. Native LiveKit hosting remains Apple Silicon only.
 
           releaseDraft: false
           prerelease: false
@@ -248,7 +248,7 @@ jobs:
             || { echo "FATAL: engine artifact missing after fetch — refusing to ship a stub build" >&2; exit 1; }
           echo "ENGINE_NAME=$NAME" >> "$GITHUB_ENV"
 
-      - name: Build the portrait camera pair from pinned source
+      - name: Build single camera and retired-device migration from pinned source
         run: |
           set -euo pipefail
           brew install simde
