@@ -241,6 +241,7 @@ open(p,'w').write(s)
 PYVIDEO
 
 # Add the portrait sink and validate its actual input video dimensions.
+cp scripts/virtualcam-mirror.h "$WORK/"
 python3 scripts/patch-portrait-virtualcam.py "$WORK/plugin-main.mm"
 
 # Rebrand the rendezvous identifiers. Fail loudly if upstream renames them.
@@ -282,7 +283,7 @@ clang++ -bundle -std=c++17 -fobjc-arc -ObjC++ \
   -F "$ART/Frameworks" -framework libobs \
   -framework Foundation -framework AppKit -framework AVFoundation \
   -framework CoreMedia -framework CoreMediaIO -framework CoreVideo \
-  -framework IOSurface -framework SystemExtensions \
+  -framework IOSurface -framework SystemExtensions -framework Accelerate \
   -Wl,-rpath,@loader_path/../../../../Frameworks \
   -Wno-deprecated-declarations \
   -o "$OUT/Contents/MacOS/mac-virtualcam" \
@@ -307,6 +308,8 @@ cat > "$OUT/Contents/Info.plist" <<EOF
 	<string>1.2</string>
 	<key>CFBundleVersion</key>
 	<string>3</string>
+	<key>ProducerMirrorSupported</key>
+	<true/>
 	<key>OBSCameraDeviceUUID</key>
 	<string>$DEV_UUID</string>
 	<key>OBSCameraSourceUUID</key>

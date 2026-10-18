@@ -1,3 +1,4 @@
+import {IS_MAC} from '../../lib/platform';
 import {AssetTransport} from './assetTransport';
 import {useEffect,useRef,useState,useSyncExternalStore,type ReactNode} from 'react';
 import {ipc} from '../../lib/ipc';
@@ -17,6 +18,9 @@ export function OutputSettings({icon,session,output,sourceNames,view='landscape'
  const pop=useRef<HTMLElement>(null);
  const state=useSyncExternalStore(session.subscribe,session.snapshot);
  const [active,setActive]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const [mirrored,setMirrored]=useState<boolean|null>(null),[mirrorBusy,setMirrorBusy]=useState(false),[mirrorError,setMirrorError]=useState('');
+ useEffect(()=>{if(!IS_MAC)return;let alive=true;void ipc.liveVirtualCamMirror().then(value=>{if(alive)setMirrored(value);}).catch(e=>{if(alive)setMirrorError(String(e));});return()=>{alive=false;};},[]);
+ const changeMirror=async(on:boolean)=>{setMirrorBusy(true);setMirrorError('');try{setMirrored(await ipc.liveVirtualCamMirror(on));}catch(e){setMirrorError(String(e));}finally{setMirrorBusy(false);}};
  const [layout,setLayout]=useState('auto');const [sources,setSources]=useState<import('../../lib/ipc').LiveSources>();
  const media=useRef(new AssetTransport());
  const cacheGeneration=useRef<number|null>(null);
@@ -81,6 +85,7 @@ export function OutputSettings({icon,session,output,sourceNames,view='landscape'
     <p className="rm-output-settings-note">{usingSet?(fitted?`${session.package.name} has no matching portrait layout. The complete set is fitted into portrait; add a portrait layout for a full-height design.`:layout==='auto'?'Portrait follows the matching set / segment layout.':'Portrait uses the selected set layout.'):'Portrait uses room sources. Drag, resize, crop and arrange them directly on its canvas.'}</p>
     {active&&!authored&&sources?.items?.length?<details className="rm-portrait-sources"><summary>Portrait sources</summary>{sources.items.map(source=><button key={source.id} aria-pressed={source.visible} aria-label={`${source.visible?'Hide':'Show'} ${sourceNames[source.id]??source.label} on portrait`} onClick={()=>void ipc.livePortraitTransform(source.id,{visible:!source.visible}).then(setSources).catch(e=>setError(String(e)))}><span>{sourceNames[source.id]??source.label}</span><span>{source.visible?'Shown':'Hidden'}</span></button>)}</details>:null}
     {busy&&<p role="status">Preparing portrait…</p>}{error&&<p role="alert">{error}</p>}
+    {IS_MAC&&<div><label><input type="checkbox" aria-label="Mirror virtual camera" checked={mirrored===true} disabled={mirrored===null||mirrorBusy} onChange={e=>void changeMirror(e.currentTarget.checked)}/> Mirror virtual camera</label><p className="rm-output-settings-note">Flips the entire outgoing camera picture horizontally, including set text.</p>{mirrorError&&<p role="alert">{mirrorError} <button onClick={()=>{setMirrorError('');void ipc.liveVirtualCamMirror().then(setMirrored).catch(e=>setMirrorError(String(e)));}}>Retry</button></p>}</div>}
     <p className="rm-output-settings-note">Virtual camera follows the selected canvas. For vertical apps, choose Portrait, start Virtual cam, then select “Producer Portrait Camera” in the other app. Stop Virtual cam before switching canvases. Camera video does not include show audio.</p>
     <p className="rm-output-settings-note">Both records separate landscape and portrait files. Portrait sends the vertical canvas to streams and guests. Both sends landscape and records both canvases.</p>
    </>}

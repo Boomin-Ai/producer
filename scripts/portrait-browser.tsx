@@ -9,6 +9,7 @@ import type {SetOutputControls} from '../src/features/presentation/useSetOutput'
 import '../src/App.css';
 const proof={requests:[] as unknown[],stops:0,previews:[] as unknown[],transforms:[] as unknown[],roomStarts:0,jpegCalls:0,landscapeEdits:0};Object.assign(window,{portraitProof:proof});
 ipc.liveSelectOutput=async()=>{};
+let mirror=false;ipc.liveVirtualCamMirror=async(on)=>{if(on!==undefined)mirror=on;return mirror;};
 ipc.liveSetStatus=async()=>({generation:3,lease:null,revision:0});
 ipc.livePortraitWarm=async()=>{};
 ipc.livePortraitApply=async request=>{proof.requests.push(request);};

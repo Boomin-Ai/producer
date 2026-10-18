@@ -1332,6 +1332,13 @@ pub async fn live_portrait_preview(
 }
 
 #[tauri::command]
+pub async fn live_virtual_cam_mirror(app: tauri::AppHandle, on: Option<bool>) -> EngineResult<bool> {
+    use tauri::Manager;
+    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().live.virtual_cam_mirror(on))
+        .await.map_err(|e| EngineError::Other(e.to_string()))?.map_err(EngineError::Other)
+}
+
+#[tauri::command]
 pub async fn live_select_output(app: tauri::AppHandle, portrait: bool) -> EngineResult<()> {
     use tauri::Manager;
     tauri::async_runtime::spawn_blocking(move || {

@@ -27,7 +27,31 @@ replace('    vcam->videoInfo.output_width = 1920;\n    vcam->videoInfo.output_he
     }
     vcam->videoInfo.output_width = vcam->portrait ? 1080 : 1920;
     vcam->videoInfo.output_height = vcam->portrait ? 1920 : 1080;''')
-# Match the portrait extension's advertised pixel format as well as its size.
+# Both CMIO devices advertise BGRA. A stable four-channel format also lets
+# live mirroring switch without renegotiating or restarting the camera.
 replace('    vcam->videoInfo.output_format = selected->format;',
-        '    vcam->videoInfo.output_format = vcam->portrait ? VIDEO_FORMAT_BGRA : selected->format;')
+        '    vcam->videoInfo.output_format = VIDEO_FORMAT_BGRA;')
+replace('#include <obs-module.h>', '#include <obs-module.h>\n#include "virtualcam-mirror.h"')
+replace('    bool portrait;\n', '    bool portrait;\n    int32_t mirrored;\n')
+replace('    vcam->portrait = obs_data_get_bool(settings, "portrait");\n',
+        '    vcam->portrait = obs_data_get_bool(settings, "portrait");\n    __atomic_store_n(&vcam->mirrored, obs_data_get_bool(settings, "mirrored"), __ATOMIC_RELAXED);\n')
+replace('static bool virtualcam_output_start(void *data)', """static void virtualcam_output_update(void *data, obs_data_t *settings)
+{
+    struct virtualcam_data *vcam = (struct virtualcam_data *) data;
+    __atomic_store_n(&vcam->mirrored, obs_data_get_bool(settings, "mirrored"), __ATOMIC_RELAXED);
+}
+
+static bool virtualcam_output_start(void *data)""")
+replace('    if (planeCount == 0) {', """    if (planeCount == 0 && __atomic_load_n(&vcam->mirrored, __ATOMIC_RELAXED)) {
+        vImage_Error reflected = producer_mirror_bgra(frame->data[0], frame->linesize[0],
+            CVPixelBufferGetBaseAddress(frameRef), CVPixelBufferGetBytesPerRow(frameRef),
+            CVPixelBufferGetWidth(frameRef), CVPixelBufferGetHeight(frameRef));
+        if (reflected != kvImageNoError) {
+            CVPixelBufferUnlockBaseAddress(frameRef, 0);
+            CVPixelBufferRelease(frameRef);
+            return;
+        }
+    } else if (planeCount == 0) {""")
+replace('    .raw_video = virtualcam_output_raw_video,',
+        '    .raw_video = virtualcam_output_raw_video,\n    .update = virtualcam_output_update,')
 path.write_text(s)

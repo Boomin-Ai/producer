@@ -19,8 +19,17 @@ pub fn start(app: tauri::AppHandle, report: PathBuf) {
                 let _ = std::fs::write(&report, bytes);
             }
         };
+        let mut original_mirror = None;
         let result = (|| -> Result<(), String> {
-            std::thread::sleep(Duration::from_secs(3));
+            let deadline = std::time::Instant::now() + Duration::from_secs(300);
+            while live.status()["engine_ready"] != true {
+                if std::time::Instant::now() >= deadline {
+                    return Err("Engine bootstrap did not finish".into());
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            original_mirror = Some(live.virtual_cam_mirror(None)?);
+            live.virtual_cam_mirror(Some(false))?;
             for (id, color) in ids.iter().zip(["#0000ff", "#ff0000", "#00ff00"]) {
                 live.add_extra(
                     (*id).into(),
@@ -70,13 +79,19 @@ pub fn start(app: tauri::AppHandle, report: PathBuf) {
             if live.select_output(false).is_ok() {
                 return Err("Canvas changed while the camera was active".into());
             }
-            write(
-                serde_json::json!({"stage":"camera_running", "camera":"Producer Portrait Camera", "expected_width":1080,"expected_height":1920,"switch_guard":true}),
-            );
-            std::thread::sleep(Duration::from_secs(60));
+            for (phase, mirrored) in [false, true, false].into_iter().enumerate() {
+                live.virtual_cam_mirror(Some(mirrored))?;
+                write(
+                    serde_json::json!({"stage":"camera_running", "phase":phase, "mirrored":mirrored, "camera":"Producer Portrait Camera", "expected_width":1080,"expected_height":1920,"switch_guard":true}),
+                );
+                std::thread::sleep(Duration::from_secs(20));
+            }
             Ok(())
         })();
         let stopped = live.set_virtual_cam(false).is_ok();
+        if let Some(original) = original_mirror {
+            let _ = live.virtual_cam_mirror(Some(original));
+        }
         let _ = live.select_output(false);
         for id in ids {
             let _ = live.remove_extra(id.into());
