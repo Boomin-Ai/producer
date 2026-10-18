@@ -55,6 +55,8 @@ active_bundles = [b for b in bundles if not plist(b / 'Contents' / 'Info.plist')
 assert active_bundles == [ext], 'Bundle must expose one camera provider'
 retired = contents / 'Library' / 'SystemExtensions' / (app_id + '.portrait-camera-extension.systemextension')
 assert retired in bundles and plist(retired / 'Contents' / 'Info.plist').get('ProducerRetiredCamera') is True
+rinfo = plist(retired / 'Contents' / 'Info.plist')
+assert (rinfo['CFBundleShortVersionString'], rinfo['CFBundleVersion']) == ('1.2', '3'), 'Retirement helper must match the installed portrait version'
 with tempfile.TemporaryDirectory(prefix='producer-migration-signing-') as tmp:
     prefix = str(pathlib.Path(tmp) / 'cert')
     output('codesign', '-d', '--extract-certificates=' + prefix, str(retired))
