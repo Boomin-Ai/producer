@@ -2,12 +2,17 @@ import assert from 'node:assert/strict';
 import {readFile,writeFile} from 'node:fs/promises';
 const {chromium}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??'playwright');
 const report=process.argv[2];if(!report)throw Error('Pass the native camera probe report path');
+let releaseReceiver=async()=>{};
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function phase(expected){
  const until=Date.now()+300000;
  while(Date.now()<until){
   let state;try{state=JSON.parse(await readFile(report,'utf8'));}catch{}
   if(state?.stage==='failed')throw Error(state.error);
+  if(state?.stage==='reconnect_required'&&state.phase===expected){
+   await releaseReceiver();
+   await writeFile(report.replace(/\.[^/.]+$/,'.receiver-ready'),String(expected));
+  }
   if(state?.stage==='camera_running'&&state.phase===expected)return state;
   if(state?.stage==='complete'||state?.phase>expected)throw Error('Missed native probe phase');
   await sleep(200);
@@ -31,6 +36,7 @@ try{
    window.mirrorProof={video,stream,track:stream.getVideoTracks()[0]};
   },{width,height});
  }
+ releaseReceiver=async()=>page.evaluate(()=>window.mirrorProof?.stream.getTracks().forEach(t=>t.stop()));
  const samples=[];
  for(let index=0;index<7;index++){
   const state=await phase(index);if(index===0||index===3||index===6)await connect(state.expected_width,state.expected_height);await sleep(1500);

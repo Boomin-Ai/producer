@@ -153,7 +153,7 @@ jobs:
           releaseName: "Producer v__VERSION__"
           releaseCommitish: ${{ github.sha }}
           releaseBody: |
-            Adds a native 1080×1920 Producer Portrait Camera on Apple Silicon for vertical apps.
+            One Producer Virtual Camera supports both landscape and portrait canvases on Apple Silicon.
             Output settings includes Mirror virtual camera: flip the entire outgoing image, including text, without restarting the camera.
             Portrait output follows paired portrait set layouts and fits the complete active set when no portrait layout exists.
             Preserves the shipped LiveKit guest startup and recovery fixes.
