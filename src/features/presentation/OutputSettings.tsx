@@ -14,13 +14,14 @@ export function RoomOutputView({view,portrait,portraitContent,children}:{view:Ou
   {portrait.error&&<div className="rm-portrait-error" role="alert">{portrait.error}</div>}
  </div>}</div>;
 }
-export function OutputSettings({icon,session,output,sourceNames,view='landscape',onViewChange,onMonitor}:{icon:ReactNode;session:RehearsalSession;output:SetOutputControls;sourceNames:Record<string,string>;view?:OutputView;onViewChange?:(view:OutputView)=>void;onMonitor?:(monitor:PortraitMonitor)=>void}){
+export function OutputSettings({icon,session,output,sourceNames,view='landscape',onViewChange,onMonitor,cameraOn=false,cameraBusy=false,onStopCamera}:{icon:ReactNode;session:RehearsalSession;output:SetOutputControls;sourceNames:Record<string,string>;view?:OutputView;onViewChange?:(view:OutputView)=>void;onMonitor?:(monitor:PortraitMonitor)=>void;cameraOn?:boolean;cameraBusy?:boolean;onStopCamera?:()=>Promise<unknown>}){
  const pop=useRef<HTMLElement>(null);
  const state=useSyncExternalStore(session.subscribe,session.snapshot);
  const [active,setActive]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [mirrored,setMirrored]=useState<boolean|null>(null),[mirrorBusy,setMirrorBusy]=useState(false),[mirrorError,setMirrorError]=useState('');
  useEffect(()=>{if(!IS_MAC)return;let alive=true;void ipc.liveVirtualCamMirror().then(value=>{if(alive)setMirrored(value);}).catch(e=>{if(alive)setMirrorError(String(e));});return()=>{alive=false;};},[]);
  const changeMirror=async(on:boolean)=>{setMirrorBusy(true);setMirrorError('');try{setMirrored(await ipc.liveVirtualCamMirror(on));}catch(e){setMirrorError(String(e));}finally{setMirrorBusy(false);}};
+ const [switching,setSwitching]=useState(false),[stoppingCamera,setStoppingCamera]=useState(false);const chooseFlight=useRef(false);
  const [layout,setLayout]=useState('auto');const [sources,setSources]=useState<import('../../lib/ipc').LiveSources>();
  const media=useRef(new AssetTransport());
  const cacheGeneration=useRef<number|null>(null);
@@ -74,13 +75,16 @@ export function OutputSettings({icon,session,output,sourceNames,view='landscape'
  },[active,authored]);
  useEffect(()=>{wake.current();},[state,output.bindings,output.framing,effectiveLayout]);
  useEffect(()=>{if(!authored){media.current.clear();warmed.current='';fingerprint.current='';}},[authored]);
- const choose=async(next:OutputView)=>{try{await ipc.liveSelectOutput(next==='portrait');sharedProgramCapture.setPortrait(next==='portrait');onViewChange?.(next);setActive(next!=='landscape');setError('');}catch(e){setError(String(e));}};
+ const choose=async(next:OutputView)=>{if(chooseFlight.current||cameraOn||cameraBusy||next===view)return;chooseFlight.current=true;setSwitching(true);setError('');try{await ipc.liveSelectOutput(next==='portrait');sharedProgramCapture.setPortrait(next==='portrait');onViewChange?.(next);setActive(next!=='landscape');}catch(e){setError(String(e));}finally{chooseFlight.current=false;setSwitching(false);}};
+ const stopCamera=async()=>{if(!onStopCamera||stoppingCamera)return;setStoppingCamera(true);setError('');try{await onStopCamera();}catch(e){setError(String(e));}finally{setStoppingCamera(false);}};
  return <>
-  <button className="stg-btn" title="Output settings" aria-label="Output settings" aria-haspopup="dialog" onClick={e=>{if(!pop.current)return;const a=e.currentTarget.getBoundingClientRect();pop.current.style.left=`${Math.max(8,Math.min(innerWidth-348,a.left-140))}px`;pop.current.style.top=`${Math.max(8,Math.min(innerHeight-380,a.top-340))}px`;pop.current.togglePopover();}}>{icon}</button>
+  <button className="stg-btn" title="Output settings" aria-label="Output settings" aria-haspopup="dialog" onClick={e=>{if(!pop.current)return;const a=e.currentTarget.getBoundingClientRect();pop.current.togglePopover();if(pop.current.matches(':popover-open')){const bounds=pop.current.getBoundingClientRect();pop.current.style.left=`${Math.max(8,Math.min(innerWidth-bounds.width-8,a.left-140))}px`;pop.current.style.top=`${Math.max(8,Math.min(innerHeight-bounds.height-8,a.top-bounds.height-8))}px`;}}}>{icon}</button>
   <section ref={pop} popover="auto" role="dialog" aria-label="Output settings" className="rm-output-settings">
    <header><strong>Output settings</strong><button aria-label="Close output settings" onClick={()=>pop.current?.hidePopover()}>×</button></header>
    {<>
-    <div className="rm-output-views" role="group" aria-label="Room output view">{(['landscape','portrait','both'] as const).map(mode=><button key={mode} aria-pressed={view===mode} onClick={()=>choose(mode)}>{mode==='landscape'?'Landscape':mode==='portrait'?'Portrait':'Both'}</button>)}</div>
+    <div className="rm-output-views" role="group" aria-label="Room output view">{(['landscape','portrait','both'] as const).map(mode=><button key={mode} aria-pressed={view===mode} disabled={cameraOn||cameraBusy||switching||stoppingCamera} onClick={()=>void choose(mode)}>{mode==='landscape'?'Landscape':mode==='portrait'?'Portrait':'Both'}</button>)}</div>
+    {(cameraOn||cameraBusy||stoppingCamera)&&<p role="status">{cameraBusy||stoppingCamera?'Waiting for the virtual camera…':'Virtual camera is on. Stop it to change orientation.'} {cameraOn&&onStopCamera&&<button disabled={cameraBusy||stoppingCamera} onClick={()=>void stopCamera()}>{stoppingCamera?'Stopping…':'Stop virtual camera'}</button>}</p>}
+    {switching&&<p role="status">Switching output…</p>}
     {output.active&&<label>Portrait composition<select aria-label="Portrait layout" value={layout==='room'||portraits.some(l=>l.id===layout)?layout:'auto'} onChange={e=>setLayout(e.target.value)}><option value="auto">Follow set / segment</option><option value="room">Room canvas</option>{portraits.map(l=><option key={l.id} value={l.id}>{l.label}</option>)}</select></label>}
     <p className="rm-output-settings-note">{usingSet?(fitted?`${session.package.name} has no matching portrait layout. The complete set is fitted into portrait; add a portrait layout for a full-height design.`:layout==='auto'?'Portrait follows the matching set / segment layout.':'Portrait uses the selected set layout.'):'Portrait uses room sources. Drag, resize, crop and arrange them directly on its canvas.'}</p>
     {active&&!authored&&sources?.items?.length?<details className="rm-portrait-sources"><summary>Portrait sources</summary>{sources.items.map(source=><button key={source.id} aria-pressed={source.visible} aria-label={`${source.visible?'Hide':'Show'} ${sourceNames[source.id]??source.label} on portrait`} onClick={()=>void ipc.livePortraitTransform(source.id,{visible:!source.visible}).then(setSources).catch(e=>setError(String(e)))}><span>{sourceNames[source.id]??source.label}</span><span>{source.visible?'Shown':'Hidden'}</span></button>)}</details>:null}
