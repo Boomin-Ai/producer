@@ -9,6 +9,9 @@ def replace(old, new):
     assert s.count(old) == 1, f"Virtual camera source changed: {old[:90]}"
     s = s.replace(old, new, 1)
 
+# BGRA must map natively: otherwise upstream falls back to planar NV12,
+# bypassing the four-channel mirror and disagreeing with the CMIO formats.
+replace('        case VIDEO_FORMAT_I420:', '        case VIDEO_FORMAT_BGRA:\n            return kCVPixelFormatType_32BGRA;\n        case VIDEO_FORMAT_I420:')
 replace('    bool running;\n', '    bool running;\n    bool portrait;\n')
 replace('    vcam->output = output;\n',
         '    vcam->output = output;\n    vcam->portrait = obs_data_get_bool(settings, "portrait");\n')
