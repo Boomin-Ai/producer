@@ -139,7 +139,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(gh api repos/Boomin-Ai/producer/actions/runs/39154873188 --jq .conclusion)" = success
-          test "$(gh api repos/Boomin-Ai/producer/actions/runs/39154873188 --jq .head_sha)" = "54dd7d1$(git rev-parse 54dd7d1 | cut -c8-)"
+          test "$(gh api repos/Boomin-Ai/producer/actions/runs/39154873188 --jq .head_sha)" = "54dd7d15131d5511daf1739ac31cb00d0ed1661c"
           gh run download 39154873188 -n Producer-Camera-Dev -D /tmp/reuse-dev
           mkdir -p src-tauri/target/aarch64-apple-darwin/release/bundle/macos
           ditto -x -k /tmp/reuse-dev/Producer-Camera-Dev.zip src-tauri/target/aarch64-apple-darwin/release/bundle/macos
