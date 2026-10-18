@@ -15,3 +15,7 @@ Final signed dev run 39156009668 (native binary reused from verified run 3915487
 The user explicitly requested dev review before production publication. v0.4.73 is prepared only; do not publish until that approval arrives.
 
 Camera-control feedback follow-up: signed dev run 39158837354, app installed and reopened at `/Applications/Producer Camera Dev.app`. The toolbar now reports Installing/Starting/Stopping while native acknowledgement is pending and prevents duplicate requests. Output settings disables orientation while the camera is active and supplies an explicit Stop virtual camera action; stop/switch progress remains visible until acknowledgement. Manual stop is respected by automatic monitor-start logic. The popup is positioned from its measured dimensions. TypeScript, frontend build and delayed-ack browser control test pass; local signature/notarization/Gatekeeper/bundle checks pass. User review of the updated native UI is pending. Public latest remains v0.4.72; v0.4.73 is still held.
+
+## Production publication — 2026-10-18
+
+User explicitly approved “push to full prod” after dev review. v0.4.73 is published; workflow 39160783483 succeeded. Both Mac installers are notarized, all four primary updater signatures were verified, and producer.dev downloads return HTTP 200 for macOS ARM/Intel, Windows and Linux. Previous review holds above are historical and satisfied. See RELEASE-0.4.73-VERIFIED.json for evidence.
