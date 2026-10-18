@@ -119,6 +119,8 @@ cat > "$BUNDLE/Contents/Info.plist" <<PLIST
 PLIST
 
 if [[ ${PRODUCER_VCAM_RETIRED:-0} == 1 ]]; then
+  /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 1.2' "$BUNDLE/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 3' "$BUNDLE/Contents/Info.plist"
   /usr/libexec/PlistBuddy -c 'Add :ProducerRetiredCamera bool true' "$BUNDLE/Contents/Info.plist"
 fi
 rm -rf "$WORK"
