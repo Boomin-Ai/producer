@@ -218,6 +218,7 @@ export const ipc = {
   }) => invoke<{ sources: LiveSources; warnings: string[] }>("live_restore_room", { restore }),
   livePortraitRoom: ()=>invoke<LiveSources>('live_portrait_room'),
   liveSelectOutput: (portrait:boolean)=>invoke<void>('live_select_output',{portrait}),
+  liveVirtualCamMirror: (on?:boolean)=>invoke<boolean>('live_virtual_cam_mirror',{on:on??null}),
   livePortraitState: ()=>invoke<LiveSources>('live_portrait_state'),
   livePortraitTransform: (id:string,patch:LiveTransformPatch)=>invoke<LiveSources>('live_portrait_transform',{id,patch}),
   livePortraitPreview: (rect:{x:number;y:number;w:number;h:number}|null)=>invoke<boolean>('live_portrait_preview',{rect}),

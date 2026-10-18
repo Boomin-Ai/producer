@@ -33,3 +33,10 @@ Chromium regression passes Head to Head fitted output, explicit Room canvas, ret
 
 
 Signed set-routing candidate: https://github.com/Boomin-Ai/producer/actions/runs/39084513741 — success, signing-only branch `dev/portrait-set-routing-2026-10-17`, commit `3764d9d`. Downloaded candidate passes local deep/strict codesign, stapler validation, Gatekeeper (Notarized Developer ID), and the landscape/portrait camera bundle checks. It is staged at `/private/tmp/producer-portrait-set-artifact/Producer.app`; replacing the running dev app awaits permission to interrupt its active camera feed. This is not a production release. A future production release must build a fresh engine artifact containing the new camera pair before using the normal release workflow.
+
+
+## Whole-picture virtual camera mirror
+
+The output gear now has a macOS **Mirror virtual camera** toggle. It flips the complete outgoing camera image horizontally, including set graphics and text. It applies to both Producer camera devices and is stored in the engine's data directory as `virtual-camera-mirror.json`. The engine updates the running output's atomic mirror flag, so toggling does not restart the camera or change scene transforms. The output uses a consistent BGRA frame format matching the advertised CMIO formats; Accelerate reflects directly from the OBS frame into the camera pixel buffer without an extra image allocation. Show audio is untouched.
+
+Local pixel tests cover horizontal direction, row padding, channel/alpha preservation, and restoration after two reflections. Chromium verifies the gear toggle updates without rebuilding the set. The opt-in native camera probe now waits for engine readiness and exposes normal/mirrored/restored phases. `scripts/portrait-camera-proof/observe-mirror.mjs` can verify those actual camera frames on one uninterrupted receiver track. Real native mirror capture remains pending installation of the new dev candidate; no completed native mirror capture is claimed yet.

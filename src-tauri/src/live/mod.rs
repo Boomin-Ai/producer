@@ -105,6 +105,13 @@ pub struct Live {
 }
 
 impl Live {
+    pub fn virtual_cam_mirror(&self, on: Option<bool>) -> Result<bool, String> {
+        #[cfg(have_engine)]
+        { self.handle.as_ref().ok_or("live engine not running")?.virtual_cam_mirror(on) }
+        #[cfg(not(have_engine))]
+        { let _ = on; Err("live engine not bundled in this build".into()) }
+    }
+
     pub fn select_output(&self, portrait: bool) -> Result<(), String> {
         #[cfg(have_engine)]
         {

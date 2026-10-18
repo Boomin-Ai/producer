@@ -40,6 +40,7 @@ assert entitlements(app).get('com.apple.developer.system-extension.install') is 
 assert ext_info['CMIOExtension']['CMIOExtensionMachServiceName'] == team + '.' + ext_id, 'Wrong camera service'
 plugin = plist(contents / 'PlugIns' / 'mac-virtualcam.plugin' / 'Contents' / 'Info.plist')
 assert plugin['OBSCameraDeviceUUID'] == ext_info['OBSCameraDeviceUUID'], 'Camera plugin/device UUID mismatch'
+assert plugin.get('ProducerMirrorSupported') is True, 'Virtual camera plugin lacks native mirror support'
 with tempfile.TemporaryDirectory(prefix='producer-camera-signing-') as tmp:
     prefix = str(pathlib.Path(tmp) / 'cert')
     output('codesign', '-d', '--extract-certificates=' + prefix, str(app))

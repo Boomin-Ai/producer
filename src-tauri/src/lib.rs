@@ -295,6 +295,7 @@ pub fn run() {
             live::commands::live_portrait_room,
             live::commands::live_portrait_state,
             live::commands::live_select_output,
+            live::commands::live_virtual_cam_mirror,
             live::commands::live_program_video_wanted,
             live::commands::live_program_video_read,
             live::commands::live_portrait_transform,

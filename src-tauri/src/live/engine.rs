@@ -750,6 +750,10 @@ pub enum Command {
     SetProgramThumb {
         on: bool,
     },
+    VirtualCamMirror {
+        on: Option<bool>,
+        reply: mpsc::Sender<Result<bool, String>>,
+    },
     SelectOutput {
         portrait: bool,
         reply: mpsc::Sender<Result<(), String>>,
@@ -912,6 +916,7 @@ fn cmd_name(c: &Command) -> &'static str {
         Command::ListDevices { .. } => "ListDevices",
         Command::PlayStinger { .. } => "PlayStinger",
         Command::SelectOutput { .. } => "SelectOutput",
+        Command::VirtualCamMirror { .. } => "VirtualCamMirror",
         Command::StartRecording { .. } => "StartRecording",
         Command::StopRecording { .. } => "StopRecording",
         Command::SetSyncOffset { .. } => "SetSyncOffset",
@@ -1357,6 +1362,12 @@ impl LiveHandle {
 
     /// The program thumb for a seat's monitor fallback (docs/THUMB-PIPELINE-V2.md
     /// target `program`, PROGRAM_THUMB_FPS while on).
+    pub fn virtual_cam_mirror(&self, on: Option<bool>) -> Result<bool, String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd.send(Command::VirtualCamMirror { on, reply: tx }).map_err(|e| e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(10)).map_err(|_| "Camera mirror settings timed out".to_string())?
+    }
+
     pub fn select_output(&self, portrait: bool) -> Result<(), String> {
         let (tx, rx) = mpsc::channel();
         self.cmd
@@ -2324,6 +2335,10 @@ pub fn start(
             // The virtual camera runs independently of streaming and
             // recording — all three can be on at once.
             let mut vcam: Option<*mut ffi::obs_output_t> = None;
+            let mirror_path = module_config_dir.parent().unwrap_or(&module_config_dir).join("virtual-camera-mirror.json");
+            let mut vcam_mirrored = std::fs::read(&mirror_path).ok()
+                .and_then(|bytes| serde_json::from_slice::<bool>(&bytes).ok()).unwrap_or(false);
+
             // Studio output (studio.rs) — the studio scene over the room.
             let mut studio_out: Option<studio::Studio> = None;
             // The room-only mix the virtual camera reads, in BOTH studio modes.
@@ -2380,11 +2395,12 @@ pub fn start(
             /// Create + start the virtual camera output on `mix` — the
             /// guests' and mods' RETURN FEED, which is always the room scene,
             /// never the main mix (which is the UI while studio is on).
-            unsafe fn start_vcam(mix: *mut ffi::video_t, portrait: bool) -> Result<*mut ffi::obs_output_t, String> {
+            unsafe fn start_vcam(mix: *mut ffi::video_t, portrait: bool, mirrored: bool) -> Result<*mut ffi::obs_output_t, String> {
                 let id = CString::new("virtualcam_output").unwrap();
                 let name = CString::new(graph::VCAM_DEVICE_NAME).unwrap();
                 let settings = ffi::obs_data_create();
                 ffi::obs_data_set_bool(settings, b"portrait\0".as_ptr().cast(), portrait);
+                ffi::obs_data_set_bool(settings, b"mirrored\0".as_ptr().cast(), mirrored);
                 let out = ffi::obs_output_create(
                     id.as_ptr(), name.as_ptr(), settings, ptr::null_mut(),
                 );
@@ -2597,6 +2613,27 @@ pub fn start(
                 match received {
                     Ok(Command::Dj { action, reply }) => {
                         let result = if report.ok { dj.apply(action) } else { Err("The room audio engine did not start".into()) };
+                        let _ = reply.send(result);
+                    }
+                    Ok(Command::VirtualCamMirror { on, reply }) => {
+                        let result = (|| -> Result<bool, String> {
+                            if !cfg!(target_os = "macos") { return Err("Virtual camera mirroring is available on macOS".into()); }
+                            if let Some(next) = on {
+                                let pending = mirror_path.with_extension("json.tmp");
+                                std::fs::write(&pending, if next { b"true".as_slice() } else { b"false".as_slice() }).map_err(|e| e.to_string())?;
+                                std::fs::rename(&pending, &mirror_path).map_err(|e| e.to_string())?;
+                                if let Some(output) = vcam {
+                                    unsafe {
+                                        let settings = ffi::obs_data_create();
+                                        ffi::obs_data_set_bool(settings, b"mirrored\0".as_ptr().cast(), next);
+                                        ffi::obs_output_update(output, settings);
+                                        ffi::obs_data_release(settings);
+                                    }
+                                }
+                                vcam_mirrored = next;
+                            }
+                            Ok(vcam_mirrored)
+                        })();
                         let _ = reply.send(result);
                     }
                     Ok(Command::SelectOutput{portrait,reply})=>{
@@ -2842,7 +2879,7 @@ pub fn start(
                                 // room_mix owns the landscape video output.
                                 let mix = if selected_portrait { selected_video }
                                     else { room_mix_video(&mut room_mix)? };
-                                vcam = Some(start_vcam(mix, selected_portrait)?);
+                                vcam = Some(start_vcam(mix, selected_portrait, vcam_mirrored)?);
                                 Ok(true)
                             }
                         })();
@@ -3067,7 +3104,7 @@ pub fn start(
                                     if vcam_was_on {
                                         unsafe {
                                             match room_mix_video(&mut room_mix)
-                                                .and_then(|mix| start_vcam(mix, false))
+                                                .and_then(|mix| start_vcam(mix, false, vcam_mirrored))
                                             {
                                                 Ok(o) => vcam = Some(o),
                                                 Err(e) => sink(&LiveEvent::EngineError {

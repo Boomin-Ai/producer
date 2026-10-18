@@ -652,6 +652,7 @@ extern "C" {
         idx: usize,
     );
     pub fn obs_output_set_service(output: *mut obs_output_t, service: *mut obs_service_t);
+    pub fn obs_output_update(output: *mut obs_output_t, settings: *mut obs_data_t);
     pub fn obs_output_start(output: *mut obs_output_t) -> bool;
     pub fn obs_output_stop(output: *mut obs_output_t);
     pub fn obs_output_active(output: *const obs_output_t) -> bool;
