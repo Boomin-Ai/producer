@@ -137,6 +137,8 @@ pub fn run() {
                 return Err(std::io::Error::other("RTC development requires its isolated app identifier").into());
             }
             let data_dir = app.path().app_data_dir()?;
+            #[cfg(feature = "portrait-camera-dev")]
+            let data_dir = data_dir.join("portrait-camera-dev");
             std::fs::create_dir_all(&data_dir)?;
             let conn = store::open(&data_dir.join("producer.db"))
                 .map_err(|e| std::io::Error::other(e.to_string()))?;

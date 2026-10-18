@@ -16,7 +16,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$REPO_ROOT/engine/obs-studio/plugins/mac-virtualcam/src/camera-extension"
 OUT_DIR="$REPO_ROOT/engine/camera-extension"
 
-EXT_ID="ai.boomin.producer.camera-extension"
+EXT_ID="${PRODUCER_VCAM_EXTENSION_ID:-ai.boomin.producer.camera-extension}"
 TEAM_ID="${PRODUCER_TEAM_ID:-9936A69867}"
 DEVICE_NAME="${PRODUCER_VCAM_NAME:-Producer Virtual Camera}"
 
@@ -39,6 +39,18 @@ WORK="$(mktemp -d)"
 cp "$SRC"/*.swift "$WORK/"
 /usr/bin/sed -i '' "s/OBS Virtual Camera/$DEVICE_NAME/g" "$WORK"/*.swift
 /usr/bin/sed -i '' "s/OBS Camera Extension Stream/Producer Camera Stream/g" "$WORK"/*.swift
+
+# The portrait device has its own extension/UUID, so clients always negotiate
+# vertical dimensions. Never rotate or stretch the landscape camera in place.
+python3 - "$WORK/OBSCameraDeviceSource.swift" "${PRODUCER_VCAM_WIDTH:-1920}" "${PRODUCER_VCAM_HEIGHT:-1080}" <<'PYFORMAT'
+import sys
+from pathlib import Path
+p=Path(sys.argv[1]); width,height=map(int,sys.argv[2:])
+assert (width,height) in ((1920,1080),(1080,1920)), "Unsupported camera format"
+s=p.read_text(); old="CMVideoDimensions(width: 1920, height: 1080)"
+assert s.count(old)==1
+p.write_text(s.replace(old,f"CMVideoDimensions(width: {width}, height: {height})"))
+PYFORMAT
 
 swiftc -O -swift-version 5 \
   -target "arm64-apple-macos13.0" \
@@ -95,6 +107,10 @@ cat > "$BUNDLE/Contents/Info.plist" <<PLIST
 		<key>CMIOExtensionMachServiceName</key>
 		<string>$TEAM_ID.$EXT_ID</string>
 	</dict>
+	<key>ProducerCameraWidth</key>
+	<integer>${PRODUCER_VCAM_WIDTH:-1920}</integer>
+	<key>ProducerCameraHeight</key>
+	<integer>${PRODUCER_VCAM_HEIGHT:-1080}</integer>
 	<key>OBSCameraDeviceUUID</key>
 	<string>$DEVICE_UUID</string>
 	<key>OBSCameraSourceUUID</key>

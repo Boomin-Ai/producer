@@ -76,6 +76,7 @@ export function OutputSettings({icon,session,output,sourceNames,view='landscape'
     <p className="rm-output-settings-note">{authored?(layout==='auto'?'Portrait follows the matching set / segment layout.':'Portrait uses the selected set layout.'):'Portrait uses room sources. Drag, resize, crop and arrange them directly on its canvas.'}</p>
     {active&&!authored&&sources?.items?.length?<details className="rm-portrait-sources"><summary>Portrait sources</summary>{sources.items.map(source=><button key={source.id} aria-pressed={source.visible} aria-label={`${source.visible?'Hide':'Show'} ${sourceNames[source.id]??source.label} on portrait`} onClick={()=>void ipc.livePortraitTransform(source.id,{visible:!source.visible}).then(setSources).catch(e=>setError(String(e)))}><span>{sourceNames[source.id]??source.label}</span><span>{source.visible?'Shown':'Hidden'}</span></button>)}</details>:null}
     {busy&&<p role="status">Preparing portrait…</p>}{error&&<p role="alert">{error}</p>}
+    <p className="rm-output-settings-note">Virtual camera follows the selected canvas. For vertical apps, choose Portrait, start Virtual cam, then select “Producer Portrait Camera” in the other app. Stop Virtual cam before switching canvases. Camera video does not include show audio.</p>
     <p className="rm-output-settings-note">Both records separate landscape and portrait files. Portrait sends the vertical canvas to streams and guests. Both sends landscape and records both canvases.</p>
    </>}
   </section>

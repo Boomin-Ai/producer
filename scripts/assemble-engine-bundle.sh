@@ -66,6 +66,16 @@ fi
 
 # A camera plugin without its device extension cannot work on a fresh Mac.
 # Do not let an old engine archive silently produce another broken release.
+# The vertical camera is a separate CMIO device; its dimensions never alter
+# consumers of the existing landscape camera.
+PORTRAIT_EXT_ID="ai.boomin.producer.portrait-camera-extension"
+PORTRAIT_EXT="$(cd "$(dirname "$0")/.." && pwd)/engine/camera-extension/$PORTRAIT_EXT_ID.systemextension"
+if [[ ! -d "$PORTRAIT_EXT" ]]; then
+  PORTRAIT_EXT="$STAGE/SystemExtensions/$PORTRAIT_EXT_ID.systemextension"
+fi
+[[ -d "$PORTRAIT_EXT" ]] || { echo "Build the portrait camera extension first" >&2; exit 1; }
+cp -R "$PORTRAIT_EXT" "$CONTENTS/Library/SystemExtensions/"
+
 [[ -x "$CONTENTS/Library/SystemExtensions/$VCAM_EXT_ID.systemextension/Contents/MacOS/$VCAM_EXT_ID" ]] \
   || { echo "FATAL: camera extension missing from engine artifact — rebuild with build-engine.sh" >&2; exit 1; }
 

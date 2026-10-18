@@ -2380,15 +2380,15 @@ pub fn start(
             /// Create + start the virtual camera output on `mix` — the
             /// guests' and mods' RETURN FEED, which is always the room scene,
             /// never the main mix (which is the UI while studio is on).
-            unsafe fn start_vcam(mix: *mut ffi::video_t) -> Result<*mut ffi::obs_output_t, String> {
+            unsafe fn start_vcam(mix: *mut ffi::video_t, portrait: bool) -> Result<*mut ffi::obs_output_t, String> {
                 let id = CString::new("virtualcam_output").unwrap();
                 let name = CString::new(graph::VCAM_DEVICE_NAME).unwrap();
+                let settings = ffi::obs_data_create();
+                ffi::obs_data_set_bool(settings, b"portrait\0".as_ptr().cast(), portrait);
                 let out = ffi::obs_output_create(
-                    id.as_ptr(),
-                    name.as_ptr(),
-                    ptr::null_mut(),
-                    ptr::null_mut(),
+                    id.as_ptr(), name.as_ptr(), settings, ptr::null_mut(),
                 );
+                ffi::obs_data_release(settings);
                 if out.is_null() {
                     return Err("this engine has no virtual camera output".into());
                 }
@@ -2602,6 +2602,7 @@ pub fn start(
                     Ok(Command::SelectOutput{portrait,reply})=>{
                         let result=(||->Result<(),String>{
                             if selected_portrait==portrait{return Ok(());}
+                            if vcam.is_some(){return Err("Stop the virtual camera before changing the output canvas".into());}
                             if session.is_some()||recorder.is_some()||portrait_recorder.is_some(){return Err("Stop streaming and recording before changing the output canvas".into());}
                             let video=if portrait{
                                 #[cfg(target_os="macos")]{scene.as_mut().ok_or("Room is not ready")?.portrait_video()?}
@@ -2836,8 +2837,12 @@ pub fn start(
                                 if vcam.is_some() {
                                     return Ok(true);
                                 }
-                                let mix = room_mix_video(&mut room_mix)?;
-                                vcam = Some(start_vcam(mix)?);
+                                // The portrait canvas owns a separate native video output.
+                                // Keep it alive for the lifetime of the camera, just as
+                                // room_mix owns the landscape video output.
+                                let mix = if selected_portrait { selected_video }
+                                    else { room_mix_video(&mut room_mix)? };
+                                vcam = Some(start_vcam(mix, selected_portrait)?);
                                 Ok(true)
                             }
                         })();
@@ -3000,6 +3005,7 @@ pub fn start(
                         }
                     }
                     Ok(Command::SetVideo { height, fps }) => {
+                        if selected_portrait && vcam.is_some(){sink(&LiveEvent::EngineError{message:"Stop the portrait virtual camera before changing video settings".into()});continue;}
                         if recorder.is_some()||portrait_recorder.is_some(){sink(&LiveEvent::EngineError{message:"Stop recording before changing video settings".into()});continue;}
                         if session.is_some() {
                             sink(&LiveEvent::EngineError {
@@ -3061,7 +3067,7 @@ pub fn start(
                                     if vcam_was_on {
                                         unsafe {
                                             match room_mix_video(&mut room_mix)
-                                                .and_then(|mix| start_vcam(mix))
+                                                .and_then(|mix| start_vcam(mix, false))
                                             {
                                                 Ok(o) => vcam = Some(o),
                                                 Err(e) => sink(&LiveEvent::EngineError {
