@@ -21,7 +21,7 @@
    Typed data validation, scoped revision ordering, privacy projection, reusable audience poll state, ordered scene compilation, per-canvas viewport transforms, resource lifetime, transactional selection and deterministic animation. Tests must cover differently styled poll sets consuming identical public state; portrait/landscape scaling; stale data/take rejection; private data not reaching render plans.
 2. **Native compositor vertical slice — isolated Metal pixel proof built and tested; room adapter pending**
    Implement ordered surfaces/groups in pinned OBS; camera + embedded media + linked gallery + graphics mixed in one masked group. Test real raw output pixels, source reuse, alpha and typography. Native program preview is authoritative; no claim that browser simulation proves composition.
-3. **Motion and segment readiness — pending**
+3. **Motion and segment readiness — native transition clock/readiness/controller built and tested in dev; authored clips/segment prediction pending**
    Compiled animation evaluated on native time; interruption/pause/seek rules; selected-layout/gallery prediction; measured Next/Back continuity across media, shaders and multi-camera fixtures.
 4. **Editor and source service — pending**
    Add content directly to a region, batch gallery import, per-instance assignments, explicit audio routes, off-air resource preparation, rollback and undo. Sources panel uses same service.
@@ -51,3 +51,11 @@ The graphics serializer emits one bounded, escaped document per ordered graphics
 Native prepared-surface scene ownership is also built and verified: complete-tree structural preflight, requested color-target allocation budgets, detached assembly/rollback, prepared-source reference ownership and actual contain/cover/stretch output transforms. Tests reject duplicate identities, unresolved sources and invalid styles before creating groups; failed new preparations preserve the existing renderable graph. These are trusted native descriptors, not an exposed IPC format. Pixel dimensions alone do not prove browser/media first-paint readiness.
 
 This completes the initial native primitive/owner proof, not the room cutover. Next: strict native IPC/package validation, authorized source/graphics resolution, graphics/media first-paint readiness and actual presented receipts; then native-clock motion/segment preparation and editor/source-service integration. Actual cameras, galleries, shaders, both-output atomic take and performance still need the integrated renderer. No production changes.
+
+## Dev-room controller progress
+
+The next slice is now implemented behind `sets-v2-dev`: strict compiled-plan transport, room-source authorization, ordered browser graphics batches, actual first-paint marker checks (reserved row cropped out), room attachment and frame-driven preparation/take/retirement. Native video ticks drive dissolve/wipe/slide and pause/resume. Prepared and rendered revisions remain distinct. Return invalidates earlier-generation commands.
+
+Verified with the exact app Rust adapter in the native harness, including its registration entry point. Both orientations pass compiled-plan and room pixel checks; native controller passes three transition modes plus 12 repeated Next/Back switches per orientation with no black gaps at sampled pixels and complete reference cleanup. Two native contract tests, 16 integration checks, TypeScript/workbench checks and Chrome workbench checks pass.
+
+Full app compile check/build and isolated app smoke pass: six alternating-set takes through real JS/Tauri/engine/native routing, first-paint readiness, rendered receipts, and stale request rejection after returning to room. See [DEV-ROOM.md](DEV-ROOM.md). App controls currently target landscape; portrait is tested in the native harness. General animation clips, segment prediction, embedded resources, source-editor UX, direct library show, dual-output coordination and migration remain. No production deployment or measured frame-performance improvement is claimed.

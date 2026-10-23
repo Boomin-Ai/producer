@@ -12,6 +12,7 @@ import {
 } from "../../src/features/sets-v2/scene";
 import { pollSet } from "../../src/features/sets-v2/fixtures";
 import "./style.css";
+import { NativeRoomControls } from "./NativeRoomControls";
 const hub = new DataHub("local-lab");
 hub.register({
   id: "audiencePoll",
@@ -132,6 +133,7 @@ function App() {
         </div>
         <span className="badge">LOCAL DEVELOPMENT</span>
       </header>
+      <NativeRoomControls data={data} />
       <section className="tools">
         <div>
           <strong>Audience interaction</strong>

@@ -2,6 +2,7 @@
  * or outputs. The synthetic capture is a real live libobs source, not a bitmap
  * camera placeholder. */
 #include "sets_v2/group.h"
+#include "sets_v2/program.h"
 #include "sets_v2/scene.h"
 #include "sets_v2/transition.h"
 #import <AppKit/AppKit.h>
@@ -26,6 +27,18 @@ OBS_IMPORT void obs_source_set_audio_mixers(obs_source_t *, uint32_t);
 OBS_IMPORT void obs_add_data_path(const char *);
 OBS_IMPORT const char *obs_get_version_string(void);
 OBS_IMPORT void obs_set_output_source(uint32_t, obs_source_t *);
+typedef struct obs_scene obs_scene_t;
+typedef struct obs_scene_item obs_sceneitem_t;
+OBS_IMPORT obs_scene_t *obs_scene_create_private(const char *);
+OBS_IMPORT obs_source_t *obs_scene_get_source(const obs_scene_t *);
+OBS_IMPORT obs_sceneitem_t *obs_scene_add(obs_scene_t *, obs_source_t *);
+OBS_IMPORT void obs_scene_release(obs_scene_t *);
+extern void sets_v2_rust_register(void);
+extern void *sets_v2_rust_attach(obs_scene_t *, uint32_t, uint32_t);
+extern bool sets_v2_rust_dispatch(void *, const char *, obs_source_t *, char *,
+                                  size_t);
+extern void sets_v2_rust_release(void *);
+
 OBS_IMPORT void obs_source_inc_active(obs_source_t *);
 OBS_IMPORT void obs_source_dec_active(obs_source_t *);
 OBS_IMPORT void obs_source_inc_showing(obs_source_t *);
@@ -384,7 +397,7 @@ static NSDictionary *media_proof(NSString *app, NSString *out) {
   };
 }
 static NSArray *transition_proof(NSString *out) {
-  producer_set_v2_transition_register();
+
   NSMutableArray *results = [NSMutableArray array];
   for (int mode = 0; mode < 3; mode++) {
     obs_source_t *from = solid(320, 180, 1, 0, 0, true),
@@ -451,6 +464,374 @@ static NSArray *transition_proof(NSString *out) {
   }
   return results;
 }
+static NSDictionary *rust_call(void *owner, NSDictionary *action,
+                               obs_source_t *camera, bool expectOK) {
+  NSData *json = [NSJSONSerialization dataWithJSONObject:action
+                                                 options:0
+                                                   error:nil];
+  char reply[2000] = {0};
+  bool ok =
+      sets_v2_rust_dispatch(owner,
+                            [[NSString alloc] initWithData:json
+                                                  encoding:NSUTF8StringEncoding]
+                                .UTF8String,
+                            camera, reply, sizeof(reply));
+  if (ok != expectOK)
+    fprintf(stderr, "rust dispatch response: %s\n", reply);
+  require(ok == expectOK,
+          "actual app adapter request accepted/rejected as expected");
+  NSDictionary *result = [NSJSONSerialization
+      JSONObjectWithData:[NSData dataWithBytes:reply length:strlen(reply)]
+                 options:0
+                   error:nil];
+  require(result != nil, "actual app adapter status decoded");
+  return result;
+}
+static NSArray *rust_adapter_proof(NSString *out) {
+  NSMutableArray *checks = [NSMutableArray array];
+  for (NSString *orientation in @[ @"landscape", @"portrait" ]) {
+    NSString *file =
+        [out stringByAppendingPathComponent:
+                 [orientation stringByAppendingString:@"-plan.json"]];
+    NSMutableDictionary *plan = [[NSJSONSerialization
+        JSONObjectWithData:[NSData dataWithContentsOfFile:file]
+                   options:NSJSONReadingMutableContainers
+                     error:nil] mutableCopy];
+    uint32_t w = [plan[@"target"][@"width"] unsignedIntValue],
+             h = [plan[@"target"][@"height"] unsignedIntValue];
+    obs_scene_t *room = obs_scene_create_private("Actual Rust v2 adapter room");
+    obs_source_t *roomSource = obs_scene_get_source(room),
+                 *camera = solid(400, 300, 0, 1, 0, true);
+    obs_set_output_source(0, roomSource);
+    void *owner = sets_v2_rust_attach(room, w, h);
+    require(owner != NULL, "exact app RoomProgram attaches to native room");
+    rust_call(
+        owner, @{
+          @"op" : @"prepare",
+          @"generation" : @6,
+          @"revision" : @1,
+          @"plan" : plan
+        },
+        camera, false);
+    // Malformed transform cannot change native composition or start a resource.
+    plan[@"viewport"][@"scaleX"] = @999;
+    rust_call(
+        owner, @{
+          @"op" : @"prepare",
+          @"generation" : @7,
+          @"revision" : @1,
+          @"plan" : plan
+        },
+        camera, false);
+    plan = [NSJSONSerialization
+        JSONObjectWithData:[NSData dataWithContentsOfFile:file]
+                   options:NSJSONReadingMutableContainers
+                     error:nil];
+    // A valid-looking compiled binding still cannot resolve an unauthorized
+    // room source. Native resolution, not package data, owns source pointers.
+    NSMutableDictionary *binding =
+        plan[@"root"][@"children"][1][@"children"][1];
+    binding[@"resource"] = @"unowned-camera";
+    NSMutableArray *manifest = plan[@"resources"];
+    NSUInteger resourceIndex = [manifest indexOfObject:@"synthetic-camera"];
+    require(resourceIndex != NSNotFound, "compiled fixture source manifest");
+    manifest[resourceIndex] = @"unowned-camera";
+    rust_call(
+        owner, @{
+          @"op" : @"prepare",
+          @"generation" : @7,
+          @"revision" : @1,
+          @"plan" : plan
+        },
+        camera, false);
+    binding[@"resource"] = @"synthetic-camera";
+    manifest[resourceIndex] = @"synthetic-camera";
+    rust_call(
+        owner, @{
+          @"op" : @"prepare",
+          @"generation" : @7,
+          @"revision" : @1,
+          @"plan" : plan
+        },
+        camera, true);
+    NSDictionary *status = nil;
+    for (int i = 0; i < 300; i++) {
+      status = rust_call(
+          owner,
+          @{@"op" : @"status",
+            @"generation" : @7},
+          camera, true);
+      if ([status[@"ready"] boolValue] && [status[@"warmed"] boolValue])
+        break;
+      usleep(20000);
+    }
+    require([status[@"ready"] boolValue] && [status[@"warmed"] boolValue],
+            "actual graphics marker confirms first CEF paint");
+    require([status[@"renderedRevision"] unsignedLongLongValue] == 0,
+            "first paint preparation stays off air");
+    rust_call(
+        owner, @{
+          @"op" : @"take",
+          @"generation" : @7,
+          @"revision" : @1,
+          @"durationMs" : @300,
+          @"mode" : @"dissolve"
+        },
+        camera, true);
+    for (int i = 0; i < 200; i++) {
+      status = rust_call(
+          owner,
+          @{@"op" : @"status",
+            @"generation" : @7},
+          camera, true);
+      if ([status[@"renderedRevision"] unsignedLongLongValue] == 1)
+        break;
+      usleep(20000);
+    }
+    require([status[@"renderedRevision"] unsignedLongLongValue] == 1,
+            "exact app adapter returns native rendered receipt");
+    NSData *frame = capture(roomSource, w, h, w, h);
+    color(frame, w, w * .05, h * .05, 0, 0, 255, 255, "Rust graph background");
+    color(frame, w, 0, h - 1, 0, 0, 255, 255,
+          "graphics readiness marker excluded from outgoing output");
+    color(frame, w, w * .15, h * .30, 255, 0, 0, 255,
+          "Rust graphics below native capture");
+    color(frame, w, w * .40, h * .50, 0, 255, 0, 255,
+          "Rust native capture above browser graphics");
+    color(frame, w, w * .50, h * .50, 255, 255, 0, 255,
+          "Rust browser graphics above native capture");
+    color(frame, w, w * .10 + 1, h * .20 + 1, 0, 0, 255, 255,
+          "Rust nested whole-group mask");
+    png(frame, w, h,
+        [out stringByAppendingPathComponent:
+                 [orientation stringByAppendingString:@"-rust-room.png"]]);
+    rust_call(
+        owner, @{
+          @"op" : @"prepare",
+          @"generation" : @7,
+          @"revision" : @1,
+          @"plan" : plan
+        },
+        camera, false);
+    [checks addObject:@{
+      @"orientation" : orientation,
+      @"exactAppAdapter" : @YES,
+      @"strictNativePlanValidation" : @YES,
+      @"sourceAuthorization" : @YES,
+      @"actualBrowserPaintMarker" : @YES,
+      @"markerCroppedFromOutput" : @YES,
+      @"orderedRoomPixels" : @YES,
+      @"nativeRenderedReceipt" : @YES
+    }];
+    sets_v2_rust_release(owner);
+    obs_set_output_source(0, NULL);
+    obs_scene_release(room);
+    obs_source_release(camera);
+    for (int i = 0; i < 300 && (producer_set_v2_live_programs() ||
+                                producer_set_v2_live_groups() ||
+                                atomic_load(&source_live));
+         i++)
+      usleep(10000);
+    require(!producer_set_v2_live_programs() &&
+                !producer_set_v2_live_groups() && !atomic_load(&source_live),
+            "Rust app adapter room/resources cleanup");
+  }
+  return checks;
+}
+
+static struct producer_set_v2_program_status program_status(obs_source_t *p) {
+  struct producer_set_v2_program_status status = {0};
+  require(producer_set_v2_program_status(p, &status), "native program status");
+  return status;
+}
+static void wait_program(obs_source_t *p, uint64_t revision) {
+  for (int i = 0; i < 300 && program_status(p).rendered_revision != revision;
+       i++)
+    usleep(10000);
+  require(program_status(p).rendered_revision == revision,
+          "candidate endpoint rendered receipt");
+}
+static NSArray *program_proof(NSString *out) {
+
+  NSMutableArray *checks = [NSMutableArray array];
+  for (int orientation = 0; orientation < 2; orientation++) {
+    uint32_t w = orientation ? 360 : 640, h = orientation ? 640 : 360;
+    obs_scene_t *room = obs_scene_create_private("Isolated v2 room");
+    require(room != NULL, "actual OBS room scene");
+    obs_source_t *source = obs_scene_get_source(room),
+                 *back = solid(w, h, 0, 0, 1, false),
+                 *red = solid(w, h, 1, 0, 0, true),
+                 *green = solid(w, h, 0, 1, 0, true),
+                 *program = producer_set_v2_program_create(w, h);
+    require(program != NULL, "create native frame-driven program source");
+    require(obs_scene_add(room, back) && obs_scene_add(room, program),
+            "native program attached above room sources");
+    obs_source_set_audio_mixers(program, 0);
+    obs_set_output_source(0, source);
+    require(producer_set_v2_program_prepare(program, red, 1),
+            "prepare first segment off air");
+    require(
+        !producer_set_v2_program_take(program, 1, 0, PRODUCER_SET_V2_DISSOLVE),
+        "unready segment cannot take");
+    NSData *frame = capture(source, w, h, w, h);
+    color(frame, w, w / 2, h * 3 / 4, 0, 0, 255, 255,
+          "preparing does not replace room output");
+    require(program_status(program).warmed,
+            "native program warms detached candidate");
+    require(producer_set_v2_program_ready(program, 1),
+            "resource owner confirms first segment readiness");
+    require(!producer_set_v2_program_ready(program, 99),
+            "stale readiness rejected");
+    require(
+        producer_set_v2_program_take(program, 1, 0, PRODUCER_SET_V2_DISSOLVE),
+        "queue initial cut");
+    wait_program(program, 1);
+    color(capture(source, w, h, w, h), w, w / 2, h * 3 / 4, 255, 0, 0, 255,
+          "first segment actually on room output");
+    uint64_t revision = 1;
+    unsigned midframes = 0;
+    for (int mode = 0; mode < 3; mode++) {
+      obs_source_t *next = (mode % 2 == 0) ? green : red;
+      require(producer_set_v2_program_prepare(program, next, ++revision),
+              "preload next segment");
+      frame = capture(source, w, h, w, h);
+      require(program_status(program).rendered_revision == revision - 1,
+              "preparing cannot advance rendered revision");
+      color(frame, w, w / 2, h * 3 / 4, mode % 2 == 0 ? 255 : 0,
+            mode % 2 == 0 ? 0 : 255, 0, 255,
+            "outgoing segment stays visible during prepare");
+      require(producer_set_v2_program_ready(program, revision),
+              "next resources ready");
+      require(producer_set_v2_program_take(program, revision, 600, mode),
+              "queue native-clock transition");
+      require(!producer_set_v2_program_take(program, revision, 600, mode),
+              "duplicate take rejected");
+      for (int i = 0; i < 100; i++) {
+        struct producer_set_v2_program_status st = program_status(program);
+        if (st.transitioning && st.transition_progress > .2 &&
+            st.transition_progress < .8) {
+          require(producer_set_v2_program_pause(program, true),
+                  "pause native clock");
+          st = program_status(program);
+          double paused = st.clock_ms;
+          frame = capture(source, w, h, w, h);
+          const uint8_t *center = pixel(frame, w, w / 2, h * 3 / 4);
+          require(center[3] == 255 && center[0] + center[1] > 245 &&
+                      center[2] < 5,
+                  "transition output stays opaque without black gap");
+          usleep(100000);
+          require(fabs(program_status(program).clock_ms - paused) < .001,
+                  "native pause holds presentation time");
+          NSData *held = capture(source, w, h, w, h);
+          const uint8_t *heldCenter = pixel(held, w, w / 2, h * 3 / 4);
+          require(abs(center[0] - heldCenter[0]) < 3 &&
+                      abs(center[1] - heldCenter[1]) < 3,
+                  "pause holds transition position");
+          require(!producer_set_v2_program_collect(program),
+                  "cannot release outgoing segment during transition");
+          require(!producer_set_v2_program_prepare(program, next, revision + 1),
+                  "bounded transition cannot be overwritten mid-render");
+          png(frame, w, h,
+              [out stringByAppendingPathComponent:
+                       [NSString stringWithFormat:@"program-%d-%d.png",
+                                                  orientation, mode]]);
+          require(producer_set_v2_program_pause(program, false),
+                  "resume native clock");
+          midframes++;
+          break;
+        }
+        usleep(10000);
+      }
+      require(midframes == (unsigned)mode + 1,
+              "native transition midpoint observed");
+      wait_program(program, revision);
+      frame = capture(source, w, h, w, h);
+      color(frame, w, w / 2, h * 3 / 4, mode % 2 == 0 ? 0 : 255,
+            mode % 2 == 0 ? 255 : 0, 0, 255,
+            "new segment endpoint on room output");
+      require(producer_set_v2_program_collect(program),
+              "retired source collection after rendered endpoint");
+    }
+    uint64_t lastConfirmed = revision;
+    unsigned continuitySamples = 0;
+    for (int cycle = 0; cycle < 12; cycle++) {
+      obs_source_t *next = (cycle % 2 == 0) ? red : green;
+      require(producer_set_v2_program_prepare(program, next, ++revision),
+              "repeated Next/Back preload");
+      capture(source, w, h, w, h);
+      require(producer_set_v2_program_ready(program, revision),
+              "repeated segment resources ready");
+      require(producer_set_v2_program_take(program, revision, 120, cycle % 3),
+              "repeated Next/Back native take");
+      for (int sample = 0; sample < 100; sample++) {
+        NSData *continuous = capture(source, w, h, w, h);
+        for (int edge = 1; edge <= 3; edge++) {
+          const uint8_t *p = pixel(continuous, w, w * edge / 4, h * 3 / 4);
+          require(p[3] == 255 && p[0] + p[1] > 245 && p[2] < 5,
+                  "repeated segment switch keeps opaque live output at sample");
+        }
+        continuitySamples++;
+        if (program_status(program).rendered_revision == revision)
+          break;
+        usleep(10000);
+      }
+      wait_program(program, revision);
+      lastConfirmed = revision;
+      require(producer_set_v2_program_collect(program),
+              "repeated Next/Back retire collection");
+    }
+    // Superseded preparation cannot take; cancellation keeps current output.
+    require(producer_set_v2_program_prepare(program, red, ++revision),
+            "prepare cancellable segment");
+    require(producer_set_v2_program_prepare(program, green, ++revision),
+            "latest preparation replaces older candidate");
+    require(!producer_set_v2_program_ready(program, revision - 1),
+            "superseded readiness rejected");
+    require(!producer_set_v2_program_take(program, revision - 1, 0, 0),
+            "superseded take rejected");
+    require(producer_set_v2_program_cancel(program, revision),
+            "cancel current preparation");
+    require(!producer_set_v2_program_prepare(program, red, revision - 1),
+            "old revision cannot revive cancelled intent");
+    color(capture(source, w, h, w, h), w, w / 2, h * 3 / 4, 0, 255, 0, 255,
+          "cancel preserves confirmed program");
+    struct producer_set_v2_program_status st = program_status(program);
+    require(st.rendered_revision == lastConfirmed && st.render_serial > 0,
+            "rendered receipt only advances after completed take");
+    [checks addObject:@{
+      @"orientation" : orientation ? @"portrait" : @"landscape",
+      @"actualRoomScene" : @YES,
+      @"offAirPreparation" : @YES,
+      @"nativeClockTransitions" : @3,
+      @"midpointFrames" : @(midframes),
+      @"nextBackSwitches" : @12,
+      @"continuitySamples" : @(continuitySamples),
+      @"pauseResume" : @YES,
+      @"noBlackGapAtSamples" : @YES,
+      @"latestPreparationWins" : @YES,
+      @"staleAndCancelledTakeRejected" : @YES,
+      @"endpointRenderedRevision" : @(st.rendered_revision),
+      @"renderSerial" : @(st.render_serial)
+    }];
+    obs_set_output_source(0, NULL);
+    obs_scene_release(room);
+    obs_source_release(back);
+    obs_source_release(red);
+    obs_source_release(green);
+    obs_source_release(program);
+    for (int i = 0; i < 300 && (producer_set_v2_live_programs() ||
+                                producer_set_v2_live_transitions() ||
+                                atomic_load(&source_live));
+         i++)
+      usleep(10000);
+    require(!producer_set_v2_live_programs() &&
+                !producer_set_v2_live_transitions() &&
+                !atomic_load(&source_live),
+            "room/program/transition/source teardown");
+  }
+  return checks;
+}
+
 static NSDictionary *owner_proof(NSString *out) {
   obs_source_t *blue = solid(320, 240, 0, 0, 1, false),
                *green = solid(160, 120, 0, 1, 0, false);
@@ -816,7 +1197,7 @@ static int runProbe(int argc, char **argv) {
     require(obs_reset_audio(&audio),
             "initialize isolated audio mixer without capture/output");
     shaderDiagnostics();
-    producer_set_v2_register();
+    sets_v2_rust_register();
     register_test();
     require(producer_set_v2_group_create(0, 10, 0, 1) == NULL,
             "reject zero-size group");
@@ -932,9 +1313,11 @@ static int runProbe(int argc, char **argv) {
     }
     NSDictionary *media = media_proof(app, out);
     NSArray *transitions = transition_proof(out);
+    NSArray *program = program_proof(out);
     NSDictionary *owner = owner_proof(out);
     NSDictionary *placement = placement_proof(out);
     NSDictionary *browser = browser_proof(app, out);
+    NSArray *adapter = rust_adapter_proof(out);
     NSDictionary *report = @{
       @"backend" : @"Metal",
       @"obsVersion" : @(obs_get_version_string()),
@@ -944,6 +1327,8 @@ static int runProbe(int argc, char **argv) {
       @"browser" : browser,
       @"placement" : placement,
       @"sceneOwner" : owner,
+      @"program" : program,
+      @"appAdapter" : adapter,
       @"remainingGroups" : @(producer_set_v2_live_groups()),
       @"remainingSyntheticSources" : @(atomic_load(&source_live)),
       @"scope" : @"isolated native compositor with synthetic capture, PNG and "

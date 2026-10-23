@@ -593,6 +593,8 @@ pub struct SceneGraph {
     presentation_spare: Option<super::presentation::Composition>,
     presentation_retiring: Option<super::presentation::Composition>,
     presentation_needs_prewarm: bool,
+    #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
+    sets_v2: Option<super::sets_v2::RoomProgram>,
     #[cfg(target_os = "macos")]
     portrait: Option<super::portrait::Portrait>,
     overlay: Option<(
@@ -812,6 +814,8 @@ impl SceneGraph {
                 presentation_spare: None,
                 presentation_retiring: None,
                 presentation_needs_prewarm: false,
+                #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
+                sets_v2: None,
                 #[cfg(target_os = "macos")]
                 portrait: None,
                 overlay: None,
@@ -3216,6 +3220,32 @@ impl SceneGraph {
                 .map_or(0, |p| p.request.projection.revision),
         }
     }
+    #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
+    pub fn sets_v2(&mut self, action: super::sets_v2::contract::Action) -> Result<super::sets_v2::contract::Status, String> {
+        use super::sets_v2::{contract::{Action, Status}, RoomProgram};
+        if action.generation() != self.presentation_generation {
+            return Err("Room changed; prepare this v2 set again".into());
+        }
+        if matches!(action, Action::Return { .. }) {
+            self.sets_v2 = None;
+            self.presentation_generation += 1;
+            return Ok(Status { generation: self.presentation_generation, ..Default::default() });
+        }
+        if self.presentation.is_some() || self.presentation_pending.is_some() {
+            return Err("Return the current set to the room before using the v2 dev adapter".into());
+        }
+        if self.sets_v2.is_none() {
+            if !matches!(action, Action::Prepare { .. }) {
+                return Err("Prepare a v2 set first".into());
+            }
+            let (w,h) = Self::base_size();
+            self.sets_v2 = Some(unsafe { RoomProgram::attach(self.scene, self.presentation_generation, w as u32, h as u32)? });
+        }
+        let sources: std::collections::HashMap<_,_> = self.state().items.into_iter()
+            .filter(|item| item.kind != "mic" && item.has_frame)
+            .filter_map(|item| self.source_by_id(&item.id).map(|source| (item.id, source))).collect();
+        unsafe { self.sets_v2.as_mut().unwrap().dispatch(action, |id| sources.get(id).copied().ok_or_else(|| format!("Room source {id} has no ready video frame"))) }
+    }
     pub fn warm_presentation(
         &mut self,
         request: super::presentation::Request,
@@ -3229,6 +3259,8 @@ impl SceneGraph {
         &mut self,
         mut request: super::presentation::Request,
     ) -> Result<std::sync::Arc<super::presentation::Bridge>, String> {
+        #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
+        if self.sets_v2.is_some() { return Err("Return v2 output to the room before opening a v1 set".into()); }
         if let Some(active) = self
             .presentation
             .as_ref()
@@ -3562,6 +3594,11 @@ impl SceneGraph {
             return Ok(self.presentation_status());
         }
         let occupied = active.is_some() || pending.is_some();
+        #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
+        let occupied = occupied || self.sets_v2.is_some();
+        #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
+        { self.sets_v2 = None; }
+
         #[cfg(target_os = "macos")]
         if let Some(p) = self.portrait.as_mut() {
             unsafe {

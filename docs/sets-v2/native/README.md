@@ -1,6 +1,6 @@
 # Native compositor proof
 
-**Built and tested in an isolated host. Not yet wired into Producer rooms or released.**
+**Built and tested in the native host and an isolated dev app. Not released to production.**
 
 Run on macOS with an installed Producer runtime:
 
@@ -20,9 +20,16 @@ npm run test:sets-v2-native
 | [transition-0.png](transition-0.png), [transition-1.png](transition-1.png), [transition-2.png](transition-2.png) | GPU dissolve, wipe and slide; exact endpoints and midpoint assertions; both inputs remain live |
 | [placement-motion.png](placement-motion.png) | Move/resize/hide one placement of a shared capture while another placement stays fixed; invalid frame updates rejected |
 | [viewport-0.png](viewport-0.png), [viewport-1.png](viewport-1.png), [viewport-2.png](viewport-2.png) | Native scene owner applies stretch, contain and cover to a 320×240 design at 640×360 output; transparent letterboxes and crop coordinates checked |
+| `program-0-*.png`, `program-1-*.png` | Frame-driven controller in actual OBS room scenes: both orientations, all three transitions, pause/resume, readiness/cancellation, outgoing lifetime and 12 repeated Next/Back switches per orientation |
+| [landscape-rust-room.png](landscape-rust-room.png), [portrait-rust-room.png](portrait-rust-room.png) | Exact app Rust adapter: strict compiled-plan transport, authorized room source, cropped first-paint markers and ordered native/browser room pixels |
+| [app-ui-proof.json](app-ui-proof.json), [app-ui-run.json](app-ui-run.json) | Full isolated app: six set switches through JS/Tauri/engine routing, rendered endpoint revisions and stale-request rejection after Return; exact source/binary hashes |
 
 All successful cases release their native groups, transitions and synthetic capture references. The probe verifies nested browser activation/showing as well as pixels. CEF testing requires actual cloned framework directories here: launching helpers through a symlinked Frameworks directory produced blank browser surfaces. The isolated host initializes OBS on the AppKit main thread, then runs probe work off that thread while the main event loop services CEF.
 
 `scene.c` owns detached prepared-surface graphs. It validates identity uniqueness, geometry/styles, surface dimensions, recursion/child limits and the sum of requested RGBA color-target bytes before creating groups. A failed preparation does not replace or damage an existing graph. The budget covers the owner's color textures, not CEF/decoder/driver memory or concurrent old/new transitions. The caller must budget those separately. Each native node currently requires positive dimensions; zero-area render nodes need normalization before this API. Source dimensions are a structural check; the eventual resource service must separately confirm first paint/frame readiness.
 
-The C sources expose a trusted native-owner API; they are not an IPC validator. The fixture JSON bridge supports groups and selected leaf types only. Every group currently uses an offscreen texture, including groups the planner could flatten. Pooling, native IPC/source resolution, first-paint readiness, native-clock sampling, presentation receipts, all-target atomic takes, actual camera/gallery/shader fixtures and room integration remain. No frame-time benchmark or Windows/Linux verification is claimed. These browser textures use the existing CEF pipeline; this is not the future HTML-to-canvas build.
+The C sources expose a trusted native-owner API. `contract.rs` independently validates the supported compiled-plan subset at the dev IPC boundary. `mod.rs` resolves authorized room sources, creates graphics batches, verifies real CEF paint markers and assembles a native scene. No imported package can provide raw source pointers or arbitrary HTML. The same module and registration path are exercised by both app and probe.
+
+`program.c` keeps preparation off air, drives transitions from native video ticks and retains outgoing inputs until an endpoint rendered receipt. Native controller tests include 12 repeated Next/Back switches per orientation; all checked pixels stay opaque with no black gaps. This is sampled continuity evidence, not a whole-stream performance benchmark. Receipts identify native source rendering; they do not prove encoder, remote playback or display delivery. Active transitions are serialized; live interruption/retargeting remains unfinished.
+
+Every group currently uses an offscreen texture, including groups the planner could flatten. Pooling, general animation-clip sampling, complete package validation, embedded resource resolution, simultaneous all-target atomic takes, actual camera/gallery/shader fixtures and integrated portrait room routing remain. The dev controls and smoke test currently target landscape. No frame-time benchmark or Windows/Linux verification is claimed. These browser textures use the existing CEF pipeline; this is not the future HTML-to-canvas build.

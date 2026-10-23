@@ -7,6 +7,12 @@ const digest = (file) =>
 const sources = [
   "engine/obs.lock",
   "src-tauri/src/live/obs_min.h",
+  "src-tauri/src/live/sets_v2/contract.rs",
+  "src-tauri/src/live/sets_v2/mod.rs",
+  "src-tauri/src/live/sets_v2/readiness.c",
+  "src-tauri/src/live/sets_v2/readiness.h",
+  "src-tauri/src/live/sets_v2/program.c",
+  "src-tauri/src/live/sets_v2/program.h",
   "src-tauri/src/live/sets_v2/scene.c",
   "src-tauri/src/live/sets_v2/scene.h",
   "src-tauri/src/live/sets_v2/group.c",
@@ -21,6 +27,9 @@ const sources = [
   "scripts/sets-v2/make-native-plans.mjs",
   "scripts/sets-v2/make-media-fixture.swift",
   "scripts/sets-v2/record-native-proof.mjs",
+  "scripts/sets-v2/rust-probe/src/lib.rs",
+  "scripts/sets-v2/rust-probe/Cargo.toml",
+  "scripts/sets-v2/rust-probe/Cargo.lock",
 ];
 const proof = JSON.parse(
   fs.readFileSync(path.join(output, "proof.json"), "utf8"),
@@ -29,6 +38,8 @@ if (
   !proof.browser?.htmlAboveNative ||
   !proof.placement?.sharedCaptureIsolation ||
   !proof.sceneOwner?.actualColorTargetBudget ||
+  proof.program?.length !== 2 ||
+  proof.appAdapter?.length !== 2 ||
   proof.remainingGroups ||
   proof.remainingSyntheticSources
 )
@@ -51,7 +62,7 @@ const report = {
       .map((file) => [file, digest(path.join(output, file))]),
   ),
   limitations: [
-    "Standalone host; not wired into the room",
+    "Actual OBS room and exact Rust adapter tested in standalone host; Tauri controls verified separately",
     "Metal on Apple Silicon only",
     "No performance or end-to-end frame-time claim",
     "No physical camera or microphone capture",

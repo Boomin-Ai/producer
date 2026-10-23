@@ -27,6 +27,8 @@ pub mod rtc_media;
 #[cfg(all(have_engine, feature = "guest-rtc-pilot"))]
 pub mod rtc_program;
 pub mod shaders;
+#[cfg(all(have_engine, feature = "sets-v2-dev", target_os = "macos"))]
+pub mod sets_v2;
 
 /// The virtual camera's label, identical on both platforms: macOS bakes it
 /// into the camera extension (build-camera-extension.sh), Windows patches it

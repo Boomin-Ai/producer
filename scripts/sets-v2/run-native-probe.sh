@@ -30,9 +30,11 @@ cp -cR "$frameworks" "$probe_app/Contents/Frameworks"
 cat > "$probe_app/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>ai.boomin.producer.sets-v2-probe</string><key>CFBundleName</key><string>producer</string><key>CFBundleExecutable</key><string>producer</string><key>CFBundlePackageType</key><string>APPL</string><key>LSUIElement</key><true/></dict></plist>
 PLIST
+CARGO_TARGET_DIR="${PRODUCER_SETS_V2_RUST_TARGET:-/private/tmp/producer-sets-v2-rust-target}" cargo build --offline --manifest-path scripts/sets-v2/rust-probe/Cargo.toml
+rust_lib="${PRODUCER_SETS_V2_RUST_TARGET:-/private/tmp/producer-sets-v2-rust-target}/debug/libproducer_sets_v2_native_adapter_probe.a"
 clang -std=gnu11 -fobjc-arc -Werror=implicit-function-declaration -Isrc-tauri/src/live \
-  scripts/sets-v2/native-probe.m src-tauri/src/live/sets_v2/group.c src-tauri/src/live/sets_v2/transition.c src-tauri/src/live/sets_v2/scene.c \
-  -F"$frameworks" -framework libobs -framework AppKit -framework Metal \
+  scripts/sets-v2/native-probe.m src-tauri/src/live/sets_v2/group.c src-tauri/src/live/sets_v2/transition.c src-tauri/src/live/sets_v2/scene.c src-tauri/src/live/sets_v2/program.c src-tauri/src/live/sets_v2/readiness.c "$rust_lib" \
+  -F"$frameworks" -framework libobs -framework AppKit -framework Metal -framework Security -framework SystemConfiguration -liconv \
   -Wl,-rpath,"$frameworks" -o "$probe_app/Contents/MacOS/producer"
 codesign --force --sign - "$probe_app"
 node scripts/sets-v2/make-native-plans.mjs "$proof_dir"

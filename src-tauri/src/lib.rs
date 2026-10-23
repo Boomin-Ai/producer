@@ -136,7 +136,19 @@ pub fn run() {
             {
                 return Err(std::io::Error::other("RTC development requires its isolated app identifier").into());
             }
+            #[cfg(feature = "sets-v2-dev")]
+            if app.config().identifier != "ai.boomin.producer.sets-v2-dev" {
+                return Err(std::io::Error::other("Sets v2 development requires its isolated app identifier").into());
+            }
+            #[cfg(feature = "sets-v2-dev")]
+            if std::env::var("PRODUCER_SETS_V2_UI_PROBE").as_deref() == Ok("1") {
+                if let Some(window) = app.get_webview_window("main") {
+                    window.navigate("http://localhost:1436/labs/sets-v2/?nativeSmoke=1".parse().unwrap())?;
+                }
+            }
             let data_dir = app.path().app_data_dir()?;
+            #[cfg(feature = "sets-v2-dev")]
+            let data_dir = data_dir.join("sets-v2-dev");
             #[cfg(feature = "portrait-camera-dev")]
             let data_dir = data_dir.join("portrait-camera-dev");
             std::fs::create_dir_all(&data_dir)?;
@@ -292,6 +304,8 @@ pub fn run() {
             live::commands::live_set_transform,
             live::commands::live_apply_scene,
             live::commands::live_set_status,
+            live::commands::live_set_v2,
+            live::commands::live_set_v2_report,
             live::commands::live_portrait_room,
             live::commands::live_portrait_state,
             live::commands::live_select_output,

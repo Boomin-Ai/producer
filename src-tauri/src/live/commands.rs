@@ -1363,3 +1363,37 @@ pub async fn live_program_video_read() -> tauri::ipc::Response {
     #[cfg(not(all(have_engine, target_os = "macos")))]
     tauri::ipc::Response::new(Vec::<u8>::new())
 }
+
+/// Development-only v2 protocol. No native source handles or HTML are accepted.
+#[tauri::command]
+pub async fn live_set_v2(app: tauri::AppHandle, request: serde_json::Value) -> Result<serde_json::Value, String> {
+    #[cfg(all(have_engine, feature = "sets-v2-dev", target_os = "macos"))]
+    {
+        use tauri::Manager;
+        if request.to_string().len() > 512 * 1024 { return Err("Sets v2 request exceeds transport budget".into()); }
+        let action: super::sets_v2::contract::Action = serde_json::from_value(request).map_err(|e| e.to_string())?;
+        return tauri::async_runtime::spawn_blocking(move || {
+            let status = app.state::<AppState>().live.handle.as_ref().ok_or("Live engine unavailable")?.sets_v2(action)?;
+            serde_json::to_value(status).map_err(|e| e.to_string())
+        }).await.map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(all(have_engine, feature = "sets-v2-dev", target_os = "macos")))]
+    { let _ = (app, request); Err("Sets v2 requires the isolated macOS dev build".into()) }
+}
+
+/// Bounded local evidence for the isolated dev-room smoke test.
+#[tauri::command]
+pub async fn live_set_v2_report(app: tauri::AppHandle, result: serde_json::Value) -> Result<(), String> {
+    #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
+    {
+        use tauri::Manager;
+        if app.config().identifier != "ai.boomin.producer.sets-v2-dev" { return Err("Not the isolated v2 app".into()); }
+        let bytes = serde_json::to_vec_pretty(&result).map_err(|e| e.to_string())?;
+        if bytes.len()>64*1024 { return Err("Dev report exceeds budget".into()); }
+        let directory=app.path().app_data_dir().map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+        return std::fs::write(directory.join("sets-v2-ui-proof.json"),bytes).map_err(|e| e.to_string());
+    }
+    #[cfg(not(all(feature = "sets-v2-dev", target_os = "macos")))]
+    { let _=(app,result);Err("Sets v2 dev reporting is disabled".into()) }
+}

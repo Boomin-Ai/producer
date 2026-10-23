@@ -1,0 +1,38 @@
+{
+  "status": "passed",
+  "completedAt": "2026-10-23T17:51:59.426Z",
+  "appIdentifier": "ai.boomin.producer.sets-v2-dev",
+  "appBinarySha256": "478767735cab07ba656bdf71fde4b8429863620e31220d11e39f8d1092a80ad3",
+  "sources": {
+    "src-tauri/Cargo.toml": "93fc819b3feea365c65796fd21db1e06c0b3af66eb7b83c38532c27f3155faf2",
+    "src-tauri/build.rs": "f1faebe28c7c4e347e84b7074144525983d571df61118255767c5f646158b454",
+    "src-tauri/src/lib.rs": "9831e51bb2f22cf04376f674b5613af24de1b88d23a754ef302bf0cc61437817",
+    "src-tauri/src/live/mod.rs": "0f93d1c977f781532e296c05d7b777a1776e37dc726bd0099c761aaf737ac2d9",
+    "src-tauri/src/live/commands.rs": "5aaec68c6e543bd0b76952d0fbebc67107aa0643e3dacd07440725edd8795acb",
+    "src-tauri/src/live/engine.rs": "f1eae3f53bb6cccd456e083ae62f138c3668365d41c4796b11ec90c1f0dfe785",
+    "src-tauri/src/live/graph.rs": "1c142d07a4498e0f149aed16d4f61669ee8004dd1e83fb625cf730b85bfcb49b",
+    "src-tauri/src/live/sets_v2/mod.rs": "b4e845eec56404e3191266a0c1bedcf0462dbd97f8a4bcfd83dbb806da82dd19",
+    "src-tauri/src/live/sets_v2/contract.rs": "e4933a50ac097495779f177568cf072cad64f666f826877832cf492e234490f9",
+    "src-tauri/src/live/sets_v2/program.c": "42c71f9cc94a8f65b2fa9009779ce3672fb943dfc9224f7a111f3262e4c99ff7",
+    "src-tauri/src/live/sets_v2/readiness.c": "0d79713911c789c0395c63624b6570b03a4bed43567d890b110e17e6055da83a",
+    "labs/sets-v2/main.tsx": "08f8f3ef7767a2ff5f7fa39e5164d89c4f271e717e93e1587bdb34139ee6a185",
+    "labs/sets-v2/NativeRoomControls.tsx": "7e053440c5793c6ed20a971a6f8a39e4e9e23c77d90e674ad0ff5b4c27e4b45a",
+    "labs/sets-v2/nativeSmoke.ts": "6e23fc1d00c591edcc4c38882e6e3336cd016a0fc1d5c437a27f5cf1a150d450",
+    "scripts/sets-v2/dev-room.py": "eefeeed234f8623b982abf173491a8b0463559b78b0128a5499a0e24b93606e3",
+    "src-tauri/tauri.sets-v2-dev.conf.json": "c5843c2bf0f93ea54a53382d992089f05322407f791190b6db7dd0cdf2c9b8dd"
+  },
+  "reportSha256": "1e9450c0b6caeed8fd42f306853f526f22125e1cc994d8846159ea30e8b64b4b",
+  "verification": [
+    "full app cargo check with sets-v2-dev",
+    "full native app build, isolated bundle, ad-hoc signature and deep signature verification",
+    "six JS/Tauri/engine/native controller set switches",
+    "first-paint readiness and native endpoint rendered receipts",
+    "return invalidates old-generation requests"
+  ],
+  "limitations": [
+    "landscape app controls; portrait tested in standalone native room",
+    "synthetic color source, no physical capture",
+    "native source-render receipt; not encoder/remote/display receipt",
+    "no end-to-end performance benchmark"
+  ]
+}

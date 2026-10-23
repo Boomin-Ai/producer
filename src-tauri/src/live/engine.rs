@@ -444,6 +444,8 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
     unsafe {
         ffi::producer_person_mask_register();
         ffi::producer_source_appearance_register();
+        #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
+        super::sets_v2::register();
         #[cfg(feature = "guest-rtc-pilot")]
         super::rtc_ingest::register_type();
     };
@@ -717,6 +719,11 @@ pub enum Command {
     PresentationStatus {
         reply: mpsc::Sender<super::presentation::Status>,
     },
+    #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
+    SetsV2 {
+        action: super::sets_v2::contract::Action,
+        reply: mpsc::Sender<Result<super::sets_v2::contract::Status, String>>,
+    },
     PresentationWarm {
         request: super::presentation::Request,
         reply: mpsc::Sender<Result<Arc<super::presentation::Bridge>, String>>,
@@ -899,6 +906,8 @@ fn cmd_name(c: &Command) -> &'static str {
         Command::ApplyScene { .. } => "ApplyScene",
         Command::PresentationWarm { .. } => "PresentationWarm",
         Command::PresentationStatus { .. } => "PresentationStatus",
+        #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
+        Command::SetsV2 { .. } => "SetsV2",
         Command::PortraitRoom { .. } => "PortraitRoom",
         Command::PortraitState { .. } => "PortraitState",
         Command::PortraitTransform { .. } => "PortraitTransform",
@@ -1203,6 +1212,12 @@ impl LiveHandle {
             .map_err(|e| e.to_string())?;
         rx.recv_timeout(Duration::from_secs(5))
             .map_err(|_| "Set engine did not answer".into())
+    }
+    #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
+    pub fn sets_v2(&self, action: super::sets_v2::contract::Action) -> Result<super::sets_v2::contract::Status, String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd.send(Command::SetsV2 { action, reply: tx }).map_err(|e| e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(10)).map_err(|_| "Sets v2 engine did not answer".to_string())?
     }
     pub fn presentation_warm(&self, request: super::presentation::Request) -> Result<(), String> {
         let revision = request.projection.revision;
@@ -2738,6 +2753,11 @@ pub fn start(
                     }
                     Ok(Command::PortraitStop{reply})=>{if portrait_recorder.is_some()||selected_portrait{let _=reply.send(());continue;}if let Some(p)=portrait_preview.take(){p.detach();}#[cfg(target_os="macos")]if let Some(g)=scene.as_mut(){g.portrait_stop();}let _=reply.send(());}
                     Ok(Command::PortraitFrame{reply})=>{#[cfg(target_os="macos")]let frame=scene.as_ref().map(|g|g.portrait_frame()).unwrap_or_default();#[cfg(not(target_os="macos"))]let frame=String::new();let _=reply.send(frame);}
+                    #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
+                    Ok(Command::SetsV2 {action,reply}) => {
+                        let result=scene.as_mut().ok_or_else(||"The dev room is not running".to_string()).and_then(|g|g.sets_v2(action));
+                        let _=reply.send(result);
+                    }
                     Ok(Command::PresentationStatus {reply})=> {let _=reply.send(scene.as_ref().map_or(super::presentation::Status{generation:0,lease:None,revision:0},|g|g.presentation_status()));}
                     Ok(Command::PresentationWarm{request,reply})=>{let result=scene.as_mut().ok_or("Room scene unavailable".to_string()).and_then(|g|g.warm_presentation(request));let _=reply.send(result);}
                     Ok(Command::PresentationPrepare {request,reply})=> {let result=scene.as_mut().ok_or_else(||"The room scene is not running".to_string()).and_then(|g|g.prepare_presentation(request));let _=reply.send(result);}

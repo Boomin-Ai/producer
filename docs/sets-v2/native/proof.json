@@ -1,5 +1,48 @@
 {
-  "obsVersion" : "32.1.2",
+  "backend" : "Metal",
+  "appAdapter" : [
+    {
+      "markerCroppedFromOutput" : true,
+      "strictNativePlanValidation" : true,
+      "nativeRenderedReceipt" : true,
+      "actualBrowserPaintMarker" : true,
+      "orderedRoomPixels" : true,
+      "orientation" : "landscape",
+      "exactAppAdapter" : true,
+      "sourceAuthorization" : true
+    },
+    {
+      "markerCroppedFromOutput" : true,
+      "strictNativePlanValidation" : true,
+      "nativeRenderedReceipt" : true,
+      "actualBrowserPaintMarker" : true,
+      "orderedRoomPixels" : true,
+      "orientation" : "portrait",
+      "exactAppAdapter" : true,
+      "sourceAuthorization" : true
+    }
+  ],
+  "remainingSyntheticSources" : 0,
+  "transitions" : [
+    {
+      "endpointsAndMidpoint" : true,
+      "inputsStayLive" : true,
+      "cleanup" : true,
+      "mode" : "dissolve"
+    },
+    {
+      "endpointsAndMidpoint" : true,
+      "inputsStayLive" : true,
+      "cleanup" : true,
+      "mode" : "wipe"
+    },
+    {
+      "endpointsAndMidpoint" : true,
+      "inputsStayLive" : true,
+      "cleanup" : true,
+      "mode" : "slide"
+    }
+  ],
   "checks" : [
     {
       "orientation" : "landscape",
@@ -44,6 +87,30 @@
       ]
     }
   ],
+  "placement" : {
+    "cleanup" : true,
+    "invalidFrameRejected" : true,
+    "nativeGeometryUpdates" : true,
+    "sharedCaptureIsolation" : true,
+    "visibility" : true
+  },
+  "scope" : "isolated native compositor with synthetic capture, PNG and decoded H.264; actual CEF HTML; no physical capture, room or production integration",
+  "browser" : {
+    "actualBrowserSources" : 2,
+    "htmlBelowNative" : true,
+    "htmlAboveNative" : true,
+    "textPixels" : 758,
+    "wholeGroupMask" : true
+  },
+  "obsVersion" : "32.1.2",
+  "media" : {
+    "foregroundOverVideo" : true,
+    "groupMask" : true,
+    "remainingGroups" : 0,
+    "videoAdvances" : true,
+    "nativeImagePixels" : true,
+    "decodedVideoPixels" : true
+  },
   "sceneOwner" : {
     "actualColorTargetBudget" : true,
     "cleanup" : true,
@@ -53,50 +120,37 @@
     "preflightRejectsInvalidGraph" : true,
     "stretch" : true
   },
-  "placement" : {
-    "cleanup" : true,
-    "invalidFrameRejected" : true,
-    "nativeGeometryUpdates" : true,
-    "sharedCaptureIsolation" : true,
-    "visibility" : true
-  },
-  "media" : {
-    "foregroundOverVideo" : true,
-    "groupMask" : true,
-    "remainingGroups" : 0,
-    "videoAdvances" : true,
-    "nativeImagePixels" : true,
-    "decodedVideoPixels" : true
-  },
-  "transitions" : [
+  "program" : [
     {
-      "endpointsAndMidpoint" : true,
-      "inputsStayLive" : true,
-      "cleanup" : true,
-      "mode" : "dissolve"
+      "orientation" : "landscape",
+      "continuitySamples" : 118,
+      "pauseResume" : true,
+      "nativeClockTransitions" : 3,
+      "actualRoomScene" : true,
+      "endpointRenderedRevision" : 16,
+      "renderSerial" : 262,
+      "latestPreparationWins" : true,
+      "midpointFrames" : 3,
+      "staleAndCancelledTakeRejected" : true,
+      "nextBackSwitches" : 12,
+      "offAirPreparation" : true,
+      "noBlackGapAtSamples" : true
     },
     {
-      "endpointsAndMidpoint" : true,
-      "inputsStayLive" : true,
-      "cleanup" : true,
-      "mode" : "wipe"
-    },
-    {
-      "endpointsAndMidpoint" : true,
-      "inputsStayLive" : true,
-      "cleanup" : true,
-      "mode" : "slide"
+      "orientation" : "portrait",
+      "continuitySamples" : 118,
+      "pauseResume" : true,
+      "nativeClockTransitions" : 3,
+      "actualRoomScene" : true,
+      "endpointRenderedRevision" : 16,
+      "renderSerial" : 262,
+      "latestPreparationWins" : true,
+      "midpointFrames" : 3,
+      "staleAndCancelledTakeRejected" : true,
+      "nextBackSwitches" : 12,
+      "offAirPreparation" : true,
+      "noBlackGapAtSamples" : true
     }
   ],
-  "backend" : "Metal",
-  "browser" : {
-    "actualBrowserSources" : 2,
-    "htmlBelowNative" : true,
-    "htmlAboveNative" : true,
-    "textPixels" : 758,
-    "wholeGroupMask" : true
-  },
-  "remainingGroups" : 0,
-  "remainingSyntheticSources" : 0,
-  "scope" : "isolated native compositor with synthetic capture, PNG and decoded H.264; actual CEF HTML; no physical capture, room or production integration"
+  "remainingGroups" : 0
 }
