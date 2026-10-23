@@ -27,7 +27,9 @@
     "test:presentation-native-output": "node scripts/test-presentation-output.mjs --native",
     "test:scene-restoration": "node scripts/test-scene-restoration.mjs",
     "test:guest-reconnect": "node scripts/test-guest-reconnect.mjs",
-    "test:guest-reconnect-browser": "node scripts/test-guest-reconnect-browser.mjs"
+    "test:guest-reconnect-browser": "node scripts/test-guest-reconnect-browser.mjs",
+    "test:sets-v2": "node scripts/test-sets-v2.mjs",
+    "dev:sets-v2": "vite --host 127.0.0.1 --port 1436 --strictPort --open /labs/sets-v2/"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.0",
