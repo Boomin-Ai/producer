@@ -19,7 +19,7 @@
 
 1. **Contracts and runtime foundation — initial implementation and tests complete; portable clips/cues/package integration remains**
    Typed data validation, scoped revision ordering, privacy projection, reusable audience poll state, ordered scene compilation, per-canvas viewport transforms, resource lifetime, transactional selection and deterministic animation. Tests must cover differently styled poll sets consuming identical public state; portrait/landscape scaling; stale data/take rejection; private data not reaching render plans.
-2. **Native compositor vertical slice — pending**
+2. **Native compositor vertical slice — isolated Metal pixel proof built and tested; room adapter pending**
    Implement ordered surfaces/groups in pinned OBS; camera + embedded media + linked gallery + graphics mixed in one masked group. Test real raw output pixels, source reuse, alpha and typography. Native program preview is authoritative; no claim that browser simulation proves composition.
 3. **Motion and segment readiness — pending**
    Compiled animation evaluated on native time; interruption/pause/seek rules; selected-layout/gallery prediction; measured Next/Back continuity across media, shaders and multi-camera fixtures.
@@ -41,3 +41,13 @@ Source baseline de5667c (v0.4.73 release plus release verification docs). Existi
 ## First milestone evidence
 
 2026-10-23: initial contracts, data hub, poll state, rules, graph compiler/pass planner, resource leases, motion sampler and presentation controller implemented. 15 integration checks, browser lab check, project/workbench TypeScript checks and Vite app build pass. See README.md for exact limitations; native renderer and room UX are not yet integrated.
+
+## Native proof progress
+
+2026-10-23: real OBS ordered groups, group opacity/rounded masks, live dissolve/wipe/slide and per-placement geometry/visibility updates implemented. Standalone Apple Silicon/Metal probe reads actual compiled v2 portrait/landscape plans, renders a synthetic moving capture, loads PNG/H.264 through shipped plugins and composites two real CEF graphics surfaces around native video. Captured pixels verify layer order, clipping, typography, scaled canvases, transition endpoints/midpoints, live inputs and reference cleanup. One shared source can move in one placement while staying fixed in another. See [native/README.md](native/README.md), raw captures and source-hashed run evidence.
+
+The graphics serializer emits one bounded, escaped document per ordered graphics batch. No arbitrary HTML authoring or HTML-to-canvas backend was added. Integration suite now has 16 checks.
+
+Native prepared-surface scene ownership is also built and verified: complete-tree structural preflight, requested color-target allocation budgets, detached assembly/rollback, prepared-source reference ownership and actual contain/cover/stretch output transforms. Tests reject duplicate identities, unresolved sources and invalid styles before creating groups; failed new preparations preserve the existing renderable graph. These are trusted native descriptors, not an exposed IPC format. Pixel dimensions alone do not prove browser/media first-paint readiness.
+
+This completes the initial native primitive/owner proof, not the room cutover. Next: strict native IPC/package validation, authorized source/graphics resolution, graphics/media first-paint readiness and actual presented receipts; then native-clock motion/segment preparation and editor/source-service integration. Actual cameras, galleries, shaders, both-output atomic take and performance still need the integrated renderer. No production changes.

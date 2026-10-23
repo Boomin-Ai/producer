@@ -7,7 +7,7 @@ import path from "node:path";
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "producer-sets-v2-tests-"));
 const bundle = await build({
   stdin: {
-    contents: `export * from './src/features/sets-v2/data';export * from './src/features/sets-v2/interactions';export * from './src/features/sets-v2/scene';export * from './src/features/sets-v2/motion';export * from './src/features/sets-v2/resources';export * from './src/features/sets-v2/presentation';export * from './src/features/sets-v2/rules';export * from './src/features/sets-v2/fixtures';export * from './src/features/sets-v2/planner';`,
+    contents: `export * from './src/features/sets-v2/data';export * from './src/features/sets-v2/interactions';export * from './src/features/sets-v2/scene';export * from './src/features/sets-v2/motion';export * from './src/features/sets-v2/resources';export * from './src/features/sets-v2/presentation';export * from './src/features/sets-v2/rules';export * from './src/features/sets-v2/fixtures';export * from './src/features/sets-v2/planner';export * from './src/features/sets-v2/graphics';`,
     resolveDir: process.cwd(),
   },
   bundle: true,
@@ -34,6 +34,7 @@ const {
   PresentationController,
   ReactionRules,
   planPasses,
+  graphicsSurface,
 } = core;
 let passed = 0;
 const test = async (name, fn) => {
@@ -659,6 +660,61 @@ await test("Definitions, inputs, public properties and malformed data are valida
   const config = poll.definition;
   config.choices[0].id = "mutated";
   assert.equal(poll.definition.choices[0].id, "a");
+});
+await test("ordered graphics documents escape data and reject unsupported native semantics", () => {
+  const node = (id, kind, x, y, width, height, properties = {}) => ({
+    id,
+    kind,
+    bounds: { x, y, width, height },
+    properties,
+    children: [],
+  });
+  const text = node("caption", "text", -10.25, 7.5, 100, 50, {
+    text: '<img src=x onerror="alert(1)"> & hi',
+    color: "#ffffff",
+    fontSize: 24,
+    align: "center",
+  });
+  const paint = {
+    ...node("paint", "graphic", 0, 0, 200, 100),
+    resource: "graphic:gold",
+  };
+  const result = graphicsSurface([paint, text], { "graphic:gold": "#ffcc00" });
+  assert.deepEqual(result.bounds, { x: -11, y: 0, width: 211, height: 100 });
+  assert.deepEqual(result.nodeIds, ["paint", "caption"]);
+  assert(
+    result.html.includes(
+      "&lt;img src=x onerror=&quot;alert(1)&quot;&gt; &amp; hi",
+    ),
+  );
+  assert(!result.html.includes("<img"));
+  assert(result.html.includes("default-src 'none'"));
+  assert.throws(() => graphicsSurface([paint], {}), /Unresolved/);
+  assert.throws(
+    () =>
+      graphicsSurface([paint], { "graphic:gold": "url(https://example.test)" }),
+    /hex/,
+  );
+  assert.throws(
+    () => graphicsSurface([{ ...text, kind: "source" }], {}),
+    /flat/,
+  );
+  assert.throws(
+    () => graphicsSurface([{ ...text, properties: { rotation: 30 } }], {}),
+    /native placement/,
+  );
+  assert.throws(
+    () =>
+      graphicsSurface(
+        [{ ...text, bounds: { x: 0, y: 0, width: 8192, height: 8192 } }],
+        {},
+      ),
+    /budget/,
+  );
+  assert.throws(
+    () => graphicsSurface([{ ...text, properties: { fontSize: NaN } }], {}),
+    /style/,
+  );
 });
 console.log(
   `Sets v2: ${passed} integration checks passed. Native adapter/hosted transports are not exercised.`,

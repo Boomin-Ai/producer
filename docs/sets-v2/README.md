@@ -1,4 +1,4 @@
-# Sets v2 foundation
+# Sets v2 implementation
 
 Worktree: `/Users/klevelandbishop/Documents/producer-sets-v2`
 Branch: `refactor/sets-v2`
@@ -10,6 +10,7 @@ Read [PLAN.md](PLAN.md) for the complete refactor sequence. HTML-in-canvas is de
 
 - `scene.ts`: strict `producer.set/2` initial graph contract, mixed ordered groups, masks, source roles, public data bindings, independent set instances and per-set design canvases. Default design sizes are 1920×1080 and 1080×1920; custom dimensions are supported. Output viewport scales the design without rewriting node geometry.
 - `planner.ts`: ordered graphics/native operation sequence. Graphics batches never jump across native sources. Mixed masked groups and group opacity request offscreen passes. Design-resolution memory estimation is not actual native allocation enforcement.
+- `graphics.ts`: bounded graphics-batch documents with escaped text, validated paints/styles, no scripts or external resources. Native owner places each resulting browser texture in its original group order. Unsupported placement transforms fail explicitly instead of being clipped silently.
 - `data.ts`: transport-neutral, room/producer-scoped data snapshots, schema validation, monotonic revision/generation, payload budgets, freshness, public/operator field projection. Provider generation resets are host-controlled.
 - `interactions.ts`: one reusable poll session independent of visual skins; private voter identities/ballots, explicit close/reveal/reset, sequence/round handling, bounded voter capacity. Results are absent from renderable data until reveal.
 - `rules.ts`: public-data rising-edge conditions with explicit automatic/host-approved cue proposals. Actions are creator-authored, not payload instructions. Host decisions are single-use and tied to current source revision. Actual cue dispatch is intentionally delegated to the eventual authorized show controller.
@@ -23,6 +24,7 @@ Read [PLAN.md](PLAN.md) for the complete refactor sequence. HTML-in-canvas is de
 
 ```sh
 npm run test:sets-v2
+npm run test:sets-v2-native # macOS; installed Producer runtime required
 npm run dev:sets-v2
 ```
 
@@ -36,15 +38,16 @@ PRODUCER_PLAYWRIGHT_MODULE=/path/to/playwright-core/index.mjs node scripts/test-
 
 ## Verification
 
-- 15 integration checks pass: poll privacy/reset/deduplication, scoped snapshots, two skins, portrait/landscape/custom canvas scaling, ordered mixed groups, stale data, rule approvals, animation, resource ownership, failed/stale takes, dual-target compilation and serialized presentation receipts.
+- 16 integration checks pass: poll privacy/reset/deduplication, scoped snapshots, two skins, portrait/landscape/custom canvas scaling, ordered mixed groups, stale data, rule approvals, animation, resource ownership, failed/stale takes, dual-target compilation, serialized presentation receipts and graphics-document validation/escaping.
 - Chrome workbench check passes: votes remain hidden until reveal, same poll survives orientation/output changes, no participant identities in public data, both skins respond, no page errors.
 - Project TypeScript check passes. Workbench standalone TypeScript check passes.
 - Existing Vite app production build passes, with its existing large-chunk advisory. The lab is a development entry, not wired into the production room UI.
+- Real native Metal pixel proof: compiled portrait/landscape plans, ordered masked groups, opacity, synthetic live capture, actual PNG/decoded H.264, actual CEF text around native video, dissolve/wipe/slide and per-placement geometry/visibility. The native scene owner assembles prepared surfaces, applies design-to-output contain/cover/stretch and checks the whole graph's requested color-target budget before creating groups. Invalid/failed preparations leave an existing composition renderable. See [native evidence](native/README.md). Native code is compiled by the isolated probe and is not yet registered in the app.
 
 ## Not yet implemented
 
-This is the control-plane/compiler foundation, not the completed refactor. No new native OBS groups, browser surface pool, native v2 renderer, room-editor source creation, persistent instance store, direct-show room picker, set migration, hosted poll transport, incoming webhook endpoint, external API polling scheduler or production release is claimed. Animation clips/cue state/rule definitions are separate runtime contracts, not yet the complete portable package authoring format. Native all-target atomic take and frame receipts are an adapter contract tested with mocks, not an achieved dual-canvas output property.
+The completed pieces are the control-plane/compiler foundation, native primitive proof and native prepared-surface scene owner. The full refactor is still underway. Browser surface pooling, native IPC/package validation, first-paint readiness, room-editor source creation, persistent instance store, direct-show room picker, set migration and a production release remain. Hosted poll transport, incoming webhooks and API polling remain future data-source infrastructure. Animation clips/cue state/rule definitions are separate runtime contracts, not yet the complete portable authoring package. Native all-target atomic take and frame receipts are still an adapter contract tested with mocks. Windows/Linux native behavior and integrated frame performance are unverified.
 
 ## Next milestone
 
-Implement the native ordered-compositor vertical slice against the existing pinned OBS engine. Feed the pass planner a masked group containing graphics → live capture → graphics plus an asset/video and verify actual raw output pixels, live motion, alpha and cleanup. Establish native readiness/receipt enforcement before connecting the room picker. Integrate clips/cues, source recipes and instance persistence as the contracts mature. Preserve and migrate the full audited library only after this path is verified.
+Connect the native scene owner to authorized source/graphics resolution, strict IPC validation and first-paint readiness. Establish native presentation receipts before connecting the room picker. Connect the motion clock and prepare incoming segments while retaining outgoing live media. Then integrate source recipes/editor/instance persistence and migrate the full audited library.

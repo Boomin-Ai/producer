@@ -1,0 +1,102 @@
+{
+  "obsVersion" : "32.1.2",
+  "checks" : [
+    {
+      "orientation" : "landscape",
+      "orderedLayers" : true,
+      "transparentCorners" : true,
+      "output" : [
+        1280,
+        720
+      ],
+      "compiledRenderPlan" : true,
+      "maskedMixedGroup" : true,
+      "groupOpacity" : true,
+      "textureBytes" : 29515776,
+      "nativeGroups" : 7,
+      "aggregateBudgetRejected" : true,
+      "nativeOwner" : true,
+      "liveFramesAdvance" : true,
+      "design" : [
+        1920,
+        1080
+      ]
+    },
+    {
+      "orientation" : "portrait",
+      "orderedLayers" : true,
+      "transparentCorners" : true,
+      "output" : [
+        720,
+        1280
+      ],
+      "compiledRenderPlan" : true,
+      "maskedMixedGroup" : true,
+      "groupOpacity" : true,
+      "textureBytes" : 29516544,
+      "nativeGroups" : 7,
+      "aggregateBudgetRejected" : true,
+      "nativeOwner" : true,
+      "liveFramesAdvance" : true,
+      "design" : [
+        1080,
+        1920
+      ]
+    }
+  ],
+  "sceneOwner" : {
+    "actualColorTargetBudget" : true,
+    "cleanup" : true,
+    "contain" : true,
+    "cover" : true,
+    "failedPreparePreservesExistingGraph" : true,
+    "preflightRejectsInvalidGraph" : true,
+    "stretch" : true
+  },
+  "placement" : {
+    "cleanup" : true,
+    "invalidFrameRejected" : true,
+    "nativeGeometryUpdates" : true,
+    "sharedCaptureIsolation" : true,
+    "visibility" : true
+  },
+  "media" : {
+    "foregroundOverVideo" : true,
+    "groupMask" : true,
+    "remainingGroups" : 0,
+    "videoAdvances" : true,
+    "nativeImagePixels" : true,
+    "decodedVideoPixels" : true
+  },
+  "transitions" : [
+    {
+      "endpointsAndMidpoint" : true,
+      "inputsStayLive" : true,
+      "cleanup" : true,
+      "mode" : "dissolve"
+    },
+    {
+      "endpointsAndMidpoint" : true,
+      "inputsStayLive" : true,
+      "cleanup" : true,
+      "mode" : "wipe"
+    },
+    {
+      "endpointsAndMidpoint" : true,
+      "inputsStayLive" : true,
+      "cleanup" : true,
+      "mode" : "slide"
+    }
+  ],
+  "backend" : "Metal",
+  "browser" : {
+    "actualBrowserSources" : 2,
+    "htmlBelowNative" : true,
+    "htmlAboveNative" : true,
+    "textPixels" : 758,
+    "wholeGroupMask" : true
+  },
+  "remainingGroups" : 0,
+  "remainingSyntheticSources" : 0,
+  "scope" : "isolated native compositor with synthetic capture, PNG and decoded H.264; actual CEF HTML; no physical capture, room or production integration"
+}

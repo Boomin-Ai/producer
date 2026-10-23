@@ -29,6 +29,7 @@
     "test:guest-reconnect": "node scripts/test-guest-reconnect.mjs",
     "test:guest-reconnect-browser": "node scripts/test-guest-reconnect-browser.mjs",
     "test:sets-v2": "node scripts/test-sets-v2.mjs",
+    "test:sets-v2-native": "bash scripts/sets-v2/run-native-probe.sh",
     "dev:sets-v2": "vite --host 127.0.0.1 --port 1436 --strictPort --open /labs/sets-v2/"
   },
   "dependencies": {

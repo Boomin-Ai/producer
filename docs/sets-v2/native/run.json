@@ -1,0 +1,60 @@
+{
+  "status": "passed",
+  "startedAt": "2026-10-23T16:07:27Z",
+  "completedAt": "2026-10-23T16:07:51.337Z",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "runtime": {
+    "app": "/Applications/Producer.app",
+    "obsVersion": "32.1.2",
+    "sha256": "a56d94884436504ba6a3fe0df7051436d2b7d2ac8d6794d1b947cecea605f13c"
+  },
+  "staging": "isolated ad-hoc-signed host with APFS-cloned frameworks and private CEF profile",
+  "sources": {
+    "engine/obs.lock": "90165ba0bff084af2a6fbbabcff98d1a124d06546f29693d2aaf557a6232cbee",
+    "src-tauri/src/live/obs_min.h": "6fa2d7fb26da866d8f133ec6815680338c5f1b7e1c2c9dd9e750f847ad5451fb",
+    "src-tauri/src/live/sets_v2/scene.c": "319e49d49829a69969471102fcdbe407e62abf08a555e4c7045b8add0ecbc8f1",
+    "src-tauri/src/live/sets_v2/scene.h": "a882a1d91d56ceba554f87b3d94e987be9dbc3677a29cea20e08830ac9a195b5",
+    "src-tauri/src/live/sets_v2/group.c": "c8e7ac3845fbf749a35daf0f3c2c25cc9c5872db28b91955ef551119dfb17efd",
+    "src-tauri/src/live/sets_v2/group.h": "4d4f393e31c74c73810b929ac503e0fd5c47a15e1883b155e3419a0b4f4f59f3",
+    "src-tauri/src/live/sets_v2/transition.c": "7f09da7f6df23045c103a63a6a79b88f44467fb0ed3d12061d5b043b5cac35e7",
+    "src-tauri/src/live/sets_v2/transition.h": "069f510720fc90fa5fcecc1aa3fdcb8b5f51614a29305fc7fdc0b1561ef2c4a4",
+    "src/features/sets-v2/scene.ts": "7f99258601503235335cfb1a5ba447fef8db6f1b8b940b8d33a0ba5051ff82f1",
+    "src/features/sets-v2/planner.ts": "c39e447f442b38f01a147bdc63ba2390869811059dd4b4bd415889a961f5fe50",
+    "src/features/sets-v2/graphics.ts": "4b4b8a5a226180f9e8cc951cb503024a217537f0665132e669eed36599dca0a3",
+    "scripts/sets-v2/native-probe.m": "11a5ce7367bc0f40147670eec6ad4db3a39e5639cb52fae4ee80ed3a58eda878",
+    "scripts/sets-v2/run-native-probe.sh": "7ae9f9acfe6b7439b6336fac9dce28e7f505fb671bf4ea190fbb5d97ff9f92aa",
+    "scripts/sets-v2/make-native-plans.mjs": "fbcd4e0c332c7107fb97ad63c9a3380584a9350b003b99be36270781107b1f8b",
+    "scripts/sets-v2/make-media-fixture.swift": "c22994a924c6c9df549d7bb3a78ca56ca6ce0a72fccc0ba5a63f06591e595c59",
+    "scripts/sets-v2/record-native-proof.mjs": "c141ed80eda0bce03ca2eb3a6f138ca7c1063fcd0fe3583da0e537deb9b97b24"
+  },
+  "artifacts": {
+    "background-surface.json": "e05338bb8b9f2888921451f28c0faa582874dee03ef2673dee6dece417039d2e",
+    "background.html": "cfee5505877b92db149bbe22078cd73bdec1442f84848be39e92ff05c2739339",
+    "foreground-surface.json": "7924766b1a6db7bf0e643b7187e8157a850f753fbab09a936a9e59e18ae4780e",
+    "foreground.html": "d661d509734aa3d0e749deb8597c0eb40523c3741b21ceff62758ba06bba071e",
+    "landscape-passes.json": "b408967533edc5f5754c38457db6c1b41345e3df34ee4ea13595241f5b8a294e",
+    "landscape-plan.json": "2b8e1efbf040bff64aca60d48c8ab259a813dc94f66aac6075320f00a8e849fe",
+    "landscape.png": "837dfc4ba7a586f7aed43877947ae210875cc2137f8a6a262040636ef5303c02",
+    "mixed-html-native.png": "9d49700ed102ac7487e264c67385a22c34bc61999cbe107b494c45ec035a755b",
+    "mixed-image-video.png": "7691d7c322461fa50d576566c5b9f056627b081cbedf654cdc9398e58fc1950a",
+    "placement-motion.png": "0e0f222d2d489c321ceb73cc3b906d45cf2838e46e74a6c36a6ceb8695f363fa",
+    "portrait-passes.json": "03658a9889b5e9eb3ce63e897584585e91f5eb2b9376d179e51dbb49c740e626",
+    "portrait-plan.json": "ec9e4ed10a005a3f30c6503f376229d9134ba3fa034a2166c60bf2c60b8e29b0",
+    "portrait.png": "aadb368215f5b25de4e1bbe673aa8ce14415689a447232fc0216d1d15e1dab52",
+    "proof.json": "fba6a394909953ed2df61c8174f5c8c1864e0eb876ea6fc6469eab004c01a8f2",
+    "transition-0.png": "2e8aebb8bf233838e73ce51fe299cf1bcb53734e60c9a6ef09071017e2a7b9b1",
+    "transition-1.png": "42195db4b05a0fba656cbdd1e82aaa9b97a6eb2f5851432636186e4b594cc543",
+    "transition-2.png": "9966e51dfc5c2e5114dc7728313330299bf5f493bbd6a1b9b9fc24ff80faeb87",
+    "viewport-0.png": "290db2532399a1af19345f0687eaac08e907a5a8f469c511dd228da0b71571b2",
+    "viewport-1.png": "7947ac4aecbca2eef329da889b4dbcc925255fa08e82b8e9cf4085f560720760",
+    "viewport-2.png": "7deebb8137513966c8826c9ea35ef1f4e1fe911df54250122d83c43b75d04417"
+  },
+  "limitations": [
+    "Standalone host; not wired into the room",
+    "Metal on Apple Silicon only",
+    "No performance or end-to-end frame-time claim",
+    "No physical camera or microphone capture",
+    "Fixture bridge is not a native IPC validator"
+  ]
+}
