@@ -1,0 +1,24 @@
+{
+  "expected": [
+    136,
+    96,
+    46,
+    255
+  ],
+  "before": {
+    "nonlinear": [
+      136,
+      96,
+      46,
+      255
+    ],
+    "linear": [
+      193,
+      165,
+      118,
+      255
+    ]
+  },
+  "scope": "actual native Metal render readback using original group implementation, not an image color adjustment",
+  "baselineCommit": "d1b693d"
+}

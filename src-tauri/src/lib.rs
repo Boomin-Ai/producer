@@ -143,7 +143,7 @@ pub fn run() {
             #[cfg(feature = "sets-v2-dev")]
             if std::env::var("PRODUCER_SETS_V2_UI_PROBE").as_deref() == Ok("1") {
                 if let Some(window) = app.get_webview_window("main") {
-                    let url=if std::env::var("PRODUCER_SETS_V2_SHOWCASE_PROBE").as_deref()==Ok("1"){"http://localhost:1436/?roomSmoke=1&roomShowcase=1"}else if std::env::var("PRODUCER_SETS_V2_RESOLUTION_PROBE").as_deref()==Ok("1"){"http://localhost:1436/?roomSmoke=1&roomResolution=1"}else if std::env::var("PRODUCER_SETS_V2_TIMING_PROBE").as_deref()==Ok("1"){"http://localhost:1436/?roomSmoke=1&roomTiming=1"}else{"http://localhost:1436/?roomSmoke=1"};
+                    let url=if std::env::var("PRODUCER_SETS_V2_INSPECT").as_deref()==Ok("1"){"http://localhost:1436/?roomInspect=1"}else if std::env::var("PRODUCER_SETS_V2_COLOR_PROBE").as_deref()==Ok("1"){"http://localhost:1436/?roomSmoke=1&roomShowcase=1&roomColor=1"}else if std::env::var("PRODUCER_SETS_V2_SHOWCASE_PROBE").as_deref()==Ok("1"){"http://localhost:1436/?roomSmoke=1&roomShowcase=1"}else if std::env::var("PRODUCER_SETS_V2_RESOLUTION_PROBE").as_deref()==Ok("1"){"http://localhost:1436/?roomSmoke=1&roomResolution=1"}else if std::env::var("PRODUCER_SETS_V2_TIMING_PROBE").as_deref()==Ok("1"){"http://localhost:1436/?roomSmoke=1&roomTiming=1"}else{"http://localhost:1436/?roomSmoke=1"};
                     window.navigate(url.parse().unwrap())?;
                 }
             }

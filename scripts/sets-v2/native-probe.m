@@ -179,6 +179,7 @@ static void require(bool condition, const char *message) {
     exit(3);
   }
 }
+static bool capture_linear=false;
 static NSData *capture(obs_source_t *source, uint32_t designW, uint32_t designH,
                        uint32_t outW, uint32_t outH) {
   obs_enter_graphics();
@@ -193,7 +194,11 @@ static NSData *capture(obs_source_t *source, uint32_t designW, uint32_t designH,
   gs_matrix_identity();
   gs_blend_state_push();
   gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
+  bool prev_linear=gs_set_linear_srgb(capture_linear);
+  bool prev_fb=gs_framebuffer_srgb_enabled();gs_enable_framebuffer_srgb(capture_linear);
   obs_source_video_render(source);
+  require(gs_get_linear_srgb()==capture_linear && gs_framebuffer_srgb_enabled()==capture_linear,"source restores inherited color state");
+  gs_enable_framebuffer_srgb(prev_fb);gs_set_linear_srgb(prev_linear);
   gs_blend_state_pop();
   gs_matrix_pop();
   gs_texrender_end(target);
@@ -811,6 +816,43 @@ static NSDictionary *text_quality_proof(NSString *out) {
   return @{@"scope":@"Isolated text graphics via actual Rust serializer, CEF plugin, native group compositor and RoomProgram cached take; optional prototype, no production quality change",@"timingScope":@"25 synchronous render+RGBA readbacks including allocation; not GPU-only/frame/encoder timing",@"variants":results};
 }
 
+static NSDictionary *color_context_proof(NSString *out) {
+  obs_source_t *tint=solid(320,240,136./255.,96./255.,46./255.,false);
+  obs_source_t *group=producer_set_v2_group_create(320,240,0,1);
+  require(add(group,tint,0,0,320,240),"mid-tone color source");producer_set_v2_group_seal(group);
+  obs_source_t *masked=producer_set_v2_group_create(320,240,32,1);
+  require(add(masked,group,0,0,320,240),"nested masked color source");producer_set_v2_group_seal(masked);
+  obs_source_t *clipped=producer_set_v2_group_create(320,240,0,1);
+  require(add(clipped,group,-20,0,360,240),"overflow clipping color source");producer_set_v2_group_seal(clipped);
+  obs_source_t *program=producer_set_v2_program_create(320,240);
+  require(producer_set_v2_program_prepare(program,masked,1),"program color scene prepare");
+  require(producer_set_v2_program_cached_ready(program,1),"program color readiness");
+  require(producer_set_v2_program_take(program,1,0,PRODUCER_SET_V2_DISSOLVE),"program color take");
+  capture(program,320,240,320,240);
+  NSMutableArray *sources=[NSMutableArray arrayWithArray:@[[NSValue valueWithPointer:group],[NSValue valueWithPointer:masked],[NSValue valueWithPointer:clipped],[NSValue valueWithPointer:program]]];
+  NSMutableArray *names=[NSMutableArray arrayWithArray:@[@"direct",@"masked",@"clipped",@"program"]];
+  for(int mode=0;mode<3;mode++){
+    obs_source_t *transition=producer_set_v2_transition_create(group,masked,320,240,mode);
+    require(transition!=NULL,"mid-tone native transition");obs_enter_graphics();producer_set_v2_transition_frame(transition,.5);obs_leave_graphics();
+    [sources addObject:[NSValue valueWithPointer:transition]];[names addObject:[NSString stringWithFormat:@"transition-%d",mode]];
+  }
+  NSMutableArray *checks=[NSMutableArray array];
+  for(size_t i=0;i<sources.count;i++)for(int linear=0;linear<2;linear++){
+    capture_linear=linear;NSData *frame=capture([sources[i] pointerValue],320,240,320,240);
+    const uint8_t *p=pixel(frame,320,160,120);fprintf(stderr,"COLOR %s/%d: %u %u %u\n",[(NSString *)names[i] UTF8String],linear,p[0],p[1],p[2]);
+    png(frame,320,240,[out stringByAppendingPathComponent:[NSString stringWithFormat:@"color-%@-%d.png",names[i],linear]]);
+    color(frame,320,160,120,136,96,46,255,"midtones survive linear/nonlinear canvas");
+    if(i==1||i==3)color(frame,320,0,0,0,0,0,0,"rounded corner stays transparent");
+    [checks addObject:@{@"source":names[i],@"linear":@(linear),@"r":@(p[0]),@"g":@(p[1]),@"b":@(p[2])}];
+  }
+  capture_linear=false;
+  for(size_t i=4;i<sources.count;i++)obs_source_release([sources[i] pointerValue]);
+  obs_source_release(program);obs_source_release(clipped);obs_source_release(masked);obs_source_release(group);obs_source_release(tint);
+  for(int i=0;i<300&&(producer_set_v2_live_groups()||producer_set_v2_live_programs()||producer_set_v2_live_transitions());i++)usleep(10000);
+  require(!producer_set_v2_live_groups()&&!producer_set_v2_live_programs()&&!producer_set_v2_live_transitions(),"color context fixtures released");
+  return @{@"checks":checks,@"scope":@"known midtone in direct, clipped, masked, program and three transition paths; both linear/nonlinear canvas state; inherited state restored"};
+}
+
 static struct producer_set_v2_program_status program_status(obs_source_t *p) {
   struct producer_set_v2_program_status status = {0};
   require(producer_set_v2_program_status(p, &status), "native program status");
@@ -1373,6 +1415,11 @@ static int runProbe(int argc, char **argv) {
     producer_source_appearance_register();
     sets_v2_rust_register();
     register_test();
+    if(getenv("PRODUCER_PROBE_COLOR_ONLY")){
+      NSDictionary *report=color_context_proof(out);
+      [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:@"color-proof.json"] atomically:YES];
+      obs_shutdown();puts("PASS: native color contexts");return 0;
+    }
     if (getenv("PRODUCER_PROBE_SHOWCASE_ONLY")) {
       load_plugin(app,@"image-source");load_plugin(app,@"obs-browser");obs_post_load_modules();
       NSArray *rooms=real_room_proof(out);

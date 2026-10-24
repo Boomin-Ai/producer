@@ -44,6 +44,22 @@ export async function roomSmoke(timingOnly=false,resolutionOnly=false,showcaseOn
    const timer=setInterval(()=>{void import('./preparedScenes').then(m=>invoke('live_set_v2_report',{result:{kind:'showcase-preparing',debug:m.preparationDebug().map(s=>({...s,entries:s.entries.filter(e=>e.state.state!=='ready')})),body:document.body.innerText.slice(-1800)}}));},5000);
    try{await until(()=>{const p=document.querySelector<HTMLElement>('.set-controls[data-layouts-total]');const failure=document.querySelector('.set-error')?.textContent;if(failure)throw Error(failure);return p?.dataset.layoutsTotal==='12'&&p.dataset.layoutsReady==='12';},'all 12 showcase layouts ready',2400);}finally{clearInterval(timer);}
 
+   if(new URLSearchParams(location.search).has('roomColor')){
+    button('Output settings')!.click();
+    const views=await until(()=>document.querySelector('[aria-label="Room output view"]'),'output view');
+    (await until(()=>button('Portrait',views),'portrait view')).click();
+    const generation=(await invoke<{generation:number}>('live_set_status')).generation;
+    await until(async()=>{const s=await invoke<{renderedRevision:number;transitioning:boolean}>('live_set_v2',{request:{op:'status',generation,outputId:'portrait'}}).catch(()=>null);return s&&s.renderedRevision>0&&!s.transitioning?s:null;},'portrait native output');
+    const sample=await until(async()=>{
+     const frame=await invoke<string>('live_portrait_frame');if(!frame)return null;
+     const img=new Image();img.src=frame.startsWith('data:')?frame:'data:image/jpeg;base64,'+frame;await img.decode();
+     const canvas=document.createElement('canvas');canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;const ctx=canvas.getContext('2d')!;ctx.drawImage(img,0,0);
+     const actual=[...ctx.getImageData(Math.round(canvas.width*.5),Math.round(canvas.height*.71),1,1).data];
+     return actual.slice(0,3).every((v,i)=>Math.abs(v-[136,96,46][i])<=6)?{actual,width:canvas.width,height:canvas.height}:null;
+    },'portrait amber matches source RGB');
+    button('Close output settings')?.click();
+    await invoke('live_set_v2_report',{result:{ok:true,kind:'portrait-color',expected:[136,96,46],...sample,completedAt:new Date().toISOString()}});return;
+   }
    const checks=[];const generation=(await invoke<{generation:number}>('live_set_status')).generation;
    document.querySelector<HTMLButtonElement>('.set-mode-action')!.click();
    for(let step=0;step<3;step++){

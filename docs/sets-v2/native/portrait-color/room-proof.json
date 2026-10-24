@@ -1,0 +1,18 @@
+{
+  "actual": [
+    131,
+    96,
+    41,
+    255
+  ],
+  "completedAt": "2026-10-24T22:55:39.572Z",
+  "expected": [
+    136,
+    96,
+    46
+  ],
+  "height": 1920,
+  "kind": "portrait-color",
+  "ok": true,
+  "width": 1080
+}

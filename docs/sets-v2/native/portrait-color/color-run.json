@@ -1,0 +1,33 @@
+{
+  "status": "passed",
+  "recordedAt": "2026-10-24T22:56:22Z",
+  "baselineCommit": "d1b693d",
+  "checks": 14,
+  "sources": {
+    "src-tauri/src/live/sets_v2/group.c": "2a28e82a7f95475423dfeb145af2d809d345609fedc70ccf67fda41f6f9b3c43",
+    "src-tauri/src/live/sets_v2/program.c": "59497bc92fa9bbe4b36cadc3876f3f9fefd2fb9c02f83448c2a1d163f4dace73",
+    "src-tauri/src/live/sets_v2/transition.c": "67c4e6e76c0fa6fb7e9ca3dd0638530881bac31e392314345485156838c59246",
+    "scripts/sets-v2/native-probe.m": "4cce355b8eea18d50239aee22d400d08615ce4e0ad404a31a6400041fe8394de",
+    "src/features/sets-v2/roomSmoke.ts": "b3d006378b4fcd70a69847d3b697bcf4054817f313f163af42bba2e946179154",
+    "src/views/SetsDevelopmentRoom.tsx": "9a3be4f2361729166c22e3966fa02c996a9c25cf81e370d96be37ec157ec9e07",
+    "src-tauri/src/lib.rs": "9d9dca089c11cac9e3399bb800a49dae5551750e021e215ef9dfeac5f7ef00e6"
+  },
+  "artifacts": {
+    "color-transition-1-0.png": "727e740b72b6e878d1220bdbebc2eb28dc39d587919aea494152274eba016e59",
+    "color-transition-1-1.png": "727e740b72b6e878d1220bdbebc2eb28dc39d587919aea494152274eba016e59",
+    "color-program-1.png": "bbd2f17bb00ff2089ac81071701e78c6a96f74419b85f589dab0b29112c5caf3",
+    "color-clipped-0.png": "2de2ed6f0d7a4731ac187d545cb5705944a7ab803c4b01ded4922bf138a20996",
+    "color-clipped-1.png": "2de2ed6f0d7a4731ac187d545cb5705944a7ab803c4b01ded4922bf138a20996",
+    "color-program-0.png": "daf9c99f32650e3583fb8aa3d5053868753bcb25f71693c588ff9a5e4fb8f599",
+    "amber-before.png": "bc5f1c876fdaddbc4e009a345ea0f56b6bd8a55bde80ab94af1807ca018756c3",
+    "color-transition-2-1.png": "6cae94d54eecc16d05b27fd3c67a2fd5a69984b48f0d9d36e5b552cde8f09de6",
+    "color-transition-2-0.png": "6cae94d54eecc16d05b27fd3c67a2fd5a69984b48f0d9d36e5b552cde8f09de6",
+    "color-transition-0-0.png": "3e693d72678192661449c2e568a65c933da3457af3e45ab7ee4b76f78ee0ea3a",
+    "color-transition-0-1.png": "3f5f2fd62a9c56c261ee7beec081c76beb069a72b267fe17ca0aed6779da78fb",
+    "color-masked-0.png": "daf9c99f32650e3583fb8aa3d5053868753bcb25f71693c588ff9a5e4fb8f599",
+    "color-masked-1.png": "bbd2f17bb00ff2089ac81071701e78c6a96f74419b85f589dab0b29112c5caf3",
+    "color-direct-1.png": "2de2ed6f0d7a4731ac187d545cb5705944a7ab803c4b01ded4922bf138a20996",
+    "color-direct-0.png": "2de2ed6f0d7a4731ac187d545cb5705944a7ab803c4b01ded4922bf138a20996"
+  },
+  "scope": "isolated native SDR color-state fixtures; actual portrait frame checked separately"
+}

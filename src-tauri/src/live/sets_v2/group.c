@@ -165,7 +165,9 @@ static void render(void *data, gs_effect_t *unused) {
   if (!g->sealed || render_depth >= GROUP_DEPTH_LIMIT)
     return;
   render_depth++;
-  if (direct(g)) {
+  const bool linear=gs_get_linear_srgb();
+  const bool framebuffer=gs_framebuffer_srgb_enabled();
+  if (direct(g) && !linear && !framebuffer) {
     gs_blend_state_push();
     gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
     draw_children(g);
@@ -173,6 +175,10 @@ static void render(void *data, gs_effect_t *unused) {
     render_depth--;
     return;
   }
+  // Intermediate surfaces store encoded SDR pixels. Children render in that
+  // explicit context; the final texture is decoded once for a linear parent.
+  gs_set_linear_srgb(false);
+  gs_enable_framebuffer_srgb(false);
   gs_texrender_reset(g->texture);
   if (gs_texrender_begin(g->texture, (uint32_t)ceilf(g->width*g->density), (uint32_t)ceilf(g->height*g->density))) {
     const struct vec4 clear = {0, 0, 0, 0};
@@ -187,8 +193,10 @@ static void render(void *data, gs_effect_t *unused) {
     gs_matrix_pop();
     gs_texrender_end(g->texture);
     gs_texture_t *texture = gs_texrender_get_texture(g->texture);
-    gs_effect_set_texture(gs_effect_get_param_by_name(g->effect, "image"),
-                          texture);
+    gs_set_linear_srgb(linear);
+    gs_enable_framebuffer_srgb(linear);
+    if(linear)gs_effect_set_texture_srgb(gs_effect_get_param_by_name(g->effect,"image"),texture);
+    else gs_effect_set_texture(gs_effect_get_param_by_name(g->effect,"image"),texture);
     struct vec2 extent = {ceilf(g->width*g->density), ceilf(g->height*g->density)};
     gs_effect_set_vec2(gs_effect_get_param_by_name(g->effect, "extent"),
                        &extent);
@@ -208,6 +216,8 @@ static void render(void *data, gs_effect_t *unused) {
     gs_technique_end(t);
     gs_blend_state_pop();
   }
+  gs_enable_framebuffer_srgb(framebuffer);
+  gs_set_linear_srgb(linear);
   render_depth--;
 }
 void producer_set_v2_register(void) {
@@ -215,7 +225,7 @@ void producer_set_v2_register(void) {
   memset(&info, 0, sizeof(info));
   info.id = GROUP_ID;
   info.type = OBS_SOURCE_TYPE_INPUT;
-  info.output_flags = OBS_SOURCE_VIDEO | OBS_SOURCE_CUSTOM_DRAW;
+  info.output_flags = OBS_SOURCE_VIDEO | OBS_SOURCE_CUSTOM_DRAW | OBS_SOURCE_SRGB;
   info.get_name = name;
   info.create = create;
   info.destroy = destroy;

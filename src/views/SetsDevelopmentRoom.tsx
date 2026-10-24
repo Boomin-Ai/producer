@@ -9,14 +9,14 @@ export function SetsDevelopmentRoom() {
   const smokeStarted = useRef(false);
   useEffect(() => {
     void invoke<boolean>("live_set_v2_smoke_enabled").then(enabled=>{
-      if(enabled && !smokeStarted.current) { smokeStarted.current=true; void import("../features/sets-v2/roomSmoke").then(m=>m.roomSmoke(new URLSearchParams(location.search).get('roomTiming')==='1',new URLSearchParams(location.search).get('roomResolution')==='1',new URLSearchParams(location.search).get('roomShowcase')==='1')); }
+      if(enabled && !new URLSearchParams(location.search).has('roomInspect') && !smokeStarted.current) { smokeStarted.current=true; void import("../features/sets-v2/roomSmoke").then(m=>m.roomSmoke(new URLSearchParams(location.search).get('roomTiming')==='1',new URLSearchParams(location.search).get('roomResolution')==='1',new URLSearchParams(location.search).get('roomShowcase')==='1')); }
     });
   }, []);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       const smoke = await invoke<boolean>("live_set_v2_smoke_enabled");
-      const name = smoke ? "Producer dev smoke" : "Producer dev";
+      const name = new URLSearchParams(location.search).has("roomColor") ? "Producer color check" : smoke ? "Producer dev smoke" : "Producer dev";
       const rooms = await ipc.liveListRooms();
       let room = rooms.filter(r=>r.name===name).sort((a,b)=>(b.config?.length??0)-(a.config?.length??0))[0] ?? (await ipc.liveCreateRoom(name));
       if(smoke){

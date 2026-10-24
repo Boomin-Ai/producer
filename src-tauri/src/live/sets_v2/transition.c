@@ -137,13 +137,19 @@ static bool input_frame(struct transition *t, gs_texrender_t *target,
 static void render(void *p, gs_effect_t *unused) {
   (void)unused;
   struct transition *t = p;
-  if (!t->from || !t->to || !input_frame(t, t->a, t->from) ||
-      !input_frame(t, t->b, t->to))
-    return;
-  gs_effect_set_texture(gs_effect_get_param_by_name(t->effect, "previousImage"),
-                        gs_texrender_get_texture(t->a));
-  gs_effect_set_texture(gs_effect_get_param_by_name(t->effect, "nextImage"),
-                        gs_texrender_get_texture(t->b));
+  const bool linear=gs_get_linear_srgb(),framebuffer=gs_framebuffer_srgb_enabled();
+  gs_set_linear_srgb(false);gs_enable_framebuffer_srgb(false);
+  bool ready=t->from&&t->to&&input_frame(t,t->a,t->from)&&input_frame(t,t->b,t->to);
+  gs_set_linear_srgb(linear);gs_enable_framebuffer_srgb(framebuffer);
+  if(!ready)return;
+  gs_enable_framebuffer_srgb(linear);
+  if(linear){
+    gs_effect_set_texture_srgb(gs_effect_get_param_by_name(t->effect,"previousImage"),gs_texrender_get_texture(t->a));
+    gs_effect_set_texture_srgb(gs_effect_get_param_by_name(t->effect,"nextImage"),gs_texrender_get_texture(t->b));
+  }else{
+    gs_effect_set_texture(gs_effect_get_param_by_name(t->effect,"previousImage"),gs_texrender_get_texture(t->a));
+    gs_effect_set_texture(gs_effect_get_param_by_name(t->effect,"nextImage"),gs_texrender_get_texture(t->b));
+  }
   gs_effect_set_float(gs_effect_get_param_by_name(t->effect, "progress"),
                       t->progress);
   gs_effect_set_float(gs_effect_get_param_by_name(t->effect, "mode"), t->mode);
@@ -160,12 +166,13 @@ static void render(void *p, gs_effect_t *unused) {
     }
   gs_technique_end(tech);
   gs_blend_state_pop();
+  gs_enable_framebuffer_srgb(framebuffer);
 }
 void producer_set_v2_transition_register(void) {
   struct obs_source_info i = {0};
   i.id = ID;
   i.type = OBS_SOURCE_TYPE_INPUT;
-  i.output_flags = OBS_SOURCE_VIDEO | OBS_SOURCE_CUSTOM_DRAW;
+  i.output_flags = OBS_SOURCE_VIDEO | OBS_SOURCE_CUSTOM_DRAW | OBS_SOURCE_SRGB;
   i.get_name = name;
   i.create = create;
   i.destroy = destroy;

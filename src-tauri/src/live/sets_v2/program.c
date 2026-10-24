@@ -287,7 +287,7 @@ void producer_set_v2_program_register(void) {
   struct obs_source_info i = {0};
   i.id = ID;
   i.type = OBS_SOURCE_TYPE_INPUT;
-  i.output_flags = OBS_SOURCE_VIDEO | OBS_SOURCE_CUSTOM_DRAW;
+  i.output_flags = OBS_SOURCE_VIDEO | OBS_SOURCE_CUSTOM_DRAW | OBS_SOURCE_SRGB;
   i.get_name = name;
   i.create = create;
   i.destroy = destroy;

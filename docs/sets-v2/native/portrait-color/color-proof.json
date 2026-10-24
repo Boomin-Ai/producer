@@ -1,0 +1,103 @@
+{
+  "scope" : "known midtone in direct, clipped, masked, program and three transition paths; both linear\/nonlinear canvas state; inherited state restored",
+  "checks" : [
+    {
+      "linear" : 0,
+      "r" : 136,
+      "g" : 96,
+      "source" : "direct",
+      "b" : 46
+    },
+    {
+      "linear" : 1,
+      "r" : 136,
+      "g" : 96,
+      "source" : "direct",
+      "b" : 46
+    },
+    {
+      "linear" : 0,
+      "r" : 136,
+      "g" : 96,
+      "source" : "masked",
+      "b" : 46
+    },
+    {
+      "linear" : 1,
+      "r" : 136,
+      "g" : 96,
+      "source" : "masked",
+      "b" : 46
+    },
+    {
+      "linear" : 0,
+      "r" : 136,
+      "g" : 96,
+      "source" : "clipped",
+      "b" : 46
+    },
+    {
+      "linear" : 1,
+      "r" : 136,
+      "g" : 96,
+      "source" : "clipped",
+      "b" : 46
+    },
+    {
+      "linear" : 0,
+      "r" : 136,
+      "g" : 96,
+      "source" : "program",
+      "b" : 46
+    },
+    {
+      "linear" : 1,
+      "r" : 136,
+      "g" : 96,
+      "source" : "program",
+      "b" : 46
+    },
+    {
+      "linear" : 0,
+      "r" : 136,
+      "g" : 96,
+      "source" : "transition-0",
+      "b" : 46
+    },
+    {
+      "linear" : 1,
+      "r" : 136,
+      "g" : 96,
+      "source" : "transition-0",
+      "b" : 46
+    },
+    {
+      "linear" : 0,
+      "r" : 136,
+      "g" : 96,
+      "source" : "transition-1",
+      "b" : 46
+    },
+    {
+      "linear" : 1,
+      "r" : 136,
+      "g" : 96,
+      "source" : "transition-1",
+      "b" : 46
+    },
+    {
+      "linear" : 0,
+      "r" : 136,
+      "g" : 96,
+      "source" : "transition-2",
+      "b" : 46
+    },
+    {
+      "linear" : 1,
+      "r" : 136,
+      "g" : 96,
+      "source" : "transition-2",
+      "b" : 46
+    }
+  ]
+}

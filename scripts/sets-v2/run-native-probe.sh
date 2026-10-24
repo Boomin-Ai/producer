@@ -39,7 +39,7 @@ clang -std=gnu11 -fobjc-arc -Werror=implicit-function-declaration -Isrc-tauri/sr
 codesign --force --sign - "$probe_app"
 if [[ -n "${PRODUCER_PROBE_TEXT_QUALITY_ONLY:-}" ]]; then
   node scripts/sets-v2/make-text-quality-plans.mjs "$proof_dir"
-elif [[ -n "${PRODUCER_PROBE_SHOWCASE_ONLY:-}" ]]; then
+elif [[ -n "${PRODUCER_PROBE_SHOWCASE_ONLY:-}" || -n "${PRODUCER_PROBE_COLOR_ONLY:-}" ]]; then
   : # Showcase plans are compiled by test-grand-arena-browser.mjs.
 else
 node scripts/sets-v2/make-native-plans.mjs "$proof_dir"
@@ -53,6 +53,6 @@ fi
 if [[ -n "${PRODUCER_PROBE_TEXT_QUALITY_ONLY:-}" ]]; then
   node scripts/sets-v2/record-text-quality-proof.mjs "$proof_dir" "$app"
 fi
-if [[ -z "${PRODUCER_PROBE_SHARPNESS_ONLY:-}" && -z "${PRODUCER_PROBE_TEXT_QUALITY_ONLY:-}" && -z "${PRODUCER_PROBE_SHOWCASE_ONLY:-}" ]]; then
+if [[ -z "${PRODUCER_PROBE_SHARPNESS_ONLY:-}" && -z "${PRODUCER_PROBE_TEXT_QUALITY_ONLY:-}" && -z "${PRODUCER_PROBE_SHOWCASE_ONLY:-}" && -z "${PRODUCER_PROBE_COLOR_ONLY:-}" ]]; then
   node scripts/sets-v2/record-native-proof.mjs "$proof_dir" "$app" "$started_at"
 fi
