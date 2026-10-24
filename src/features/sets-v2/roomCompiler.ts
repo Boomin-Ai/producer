@@ -6,7 +6,7 @@ import type { RenderNode, RenderPlan, OutputTarget } from "./scene";
 import { viewport } from "./scene";
 import { PAINT_KEYS, type Paint, validatePaint } from "./paint";
 
-function id(value: string): string {
+export function nativeNodeId(value: string): string {
   let hash = 2166136261;
   for (const c of value) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619);
   return "node-" + (hash >>> 0).toString(16);
@@ -22,6 +22,7 @@ export async function compileRoomScene(
     canvasId: string;
     target: OutputTarget;
     bindings: Record<string, string>;
+    retainedTargets?:string[];
   },
 ): Promise<RenderPlan> {
   const container = document.createElement("div");
@@ -65,11 +66,11 @@ export async function compileRoomScene(
       element.style.transform = "none";
     const resources = new Set<string>();
     const motionTargets = new Set(
-      projection.timeline?.tracks.map((t) => t.target) ?? [],
+      [...(projection.timeline?.tracks.map((t) => t.target) ?? []),...(options.retainedTargets??[])],
     );
     const assignedIds = new Set<string>();
     const identity = (name: string) => {
-      const key = id(name);
+      const key = nativeNodeId(name);
       if (assignedIds.has(key)) throw Error("Set node identity collision");
       assignedIds.add(key);
       return key;
@@ -242,10 +243,11 @@ export async function compileRoomScene(
         assets: projection.assets ?? {},
         shaders,
         clock: projection.timeline?.clock,
+        retainedTargets:(options.retainedTargets??[]).map(nativeNodeId),
         motion:
           projection.timeline?.tracks.map((track) => ({
             ...track,
-            target: id(track.target),
+            target: nativeNodeId(track.target),
           })) ?? [],
       } as object),
     };

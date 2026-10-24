@@ -1,3 +1,4 @@
+import {useShowClock} from './showClock';
 import {useRoomOutput} from '../sets-v2/useRoomOutput';
 import {invoke} from '@tauri-apps/api/core';
 import {AssetTransport} from './assetTransport';
@@ -19,6 +20,11 @@ export function resolveRoomBindings(bindings:Record<string,string>,sources:LiveS
   return next;
 }
 export interface SetOutputControls {
+  layoutReadiness?:Record<string,import('../sets-v2/preparedScenes').SceneReadiness>;
+  retryPreparation?:()=>void;
+  prepareDraft?:(doc:import('./schema').PresentationPackage,bindings:Record<string,string>,framing:Record<string,import('./schema').SlotFraming>)=>void;
+  clearDraftPreparation?:()=>void;
+
   applyPortrait?:(projection:OutputProjection,layoutId?:string)=>Promise<void>;
   stopPortrait?:()=>Promise<void>;
   createSource?:(slot:string,spec:import('../../lib/sourceSpec').ExtraSpec,label:string,assign?:boolean)=>Promise<string|void>;
@@ -166,6 +172,7 @@ function useLegacySetOutput(session:RehearsalSession,roomId:string|null,sources:
 
 let nativeCapability:Promise<boolean>|undefined;
 export function useSetOutput(session:RehearsalSession,roomId:string|null,sources:LiveSources,enabled:boolean,initialBindings:Record<string,string>={},onBindings?:(bindings:Record<string,string>)=>void,initialFraming:Record<string,import('./schema').SlotFraming>={},onFraming?:(framing:Record<string,import('./schema').SlotFraming>)=>void):SetOutputControls {
+ useShowClock(session);
  const [renderer,setRenderer]=useState<'waiting'|'native'|'legacy'>('waiting');
  useEffect(()=>{let stopped=false;nativeCapability??=invoke<boolean>('live_set_v2_enabled').catch(()=>false);void nativeCapability.then(value=>{if(!stopped)setRenderer(value?'native':'legacy');});return()=>{stopped=true;};},[]);
  const native=useRoomOutput(session,roomId,sources,enabled&&renderer==='native',initialBindings,onBindings,initialFraming,onFraming);

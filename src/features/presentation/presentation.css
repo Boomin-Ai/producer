@@ -740,3 +740,8 @@
  .set-configuration > .set-menu-section { min-width:80px; }
  .set-editor-top-actions { gap:5px; }
 }
+/* Readiness follows native prepared resources; an unready click prioritizes loading. */
+.set-controls .set-layout-list > button[data-readiness=queued],.set-controls .set-layout-list > button[data-readiness=loading],
+.set-controls .set-segments li[data-readiness=queued] .set-segment-select,.set-controls .set-segments li[data-readiness=loading] .set-segment-select { opacity:.62; transition:opacity .18s ease; }
+.set-controls .set-layout-list > button[data-readiness=ready],.set-controls .set-segments li[data-readiness=ready] .set-segment-select { opacity:1; }
+.set-controls .set-layout-list > button[data-readiness=error],.set-controls .set-segments li[data-readiness=error] { border-color:var(--red); }

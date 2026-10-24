@@ -33,6 +33,7 @@ obs_source_t *producer_set_v2_scene_node(struct producer_set_v2_scene *scene,
                                          const char *id);
 size_t producer_set_v2_scene_texture_bytes(struct producer_set_v2_scene *scene);
 size_t producer_set_v2_scene_group_count(struct producer_set_v2_scene *scene);
+void producer_set_v2_scene_reset(struct producer_set_v2_scene *scene);
 void producer_set_v2_scene_release(struct producer_set_v2_scene *scene);
 bool producer_set_v2_scene_frame(struct producer_set_v2_scene *scene,
                                  const char *node_id, int property,

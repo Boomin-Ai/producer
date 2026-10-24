@@ -17,7 +17,7 @@ struct owned_node {
 };
 struct producer_set_v2_scene {
   obs_source_t *root;
-  struct owned_node nodes[NODE_LIMIT];
+  struct owned_node nodes[NODE_LIMIT], initial[NODE_LIMIT];
   size_t count, bytes, groups;
 };
 struct preparation {
@@ -196,6 +196,7 @@ struct producer_set_v2_scene *producer_set_v2_scene_prepare(
   }
   obs_source_release(design);
   producer_set_v2_group_seal(scene->root);
+  memcpy(scene->initial, scene->nodes, sizeof(scene->nodes));
   return scene;
 }
 obs_source_t *producer_set_v2_scene_source(struct producer_set_v2_scene *s) {
@@ -274,4 +275,20 @@ bool producer_set_v2_scene_frame(struct producer_set_v2_scene *s,
     return false;
   return producer_set_v2_group_layer_transform(n->parent, n->index, n->rotation,
                                                n->sx, n->sy);
+}
+
+void producer_set_v2_scene_reset(struct producer_set_v2_scene *s) {
+  if(!s)return;
+  obs_enter_graphics();
+  for(size_t i=0;i<s->count;i++){
+    struct owned_node n=s->initial[i];
+    producer_set_v2_scene_frame(s,n.id,4,n.opacity);
+    if(n.parent){
+      producer_set_v2_scene_frame(s,n.id,0,n.x);producer_set_v2_scene_frame(s,n.id,1,n.y);
+      producer_set_v2_scene_frame(s,n.id,2,n.width);producer_set_v2_scene_frame(s,n.id,3,n.height);
+      producer_set_v2_scene_frame(s,n.id,5,n.rotation);producer_set_v2_scene_frame(s,n.id,6,n.sx);
+      s->nodes[i].sy=n.sy;producer_set_v2_group_layer_transform(n.parent,n.index,n.rotation,n.sx,n.sy);
+    }
+  }
+  obs_leave_graphics();
 }

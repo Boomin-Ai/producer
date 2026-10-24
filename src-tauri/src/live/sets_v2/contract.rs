@@ -3,7 +3,7 @@
 //! geometry, paint and resource identities before resolving any room source.
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Bounds {
     pub x: f32,
@@ -11,7 +11,7 @@ pub struct Bounds {
     pub width: f32,
     pub height: f32,
 }
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Properties {
     pub text: Option<String>,
@@ -27,7 +27,7 @@ pub struct Properties {
     pub scale_x: Option<f32>,
     pub scale_y: Option<f32>,
 }
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Mask {
     pub kind: String,
@@ -43,14 +43,14 @@ pub struct Appearance {
     pub grayscale: f32,
     pub opacity: f32,
 }
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Framing {
     pub mode: String,
     pub x: f32,
     pub y: f32,
 }
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Node {
     pub id: String,
@@ -68,7 +68,7 @@ pub struct Node {
     pub playback: Option<Playback>,
     pub looping: Option<bool>,
 }
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Target {
     pub id: String,
@@ -77,7 +77,7 @@ pub struct Target {
     pub height: u32,
     pub scaling: String,
 }
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Viewport {
     pub scale_x: f32,
@@ -86,7 +86,7 @@ pub struct Viewport {
     pub offset_y: f32,
     pub clip: Bounds,
 }
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Clock {
     pub running: bool,
@@ -94,14 +94,14 @@ pub struct Clock {
     pub segment_ms: f64,
     pub anchor_ms: f64,
 }
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Asset {
     pub name: String,
     pub mime: String,
     pub data: String,
 }
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Shader {
     pub effect: String,
@@ -114,7 +114,7 @@ pub struct Shader {
     pub quality: String,
     pub clock: String,
 }
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Playback {
     pub playing: bool,
@@ -122,13 +122,13 @@ pub struct Playback {
     pub anchor_ms: f64,
     pub resume_after_pause: Option<bool>,
 }
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Keyframe {
     pub at_ms: f64,
     pub value: f32,
 }
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Track {
     pub target: String,
@@ -139,7 +139,7 @@ pub struct Track {
     pub delay_ms: Option<f64>,
     pub r#loop: Option<String>,
 }
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Plan {
     pub definition_id: String,
@@ -157,6 +157,8 @@ pub struct Plan {
     pub clock: Option<Clock>,
     #[serde(default)]
     pub motion: Vec<Track>,
+    #[serde(default)]
+    pub retained_targets:Vec<String>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(
@@ -171,6 +173,15 @@ pub enum Action {
         output_id: Option<String>,
         revision: u64,
         plan: Plan,
+    },
+    Preload {
+        generation:u64, output_id:Option<String>, revision:u64, key:String, plan:Plan,
+    },
+    Activate {
+        generation:u64, output_id:Option<String>, revision:u64, key:String, plan:Plan,
+    },
+    Retain {
+        generation:u64, output_id:Option<String>, keys:Vec<String>,
     },
     Take {
         generation: u64,
@@ -202,6 +213,7 @@ impl Action {
     pub fn output(&self) -> &str {
         match self {
             Self::Prepare { output_id, .. }
+            | Self::Preload { output_id, .. } | Self::Activate { output_id, .. } | Self::Retain { output_id, .. }
             | Self::Take { output_id, .. }
             | Self::Cancel { output_id, .. }
             | Self::Status { output_id, .. }
@@ -212,6 +224,7 @@ impl Action {
     pub fn generation(&self) -> u64 {
         match self {
             Self::Prepare { generation, .. }
+            | Self::Preload { generation, .. } | Self::Activate { generation, .. } | Self::Retain { generation, .. }
             | Self::Take { generation, .. }
             | Self::Cancel { generation, .. }
             | Self::Status { generation, .. }
@@ -223,6 +236,8 @@ impl Action {
 #[derive(Debug, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Status {
+    pub cached_keys:Vec<String>,
+    pub cached_bytes:usize,
     pub generation: u64,
     pub prepared_revision: u64,
     pub rendered_revision: u64,
@@ -258,6 +273,8 @@ fn bounds(b: &Bounds) -> bool {
         && number(b.height, 0., 8192.)
 }
 pub fn validate(plan: &Plan) -> Result<(), String> {
+    if plan.retained_targets.len()>128||plan.retained_targets.iter().any(|id|!identity(id)){return Err("Invalid retained motion targets".into());}
+
     if ![
         &plan.definition_id,
         &plan.instance_id,

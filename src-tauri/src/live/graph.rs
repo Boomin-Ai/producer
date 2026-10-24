@@ -3264,7 +3264,7 @@ impl SceneGraph {
         if action.output()=="portrait" {
             if matches!(action,Action::Return{..}){self.sets_v2_portrait=None;return Ok(Status{generation:self.presentation_generation,..Default::default()});}
             if self.sets_v2_portrait.is_none(){
-                if !matches!(action,Action::Prepare{..}){return Err("Prepare the portrait set first".into());}
+                if !matches!(action,Action::Prepare{..}|Action::Preload{..}){return Err("Prepare the portrait set first".into());}
                 self.portrait_room()?;
                 let(parent,w,h)=unsafe{self.portrait.as_mut().unwrap().native_room()};
                 self.sets_v2_portrait=Some(unsafe{RoomProgram::attach(parent,self.presentation_generation,w,h)?});
@@ -3282,7 +3282,7 @@ impl SceneGraph {
             return Err("Return the current set to the room before using the v2 dev adapter".into());
         }
         if self.sets_v2.is_none() {
-            if !matches!(action, Action::Prepare { .. }) {
+            if !matches!(action, Action::Prepare { .. }|Action::Preload{..}) {
                 return Err("Prepare a v2 set first".into());
             }
             let (w,h) = Self::base_size();

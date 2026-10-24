@@ -670,6 +670,32 @@ static NSArray *real_room_proof(NSString *out) {
       usleep(20000);
     }
     require([status[@"renderedRevision"] intValue]==1,"authored set rendered receipt");
+    // Prepare two off-air records, then revisit the first without another build.
+    for(int index=0;index<2;index++){
+      NSString *key=index?@"prepared-b":@"prepared-a";
+      rust_call(owner,@{@"op":@"preload",@"generation":@7,@"revision":@(index+2),@"key":key,@"plan":plan},camera,true);
+      for(int i=0;i<700;i++){
+        status=rust_call(owner,@{@"op":@"status",@"generation":@7},camera,true);
+        if([status[@"cachedKeys"] containsObject:key])break;usleep(20000);
+      }
+      require([status[@"cachedKeys"] containsObject:key],"prepared layout has native first paint receipt");
+    }
+    require([status[@"cachedKeys"] count]==2,"multiple prepared layouts remain resident");
+    rust_call(owner,@{@"op":@"retain",@"generation":@7,@"keys":@[@"prepared-a",@"prepared-b"]},camera,true);
+    for(int index=0;index<2;index++){
+      uint64_t revision=4+index;double start=CFAbsoluteTimeGetCurrent()*1000.;
+      NSMutableDictionary *entry=[plan mutableCopy];entry[@"assets"]=@{};
+      rust_call(owner,@{@"op":@"activate",@"generation":@7,@"revision":@(revision),@"key":@"prepared-a",@"plan":entry},camera,true);
+      rust_call(owner,@{@"op":@"take",@"generation":@7,@"revision":@(revision),@"durationMs":@0,@"mode":@"dissolve"},camera,true);
+      for(int i=0;i<200;i++){status=rust_call(owner,@{@"op":@"status",@"generation":@7},camera,true);if([status[@"renderedRevision"] unsignedLongLongValue]==revision)break;usleep(10000);}
+      require([status[@"renderedRevision"] unsignedLongLongValue]==revision,"retained scene repeat take renders");
+      require([status[@"cachedKeys"] count]==2,"taking does not consume ready scene bank");
+      fprintf(stderr,"Cached scene take %s: %.2f ms\n",file.UTF8String,CFAbsoluteTimeGetCurrent()*1000.-start);
+    }
+    NSMutableDictionary *stale=[plan mutableCopy];stale[@"assets"]=@{};
+    NSMutableDictionary *changedRoot=[plan[@"root"] mutableCopy];
+    NSMutableDictionary *properties=[changedRoot[@"properties"] mutableCopy]?:[NSMutableDictionary dictionary];properties[@"opacity"]=@0.25;changedRoot[@"properties"]=properties;stale[@"root"]=changedRoot;
+    rust_call(owner,@{@"op":@"activate",@"generation":@7,@"revision":@6,@"key":@"prepared-a",@"plan":stale},camera,false);
     NSData *frame=capture(source,w,h,w,h);
     png(frame,w,h,[out stringByAppendingPathComponent:[[file stringByDeletingPathExtension] stringByAppendingString:@"-room.png"]]);
     [checks addObject:@{@"file":file,@"rendered":@YES,@"resources":plan[@"resources"]}];

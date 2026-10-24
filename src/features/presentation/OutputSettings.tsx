@@ -34,7 +34,7 @@ export function OutputSettings({icon,session,output,sourceNames,view='landscape'
  // The compositor fits an unmatched landscape composition into the portrait canvas.
  const effectiveLayout=layout==='room'?'room':portraits.some(l=>l.id===layout)?layout:matched??state.layoutId;
  const usingSet=output.active&&effectiveLayout!=='room';
- const authored=usingSet&&(active||view!=='landscape'||portraits.some(l=>l.id===effectiveLayout));
+ const authored=usingSet&&(active||view!=='landscape');
  const fitted=usingSet&&!portraits.some(l=>l.id===effectiveLayout);
  useEffect(()=>{setLayout('auto');fingerprint.current='';media.current.clear();},[session.package.id]);
  const warmed=useRef('');

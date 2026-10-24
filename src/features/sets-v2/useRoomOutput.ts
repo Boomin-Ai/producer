@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ipc, type LiveSources } from "../../lib/ipc";
-import type { RehearsalSession } from "../presentation/rehearsal";
 import {
   setOutputProjection,
   type SetOutputControls,
@@ -9,8 +8,9 @@ import {
 import type { SlotFraming } from "../presentation/schema";
 import { AssetTransport } from "../presentation/assetTransport";
 import {authoredCrossfadeMs} from '../presentation/animation';
-import { compileRoomScene } from "./roomCompiler";
-type NativeStatus = {
+import {PreparedScenes,layoutProjections,morphTargets,runtimePlan,type SceneSpec,type NativeSceneStatus} from './preparedScenes';
+import {RehearsalSession} from '../presentation/rehearsal';
+type NativeStatus = NativeSceneStatus & {
   generation: number;
   preparedRevision: number;
   renderedRevision: number;
@@ -55,9 +55,9 @@ export function useRoomOutput(
   });
   latest.current = { session, roomId, sources, enabled, bindings, framing };
   const media = useRef(new AssetTransport());
-  const portraitRevision = useRef(0), portraitOperation = useRef(0), portraitShownLayout=useRef("");
-  const revision = useRef(0),
-    generation = useRef(0),
+  const portraitOperation = useRef(0), portraitShownLayout=useRef("");
+  const cacheGeneration=useRef<number|undefined>(undefined);
+  const generation = useRef(0),
     operation = useRef(0),
     flight = useRef(false),
     confirmed = useRef(""),
@@ -69,6 +69,54 @@ export function useRoomOutput(
     invoke<NativeStatus>("live_set_v2", {
       request: { generation: generation.current, ...value },
     });
+  const [preparationVersion,notifyPreparation]=useState(0);
+  const [canvas,setCanvas]=useState({width:1280,height:720});
+  const [draftCandidate,setDraftCandidate]=useState<{doc:import('../presentation/schema').PresentationPackage;bindings:Record<string,string>;framing:Record<string,SlotFraming>}>();
+  const [retryVersion,setRetryVersion]=useState(0);
+  const bank=useRef<PreparedScenes|null>(null);
+  if(!bank.current)bank.current=new PreparedScenes(async value=>{
+    const room=await ipc.liveSetStatus();
+    if(cacheGeneration.current!==undefined&&cacheGeneration.current!==room.generation){bank.current?.reset();setRetryVersion(v=>v+1);}
+    cacheGeneration.current=room.generation;generation.current=room.generation;
+    return invoke<NativeStatus>('live_set_v2',{request:{generation:room.generation,...value}}).catch(e=>{if(value.op==='status'&&/Prepare (a v2|the portrait) set first/.test(String(e)))return {preparedRevision:0,renderedRevision:0,renderSerial:0,ready:false,warmed:false,queued:false,transitioning:false,cachedKeys:[],generation:room.generation};throw e;});
+  },()=>notifyPreparation(v=>v+1));
+  const specsFor=(selected:RehearsalSession,selectedBindings:Record<string,string>,selectedFraming:Record<string,SlotFraming>):SceneSpec[]=>{
+    const inventory=layoutProjections(selected);
+    const projections=inventory.map(i=>i.projection);
+    const version=JSON.stringify(media.current.signature({...inventory[0].projection,assets:selected.package.set.assets}).assets);
+    return inventory.map(item=>{
+      const frame=(n:typeof item.projection.root)=>{if(n.slotId&&selectedFraming[n.slotId])n.framing=selectedFraming[n.slotId];n.children.forEach(frame);};frame(item.projection.root);
+      return {projection:item.projection,phase:item.phase,layout:item.layout,definition:selected.package.id,instance:'room-'+(roomId??'local').slice(0,50),bindings:selectedBindings,target:item.projection.height>item.projection.width?{id:'portrait',orientation:'portrait',width:canvas.height,height:Math.round(canvas.height*16/9),scaling:'contain'}:{id:'program',orientation:'landscape',...canvas,scaling:'contain'},targets:morphTargets(projections,item.projection),assetVersion:version+JSON.stringify(Object.values(selectedBindings).map(id=>{const source=sources.items?.find(s=>s.id===id);return [id,source?.src_w,source?.src_h];}))};
+    });
+  };
+  const inventory=useMemo(()=>specsFor(session,bindings,framing),[session.package,JSON.stringify(state.values),JSON.stringify(state.feeds),JSON.stringify(bindings),JSON.stringify(framing),JSON.stringify(sources.items?.map(s=>[s.id,s.src_w,s.src_h,s.has_frame])),canvas,roomId]);
+  const candidates=useMemo(()=>draftCandidate?specsFor(new RehearsalSession(draftCandidate.doc,undefined,'prepare'),draftCandidate.bindings,draftCandidate.framing):[],[draftCandidate,canvas,roomId]);
+  const specsRef=useRef(inventory);specsRef.current=inventory;
+  useEffect(()=>{if(!enabled)return;let cancelled=false;void ipc.liveEngineStatus().then(status=>{if(!cancelled){const height=status.video_height??720;setCanvas(old=>old.height===height?old:{height,width:Math.round(height*16/9)});}});return()=>{cancelled=true;};},[enabled,roomId]);
+  useEffect(()=>{
+    if(!enabled)return;let cancelled=false;
+    const authoredSpecs=[...candidates,...inventory];
+    // Prepare each design in its own output orientation; don't allocate a second
+    // fitted copy of every portrait layout on the landscape renderer.
+    const selected=inventory.find(s=>s.layout===state.layoutId);
+    const fallback=selected&&selected.target.id!=='program'?{...selected,target:{id:'program',orientation:'landscape' as const,...canvas,scaling:'contain' as const}}:undefined;
+    const specs=[...authoredSpecs,...(fallback?[fallback]:[])];
+    const prioritized=[...specs].sort((a,b)=>Number(b.layout===state.layoutId)-Number(a.layout===state.layoutId));
+    void bank.current!.retain(specs).then(()=>bank.current!.preload(prioritized,()=>cancelled));
+    return()=>{cancelled=true;};
+  },[enabled,inventory,candidates,retryVersion]);
+  const bankDisposal=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
+  useEffect(()=>{clearTimeout(bankDisposal.current);return()=>{bankDisposal.current=setTimeout(()=>bank.current?.dispose(),0);};},[]);
+  useEffect(()=>{
+    if(!enabled)return;let cancelled=false;
+    const timer=setInterval(()=>{void ipc.liveSetStatus().then(room=>{
+      if(cancelled||cacheGeneration.current===undefined||cacheGeneration.current===room.generation)return;
+      cacheGeneration.current=room.generation;generation.current=room.generation;bank.current?.reset();setRetryVersion(v=>v+1);
+    }).catch(()=>{});},1500);
+    return()=>{cancelled=true;clearInterval(timer);};
+  },[enabled,roomId]);
+  const layoutReadiness=Object.fromEntries(inventory.map(spec=>[spec.layout,bank.current!.readiness(spec)]));
+  void preparationVersion;
   const project = () => {
     const current = latest.current,
       p = setOutputProjection(current.session, 1);
@@ -107,51 +155,18 @@ export function useRoomOutput(
     try {
       const room = await ipc.liveSetStatus();
       generation.current = room.generation;
-      const engine = await ipc.liveEngineStatus();
       if (ticket !== operation.current) return;
-      const prior = await request({ op: "status" }).catch(() => ({preparedRevision: 0, renderedRevision: 0}));
-      revision.current = Math.max(revision.current, prior.preparedRevision, prior.renderedRevision);
-      const full = project();
-      const fingerprint = signature(full, current);
-      const layout = current.session.snapshot().layoutId;
-      const p = media.current.compact(full);
-      p.revision = ++revision.current;
-      attempted = revision.current;
-      const height = engine.video_height ?? 720,
-        width = Math.round((height * 16) / 9);
-      timing('compile-start');
-      const plan = await compileRoomScene(p, {
-        definitionId: current.session.package.id,
-        instanceId: "room-" + (current.roomId ?? "local").slice(0, 50),
-        canvasId: current.session.snapshot().layoutId,
-        target: {
-          id: "program",
-          orientation: "landscape",
-          width,
-          height,
-          scaling: "contain",
-        },
-        bindings: current.bindings,
-      });
-      if (ticket !== operation.current) return;
-      timing('compile-done');
-      await request({ op: "prepare", revision: attempted, plan });
-      timing('prepare-submitted');
-      for (let i = 0; i < 500; i++) {
-        if (ticket !== operation.current) {
-          await request({ op: "cancel", revision: attempted }).catch(() => {});
-          return;
-        }
-        const status = await request({ op: "status" });
-        if (status.preparedRevision !== attempted)
-          throw Error("Set preparation was replaced");
-        if (status.ready && status.warmed) {timing('ready-warmed');break;}
-        if (i === 499)
-          throw Error(
-            "The next set is still preparing. The current output is retained.",
-          );
-        await sleep(25);
-      }
+      const full=project();
+      const fingerprint=signature(full,current),layout=current.session.snapshot().layoutId;
+      const base=specsRef.current.find(s=>s.layout===layout);if(!base)throw Error('Selected layout is not in preparation inventory');
+      const spec:SceneSpec={...base,projection:full,phase:snapshot.show.phase,target:{id:'program',orientation:'landscape',...canvas,scaling:'contain'}};
+      timing('cache-request');
+      await bank.current!.take(spec,async(entry,candidateRevision)=>{
+      if(ticket!==operation.current||current.session.snapshot().layoutId!==layout||current.session.snapshot().show.phase!==snapshot.show.phase||signature()!==fingerprint)return;
+      attempted=candidateRevision;
+      const plan=runtimePlan(entry.plan!,full);
+      timing('activate-request',{cacheKey:entry.key});
+      await request({op:'activate',revision:attempted,key:entry.key,plan});
       if (ticket !== operation.current) return;
       const transition =
         authoredCrossfadeMs(full.timeline?.transition,isActive.current&&(shownSelection.current.definition!==selection.definition||shownLayout.current!==layout),snapshot.paused);
@@ -184,6 +199,7 @@ export function useRoomOutput(
           );
         await sleep(20);
       }
+      });
     } catch (e) {
       timing('error',{error:String(e)});
       if (attempted)
@@ -206,6 +222,7 @@ export function useRoomOutput(
       confirmed.current = signature();
       shownLayout.current = "";
       media.current.clear();
+      bank.current?.reset();setRetryVersion(v=>v+1);
       setError("");
       return true;
     } catch (e) {
@@ -256,7 +273,7 @@ export function useRoomOutput(
       return;
     }
     if (fingerprint === confirmed.current) return;
-    const timer = setTimeout(() => void apply(), 40);
+    const timer = setTimeout(() => void apply(), 0);
     return () => clearTimeout(timer);
   }, [
     enabled,
@@ -294,41 +311,13 @@ export function useRoomOutput(
       if (ticket !== portraitOperation.current || !alive.current) throw Error("Portrait selection changed");
       return invoke<NativeStatus>("live_set_v2", {request: {generation: room.generation, ...value, outputId: "portrait"}});
     };
-    const status = await send({ op: "status" }).catch(() => undefined);
-    portraitRevision.current =
-      Math.max(
-        portraitRevision.current,
-        status?.preparedRevision ?? 0,
-        status?.renderedRevision ?? 0,
-      ) + 1;
-    const candidate = portraitRevision.current;
-    projection.revision = candidate;
-    const plan = await compileRoomScene(projection, {
-      definitionId: current.session.package.id,
-      instanceId: "room-" + (current.roomId ?? "local").slice(0, 50),
-      canvasId: layoutId??current.session.snapshot().layoutId,
-      target: {
-        id: "portrait",
-        orientation: "portrait",
-        width,
-        height,
-        scaling: "contain",
-      },
-      bindings: current.bindings,
-    });
-    await send({ op: "prepare", revision: candidate, plan });
-    for (let i = 0; i < 500; i++) {
-      const state = await send({ op: "status" });
-      if (state.ready && state.warmed) break;
-      if (i === 499) throw Error("Portrait is still preparing");
-      await sleep(25);
-    }
-    await send({
-      op: "take",
-      revision: candidate,
-      durationMs: authoredCrossfadeMs(projection.timeline?.transition,!!status?.renderedRevision&&portraitShownLayout.current!==portraitKey,!!current.session.snapshot().paused),
-      mode: "dissolve",
-    });
+    const id=layoutId??current.session.snapshot().layoutId;
+    const base=specsRef.current.find(s=>s.layout===id);if(!base)throw Error('Portrait layout is not in preparation inventory');
+    const spec:SceneSpec={...base,projection,target:{id:'portrait',orientation:'portrait',width,height,scaling:'contain'}};
+    await bank.current!.take(spec,async(entry,candidate)=>{
+      const plan=runtimePlan(entry.plan!,projection);
+      await send({op:'activate',key:entry.key,revision:candidate,plan});
+      await send({op:'take',revision:candidate,durationMs:authoredCrossfadeMs(projection.timeline?.transition,portraitShownLayout.current!==portraitKey,!!current.session.snapshot().paused),mode:'dissolve'});
     for (let i = 0; i < 200; i++) {
       const state = await send({ op: "status" });
       if (
@@ -338,9 +327,14 @@ export function useRoomOutput(
       if (i === 199) throw Error("Portrait did not confirm its rendered frame");
       await sleep(20);
     }
+    });
   };
   return {
     renderer: "native",
+    layoutReadiness,
+    retryPreparation:()=>{bank.current?.retry();setRetryVersion(v=>v+1);},
+    prepareDraft:(doc,bindings,framing)=>setDraftCandidate({doc,bindings,framing}),
+    clearDraftPreparation:()=>setDraftCandidate(undefined),
     applyPortrait,
     stopPortrait: async () => {
       ++portraitOperation.current;

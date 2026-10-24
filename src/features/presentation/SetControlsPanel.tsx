@@ -1,3 +1,4 @@
+import {useShowClock} from './showClock';
 import {createPortal} from 'react-dom';
 import {layoutMedia,mediaConfig} from './playback';
 import {MediaPlaybackControls} from './MediaPlaybackControls';
@@ -33,6 +34,10 @@ export function SetControlsPanel(props:PanelProps) {
   const sameDesign=useMemo(()=>designIdentity(draft.package)===designIdentity(props.session.package),[draft.package,props.session.package]);
   const matches=sameDesign&&draftState.layoutId===roomState.layoutId&&draftState.show.phase===roomState.show.phase&&recordIdentity(draftState.values)===recordIdentity(roomState.values)&&recordIdentity(draftState.feeds)===recordIdentity(roomState.feeds)&&recordIdentity(bindings)===recordIdentity(props.output?.bindings??{})&&recordIdentity(framing)===recordIdentity(props.output?.framing??{});
   const editorStatus=publishing||props.output?.busy&&matches?'applying':publishError||props.output?.error?'error':props.output?.active&&matches?'applied':'changed';
+  useEffect(()=>{
+    props.output?.prepareDraft?.(draft.exportPreparedPackage(),bindings,framing);
+  },[draft.package,JSON.stringify(draftState.values),JSON.stringify(draftState.feeds),JSON.stringify(bindings),JSON.stringify(framing)]);
+  useEffect(()=>()=>props.output?.clearDraftPreparation?.(),[]);
   useEffect(()=>{
     const next=new RehearsalSession(props.session.exportPreparedPackage(),undefined,'prepare');
     const phase=pending.current?.phase??props.session.snapshot().show.phase;
@@ -70,11 +75,7 @@ export function SetControlsPanel(props:PanelProps) {
 function SetControlsPanelView({ session, blocked = false, blockedReason, onChange, output, sourceNames = {}, voting, onFieldEdit, workspace, editorOnly=false,onPublish,publishError,onWorkspaceClose,editorStatus='changed' }: PanelProps & {editorStatus?:'changed'|'applying'|'applied'|'error';onWorkspaceClose?:()=>void;workspace?:ReactNode;editorOnly?:boolean;onPublish?:()=>void;publishError?:string}) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const [player, setPlayer] = useState('player-1');
-  useEffect(()=>{
-    let last=performance.now();
-    const timer=setInterval(()=>{const now=performance.now(),elapsed=now-last;last=now;const current=session.snapshot();if(current.running&&!current.paused)session.send({type:'tick',milliseconds:Math.min(3_600_000,elapsed)});},100);
-    return()=>clearInterval(timer);
-  },[session]);
+  useShowClock(session);
   // Fast Refresh can retain a session built by the previous runtime module.
   // Replace that rehearsal instance while retaining its prepared configuration.
   const staleSession = !(session instanceof RehearsalSession);
@@ -171,6 +172,8 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
   const editorSegments=[...schedule.phases,...(doc.show?.phases??[]).filter(p=>!schedule.phases.some(known=>known.id===p.id))];
   const editorIndex=editorSegments.findIndex(p=>p.id===state.show.phase);
   const editSegment=(id:string)=>{session.send({type:'segment.select',phaseId:id});};
+  const ready=(layout:string)=>output?.layoutReadiness?.[layout];
+  const readinessLabel=(layout:string)=>{const status=ready(layout);return !status?'':status.state==='ready'?'Ready':status.state==='error'?`Layout unavailable: ${status.error}`:'Loading layout';};
   const editor = <>
         <div className="set-editor-details-header"><strong>{doc.show?'Segment details':'Set details'}</strong><p>{editorOnly?'Changes stay in this preview until you show the set on output.':'Changes update room output.'}</p></div>
         <section className="set-editor-navigation" aria-label={doc.show?'Segment navigation':'Layout navigation'}>
@@ -214,7 +217,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
     {visibleSlots.size>0&&<section className="set-controls set-editor-source-tray" aria-label="Edit source assignments">{sourceEditor}</section>}
   </>;
   if (blocked) return <div className="set-controls"><p>{blockedReason ?? 'Waiting for the room to finish loading.'}</p></div>;
-  return <div className="set-controls">
+  return <div className="set-controls" data-layouts-ready={Object.values(output?.layoutReadiness??{}).filter(s=>s.state==='ready').length} data-layouts-total={Object.keys(output?.layoutReadiness??{}).length}>
     <header className="set-controls-toolbar">
       <div className="set-header-main">
       <span className={`set-mode-badge ${rehearsing ? 'rehearsal' : 'prepared'}`}>{rehearsing ? 'Rehearsal' : state.workspaceMode==='live'?'Show':'Prepared'}</span>
@@ -246,13 +249,14 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
         <RehearsalPreview doc={doc} state={state} output={output} outputActive={output?.active} workspace={workspace} onEditorClose={onWorkspaceClose} configuration={<SetConfiguration session={session} onChange={onChange} output={output}/>} editor={editor} sources={visibleSlots.size ? sourceEditor : undefined} />
       </div>
     </header>
+    {output?.layoutReadiness&&Object.values(output.layoutReadiness).some(s=>s.state==='error')&&<p className="set-error">Some layouts could not load. <button onClick={output.retryPreparation}>Retry loading</button></p>}
     {output?.error && <div role="alert" className="set-error">{output.error} <button disabled={output.busy&&!output.active} onClick={()=>void output.apply()}>Retry update</button></div>}
     {state.trace[state.trace.length - 1]?.message.startsWith('Rejected:') && <p role="status" className="set-error">{state.trace[state.trace.length - 1]!.message}</p>}
     <div className={`set-sections ${rehearsing ? 'is-rehearsing' : 'is-prepared'}${doc.show ? ' has-show' : ' set-only'}${hasHostMedia ? ' has-media' : ''}`}>
       {!doc.show && <>
         <section className="set-layouts" aria-label="Layouts">
           <h3>Layouts <span>{doc.set.layouts.length} layouts</span></h3>
-          <div className="set-layout-list">{doc.set.layouts.map(layout=><button type="button" key={layout.id} aria-pressed={state.layoutId===layout.id} disabled={blocked}
+          <div className="set-layout-list">{doc.set.layouts.map(layout=><button type="button" key={layout.id} aria-pressed={state.layoutId===layout.id} data-readiness={ready(layout.id)?.state} title={readinessLabel(layout.id)} disabled={blocked}
             onClick={()=>session.send({type:'control',action:{type:'layout.select',layoutId:layout.id}})}><span>{layout.label}</span><small>{layout.height>layout.width?'Portrait':layout.width>layout.height?'Landscape':'Square'}</small></button>)}</div>
         </section>
         <section className="set-manual-controls" aria-label="Set controls">
@@ -288,7 +292,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
             <h3 className="set-segments-heading">Segments<span>{schedule.phases.length} segments</span></h3>
             <div className="set-segments-scroll" role="region" tabIndex={0} aria-label="Segment list">
               <ol>{schedule.phases.map((p, i) => <li key={p.id} aria-current={i === displayedStepIndex ? 'step' : undefined}
-                className={i === displayedStepIndex ? 'current' : state.running && i < displayedStepIndex ? 'passed' : ''}>
+                data-readiness={ready(p.layoutId)?.state} title={readinessLabel(p.layoutId)} className={i === displayedStepIndex ? 'current' : state.running && i < displayedStepIndex ? 'passed' : ''}>
                 <button type="button" className="set-segment-select" disabled={blocked} onClick={()=>editSegment(p.id)}><span className="set-step-number">{String(i + 1).padStart(2,'0')}</span><span>{p.label}</span><small>{p.collectMs ? `${timeLabel(p.collectMs)} vote` : 'Manual'}</small></button>
               </li>)}</ol>
               <div className="set-run-timing">

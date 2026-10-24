@@ -245,6 +245,8 @@ static void render(void *data, gs_effect_t *unused) {
     p->pending_track_count = 0;
     for (size_t i = 0; i < p->effect_count; i++)
       p->effects[i].anchor_ms = p->clock_ms;
+    /* Off-air resident players remain paused until their next entry. */
+    for(size_t i=0;i<p->media_count;i++)obs_source_media_play_pause(p->media[i].source,true);
     memcpy(p->media, p->pending_media, sizeof(p->media));
     p->media_count = p->pending_media_count;
     p->pending_media_count = 0;
@@ -565,4 +567,11 @@ void producer_set_v2_program_stop_motion(obs_source_t *source) {
   obs_enter_graphics();
   p->track_count = p->pending_track_count = p->retired_track_count = 0;
   obs_leave_graphics();
+}
+
+/* Only the owner may promote a previously painted, warmed retained scene. */
+bool producer_set_v2_program_cached_ready(obs_source_t *s,uint64_t revision){
+  struct program *p=get(s);if(!p)return false;
+  obs_enter_graphics();bool ok=p->pending&&p->prepared_revision==revision;
+  if(ok){p->ready=true;p->warmed=true;}obs_leave_graphics();return ok;
 }

@@ -4,6 +4,7 @@ mod resources;
 use super::ffi;
 use contract::{Action, Node, Plan, Status};
 use std::{
+    rc::Rc,
     collections::HashMap,
     ffi::{c_char, CStr, CString},
     ptr,
@@ -104,6 +105,9 @@ extern "C" {
         capacity: usize,
     ) -> *mut NativeScene;
     fn producer_set_v2_scene_source(scene: *mut NativeScene) -> *mut ffi::obs_source_t;
+    fn producer_set_v2_scene_reset(scene:*mut NativeScene);
+    fn producer_set_v2_scene_texture_bytes(scene:*mut NativeScene)->usize;
+    fn producer_set_v2_program_cached_ready(p:*mut ffi::obs_source_t,r:u64)->bool;
     fn producer_set_v2_scene_release(scene: *mut NativeScene);
     fn producer_set_v2_program_create(w: u32, h: u32) -> *mut ffi::obs_source_t;
     fn producer_set_v2_program_prepare(
@@ -139,10 +143,12 @@ impl Drop for Source {
     }
 }
 struct Draft {
-    revision: u64,
     scene: *mut NativeScene,
     markers: Vec<(Source, u32)>,
     _resources: resources::Prepared,
+    bytes:usize,
+    captures:HashMap<String,usize>,
+    asset_versions:String,
 }
 struct Capture(Source);
 impl Drop for Capture {
@@ -449,8 +455,11 @@ pub struct RoomProgram {
     height: u32,
     program: Source,
     item: *mut ffi::obs_sceneitem_t,
-    draft: Option<Draft>,
-    current: Option<Draft>,
+    draft: Option<Rc<Draft>>,
+    draft_revision:u64,
+    current: Option<Rc<Draft>>,
+    bank:HashMap<String,(String,Rc<Draft>)>,
+    preparing_key:Option<(String,String)>,
     building: Option<Building>,
     latest_revision: u64,
     resources: resources::Store,
@@ -481,7 +490,10 @@ impl RoomProgram {
             program,
             item,
             draft: None,
+            draft_revision:0,
             current: None,
+            bank:HashMap::new(),
+            preparing_key:None,
             building: None,
             latest_revision: 0,
             resources,
@@ -498,6 +510,40 @@ impl RoomProgram {
         match action {
             Action::Prepare { revision, plan, .. } => {
                 self.prepare(revision, &plan, &mut resolve)?
+            }
+            Action::Preload{revision,key,plan,..}=>{
+                if !contract::identity(&key){return Err("Invalid cached scene identity".into());}
+                self.resources.publish(&plan.assets)?;
+                let signature=self.identity(&plan)?;
+                if let Some((s,d))=self.bank.get(&key){
+                    let captures_match=d.captures.iter().all(|(id,source)|resolve(id).is_ok_and(|current|current as usize==*source));
+                    if s==&signature&&captures_match&&d.asset_versions==self.resources.versions(&plan.resources){return self.poll();}
+                }
+                self.bank.remove(&key);
+                if self.bank.len()>=64{return Err("Loaded set scene count budget reached".into());}
+                self.prepare(revision,&plan,&mut resolve)?;
+                self.preparing_key=Some((key,signature));
+            }
+            Action::Activate{revision,key,plan,..}=>{
+                contract::validate(&plan)?;
+                self.resources.publish(&plan.assets)?;
+                let signature=self.identity(&plan)?;
+                let draft=self.bank.get(&key).filter(|(s,_)|s==&signature).map(|(_,d)|d.clone()).ok_or("Cached scene is missing or stale")?;
+                let native=self.poll()?;
+                if native.transitioning||native.queued||revision<=self.latest_revision{return Err("Cached scene take is stale or busy".into());}
+                // Validate capture identity again: a replaced source cannot reuse an old lease.
+                for resource in &plan.resources{if !resource.starts_with("graphic:")&&!resource.starts_with("shader:")&&!resource.starts_with("asset:"){let current=resolve(resource)?;if draft.captures.get(resource)!=Some(&(current as usize)){return Err("Cached scene source was replaced".into());}}}
+                if !producer_set_v2_program_prepare(self.program.0,producer_set_v2_scene_source(draft.scene),revision){return Err("Cached scene activation rejected".into());}
+                self.latest_revision=revision;self.building=None;self.preparing_key=None;
+                if let Err(error)=self.register(&draft,&plan,revision){producer_set_v2_program_cancel(self.program.0,revision);return Err(error);}
+                producer_set_v2_scene_reset(draft.scene);
+                if !producer_set_v2_program_cached_ready(self.program.0,revision){return Err("Cached scene readiness rejected".into());}
+                self.draft_revision=revision;self.draft=Some(draft);
+            }
+            Action::Retain{keys,..}=>{
+                if keys.len()>64||keys.iter().any(|k|!contract::identity(k)){return Err("Invalid retained scene inventory".into());}
+                self.bank.retain(|key,_|keys.contains(key));
+                self.resources.clear_manifest();
             }
             Action::Take {
                 revision,
@@ -542,6 +588,13 @@ impl RoomProgram {
         }
         self.poll()
     }
+    fn identity(&self,plan:&Plan)->Result<String,String>{
+        let mut value=serde_json::to_value(plan).map_err(|e|e.to_string())?;
+        let o=value.as_object_mut().unwrap();o.remove("clock");o.remove("motion");o.remove("assets");o.remove("definitionRevision");
+        fn strip(n:&mut serde_json::Value){if let Some(o)=n.as_object_mut(){o.remove("playback");if let Some(children)=o.get_mut("children").and_then(|c|c.as_array_mut()){for c in children{strip(c);}}}}
+        strip(value.get_mut("root").unwrap());
+        Ok(value.to_string())
+    }
     unsafe fn prepare(
         &mut self,
         revision: u64,
@@ -549,6 +602,7 @@ impl RoomProgram {
         resolve: &mut impl FnMut(&str) -> Result<*mut ffi::obs_source_t, String>,
     ) -> Result<(), String> {
         contract::validate(plan)?;
+        self.preparing_key=None;
         if revision == 0
             || revision > 9_007_199_254_740_991
             || plan.target.width != self.width
@@ -579,8 +633,8 @@ impl RoomProgram {
             ffi::obs_source_inc_showing(source);
             captures.insert(resource.clone(), Capture(Source(source)));
         }
-        if let Some(draft) = self.draft.take() {
-            producer_set_v2_program_cancel(self.program.0, draft.revision);
+        if self.draft.take().is_some() {
+            producer_set_v2_program_cancel(self.program.0, self.draft_revision);
         }
         let mut plan = plan.clone();
         plan.assets.clear();
@@ -594,9 +648,9 @@ impl RoomProgram {
         });
         Ok(())
     }
-    unsafe fn finish_build(&mut self, b: Building) -> Result<Draft, String> {
+    unsafe fn finish_build(&mut self, b: Building) -> Result<Rc<Draft>, String> {
         let mut arena = Arena::new();
-        arena.motion_targets = b.plan.motion.iter().map(|t| t.target.clone()).collect();
+        arena.motion_targets = b.plan.motion.iter().map(|t| t.target.clone()).chain(b.plan.retained_targets.iter().cloned()).collect();
         let root = arena.node(&b.plan.root, &palette(), &mut |id| {
             b.resources
                 .sources
@@ -620,10 +674,13 @@ impl RoomProgram {
                 .to_string_lossy()
                 .into_owned());
         }
+        let bytes=producer_set_v2_scene_texture_bytes(scene)+arena.browser_pixels*4+arena.markers.len()*1024*1024;
         let draft = Draft {
-            revision: b.revision,
             scene,
             markers: std::mem::take(&mut arena.markers),
+            bytes,
+            asset_versions:self.resources.versions(&b.plan.resources),
+            captures:b.captures.iter().map(|(id,s)|(id.clone(),s.0 .0 as usize)).collect(),
             _resources: b.resources,
         };
         if !producer_set_v2_program_prepare(
@@ -633,33 +690,42 @@ impl RoomProgram {
         ) {
             return Err("Native program rejected preparation".into());
         }
+        if let Err(error)=self.register(&draft,&b.plan,b.revision){producer_set_v2_program_cancel(self.program.0,b.revision);return Err(error);}
+        self.draft_revision=b.revision;
+        Ok(Rc::new(draft))
+    }
+    unsafe fn register(&self,draft:&Draft,plan:&Plan,revision:u64)->Result<(),String>{
+        let (show,segment,running)=contract::clock_positions(plan.clock.as_ref());
         for shader in &draft._resources.shaders {
+            let spec=draft._resources.sources.iter().find(|(_,s)|s.0==shader.source).and_then(|(key,_)|key.strip_prefix("shader:")).and_then(|key|plan.shaders.get(key));
             if !producer_set_v2_program_shader(
                 self.program.0,
-                b.revision,
+                revision,
                 shader.source,
                 shader.intensity,
                 shader.scale,
                 shader.opacity,
-                shader.base_ms,
-                shader.running,
+                spec.map_or(shader.base_ms,|s|if s.clock=="show"{show}else{segment}),
+                running,
             ) {
                 return Err("Native material clock rejected".into());
             }
         }
         for media in &draft._resources.media {
+            fn transport(n:&Node,id:&str)->Option<contract::Playback>{if n.resource.as_deref()==Some(id){return n.playback.clone();}n.children.iter().find_map(|c|transport(c,id))}
+            let resource=draft._resources.sources.iter().find(|(_,s)|s.0==media.source).map(|(k,_)|k.as_str());
+            let transport=resource.and_then(|id|transport(&plan.root,id));
             if !producer_set_v2_program_media(
                 self.program.0,
-                b.revision,
+                revision,
                 media.source,
-                media.playing,
-                media.position_ms,
+                transport.as_ref().map_or(media.playing,|t|t.playing),
+                transport.as_ref().map_or(media.position_ms,|t|t.position_ms),
             ) {
                 return Err("Native media transport rejected".into());
             }
         }
-        let (show, segment, running) = contract::clock_positions(b.plan.clock.as_ref());
-        for t in &b.plan.motion {
+        for t in &plan.motion {
             let property = [
                 "x",
                 "y",
@@ -700,8 +766,8 @@ impl RoomProgram {
                 .map_or(ptr::null_mut(), |s| s.0);
             if !producer_set_v2_program_track(
                 self.program.0,
-                b.revision,
-                scene,
+                revision,
+                draft.scene,
                 CString::new(t.target.clone()).unwrap().as_ptr(),
                 shader,
                 property,
@@ -717,11 +783,11 @@ impl RoomProgram {
                 t.delay_ms.unwrap_or(0.),
                 running,
             ) {
-                producer_set_v2_program_cancel(self.program.0, b.revision);
+                producer_set_v2_program_cancel(self.program.0, revision);
                 return Err("Native animation target is not representable".into());
             }
         }
-        Ok(draft)
+        Ok(())
     }
     pub unsafe fn raise(&self) {
         ffi::obs_sceneitem_set_order_position(self.item, i32::MAX);
@@ -745,17 +811,24 @@ impl RoomProgram {
             return Err("Native v2 program unavailable".into());
         }
         if let Some(draft) = &self.draft {
-            if native.prepared_revision == draft.revision
+            if native.prepared_revision == self.draft_revision
                 && !native.ready
                 && draft
                     .markers
                     .iter()
                     .all(|(s, y)| producer_set_v2_surface_marker(s.0, 0, *y, 1, 254, 3))
             {
-                producer_set_v2_program_ready(self.program.0, draft.revision);
+                producer_set_v2_program_ready(self.program.0, self.draft_revision);
                 producer_set_v2_program_status(self.program.0, &mut native);
             }
-            if native.rendered_revision == draft.revision && !native.transitioning && !native.queued
+            if native.ready&&native.warmed {
+                if let Some((key,signature))=self.preparing_key.take(){
+                    let bytes=self.bank.values().map(|(_,d)|d.bytes).sum::<usize>();
+                    if bytes+draft.bytes>768*1024*1024 {return Err("Loaded set texture budget reached".into());}
+                    self.bank.insert(key,(signature,draft.clone()));
+                }
+            }
+            if native.rendered_revision == self.draft_revision && !native.transitioning && !native.queued
             {
                 producer_set_v2_program_collect(self.program.0);
                 self.current = self.draft.take();
@@ -763,6 +836,8 @@ impl RoomProgram {
         }
         producer_set_v2_program_collect(self.program.0);
         Ok(Status {
+            cached_keys:self.bank.keys().cloned().collect(),
+            cached_bytes:self.bank.values().map(|(_,d)|d.bytes).sum(),
             generation: self.generation,
             prepared_revision: self
                 .building

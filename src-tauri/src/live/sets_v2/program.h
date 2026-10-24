@@ -50,10 +50,12 @@ bool producer_set_v2_program_shader(obs_source_t *program, uint64_t revision,
 bool producer_set_v2_program_media(obs_source_t *program, uint64_t revision,
                                    obs_source_t *media, bool playing,
                                    double position_ms);
+
+/* Stop borrowing scene metadata before the room owner releases it. */
+void producer_set_v2_program_stop_motion(obs_source_t *source);
+
+bool producer_set_v2_program_cached_ready(obs_source_t *source, uint64_t revision);
 #ifdef __cplusplus
 }
 #endif
 #endif
-
-/* Stop borrowing scene metadata before the room owner releases it. */
-void producer_set_v2_program_stop_motion(obs_source_t *source);

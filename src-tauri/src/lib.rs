@@ -143,7 +143,8 @@ pub fn run() {
             #[cfg(feature = "sets-v2-dev")]
             if std::env::var("PRODUCER_SETS_V2_UI_PROBE").as_deref() == Ok("1") {
                 if let Some(window) = app.get_webview_window("main") {
-                    window.navigate("http://localhost:1436/?roomSmoke=1".parse().unwrap())?;
+                    let url=if std::env::var("PRODUCER_SETS_V2_TIMING_PROBE").as_deref()==Ok("1"){"http://localhost:1436/?roomSmoke=1&roomTiming=1"}else{"http://localhost:1436/?roomSmoke=1"};
+                    window.navigate(url.parse().unwrap())?;
                 }
             }
             let data_dir = app.path().app_data_dir()?;

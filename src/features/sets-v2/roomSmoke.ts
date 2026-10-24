@@ -73,6 +73,6 @@ export async function roomSmoke(timingOnly=false) {
   button('Output settings')!.click();await sleep(100);button('Landscape',document.querySelector('[aria-label="Room output view"]')!)!.click();await sleep(300);button('Close output settings')?.click();
   await invoke('live_set_v2_report',{result:{ok:true,kind:'normal-room',events,portraitFrame:canvas.toDataURL('image/jpeg',0.85),completedAt:new Date().toISOString()}});
  } catch(error) {
-  await invoke('live_set_v2_report',{result:{ok:false,kind:'normal-room',error:String(error),events,body:document.body.innerText.slice(-16000),completedAt:new Date().toISOString()}});
+  await invoke('live_set_v2_report',{result:{ok:false,kind:'normal-room',error:String(error),debug:(await import('./preparedScenes')).preparationDebug().map(s=>({...s,entries:s.entries.filter(e=>e.state.state!=='ready').slice(0,24)})),events,body:document.body.innerText.slice(-6000),completedAt:new Date().toISOString()}});
  }
 }
