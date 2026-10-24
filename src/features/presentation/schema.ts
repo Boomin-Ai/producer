@@ -37,6 +37,11 @@ const number = (minimum: number, maximum: number): Codec<number> => ({
 const boolean: Codec<boolean> = { json: { type: 'boolean' }, read: (v, p) => typeof v === 'boolean' ? v : fail(p, 'Expected boolean.') };
 const optional = <T>(codec: Codec<T>): Optional<T> => ({ ...codec, optional: true,
   read: (v, p, d) => v === undefined ? undefined : codec.read(v, p, d) });
+/** Defaults normalize optional authored fields into a complete runtime value. */
+const defaulted = <T>(codec:Codec<T>,value:T):Codec<T>&{defaulted:true}=>({
+  ...codec,defaulted:true,json:{...codec.json,default:value},
+  read:(input,path,depth)=>input===undefined?structuredClone(value):codec.read(input,path,depth),
+});
 const array = <T>(codec: Codec<T>, maxItems = 64): Codec<T[]> => ({
   json: { type: 'array', items: codec.json, maxItems },
   read(v, p, d) {
@@ -51,7 +56,7 @@ function plain(v: unknown, p: string): asserts v is Record<string, unknown> {
 }
 const object = <S extends Shape>(shape: S): Codec<ObjectType<S>> => ({
   json: { type: 'object', properties: Object.fromEntries(Object.entries(shape).map(([k, c]) => [k, c.json])),
-    required: Object.entries(shape).filter(([, c]) => !('optional' in c)).map(([k]) => k), additionalProperties: false },
+    required: Object.entries(shape).filter(([, c]) => !('optional' in c)&&!('defaulted' in c)).map(([k]) => k), additionalProperties: false },
   read(v, p, d) {
     bounded(d, p); plain(v, p);
     for (const k of Object.keys(v)) if (!hasOwn(shape, k)) fail(`${p}.${k}`, 'Unknown field.');
@@ -159,7 +164,7 @@ const control = union(
 export type SetControl = Type<typeof control>;
 const show = object({ id, version: string(32), initialPhase: id,
   phases: array(object({ id, label: string(80), layoutId: id, next: optional(id), collectMs: optional(number(1000, 3_600_000)) }), 16),
-  choices: array(object({ id, label: string(80) }), 6),
+  choices: defaulted(array(object({ id, label: string(80) }), 6), []),
 });
 const codec = object({
   schema: literal('producer.presentation/1'), id, version: string(32), name: string(80),
@@ -306,7 +311,7 @@ export function parsePackage(value: unknown): PresentationPackage {
     if (!phases.has(doc.show.initialPhase)) fail('$.show', 'Unknown initial phase.');
     doc.show.phases.forEach(p => { if (p.next && !phases.has(p.next)) fail('$.show', 'Unknown next phase.'); });
     doc.show.choices.forEach(c => { if (choices.has(c.id)) fail('$.show', 'Duplicate choice.'); choices.add(c.id); });
-    if (choices.size < 2) fail('$.show', 'Show fixture needs at least two choices.');
+    if ((choices.size>0||doc.show.phases.some(p=>p.collectMs!==undefined))&&choices.size<2) fail('$.show.choices', 'Voting needs at least two choices. A sequence without voting needs none.');
     for (const c of doc.set.controls) if (c.type === 'button' && c.action.type === 'show.vote' && !choices.has(c.action.choiceId)) fail('$.set.controls', 'Unknown choice.');
   }
   return doc;

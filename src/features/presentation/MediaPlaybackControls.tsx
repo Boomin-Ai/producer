@@ -18,7 +18,7 @@ export function MediaPlaybackControls({session,edit=false}:{session:RehearsalSes
  {(edit?visible:[visible.includes(selected)?selected:visible[0]]).map(id=>{const c=mediaConfig(doc,id),t=state.media?.[id];const change=(key:keyof PlaybackConfig,value:string|boolean)=>session.configureMedia(id,{...c,[key]:value});
  return <div className="set-media-item" key={id}><strong title={doc.set.assets![id].name}>{doc.id==='ai-signal'&&id==='reaction-media'?'Reaction player':doc.set.assets![id].name}</strong>
  {edit&&<div className="set-media-options">
- <label>Start<select aria-label="Start" value={c.start} onChange={e=>change('start',e.target.value)}><option value="entry">On segment entry</option><option value="manual">Manual</option></select></label>
+ <label>Start<select aria-label="Start" value={c.start} onChange={e=>change('start',e.target.value)}><option value="entry">{doc.show?'On segment entry':'On layout entry'}</option><option value="manual">Manual</option></select></label>
  <label>Playback<select aria-label="Playback" value={String(c.loop)} onChange={e=>change('loop',e.target.value==='true')}><option value="false">Once</option><option value="true">Loop</option></select></label>
  <label>On exit<select aria-label="On exit" value={c.exit} onChange={e=>change('exit',e.target.value)}><option value="reset">Stop and reset</option><option value="pause">Pause</option><option value="continue">Continue</option></select></label>
  <label>On return<select aria-label="On return" value={c.return} onChange={e=>change('return',e.target.value)}><option value="restart">Restart</option><option value="resume">Resume</option></select></label>

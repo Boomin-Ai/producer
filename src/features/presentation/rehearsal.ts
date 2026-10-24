@@ -79,7 +79,7 @@ export class RehearsalSession {
   }
   private initial(): RehearsalState {
     const media:Record<string,MediaTransport>={};enterMedia(this.package,undefined,this.preparation?.layoutId??this.package.set.initialLayout,media);
-    return { media,...(this.package.set.layouts.some(l=>l.animation||l.root.children?.some(n=>n.type==='shader'))?{animationClock:{running:false,positionMs:0,segmentMs:0,anchorMs:Date.now()}}:{}), mode: this.workspaceMode==='live'?'live':'rehearsal', workspaceMode: this.workspaceMode, sandboxId: this.sandboxId, revision: 0, elapsedMs: 0, running: false, paused: false,
+    return { media,...(this.package.set.layouts.some(l=>l.animation||l.root.children?.some(n=>n.type==='shader'))?{animationClock:{running:!this.package.show,positionMs:0,segmentMs:0,anchorMs:Date.now()}}:{}), mode: this.workspaceMode==='live'?'live':'rehearsal', workspaceMode: this.workspaceMode, sandboxId: this.sandboxId, revision: 0, elapsedMs: 0, running: false, paused: false,
       layoutId: this.package.set.initialLayout,
       values: Object.fromEntries(Object.entries(this.package.set.values).map(([k, v]) => [k, v.default])),
       feeds: Object.fromEntries(Object.entries(this.package.set.feeds).map(([k, v]) => [k, v.default])),
@@ -261,7 +261,7 @@ export class RehearsalSession {
       else if(event.type==='seek'){position.positionMs+=event.milliseconds-position.segmentMs;position.segmentMs=event.milliseconds;for(const [id,t]of Object.entries(next.media))next.media[id]={...t,positionMs:event.milliseconds,anchorMs:animationNow};}
       // Control edges update the anchor. Ordinary content edits retain it, so
       // editing a title never restarts an animation.
-      if(this.state.animationClock&&(['pause','stop','tick','seek','segment.select'].includes(event.type)||event.type==='control'&&(['show.start','show.next','show.previous','layout.select'].includes(event.action.type))))next.animationClock={...position,positionMs:Math.max(0,position.positionMs),running:next.running&&!next.paused,anchorMs:animationNow};
+      if(this.state.animationClock&&(['pause','stop','tick','seek','segment.select'].includes(event.type)||event.type==='control'&&(['show.start','show.next','show.previous','layout.select'].includes(event.action.type))))next.animationClock={...position,positionMs:Math.max(0,position.positionMs),running:(!this.package.show||next.running)&&!next.paused,anchorMs:animationNow};
       if(next.layoutId!==this.state.layoutId){
         delete next.layoutMotion;delete next.layoutMotionId;
         const transition=this.package.set.layouts.find(l=>l.id===next.layoutId)?.animation?.transition;

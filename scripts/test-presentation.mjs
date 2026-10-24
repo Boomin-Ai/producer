@@ -128,6 +128,26 @@ test('standalone set needs no show, choices, phases or live adapters', () => {
   assert.ok(s.send({ type: 'feed', key: 'headline', value: 'NEW TOPIC' }));
   assert.ok(texts(outputProjection(s.package, s.snapshot())).includes('NEW TOPIC'));
 });
+test('standalone layout animation does not depend on a show transport',()=>{
+ const doc=structuredClone(AFTER_HOURS),layout=doc.set.layouts[0];
+ layout.animation={tracks:[{target:layout.root.children[0].id,property:'opacity',keyframes:[{atMs:0,value:0},{atMs:1000,value:1}]}]};
+ const session=new RehearsalSession(doc,undefined,'prepare');assert.equal(session.snapshot().animationClock.running,true);assert.equal(session.snapshot().running,false);
+ control(session,'layout.select',{layoutId:'solo'});control(session,'layout.select',{layoutId:layout.id});
+ assert.equal(session.snapshot().animationClock.running,true);assert.equal(session.snapshot().animationClock.segmentMs,0);assert.equal(session.snapshot().running,false);
+});
+
+test('a show can sequence layouts without contestants or voting',()=>{
+ const doc=structuredClone(AFTER_HOURS);
+ doc.show={id:'conversation-sequence',version:'1',initialPhase:'opening',phases:[{id:'opening',label:'Opening',layoutId:doc.set.layouts[0].id,next:'close'},{id:'close',label:'Closing',layoutId:'solo'}]};
+ const parsed=parsePackage(doc);assert.deepEqual(parsed.show.choices,[]);
+ assert(!presentationJsonSchema.properties.show.required.includes('choices'));
+ const session=new RehearsalSession(parsed,undefined,'prepare');session.enterLive();
+ assert.ok(control(session,'show.start'));assert.ok(control(session,'show.next'));
+ assert.equal(session.snapshot().show.phase,'close');assert.equal(session.snapshot().layoutId,'solo');assert.deepEqual(session.snapshot().counts,{});
+ const invalid=structuredClone(doc);invalid.show.phases[0].collectMs=10000;
+ assert.throws(()=>parsePackage(invalid),/Voting needs at least two choices/);
+});
+
 test('schema is generated from the same strict codec', () => {
   assert.equal(presentationJsonSchema.additionalProperties, false);
   assert.equal(presentationJsonSchema.properties.schema.const, 'producer.presentation/1');

@@ -163,6 +163,7 @@ import { AudienceSender, type MediaSignal } from "../lib/audienceMedia";
 import { MonitorSender, ProgramMonitor, monitorLog, monitorPlaceholder, type MonitorRoomInfo, type MonitorState, type ProgramSource } from "../lib/monitorFeed";
 import { SeatMediaLeg } from "../lib/seatMedia";
 import { ModBoard } from "./ModBoard";
+import {SetRoomVoting} from '../features/presentation/SetRoomVoting';
 import { VotePanel, VoteEditor } from "./VotePanel";
 import { voteFormFor, firstSentence } from "../lib/votePanel";
 import { activeRoomVote, mergeRoomVote, newestVotes } from "../lib/roomVotes";
@@ -5942,8 +5943,10 @@ export function LiveView({
       const ix = isBoomin(ep) ? normalizeBoominInteraction(res.interaction) : res.interaction;
       if (ix) onInteractionFrame(ix);
       setVoteEdit(false);
+      return true;
     } catch (e) {
       notifyError(e, { key: "guests" });
+      return false;
     }
   };
 
@@ -6816,7 +6819,7 @@ export function LiveView({
   const panelBody = (id: PanelId) => {
     switch (id) {
       case "setControls":
-        return <SetControlsPanel sourceNames={setSourceNames} onFieldEdit={editSetField} session={setRehearsal} output={setOutput} blocked={!docApplied}
+        return <SetControlsPanel voting={roomAccess.can.interactions?<SetRoomVoting vote={vote} savedVotes={savedVotes} onSelectVote={selectSavedVote} onOpen={openVote} onTransition={(action,hold)=>void transitionVote(action,hold)}/>:undefined} sourceNames={setSourceNames} onFieldEdit={editSetField} session={setRehearsal} output={setOutput} blocked={!docApplied}
           blockedReason={!docApplied ? "Waiting for the room to finish loading." : undefined}
           onChange={changeSet} />;
       case "dj":
