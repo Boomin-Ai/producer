@@ -5,6 +5,7 @@ import {
   type DataValue,
   type PublicData,
 } from "./data";
+import { validatePaint, type Paint } from "./paint";
 export type Orientation = "landscape" | "portrait";
 export type Scalar = string | number | boolean;
 export interface DataBinding {
@@ -24,6 +25,7 @@ interface CommonNode {
   id: string;
   bounds: Bounds;
   properties?: Record<string, Property>;
+  paint?: Paint;
 }
 export type SceneNode = CommonNode &
   (
@@ -84,6 +86,7 @@ export type RenderNode = {
   mask?: { kind: "rounded"; radius: number };
   children: RenderNode[];
   isolate?: boolean;
+  paint?: Paint;
 };
 export interface RenderPlan {
   definitionId: string;
@@ -113,6 +116,8 @@ const allowedProps = [
   "height",
   "rotation",
   "scale",
+  "scaleX",
+  "scaleY",
   "fontSize",
   "fontWeight",
   "align",
@@ -244,7 +249,12 @@ export function validateDefinition(input: unknown): SetDefinition {
         shader: ["preset"],
       }[n.kind];
       if (!specific) throw Error("Unknown scene kind");
-      exact(n, ["id", "kind", "bounds", "properties", ...specific]);
+      exact(n, ["id", "kind", "bounds", "properties", "paint", ...specific]);
+      if (n.paint) {
+        if (!["text", "graphic"].includes(n.kind))
+          throw Error("Paint is only valid on graphics leaves");
+        validatePaint(n.paint);
+      }
       id(n.id);
       if (ids.has(n.id)) throw Error("Duplicate node identity");
       ids.add(n.id);
@@ -332,7 +342,7 @@ function validateVisualProperty(key: string, value: Scalar): void {
   if (["x", "y", "width", "height"].includes(key)) {
     finite(value, key === "width" || key === "height" ? 0 : -16384, 16384);
   } else if (key === "opacity") finite(value, 0, 1);
-  else if (key === "scale") finite(value, 0.01, 32);
+  else if (["scale", "scaleX", "scaleY"].includes(key)) finite(value, 0.01, 32);
   else if (key === "rotation") finite(value, -36000, 36000);
   else if (key === "fontSize") finite(value, 1, 1024);
   else if (key === "fontWeight") finite(value, 100, 1000);
@@ -432,6 +442,7 @@ export function compileSet(
       bounds,
       properties,
       children: [],
+      ...(n.paint ? { paint: structuredClone(n.paint) } : {}),
     };
     if (n.kind === "source") {
       const handle = instance.bindings[n.input];

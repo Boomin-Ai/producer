@@ -19,6 +19,7 @@ struct producer_set_v2_node {
   obs_source_t *surface;
   const struct producer_set_v2_node *children;
   size_t child_count;
+  float rotation, scale_x, scale_y;
 };
 struct producer_set_v2_scene;
 struct producer_set_v2_scene *producer_set_v2_scene_prepare(
@@ -33,6 +34,9 @@ obs_source_t *producer_set_v2_scene_node(struct producer_set_v2_scene *scene,
 size_t producer_set_v2_scene_texture_bytes(struct producer_set_v2_scene *scene);
 size_t producer_set_v2_scene_group_count(struct producer_set_v2_scene *scene);
 void producer_set_v2_scene_release(struct producer_set_v2_scene *scene);
+bool producer_set_v2_scene_frame(struct producer_set_v2_scene *scene,
+                                 const char *node_id, int property,
+                                 float value);
 #ifdef __cplusplus
 }
 #endif

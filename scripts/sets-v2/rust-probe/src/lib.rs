@@ -31,7 +31,7 @@ pub unsafe extern "C" fn sets_v2_rust_dispatch(
     }
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let request = CStr::from_ptr(json).to_str().map_err(|e| e.to_string())?;
-        if request.len() > 512 * 1024 {
+        if request.len() > 42 * 1024 * 1024 {
             return Err("Request too large".to_string());
         }
         let action: sets_v2::contract::Action =
@@ -70,4 +70,12 @@ pub unsafe extern "C" fn sets_v2_rust_release(owner: *mut c_void) {
 #[no_mangle]
 pub unsafe extern "C" fn sets_v2_rust_register() {
     sets_v2::register();
+}
+
+#[path = "../../../../src-tauri/src/live/shaders.rs"]
+mod shaders;
+mod set_media {
+    pub fn native_path(_: &str, _: &str) -> Result<std::path::PathBuf, String> {
+        Err("External media references are not authorized by the native probe".into())
+    }
 }

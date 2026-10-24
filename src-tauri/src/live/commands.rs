@@ -1370,7 +1370,7 @@ pub async fn live_set_v2(app: tauri::AppHandle, request: serde_json::Value) -> R
     #[cfg(all(have_engine, feature = "sets-v2-dev", target_os = "macos"))]
     {
         use tauri::Manager;
-        if request.to_string().len() > 512 * 1024 { return Err("Sets v2 request exceeds transport budget".into()); }
+        if request.to_string().len() > 42 * 1024 * 1024 { return Err("Sets v2 request exceeds transport budget".into()); }
         let action: super::sets_v2::contract::Action = serde_json::from_value(request).map_err(|e| e.to_string())?;
         return tauri::async_runtime::spawn_blocking(move || {
             let status = app.state::<AppState>().live.handle.as_ref().ok_or("Live engine unavailable")?.sets_v2(action)?;
@@ -1396,4 +1396,25 @@ pub async fn live_set_v2_report(app: tauri::AppHandle, result: serde_json::Value
     }
     #[cfg(not(all(feature = "sets-v2-dev", target_os = "macos")))]
     { let _=(app,result);Err("Sets v2 dev reporting is disabled".into()) }
+}
+
+#[tauri::command]
+pub fn live_set_v2_enabled()->bool{cfg!(all(have_engine,feature="sets-v2-dev",target_os="macos"))}
+
+#[tauri::command]
+pub fn live_set_v2_smoke_enabled()->bool {
+ cfg!(feature="sets-v2-dev") && std::env::var("PRODUCER_SETS_V2_UI_PROBE").as_deref()==Ok("1")
+}
+
+#[tauri::command]
+pub async fn live_set_source_create(app:tauri::AppHandle,id:String,label:String,spec:serde_json::Value)->Result<serde_json::Value,String>{
+ #[cfg(all(have_engine,feature="sets-v2-dev",target_os="macos"))]{
+  use tauri::Manager;
+  let spec=serde_json::from_value(spec).map_err(|e|e.to_string())?;
+  return tauri::async_runtime::spawn_blocking(move||{
+   let state=app.state::<AppState>();let handle=state.live.handle.as_ref().ok_or("Live engine unavailable")?;
+   serde_json::to_value(handle.set_source_create(id,label,spec)?).map_err(|e|e.to_string())
+  }).await.map_err(|e|e.to_string())?;
+ }
+ #[cfg(not(all(have_engine,feature="sets-v2-dev",target_os="macos")))]{let _=(app,id,label,spec);Err("Set source creation requires the v2 dev room".into())}
 }

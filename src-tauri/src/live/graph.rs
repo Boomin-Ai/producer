@@ -595,6 +595,8 @@ pub struct SceneGraph {
     presentation_needs_prewarm: bool,
     #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
     sets_v2: Option<super::sets_v2::RoomProgram>,
+    #[cfg(all(feature="sets-v2-dev",target_os="macos"))]
+    sets_v2_portrait:Option<super::sets_v2::RoomProgram>,
     #[cfg(target_os = "macos")]
     portrait: Option<super::portrait::Portrait>,
     overlay: Option<(
@@ -816,6 +818,8 @@ impl SceneGraph {
                 presentation_needs_prewarm: false,
                 #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
                 sets_v2: None,
+                #[cfg(all(feature="sets-v2-dev",target_os="macos"))]
+                sets_v2_portrait:None,
                 #[cfg(target_os = "macos")]
                 portrait: None,
                 overlay: None,
@@ -1338,6 +1342,12 @@ impl SceneGraph {
         self.add_extra_visible(id, label, spec, true)
     }
 
+    #[cfg(all(feature="sets-v2-dev",target_os="macos"))]
+    pub fn create_set_source(&mut self,id:&str,label:&str,spec:&ExtraSpec)->Result<SourcesState,String>{
+        if !super::sets_v2::contract::identity(id) || label.is_empty()||label.len()>160 || !matches!(spec,ExtraSpec::Camera{..}|ExtraSpec::Screen{..}|ExtraSpec::Image{..}|ExtraSpec::Media{..}|ExtraSpec::Color{..}){return Err("Invalid set source recipe".into());}
+        self.add_extra_visible(id,label,spec,false)?;
+        Ok(self.state())
+    }
     fn add_extra_visible(
         &mut self,
         id: &str,
@@ -3074,6 +3084,8 @@ impl SceneGraph {
                     info.base_width as f32,
                     info.base_height as f32,
                 );
+                #[cfg(feature="sets-v2-dev")]
+                if let Some(program)=&self.sets_v2_portrait{program.raise();}
             }
         }
     }
@@ -3204,6 +3216,8 @@ impl SceneGraph {
     }
     #[cfg(target_os = "macos")]
     pub fn portrait_stop(&mut self) {
+        #[cfg(feature="sets-v2-dev")]
+        {self.sets_v2_portrait=None;}
         self.portrait = None;
     }
     #[cfg(target_os = "macos")]
@@ -3226,8 +3240,21 @@ impl SceneGraph {
         if action.generation() != self.presentation_generation {
             return Err("Room changed; prepare this v2 set again".into());
         }
+        if !["program","portrait"].contains(&action.output()){return Err("Unknown set output".into());}
+        if action.output()=="portrait" {
+            if matches!(action,Action::Return{..}){self.sets_v2_portrait=None;return Ok(Status{generation:self.presentation_generation,..Default::default()});}
+            if self.sets_v2_portrait.is_none(){
+                if !matches!(action,Action::Prepare{..}){return Err("Prepare the portrait set first".into());}
+                self.portrait_room()?;
+                let(parent,w,h)=unsafe{self.portrait.as_mut().unwrap().native_room()};
+                self.sets_v2_portrait=Some(unsafe{RoomProgram::attach(parent,self.presentation_generation,w,h)?});
+            }
+            let sources:std::collections::HashMap<_,_>=self.state().items.into_iter().filter(|item|item.kind!="mic").filter_map(|item|self.source_by_id(&item.id).map(|s|(item.id,s))).collect();
+            return unsafe{self.sets_v2_portrait.as_mut().unwrap().dispatch(action,|id|sources.get(id).copied().ok_or_else(||format!("Portrait source {id} is unavailable")))};
+        }
         if matches!(action, Action::Return { .. }) {
             self.sets_v2 = None;
+            self.sets_v2_portrait=None;
             self.presentation_generation += 1;
             return Ok(Status { generation: self.presentation_generation, ..Default::default() });
         }
@@ -3242,7 +3269,7 @@ impl SceneGraph {
             self.sets_v2 = Some(unsafe { RoomProgram::attach(self.scene, self.presentation_generation, w as u32, h as u32)? });
         }
         let sources: std::collections::HashMap<_,_> = self.state().items.into_iter()
-            .filter(|item| item.kind != "mic" && item.has_frame)
+            .filter(|item| item.kind != "mic")
             .filter_map(|item| self.source_by_id(&item.id).map(|source| (item.id, source))).collect();
         unsafe { self.sets_v2.as_mut().unwrap().dispatch(action, |id| sources.get(id).copied().ok_or_else(|| format!("Room source {id} has no ready video frame"))) }
     }
@@ -3597,7 +3624,7 @@ impl SceneGraph {
         #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
         let occupied = occupied || self.sets_v2.is_some();
         #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
-        { self.sets_v2 = None; }
+        { self.sets_v2 = None;self.sets_v2_portrait=None; }
 
         #[cfg(target_os = "macos")]
         if let Some(p) = self.portrait.as_mut() {

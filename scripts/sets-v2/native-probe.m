@@ -34,6 +34,7 @@ OBS_IMPORT obs_source_t *obs_scene_get_source(const obs_scene_t *);
 OBS_IMPORT obs_sceneitem_t *obs_scene_add(obs_scene_t *, obs_source_t *);
 OBS_IMPORT void obs_scene_release(obs_scene_t *);
 extern void sets_v2_rust_register(void);
+extern void producer_source_appearance_register(void);
 extern void *sets_v2_rust_attach(obs_scene_t *, uint32_t, uint32_t);
 extern bool sets_v2_rust_dispatch(void *, const char *, obs_source_t *, char *,
                                   size_t);
@@ -639,6 +640,47 @@ static NSArray *rust_adapter_proof(NSString *out) {
   return checks;
 }
 
+
+static NSArray *real_room_proof(NSString *out) {
+  NSString *folder = @(getenv("PRODUCER_ROOM_FIXTURES") ?: "/private/tmp/producer-sets-v2-room-fixtures");
+  NSArray *files = [[[NSFileManager defaultManager] contentsOfDirectoryAtPath:folder error:nil] sortedArrayUsingSelector:@selector(compare:)];
+  require(files.count >= 10, "real authored room fixtures available");
+  NSMutableArray *checks = [NSMutableArray array];
+  for (NSString *file in files) {
+    if (![file hasSuffix:@".json"]) continue;
+    NSDictionary *plan = [NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:[folder stringByAppendingPathComponent:file]] options:0 error:nil];
+    uint32_t w = [plan[@"target"][@"width"] unsignedIntValue], h = [plan[@"target"][@"height"] unsignedIntValue];
+    obs_scene_t *room = obs_scene_create_private("Authored room integration");
+    obs_source_t *source = obs_scene_get_source(room), *camera = solid(640,480,0,1,0,true);
+    obs_set_output_source(0, source);
+    void *owner = sets_v2_rust_attach(room,w,h);
+    require(owner != NULL,"authored room attaches");
+    rust_call(owner,@{@"op":@"prepare",@"generation":@7,@"revision":@1,@"plan":plan},camera,true);
+    NSDictionary *status = nil;
+    for (int i=0;i<700;i++) {
+      status=rust_call(owner,@{@"op":@"status",@"generation":@7},camera,true);
+      if ([status[@"ready"] boolValue] && [status[@"warmed"] boolValue]) break;
+      usleep(20000);
+    }
+    require([status[@"ready"] boolValue] && [status[@"warmed"] boolValue],"authored set first paint and resource readiness");
+    rust_call(owner,@{@"op":@"take",@"generation":@7,@"revision":@1,@"durationMs":@0,@"mode":@"dissolve"},camera,true);
+    for(int i=0;i<250;i++) {
+      status=rust_call(owner,@{@"op":@"status",@"generation":@7},camera,true);
+      if ([status[@"renderedRevision"] intValue]==1) break;
+      usleep(20000);
+    }
+    require([status[@"renderedRevision"] intValue]==1,"authored set rendered receipt");
+    NSData *frame=capture(source,w,h,w,h);
+    png(frame,w,h,[out stringByAppendingPathComponent:[[file stringByDeletingPathExtension] stringByAppendingString:@"-room.png"]]);
+    [checks addObject:@{@"file":file,@"rendered":@YES,@"resources":plan[@"resources"]}];
+    fprintf(stderr,"Authored room rendered: %s\n",file.UTF8String);
+    sets_v2_rust_release(owner);obs_set_output_source(0,NULL);obs_scene_release(room);obs_source_release(camera);
+    for(int i=0;i<300 && producer_set_v2_live_groups();i++) usleep(10000);
+    require(!producer_set_v2_live_groups(),"authored room groups released");
+  }
+  return checks;
+}
+
 static struct producer_set_v2_program_status program_status(obs_source_t *p) {
   struct producer_set_v2_program_status status = {0};
   require(producer_set_v2_program_status(p, &status), "native program status");
@@ -1197,6 +1239,7 @@ static int runProbe(int argc, char **argv) {
     require(obs_reset_audio(&audio),
             "initialize isolated audio mixer without capture/output");
     shaderDiagnostics();
+    producer_source_appearance_register();
     sets_v2_rust_register();
     register_test();
     require(producer_set_v2_group_create(0, 10, 0, 1) == NULL,
@@ -1318,6 +1361,7 @@ static int runProbe(int argc, char **argv) {
     NSDictionary *placement = placement_proof(out);
     NSDictionary *browser = browser_proof(app, out);
     NSArray *adapter = rust_adapter_proof(out);
+    NSArray *authored = real_room_proof(out);
     NSDictionary *report = @{
       @"backend" : @"Metal",
       @"obsVersion" : @(obs_get_version_string()),
@@ -1329,6 +1373,7 @@ static int runProbe(int argc, char **argv) {
       @"sceneOwner" : owner,
       @"program" : program,
       @"appAdapter" : adapter,
+      @"authoredRooms" : authored,
       @"remainingGroups" : @(producer_set_v2_live_groups()),
       @"remainingSyntheticSources" : @(atomic_load(&source_live)),
       @"scope" : @"isolated native compositor with synthetic capture, PNG and "

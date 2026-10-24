@@ -1,3 +1,5 @@
+import {useRoomOutput} from '../sets-v2/useRoomOutput';
+import {invoke} from '@tauri-apps/api/core';
 import {AssetTransport} from './assetTransport';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ipc } from '../../lib/ipc';
@@ -17,6 +19,10 @@ export function resolveRoomBindings(bindings:Record<string,string>,sources:LiveS
   return next;
 }
 export interface SetOutputControls {
+  applyPortrait?:(projection:OutputProjection)=>Promise<void>;
+  stopPortrait?:()=>Promise<void>;
+  createSource?:(slot:string,spec:import('../../lib/sourceSpec').ExtraSpec,label:string)=>Promise<void>;
+  renderer?:'native';selectToShow?:boolean;setSelectToShow?:(value:boolean)=>void;
   framing:Record<string,import('./schema').SlotFraming>; frame:(slot:string,value:import('./schema').SlotFraming)=>void;
   active:boolean; busy:boolean; error:string; bindings:Record<string,string>; sources:LiveSources;
   bind:(slot:string,source:string)=>void; apply:()=>Promise<void>; returnToRoom:()=>Promise<boolean>;
@@ -56,7 +62,7 @@ export function nextSetProjection(session:RehearsalSession,layoutId?:string,fram
  const pause=(n:OutputProjection['root'])=>{if(n.slotId&&framing[n.slotId])n.framing=framing[n.slotId];if(n.playback)n.playback={playing:false,positionMs:mediaPosition(n.playback),anchorMs:Date.now()};if(n.type==='media')n.autoplay=false;n.children.forEach(pause);};pause(projection.root);
  return normalizeSlotAppearance(projection);
 }
-export function useSetOutput(session:RehearsalSession,roomId:string|null,sources:LiveSources,enabled:boolean,
+function useLegacySetOutput(session:RehearsalSession,roomId:string|null,sources:LiveSources,enabled:boolean,
   initialBindings:Record<string,string>={},onBindings?:(bindings:Record<string,string>)=>void,initialFraming:Record<string,import('./schema').SlotFraming>={},onFraming?:(framing:Record<string,import('./schema').SlotFraming>)=>void):SetOutputControls {
   const state=useSyncExternalStore(session.subscribe,session.snapshot);
   const [bindings,setBindings]=useState(initialBindings);
@@ -155,4 +161,13 @@ export function useSetOutput(session:RehearsalSession,roomId:string|null,sources
   return {framing,frame:(slot,value)=>{const next={...framing,[slot]:value};setFraming(next);onFraming?.(next);},active,busy,error,bindings,sources,apply,returnToRoom,bind:(slot,source)=>{
     const next={...bindings};if(source)next[slot]=source;else delete next[slot];setBindings(next);onBindings?.(next);
   }};
+}
+
+let nativeCapability:Promise<boolean>|undefined;
+export function useSetOutput(session:RehearsalSession,roomId:string|null,sources:LiveSources,enabled:boolean,initialBindings:Record<string,string>={},onBindings?:(bindings:Record<string,string>)=>void,initialFraming:Record<string,import('./schema').SlotFraming>={},onFraming?:(framing:Record<string,import('./schema').SlotFraming>)=>void):SetOutputControls {
+ const [renderer,setRenderer]=useState<'waiting'|'native'|'legacy'>('waiting');
+ useEffect(()=>{let stopped=false;nativeCapability??=invoke<boolean>('live_set_v2_enabled').catch(()=>false);void nativeCapability.then(value=>{if(!stopped)setRenderer(value?'native':'legacy');});return()=>{stopped=true;};},[]);
+ const native=useRoomOutput(session,roomId,sources,enabled&&renderer==='native',initialBindings,onBindings,initialFraming,onFraming);
+ const legacy=useLegacySetOutput(session,roomId,sources,enabled&&renderer==='legacy',initialBindings,onBindings,initialFraming,onFraming);
+ return renderer==='native'?native:legacy;
 }

@@ -1,40 +1,37 @@
 # Isolated Sets v2 room
 
-The new engine adapter is opt-in under `sets-v2-dev`, currently on macOS. It uses its own app identifier (`ai.boomin.producer.sets-v2-dev`), database and CEF profile. The app refuses to run that feature with the production identifier. It does not modify the installed Producer bundle or its rooms.
+Updated 2026-10-24. The isolated `Producer Sets v2 Dev.app` opens the normal Producer room, set picker, controls and Set edit dialog. The engineering lab remains an internal diagnostic page.
 
-```sh
-npm run dev:sets-v2
-# In another terminal:
-npm run dev:sets-v2-room
-```
+Run `npm run dev:sets-v2` for the local frontend, then `npm run dev:sets-v2-room` to build and open the app. `python3 scripts/sets-v2/dev-room.py --prepare` builds without opening; `--smoke` exercises the normal room controls automatically.
 
-The helper builds with the installed engine runtime, APFS-clones a separate bundle and ad-hoc-signs it. It does not install camera extensions. Build output is cached under `/private/tmp/producer-sets-v2-app-check` by default. The staged app is:
+The app uses identifier `ai.boomin.producer.sets-v2-dev`, isolated storage, a copied set library and copied local media-picker grants. It does not copy account credentials or modify original set packages. The staged bundle is `src-tauri/target/sets-v2-dev/Producer Sets v2 Dev.app`.
 
-`src-tauri/target/sets-v2-dev/Producer Sets v2 Dev.app`
+## Available for review
 
-The workbench's **Native dev room** controls appear inside Tauri. In a normal browser, the existing side-by-side previews remain simulations.
+- Choose a set through the existing picker. “Show configured sets when selected” controls automatic output.
+- In Set edit, assign an existing room source or use **Add source here** to create and assign a camera, screen, image, video or color source. New sources start hidden in the ordinary room scene; a set placement can render them independently.
+- Sources, embedded images/video, trusted shader presets and ordered browser graphics pass through the native compositor. Preparation waits for resource readiness and graphics paint markers before taking output.
+- Layout changes use a native dissolve. Native source rendering drives transitions, shader time, media playback and bounded declarative motion tracks.
+- Output settings supports an independent portrait composition through the same renderer.
+- Show room scene returns to the original scene and invalidates pending main-output work.
 
-1. **Add synthetic host**, or enter the ID of a ready video source in this dev room.
-2. **Show native preview** to view the actual room output.
-3. **Prepare Audience Desk** or **Prepare Spotlight**. The next composition renders off air while the current output remains visible.
-4. Choose dissolve, wipe or slide, then **Take**. A 500 ms native-clock transition switches compositions.
-5. **Pause clock** holds transition timing; live capture is independently live. **Return to room** removes v2 output and invalidates old requests.
+## Verified
 
-The native controller acknowledges a rendered endpoint, rather than the arrival of a UI command. This is a native source-render receipt, not proof that an encoder, remote viewer or display scanout has received that frame. The diagnostics show prepared/rendered revisions separately.
+The native Metal harness rendered all ten authored layouts: three Head to Head, three Signal Desk and four Atlanta Culture portrait layouts. Output captures are in `native/`. It also checks mixed-content ordering, masks, live source movement, transitions, native ownership and cleanup, source authorization and strict transport validation.
 
-## Current limits
+The normal-room app smoke passed inline color-source creation and assignment, hidden room visibility, automatic takes across the three sets, and portrait rendering. Evidence: `native/normal-room-ui-proof.json`. This uses synthetic color sources, without physical cameras, microphones or streaming destinations.
 
-- The visible native room controls target its landscape program canvas. Portrait graph assembly/controller behavior is pixel-tested separately; integrated simultaneous landscape/portrait room routing and atomic dual-output takes remain unfinished.
-- Compiled v2 groups, room-source bindings and ordered text/graphics batches are supported. Assets, gallery recipes and shaders still need the new authorized resource service; this adapter rejects them explicitly.
-- A bounded native graphics serializer independently validates incoming plans and recomputes their viewport. Each graphics surface reserves a paint marker in an extra row; native code reads that pixel, then crops the row out of the visible placement. Dimension checks alone cannot mark browser graphics ready.
-- The native video tick drives transition progress and exposes presentation time. General animation-clip sampling and per-segment timeline authoring still need integration. No UI timer advances native transition frames.
-- Preparations can replace an older off-air candidate. An active transition is bounded: the caller must wait for its endpoint before another take. Rapid interruption/retargeting is still future work.
-- Zero-area/hidden nodes are omitted during preparation. Activating them requires recompilation until native patch/motion support lands.
-- Native takes currently use immutable data snapshots. Audience/data updates require another prepare/take until native live-binding patches are connected. The browser interaction lab continues to exercise the shared poll/data kernel independently.
-- No v1 conversion or permanent fallback engine is introduced. The old runtime stays active outside the isolated feature until the full v2 cutover.
+The existing 16 runtime integration checks and browser poll checks cover shared audience state, independent skins, privacy, orientation continuity, data validation and deterministic animation. They do not prove hosted audience integration in the normal room.
 
-## Evidence
+## Remaining refactor work
 
-`npm run test:sets-v2-native` compiles the **same Rust adapter module** linked by the app and uses the **same source-type registration entry point**. It exercises actual OBS room scenes, native source authorization, strict plan rejection, graphics first-paint markers, output pixels, transitions, cancellation and cleanup. Both orientations run through this adapter in the probe.
+- The native portrait preview appeared washed out in an app screenshot, while the independent portrait output readback had correct colors. Resolve the display-only discrepancy before visual sign-off.
 
-The app-level smoke test is `python3 scripts/sets-v2/dev-room.py --smoke`. It launches the isolated app, creates one synthetic color source, switches between the two v2 poll sets six times through Tauri and the engine queue, checks readiness/rendered receipts, then returns to room and checks that old-generation requests fail. It opens no physical capture devices or streams. Its bounded report is saved to the isolated app-data directory as `sets-v2-ui-proof.json`.
+- Integrate shared audience/data channels into the normal room presentation path; current snapshots still require preparation for visual changes.
+- Retain/cache graphics and media across content changes, predict upcoming segments and measure frame times. No speed improvement is claimed yet.
+- Coordinate landscape and portrait takes atomically; current native controllers are independent.
+- Complete portable package migration. Existing editor projections are lowered into the new native graph; the full breaking authoring-format cutover is unfinished.
+- Finish Lottie support, overflow/blur bounds and native blend semantics across the complete library; audit root-geometry animation and interruption handling.
+- Test physical sources and Windows/Linux support before broader rollout. Current native evidence is Apple Silicon/Metal only.
+
+No production deployment has occurred. HTML-to-canvas remains out of scope.

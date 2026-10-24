@@ -1,4 +1,5 @@
 #include "program.h"
+#include "scene.h"
 #include <math.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -6,10 +7,35 @@
 #include <string.h>
 
 #define ID "producer_set_v2_program"
+extern void producer_shader_frame(obs_source_t *, float, float, float, float);
+struct effect_clock {
+  obs_source_t *source;
+  float intensity, scale, opacity;
+  double base_ms, anchor_ms;
+  bool running;
+};
+extern void obs_source_media_play_pause(obs_source_t *, bool);
+extern void obs_source_media_set_time(obs_source_t *, int64_t);
+extern int64_t obs_source_media_get_time(obs_source_t *);
+struct media_clock {
+  obs_source_t *source;
+  bool playing;
+  double position_ms;
+};
 /* libobs invokes enum callbacks outside the graphics thread too. This lock
  * protects only the child pointer snapshot; no libobs graph call holds it. All
  * rendering, state changes and owner calls are serialized by graphics context.
  */
+struct motion_track {
+  struct producer_set_v2_scene *scene;
+  char target[65];
+  obs_source_t *shader;
+  int property, easing, loop;
+  struct producer_set_v2_keyframe frames[64];
+  size_t count;
+  double base_ms, delay_ms, anchor_ms;
+  bool running;
+};
 struct program {
   obs_source_t *source, *current, *pending, *transition, *retiring;
   obs_source_t *children[4];
@@ -20,6 +46,12 @@ struct program {
       rendered_revision, serial;
   double clock_ms, start_ms, duration_ms, progress;
   bool warmed, ready, queued, transitioning, paused;
+  struct effect_clock effects[32], pending_effects[32], retired_effects[32];
+  size_t effect_count, pending_effect_count, retired_effect_count;
+  struct media_clock media[24], pending_media[24];
+  size_t media_count, pending_media_count;
+  struct motion_track tracks[128], pending_tracks[128], retired_tracks[128];
+  size_t track_count, pending_track_count, retired_track_count;
 };
 static atomic_size_t live = 0;
 static void lock(struct program *p) {
@@ -128,9 +160,68 @@ static bool warm(struct program *p) {
   gs_texrender_end(p->warm);
   return gs_texrender_get_texture(p->warm) != NULL;
 }
+static void effects(struct effect_clock *items, size_t count, double clock) {
+  for (size_t i = 0; i < count; i++) {
+    struct effect_clock *e = &items[i];
+    double ms = e->base_ms + (e->running ? fmax(0., clock - e->anchor_ms) : 0.);
+    producer_shader_frame(e->source, (float)(ms / 1000.), e->intensity,
+                          e->scale, e->opacity);
+  }
+}
+static void animate(struct program *p, struct motion_track *tracks,
+                    size_t count, double clock, bool holding) {
+  for (size_t i = 0; i < count; i++) {
+    struct motion_track *t = &tracks[i];
+    double time = fmax(
+        0., t->base_ms +
+                (t->running && !holding ? fmax(0., clock - t->anchor_ms) : 0.) -
+                t->delay_ms);
+    double duration = t->frames[t->count - 1].at_ms;
+    if (t->loop == 1)
+      time = fmod(time, duration);
+    if (t->loop == 2) {
+      time = fmod(time, duration * 2);
+      if (time > duration)
+        time = duration * 2 - time;
+    }
+    float value = t->frames[t->count - 1].value;
+    if (time < duration) {
+      size_t k = 1;
+      while (k < t->count && t->frames[k].at_ms < time)
+        k++;
+      double phase = (time - t->frames[k - 1].at_ms) /
+                     (t->frames[k].at_ms - t->frames[k - 1].at_ms);
+      if (t->easing == 1)
+        phase *= phase;
+      else if (t->easing == 2)
+        phase = 1 - (1 - phase) * (1 - phase);
+      else if (t->easing == 3)
+        phase = phase * phase * (3 - 2 * phase);
+      value = t->frames[k - 1].value +
+              (t->frames[k].value - t->frames[k - 1].value) * (float)phase;
+    }
+    if (t->property >= 7) {
+      struct effect_clock *sets[] = {p->effects, p->pending_effects,
+                                     p->retired_effects};
+      size_t sizes[] = {p->effect_count, p->pending_effect_count,
+                        p->retired_effect_count};
+      for (size_t j = 0; j < 3; j++)
+        for (size_t k = 0; k < sizes[j]; k++)
+          if (sets[j][k].source == t->shader) {
+            if (t->property == 7)
+              sets[j][k].intensity = value;
+            else
+              sets[j][k].scale = value;
+          }
+    } else
+      producer_set_v2_scene_frame(t->scene, t->target, t->property, value);
+  }
+}
 static void render(void *data, gs_effect_t *unused) {
   (void)unused;
   struct program *p = data;
+  animate(p, p->pending_tracks, p->pending_track_count, p->clock_ms, true);
+  effects(p->pending_effects, p->pending_effect_count, p->clock_ms);
   if (p->pending && !p->warmed)
     p->warmed = warm(p);
   if (p->queued && p->warmed && p->ready) {
@@ -139,10 +230,39 @@ static void render(void *data, gs_effect_t *unused) {
     p->pending = NULL;
     p->queued = false;
     p->current_revision = p->prepared_revision;
+    memcpy(p->retired_tracks, p->tracks, sizeof(p->tracks));
+    p->retired_track_count = p->track_count;
+    memcpy(p->tracks, p->pending_tracks, sizeof(p->tracks));
+    p->track_count = p->pending_track_count;
+    p->pending_track_count = 0;
+    for (size_t i = 0; i < p->track_count; i++)
+      p->tracks[i].anchor_ms = p->clock_ms;
+    memcpy(p->retired_effects, p->effects, sizeof(p->effects));
+    p->retired_effect_count = p->effect_count;
+    memcpy(p->effects, p->pending_effects, sizeof(p->effects));
+    p->effect_count = p->pending_effect_count;
+    p->pending_effect_count = 0;
+    p->pending_track_count = 0;
+    for (size_t i = 0; i < p->effect_count; i++)
+      p->effects[i].anchor_ms = p->clock_ms;
+    memcpy(p->media, p->pending_media, sizeof(p->media));
+    p->media_count = p->pending_media_count;
+    p->pending_media_count = 0;
+    for (size_t i = 0; i < p->media_count; i++) {
+      struct media_clock *m = &p->media[i];
+      if (fabs((double)obs_source_media_get_time(m->source) - m->position_ms) >
+          50.)
+        obs_source_media_set_time(m->source, (int64_t)m->position_ms);
+      obs_source_media_play_pause(m->source, !m->playing || p->paused);
+    }
     p->start_ms = p->clock_ms;
     p->transitioning = p->transition != NULL;
     snapshot_children(p);
   }
+  animate(p, p->tracks, p->track_count, p->clock_ms, false);
+  animate(p, p->retired_tracks, p->retired_track_count, p->clock_ms, false);
+  effects(p->effects, p->effect_count, p->clock_ms);
+  effects(p->retired_effects, p->retired_effect_count, p->clock_ms);
   if (!p->current)
     return;
   p->serial++;
@@ -200,6 +320,8 @@ static void collect(struct program *p) {
   obs_source_t *t = p->transition, *r = p->retiring;
   p->transition = NULL;
   p->retiring = NULL;
+  p->retired_effect_count = 0;
+  p->retired_track_count = 0;
   snapshot_children(p);
   detach(p, t);
   detach(p, r);
@@ -227,6 +349,9 @@ bool producer_set_v2_program_prepare(obs_source_t *s, obs_source_t *candidate,
   }
   obs_source_t *old = p->pending;
   p->pending = ref;
+  p->pending_effect_count = 0;
+  p->pending_track_count = 0;
+  p->pending_media_count = 0;
   p->latest_revision = revision;
   p->prepared_revision = revision;
   p->warmed = false;
@@ -288,6 +413,9 @@ bool producer_set_v2_program_cancel(obs_source_t *s, uint64_t revision) {
   if (ok) {
     obs_source_t *old = p->pending, *t = p->transition;
     p->pending = NULL;
+    p->pending_effect_count = 0;
+    p->pending_track_count = 0;
+    p->pending_media_count = 0;
     p->transition = NULL;
     p->queued = false;
     p->warmed = false;
@@ -306,6 +434,9 @@ bool producer_set_v2_program_pause(obs_source_t *s, bool paused) {
     return false;
   obs_enter_graphics();
   p->paused = paused;
+  for (size_t i = 0; i < p->media_count; i++)
+    obs_source_media_play_pause(p->media[i].source,
+                                paused || !p->media[i].playing);
   obs_leave_graphics();
   return true;
 }
@@ -339,3 +470,99 @@ bool producer_set_v2_program_collect(obs_source_t *s) {
   return ok;
 }
 size_t producer_set_v2_live_programs(void) { return atomic_load(&live); }
+bool producer_set_v2_program_media(obs_source_t *s, uint64_t revision,
+                                   obs_source_t *media, bool playing,
+                                   double position) {
+  struct program *p = get(s);
+  if (!p || !media || strcmp(obs_source_get_id(media), "ffmpeg_source") ||
+      !isfinite(position) || position < 0 || position > 86400000)
+    return false;
+  obs_enter_graphics();
+  bool ok = p->pending && p->prepared_revision == revision &&
+            p->pending_media_count < 24;
+  if (ok)
+    p->pending_media[p->pending_media_count++] =
+        (struct media_clock){media, playing, position};
+  obs_leave_graphics();
+  return ok;
+}
+bool producer_set_v2_program_shader(obs_source_t *s, uint64_t revision,
+                                    obs_source_t *shader, float intensity,
+                                    float scale, float opacity, double base,
+                                    bool running) {
+  struct program *p = get(s);
+  if (!p || !shader ||
+      strcmp(obs_source_get_id(shader), "producer_shader_layer") ||
+      !isfinite(intensity) || intensity < 0 || intensity > 2 ||
+      !isfinite(scale) || scale < .25f || scale > 4 || !isfinite(opacity) ||
+      opacity < 0 || opacity > 1 || !isfinite(base) || base < 0 ||
+      base > 86400000)
+    return false;
+  obs_enter_graphics();
+  bool ok = p->pending && p->prepared_revision == revision &&
+            p->pending_effect_count < 32;
+  if (ok)
+    p->pending_effects[p->pending_effect_count++] = (struct effect_clock){
+        shader, intensity, scale, opacity, base, p->clock_ms, running};
+  obs_leave_graphics();
+  return ok;
+}
+
+bool producer_set_v2_program_track(
+    obs_source_t *s, uint64_t revision, struct producer_set_v2_scene *scene,
+    const char *target, obs_source_t *shader, int property,
+    const struct producer_set_v2_keyframe *frames, size_t count, int easing,
+    int loop, double base, double delay, bool running) {
+  struct program *p = get(s);
+  if (!p || !scene || !target || strlen(target) > 64 ||
+      !producer_set_v2_scene_node(scene, target) || property < 0 ||
+      property > 8 || !frames || count < 2 || count > 64 || easing < 0 ||
+      easing > 3 || loop < 0 || loop > 2 || !isfinite(base) || base < 0 ||
+      base > 86400000 || !isfinite(delay) || delay < 0 || delay > 60000)
+    return false;
+  for (size_t i = 0; i < count; i++) {
+    float v = frames[i].value;
+    double at = frames[i].at_ms;
+    if (!isfinite(at) || at < 0 || at > 60000 || (!i && at != 0) ||
+        (i && at <= frames[i - 1].at_ms) || !isfinite(v) || fabsf(v) > 36000)
+      return false;
+    if ((property == 4 && (v < 0 || v > 1)) ||
+        (property == 6 && (v < .01f || v > 32)) ||
+        (property == 7 && (v < 0 || v > 2)) ||
+        (property == 8 && (v < .25f || v > 4)) ||
+        ((property == 2 || property == 3) && (v < 0 || v > 8192)))
+      return false;
+  }
+  if (property >= 7 &&
+      (!shader || strcmp(obs_source_get_id(shader), "producer_shader_layer")))
+    return false;
+  obs_enter_graphics();
+  bool ok = p->pending && p->prepared_revision == revision &&
+            p->pending_track_count < 128;
+  if (ok) {
+    struct motion_track *t = &p->pending_tracks[p->pending_track_count++];
+    memset(t, 0, sizeof(*t));
+    t->scene = scene;
+    snprintf(t->target, sizeof(t->target), "%s", target);
+    t->shader = shader;
+    t->property = property;
+    t->easing = easing;
+    t->loop = loop;
+    t->base_ms = base;
+    t->delay_ms = delay;
+    t->running = running;
+    t->anchor_ms = p->clock_ms;
+    t->count = count;
+    memcpy(t->frames, frames, count * sizeof(*frames));
+  }
+  obs_leave_graphics();
+  return ok;
+}
+
+void producer_set_v2_program_stop_motion(obs_source_t *source) {
+  struct program *p = get(source);
+  if (!p) return;
+  obs_enter_graphics();
+  p->track_count = p->pending_track_count = p->retired_track_count = 0;
+  obs_leave_graphics();
+}

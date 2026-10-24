@@ -10,6 +10,10 @@
 struct owned_node {
   char id[65];
   obs_source_t *group;
+  obs_source_t *parent;
+  size_t index;
+  float x, y, width, height, radius, opacity, rotation, sx, sy;
+  bool visible;
 };
 struct producer_set_v2_scene {
   obs_source_t *root;
@@ -62,6 +66,10 @@ static bool validate(struct preparation *p,
       n->radius > 8192 || !isfinite(n->opacity) || n->opacity < 0 ||
       n->opacity > 1 || !fit_valid(n->fit))
     return fail(p, "Invalid native node geometry/style");
+  if (!isfinite(n->rotation) || fabsf(n->rotation) > 36000 ||
+      !isfinite(n->scale_x) || !isfinite(n->scale_y) || n->scale_x < 0 ||
+      n->scale_y < 0 || n->scale_x > 32 || n->scale_y > 32)
+    return fail(p, "Invalid native placement transform");
   if (!allocation(p, n->width, n->height))
     return false;
   snprintf(p->scene->nodes[p->scene->count++].id, 65, "%s", n->id);
@@ -108,9 +116,21 @@ static obs_source_t *assemble(struct preparation *p,
   }
   p->scene->nodes[own].group =
       group; /* borrowed while root retains the graph */
+  struct owned_node *entry = &p->scene->nodes[own];
+  entry->x = n->x;
+  entry->y = n->y;
+  entry->width = n->width;
+  entry->height = n->height;
+  entry->radius = n->radius;
+  entry->opacity = n->opacity;
+  entry->visible = n->visible;
+  entry->rotation = n->rotation;
+  entry->sx = n->scale_x == 0 ? 1 : n->scale_x;
+  entry->sy = n->scale_y == 0 ? 1 : n->scale_y;
   if (n->kind == SET_V2_GROUP) {
     for (size_t i = 0; i < n->child_count; i++) {
       const struct producer_set_v2_node *child = &n->children[i];
+      size_t child_index = *index;
       obs_source_t *source = assemble(p, child, index);
       if (!source) {
         obs_source_release(group);
@@ -118,7 +138,13 @@ static obs_source_t *assemble(struct preparation *p,
       }
       bool ok = producer_set_v2_group_add(group, source, child->x, child->y,
                                           child->width, child->height, false);
+      if (ok)
+        ok = producer_set_v2_group_layer_transform(
+            group, i, child->rotation, child->scale_x == 0 ? 1 : child->scale_x,
+            child->scale_y == 0 ? 1 : child->scale_y);
       obs_source_release(source);
+      p->scene->nodes[child_index].parent = group;
+      p->scene->nodes[child_index].index = i;
       if (!ok) {
         fail(p, "Native child attachment failed");
         obs_source_release(group);
@@ -195,4 +221,57 @@ void producer_set_v2_scene_release(struct producer_set_v2_scene *s) {
   if (s->root)
     obs_source_release(s->root);
   free(s);
+}
+bool producer_set_v2_scene_frame(struct producer_set_v2_scene *s,
+                                 const char *id, int property, float value) {
+  if (!s || !id || !isfinite(value))
+    return false;
+  struct owned_node *n = NULL;
+  for (size_t i = 0; i < s->count; i++)
+    if (!strcmp(s->nodes[i].id, id)) {
+      n = &s->nodes[i];
+      break;
+    }
+  if (!n)
+    return false;
+  if (property == 4) {
+    if (value < 0 || value > 1)
+      return false;
+    n->opacity = value;
+    return producer_set_v2_group_frame(n->group, n->radius,
+                                       n->visible ? value : 0);
+  }
+  if (!n->parent)
+    return false;
+  if (property <= 1) {
+    if (fabsf(value) > 16384)
+      return false;
+    if (property == 0)
+      n->x = value;
+    else
+      n->y = value;
+  } else if (property <= 3) {
+    if (value < 0 || value > 8192)
+      return false;
+    if (property == 2)
+      n->width = value;
+    else
+      n->height = value;
+  } else if (property == 5) {
+    if (fabsf(value) > 36000)
+      return false;
+    n->rotation = value;
+  } else if (property == 6) {
+    if (value < .01f || value > 32)
+      return false;
+    n->sx = value;
+    n->sy = value;
+  } else
+    return false;
+  if (!producer_set_v2_group_layer_frame(
+          n->parent, n->index, n->x, n->y, fmaxf(1, n->width),
+          fmaxf(1, n->height), n->visible && n->width > 0 && n->height > 0))
+    return false;
+  return producer_set_v2_group_layer_transform(n->parent, n->index, n->rotation,
+                                               n->sx, n->sy);
 }

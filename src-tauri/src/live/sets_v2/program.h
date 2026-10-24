@@ -32,7 +32,28 @@ bool producer_set_v2_program_status(obs_source_t *program,
  * alive until the transition has rendered its endpoint. */
 bool producer_set_v2_program_collect(obs_source_t *program);
 size_t producer_set_v2_live_programs(void);
+struct producer_set_v2_scene;
+struct producer_set_v2_keyframe {
+  double at_ms;
+  float value;
+};
+bool producer_set_v2_program_track(
+    obs_source_t *program, uint64_t revision,
+    struct producer_set_v2_scene *scene, const char *target,
+    obs_source_t *shader, int property,
+    const struct producer_set_v2_keyframe *frames, size_t count, int easing,
+    int loop, double base_ms, double delay_ms, bool running);
+bool producer_set_v2_program_shader(obs_source_t *program, uint64_t revision,
+                                    obs_source_t *shader, float intensity,
+                                    float scale, float opacity, double base_ms,
+                                    bool running);
+bool producer_set_v2_program_media(obs_source_t *program, uint64_t revision,
+                                   obs_source_t *media, bool playing,
+                                   double position_ms);
 #ifdef __cplusplus
 }
 #endif
 #endif
+
+/* Stop borrowing scene metadata before the room owner releases it. */
+void producer_set_v2_program_stop_motion(obs_source_t *source);

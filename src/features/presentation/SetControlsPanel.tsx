@@ -9,6 +9,7 @@ import { rundown, timeLabel } from './rundown';
 import type { PresentationPackage, SetControl } from './schema';
 import type { SetOutputControls } from './useSetOutput';
 import './presentation.css';
+import {SetSourceCreator} from './SetSourceCreator';
 
 export function SetControlsPanel({ session, blocked = false, blockedReason, onChange, output, sourceNames = {}, onFieldEdit }: {
   sourceNames?: Record<string,string>; onFieldEdit?: (key:string)=>void; output?: SetOutputControls; session: RehearsalSession; blocked?: boolean; blockedReason?: string; onChange: (doc: PresentationPackage) => void;
@@ -100,9 +101,9 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
   const sourceEditor = <details className="set-source-slots" open><summary>Source slots <span>{visibleSlots.size}</span></summary>
               {output ? <div className="set-editor-sources">{doc.set.slots.filter(slot=>visibleSlots.has(slot.id)).map((slot,index) => <div className="set-source-card" key={slot.id}><h4><span>{index+1}</span>{slot.label}</h4><select aria-label={`${slot.label} source`} disabled={output.busy&&!output.active} value={output.bindings[slot.id] ?? ''} onChange={e => output.bind(slot.id,e.target.value)}>
                 <option value="">Empty slot</option>
-                {(output.sources.items ?? []).filter(item => item.kind!=='mic').map(item => <option key={item.id} value={item.id} disabled={!item.visible || !item.has_frame}>{sourceNames[item.id] ?? item.label}{!item.visible ? ' · off scene' : !item.has_frame ? ' · waiting for video' : ''}</option>)}
-              </select><SlotFramingControls label={slot.label} value={output.framing[slot.id] ?? findSlotFraming(doc.set.layouts.find(l=>l.id===state.layoutId)?.root,slot.id)} disabled={output.busy&&!output.active} onChange={value=>output.frame(slot.id,value)} /></div>)}</div> : <ul>{doc.set.slots.filter(slot=>visibleSlots.has(slot.id)).map(slot => <li key={slot.id}><strong>{slot.label}</strong><span>Sample video</span></li>)}</ul>}
-              <p className="set-section-note">{output ? 'Assign sources already on the room output. Empty slots stay empty; audio follows the room mixer.' : 'This preview uses sample video.'}</p>
+                {(output.sources.items ?? []).filter(item => item.kind!=='mic').map(item => <option key={item.id} value={item.id} disabled={output.renderer!=='native'&&(!item.visible || !item.has_frame)}>{sourceNames[item.id] ?? item.label}{!item.visible ? ' · off scene' : !item.has_frame ? ' · waiting for video' : ''}</option>)}
+              </select>{output.createSource&&<SetSourceCreator slot={slot.id} label={slot.label} create={output.createSource}/>}<SlotFramingControls label={slot.label} value={output.framing[slot.id] ?? findSlotFraming(doc.set.layouts.find(l=>l.id===state.layoutId)?.root,slot.id)} disabled={output.busy&&!output.active} onChange={value=>output.frame(slot.id,value)} /></div>)}</div> : <ul>{doc.set.slots.filter(slot=>visibleSlots.has(slot.id)).map(slot => <li key={slot.id}><strong>{slot.label}</strong><span>Sample video</span></li>)}</ul>}
+              <p className="set-section-note">{output ? output.renderer==='native'?'Choose a source or add one here. Creating a source does not place it on the room scene. Audio follows the room mixer.':'Assign sources already on the room output. Empty slots stay empty; audio follows the room mixer.' : 'This preview uses sample video.'}</p>
             </details>;
   const editor = <>
         <section className="set-setup" aria-label="Set editing controls">
@@ -133,7 +134,7 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
       </div>
       {output && <div className="set-output-actions">
         {output.active || output.busy ? <button onClick={() => void output.returnToRoom()}>Show room scene</button> : <button disabled={output.busy&&!output.active} onClick={() => void output.apply()} className="set-send-output">Show set</button>}
-        <span>{output.busy&&!output.active ? 'Preparing output…' : output.active ? rehearsing ? 'Rehearsal on output' : 'On output' : 'Show the set before rehearsing'}</span>
+        <span>{output.busy ? output.active ? 'Switching set…' : 'Preparing output…' : output.active ? rehearsing ? 'Rehearsal on output' : 'On output' : 'Show the set before rehearsing'}</span>
       </div>}
       {doc.show && <div className="set-fixed-playback">{transport}</div>}
       {doc.show && <div className="set-compact-run" aria-label="Compact show controls">

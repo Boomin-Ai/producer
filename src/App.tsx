@@ -7,10 +7,14 @@ import type { ModLink } from "./lib/modSeat";
 import { setActiveEndpointId } from "./lib/workspace";
 import { FirstLight, firstLightDone } from "./views/FirstLight";
 import { Home } from "./views/Home";
+import {invoke} from "@tauri-apps/api/core";
+import {SetsDevelopmentRoom} from "./views/SetsDevelopmentRoom";
 
 type View = "loading" | "onboarding" | "onboarding-server" | "signin" | "home" | { kind: "modseat"; link: ModLink; from: "onboarding" | "signin" };
 
 function App() {
+  const [setsDevelopment,setSetsDevelopment]=useState(false);
+  useEffect(()=>{if(hasTauri())void invoke<boolean>('live_set_v2_enabled').then(setSetsDevelopment).catch(()=>{});},[]);
   const [view, setView] = useState<View>("loading");
   const [firstLight, setFirstLight] = useState(() => !firstLightDone());
   const [endpoints, setEndpoints] = useState<EndpointInfo[]>([]);
@@ -51,6 +55,7 @@ function App() {
     await refresh();
   }
 
+  if(setsDevelopment)return <SetsDevelopmentRoom/>;
   if (firstLight) {
     return <FirstLight onDone={() => setFirstLight(false)} />;
   }

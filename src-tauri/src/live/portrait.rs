@@ -202,6 +202,9 @@ pub struct Portrait {
     needs_prewarm: bool,
 }
 impl Portrait {
+    #[cfg(feature="sets-v2-dev")]
+    pub unsafe fn native_room(&mut self)->(*mut ffi::obs_scene_t,u32,u32){self.room();(self.room_scene,self.width,self.height)}
+
     pub unsafe fn create() -> Result<Self, String> {
         let mut info: std::mem::MaybeUninit<ffi::obs_video_info> = std::mem::MaybeUninit::zeroed();
         if !ffi::obs_get_video_info(info.as_mut_ptr()) {

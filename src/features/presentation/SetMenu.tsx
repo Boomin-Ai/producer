@@ -59,6 +59,7 @@ export function SetMenu({ session, onChange, onControls, output }: {
         {![AFTER_HOURS.id, HEAD_TO_HEAD.id, SIGNAL_DESK.id].includes(session.package.id)&&!library.some(entry=>entry.id===session.package.id) && <option value="imported">{session.package.name}</option>}
       </select></label>
 
+      {output?.renderer==='native'&&<label className="set-selection-preference"><input type="checkbox" checked={!!output.selectToShow} onChange={e=>output.setSelectToShow?.(e.target.checked)}/>Show configured sets when selected</label>}
       <div className="set-menu-actions"><button onClick={() => { onControls(); }}>Controls</button>
       {output && <button disabled={output.busy} onClick={() => {void (output.active || output.busy ? output.returnToRoom() : output.apply());}}>{output.active || output.busy ? 'Show room scene' : 'Show set'}</button>}
       </div></div>

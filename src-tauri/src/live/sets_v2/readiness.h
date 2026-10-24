@@ -8,4 +8,5 @@
 bool producer_set_v2_surface_marker(obs_source_t *source, uint32_t x,
                                     uint32_t y, uint8_t red, uint8_t green,
                                     uint8_t blue);
+bool producer_set_v2_surface_warm(obs_source_t *source);
 #endif

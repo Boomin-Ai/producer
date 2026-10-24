@@ -20,10 +20,22 @@ if not (runtime / 'Contents/Frameworks/libobs.framework').is_dir():
     raise SystemExit('Installed Producer runtime not found')
 if subprocess.run(['pgrep', '-f', str(stage / 'Contents/MacOS/producer')], stdout=subprocess.DEVNULL).returncode == 0:
     raise SystemExit('Close only Producer Sets v2 Dev before replacing its bundle')
-with urllib.request.urlopen('http://127.0.0.1:1436/labs/sets-v2/', timeout=3) as response:
+with urllib.request.urlopen('http://127.0.0.1:1436/', timeout=3) as response:
     if response.status != 200:
         raise SystemExit('Start npm run dev:sets-v2 on port 1436 first')
 env = dict(os.environ, CARGO_TARGET_DIR=str(target), CARGO_PROFILE_DEV_DEBUG='0', CARGO_INCREMENTAL='0', CARGO_BUILD_JOBS='1', PRODUCER_ENGINE_DIR=str(runtime / 'Contents'), TAURI_CONFIG=json.dumps(config))
+# Read existing set files into a separate editable library. Original packages and
+# media grants remain untouched; no account credentials/workspace DB are copied.
+profile=Path.home()/'Library/Application Support'/config['identifier']
+library=profile/'sets-library'
+library.mkdir(parents=True,exist_ok=True)
+for original in (Path.home()/'Documents/boomin/docs/shows').glob('*.json'):
+    destination=library/original.name
+    if not destination.exists():
+        shutil.copyfile(original,destination)
+original_grants=Path.home()/'Library/Application Support/ai.boomin.producer/set-media-files.json'
+if original_grants.is_file() and not (profile/'set-media-files.json').exists():
+    shutil.copyfile(original_grants,profile/'set-media-files.json')
 subprocess.run(['cargo', 'build', '--offline', '--manifest-path', str(root / 'src-tauri/Cargo.toml'), '--features', 'sets-v2-dev'], cwd=root, env=env, check=True)
 stage.parent.mkdir(parents=True, exist_ok=True)
 if stage.exists():

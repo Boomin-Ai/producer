@@ -436,3 +436,9 @@
  .rm-dock-bottom.slim .set-fixed-media {max-width:230px;min-width:180px;}
  .rm-dock-bottom.slim .set-fixed-media .set-media-item>strong {max-width:70px;}
 }
+
+.set-selection-preference{display:flex!important;align-items:center;gap:8px;font-size:12px;line-height:1.4;margin-top:12px}
+.set-selection-preference input{width:auto!important;margin:0}
+.set-source-create{display:grid;gap:8px;padding-top:8px}
+.set-source-create-actions{display:flex;gap:6px}
+.set-add-source{margin-top:8px}

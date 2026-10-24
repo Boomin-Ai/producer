@@ -30,7 +30,7 @@ fn compiled_fixture_and_strict_rejection() {
     assert!(!validates(p));
     let mut p = fixture();
     p["root"]["children"][0]["properties"]["rotation"] = json!(30);
-    assert!(!validates(p));
+    assert!(validates(p));
     let mut p = fixture();
     p["root"]["children"][0]["kind"] = json!("asset");
     assert!(!validates(p));

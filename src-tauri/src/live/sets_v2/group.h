@@ -24,6 +24,9 @@ bool producer_set_v2_group_layer_frame(obs_source_t *group, size_t index,
                                        float x, float y, float width,
                                        float height, bool visible);
 size_t producer_set_v2_live_groups(void);
+bool producer_set_v2_group_layer_transform(obs_source_t *group, size_t index,
+                                           float rotation, float scale_x,
+                                           float scale_y);
 #ifdef __cplusplus
 }
 #endif

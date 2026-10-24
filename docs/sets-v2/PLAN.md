@@ -59,3 +59,10 @@ The next slice is now implemented behind `sets-v2-dev`: strict compiled-plan tra
 Verified with the exact app Rust adapter in the native harness, including its registration entry point. Both orientations pass compiled-plan and room pixel checks; native controller passes three transition modes plus 12 repeated Next/Back switches per orientation with no black gaps at sampled pixels and complete reference cleanup. Two native contract tests, 16 integration checks, TypeScript/workbench checks and Chrome workbench checks pass.
 
 Full app compile check/build and isolated app smoke pass: six alternating-set takes through real JS/Tauri/engine/native routing, first-paint readiness, rendered receipts, and stale request rejection after returning to room. See [DEV-ROOM.md](DEV-ROOM.md). App controls currently target landscape; portrait is tested in the native harness. General animation clips, segment prediction, embedded resources, source-editor UX, direct library show, dual-output coordination and migration remain. No production deployment or measured frame-performance improvement is claimed.
+
+
+## Normal-room integration milestone — 2026-10-24
+
+The dev app now opens the familiar Producer room. Inline source creation/assignment, automatic configured-set selection, authorized embedded image/video resources, trusted shaders, bounded native motion and independent portrait output are implemented. Ten authored layouts rendered in the exact native Rust adapter; normal-room UI smoke passed three set selections, hidden source creation and portrait output. See [DEV-ROOM.md](DEV-ROOM.md) for current review instructions and remaining work; earlier progress sections describe historical milestones.
+
+The complete refactor remains in progress: retained content updates, shared audience/data room integration, atomic dual output, complete package migration and broad library/platform coverage remain. No production deployment or performance improvement claim.

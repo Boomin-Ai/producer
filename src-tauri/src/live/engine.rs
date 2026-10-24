@@ -719,6 +719,8 @@ pub enum Command {
     PresentationStatus {
         reply: mpsc::Sender<super::presentation::Status>,
     },
+    #[cfg(all(feature="sets-v2-dev",target_os="macos"))]
+    SetSourceCreate {id:String,label:String,spec:graph::ExtraSpec,reply:mpsc::Sender<Result<graph::SourcesState,String>>},
     #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
     SetsV2 {
         action: super::sets_v2::contract::Action,
@@ -908,6 +910,8 @@ fn cmd_name(c: &Command) -> &'static str {
         Command::PresentationStatus { .. } => "PresentationStatus",
         #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
         Command::SetsV2 { .. } => "SetsV2",
+        #[cfg(all(feature="sets-v2-dev",target_os="macos"))]
+        Command::SetSourceCreate { .. } => "SetSourceCreate",
         Command::PortraitRoom { .. } => "PortraitRoom",
         Command::PortraitState { .. } => "PortraitState",
         Command::PortraitTransform { .. } => "PortraitTransform",
@@ -1212,6 +1216,11 @@ impl LiveHandle {
             .map_err(|e| e.to_string())?;
         rx.recv_timeout(Duration::from_secs(5))
             .map_err(|_| "Set engine did not answer".into())
+    }
+    #[cfg(all(feature="sets-v2-dev",target_os="macos"))]
+    pub fn set_source_create(&self,id:String,label:String,spec:graph::ExtraSpec)->Result<graph::SourcesState,String>{
+        let(tx,rx)=mpsc::channel();self.cmd.send(Command::SetSourceCreate{id,label,spec,reply:tx}).map_err(|e|e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(10)).map_err(|_|"Source creation did not answer".to_string())?
     }
     #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
     pub fn sets_v2(&self, action: super::sets_v2::contract::Action) -> Result<super::sets_v2::contract::Status, String> {
@@ -2753,6 +2762,12 @@ pub fn start(
                     }
                     Ok(Command::PortraitStop{reply})=>{if portrait_recorder.is_some()||selected_portrait{let _=reply.send(());continue;}if let Some(p)=portrait_preview.take(){p.detach();}#[cfg(target_os="macos")]if let Some(g)=scene.as_mut(){g.portrait_stop();}let _=reply.send(());}
                     Ok(Command::PortraitFrame{reply})=>{#[cfg(target_os="macos")]let frame=scene.as_ref().map(|g|g.portrait_frame()).unwrap_or_default();#[cfg(not(target_os="macos"))]let frame=String::new();let _=reply.send(frame);}
+                    #[cfg(all(feature="sets-v2-dev",target_os="macos"))]
+                    Ok(Command::SetSourceCreate{id,label,spec,reply})=>{
+                        let result=scene.as_mut().ok_or("Room unavailable".to_string()).and_then(|g|g.create_set_source(&id,&label,&spec));
+                        if let Ok(sources)=&result{snap.lock().unwrap().sources=sources.clone();sink(&LiveEvent::SourcesChanged{sources:sources.clone()});}
+                        let _=reply.send(result);
+                    }
                     #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
                     Ok(Command::SetsV2 {action,reply}) => {
                         let result=scene.as_mut().ok_or_else(||"The dev room is not running".to_string()).and_then(|g|g.sets_v2(action));

@@ -9,6 +9,9 @@ const sources = [
   "src-tauri/src/live/obs_min.h",
   "src-tauri/src/live/sets_v2/contract.rs",
   "src-tauri/src/live/sets_v2/mod.rs",
+  "src-tauri/src/live/sets_v2/resources.rs",
+  "src/features/sets-v2/roomCompiler.ts",
+  "src/features/sets-v2/paint.ts",
   "src-tauri/src/live/sets_v2/readiness.c",
   "src-tauri/src/live/sets_v2/readiness.h",
   "src-tauri/src/live/sets_v2/program.c",
@@ -40,6 +43,7 @@ if (
   !proof.sceneOwner?.actualColorTargetBudget ||
   proof.program?.length !== 2 ||
   proof.appAdapter?.length !== 2 ||
+  proof.authoredRooms?.length !== 10 ||
   proof.remainingGroups ||
   proof.remainingSyntheticSources
 )

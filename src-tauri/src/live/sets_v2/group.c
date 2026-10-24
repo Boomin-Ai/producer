@@ -8,6 +8,7 @@
 /* Exported libobs matrix entry points; ABI pinned by engine/obs.lock. */
 OBS_IMPORT void gs_matrix_translate3f(float x, float y, float z);
 OBS_IMPORT void gs_matrix_scale3f(float x, float y, float z);
+OBS_IMPORT void gs_matrix_rotaa4f(float x, float y, float z, float angle);
 
 #define GROUP_ID "producer_set_v2_group"
 #define GROUP_CHILD_LIMIT 128
@@ -21,6 +22,7 @@ struct layer {
   obs_source_t *source;
   float x, y, width, height;
   bool contain, visible;
+  float rotation, scale_x, scale_y;
 };
 struct group {
   obs_source_t *source;
@@ -147,6 +149,10 @@ static void render(void *data, gs_effect_t *unused) {
       }
       gs_matrix_push();
       gs_matrix_translate3f(dx, dy, 0);
+      gs_matrix_translate3f(l->width * .5f, l->height * .5f, 0);
+      gs_matrix_rotaa4f(0, 0, 1, l->rotation * 0.0174532925199433f);
+      gs_matrix_scale3f(l->scale_x, l->scale_y, 1);
+      gs_matrix_translate3f(-l->width * .5f, -l->height * .5f, 0);
       gs_matrix_scale3f(sx, sy, 1);
       obs_source_video_render(l->source);
       gs_matrix_pop();
@@ -233,7 +239,8 @@ bool producer_set_v2_group_add(obs_source_t *s, obs_source_t *child, float x,
     obs_source_remove_active_child(s, child);
     return false;
   }
-  g->layers[g->count++] = (struct layer){ref, x, y, w, h, contain, true};
+  g->layers[g->count++] =
+      (struct layer){ref, x, y, w, h, contain, true, 0, 1, 1};
   return true;
 }
 bool producer_set_v2_group_seal(obs_source_t *s) {
@@ -253,6 +260,18 @@ bool producer_set_v2_group_frame(obs_source_t *s, float radius, float opacity) {
   return true;
 }
 size_t producer_set_v2_live_groups(void) { return atomic_load(&live_groups); }
+bool producer_set_v2_group_layer_transform(obs_source_t *s, size_t index,
+                                           float rotation, float sx, float sy) {
+  struct group *g = get(s);
+  if (!g || index >= g->count || !isfinite(rotation) ||
+      fabsf(rotation) > 36000 || !isfinite(sx) || !isfinite(sy) || sx < .01f ||
+      sy < .01f || sx > 32 || sy > 32)
+    return false;
+  g->layers[index].rotation = rotation;
+  g->layers[index].scale_x = sx;
+  g->layers[index].scale_y = sy;
+  return true;
+}
 bool producer_set_v2_group_layer_frame(obs_source_t *s, size_t index, float x,
                                        float y, float w, float h,
                                        bool visible) {

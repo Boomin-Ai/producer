@@ -1,3 +1,4 @@
+import {invoke} from "@tauri-apps/api/core";
 import { admitGuestThroughTransport, revokeGuestAndConfirm } from "../lib/guestAdmission";
 import {PortraitCanvas} from '../features/presentation/PortraitCanvas';
 import { OutputSettings, RoomOutputView, type OutputView, type PortraitMonitor } from '../features/presentation/OutputSettings';
@@ -4444,10 +4445,19 @@ export function LiveView({
   const localSetSkipped = useRef(false);
   const roomId = room?.id ?? null;
   const setOutput=useSetOutput(setRehearsal,roomId,sources,docApplied && isHost,cfg.presentation?.bindings ?? {},bindings=>writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.exportPreparedPackage(),bindings,framing:cfgRef.current.presentation?.framing}}),cfg.presentation?.framing ?? {},framing=>writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.exportPreparedPackage(),bindings:cfgRef.current.presentation?.bindings ?? {},framing}}));
+  if(setOutput.renderer==='native')setOutput.createSource=async(slot,spec,label)=>{
+    const id='set-source-'+crypto.randomUUID();
+    const next=await invoke<LiveSources>('live_set_source_create',{id,label,spec});
+    setSources(next);
+    const c=cfgRef.current;
+    const scenes=c.scenes.map(scene=>scene.id===c.active_scene?{...scene,look:{...scene.look,[id]:{visible:false}}}:scene);
+    writeCfg({...c,scenes,sources:{...c.sources,extras:[...(c.sources.extras??[]),{id,label,spec}]}});
+    setOutput.bind(slot,id);
+  };
   const changeSet=async (doc:import('../features/presentation/schema').PresentationPackage)=> {
-    if(!await setOutput.returnToRoom())return;
+    if(setOutput.renderer!=='native'&&!await setOutput.returnToRoom())return;
     setSetRehearsal(new RehearsalSession(doc,undefined,'prepare'));
-    writeCfg({...cfgRef.current,presentation:{package:doc,bindings:setOutput.bindings,framing:setOutput.framing}});
+    writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:doc,bindings:setOutput.bindings,framing:setOutput.framing}});
   };
   const setWorkspaceState=useSyncExternalStore(setRehearsal.subscribe,setRehearsal.snapshot);
   const [setHostName,setSetHostName]=useState('');

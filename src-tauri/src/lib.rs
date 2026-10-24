@@ -143,7 +143,7 @@ pub fn run() {
             #[cfg(feature = "sets-v2-dev")]
             if std::env::var("PRODUCER_SETS_V2_UI_PROBE").as_deref() == Ok("1") {
                 if let Some(window) = app.get_webview_window("main") {
-                    window.navigate("http://localhost:1436/labs/sets-v2/?nativeSmoke=1".parse().unwrap())?;
+                    window.navigate("http://localhost:1436/?roomSmoke=1".parse().unwrap())?;
                 }
             }
             let data_dir = app.path().app_data_dir()?;
@@ -305,7 +305,10 @@ pub fn run() {
             live::commands::live_apply_scene,
             live::commands::live_set_status,
             live::commands::live_set_v2,
+            live::commands::live_set_v2_enabled,
+            live::commands::live_set_source_create,
             live::commands::live_set_v2_report,
+            live::commands::live_set_v2_smoke_enabled,
             live::commands::live_portrait_room,
             live::commands::live_portrait_state,
             live::commands::live_select_output,

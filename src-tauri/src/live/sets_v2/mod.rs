@@ -1,5 +1,6 @@
 //! Opt-in dev-room adapter. No v1 conversion and no production registration.
 pub mod contract;
+mod resources;
 use super::ffi;
 use contract::{Action, Node, Plan, Status};
 use std::{
@@ -22,6 +23,9 @@ struct NativeNode {
     surface: *mut ffi::obs_source_t,
     children: *const NativeNode,
     child_count: usize,
+    rotation: f32,
+    scale_x: f32,
+    scale_y: f32,
 }
 #[repr(C)]
 #[derive(Default)]
@@ -37,10 +41,47 @@ struct NativeStatus {
     transitioning: bool,
     paused: bool,
 }
+#[repr(C)]
+struct NativeKeyframe {
+    at_ms: f64,
+    value: f32,
+}
 enum NativeScene {}
 extern "C" {
     fn producer_set_v2_register();
     fn producer_set_v2_program_register();
+    fn producer_set_v2_program_track(
+        p: *mut ffi::obs_source_t,
+        r: u64,
+        scene: *mut NativeScene,
+        target: *const c_char,
+        shader: *mut ffi::obs_source_t,
+        property: i32,
+        frames: *const NativeKeyframe,
+        count: usize,
+        easing: i32,
+        loops: i32,
+        base: f64,
+        delay: f64,
+        running: bool,
+    ) -> bool;
+    fn producer_set_v2_program_shader(
+        p: *mut ffi::obs_source_t,
+        r: u64,
+        s: *mut ffi::obs_source_t,
+        i: f32,
+        f: f32,
+        o: f32,
+        b: f64,
+        running: bool,
+    ) -> bool;
+    fn producer_set_v2_program_media(
+        p: *mut ffi::obs_source_t,
+        r: u64,
+        s: *mut ffi::obs_source_t,
+        playing: bool,
+        position: f64,
+    ) -> bool;
     fn producer_set_v2_transition_register();
     fn producer_set_v2_group_create(w: u32, h: u32, r: f32, o: f32) -> *mut ffi::obs_source_t;
     fn producer_set_v2_group_add(
@@ -75,6 +116,7 @@ extern "C" {
     fn producer_set_v2_program_cancel(p: *mut ffi::obs_source_t, r: u64) -> bool;
     fn producer_set_v2_program_pause(p: *mut ffi::obs_source_t, paused: bool) -> bool;
     fn producer_set_v2_program_status(p: *mut ffi::obs_source_t, out: *mut NativeStatus) -> bool;
+    fn producer_set_v2_program_stop_motion(p: *mut ffi::obs_source_t);
     fn producer_set_v2_program_collect(p: *mut ffi::obs_source_t) -> bool;
     fn producer_set_v2_surface_marker(
         s: *mut ffi::obs_source_t,
@@ -100,6 +142,23 @@ struct Draft {
     revision: u64,
     scene: *mut NativeScene,
     markers: Vec<(Source, u32)>,
+    _resources: resources::Prepared,
+}
+struct Capture(Source);
+impl Drop for Capture {
+    fn drop(&mut self) {
+        unsafe {
+            ffi::obs_source_dec_showing(self.0 .0);
+            ffi::obs_source_dec_active(self.0 .0);
+        }
+    }
+}
+struct Building {
+    revision: u64,
+    plan: Plan,
+    resources: resources::Prepared,
+    captures: HashMap<String, Capture>,
+    started: std::time::Instant,
 }
 impl Drop for Draft {
     fn drop(&mut self) {
@@ -112,6 +171,7 @@ struct Arena {
     sources: Vec<Source>,
     markers: Vec<(Source, u32)>,
     browser_pixels: usize,
+    motion_targets: std::collections::HashSet<String>,
 }
 impl Arena {
     fn new() -> Self {
@@ -121,7 +181,13 @@ impl Arena {
             sources: Vec::new(),
             markers: Vec::new(),
             browser_pixels: 0,
+            motion_targets: Default::default(),
         }
+    }
+    fn graphics_only(&self, n: &Node) -> bool {
+        !self.motion_targets.contains(&n.id)
+            && ["text", "graphic", "group"].contains(&n.kind.as_str())
+            && n.children.iter().all(|child| self.graphics_only(child))
     }
     unsafe fn graphics(
         &mut self,
@@ -216,6 +282,9 @@ impl Arena {
             surface,
             children: ptr::null(),
             child_count: 0,
+            rotation: 0.,
+            scale_x: 1.,
+            scale_y: 1.,
         })
     }
     unsafe fn node(
@@ -240,6 +309,9 @@ impl Arena {
             surface: ptr::null_mut(),
             children: ptr::null(),
             child_count: 0,
+            rotation: n.properties.rotation.unwrap_or(0.),
+            scale_x: n.properties.scale_x.or(n.properties.scale).unwrap_or(1.),
+            scale_y: n.properties.scale_y.or(n.properties.scale).unwrap_or(1.),
         };
         if n.kind == "group" {
             let mut children = Vec::new();
@@ -253,7 +325,7 @@ impl Arena {
                 {
                     continue;
                 }
-                if ["text", "graphic"].contains(&child.kind.as_str()) {
+                if self.graphics_only(child) {
                     batch.push(child);
                     continue;
                 }
@@ -270,12 +342,12 @@ impl Arena {
             out.children = children.as_ptr();
             out.child_count = children.len();
             self.children.push(children);
-        } else if n.kind == "source" {
+        } else if ["source", "asset", "shader"].contains(&n.kind.as_str()) {
             out.kind = 1;
-            out.fit = if n.fit.as_deref() == Some("cover") {
-                2
-            } else {
-                1
+            out.fit = match n.fit.as_deref() {
+                Some("cover") => 2,
+                Some("contain") => 1,
+                _ => 0,
             };
             let source = resolve(n.resource.as_deref().ok_or("Missing source")?)?;
             if source.is_null() {
@@ -285,8 +357,65 @@ impl Arena {
             if source.is_null() {
                 return Err("Room source expired during preparation".into());
             }
-            out.surface = source;
-            self.sources.push(Source(source));
+            if n.appearance.is_some() || n.framing.is_some() {
+                let w = n.bounds.width.ceil().max(1.) as u32;
+                let h = n.bounds.height.ceil().max(1.) as u32;
+                let frame = Source(producer_set_v2_group_create(w, h, 0., 1.));
+                if frame.0.is_null() {
+                    ffi::obs_source_release(source);
+                    return Err("Source placement allocation failed".into());
+                }
+                let sw = ffi::obs_source_get_width(source) as f32;
+                let sh = ffi::obs_source_get_height(source) as f32;
+                if sw <= 0. || sh <= 0. {
+                    ffi::obs_source_release(source);
+                    return Err("Source placement has no video frame".into());
+                }
+                let (x, y, dw, dh) = if out.fit == 2 {
+                    let scale = (w as f32 / sw).max(h as f32 / sh);
+                    let align = n.framing.as_ref().map(|f| (f.x, f.y)).unwrap_or((0.5, 0.5));
+                    (
+                        (w as f32 - sw * scale) * align.0,
+                        (h as f32 - sh * scale) * align.1,
+                        sw * scale,
+                        sh * scale,
+                    )
+                } else {
+                    (0., 0., w as f32, h as f32)
+                };
+                if !producer_set_v2_group_add(frame.0, source, x, y, dw, dh, out.fit == 1)
+                    || !producer_set_v2_group_seal(frame.0)
+                {
+                    ffi::obs_source_release(source);
+                    return Err("Source placement attachment failed".into());
+                }
+                self.sources.push(Source(source));
+                if let Some(appearance) = &n.appearance {
+                    let mut value = serde_json::to_value(appearance).map_err(|e| e.to_string())?;
+                    value["displayWidth"] = serde_json::json!(w);
+                    value["displayHeight"] = serde_json::json!(h);
+                    let settings = ffi::obs_data_create_from_json(
+                        CString::new(value.to_string()).unwrap().as_ptr(),
+                    );
+                    let filter = ffi::obs_source_create_private(
+                        c"producer_source_appearance".as_ptr(),
+                        c"V2 source appearance".as_ptr(),
+                        settings,
+                    );
+                    ffi::obs_data_release(settings);
+                    if filter.is_null() {
+                        return Err("Source appearance filter unavailable".into());
+                    }
+                    ffi::obs_source_filter_add(frame.0, filter);
+                    ffi::obs_source_release(filter);
+                }
+                out.surface = frame.0;
+                out.fit = 0;
+                self.sources.push(frame);
+            } else {
+                out.surface = source;
+                self.sources.push(Source(source));
+            }
         } else {
             return Err("Leaf requires graphics batching or native source service".into());
         }
@@ -321,6 +450,10 @@ pub struct RoomProgram {
     program: Source,
     item: *mut ffi::obs_sceneitem_t,
     draft: Option<Draft>,
+    current: Option<Draft>,
+    building: Option<Building>,
+    latest_revision: u64,
+    resources: resources::Store,
 }
 impl RoomProgram {
     pub unsafe fn attach(
@@ -329,6 +462,7 @@ impl RoomProgram {
         width: u32,
         height: u32,
     ) -> Result<Self, String> {
+        let resources = resources::Store::new()?;
         let source = producer_set_v2_program_create(width, height);
         if source.is_null() {
             return Err("V2 program allocation failed".into());
@@ -347,6 +481,10 @@ impl RoomProgram {
             program,
             item,
             draft: None,
+            current: None,
+            building: None,
+            latest_revision: 0,
+            resources,
         })
     }
     pub unsafe fn dispatch(
@@ -381,6 +519,14 @@ impl RoomProgram {
                 }
             }
             Action::Cancel { revision, .. } => {
+                if self
+                    .building
+                    .as_ref()
+                    .is_some_and(|b| b.revision == revision)
+                {
+                    self.building = None;
+                    return self.poll();
+                }
                 if !producer_set_v2_program_cancel(self.program.0, revision) {
                     return Err("V2 cancellation is stale or already rendered".into());
                 }
@@ -411,22 +557,61 @@ impl RoomProgram {
             return Err("V2 revision/output must match the current room canvas".into());
         }
         let current = self.poll()?;
-        if current.transitioning
-            || current.queued
-            || revision <= current.prepared_revision
-            || revision <= current.rendered_revision
-        {
-            return Err("V2 prepare is stale or the previous take is still rendering".into());
+        if current.transitioning || current.queued || revision <= self.latest_revision {
+            return Err("V2 prepare is stale or a take is still rendering".into());
         }
+        self.resources.publish(&plan.assets)?;
+        let prepared = self.resources.open(plan)?;
+        let mut captures = HashMap::new();
+        for resource in &plan.resources {
+            if resource.starts_with("graphic:")
+                || resource.starts_with("asset:")
+                || resource.starts_with("shader:")
+            {
+                continue;
+            }
+            let source = resolve(resource)?;
+            let source = ffi::obs_source_get_ref(source);
+            if source.is_null() {
+                return Err("Room capture expired".into());
+            }
+            ffi::obs_source_inc_active(source);
+            ffi::obs_source_inc_showing(source);
+            captures.insert(resource.clone(), Capture(Source(source)));
+        }
+        if let Some(draft) = self.draft.take() {
+            producer_set_v2_program_cancel(self.program.0, draft.revision);
+        }
+        let mut plan = plan.clone();
+        plan.assets.clear();
+        self.latest_revision = revision;
+        self.building = Some(Building {
+            revision,
+            plan,
+            resources: prepared,
+            captures,
+            started: std::time::Instant::now(),
+        });
+        Ok(())
+    }
+    unsafe fn finish_build(&mut self, b: Building) -> Result<Draft, String> {
         let mut arena = Arena::new();
-        let root = arena.node(&plan.root, &palette(), resolve)?;
+        arena.motion_targets = b.plan.motion.iter().map(|t| t.target.clone()).collect();
+        let root = arena.node(&b.plan.root, &palette(), &mut |id| {
+            b.resources
+                .sources
+                .get(id)
+                .map(|s| s.0)
+                .or_else(|| b.captures.get(id).map(|s| s.0 .0))
+                .ok_or_else(|| format!("Source {id} is unavailable"))
+        })?;
         let mut error = [0 as c_char; 200];
         let scene = producer_set_v2_scene_prepare(
             &root,
             self.width,
             self.height,
-            fit(&plan.target.scaling),
-            48 * 1024 * 1024,
+            fit(&b.plan.target.scaling),
+            96 * 1024 * 1024,
             error.as_mut_ptr(),
             error.len(),
         );
@@ -436,21 +621,125 @@ impl RoomProgram {
                 .into_owned());
         }
         let draft = Draft {
-            revision,
+            revision: b.revision,
             scene,
             markers: std::mem::take(&mut arena.markers),
+            _resources: b.resources,
         };
         if !producer_set_v2_program_prepare(
             self.program.0,
             producer_set_v2_scene_source(scene),
-            revision,
+            b.revision,
         ) {
-            return Err("Native program rejected v2 preparation".into());
+            return Err("Native program rejected preparation".into());
         }
-        self.draft = Some(draft);
-        Ok(())
+        for shader in &draft._resources.shaders {
+            if !producer_set_v2_program_shader(
+                self.program.0,
+                b.revision,
+                shader.source,
+                shader.intensity,
+                shader.scale,
+                shader.opacity,
+                shader.base_ms,
+                shader.running,
+            ) {
+                return Err("Native material clock rejected".into());
+            }
+        }
+        for media in &draft._resources.media {
+            if !producer_set_v2_program_media(
+                self.program.0,
+                b.revision,
+                media.source,
+                media.playing,
+                media.position_ms,
+            ) {
+                return Err("Native media transport rejected".into());
+            }
+        }
+        let (show, segment, running) = contract::clock_positions(b.plan.clock.as_ref());
+        for t in &b.plan.motion {
+            let property = [
+                "x",
+                "y",
+                "width",
+                "height",
+                "opacity",
+                "rotation",
+                "scale",
+                "shader.intensity",
+                "shader.scale",
+            ]
+            .iter()
+            .position(|p| *p == t.property)
+            .ok_or("Unknown animation property")? as i32;
+            let frames = t
+                .keyframes
+                .iter()
+                .map(|k| NativeKeyframe {
+                    at_ms: k.at_ms,
+                    value: k.value,
+                })
+                .collect::<Vec<_>>();
+            let easing = match t.easing.as_deref() {
+                Some("linear") => 0,
+                Some("easeIn") => 1,
+                Some("easeOut") => 2,
+                _ => 3,
+            };
+            let loops = match t.r#loop.as_deref() {
+                Some("repeat") => 1,
+                Some("pingpong") => 2,
+                _ => 0,
+            };
+            let shader = draft
+                ._resources
+                .sources
+                .get(&format!("shader:{}", t.target))
+                .map_or(ptr::null_mut(), |s| s.0);
+            if !producer_set_v2_program_track(
+                self.program.0,
+                b.revision,
+                scene,
+                CString::new(t.target.clone()).unwrap().as_ptr(),
+                shader,
+                property,
+                frames.as_ptr(),
+                frames.len(),
+                easing,
+                loops,
+                if t.clock.as_deref() == Some("show") {
+                    show
+                } else {
+                    segment
+                },
+                t.delay_ms.unwrap_or(0.),
+                running,
+            ) {
+                producer_set_v2_program_cancel(self.program.0, b.revision);
+                return Err("Native animation target is not representable".into());
+            }
+        }
+        Ok(draft)
+    }
+    pub unsafe fn raise(&self) {
+        ffi::obs_sceneitem_set_order_position(self.item, i32::MAX);
     }
     pub unsafe fn poll(&mut self) -> Result<Status, String> {
+        if let Some(building) = self.building.take() {
+            if building.resources.ready()
+                && building.captures.values().all(|s| {
+                    ffi::obs_source_get_width(s.0 .0) > 0 && ffi::obs_source_get_height(s.0 .0) > 0
+                })
+            {
+                self.draft = Some(self.finish_build(building)?);
+            } else if building.started.elapsed().as_secs() > 12 {
+                return Err("Media did not decode its first frame; current output retained".into());
+            } else {
+                self.building = Some(building);
+            }
+        }
         let mut native = NativeStatus::default();
         if !producer_set_v2_program_status(self.program.0, &mut native) {
             return Err("Native v2 program unavailable".into());
@@ -468,19 +757,23 @@ impl RoomProgram {
             }
             if native.rendered_revision == draft.revision && !native.transitioning && !native.queued
             {
-                self.draft = None;
+                producer_set_v2_program_collect(self.program.0);
+                self.current = self.draft.take();
             }
         }
         producer_set_v2_program_collect(self.program.0);
         Ok(Status {
             generation: self.generation,
-            prepared_revision: native.prepared_revision,
+            prepared_revision: self
+                .building
+                .as_ref()
+                .map_or(native.prepared_revision, |b| b.revision),
             rendered_revision: native.rendered_revision,
             render_serial: native.render_serial,
             clock_ms: native.clock_ms,
             transition_progress: native.transition_progress,
-            warmed: native.warmed,
-            ready: native.ready,
+            warmed: self.building.is_none() && native.warmed,
+            ready: self.building.is_none() && native.ready,
             queued: native.queued,
             transitioning: native.transitioning,
             paused: native.paused,
@@ -490,6 +783,7 @@ impl RoomProgram {
 impl Drop for RoomProgram {
     fn drop(&mut self) {
         unsafe {
+            producer_set_v2_program_stop_motion(self.program.0);
             if !self.item.is_null() {
                 ffi::obs_sceneitem_remove(self.item);
                 self.item = ptr::null_mut();
