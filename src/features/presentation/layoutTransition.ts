@@ -11,6 +11,13 @@ export function layoutTransition(from:OutputProjection,to:OutputProjection,durat
  const tracks:AnimationTrack[]=[];const text:RenderNode[]=[];
  const walk=(n:RenderNode)=>{
   const prev=old.get(key(n));
+  // Entering panels are one visual unit. Fading each descendant separately
+  // prevents graphics batching and can exceed the native browser-surface cap.
+  // A native group owns local opacity, including any media/source placements.
+  if(!prev&&n.type==='box'&&n.styles.position==='absolute'){
+   tracks.push({target:n.id,property:'opacity',keyframes:[{atMs:0,value:0},{atMs:Math.round(durationMs*.2),value:0},{atMs:durationMs,value:typeof n.styles.opacity==='number'?n.styles.opacity:1}],easing:'easeOut',clock:'segment'});
+   return;
+  }
   if(prev&&prev.type===n.type&&n.styles.position==='absolute'&&['slot','shader','box','media'].includes(n.type)){
    for(const [property,style]of [['x','left'],['y','top'],['width','width'],['height','height']] as const){const a=prev.styles[style],b=n.styles[style];if(typeof a!=='number'||typeof b!=='number')continue;const start=current(prev,property,a);if(start!==b)tracks.push({target:n.id,property,keyframes:[{atMs:0,value:start},{atMs:durationMs,value:b}],easing:'easeInOut',clock:'segment'});}
   }

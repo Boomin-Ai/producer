@@ -1,0 +1,75 @@
+{
+  "checks": [
+    {
+      "cachedBytes": 376649912,
+      "cachedKeys": [
+        "scene-65d3abae-f8dc5018",
+        "scene-c71ee03f-ac4c9e89",
+        "scene-cc373e91-d4174cb5",
+        "scene-8aa7a5c2-388ea35c",
+        "scene-827f5909-29743405",
+        "scene-d6ee0324-fa2556b4"
+      ],
+      "clockMs": 106833.32697302104,
+      "generation": 2,
+      "paused": false,
+      "preparedRevision": 16,
+      "queued": false,
+      "ready": true,
+      "renderSerial": 2329,
+      "renderedRevision": 16,
+      "transitionProgress": 1,
+      "transitioning": false,
+      "warmed": true
+    },
+    {
+      "cachedBytes": 376649912,
+      "cachedKeys": [
+        "scene-65d3abae-f8dc5018",
+        "scene-c71ee03f-ac4c9e89",
+        "scene-cc373e91-d4174cb5",
+        "scene-8aa7a5c2-388ea35c",
+        "scene-827f5909-29743405",
+        "scene-d6ee0324-fa2556b4"
+      ],
+      "clockMs": 108533.32687169312,
+      "generation": 2,
+      "paused": false,
+      "preparedRevision": 17,
+      "queued": false,
+      "ready": true,
+      "renderSerial": 2379,
+      "renderedRevision": 17,
+      "transitionProgress": 1,
+      "transitioning": false,
+      "warmed": true
+    },
+    {
+      "cachedBytes": 376649912,
+      "cachedKeys": [
+        "scene-65d3abae-f8dc5018",
+        "scene-c71ee03f-ac4c9e89",
+        "scene-cc373e91-d4174cb5",
+        "scene-8aa7a5c2-388ea35c",
+        "scene-827f5909-29743405",
+        "scene-d6ee0324-fa2556b4"
+      ],
+      "clockMs": 110733.32674056292,
+      "generation": 2,
+      "paused": false,
+      "preparedRevision": 18,
+      "queued": false,
+      "ready": true,
+      "renderSerial": 2445,
+      "renderedRevision": 18,
+      "transitionProgress": 1,
+      "transitioning": false,
+      "warmed": true
+    }
+  ],
+  "completedAt": "2026-10-24T22:29:02.692Z",
+  "kind": "grand-arena-showcase",
+  "layoutsReady": 12,
+  "ok": true,
+  "syntheticSources": true
+}

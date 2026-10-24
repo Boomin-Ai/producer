@@ -249,7 +249,7 @@ impl Arena {
                 .map(|c| format!("%{c:02X}"))
                 .collect::<String>()
         );
-        let config = serde_json::json!({"url":url,"is_local_file":false,"css":"","width":pw,"height":ph+1,"fps":30,"fps_custom":true,"shutdown":false,"reroute_audio":true,"webpage_control_level":0});
+        let config = serde_json::json!({"url":url,"is_local_file":false,"css":"","width":pw,"height":ph+1,"fps":30,"fps_custom":true,"shutdown":false,"restart_when_active":false,"reroute_audio":true,"webpage_control_level":0});
         let settings =
             ffi::obs_data_create_from_json(CString::new(config.to_string()).unwrap().as_ptr());
         if settings.is_null() {

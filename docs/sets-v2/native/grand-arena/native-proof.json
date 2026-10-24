@@ -1,0 +1,222 @@
+{
+  "remainingSyntheticSources" : 0,
+  "remainingGroups" : 0,
+  "authoredRooms" : [
+    {
+      "resources" : [
+        "asset:landscape",
+        "shader:node-f371a39c",
+        "shader:node-556e23fb",
+        "graphic:custom",
+        "synthetic-camera",
+        "asset:bezel"
+      ],
+      "file" : "crowd-call-landscape.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "asset:portrait",
+        "shader:node-f371a39c",
+        "shader:node-556e23fb",
+        "graphic:custom",
+        "synthetic-camera",
+        "asset:bezel"
+      ],
+      "file" : "crowd-call-portrait.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "asset:landscape",
+        "shader:node-f371a39c",
+        "shader:node-556e23fb",
+        "graphic:custom",
+        "synthetic-camera",
+        "asset:bezel"
+      ],
+      "file" : "faceoff-landscape.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "asset:portrait",
+        "shader:node-f371a39c",
+        "shader:node-556e23fb",
+        "graphic:custom",
+        "synthetic-camera",
+        "asset:bezel"
+      ],
+      "file" : "faceoff-portrait.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "asset:landscape",
+        "shader:node-f371a39c",
+        "shader:node-556e23fb",
+        "graphic:custom",
+        "synthetic-camera",
+        "asset:bezel"
+      ],
+      "file" : "guest-case-landscape.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "asset:portrait",
+        "shader:node-f371a39c",
+        "shader:node-556e23fb",
+        "graphic:custom",
+        "synthetic-camera",
+        "asset:bezel"
+      ],
+      "file" : "guest-case-portrait.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "asset:landscape",
+        "shader:node-f371a39c",
+        "shader:node-556e23fb",
+        "graphic:custom",
+        "synthetic-camera",
+        "asset:bezel"
+      ],
+      "file" : "host-case-landscape.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "asset:portrait",
+        "shader:node-f371a39c",
+        "shader:node-556e23fb",
+        "graphic:custom",
+        "synthetic-camera",
+        "asset:bezel"
+      ],
+      "file" : "host-case-portrait.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "asset:landscape",
+        "shader:node-f371a39c",
+        "shader:node-556e23fb",
+        "graphic:custom",
+        "synthetic-camera",
+        "asset:bezel"
+      ],
+      "file" : "motion-host-case-0.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "asset:landscape",
+        "shader:node-f371a39c",
+        "shader:node-556e23fb",
+        "graphic:custom",
+        "synthetic-camera",
+        "asset:bezel"
+      ],
+      "file" : "motion-host-case-325.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "asset:landscape",
+        "shader:node-f371a39c",
+        "shader:node-556e23fb",
+        "graphic:custom",
+        "synthetic-camera",
+        "asset:bezel"
+      ],
+      "file" : "motion-host-case-650.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "asset:landscape",
+        "shader:node-f371a39c",
+        "shader:node-556e23fb",
+        "graphic:custom",
+        "synthetic-camera",
+        "asset:bezel"
+      ],
+      "file" : "motion-receipts-0.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "asset:landscape",
+        "shader:node-f371a39c",
+        "shader:node-556e23fb",
+        "graphic:custom",
+        "synthetic-camera",
+        "asset:bezel"
+      ],
+      "file" : "motion-receipts-325.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "asset:landscape",
+        "shader:node-f371a39c",
+        "shader:node-556e23fb",
+        "graphic:custom",
+        "synthetic-camera",
+        "asset:bezel"
+      ],
+      "file" : "motion-receipts-650.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "asset:landscape",
+        "shader:node-f371a39c",
+        "shader:node-556e23fb",
+        "graphic:custom",
+        "synthetic-camera",
+        "asset:bezel"
+      ],
+      "file" : "receipts-landscape.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "asset:portrait",
+        "shader:node-f371a39c",
+        "shader:node-556e23fb",
+        "graphic:custom",
+        "synthetic-camera",
+        "asset:bezel"
+      ],
+      "file" : "receipts-portrait.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "asset:landscape",
+        "shader:node-f371a39c",
+        "shader:node-556e23fb",
+        "graphic:custom",
+        "synthetic-camera",
+        "asset:bezel"
+      ],
+      "file" : "verdict-landscape.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "asset:portrait",
+        "shader:node-f371a39c",
+        "shader:node-556e23fb",
+        "graphic:custom",
+        "synthetic-camera",
+        "asset:bezel"
+      ],
+      "file" : "verdict-portrait.json",
+      "rendered" : true
+    }
+  ]
+}

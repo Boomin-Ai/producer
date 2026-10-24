@@ -20,7 +20,7 @@ mkdir -p "$proof_dir"
 # A failed rerun must never leave an older successful report looking current.
 python3 - "$proof_dir" <<'PY_REPORT'
 import pathlib, sys
-for name in ['proof.json', 'run.json', 'text-quality.json', 'text-quality-run.json']:
+for name in ['proof.json', 'run.json', 'text-quality.json', 'text-quality-run.json', 'showcase-proof.json', 'showcase-run.json']:
     (pathlib.Path(sys.argv[1]) / name).unlink(missing_ok=True)
 PY_REPORT
 mkdir -p "$probe_app/Contents/MacOS"
@@ -39,15 +39,20 @@ clang -std=gnu11 -fobjc-arc -Werror=implicit-function-declaration -Isrc-tauri/sr
 codesign --force --sign - "$probe_app"
 if [[ -n "${PRODUCER_PROBE_TEXT_QUALITY_ONLY:-}" ]]; then
   node scripts/sets-v2/make-text-quality-plans.mjs "$proof_dir"
+elif [[ -n "${PRODUCER_PROBE_SHOWCASE_ONLY:-}" ]]; then
+  : # Showcase plans are compiled by test-grand-arena-browser.mjs.
 else
 node scripts/sets-v2/make-native-plans.mjs "$proof_dir"
 node scripts/sets-v2/make-room-fixtures.mjs
 xcrun swift scripts/sets-v2/make-media-fixture.swift "$proof_dir/media"
 fi
 PRODUCER_PROBE_CONFIG="$build_dir/cef-profile" "$probe_app/Contents/MacOS/producer" "$app" "$proof_dir"
+if [[ -n "${PRODUCER_PROBE_SHOWCASE_ONLY:-}" && -z "${PRODUCER_PROBE_SHOWCASE_FOCUS:-}" ]]; then
+  node scripts/sets-v2/record-grand-arena-proof.mjs "$proof_dir" "$PRODUCER_ROOM_FIXTURES"
+fi
 if [[ -n "${PRODUCER_PROBE_TEXT_QUALITY_ONLY:-}" ]]; then
   node scripts/sets-v2/record-text-quality-proof.mjs "$proof_dir" "$app"
 fi
-if [[ -z "${PRODUCER_PROBE_SHARPNESS_ONLY:-}" && -z "${PRODUCER_PROBE_TEXT_QUALITY_ONLY:-}" ]]; then
+if [[ -z "${PRODUCER_PROBE_SHARPNESS_ONLY:-}" && -z "${PRODUCER_PROBE_TEXT_QUALITY_ONLY:-}" && -z "${PRODUCER_PROBE_SHOWCASE_ONLY:-}" ]]; then
   node scripts/sets-v2/record-native-proof.mjs "$proof_dir" "$app" "$started_at"
 fi

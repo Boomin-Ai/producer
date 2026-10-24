@@ -646,7 +646,7 @@ static NSArray *rust_adapter_proof(NSString *out) {
 static NSArray *real_room_proof(NSString *out) {
   NSString *folder = @(getenv("PRODUCER_ROOM_FIXTURES") ?: "/private/tmp/producer-sets-v2-room-fixtures");
   NSArray *files = [[[NSFileManager defaultManager] contentsOfDirectoryAtPath:folder error:nil] sortedArrayUsingSelector:@selector(compare:)];
-  require(files.count >= 10, "real authored room fixtures available");
+  require(files.count >= (getenv("PRODUCER_PROBE_SHOWCASE_ONLY")?1:10), "real authored room fixtures available");
   NSMutableArray *checks = [NSMutableArray array];
   for (NSString *file in files) {
     if (![file hasSuffix:@".json"]) continue;
@@ -699,6 +699,16 @@ static NSArray *real_room_proof(NSString *out) {
     NSMutableDictionary *properties=[changedRoot[@"properties"] mutableCopy]?:[NSMutableDictionary dictionary];properties[@"opacity"]=@0.25;changedRoot[@"properties"]=properties;stale[@"root"]=changedRoot;
     rust_call(owner,@{@"op":@"activate",@"generation":@7,@"revision":@6,@"key":@"prepared-a",@"plan":stale},camera,false);
     NSData *frame=capture(source,w,h,w,h);
+    if(getenv("PRODUCER_PROBE_SHOWCASE_ONLY")){
+      unsigned titlePixels=0,videoPixels=0;
+      for(uint32_t y=0;y<h;y++)for(uint32_t x=0;x<w;x++){
+        const uint8_t *p=pixel(frame,w,x,y);
+        if(y>(w>h?165:220)&&y<(w>h?270:315)&&p[0]>215&&p[1]>215&&p[2]>205)titlePixels++;
+        if(p[1]>245&&p[0]<10&&p[2]<10)videoPixels++;
+      }
+      require(titlePixels>200,"prepared native graphics remain painted after repeated takes");
+      require(videoPixels>5000,"native camera remains visible through transparent bezel");
+    }
     png(frame,w,h,[out stringByAppendingPathComponent:[[file stringByDeletingPathExtension] stringByAppendingString:@"-room.png"]]);
     [checks addObject:@{@"file":file,@"rendered":@YES,@"resources":plan[@"resources"]}];
     fprintf(stderr,"Authored room rendered: %s\n",file.UTF8String);
@@ -1363,6 +1373,13 @@ static int runProbe(int argc, char **argv) {
     producer_source_appearance_register();
     sets_v2_rust_register();
     register_test();
+    if (getenv("PRODUCER_PROBE_SHOWCASE_ONLY")) {
+      load_plugin(app,@"image-source");load_plugin(app,@"obs-browser");obs_post_load_modules();
+      NSArray *rooms=real_room_proof(out);
+      require(rooms.count==18||getenv("PRODUCER_PROBE_SHOWCASE_FOCUS"),"twelve showcase layouts and six native morph samples");
+      [[NSJSONSerialization dataWithJSONObject:@{@"authoredRooms":rooms,@"remainingGroups":@(producer_set_v2_live_groups()),@"remainingSyntheticSources":@(atomic_load(&source_live))} options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:@"showcase-proof.json"] atomically:YES];
+      obs_shutdown();puts("PASS: Grand Arena native layouts and morph samples");return 0;
+    }
     if (getenv("PRODUCER_PROBE_TEXT_QUALITY_ONLY")) {
       load_plugin(app,@"obs-browser");obs_post_load_modules();
       NSDictionary *report=text_quality_proof(out);

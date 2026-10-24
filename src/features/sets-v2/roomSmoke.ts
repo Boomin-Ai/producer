@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import {listenLiveEvents} from "../../lib/ipc";
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
-async function until<T>(read: () => T | Promise<T>, label: string): Promise<NonNullable<T>> {
-  for (let i=0;i<600;i++) { const result=await read(); if(result) return result as NonNullable<T>; await sleep(50); }
+async function until<T>(read: () => T | Promise<T>, label: string,attempts=600): Promise<NonNullable<T>> {
+  for (let i=0;i<attempts;i++) { const result=await read(); if(result) return result as NonNullable<T>; await sleep(50); }
   throw Error(`Timed out: ${label}`);
 }
 const button = (label: string, root: ParentNode = document) => Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(b => (b.getAttribute('aria-label')===label || b.textContent?.trim()===label) && !b.disabled);
@@ -11,7 +11,7 @@ function select(el: HTMLSelectElement, value: string) {
   el.dispatchEvent(new Event('change',{bubbles:true}));
 }
 /** Opt-in local automation exercises the product's actual picker/editor. */
-export async function roomSmoke(timingOnly=false,resolutionOnly=false) {
+export async function roomSmoke(timingOnly=false,resolutionOnly=false,showcaseOnly=false) {
  const events: unknown[]=[];
  try {
   const dock=await until(()=>document.querySelector<HTMLElement>('[aria-label="Show the bottom row"]')||button('Set settings'),'bottom row');
@@ -26,6 +26,36 @@ export async function roomSmoke(timingOnly=false,resolutionOnly=false) {
    const option=await until(()=>Array.from(document.querySelectorAll<HTMLButtonElement>('[role="option"]')).find(o=>o.textContent?.includes(name)),'set option '+name);
    option.click(); await until(()=>document.querySelector('dialog[open] [role=combobox][aria-label="Choose set"]')?.textContent?.includes(name),'set loaded '+name); await sleep(100);
    return until(()=>document.querySelector<HTMLDialogElement>('dialog[open]'),'set editor');
+  }
+  if(showcaseOnly){
+   const editor=await choose('Head to Head — The Grand Arena');
+   await invoke('live_set_video',{height:1080,fps:30});
+   await until(async()=>(await invoke<{video_height:number}>('live_engine_status')).video_height===1080,'1080p showcase canvas');
+   const bindings:Record<string,string>={};
+   for(const [slot,label,color] of [['host','Grand Arena / Blue preview','#22587b'],['guest','Grand Arena / Amber preview','#88602e'],['evidence','Grand Arena / Evidence preview','#334659']]){
+    const id='grand-arena-'+slot+'-'+crypto.randomUUID().slice(0,8);
+    await invoke('live_set_source_create',{id,label,spec:{kind:'color',color}});bindings[slot]=id;
+   }
+   for(const picker of editor.querySelectorAll<HTMLSelectElement>('.set-source-card select[aria-label$=" source"]')){
+    const label=picker.getAttribute('aria-label')??'';select(picker,label.includes('Blue')?bindings.host:label.includes('Amber')?bindings.guest:bindings.evidence);
+   }
+   (await until(()=>button('Show on output'),'showcase apply')).click();
+   await until(()=>document.querySelector('.set-editor-apply-status.applied'),'showcase applied');button('Close editor')!.click();
+   const timer=setInterval(()=>{void import('./preparedScenes').then(m=>invoke('live_set_v2_report',{result:{kind:'showcase-preparing',debug:m.preparationDebug().map(s=>({...s,entries:s.entries.filter(e=>e.state.state!=='ready')})),body:document.body.innerText.slice(-1800)}}));},5000);
+   try{await until(()=>{const p=document.querySelector<HTMLElement>('.set-controls[data-layouts-total]');const failure=document.querySelector('.set-error')?.textContent;if(failure)throw Error(failure);return p?.dataset.layoutsTotal==='12'&&p.dataset.layoutsReady==='12';},'all 12 showcase layouts ready',2400);}finally{clearInterval(timer);}
+
+   const checks=[];const generation=(await invoke<{generation:number}>('live_set_status')).generation;
+   document.querySelector<HTMLButtonElement>('.set-mode-action')!.click();
+   for(let step=0;step<3;step++){
+    await until(()=>document.querySelector('.set-output-status')?.textContent==='On output','showcase output idle');await sleep(800);
+    const before=await invoke<{renderedRevision:number}>('live_set_v2',{request:{op:'status',generation}});
+    (await until(()=>button('Next'),'showcase next')).click();
+    const status=await until(async()=>{const s=await invoke<{renderedRevision:number;transitioning:boolean}>('live_set_v2',{request:{op:'status',generation}});const failure=document.querySelector('.set-error')?.textContent;if(failure)throw Error(failure);return s.renderedRevision>before.renderedRevision&&!s.transitioning?s:null;},'showcase next rendered');checks.push(status);
+   }
+   button('Stop run')!.click();
+   const picker=document.querySelector<HTMLSelectElement>('.set-compact-segment');if(picker)select(picker,'faceoff');
+   await sleep(1200);button('Set settings')!.click();
+   await invoke('live_set_v2_report',{result:{ok:true,kind:'grand-arena-showcase',layoutsReady:12,checks,syntheticSources:true,completedAt:new Date().toISOString()}});return;
   }
   const editor=await choose(resolutionOnly?'Head to Head — The Arena':'Head to Head');
   const card=await until(()=>editor.querySelector<HTMLElement>('.set-source-card'),'source card');
