@@ -661,3 +661,18 @@
 .set-configuration-popover input[type=checkbox] { flex:0 0 auto; width:auto; min-height:0; accent-color:var(--primary); }
 .set-configuration-popover button { font:inherit; color:var(--fg-1); background:var(--surface-2); border:1px solid var(--line-1); border-radius:var(--r-ctl); min-height:32px; padding:6px 10px; }
 .set-configuration > p[role=alert] { flex:1 0 100%; margin:0; }
+/* App-native set selection shares the room's control tokens. */
+.set-configuration > .set-menu-section { display:flex; align-items:center; gap:10px; }
+.set-picker-label { color:var(--fg-2); font-size:12px; white-space:nowrap; }
+.set-picker { flex:1; min-width:0; }
+.set-picker > button { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; min-width:0; min-height:var(--h-ctl); padding:6px 10px; background:var(--surface-2); color:var(--fg-1); border:1px solid var(--line-2); border-radius:var(--r-ctl); font:inherit; text-align:left; }
+.set-picker > button > span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.set-picker-menu { position:fixed; inset:auto; margin:0; box-sizing:border-box; padding:8px; border:1px solid var(--line-2); border-radius:var(--r-card); background:var(--surface-1,#171f2b); color:var(--fg-1); box-shadow:0 12px 35px #0007; font:13px system-ui,sans-serif; overflow:hidden; }
+.set-picker-menu:popover-open { display:flex; flex-direction:column; gap:8px; }
+.set-picker-menu > input { flex:0 0 auto; width:100%; box-sizing:border-box; min-height:34px; padding:7px 10px; background:var(--surface-2); border:1px solid var(--line-2); border-radius:var(--r-ctl); color:var(--fg-1); font:inherit; }
+.set-picker-list { overflow:auto; min-height:0; }
+.set-picker-group { padding:9px 10px 5px; font-size:11px; color:var(--fg-3); }
+.set-picker-list button { display:flex; justify-content:space-between; gap:12px; width:100%; padding:9px 10px; min-height:34px; text-align:left; border:0; border-radius:var(--r-ctl); background:transparent; color:var(--fg-1); font:inherit; }
+.set-picker-list button[data-active=true] { background:var(--surface-3); }
+.set-picker-list button[aria-selected=true] { color:var(--primary); }
+.set-picker-empty { padding:12px; color:var(--fg-2); }

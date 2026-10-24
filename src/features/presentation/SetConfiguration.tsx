@@ -1,3 +1,4 @@
+import {SetPicker} from './SetPicker';
 import {MediaAssetsDialog} from './MediaAssetsDialog';
 import {ipc} from '../../lib/ipc';
 import {PACKAGE_BYTES} from './assets';
@@ -42,13 +43,14 @@ export function SetConfiguration({ session, onChange, output }: {
   return <>
     <section className="set-configuration" role="toolbar" aria-label="Set configuration">
       <div className="set-menu-section">
-      <label>Choose set<select aria-label="Choose set" value={library.some(entry=>entry.file===selectedFile&&entry.id===session.package.id)?`file:${selectedFile}`:library.some(entry=>entry.id===session.package.id)?`file:${library.find(entry=>entry.id===session.package.id)!.file}`:[AFTER_HOURS.id, HEAD_TO_HEAD.id, SIGNAL_DESK.id].includes(session.package.id)?`builtin:${session.package.id}`:'imported'}
-        onChange={e => {if(e.target.value.startsWith('file:'))void loadLibrary(e.target.value.slice(5));else {const next=[SIGNAL_DESK,AFTER_HOURS,HEAD_TO_HEAD].find(doc=>`builtin:${doc.id}`===e.target.value);if(next){setSelectedFile('');setError('');onChange(next);}}}}>
-        <option value="" disabled>Choose a set…</option>
-        <optgroup label="Built-in sets">{[SIGNAL_DESK,AFTER_HOURS,HEAD_TO_HEAD].map(doc=><option key={doc.id} value={`builtin:${doc.id}`}>{doc.name}</option>)}</optgroup>
-        {library.map(entry=><option key={entry.file} value={`file:${entry.file}`}>{entry.name}{library.filter(other=>other.name===entry.name).length>1?` · ${entry.file.replace(/\.(show|set)?\.?json$/,'')}`:''}</option>)}
-        {![AFTER_HOURS.id, HEAD_TO_HEAD.id, SIGNAL_DESK.id].includes(session.package.id)&&!library.some(entry=>entry.id===session.package.id) && <option value="imported">{session.package.name}</option>}
-      </select></label>
+      <span className="set-picker-label">Choose set</span><SetPicker value={library.some(entry=>entry.file===selectedFile&&entry.id===session.package.id)?`file:${selectedFile}`:library.some(entry=>entry.id===session.package.id)?`file:${library.find(entry=>entry.id===session.package.id)!.file}`:[AFTER_HOURS.id, HEAD_TO_HEAD.id, SIGNAL_DESK.id].includes(session.package.id)?`builtin:${session.package.id}`:'imported'}
+        options={[
+          ...[SIGNAL_DESK,AFTER_HOURS,HEAD_TO_HEAD].map(doc=>({value:`builtin:${doc.id}`,label:doc.name,group:'Built-in sets'})),
+          ...library.map(entry=>({value:`file:${entry.file}`,label:entry.name+(library.filter(other=>other.name===entry.name).length>1?` · ${entry.file}`:''),group:'Saved sets'})),
+          ...(![AFTER_HOURS.id,HEAD_TO_HEAD.id,SIGNAL_DESK.id].includes(session.package.id)&&!library.some(entry=>entry.id===session.package.id)?[{value:'imported',label:session.package.name,group:'Current set'}]:[]),
+        ]}
+        onSelect={value=>{if(value.startsWith('file:'))void loadLibrary(value.slice(5));else {const next=[SIGNAL_DESK,AFTER_HOURS,HEAD_TO_HEAD].find(doc=>`builtin:${doc.id}`===value);if(next){setSelectedFile('');setError('');onChange(next);}}}}/>
+
 
       </div>
       <div className="set-configuration-file-actions"><button onClick={()=>{setError('');file.current?.click();}}>Import set</button><button ref={trigger} onClick={()=>edit('export')}>Export set</button><button onClick={()=>setMedia(true)}>Media assets</button></div>

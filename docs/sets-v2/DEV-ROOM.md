@@ -81,3 +81,11 @@ The room header no longer contains the set dropdown. A single **Set** button in 
 Set options preserves automatic showing, reload saved set, agent authoring, add-show authoring where applicable, test data and activity. Built-in/library/imported set selection updates the same open editor. Closing export or media dialogs preserves the editor beneath them; keyboard/cancel handlers distinguish nested dialogs. Existing set playback/room authority is unchanged by this UI relocation.
 
 `npm run test:set-configuration-browser` checks toolbar placement, builtin/saved selection, preference changes, export/media dismissal, invalid/valid imports and removal of the room-header selector. Editor canvas fitting, source previews, compact panel layout and TypeScript checks also pass.
+
+### Producer set picker and show-mode audit (2026-10-24)
+
+The editor toolbar now uses a Producer-styled searchable picker instead of the macOS select menu. Built-in, saved and current sets are grouped; selected entries have a checkmark. Arrow keys and Enter select, Escape closes the picker while preserving the editor. Import, export and configuration remain in the toolbar. Updated the normal-room smoke driver for this picker.
+
+Validation: TypeScript and configuration browser checks pass (saved/built-in selection, search and Enter, Escape, nested dialogs, import and preferences). Frontend changes are available through dev HMR; no production deployment.
+
+The current show runner only supports prepare and rehearsal. Start enters rehearsal. Rendering still targets actual room output, so rehearsal is not an off-air guarantee. Audience/feed test controls are simulated; leaving rehearsal restores prepared configuration. Live broadcasting remains a separate room action. A production show mode needs explicit live input routing and durable runtime state, with rehearsal isolated to preview; changing the label alone would not supply this behavior.
