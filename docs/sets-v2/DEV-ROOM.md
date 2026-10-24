@@ -105,3 +105,21 @@ Rehearse/Exit rehearsal and simulated audience controls live inside the editor. 
 The room Start show/play/pause/next/back/stop/restart controls now operate a live workspace session rather than entering rehearsal. Both sessions use the same segment reducer and independent monotonic clocks. Room segment selection continues playback; editor segment selection pauses practice for editing. Live workspace rejects simulation vote/reaction/feed injection, and the room UI omits simulated participant controls. Real audience/data adapter wiring remains pending; this change does not claim those transports are connected.
 
 Validation: TypeScript passes; presentation runtime 21 checks, sets-v2 integration 16 checks, browser isolation, configuration, editor navigation/canvas fitting, and panel layout checks pass. The isolation browser check exercises rehearsal with output initially inactive, verifies room state and binding callbacks stay untouched, verifies practice reset/draft retention, explicit handoff and independent room playback. Visually inspected the private rehearsal UI. Normal-room native smoke driver updated for explicit Show on output and Close editor; not rerun as part of this frontend change. No native binary or production release built.
+
+### Measured Next latency and authored transitions (2026-10-24)
+
+Measured 18 real room Next clicks against the native renderer, using the isolated dev app, a hidden color source assigned to slots, and three saved sets. Each set ran its first three advances twice. The probe waits for output to settle before clicking, matches the completion receipt to the destination phase, and requires a compile-start event for each measured segment. Evidence: [segment-timing-proof.json](native/segment-timing-proof.json). These are native render-status receipts sampled through IPC, not physical monitor scan-out or encoder/stream latency.
+
+| Set | Click to native completion (median; range) | Authored effect |
+| --- | --- | --- |
+| Head to Head — The Arena | 847 ms; 821–1014 ms | 650 ms morph tracks; no compositor dissolve. Receipt confirms new frame, not completion of those tracks. |
+| Producer — Make Your Show | 758 ms; 733–869 ms | 320 ms crossfade; first transition observed 373–526 ms after click. |
+| Claude Code — Build, Review, Ship | 445 ms; 385–605 ms | No transition; straight cut after readiness. |
+
+Layout compilation took 3–9 ms in these samples. Head to Head native prepare submission took 194–383 ms and readiness/warm waiting another 392–499 ms. The adapter did not have the destination scene resident before Next. Repeating the same sequence still rebuilt/prepared scenes. This supports the existing retained-resource/refactor work remaining on the plan; loading a package/asset manifest does not mean all segment graphs and graphics pages are ready to take.
+
+Removed the unconditional room 300 ms dissolve and portrait 250 ms dissolve. Both native output adapters now add a crossfade only when the destination set layout explicitly authors one, with its authored duration. Cut/missing transition adds zero; morph stays on its authored motion tracks. Content updates within the same canvas do not restart a dissolve. Portrait takes receive the selected portrait layout identity for this decision.
+
+Added development-only stage timing events and an optional `roomSmoke(true)` measurement path. `roomTiming=1` selects it when the native UI probe is enabled. Standard smoke now opens the collapsed dock and waits for the selected set to finish loading; dev room selection prefers configured duplicates, and smoke layout changes are confined to its separate room. Restored the normal dev room after measuring.
+
+Validation: TypeScript and 22 presentation runtime checks pass, including explicit transition-duration cases. The timed native pass passed all 18 phase-matched samples. Scene preloading/retention has been identified and measured, not implemented in this change.

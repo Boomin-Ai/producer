@@ -9,11 +9,12 @@ const result = await build({ stdin: { contents: `export * from './src/features/p
 export * from './src/features/presentation/fixtures';
 export * from './src/features/presentation/rehearsal';
 export * from './src/features/presentation/rundown';
+export * from './src/features/presentation/animation';
 export * from './src/features/presentation/projection';`, resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'esm', write: false });
 const temp = await mkdtemp(join(tmpdir(), 'producer-presentation-'));
 const file = join(temp, 'runtime.mjs');
 await writeFile(file, result.outputFiles[0].text);
-const { parsePackage, presentationJsonSchema, AFTER_HOURS, HEAD_TO_HEAD, RehearsalSession, outputProjection, rundown, timeLabel } = await import(pathToFileURL(file));
+const { parsePackage, presentationJsonSchema, AFTER_HOURS, HEAD_TO_HEAD, RehearsalSession, outputProjection, rundown, timeLabel, authoredCrossfadeMs } = await import(pathToFileURL(file));
 await unlink(file); await rmdir(temp);
 let checks = 0;
 const test = (name, fn) => { fn(); checks++; console.log('PASS:', name); };
@@ -56,6 +57,15 @@ test('prepare/rehearse boundary restores setup and discards practice state and p
   const standalone = new RehearsalSession(AFTER_HOURS, 'set-only', 'prepare');
   assert.ok(standalone.enterRehearsal()); assert.equal(standalone.snapshot().running, false);
   assert.equal(standalone.package.show, undefined); assert.ok(standalone.exitRehearsal());
+});
+
+test('only authored crossfades add compositor transition duration',()=>{
+ assert.equal(authoredCrossfadeMs(undefined,true,false),0);
+ assert.equal(authoredCrossfadeMs({type:'cut',durationMs:500},true,false),0);
+ assert.equal(authoredCrossfadeMs({type:'morph',durationMs:500},true,false),0);
+ assert.equal(authoredCrossfadeMs({type:'crossfade',durationMs:170},true,false),170);
+ assert.equal(authoredCrossfadeMs({type:'crossfade',durationMs:170},false,false),0);
+ assert.equal(authoredCrossfadeMs({type:'crossfade',durationMs:170},true,true),0);
 });
 
 test('room show and private rehearsal own independent runtime and prepared state',()=>{

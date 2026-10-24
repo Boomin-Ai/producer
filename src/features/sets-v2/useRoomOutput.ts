@@ -8,6 +8,7 @@ import {
 } from "../presentation/useSetOutput";
 import type { SlotFraming } from "../presentation/schema";
 import { AssetTransport } from "../presentation/assetTransport";
+import {authoredCrossfadeMs} from '../presentation/animation';
 import { compileRoomScene } from "./roomCompiler";
 type NativeStatus = {
   generation: number;
@@ -54,7 +55,7 @@ export function useRoomOutput(
   });
   latest.current = { session, roomId, sources, enabled, bindings, framing };
   const media = useRef(new AssetTransport());
-  const portraitRevision = useRef(0), portraitOperation = useRef(0);
+  const portraitRevision = useRef(0), portraitOperation = useRef(0), portraitShownLayout=useRef("");
   const revision = useRef(0),
     generation = useRef(0),
     operation = useRef(0),
@@ -100,6 +101,9 @@ export function useRoomOutput(
     setBusy(true);
     setError("");
     let attempted = 0;
+    const started=performance.now();
+    const timing=(stage:string,extra:Record<string,unknown>={})=>{if(import.meta.env.DEV)window.dispatchEvent(new CustomEvent('producer:set-render-timing',{detail:{stage,at:performance.now(),elapsedMs:performance.now()-started,definition:selection.definition,layout:selection.layout,phase:selection.phase,revision:attempted,...extra}}));};
+    timing('apply-start');
     try {
       const room = await ipc.liveSetStatus();
       generation.current = room.generation;
@@ -115,6 +119,7 @@ export function useRoomOutput(
       attempted = revision.current;
       const height = engine.video_height ?? 720,
         width = Math.round((height * 16) / 9);
+      timing('compile-start');
       const plan = await compileRoomScene(p, {
         definitionId: current.session.package.id,
         instanceId: "room-" + (current.roomId ?? "local").slice(0, 50),
@@ -129,7 +134,9 @@ export function useRoomOutput(
         bindings: current.bindings,
       });
       if (ticket !== operation.current) return;
+      timing('compile-done');
       await request({ op: "prepare", revision: attempted, plan });
+      timing('prepare-submitted');
       for (let i = 0; i < 500; i++) {
         if (ticket !== operation.current) {
           await request({ op: "cancel", revision: attempted }).catch(() => {});
@@ -138,7 +145,7 @@ export function useRoomOutput(
         const status = await request({ op: "status" });
         if (status.preparedRevision !== attempted)
           throw Error("Set preparation was replaced");
-        if (status.ready && status.warmed) break;
+        if (status.ready && status.warmed) {timing('ready-warmed');break;}
         if (i === 499)
           throw Error(
             "The next set is still preparing. The current output is retained.",
@@ -147,16 +154,20 @@ export function useRoomOutput(
       }
       if (ticket !== operation.current) return;
       const transition =
-        isActive.current && shownLayout.current !== layout && !snapshot.paused ? 300 : 0;
+        authoredCrossfadeMs(full.timeline?.transition,isActive.current&&(shownSelection.current.definition!==selection.definition||shownLayout.current!==layout),snapshot.paused);
+      timing('take-request',{transitionMs:transition});
       await request({
         op: "take",
         revision: attempted,
         durationMs: transition,
         mode: "dissolve",
       });
+      let sawTransition=false;
       for (let i = 0; i < 200; i++) {
         const status = await request({ op: "status" });
+        if(status.transitioning&&!sawTransition){sawTransition=true;timing('transition-first-observed',{renderSerial:status.renderSerial});}
         if (status.renderedRevision === attempted && !status.transitioning) {
+          timing('render-complete',{renderSerial:status.renderSerial});
           if (!alive.current || current.roomId !== latest.current.roomId)
             return;
           media.current.acknowledge(full);
@@ -174,6 +185,7 @@ export function useRoomOutput(
         await sleep(20);
       }
     } catch (e) {
+      timing('error',{error:String(e)});
       if (attempted)
         await request({ op: "cancel", revision: attempted }).catch(() => {});
       if (alive.current && ticket === operation.current) setError(String(e));
@@ -268,8 +280,10 @@ export function useRoomOutput(
   }, [enabled, state.paused]);
   const applyPortrait = async (
     projection: import("../presentation/projection").OutputProjection,
+    layoutId?:string,
   ) => {
     const current = latest.current;
+    const portraitKey=current.session.package.id+":"+(layoutId??current.session.snapshot().layoutId);
     const ticket = ++portraitOperation.current;
     const room = await ipc.liveSetStatus();
     generation.current = room.generation;
@@ -292,7 +306,7 @@ export function useRoomOutput(
     const plan = await compileRoomScene(projection, {
       definitionId: current.session.package.id,
       instanceId: "room-" + (current.roomId ?? "local").slice(0, 50),
-      canvasId: current.session.snapshot().layoutId,
+      canvasId: layoutId??current.session.snapshot().layoutId,
       target: {
         id: "portrait",
         orientation: "portrait",
@@ -312,7 +326,7 @@ export function useRoomOutput(
     await send({
       op: "take",
       revision: candidate,
-      durationMs: 250,
+      durationMs: authoredCrossfadeMs(projection.timeline?.transition,!!status?.renderedRevision&&portraitShownLayout.current!==portraitKey,!!current.session.snapshot().paused),
       mode: "dissolve",
     });
     for (let i = 0; i < 200; i++) {
@@ -320,8 +334,7 @@ export function useRoomOutput(
       if (
         state.renderedRevision === candidate &&
         !state.transitioning
-      )
-        return;
+      ) { portraitShownLayout.current=portraitKey; return; }
       if (i === 199) throw Error("Portrait did not confirm its rendered frame");
       await sleep(20);
     }

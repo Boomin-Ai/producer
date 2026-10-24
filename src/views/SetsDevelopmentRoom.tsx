@@ -9,7 +9,7 @@ export function SetsDevelopmentRoom() {
   const smokeStarted = useRef(false);
   useEffect(() => {
     void invoke<boolean>("live_set_v2_smoke_enabled").then(enabled=>{
-      if(enabled && !smokeStarted.current) { smokeStarted.current=true; void import("../features/sets-v2/roomSmoke").then(m=>m.roomSmoke()); }
+      if(enabled && !smokeStarted.current) { smokeStarted.current=true; void import("../features/sets-v2/roomSmoke").then(m=>m.roomSmoke(new URLSearchParams(location.search).get('roomTiming')==='1')); }
     });
   }, []);
   useEffect(() => {
@@ -18,7 +18,13 @@ export function SetsDevelopmentRoom() {
       const smoke = await invoke<boolean>("live_set_v2_smoke_enabled");
       const name = smoke ? "Producer dev smoke" : "Producer dev";
       const rooms = await ipc.liveListRooms();
-      const room = rooms.find((r) => r.name === name) ?? (await ipc.liveCreateRoom(name));
+      let room = rooms.filter(r=>r.name===name).sort((a,b)=>(b.config?.length??0)-(a.config?.length??0))[0] ?? (await ipc.liveCreateRoom(name));
+      if(smoke){
+        const config=JSON.parse(room.config||'{}');
+        config.layout={top:[],left:['scenes','sources'],right:[],bottom:['setControls'],hidden:['guests','vote','mods','mixer','stats','dj','chat','channels','updates']};
+        await ipc.liveUpdateRoom(room.id,{config:JSON.stringify(config)});
+        room={...room,config:JSON.stringify(config)};
+      }
       if (!cancelled) setRoom(room);
     })().catch((e) => setError(String(e)));
     return () => {

@@ -11,9 +11,11 @@ function select(el: HTMLSelectElement, value: string) {
   el.dispatchEvent(new Event('change',{bubbles:true}));
 }
 /** Opt-in local automation exercises the product's actual picker/editor. */
-export async function roomSmoke() {
+export async function roomSmoke(timingOnly=false) {
  const events: unknown[]=[];
  try {
+  const dock=await until(()=>document.querySelector<HTMLElement>('[aria-label="Show the bottom row"]')||button('Set settings'),'bottom row');
+  if(dock.getAttribute('aria-label')==='Show the bottom row')dock.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
   await until(()=>button('Set settings'),'normal room');
   await until(()=>button('Record'),'room configuration applied');
   async function choose(name: string) {
@@ -21,7 +23,7 @@ export async function roomSmoke() {
    const picker=await until(()=>document.querySelector<HTMLButtonElement>('[role="combobox"][aria-label="Choose set"]'),'set picker');
    picker.click();
    const option=await until(()=>Array.from(document.querySelectorAll<HTMLButtonElement>('[role="option"]')).find(o=>o.textContent?.includes(name)),'set option '+name);
-   option.click(); await sleep(250);
+   option.click(); await until(()=>document.querySelector('dialog[open] header strong')?.textContent?.includes(name),'set loaded '+name); await sleep(100);
    return until(()=>document.querySelector<HTMLDialogElement>('dialog[open]'),'set editor');
   }
   const editor=await choose('Head to Head');
@@ -52,6 +54,10 @@ export async function roomSmoke() {
    revision=status.renderedRevision;events.push({outputId,...status});
   }
   await rendered();
+  if(timingOnly){
+   const segmentTiming=await (await import('./segmentTiming')).measureSegmentTiming(assigned);
+   await invoke('live_set_v2_report',{result:{ok:true,kind:'segment-timing',events,segmentTiming,completedAt:new Date().toISOString()}});return;
+  }
   for(const name of ['Signal Desk','Atlanta Culture']) {
    const e=await choose(name);
    for(const s of e.querySelectorAll<HTMLSelectElement>('.set-source-card select[aria-label$=" source"]')) select(s,assigned);
@@ -64,6 +70,7 @@ export async function roomSmoke() {
   const img = new Image(); img.src=frame.startsWith('data:')?frame:'data:image/jpeg;base64,'+frame; await img.decode();
   const canvas=document.createElement('canvas');canvas.width=180;canvas.height=320;
   canvas.getContext('2d')!.drawImage(img,0,0,180,320);
+  button('Output settings')!.click();await sleep(100);button('Landscape',document.querySelector('[aria-label="Room output view"]')!)!.click();await sleep(300);button('Close output settings')?.click();
   await invoke('live_set_v2_report',{result:{ok:true,kind:'normal-room',events,portraitFrame:canvas.toDataURL('image/jpeg',0.85),completedAt:new Date().toISOString()}});
  } catch(error) {
   await invoke('live_set_v2_report',{result:{ok:false,kind:'normal-room',error:String(error),events,body:document.body.innerText.slice(-16000),completedAt:new Date().toISOString()}});

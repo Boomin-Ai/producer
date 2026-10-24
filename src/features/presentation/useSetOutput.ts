@@ -19,7 +19,7 @@ export function resolveRoomBindings(bindings:Record<string,string>,sources:LiveS
   return next;
 }
 export interface SetOutputControls {
-  applyPortrait?:(projection:OutputProjection)=>Promise<void>;
+  applyPortrait?:(projection:OutputProjection,layoutId?:string)=>Promise<void>;
   stopPortrait?:()=>Promise<void>;
   createSource?:(slot:string,spec:import('../../lib/sourceSpec').ExtraSpec,label:string,assign?:boolean)=>Promise<string|void>;
   renderer?:'native';selectToShow?:boolean;setSelectToShow?:(value:boolean)=>void;
