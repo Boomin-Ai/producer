@@ -509,7 +509,7 @@
 .set-preview-dialog .set-editor-controls { min-height:0; }
 
 /* One structure for prepared and rehearsal: rundown, controls, sources. */
-.set-mode-action { inline-size:54px; }
+.set-controls .set-mode-action { inline-size:max-content; min-inline-size:94px; flex-shrink:0; white-space:nowrap; }
 .set-header-main > .set-mode-badge { inline-size:78px; text-align:center; }
 .set-panel-layout-picker { display:flex; flex-direction:column; gap:7px; color:var(--fg-2,#bcb4c4); font-size:11px; }
 .set-panel-layout-picker select { width:100%; min-width:0; }
