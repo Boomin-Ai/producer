@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ipc, type LiveSources } from "../../lib/ipc";
+import { ipc, listenLiveEvents, type LiveSources } from "../../lib/ipc";
 import {
   setOutputProjection,
   type SetOutputControls,
@@ -71,12 +71,19 @@ export function useRoomOutput(
     });
   const [preparationVersion,notifyPreparation]=useState(0);
   const [canvas,setCanvas]=useState({width:1280,height:720});
+  const canvasRef=useRef(canvas);
   const [draftCandidate,setDraftCandidate]=useState<{doc:import('../presentation/schema').PresentationPackage;bindings:Record<string,string>;framing:Record<string,SlotFraming>}>();
   const [retryVersion,setRetryVersion]=useState(0);
   const bank=useRef<PreparedScenes|null>(null);
+  const invalidateRoom=()=>{
+    ++operation.current;++portraitOperation.current;
+    confirmed.current="";shownLayout.current="";portraitShownLayout.current="";
+    isActive.current=false;setError("");
+    bank.current?.reset();setRetryVersion(v=>v+1);
+  };
   if(!bank.current)bank.current=new PreparedScenes(async value=>{
     const room=await ipc.liveSetStatus();
-    if(cacheGeneration.current!==undefined&&cacheGeneration.current!==room.generation){bank.current?.reset();setRetryVersion(v=>v+1);}
+    if(cacheGeneration.current!==undefined&&cacheGeneration.current!==room.generation)invalidateRoom();
     cacheGeneration.current=room.generation;generation.current=room.generation;
     return invoke<NativeStatus>('live_set_v2',{request:{generation:room.generation,...value}}).catch(e=>{if(value.op==='status'&&/Prepare (a v2|the portrait) set first/.test(String(e)))return {preparedRevision:0,renderedRevision:0,renderSerial:0,ready:false,warmed:false,queued:false,transitioning:false,cachedKeys:[],generation:room.generation};throw e;});
   },()=>notifyPreparation(v=>v+1));
@@ -92,7 +99,6 @@ export function useRoomOutput(
   const inventory=useMemo(()=>specsFor(session,bindings,framing),[session.package,JSON.stringify(state.values),JSON.stringify(state.feeds),JSON.stringify(bindings),JSON.stringify(framing),JSON.stringify(sources.items?.map(s=>[s.id,s.src_w,s.src_h,s.has_frame])),canvas,roomId]);
   const candidates=useMemo(()=>draftCandidate?specsFor(new RehearsalSession(draftCandidate.doc,undefined,'prepare'),draftCandidate.bindings,draftCandidate.framing):[],[draftCandidate,canvas,roomId]);
   const specsRef=useRef(inventory);specsRef.current=inventory;
-  useEffect(()=>{if(!enabled)return;let cancelled=false;void ipc.liveEngineStatus().then(status=>{if(!cancelled){const height=status.video_height??720;setCanvas(old=>old.height===height?old:{height,width:Math.round(height*16/9)});}});return()=>{cancelled=true;};},[enabled,roomId]);
   useEffect(()=>{
     if(!enabled)return;let cancelled=false;
     const authoredSpecs=[...candidates,...inventory];
@@ -108,12 +114,30 @@ export function useRoomOutput(
   const bankDisposal=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
   useEffect(()=>{clearTimeout(bankDisposal.current);return()=>{bankDisposal.current=setTimeout(()=>bank.current?.dispose(),0);};},[]);
   useEffect(()=>{
-    if(!enabled)return;let cancelled=false;
-    const timer=setInterval(()=>{void ipc.liveSetStatus().then(room=>{
-      if(cancelled||cacheGeneration.current===undefined||cacheGeneration.current===room.generation)return;
-      cacheGeneration.current=room.generation;generation.current=room.generation;bank.current?.reset();setRetryVersion(v=>v+1);
-    }).catch(()=>{});},1500);
-    return()=>{cancelled=true;clearInterval(timer);};
+    if(!enabled)return;
+    let cancelled=false,observed=0,stop:(()=>void)|undefined;
+    const resize=(height:number)=>{
+      if(cancelled||height===canvasRef.current.height)return;
+      const next={height,width:Math.round(height*16/9)};
+      canvasRef.current=next;invalidateRoom();setCanvas(next);
+    };
+    const refresh=async()=>{
+      const version=observed;
+      const [room,engine]=await Promise.all([ipc.liveSetStatus(),ipc.liveEngineStatus()]);
+      if(cancelled||version!==observed)return;
+      const changed=cacheGeneration.current!==undefined&&cacheGeneration.current!==room.generation;
+      cacheGeneration.current=room.generation;generation.current=room.generation;
+      const height=engine.video_height??720;
+      if(height!==canvasRef.current.height)resize(height);
+      else if(changed)invalidateRoom();
+    };
+    void listenLiveEvents(event=>{
+      if(cancelled||event.type!=="video_changed")return;
+      ++observed;resize(event.height);void refresh().catch(()=>{});
+    }).then(unsubscribe=>{if(cancelled)unsubscribe();else stop=unsubscribe;}).catch(()=>{});
+    void refresh().catch(()=>{});
+    const timer=setInterval(()=>{void refresh().catch(()=>{});},1500);
+    return()=>{cancelled=true;clearInterval(timer);stop?.();};
   },[enabled,roomId]);
   const layoutReadiness=Object.fromEntries(inventory.map(spec=>[spec.layout,bank.current!.readiness(spec)]));
   void preparationVersion;
@@ -130,6 +154,7 @@ export function useRoomOutput(
   };
   const signature = (p = project(), current = latest.current) => {
     return JSON.stringify({
+      canvas,
       root: p.root,
       assets: media.current.signature(p).assets,
       tracks: p.timeline?.tracks,
@@ -216,6 +241,7 @@ export function useRoomOutput(
     try {
       const status = await request({ op: "return" });
       generation.current = status.generation;
+      cacheGeneration.current = status.generation;
       isActive.current = false;
       setActive(false);
       // A deliberate return stays on the room until content or selection changes.
@@ -283,6 +309,8 @@ export function useRoomOutput(
     selectToShow,
     state,
     session,
+    canvas,
+    retryVersion,
     bindings,
     framing,
   ]);

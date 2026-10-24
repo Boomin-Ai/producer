@@ -11,13 +11,14 @@ function select(el: HTMLSelectElement, value: string) {
   el.dispatchEvent(new Event('change',{bubbles:true}));
 }
 /** Opt-in local automation exercises the product's actual picker/editor. */
-export async function roomSmoke(timingOnly=false) {
+export async function roomSmoke(timingOnly=false,resolutionOnly=false) {
  const events: unknown[]=[];
  try {
   const dock=await until(()=>document.querySelector<HTMLElement>('[aria-label="Show the bottom row"]')||button('Set settings'),'bottom row');
   if(dock.getAttribute('aria-label')==='Show the bottom row')dock.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
   await until(()=>button('Set settings'),'normal room');
   await until(()=>button('Record'),'room configuration applied');
+  if(resolutionOnly){await invoke('live_set_video',{height:720,fps:30});await until(async()=>(await invoke<{video_height:number}>('live_engine_status')).video_height===720,'720p starting canvas');await sleep(500);}
   async function choose(name: string) {
    if(!document.querySelector('dialog[open]'))button('Set settings')!.click();
    const picker=await until(()=>document.querySelector<HTMLButtonElement>('[role="combobox"][aria-label="Choose set"]'),'set picker');
@@ -26,7 +27,7 @@ export async function roomSmoke(timingOnly=false) {
    option.click(); await until(()=>document.querySelector('dialog[open] [role=combobox][aria-label="Choose set"]')?.textContent?.includes(name),'set loaded '+name); await sleep(100);
    return until(()=>document.querySelector<HTMLDialogElement>('dialog[open]'),'set editor');
   }
-  const editor=await choose('Head to Head');
+  const editor=await choose(resolutionOnly?'Head to Head — The Arena':'Head to Head');
   const card=await until(()=>editor.querySelector<HTMLElement>('.set-source-card'),'source card');
   const priorSource=card.querySelector<HTMLSelectElement>('select[aria-label$=" source"]')?.value;
   const thumbIds=new Set<string>();
@@ -42,7 +43,7 @@ export async function roomSmoke(timingOnly=false) {
   stopThumbs();
   events.push({inlineSourceCreatedAndAssigned:true,hiddenInRoom:true,nativeSourcePreviewFrame:true});
   for(const s of editor.querySelectorAll<HTMLSelectElement>('.set-source-card select[aria-label$=" source"]')) select(s,assigned);
-  button('Show on output',editor)!.click();await sleep(150);button('Close editor',editor)!.click();
+  (await until(()=>button('Show on output',editor),'initial apply ready')).click();await sleep(150);button('Close editor',editor)!.click();
   let revision=0;
   async function rendered(outputId='program') {
    const generation=(await invoke<{generation:number}>('live_set_status')).generation;
@@ -54,6 +55,33 @@ export async function roomSmoke(timingOnly=false) {
    revision=status.renderedRevision;events.push({outputId,...status});
   }
   await rendered();
+  if(resolutionOnly){
+   const changes=[];
+   for(const height of [1080,720,1080]){
+    await invoke('live_set_video',{height,fps:30});
+    await until(async()=>(await invoke<{video_height:number}>('live_engine_status')).video_height===height,'engine '+height);
+    await sleep(300);
+    button('Set settings')!.click();await until(()=>document.querySelector<HTMLDialogElement>('dialog[open]'),'resize editor');
+    const generation=(await invoke<{generation:number}>('live_set_status')).generation;
+    // An active set restores automatically; make a private field edit to also
+    // exercise explicit Show on output at the resized canvas.
+    const field=await until(()=>document.querySelector<HTMLInputElement>('dialog[open] .set-controls-fields input[type=text]'),'resized content field');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(field,'Resolution '+height+' / '+changes.length);
+    field.dispatchEvent(new Event('input',{bubbles:true}));
+    (await until(()=>button('Show on output',document.querySelector('dialog[open]')??document),'resize apply ready')).click();
+    const status=await until(async()=>{
+     const failure=document.querySelector('.set-error')?.textContent;
+     if(failure)throw Error(failure);
+     const s=await invoke<{generation:number;renderedRevision:number;transitioning:boolean}>('live_set_v2',{request:{op:'status',generation}}).catch(()=>null);
+     return s&&s.renderedRevision>0&&!s.transitioning?s:null;
+    },'set applied after resize '+height);
+    await until(()=>document.querySelector('dialog[open] .set-editor-apply-status.applied'),'resize applied state');
+    button('Close editor')!.click();
+    const layouts=await until(()=>{const panel=document.querySelector<HTMLElement>('.set-controls[data-layouts-total]');return panel&&Number(panel.dataset.layoutsTotal)>0&&panel.dataset.layoutsReady===panel.dataset.layoutsTotal?{ready:Number(panel.dataset.layoutsReady),total:Number(panel.dataset.layoutsTotal)}:undefined;},'all resized layouts ready '+height);
+    changes.push({height,...status,layouts});
+   }
+   await invoke('live_set_v2_report',{result:{ok:true,kind:'resolution-change',events,changes,completedAt:new Date().toISOString()}});return;
+  }
   if(timingOnly){
    const segmentTiming=await (await import('./segmentTiming')).measureSegmentTiming(assigned);
    await invoke('live_set_v2_report',{result:{ok:true,kind:'segment-timing',events,segmentTiming,completedAt:new Date().toISOString()}});return;
