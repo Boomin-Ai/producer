@@ -23,7 +23,7 @@ export async function roomSmoke(timingOnly=false) {
    const picker=await until(()=>document.querySelector<HTMLButtonElement>('[role="combobox"][aria-label="Choose set"]'),'set picker');
    picker.click();
    const option=await until(()=>Array.from(document.querySelectorAll<HTMLButtonElement>('[role="option"]')).find(o=>o.textContent?.includes(name)),'set option '+name);
-   option.click(); await until(()=>document.querySelector('dialog[open] header strong')?.textContent?.includes(name),'set loaded '+name); await sleep(100);
+   option.click(); await until(()=>document.querySelector('dialog[open] [role=combobox][aria-label="Choose set"]')?.textContent?.includes(name),'set loaded '+name); await sleep(100);
    return until(()=>document.querySelector<HTMLDialogElement>('dialog[open]'),'set editor');
   }
   const editor=await choose('Head to Head');

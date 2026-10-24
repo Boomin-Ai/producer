@@ -13,7 +13,7 @@ export async function measureSegmentTiming(sourceId:string){
   for(const name of ['Head to Head — The Arena','Producer — Make Your Show','Claude Code — Build, Review, Ship']){
    button('Set settings')!.click();const editor=await wait(()=>document.querySelector<HTMLDialogElement>('dialog[open]'),'editor');
    button('Choose set',editor)!.click();(await wait(()=>Array.from(editor.querySelectorAll<HTMLButtonElement>('[role=option]')).find(o=>o.textContent?.includes(name)),name)).click();
-   await wait(()=>editor.querySelector('header strong')?.textContent===name,'selected title');
+   await wait(()=>editor.querySelector('[role=combobox][aria-label="Choose set"]')?.textContent?.includes(name),'selected title');
    for(const picker of editor.querySelectorAll<HTMLSelectElement>('.set-source-picker select'))select(picker,sourceId);
    await sleep(100);events=[];button('Show on output',editor)!.click();await wait(()=>events.find(e=>e.stage==='render-complete'),'initial render');button('Close editor',editor)!.click();
    events=[];document.querySelector<HTMLButtonElement>('.set-mode-action')!.click();

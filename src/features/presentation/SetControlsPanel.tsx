@@ -197,7 +197,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
       {doc.show&&<button onClick={()=>{if(rehearsing)session.exitRehearsal();else startShow();}}>{rehearsing?'Exit rehearsal':'Rehearse'}</button>}
       <button className="set-editor-apply" disabled={rehearsing||!output||editorStatus==='applying'||editorStatus==='applied'} onClick={onPublish}>{editorStatus==='applying'?'Applying…':'Show on output'}</button>
     </div>}/>
-    <header><div><strong>{doc.name}</strong><span>{rehearsing?'Private rehearsal · Simulated audience inputs':'Set editor · Private preview'}</span></div>{doc.show&&rehearsing&&<div className="set-editor-run-tools">{transport}</div>}</header>
+    {doc.show&&rehearsing&&<div className="set-editor-run-tools">{transport}</div>}
     {publishError&&<p role="alert">{publishError}</p>}
     <div className="set-editor-layout has-controls" style={{'--set-preview-aspect':activeLayout!.width/activeLayout!.height} as CSSProperties}>
       <div className="set-editor-preview-viewport"><div className="set-preview-dialog-canvas"><SetPreview doc={doc} state={state} output={output}/></div></div>
