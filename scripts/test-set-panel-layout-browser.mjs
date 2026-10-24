@@ -17,6 +17,7 @@ try {
  const bounds=()=>page.evaluate(()=>['.set-fixed-playback','.set-run','.set-participation','.set-reference'].map(s=>{const r=document.querySelector(s).getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height};}));
  await page.getByRole('button',{name:'Start',exact:true}).click();await page.waitForTimeout(100);const running=await bounds();
  await page.getByRole('button',{name:'Exit',exact:true}).click();await page.waitForTimeout(100);const prepared=await bounds();assert.deepEqual(prepared,running,'Start and Exit preserve every column and transport rectangle');
+ assert.equal(await page.locator('.set-run-current-label').innerText(),await page.evaluate(()=>window.panelSession.package.show.phases.find(p=>p.id===window.panelSession.snapshot().show.phase).label));
  const sections=page.locator('.set-sections > *');assert.equal(await sections.count(),3);const columns=await bounds();assert(columns[1].x<columns[2].x&&columns[2].x<columns[3].x);assert.equal(columns[1].y,columns[2].y);assert.equal(columns[2].y,columns[3].y);
  for(const height of [600,460,360,300]){
   await page.evaluate(h=>document.querySelector('.rm-dock-bottom').style.height=h+'px',height);await page.waitForTimeout(100);

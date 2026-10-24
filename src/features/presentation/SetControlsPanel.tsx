@@ -182,7 +182,8 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
       {doc.show && <section className="set-run" aria-label="Run">
         <div className="set-run-transport">
           <div className="set-run-topline">
-            <h3><strong>Show run</strong><span>{rehearsing ? 'Rehearsal' : 'Prepared'}</span></h3>
+            <h3><strong>Show run</strong></h3>
+            <span className="set-run-current-label" title={phase?.label}>{phase?.label}</span>
             <span role="status" className={`set-run-status${state.running ? state.paused ? ' is-paused' : ' is-running' : ''}`}>{runStatus}</span>
           </div>
           {doc.show ? <>
