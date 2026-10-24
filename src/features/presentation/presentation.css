@@ -557,31 +557,34 @@
  .rm-dock-bottom.slim .set-controls .set-transport button { width:30px; }
  .rm-dock-bottom.slim .set-controls .set-transport { gap:2px; }
 }
-/* Show run and rundown form a single native card. */
-.set-sections.has-show > .set-run { gap:16px; padding:16px; background:linear-gradient(145deg,var(--surface-1,#141c27),var(--surface-0,#0b121b)); }
-.set-run .set-run-topline { padding-bottom:12px; border-bottom:1px solid var(--line-1,#29323e); align-items:center; }
-.set-run .set-run-topline h3 { display:flex; align-items:center; justify-content:flex-start; gap:12px; }
-.set-run .set-run-topline h3 > strong { padding:7px 10px; border-radius:8px; background:var(--surface-2,#202b38); color:var(--fg-1,#ece8f0); font-size:12px; }
-.set-run .set-run-topline h3 > span { font-size:11px; }
-.set-run .set-run-status { display:flex; align-items:center; gap:6px; font-size:11px; white-space:nowrap; }
-.set-run .set-run-status.is-running::before { content:''; width:7px; height:7px; border-radius:50%; background:var(--primary,#6bd6ad); box-shadow:0 0 10px #6bd6ad44; }
-.set-run .set-run-transport { gap:14px; }
-.set-run .set-current-segment { font-size:24px; line-height:1.2; }
-.set-run .set-next-step { margin-top:8px; font-size:12px; }
-.set-run .set-run-actions { padding:0; margin:0; }
-.set-run .set-segment-position { font-size:11px; }
-.set-sections.has-show > .set-run > .set-segments { gap:8px; padding-top:12px; }
-.set-run .set-segments-heading { align-items:center; font-size:12px; }
-.set-run .set-segments-heading > span { font-size:11px; }
-.set-run .set-segments ol { display:flex; flex-direction:column; gap:6px; }
-.set-run .set-segments li { padding:0; background:var(--surface-1,#151d28); border:1px solid var(--line-1,#2a3442); border-radius:9px; opacity:1; }
+/* Keep the rundown legible even when the dock is short. */
+.set-sections.has-show > .set-run { container:set-rundown / size; gap:8px; padding:10px; background:linear-gradient(145deg,var(--surface-1,#141c27),var(--surface-0,#0b121b)); }
+.set-run .set-run-topline { padding-bottom:6px; margin:0; border-bottom:1px solid var(--line-1,#29323e); align-items:center; flex-wrap:nowrap; }
+.set-run .set-run-topline h3 { display:flex; align-items:center; justify-content:flex-start; gap:8px; }
+.set-run .set-run-topline h3 > strong { padding:4px 7px; border-radius:6px; background:var(--surface-2,#202b38); color:var(--fg-1,#ece8f0); font-size:11px; white-space:nowrap; }
+.set-run .set-run-topline h3 > span { font-size:10px; }
+.set-run .set-run-status { display:flex; align-items:center; gap:5px; font-size:10px; white-space:nowrap; }
+.set-run .set-run-status.is-running::before { content:''; width:6px; height:6px; border-radius:50%; background:var(--primary,#6bd6ad); }
+.set-run .set-run-transport { gap:8px; }
+.set-run .set-current-segment { font-size:19px; line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.set-run .set-next-step { font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.set-run .set-segment-position { font-size:10px; }
+.set-sections.has-show > .set-run > .set-segments { gap:5px; padding-top:6px; }
+.set-run .set-segments-heading { align-items:center; font-size:11px; margin:0!important; }
+.set-run .set-segments-heading > span { font-size:10px; }
+.set-run .set-segments ol { display:flex; flex-direction:column; gap:3px; }
+.set-run .set-segments li { padding:0; background:var(--surface-1,#151d28); border:1px solid var(--line-1,#2a3442); border-radius:6px; opacity:1; }
 .set-run .set-segments li.current { background:#6bd6ad16; border-color:#6bd6ad66; }
-.set-run .set-segment-select { padding:8px 10px; gap:10px; min-height:45px; color:var(--fg-1,#e7edf4); font-size:12px; }
-.set-run .set-segment-select > .set-step-number { display:grid; place-items:center; flex:0 0 28px; width:28px; height:28px; border-radius:50%; background:var(--surface-2,#273341); color:var(--fg-2,#c1cbd6); font-size:11px; font-weight:600; }
+.set-run .set-segment-select { padding:4px 6px; gap:8px; min-height:29px; color:var(--fg-1,#e7edf4); font-size:11px; }
+.set-run .set-segment-select > .set-step-number { display:grid; place-items:center; flex:0 0 21px; width:21px; height:21px; border-radius:50%; background:var(--surface-2,#273341); color:var(--fg-2,#c1cbd6); font-size:10px; font-weight:600; }
 .set-run .set-segments li.current .set-step-number { color:#09291e; background:var(--primary,#6bd6ad); }
-.set-run .set-segment-select > small { color:var(--fg-3,#98a5b4); font-size:11px; }
+.set-run .set-segment-select > small { color:var(--fg-3,#98a5b4); font-size:10px; }
 .set-run .set-segments li.current small { color:var(--fg-1,#e7edf4); }
 .set-run .set-run-timing { display:none; }
+@container set-rundown (max-height:300px) {
+ .set-run-overview { display:none; }
+ .set-run-topline h3 > span { display:none; }
+}
 /* A minimized set is a single row, never a scrollable window onto the panel. */
 .rm-dock-bottom.slim .rm-panel-setControls .rm-panel-body { overflow:clip; overscroll-behavior:none; display:flex; align-items:center; }
 .rm-dock-bottom.slim .rm-panel-setControls .rm-panel-body > .set-controls { height:100%; min-height:0; width:100%; padding:0; justify-content:center; overflow:clip; gap:0; }
@@ -591,6 +594,9 @@
 .rm-dock-bottom.slim .rm-panel-setControls .set-compact-run { overflow:clip; }
 .set-run .set-run-description { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:baseline; gap:7px 12px; }
 .set-run .set-run-description .set-current-segment { grid-column:1; min-width:0; }
-.set-run .set-run-description .set-segment-countdown { grid-column:2; text-align:right; min-width:55px; font-size:24px; }
+.set-run .set-run-description .set-segment-countdown { grid-column:2; text-align:right; min-width:55px; font-size:19px; }
 .set-run .set-run-description .set-next-step { grid-column:1; margin:0; }
 .set-run .set-run-description .set-segment-position { grid-column:2; text-align:right; white-space:nowrap; }
+@container panel (max-width:599px) {
+ .set-sections.has-show > .set-run { flex:0 0 auto; height:min(440px,65dvh); }
+}

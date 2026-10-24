@@ -9,6 +9,8 @@ try {
   const doc=structuredClone(HEAD_TO_HEAD);
   for(let i=0;i<20;i++){const layout={...structuredClone(doc.set.layouts[0]),root:{id:'root-'+i,type:'box',styles:{width:1280,height:720},children:[]},id:'extra-'+i,label:'An intentionally long segment layout number '+i};doc.set.layouts.push(layout);doc.set.controls.push({id:'layout-'+i,type:'button',label:layout.label,action:{type:'layout.select',layoutId:layout.id}});}
   doc.set.controls.push({id:'reset-topic',type:'button',label:'Reset topic',action:{type:'value.set',key:'topic',value:'Who takes the round?'}});
+  let last=doc.show.phases.at(-1);
+  for(let i=0;i<4;i++){const phase={id:'extra-phase-'+i,label:['Counterpoint','Receipts','Crowd call','Final verdict'][i],layoutId:doc.set.layouts[0].id};last.next=phase.id;doc.show.phases.push(phase);last=phase;}
   window.panelSession=new RehearsalSession(doc,undefined,'prepare');const host=document.createElement('div');host.className='rm-dock-bottom';host.style.cssText='height:600px;width:1400px';host.innerHTML='<div class="rm-panel-setControls" style="container:panel / inline-size;height:100%;width:100%"><div class="rm-panel-body" style="height:100%;display:flex;flex-direction:column"></div></div>';document.body.replaceChildren(host);
   (D.createRoot??D.default.createRoot)(host.querySelector('.rm-panel-body')).render((R.createElement??R.default.createElement)(SetControlsPanel,{session:window.panelSession,onChange:()=>{},output:{renderer:'native',active:true,busy:false,error:'',bindings:{},framing:{},sources:{items:[]},bind:()=>{},frame:()=>{},apply:async()=>{},returnToRoom:async()=>true}}));
  });
@@ -16,6 +18,12 @@ try {
  await page.getByRole('button',{name:'Start',exact:true}).click();await page.waitForTimeout(100);const running=await bounds();
  await page.getByRole('button',{name:'Exit',exact:true}).click();await page.waitForTimeout(100);const prepared=await bounds();assert.deepEqual(prepared,running,'Start and Exit preserve every column and transport rectangle');
  const sections=page.locator('.set-sections > *');assert.equal(await sections.count(),3);const columns=await bounds();assert(columns[1].x<columns[2].x&&columns[2].x<columns[3].x);assert.equal(columns[1].y,columns[2].y);assert.equal(columns[2].y,columns[3].y);
+ for(const height of [600,460,360,300]){
+  await page.evaluate(h=>document.querySelector('.rm-dock-bottom').style.height=h+'px',height);await page.waitForTimeout(100);
+  const list=await page.evaluate(()=>{const list=document.querySelector('.set-segments-scroll');list.scrollTop=0;const viewport=list.getBoundingClientRect(),card=document.querySelector('.set-run').getBoundingClientRect();return {fraction:viewport.height/card.height,visible:[...list.querySelectorAll('li')].filter(el=>{const r=el.getBoundingClientRect();return r.top>=viewport.top-1&&r.bottom<=viewport.bottom+1;}).length};});
+  assert(list.fraction>.55,JSON.stringify({height,...list}));assert(list.visible>=4,JSON.stringify({height,...list}));if(height>=460)assert.equal(list.visible,7);
+ }
+ await page.evaluate(()=>document.querySelector('.rm-dock-bottom').style.height='460px');await page.waitForTimeout(100);
  await page.screenshot({path:'/private/tmp/producer-set-panel-expanded.png'});
  await page.evaluate(()=>{const dock=document.querySelector('.rm-dock-bottom');dock.classList.add('slim');dock.style.height='56px';});
  for(const width of [1400,1024,800,600,450]){

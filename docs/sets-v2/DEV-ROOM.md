@@ -66,3 +66,6 @@ Browser checks cover unchanged section/playback rectangles across Start/Exit, 20
 ## Show-run card and minimized scrolling — 2026-10-24
 
 The combined rundown matches the requested structure: Show run and mode header, running indicator, title/countdown row, next-segment/position row, section count, and numbered segment rows with a highlighted current entry. Native surfaces, typography and mint accents are retained. The minimized bottom bar clips overflow, hides expanded content and centers its toolbar; it is not a scroll container. Browser checks explicitly attempt horizontal and vertical programmatic scrolling at 56px row height and confirm offsets remain zero, while playback/edit controls remain accessible across tested widths.
+
+
+The rundown now prioritizes segment visibility over its summary: tighter row/header spacing and a compact title. In short cards (300px content height or less), the duplicate title/up-next summary is hidden; the current segment remains highlighted in the list. Browser regression checks use seven segments and verify that the list consumes over 55% of card height, shows at least four complete rows in tested short docks, and all seven at dock heights of 460px and above. Narrow panels receive a bounded rundown height rather than collapsing under size containment.
