@@ -61,3 +61,8 @@ The minimized bottom bar keeps fixed playback and edit controls, bounded segment
 Set edit now sizes the preview against the actual remaining viewport after the header and source tray, preserving the complete landscape/portrait canvas when the source tray expands. Editor panes explicitly reset inherited full-height minimums that previously caused clipping.
 
 Browser checks cover unchanged section/playback rectangles across Start/Exit, 20 extra layout choices at widths down to 450px, and expanded/collapsed source trays for landscape/portrait at three desktop heights. Commands: `npm run test:set-panel-layout-browser` and `npm run test:set-editor-navigation-browser`.
+
+
+## Show-run card and minimized scrolling — 2026-10-24
+
+The combined rundown matches the requested structure: Show run and mode header, running indicator, title/countdown row, next-segment/position row, section count, and numbered segment rows with a highlighted current entry. Native surfaces, typography and mint accents are retained. The minimized bottom bar clips overflow, hides expanded content and centers its toolbar; it is not a scroll container. Browser checks explicitly attempt horizontal and vertical programmatic scrolling at 56px row height and confirm offsets remain zero, while playback/edit controls remain accessible across tested widths.

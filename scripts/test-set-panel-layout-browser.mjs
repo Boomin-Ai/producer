@@ -17,11 +17,16 @@ try {
  await page.getByRole('button',{name:'Exit',exact:true}).click();await page.waitForTimeout(100);const prepared=await bounds();assert.deepEqual(prepared,running,'Start and Exit preserve every column and transport rectangle');
  const sections=page.locator('.set-sections > *');assert.equal(await sections.count(),3);const columns=await bounds();assert(columns[1].x<columns[2].x&&columns[2].x<columns[3].x);assert.equal(columns[1].y,columns[2].y);assert.equal(columns[2].y,columns[3].y);
  await page.screenshot({path:'/private/tmp/producer-set-panel-expanded.png'});
- await page.evaluate(()=>{document.querySelector('.rm-dock-bottom').classList.add('slim');});
+ await page.evaluate(()=>{const dock=document.querySelector('.rm-dock-bottom');dock.classList.add('slim');dock.style.height='56px';});
  for(const width of [1400,1024,800,600,450]){
   await page.setViewportSize({width,height:960});await page.evaluate(w=>document.querySelector('.rm-dock-bottom').style.width=(w-20)+'px',width);await page.waitForTimeout(100);
   const fit=await page.evaluate(()=>{const bar=document.querySelector('.set-controls-toolbar'),r=bar.getBoundingClientRect();return {overflow:bar.scrollWidth>bar.clientWidth+1,visible:[...bar.querySelectorAll('.set-fixed-playback,.set-toolbar-tools')].every(el=>{const b=el.getBoundingClientRect();return b.left>=r.left-1&&b.right<=r.right+1;}),buttons:bar.querySelectorAll('button').length};});assert(!fit.overflow&&fit.visible,JSON.stringify({width,...fit}));assert(fit.buttons<12,'layout count must not add toolbar buttons');
  }
+ const scroll=await page.evaluate(()=>{
+  const nodes=['.rm-panel-body','.rm-panel-body > .set-controls','.set-controls-toolbar','.set-compact-run'].map(s=>document.querySelector(s));
+  for(const node of nodes){node.scrollTop=1000;node.scrollLeft=1000;}
+  return nodes.map(n=>({top:n.scrollTop,left:n.scrollLeft}));
+ });assert(scroll.every(n=>n.top===0&&n.left===0),'minimized bar must not scroll in either direction');
  await page.getByRole('button',{name:'Set actions',exact:true}).click();assert(await page.locator('.set-actions-popover').evaluate(el=>el.matches(':popover-open')));
  console.log('PASS: identical prepared/rehearsal geometry, three merged sections, and compact toolbar remains bounded with 20 extra layouts');
 }finally{await browser.close();}

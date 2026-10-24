@@ -182,32 +182,28 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
       {doc.show && <section className="set-run" aria-label="Run">
         <div className="set-run-transport">
           <div className="set-run-topline">
-            <h3>Show run<span>{rehearsing ? 'Rehearsal' : 'Prepared'}</span></h3>
+            <h3><strong>Show run</strong><span>{rehearsing ? 'Rehearsal' : 'Prepared'}</span></h3>
             <span role="status" className={`set-run-status${state.running ? state.paused ? ' is-paused' : ' is-running' : ''}`}>{runStatus}</span>
           </div>
           {doc.show ? <>
             <div className="set-run-overview">
               <div className="set-run-description">
-                <div className="set-simulation-state" role="status">
-                  <div className="set-current-segment-row"><h4 className="set-current-segment">{phase?.label}</h4>
-                    {state.show.collecting && <span className="set-segment-countdown">{timeLabel(state.show.remainingMs)} <small>left</small></span>}</div>
-                </div>
+                <h4 className="set-current-segment">{phase?.label}</h4>
+                <span className="set-segment-countdown">{state.show.collecting&&<>{timeLabel(state.show.remainingMs)} <small>left</small></>}</span>
                 <p className="set-next-step">{nextPhase ? `Up next: ${nextPhase.label}` : 'Final step'}</p>
+                <span className="set-segment-position">Segment {displayedStepIndex + 1}/{schedule.phases.length}</span>
               </div>
-            </div>
-            <div className="set-run-actions">
-            <span className="set-segment-position">Segment {displayedStepIndex + 1}/{schedule.phases.length}</span>
             </div>
 
           </> : <><strong>Set rehearsal</strong><p className="set-rehearsal-note">Try layouts and content here. Test data is in Set settings.</p></>}
         </div>
         {doc.show && <>
           <div className="set-segments" role="region" aria-label="Show segments">
-            <h3 className="set-segments-heading">Segments</h3>
+            <h3 className="set-segments-heading">Segments<span>{schedule.phases.length} segments</span></h3>
             <div className="set-segments-scroll" role="region" tabIndex={0} aria-label="Segment list">
               <ol>{schedule.phases.map((p, i) => <li key={p.id} aria-current={i === displayedStepIndex ? 'step' : undefined}
                 className={i === displayedStepIndex ? 'current' : state.running && i < displayedStepIndex ? 'passed' : ''}>
-                <button type="button" className="set-segment-select" disabled={blocked} onClick={()=>editSegment(p.id)}><span className="set-step-number">{i + 1}</span><span>{p.label}</span><small>{p.collectMs ? `${timeLabel(p.collectMs)} vote` : 'Manual'}</small></button>
+                <button type="button" className="set-segment-select" disabled={blocked} onClick={()=>editSegment(p.id)}><span className="set-step-number">{String(i + 1).padStart(2,'0')}</span><span>{p.label}</span><small>{p.collectMs ? `${timeLabel(p.collectMs)} vote` : 'Manual'}</small></button>
               </li>)}</ol>
               <div className="set-run-timing">
                 <span className="set-rehearsal-note">{schedule.repeats ? 'Repeating · No fixed total' : schedule.timedMs ? `${timeLabel(schedule.timedMs)} timed${schedule.manual ? ' + manual steps' : ''}` : 'Manual timing'}</span>
