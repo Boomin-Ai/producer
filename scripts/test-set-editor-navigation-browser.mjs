@@ -6,11 +6,11 @@ try {
  await page.evaluate(async()=>{
   const R=await import('/node_modules/.vite/deps/react.js'),D=await import('/node_modules/.vite/deps/react-dom_client.js');
   const {SetControlsPanel}=await import('/src/features/presentation/SetControlsPanel.tsx');const {HEAD_TO_HEAD}=await import('/src/features/presentation/fixtures.ts');const componentSource=await (await fetch('/src/features/presentation/SetControlsPanel.tsx')).text();const runtimePath=componentSource.match(/from "([^"]*rehearsal\.ts[^"]*)"/)[1];const {RehearsalSession}=await import(runtimePath);
-  window.__TAURI_INTERNALS__={transformCallback:()=>1,invoke:async()=>1};window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};
+  window.__TAURI_INTERNALS__={transformCallback:()=>1,invoke:async(cmd)=>cmd==='set_library_list'?[]:1};window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};
   const host=document.createElement('div');host.style.cssText='height:900px;width:100%';document.body.replaceChildren(host);const fixture=structuredClone(HEAD_TO_HEAD);fixture.set.layouts.push({...structuredClone(fixture.set.layouts[0]),id:'portrait-fit',label:'Portrait fit',width:1080,height:1920});window.editorSession=new RehearsalSession(fixture,undefined,'prepare');
   (D.createRoot??D.default.createRoot)(host).render((R.createElement??R.default.createElement)(SetControlsPanel,{session:window.editorSession,onChange:()=>{},output:{renderer:'native',active:false,busy:false,error:'',bindings:{},framing:{},sources:{items:[]},bind:()=>{},frame:()=>{},createSource:async()=>{},apply:async()=>{},returnToRoom:async()=>true}}));
  });
- await page.getByRole('button',{name:'Set edit',exact:true}).click();
+ await page.getByRole('button',{name:'Set settings',exact:true}).click();
  const dialog=page.locator('dialog[open]');const selector=dialog.getByRole('combobox',{name:'Edit segment',exact:true});
  const options=await selector.locator('option').evaluateAll(items=>items.map(i=>({value:i.value,text:i.textContent})));
  assert(options.length>=3);await selector.selectOption(options.at(-1).value);await page.waitForTimeout(100);

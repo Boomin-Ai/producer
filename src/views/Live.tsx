@@ -7,7 +7,6 @@ import type { RoomSource, RoomAction } from "../../server/src/roomActions";
 import { formatGuestLink, hostedAudienceLink } from "../lib/hostedShare";
 import { previewSession, setPreviewTransparency } from "../lib/previewSession";
 import { useSetOutput } from "../features/presentation/useSetOutput";
-import { SetMenu } from "../features/presentation/SetMenu";
 import { SetControlsPanel } from "../features/presentation/SetControlsPanel";
 import { AFTER_HOURS } from "../features/presentation/fixtures";
 import { RehearsalSession } from "../features/presentation/rehearsal";
@@ -8494,18 +8493,7 @@ export function LiveView({
             {studioOn ? "Studio on" : "Studio"}
           </button>
 
-          {<>
-            <SetMenu session={setRehearsal} output={setOutput} onChange={changeSet}
-              onControls={() => {
-                const current = dockOf(layout, "setControls");
-                const dock = current === "hidden" ? "bottom" : current;
-                if (current === "hidden") setLayout(movePanel(layout, "setControls", dock));
-                if (dock === "bottom") setSheetOpen(true);
-                else if (dock === "top") setTopOpen(true);
-                else if (dock === "left") setLeftOpen(true);
-                else if (dock === "right") setRightOpen(true);
-              }} />
-          </>}
+
 
           <button
             className={`hd-chip${vcamOn ? " on" : ""}`}

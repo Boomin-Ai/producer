@@ -17,14 +17,10 @@ export async function roomSmoke() {
   await until(()=>button('Set settings'),'normal room');
   await until(()=>button('Record'),'room configuration applied');
   async function choose(name: string) {
-   button('Set settings')!.click();
+   if(!document.querySelector('dialog[open]'))button('Set settings')!.click();
    const picker=await until(()=>document.querySelector<HTMLSelectElement>('select[aria-label="Choose set"]'),'set picker');
    const option=await until(()=>Array.from(picker.options).find(o=>o.textContent?.includes(name)),'set option '+name);
    select(picker,option.value); await sleep(250);
-   button('Controls')?.click();
-   button('Close set menu')?.click();
-   const edit=await until(()=>button('Set edit'),'set edit control');
-   edit.click();
    return until(()=>document.querySelector<HTMLDialogElement>('dialog[open]'),'set editor');
   }
   const editor=await choose('Head to Head');

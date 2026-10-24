@@ -11,6 +11,7 @@ import type { PresentationPackage, SetControl } from './schema';
 import type { SetOutputControls } from './useSetOutput';
 import './presentation.css';
 import {SetSourceCreator} from './SetSourceCreator';
+import {SetConfiguration} from './SetConfiguration';
 
 export function SetControlsPanel({ session, blocked = false, blockedReason, onChange, output, sourceNames = {}, onFieldEdit }: {
   sourceNames?: Record<string,string>; onFieldEdit?: (key:string)=>void; output?: SetOutputControls; session: RehearsalSession; blocked?: boolean; blockedReason?: string; onChange: (doc: PresentationPackage) => void;
@@ -115,7 +116,7 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
   const editorIndex=editorSegments.findIndex(p=>p.id===state.show.phase);
   const editSegment=(id:string)=>{session.send({type:'segment.select',phaseId:id});};
   const editor = <>
-        <div className="set-editor-details-header"><strong>Set details</strong><p>{output?.active ? 'Changes update room output.' : 'Changes update the preview.'}</p></div>
+        <div className="set-editor-details-header"><strong>Segment details</strong><p>{output?.active ? 'Changes update room output.' : 'Changes update the preview.'}</p></div>
         <section className="set-editor-navigation" aria-label="Segment navigation">
           {doc.show&&<div className="set-editor-segment-row"><label>Segment<select aria-label="Edit segment" disabled={blocked} value={state.show.phase} onChange={e=>editSegment(e.target.value)}>{editorSegments.map((segment,i)=><option key={segment.id} value={segment.id}>{String(i+1).padStart(2,'0')} / {segment.label}</option>)}</select></label>
           <div className="set-editor-segment-buttons"><button type="button" aria-label="Edit previous segment" title="Previous segment" disabled={blocked||editorIndex<=0} onClick={()=>editSegment(editorSegments[editorIndex-1].id)}>←</button><button type="button" aria-label="Edit next segment" title="Next segment" disabled={blocked||editorIndex>=editorSegments.length-1} onClick={()=>editSegment(editorSegments[editorIndex+1].id)}>→</button></div></div>}
@@ -167,7 +168,7 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
         </SetActionsMenu>}
       </div>
       <div className="set-toolbar-tools">
-        <RehearsalPreview doc={doc} state={state} output={output} outputActive={output?.active} editor={editor} sources={visibleSlots.size ? sourceEditor : undefined} />
+        <RehearsalPreview doc={doc} state={state} output={output} outputActive={output?.active} configuration={<SetConfiguration session={session} onChange={onChange} output={output}/>} editor={editor} sources={visibleSlots.size ? sourceEditor : undefined} />
       </div>
     </header>
     {output?.error && <div role="alert" className="set-error">{output.error} <button disabled={output.busy&&!output.active} onClick={()=>void output.apply()}>Retry update</button></div>}

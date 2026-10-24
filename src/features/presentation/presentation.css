@@ -633,3 +633,31 @@
 .set-controls .set-transport .set-transport-stop { color:var(--red); background:color-mix(in srgb,var(--red) 15%,transparent); }
 .set-controls .set-mode-badge.prepared { color:var(--primary); background:color-mix(in srgb,var(--primary) 10%,transparent); border-color:color-mix(in srgb,var(--primary) 35%,transparent); }
 .set-controls .set-mode-badge.rehearsal { color:var(--amber); background:color-mix(in srgb,var(--amber) 10%,transparent); border-color:color-mix(in srgb,var(--amber) 35%,transparent); }
+/* Set selection and file tools live in the editor's details pane. */
+.set-configuration { display:flex; flex-direction:column; gap:10px; padding-bottom:12px; border-bottom:1px solid var(--line-1); }
+.set-configuration > .set-menu-section > label { display:flex; flex-direction:column; gap:7px; color:var(--fg-2); font-size:12px; }
+.set-configuration select { width:100%; min-width:0; }
+.set-configuration-options { display:flex; flex-direction:column; }
+.set-configuration-options > summary { font-size:11px; cursor:pointer; padding:4px 0; }
+.set-configuration-options[open] > :not(summary) { margin-top:10px; }
+.set-configuration .set-selection-preference { margin:0; flex-direction:row; align-items:flex-start; gap:8px; font-size:11px; }
+.set-configuration .set-selection-preference input { flex:0 0 auto; margin-top:2px; min-height:0; accent-color:var(--primary); }
+.set-configuration .set-menu-section-label { color:var(--fg-3); }
+.set-configuration .set-menu-advanced { border-color:var(--line-1); }
+.set-configuration .set-menu-agent { align-items:center; }
+.set-configuration p { font-size:11px; line-height:1.5; color:var(--fg-2); }
+.set-configuration p[role=alert] { color:var(--red); }
+/* Set-wide tools span the editor; the right pane stays segment-specific. */
+.set-preview-dialog .set-configuration { display:flex; flex:0 0 auto; flex-direction:row; flex-wrap:wrap; align-items:center; gap:8px; padding:10px; border:1px solid var(--line-1); border-radius:var(--r-ctl); background:var(--surface-1); }
+.set-configuration > .set-menu-section { flex:1 1 260px; min-width:180px; max-width:480px; }
+.set-configuration > .set-menu-section > label { flex-direction:row; align-items:center; gap:10px; white-space:nowrap; }
+.set-configuration > .set-menu-section select { flex:1; width:0; min-width:0; height:var(--h-ctl); padding:5px 8px; color:var(--fg-1); background:var(--surface-2); border:1px solid var(--line-1); border-radius:var(--r-ctl); font:inherit; }
+.set-configuration-file-actions { display:flex; align-items:center; gap:6px; }
+.set-configuration > button,.set-configuration-file-actions > button { min-height:var(--h-ctl); flex:0 0 auto; padding:6px 10px; }
+.set-configuration-popover { position:fixed; inset:auto; margin:0; width:min(320px,calc(100vw - 16px)); padding:14px; border:1px solid var(--line-2); border-radius:var(--r-card); color:var(--fg-1); background:#171f2b; overflow:auto; font:12px system-ui,sans-serif; box-shadow:0 12px 35px #0007; }
+.set-configuration-popover:popover-open { display:flex; flex-direction:column; gap:12px; }
+.set-configuration-popover .set-menu-advanced { margin:0; border-top:1px solid var(--line-1); }
+.set-configuration-popover .set-selection-preference { white-space:normal; margin:0; }
+.set-configuration-popover input[type=checkbox] { flex:0 0 auto; width:auto; min-height:0; accent-color:var(--primary); }
+.set-configuration-popover button { font:inherit; color:var(--fg-1); background:var(--surface-2); border:1px solid var(--line-1); border-radius:var(--r-ctl); min-height:32px; padding:6px 10px; }
+.set-configuration > p[role=alert] { flex:1 0 100%; margin:0; }

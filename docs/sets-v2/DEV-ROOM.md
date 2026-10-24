@@ -72,3 +72,12 @@ The rundown now prioritizes segment visibility over its summary: tighter row/hea
 
 
 The three control cards now use Producer's shared surface, line, text and accent tokens. Segment controls and Sources have consistent card padding; heading, layout selector and actions have explicit spacing. Nested source-card paint is removed, and playback/status controls use existing primary/red/amber tokens. Browser checks assert matching card colors/borders, no gradients, internal padding and spacing between the selector and actions, while retaining the geometry/overflow checks.
+
+
+## Unified set editor toolbar — 2026-10-24
+
+The room header no longer contains the set dropdown. A single **Set** button in the set control panel (the former Set edit position) opens the existing full editor. A dedicated full-width toolbar above the preview and segment fields contains Choose set, Import set, Export set, Media assets, Show set/Show room scene and Set options. Segment navigation/fields remain in the right pane; source assignments remain below.
+
+Set options preserves automatic showing, reload saved set, agent authoring, add-show authoring where applicable, test data and activity. Built-in/library/imported set selection updates the same open editor. Closing export or media dialogs preserves the editor beneath them; keyboard/cancel handlers distinguish nested dialogs. Existing set playback/room authority is unchanged by this UI relocation.
+
+`npm run test:set-configuration-browser` checks toolbar placement, builtin/saved selection, preference changes, export/media dismissal, invalid/valid imports and removal of the room-header selector. Editor canvas fitting, source previews, compact panel layout and TypeScript checks also pass.
