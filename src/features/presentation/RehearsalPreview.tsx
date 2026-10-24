@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { SetPreview } from './SetPreview';
 import type { PresentationPackage } from './schema';
@@ -26,9 +26,9 @@ function PreviewDialog({ doc, state, onClose, returnFocus, editor, sources, outp
     <div className="set-preview-dialog-content">
       <header><div><strong>{doc.name}</strong><span>{previewMode === 'set' ? 'Set preview' : 'Rehearsal preview'} · {outputActive ? 'Changes update room output' : 'Preview only'}</span></div>
         <button autoFocus onClick={onClose}>Close preview</button></header>
-      <div className={`set-editor-layout${editor ? ' has-controls' : ''}`}><div className="set-preview-dialog-canvas" style={{ maxWidth: `min(100%, calc((100dvh - 340px) * ${layout.width / layout.height}))` }}>
+      <div className={`set-editor-layout${editor ? ' has-controls' : ''}`} style={{'--set-preview-aspect':layout.width/layout.height} as CSSProperties}><div className="set-editor-preview-viewport"><div className="set-preview-dialog-canvas">
         <SetPreview key={state.sandboxId} doc={doc} state={state} output={output} />
-      </div>{editor && <aside className="set-controls set-editor-controls" aria-label="Edit set">{editor}</aside>}</div>
+      </div></div>{editor && <aside className="set-controls set-editor-controls" aria-label="Edit set">{editor}</aside>}</div>
       {sources && <section className="set-controls set-editor-source-tray" aria-label="Edit source assignments">{sources}</section>}
     </div>
   </dialog>, document.body);

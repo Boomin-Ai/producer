@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+const {chromium}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??'/private/tmp/producer-sets-v2-browser/node_modules/playwright-core/index.mjs');
+const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
+try {
+ const page=await browser.newPage({viewport:{width:1440,height:960}});page.on('pageerror',e=>console.error(e.message));await page.goto('http://127.0.0.1:1436/');
+ await page.evaluate(async()=>{
+  const R=await import('/node_modules/.vite/deps/react.js'),D=await import('/node_modules/.vite/deps/react-dom_client.js');
+  const {SetControlsPanel}=await import('/src/features/presentation/SetControlsPanel.tsx');const {HEAD_TO_HEAD}=await import('/src/features/presentation/fixtures.ts');const source=await(await fetch('/src/features/presentation/SetControlsPanel.tsx')).text();const {RehearsalSession}=await import(source.match(/from "([^"]*rehearsal\.ts[^"]*)"/)[1]);
+  const doc=structuredClone(HEAD_TO_HEAD);
+  for(let i=0;i<20;i++){const layout={...structuredClone(doc.set.layouts[0]),root:{id:'root-'+i,type:'box',styles:{width:1280,height:720},children:[]},id:'extra-'+i,label:'An intentionally long segment layout number '+i};doc.set.layouts.push(layout);doc.set.controls.push({id:'layout-'+i,type:'button',label:layout.label,action:{type:'layout.select',layoutId:layout.id}});}
+  doc.set.controls.push({id:'reset-topic',type:'button',label:'Reset topic',action:{type:'value.set',key:'topic',value:'Who takes the round?'}});
+  window.panelSession=new RehearsalSession(doc,undefined,'prepare');const host=document.createElement('div');host.className='rm-dock-bottom';host.style.cssText='height:600px;width:1400px';host.innerHTML='<div class="rm-panel-setControls" style="container:panel / inline-size;height:100%;width:100%"><div class="rm-panel-body" style="height:100%;display:flex;flex-direction:column"></div></div>';document.body.replaceChildren(host);
+  (D.createRoot??D.default.createRoot)(host.querySelector('.rm-panel-body')).render((R.createElement??R.default.createElement)(SetControlsPanel,{session:window.panelSession,onChange:()=>{},output:{renderer:'native',active:true,busy:false,error:'',bindings:{},framing:{},sources:{items:[]},bind:()=>{},frame:()=>{},apply:async()=>{},returnToRoom:async()=>true}}));
+ });
+ const bounds=()=>page.evaluate(()=>['.set-fixed-playback','.set-run','.set-participation','.set-reference'].map(s=>{const r=document.querySelector(s).getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height};}));
+ await page.getByRole('button',{name:'Start',exact:true}).click();await page.waitForTimeout(100);const running=await bounds();
+ await page.getByRole('button',{name:'Exit',exact:true}).click();await page.waitForTimeout(100);const prepared=await bounds();assert.deepEqual(prepared,running,'Start and Exit preserve every column and transport rectangle');
+ const sections=page.locator('.set-sections > *');assert.equal(await sections.count(),3);const columns=await bounds();assert(columns[1].x<columns[2].x&&columns[2].x<columns[3].x);assert.equal(columns[1].y,columns[2].y);assert.equal(columns[2].y,columns[3].y);
+ await page.screenshot({path:'/private/tmp/producer-set-panel-expanded.png'});
+ await page.evaluate(()=>{document.querySelector('.rm-dock-bottom').classList.add('slim');});
+ for(const width of [1400,1024,800,600,450]){
+  await page.setViewportSize({width,height:960});await page.evaluate(w=>document.querySelector('.rm-dock-bottom').style.width=(w-20)+'px',width);await page.waitForTimeout(100);
+  const fit=await page.evaluate(()=>{const bar=document.querySelector('.set-controls-toolbar'),r=bar.getBoundingClientRect();return {overflow:bar.scrollWidth>bar.clientWidth+1,visible:[...bar.querySelectorAll('.set-fixed-playback,.set-toolbar-tools')].every(el=>{const b=el.getBoundingClientRect();return b.left>=r.left-1&&b.right<=r.right+1;}),buttons:bar.querySelectorAll('button').length};});assert(!fit.overflow&&fit.visible,JSON.stringify({width,...fit}));assert(fit.buttons<12,'layout count must not add toolbar buttons');
+ }
+ await page.getByRole('button',{name:'Set actions',exact:true}).click();assert(await page.locator('.set-actions-popover').evaluate(el=>el.matches(':popover-open')));
+ console.log('PASS: identical prepared/rehearsal geometry, three merged sections, and compact toolbar remains bounded with 20 extra layouts');
+}finally{await browser.close();}

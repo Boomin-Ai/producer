@@ -50,3 +50,14 @@ Verification: `npm run test:set-source-preview-browser` checks decoded source im
 Set edit has a segment selector and Previous/Next controls in the details pane. Every declared segment is reachable without closing the dialog, including before a show starts. A separate layout selector supports sets with several compositions. Selecting a segment retains authored field edits and source bindings; an active rehearsal pauses at the selected segment, with media and animation clocks held until resume. Voting segments begin with fresh rehearsal ballots. Output updates remain explicit in the dialog header; paused native layout changes use a cut so they do not wait for a frozen transition clock.
 
 The editor uses the existing UI surfaces and controls: preview left, navigation/fields right, source cards below, stacked at smaller widths. Source creation sits next to the assignment picker. Slot numbers retain muted native text styling. Tests: 20 presentation runtime checks, TypeScript, `npm run test:set-editor-navigation-browser`, and the source-preview browser check.
+
+
+## Stable set control surface — 2026-10-24
+
+Prepared and rehearsal modes now share the same three-column structure: current segment plus scrollable rundown in one card, segment controls, and assigned sources. Start/Exit, mode badge and output status reserve consistent widths. Layout choices use a selector rather than a growing button wall. Segment list entries can select a segment through the same pause-for-editing command used by the editor.
+
+The minimized bottom bar keeps fixed playback and edit controls, bounded segment/layout selectors and an Actions popover. Narrow panels prioritize playback and segment selection; layout editing stays available through Set edit. Extra layouts/actions no longer add unbounded buttons to the bar.
+
+Set edit now sizes the preview against the actual remaining viewport after the header and source tray, preserving the complete landscape/portrait canvas when the source tray expands. Editor panes explicitly reset inherited full-height minimums that previously caused clipping.
+
+Browser checks cover unchanged section/playback rectangles across Start/Exit, 20 extra layout choices at widths down to 450px, and expanded/collapsed source trays for landscape/portrait at three desktop heights. Commands: `npm run test:set-panel-layout-browser` and `npm run test:set-editor-navigation-browser`.

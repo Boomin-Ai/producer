@@ -1,6 +1,7 @@
+import {createPortal} from 'react-dom';
 import {layoutMedia,mediaConfig} from './playback';
 import {MediaPlaybackControls} from './MediaPlaybackControls';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { evaluate, RehearsalSession, voteLeaders } from './rehearsal';
 import { RehearsalPreview } from './RehearsalPreview';
 import { outputProjection } from './projection';
@@ -35,6 +36,7 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
     : output?.busy ? 'Preparing output…' : 'Show the set before rehearsing';
   const showControls = doc.set.controls.filter(c => c.type === 'button' && c.action.type.startsWith('show.'));
   const layoutControls = doc.set.controls.filter(c => c.type === 'button' && !c.action.type.startsWith('show.'));
+  const actionControls=layoutControls.filter(c=>c.type==='button'&&c.action.type!=='layout.select');
   const fields = doc.set.controls.filter(c => c.type !== 'button');
   const activeFieldKeys=layoutFieldKeys(doc,state.layoutId);
   const layoutFields=fields.filter(c=>activeFieldKeys.has(c.key));
@@ -60,7 +62,6 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
     <button title="Restart show" aria-label="Restart show" disabled={blocked} onClick={restart}>↻</button>
   </div>;
   const schedule = rundown(doc);
-  const stepIndex = schedule.phases.findIndex(p => p.id === state.show.phase);
   const displayedStepIndex = schedule.phases.findIndex(p => p.id === phase?.id);
   const runStatus = state.running ? state.paused ? 'Paused' : 'Running' : stopped ? 'Run stopped' : rehearsing ? 'Ready to rehearse' : 'Ready to rehearse show';
   const needsRevealHint = state.running && !state.paused && phase?.collectMs && !state.show.collecting && !state.show.revealed;
@@ -152,17 +153,19 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
         <span className="set-output-status" title={outputStatus}>{outputStatus}</span>
       </div>}
       {doc.show && <div className="set-fixed-playback">{transport}</div>}
-      {doc.show && <div className="set-compact-run" aria-label="Compact show controls">
-        <span className="set-compact-segment" title={phase?.label}>{displayedStepIndex+1}/{schedule.phases.length} · {phase?.label}</span>
-        {layoutControls.map(control)}
-        {state.running && <>
-          {collecting && <><span className="set-compact-timer">{timeLabel(state.show.remainingMs)}</span><button disabled={state.paused} onClick={()=>session.send({type:'tick',milliseconds:state.show.remainingMs})}>Close voting</button></>}
-          {segmentControls.filter(c=>c.type==='button' && c.action.type==='show.reveal').map(control)}
-          {unresolved && <button disabled={state.paused} onClick={()=>session.send({type:'control',action:{type:'show.reopen'}})}>Reopen voting</button>}
-          {unresolved && tied && <><button disabled={state.paused} onClick={()=>session.send({type:'control',action:{type:'show.tiebreak'}})}>Tie-break</button><button disabled={state.paused} onClick={()=>session.send({type:'control',action:{type:'show.draw'}})}>Reveal draw</button></>}
-        </>}
-
-      </div>}
+      <div className="set-compact-run" aria-label="Compact show controls">
+        {doc.show&&<select className="set-compact-segment" aria-label="Choose segment" disabled={blocked} value={state.show.phase} onChange={e=>editSegment(e.target.value)}>{editorSegments.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</select>}
+        <select className="set-compact-layout" aria-label="Choose layout" disabled={blocked} value={state.layoutId} onChange={e=>session.send({type:'control',action:{type:'layout.select',layoutId:e.target.value}})}>{doc.set.layouts.map(l=><option key={l.id} value={l.id}>{l.label}</option>)}</select>
+        {(actionControls.length>0||state.running)&&<SetActionsMenu>
+          {actionControls.map(control)}
+          {state.running&&<>
+            {collecting&&<button disabled={state.paused} onClick={()=>session.send({type:'tick',milliseconds:state.show.remainingMs})}>Close voting</button>}
+            {segmentControls.filter(c=>c.type==='button'&&c.action.type==='show.reveal').map(control)}
+            {unresolved&&<button disabled={state.paused} onClick={()=>session.send({type:'control',action:{type:'show.reopen'}})}>Reopen voting</button>}
+            {unresolved&&tied&&<><button disabled={state.paused} onClick={()=>session.send({type:'control',action:{type:'show.tiebreak'}})}>Tie-break</button><button disabled={state.paused} onClick={()=>session.send({type:'control',action:{type:'show.draw'}})}>Reveal draw</button></>}
+          </>}
+        </SetActionsMenu>}
+      </div>
       <div className="set-toolbar-tools">
         <RehearsalPreview doc={doc} state={state} output={output} outputActive={output?.active} editor={editor} sources={visibleSlots.size ? sourceEditor : undefined} />
       </div>
@@ -195,20 +198,20 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
             <div className="set-run-actions">
             <span className="set-segment-position">Segment {displayedStepIndex + 1}/{schedule.phases.length}</span>
             </div>
-            {!rehearsing && <p className="set-rehearsal-note">Rehearse to run segments and their assigned layouts on output.</p>}
+
           </> : <><strong>Set rehearsal</strong><p className="set-rehearsal-note">Try layouts and content here. Test data is in Set settings.</p></>}
         </div>
         {doc.show && <>
           <div className="set-segments" role="region" aria-label="Show segments">
             <h3 className="set-segments-heading">Segments</h3>
             <div className="set-segments-scroll" role="region" tabIndex={0} aria-label="Segment list">
-              <ol>{schedule.phases.map((p, i) => <li key={p.id} aria-current={state.running && i === stepIndex ? 'step' : undefined}
-                className={state.running && i === stepIndex ? 'current' : state.running && i < stepIndex ? 'passed' : ''}>
-                <span className="set-step-number">{i + 1}</span><span>{p.label}</span><small>{p.collectMs ? `${timeLabel(p.collectMs)} vote` : 'Manual'}</small>
+              <ol>{schedule.phases.map((p, i) => <li key={p.id} aria-current={i === displayedStepIndex ? 'step' : undefined}
+                className={i === displayedStepIndex ? 'current' : state.running && i < displayedStepIndex ? 'passed' : ''}>
+                <button type="button" className="set-segment-select" disabled={blocked} onClick={()=>editSegment(p.id)}><span className="set-step-number">{i + 1}</span><span>{p.label}</span><small>{p.collectMs ? `${timeLabel(p.collectMs)} vote` : 'Manual'}</small></button>
               </li>)}</ol>
               <div className="set-run-timing">
                 <span className="set-rehearsal-note">{schedule.repeats ? 'Repeating · No fixed total' : schedule.timedMs ? `${timeLabel(schedule.timedMs)} timed${schedule.manual ? ' + manual steps' : ''}` : 'Manual timing'}</span>
-                {rehearsing && <span className="set-rehearsal-note">Elapsed {timeLabel(state.elapsedMs)} · Simulated clock</span>}
+                <span className="set-rehearsal-note">{rehearsing?`Elapsed ${timeLabel(state.elapsedMs)} · Simulated clock`:'Ready to rehearse'}</span>
               </div>
             </div>
           </div>
@@ -218,7 +221,8 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
         <h3>Segment controls <span>{rehearsing ? 'Rehearsal' : 'Prepared'}</span></h3>
         {hasHostMedia&&<div className="set-segment-media"><MediaPlaybackControls session={session}/></div>}
         <strong className="set-participation-heading">{state.running ? phase?.label : activeLayout?.label}</strong>
-        {!!layoutControls.length && <div className="set-controls-fields set-layout-controls">{layoutControls.map(control)}</div>}
+        <label className="set-panel-layout-picker">Layout<select aria-label="Segment layout" disabled={blocked} value={state.layoutId} onChange={e=>session.send({type:'control',action:{type:'layout.select',layoutId:e.target.value}})}>{doc.set.layouts.map(l=><option key={l.id} value={l.id}>{l.label}</option>)}</select></label>
+        {!!actionControls.length&&<div className="set-controls-fields set-segment-actions">{actionControls.map(control)}</div>}
 
         {collecting ? <>
           <div className="set-participation-stats" role="status">{state.show.ballot > 1 ? `Tie-break ${state.show.ballot - 1} · ` : ''}{state.show.total} votes · heat {Math.round(state.show.heat * 100)}%</div>
@@ -275,4 +279,11 @@ function findSlotFraming(node:import('./schema').PresentationNode|undefined,slot
 }
 function SlotFramingControls({label,value,disabled,onChange}:{label:string;value:import('./schema').SlotFraming;disabled:boolean;onChange:(v:import('./schema').SlotFraming)=>void}) {
  return <span className="set-slot-framing"><select aria-label={`${label} framing`} disabled={disabled} value={value.mode} onChange={e=>onChange({...value,mode:e.target.value as 'fill'|'fit'})}><option value="fill">Fill frame</option><option value="fit">Fit entire source</option></select>{value.mode==='fill' && <details className="set-framing-adjust"><summary>Adjust framing</summary><span className="set-slot-position"><span>Horizontal<input aria-label={`${label} horizontal crop position`} type="range" min="0" max="1" step="0.01" value={value.x} disabled={disabled} onChange={e=>onChange({...value,x:Number(e.target.value)})} /></span><span>Vertical<input aria-label={`${label} vertical crop position`} type="range" min="0" max="1" step="0.01" value={value.y} disabled={disabled} onChange={e=>onChange({...value,y:Number(e.target.value)})} /></span></span><button type="button" disabled={disabled} onClick={()=>onChange({...value,x:0.5,y:0.5})}>Center crop</button></details>}</span>;
+}
+
+function SetActionsMenu({children}:{children:ReactNode}) {
+ const id=useId(),trigger=useRef<HTMLButtonElement>(null),menu=useRef<HTMLDivElement>(null);
+ const [position,setPosition]=useState({left:8,top:60});
+ return <><button type="button" className="set-compact-actions-trigger" ref={trigger} popoverTarget={id} aria-label="Set actions" onClick={()=>{const r=trigger.current!.getBoundingClientRect();setPosition({left:Math.max(8,Math.min(r.left,innerWidth-288)),top:Math.max(8,r.top-8)});}}>Actions ▴</button>
+ {createPortal(<div id={id} ref={menu} popover="auto" className="set-actions-popover set-controls" style={{left:position.left,top:position.top}}><strong>Segment actions</strong>{children}</div>,document.body)}</>;
 }
