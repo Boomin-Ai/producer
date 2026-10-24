@@ -351,12 +351,14 @@ export function useRoomOutput(
       const next = { ...latest.current.bindings };
       if (source) next[slot] = source;
       else delete next[slot];
+      latest.current.bindings=next;
       setBindings(next);
       setError("");
       onBindings?.(next);
     },
     frame: (slot, value) => {
       const next = { ...latest.current.framing, [slot]: value };
+      latest.current.framing=next;
       setFraming(next);
       setError("");
       onFraming?.(next);

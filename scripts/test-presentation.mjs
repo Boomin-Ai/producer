@@ -58,6 +58,25 @@ test('prepare/rehearse boundary restores setup and discards practice state and p
   assert.equal(standalone.package.show, undefined); assert.ok(standalone.exitRehearsal());
 });
 
+test('room show and private rehearsal own independent runtime and prepared state',()=>{
+  const room=new RehearsalSession(HEAD_TO_HEAD,'room','prepare');
+  const draft=new RehearsalSession(room.exportPreparedPackage(),'editor','prepare');
+  const before=structuredClone(room.snapshot());
+  draft.enterRehearsal();control(draft,'show.start');control(draft,'show.next');
+  assert.ok(draft.send({type:'vote',playerId:'practice',choiceId:'a'}));
+  draft.send({type:'field',key:'hostName',value:'Practice name'});
+  assert.deepEqual(room.snapshot(),before);
+  draft.exitRehearsal();assert.equal(draft.snapshot().show.total,0);
+  assert.equal(draft.snapshot().values.hostName,room.snapshot().values.hostName);
+  assert.ok(room.enterLive());assert.ok(control(room,'show.start'));
+  assert.equal(room.snapshot().workspaceMode,'live');
+  assert.ok(room.send({type:'tick',milliseconds:1000}));assert.equal(room.snapshot().elapsedMs,1000);
+  assert.equal(room.send({type:'vote',playerId:'fake',choiceId:'a'}),false);
+  assert.equal(control(room,'show.vote',{choiceId:'a'}),false);
+  assert.ok(room.send({type:'segment.select',phaseId:HEAD_TO_HEAD.show.phases[1].id}));assert.equal(room.snapshot().paused,false);
+  assert.equal(draft.snapshot().running,false);assert.equal(draft.snapshot().elapsedMs,0);
+});
+
 test('agent export retains configured defaults and excludes all rehearsal edits/results', () => {
   const session = new RehearsalSession(HEAD_TO_HEAD, 'export', 'prepare');
   session.send({type:'field',key:'hostName',value:'Configured host'});

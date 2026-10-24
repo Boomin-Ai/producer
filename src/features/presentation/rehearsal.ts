@@ -16,8 +16,8 @@ export interface RehearsalState {
   animationClock?:AnimationClock;
   layoutMotion?:AnimationTrack[];
   layoutMotionId?:string;
-  mode: 'rehearsal'; sandboxId: string; revision: number; elapsedMs: number;
-  workspaceMode: 'prepare' | 'rehearsal';
+  mode: 'rehearsal' | 'live'; sandboxId: string; revision: number; elapsedMs: number;
+  workspaceMode: 'prepare' | 'rehearsal' | 'live';
   running: boolean; paused: boolean; layoutId: string;
   values: Record<string, Scalar>; feeds: Record<string, Scalar>;
   show: { phase: string; collecting: boolean; revealed: boolean; winner: string; result: '' | 'winner' | 'draw'; ballot: number;
@@ -79,7 +79,7 @@ export class RehearsalSession {
   }
   private initial(): RehearsalState {
     const media:Record<string,MediaTransport>={};enterMedia(this.package,undefined,this.preparation?.layoutId??this.package.set.initialLayout,media);
-    return { media,...(this.package.set.layouts.some(l=>l.animation||l.root.children?.some(n=>n.type==='shader'))?{animationClock:{running:false,positionMs:0,segmentMs:0,anchorMs:Date.now()}}:{}), mode: 'rehearsal', workspaceMode: this.workspaceMode, sandboxId: this.sandboxId, revision: 0, elapsedMs: 0, running: false, paused: false,
+    return { media,...(this.package.set.layouts.some(l=>l.animation||l.root.children?.some(n=>n.type==='shader'))?{animationClock:{running:false,positionMs:0,segmentMs:0,anchorMs:Date.now()}}:{}), mode: this.workspaceMode==='live'?'live':'rehearsal', workspaceMode: this.workspaceMode, sandboxId: this.sandboxId, revision: 0, elapsedMs: 0, running: false, paused: false,
       layoutId: this.package.set.initialLayout,
       values: Object.fromEntries(Object.entries(this.package.set.values).map(([k, v]) => [k, v.default])),
       feeds: Object.fromEntries(Object.entries(this.package.set.feeds).map(([k, v]) => [k, v.default])),
@@ -94,6 +94,12 @@ export class RehearsalSession {
     if (this.workspaceMode !== 'prepare') return false;
     this.preparation = structuredClone({ layoutId: this.state.layoutId, values: this.state.values, feeds: this.state.feeds });
     this.workspaceMode = 'rehearsal'; this.freshBoundary(); return true;
+  };
+  /** The room runner shares segment semantics, but owns a separate runtime boundary. */
+  enterLive = (): boolean => {
+    if(this.workspaceMode !== 'prepare')return false;
+    this.preparation=structuredClone({layoutId:this.state.layoutId,values:this.state.values,feeds:this.state.feeds});
+    this.workspaceMode='live';this.freshBoundary();return true;
   };
   exitRehearsal = (): boolean => {
     if (this.workspaceMode !== 'rehearsal') return false;
@@ -142,13 +148,15 @@ export class RehearsalSession {
       if (this.workspaceMode === 'prepare' &&
         (['pause', 'tick', 'seek', 'vote', 'reaction', 'stop'].includes(event.type) || event.type === 'control' && event.action.type.startsWith('show.')))
         throw new Error('Enter rehearsal before running the show or sending practice inputs.');
+      if(this.workspaceMode==='live'&&(['vote','reaction','feed'].includes(event.type)||event.type==='control'&&['show.vote','show.react'].includes(event.action.type)))
+        throw new Error('Audience inputs require a connected data source. Practice inputs are available in editor rehearsal.');
       switch (event.type) {
         case 'segment.select': {
           const target=this.package.show?.phases.find(p=>p.id===event.phaseId);
           if(!target)throw new Error('Unknown segment.');
           if(target.id===next.show.phase&&target.layoutId===next.layoutId)return true;
           next.show.phase=target.id;next.layoutId=target.layoutId;
-          next.paused=next.running;next.show.remainingMs=target.collectMs??0;
+          next.paused=next.running&&this.workspaceMode!=='live';next.show.remainingMs=target.collectMs??0;
           next.show.collecting=next.running&&!!target.collectMs;
           if(target.collectMs){this.voters.clear();next.ballotChoiceIds=this.package.show!.choices.map(c=>c.id);next.ballotHistory=[];next.show.ballot=1;next.show.result='';next.show.total=0;next.show.revealed=false;next.show.winner='';Object.keys(next.counts).forEach(k=>next.counts[k]=0);}
           log(`Editing segment: ${target.label}.`);break;
@@ -192,7 +200,7 @@ export class RehearsalSession {
               next.running = true; next.paused = false; next.elapsedMs = 0;
               next.layoutId = phase.layoutId;
               next.show.remainingMs = phase.collectMs ?? 0; next.show.collecting = !!phase.collectMs;
-              log('Show started in rehearsal.'); break;
+              log(this.workspaceMode==='live'?'Show started on room output.':'Show started in rehearsal.'); break;
             }
             case 'show.previous':
             case 'show.next': {

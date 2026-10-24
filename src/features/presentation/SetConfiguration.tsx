@@ -10,8 +10,8 @@ import type { PresentationPackage } from './schema';
 import type { SetOutputControls } from './useSetOutput';
 import './presentation.css';
 
-export function SetConfiguration({ session, onChange, output }: {
-  output?:SetOutputControls; session: RehearsalSession; onChange: (doc: PresentationPackage) => void;
+export function SetConfiguration({ session, onChange, output, hideOutputAction=false }: {
+  hideOutputAction?:boolean; output?:SetOutputControls; session: RehearsalSession; onChange: (doc: PresentationPackage) => void;
 }) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const rehearsing = state.workspaceMode === 'rehearsal';
@@ -55,11 +55,11 @@ export function SetConfiguration({ session, onChange, output }: {
 
       </div>
       <div className="set-configuration-file-actions"><button onClick={()=>{setError('');file.current?.click();}}>Import set</button><button ref={trigger} onClick={()=>edit('export')}>Export set</button><button onClick={()=>setMedia(true)}>Media assets</button></div>
-      {output&&<button disabled={output.busy} onClick={()=>void(output.active||output.busy?output.returnToRoom():output.apply())}>{output.active||output.busy?'Show room scene':'Show set'}</button>}
+      {output&&!hideOutputAction&&<button disabled={output.busy} onClick={()=>void(output.active||output.busy?output.returnToRoom():output.apply())}>{output.active||output.busy?'Show room scene':'Show set'}</button>}
       <button type="button" popoverTarget={optionsId} aria-label="Set options" onClick={e=>{const r=e.currentTarget.getBoundingClientRect();setPosition({left:Math.max(8,Math.min(r.right-320,innerWidth-328)),top:r.bottom+6});}}>Set options ▾</button>
       <div id={optionsId} popover="auto" className="set-configuration-popover" style={{left:position.left,top:position.top,maxHeight:`calc(100dvh - ${position.top+12}px)`}}>
       <strong>Set options</strong>
-      {output?.renderer==='native'&&<label className="set-selection-preference"><input type="checkbox" checked={!!output.selectToShow} onChange={e=>output.setSelectToShow?.(e.target.checked)}/>Show configured sets when selected</label>}
+      {!hideOutputAction&&output?.renderer==='native'&&<label className="set-selection-preference"><input type="checkbox" checked={!!output.selectToShow} onChange={e=>output.setSelectToShow?.(e.target.checked)}/>Show configured sets when selected</label>}
       <details className="set-menu-advanced"><summary>Advanced</summary><div className="set-menu-advanced-body">
       {library.some(entry=>entry.id===session.package.id)&&<button onClick={()=>{const entry=library.find(entry=>entry.file===selectedFile&&entry.id===session.package.id)??library.find(entry=>entry.id===session.package.id);if(entry)void loadLibrary(entry.file);}}>Reload saved set</button>}
       <div className="set-menu-agent"><button onClick={() => edit('edit-set')}>Edit set with agent</button>

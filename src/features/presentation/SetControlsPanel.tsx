@@ -1,9 +1,10 @@
 import {createPortal} from 'react-dom';
 import {layoutMedia,mediaConfig} from './playback';
 import {MediaPlaybackControls} from './MediaPlaybackControls';
-import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode, type CSSProperties } from 'react';
 import { evaluate, RehearsalSession, voteLeaders } from './rehearsal';
 import { RehearsalPreview } from './RehearsalPreview';
+import {SetPreview} from './SetPreview';
 import { outputProjection } from './projection';
 import { layoutFieldKeys } from './layoutFields';
 import { rundown, timeLabel } from './rundown';
@@ -13,12 +14,57 @@ import './presentation.css';
 import {SetSourceCreator} from './SetSourceCreator';
 import {SetConfiguration} from './SetConfiguration';
 
-export function SetControlsPanel({ session, blocked = false, blockedReason, onChange, output, sourceNames = {}, onFieldEdit }: {
+type PanelProps={
   sourceNames?: Record<string,string>; onFieldEdit?: (key:string)=>void; output?: SetOutputControls; session: RehearsalSession; blocked?: boolean; blockedReason?: string; onChange: (doc: PresentationPackage) => void;
-}) {
+};
+export function SetControlsPanel(props:PanelProps) {
+  const [draft,setDraft]=useState(()=>new RehearsalSession(props.session.exportPreparedPackage(),undefined,'prepare'));
+  const [bindings,setBindings]=useState({...props.output?.bindings});
+  const [framing,setFraming]=useState({...props.output?.framing});
+  const pending=useRef<{doc:PresentationPackage;phase:string;layout:string}|undefined>(undefined);
+  const [publishError,setPublishError]=useState('');
+  useEffect(()=>{
+    const next=new RehearsalSession(props.session.exportPreparedPackage(),undefined,'prepare');
+    const phase=pending.current?.phase??props.session.snapshot().show.phase;
+    const layout=pending.current?.layout??props.session.snapshot().layoutId;
+    if(phase)next.send({type:'segment.select',phaseId:phase});
+    if(next.snapshot().layoutId!==layout)next.send({type:'control',action:{type:'layout.select',layoutId:layout}});
+    setDraft(next);
+    setBindings({...props.output?.bindings});setFraming({...props.output?.framing});
+  },[props.session]);
+  useEffect(()=>{
+    if(!pending.current||JSON.stringify(props.session.package)!==JSON.stringify(pending.current.doc))return;
+    const take=pending.current;pending.current=undefined;
+    if(take.phase)props.session.send({type:'segment.select',phaseId:take.phase});
+    if(props.session.snapshot().layoutId!==take.layout)props.session.send({type:'control',action:{type:'layout.select',layoutId:take.layout}});
+    void props.output?.apply().catch(e=>setPublishError(String(e)));
+  },[props.session,props.output]);
+  const previewOutput=props.output?{...props.output,active:false,busy:false,error:'',bindings,framing,
+    bind:(slot:string,id:string)=>setBindings(old=>({...old,[slot]:id})),
+    frame:(slot:string,value:import('./schema').SlotFraming)=>setFraming(old=>({...old,[slot]:value})),
+    apply:async()=>{},returnToRoom:async()=>true,
+    createSource:props.output.createSource?async(slot:string,spec:import('../../lib/sourceSpec').ExtraSpec,label:string)=>{
+      const id=await props.output!.createSource!(slot,spec,label,false);if(id)setBindings(old=>({...old,[slot]:id}));
+    }:undefined,
+  }:undefined;
+  const publish=()=>{
+    if(draft.snapshot().workspaceMode==='rehearsal')return;
+    const doc=draft.exportPreparedPackage();pending.current={doc,phase:draft.snapshot().show.phase,layout:draft.snapshot().layoutId};setPublishError('');
+    for(const [key,definition] of Object.entries(doc.set.values))if(definition.default!==props.session.snapshot().values[key])props.onFieldEdit?.(key);
+    for(const slot of doc.set.slots){props.output?.bind(slot.id,bindings[slot.id]??'');if(framing[slot.id])props.output?.frame(slot.id,framing[slot.id]);}
+    props.onChange(doc);
+  };
+  const workspace=<SetControlsPanelView {...props} session={draft} output={previewOutput} onFieldEdit={undefined} onChange={doc=>setDraft(new RehearsalSession(doc,undefined,'prepare'))} editorOnly onPublish={publish} publishError={publishError}/>;
+  return <SetControlsPanelView {...props} workspace={workspace} onWorkspaceClose={()=>draft.exitRehearsal()}/>;
+}
+function SetControlsPanelView({ session, blocked = false, blockedReason, onChange, output, sourceNames = {}, onFieldEdit, workspace, editorOnly=false,onPublish,publishError,onWorkspaceClose }: PanelProps & {onWorkspaceClose?:()=>void;workspace?:ReactNode;editorOnly?:boolean;onPublish?:()=>void;publishError?:string}) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
-  const [error, setError] = useState('');
   const [player, setPlayer] = useState('player-1');
+  useEffect(()=>{
+    let last=performance.now();
+    const timer=setInterval(()=>{const now=performance.now(),elapsed=now-last;last=now;const current=session.snapshot();if(current.running&&!current.paused)session.send({type:'tick',milliseconds:Math.min(3_600_000,elapsed)});},100);
+    return()=>clearInterval(timer);
+  },[session]);
   // Fast Refresh can retain a session built by the previous runtime module.
   // Replace that rehearsal instance while retaining its prepared configuration.
   const staleSession = !(session instanceof RehearsalSession);
@@ -29,12 +75,12 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
   const doc = session.package;
   const hasHostMedia=[...layoutMedia(doc,state.layoutId,false,state)].some(id=>mediaConfig(doc,id).hostControls);
   const rehearsing = state.workspaceMode === 'rehearsal';
-  const canRehearse = !!output?.active;
+  const canRun = editorOnly || !!output?.active;
   const outputStatus = output?.active
     ? output.busy && output.pendingChange === 'set' ? 'Switching set…'
       : output.busy && output.pendingChange === 'segment' ? 'Switching segment…'
-      : rehearsing ? 'Rehearsal on output' : 'On output'
-    : output?.busy ? 'Preparing output…' : 'Show the set before rehearsing';
+      : 'On output'
+    : output?.busy ? 'Preparing output…' : 'Show the set on output';
   const showControls = doc.set.controls.filter(c => c.type === 'button' && c.action.type.startsWith('show.'));
   const layoutControls = doc.set.controls.filter(c => c.type === 'button' && !c.action.type.startsWith('show.'));
   const actionControls=layoutControls.filter(c=>c.type==='button'&&c.action.type!=='layout.select');
@@ -42,29 +88,29 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
   const activeFieldKeys=layoutFieldKeys(doc,state.layoutId);
   const layoutFields=fields.filter(c=>activeFieldKeys.has(c.key));
   const activeLayout=doc.set.layouts.find(layout=>layout.id===state.layoutId);
-  const stopped = !state.running && state.trace.some(entry => entry.message === 'Show started in rehearsal.');
+  const stopped = !state.running && state.trace.some(entry => entry.message.startsWith('Show started'));
   const phase = doc.show?.phases.find(p => p.id === state.show.phase);
   const nextPhase = doc.show?.phases.find(p => p.id === phase?.next);
   const previousPhase = doc.show?.phases.find(p => p.next === phase?.id);
   const navigateDisabled=blocked||!state.running||state.paused||state.show.collecting||!!phase?.collectMs&&!state.show.revealed;
-  const restart=()=>{if(!rehearsing)session.enterRehearsal();session.send({type:'reset'});session.send({type:'control',action:{type:'show.start'}});};
+  const restart=()=>{if(state.workspaceMode==='prepare'){if(editorOnly)session.enterRehearsal();else session.enterLive();}session.send({type:'reset'});session.send({type:'control',action:{type:'show.start'}});};
   const startShow=()=>{
-    if(!canRehearse)return;
-    if(!rehearsing)session.enterRehearsal();
+    if(!canRun)return;
+    if(state.workspaceMode==='prepare'){if(editorOnly)session.enterRehearsal();else session.enterLive();}
     const initial=doc.show?.phases.find(p=>p.id===doc.show?.initialPhase);
     if(initial?.layoutId)session.send({type:'control',action:{type:'layout.select',layoutId:initial.layoutId}});
     session.send({type:'control',action:{type:'show.start'}});
   };
   const transport=<div className="set-transport" role="group" aria-label="Show playback">
     <button title="Previous segment" aria-label="Previous segment" disabled={navigateDisabled||!previousPhase} onClick={()=>session.send({type:'control',action:{type:'show.previous'}})}>⏮</button>
-    <button className="set-transport-play" title={!canRehearse?'Show the set on room output first':state.running&&!state.paused?'Pause':'Play'} aria-label={!canRehearse?'Show the set on room output first':state.running&&!state.paused?'Pause':state.running?'Resume':'Start show'} disabled={blocked||!canRehearse} onClick={()=>{if(!state.running)startShow();else session.send({type:'pause',paused:!state.paused});}}>{state.running&&!state.paused?'Ⅱ':'▶'}</button>
+    <button className="set-transport-play" title={!canRun?'Show the set on room output first':state.running&&!state.paused?'Pause':'Play'} aria-label={!canRun?'Show the set on room output first':state.running&&!state.paused?'Pause':state.running?'Resume':'Start show'} disabled={blocked||!canRun} onClick={()=>{if(!state.running)startShow();else session.send({type:'pause',paused:!state.paused});}}>{state.running&&!state.paused?'Ⅱ':'▶'}</button>
     <button title="Next segment" aria-label="Next" disabled={navigateDisabled||!nextPhase} onClick={()=>session.send({type:'control',action:{type:'show.next'}})}>⏭</button>
     <button className="set-transport-stop" title="Stop run" aria-label="Stop run" disabled={!state.running||blocked} onClick={()=>session.send({type:'stop'})}>■</button>
-    <button title="Restart show" aria-label="Restart show" disabled={blocked} onClick={restart}>↻</button>
+    <button title="Restart show" aria-label="Restart show" disabled={blocked||!canRun} onClick={restart}>↻</button>
   </div>;
   const schedule = rundown(doc);
   const displayedStepIndex = schedule.phases.findIndex(p => p.id === phase?.id);
-  const runStatus = state.running ? state.paused ? 'Paused' : 'Running' : stopped ? 'Run stopped' : rehearsing ? 'Ready to rehearse' : 'Ready to rehearse show';
+  const runStatus = state.running ? state.paused ? 'Paused' : 'Running' : stopped ? 'Run stopped' : rehearsing ? 'Ready to start' : 'Ready to start show';
   const needsRevealHint = state.running && !state.paused && phase?.collectMs && !state.show.collecting && !state.show.revealed;
   const collecting = state.running && !!phase?.collectMs && state.show.collecting;
   const tied = state.show.total > 0 && voteLeaders(state).length > 1;
@@ -116,7 +162,7 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
   const editorIndex=editorSegments.findIndex(p=>p.id===state.show.phase);
   const editSegment=(id:string)=>{session.send({type:'segment.select',phaseId:id});};
   const editor = <>
-        <div className="set-editor-details-header"><strong>Segment details</strong><p>{output?.active ? 'Changes update room output.' : 'Changes update the preview.'}</p></div>
+        <div className="set-editor-details-header"><strong>Segment details</strong><p>{editorOnly?'Changes stay in this preview until you show the set on output.':'Changes update room output.'}</p></div>
         <section className="set-editor-navigation" aria-label="Segment navigation">
           {doc.show&&<div className="set-editor-segment-row"><label>Segment<select aria-label="Edit segment" disabled={blocked} value={state.show.phase} onChange={e=>editSegment(e.target.value)}>{editorSegments.map((segment,i)=><option key={segment.id} value={segment.id}>{String(i+1).padStart(2,'0')} / {segment.label}</option>)}</select></label>
           <div className="set-editor-segment-buttons"><button type="button" aria-label="Edit previous segment" title="Previous segment" disabled={blocked||editorIndex<=0} onClick={()=>editSegment(editorSegments[editorIndex-1].id)}>←</button><button type="button" aria-label="Edit next segment" title="Next segment" disabled={blocked||editorIndex>=editorSegments.length-1} onClick={()=>editSegment(editorSegments[editorIndex+1].id)}>→</button></div></div>}
@@ -135,19 +181,38 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
         </section>
 
   </>;
+  if(editorOnly)return <>
+    <SetConfiguration hideOutputAction session={session} onChange={onChange} output={output?{...output,apply:async()=>onPublish?.()}:undefined}/>
+    <header><div><strong>{doc.name}</strong><span>{rehearsing?'Private rehearsal · Simulated audience inputs':'Set editor · Private preview'}</span></div><div className="set-editor-run-tools">
+      <button onClick={()=>{if(rehearsing)session.exitRehearsal();else if(doc.show)startShow();else session.enterRehearsal();}}>{rehearsing?'Exit rehearsal':'Rehearse'}</button>
+      {rehearsing&&transport}
+      <button disabled={rehearsing||!output} onClick={onPublish}>Show on output</button>
+    </div></header>
+    {publishError&&<p role="alert">{publishError}</p>}
+    <div className="set-editor-layout has-controls" style={{'--set-preview-aspect':activeLayout!.width/activeLayout!.height} as CSSProperties}>
+      <div className="set-editor-preview-viewport"><div className="set-preview-dialog-canvas"><SetPreview doc={doc} state={state} output={output}/></div></div>
+      <aside className="set-controls set-editor-controls" aria-label="Edit set">{editor}
+        {rehearsing&&doc.show&&<section className="set-rehearsal-inputs"><strong>Simulated audience</strong><input aria-label="Simulated player" value={player} onChange={e=>setPlayer(e.target.value)}/>
+          <button onClick={()=>setPlayer(`player-${crypto.randomUUID().slice(0,8)}`)}>New participant</button>
+          {(doc.show.choices??[]).map(choice=><button key={choice.id} disabled={!collecting||state.paused} onClick={()=>session.send({type:'vote',playerId:player,choiceId:choice.id})}>Vote {choice.label}</button>)}
+          <button disabled={!collecting||state.paused} onClick={()=>session.send({type:'reaction',playerId:player})}>React 🔥</button>
+          {collecting&&<button onClick={()=>session.send({type:'tick',milliseconds:state.show.remainingMs})}>Close voting</button>}
+          {segmentControls.filter(c=>c.type==='button'&&c.action.type==='show.reveal').map(control)}
+        </section>}
+      </aside>
+    </div>
+    {visibleSlots.size>0&&<section className="set-controls set-editor-source-tray" aria-label="Edit source assignments">{sourceEditor}</section>}
+  </>;
   if (blocked) return <div className="set-controls"><p>{blockedReason ?? 'Waiting for the room to finish loading.'}</p></div>;
   return <div className="set-controls">
     <header className="set-controls-toolbar">
       <div className="set-header-main">
-      <span className={`set-mode-badge ${rehearsing ? 'rehearsal' : 'prepared'}`}>{rehearsing ? 'Rehearsal' : 'Prepared'}</span>
+      <span className={`set-mode-badge ${rehearsing ? 'rehearsal' : 'prepared'}`}>{rehearsing ? 'Rehearsal' : state.workspaceMode==='live'?'Show':'Prepared'}</span>
       <strong className="set-current-name" title={doc.name}>{doc.name}</strong>
       </div>
       <div className="set-header-mode">
       <span className="set-capability">{doc.show ? "Show attached" : "Set only"}</span>
-      <button className="set-mode-action" disabled={!canRehearse} title={!canRehearse?'Show the set on room output first':undefined} onClick={() => {
-        setError(''); setPlayer('player-1');
-        if (rehearsing) session.exitRehearsal(); else startShow();
-      }}>{rehearsing ? 'Exit' : 'Start'}</button>
+      <button className="set-mode-action" disabled={!canRun||state.running} onClick={startShow}>Start show</button>
       </div>
       {output && <div className="set-output-actions">
         {output.active || output.busy ? <button onClick={() => void output.returnToRoom()}>Show room scene</button> : <button disabled={output.busy&&!output.active} onClick={() => void output.apply()} className="set-send-output">Show set</button>}
@@ -168,15 +233,14 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
         </SetActionsMenu>}
       </div>
       <div className="set-toolbar-tools">
-        <RehearsalPreview doc={doc} state={state} output={output} outputActive={output?.active} configuration={<SetConfiguration session={session} onChange={onChange} output={output}/>} editor={editor} sources={visibleSlots.size ? sourceEditor : undefined} />
+        <RehearsalPreview doc={doc} state={state} output={output} outputActive={output?.active} workspace={workspace} onEditorClose={onWorkspaceClose} configuration={<SetConfiguration session={session} onChange={onChange} output={output}/>} editor={editor} sources={visibleSlots.size ? sourceEditor : undefined} />
       </div>
     </header>
     {output?.error && <div role="alert" className="set-error">{output.error} <button disabled={output.busy&&!output.active} onClick={()=>void output.apply()}>Retry update</button></div>}
-    {error && <p role="alert" className="set-error">{error}</p>}
     {state.trace[state.trace.length - 1]?.message.startsWith('Rejected:') && <p role="status" className="set-error">{state.trace[state.trace.length - 1]!.message}</p>}
     <div className={`set-sections ${rehearsing ? 'is-rehearsing' : 'is-prepared'}${doc.show ? ' has-show' : ''}${hasHostMedia ? ' has-media' : ''}`}>
       {!doc.show && <section className="set-workspace" aria-label="Set workspace">
-        <h3>Layout <span>{rehearsing ? 'Rehearsal' : 'Prepared'}</span></h3>
+        <h3>Layout <span>{rehearsing ? 'Rehearsal' : state.workspaceMode==='live'?'Show':'Prepared'}</span></h3>
         <div className="set-controls-fields set-layout-controls">{layoutControls.map(control)}</div>
         <p className="set-rehearsal-note">{doc.set.slots.length} source slots · {fields.length} editable fields</p>
       </section>}
@@ -209,14 +273,14 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
               </li>)}</ol>
               <div className="set-run-timing">
                 <span className="set-rehearsal-note">{schedule.repeats ? 'Repeating · No fixed total' : schedule.timedMs ? `${timeLabel(schedule.timedMs)} timed${schedule.manual ? ' + manual steps' : ''}` : 'Manual timing'}</span>
-                <span className="set-rehearsal-note">{rehearsing?`Elapsed ${timeLabel(state.elapsedMs)} · Simulated clock`:'Ready to rehearse'}</span>
+                <span className="set-rehearsal-note">{state.workspaceMode==='live'?`Elapsed ${timeLabel(state.elapsedMs)}`:rehearsing?`Elapsed ${timeLabel(state.elapsedMs)} · Simulated clock`:'Ready to start'}</span>
               </div>
             </div>
           </div>
         </>}
       </section>}
       {(doc.show || hasHostMedia) && <section className="set-participation" aria-label="Segment controls">
-        <h3>Segment controls <span>{rehearsing ? 'Rehearsal' : 'Prepared'}</span></h3>
+        <h3>Segment controls <span>{rehearsing ? 'Rehearsal' : state.workspaceMode==='live'?'Show':'Prepared'}</span></h3>
         {hasHostMedia&&<div className="set-segment-media"><MediaPlaybackControls session={session}/></div>}
         <strong className="set-participation-heading">{state.running ? phase?.label : activeLayout?.label}</strong>
         <label className="set-panel-layout-picker">Layout<select aria-label="Segment layout" disabled={blocked} value={state.layoutId} onChange={e=>session.send({type:'control',action:{type:'layout.select',layoutId:e.target.value}})}>{doc.set.layouts.map(l=><option key={l.id} value={l.id}>{l.label}</option>)}</select></label>
@@ -224,7 +288,7 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
 
         {collecting ? <>
           <div className="set-participation-stats" role="status">{state.show.ballot > 1 ? `Tie-break ${state.show.ballot - 1} · ` : ''}{state.show.total} votes · heat {Math.round(state.show.heat * 100)}%</div>
-          <div className="set-controls-fields">
+          {editorOnly&&<><div className="set-controls-fields">
             <input aria-label="Simulated player" value={player} maxLength={40} onChange={e => setPlayer(e.target.value)} />
             <button onClick={() => setPlayer(`player-${Number(player.match(/^player-(\d+)$/)?.[1] ?? state.show.total) + 1}`)}>New participant</button>
           </div>
@@ -237,7 +301,8 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
             <button disabled={state.paused} onClick={() => session.send({ type: 'tick', milliseconds: 10_000 })}>Advance 10s</button>
             <button disabled={state.paused} onClick={() => session.send({ type: 'tick', milliseconds: state.show.remainingMs })}>Close voting</button>
           </div>
-          <span className="set-rehearsal-note">{timeLabel(state.show.remainingMs)} left · Simulated clock</span>
+          <span className="set-rehearsal-note">{timeLabel(state.show.remainingMs)} left · Simulated clock</span></>}
+          {!editorOnly&&<p className="set-section-note">Waiting for connected audience inputs.</p>}
         </> : state.running && phase?.collectMs ? <>
           <div className="set-participation-stats" role="status">Voting closed · {state.show.total} votes</div>
           <ul className="set-vote-results">{(doc.show?.choices??[]).map(choice => <li key={choice.id}><span>{choice.label}</span><strong>{state.counts[choice.id]}</strong></li>)}</ul>
@@ -245,7 +310,7 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
         </> : state.running && state.show.revealed ? <>
           <strong className="set-segment-result">{resultLabel}</strong>
           <p className="set-rehearsal-note">The result is on the set output. Stop the run when you’re finished.</p>
-        </> : !hasHostMedia && !layoutControls.length && <p className="set-rehearsal-note">No participant inputs in this segment. {state.running ? 'Use Next when you’re ready.' : 'Start the show to rehearse this segment.'}</p>}
+        </> : !hasHostMedia && !layoutControls.length && <p className="set-rehearsal-note">No participant inputs in this segment. {state.running ? 'Use Next when you’re ready.' : 'Start the show to run this segment.'}</p>}
         {unresolved && <div className="set-controls-fields">
           <button disabled={state.paused} onClick={() => session.send({ type: 'control', action: { type: 'show.reopen' } })}>Reopen voting</button>
           {tied && <>
@@ -254,7 +319,7 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
           </>}
           <p className="set-rehearsal-note">Reopen adds {timeLabel(phase?.collectMs ?? 0)} and keeps votes. A tie-break starts a new ballot.</p>
         </div>}
-        {!!segmentControls.length && <div className="set-controls-fields">{segmentControls.map(control)}</div>}
+        {!!segmentControls.length && <div className="set-controls-fields">{segmentControls.filter(c=>editorOnly||c.type!=='button'||!['show.vote','show.react'].includes(c.action.type)).map(control)}</div>}
       </section>}
       <div className="set-reference">
         <section className="set-assignments" aria-label="Assigned sources">

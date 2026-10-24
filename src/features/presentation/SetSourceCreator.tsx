@@ -8,7 +8,7 @@ export function SetSourceCreator({
 }: {
   slot: string;
   label: string;
-  create: (slot: string, spec: ExtraSpec, label: string) => Promise<void>;
+  create: (slot: string, spec: ExtraSpec, label: string) => Promise<string|void>;
 }) {
   const [open, setOpen] = useState(false),
     [kind, setKind] = useState("camera"),

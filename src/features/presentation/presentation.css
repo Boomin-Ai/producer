@@ -692,3 +692,14 @@
 .set-choice-thumbnail-canvas * { box-sizing:border-box; }
 .set-choice-thumbnail-placeholder { display:grid; place-items:center; height:100%; color:var(--fg-3); }
 .set-choice-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.set-preview-dialog-content { position:relative; }
+.set-preview-dialog-content > .set-editor-close { position:absolute; right:30px; top:30px; height:32px; font-size:12px; }
+.set-preview-dialog-content:has(> .set-editor-close) > .set-configuration { padding-right:124px; }
+.set-editor-run-tools { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.set-editor-run-tools button { white-space:nowrap; font-size:12px; }
+.set-editor-run-tools .set-transport { display:flex; gap:4px; }
+.set-rehearsal-inputs { display:flex; flex-wrap:wrap; gap:8px; padding-top:12px; border-top:1px solid var(--line-1); }
+.set-rehearsal-inputs > strong { flex-basis:100%; }
+.set-preview-dialog-content > header > .set-editor-run-tools { display:flex; flex-direction:row; align-items:center; gap:8px; }
+.set-preview-dialog .set-editor-run-tools .set-transport { display:flex; flex-direction:row; align-items:center; gap:4px; }
+.set-preview-dialog .set-editor-run-tools .set-transport button { width:32px; min-width:32px; height:32px; min-height:32px; padding:4px; }

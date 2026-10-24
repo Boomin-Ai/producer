@@ -5,8 +5,8 @@ import type { PresentationPackage } from './schema';
 import type { RehearsalState } from './rehearsal';
 import type { SetOutputControls } from './useSetOutput';
 
-function PreviewDialog({ doc, state, onClose, returnFocus, editor, sources, outputActive, output, configuration }: {
-  configuration?:ReactNode; output?:SetOutputControls; editor?:ReactNode; sources?:ReactNode; outputActive?:boolean; doc: PresentationPackage; state: RehearsalState; onClose: () => void; returnFocus: HTMLButtonElement | null;
+function PreviewDialog({ doc, state, onClose, returnFocus, editor, sources, outputActive, output, configuration, workspace }: {
+  workspace?:ReactNode; configuration?:ReactNode; output?:SetOutputControls; editor?:ReactNode; sources?:ReactNode; outputActive?:boolean; doc: PresentationPackage; state: RehearsalState; onClose: () => void; returnFocus: HTMLButtonElement | null;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -23,7 +23,7 @@ function PreviewDialog({ doc, state, onClose, returnFocus, editor, sources, outp
       const current=controls.indexOf(document.activeElement as HTMLElement);
       if(controls.length){event.preventDefault();controls[(current+(event.shiftKey?-1:1)+controls.length)%controls.length]?.focus();}
     }} onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
-    <div className="set-preview-dialog-content">
+    <div className="set-preview-dialog-content">{workspace&&<button className="set-editor-close" onClick={onClose}>Close editor</button>}{workspace ?? <>
       {configuration}
       <header><div><strong>{doc.name}</strong><span>{previewMode === 'set' ? 'Set preview' : 'Rehearsal preview'} · {outputActive ? 'Changes update room output' : 'Preview only'}</span></div>
         <button autoFocus onClick={onClose}>Close preview</button></header>
@@ -31,11 +31,11 @@ function PreviewDialog({ doc, state, onClose, returnFocus, editor, sources, outp
         <SetPreview key={state.sandboxId} doc={doc} state={state} output={output} />
       </div></div>{editor && <aside className="set-controls set-editor-controls" aria-label="Edit set">{editor}</aside>}</div>
       {sources && <section className="set-controls set-editor-source-tray" aria-label="Edit source assignments">{sources}</section>}
-    </div>
+    </>} </div>
   </dialog>, document.body);
 }
 
-export function RehearsalPreview({ doc, state, editor, sources, outputActive, output, configuration }: { configuration?:ReactNode; output?:SetOutputControls; editor?:ReactNode; sources?:ReactNode; outputActive?:boolean; doc: PresentationPackage; state: RehearsalState }) {
+export function RehearsalPreview({ doc, state, editor, sources, outputActive, output, configuration, workspace, onEditorClose }: { onEditorClose?:()=>void; workspace?:ReactNode; configuration?:ReactNode; output?:SetOutputControls; editor?:ReactNode; sources?:ReactNode; outputActive?:boolean; doc: PresentationPackage; state: RehearsalState }) {
   const [expanded, setExpanded] = useState(false);
   useEffect(()=>{const open=()=>setExpanded(true);window.addEventListener('producer:edit-set',open);return()=>window.removeEventListener('producer:edit-set',open);},[]);
   const expandButton = useRef<HTMLButtonElement>(null);
@@ -43,6 +43,6 @@ export function RehearsalPreview({ doc, state, editor, sources, outputActive, ou
     <div className="set-preview-tools">
       <button ref={expandButton} aria-label={editor ? "Set settings" : "Set preview"} title={editor ? "Choose and edit sets" : "Preview set"} aria-haspopup="dialog" aria-expanded={expanded} onClick={() => setExpanded(true)}>{editor ? 'Set' : 'Set preview ↗'}</button>
     </div>
-    {expanded && <PreviewDialog doc={doc} state={state} editor={editor} sources={sources} outputActive={outputActive} output={output} configuration={configuration} returnFocus={expandButton.current} onClose={() => setExpanded(false)} />}
+    {expanded && <PreviewDialog doc={doc} state={state} editor={editor} sources={sources} outputActive={outputActive} output={output} configuration={configuration} workspace={workspace} returnFocus={expandButton.current} onClose={() => {onEditorClose?.();setExpanded(false);}} />}
   </div>;
 }

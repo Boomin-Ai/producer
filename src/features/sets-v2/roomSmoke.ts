@@ -40,7 +40,7 @@ export async function roomSmoke() {
   stopThumbs();
   events.push({inlineSourceCreatedAndAssigned:true,hiddenInRoom:true,nativeSourcePreviewFrame:true});
   for(const s of editor.querySelectorAll<HTMLSelectElement>('.set-source-card select[aria-label$=" source"]')) select(s,assigned);
-  button('Close preview',editor)!.click();
+  button('Show on output',editor)!.click();await sleep(150);button('Close editor',editor)!.click();
   let revision=0;
   async function rendered(outputId='program') {
    const generation=(await invoke<{generation:number}>('live_set_status')).generation;
@@ -55,7 +55,7 @@ export async function roomSmoke() {
   for(const name of ['Signal Desk','Atlanta Culture']) {
    const e=await choose(name);
    for(const s of e.querySelectorAll<HTMLSelectElement>('.set-source-card select[aria-label$=" source"]')) select(s,assigned);
-   await sleep(100);button('Close preview',e)!.click();await rendered();
+   await sleep(100);button('Show on output',e)!.click();await sleep(150);button('Close editor',e)!.click();await rendered();
   }
   button('Output settings')!.click();
   await sleep(100);button('Portrait',document.querySelector('[aria-label="Room output view"]')!)!.click();

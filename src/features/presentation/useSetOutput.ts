@@ -21,7 +21,7 @@ export function resolveRoomBindings(bindings:Record<string,string>,sources:LiveS
 export interface SetOutputControls {
   applyPortrait?:(projection:OutputProjection)=>Promise<void>;
   stopPortrait?:()=>Promise<void>;
-  createSource?:(slot:string,spec:import('../../lib/sourceSpec').ExtraSpec,label:string)=>Promise<void>;
+  createSource?:(slot:string,spec:import('../../lib/sourceSpec').ExtraSpec,label:string,assign?:boolean)=>Promise<string|void>;
   renderer?:'native';selectToShow?:boolean;setSelectToShow?:(value:boolean)=>void;
   framing:Record<string,import('./schema').SlotFraming>; frame:(slot:string,value:import('./schema').SlotFraming)=>void;
   pendingChange?:'set'|'segment'|'content';
@@ -159,8 +159,8 @@ function useLegacySetOutput(session:RehearsalSession,roomId:string|null,sources:
     const timer=setInterval(()=> {if(inFlight.current)return;void ipc.liveSetStatus().then(status=>{if(stopped)return;if(generation.current!==status.generation){media.current.clear();warmed.current='';}generation.current=status.generation;if(status.lease && !owner.current){media.current.clear();owner.current=status.lease;revision.current=Math.max(revision.current,status.revision);setActive(true);}else if(status.lease!==owner.current){owner.current=null;setActive(false);}}).catch(()=>{});},1000);
     return()=>{stopped=true;clearInterval(timer);};
   },[enabled]);
-  return {framing,frame:(slot,value)=>{const next={...framing,[slot]:value};setFraming(next);onFraming?.(next);},active,busy,error,bindings,sources,apply,returnToRoom,bind:(slot,source)=>{
-    const next={...bindings};if(source)next[slot]=source;else delete next[slot];setBindings(next);onBindings?.(next);
+  return {framing,frame:(slot,value)=>{const next={...latest.current.framing,[slot]:value};latest.current.framing=next;setFraming(next);onFraming?.(next);},active,busy,error,bindings,sources,apply,returnToRoom,bind:(slot,source)=>{
+    const next={...latest.current.bindings};if(source)next[slot]=source;else delete next[slot];latest.current.bindings=next;setBindings(next);onBindings?.(next);
   }};
 }
 

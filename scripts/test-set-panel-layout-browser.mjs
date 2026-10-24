@@ -15,8 +15,8 @@ try {
   (D.createRoot??D.default.createRoot)(host.querySelector('.rm-panel-body')).render((R.createElement??R.default.createElement)(SetControlsPanel,{session:window.panelSession,onChange:()=>{},output:{renderer:'native',active:true,busy:false,error:'',bindings:{},framing:{},sources:{items:[]},bind:()=>{},frame:()=>{},apply:async()=>{},returnToRoom:async()=>true}}));
  });
  const bounds=()=>page.evaluate(()=>['.set-fixed-playback','.set-run','.set-participation','.set-reference'].map(s=>{const r=document.querySelector(s).getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height};}));
- await page.getByRole('button',{name:'Start',exact:true}).click();await page.waitForTimeout(100);const running=await bounds();
- await page.getByRole('button',{name:'Exit',exact:true}).click();await page.waitForTimeout(100);const prepared=await bounds();assert.deepEqual(prepared,running,'Start and Exit preserve every column and transport rectangle');
+ await page.locator('.set-mode-action').click();await page.waitForTimeout(100);const running=await bounds();
+ await page.getByRole('button',{name:'Stop run',exact:true}).click();await page.waitForTimeout(100);const prepared=await bounds();assert.deepEqual(prepared,running,'Start and Stop preserve every column and transport rectangle');
  assert.equal(await page.locator('.set-run-current-label').innerText(),await page.evaluate(()=>window.panelSession.package.show.phases.find(p=>p.id===window.panelSession.snapshot().show.phase).label));
  const sections=page.locator('.set-sections > *');assert.equal(await sections.count(),3);const columns=await bounds();assert(columns[1].x<columns[2].x&&columns[2].x<columns[3].x);assert.equal(columns[1].y,columns[2].y);assert.equal(columns[2].y,columns[3].y);
  for(const height of [600,460,360,300]){
@@ -40,5 +40,5 @@ try {
   return nodes.map(n=>({top:n.scrollTop,left:n.scrollLeft}));
  });assert(scroll.every(n=>n.top===0&&n.left===0),'minimized bar must not scroll in either direction');
  await page.getByRole('button',{name:'Set actions',exact:true}).click();assert(await page.locator('.set-actions-popover').evaluate(el=>el.matches(':popover-open')));
- console.log('PASS: identical prepared/rehearsal geometry, three merged sections, and compact toolbar remains bounded with 20 extra layouts');
+ console.log('PASS: identical prepared/running geometry, three merged sections, and compact toolbar remains bounded with 20 extra layouts');
 }finally{await browser.close();}
