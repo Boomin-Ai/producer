@@ -69,3 +69,6 @@ The combined rundown matches the requested structure: Show run and mode header, 
 
 
 The rundown now prioritizes segment visibility over its summary: tighter row/header spacing and a compact title. In short cards (300px content height or less), the duplicate title/up-next summary is hidden; the current segment remains highlighted in the list. Browser regression checks use seven segments and verify that the list consumes over 55% of card height, shows at least four complete rows in tested short docks, and all seven at dock heights of 460px and above. Narrow panels receive a bounded rundown height rather than collapsing under size containment.
+
+
+The three control cards now use Producer's shared surface, line, text and accent tokens. Segment controls and Sources have consistent card padding; heading, layout selector and actions have explicit spacing. Nested source-card paint is removed, and playback/status controls use existing primary/red/amber tokens. Browser checks assert matching card colors/borders, no gradients, internal padding and spacing between the selector and actions, while retaining the geometry/overflow checks.

@@ -25,6 +25,9 @@ try {
   assert(list.fraction>.55,JSON.stringify({height,...list}));assert(list.visible>=4,JSON.stringify({height,...list}));if(height>=460)assert.equal(list.visible,7);
  }
  await page.evaluate(()=>document.querySelector('.rm-dock-bottom').style.height='460px');await page.waitForTimeout(100);
+ const cards=await page.evaluate(()=>['.set-run','.set-participation','.set-reference'].map(selector=>{const el=document.querySelector(selector),s=getComputedStyle(el);return {background:s.backgroundColor,image:s.backgroundImage,border:s.borderTopColor,padding:parseFloat(s.paddingLeft)};}));
+ assert.equal(new Set(cards.map(c=>c.background)).size,1,'cards share the room surface');assert(cards.every(c=>c.image==='none'));assert.equal(new Set(cards.map(c=>c.border)).size,1);assert(cards[1].padding>=12&&cards[2].padding>=12,'control and source cards have internal padding');
+ const controlGap=await page.locator('.set-participation').evaluate(el=>{const picker=el.querySelector('.set-panel-layout-picker').getBoundingClientRect(),actions=el.querySelector('.set-segment-actions').getBoundingClientRect();return actions.top-picker.bottom;});assert(controlGap>=10,'layout and actions have visible separation');
  await page.screenshot({path:'/private/tmp/producer-set-panel-expanded.png'});
  await page.evaluate(()=>{const dock=document.querySelector('.rm-dock-bottom');dock.classList.add('slim');dock.style.height='56px';});
  for(const width of [1400,1024,800,600,450]){
