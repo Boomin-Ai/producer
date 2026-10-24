@@ -15,10 +15,10 @@ export function SetsDevelopmentRoom() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      const smoke = await invoke<boolean>("live_set_v2_smoke_enabled");
+      const name = smoke ? "Producer dev smoke" : "Producer dev";
       const rooms = await ipc.liveListRooms();
-      const room =
-        rooms.find((r) => r.name === "Producer dev") ??
-        (await ipc.liveCreateRoom("Producer dev"));
+      const room = rooms.find((r) => r.name === name) ?? (await ipc.liveCreateRoom(name));
       if (!cancelled) setRoom(room);
     })().catch((e) => setError(String(e)));
     return () => {

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import {listenLiveEvents} from "../../lib/ipc";
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 async function until<T>(read: () => T | Promise<T>, label: string): Promise<NonNullable<T>> {
   for (let i=0;i<600;i++) { const result=await read(); if(result) return result as NonNullable<T>; await sleep(50); }
@@ -14,6 +15,7 @@ export async function roomSmoke() {
  const events: unknown[]=[];
  try {
   await until(()=>button('Set settings'),'normal room');
+  await until(()=>button('Record'),'room configuration applied');
   async function choose(name: string) {
    button('Set settings')!.click();
    const picker=await until(()=>document.querySelector<HTMLSelectElement>('select[aria-label="Choose set"]'),'set picker');
@@ -27,14 +29,19 @@ export async function roomSmoke() {
   }
   const editor=await choose('Head to Head');
   const card=await until(()=>editor.querySelector<HTMLElement>('.set-source-card'),'source card');
+  const priorSource=card.querySelector<HTMLSelectElement>('select[aria-label$=" source"]')?.value;
+  const thumbIds=new Set<string>();
+  const stopThumbs=await listenLiveEvents(event=>{if(event.type==='guest_thumbs')for(const frame of event.thumbs)if(frame.jpeg)thumbIds.add(frame.id);});
   button('Add source here',card)!.click();
   const kind=await until(()=>card.querySelector<HTMLSelectElement>('select[aria-label$="new source type"]'),'inline source creator');
   select(kind,'color');await sleep(100);button('Add and assign',card)!.click();
-  const assigned=await until(()=> {const s=card.querySelector<HTMLSelectElement>('select[aria-label$=" source"]');return s?.value;},'source assignment');
+  const assigned=await until(()=> {const s=card.querySelector<HTMLSelectElement>('select[aria-label$=" source"]');return s?.value&&s.value!==priorSource?s.value:undefined;},'source assignment');
   const snapshot=await invoke<{sources:{items:Array<{id:string;visible:boolean}>}}>('live_engine_status');
   const sources=snapshot.sources;
   if(sources.items.find(s=>s.id===assigned)?.visible!==false) throw Error('Inline source was not created hidden');
-  events.push({inlineSourceCreatedAndAssigned:true,hiddenInRoom:true});
+  await until(()=>thumbIds.has(assigned),'hidden source native preview frame');
+  stopThumbs();
+  events.push({inlineSourceCreatedAndAssigned:true,hiddenInRoom:true,nativeSourcePreviewFrame:true});
   for(const s of editor.querySelectorAll<HTMLSelectElement>('.set-source-card > select')) select(s,assigned);
   button('Close preview',editor)!.click();
   let revision=0;

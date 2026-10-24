@@ -290,6 +290,7 @@ pub fn run() {
             live::commands::live_release_idle_room,
             live::commands::live_permissions,
             live::commands::live_set_thumb_rate,
+            live::commands::live_set_preview_sources,
             live::commands::live_set_program_thumb,
             live::commands::ui_log,
             live::commands::ui_diagnostics,

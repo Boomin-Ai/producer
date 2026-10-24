@@ -154,7 +154,7 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
 
       </div>}
       <div className="set-toolbar-tools">
-        <RehearsalPreview doc={doc} state={state} outputActive={output?.active} editor={editor} sources={visibleSlots.size ? sourceEditor : undefined} />
+        <RehearsalPreview doc={doc} state={state} output={output} outputActive={output?.active} editor={editor} sources={visibleSlots.size ? sourceEditor : undefined} />
       </div>
     </header>
     {output?.error && <div role="alert" className="set-error">{output.error} <button disabled={output.busy&&!output.active} onClick={()=>void output.apply()}>Retry update</button></div>}

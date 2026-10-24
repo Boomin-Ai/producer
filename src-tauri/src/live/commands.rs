@@ -482,6 +482,14 @@ async fn ui_log_tail(app: tauri::AppHandle, max_bytes: Option<u64>) -> EngineRes
 }
 
 #[tauri::command]
+pub fn live_set_preview_sources(state: State<'_, AppState>, lease: String, ids: Vec<String>) -> Result<(),String> {
+    if lease.is_empty() || lease.len()>64 || ids.len()>16 || ids.iter().any(|id|id.is_empty()||id.len()>128) {
+        return Err("Invalid source preview subscription".into());
+    }
+    state.live.set_preview_sources(lease,ids); Ok(())
+}
+
+#[tauri::command]
 pub async fn live_set_thumb_rate(state: State<'_, AppState>, fps: u32) -> EngineResult<()> {
     state.live.set_thumb_rate(fps);
     Ok(())

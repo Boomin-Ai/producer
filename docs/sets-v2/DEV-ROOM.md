@@ -25,7 +25,6 @@ The existing 16 runtime integration checks and browser poll checks cover shared 
 
 ## Remaining refactor work
 
-- The native portrait preview appeared washed out in an app screenshot, while the independent portrait output readback had correct colors. Resolve the display-only discrepancy before visual sign-off.
 
 - Integrate shared audience/data channels into the normal room presentation path; current snapshots still require preparation for visual changes.
 - Retain/cache graphics and media across content changes, predict upcoming segments and measure frame times. No speed improvement is claimed yet.
@@ -35,3 +34,12 @@ The existing 16 runtime integration checks and browser poll checks cover shared 
 - Test physical sources and Windows/Linux support before broader rollout. Current native evidence is Apple Silicon/Metal only.
 
 No production deployment has occurred. HTML-to-canvas remains out of scope.
+
+
+## Source previews inside Set edit — 2026-10-24
+
+The editor now subscribes to the actual assigned room sources, including sources hidden from the ordinary scene. Existing thumbnail capture produces bounded 256×144 previews at a minimum requested cadence of 8 fps while an editor subscription exists. The sandboxed preview restores the source aspect ratio and applies per-slot framing, masks, opacity and grayscale. These are configuration previews; final output keeps its native resolution.
+
+Reassignment clears the old source picture. Empty slots and sources awaiting frames show explicit states. Closing the editor unsubscribes its lease; preview activation does not add a source to the room scene or change mixer settings. Multiple preview leases coexist with guest and program-thumbnail demand.
+
+Verification: `npm run test:set-source-preview-browser` checks decoded source images, restored portrait proportions, reassignment and subscription cleanup. The 19 presentation runtime checks and TypeScript checks pass. The rebuilt app smoke confirms a hidden source produces native preview frames; see `native/source-preview-ui-proof.json`. Smoke tests now use their own local room so the normal dev room's source assignments are preserved.

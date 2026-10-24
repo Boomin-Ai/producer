@@ -1,4 +1,6 @@
 import {invoke} from '@tauri-apps/api/core';
+import {listenLiveEvents} from '../../lib/ipc';
+import type {SetOutputControls} from './useSetOutput';
 import {AssetTransport} from './assetTransport';
 import { useEffect, useRef, useState } from 'react';
 import lottie from './vendor/lottie-light.js?raw';
@@ -9,10 +11,12 @@ import { outputProjection } from './projection';
 import type { RehearsalState } from './rehearsal';
 import type { PresentationPackage } from './schema';
 
-export function SetPreview({ doc, state }: { doc: PresentationPackage; state: RehearsalState }) {
+export function SetPreview({ doc, state, output }: { doc: PresentationPackage; state: RehearsalState; output?:SetOutputControls }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const port = useRef<MessagePort | null>(null);
-  const latest = useRef({ doc, state }); latest.current = { doc, state };
+  const latest = useRef({ doc, state, output }); latest.current = { doc, state, output };
+  const previewLease=useRef(crypto.randomUUID());
+  const frames=useRef<Record<string,string>>({});
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
   const source = useRef('');
@@ -26,8 +30,9 @@ export function SetPreview({ doc, state }: { doc: PresentationPackage; state: Re
     const ticket=++sequence.current;
     if (!port.current) return;
     try {const projection=outputProjection(latest.current.doc,latest.current.state);
+      const frameSlots=(n:typeof projection.root)=>{if(n.slotId&&latest.current.output?.framing[n.slotId])n.framing=latest.current.output.framing[n.slotId];n.children.forEach(frameSlots);};frameSlots(projection.root);
       for(const [id,a] of Object.entries(projection.assets??{})){if(a.data.startsWith('producer-media:')){let url=localUrls.current.get(a.data);if(!url){url=invoke<string>('set_media_resolve',{id:a.data});localUrls.current.set(a.data,url);}try{projection.assets![id]={...a,data:await url};}catch(e){localUrls.current.delete(a.data);throw e;}}}
-      if(ticket!==sequence.current||!port.current)return;port.current.postMessage({type:'output',projection:media.current.compact(projection),assetIds:Object.keys(latest.current.doc.set.assets??{})});media.current.acknowledge(projection);setError('');}
+      if(ticket!==sequence.current||!port.current)return;port.current.postMessage({type:'output',slotSources:latest.current.output?Object.fromEntries(Object.entries(latest.current.output.bindings).map(([slot,id])=>{const source=latest.current.output!.sources.items?.find(s=>s.id===id);return [slot,{id,width:source?.src_w??0,height:source?.src_h??0}];})):undefined,sourceFrames:frames.current,projection:media.current.compact(projection),assetIds:Object.keys(latest.current.doc.set.assets??{})});media.current.acknowledge(projection);setError('');}
     catch (e) { setError(e instanceof Error ? e.message : 'Preview unavailable.'); }
   };
   useEffect(() => {
@@ -47,7 +52,24 @@ export function SetPreview({ doc, state }: { doc: PresentationPackage; state: Re
     ref.current?.contentWindow?.postMessage('presentation.probe', '*');
     return () => { window.clearTimeout(timeout); window.removeEventListener('message', onMessage); port.current?.close(); port.current = null; };
   }, []);
-  useEffect(()=>{void send();}, [doc, state]);
+  useEffect(()=>{void send();}, [doc, state, output?.bindings, output?.framing, output?.sources]);
+  const visible = new Set<string>();
+  const collect=(node:ReturnType<typeof outputProjection>['root'])=>{if(node.slotId&&output?.bindings[node.slotId])visible.add(output.bindings[node.slotId]);node.children.forEach(collect);};
+  collect(outputProjection(doc,state).root);
+  const wanted=JSON.stringify([...visible].sort());
+  useEffect(()=>{
+    if(!output)return;
+    let disposed=false,unlisten:(()=>void)|undefined;
+    const ids=JSON.parse(wanted) as string[];
+    frames.current=Object.fromEntries(Object.entries(frames.current).filter(([id])=>ids.includes(id)));
+    void listenLiveEvents(event=>{
+      if(disposed||event.type!=='guest_thumbs')return;
+      const next=Object.fromEntries(event.thumbs.filter(t=>ids.includes(t.id)).map(t=>[t.id,t.jpeg]));
+      Object.assign(frames.current,next);
+      if(Object.keys(next).length)port.current?.postMessage({type:'sourceFrames',frames:next});
+    }).then(stop=>{if(disposed)stop();else {unlisten=stop;void invoke('live_set_preview_sources',{lease:previewLease.current,ids}).catch(e=>{if(!disposed)setError(String(e));});}}).catch(e=>{if(!disposed)setError(String(e));});
+    return()=>{disposed=true;unlisten?.();void invoke('live_set_preview_sources',{lease:previewLease.current,ids:[]}).catch(()=>{});};
+  },[wanted,!!output]);
   const layout = doc.set.layouts.find(l => l.id === state.layoutId)!;
   const previewMode = state.workspaceMode === 'prepare' ? 'set' : 'rehearsal';
   return <div className="set-preview" style={{ aspectRatio: `${layout.width}/${layout.height}` }} aria-label={`${previewMode === 'set' ? 'Set' : 'Rehearsal'} output preview`}>

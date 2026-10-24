@@ -4,6 +4,7 @@
   const canvas = document.getElementById('canvas');
   const style = document.getElementById('motion');
   let assets={};
+  let slotSources,sourceFrames={};
   let width = 1280, height = 720, port, sequence = 0;
   let entries = new Map(),previousLayer;
   let timeline,motionReady=false;
@@ -42,6 +43,26 @@
   }
   requestAnimationFrame(animate);
   const px = new Set(['inset','left','top','right','bottom','width','height','gap','padding','fontSize','borderRadius','minHeight','maxWidth','wordSpacing']);
+  function liveSlot(entry) {
+    if(slotSources===undefined||!entry.slotNode)return;
+    const node=entry.slotNode,el=entry.element,target=entry.previewShape||el;
+    el.setAttribute('aria-label',node.slotLabel+' source preview');
+    const binding=slotSources[node.slotId],jpeg=binding&&sourceFrames[binding.id];
+    let image=target.querySelector('img[data-live-source]');
+    if(!binding||!jpeg){
+      image?.remove();
+      if(!target.querySelector('[data-live-status]')) {target.replaceChildren();const label=document.createElement('span');label.dataset.liveStatus='';label.textContent=binding?'Waiting for video…':'Empty slot';target.appendChild(label);}
+      return;
+    }
+    if(!image){target.replaceChildren();image=document.createElement('img');image.dataset.liveSource='';image.alt=node.slotLabel;image.style.cssText='position:absolute;max-width:none;max-height:none;object-fit:fill;';target.appendChild(image);}
+    if(image.dataset.frame!==jpeg){image.src='data:image/jpeg;base64,'+jpeg;image.dataset.frame=jpeg;}
+    const w=target.clientWidth||el.clientWidth,h=target.clientHeight||el.clientHeight;
+    const sw=binding.width||16,sh=binding.height||9,framing=node.framing||{mode:'fill',x:.5,y:.5};
+    const scale=framing.mode==='fit'?Math.min(w/sw,h/sh):Math.max(w/sw,h/sh);
+    image.style.width=sw*scale+'px';image.style.height=sh*scale+'px';image.style.left=(w-sw*scale)*(framing.x??.5)+'px';image.style.top=(h-sh*scale)*(framing.y??.5)+'px';
+    image.style.filter='grayscale('+(node.appearance?.grayscale||0)+')';
+    target.style.overflow='hidden';if(!target.style.position)target.style.position='relative';
+  }
   function fit() {
     canvas.style.width = width + 'px'; canvas.style.height = height + 'px';
     canvas.style.transform = 'scale(' + Math.min(innerWidth / width, innerHeight / height) + ')';
@@ -124,6 +145,7 @@
       el.style.overflow='hidden';
     }
     if (node.type === 'slot') {
+      entry.slotNode=node;
       el.dataset.slot = node.slotId;
       el.textContent = '';
       el.setAttribute('aria-label', node.slotLabel + (surface === 'preview' ? ' simulated source' : ' source slot'));
@@ -152,6 +174,7 @@
       }
     }
     if (el.parentNode !== parent) parent.appendChild(el);
+    if(node.type==='slot'&&surface==='preview')liveSlot(entry);
     // append also establishes declared order when an existing keyed child moves.
     for (const child of node.children) { sync(child, el, used, surface); el.appendChild(entries.get(child.id).element); }
   }
@@ -162,7 +185,13 @@
     if (port) port.close();
     port = event.ports[0];
     port.onmessage = ({ data }) => {
+      if(data?.type==='sourceFrames') {
+        Object.assign(sourceFrames,data.frames);
+        for(const entry of entries.values())liveSlot(entry);
+        return;
+      }
       if (!data || data.type !== 'output' || !data.projection) return;
+      slotSources=data.slotSources;sourceFrames={...sourceFrames,...data.sourceFrames};
       try {
         if(data.transportOnly){
           timeline=data.projection.timeline;
@@ -195,6 +224,7 @@
             const size = Math.min(r.width, r.height) / scale;
             e.previewShape.style.width = size + 'px'; e.previewShape.style.height = size + 'px';
           }
+          for(const entry of entries.values())liveSlot(entry);
           const slots = [...entries.values()].filter(e => e.type === 'slot').map(e => {
             const r = e.element.getBoundingClientRect();
             return { nodeId: e.element.dataset.node, slotId: e.element.dataset.slot,

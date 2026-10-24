@@ -773,6 +773,13 @@ impl Live {
         Err("live engine not bundled in this build".into())
     }
 
+    pub fn set_preview_sources(&self, lease: String, ids: Vec<String>) {
+        #[cfg(have_engine)]
+        if let Some(h)=self.handle.as_ref(){h.set_preview_sources(lease,ids);}
+        #[cfg(not(have_engine))]
+        let _=(lease,ids);
+    }
+
     #[cfg(have_engine)]
     pub fn set_thumb_rate(&self, fps: u32) {
         if let Some(h) = self.handle.as_ref() {

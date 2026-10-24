@@ -2283,6 +2283,7 @@ pub struct ThumbTarget {
     /// OWNED reference (obs_source_get_ref by the publisher); released when
     /// the target list is replaced. The graphics callback may use it freely.
     pub src: *mut ffi::obs_source_t,
+    preview_active: bool,
 }
 unsafe impl Send for ThumbTarget {}
 
@@ -2306,6 +2307,8 @@ pub struct ThumbHub {
     /// lib/monitorFeed.ts). Adds the `program` target — the output source
     /// itself — at PROGRAM_THUMB_FPS even with the guests panel hidden.
     pub program_wanted: std::sync::atomic::AtomicBool,
+    pub preview_wanted: std::sync::atomic::AtomicBool,
+    pub preview_requests: std::sync::Mutex<std::collections::BTreeMap<String, Vec<String>>>,
     pub program_portrait: std::sync::atomic::AtomicBool,
     frame_no: std::sync::atomic::AtomicU32,
     rings: std::sync::Mutex<std::collections::HashMap<String, ThumbRing>>,
@@ -2325,6 +2328,8 @@ impl ThumbHub {
             targets: std::sync::Mutex::new(Vec::new()),
             fps: std::sync::atomic::AtomicU32::new(0),
             program_wanted: std::sync::atomic::AtomicBool::new(false),
+            preview_wanted: std::sync::atomic::AtomicBool::new(false),
+            preview_requests: std::sync::Mutex::new(Default::default()),
             program_portrait: std::sync::atomic::AtomicBool::new(false),
             frame_no: std::sync::atomic::AtomicU32::new(0),
             rings: std::sync::Mutex::new(std::collections::HashMap::new()),
@@ -2359,6 +2364,16 @@ impl ThumbHub {
         {
             wanted.push((cam.id.as_str(), cam.src));
         }
+        let requests=self.preview_requests.lock().unwrap();
+        for extra in &scene.extras {
+            if extra.kind != "mic" && !extra.src.is_null()
+                && requests.values().any(|ids|ids.contains(&extra.id))
+                && !wanted.iter().any(|(id,_)|*id==extra.id) {
+                wanted.push((extra.id.as_str(),extra.src));
+            }
+        }
+        let preview_ids: std::collections::HashSet<String>=requests.values().flatten().cloned().collect();
+        drop(requests);
         // The program: whatever sits on output channel 0 (the transition
         // wrapping the scene). obs_get_output_source hands back its OWN ref;
         // the loop below takes another, so this one is released at the end.
@@ -2400,7 +2415,7 @@ impl ThumbHub {
                 && cur
                     .iter()
                     .zip(wanted.iter())
-                    .all(|(a, (id, src))| a.id == *id && a.src == *src)
+                    .all(|(a, (id, src))| a.id == *id && a.src == *src && a.preview_active == preview_ids.contains(*id))
             {
                 release_program();
                 return;
@@ -2416,9 +2431,12 @@ impl ThumbHub {
                     // CEF WasHidden(true) — no frames, texture torn down, and
                     // its video_render body is `if (texture)`: silent black.
                     ffi::obs_source_inc_showing(r);
+                    let preview_active=preview_ids.contains(id);
+                    if preview_active {ffi::obs_source_inc_active(r);}
                     next.push(ThumbTarget {
                         id: id.to_string(),
                         src: r,
+                        preview_active,
                     });
                 }
             }
@@ -2426,6 +2444,7 @@ impl ThumbHub {
         let old = std::mem::replace(&mut *self.targets.lock().unwrap(), next);
         unsafe {
             for t in old {
+                if t.preview_active {ffi::obs_source_dec_active(t.src);}
                 ffi::obs_source_dec_showing(t.src);
                 ffi::obs_source_release(t.src);
             }
@@ -2448,6 +2467,7 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
     {
         fps = fps.max(PROGRAM_THUMB_FPS);
     }
+    if hub.preview_wanted.load(std::sync::atomic::Ordering::Relaxed) { fps=fps.max(8); }
     if fps == 0 {
         return;
     }

@@ -751,6 +751,7 @@ pub enum Command {
         action: crate::dj::Action,
         reply: std::sync::mpsc::Sender<Result<crate::dj::Status, String>>,
     },
+    SetPreviewSources { lease: String, ids: Vec<String> },
     SetThumbRate {
         fps: u32,
     },
@@ -899,6 +900,7 @@ pub enum Command {
 fn cmd_name(c: &Command) -> &'static str {
     match c {
         Command::Dj { .. } => "Dj",
+        Command::SetPreviewSources { .. } => "SetPreviewSources",
         Command::SetThumbRate { .. } => "SetThumbRate",
         Command::SetProgramThumb { .. } => "SetProgramThumb",
         Command::GoLive { .. } => "GoLive",
@@ -1380,6 +1382,10 @@ impl LiveHandle {
     }
 
     /// Demand control (docs/THUMB-PIPELINE-V2.md): 0 = previews off.
+    pub fn set_preview_sources(&self, lease: String, ids: Vec<String>) {
+        let _ = self.cmd.send(Command::SetPreviewSources { lease, ids });
+    }
+
     pub fn set_thumb_rate(&self, fps: u32) {
         let _ = self.cmd.send(Command::SetThumbRate { fps });
     }
@@ -3062,6 +3068,14 @@ pub fn start(
                                 Err(e) => sink(&LiveEvent::EngineError { message: e }),
                             }
                         }
+                    }
+                    Ok(Command::SetPreviewSources { lease, ids }) => {
+                        let mut requests=hub_engine.preview_requests.lock().unwrap();
+                        if ids.is_empty() { requests.remove(&lease); }
+                        else if requests.contains_key(&lease) || requests.len()<8 { requests.insert(lease,ids); }
+                        hub_engine.preview_wanted.store(!requests.is_empty(),std::sync::atomic::Ordering::Relaxed);
+                        drop(requests);
+                        if let Some(g)=scene.as_ref(){hub_engine.publish_targets(g);}
                     }
                     Ok(Command::SetThumbRate { fps }) => {
                         hub_engine
