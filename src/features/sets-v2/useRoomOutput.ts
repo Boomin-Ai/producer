@@ -72,6 +72,17 @@ export function useRoomOutput(
   const [preparationVersion,notifyPreparation]=useState(0);
   const [canvas,setCanvas]=useState({width:1280,height:720});
   const canvasRef=useRef(canvas);
+  const canvasReadyRoom=useRef<string|null|undefined>(undefined);
+  const [canvasReady,setCanvasReady]=useState(false);
+  const waitForCanvas=async()=>{
+    const waitingRoom=latest.current.roomId;
+    for(let i=0;i<600;i++){
+      if(!alive.current||!latest.current.enabled||latest.current.roomId!==waitingRoom)return false;
+      if(canvasReadyRoom.current===latest.current.roomId)return true;
+      await sleep(25);
+    }
+    throw Error('Room canvas settings are not ready');
+  };
   const [draftCandidate,setDraftCandidate]=useState<{doc:import('../presentation/schema').PresentationPackage;bindings:Record<string,string>;framing:Record<string,SlotFraming>}>();
   const [retryVersion,setRetryVersion]=useState(0);
   const bank=useRef<PreparedScenes|null>(null);
@@ -100,7 +111,7 @@ export function useRoomOutput(
   const candidates=useMemo(()=>draftCandidate?specsFor(new RehearsalSession(draftCandidate.doc,undefined,'prepare'),draftCandidate.bindings,draftCandidate.framing):[],[draftCandidate,canvas,roomId]);
   const specsRef=useRef(inventory);specsRef.current=inventory;
   useEffect(()=>{
-    if(!enabled)return;let cancelled=false;
+    if(!enabled||!canvasReady||canvasReadyRoom.current!==roomId)return;let cancelled=false;
     const authoredSpecs=[...candidates,...inventory];
     // Prepare each design in its own output orientation; don't allocate a second
     // fitted copy of every portrait layout on the landscape renderer.
@@ -110,12 +121,13 @@ export function useRoomOutput(
     const prioritized=[...specs].sort((a,b)=>Number(b.layout===state.layoutId)-Number(a.layout===state.layoutId));
     void bank.current!.retain(specs).then(()=>bank.current!.preload(prioritized,()=>cancelled));
     return()=>{cancelled=true;};
-  },[enabled,inventory,candidates,retryVersion]);
+  },[enabled,canvasReady,inventory,candidates,retryVersion]);
   const bankDisposal=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
   useEffect(()=>{clearTimeout(bankDisposal.current);return()=>{bankDisposal.current=setTimeout(()=>bank.current?.dispose(),0);};},[]);
   useEffect(()=>{
     if(!enabled)return;
     let cancelled=false,observed=0,stop:(()=>void)|undefined;
+    canvasReadyRoom.current=undefined;setCanvasReady(false);
     const resize=(height:number)=>{
       if(cancelled||height===canvasRef.current.height)return;
       const next={height,width:Math.round(height*16/9)};
@@ -127,9 +139,11 @@ export function useRoomOutput(
       if(cancelled||version!==observed)return;
       const changed=cacheGeneration.current!==undefined&&cacheGeneration.current!==room.generation;
       cacheGeneration.current=room.generation;generation.current=room.generation;
-      const height=engine.video_height??720;
+      if(engine.engine_ready===false||!engine.video_height)return;
+      const height=engine.video_height;
       if(height!==canvasRef.current.height)resize(height);
       else if(changed)invalidateRoom();
+      canvasReadyRoom.current=roomId;setCanvasReady(true);
     };
     void listenLiveEvents(event=>{
       if(cancelled||event.type!=="video_changed")return;
@@ -137,7 +151,7 @@ export function useRoomOutput(
     }).then(unsubscribe=>{if(cancelled)unsubscribe();else stop=unsubscribe;}).catch(()=>{});
     void refresh().catch(()=>{});
     const timer=setInterval(()=>{void refresh().catch(()=>{});},1500);
-    return()=>{cancelled=true;clearInterval(timer);stop?.();};
+    return()=>{cancelled=true;canvasReadyRoom.current=undefined;clearInterval(timer);stop?.();};
   },[enabled,roomId]);
   const layoutReadiness=Object.fromEntries(inventory.map(spec=>[spec.layout,bank.current!.readiness(spec)]));
   void preparationVersion;
@@ -154,7 +168,7 @@ export function useRoomOutput(
   };
   const signature = (p = project(), current = latest.current) => {
     return JSON.stringify({
-      canvas,
+      canvas:canvasRef.current,
       root: p.root,
       assets: media.current.signature(p).assets,
       tracks: p.timeline?.tracks,
@@ -164,6 +178,9 @@ export function useRoomOutput(
   };
   const apply = async () => {
     if (!latest.current.enabled || flight.current) return;
+    const selectedSession=latest.current.session;
+    try { if(!await waitForCanvas()||flight.current||latest.current.session!==selectedSession)return; }
+    catch(e){if(alive.current)setError(String(e));return;}
     const ticket = ++operation.current,
       current = latest.current;
     flight.current = true;
@@ -184,7 +201,7 @@ export function useRoomOutput(
       const full=project();
       const fingerprint=signature(full,current),layout=current.session.snapshot().layoutId;
       const base=specsRef.current.find(s=>s.layout===layout);if(!base)throw Error('Selected layout is not in preparation inventory');
-      const spec:SceneSpec={...base,projection:full,phase:snapshot.show.phase,target:{id:'program',orientation:'landscape',...canvas,scaling:'contain'}};
+      const spec:SceneSpec={...base,projection:full,phase:snapshot.show.phase,target:{id:'program',orientation:'landscape',...canvasRef.current,scaling:'contain'}};
       timing('cache-request');
       await bank.current!.take(spec,async(entry,candidateRevision)=>{
       if(ticket!==operation.current||current.session.snapshot().layoutId!==layout||current.session.snapshot().show.phase!==snapshot.show.phase||signature()!==fingerprint)return;
@@ -287,7 +304,7 @@ export function useRoomOutput(
     };
   }, [roomId]);
   useEffect(() => {
-    if (!enabled || busy || error) return;
+    if (!enabled || !canvasReady || busy || error) return;
     // Changes to the selected set flow through the same normal Show/Next controls.
     // Choosing an unconfigured set opens its existing source editor first.
     if (!active && !(selectToShow && Object.keys(bindings).length)) return;
@@ -303,6 +320,7 @@ export function useRoomOutput(
     return () => clearTimeout(timer);
   }, [
     enabled,
+    canvasReady,
     busy,
     error,
     active,
@@ -327,6 +345,7 @@ export function useRoomOutput(
     projection: import("../presentation/projection").OutputProjection,
     layoutId?:string,
   ) => {
+    if(!await waitForCanvas())return;
     const current = latest.current;
     const portraitKey=current.session.package.id+":"+(layoutId??current.session.snapshot().layoutId);
     const ticket = ++portraitOperation.current;

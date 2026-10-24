@@ -29,7 +29,7 @@ export class PreparedScenes {
  private sentAssets=new Map<string,Map<string,string>>();
  private outputs=new Set<string>();
  private trace:string[]=[];
- debug(){return {working:this.working,abort:this.abort,queue:this.jobs.map(j=>j.priority),trace:this.trace,entries:[...this.entries.values()].map(e=>({layout:e.spec.layout,key:e.key,state:e.state}))};}
+ debug(){return {working:this.working,abort:this.abort,queue:this.jobs.map(j=>j.priority),trace:this.trace,entries:[...this.entries.values()].map(e=>({layout:e.spec.layout,target:e.spec.target,key:e.key,state:e.state}))};}
  private log(message:string){this.trace=[...this.trace.slice(-15),message];}
  private entries=new Map<string,Entry>();private jobs:Job[]=[];private working=false;private abort=false;private background=false;private disposed=false;private revision=0;
  constructor(private send:(request:Record<string,unknown>)=>Promise<NativeSceneStatus>,private changed:()=>void,private compile=compileRoomScene){debugSessions.add(this);}

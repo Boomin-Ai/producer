@@ -1,0 +1,15 @@
+# Grand Arena apply failure: startup resolution
+
+The editor requested 1920×1080 from the saved room video mode. In debug builds, `PRODUCER_DEV_MODULE_CONFIG_DIR` isolated OBS/CEF plugin caches but also redirected the renderer’s startup video-mode read. An empty cache directory defaulted native video to 1280×720. Engine status still read 1080p from the real app profile. Applying a correctly compiled 1080p set therefore failed native output-size validation. Retrying, or changing set artwork, could not resolve the conflicting settings.
+
+Select the saved video mode from the app profile before redirecting the plugin cache. Pass that mode into native bootstrap explicitly. Video changes continue persisting to the same app profile; the isolated cache remains independent. Keep native validation strict and include requested/native dimensions in diagnostic errors.
+
+Regression setup: the real dev app profile has `video.json` set to 1080/30, while the isolated module-cache directory has no `video.json`. Launch the opt-in apply probe against the existing dev room and its camera source. It selects Grand Arena, applies it, checks the native rendered revision, and waits for every declared layout to become ready. Normal `roomInspect` remains passive.
+
+A second startup race let the editor preload or publish its initial 1280×720 placeholder before engine discovery finished. Preparation and automatic publishing now wait for real canvas metadata; explicit publishing waits for the same readiness. A retained callback reads the current canvas reference rather than its pre-discovery render closure. This initial discovery gate does not add a delay to ready segment changes. Room/session cancellation remains effective while waiting.
+
+Verification: `node scripts/test-room-resolution-browser.mjs` holds engine metadata pending while an explicit early apply runs, confirms zero native preloads, then releases a saved 1080p canvas and requires a successful rendered output. The pre-fix adapter fails with four premature preloads. The fixed adapter passes and continues through 1080→720→1080 changes, including a missed event recovered by polling. The real room adapter preparation test and TypeScript checks also pass.
+
+The rebuilt dev app was restarted with saved 1080p settings and the separate cache still lacking `video.json`. Grand Arena applied with the existing physical camera. All twelve layouts reached ready state, the native program and portrait controllers confirmed rendered revisions, and the portrait frame decoded at 1080×1920. No apply errors remained. See [before/after proof](native/apply-resolution-proof.json). No personal camera images are committed.
+
+To repeat the existing-room check, close only the isolated dev app, then launch it with `PRODUCER_SETS_V2_UI_PROBE=1`, `PRODUCER_SETS_V2_APPLY_PROBE=1`, and `PRODUCER_DEV_MODULE_CONFIG_DIR` pointing to a separate plugin-cache directory. The opt-in check requires an existing camera in **Producer dev smoke**, creates no sources, and writes `sets-v2-ui-proof.json` in the isolated app profile. Omit the apply-probe flag and use `PRODUCER_SETS_V2_INSPECT=1` for passive inspection.

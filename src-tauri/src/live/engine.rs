@@ -264,18 +264,22 @@ fn windows_engine_root() -> Option<std::path::PathBuf> {
 /// reach it. bootstrap_with_config takes a &Path, not an Option, and this is
 /// the only route to None. The guard is the signature, not a runtime check.
 pub fn bootstrap() -> EngineReport {
-    bootstrap_inner(None)
+    bootstrap_inner(None, stored_video(None))
 }
 
 /// The engine as the app boots it: a real config directory, always.
 pub fn bootstrap_with_config(module_config_dir: &std::path::Path) -> EngineReport {
+    // The isolated OBS/CEF cache is not the app's video-settings profile.
+    // Resolve video from the same profile used by status and SetVideo before
+    // redirecting plugin storage, otherwise a fresh cache silently boots 720p.
+    let video_mode = stored_video(Some(module_config_dir));
     // An explicitly isolated dev renderer can run beside the installed app.
     // CEF refuses to initialize twice against the same browser cache.
     #[cfg(debug_assertions)]
     if let Ok(dir) = std::env::var("PRODUCER_DEV_MODULE_CONFIG_DIR") {
-        return bootstrap_inner(Some(std::path::Path::new(&dir)));
+        return bootstrap_inner(Some(std::path::Path::new(&dir)), video_mode);
     }
-    bootstrap_inner(Some(module_config_dir))
+    bootstrap_inner(Some(module_config_dir), video_mode)
 }
 
 /// module_config_path feeds obs_module_config_path() — obs-browser derives
@@ -326,7 +330,7 @@ pub fn persist_video(dir: &std::path::Path, h: u32, f: u32) {
     let _ = std::fs::write(dir.join("video.json"), format!("{{\"h\":{h},\"f\":{f}}}"));
 }
 
-fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport {
+fn bootstrap_inner(module_config_dir: Option<&std::path::Path>, video_mode: (u32, u32)) -> EngineReport {
     let mut report = EngineReport {
         ok: false,
         obs_version: String::new(),
@@ -483,7 +487,7 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
     // The module NAMES are the only platform difference — obs_reset_video's
     // contract is identical, so the preference/fallback shape is shared rather
     // than duplicated per platform.
-    let (boot_h, boot_f) = stored_video(module_config_dir);
+    let (boot_h, boot_f) = video_mode;
     #[cfg(target_os = "macos")]
     let (primary, primary_name) = ("libobs-metal.dylib", "metal");
     #[cfg(target_os = "windows")]

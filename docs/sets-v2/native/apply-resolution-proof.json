@@ -1,0 +1,85 @@
+{
+  "before": {
+    "reportedHeight": 1080,
+    "errors": [
+      "Some layouts could not load. Retry loading",
+      "V2 revision/output must match the current room canvas (revision 3, requested 1920x1080, native 1280x720) Retry update"
+    ],
+    "isolatedCacheHasVideoSettings": false
+  },
+  "after": {
+    "completedAt": "2026-10-24T23:23:16.633Z",
+    "errors": [],
+    "kind": "grand-arena-apply",
+    "layoutsReady": 12,
+    "ok": true,
+    "portrait": {
+      "cachedBytes": 376552488,
+      "cachedKeys": [
+        "scene-8d839c41-9e275803",
+        "scene-c306bcb9-70ac0cad",
+        "scene-79eee432-511df46c",
+        "scene-8ac52999-7ca1548d",
+        "scene-19b03933-6abbef13",
+        "scene-5f4beee5-976c6305"
+      ],
+      "clockMs": 20133.332133293152,
+      "generation": 2,
+      "paused": false,
+      "preparedRevision": 14,
+      "queued": false,
+      "ready": true,
+      "renderSerial": 5,
+      "renderedRevision": 14,
+      "transitionProgress": 1,
+      "transitioning": false,
+      "warmed": true
+    },
+    "portraitFrame": {
+      "height": 1920,
+      "width": 1080
+    },
+    "program": {
+      "cachedBytes": 364755296,
+      "cachedKeys": [
+        "scene-919c6bfc-fbfc38ee",
+        "scene-3ebcac7d-94a11ca7",
+        "scene-987f5ae2-22a7b1ca",
+        "scene-7671b78b-10d489b",
+        "scene-e029dde-3a775c6",
+        "scene-4ff36439-219464d7"
+      ],
+      "clockMs": 22866.665303707123,
+      "generation": 2,
+      "paused": false,
+      "preparedRevision": 12,
+      "queued": false,
+      "ready": true,
+      "renderSerial": 603,
+      "renderedRevision": 2,
+      "transitionProgress": 1,
+      "transitioning": false,
+      "warmed": true
+    },
+    "videoFps": 30,
+    "videoHeight": 1080
+  },
+  "sourceKind": "camera",
+  "checks": {
+    "savedProfile1080WithEmptyIsolatedCache": true,
+    "existingPhysicalCamera": true,
+    "allTwelveLayoutsPrepared": true,
+    "nativeProgramRendered": true,
+    "nativePortraitRendered": true,
+    "portraitFrame1080x1920": true,
+    "earlyApplyRegressionFailsBeforeFix": true,
+    "earlyApplyRegressionPassesAfterFix": true,
+    "resolutionChanges1080_720_1080": true
+  },
+  "sourceHashes": {
+    "src-tauri/src/live/engine.rs": "d55b308860aeea7c723913a46a95fcfd0fd3de407b33b2584f04a9a4ec567f51",
+    "src-tauri/src/live/sets_v2/mod.rs": "32915eb9f31572d57a259a6df9580797e13e321fa68b496b25d2afcd6d067c9d",
+    "src/features/sets-v2/useRoomOutput.ts": "e700a65889bda2b5a215d50b8a9952fca1afadc0c9cab32eb978a3fba7e4a914",
+    "scripts/test-room-resolution-browser.mjs": "5f3d6507e563a50b2f29f7837378a3ade86765f02f9caf8d00d04f846d86bbbd"
+  }
+}

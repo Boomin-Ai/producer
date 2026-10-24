@@ -619,7 +619,7 @@ impl RoomProgram {
             || plan.target.width != self.width
             || plan.target.height != self.height
         {
-            return Err("V2 revision/output must match the current room canvas".into());
+            return Err(format!("V2 revision/output must match the current room canvas (revision {revision}, requested {}x{}, native {}x{})",plan.target.width,plan.target.height,self.width,self.height));
         }
         let current = self.poll()?;
         if current.transitioning || current.queued || revision <= self.latest_revision {

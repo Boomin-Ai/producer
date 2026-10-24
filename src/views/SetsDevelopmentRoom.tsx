@@ -9,7 +9,8 @@ export function SetsDevelopmentRoom() {
   const smokeStarted = useRef(false);
   useEffect(() => {
     void invoke<boolean>("live_set_v2_smoke_enabled").then(enabled=>{
-      if(enabled && !new URLSearchParams(location.search).has('roomInspect') && !smokeStarted.current) { smokeStarted.current=true; void import("../features/sets-v2/roomSmoke").then(m=>m.roomSmoke(new URLSearchParams(location.search).get('roomTiming')==='1',new URLSearchParams(location.search).get('roomResolution')==='1',new URLSearchParams(location.search).get('roomShowcase')==='1')); }
+      if(enabled && new URLSearchParams(location.search).has('roomApplyCheck') && !smokeStarted.current) { smokeStarted.current=true; void import('../features/sets-v2/roomSmoke').then(m=>m.roomApplyCheck()); }
+      else if(enabled && !new URLSearchParams(location.search).has('roomInspect') && !smokeStarted.current) { smokeStarted.current=true; void import("../features/sets-v2/roomSmoke").then(m=>m.roomSmoke(new URLSearchParams(location.search).get('roomTiming')==='1',new URLSearchParams(location.search).get('roomResolution')==='1',new URLSearchParams(location.search).get('roomShowcase')==='1')); }
     });
   }, []);
   useEffect(() => {

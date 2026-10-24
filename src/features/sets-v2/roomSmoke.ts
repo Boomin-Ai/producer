@@ -150,3 +150,50 @@ export async function roomSmoke(timingOnly=false,resolutionOnly=false,showcaseOn
   await invoke('live_set_v2_report',{result:{ok:false,kind:'normal-room',error:String(error),debug:(await import('./preparedScenes')).preparationDebug().map(s=>({...s,entries:s.entries.filter(e=>e.state.state!=='ready').slice(0,24)})),events,body:document.body.innerText.slice(-6000),completedAt:new Date().toISOString()}});
  }
 }
+
+/** Explicit existing-room regression: preserves sources, checks saved-resolution startup. */
+export async function roomApplyCheck() {
+ const errors=()=>Array.from(document.querySelectorAll('.set-error, [role=alert]')).map(e=>e.textContent).filter(Boolean);
+ try {
+  await until(()=>button('Record'),'inspection room ready');
+  const dock=document.querySelector<HTMLElement>('[aria-label="Show the bottom row"]');
+  dock?.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+  (await until(()=>button('Set settings'),'inspection set controls')).click();
+  await until(()=>document.querySelector('dialog[open]'),'inspection editor');
+  button('Choose set')!.click();
+  (await until(()=>Array.from(document.querySelectorAll<HTMLButtonElement>('[role=option]')).find(b=>b.textContent?.includes('Head to Head — The Grand Arena')),'inspection Grand Arena')).click();
+  await sleep(400);
+  const host=document.querySelector<HTMLSelectElement>('dialog[open] .set-source-card select[aria-label^="Blue"]');
+  if(!host)throw Error('Grand Arena host slot missing');
+  const camera=Array.from(host.options).find(o=>o.value&&/camera/i.test(o.text)&&!/color/i.test(o.text));
+  if(!camera)throw Error('Existing room camera required for apply regression');
+  select(host,camera.value);
+  const apply=await until(()=>button('Show on output')??document.querySelector('.set-editor-apply-status.applied'),'inspection apply');
+  if(apply instanceof HTMLButtonElement)apply.click();
+  await until(()=>{if(errors().length)throw Error(errors().join('; '));return document.querySelector('.set-editor-apply-status.applied');},'inspection apply settled',2400);
+  button('Close editor')!.click();
+  await until(()=>{
+   if(errors().length)throw Error(errors().join('; '));
+   const p=document.querySelector<HTMLElement>('.set-controls[data-layouts-total]');
+   return p?.dataset.layoutsTotal==='12'&&p.dataset.layoutsReady==='12';
+  },'all twelve existing-camera layouts ready',2400);
+  const generation=(await invoke<{generation:number}>('live_set_status')).generation;
+  const program=await invoke<{renderedRevision:number;renderSerial:number}>('live_set_v2',{request:{op:'status',generation}});
+  if(!program.renderedRevision||!program.renderSerial)throw Error('Program has not rendered');
+  button('Output settings')!.click();
+  const views=await until(()=>document.querySelector('[aria-label="Room output view"]'),'output view');
+  (await until(()=>button('Portrait',views),'portrait view')).click();
+  const portrait=await until(async()=>{
+   const s=await invoke<{renderedRevision:number;renderSerial:number;transitioning:boolean}>('live_set_v2',{request:{op:'status',generation,outputId:'portrait'}}).catch(()=>null);
+   return s&&s.renderedRevision>0&&s.renderSerial>0&&!s.transitioning?s:null;
+  },'portrait rendered');
+  const frame=await until(()=>invoke<string>('live_portrait_frame'),'portrait frame');
+  const image=new Image();image.src=frame.startsWith('data:')?frame:'data:image/jpeg;base64,'+frame;await image.decode();
+  const engine=await invoke<{video_height:number;video_fps:number}>('live_engine_status');
+  if(image.naturalWidth!==engine.video_height||image.naturalHeight!==Math.round(engine.video_height*16/9))throw Error('Portrait frame does not match saved room resolution');
+  button('Close output settings')?.click();
+  await invoke('live_set_v2_report',{result:{ok:true,kind:'grand-arena-apply',videoHeight:engine.video_height,videoFps:engine.video_fps,cameraSource:camera.value,layoutsReady:12,program,portrait,portraitFrame:{width:image.naturalWidth,height:image.naturalHeight},errors:errors(),completedAt:new Date().toISOString()}});
+ } catch(error) {
+  await invoke('live_set_v2_report',{result:{ok:false,kind:'grand-arena-apply',error:String(error),errors:errors(),debug:(await import('./preparedScenes')).preparationDebug(),body:document.body.innerText.slice(-5000),completedAt:new Date().toISOString()}});
+ }
+}
