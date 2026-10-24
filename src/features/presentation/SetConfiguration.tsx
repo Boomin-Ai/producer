@@ -2,7 +2,7 @@ import {SetPicker} from './SetPicker';
 import {MediaAssetsDialog} from './MediaAssetsDialog';
 import {ipc} from '../../lib/ipc';
 import {PACKAGE_BYTES} from './assets';
-import { useEffect, useMemo, useId, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useId, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { AFTER_HOURS, HEAD_TO_HEAD, SIGNAL_DESK } from './fixtures';
 import { PackageAuthoringDialog, type AuthoringIntent } from './PackageAuthoringDialog';
 import { RehearsalSession } from './rehearsal';
@@ -10,12 +10,12 @@ import type { PresentationPackage } from './schema';
 import type { SetOutputControls } from './useSetOutput';
 import './presentation.css';
 
-export function SetConfiguration({ session, onChange, output, hideOutputAction=false }: {
-  hideOutputAction?:boolean; output?:SetOutputControls; session: RehearsalSession; onChange: (doc: PresentationPackage) => void;
+export function SetConfiguration({ session, onChange, output, hideOutputAction=false, actions }: {
+  actions?:ReactNode; hideOutputAction?:boolean; output?:SetOutputControls; session: RehearsalSession; onChange: (doc: PresentationPackage) => void;
 }) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const rehearsing = state.workspaceMode === 'rehearsal';
-  const optionsId=useId();
+  const optionsId=useId(),filesId=useId();
   const [position,setPosition]=useState({left:8,top:80});
   const trigger = useRef<HTMLButtonElement>(null);
   const file = useRef<HTMLInputElement>(null);
@@ -54,7 +54,12 @@ export function SetConfiguration({ session, onChange, output, hideOutputAction=f
 
 
       </div>
-      <div className="set-configuration-file-actions"><button onClick={()=>{setError('');file.current?.click();}}>Import set</button><button ref={trigger} onClick={()=>edit('export')}>Export set</button><button onClick={()=>setMedia(true)}>Media assets</button></div>
+      <button ref={trigger} type="button" popoverTarget={filesId} onClick={e=>{const r=e.currentTarget.getBoundingClientRect();setPosition({left:Math.max(8,Math.min(r.left,innerWidth-228)),top:r.bottom+6});}}>Files ▾</button>
+      <div id={filesId} popover="auto" className="set-configuration-popover set-files-popover" style={{left:position.left,top:position.top}}>
+        <button onClick={()=>{document.getElementById(filesId)?.hidePopover();setError('');file.current?.click();}}>Import set</button>
+        <button onClick={()=>{document.getElementById(filesId)?.hidePopover();edit('export');}}>Export set</button>
+        <button onClick={()=>{document.getElementById(filesId)?.hidePopover();setMedia(true);}}>Media assets</button>
+      </div>
       {output&&!hideOutputAction&&<button disabled={output.busy} onClick={()=>void(output.active||output.busy?output.returnToRoom():output.apply())}>{output.active||output.busy?'Show room scene':'Show set'}</button>}
       <button type="button" popoverTarget={optionsId} aria-label="Set options" onClick={e=>{const r=e.currentTarget.getBoundingClientRect();setPosition({left:Math.max(8,Math.min(r.right-320,innerWidth-328)),top:r.bottom+6});}}>Set options ▾</button>
       <div id={optionsId} popover="auto" className="set-configuration-popover" style={{left:position.left,top:position.top,maxHeight:`calc(100dvh - ${position.top+12}px)`}}>
@@ -81,6 +86,7 @@ export function SetConfiguration({ session, onChange, output, hideOutputAction=f
       <details className="set-trace"><summary>Activity</summary><ol>{state.trace.map((entry, i) => <li key={`${i}-${entry.at}`}>{Math.round(entry.at / 1000)}s · {entry.message}</li>)}</ol></details>
       </div></details>
       </div>
+      {actions}
       {error && <p role="alert">{error}</p>}
     </section>
     <input ref={file} className="set-file-input" type="file" accept=".json,application/json" aria-label="Import set package" onChange={e => void importFile(e.target.files?.[0])} />

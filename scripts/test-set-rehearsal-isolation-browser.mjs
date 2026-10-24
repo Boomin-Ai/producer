@@ -15,6 +15,9 @@ try{
   const host=document.createElement('div');host.style.cssText='height:900px';document.body.replaceChildren(host);(D.createRoot??D.default.createRoot)(host).render(R.createElement(Harness));
  });
  await page.getByRole('button',{name:'Set settings',exact:true}).click();const editor=page.locator('dialog[open]');
+ assert(await editor.getByRole('toolbar',{name:'Set configuration'}).getByRole('button',{name:'Rehearse',exact:true}).isVisible());
+ assert(await editor.getByRole('toolbar',{name:'Set configuration'}).getByRole('button',{name:'Show on output',exact:true}).isVisible());
+ assert.equal(await editor.locator('.set-editor-apply-status').innerText(),'Changes not on output');
  const before=await page.evaluate(()=>JSON.stringify(window.roomSession.snapshot()));
  await editor.getByRole('button',{name:'Rehearse',exact:true}).click();await page.waitForTimeout(250);
  assert.equal(await page.evaluate(()=>JSON.stringify(window.roomSession.snapshot())),before);
@@ -33,6 +36,8 @@ try{
  await editor.getByRole('button',{name:'Close editor',exact:true}).click();await page.getByRole('button',{name:'Set settings',exact:true}).click();
  assert.equal(await editor.getByRole('textbox',{name:'Host name',exact:false}).inputValue(),'Prepared draft');
  await editor.getByRole('button',{name:'Show on output',exact:true}).click();await page.waitForFunction(()=>window.takes===1);
+ await page.waitForFunction(()=>document.querySelector('.set-editor-apply-status')?.textContent==='✓ On output');
+ assert(await editor.getByRole('button',{name:'Show on output',exact:true}).isDisabled());
  assert.equal(await page.evaluate(()=>window.roomSession.snapshot().values.hostName),'Prepared draft');
  assert.equal(await page.evaluate(()=>window.roomSession.snapshot().show.phase),'round');
  assert.equal(await editor.getByRole('combobox',{name:'Edit segment',exact:true}).inputValue(),'round');

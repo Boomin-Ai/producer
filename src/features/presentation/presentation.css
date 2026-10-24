@@ -724,3 +724,19 @@
  .set-sections.set-only > * { min-height:0; overflow:auto; }
 }
 .set-sections.set-only > .set-reference > .set-assignments { padding:0; border:0; border-radius:0; background:transparent; }
+.set-editor-top-actions { display:flex; flex:0 0 auto; align-items:center; gap:8px; margin-left:auto; }
+.set-editor-apply-status { display:flex; align-items:center; gap:5px; white-space:nowrap; font-size:11px; color:var(--fg-2); }
+.set-editor-apply-status.changed { color:var(--amber); }
+.set-editor-apply-status.applied { color:var(--primary); }
+.set-editor-apply-status.error { color:var(--red); }
+.set-preview-dialog .set-configuration .set-editor-apply { background:var(--primary); color:var(--primary-fg); border-color:var(--primary); font-weight:600; min-width:118px; }
+.set-preview-dialog .set-configuration .set-editor-apply:disabled { opacity:.5; cursor:default; }
+.set-preview-dialog .set-configuration .set-editor-apply:not(:disabled):hover { filter:brightness(1.08); background:var(--primary); }
+.set-files-popover { width:220px; }
+@media(max-width:1100px) {
+ .set-editor-apply-status { max-width:14px; overflow:hidden; font-size:0; }
+ .set-editor-apply-status::before { content:''; width:7px; height:7px; flex:0 0 7px; border-radius:50%; background:currentColor; }
+ .set-configuration .set-picker-label { display:none; }
+ .set-configuration > .set-menu-section { min-width:80px; }
+ .set-editor-top-actions { gap:5px; }
+}

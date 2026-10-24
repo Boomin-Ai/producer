@@ -1,7 +1,7 @@
 import {createPortal} from 'react-dom';
 import {layoutMedia,mediaConfig} from './playback';
 import {MediaPlaybackControls} from './MediaPlaybackControls';
-import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode, type CSSProperties } from 'react';
+import { useEffect, useMemo, useId, useRef, useState, useSyncExternalStore, type ReactNode, type CSSProperties } from 'react';
 import { evaluate, RehearsalSession, voteLeaders } from './rehearsal';
 import { RehearsalPreview } from './RehearsalPreview';
 import {SetPreview} from './SetPreview';
@@ -17,12 +17,22 @@ import {SetConfiguration} from './SetConfiguration';
 type PanelProps={
   voting?:ReactNode; sourceNames?: Record<string,string>; onFieldEdit?: (key:string)=>void; output?: SetOutputControls; session: RehearsalSession; blocked?: boolean; blockedReason?: string; onChange: (doc: PresentationPackage) => void;
 };
+function designIdentity(doc:PresentationPackage) {
+  const definitions=(values:PresentationPackage['set']['values'])=>Object.fromEntries(Object.entries(values).map(([key,{default:_,...definition}])=>[key,definition]));
+  return JSON.stringify({...doc,set:{...doc.set,initialLayout:'',values:definitions(doc.set.values),feeds:definitions(doc.set.feeds)}});
+}
+function recordIdentity(record:Record<string,unknown>){return JSON.stringify(Object.entries(record).filter(([,value])=>value!==''&&value!==undefined).sort(([a],[b])=>a.localeCompare(b)));}
 export function SetControlsPanel(props:PanelProps) {
   const [draft,setDraft]=useState(()=>new RehearsalSession(props.session.exportPreparedPackage(),undefined,'prepare'));
   const [bindings,setBindings]=useState({...props.output?.bindings});
   const [framing,setFraming]=useState({...props.output?.framing});
   const pending=useRef<{doc:PresentationPackage;phase:string;layout:string}|undefined>(undefined);
-  const [publishError,setPublishError]=useState('');
+  const [publishError,setPublishError]=useState(''),[publishing,setPublishing]=useState(false);
+  const draftState=useSyncExternalStore(draft.subscribe,draft.snapshot);
+  const roomState=useSyncExternalStore(props.session.subscribe,props.session.snapshot);
+  const sameDesign=useMemo(()=>designIdentity(draft.package)===designIdentity(props.session.package),[draft.package,props.session.package]);
+  const matches=sameDesign&&draftState.layoutId===roomState.layoutId&&draftState.show.phase===roomState.show.phase&&recordIdentity(draftState.values)===recordIdentity(roomState.values)&&recordIdentity(draftState.feeds)===recordIdentity(roomState.feeds)&&recordIdentity(bindings)===recordIdentity(props.output?.bindings??{})&&recordIdentity(framing)===recordIdentity(props.output?.framing??{});
+  const editorStatus=publishing||props.output?.busy&&matches?'applying':publishError||props.output?.error?'error':props.output?.active&&matches?'applied':'changed';
   useEffect(()=>{
     const next=new RehearsalSession(props.session.exportPreparedPackage(),undefined,'prepare');
     const phase=pending.current?.phase??props.session.snapshot().show.phase;
@@ -37,7 +47,7 @@ export function SetControlsPanel(props:PanelProps) {
     const take=pending.current;pending.current=undefined;
     if(take.phase)props.session.send({type:'segment.select',phaseId:take.phase});
     if(props.session.snapshot().layoutId!==take.layout)props.session.send({type:'control',action:{type:'layout.select',layoutId:take.layout}});
-    void props.output?.apply().catch(e=>setPublishError(String(e)));
+    void Promise.resolve(props.output?.apply()).catch(e=>setPublishError(String(e))).finally(()=>setPublishing(false));
   },[props.session,props.output]);
   const previewOutput=props.output?{...props.output,active:false,busy:false,error:'',bindings,framing,
     bind:(slot:string,id:string)=>setBindings(old=>({...old,[slot]:id})),
@@ -49,15 +59,15 @@ export function SetControlsPanel(props:PanelProps) {
   }:undefined;
   const publish=()=>{
     if(draft.snapshot().workspaceMode==='rehearsal')return;
-    const doc=draft.exportPreparedPackage();pending.current={doc,phase:draft.snapshot().show.phase,layout:draft.snapshot().layoutId};setPublishError('');
+    const doc=draft.exportPreparedPackage();pending.current={doc,phase:draft.snapshot().show.phase,layout:draft.snapshot().layoutId};setPublishError('');setPublishing(true);
     for(const [key,definition] of Object.entries(doc.set.values))if(definition.default!==props.session.snapshot().values[key])props.onFieldEdit?.(key);
     for(const slot of doc.set.slots){props.output?.bind(slot.id,bindings[slot.id]??'');if(framing[slot.id])props.output?.frame(slot.id,framing[slot.id]);}
     props.onChange(doc);
   };
-  const workspace=<SetControlsPanelView {...props} session={draft} output={previewOutput} onFieldEdit={undefined} onChange={doc=>setDraft(new RehearsalSession(doc,undefined,'prepare'))} editorOnly onPublish={publish} publishError={publishError}/>;
+  const workspace=<SetControlsPanelView {...props} session={draft} output={previewOutput} onFieldEdit={undefined} onChange={doc=>setDraft(new RehearsalSession(doc,undefined,'prepare'))} editorOnly onPublish={publish} publishError={publishError} editorStatus={editorStatus}/>;
   return <SetControlsPanelView {...props} workspace={workspace} onWorkspaceClose={()=>draft.exitRehearsal()}/>;
 }
-function SetControlsPanelView({ session, blocked = false, blockedReason, onChange, output, sourceNames = {}, voting, onFieldEdit, workspace, editorOnly=false,onPublish,publishError,onWorkspaceClose }: PanelProps & {onWorkspaceClose?:()=>void;workspace?:ReactNode;editorOnly?:boolean;onPublish?:()=>void;publishError?:string}) {
+function SetControlsPanelView({ session, blocked = false, blockedReason, onChange, output, sourceNames = {}, voting, onFieldEdit, workspace, editorOnly=false,onPublish,publishError,onWorkspaceClose,editorStatus='changed' }: PanelProps & {editorStatus?:'changed'|'applying'|'applied'|'error';onWorkspaceClose?:()=>void;workspace?:ReactNode;editorOnly?:boolean;onPublish?:()=>void;publishError?:string}) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const [player, setPlayer] = useState('player-1');
   useEffect(()=>{
@@ -182,12 +192,12 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
 
   </>;
   if(editorOnly)return <>
-    <SetConfiguration hideOutputAction session={session} onChange={onChange} output={output?{...output,apply:async()=>onPublish?.()}:undefined}/>
-    <header><div><strong>{doc.name}</strong><span>{rehearsing?'Private rehearsal · Simulated audience inputs':'Set editor · Private preview'}</span></div><div className="set-editor-run-tools">
+    <SetConfiguration hideOutputAction session={session} onChange={onChange} output={output?{...output,apply:async()=>onPublish?.()}:undefined} actions={<div className="set-editor-top-actions">
+      <span role="status" className={`set-editor-apply-status ${rehearsing?'practice':editorStatus}`} title={rehearsing?'Private rehearsal':editorStatus==='applied'?'This set is on output':editorStatus==='applying'?'Applying to output':editorStatus==='error'?'Output update failed':'Changes not on output'}>{rehearsing?'Private rehearsal':editorStatus==='applied'?'✓ On output':editorStatus==='applying'?'Applying…':editorStatus==='error'?'Update failed':'Changes not on output'}</span>
       {doc.show&&<button onClick={()=>{if(rehearsing)session.exitRehearsal();else startShow();}}>{rehearsing?'Exit rehearsal':'Rehearse'}</button>}
-      {doc.show&&rehearsing&&transport}
-      <button disabled={rehearsing||!output} onClick={onPublish}>Show on output</button>
-    </div></header>
+      <button className="set-editor-apply" disabled={rehearsing||!output||editorStatus==='applying'||editorStatus==='applied'} onClick={onPublish}>{editorStatus==='applying'?'Applying…':'Show on output'}</button>
+    </div>}/>
+    <header><div><strong>{doc.name}</strong><span>{rehearsing?'Private rehearsal · Simulated audience inputs':'Set editor · Private preview'}</span></div>{doc.show&&rehearsing&&<div className="set-editor-run-tools">{transport}</div>}</header>
     {publishError&&<p role="alert">{publishError}</p>}
     <div className="set-editor-layout has-controls" style={{'--set-preview-aspect':activeLayout!.width/activeLayout!.height} as CSSProperties}>
       <div className="set-editor-preview-viewport"><div className="set-preview-dialog-canvas"><SetPreview doc={doc} state={state} output={output}/></div></div>
