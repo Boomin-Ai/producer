@@ -147,7 +147,7 @@ export function useRoomOutput(
       }
       if (ticket !== operation.current) return;
       const transition =
-        isActive.current && shownLayout.current !== layout ? 300 : 0;
+        isActive.current && shownLayout.current !== layout && !snapshot.paused ? 300 : 0;
       await request({
         op: "take",
         revision: attempted,

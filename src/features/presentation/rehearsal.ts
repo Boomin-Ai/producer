@@ -30,6 +30,7 @@ export type SimulationEvent =
   | { type: 'field'; key: string; value: Scalar }
   | { type: 'feed'; key: string; value: Scalar }
   | { type: 'tick'; milliseconds: number }
+  | { type: 'segment.select'; phaseId:string }
   | { type: 'seek'; milliseconds:number }
   | { type: 'pause'; paused: boolean }
   | { type: 'vote'; playerId: string; choiceId: string }
@@ -142,6 +143,16 @@ export class RehearsalSession {
         (['pause', 'tick', 'seek', 'vote', 'reaction', 'stop'].includes(event.type) || event.type === 'control' && event.action.type.startsWith('show.')))
         throw new Error('Enter rehearsal before running the show or sending practice inputs.');
       switch (event.type) {
+        case 'segment.select': {
+          const target=this.package.show?.phases.find(p=>p.id===event.phaseId);
+          if(!target)throw new Error('Unknown segment.');
+          if(target.id===next.show.phase&&target.layoutId===next.layoutId)return true;
+          next.show.phase=target.id;next.layoutId=target.layoutId;
+          next.paused=next.running;next.show.remainingMs=target.collectMs??0;
+          next.show.collecting=next.running&&!!target.collectMs;
+          if(target.collectMs){this.voters.clear();next.ballotChoiceIds=this.package.show!.choices.map(c=>c.id);next.ballotHistory=[];next.show.ballot=1;next.show.result='';next.show.total=0;next.show.revealed=false;next.show.winner='';Object.keys(next.counts).forEach(k=>next.counts[k]=0);}
+          log(`Editing segment: ${target.label}.`);break;
+        }
         case 'seek': if(!Number.isFinite(event.milliseconds)||event.milliseconds<0||event.milliseconds>60_000)throw new Error('Invalid segment animation time.');break;
         case 'reset':
           this.voters.clear(); this.reactionTimes.clear(); this.heatEvents = [];
@@ -242,7 +253,7 @@ export class RehearsalSession {
       else if(event.type==='seek'){position.positionMs+=event.milliseconds-position.segmentMs;position.segmentMs=event.milliseconds;for(const [id,t]of Object.entries(next.media))next.media[id]={...t,positionMs:event.milliseconds,anchorMs:animationNow};}
       // Control edges update the anchor. Ordinary content edits retain it, so
       // editing a title never restarts an animation.
-      if(this.state.animationClock&&(['pause','stop','tick','seek'].includes(event.type)||event.type==='control'&&(['show.start','show.next','show.previous','layout.select'].includes(event.action.type))))next.animationClock={...position,positionMs:Math.max(0,position.positionMs),running:next.running&&!next.paused,anchorMs:animationNow};
+      if(this.state.animationClock&&(['pause','stop','tick','seek','segment.select'].includes(event.type)||event.type==='control'&&(['show.start','show.next','show.previous','layout.select'].includes(event.action.type))))next.animationClock={...position,positionMs:Math.max(0,position.positionMs),running:next.running&&!next.paused,anchorMs:animationNow};
       if(next.layoutId!==this.state.layoutId){
         delete next.layoutMotion;delete next.layoutMotionId;
         const transition=this.package.set.layouts.find(l=>l.id===next.layoutId)?.animation?.transition;
@@ -253,10 +264,10 @@ export class RehearsalSession {
       if(event.type==='stop'){delete next.layoutMotion;delete next.layoutMotionId;}
       if(event.type==='control'&&event.action.type==='show.start')enterMedia(this.package,undefined,next.layoutId,next.media);
       else enterMedia(this.package,this.state.layoutId,next.layoutId,next.media,Date.now(),this.state,next);
-      if(event.type==='pause'||event.type==='stop'){
+      if(event.type==='pause'||event.type==='stop'||event.type==='segment.select'&&next.running){
         const now=Date.now();for(const [id,t]of Object.entries(next.media)){
           if(event.type==='pause'&&!event.paused){if(t.resumeAfterPause)next.media[id]={playing:true,positionMs:t.positionMs,anchorMs:now};}
-          else next.media[id]={playing:false,positionMs:mediaPosition(t,now),anchorMs:now,resumeAfterPause:event.type==='pause'&&t.playing};
+          else next.media[id]={playing:false,positionMs:mediaPosition(t,now),anchorMs:now,resumeAfterPause:(event.type==='pause'||event.type==='segment.select')&&t.playing};
         }
       }
       next.revision++; this.state = freeze(next); this.emit(); return true;

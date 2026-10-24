@@ -40,7 +40,7 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
   const layoutFields=fields.filter(c=>activeFieldKeys.has(c.key));
   const activeLayout=doc.set.layouts.find(layout=>layout.id===state.layoutId);
   const stopped = !state.running && state.trace.some(entry => entry.message === 'Show started in rehearsal.');
-  const phase = doc.show?.phases.find(p => p.id === (state.running ? state.show.phase : doc.show?.initialPhase));
+  const phase = doc.show?.phases.find(p => p.id === state.show.phase);
   const nextPhase = doc.show?.phases.find(p => p.id === phase?.next);
   const previousPhase = doc.show?.phases.find(p => p.next === phase?.id);
   const navigateDisabled=blocked||!state.running||state.paused||state.show.collecting||!!phase?.collectMs&&!state.show.revealed;
@@ -104,16 +104,26 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
   const visit = (node:ReturnType<typeof outputProjection>['root']) => { if(node.slotId)visibleSlots.add(node.slotId);node.children.forEach(visit); };
   try { visit(outputProjection(doc,state).root); } catch { /* Preview surfaces binding errors. */ }
   const sourceEditor = <details className="set-source-slots" open><summary>Source slots <span>{visibleSlots.size}</span></summary>
-              {output ? <div className="set-editor-sources">{doc.set.slots.filter(slot=>visibleSlots.has(slot.id)).map((slot,index) => <div className="set-source-card" key={slot.id}><h4><span>{index+1}</span>{slot.label}</h4><select aria-label={`${slot.label} source`} disabled={output.busy&&!output.active} value={output.bindings[slot.id] ?? ''} onChange={e => output.bind(slot.id,e.target.value)}>
+              {output ? <div className="set-editor-sources">{doc.set.slots.filter(slot=>visibleSlots.has(slot.id)).map((slot,index) => <div className="set-source-card" key={slot.id}><h4><span>{index+1}</span>{slot.label}</h4><div className="set-source-picker"><select aria-label={`${slot.label} source`} disabled={output.busy&&!output.active} value={output.bindings[slot.id] ?? ''} onChange={e => output.bind(slot.id,e.target.value)}>
                 <option value="">Empty slot</option>
                 {(output.sources.items ?? []).filter(item => item.kind!=='mic').map(item => <option key={item.id} value={item.id} disabled={output.renderer!=='native'&&(!item.visible || !item.has_frame)}>{sourceNames[item.id] ?? item.label}{!item.visible ? ' · off scene' : !item.has_frame ? ' · waiting for video' : ''}</option>)}
-              </select>{output.createSource&&<SetSourceCreator slot={slot.id} label={slot.label} create={output.createSource}/>}<SlotFramingControls label={slot.label} value={output.framing[slot.id] ?? findSlotFraming(doc.set.layouts.find(l=>l.id===state.layoutId)?.root,slot.id)} disabled={output.busy&&!output.active} onChange={value=>output.frame(slot.id,value)} /></div>)}</div> : <ul>{doc.set.slots.filter(slot=>visibleSlots.has(slot.id)).map(slot => <li key={slot.id}><strong>{slot.label}</strong><span>Sample video</span></li>)}</ul>}
+              </select>{output.createSource&&<SetSourceCreator slot={slot.id} label={slot.label} create={output.createSource}/>}</div><SlotFramingControls label={slot.label} value={output.framing[slot.id] ?? findSlotFraming(doc.set.layouts.find(l=>l.id===state.layoutId)?.root,slot.id)} disabled={output.busy&&!output.active} onChange={value=>output.frame(slot.id,value)} /></div>)}</div> : <ul>{doc.set.slots.filter(slot=>visibleSlots.has(slot.id)).map(slot => <li key={slot.id}><strong>{slot.label}</strong><span>Sample video</span></li>)}</ul>}
               <p className="set-section-note">{output ? output.renderer==='native'?'Choose a source or add one here. Creating a source does not place it on the room scene. Audio follows the room mixer.':'Assign sources already on the room output. Empty slots stay empty; audio follows the room mixer.' : 'This preview uses sample video.'}</p>
             </details>;
+  const editorSegments=[...schedule.phases,...(doc.show?.phases??[]).filter(p=>!schedule.phases.some(known=>known.id===p.id))];
+  const editorIndex=editorSegments.findIndex(p=>p.id===state.show.phase);
+  const editSegment=(id:string)=>{session.send({type:'segment.select',phaseId:id});};
   const editor = <>
+        <div className="set-editor-details-header"><strong>Set details</strong><p>{output?.active ? 'Changes update room output.' : 'Changes update the preview.'}</p></div>
+        <section className="set-editor-navigation" aria-label="Segment navigation">
+          {doc.show&&<div className="set-editor-segment-row"><label>Segment<select aria-label="Edit segment" disabled={blocked} value={state.show.phase} onChange={e=>editSegment(e.target.value)}>{editorSegments.map((segment,i)=><option key={segment.id} value={segment.id}>{String(i+1).padStart(2,'0')} / {segment.label}</option>)}</select></label>
+          <div className="set-editor-segment-buttons"><button type="button" aria-label="Edit previous segment" title="Previous segment" disabled={blocked||editorIndex<=0} onClick={()=>editSegment(editorSegments[editorIndex-1].id)}>←</button><button type="button" aria-label="Edit next segment" title="Next segment" disabled={blocked||editorIndex>=editorSegments.length-1} onClick={()=>editSegment(editorSegments[editorIndex+1].id)}>→</button></div></div>}
+          {doc.set.layouts.length>1&&<label>Layout<select aria-label="Edit layout" disabled={blocked} value={state.layoutId} onChange={e=>session.send({type:'control',action:{type:'layout.select',layoutId:e.target.value}})}>{doc.set.layouts.map(layout=><option key={layout.id} value={layout.id}>{layout.label} · {layout.width>layout.height?'Landscape':layout.height>layout.width?'Portrait':'Square'}</option>)}</select></label>}
+          {state.running&&<p className="set-section-note">{state.paused?'Rehearsal paused for editing.':'Choosing another segment pauses rehearsal.'}</p>}
+        </section>
         <section className="set-setup" aria-label="Set editing controls">
           <details key={`${state.sandboxId}-setup`} open><summary><strong>Content & sources</strong><span>Changes update the set</span></summary>
-            <p className="set-section-note">{rehearsing ? "Content and layout edits reset on exit. Sources stay saved." : "Edit values here. Change design with your agent."}</p>
+            {rehearsing&&<p className="set-section-note">Rehearsal edits reset on exit. Sources stay saved.</p>}
             {!doc.show && <><h3>Layout</h3><div className="set-controls-fields set-layout-controls">{layoutControls.map(control)}</div></>}<h3 className="set-editor-heading">Content <span>{activeLayout?.label}</span></h3>
             <div className="set-controls-fields">{layoutFields.map(control)}{!layoutFields.length && <p className="set-section-note">This layout has no editable content.</p>}</div>
 

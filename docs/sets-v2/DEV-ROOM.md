@@ -43,3 +43,10 @@ The editor now subscribes to the actual assigned room sources, including sources
 Reassignment clears the old source picture. Empty slots and sources awaiting frames show explicit states. Closing the editor unsubscribes its lease; preview activation does not add a source to the room scene or change mixer settings. Multiple preview leases coexist with guest and program-thumbnail demand.
 
 Verification: `npm run test:set-source-preview-browser` checks decoded source images, restored portrait proportions, reassignment and subscription cleanup. The 19 presentation runtime checks and TypeScript checks pass. The rebuilt app smoke confirms a hidden source produces native preview frames; see `native/source-preview-ui-proof.json`. Smoke tests now use their own local room so the normal dev room's source assignments are preserved.
+
+
+## Segment navigation and editor structure — 2026-10-24
+
+Set edit has a segment selector and Previous/Next controls in the details pane. Every declared segment is reachable without closing the dialog, including before a show starts. A separate layout selector supports sets with several compositions. Selecting a segment retains authored field edits and source bindings; an active rehearsal pauses at the selected segment, with media and animation clocks held until resume. Voting segments begin with fresh rehearsal ballots. Output updates remain explicit in the dialog header; paused native layout changes use a cut so they do not wait for a frozen transition clock.
+
+The editor uses the existing UI surfaces and controls: preview left, navigation/fields right, source cards below, stacked at smaller widths. Source creation sits next to the assignment picker. Slot numbers retain muted native text styling. Tests: 20 presentation runtime checks, TypeScript, `npm run test:set-editor-navigation-browser`, and the source-preview browser check.

@@ -279,6 +279,18 @@ test('shared style tokens resolve without flattening reusable presets',()=>{
  assert.throws(()=>parsePackage(edit(d=>{d.set.styles={bad:{fontFamily:'url(https://evil)'}};})));
  assert.throws(()=>parsePackage(edit(d=>{d.set.styles={bad:{color:{get:'tokens.missing'}}};})));
 });
+test('Editor segment navigation reaches any segment without starting a show and pauses an active rehearsal', () => {
+ const session=new RehearsalSession(HEAD_TO_HEAD,undefined,'prepare');
+ session.send({type:'field',key:'hostName',value:'Editor test'});
+ for(const phase of HEAD_TO_HEAD.show.phases){assert.equal(session.send({type:'segment.select',phaseId:phase.id}),true);assert.equal(session.snapshot().layoutId,phase.layoutId);assert.equal(session.snapshot().show.phase,phase.id);assert.equal(session.snapshot().running,false);assert.equal(session.snapshot().values.hostName,'Editor test');}
+ const before=session.snapshot().layoutId;assert.equal(session.send({type:'segment.select',phaseId:'unknown'}),false);assert.equal(session.snapshot().layoutId,before);
+ session.enterRehearsal();session.send({type:'control',action:{type:'show.start'}});
+ const voting=HEAD_TO_HEAD.show.phases.find(p=>p.collectMs);
+ assert.equal(session.send({type:'segment.select',phaseId:voting.id}),true);
+ assert.equal(session.snapshot().paused,true);assert.equal(session.snapshot().show.collecting,true);assert.equal(session.snapshot().animationClock?.running??false,false);
+ const remaining=session.snapshot().show.remainingMs;assert.equal(session.send({type:'tick',milliseconds:1000}),false);assert.equal(session.snapshot().show.remainingMs,remaining);
+ assert.equal(session.send({type:'pause',paused:false}),true);assert.equal(session.send({type:'tick',milliseconds:1000}),true);assert.equal(session.snapshot().show.remainingMs,remaining-1000);
+});
 console.log(`Presentation runtime: ${checks} checks passed.`);
 
 for (const development of [false, true]) {

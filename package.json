@@ -20,6 +20,7 @@
     "test:people-panels-browser": "node scripts/test-people-panels-browser.mjs",
     "test:presentation": "node scripts/test-presentation.mjs",
     "test:room-chat-browser": "node scripts/test-room-chat-browser.mjs",
+    "test:set-editor-navigation-browser": "node scripts/test-set-editor-navigation-browser.mjs",
     "test:set-source-preview-browser": "node scripts/test-set-source-preview-browser.mjs",
     "test:presentation-browser": "node scripts/test-presentation-browser.mjs",
     "export:presentation": "node scripts/export-presentation-contract.mjs",
