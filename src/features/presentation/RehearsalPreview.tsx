@@ -24,9 +24,9 @@ function PreviewDialog({ doc, state, onClose, returnFocus, editor, sources, outp
       if(controls.length){event.preventDefault();controls[(current+(event.shiftKey?-1:1)+controls.length)%controls.length]?.focus();}
     }} onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
     <div className="set-preview-dialog-content">
+      {configuration}
       <header><div><strong>{doc.name}</strong><span>{previewMode === 'set' ? 'Set preview' : 'Rehearsal preview'} · {outputActive ? 'Changes update room output' : 'Preview only'}</span></div>
         <button autoFocus onClick={onClose}>Close preview</button></header>
-      {configuration}
       <div className={`set-editor-layout${editor ? ' has-controls' : ''}`} style={{'--set-preview-aspect':layout.width/layout.height} as CSSProperties}><div className="set-editor-preview-viewport"><div className="set-preview-dialog-canvas">
         <SetPreview key={state.sandboxId} doc={doc} state={state} output={output} />
       </div></div>{editor && <aside className="set-controls set-editor-controls" aria-label="Edit set">{editor}</aside>}</div>
