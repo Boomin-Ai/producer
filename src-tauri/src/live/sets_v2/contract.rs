@@ -710,7 +710,16 @@ pub fn graphics_document(
     origin: (f32, f32),
     palette: &HashMap<String, String>,
 ) -> Result<String, String> {
-    let mut html=format!("<!doctype html><meta charset=utf-8><meta http-equiv=Content-Security-Policy content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><style>html,body{{margin:0;width:{width}px;height:{}px;overflow:hidden;background:transparent;font-family:Arial,sans-serif}}*{{box-sizing:border-box}}</style>",height+1);
+    graphics_document_scaled(nodes,width,height,origin,palette,1.)
+}
+pub fn graphics_document_scaled(
+    nodes:&[&Node],width:u32,height:u32,origin:(f32,f32),
+    palette:&HashMap<String,String>,density:f32,
+)->Result<String,String>{
+    if !density.is_finite() || density<1. || density>8. {return Err("Invalid graphics density".into());}
+    let physical_width=(width as f32*density).ceil() as u32;
+    let physical_height=(height as f32*density).ceil() as u32;
+    let mut html=format!("<!doctype html><meta charset=utf-8><meta http-equiv=Content-Security-Policy content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><style>html,body{{margin:0;width:{physical_width}px;height:{}px;overflow:hidden;background:transparent;font-family:Arial,sans-serif}}*{{box-sizing:border-box}}</style><div style=\"position:absolute;left:0;top:0;width:{width}px;height:{height}px;zoom:{density}\">",physical_height+1);
     fn append(n: &Node, origin: (f32,f32), palette: &HashMap<String,String>, html: &mut String) -> Result<(),String> {
         if !["text", "graphic", "group"].contains(&n.kind.as_str()) {
             return Err("Invalid graphics batch".into());
@@ -749,9 +758,10 @@ pub fn graphics_document(
         Ok(())
     }
     for n in nodes { append(n,origin,palette,&mut html)?; }
+    html.push_str("</div>");
     // Reserved extra row is cropped by a native placement wrapper. The marker
     // is painted with the document but is never part of outgoing set pixels.
-    html.push_str(&format!("<div style=\"position:absolute;left:0;top:{height}px;width:1px;height:1px;background:#01fe03\"></div>"));
+    html.push_str(&format!("<div style=\"position:absolute;left:0;top:{physical_height}px;width:1px;height:1px;background:#01fe03\"></div>"));
     Ok(html)
 }
 

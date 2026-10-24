@@ -1,0 +1,318 @@
+{
+  "backend" : "Metal",
+  "appAdapter" : [
+    {
+      "markerCroppedFromOutput" : true,
+      "strictNativePlanValidation" : true,
+      "nativeRenderedReceipt" : true,
+      "actualBrowserPaintMarker" : true,
+      "orderedRoomPixels" : true,
+      "orientation" : "landscape",
+      "exactAppAdapter" : true,
+      "sourceAuthorization" : true
+    },
+    {
+      "markerCroppedFromOutput" : true,
+      "strictNativePlanValidation" : true,
+      "nativeRenderedReceipt" : true,
+      "actualBrowserPaintMarker" : true,
+      "orderedRoomPixels" : true,
+      "orientation" : "portrait",
+      "exactAppAdapter" : true,
+      "sourceAuthorization" : true
+    }
+  ],
+  "remainingSyntheticSources" : 0,
+  "transitions" : [
+    {
+      "endpointsAndMidpoint" : true,
+      "inputsStayLive" : true,
+      "cleanup" : true,
+      "mode" : "dissolve"
+    },
+    {
+      "endpointsAndMidpoint" : true,
+      "inputsStayLive" : true,
+      "cleanup" : true,
+      "mode" : "wipe"
+    },
+    {
+      "endpointsAndMidpoint" : true,
+      "inputsStayLive" : true,
+      "cleanup" : true,
+      "mode" : "slide"
+    }
+  ],
+  "checks" : [
+    {
+      "orientation" : "landscape",
+      "orderedLayers" : true,
+      "transparentCorners" : true,
+      "output" : [
+        1280,
+        720
+      ],
+      "compiledRenderPlan" : true,
+      "maskedMixedGroup" : true,
+      "groupOpacity" : true,
+      "textureBytes" : 29515776,
+      "nativeGroups" : 7,
+      "aggregateBudgetRejected" : true,
+      "nativeOwner" : true,
+      "liveFramesAdvance" : true,
+      "design" : [
+        1920,
+        1080
+      ]
+    },
+    {
+      "orientation" : "portrait",
+      "orderedLayers" : true,
+      "transparentCorners" : true,
+      "output" : [
+        720,
+        1280
+      ],
+      "compiledRenderPlan" : true,
+      "maskedMixedGroup" : true,
+      "groupOpacity" : true,
+      "textureBytes" : 29516544,
+      "nativeGroups" : 7,
+      "aggregateBudgetRejected" : true,
+      "nativeOwner" : true,
+      "liveFramesAdvance" : true,
+      "design" : [
+        1080,
+        1920
+      ]
+    }
+  ],
+  "placement" : {
+    "cleanup" : true,
+    "invalidFrameRejected" : true,
+    "nativeGeometryUpdates" : true,
+    "sharedCaptureIsolation" : true,
+    "visibility" : true
+  },
+  "authoredRooms" : [
+    {
+      "resources" : [
+        "graphic:custom",
+        "shader:node-5010f1b1",
+        "asset:logo",
+        "shader:node-f3080d66",
+        "synthetic-camera",
+        "shader:node-9c762c39",
+        "shader:node-5f288f41"
+      ],
+      "file" : "atlanta-culture-culture-topic-1-portrait.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "graphic:custom",
+        "shader:node-5010f1b1",
+        "asset:logo",
+        "shader:node-f3080d66",
+        "synthetic-camera",
+        "shader:node-9c762c39",
+        "shader:node-5f288f41"
+      ],
+      "file" : "atlanta-culture-culture-topic-2-portrait.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "graphic:custom",
+        "shader:node-5010f1b1",
+        "asset:logo",
+        "shader:node-f3080d66",
+        "synthetic-camera",
+        "shader:node-9c762c39",
+        "shader:node-5f288f41"
+      ],
+      "file" : "atlanta-culture-culture-topic-3-portrait.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "graphic:custom",
+        "shader:node-5010f1b1",
+        "asset:logo",
+        "shader:node-f3080d66",
+        "synthetic-camera",
+        "shader:node-9c762c39",
+        "shader:node-5f288f41"
+      ],
+      "file" : "atlanta-culture-culture-topic-4-portrait.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "graphic:custom",
+        "synthetic-camera"
+      ],
+      "file" : "head-to-head-conversation.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "graphic:custom",
+        "synthetic-camera"
+      ],
+      "file" : "head-to-head-host-focus.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "graphic:custom",
+        "synthetic-camera"
+      ],
+      "file" : "head-to-head-solo.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "graphic:custom",
+        "synthetic-camera"
+      ],
+      "file" : "signal-desk-duo.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "graphic:custom",
+        "synthetic-camera"
+      ],
+      "file" : "signal-desk-host-focus.json",
+      "rendered" : true
+    },
+    {
+      "resources" : [
+        "graphic:custom",
+        "synthetic-camera"
+      ],
+      "file" : "signal-desk-solo.json",
+      "rendered" : true
+    }
+  ],
+  "sharpness" : {
+    "outputResolutionReference" : [
+      {
+        "density" : 1.5,
+        "meanAbsolutePixelError" : 0.95400966183574876,
+        "softenedStripeFraction" : 0,
+        "mode" : "nested",
+        "orientation" : "landscape"
+      },
+      {
+        "density" : 1.5,
+        "meanAbsolutePixelError" : 0.95400966183574876,
+        "softenedStripeFraction" : 0,
+        "mode" : "masked",
+        "orientation" : "landscape"
+      },
+      {
+        "density" : 1.5,
+        "meanAbsolutePixelError" : 0.95400966183574876,
+        "softenedStripeFraction" : 0,
+        "mode" : "nested",
+        "orientation" : "portrait"
+      },
+      {
+        "density" : 1.5,
+        "meanAbsolutePixelError" : 0.95400966183574876,
+        "softenedStripeFraction" : 0,
+        "mode" : "masked",
+        "orientation" : "portrait"
+      },
+      {
+        "density" : 2,
+        "meanAbsolutePixelError" : 0,
+        "softenedStripeFraction" : 0,
+        "mode" : "nested",
+        "orientation" : "landscape"
+      },
+      {
+        "density" : 2,
+        "meanAbsolutePixelError" : 0,
+        "softenedStripeFraction" : 0,
+        "mode" : "masked",
+        "orientation" : "landscape"
+      },
+      {
+        "density" : 2,
+        "meanAbsolutePixelError" : 0,
+        "softenedStripeFraction" : 0,
+        "mode" : "nested",
+        "orientation" : "portrait"
+      },
+      {
+        "density" : 2,
+        "meanAbsolutePixelError" : 0,
+        "softenedStripeFraction" : 0,
+        "mode" : "masked",
+        "orientation" : "portrait"
+      }
+    ]
+  },
+  "scope" : "isolated native compositor with synthetic capture, PNG and decoded H.264; actual CEF HTML; no physical capture, room or production integration",
+  "browser" : {
+    "actualBrowserSources" : 2,
+    "htmlBelowNative" : true,
+    "htmlAboveNative" : true,
+    "textPixels" : 758,
+    "wholeGroupMask" : true
+  },
+  "obsVersion" : "32.1.2",
+  "media" : {
+    "foregroundOverVideo" : true,
+    "groupMask" : true,
+    "remainingGroups" : 0,
+    "videoAdvances" : true,
+    "nativeImagePixels" : true,
+    "decodedVideoPixels" : true
+  },
+  "sceneOwner" : {
+    "actualColorTargetBudget" : true,
+    "cleanup" : true,
+    "contain" : true,
+    "cover" : true,
+    "failedPreparePreservesExistingGraph" : true,
+    "preflightRejectsInvalidGraph" : true,
+    "stretch" : true
+  },
+  "program" : [
+    {
+      "orientation" : "landscape",
+      "continuitySamples" : 118,
+      "pauseResume" : true,
+      "nativeClockTransitions" : 3,
+      "actualRoomScene" : true,
+      "endpointRenderedRevision" : 16,
+      "renderSerial" : 260,
+      "latestPreparationWins" : true,
+      "midpointFrames" : 3,
+      "staleAndCancelledTakeRejected" : true,
+      "nextBackSwitches" : 12,
+      "offAirPreparation" : true,
+      "noBlackGapAtSamples" : true
+    },
+    {
+      "orientation" : "portrait",
+      "continuitySamples" : 116,
+      "pauseResume" : true,
+      "nativeClockTransitions" : 3,
+      "actualRoomScene" : true,
+      "endpointRenderedRevision" : 16,
+      "renderSerial" : 250,
+      "latestPreparationWins" : true,
+      "midpointFrames" : 3,
+      "staleAndCancelledTakeRejected" : true,
+      "nextBackSwitches" : 12,
+      "offAirPreparation" : true,
+      "noBlackGapAtSamples" : true
+    }
+  ],
+  "remainingGroups" : 0
+}

@@ -1,0 +1,125 @@
+{
+  "baselineCommit": "ad69274",
+  "baselineMode": "measurement only; thresholds disabled in temporary comparison harness",
+  "reference": "equivalent full-output-resolution authored design",
+  "before": {
+    "outputResolutionReference": [
+      {
+        "density": 1.5,
+        "meanAbsolutePixelError": 7.189049919484702,
+        "softenedStripeFraction": 1,
+        "mode": "nested",
+        "orientation": "landscape"
+      },
+      {
+        "density": 1.5,
+        "meanAbsolutePixelError": 11.950144927536233,
+        "softenedStripeFraction": 0.6666666666666666,
+        "mode": "masked",
+        "orientation": "landscape"
+      },
+      {
+        "density": 1.5,
+        "meanAbsolutePixelError": 7.189049919484702,
+        "softenedStripeFraction": 1,
+        "mode": "nested",
+        "orientation": "portrait"
+      },
+      {
+        "density": 1.5,
+        "meanAbsolutePixelError": 11.950144927536233,
+        "softenedStripeFraction": 0.6666666666666666,
+        "mode": "masked",
+        "orientation": "portrait"
+      },
+      {
+        "density": 2,
+        "meanAbsolutePixelError": 10.726702898550725,
+        "softenedStripeFraction": 0.06555555555555556,
+        "mode": "nested",
+        "orientation": "landscape"
+      },
+      {
+        "density": 2,
+        "meanAbsolutePixelError": 12.614293478260869,
+        "softenedStripeFraction": 0,
+        "mode": "masked",
+        "orientation": "landscape"
+      },
+      {
+        "density": 2,
+        "meanAbsolutePixelError": 10.726702898550725,
+        "softenedStripeFraction": 0.06555555555555556,
+        "mode": "nested",
+        "orientation": "portrait"
+      },
+      {
+        "density": 2,
+        "meanAbsolutePixelError": 12.614293478260869,
+        "softenedStripeFraction": 0,
+        "mode": "masked",
+        "orientation": "portrait"
+      }
+    ]
+  },
+  "after": {
+    "outputResolutionReference": [
+      {
+        "density": 1.5,
+        "meanAbsolutePixelError": 0.9540096618357488,
+        "softenedStripeFraction": 0,
+        "mode": "nested",
+        "orientation": "landscape"
+      },
+      {
+        "density": 1.5,
+        "meanAbsolutePixelError": 0.9540096618357488,
+        "softenedStripeFraction": 0,
+        "mode": "masked",
+        "orientation": "landscape"
+      },
+      {
+        "density": 1.5,
+        "meanAbsolutePixelError": 0.9540096618357488,
+        "softenedStripeFraction": 0,
+        "mode": "nested",
+        "orientation": "portrait"
+      },
+      {
+        "density": 1.5,
+        "meanAbsolutePixelError": 0.9540096618357488,
+        "softenedStripeFraction": 0,
+        "mode": "masked",
+        "orientation": "portrait"
+      },
+      {
+        "density": 2,
+        "meanAbsolutePixelError": 0,
+        "softenedStripeFraction": 0,
+        "mode": "nested",
+        "orientation": "landscape"
+      },
+      {
+        "density": 2,
+        "meanAbsolutePixelError": 0,
+        "softenedStripeFraction": 0,
+        "mode": "masked",
+        "orientation": "landscape"
+      },
+      {
+        "density": 2,
+        "meanAbsolutePixelError": 0,
+        "softenedStripeFraction": 0,
+        "mode": "nested",
+        "orientation": "portrait"
+      },
+      {
+        "density": 2,
+        "meanAbsolutePixelError": 0,
+        "softenedStripeFraction": 0,
+        "mode": "masked",
+        "orientation": "portrait"
+      }
+    ]
+  }
+}

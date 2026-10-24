@@ -707,6 +707,47 @@ static NSArray *real_room_proof(NSString *out) {
   return checks;
 }
 
+static NSDictionary *sharpness_proof(NSString *out) {
+  NSMutableArray *checks=[NSMutableArray array];
+  for (NSNumber *factor in @[@1.5,@2]) for (NSString *orientation in @[@"landscape",@"portrait"]) for (NSString *mode in @[@"nested",@"masked"]) {
+    NSMutableArray<NSData *> *frames=[NSMutableArray array];
+    double density=factor.doubleValue;
+    uint32_t w=([orientation isEqualToString:@"portrait"]?180:320)*density,h=([orientation isEqualToString:@"portrait"]?320:180)*density;
+    for (NSString *variant in @[@"design",@"reference"]) {
+      NSString *stem=[NSString stringWithFormat:@"sharpness-%@-%@-%@-%@",factor,orientation,mode,variant];
+      NSDictionary *plan=[NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:[out stringByAppendingPathComponent:[stem stringByAppendingString:@".json"]]] options:0 error:nil];
+      obs_scene_t *room=obs_scene_create_private("Sharpness proof");obs_source_t *source=obs_scene_get_source(room);
+      obs_set_output_source(0,source);void *owner=sets_v2_rust_attach(room,w,h);
+      require(owner!=NULL,"sharpness room attaches");
+      rust_call(owner,@{@"op":@"preload",@"generation":@7,@"revision":@1,@"key":@"sharpness",@"plan":plan},NULL,true);
+      NSDictionary *status=nil;
+      for(int i=0;i<700;i++){status=rust_call(owner,@{@"op":@"status",@"generation":@7},NULL,true);if([status[@"cachedKeys"] containsObject:@"sharpness"])break;usleep(20000);}
+      require([status[@"cachedKeys"] containsObject:@"sharpness"],"density-aware graphics first paint");
+      rust_call(owner,@{@"op":@"activate",@"generation":@7,@"revision":@2,@"key":@"sharpness",@"plan":plan},NULL,true);
+      rust_call(owner,@{@"op":@"take",@"generation":@7,@"revision":@2,@"durationMs":@0,@"mode":@"dissolve"},NULL,true);
+      for(int i=0;i<250;i++){status=rust_call(owner,@{@"op":@"status",@"generation":@7},NULL,true);if([status[@"renderedRevision"] intValue]==2)break;usleep(20000);}
+      require([status[@"renderedRevision"] intValue]==2,"sharpness cached take renders");
+      NSData *frame=capture(source,w,h,w,h);[frames addObject:frame];png(frame,w,h,[out stringByAppendingPathComponent:[stem stringByAppendingString:@".png"]]);
+      sets_v2_rust_release(owner);obs_set_output_source(0,NULL);obs_scene_release(room);
+      for(int i=0;i<300&&producer_set_v2_live_groups();i++)usleep(10000);
+      require(!producer_set_v2_live_groups(),"sharpness groups released");
+    }
+    double error=0;unsigned gray=0,samples=0;
+    // Compare text and one-output-pixel lines, excluding rounded outer edges.
+    for(int y=ceil(20*density);y<110*density;y++)for(int x=ceil(20*density);x<135*density;x++){
+      const uint8_t *a=pixel(frames[0],w,x,y),*b=pixel(frames[1],w,x,y);
+      for(int c=0;c<4;c++)error+=abs(a[c]-b[c]);
+      if(y>=ceil(21*density)&&y<36*density&&x>=ceil(21*density)&&x<20*density+62){samples++;if(a[0]>8&&a[0]<247)gray++;}
+    }
+    error/=(110*density-ceil(20*density))*(135*density-ceil(20*density))*4.;double softened=(double)gray/samples;
+    fprintf(stderr,"Sharpness %s/%s MAE %.3f; softened stripe pixels %.3f\n",orientation.UTF8String,mode.UTF8String,error,softened);
+    require(error<3,"upscaled design matches output-resolution text reference");
+    require(softened<0.02,"one-output-pixel stripe contrast preserved through nested groups");
+    [checks addObject:@{@"density":factor,@"orientation":orientation,@"mode":mode,@"meanAbsolutePixelError":@(error),@"softenedStripeFraction":@(softened)}];
+  }
+  return @{@"outputResolutionReference":checks};
+}
+
 static struct producer_set_v2_program_status program_status(obs_source_t *p) {
   struct producer_set_v2_program_status status = {0};
   require(producer_set_v2_program_status(p, &status), "native program status");
@@ -955,8 +996,9 @@ static NSDictionary *owner_proof(NSString *out) {
     require(scene != NULL, "prepare custom aspect viewport");
     require(producer_set_v2_scene_group_count(scene) == 4,
             "actual native color target count");
+    size_t rasterScale=mode==SET_V2_CONTAIN?3:4; // twice the density: 1.5x or 2x
     require(producer_set_v2_scene_texture_bytes(scene) ==
-                (640 * 360 + 320 * 240 * 2 + 160 * 120) * 4,
+                (640 * 360 + (320 * 240 * 2 + 160 * 120)*rasterScale*rasterScale/4) * 4,
             "actual native color target byte budget");
     obs_source_t *output = producer_set_v2_scene_source(scene);
     NSData *frame = capture(output, 640, 360, 640, 360);
@@ -1268,6 +1310,12 @@ static int runProbe(int argc, char **argv) {
     producer_source_appearance_register();
     sets_v2_rust_register();
     register_test();
+    if (getenv("PRODUCER_PROBE_SHARPNESS_ONLY")) {
+      load_plugin(app,@"obs-browser");obs_post_load_modules();
+      NSDictionary *report=sharpness_proof(out);
+      [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:@"sharpness.json"] atomically:YES];
+      obs_shutdown();puts("PASS: density-aware native sharpness");return 0;
+    }
     require(producer_set_v2_group_create(0, 10, 0, 1) == NULL,
             "reject zero-size group");
     NSMutableArray *checks = [NSMutableArray array];
@@ -1388,6 +1436,7 @@ static int runProbe(int argc, char **argv) {
     NSDictionary *browser = browser_proof(app, out);
     NSArray *adapter = rust_adapter_proof(out);
     NSArray *authored = real_room_proof(out);
+    NSDictionary *sharpness = sharpness_proof(out);
     NSDictionary *report = @{
       @"backend" : @"Metal",
       @"obsVersion" : @(obs_get_version_string()),
@@ -1400,6 +1449,7 @@ static int runProbe(int argc, char **argv) {
       @"program" : program,
       @"appAdapter" : adapter,
       @"authoredRooms" : authored,
+      @"sharpness" : sharpness,
       @"remainingGroups" : @(producer_set_v2_live_groups()),
       @"remainingSyntheticSources" : @(atomic_load(&source_live)),
       @"scope" : @"isolated native compositor with synthetic capture, PNG and "

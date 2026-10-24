@@ -44,6 +44,8 @@ if (
   proof.program?.length !== 2 ||
   proof.appAdapter?.length !== 2 ||
   proof.authoredRooms?.length !== 10 ||
+  proof.sharpness?.outputResolutionReference?.length !== 8 ||
+  proof.sharpness.outputResolutionReference.some(c => c.meanAbsolutePixelError >= 3 || c.softenedStripeFraction >= 0.02) ||
   proof.remainingGroups ||
   proof.remainingSyntheticSources
 )

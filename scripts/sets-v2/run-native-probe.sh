@@ -41,4 +41,6 @@ node scripts/sets-v2/make-native-plans.mjs "$proof_dir"
 node scripts/sets-v2/make-room-fixtures.mjs
 xcrun swift scripts/sets-v2/make-media-fixture.swift "$proof_dir/media"
 PRODUCER_PROBE_CONFIG="$build_dir/cef-profile" "$probe_app/Contents/MacOS/producer" "$app" "$proof_dir"
-node scripts/sets-v2/record-native-proof.mjs "$proof_dir" "$app" "$started_at"
+if [[ -z "${PRODUCER_PROBE_SHARPNESS_ONLY:-}" ]]; then
+  node scripts/sets-v2/record-native-proof.mjs "$proof_dir" "$app" "$started_at"
+fi

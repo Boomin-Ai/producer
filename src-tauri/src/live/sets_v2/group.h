@@ -9,6 +9,8 @@ extern "C" {
 void producer_set_v2_register(void);
 obs_source_t *producer_set_v2_group_create(uint32_t width, uint32_t height,
                                            float radius, float opacity);
+/* Set physical raster density before sealing; logical coordinates stay fixed. */
+bool producer_set_v2_group_density(obs_source_t *group, float density);
 bool producer_set_v2_group_add(obs_source_t *group, obs_source_t *child,
                                float x, float y, float width, float height,
                                bool contain);

@@ -85,6 +85,7 @@ extern "C" {
     ) -> bool;
     fn producer_set_v2_transition_register();
     fn producer_set_v2_group_create(w: u32, h: u32, r: f32, o: f32) -> *mut ffi::obs_source_t;
+    fn producer_set_v2_group_density(g:*mut ffi::obs_source_t,density:f32)->bool;
     fn producer_set_v2_group_add(
         g: *mut ffi::obs_source_t,
         s: *mut ffi::obs_source_t,
@@ -177,6 +178,8 @@ struct Arena {
     sources: Vec<Source>,
     markers: Vec<(Source, u32)>,
     browser_pixels: usize,
+    intermediate_pixels: usize,
+    density:f32,
     motion_targets: std::collections::HashSet<String>,
 }
 impl Arena {
@@ -187,6 +190,8 @@ impl Arena {
             sources: Vec::new(),
             markers: Vec::new(),
             browser_pixels: 0,
+            intermediate_pixels:0,
+            density:1.,
             motion_targets: Default::default(),
         }
     }
@@ -224,9 +229,11 @@ impl Arena {
             .ceil()
             - y)
             .max(1.) as u32;
-        let pixels = (w as usize) * (h as usize + 1);
-        if w > 8192
-            || h >= 8192
+        let pw=(w as f32*self.density).ceil() as u32;
+        let ph=(h as f32*self.density).ceil() as u32;
+        let pixels = (pw as usize) * (ph as usize + 1);
+        if pw > 8192
+            || ph >= 8192
             || pixels > 4096 * 4096
             || self.browser_pixels + pixels > 8 * 1024 * 1024
             || self.markers.len() >= 16
@@ -234,7 +241,7 @@ impl Arena {
             return Err("V2 graphics surface budget exceeded".into());
         }
         self.browser_pixels += pixels;
-        let html = contract::graphics_document(nodes, w, h, (x, y), palette)?;
+        let html = contract::graphics_document_scaled(nodes, w, h, (x, y), palette,self.density)?;
         let url = format!(
             "data:text/html;charset=utf-8,{}",
             html.as_bytes()
@@ -242,7 +249,7 @@ impl Arena {
                 .map(|c| format!("%{c:02X}"))
                 .collect::<String>()
         );
-        let config = serde_json::json!({"url":url,"is_local_file":false,"css":"","width":w,"height":h+1,"fps":30,"fps_custom":true,"shutdown":false,"reroute_audio":true,"webpage_control_level":0});
+        let config = serde_json::json!({"url":url,"is_local_file":false,"css":"","width":pw,"height":ph+1,"fps":30,"fps_custom":true,"shutdown":false,"reroute_audio":true,"webpage_control_level":0});
         let settings =
             ffi::obs_data_create_from_json(CString::new(config.to_string()).unwrap().as_ptr());
         if settings.is_null() {
@@ -264,14 +271,16 @@ impl Arena {
             return Err("V2 graphics crop allocation failed".into());
         }
         let clip = Source(clip);
-        if !producer_set_v2_group_add(clip.0, browser.0, 0., 0., w as f32, (h + 1) as f32, false)
+        if !producer_set_v2_group_density(clip.0,self.density){return Err("Graphics density exceeds texture budget".into());}
+        self.intermediate_pixels += (pw as usize)*(ph as usize);
+        if !producer_set_v2_group_add(clip.0, browser.0, 0., 0., w as f32, (ph + 1) as f32 * h as f32 / ph as f32, false)
             || !producer_set_v2_group_seal(clip.0)
         {
             return Err("V2 graphics crop attachment failed".into());
         }
         let surface = clip.0;
         self.sources.push(clip);
-        self.markers.push((browser, h));
+        self.markers.push((browser, ph));
         self.ids
             .push(CString::new(format!("graphics-{}", self.markers.len())).unwrap());
         Ok(NativeNode {
@@ -371,6 +380,8 @@ impl Arena {
                     ffi::obs_source_release(source);
                     return Err("Source placement allocation failed".into());
                 }
+                if !producer_set_v2_group_density(frame.0,self.density){ffi::obs_source_release(source);return Err("Source placement density exceeds texture budget".into());}
+                self.intermediate_pixels += ((w as f32*self.density).ceil() as usize)*((h as f32*self.density).ceil() as usize);
                 let sw = ffi::obs_source_get_width(source) as f32;
                 let sh = ffi::obs_source_get_height(source) as f32;
                 if sw <= 0. || sh <= 0. {
@@ -650,6 +661,9 @@ impl RoomProgram {
     }
     unsafe fn finish_build(&mut self, b: Building) -> Result<Rc<Draft>, String> {
         let mut arena = Arena::new();
+        let sx=self.width as f32/b.plan.root.bounds.width;
+        let sy=self.height as f32/b.plan.root.bounds.height;
+        arena.density=if b.plan.target.scaling=="contain"{sx.min(sy)}else{sx.max(sy)}.max(1.);
         arena.motion_targets = b.plan.motion.iter().map(|t| t.target.clone()).chain(b.plan.retained_targets.iter().cloned()).collect();
         let root = arena.node(&b.plan.root, &palette(), &mut |id| {
             b.resources
@@ -674,7 +688,7 @@ impl RoomProgram {
                 .to_string_lossy()
                 .into_owned());
         }
-        let bytes=producer_set_v2_scene_texture_bytes(scene)+arena.browser_pixels*4+arena.markers.len()*1024*1024;
+        let bytes=producer_set_v2_scene_texture_bytes(scene)+(arena.browser_pixels+arena.intermediate_pixels)*4+arena.markers.len()*1024*1024;
         let draft = Draft {
             scene,
             markers: std::mem::take(&mut arena.markers),

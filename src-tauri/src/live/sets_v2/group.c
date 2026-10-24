@@ -13,7 +13,7 @@ OBS_IMPORT void gs_matrix_rotaa4f(float x, float y, float z, float angle);
 #define GROUP_ID "producer_set_v2_group"
 #define GROUP_CHILD_LIMIT 128
 #define GROUP_DEPTH_LIMIT 16
-/* A single offscreen texture at design resolution. Aggregate budget belongs to
+/* A single offscreen texture at output-aware density. Aggregate budget belongs to
  * the render-plan owner. Prevent a malformed direct call allocating huge
  * targets. */
 #define GROUP_PIXEL_LIMIT (4096u * 4096u)
@@ -27,6 +27,7 @@ struct layer {
 struct group {
   obs_source_t *source;
   uint32_t width, height;
+  float density;
   float radius, opacity;
   gs_texrender_t *texture;
   gs_effect_t *effect;
@@ -72,6 +73,7 @@ static void *create(obs_data_t *settings, obs_source_t *source) {
   g->source = source;
   g->width = (uint32_t)w;
   g->height = (uint32_t)h;
+  g->density = 1;
   g->radius = (float)radius;
   g->opacity = (float)opacity;
   char *error = NULL;
@@ -117,14 +119,62 @@ static void children(void *data, void *callback, void *param) {
     ((void (*)(obs_source_t *, obs_source_t *, void *))callback)(
         g->source, g->layers[i].source, param);
 }
+/* Bypass offscreen sampling only when no group isolation or clipping is
+ * needed. Check each frame: animation may move a child outside its bounds. */
+static bool direct(const struct group *g) {
+  if (g->radius != 0 || g->opacity != 1) return false;
+  for (size_t i=0;i<g->count;i++) {
+    const struct layer *l=&g->layers[i];
+    if (!l->visible) continue;
+    if (l->rotation != 0 || l->scale_x != 1 || l->scale_y != 1 ||
+        l->x < 0 || l->y < 0 || l->x+l->width > g->width ||
+        l->y+l->height > g->height) return false;
+  }
+  return true;
+}
+static void draw_children(struct group *g) {
+  for (size_t i = 0; i < g->count; i++) {
+    const struct layer *l = &g->layers[i];
+    if (!l->visible)
+      continue;
+    uint32_t sw = obs_source_get_width(l->source),
+             sh = obs_source_get_height(l->source);
+    if (!sw || !sh)
+      continue;
+    float sx = l->width / sw, sy = l->height / sh, dx = l->x, dy = l->y;
+    if (l->contain) {
+      float s = fminf(sx, sy);
+      dx += (l->width - sw * s) * .5f;
+      dy += (l->height - sh * s) * .5f;
+      sx = sy = s;
+    }
+    gs_matrix_push();
+    gs_matrix_translate3f(dx, dy, 0);
+    gs_matrix_translate3f(l->width * .5f, l->height * .5f, 0);
+    gs_matrix_rotaa4f(0, 0, 1, l->rotation * 0.0174532925199433f);
+    gs_matrix_scale3f(l->scale_x, l->scale_y, 1);
+    gs_matrix_translate3f(-l->width * .5f, -l->height * .5f, 0);
+    gs_matrix_scale3f(sx, sy, 1);
+    obs_source_video_render(l->source);
+    gs_matrix_pop();
+  }
+}
 static void render(void *data, gs_effect_t *unused) {
   (void)unused;
   struct group *g = data;
   if (!g->sealed || render_depth >= GROUP_DEPTH_LIMIT)
     return;
   render_depth++;
+  if (direct(g)) {
+    gs_blend_state_push();
+    gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
+    draw_children(g);
+    gs_blend_state_pop();
+    render_depth--;
+    return;
+  }
   gs_texrender_reset(g->texture);
-  if (gs_texrender_begin(g->texture, g->width, g->height)) {
+  if (gs_texrender_begin(g->texture, (uint32_t)ceilf(g->width*g->density), (uint32_t)ceilf(g->height*g->density))) {
     const struct vec4 clear = {0, 0, 0, 0};
     gs_clear(GS_CLEAR_COLOR, &clear, 0, 0);
     gs_ortho(0, (float)g->width, 0, (float)g->height, -100, 100);
@@ -132,42 +182,18 @@ static void render(void *data, gs_effect_t *unused) {
     gs_matrix_identity();
     gs_blend_state_push();
     gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
-    for (size_t i = 0; i < g->count; i++) {
-      const struct layer *l = &g->layers[i];
-      if (!l->visible)
-        continue;
-      uint32_t sw = obs_source_get_width(l->source),
-               sh = obs_source_get_height(l->source);
-      if (!sw || !sh)
-        continue;
-      float sx = l->width / sw, sy = l->height / sh, dx = l->x, dy = l->y;
-      if (l->contain) {
-        float s = fminf(sx, sy);
-        dx += (l->width - sw * s) * .5f;
-        dy += (l->height - sh * s) * .5f;
-        sx = sy = s;
-      }
-      gs_matrix_push();
-      gs_matrix_translate3f(dx, dy, 0);
-      gs_matrix_translate3f(l->width * .5f, l->height * .5f, 0);
-      gs_matrix_rotaa4f(0, 0, 1, l->rotation * 0.0174532925199433f);
-      gs_matrix_scale3f(l->scale_x, l->scale_y, 1);
-      gs_matrix_translate3f(-l->width * .5f, -l->height * .5f, 0);
-      gs_matrix_scale3f(sx, sy, 1);
-      obs_source_video_render(l->source);
-      gs_matrix_pop();
-    }
+    draw_children(g);
     gs_blend_state_pop();
     gs_matrix_pop();
     gs_texrender_end(g->texture);
     gs_texture_t *texture = gs_texrender_get_texture(g->texture);
     gs_effect_set_texture(gs_effect_get_param_by_name(g->effect, "image"),
                           texture);
-    struct vec2 extent = {(float)g->width, (float)g->height};
+    struct vec2 extent = {ceilf(g->width*g->density), ceilf(g->height*g->density)};
     gs_effect_set_vec2(gs_effect_get_param_by_name(g->effect, "extent"),
                        &extent);
     gs_effect_set_float(gs_effect_get_param_by_name(g->effect, "radius"),
-                        g->radius);
+                        g->radius*g->density);
     gs_effect_set_float(gs_effect_get_param_by_name(g->effect, "opacity"),
                         g->opacity);
     gs_blend_state_push();
@@ -220,6 +246,15 @@ obs_source_t *producer_set_v2_group_create(uint32_t w, uint32_t h, float radius,
     return NULL;
   }
   return s;
+}
+bool producer_set_v2_group_density(obs_source_t *s, float density) {
+  struct group *g=get(s);
+  if (!g || g->sealed || !isfinite(density) || density < 1 || density > 8)
+    return false;
+  double w=ceil(g->width*density),h=ceil(g->height*density);
+  if (w > 8192 || h > 8192 || w*h > GROUP_PIXEL_LIMIT) return false;
+  g->density=density;
+  return true;
 }
 bool producer_set_v2_group_add(obs_source_t *s, obs_source_t *child, float x,
                                float y, float w, float h, bool contain) {

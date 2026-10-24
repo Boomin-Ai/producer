@@ -17,7 +17,7 @@ export async function measureSegmentTiming(sourceId:string){
    button('Choose set',editor)!.click();(await wait(()=>Array.from(editor.querySelectorAll<HTMLButtonElement>('[role=option]')).find(o=>o.textContent?.includes(name)),name)).click();
    await wait(()=>editor.querySelector('[role=combobox][aria-label="Choose set"]')?.textContent?.includes(name),'selected title');
    for(const picker of editor.querySelectorAll<HTMLSelectElement>('.set-source-picker select'))select(picker,sourceId);
-   await sleep(100);events=[];button('Show on output',editor)!.click();await wait(()=>events.find(e=>e.stage==='render-complete'),'initial render');button('Close editor',editor)!.click();
+   await sleep(100);events=[];button('Show on output',editor)!.click();await wait(()=>events.find(e=>e.stage==='render-complete'),'initial render').catch(e=>{throw Error(String(e)+' '+JSON.stringify(events.slice(-12)));});button('Close editor',editor)!.click();
    await invoke('live_set_v2_report',{result:{ok:false,kind:'timing-progress',set:name,debug:(await import('./preparedScenes')).preparationDebug().map(s=>({...s,entries:s.entries.filter(e=>e.state.state!=='ready').slice(0,24)}))}});
    await wait(()=>{const p=document.querySelector<HTMLElement>('.set-controls[data-layouts-total]');return p&&Number(p.dataset.layoutsTotal)>0&&p.dataset.layoutsReady===p.dataset.layoutsTotal;},'entire set layouts ready');
    events=[];document.querySelector<HTMLButtonElement>('.set-mode-action')!.click();

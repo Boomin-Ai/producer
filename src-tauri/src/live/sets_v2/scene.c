@@ -23,6 +23,7 @@ struct producer_set_v2_scene {
 struct preparation {
   struct producer_set_v2_scene *scene;
   size_t budget;
+  float density;
   char *error;
   size_t capacity;
 };
@@ -70,7 +71,7 @@ static bool validate(struct preparation *p,
       !isfinite(n->scale_x) || !isfinite(n->scale_y) || n->scale_x < 0 ||
       n->scale_y < 0 || n->scale_x > 32 || n->scale_y > 32)
     return fail(p, "Invalid native placement transform");
-  if (!allocation(p, n->width, n->height))
+  if (!allocation(p, ceil(n->width)*p->density, ceil(n->height)*p->density))
     return false;
   snprintf(p->scene->nodes[p->scene->count++].id, 65, "%s", n->id);
   if (n->kind == SET_V2_GROUP) {
@@ -110,7 +111,8 @@ static obs_source_t *assemble(struct preparation *p,
   uint32_t w = (uint32_t)ceilf(n->width), h = (uint32_t)ceilf(n->height);
   obs_source_t *group = producer_set_v2_group_create(
       w, h, n->radius, n->visible ? n->opacity : 0);
-  if (!group) {
+  if (!group || !producer_set_v2_group_density(group,p->density)) {
+    if (group) obs_source_release(group);
     fail(p, "Native group allocation failed");
     return NULL;
   }
@@ -170,13 +172,18 @@ struct producer_set_v2_scene *producer_set_v2_scene_prepare(
       snprintf(error, capacity, "Native owner allocation failed");
     return NULL;
   }
-  struct preparation p = {scene, budget, error, capacity};
+  struct preparation p = {.scene=scene,.budget=budget,.density=1,.error=error,.capacity=capacity};
   if (!budget || budget > BYTE_LIMIT || !fit_valid(fit) || !root ||
       root->kind != SET_V2_GROUP || root->x != 0 || root->y != 0) {
     fail(&p, "Invalid native scene request");
     free(scene);
     return NULL;
   }
+  if (root->width <= 0 || root->height <= 0) {
+    fail(&p, "Invalid design dimensions");free(scene);return NULL;
+  }
+  float sx=width/root->width,sy=height/root->height;
+  p.density=fmaxf(1,fit==SET_V2_CONTAIN?fminf(sx,sy):fmaxf(sx,sy));
   if (!allocation(&p, width, height) || !validate(&p, root, 0)) {
     free(scene);
     return NULL;

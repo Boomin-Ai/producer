@@ -128,3 +128,17 @@ for (const [name, surface] of [
     JSON.stringify({ ...surface, html: undefined }, null, 2),
   );
 }
+
+// Compare nested design-space graphics against an equivalent output-size design.
+// Half-design-pixel stripes must stay one physical pixel wide after a 2x take.
+for(const density of [1.5,2])for(const portrait of [false,true])for(const masked of [false,true])for(const reference of [false,true]){
+ const scale=reference?density:1,w=(portrait?180:320)*scale,h=(portrait?320:180)*scale;
+ const n=(id,kind,x,y,width,height,extra={})=>({id,kind,bounds:{x:x*scale,y:y*scale,width:width*scale,height:height*scale},properties:{},children:[],...(kind==='graphic'?{resource:'graphic:fixture'}:{}),...extra});
+ const stripes=Array.from({length:64},(_,i)=>n('stripe'+i,'graphic',i/density,0,1/density,18,{properties:{background:i%2?'#ffffff':'#000000'}}));
+ const content=n('detail','group',masked?10:9.75,masked?10:9.75,120,110,{children:[...stripes,n('label','text',0,30,118,65,{properties:{text:'CRISP SETS\nAa 123 / UI',fontSize:12*scale,fontWeight:400,color:'#000000'}})]});
+ const panel=n('panel','group',masked?10:10.25,masked?10:10.25,150,150,{...(masked?{mask:{kind:'rounded',radius:8*scale},isolate:true}:{}),children:[content]});
+ const root=n('root','group',0,0,w/scale,h/scale,{children:[n('paper','graphic',0,0,w/scale,h/scale,{properties:{background:'#ffffff'}}),panel]});
+ const target={id:'proof',orientation:portrait?'portrait':'landscape',width:(portrait?180:320)*density,height:(portrait?320:180)*density,scaling:'contain'};
+ const plan={definitionId:'sharpness',definitionRevision:1,instanceId:'proof',canvasId:'design',target,viewport:{scaleX:reference?1:density,scaleY:reference?1:density,offsetX:0,offsetY:0,clip:{x:0,y:0,width:target.width,height:target.height}},root,resources:['graphic:fixture'],retainedTargets:['panel','detail']};
+ fs.writeFileSync(path.join(output,`sharpness-${density}-${portrait?'portrait':'landscape'}-${masked?'masked':'nested'}-${reference?'reference':'design'}.json`),JSON.stringify(plan));
+}
