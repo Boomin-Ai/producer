@@ -1,5 +1,7 @@
 import {useId,useRef,useState} from 'react';
-type Choice={value:string;label:string;group:string};
+import {SetThumbnail} from './SetThumbnail';
+import type {PresentationPackage} from './schema';
+type Choice={value:string;label:string;group:string;load?:()=>Promise<PresentationPackage>};
 export function SetPicker({value,options,onSelect}:{value:string;options:Choice[];onSelect:(value:string)=>void}) {
  const id=useId(),trigger=useRef<HTMLButtonElement>(null),menu=useRef<HTMLDivElement>(null),search=useRef<HTMLInputElement>(null);
  const [open,setOpen]=useState(false),[query,setQuery]=useState(''),[active,setActive]=useState(0);
@@ -8,7 +10,7 @@ export function SetPicker({value,options,onSelect}:{value:string;options:Choice[
  const close=()=>{menu.current?.hidePopover();trigger.current?.focus();};
  const choose=(o:Choice)=>{close();onSelect(o.value);};
  const show=()=>{
-  const r=trigger.current!.getBoundingClientRect(),width=Math.min(Math.max(r.width,320),innerWidth-16),below=innerHeight-r.bottom-14,above=r.top-14;
+  const r=trigger.current!.getBoundingClientRect(),width=Math.min(Math.max(r.width,420),innerWidth-16),below=innerHeight-r.bottom-14,above=r.top-14;
   const maxHeight=Math.min(420,Math.max(below,above));
   setPosition({left:Math.max(8,Math.min(r.left,innerWidth-width-8)),top:below>=Math.min(300,above)?r.bottom+6:Math.max(8,r.top-maxHeight-6),width,maxHeight});
   setQuery('');setActive(Math.max(0,options.findIndex(o=>o.value===value)));menu.current?.showPopover();
@@ -26,7 +28,7 @@ export function SetPicker({value,options,onSelect}:{value:string;options:Choice[
    <input ref={search} type="search" aria-label="Search sets" aria-controls={`${id}-list`} aria-activedescendant={filtered[active]?`${id}-${active}`:undefined} placeholder="Search sets…" value={query} onChange={e=>{setQuery(e.target.value);setActive(0);}}/>
    <div id={`${id}-list`} role="listbox" aria-label="Sets" className="set-picker-list">{filtered.map((o,i)=><div key={o.value}>
     {(i===0||filtered[i-1].group!==o.group)&&<div className="set-picker-group">{o.group}</div>}
-    <button type="button" role="option" id={`${id}-${i}`} aria-selected={o.value===value} tabIndex={-1} data-active={i===active} onMouseMove={()=>setActive(i)} onClick={()=>choose(o)}><span>{o.label}</span><span aria-hidden="true">{o.value===value?'✓':''}</span></button>
+    <button type="button" role="option" id={`${id}-${i}`} aria-selected={o.value===value} tabIndex={-1} data-active={i===active} onMouseMove={()=>setActive(i)} onClick={()=>choose(o)}>{open&&o.load&&<SetThumbnail load={o.load}/>}<span className="set-choice-name">{o.label}</span><span aria-hidden="true">{o.value===value?'✓':''}</span></button>
    </div>)}{!filtered.length&&<p className="set-picker-empty">No sets found.</p>}</div>
   </div>
  </div>;

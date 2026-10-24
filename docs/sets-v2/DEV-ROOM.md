@@ -89,3 +89,9 @@ The editor toolbar now uses a Producer-styled searchable picker instead of the m
 Validation: TypeScript and configuration browser checks pass (saved/built-in selection, search and Enter, Escape, nested dialogs, import and preferences). Frontend changes are available through dev HMR; no production deployment.
 
 The current show runner only supports prepare and rehearsal. Start enters rehearsal. Rendering still targets actual room output, so rehearsal is not an off-air guarantee. Audience/feed test controls are simulated; leaving rehearsal restores prepared configuration. Live broadcasting remains a separate room action. A production show mode needs explicit live input routing and durable runtime state, with rehearsal isolated to preview; changing the label alone would not supply this behavior.
+
+### Set picker thumbnails
+
+Each visible picker row now shows a miniature opening layout, resolved through the existing package parser and output projection. The miniature preserves canvas proportions, authored text/styles, embedded images and slot placement. It has no camera leases, video playback or animation timers. Shader nodes use a static gradient from their authored colors; video and locally referenced media do not have poster extraction yet. This is a lightweight design preview rather than a native compositor capture. Rows load on visibility and release their projection on leaving view; closing the picker unmounts thumbnails. Loading failures retain a placeholder and do not block selection.
+
+Validation: TypeScript passes; configuration browser test confirms all four visible fixture thumbnails finish rendering, alongside selection/search/keyboard/import checks. Visually inspected the rendered picker screenshot.

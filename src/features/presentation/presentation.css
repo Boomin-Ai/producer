@@ -686,3 +686,9 @@
 .set-preview-dialog .set-picker-group { font-size:10px; line-height:16px; padding:8px 10px 4px; }
 .set-preview-dialog-content > header > div { min-width:0; }
 .set-preview-dialog-content > header strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.set-preview-dialog .set-picker-list button { align-items:center; gap:10px; }
+.set-choice-thumbnail { display:block; position:relative; flex:0 0 88px; width:88px; height:52px; overflow:hidden; background:var(--bg); border:1px solid var(--line-2); border-radius:4px; pointer-events:none; }
+.set-choice-thumbnail-canvas { display:block; position:absolute; transform-origin:top left; overflow:hidden; font-family:system-ui,sans-serif; text-align:left; white-space:normal; color:#fff; }
+.set-choice-thumbnail-canvas * { box-sizing:border-box; }
+.set-choice-thumbnail-placeholder { display:grid; place-items:center; height:100%; color:var(--fg-3); }
+.set-choice-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

@@ -20,6 +20,7 @@ try{
  await chooser.click();await page.getByRole('searchbox',{name:'Search sets'}).fill('newsroom');await page.waitForFunction(()=>document.querySelectorAll('.set-picker-list [role=option]').length===1);await page.keyboard.press('Enter');await editor.locator('header > div > strong').filter({hasText:'Saved newsroom'}).waitFor();
  await chooser.click();
  const pickerStyle=await page.locator('.set-picker-menu:popover-open').evaluate(el=>({background:getComputedStyle(el).backgroundColor,font:getComputedStyle(el).fontSize}));assert(!pickerStyle.background.includes('rgba'));assert.equal(pickerStyle.font,'12px');
+ await page.waitForFunction(()=>document.querySelectorAll('.set-picker-menu:popover-open .set-choice-thumbnail-canvas').length>=4);
  await page.screenshot({path:'/private/tmp/producer-set-picker-refined.png'});
  await page.keyboard.press('Escape');assert.equal(await editor.count(),1);assert.equal(await chooser.getAttribute('aria-expanded'),'false');
  await toolbar.getByRole('button',{name:'Set options',exact:true}).click();const options=editor.locator('.set-configuration-popover:popover-open');await options.waitFor();const checkbox=options.getByRole('checkbox');await checkbox.uncheck();assert(!(await checkbox.isChecked()));await options.getByText('Advanced',{exact:true}).click();assert(await options.getByRole('button',{name:'Reload saved set'}).isVisible());assert(await options.getByRole('button',{name:'Edit set with agent',exact:true}).isVisible());await toolbar.getByRole('button',{name:'Set options',exact:true}).click();
