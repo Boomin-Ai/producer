@@ -3,6 +3,7 @@
  * camera placeholder. */
 #include "sets_v2/group.h"
 #include "sets_v2/program.h"
+#include "sets_v2/readiness.h"
 #include "sets_v2/scene.h"
 #include "sets_v2/transition.h"
 #import <AppKit/AppKit.h>
@@ -39,6 +40,7 @@ extern void *sets_v2_rust_attach(obs_scene_t *, uint32_t, uint32_t);
 extern bool sets_v2_rust_dispatch(void *, const char *, obs_source_t *, char *,
                                   size_t);
 extern void sets_v2_rust_release(void *);
+extern bool sets_v2_rust_graphics_document(const char *,float,char *,size_t);
 
 OBS_IMPORT void obs_source_inc_active(obs_source_t *);
 OBS_IMPORT void obs_source_dec_active(obs_source_t *);
@@ -748,6 +750,57 @@ static NSDictionary *sharpness_proof(NSString *out) {
   return @{@"outputResolutionReference":checks};
 }
 
+/* Isolated text-only supersampling prototype. Production density is unchanged. */
+static NSDictionary *text_quality_proof(NSString *out) {
+  NSString *nodeJSON=[NSString stringWithContentsOfFile:[out stringByAppendingPathComponent:@"text-quality-nodes.json"] encoding:NSUTF8StringEncoding error:nil];
+  NSDictionary *plan=[NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:[out stringByAppendingPathComponent:@"text-quality-plan.json"]] options:0 error:nil];
+  NSMutableArray *results=[NSMutableArray array];
+  for(NSNumber *factor in @[@1,@2,@1.5,@1,@1.5,@2]){
+    double density=factor.doubleValue;uint32_t bw=1760*density,bh=800*density;
+    char html[128*1024];require(sets_v2_rust_graphics_document(nodeJSON.UTF8String,density,html,sizeof(html)),"quality uses actual graphics serializer");
+    NSString *document=@(html);
+    NSDictionary *config=@{@"url":[@"data:text/html;base64," stringByAppendingString:[[document dataUsingEncoding:NSUTF8StringEncoding] base64EncodedStringWithOptions:0]],@"width":@(bw),@"height":@(bh+1),@"fps":@30,@"fps_custom":@YES,@"shutdown":@NO,@"reroute_audio":@YES,@"webpage_control_level":@0};
+    NSData *data=[NSJSONSerialization dataWithJSONObject:config options:0 error:nil];
+    obs_data_t *settings=obs_data_create_from_json([[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding].UTF8String);
+    double started=CFAbsoluteTimeGetCurrent()*1000.;
+    obs_source_t *browser=obs_source_create_private("browser_source","Text quality graphics",settings);obs_data_release(settings);require(browser!=NULL,"quality browser created");obs_source_set_audio_mixers(browser,0);
+    obs_source_t *clip=producer_set_v2_group_create(1760,800,0,1),*stage=producer_set_v2_group_create(1920,1080,0,1),*back=solid(1920,1080,17./255.,25./255.,37./255.,false);
+    require(clip&&stage&&back,"quality native surfaces created");
+    require(add(clip,browser,0,0,1760,800+1/density),"physical marker cropped at final output density");producer_set_v2_group_seal(clip);
+    require(add(stage,back,0,0,1920,1080)&&add(stage,clip,80,160,1760,800),"text-only higher density leaves native backdrop unchanged");producer_set_v2_group_seal(stage);
+    obs_scene_t *room=obs_scene_create_private("1080p text experiment");obs_source_t *source=obs_scene_get_source(room);obs_set_output_source(0,source);
+    void *owner=sets_v2_rust_attach(room,1920,1080);require(owner!=NULL,"1080p native owner attached");
+    rust_call(owner,@{@"op":@"preload",@"generation":@7,@"revision":@1,@"key":@"quality",@"plan":plan},stage,true);
+    bool painted=false;NSDictionary *status=nil;
+    for(int i=0;i<700;i++){
+      status=rust_call(owner,@{@"op":@"status",@"generation":@7},stage,true);
+      painted=producer_set_v2_surface_marker(browser,0,bh,1,254,3);
+      if(painted&&[status[@"cachedKeys"] containsObject:@"quality"])break;usleep(20000);
+    }
+    require(painted&&[status[@"cachedKeys"] containsObject:@"quality"],"real browser first paint and native preparation");
+    double firstPaint=CFAbsoluteTimeGetCurrent()*1000.-started;
+    rust_call(owner,@{@"op":@"activate",@"generation":@7,@"revision":@2,@"key":@"quality",@"plan":plan},stage,true);
+    rust_call(owner,@{@"op":@"take",@"generation":@7,@"revision":@2,@"durationMs":@0,@"mode":@"dissolve"},stage,true);
+    for(int i=0;i<250;i++){status=rust_call(owner,@{@"op":@"status",@"generation":@7},stage,true);if([status[@"renderedRevision"] intValue]==2)break;usleep(20000);}
+    require([status[@"renderedRevision"] intValue]==2,"1080p experiment rendered receipt");
+    // Warm readback allocations, then sample render+GPU readback cost; not video frame time.
+    for(int i=0;i<3;i++)capture(source,1920,1080,1920,1080);
+    NSMutableArray *times=[NSMutableArray array];NSData *frame=nil;
+    for(int i=0;i<25;i++){double t=CFAbsoluteTimeGetCurrent()*1000.;frame=capture(source,1920,1080,1920,1080);[times addObject:@(CFAbsoluteTimeGetCurrent()*1000.-t)];}
+    NSString *stem=[NSString stringWithFormat:@"text-1080p-%@x",factor];png(frame,1920,1080,[out stringByAppendingPathComponent:[stem stringByAppendingString:@".png"]]);
+    obs_source_t *crop=producer_set_v2_group_create(840,650,0,1);require(add(crop,source,-80,-294,1920,1080),"native 1:1 detail crop");producer_set_v2_group_seal(crop);
+    NSData *detail=capture(crop,840,650,840,650);
+    for(int y=0;y<650;y++)require(!memcmp(pixel(detail,840,0,y),pixel(frame,1920,80,y+294),840*4),"detail crop preserves exact output pixels");
+    png(detail,840,650,[out stringByAppendingPathComponent:[stem stringByAppendingString:@"-detail.png"]]);obs_source_release(crop);
+    [times sortUsingSelector:@selector(compare:)];
+    NSDictionary *result=@{@"density":factor,@"outputWidth":@1920,@"outputHeight":@1080,@"browserWidth":@(bw),@"browserHeight":@(bh+1),@"browserRgbaBytes":@((uint64_t)bw*(bh+1)*4),@"finalCropRgbaBytes":@(1760*800*4),@"nativeReservedBytes":status[@"cachedBytes"],@"firstPaintMs":@(firstPaint),@"renderAndReadbackMedianMs":times[12],@"renderAndReadbackP95Ms":times[23],@"renderAndReadbackSamplesMs":times};
+    [results addObject:result];fprintf(stderr,"Text quality %sx: %s\n",factor.stringValue.UTF8String,[[result description] UTF8String]);
+    sets_v2_rust_release(owner);obs_set_output_source(0,NULL);obs_scene_release(room);obs_source_release(stage);obs_source_release(clip);obs_source_release(browser);obs_source_release(back);
+    for(int i=0;i<300&&producer_set_v2_live_groups();i++)usleep(10000);require(!producer_set_v2_live_groups(),"quality surfaces released");
+  }
+  return @{@"scope":@"Isolated text graphics via actual Rust serializer, CEF plugin, native group compositor and RoomProgram cached take; optional prototype, no production quality change",@"timingScope":@"25 synchronous render+RGBA readbacks including allocation; not GPU-only/frame/encoder timing",@"variants":results};
+}
+
 static struct producer_set_v2_program_status program_status(obs_source_t *p) {
   struct producer_set_v2_program_status status = {0};
   require(producer_set_v2_program_status(p, &status), "native program status");
@@ -1310,6 +1363,12 @@ static int runProbe(int argc, char **argv) {
     producer_source_appearance_register();
     sets_v2_rust_register();
     register_test();
+    if (getenv("PRODUCER_PROBE_TEXT_QUALITY_ONLY")) {
+      load_plugin(app,@"obs-browser");obs_post_load_modules();
+      NSDictionary *report=text_quality_proof(out);
+      [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:@"text-quality.json"] atomically:YES];
+      obs_shutdown();puts("PASS: native 1080p text quality experiment");return 0;
+    }
     if (getenv("PRODUCER_PROBE_SHARPNESS_ONLY")) {
       load_plugin(app,@"obs-browser");obs_post_load_modules();
       NSDictionary *report=sharpness_proof(out);

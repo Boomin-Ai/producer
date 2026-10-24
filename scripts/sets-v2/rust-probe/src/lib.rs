@@ -79,3 +79,16 @@ mod set_media {
         Err("External media references are not authorized by the native probe".into())
     }
 }
+
+// Probe-only bridge to the shipped graphics serializer; no new app IPC/API.
+#[no_mangle]
+pub unsafe extern "C" fn sets_v2_rust_graphics_document(json:*const c_char,density:f32,output:*mut c_char,capacity:usize)->bool{
+ let result=(||->Result<String,String>{
+  let node:sets_v2::contract::Node=serde_json::from_str(CStr::from_ptr(json).to_str().map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
+  sets_v2::contract::graphics_document_scaled(&[&node],1760,800,(0.,0.),&Default::default(),density)
+ })();
+ match result{
+  Ok(html) if html.len()<capacity=>{std::ptr::copy_nonoverlapping(html.as_ptr(),output as *mut u8,html.len());*output.add(html.len())=0;true},
+  Err(e)=>{eprintln!("Probe document: {e}");false},_=>false,
+ }
+}
