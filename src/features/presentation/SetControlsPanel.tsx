@@ -28,6 +28,11 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
   const hasHostMedia=[...layoutMedia(doc,state.layoutId,false,state)].some(id=>mediaConfig(doc,id).hostControls);
   const rehearsing = state.workspaceMode === 'rehearsal';
   const canRehearse = !!output?.active;
+  const outputStatus = output?.active
+    ? output.busy && output.pendingChange === 'set' ? 'Switching set…'
+      : output.busy && output.pendingChange === 'segment' ? 'Switching segment…'
+      : rehearsing ? 'Rehearsal on output' : 'On output'
+    : output?.busy ? 'Preparing output…' : 'Show the set before rehearsing';
   const showControls = doc.set.controls.filter(c => c.type === 'button' && c.action.type.startsWith('show.'));
   const layoutControls = doc.set.controls.filter(c => c.type === 'button' && !c.action.type.startsWith('show.'));
   const fields = doc.set.controls.filter(c => c.type !== 'button');
@@ -134,7 +139,7 @@ export function SetControlsPanel({ session, blocked = false, blockedReason, onCh
       </div>
       {output && <div className="set-output-actions">
         {output.active || output.busy ? <button onClick={() => void output.returnToRoom()}>Show room scene</button> : <button disabled={output.busy&&!output.active} onClick={() => void output.apply()} className="set-send-output">Show set</button>}
-        <span>{output.busy ? output.active ? 'Switching set…' : 'Preparing output…' : output.active ? rehearsing ? 'Rehearsal on output' : 'On output' : 'Show the set before rehearsing'}</span>
+        <span className="set-output-status" title={outputStatus}>{outputStatus}</span>
       </div>}
       {doc.show && <div className="set-fixed-playback">{transport}</div>}
       {doc.show && <div className="set-compact-run" aria-label="Compact show controls">

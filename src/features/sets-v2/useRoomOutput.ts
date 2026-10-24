@@ -36,6 +36,8 @@ export function useRoomOutput(
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const [bindings, setBindings] = useState(initialBindings),
     [framing, setFraming] = useState(initialFraming);
+  const [pendingChange, setPendingChange] = useState<"set" | "segment" | "content">("content");
+  const shownSelection = useRef({definition: "", layout: "", phase: ""});
   const [active, setActive] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -91,6 +93,10 @@ export function useRoomOutput(
     const ticket = ++operation.current,
       current = latest.current;
     flight.current = true;
+    const snapshot = current.session.snapshot();
+    const selection = {definition: current.session.package.id, layout: snapshot.layoutId, phase: snapshot.show.phase};
+    const previous = shownSelection.current;
+    setPendingChange(previous.definition !== selection.definition ? "set" : previous.layout !== selection.layout || previous.phase !== selection.phase ? "segment" : "content");
     setBusy(true);
     setError("");
     let attempted = 0;
@@ -156,6 +162,7 @@ export function useRoomOutput(
           media.current.acknowledge(full);
           confirmed.current = fingerprint;
           shownLayout.current = layout;
+          shownSelection.current = selection;
           isActive.current = true;
           setActive(true);
           return;
@@ -333,6 +340,7 @@ export function useRoomOutput(
     },
     active,
     busy,
+    pendingChange,
     error,
     bindings,
     framing,

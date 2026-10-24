@@ -24,6 +24,7 @@ export interface SetOutputControls {
   createSource?:(slot:string,spec:import('../../lib/sourceSpec').ExtraSpec,label:string)=>Promise<void>;
   renderer?:'native';selectToShow?:boolean;setSelectToShow?:(value:boolean)=>void;
   framing:Record<string,import('./schema').SlotFraming>; frame:(slot:string,value:import('./schema').SlotFraming)=>void;
+  pendingChange?:'set'|'segment'|'content';
   active:boolean; busy:boolean; error:string; bindings:Record<string,string>; sources:LiveSources;
   bind:(slot:string,source:string)=>void; apply:()=>Promise<void>; returnToRoom:()=>Promise<boolean>;
 }

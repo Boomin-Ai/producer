@@ -442,3 +442,6 @@
 .set-source-create{display:grid;gap:8px;padding-top:8px}
 .set-source-create-actions{display:flex;gap:6px}
 .set-add-source{margin-top:8px}
+
+/* Reserve the longest status so segment updates never displace transport. */
+.set-output-actions > .set-output-status { inline-size:29ch; flex:0 0 29ch; }
