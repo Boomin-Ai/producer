@@ -1,0 +1,97 @@
+{
+  "changes": [
+    {
+      "cachedBytes": 174812720,
+      "cachedKeys": [
+        "scene-42480a2-50562cd6",
+        "scene-60b5a674-f461d054"
+      ],
+      "clockMs": 1899.999886751175,
+      "generation": 3,
+      "height": 1080,
+      "layouts": {
+        "ready": 14,
+        "total": 14
+      },
+      "paused": false,
+      "preparedRevision": 9,
+      "queued": false,
+      "ready": true,
+      "renderSerial": 1,
+      "renderedRevision": 9,
+      "transitionProgress": 1,
+      "transitioning": false,
+      "warmed": true
+    },
+    {
+      "cachedBytes": 44656400,
+      "cachedKeys": [
+        "scene-fb654f90-ec42576"
+      ],
+      "clockMs": 2333.333194255829,
+      "generation": 4,
+      "height": 720,
+      "layouts": {
+        "ready": 14,
+        "total": 14
+      },
+      "paused": false,
+      "preparedRevision": 26,
+      "queued": false,
+      "ready": true,
+      "renderSerial": 1,
+      "renderedRevision": 26,
+      "transitionProgress": 1,
+      "transitioning": false,
+      "warmed": true
+    },
+    {
+      "cachedBytes": 87406360,
+      "cachedKeys": [
+        "scene-60b5a674-f461d054"
+      ],
+      "clockMs": 1633.3332359790802,
+      "generation": 5,
+      "height": 1080,
+      "layouts": {
+        "ready": 14,
+        "total": 14
+      },
+      "paused": false,
+      "preparedRevision": 43,
+      "queued": false,
+      "ready": true,
+      "renderSerial": 1,
+      "renderedRevision": 43,
+      "transitionProgress": 1,
+      "transitioning": false,
+      "warmed": true
+    }
+  ],
+  "completedAt": "2026-10-24T21:09:38.279Z",
+  "events": [
+    {
+      "hiddenInRoom": true,
+      "inlineSourceCreatedAndAssigned": true,
+      "nativeSourcePreviewFrame": true
+    },
+    {
+      "cachedBytes": 0,
+      "cachedKeys": [],
+      "clockMs": 2166.6665375232697,
+      "generation": 2,
+      "outputId": "program",
+      "paused": false,
+      "preparedRevision": 4,
+      "queued": false,
+      "ready": false,
+      "renderSerial": 37,
+      "renderedRevision": 2,
+      "transitionProgress": 1,
+      "transitioning": false,
+      "warmed": true
+    }
+  ],
+  "kind": "resolution-change",
+  "ok": true
+}

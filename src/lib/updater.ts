@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { hasTauri } from "./ipc";
 
-export type UpdateState = "idle" | "downloading" | "ready";
+export type UpdateState = "idle" | "checking" | "current" | "error" | "downloading" | "ready";
 
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 
@@ -22,10 +22,11 @@ const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
  * this comment always claimed, works on both platforms, and means the app is
  * quiet and expendable at the moment its own binary is replaced.
  */
-export function useUpdater(): { state: UpdateState; version: string | null; restart: () => void } {
+export function useUpdater(): { state: UpdateState; version: string | null; restart: () => void; checkNow: () => void } {
   const [state, setState] = useState<UpdateState>("idle");
   const [version, setVersion] = useState<string | null>(null);
   const busy = useRef(false);
+  const checkNow = useRef<() => void>(() => {});
   /** The downloaded-but-not-installed update, kept for `restart`. */
   const staged = useRef<Update | null>(null);
 
@@ -36,10 +37,12 @@ export function useUpdater(): { state: UpdateState; version: string | null; rest
     const run = async () => {
       if (busy.current || staged.current) return;
       busy.current = true;
+      setState("checking");
       try {
         const { check } = await import("@tauri-apps/plugin-updater");
         const update = await check();
-        if (!alive || !update) return;
+        if (!alive) return;
+        if (!update) {setState("current");return;}
         setState("downloading");
         setVersion(update.version);
         await update.download();
@@ -47,16 +50,18 @@ export function useUpdater(): { state: UpdateState; version: string | null; rest
         staged.current = update;
         setState("ready");
       } catch {
-        if (alive && !staged.current) setState("idle");
+        if (alive && !staged.current) setState("error");
       } finally {
         busy.current = false;
       }
     };
 
+    checkNow.current = () => {void run();};
     run();
     const t = setInterval(run, CHECK_INTERVAL_MS);
     return () => {
       alive = false;
+      checkNow.current = () => {};
       clearInterval(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -65,6 +70,7 @@ export function useUpdater(): { state: UpdateState; version: string | null; rest
   return {
     state,
     version,
+    checkNow: () => checkNow.current(),
     restart: async () => {
       const update = staged.current;
       const { relaunch } = await import("@tauri-apps/plugin-process");

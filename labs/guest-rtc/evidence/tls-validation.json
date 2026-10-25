@@ -1,0 +1,7 @@
+{
+  "untrusted_peer_rejected": true,
+  "exit_code": 1,
+  "error": "Error: engine: signal failure: transport connection error: IO error: no native root CA certificates found (errors: [Error { context: \"opening directory\", kind: Io { inner: Os { code: 2, kind: NotFound, message: \"No such file or directory\" }, path: \"/Users/klevelandbishop/Documents/producer-livekit-g1/labs/guest-rtc/runtime/no-certificates\" } }])\n\nCaused by:\n    0: signal failure: transport connection error: IO error: no native root CA certificates found (errors: [Error { context: \"opening directory\", kind: Io { inner: Os { code: 2, kind: NotFound, message: \"No such file or directory\" }, path: \"/Users/klevelandbishop/Documents/producer-livekit-g1/labs/guest-rtc/runtime/no-certificates\" } }])\n    1: transport connection error: IO error: no native root CA certificates found (errors: [Error { context: \"opening directory\", kind: Io { inner: Os { code: 2, kind: NotFound, message: \"No such file or directory\" }, path: \"/Users/klevelandbishop/Documents/producer-livekit-g1/labs/guest-rtc/runtime/no-certificates\" } }])",
+  "certificate_verification_disabled": false,
+  "system_keychain_modified": false
+}

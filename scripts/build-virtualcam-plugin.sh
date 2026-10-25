@@ -240,6 +240,10 @@ s=s.replace(old,old+"""
 open(p,'w').write(s)
 PYVIDEO
 
+# Select the canvas format on one device and validate native input dimensions.
+cp scripts/virtualcam-mirror.h "$WORK/"
+python3 scripts/patch-single-virtualcam.py "$WORK/plugin-main.mm"
+
 # Rebrand the rendezvous identifiers. Fail loudly if upstream renames them.
 grep -q 'com.obsproject.obs-studio.mac-camera-extension' "$WORK/plugin-main.mm" \
   || { echo "FATAL: extension id string moved upstream" >&2; exit 1; }
@@ -279,7 +283,7 @@ clang++ -bundle -std=c++17 -fobjc-arc -ObjC++ \
   -F "$ART/Frameworks" -framework libobs \
   -framework Foundation -framework AppKit -framework AVFoundation \
   -framework CoreMedia -framework CoreMediaIO -framework CoreVideo \
-  -framework IOSurface -framework SystemExtensions \
+  -framework IOSurface -framework SystemExtensions -framework Accelerate \
   -Wl,-rpath,@loader_path/../../../../Frameworks \
   -Wno-deprecated-declarations \
   -o "$OUT/Contents/MacOS/mac-virtualcam" \
@@ -304,6 +308,9 @@ cat > "$OUT/Contents/Info.plist" <<EOF
 	<string>1.2</string>
 	<key>CFBundleVersion</key>
 	<string>3</string>
+	<key>ProducerSingleCamera</key><true/>
+    <key>ProducerMirrorSupported</key>
+	<true/>
 	<key>OBSCameraDeviceUUID</key>
 	<string>$DEV_UUID</string>
 	<key>OBSCameraSourceUUID</key>

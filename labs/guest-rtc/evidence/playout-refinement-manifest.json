@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "sdk": "LiveKit Rust 0.9.4",
+  "obs": "32.1.2",
+  "recording_sha256": {
+    "obs-playout-normal.mp4": "5773ab40eea86ffddf6112227df39a72ab4384290d0da806ec32bb8b1ce152d5",
+    "obs-playout-network.mp4": "1a3859733aa7ffe70a9d6a7c566f6f08ebc5e9f0ea155d68dbcded8d5f83dce0",
+    "obs-dedicated-normal.mp4": "c7686d1a3e012dd9dcc0ee4a1569cc4fc07508320b67059e43fdb35fd4fef985",
+    "obs-dedicated-120s.mp4": "8c363e4f8aae43aa0354a4e619aa146e1ee53abb576e4ff60c8b36e9fab69d69",
+    "obs-dedicated-rejoin.mp4": "6d63ecefa65ecff9c1e77974cfca82e049f2c88bb4ba3778e499e02f41f6b917"
+  },
+  "native_executable_sha256": "f089be7e0eb127a7802032949d2f078ac6a3b10e6289ea77c38dbfcd0a38d355",
+  "network_impairment_verified": false,
+  "g1_complete": false,
+  "realtime_audio_allocation_note": "fixed 480-sample PCM arrays in callbacks; queue mutex contention still possible",
+  "runs": [
+    "transport-obs-playout",
+    "transport-obs-network",
+    "transport-obs-dedicated",
+    "transport-obs-dedicated-120s",
+    "transport-obs-dedicated-rejoin",
+    "transport-network-hard-loss"
+  ]
+}

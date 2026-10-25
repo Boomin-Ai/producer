@@ -1,11 +1,20 @@
 [package]
 name = "producer"
-version = "0.4.69"
+version = "0.4.74"
 description = "Producer by Boomin — the open-source studio for creators: post everywhere, stream everywhere."
 authors = ["Boomin"]
 license = "AGPL-3.0-only"
 repository = "https://github.com/Boomin-Ai/producer"
 edition = "2021"
+
+[features]
+# Isolated development-only Sets v2 room adapter. Native backend currently Mac.
+sets-v2-dev = []
+# Isolated local room/storage for the signed portrait-camera candidate.
+portrait-camera-dev = []
+# Opt-in staging authority, SDK connection, scene endpoints and room controls.
+guest-rtc-pilot = ["dep:producer-guest-session", "dep:producer-guest-runtime"]
+guest-rtc-production = ["guest-rtc-pilot"]
 
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary
@@ -21,6 +30,8 @@ tauri-build = { version = "2", features = [] }
 cc = "1"
 
 [dependencies]
+producer-guest-session = { path = "../crates/guest-session", optional = true }
+producer-guest-runtime = { path = "../crates/guest-runtime", optional = true }
 # macos-private-api is declared PLAIN and macOSPrivateApi lives in the BASE
 # config: tauri-build's feature/config check parses Cargo.toml textually and
 # cannot see target-scoped features (macOS build broke), while a feature
@@ -57,3 +68,7 @@ lofty = "0.22"
 symphonia = { version = "0.5", features = ["mp3", "aac", "isomp4", "alac", "wav", "pcm", "flac"] }
 soundtouch = { version = "0.5.4", features = ["bundled"] }
 hound = "3.5"
+
+[patch.crates-io]
+webrtc-sys = { path = "../labs/guest-rtc/vendor/webrtc-sys" }
+libwebrtc = { path = "../labs/guest-rtc/vendor/libwebrtc" }

@@ -335,3 +335,20 @@ mod http_tests {
         assert!(response.len() < 500);
     }
 }
+
+/// Resolve only an opaque reference already granted by the local media picker.
+/// Native set packages cannot provide filesystem paths.
+pub fn native_path(id: &str, mime: &str) -> Result<PathBuf, String> {
+    validate(id, mime)?;
+    let key = reference_id(id)?;
+    let registry = REGISTRY.get().ok_or("Local media service unavailable")?;
+    let path = registry
+        .files
+        .lock()
+        .unwrap()
+        .get(key)
+        .ok_or("Local media reference missing")?
+        .path
+        .clone();
+    path.canonicalize().map_err(|e| e.to_string())
+}

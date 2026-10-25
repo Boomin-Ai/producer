@@ -1,0 +1,17 @@
+# Managed data and agent connections
+
+Settings → Integrations configures weather, OpenAI and Anthropic/Claude connections. `/v1/app/data-integrations` requires the primary workspace credential. Apply migration `0004_data_integrations.sql` on the intended server. Provider credentials are AES-GCM encrypted with the server's existing `TOKEN_ENCRYPTION_KEY`; no provider key is returned by list/read/save or stored in the desktop endpoint-token vault. New package/server capability integration remains separate work; these routes do not publish audience modules.
+
+Connection changes require an expected revision. A connection's kind/provider cannot be changed in place: create a new connection, so an old provider key is not sent to another provider. Existing keys are retained when the edit omits a replacement. Test uses provider model retrieval for agents rather than a paid generation. Weather observations are normalized, cached for the configured poll interval, and reused across queries. Host callers cannot supply arbitrary provider URLs.
+
+Agent queries make one bounded request and do not automatically retry paid calls. Explicit response status/stop reason must indicate completion. Fact-check requests require web research and real source annotations; unsupported, uncited or paused/incomplete responses fail visibly. `pause_turn` continuation is not implemented for Claude in this initial adapter. This must not be presented as a completed fact check. OpenAI and Claude use distinct adapters with the same typed answer/citation result. The model ID is configured by the user, not silently substituted. Automated tests use synthetic credentials and controlled responses. A separate user-authorized live Claude check subsequently passed with a real key and four source citations through the Just Facts module; see `docs/set-runtime/claude-provider-proof.json`. No key is in that artifact. OpenAI has not been tested against a real account.
+
+Documentation verified 2026-10-24:
+
+- [OpenAI Responses web search](https://developers.openai.com/api/docs/guides/tools-web-search): required search tool choice, output text annotations and citation positions. Preserve citations for clickable participant/operator presentation.
+- [Claude API overview](https://platform.claude.com/docs/en/api/overview): API-key Bearer authentication, explicit `anthropic-version: 2026-10-21`, optional workspace selection for workspace-scoped keys.
+- [Claude web search](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool): basic `web_search_20250305`, bounded searches, text-block `web_search_result_location` citations, tool errors and incomplete `pause_turn` responses.
+- [Claude model retrieval](https://platform.claude.com/docs/en/api/models/retrieve): model/alias access check.
+- [Open-Meteo API](https://open-meteo.com/en/docs): current temperature, WMO condition, precipitation, day/night and wind. API usage/attribution must match the operator's deployment.
+
+Verification: 12 provider/route tests cover real SQL, encrypted keys, primary-only access, revisions, caching, normalized weather, both agent request formats, evidence/completion checks and provider-error redaction. The actual Integrations component browser test covers creating Claude/OpenAI/weather entries, connection test status, secret omission on edit and absence of saved keys in the rendered UI. These are controlled-provider tests, not a claim that a user's API account has been tested.

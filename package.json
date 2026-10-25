@@ -1,7 +1,7 @@
 {
   "name": "producer",
   "private": true,
-  "version": "0.4.69",
+  "version": "0.4.74",
   "description": "Producer by Boomin \u2014 the open-source studio for creators: post everywhere, stream everywhere.",
   "license": "AGPL-3.0-only",
   "repository": {
@@ -18,8 +18,15 @@
     "tauri": "tauri",
     "tauri:manager-preview": "tauri dev --config src-tauri/tauri.manager-preview.conf.json",
     "test:people-panels-browser": "node scripts/test-people-panels-browser.mjs",
+    "test:module-runtime": "node scripts/test-module-runtime.mjs",
+    "test:data-integrations-browser": "node scripts/test-data-integrations-browser.mjs",
+    "export:module-contract": "node scripts/export-module-contract.mjs",
     "test:presentation": "node scripts/test-presentation.mjs",
     "test:room-chat-browser": "node scripts/test-room-chat-browser.mjs",
+    "test:set-configuration-browser": "node scripts/test-set-configuration-browser.mjs",
+    "test:set-panel-layout-browser": "node scripts/test-set-panel-layout-browser.mjs",
+    "test:set-editor-navigation-browser": "node scripts/test-set-editor-navigation-browser.mjs",
+    "test:set-source-preview-browser": "node scripts/test-set-source-preview-browser.mjs",
     "test:presentation-browser": "node scripts/test-presentation-browser.mjs",
     "export:presentation": "node scripts/export-presentation-contract.mjs",
     "test:presentation-output": "node scripts/test-presentation-output.mjs",
@@ -27,7 +34,14 @@
     "test:presentation-native-output": "node scripts/test-presentation-output.mjs --native",
     "test:scene-restoration": "node scripts/test-scene-restoration.mjs",
     "test:guest-reconnect": "node scripts/test-guest-reconnect.mjs",
-    "test:guest-reconnect-browser": "node scripts/test-guest-reconnect-browser.mjs"
+    "test:guest-reconnect-browser": "node scripts/test-guest-reconnect-browser.mjs",
+    "test:sets-v2": "node scripts/test-sets-v2.mjs",
+    "test:sets-v2-native": "bash scripts/sets-v2/run-native-probe.sh",
+    "dev:sets-v2-room": "python3 scripts/sets-v2/dev-room.py",
+    "dev:sets-v2": "vite --host 127.0.0.1 --port 1436 --strictPort",
+    "test:module-recovery-browser": "node scripts/test-module-recovery-browser.mjs",
+    "test:weather-output-stability-browser": "node scripts/test-weather-output-stability-browser.mjs",
+    "dev:sets-v2-workspace": "node scripts/sets-v2/local-workspace.mjs --background"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.0",

@@ -1,0 +1,146 @@
+{
+  "callback_timestamps_are_capture_timestamps": false,
+  "consumer_stall_ms": 0,
+  "dedicated_audio_ingest": [],
+  "duration_seconds": 25,
+  "g1_complete": false,
+  "lifecycle": [
+    {
+      "at_ms": 1983,
+      "event": "subscribed",
+      "identity": "guest-1",
+      "sid": "TR_VCfaWqUYqeHVQC"
+    },
+    {
+      "at_ms": 2183,
+      "event": "subscribed",
+      "identity": "guest-1",
+      "sid": "TR_AMb2qw5GMGVa5u"
+    }
+  ],
+  "livekit": "0.9.4",
+  "local_playout_clock_requested": true,
+  "native_publish_audio_internal_queue_ms": 0,
+  "obs_recorded_av_qualified": false,
+  "obs_recording": null,
+  "participants": [
+    {
+      "audio_bad_format": 0,
+      "audio_blocks": 2274,
+      "audio_blocks_with_capture_timestamp": 0,
+      "audio_callback_to_consumer_p95_ms": 10.535875,
+      "audio_pulses_ms": [
+        2201.826875,
+        4162.0282910000005,
+        6161.961082999999,
+        8162.265625,
+        10172.079708,
+        12192.232457999999,
+        14191.774583,
+        16191.740041,
+        18192.176124999998,
+        20192.06525,
+        22192.118458,
+        24191.770333
+      ],
+      "audio_queue": {
+        "callback_contention_dropped": 2,
+        "capacity_frames": 3,
+        "max_age_ms": 30,
+        "overflow_oldest_dropped": 5,
+        "received": 2282,
+        "stale_dropped": 0
+      },
+      "audio_resampled_blocks": 2274,
+      "audio_sample_discontinuities": 5,
+      "callback_av_abs_p95_ms": 53.37541699999929,
+      "capture_timestamp_clock_domain": "WebRTC TimeMillis (unmapped to OBS)",
+      "capture_timestamp_regressions": 0,
+      "capture_timestamp_step_p95_ms": null,
+      "identity": "guest-1",
+      "original_audio_capture_timestamp_available": false,
+      "paired_callback_video_minus_audio_ms": [
+        -20.551416000000245,
+        -1.7674579999993512,
+        -20.74829200000022,
+        -31.95154199999888,
+        -28.750582999997278,
+        -47.998208000000886,
+        -32.105790999999954,
+        -49.44937499999651,
+        -53.37541699999929,
+        -32.67670800000269,
+        -50.09254200000214
+      ],
+      "retired_queues": [],
+      "video_callback_to_consumer_p95_ms": 9.921916,
+      "video_deadline_minus_arrival_p95_ms": 9.690334,
+      "video_frames": 558,
+      "video_frames_with_ntp_metadata": 0,
+      "video_local_deadline_invalid": 0,
+      "video_local_deadline_valid": 558,
+      "video_pulses_ms": [
+        4141.476875,
+        6160.193625,
+        8141.517333,
+        10140.128166,
+        12163.481875000001,
+        14143.776375,
+        16159.63425,
+        18142.72675,
+        20138.689833,
+        22159.441749999998,
+        24141.677791
+      ],
+      "video_queue": {
+        "callback_contention_dropped": 0,
+        "capacity_frames": 2,
+        "max_age_ms": 50,
+        "overflow_oldest_dropped": 1,
+        "received": 559,
+        "stale_dropped": 0
+      }
+    }
+  ],
+  "physical_speaker_reference_connected": false,
+  "publisher_error": null,
+  "receiver_stats": [
+    {
+      "concealed_samples": 0,
+      "estimated_playout_presence_preserved": false,
+      "estimated_playout_timestamp_ms": 0.0,
+      "frames_dropped": 0,
+      "identity": "guest-1",
+      "inserted_samples_for_deceleration": 0,
+      "jitter_buffer_delay_seconds": 7.076220999999999,
+      "jitter_buffer_emitted_count": 559,
+      "jitter_seconds": 0.001,
+      "kind": "video",
+      "packets_lost": 0,
+      "packets_received": 560,
+      "removed_samples_for_acceleration": 0,
+      "sid": "TR_VCfaWqUYqeHVQC"
+    },
+    {
+      "concealed_samples": 1777,
+      "estimated_playout_presence_preserved": false,
+      "estimated_playout_timestamp_ms": 0.0,
+      "frames_dropped": 0,
+      "identity": "guest-1",
+      "inserted_samples_for_deceleration": 3066,
+      "jitter_buffer_delay_seconds": 59347.2,
+      "jitter_buffer_emitted_count": 1092480,
+      "jitter_seconds": 0.002,
+      "kind": "audio",
+      "packets_lost": 0,
+      "packets_received": 1141,
+      "removed_samples_for_acceleration": 1560,
+      "sid": "TR_AMb2qw5GMGVa5u"
+    }
+  ],
+  "schema_version": 1,
+  "signaling_url": "ws://127.0.0.1:7880",
+  "stall_period_seconds": 5,
+  "sync_streams_requested": true,
+  "topology": "local browser guests to native host through loopback SFU"
+}

@@ -1,0 +1,557 @@
+{
+  "qualification": "Actual guest page + native host authority polling and owned SDK subscriptions; optional timed decode/OBS copy boundary. No ordinary-room rendering or AV synchronization qualification.",
+  "production_changed": false,
+  "started_at": "2026-10-12T22:25:29.396Z",
+  "steps": [
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "fixture_roster",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "fixture_revoke",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "fixture_revoke",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "fixture_revoke",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "fixture_revoke",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "fixture_revoke",
+      "status": 200
+    },
+    {
+      "name": "link",
+      "status": 200
+    },
+    {
+      "name": "roster",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "admit",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "stage",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "mute",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "unmute",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "revoke",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    },
+    {
+      "name": "state",
+      "status": 200
+    }
+  ],
+  "fixture_seats_retired": 5,
+  "guest_api": [
+    {
+      "operation": "guest_entry",
+      "status": 200
+    },
+    {
+      "operation": "guest_entry",
+      "status": 201
+    },
+    {
+      "operation": "guest_entry",
+      "status": 200
+    },
+    {
+      "operation": "state",
+      "status": 409
+    },
+    {
+      "operation": "state",
+      "status": 409
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 3
+    },
+    {
+      "operation": "connection",
+      "status": 201
+    },
+    {
+      "operation": "guest_entry",
+      "status": 200
+    },
+    {
+      "operation": "session",
+      "status": 200
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 3
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 3
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 3
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 3
+    },
+    {
+      "operation": "state",
+      "status": 200
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 3
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 3
+    },
+    {
+      "operation": "state",
+      "status": 409
+    },
+    {
+      "operation": "state",
+      "status": 409
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera"
+      ],
+      "generation": 4
+    },
+    {
+      "operation": "session",
+      "status": 200
+    },
+    {
+      "operation": "guest_entry",
+      "status": 200
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera"
+      ],
+      "generation": 4
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera"
+      ],
+      "generation": 4
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera"
+      ],
+      "generation": 4
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera"
+      ],
+      "generation": 4
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera"
+      ],
+      "generation": 4
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera"
+      ],
+      "generation": 4
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera"
+      ],
+      "generation": 4
+    },
+    {
+      "operation": "state",
+      "status": 409
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 5
+    },
+    {
+      "operation": "session",
+      "status": 200
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 5
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 5
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 5
+    },
+    {
+      "operation": "state",
+      "status": 200
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 5
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 5
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 5
+    },
+    {
+      "operation": "state",
+      "status": 200,
+      "sources": [
+        "camera",
+        "microphone"
+      ],
+      "generation": 5
+    },
+    {
+      "operation": "state",
+      "status": 410
+    }
+  ],
+  "initial": {
+    "alive": 2,
+    "camera_attached": 1,
+    "capture_devices_used": false,
+    "decoded_media": {
+      "audio_submitted": 24,
+      "bindings": 2,
+      "pcm_received": 633,
+      "rejected": 0,
+      "sender_reports": 4,
+      "video_observers": 1,
+      "video_received": 117,
+      "video_submitted": 3,
+      "workers": 3
+    },
+    "error": null,
+    "microphone_attached": 1,
+    "obs_endpoint_used": true,
+    "obs_rendering_qualified": false,
+    "passed": null,
+    "retired": 0,
+    "sink_closed": 0
+  },
+  "muted": {
+    "alive": 1,
+    "camera_attached": 2,
+    "capture_devices_used": false,
+    "decoded_media": {
+      "audio_submitted": 196,
+      "bindings": 1,
+      "pcm_received": 844,
+      "rejected": 0,
+      "sender_reports": 6,
+      "video_observers": 1,
+      "video_received": 263,
+      "video_submitted": 41,
+      "workers": 2
+    },
+    "error": null,
+    "microphone_attached": 1,
+    "obs_endpoint_used": true,
+    "obs_rendering_qualified": false,
+    "passed": null,
+    "retired": 2,
+    "sink_closed": 0
+  },
+  "restored": {
+    "alive": 2,
+    "camera_attached": 3,
+    "capture_devices_used": false,
+    "decoded_media": {
+      "audio_submitted": 215,
+      "bindings": 2,
+      "pcm_received": 1588,
+      "rejected": 0,
+      "sender_reports": 11,
+      "video_observers": 1,
+      "video_received": 446,
+      "video_submitted": 86,
+      "workers": 3
+    },
+    "error": null,
+    "microphone_attached": 2,
+    "obs_endpoint_used": true,
+    "obs_rendering_qualified": false,
+    "passed": null,
+    "retired": 3,
+    "sink_closed": 0
+  },
+  "removal_to_zero_owned_tracks_ms": 1260,
+  "removed": {
+    "alive": 0,
+    "camera_attached": 3,
+    "capture_devices_used": false,
+    "decoded_media": {
+      "audio_submitted": 388,
+      "bindings": 0,
+      "pcm_received": 1780,
+      "rejected": 0,
+      "sender_reports": 11,
+      "video_observers": 0,
+      "video_received": 482,
+      "video_submitted": 121,
+      "workers": 1
+    },
+    "error": null,
+    "microphone_attached": 2,
+    "obs_endpoint_used": true,
+    "obs_rendering_qualified": false,
+    "passed": null,
+    "retired": 5,
+    "sink_closed": 0
+  },
+  "final": {
+    "alive": 0,
+    "camera_attached": 3,
+    "capture_devices_used": false,
+    "decoded_media": {
+      "audio_submitted": 388,
+      "bindings": 0,
+      "pcm_received": 1805,
+      "rejected": 0,
+      "sender_reports": 11,
+      "video_observers": 0,
+      "video_received": 482,
+      "video_submitted": 121,
+      "workers": 0
+    },
+    "error": null,
+    "microphone_attached": 2,
+    "obs_endpoint_used": true,
+    "obs_rendering_qualified": false,
+    "passed": true,
+    "retired": 5,
+    "sink_closed": 1
+  },
+  "run_ended": true,
+  "passed": true,
+  "source_sha256": {
+    "crates/guest-runtime/src/authority.rs": "656cc4901ea2d338fad0a7d23bc0c2f8f40ae8ff39c614fee4d4bc2ea5295f9d",
+    "crates/guest-runtime/src/subscriptions.rs": "a772a45a5ed7f7646d8851a8b6b86692ad7b3e72b5b593c0e43cc11a41c84f81",
+    "crates/guest-runtime/src/lib.rs": "dfcce72dafc5c21f7768e830f9750031c368514dde11c3e985109b355ef32c67",
+    "crates/guest-runtime/src/media.rs": "5097d6c306ceca49682033bf60459a7075c672afe792c9db353ebc82136d5ec8",
+    "crates/guest-runtime/examples/subscription_owner.rs": "deccd607d2c2763c5bbeb82c6d435ebfdf1681983402b97cc9e24df44558becb",
+    "src-tauri/src/rtc_control.rs": "814d8b90f3effe2c184757ad6643596996bb2dfbb653658437762c62d96d741f",
+    "src-tauri/src/rtc_owner.rs": "e874cf867813af66686ba379a44e668b0681d1c3a993be0c399fb34131aa7b3d",
+    "scripts/test-native-guest-subscriptions.mjs": "2147bdc9efe8005bbcf3bb0acd3ae6cd4b85dcab487f9452b57dcdf55f5e8d5d"
+  }
+}

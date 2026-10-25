@@ -1,0 +1,50 @@
+{
+  "recorded_utc": "2026-10-10T01:35:35.254243+00:00",
+  "producer_base": "5723335221dfe812cac851e57f610227b16d8c35",
+  "web": "75630c1039ccdb87aebdb8845c30e40525d1ebc8",
+  "api": "07991feadfc2a9236d62d30d311c146d73569abc",
+  "host_os": "macOS-27.0.1-arm64-arm-64bit",
+  "host_arch": "arm64",
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01) (Homebrew)",
+  "legacy_regression_checks": {
+    "passed": 11,
+    "failed": 0,
+    "commands": [
+      "node --test scripts/test-guest-return.mjs scripts/test-guest-reconnect.mjs"
+    ]
+  },
+  "physical_legacy_one_and_three_guest_baselines": "not measured",
+  "g0_complete": false,
+  "g1_complete": false,
+  "production_deployment_drift": "Producer/web source heads match; local API behind remote main. Deployment version observed; source-to-deployment mapping remains unproven.",
+  "disk_free_bytes": 880553984,
+  "remote_heads_checked_utc": "2026-10-10T02:07:46.962659+00:00",
+  "remote_main_heads": {
+    "producer": "5723335221dfe812cac851e57f610227b16d8c35",
+    "web": "75630c1039ccdb87aebdb8845c30e40525d1ebc8",
+    "api": "0961234ef1df03ba3420171027d677ff03511379"
+  },
+  "observed_api_deployment": {
+    "id": "ae65e98e-7506-4749-b6e6-7a05cd0a7fdd",
+    "created_on": "2026-10-05T01:50:44.456557Z",
+    "versions": [
+      {
+        "version_id": "1dc968bd-b1aa-4488-9d03-7a77a6f84abb",
+        "percentage": 100
+      }
+    ]
+  },
+  "deployed_api_source_commit": "not established from deployment metadata",
+  "remote_api_changes_relevant_to_review": [
+    "Managed Cloudflare TURN credential mint/fallback",
+    "RoomMutations queue for link/stage/admit/accept/revoke/join/monitor",
+    "Atomic nested grant updates via jsonb_set"
+  ],
+  "api_worktree_unchanged": true,
+  "observed_api_turn_binding_names_present": {
+    "CLOUDFLARE_TURN_KEY_ID": true,
+    "CLOUDFLARE_TURN_KEY_TOKEN": true,
+    "ICE_SERVERS": false
+  },
+  "api_turn_relay_functionally_tested": false
+}

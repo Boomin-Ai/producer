@@ -1,0 +1,30 @@
+{
+  "body": "Host\nLink\n▾\nChannels\n720p · 30\nStudio\nVirtual cam\nRecord\nGO LIVE\nNONE\nNo scenes yet — add one with + or ⌘N, then put what it needs on the stage.\nHost color\nHost color\nHost color\nHost color\nHost color\nHost color\nHost color\nHost color\nHost color\nHost color\nHost color\nHost color\nHost color\nHost color\nHost color\nHost color\nSHOW\nHead to Head — The Arena\nShow attached\nStart show\nShow room scene\nOn output\n⏮\nⅡ\n⏭\n■\n↻\nSet\nShow run\n02 / Hot take\nRunning\nSegments\n7 segments\n01\n01 / Face-off\nManual\n02\n02 / Hot take\nManual\n03\n03 / Host’s case\nManual\n04\n04 / Challenger’s case\nManual\n05\n05 / Receipts\nManual\n06\n06 / Crowd call\n1:00 vote\n07\n07 / Final verdict\nManual\nSegment controls\nShow\n02 / Hot take\nLayout\nShow receipts\nHide receipts\nReset host points\nReset challenger points\nSources\n2 slots\n1\nHost color\nBlue side / Host camera · 02 / Hot take\n2\nHost color\nGold side / Challenger camera · 02 / Hot take\n\nSet is on the room output · Audio follows the room mixer\n\nProducer v0.4.73\nReport a bug\nopened in 3.26s\nNo channels · 18 fps\nStream health\nIdle\nmetal · VideoToolbox",
+  "debug": [
+    {
+      "abort": false,
+      "entries": [],
+      "queue": [],
+      "trace": [
+        "loading scene-21d457fd-d4ff05f9 priority 0",
+        "ready scene-21d457fd-d4ff05f9",
+        "loading scene-5f30c3c9-fd3f7619 priority 0",
+        "ready scene-5f30c3c9-fd3f7619",
+        "loading scene-cd29266-8ab4a60 priority 0",
+        "ready scene-cd29266-8ab4a60",
+        "loading scene-b6307c8f-f03db75d priority 0",
+        "ready scene-b6307c8f-f03db75d",
+        "loading scene-c31bba7e-8c5d8a02 priority 0",
+        "ready scene-c31bba7e-8c5d8a02",
+        "loading scene-f42a543a-cbc21dbc priority 0",
+        "ready scene-f42a543a-cbc21dbc",
+        "loading scene-9a060b52-7d410fdc priority 0",
+        "ready scene-9a060b52-7d410fdc",
+        "loading scene-52496b08-e216fcb2 priority 0",
+        "ready scene-52496b08-e216fcb2"
+      ],
+      "working": false
+    }
+  ],
+  "kind": "timing-heartbeat"
+}

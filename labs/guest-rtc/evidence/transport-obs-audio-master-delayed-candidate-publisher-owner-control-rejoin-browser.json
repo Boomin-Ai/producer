@@ -1,0 +1,73 @@
+{
+  "browser": "154.0.8037.98",
+  "guests": 1,
+  "mode": "republish",
+  "states": [
+    {
+      "identity": "guest-1",
+      "connected": true,
+      "published": true,
+      "returnAudioBlocks": 806,
+      "returnAudioPulses": 12,
+      "returnVideoFrames": 652,
+      "events": [
+        "return-audio",
+        "return-video",
+        "disconnected",
+        "return-audio",
+        "return-video"
+      ],
+      "audioMaxRms": 0.46165418800764635,
+      "error": null,
+      "syncStreams": true
+    }
+  ],
+  "audioStats": [
+    [
+      {
+        "id": "IT01A2184671741",
+        "timestamp": 1791650928302.843,
+        "type": "inbound-rtp",
+        "codecId": "CIT01_111_minptime=10;stereo=1;useinbandfec=1",
+        "kind": "audio",
+        "mediaType": "audio",
+        "ssrc": 2184671741,
+        "transportId": "T01",
+        "jitter": 0.019,
+        "packetsLost": 3,
+        "packetsReceived": 195,
+        "packetsReceivedWithCe": 0,
+        "packetsReceivedWithEct1": 0,
+        "audioLevel": 0,
+        "bytesReceived": 2595,
+        "concealedSamples": 3570,
+        "concealmentEvents": 5,
+        "fecPacketsDiscarded": 0,
+        "fecPacketsReceived": 0,
+        "headerBytesReceived": 2340,
+        "insertedSamplesForDeceleration": 1307,
+        "jitterBufferDelay": 7363.2,
+        "jitterBufferEmittedCount": 185280,
+        "jitterBufferMinimumDelay": 14822.4,
+        "jitterBufferTargetDelay": 14822.4,
+        "lastPacketReceivedTimestamp": 1791650928295.927,
+        "mid": "8",
+        "packetsDiscarded": 0,
+        "playoutId": "AP",
+        "remoteId": "ROA2184671741",
+        "removedSamplesForAcceleration": 0,
+        "silentConcealedSamples": 0,
+        "totalAudioEnergy": 0,
+        "totalProcessingDelay": 6543.68064,
+        "totalSamplesDuration": 4.009999999999959,
+        "totalSamplesReceived": 189120,
+        "trackIdentifier": "bf7580f8-2643-480f-8ad1-168be259e037"
+      }
+    ]
+  ],
+  "impairments": [],
+  "packetProbe": [],
+  "return_transport_observed": true,
+  "hardware_capture_used": false,
+  "physical_speaker_playout_used": false
+}

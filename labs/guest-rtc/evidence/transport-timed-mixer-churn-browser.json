@@ -1,0 +1,71 @@
+{
+  "browser": "154.0.8037.98",
+  "guests": 3,
+  "mode": "churn",
+  "states": [
+    {
+      "identity": "guest-1",
+      "connected": true,
+      "published": true,
+      "returnAudioBlocks": 855,
+      "returnAudioPulses": 12,
+      "returnVideoFrames": 559,
+      "events": [
+        "return-audio",
+        "return-video",
+        "disconnected",
+        "return-audio",
+        "return-video",
+        "disconnected",
+        "return-audio",
+        "return-video",
+        "disconnected",
+        "return-audio",
+        "return-video"
+      ],
+      "audioMaxRms": 0.2853775889532825,
+      "error": null,
+      "syncStreams": true
+    },
+    {
+      "identity": "guest-2",
+      "connected": true,
+      "published": true,
+      "returnAudioBlocks": 923,
+      "returnAudioPulses": 13,
+      "returnVideoFrames": 375,
+      "events": [
+        "return-audio",
+        "return-video"
+      ],
+      "audioMaxRms": 0.2874725068390533,
+      "error": null,
+      "syncStreams": true
+    },
+    {
+      "identity": "guest-3",
+      "connected": true,
+      "published": true,
+      "returnAudioBlocks": 869,
+      "returnAudioPulses": 12,
+      "returnVideoFrames": 348,
+      "events": [
+        "return-audio",
+        "return-video"
+      ],
+      "audioMaxRms": 0.29354630166889345,
+      "error": null,
+      "syncStreams": true
+    }
+  ],
+  "audioStats": [
+    [],
+    [],
+    []
+  ],
+  "impairments": [],
+  "packetProbe": [],
+  "return_transport_observed": true,
+  "hardware_capture_used": false,
+  "physical_speaker_playout_used": false
+}

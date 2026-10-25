@@ -1,0 +1,26 @@
+{
+  "failed_trial": "physical-publication-1791682598987271000",
+  "cause": "640x480 session preset plus explicit pixel-format-only videoSettings delivered native 1280x720 buffers",
+  "before_probe": {
+    "width": 1280,
+    "height": 720,
+    "pixel_format": 875704438,
+    "first_fault_code": 2,
+    "errors": 59
+  },
+  "fix": "Explicit kCVPixelBufferWidthKey 640 and kCVPixelBufferHeightKey 480 in output videoSettings",
+  "after_probe": {
+    "width": 640,
+    "height": 480,
+    "pixel_format": 875704438,
+    "first_fault_code": 0,
+    "errors": 0,
+    "queued": 3,
+    "overflow_newest_discarded": 56,
+    "callbacks_active_after_stop": 0,
+    "owners_retired": true
+  },
+  "probe_scope": "2-second permission-preflighted native camera capture; no recording or publication; deliberately no consumer, so overflow at three-frame capacity is expected",
+  "camera_sync_qualified": false,
+  "g1_complete": false
+}

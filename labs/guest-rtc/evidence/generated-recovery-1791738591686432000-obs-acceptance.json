@@ -1,0 +1,84 @@
+{
+  "local_obs_acceptance_passed": false,
+  "failure_reasons": [
+    "missing marker labels within observed recording span"
+  ],
+  "local_delivery_worker_gate_passed": true,
+  "delivery_worker_failure_reasons": [],
+  "local_readiness_gate_passed": true,
+  "readiness_failure_reasons": [],
+  "binding_epochs": [
+    {
+      "binding_since_us": 209956211,
+      "recovery_started_us": 209922271,
+      "superseded_binding_epochs": [
+        209922271,
+        209954237
+      ],
+      "first_scheduled_ms": {
+        "audio": 524.549,
+        "video": 547.042
+      }
+    },
+    {
+      "binding_since_us": 221985949,
+      "recovery_started_us": 221926034,
+      "superseded_binding_epochs": [
+        221926034,
+        221926273,
+        221985478
+      ],
+      "first_scheduled_ms": {
+        "audio": 632.196,
+        "video": 668.295
+      }
+    },
+    {
+      "binding_since_us": 261983569,
+      "recovery_started_us": 261924163,
+      "superseded_binding_epochs": [
+        261924163,
+        261924220,
+        261974079
+      ],
+      "first_scheduled_ms": {
+        "audio": 564.167,
+        "video": 581.236
+      }
+    },
+    {
+      "binding_since_us": 301974428,
+      "recovery_started_us": 301923766,
+      "superseded_binding_epochs": [
+        301923766,
+        301923859,
+        301962699
+      ],
+      "first_scheduled_ms": {
+        "audio": 642.867,
+        "video": 652.623
+      }
+    }
+  ],
+  "raw_binding_epoch_count": 15,
+  "superseded_binding_epochs": [
+    209922271,
+    209954237,
+    221926034,
+    221926273,
+    221985478,
+    261924163,
+    261924220,
+    261974079,
+    301923766,
+    301923859,
+    301962699
+  ],
+  "unfinished_binding_epochs": [],
+  "expected_binding_epochs": 4,
+  "readiness_budget_ms": 1500,
+  "budget_scope": "prototype local recovery from earliest pending reset, not WAN service guarantee",
+  "startup_and_tail_loss_qualified": false,
+  "lip_sync_qualified": false,
+  "g1_complete": false
+}

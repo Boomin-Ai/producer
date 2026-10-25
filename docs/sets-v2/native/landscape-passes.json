@@ -1,0 +1,117 @@
+{
+  "operations": [
+    {
+      "op": "begin-group",
+      "id": "root",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      },
+      "offscreen": false,
+      "properties": {}
+    },
+    {
+      "op": "graphics",
+      "id": "root-graphics-1",
+      "nodes": [
+        {
+          "id": "backdrop",
+          "kind": "graphic",
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080
+          },
+          "properties": {},
+          "children": [],
+          "resource": "graphic:blue"
+        }
+      ]
+    },
+    {
+      "op": "begin-group",
+      "id": "panel",
+      "bounds": {
+        "x": 192,
+        "y": 216,
+        "width": 1536,
+        "height": 648
+      },
+      "offscreen": true,
+      "mask": {
+        "kind": "rounded",
+        "radius": 80
+      },
+      "properties": {}
+    },
+    {
+      "op": "graphics",
+      "id": "panel-graphics-2",
+      "nodes": [
+        {
+          "id": "panelBackground",
+          "kind": "graphic",
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 1536,
+            "height": 648
+          },
+          "properties": {},
+          "children": [],
+          "resource": "graphic:red"
+        }
+      ]
+    },
+    {
+      "op": "source",
+      "node": {
+        "id": "camera",
+        "kind": "source",
+        "bounds": {
+          "x": 384,
+          "y": 129.6,
+          "width": 768,
+          "height": 388.8
+        },
+        "properties": {},
+        "children": [],
+        "resource": "synthetic-camera",
+        "fit": "cover"
+      }
+    },
+    {
+      "op": "graphics",
+      "id": "panel-graphics-3",
+      "nodes": [
+        {
+          "id": "foreground",
+          "kind": "graphic",
+          "bounds": {
+            "x": 672,
+            "y": 291.6,
+            "width": 192,
+            "height": 108
+          },
+          "properties": {},
+          "children": [],
+          "resource": "graphic:yellow"
+        }
+      ]
+    },
+    {
+      "op": "end-group",
+      "id": "panel"
+    },
+    {
+      "op": "end-group",
+      "id": "root"
+    }
+  ],
+  "graphicsSurfaces": 3,
+  "offscreenGroups": 1,
+  "estimatedRGBABytes": 16339968
+}

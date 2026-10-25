@@ -1,3 +1,4 @@
+import {setRuntimeHostRoutes,setRuntimeAudienceRoutes} from './setRuntimeRoutes';
 // producer-server — the sovereignty backend for Producer.
 //
 // One deployment = one workspace. The desktop app (or a CLI, or an
@@ -8,6 +9,7 @@
 // and your own Meta apps do the publishing.
 
 import { Hono } from "hono";
+import { dataIntegrationRoutes } from "./dataIntegrations/routes";
 import type { Context } from "hono";
 import { CONTRACT_VERSION, type Env } from "./env";
 import { ApiError, errorBody, preflight } from "./errors";
@@ -484,10 +486,13 @@ app.post("/v1/jobs/:jobId/retry", async (c) => {
 // Host family (primary token only) at the same paths Boomin serves, so the
 // Producer desktop app speaks to either backend unchanged.
 
+app.route("/v1/app/data-integrations", dataIntegrationRoutes);
 app.route("/v1/app/live", liveHostRoutes);
 app.route("/v1/connect", connectGuestRoutes);
 app.route("/v1/connect", modRoutes);
 app.route("/v1/app/live", interactionHostRoutes);
+app.route("/v1/app/live", setRuntimeHostRoutes);
+app.route("/v1/connect", setRuntimeAudienceRoutes);
 app.route("/v1/connect", interactionConnectRoutes);
 
 // ── Contract-first stubs (docs/CONTRIBUTIONS.md) ─────────────────────────────

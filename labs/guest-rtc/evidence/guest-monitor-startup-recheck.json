@@ -1,0 +1,38 @@
+{
+  "run": "physical-publication-1791663783537881000",
+  "seconds": 10.028188375,
+  "p95_ms": 26,
+  "published": 940,
+  "recoveries": 0,
+  "monitor_inbox": {
+    "accepted": 963,
+    "before_device_ready_rejected": 37,
+    "callback_contention_rejected": 0,
+    "capacity_blocks": 8,
+    "device_ready": false,
+    "generation": 2,
+    "max_age_ms": 30,
+    "old_generation_rejected": 0,
+    "overflow_rejected": 0,
+    "pending": 0,
+    "retired": 0,
+    "stale": 0
+  },
+  "monitor_after_stop": {
+    "consumed": 961,
+    "overflow_rejected": 0,
+    "partial_samples_retired": 384,
+    "pending_retired": 2,
+    "played_blocks": 961,
+    "queued": 963,
+    "silent_samples": 928,
+    "stale_or_generation_retired": 0
+  },
+  "format_or_timeline_errors": 0,
+  "callbacks_active_after_stop": 0,
+  "owners_retired": true,
+  "receiver_packets": 470,
+  "receiver_packet_loss": 0,
+  "voice_quality_qualified": false,
+  "g1_complete": false
+}

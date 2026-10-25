@@ -1,0 +1,59 @@
+{
+  "scope": "Real staging room with sequential browser guest admission",
+  "passed": false,
+  "failures": [
+    {
+      "capture_fault_code": 0,
+      "maximum_audio_call_us": 11481,
+      "maximum_audio_late_us": 46525,
+      "maximum_callback_age_us": 443375,
+      "maximum_capture_age_us": 443801,
+      "maximum_capture_queue_wait_us": 32360,
+      "maximum_loop_gap_us": 12497,
+      "maximum_video_call_us": 77444,
+      "maximum_work_us": 11486,
+      "minimum_audio_spacing_us": 8134,
+      "program_buffer_ms": 400,
+      "publisher_recoveries": 0,
+      "startup_audio_blocks_discarded": 0,
+      "time_constrained_scheduling": true,
+      "video_worker_stall_injected": false
+    },
+    {
+      "capture_fault_code": 0,
+      "maximum_audio_call_us": 11481,
+      "maximum_audio_late_us": 103862,
+      "maximum_callback_age_us": 443375,
+      "maximum_capture_age_us": 443801,
+      "maximum_capture_queue_wait_us": 57105,
+      "maximum_loop_gap_us": 12497,
+      "maximum_video_call_us": 77444,
+      "maximum_work_us": 11486,
+      "minimum_audio_spacing_us": 8134,
+      "program_buffer_ms": 400,
+      "publisher_recoveries": 1,
+      "startup_audio_blocks_discarded": 0,
+      "time_constrained_scheduling": true,
+      "video_worker_stall_injected": false
+    },
+    {
+      "capture_fault_code": 0,
+      "maximum_audio_call_us": 11481,
+      "maximum_audio_late_us": 107767,
+      "maximum_callback_age_us": 500268,
+      "maximum_capture_age_us": 500850,
+      "maximum_capture_queue_wait_us": 57105,
+      "maximum_loop_gap_us": 12497,
+      "maximum_video_call_us": 77444,
+      "maximum_work_us": 11486,
+      "minimum_audio_spacing_us": 8134,
+      "program_buffer_ms": 400,
+      "publisher_recoveries": 2,
+      "startup_audio_blocks_discarded": 0,
+      "time_constrained_scheduling": true,
+      "video_worker_stall_injected": false
+    }
+  ],
+  "candidate": "Reduce explicit pilot OBS fixed mixing buffer from 200 to 100 ms; shared audio/video publication lead remains 400 ms.",
+  "candidate_validated": false
+}

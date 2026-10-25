@@ -1,0 +1,44 @@
+[
+  {
+    "run": "transport-decoded-pcm-stereo-rejoin",
+    "sha256": "7f0a9dae7f9ebb1bfe7615025717da1522429db52f7bec18ba2d1b44a12d8eca",
+    "generations": 6,
+    "mapped_blocks": 6563,
+    "native_pcm_blocks": 10289,
+    "nonzero_pcm_blocks": 1800,
+    "native_pcm_accounting_verified": true,
+    "online_mapping_verified": true,
+    "native_pull_contention": 9,
+    "clock_resets": 0,
+    "max_origin_step_error_vs_10ms_pcm_us": 0,
+    "obs_synchronization_qualified": false
+  },
+  {
+    "run": "transport-decoded-pcm-audio-jitter",
+    "sha256": "5693ef2507fd22b6973d2f7aec2da724f1ce73dc1311913df051734e5004cabc",
+    "generations": 3,
+    "mapped_blocks": 7147,
+    "native_pcm_blocks": 9293,
+    "nonzero_pcm_blocks": 1625,
+    "native_pcm_accounting_verified": true,
+    "online_mapping_verified": true,
+    "native_pull_contention": 0,
+    "clock_resets": 0,
+    "max_origin_step_error_vs_10ms_pcm_us": 0,
+    "obs_synchronization_qualified": false
+  },
+  {
+    "run": "transport-decoded-pcm-step-jitter",
+    "sha256": "eacfa75a060085327ac16d80951d7dcb4089a24957aa76fc82b8252041ecabfa",
+    "generations": 3,
+    "mapped_blocks": 3210,
+    "native_pcm_blocks": 5277,
+    "nonzero_pcm_blocks": 894,
+    "native_pcm_accounting_verified": true,
+    "online_mapping_verified": true,
+    "native_pull_contention": 10,
+    "clock_resets": 0,
+    "max_origin_step_error_vs_10ms_pcm_us": 17500,
+    "obs_synchronization_qualified": false
+  }
+]

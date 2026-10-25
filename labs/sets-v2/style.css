@@ -1,0 +1,148 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: #0d1423;
+  color: #e7edf8;
+  font:
+    15px/1.5 system-ui,
+    sans-serif;
+}
+main {
+  max-width: 1480px;
+  margin: auto;
+  padding: 38px;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  border-bottom: 1px solid #2d3b52;
+  padding-bottom: 22px;
+}
+small {
+  color: #d5b16d;
+  letter-spacing: 3px;
+  font-weight: 700;
+}
+h1 {
+  font-size: 38px;
+  letter-spacing: -1.5px;
+  margin: 10px 0;
+}
+h2 {
+  font-size: 21px;
+}
+p {
+  color: #a9b6cd;
+  margin: 8px 0 16px;
+}
+.badge {
+  font-size: 11px;
+  letter-spacing: 1px;
+  border: 1px solid #53637e;
+  border-radius: 20px;
+  padding: 7px 12px;
+}
+.tools {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 22px;
+  padding: 28px 0;
+}
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+button,
+select {
+  background: #1a2942;
+  border: 1px solid #3b4d69;
+  color: #eff3fa;
+  border-radius: 8px;
+  padding: 9px 13px;
+  font: inherit;
+  cursor: pointer;
+}
+button:hover {
+  background: #2b3d5b;
+}
+button[aria-pressed="true"] {
+  border-color: #dfb568;
+  color: #f0cb85;
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+label {
+  margin-left: 8px;
+  color: #b9c5d9;
+}
+.previews {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+article {
+  min-width: 0;
+  background: #111c2e;
+  border: 1px solid #2b3c55;
+  border-radius: 16px;
+  padding: 15px;
+}
+article h2 {
+  margin: 4px 0;
+}
+.viewport {
+  overflow: hidden;
+  border-radius: 10px;
+  max-width: 100%;
+  background: #172033;
+}
+article p {
+  font-size: 12px;
+}
+details {
+  margin: 26px 0;
+  border-top: 1px solid #2b3c55;
+  padding-top: 20px;
+}
+summary {
+  cursor: pointer;
+}
+pre {
+  background: #080e19;
+  padding: 20px;
+  overflow: auto;
+  font-size: 12px;
+}
+footer {
+  color: #9aaac4;
+  font-size: 12px;
+  max-width: 850px;
+}
+.error {
+  color: #ffb1b1;
+}
+@media (max-width: 760px) {
+  main {
+    padding: 18px;
+  }
+  header {
+    display: block;
+  }
+  .badge {
+    display: inline-block;
+  }
+  h1 {
+    font-size: 29px;
+  }
+  .viewport {
+    zoom: 0.7;
+  }
+}

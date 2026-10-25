@@ -1,0 +1,148 @@
+{
+  "cycles": [
+    {
+      "cancelled": false,
+      "cycle": 0,
+      "fds_after_shutdown": 14,
+      "finish": {
+        "async_video_unbuffered": false,
+        "clock": "shared OBS monotonic anchor + callback Instant elapsed; sender clock unqualified",
+        "frames": 11,
+        "qualified": false,
+        "raw_video_pipeline_probe": {
+          "audio_frames": 31,
+          "audio_marker_window_ms": 10,
+          "audio_markers": [],
+          "audio_overflow": 0,
+          "callbacks_quiescent_after_unregister": true,
+          "capacity": 64,
+          "contention_dropped": 0,
+          "frames": 19,
+          "markers": [
+            {
+              "observed_ns": 31627158913333,
+              "timestamp_ns": 31627119113666
+            }
+          ],
+          "overflow": 0,
+          "registered": false
+        },
+        "recorded_av_analyzed": false,
+        "stop_code": 0
+      },
+      "probe_lifecycle": {
+        "alive": 0,
+        "created": 1,
+        "destroyed": 1
+      },
+      "recording": "pipeline-lifecycle-0-31626818107208.mp4",
+      "threads_after_shutdown": 10
+    },
+    {
+      "cancelled": false,
+      "cycle": 1,
+      "fds_after_shutdown": 14,
+      "finish": {
+        "async_video_unbuffered": false,
+        "clock": "shared OBS monotonic anchor + callback Instant elapsed; sender clock unqualified",
+        "frames": 11,
+        "qualified": false,
+        "raw_video_pipeline_probe": {
+          "audio_frames": 30,
+          "audio_marker_window_ms": 10,
+          "audio_markers": [],
+          "audio_overflow": 0,
+          "callbacks_quiescent_after_unregister": true,
+          "capacity": 64,
+          "contention_dropped": 0,
+          "frames": 18,
+          "markers": [
+            {
+              "observed_ns": 31628289667583,
+              "timestamp_ns": 31628253719582
+            }
+          ],
+          "overflow": 0,
+          "registered": false
+        },
+        "recorded_av_analyzed": false,
+        "stop_code": 0
+      },
+      "probe_lifecycle": {
+        "alive": 0,
+        "created": 2,
+        "destroyed": 2
+      },
+      "recording": "pipeline-lifecycle-1-31627990605750.mp4",
+      "threads_after_shutdown": 10
+    },
+    {
+      "cancelled": false,
+      "cycle": 2,
+      "fds_after_shutdown": 14,
+      "finish": {
+        "async_video_unbuffered": false,
+        "clock": "shared OBS monotonic anchor + callback Instant elapsed; sender clock unqualified",
+        "frames": 11,
+        "qualified": false,
+        "raw_video_pipeline_probe": {
+          "audio_frames": 30,
+          "audio_marker_window_ms": 10,
+          "audio_markers": [],
+          "audio_overflow": 0,
+          "callbacks_quiescent_after_unregister": true,
+          "capacity": 64,
+          "contention_dropped": 0,
+          "frames": 18,
+          "markers": [
+            {
+              "observed_ns": 31629378419291,
+              "timestamp_ns": 31629339656291
+            }
+          ],
+          "overflow": 0,
+          "registered": false
+        },
+        "recorded_av_analyzed": false,
+        "stop_code": 0
+      },
+      "probe_lifecycle": {
+        "alive": 0,
+        "created": 3,
+        "destroyed": 3
+      },
+      "recording": "pipeline-lifecycle-2-31629073418583.mp4",
+      "threads_after_shutdown": 10
+    },
+    {
+      "cancelled": true,
+      "cycle": 3,
+      "fds_after_shutdown": 14,
+      "finish": null,
+      "probe_lifecycle": {
+        "alive": 0,
+        "created": 4,
+        "destroyed": 4
+      },
+      "recording": "pipeline-lifecycle-3-31630163625708.mp4",
+      "threads_after_shutdown": 11
+    }
+  ],
+  "hardware_capture": false,
+  "initial_fds": 10,
+  "initial_threads": 10,
+  "partial_initialization": {
+    "fds_after_shutdown": 14,
+    "injected_after_callback_registration": true,
+    "probe_lifecycle": {
+      "alive": 0,
+      "created": 5,
+      "destroyed": 5
+    },
+    "threads_after_shutdown": 11
+  },
+  "speaker_playout": false,
+  "success_and_drop_cancellation": true,
+  "warm_fds": 14,
+  "warm_threads": 10
+}

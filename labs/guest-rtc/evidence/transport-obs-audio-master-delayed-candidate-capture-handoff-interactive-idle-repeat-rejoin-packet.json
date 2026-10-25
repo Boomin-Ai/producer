@@ -1,0 +1,46 @@
+{
+  "profile": "audio-jitter",
+  "signaling_rewrites": 155,
+  "rejected_tcp_candidates": 0,
+  "rejected_non_mux_candidates": 133,
+  "pending_max": 5,
+  "snapshot_write_errors": 0,
+  "last_snapshot_error_code": null,
+  "peer_limit_drops": 0,
+  "overflow_drops": 0,
+  "send_errors": 0,
+  "websocket_backpressure_closes": 0,
+  "packets": {
+    "client_to_sfu:control": {
+      "received": 136,
+      "forwarded": 136,
+      "dropped": 0,
+      "delayed": 0,
+      "max_delay_ms": 0
+    },
+    "sfu_to_client:control": {
+      "received": 190,
+      "forwarded": 190,
+      "dropped": 0,
+      "delayed": 0,
+      "max_delay_ms": 0
+    },
+    "client_to_sfu:video": {
+      "received": 782,
+      "forwarded": 782,
+      "dropped": 0,
+      "delayed": 0,
+      "max_delay_ms": 0
+    },
+    "client_to_sfu:audio": {
+      "received": 1345,
+      "forwarded": 1321,
+      "dropped": 22,
+      "delayed": 1323,
+      "max_delay_ms": 79
+    }
+  },
+  "payloads_decrypted": false,
+  "payloads_logged": false,
+  "packet_profile_effect_observed": true
+}

@@ -1,0 +1,10 @@
+{
+  "scope": "Actual local Cloudflare Worker HTTP routes, encrypted saved Claude credential, durable room module authority, researched answer and explicit show gate",
+  "at": "2026-10-25T05:34:14.437Z",
+  "model": "claude-sonnet-5-5",
+  "citations": 8,
+  "responseCharacters": 1731,
+  "encryptedConnection": true,
+  "withheldBeforeShow": true,
+  "shownAfterAction": true
+}

@@ -1,0 +1,40 @@
+{
+  "passed": true,
+  "frontend_identity_tests": 4,
+  "native_graph_conversion_tests": 1,
+  "native_graph_actual_obs": true,
+  "frontend_build_passed": true,
+  "native_pilot_compile_passed": true,
+  "checks": [
+    "saved short scene ID preserved",
+    "full participant identity registered separately",
+    "position and size preserved",
+    "volume and mute preserved",
+    "removal clears full identity registration",
+    "colliding scene prefixes rejected",
+    "noncanonical participant identities rejected",
+    "room session queue regression passed",
+    "native binding exposed in source state for normal room reconciliation"
+  ],
+  "ordinary_room_ui_exercised": true,
+  "host_return_exercised": false,
+  "production_changed": false,
+  "source_sha256": {
+    "src/views/Live.tsx": "ca80959b0d322d7c3f6c0722aa563d939810eb0f2639d835289e0e9a66664e7a",
+    "src/lib/nativeGuestSources.ts": "9168d07d944dbc45aa0d862e7fe42b2cc120e91320d9593d3d31e812e7bedeba",
+    "src/lib/ipc.ts": "6b7fd8e0a6d7050bd6d6b8b90f3419dcc6630b9bc2195b7d1d93e991dbfb9cd3",
+    "src-tauri/src/rtc_ipc.rs": "a2fa48b2f29f31545ae67f578288ed21188563107eddf01d8ccd2eda92347d3c",
+    "src-tauri/src/rtc_owner.rs": "9673de306a95181733fcf6e1eb394da658f251bc3165b6651ac4651718d2fa33",
+    "src-tauri/src/live/graph.rs": "e68724c2163e5f512bad2f5ebee7b797ae4558bddf4ffd3826d5107dcda5bcb3",
+    "scripts/test-native-guest-sources.mjs": "9cbc3e4e4fee554a45135444abac0646416caf04f2d4cc8a1e4c58c60278723d"
+  },
+  "qualification": "Native graph conversion, frontend admission/identity/session primitives, and user-confirmed native room open with an active owner. End-to-end guest admission/placement, full room audiovisual synchronization and physical host AEC remain unqualified.",
+  "native_app_unit_tests": 63,
+  "guest_session_unit_tests": 9,
+  "staging_read_tests": 35,
+  "staging_worker_version": "4cba72e9-d68e-42ca-89ee-670273b5a8cf",
+  "guest_runtime_unit_tests": 28,
+  "ordinary_room_open_user_confirmed": true,
+  "ordinary_room_native_owner_active_verified": true,
+  "ordinary_room_guest_admission_placement_exercised": false
+}

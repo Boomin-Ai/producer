@@ -90,7 +90,7 @@ export class RealtimeHub {
   private readonly actions: RoomActions;
   private readonly commands: RoomCommands;
   private readonly audience: AudienceRoom;
-  constructor(private readonly state: DurableObjectState, private readonly env: Env) { this.actions = new RoomActions(state.storage); this.commands = new RoomCommands(state.storage); this.audience = new AudienceRoom(state.storage, () => state.getWebSockets().filter(ws => ws.readyState === 1), (url) => state.getWebSockets().some((ws) => (ws.deserializeAttachment() as SocketState | null)?.inviteOrigin === url.origin)); }
+  constructor(private readonly state: DurableObjectState, private readonly env: Env) { this.actions = new RoomActions(state.storage); this.commands = new RoomCommands(state.storage); this.audience = new AudienceRoom(state.storage, () => state.getWebSockets().filter(ws => ws.readyState === 1), (url) => state.getWebSockets().some((ws) => (ws.deserializeAttachment() as SocketState | null)?.inviteOrigin === url.origin),(message,roomId)=>{if(!this.env.ROOMSTATE)return;this.state.waitUntil(this.env.ROOMSTATE.get(this.env.ROOMSTATE.idFromName('roomstate:'+roomId)).fetch('https://do/set-runtime/chat',{method:'POST',body:JSON.stringify({message:{id:message.id,text:message.text,name:message.name,at:message.at}})}).then(()=>{}).catch(()=>{}));}); }
 
 
   async fetch(request: Request): Promise<Response> {

@@ -1,0 +1,33 @@
+{
+  "at": "2026-10-25T06:39:47.257Z",
+  "authoredEvidenceView": "view1",
+  "citations": 4,
+  "committedRevision": 5,
+  "heldBeforeShow": true,
+  "kind": "just-facts-module-ui",
+  "native": {
+    "cachedBytes": 300432496,
+    "cachedKeys": [
+      "scene-897d195e-54efbfea",
+      "scene-bfd40558-72d11c28",
+      "scene-dee0075e-3fa625d6",
+      "scene-5a65ed4e-eae4991a"
+    ],
+    "clockMs": 15699.999064207075,
+    "generation": 6,
+    "paused": false,
+    "preparedRevision": 7,
+    "queued": false,
+    "ready": true,
+    "renderSerial": 303,
+    "renderedRevision": 2,
+    "transitionProgress": 1,
+    "transitioning": false,
+    "warmed": true
+  },
+  "ok": true,
+  "providerOrigin": "provider",
+  "responseCharacters": 1590,
+  "setEpoch": 2,
+  "status": "passed"
+}

@@ -1,0 +1,18 @@
+{
+  "network_profile": "baseline",
+  "run_name": "physical-publication-1791686827299744000",
+  "status": "completed",
+  "loopback_only": true,
+  "physical_microphone_publication_requested": true,
+  "browser_voice_recording_requested": false,
+  "private_av_recording_requested": true,
+  "voice_recording_scope": "none",
+  "seconds": 30,
+  "g1_complete": false,
+  "guest_monitor_requested": true,
+  "wait_for_user_start": true,
+  "sdk_reconnect_requested": null,
+  "guest_rejoin_requested": false,
+  "native_binary_sha256": "457a15d243fdbc8a7dea3cfce905c32787bcd2111cfc28f9f00b00459bd101bf",
+  "sfu_binary_sha256": "09d100f23cd3377edb8acb90496d63ed95a590b8524d6b33061bf9108fb31c09"
+}

@@ -1,0 +1,35 @@
+{
+  "status": "passed",
+  "recordedAt": "2026-10-24T21:41:49.429Z",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "sources": {
+    "src-tauri/src/live/sets_v2/contract.rs": "1e318508d1abbc4d3e542fbd34763e61c866ad4e4e3b106460894a739542feda",
+    "src-tauri/src/live/sets_v2/group.c": "423be9dd0fd78831ae9162e0f65685a05a63ac64f400ff3317434b46f4928d87",
+    "src-tauri/src/live/sets_v2/scene.c": "bf6919335a78f27fb26d365467034bacd20d51a08cf910a4265c5d6c7755a188",
+    "src-tauri/src/live/sets_v2/mod.rs": "a3cc31fbb85015959eaf10ad25532fffbdebb1223454e61785dc0c0660ec0d91",
+    "scripts/sets-v2/native-probe.m": "4356fa027b95b8f39ca6c488201d43505ab303bc02ce79e1ce7280dfe69a4bc0",
+    "scripts/sets-v2/rust-probe/src/lib.rs": "f8899735272f3165504ff2dbd82a4cc8d0608b1eb011f27db1daef24f824f425",
+    "scripts/sets-v2/make-text-quality-plans.mjs": "430d2593b2fa729e727dc4d904ed082c95210e5b40b481bf903858cd8cd106a3",
+    "scripts/sets-v2/run-native-probe.sh": "dbc728a06311ebd032351e33d4cd76d7f32064336e30294594081719295b5719",
+    "scripts/sets-v2/record-text-quality-proof.mjs": "02533d4e758c49601714cf93cb78c9d11a2fdd1fd640c874a6fa3edba4ecc82a"
+  },
+  "runtimeSha256": "a56d94884436504ba6a3fe0df7051436d2b7d2ac8d6794d1b947cecea605f13c",
+  "artifacts": {
+    "text-1080p-1.5x-detail.png": "54b1f3d3b301ef9bb0172aed0628afa443d29091229eb24c1fe99decefb4c341",
+    "text-1080p-1.5x.png": "9f73ae23ea7b0759335309874785fa263b6ad31e98bcb1709b70cab50feb86ad",
+    "text-1080p-1x-detail.png": "9a4448978f2e218682ce6a5a41454d02f136dd6175574b74df5cacb168bce441",
+    "text-1080p-1x.png": "98404be42d75e696f33fd1ddc82ec0966317c1e2efcc5170bfca6f9a750cb53c",
+    "text-1080p-2x-detail.png": "d12e3891b62c5a71e94d8668f257c1e03dd67731897f2ca71be5620418204fea",
+    "text-1080p-2x.png": "2feec8bbab6ce9d82a93e8432d1a56c07574cb97e547dc7c4560206d024b479b",
+    "text-quality-nodes.json": "b70d922724ce5e26ee5bbf65b1b69cd497784136713d03a73414036d49d17c28",
+    "text-quality-plan.json": "1f0523ab41c316db56af41b482bfd4f96b9d125d07bb4a104cb41269d517f71e",
+    "text-quality.json": "32dd5e880cbd0ca1edf3b6f17be6260096220b0a24d4dc982dc5fb60fb0bf535"
+  },
+  "limitations": [
+    "Text-only prototype injected as an authorized native source; not a production quality setting",
+    "Render+allocation+RGBA readback timing is not frame time or GPU-only timing",
+    "Requested RGBA byte counts exclude CEF/driver buffers and total process memory",
+    "Static Arial fixture on Apple Silicon/Metal; no encoder or audience playback comparison"
+  ]
+}

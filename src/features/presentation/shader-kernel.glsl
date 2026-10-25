@@ -3,6 +3,30 @@
 vec4 shade(vec2 uv) {
  float t=clockTime*speed;
  vec3 a=paletteA.xyz,b=paletteB.xyz,c=paletteC.xyz;
+ // Bounded weather layers. One analytical cell lookup; transparent background.
+ if(effectType>11.5) {
+  vec2 p=uv*vec2(extent.x/extent.y,1.0);
+  float light=0.0;
+  if(effectType<12.5) { // Slanted rain streaks, independently hashed per cell.
+   vec2 q=vec2((p.x+p.y*0.19)*frequency*55.0,(p.y-t*0.55)*frequency*15.0);
+   vec2 seed=floor(q),f=fract(q);
+   float hash=fract(sin(dot(seed,vec2(12.9898,78.233)))*4375.8545);
+   float streak=exp(-pow((f.x-(0.15+hash*0.7))*45.0,2.0));
+   light=streak*smoothstep(0.0,0.16,f.y)*(1.0-smoothstep(0.55,0.95,f.y))*step(0.32,hash);
+  } else if(effectType<13.5) { // Drifting snow, soft circular flakes.
+   vec2 q=vec2((p.x+sin(t*0.2+p.y*3.0)*0.018)*frequency*22.0,(p.y-t*0.09)*frequency*22.0);
+   vec2 seed=floor(q),f=fract(q);
+   float hash=fract(sin(dot(seed,vec2(12.9898,78.233)))*4375.8545);
+   vec2 center=vec2(0.15+hash*0.7,0.15+fract(hash*7.3)*0.7);
+   float d=length(f-center);
+   light=exp(-d*d*(180.0+hash*280.0))*step(0.25,hash);
+  } else { // Slowly drifting cloud veil, intentionally no opaque fill.
+   float field=sin(p.x*frequency*4.0+t*0.08)+sin(p.y*frequency*6.0-t*0.04)+sin((p.x+p.y)*frequency*3.0+t*0.06);
+   light=smoothstep(-0.5,2.7,field)*0.55;
+  }
+  light=clamp(light*intensity,0.0,1.0)*alpha;
+  return vec4(mix(b,c,0.35)*light,light);
+ }
  // Hairline perimeter flare: bright moving head, short falloff, no filled panel.
  if(effectType>10.5) {
   vec2 halfSize=extent*0.5,p=(uv-0.5)*extent;

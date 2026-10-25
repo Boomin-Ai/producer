@@ -1,0 +1,90 @@
+{
+  "passed": true,
+  "production_changed": false,
+  "ordinary_room_ui_exercised": false,
+  "qualification": "Generated OBS program through actual native publisher, LiveKit Cloud and the existing guest page; no physical AEC or audiovisual synchronization qualification.",
+  "steps": [
+    {
+      "name": "fixture_revoke",
+      "status": 200,
+      "elapsed_ms": 5014
+    },
+    {
+      "name": "link",
+      "status": 200,
+      "elapsed_ms": 4691
+    },
+    {
+      "name": "admit",
+      "status": 200,
+      "elapsed_ms": 4389
+    },
+    {
+      "name": "stage",
+      "status": 200,
+      "elapsed_ms": 6190
+    },
+    {
+      "name": "revoke",
+      "status": 200,
+      "elapsed_ms": 5141
+    }
+  ],
+  "checkpoint": "owner_shutdown",
+  "return_media": {
+    "width": 1280,
+    "height": 720,
+    "decoded_frames": 20,
+    "stream_changes": 0,
+    "maximum_rms": 0.0869013207762212,
+    "center_rgb": [
+      248,
+      1,
+      0
+    ]
+  },
+  "final": {
+    "audio_submitted": 4970,
+    "owner_expired": true,
+    "passed": true,
+    "repeated_close_passed": true,
+    "timing": {
+      "maximum_audio_call_us": 2750,
+      "maximum_audio_late_us": 117412,
+      "maximum_video_call_us": 2880,
+      "minimum_audio_spacing_us": 8009,
+      "publisher_recoveries": 3
+    },
+    "video_submitted": 1482
+  },
+  "run_ended": true,
+  "owner": {
+    "audio_submitted": 4970,
+    "owner_expired": true,
+    "passed": true,
+    "repeated_close_passed": true,
+    "timing": {
+      "maximum_audio_call_us": 2750,
+      "maximum_audio_late_us": 117412,
+      "maximum_video_call_us": 2880,
+      "minimum_audio_spacing_us": 8009,
+      "publisher_recoveries": 3
+    },
+    "video_submitted": 1482
+  },
+  "source_sha256": {
+    "crates/guest-runtime/src/lib.rs": "bd2553b716f377eb97775724fff972a8c799c454cce9707b263ebc504519330b",
+    "crates/guest-runtime/src/program.rs": "07aad9f91da1ad5721175ab870d071709c8e1106f8e084e192f249748b1aa868",
+    "crates/guest-session/src/lib.rs": "c4e9498c2022b931a5e08c17a26c34fd47812a10a3bb9b79761fb81e827bfd1b",
+    "src-tauri/src/rtc_owner.rs": "9673de306a95181733fcf6e1eb394da658f251bc3165b6651ac4651718d2fa33",
+    "src-tauri/src/live/rtc_program.rs": "284a263d2274f0dd68195a0ecf6309a50757b437c28834f20a93c37f3681b6ae",
+    "scripts/test-native-program-return.mjs": "80f49c525191cb4c639cd3c8b5710a902521e93f9d7be162bb8ff1914b0261c3"
+  },
+  "binary_sha256": "9903ffe185c2fbaf929dc7c20a48dc5316d0d64b940532ee4407e6107b37f6ab",
+  "deliberate_publisher_stall_enabled": true,
+  "limitations": [
+    "Three publisher recoveries in 60 seconds; long-running production stability not qualified.",
+    "Constant generated picture and tone; audiovisual alignment not measured.",
+    "Host speaker-reference AEC, direct peer audio and private cue are not integrated."
+  ]
+}

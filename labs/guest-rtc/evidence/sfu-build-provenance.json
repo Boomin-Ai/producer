@@ -1,0 +1,26 @@
+{
+  "sfu_tag": "v1.13.9",
+  "sfu_commit": "6fbe7f7e648aab4b2f734d6044a416bc2cbc482c",
+  "source_archive_sha256": "5b2b9c0a9b0fbcc51a5e5cff2451ce62e9e5df2b8c8545eccebe0e852537af68",
+  "go_version": "go1.26.0",
+  "go_archive_sha256": "b1640525dfe68f066d56f200bef7bf4dce955a1a893bd061de6754c211431023",
+  "go_metadata_url": "https://go.dev/dl/?mode=json&include=all",
+  "patch_sha256": "a535c0e730dc86581a3d726416c4d6ae105fe45aa4acb74bb5b6395932dc340e",
+  "upstream_participant_sha256": "c4a9d37cec6dcc0a530d8b55c730f6dbe9e2aae2f80801f883c26f8df3c4a560",
+  "upstream_downtrack_sha256": "3a6e995f7f322523b655747d3a8439de26529a49cd426a45f1436bad56e5d3ee",
+  "fast_cadence_ms": 250,
+  "default_cadence_ms": 3000,
+  "publisher_timing_logic_changed": false,
+  "patched_files_sha256": {
+    "pkg/rtc/participant.go": "8234a3af4a707f491a8a0e49bc80d4fa87de489eef8d29fad8bbf7b6af451b52",
+    "pkg/sfu/downtrack.go": "34adb600577dea100430d0452e6e4ad2ea7641768349bf02c95a833bf51a49d0",
+    "pkg/rtc/lab_sender_report_interval.go": "7734585364e4f7b84d7080a867976db5590bea3b4f1fd8cff2988b0fe65c12fb",
+    "pkg/rtc/lab_sender_report_interval_test.go": "0da9053846924786ee0b8d9d079d151e0f5744de938b61c3812e7aa048bd90ea"
+  },
+  "built_binary_sha256": "a233d9c0a6fd40acb5a1e5fdc5bfef941febd801356882cf52d54f91e1cac1f6",
+  "built_binary_size_bytes": 53893554,
+  "server_build_completed": true,
+  "cadence_policy_test_passed": true,
+  "live_experiment_completed": true,
+  "g1_complete": false
+}

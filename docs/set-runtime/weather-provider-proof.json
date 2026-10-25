@@ -1,0 +1,17 @@
+{
+  "kind": "managed-weather-live-provider",
+  "ok": true,
+  "testedAt": "2026-10-25T05:00:23.647Z",
+  "scope": "Actual API request through the managed provider adapter, not room/native output integration",
+  "result": {
+    "observedAt": 1792904400000,
+    "temperature": 11.7,
+    "condition": "clear",
+    "isDay": false,
+    "wind": 11.8,
+    "precipitation": 0,
+    "provider": "Open-Meteo",
+    "location": "Atlanta",
+    "units": "celsius"
+  }
+}

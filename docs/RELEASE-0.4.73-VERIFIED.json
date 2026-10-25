@@ -1,0 +1,74 @@
+{
+  "version": "0.4.73",
+  "source_sha": "0b0e3b0b8e9a2a7300572a88c968f696b5af3471",
+  "run": 39160783483,
+  "workflow": "success",
+  "macos": "codesign deep strict, Gatekeeper and stapler passed; both DMGs stapled; one-camera bundle gate passed",
+  "updater_signatures_verified": [
+    "darwin-aarch64",
+    "darwin-x86_64",
+    "windows-x86_64",
+    "linux-x86_64"
+  ],
+  "public_manifest": {
+    "version": "0.4.73",
+    "notes": "One Producer Virtual Camera now supports landscape 1920\u00d71080 and portrait 1080\u00d71920 on Apple Silicon.\nThe camera follows Producer's selected canvas; stop it before switching orientation and reconnect receiving apps that lock their format.\nFixes whole-picture mirroring by keeping camera frames BGRA instead of silently falling back to NV12.\nRetires the separate Producer Portrait Camera through macOS extension removal.\nKeeps portrait set routing, saved mirror preference, and existing guest startup/recovery improvements.\nWindows retains its native Live engine; Intel macOS and Linux retain their existing engine-less scope.",
+    "pub_date": "2026-10-18T20:01:48.290Z",
+    "platforms": {
+      "linux-x86_64": {
+        "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTQ09OeEZZT0l4YWlpUWNPMGo2OFgwMjhjR0xOUmhhUkkxM1FzY3VTZ0NXVTA2RXdSaGxzYk55cWxKR2pjblg1bWhtYythcHhjQXl1alI2dDJqU29DUzJiU0tyeWJySlFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMzUzNjU3CWZpbGU6UHJvZHVjZXJfMC40LjczX2FtZDY0LkFwcEltYWdlCjY5RzFMS2FtZk1ETHZCc01hUEtYcmY5OUdFSDEyRFhNM3kyVkp1L09kZTVvYjhjZXh5emo0OVk1bVRTdFNWUVBhTzBUVUNnR21DZGJIZ2VtN1FHUUFnPT0K",
+        "url": "https://github.com/Boomin-Ai/producer/releases/download/v0.4.73/Producer_0.4.73_amd64.AppImage"
+      },
+      "linux-x86_64-appimage": {
+        "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTQ09OeEZZT0l4YWlpUWNPMGo2OFgwMjhjR0xOUmhhUkkxM1FzY3VTZ0NXVTA2RXdSaGxzYk55cWxKR2pjblg1bWhtYythcHhjQXl1alI2dDJqU29DUzJiU0tyeWJySlFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMzUzNjU3CWZpbGU6UHJvZHVjZXJfMC40LjczX2FtZDY0LkFwcEltYWdlCjY5RzFMS2FtZk1ETHZCc01hUEtYcmY5OUdFSDEyRFhNM3kyVkp1L09kZTVvYjhjZXh5emo0OVk1bVRTdFNWUVBhTzBUVUNnR21DZGJIZ2VtN1FHUUFnPT0K",
+        "url": "https://github.com/Boomin-Ai/producer/releases/download/v0.4.73/Producer_0.4.73_amd64.AppImage"
+      },
+      "linux-x86_64-deb": {
+        "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTQ09OeEZZT0l4YW13L1Y1SWs1OW1vbEVmclBlVzhWVHdadURHMlEzRDE3cWt1T1lMeTZzbTRqM0xTT3ZWT3o0dFpKY0RUdVY5VzJvQldQRklpWkVOa1E4WmhPdnN6a2d3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMzUzNjU3CWZpbGU6UHJvZHVjZXJfMC40LjczX2FtZDY0LmRlYgprY3htOUZwMXJKNmg3WkdQZTM0c3ZsamlmdWw3bGM1Y05LRnl3aGM5dmpKWXljRlJZUVUvSDY5ZjFTdzlVcGhWRVRSWGZWdUtKNEFYSnlVdnl3RlJBdz09Cg==",
+        "url": "https://github.com/Boomin-Ai/producer/releases/download/v0.4.73/Producer_0.4.73_amd64.deb"
+      },
+      "linux-x86_64-rpm": {
+        "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTQ09OeEZZT0l4YXBuQU5wclZlTlVqU09zdXE3YUg2dW10R0NoWGRwNkIzNjdoTnc5NDViOXQ0Qm94L000My8yL1F0emxRb0xJbjFSb2tVT3hYZlZDMlYrS3dTSzRHS0FFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMzUzNjU3CWZpbGU6UHJvZHVjZXItMC40LjczLTEueDg2XzY0LnJwbQpldGN0emNINnRrSmpGUkN0SWhhNUxISGJpV1FqcVBoM1lqMnNuYmo5Ykp0MjdYOEdZOEUwNmh1RlNuOHAvK1E4UGlzZHJyc3JnbzRndHByUjd1S2ZCZz09Cg==",
+        "url": "https://github.com/Boomin-Ai/producer/releases/download/v0.4.73/Producer-0.4.73-1.x86_64.rpm"
+      },
+      "darwin-x86_64": {
+        "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTQ09OeEZZT0l4YW5yQXBJOUdlRGtxVWE2QVlRT3R5OUUzL3Y3YjJKWWtxa3pDdlRkaW9HVnJvdUVhQ05Ua3NndlhUYWU1WWNnSm9oS2xpYi8vRUpyY25rdHJzT3FPK0FJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMzUzNzAzCWZpbGU6UHJvZHVjZXIuYXBwLnRhci5negpJdU1NTFFOa05GUG5PSkhVV0lHdm5KRFVkdHQyN0lGRUkxZzdZalVCSDBnTnZGWXdRczZyNkhtenVlTzE4V0JlcHE4UExXWHNFaUZUeVhYbWY4Q3JCUT09Cg==",
+        "url": "https://github.com/Boomin-Ai/producer/releases/download/v0.4.73/Producer_x64.app.tar.gz"
+      },
+      "darwin-x86_64-app": {
+        "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTQ09OeEZZT0l4YW5yQXBJOUdlRGtxVWE2QVlRT3R5OUUzL3Y3YjJKWWtxa3pDdlRkaW9HVnJvdUVhQ05Ua3NndlhUYWU1WWNnSm9oS2xpYi8vRUpyY25rdHJzT3FPK0FJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMzUzNzAzCWZpbGU6UHJvZHVjZXIuYXBwLnRhci5negpJdU1NTFFOa05GUG5PSkhVV0lHdm5KRFVkdHQyN0lGRUkxZzdZalVCSDBnTnZGWXdRczZyNkhtenVlTzE4V0JlcHE4UExXWHNFaUZUeVhYbWY4Q3JCUT09Cg==",
+        "url": "https://github.com/Boomin-Ai/producer/releases/download/v0.4.73/Producer_x64.app.tar.gz"
+      },
+      "darwin-aarch64": {
+        "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTQ09OeEZZT0l4YXRtU3JpVDNTUzBhVUM1RUJmM0duS1dJSmVXd0diWHY4cGhZazE3UzI1a0JsWDRZMWFCc3Y3c1BjVGlVVlBDVFloK3I1bDZFU1U1alBZY2tSZjVRN2d3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMzU0MDQ0CWZpbGU6UHJvZHVjZXJfMC40LjczX2FhcmNoNjQuYXBwLnRhci5negoyL0Rxdk0rRktkQUJOa1REbGpDMXIvRTZLMU1VN3pFN3NCWDdpeXZZenZLOGVrK0ZoN1cxTlExUk1zWDlQVkJCckRSbDA5cFg3d2pna1oyN01YdmFEUT09Cg==",
+        "url": "https://github.com/Boomin-Ai/producer/releases/download/v0.4.73/Producer_0.4.73_aarch64.app.tar.gz"
+      },
+      "windows-x86_64": {
+        "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTQ09OeEZZT0l4YWlWeDNWMDkyeEFGekU1bVg0UmZjNEFTNDV6NW9rb0NDOFdNVGVvR2xOWkdSdHArZGtJRXQ2WmlXUWhZQkNhdlNCNDcwTlMrYUp2ZDNFbTJDZE8wL2c0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMzUzOTU2CWZpbGU6UHJvZHVjZXJfMC40LjczX3g2NC1zZXR1cC5leGUKSFVuV05sMkZWcVBMeVFtTEpKZ2xTUXFMdEgyWkxzeTMvVFQ0dTFoQldtZE5rZUhPRHpYSXRPRHNYNlRrY1pPVzBsdnIvRUU3YXExcUxTUTkrWktnQ0E9PQo=",
+        "url": "https://github.com/Boomin-Ai/producer/releases/download/v0.4.73/Producer_0.4.73_x64-setup.exe"
+      },
+      "windows-x86_64-nsis": {
+        "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTQ09OeEZZT0l4YWlWeDNWMDkyeEFGekU1bVg0UmZjNEFTNDV6NW9rb0NDOFdNVGVvR2xOWkdSdHArZGtJRXQ2WmlXUWhZQkNhdlNCNDcwTlMrYUp2ZDNFbTJDZE8wL2c0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMzUzOTU2CWZpbGU6UHJvZHVjZXJfMC40LjczX3g2NC1zZXR1cC5leGUKSFVuV05sMkZWcVBMeVFtTEpKZ2xTUXFMdEgyWkxzeTMvVFQ0dTFoQldtZE5rZUhPRHpYSXRPRHNYNlRrY1pPVzBsdnIvRUU3YXExcUxTUTkrWktnQ0E9PQo=",
+        "url": "https://github.com/Boomin-Ai/producer/releases/download/v0.4.73/Producer_0.4.73_x64-setup.exe"
+      },
+      "windows-x86_64-msi": {
+        "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTQ09OeEZZT0l4YWpzcldpVG5DTE53MEhrZzI5YW0vWUovdERTZGE3WlRUNkd3L1hmaXBvK2J6YWEvKytrVUI0dytXMi82bm9CNWIrV0FTV2lIZ3FibkVpSExVbk9WT3dvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMzU0MTk1CWZpbGU6UHJvZHVjZXJfMC40LjczX3g2NF9lbi1VUy5tc2kKQlpSc0laNzFWaExqN3B6WXZtUyt1cDRsN0NTSkRzZVVUSytRNDBrajFvcHdiSGpIc0RzeENEODUzWGVWdzlpWmtoQXFDdjU1Qkg0WWxQeFUwcVZkQlE9PQo=",
+        "url": "https://github.com/Boomin-Ai/producer/releases/download/v0.4.73/Producer_0.4.73_x64_en-US.msi"
+      }
+    }
+  },
+  "download_checks": {
+    "macos": "HTTP/2 200 \ndate: Sun, 18 Oct 2026 20:12:41 GMT\ncontent-type: application/octet-stream\ncontent-length: 196116576\nreport-to: {\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=3XAubSf%2B2SCvgZHY6JIX8eDBPcArYVZAn%2BC2hutqq7FTs5n91dBN4sfo6BzzXH3omKP609P%2FS2wuBidwPb7q0NSuahWM14V0yI6DxyYwrDprOvvdFo8lm%2Fov6T0lVLQXMr6SgaMU5hu30I4%3D\"}]}\nnel: {\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}\ncache-control: no-store\ncontent-disposition: attachment; filename=\"Producer.dmg\"\nserver: cloudflare\ncf-cache-status: DYNAMIC\ncf-ray: a4ca32fc59f1fd76-DEN\nalt-svc: h3=\":443\"; ma=86400\n\n",
+    "macos-intel": "HTTP/2 200 \ndate: Sun, 18 Oct 2026 20:12:42 GMT\ncontent-type: application/octet-stream\ncontent-length: 11945736\nreport-to: {\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=fKQjqXlm5fUiDc5yZ7ZTgI%2Bgv5TZkAA2Gmin9gDyVAj5Siy%2F%2F7vJEXupN1GehLknqkh8QHNAYWmAq2CQkrzj4M8bxdQAmrYXTdUEvMdUouzAOsYW9C40CGqsFM9lILbYtlS93pf4EmqMCgg%3D\"}]}\nnel: {\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}\ncache-control: no-store\ncontent-disposition: attachment; filename=\"Producer-Intel.dmg\"\nserver: cloudflare\ncf-cache-status: DYNAMIC\ncf-ray: a4ca330ae97f724c-DEN\nalt-svc: h3=\":443\"; ma=86400\n\n",
+    "windows": "HTTP/2 200 \ndate: Sun, 18 Oct 2026 20:12:44 GMT\ncontent-type: application/octet-stream\ncontent-length: 136753683\nreport-to: {\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=f175P8%2BtkaePUiOKFniraheZb%2FHRYWHPO5ihBIolQ774N6f7dmB3cZJeGWvJl4MWlCwRsSm0ILRUSiwPercKcUl%2B35aWNzJcI0fU5lhq96pfXDGsSaY3Chz%2FCPxI992VSPD0QXoQ9snQcVI%3D\"}]}\nnel: {\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}\ncache-control: no-store\ncontent-disposition: attachment; filename=\"Producer-Setup.exe\"\nserver: cloudflare\ncf-cache-status: DYNAMIC\ncf-ray: a4ca33101ac5c639-DEN\nalt-svc: h3=\":443\"; ma=86400\n\n",
+    "linux": "HTTP/2 200 \ndate: Sun, 18 Oct 2026 20:12:45 GMT\ncontent-type: application/octet-stream\ncontent-length: 85383672\nreport-to: {\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=9Cax0j4SmAP37da89vTc%2FjdXBUdOanZ4UZ1Mz7s53xgjqtZEFd291SxcYcj0BErJfnvEdi5Rn6my96VhtUVWQ0hYnBO9b4yEP4t3HcFeBNRQo1nVmMwN0Q4fccGNzwxQir5QcIy7bZmN33Q%3D\"}]}\nnel: {\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}\ncache-control: no-store\ncontent-disposition: attachment; filename=\"Producer.AppImage\"\nserver: cloudflare\ncf-cache-status: DYNAMIC\ncf-ray: a4ca33188dbde66b-DEN\nalt-svc: h3=\":443\"; ma=86400\n\n"
+  },
+  "sha256": {
+    "Producer_0.4.73_aarch64.app.tar.gz": "40fb928659e6bd33753d496596bdbd4e90aec2f8259aabeec9e422b0e56b7b3f",
+    "Producer_0.4.73_aarch64.dmg": "99dd37fbeb78e9b87a79dc4dd635dd121c6f70973331e381d8df05c2c90d6c6f",
+    "Producer_0.4.73_amd64.AppImage": "dcea76967a54b830b4b5d6333bf0d1845798e403656694f325f6e7ae6517304e",
+    "Producer_0.4.73_x64.dmg": "a17b14ee215b99812277f10f4a300a98b966b1cc6423a65242608dca49c257cb",
+    "Producer_0.4.73_x64-setup.exe": "cea53a2fc996a771947ae76ab6d046da886d9e12a82427cbad145631b5f65d01",
+    "Producer_x64.app.tar.gz": "610eab2167dc4c2841cf70181f0cf2b54037d088f5c199ba9736a918b5979480"
+  }
+}

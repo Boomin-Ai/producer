@@ -264,18 +264,22 @@ fn windows_engine_root() -> Option<std::path::PathBuf> {
 /// reach it. bootstrap_with_config takes a &Path, not an Option, and this is
 /// the only route to None. The guard is the signature, not a runtime check.
 pub fn bootstrap() -> EngineReport {
-    bootstrap_inner(None)
+    bootstrap_inner(None, stored_video(None))
 }
 
 /// The engine as the app boots it: a real config directory, always.
 pub fn bootstrap_with_config(module_config_dir: &std::path::Path) -> EngineReport {
+    // The isolated OBS/CEF cache is not the app's video-settings profile.
+    // Resolve video from the same profile used by status and SetVideo before
+    // redirecting plugin storage, otherwise a fresh cache silently boots 720p.
+    let video_mode = stored_video(Some(module_config_dir));
     // An explicitly isolated dev renderer can run beside the installed app.
     // CEF refuses to initialize twice against the same browser cache.
     #[cfg(debug_assertions)]
     if let Ok(dir) = std::env::var("PRODUCER_DEV_MODULE_CONFIG_DIR") {
-        return bootstrap_inner(Some(std::path::Path::new(&dir)));
+        return bootstrap_inner(Some(std::path::Path::new(&dir)), video_mode);
     }
-    bootstrap_inner(Some(module_config_dir))
+    bootstrap_inner(Some(module_config_dir), video_mode)
 }
 
 /// module_config_path feeds obs_module_config_path() — obs-browser derives
@@ -326,7 +330,10 @@ pub fn persist_video(dir: &std::path::Path, h: u32, f: u32) {
     let _ = std::fs::write(dir.join("video.json"), format!("{{\"h\":{h},\"f\":{f}}}"));
 }
 
-fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport {
+fn bootstrap_inner(
+    module_config_dir: Option<&std::path::Path>,
+    video_mode: (u32, u32),
+) -> EngineReport {
     let mut report = EngineReport {
         ok: false,
         obs_version: String::new(),
@@ -444,6 +451,10 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
     unsafe {
         ffi::producer_person_mask_register();
         ffi::producer_source_appearance_register();
+        #[cfg(all(target_os = "macos"))]
+        super::sets_v2::register();
+        #[cfg(feature = "guest-rtc-pilot")]
+        super::rtc_ingest::register_type();
     };
 
     #[cfg(target_os = "macos")]
@@ -479,7 +490,7 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
     // The module NAMES are the only platform difference — obs_reset_video's
     // contract is identical, so the preference/fallback shape is shared rather
     // than duplicated per platform.
-    let (boot_h, boot_f) = stored_video(module_config_dir);
+    let (boot_h, boot_f) = video_mode;
     #[cfg(target_os = "macos")]
     let (primary, primary_name) = ("libobs-metal.dylib", "metal");
     #[cfg(target_os = "windows")]
@@ -534,7 +545,24 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>) -> EngineReport 
         samples_per_sec: 48000,
         speakers: ffi::SPEAKERS_STEREO,
     };
-    if !unsafe { ffi::obs_reset_audio(&oai) } {
+    // The RTC publisher needs a bounded capture timeline. Legacy OBS audio
+    // can grow its mixer delay to 960 ms, exceeding our publication budget.
+    // Keep this candidate restricted to the explicit native RTC pilot.
+    let rtc_audio = cfg!(feature = "guest-rtc-pilot")
+        && (cfg!(feature = "guest-rtc-production")
+            || std::env::var("PRODUCER_RTC_PROGRAM_PILOT").as_deref() == Ok("1"));
+    let audio_ready = if rtc_audio {
+        let bounded = ffi::obs_audio_info2 {
+            samples_per_sec: oai.samples_per_sec,
+            speakers: oai.speakers,
+            max_buffering_ms: 200,
+            fixed_buffering: true,
+        };
+        unsafe { ffi::obs_reset_audio2(&bounded) }
+    } else {
+        unsafe { ffi::obs_reset_audio(&oai) }
+    };
+    if !audio_ready {
         report.errors.push("obs_reset_audio failed".into());
         return report;
     }
@@ -699,6 +727,18 @@ pub enum Command {
     PresentationStatus {
         reply: mpsc::Sender<super::presentation::Status>,
     },
+    #[cfg(all(target_os = "macos"))]
+    SetSourceCreate {
+        id: String,
+        label: String,
+        spec: graph::ExtraSpec,
+        reply: mpsc::Sender<Result<graph::SourcesState, String>>,
+    },
+    #[cfg(all(target_os = "macos"))]
+    SetsV2 {
+        action: super::sets_v2::contract::Action,
+        reply: mpsc::Sender<Result<super::sets_v2::contract::Status, String>>,
+    },
     PresentationWarm {
         request: super::presentation::Request,
         reply: mpsc::Sender<Result<Arc<super::presentation::Bridge>, String>>,
@@ -724,6 +764,10 @@ pub enum Command {
         action: crate::dj::Action,
         reply: std::sync::mpsc::Sender<Result<crate::dj::Status, String>>,
     },
+    SetPreviewSources {
+        lease: String,
+        ids: Vec<String>,
+    },
     SetThumbRate {
         fps: u32,
     },
@@ -731,6 +775,10 @@ pub enum Command {
     /// lib/monitorFeed.ts): the `program` target joins the thumb hub.
     SetProgramThumb {
         on: bool,
+    },
+    VirtualCamMirror {
+        on: Option<bool>,
+        reply: mpsc::Sender<Result<bool, String>>,
     },
     SelectOutput {
         portrait: bool,
@@ -868,6 +916,7 @@ pub enum Command {
 fn cmd_name(c: &Command) -> &'static str {
     match c {
         Command::Dj { .. } => "Dj",
+        Command::SetPreviewSources { .. } => "SetPreviewSources",
         Command::SetThumbRate { .. } => "SetThumbRate",
         Command::SetProgramThumb { .. } => "SetProgramThumb",
         Command::GoLive { .. } => "GoLive",
@@ -877,6 +926,10 @@ fn cmd_name(c: &Command) -> &'static str {
         Command::ApplyScene { .. } => "ApplyScene",
         Command::PresentationWarm { .. } => "PresentationWarm",
         Command::PresentationStatus { .. } => "PresentationStatus",
+        #[cfg(all(target_os = "macos"))]
+        Command::SetsV2 { .. } => "SetsV2",
+        #[cfg(all(target_os = "macos"))]
+        Command::SetSourceCreate { .. } => "SetSourceCreate",
         Command::PortraitRoom { .. } => "PortraitRoom",
         Command::PortraitState { .. } => "PortraitState",
         Command::PortraitTransform { .. } => "PortraitTransform",
@@ -894,6 +947,7 @@ fn cmd_name(c: &Command) -> &'static str {
         Command::ListDevices { .. } => "ListDevices",
         Command::PlayStinger { .. } => "PlayStinger",
         Command::SelectOutput { .. } => "SelectOutput",
+        Command::VirtualCamMirror { .. } => "VirtualCamMirror",
         Command::StartRecording { .. } => "StartRecording",
         Command::StopRecording { .. } => "StopRecording",
         Command::SetSyncOffset { .. } => "SetSyncOffset",
@@ -1181,6 +1235,37 @@ impl LiveHandle {
         rx.recv_timeout(Duration::from_secs(5))
             .map_err(|_| "Set engine did not answer".into())
     }
+    #[cfg(all(target_os = "macos"))]
+    pub fn set_source_create(
+        &self,
+        id: String,
+        label: String,
+        spec: graph::ExtraSpec,
+    ) -> Result<graph::SourcesState, String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd
+            .send(Command::SetSourceCreate {
+                id,
+                label,
+                spec,
+                reply: tx,
+            })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(10))
+            .map_err(|_| "Source creation did not answer".to_string())?
+    }
+    #[cfg(all(target_os = "macos"))]
+    pub fn sets_v2(
+        &self,
+        action: super::sets_v2::contract::Action,
+    ) -> Result<super::sets_v2::contract::Status, String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd
+            .send(Command::SetsV2 { action, reply: tx })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(10))
+            .map_err(|_| "Sets v2 engine did not answer".to_string())?
+    }
     pub fn presentation_warm(&self, request: super::presentation::Request) -> Result<(), String> {
         let revision = request.projection.revision;
         let (tx, rx) = mpsc::channel();
@@ -1333,12 +1418,25 @@ impl LiveHandle {
     }
 
     /// Demand control (docs/THUMB-PIPELINE-V2.md): 0 = previews off.
+    pub fn set_preview_sources(&self, lease: String, ids: Vec<String>) {
+        let _ = self.cmd.send(Command::SetPreviewSources { lease, ids });
+    }
+
     pub fn set_thumb_rate(&self, fps: u32) {
         let _ = self.cmd.send(Command::SetThumbRate { fps });
     }
 
     /// The program thumb for a seat's monitor fallback (docs/THUMB-PIPELINE-V2.md
     /// target `program`, PROGRAM_THUMB_FPS while on).
+    pub fn virtual_cam_mirror(&self, on: Option<bool>) -> Result<bool, String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd
+            .send(Command::VirtualCamMirror { on, reply: tx })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(10))
+            .map_err(|_| "Camera mirror settings timed out".to_string())?
+    }
+
     pub fn select_output(&self, portrait: bool) -> Result<(), String> {
         let (tx, rx) = mpsc::channel();
         self.cmd
@@ -2165,7 +2263,13 @@ pub fn start(
                             .is_ok()
                         {
                             #[cfg(debug_assertions)]
-                            if dumped.insert(id.clone()) {
+                            // First async-source frames can be black before decoding.
+                            // Save the first image containing pixels for diagnostics.
+                            if rgba
+                                .chunks_exact(4)
+                                .any(|p| p[0] > 12 || p[1] > 12 || p[2] > 12)
+                                && dumped.insert(id.clone())
+                            {
                                 let _ = std::fs::create_dir_all("/tmp/producer-thumbs");
                                 let _ =
                                     std::fs::write(format!("/tmp/producer-thumbs/{id}.jpg"), &jpg);
@@ -2303,6 +2407,10 @@ pub fn start(
             // The virtual camera runs independently of streaming and
             // recording — all three can be on at once.
             let mut vcam: Option<*mut ffi::obs_output_t> = None;
+            let mirror_path = module_config_dir.parent().unwrap_or(&module_config_dir).join("virtual-camera-mirror.json");
+            let mut vcam_mirrored = std::fs::read(&mirror_path).ok()
+                .and_then(|bytes| serde_json::from_slice::<bool>(&bytes).ok()).unwrap_or(false);
+
             // Studio output (studio.rs) — the studio scene over the room.
             let mut studio_out: Option<studio::Studio> = None;
             // The room-only mix the virtual camera reads, in BOTH studio modes.
@@ -2359,15 +2467,16 @@ pub fn start(
             /// Create + start the virtual camera output on `mix` — the
             /// guests' and mods' RETURN FEED, which is always the room scene,
             /// never the main mix (which is the UI while studio is on).
-            unsafe fn start_vcam(mix: *mut ffi::video_t) -> Result<*mut ffi::obs_output_t, String> {
+            unsafe fn start_vcam(mix: *mut ffi::video_t, portrait: bool, mirrored: bool) -> Result<*mut ffi::obs_output_t, String> {
                 let id = CString::new("virtualcam_output").unwrap();
                 let name = CString::new(graph::VCAM_DEVICE_NAME).unwrap();
+                let settings = ffi::obs_data_create();
+                ffi::obs_data_set_bool(settings, b"portrait\0".as_ptr().cast(), portrait);
+                ffi::obs_data_set_bool(settings, b"mirrored\0".as_ptr().cast(), mirrored);
                 let out = ffi::obs_output_create(
-                    id.as_ptr(),
-                    name.as_ptr(),
-                    ptr::null_mut(),
-                    ptr::null_mut(),
+                    id.as_ptr(), name.as_ptr(), settings, ptr::null_mut(),
                 );
+                ffi::obs_data_release(settings);
                 if out.is_null() {
                     return Err("this engine has no virtual camera output".into());
                 }
@@ -2578,9 +2687,31 @@ pub fn start(
                         let result = if report.ok { dj.apply(action) } else { Err("The room audio engine did not start".into()) };
                         let _ = reply.send(result);
                     }
+                    Ok(Command::VirtualCamMirror { on, reply }) => {
+                        let result = (|| -> Result<bool, String> {
+                            if !cfg!(target_os = "macos") { return Err("Virtual camera mirroring is available on macOS".into()); }
+                            if let Some(next) = on {
+                                let pending = mirror_path.with_extension("json.tmp");
+                                std::fs::write(&pending, if next { b"true".as_slice() } else { b"false".as_slice() }).map_err(|e| e.to_string())?;
+                                std::fs::rename(&pending, &mirror_path).map_err(|e| e.to_string())?;
+                                if let Some(output) = vcam {
+                                    unsafe {
+                                        let settings = ffi::obs_data_create();
+                                        ffi::obs_data_set_bool(settings, b"mirrored\0".as_ptr().cast(), next);
+                                        ffi::obs_output_update(output, settings);
+                                        ffi::obs_data_release(settings);
+                                    }
+                                }
+                                vcam_mirrored = next;
+                            }
+                            Ok(vcam_mirrored)
+                        })();
+                        let _ = reply.send(result);
+                    }
                     Ok(Command::SelectOutput{portrait,reply})=>{
                         let result=(||->Result<(),String>{
                             if selected_portrait==portrait{return Ok(());}
+                            if vcam.is_some(){return Err("Stop the virtual camera before changing the output canvas".into());}
                             if session.is_some()||recorder.is_some()||portrait_recorder.is_some(){return Err("Stop streaming and recording before changing the output canvas".into());}
                             let video=if portrait{
                                 #[cfg(target_os="macos")]{scene.as_mut().ok_or("Room is not ready")?.portrait_video()?}
@@ -2679,6 +2810,17 @@ pub fn start(
                     }
                     Ok(Command::PortraitStop{reply})=>{if portrait_recorder.is_some()||selected_portrait{let _=reply.send(());continue;}if let Some(p)=portrait_preview.take(){p.detach();}#[cfg(target_os="macos")]if let Some(g)=scene.as_mut(){g.portrait_stop();}let _=reply.send(());}
                     Ok(Command::PortraitFrame{reply})=>{#[cfg(target_os="macos")]let frame=scene.as_ref().map(|g|g.portrait_frame()).unwrap_or_default();#[cfg(not(target_os="macos"))]let frame=String::new();let _=reply.send(frame);}
+                    #[cfg(all(target_os="macos"))]
+                    Ok(Command::SetSourceCreate{id,label,spec,reply})=>{
+                        let result=scene.as_mut().ok_or("Room unavailable".to_string()).and_then(|g|g.create_set_source(&id,&label,&spec));
+                        if let Ok(sources)=&result{snap.lock().unwrap().sources=sources.clone();sink(&LiveEvent::SourcesChanged{sources:sources.clone()});}
+                        let _=reply.send(result);
+                    }
+                    #[cfg(all(target_os = "macos"))]
+                    Ok(Command::SetsV2 {action,reply}) => {
+                        let result=scene.as_mut().ok_or_else(||"The dev room is not running".to_string()).and_then(|g|g.sets_v2(action));
+                        let _=reply.send(result);
+                    }
                     Ok(Command::PresentationStatus {reply})=> {let _=reply.send(scene.as_ref().map_or(super::presentation::Status{generation:0,lease:None,revision:0},|g|g.presentation_status()));}
                     Ok(Command::PresentationWarm{request,reply})=>{let result=scene.as_mut().ok_or("Room scene unavailable".to_string()).and_then(|g|g.warm_presentation(request));let _=reply.send(result);}
                     Ok(Command::PresentationPrepare {request,reply})=> {let result=scene.as_mut().ok_or_else(||"The room scene is not running".to_string()).and_then(|g|g.prepare_presentation(request));let _=reply.send(result);}
@@ -2815,8 +2957,12 @@ pub fn start(
                                 if vcam.is_some() {
                                     return Ok(true);
                                 }
-                                let mix = room_mix_video(&mut room_mix)?;
-                                vcam = Some(start_vcam(mix)?);
+                                // The portrait canvas owns a separate native video output.
+                                // Keep it alive for the lifetime of the camera, just as
+                                // room_mix owns the landscape video output.
+                                let mix = if selected_portrait { selected_video }
+                                    else { room_mix_video(&mut room_mix)? };
+                                vcam = Some(start_vcam(mix, selected_portrait, vcam_mirrored)?);
                                 Ok(true)
                             }
                         })();
@@ -2965,6 +3111,14 @@ pub fn start(
                             }
                         }
                     }
+                    Ok(Command::SetPreviewSources { lease, ids }) => {
+                        let mut requests=hub_engine.preview_requests.lock().unwrap();
+                        if ids.is_empty() { requests.remove(&lease); }
+                        else if requests.contains_key(&lease) || requests.len()<8 { requests.insert(lease,ids); }
+                        hub_engine.preview_wanted.store(!requests.is_empty(),std::sync::atomic::Ordering::Relaxed);
+                        drop(requests);
+                        if let Some(g)=scene.as_ref(){hub_engine.publish_targets(g);}
+                    }
                     Ok(Command::SetThumbRate { fps }) => {
                         hub_engine
                             .fps
@@ -2979,6 +3133,7 @@ pub fn start(
                         }
                     }
                     Ok(Command::SetVideo { height, fps }) => {
+                        if selected_portrait && vcam.is_some(){sink(&LiveEvent::EngineError{message:"Stop the portrait virtual camera before changing video settings".into()});continue;}
                         if recorder.is_some()||portrait_recorder.is_some(){sink(&LiveEvent::EngineError{message:"Stop recording before changing video settings".into()});continue;}
                         if session.is_some() {
                             sink(&LiveEvent::EngineError {
@@ -3040,7 +3195,7 @@ pub fn start(
                                     if vcam_was_on {
                                         unsafe {
                                             match room_mix_video(&mut room_mix)
-                                                .and_then(|mix| start_vcam(mix))
+                                                .and_then(|mix| start_vcam(mix, false, vcam_mirrored))
                                             {
                                                 Ok(o) => vcam = Some(o),
                                                 Err(e) => sink(&LiveEvent::EngineError {

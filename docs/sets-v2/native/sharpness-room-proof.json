@@ -1,0 +1,1359 @@
+{
+  "completedAt": "2026-10-24T20:38:40.601Z",
+  "events": [
+    {
+      "hiddenInRoom": true,
+      "inlineSourceCreatedAndAssigned": true,
+      "nativeSourcePreviewFrame": true
+    },
+    {
+      "cachedBytes": 42340808,
+      "cachedKeys": [
+        "scene-e58361a5-d19ab5eb"
+      ],
+      "clockMs": 799.9999523162842,
+      "generation": 2,
+      "outputId": "program",
+      "paused": false,
+      "preparedRevision": 3,
+      "queued": false,
+      "ready": false,
+      "renderSerial": 9,
+      "renderedRevision": 2,
+      "transitionProgress": 1,
+      "transitioning": false,
+      "warmed": false
+    }
+  ],
+  "kind": "segment-timing",
+  "ok": true,
+  "segmentTiming": {
+    "inventories": [
+      {
+        "memory": [
+          {
+            "cachedBytes": 550933888,
+            "cachedKeys": [
+              "scene-2564926a-1499e4f0",
+              "scene-9e69cec1-a93bcdd7",
+              "scene-a22898b8-beea373e",
+              "scene-4d0f1a4d-f39861e1",
+              "scene-9c87cb31-f3a16065",
+              "scene-10ec45c2-4356f906",
+              "scene-accfa4f7-1afd07d3",
+              "scene-82fa5ce-e338f448",
+              "scene-2098115e-3a4a8ef8",
+              "scene-74776ce2-7dcc1720",
+              "scene-ce69a331-a6be3063",
+              "scene-c70325e8-d8d949e0",
+              "scene-7e2f7806-6929bd22",
+              "scene-60683be1-e52cdcfb",
+              "scene-66a7ae8e-6ebb8d72",
+              "scene-bf7c0412-9e250968"
+            ],
+            "clockMs": 48399.99711513519,
+            "generation": 2,
+            "paused": false,
+            "preparedRevision": 102,
+            "queued": false,
+            "ready": true,
+            "renderSerial": 1437,
+            "renderedRevision": 72,
+            "transitionProgress": 1,
+            "transitioning": false,
+            "warmed": true
+          },
+          {
+            "cachedBytes": 566498496,
+            "cachedKeys": [
+              "scene-b9ec0946-e5773dc8",
+              "scene-6bd7e699-efd4ee39",
+              "scene-3c668bb2-72f89064",
+              "scene-ae8bc8f9-a3751a37",
+              "scene-aabe9ead-57858b09",
+              "scene-7a3e6703-bfe09191",
+              "scene-2672c33-2f3d9073",
+              "scene-5ba4b639-ce0e94b7",
+              "scene-ec89f1f6-376cf02",
+              "scene-694fe12f-53b01113",
+              "scene-8f5a20aa-959bf676",
+              "scene-5b4eae7d-3377f475",
+              "scene-3f2541cf-b15778b9",
+              "scene-bdc683d6-c588a966",
+              "scene-6dacc304-e1f4d32a",
+              "scene-b6843904-da6e3146"
+            ],
+            "clockMs": 46199.99724626541,
+            "generation": 2,
+            "paused": false,
+            "preparedRevision": 103,
+            "queued": false,
+            "ready": true,
+            "renderSerial": 0,
+            "renderedRevision": 0,
+            "transitionProgress": 0,
+            "transitioning": false,
+            "warmed": true
+          }
+        ],
+        "name": "Shader Lab — Aurora, Glow & Sweep",
+        "ready": 32
+      },
+      {
+        "memory": [
+          {
+            "cachedBytes": 666473384,
+            "cachedKeys": [
+              "scene-66cf7f5b-7b51b2b9",
+              "scene-acc0d760-90de7264",
+              "scene-4c615c64-555ec78",
+              "scene-72793c5-c328505b",
+              "scene-64400b72-ce394534",
+              "scene-5da68387-c01dd5a1",
+              "scene-6df9d7ea-1f17c644",
+              "scene-adabd961-87678c5d",
+              "scene-2df7ae98-ae23fdf6",
+              "scene-b1560e51-d8d32fd5",
+              "scene-c64105a5-ca482317",
+              "scene-f6ab82bd-646b6771",
+              "scene-7cf9526d-c04b65e5",
+              "scene-907c57d9-bf741e65",
+              "scene-7ddaf2f8-47461260",
+              "scene-12af1b9f-4a6b9ac5"
+            ],
+            "clockMs": 65333.32943916321,
+            "generation": 2,
+            "paused": false,
+            "preparedRevision": 135,
+            "queued": false,
+            "ready": true,
+            "renderSerial": 1945,
+            "renderedRevision": 105,
+            "transitionProgress": 1,
+            "transitioning": false,
+            "warmed": true
+          },
+          {
+            "cachedBytes": 663274752,
+            "cachedKeys": [
+              "scene-cf72c532-febcac",
+              "scene-ec8a6d6c-157a2540",
+              "scene-91df992-c24d955c",
+              "scene-14c68fc4-d359f6fc",
+              "scene-d6c6ee05-f3efee9b",
+              "scene-fccfc536-1e8a6a48",
+              "scene-86aaf823-c4e5f497",
+              "scene-98bab579-e0ce9a79",
+              "scene-76b3f86d-e392382f",
+              "scene-502e137-739d0ccb",
+              "scene-872b8fb0-5cf42c58",
+              "scene-1175c928-6fb94802",
+              "scene-48fb192-5a798eae",
+              "scene-970d0e46-ab7b115c",
+              "scene-6323ff79-5d94a52b",
+              "scene-e146383e-65d2cdb2"
+            ],
+            "clockMs": 63133.32957029343,
+            "generation": 2,
+            "paused": false,
+            "preparedRevision": 136,
+            "queued": false,
+            "ready": true,
+            "renderSerial": 0,
+            "renderedRevision": 0,
+            "transitionProgress": 0,
+            "transitioning": false,
+            "warmed": true
+          }
+        ],
+        "name": "Combo Studio — Shader Duets",
+        "ready": 32
+      }
+    ],
+    "measurement": "Next click to native render completion; transition-first-observed is status polling estimate, not display scanout",
+    "measurements": [
+      {
+        "clickToCompleteMs": 75,
+        "name": "Head to Head — The Arena",
+        "pass": "first-visit",
+        "stages": [
+          {
+            "at": 11286,
+            "clickMs": 14,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 0,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 11291,
+            "clickMs": 19,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 5,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "revision": 0,
+            "stage": "cache-request"
+          },
+          {
+            "at": 11293,
+            "cacheKey": "scene-59a63762-28032c84",
+            "clickMs": 21,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 7,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "revision": 20,
+            "stage": "activate-request"
+          },
+          {
+            "at": 11302,
+            "clickMs": 30,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 16,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "revision": 20,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 11347,
+            "clickMs": 75,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 61,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "renderSerial": 251,
+            "revision": 20,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 1,
+        "target": "hot-take"
+      },
+      {
+        "clickToCompleteMs": 49,
+        "name": "Head to Head — The Arena",
+        "pass": "first-visit",
+        "stages": [
+          {
+            "at": 11782,
+            "clickMs": 11,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 0,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 11786,
+            "clickMs": 15,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 4,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "revision": 0,
+            "stage": "cache-request"
+          },
+          {
+            "at": 11789,
+            "cacheKey": "scene-5673a47c-6fa69150",
+            "clickMs": 18,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 7,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "revision": 21,
+            "stage": "activate-request"
+          },
+          {
+            "at": 11793,
+            "clickMs": 22,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 11,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "revision": 21,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 11820,
+            "clickMs": 49,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 38,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "renderSerial": 265,
+            "revision": 21,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 2,
+        "target": "host-case"
+      },
+      {
+        "clickToCompleteMs": 55,
+        "name": "Head to Head — The Arena",
+        "pass": "first-visit",
+        "stages": [
+          {
+            "at": 12255,
+            "clickMs": 16,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 0,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 12258,
+            "clickMs": 19,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 3,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "revision": 0,
+            "stage": "cache-request"
+          },
+          {
+            "at": 12261,
+            "cacheKey": "scene-e24f87c7-e18955d9",
+            "clickMs": 22,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 6,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "revision": 22,
+            "stage": "activate-request"
+          },
+          {
+            "at": 12264,
+            "clickMs": 25,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 9,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "revision": 22,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 12294,
+            "clickMs": 55,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 39,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "renderSerial": 279,
+            "revision": 22,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 3,
+        "target": "guest-case"
+      },
+      {
+        "clickToCompleteMs": 63,
+        "name": "Head to Head — The Arena",
+        "pass": "repeat",
+        "stages": [
+          {
+            "at": 13434,
+            "clickMs": 16,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 0,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 13438,
+            "clickMs": 20,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 4,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "revision": 0,
+            "stage": "cache-request"
+          },
+          {
+            "at": 13442,
+            "cacheKey": "scene-59a63762-28032c84",
+            "clickMs": 24,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 8,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "revision": 24,
+            "stage": "activate-request"
+          },
+          {
+            "at": 13446,
+            "clickMs": 28,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 12,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "revision": 24,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 13481,
+            "clickMs": 63,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 47,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "renderSerial": 315,
+            "revision": 24,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 1,
+        "target": "hot-take"
+      },
+      {
+        "clickToCompleteMs": 66,
+        "name": "Head to Head — The Arena",
+        "pass": "repeat",
+        "stages": [
+          {
+            "at": 13926,
+            "clickMs": 11,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 0,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 13931,
+            "clickMs": 16,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 5,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "revision": 0,
+            "stage": "cache-request"
+          },
+          {
+            "at": 13934,
+            "cacheKey": "scene-5673a47c-6fa69150",
+            "clickMs": 19,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 8,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "revision": 25,
+            "stage": "activate-request"
+          },
+          {
+            "at": 13947,
+            "clickMs": 32,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 21,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "revision": 25,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 13981,
+            "clickMs": 66,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 55,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "renderSerial": 330,
+            "revision": 25,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 2,
+        "target": "host-case"
+      },
+      {
+        "clickToCompleteMs": 50,
+        "name": "Head to Head — The Arena",
+        "pass": "repeat",
+        "stages": [
+          {
+            "at": 14423,
+            "clickMs": 12,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 0,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 14426,
+            "clickMs": 15,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 3,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "revision": 0,
+            "stage": "cache-request"
+          },
+          {
+            "at": 14428,
+            "cacheKey": "scene-e24f87c7-e18955d9",
+            "clickMs": 17,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 5,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "revision": 26,
+            "stage": "activate-request"
+          },
+          {
+            "at": 14432,
+            "clickMs": 21,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 9,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "revision": 26,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 14461,
+            "clickMs": 50,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 38,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "renderSerial": 344,
+            "revision": 26,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 3,
+        "target": "guest-case"
+      },
+      {
+        "clickToCompleteMs": 374,
+        "name": "Producer — Make Your Show",
+        "pass": "first-visit",
+        "stages": [
+          {
+            "at": 19822,
+            "clickMs": 11,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 0,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 19826,
+            "clickMs": 15,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 4,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "revision": 0,
+            "stage": "cache-request"
+          },
+          {
+            "at": 19828,
+            "cacheKey": "scene-45c2bf5a-a141d852",
+            "clickMs": 17,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 6,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "revision": 41,
+            "stage": "activate-request"
+          },
+          {
+            "at": 19834,
+            "clickMs": 23,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 12,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "revision": 41,
+            "stage": "take-request",
+            "transitionMs": 320
+          },
+          {
+            "at": 19857,
+            "clickMs": 46,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 35,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "renderSerial": 506,
+            "revision": 41,
+            "stage": "transition-first-observed"
+          },
+          {
+            "at": 20185,
+            "clickMs": 374,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 363,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "renderSerial": 516,
+            "revision": 41,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 1,
+        "target": "conversation"
+      },
+      {
+        "clickToCompleteMs": 393,
+        "name": "Producer — Make Your Show",
+        "pass": "first-visit",
+        "stages": [
+          {
+            "at": 20630,
+            "clickMs": 11,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 0,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 20634,
+            "clickMs": 15,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 4,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "revision": 0,
+            "stage": "cache-request"
+          },
+          {
+            "at": 20636,
+            "cacheKey": "scene-463723b9-89010b69",
+            "clickMs": 17,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 6,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "revision": 42,
+            "stage": "activate-request"
+          },
+          {
+            "at": 20640,
+            "clickMs": 21,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 10,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "revision": 42,
+            "stage": "take-request",
+            "transitionMs": 320
+          },
+          {
+            "at": 20690,
+            "clickMs": 71,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 60,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "renderSerial": 531,
+            "revision": 42,
+            "stage": "transition-first-observed"
+          },
+          {
+            "at": 21012,
+            "clickMs": 393,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 382,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "renderSerial": 541,
+            "revision": 42,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 2,
+        "target": "guest-focus"
+      },
+      {
+        "clickToCompleteMs": 397,
+        "name": "Producer — Make Your Show",
+        "pass": "first-visit",
+        "stages": [
+          {
+            "at": 21430,
+            "clickMs": 8,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 0,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 21434,
+            "clickMs": 12,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 4,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "revision": 0,
+            "stage": "cache-request"
+          },
+          {
+            "at": 21436,
+            "cacheKey": "scene-73891762-213891c6",
+            "clickMs": 14,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 6,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "revision": 43,
+            "stage": "activate-request"
+          },
+          {
+            "at": 21440,
+            "clickMs": 18,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 10,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "revision": 43,
+            "stage": "take-request",
+            "transitionMs": 320
+          },
+          {
+            "at": 21486,
+            "clickMs": 64,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 56,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "renderSerial": 555,
+            "revision": 43,
+            "stage": "transition-first-observed"
+          },
+          {
+            "at": 21819,
+            "clickMs": 397,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 389,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "renderSerial": 565,
+            "revision": 43,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 3,
+        "target": "live-demo"
+      },
+      {
+        "clickToCompleteMs": 383,
+        "name": "Producer — Make Your Show",
+        "pass": "repeat",
+        "stages": [
+          {
+            "at": 22970,
+            "clickMs": 8,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 0,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 22974,
+            "clickMs": 12,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 4,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "revision": 0,
+            "stage": "cache-request"
+          },
+          {
+            "at": 22976,
+            "cacheKey": "scene-45c2bf5a-a141d852",
+            "clickMs": 14,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 6,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "revision": 45,
+            "stage": "activate-request"
+          },
+          {
+            "at": 22980,
+            "clickMs": 18,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 10,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "revision": 45,
+            "stage": "take-request",
+            "transitionMs": 320
+          },
+          {
+            "at": 23012,
+            "clickMs": 50,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 42,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "renderSerial": 601,
+            "revision": 45,
+            "stage": "transition-first-observed"
+          },
+          {
+            "at": 23345,
+            "clickMs": 383,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 375,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "renderSerial": 611,
+            "revision": 45,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 1,
+        "target": "conversation"
+      },
+      {
+        "clickToCompleteMs": 391,
+        "name": "Producer — Make Your Show",
+        "pass": "repeat",
+        "stages": [
+          {
+            "at": 23790,
+            "clickMs": 23,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 0,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 23794,
+            "clickMs": 27,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 4,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "revision": 0,
+            "stage": "cache-request"
+          },
+          {
+            "at": 23795,
+            "cacheKey": "scene-463723b9-89010b69",
+            "clickMs": 28,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 5,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "revision": 46,
+            "stage": "activate-request"
+          },
+          {
+            "at": 23799,
+            "clickMs": 32,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 9,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "revision": 46,
+            "stage": "take-request",
+            "transitionMs": 320
+          },
+          {
+            "at": 23823,
+            "clickMs": 56,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 33,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "renderSerial": 625,
+            "revision": 46,
+            "stage": "transition-first-observed"
+          },
+          {
+            "at": 24158,
+            "clickMs": 391,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 368,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "renderSerial": 635,
+            "revision": 46,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 2,
+        "target": "guest-focus"
+      },
+      {
+        "clickToCompleteMs": 368,
+        "name": "Producer — Make Your Show",
+        "pass": "repeat",
+        "stages": [
+          {
+            "at": 24590,
+            "clickMs": 11,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 0,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 24594,
+            "clickMs": 15,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 4,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "revision": 0,
+            "stage": "cache-request"
+          },
+          {
+            "at": 24596,
+            "cacheKey": "scene-73891762-213891c6",
+            "clickMs": 17,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 6,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "revision": 47,
+            "stage": "activate-request"
+          },
+          {
+            "at": 24599,
+            "clickMs": 20,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 9,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "revision": 47,
+            "stage": "take-request",
+            "transitionMs": 320
+          },
+          {
+            "at": 24624,
+            "clickMs": 45,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 34,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "renderSerial": 649,
+            "revision": 47,
+            "stage": "transition-first-observed"
+          },
+          {
+            "at": 24947,
+            "clickMs": 368,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 357,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "renderSerial": 659,
+            "revision": 47,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 3,
+        "target": "live-demo"
+      },
+      {
+        "clickToCompleteMs": 47,
+        "name": "Claude Code — Build, Review, Ship",
+        "pass": "first-visit",
+        "stages": [
+          {
+            "at": 37218,
+            "clickMs": 11,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 0,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 37223,
+            "clickMs": 16,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 5,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "revision": 0,
+            "stage": "cache-request"
+          },
+          {
+            "at": 37226,
+            "cacheKey": "scene-8ab2a167-5274875d",
+            "clickMs": 19,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 8,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "revision": 63,
+            "stage": "activate-request"
+          },
+          {
+            "at": 37230,
+            "clickMs": 23,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 12,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "revision": 63,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 37254,
+            "clickMs": 47,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 36,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "renderSerial": 1028,
+            "revision": 63,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 1,
+        "target": "hero"
+      },
+      {
+        "clickToCompleteMs": 72,
+        "name": "Claude Code — Build, Review, Ship",
+        "pass": "first-visit",
+        "stages": [
+          {
+            "at": 37694,
+            "clickMs": 15,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 0,
+            "layout": "review-landscape",
+            "phase": "review",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 37699,
+            "clickMs": 20,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 5,
+            "layout": "review-landscape",
+            "phase": "review",
+            "revision": 0,
+            "stage": "cache-request"
+          },
+          {
+            "at": 37701,
+            "cacheKey": "scene-9deefd85-e08c3ee5",
+            "clickMs": 22,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 7,
+            "layout": "review-landscape",
+            "phase": "review",
+            "revision": 64,
+            "stage": "activate-request"
+          },
+          {
+            "at": 37712,
+            "clickMs": 33,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 18,
+            "layout": "review-landscape",
+            "phase": "review",
+            "revision": 64,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 37751,
+            "clickMs": 72,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 57,
+            "layout": "review-landscape",
+            "phase": "review",
+            "renderSerial": 1043,
+            "revision": 64,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 2,
+        "target": "review"
+      },
+      {
+        "clickToCompleteMs": 47,
+        "name": "Claude Code — Build, Review, Ship",
+        "pass": "first-visit",
+        "stages": [
+          {
+            "at": 38186,
+            "clickMs": 12,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 0,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 38191,
+            "clickMs": 17,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 5,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "revision": 0,
+            "stage": "cache-request"
+          },
+          {
+            "at": 38194,
+            "cacheKey": "scene-c8e755c3-4d8542f3",
+            "clickMs": 20,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 8,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "revision": 65,
+            "stage": "activate-request"
+          },
+          {
+            "at": 38197,
+            "clickMs": 23,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 11,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "revision": 65,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 38221,
+            "clickMs": 47,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 35,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "renderSerial": 1057,
+            "revision": 65,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 3,
+        "target": "refine"
+      },
+      {
+        "clickToCompleteMs": 60,
+        "name": "Claude Code — Build, Review, Ship",
+        "pass": "repeat",
+        "stages": [
+          {
+            "at": 39362,
+            "clickMs": 11,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 0,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 39373,
+            "clickMs": 22,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 11,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "revision": 0,
+            "stage": "cache-request"
+          },
+          {
+            "at": 39376,
+            "cacheKey": "scene-8ab2a167-5274875d",
+            "clickMs": 25,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 14,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "revision": 67,
+            "stage": "activate-request"
+          },
+          {
+            "at": 39380,
+            "clickMs": 29,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 18,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "revision": 67,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 39411,
+            "clickMs": 60,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 49,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "renderSerial": 1093,
+            "revision": 67,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 1,
+        "target": "hero"
+      },
+      {
+        "clickToCompleteMs": 75,
+        "name": "Claude Code — Build, Review, Ship",
+        "pass": "repeat",
+        "stages": [
+          {
+            "at": 39858,
+            "clickMs": 11,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 0,
+            "layout": "review-landscape",
+            "phase": "review",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 39863,
+            "clickMs": 16,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 5,
+            "layout": "review-landscape",
+            "phase": "review",
+            "revision": 0,
+            "stage": "cache-request"
+          },
+          {
+            "at": 39873,
+            "cacheKey": "scene-9deefd85-e08c3ee5",
+            "clickMs": 26,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 15,
+            "layout": "review-landscape",
+            "phase": "review",
+            "revision": 68,
+            "stage": "activate-request"
+          },
+          {
+            "at": 39877,
+            "clickMs": 30,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 19,
+            "layout": "review-landscape",
+            "phase": "review",
+            "revision": 68,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 39922,
+            "clickMs": 75,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 64,
+            "layout": "review-landscape",
+            "phase": "review",
+            "renderSerial": 1108,
+            "revision": 68,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 2,
+        "target": "review"
+      },
+      {
+        "clickToCompleteMs": 50,
+        "name": "Claude Code — Build, Review, Ship",
+        "pass": "repeat",
+        "stages": [
+          {
+            "at": 40354,
+            "clickMs": 11,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 0,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 40358,
+            "clickMs": 15,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 4,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "revision": 0,
+            "stage": "cache-request"
+          },
+          {
+            "at": 40361,
+            "cacheKey": "scene-c8e755c3-4d8542f3",
+            "clickMs": 18,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 7,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "revision": 69,
+            "stage": "activate-request"
+          },
+          {
+            "at": 40364,
+            "clickMs": 21,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 10,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "revision": 69,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 40393,
+            "clickMs": 50,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 39,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "renderSerial": 1122,
+            "revision": 69,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 3,
+        "target": "refine"
+      }
+    ]
+  }
+}

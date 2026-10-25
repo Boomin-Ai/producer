@@ -1,5 +1,5 @@
 export interface ShaderEffect {
- effect:'aurora'|'edgeGlow'|'lightSweep'|'plasma'|'silk'|'rings'|'grid'|'stars'|'petals'|'contours'|'prism'|'borderFlare';
+ effect:'aurora'|'edgeGlow'|'lightSweep'|'plasma'|'silk'|'rings'|'grid'|'stars'|'petals'|'contours'|'prism'|'borderFlare'|'rain'|'snow'|'clouds';
  colors:string[];speed:number;intensity:number;scale:number;
  opacity:number;radius:number;quality:'low'|'medium';clock:'show'|'segment';
 }

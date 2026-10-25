@@ -40,6 +40,7 @@ assert entitlements(app).get('com.apple.developer.system-extension.install') is 
 assert ext_info['CMIOExtension']['CMIOExtensionMachServiceName'] == team + '.' + ext_id, 'Wrong camera service'
 plugin = plist(contents / 'PlugIns' / 'mac-virtualcam.plugin' / 'Contents' / 'Info.plist')
 assert plugin['OBSCameraDeviceUUID'] == ext_info['OBSCameraDeviceUUID'], 'Camera plugin/device UUID mismatch'
+assert plugin.get('ProducerMirrorSupported') is True, 'Virtual camera plugin lacks native mirror support'
 with tempfile.TemporaryDirectory(prefix='producer-camera-signing-') as tmp:
     prefix = str(pathlib.Path(tmp) / 'cert')
     output('codesign', '-d', '--extract-certificates=' + prefix, str(app))
@@ -47,4 +48,18 @@ with tempfile.TemporaryDirectory(prefix='producer-camera-signing-') as tmp:
     assert cert in profile['DeveloperCertificates'], 'Profile does not authorize the signing certificate'
     output('codesign', '-d', '--extract-certificates=' + prefix, str(ext))
     assert pathlib.Path(prefix + '0').read_bytes() == cert, 'App and camera signed with different certificates'
-print('PASS: camera bundle, signing identity, provisioning, and plugin pairing')
+assert ext_info.get('ProducerCameraFormats') == ['1920x1080', '1080x1920'], 'Camera must support both orientations'
+assert ext_info['CFBundleVersion'] == '4', 'Stale single-camera extension'
+bundles = list((contents / 'Library' / 'SystemExtensions').glob('*.systemextension'))
+active_bundles = [b for b in bundles if not plist(b / 'Contents' / 'Info.plist').get('ProducerRetiredCamera')]
+assert active_bundles == [ext], 'Bundle must expose one camera provider'
+retired = contents / 'Library' / 'SystemExtensions' / (app_id + '.portrait-camera-extension.systemextension')
+assert retired in bundles and plist(retired / 'Contents' / 'Info.plist').get('ProducerRetiredCamera') is True
+rinfo = plist(retired / 'Contents' / 'Info.plist')
+assert (rinfo['CFBundleShortVersionString'], rinfo['CFBundleVersion']) == ('1.2', '3'), 'Retirement helper must match the installed portrait version'
+with tempfile.TemporaryDirectory(prefix='producer-migration-signing-') as tmp:
+    prefix = str(pathlib.Path(tmp) / 'cert')
+    output('codesign', '-d', '--extract-certificates=' + prefix, str(retired))
+    assert pathlib.Path(prefix + '0').read_bytes() == cert, 'Migration helper signing mismatch'
+assert plugin.get('ProducerSingleCamera') is True, 'Stale two-device camera plugin'
+print('PASS: one camera bundle, both formats, native mirroring, signing and provisioning')

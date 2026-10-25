@@ -1,0 +1,68 @@
+{
+  "passed": false,
+  "production_changed": false,
+  "ordinary_room_ui_exercised": false,
+  "qualification": "Generated OBS program through actual native publisher, LiveKit Cloud and the existing guest page; no physical AEC or audiovisual synchronization qualification.",
+  "steps": [
+    {
+      "name": "link",
+      "status": 200,
+      "elapsed_ms": 2725
+    },
+    {
+      "name": "admit",
+      "status": 200,
+      "elapsed_ms": 2724
+    },
+    {
+      "name": "stage",
+      "status": 200,
+      "elapsed_ms": 2873
+    }
+  ],
+  "guest_observation_ms": 20000,
+  "checkpoint": "browser_return",
+  "return_media": {
+    "width": 1280,
+    "height": 720,
+    "decoded_frames": 419,
+    "stream_changes": 0,
+    "maximum_rms": 0.09005771173754369,
+    "center_rgb": [
+      74,
+      255,
+      20
+    ],
+    "maximum_frame_gap_ms": 1134,
+    "maximum_silent_window_ms": 12150
+  },
+  "failure": "native_program_return_not_qualified",
+  "owner": {
+    "audio_submitted": 2419,
+    "passed": false,
+    "timing": {
+      "maximum_audio_call_us": 59,
+      "maximum_audio_late_us": 1150,
+      "maximum_capture_age_us": 107722,
+      "maximum_loop_gap_us": 1756,
+      "maximum_video_call_us": 523,
+      "maximum_work_us": 586,
+      "minimum_audio_spacing_us": 9074,
+      "program_buffer_ms": 200,
+      "publisher_recoveries": 0,
+      "startup_audio_blocks_discarded": 0,
+      "time_constrained_scheduling": true
+    },
+    "video_submitted": 722
+  },
+  "source_sha256": {
+    "crates/guest-runtime/src/lib.rs": "bd2553b716f377eb97775724fff972a8c799c454cce9707b263ebc504519330b",
+    "crates/guest-runtime/src/program.rs": "07aad9f91da1ad5721175ab870d071709c8e1106f8e084e192f249748b1aa868",
+    "crates/guest-session/src/lib.rs": "c4e9498c2022b931a5e08c17a26c34fd47812a10a3bb9b79761fb81e827bfd1b",
+    "src-tauri/src/rtc_owner.rs": "1256d53e2eb782f993d2c675bf13e9ec03e6480dc55c6c4fc96d9ef36b5a3dbd",
+    "src-tauri/src/rtc_control.rs": "cc9d5f2aea6946809d5f3f56a3eb1c16e4e6193ca766358e2b368042da9e902b",
+    "src-tauri/src/live/rtc_program.rs": "3b70c63346225f04fb1da8940a6a6ee8bec02275fa1cafc23ab78544c84e646b",
+    "scripts/test-native-program-return.mjs": "2696f08c0b065fb2433cd101c748147c47342fbad158f1ec37396c68180fc009"
+  },
+  "binary_sha256": "88caf290e775a0813b03cc632b9b8355f23c796a729804bac017113309aa9941"
+}

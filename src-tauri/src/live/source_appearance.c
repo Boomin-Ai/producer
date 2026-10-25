@@ -101,11 +101,20 @@ void producer_source_appearance_register(void){
 /* Trusted procedural source. Kernel and parameters are supplied only by the
  * bounded native presentation adapter. Off-air compilation; no per-frame IPC. */
 struct shader_source {
- obs_source_t *source;gs_effect_t *effect;gs_texrender_t *texture;
+ obs_source_t *source;gs_effect_t *effect,*display;gs_texrender_t *texture;
  gs_eparam_t *time_param,*intensity_param,*frequency_param,*alpha_param;
  uint32_t width,height,rw,rh;float time,intensity,frequency,alpha;
  float last[4];bool painted;
 };
+/* A shader owns its presentation program. Mutating OBS's shared default
+ * program here corrupts a following graphics batch's active render pass. */
+static const char *SHADER_DISPLAY=
+ "uniform float4x4 ViewProj;uniform texture2d image;"
+ "sampler_state px{Filter=Linear;AddressU=Clamp;AddressV=Clamp;};"
+ "struct Vert{float4 pos:POSITION;float2 uv:TEXCOORD0;};"
+ "Vert VS(Vert v){Vert o;o.pos=mul(float4(v.pos.xyz,1.0),ViewProj);o.uv=v.uv;return o;}"
+ "float4 PS(Vert v):TARGET{return image.Sample(px,v.uv);}"
+ "technique Draw{pass{vertex_shader=VS(v);pixel_shader=PS(v);}}";
 static const char *shader_name(void *unused){(void)unused;return "Producer shader layer";}
 static uint32_t shader_width(void *data){return ((struct shader_source*)data)->width;}
 static uint32_t shader_height(void *data){return ((struct shader_source*)data)->height;}
@@ -115,21 +124,21 @@ static void shader_palette(gs_effect_t *e,const char *name,const char *hex){
  struct vec4 color={((rgb>>16)&255)/255.f,((rgb>>8)&255)/255.f,(rgb&255)/255.f,1.f};
  gs_effect_set_vec4(gs_effect_get_param_by_name(e,name),&color);
 }
-static void shader_destroy(void *data){struct shader_source *s=data;if(!s)return;obs_enter_graphics();if(s->texture)gs_texrender_destroy(s->texture);if(s->effect)gs_effect_destroy(s->effect);obs_leave_graphics();free(s);}
+static void shader_destroy(void *data){struct shader_source *s=data;if(!s)return;obs_enter_graphics();if(s->texture)gs_texrender_destroy(s->texture);if(s->effect)gs_effect_destroy(s->effect);if(s->display)gs_effect_destroy(s->display);obs_leave_graphics();free(s);}
 static void *shader_create(obs_data_t *settings,obs_source_t *source){
  struct shader_source *s=calloc(1,sizeof(*s));if(!s)return NULL;s->source=source;
  const char *code=obs_data_get_string(settings,"_kernel");if(!code||!*code){free(s);return NULL;}
  s->width=(uint32_t)bounded(obs_data_get_double(settings,"width"),1920);s->height=(uint32_t)bounded(obs_data_get_double(settings,"height"),1920);
  const char *kind=obs_data_get_string(settings,"effect");
- const char *presets[]={"aurora","edgeGlow","lightSweep","plasma","silk","rings","grid","stars","petals","contours","prism","borderFlare"};
- float mode=0;for(int i=0;i<12;i++){if(strcmp(kind,presets[i])==0){mode=(float)i;break;}}
+ const char *presets[]={"aurora","edgeGlow","lightSweep","plasma","silk","rings","grid","stars","petals","contours","prism","borderFlare","rain","snow","clouds"};
+ float mode=0;for(int i=0;i<15;i++){if(strcmp(kind,presets[i])==0){mode=(float)i;break;}}
  bool low=strcmp(obs_data_get_string(settings,"quality"),"low")==0;
  float reduction=mode==0||(mode>=3&&mode<11)?(low?.25f:.5f):(low?.5f:1.f);
  s->rw=(uint32_t)fmaxf(1,ceilf(s->width*reduction));s->rh=(uint32_t)fmaxf(1,ceilf(s->height*reduction));
  s->intensity=bounded(obs_data_get_double(settings,"intensity"),2);s->frequency=bounded(obs_data_get_double(settings,"scale"),4);s->alpha=bounded(obs_data_get_double(settings,"opacity"),1);
  char *error=NULL;obs_enter_graphics();s->effect=gs_effect_create(code,"producer-presets.effect",&error);
  if(!s->effect){blog(100,"[shader] compile failed: %s",error?error:"unknown");if(error)bfree(error);obs_leave_graphics();free(s);return NULL;}
- if(error)bfree(error);s->texture=gs_texrender_create(GS_RGBA,GS_ZS_NONE);
+ if(error)bfree(error);error=NULL;s->display=gs_effect_create(SHADER_DISPLAY,"producer-shader-display.effect",&error);if(error)bfree(error);if(!s->display){gs_effect_destroy(s->effect);obs_leave_graphics();free(s);return NULL;}s->texture=gs_texrender_create(GS_RGBA,GS_ZS_NONE);
  shader_scalar(s->effect,"effectType",mode);shader_scalar(s->effect,"speed",bounded(obs_data_get_double(settings,"speed"),4));shader_scalar(s->effect,"radius",bounded(obs_data_get_double(settings,"radius"),960));
  struct vec2 extent={(float)s->width,(float)s->height};gs_effect_set_vec2(gs_effect_get_param_by_name(s->effect,"extent"),&extent);
  shader_palette(s->effect,"paletteA",obs_data_get_string(settings,"colorA"));shader_palette(s->effect,"paletteB",obs_data_get_string(settings,"colorB"));shader_palette(s->effect,"paletteC",obs_data_get_string(settings,"colorC"));
@@ -151,7 +160,7 @@ static void shader_render(void *data,gs_effect_t *unused){
   gs_technique_end(tech);gs_blend_state_pop();gs_texrender_end(s->texture);
   memcpy(s->last,values,sizeof(values));s->painted=true;
  }
- gs_effect_t *draw=obs_get_base_effect(OBS_EFFECT_DEFAULT);gs_effect_set_texture(gs_effect_get_param_by_name(draw,"image"),gs_texrender_get_texture(s->texture));
+ gs_effect_t *draw=s->display;gs_effect_set_texture(gs_effect_get_param_by_name(draw,"image"),gs_texrender_get_texture(s->texture));
  gs_blend_state_push();gs_blend_function(GS_BLEND_ONE,GS_BLEND_INVSRCALPHA);
  gs_technique_t *tech=gs_effect_get_technique(draw,"Draw");size_t passes=gs_technique_begin(tech);for(size_t i=0;i<passes;i++){if(gs_technique_begin_pass(tech,i)){gs_draw_sprite(gs_texrender_get_texture(s->texture),0,s->width,s->height);gs_technique_end_pass(tech);}}gs_technique_end(tech);gs_blend_state_pop();
 }

@@ -1,0 +1,28 @@
+{
+  "scope": "Generated native source lifecycle plus concurrent synthetic browser guest startup",
+  "passed": false,
+  "mixer_buffer_ms": 106,
+  "result": {
+    "passed": null,
+    "audio_submitted": 5573,
+    "timing": {
+      "capture_fault_code": 4,
+      "maximum_audio_call_us": 306,
+      "maximum_audio_late_us": 914885,
+      "maximum_callback_age_us": 1305754,
+      "maximum_capture_age_us": 1306165,
+      "maximum_capture_queue_wait_us": 6702,
+      "maximum_loop_gap_us": 1494,
+      "maximum_video_call_us": 21207,
+      "maximum_work_us": 485,
+      "minimum_audio_spacing_us": 8125,
+      "program_buffer_ms": 400,
+      "publisher_recoveries": 1,
+      "startup_audio_blocks_discarded": 0,
+      "time_constrained_scheduling": true,
+      "video_worker_stall_injected": false
+    },
+    "source_recreation_cycles": null
+  },
+  "finding": "Browser startup load can delay OBS callbacks beyond one second; reducing fixed buffering alone does not solve capture stalls."
+}

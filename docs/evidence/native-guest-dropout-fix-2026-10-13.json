@@ -1,0 +1,22 @@
+{
+  "environment": "isolated native staging",
+  "user_confirmed_continuous_video_for_about_a_minute": true,
+  "native_diagnostics": {
+    "permission_retirements": 0,
+    "binding_failures": 0,
+    "binding_clock_resets": 2,
+    "owner_failures": 0
+  },
+  "binding_clock_resets_explanation": "Two expected startup resets: one when audio binding is first established and one for video",
+  "changes": [
+    "Independent read-only authority task separate from mutation/renewal queue",
+    "At most two permission reads in flight",
+    "Older revision or older same-revision freshness cannot replace a newer snapshot",
+    "Authority reader stopped and joined before SDK/room teardown",
+    "Local binding stats deadline increased from 100ms to 500ms; missing binding still stops delivery"
+  ],
+  "receiver_tests_passed": 34,
+  "build_and_development_signature": "passed",
+  "cold_admit_to_preview_ms": 8406,
+  "production_changed": false
+}

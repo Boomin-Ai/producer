@@ -1,0 +1,108 @@
+{
+  "operation": "Retire legacy active dev set catalog",
+  "kept": {
+    "file": "head-to-head-grand-arena.json",
+    "id": "head-to-head-grand-arena",
+    "sha256": "3ab539e04d03c4ffc32122587e99575ce47579f3c37b72a27a7d5437f0880984"
+  },
+  "retired": [
+    {
+      "file": "5-ways-to-make-money-with-claude.json",
+      "id": "five-ways-with-claude",
+      "name": "5 Ways to Make Money with Claude",
+      "sha256": "966feb3cc2a6eab2437e1d358bad4ca8ebfb03df57626af2d054eaa5987a69e0"
+    },
+    {
+      "file": "ai-signal.show.json",
+      "id": "ai-signal",
+      "name": "AI Signal \u2014 Vertical Reactions",
+      "sha256": "71f8e83380067f628608eb0651a7339a34680411f40bf56a2707c6772be32bf0"
+    },
+    {
+      "file": "ai-stack.show.json",
+      "id": "ai-stack",
+      "name": "AI Stack \u2014 Connected Intelligence",
+      "sha256": "ae485d1cfa7e9792f582e34f5f9e4937ae2df442afc017738873d49d43368634"
+    },
+    {
+      "file": "animation-foundation.show.json",
+      "id": "animation-foundation",
+      "name": "Animation Lab \u2014 Native Motion",
+      "sha256": "48fbad0d026f6f4eac318e468d6681700be8ca4c5fc7fe81e9c157701602c7a2"
+    },
+    {
+      "file": "atlanta-culture.json",
+      "id": "atlanta-culture",
+      "name": "Atlanta Culture \u2014 The Conversation",
+      "sha256": "a2c730dd9ba0ef11fa66c5cf5559c1115957af4d4c97abd3d276b92d767b38f8"
+    },
+    {
+      "file": "claude-code-media-walkthrough.json",
+      "id": "claude-code-media-walkthrough",
+      "name": "Claude Code \u2014 Build, Review, Ship",
+      "sha256": "6d2955c436d235fbaf45f2193573f93356e261385d49d2c759ca4eb0adc8a324"
+    },
+    {
+      "file": "daily-job-report.json",
+      "id": "daily-job-report",
+      "name": "The Daily Job Report",
+      "sha256": "065f4c32e313edd68b2746370ab0737fb4d77c75a26a6a604e0ffe40efae6348"
+    },
+    {
+      "file": "four-host-grid.show.json",
+      "id": "four-host-grid-v2",
+      "name": "Four Host Grid \u2014 Guest Focus (v2)",
+      "sha256": "cd5137eb5216fdd1be597052defdbff08160424072ef1fb31094c453503e120f"
+    },
+    {
+      "file": "head-to-head-arena.json",
+      "id": "head-to-head-arena",
+      "name": "Head to Head \u2014 The Arena",
+      "sha256": "15d3f59191e8be1de2e88fa63f37e0c6a3d9aaf408876aa15eadb85c3d76dc11"
+    },
+    {
+      "file": "inside-atlantium.json",
+      "id": "inside-atlantium",
+      "name": "Inside Atlantium",
+      "sha256": "779469066b0623ccb2932cf0d98c00d20da9b7f716de4d86a6d1ea058410565d"
+    },
+    {
+      "file": "json-ui-test.show.json",
+      "id": "json-ui-test",
+      "name": "JSON UI Test \u2014 Motion & Audience",
+      "sha256": "94ac8268027dcfee33018ccf19e8582eac2c8b81b192abf21d2fb92f4a3e4150"
+    },
+    {
+      "file": "local-host.show.json",
+      "id": "local-host",
+      "name": "Local Host \u2014 Atlantium",
+      "sha256": "c1f2124bbe9f9e372f3c02f8bc1734cefb65841eda9a87ba292b9fcc6b0f7caf"
+    },
+    {
+      "file": "own-your-distribution.show.json",
+      "id": "own-your-distribution",
+      "name": "Own Your Distribution \u2014 Founder POV",
+      "sha256": "3b208f8a2f465eca916be4395544b022fd049e3d1dd6ed92aede48e34ee35b1c"
+    },
+    {
+      "file": "producer-download-session-v1.json",
+      "id": "producer-download-session-v1",
+      "name": "Producer \u2014 Make Your Show",
+      "sha256": "bcc69edf7a59aad109b85d9f884c4783db27da3dbdb10cd1c7d64b626d072ecc"
+    },
+    {
+      "file": "shader-combo.show.json",
+      "id": "shader-combo",
+      "name": "Combo Studio \u2014 Shader Duets",
+      "sha256": "eac0002abf0f50cb3fbbd9a7774de250b1bdcb7738973d7088c1cecc939efb51"
+    },
+    {
+      "file": "shader-lab.show.json",
+      "id": "shader-lab",
+      "name": "Shader Lab \u2014 Aurora, Glow & Sweep",
+      "sha256": "0b4ea095b0c968a66c64cfc953b7a81d659a2ce842cee7310f5fed5f0c82dcaa"
+    }
+  ],
+  "archiveDirectory": "isolated app profile / retired-set-packages / 20261025T041052Z",
+  "sourceAndMixerChanges": false
+}

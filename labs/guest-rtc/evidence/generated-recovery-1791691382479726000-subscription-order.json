@@ -1,0 +1,28 @@
+{
+  "run": "generated-recovery-1791691382479726000",
+  "sfu_trace_sha256": "5db26187aa5f414b679d32e92507f2b7925729cc7ec951f1dc793876f6896e19",
+  "native_report_sha256": "2ca871813b5ceaea8e57785e585618703a8c27d98fc03a3adf6bd904093fbeb3",
+  "guest_audio_tracks": [
+    {
+      "track_id": "TR_AM9oko8kvf2SvB",
+      "publisher": "guest-1",
+      "first_receipt_subscribers": 1,
+      "subscriber_requests": [],
+      "first_receipt_sfu_wall_us": 1791691392197637,
+      "first_native_forward_after_initial_receipt_ms": 0.022,
+      "native_admissions": [
+        {
+          "added_sfu_wall_us": 1791691391138000,
+          "first_forward_after_add_ms": 1059.659
+        },
+        {
+          "added_sfu_wall_us": 1791691403383000,
+          "first_forward_after_add_ms": 4289.165
+        }
+      ]
+    }
+  ],
+  "clock_domains": "Receipt/admission deltas use SFU wall time only. Native readiness uses per-binding monotonic intervals only. No subtraction across clock domains.",
+  "interpretation": "Reports received without subscribers cannot initialize a subsequently bound downstream. A fresh post-switch report is still required by the upstream timestamp-offset validity guard; cached report seeding alone is insufficient.",
+  "g1_complete": false
+}

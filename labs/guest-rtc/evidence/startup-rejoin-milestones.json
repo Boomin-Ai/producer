@@ -1,0 +1,168 @@
+[
+  {
+    "run": "transport-obs-audio-master-startup-trace-rejoin",
+    "startup_epochs_ms": {
+      "40468189181": {
+        "audio_bound": 294.999,
+        "bound_audio_pcm": 290.856,
+        "video_bound": 803.893,
+        "video_clock_ready": 3330.73,
+        "audio_clock_ready": 3330.764,
+        "first_audio_scheduled": 3330.764,
+        "first_video_scheduled": 3331.954
+      },
+      "40477596024": {
+        "audio_bound": 115.038,
+        "bound_audio_pcm": 112.522,
+        "video_bound": 624.668,
+        "video_clock_ready": 2844.02,
+        "audio_clock_ready": 2844.204,
+        "first_audio_scheduled": 2844.204,
+        "first_video_scheduled": 2863.746
+      },
+      "40484832545": {
+        "audio_bound": 138.437,
+        "video_bound": 138.805,
+        "bound_audio_pcm": 136.0,
+        "video_clock_ready": 1607.152,
+        "audio_clock_ready": 4688.802,
+        "first_audio_scheduled": 4688.802,
+        "first_video_scheduled": 4709.088
+      },
+      "40492066570": {
+        "audio_bound": 114.27,
+        "video_bound": 114.793,
+        "bound_audio_pcm": 112.608,
+        "video_clock_ready": 453.899,
+        "audio_clock_ready": 3422.891,
+        "first_audio_scheduled": 3422.891,
+        "first_video_scheduled": 3432.553
+      }
+    },
+    "independent_abs_p95_ms": 72.0,
+    "unmatched_audio": 1,
+    "unmatched_video": 0,
+    "local_gate_passed": false,
+    "audio_label_step_max_us": 10014,
+    "audio_label_shift_max_us": 11193,
+    "g1_complete": false,
+    "capture_to_playout_latency_qualified": false
+  },
+  {
+    "run": "transport-obs-audio-master-startup-event-rejoin",
+    "startup_epochs_ms": {
+      "40616508499": {
+        "audio_bound": 10.226,
+        "bound_audio_pcm": 5.484,
+        "video_bound": 510.38,
+        "video_clock_ready": 3588.335,
+        "audio_clock_ready": 3588.557,
+        "first_audio_scheduled": 3588.557,
+        "first_video_scheduled": 3609.792
+      },
+      "40625894878": {
+        "video_bound": 502.434,
+        "audio_bound": 502.763,
+        "bound_audio_pcm": 499.006,
+        "video_clock_ready": 3223.882,
+        "audio_clock_ready": 3223.97,
+        "first_audio_scheduled": 3223.97,
+        "first_video_scheduled": 3233.207
+      },
+      "40633137780": {
+        "audio_bound": 10.963,
+        "bound_audio_pcm": 6.161,
+        "video_bound": 520.138,
+        "video_clock_ready": 1990.212,
+        "audio_clock_ready": 4941.229,
+        "first_audio_scheduled": 4941.229,
+        "first_video_scheduled": 4941.951
+      },
+      "40640372780": {
+        "video_bound": 505.869,
+        "audio_bound": 506.216,
+        "bound_audio_pcm": 500.497,
+        "video_clock_ready": 3684.573,
+        "audio_clock_ready": 3684.682,
+        "first_audio_scheduled": 3684.682,
+        "first_video_scheduled": 3733.957
+      }
+    },
+    "independent_abs_p95_ms": 65.33333300000231,
+    "unmatched_audio": 0,
+    "unmatched_video": 0,
+    "local_gate_passed": true,
+    "audio_label_step_max_us": 10000,
+    "audio_label_shift_max_us": 39992,
+    "g1_complete": false,
+    "capture_to_playout_latency_qualified": false
+  },
+  {
+    "run": "transport-obs-audio-master-discovery-worker-rejoin-v2",
+    "startup_epochs_ms": {
+      "41403880395": {
+        "video_bound": 517.033,
+        "audio_bound": 517.056,
+        "bound_audio_pcm": 509.539,
+        "first_incoming_video_report": 3936.199,
+        "first_incoming_audio_report": 3936.199,
+        "video_clock_ready": 3987.311,
+        "audio_clock_ready": 3987.341,
+        "first_audio_scheduled": 3987.341,
+        "first_video_scheduled": 3997.382
+      },
+      "41413051627": {
+        "video_bound": 16.437,
+        "audio_bound": 16.458,
+        "bound_audio_pcm": 8.556,
+        "first_incoming_video_report": 767.461,
+        "video_clock_ready": 826.324,
+        "first_incoming_audio_report": 3768.096,
+        "audio_clock_ready": 3797.809,
+        "first_audio_scheduled": 3797.809,
+        "first_video_scheduled": 3798.471
+      },
+      "41420286762": {
+        "video_bound": 21.925,
+        "audio_bound": 21.953,
+        "bound_audio_pcm": 12.904,
+        "first_incoming_video_report": 2535.159,
+        "first_incoming_audio_report": 2535.159,
+        "video_clock_ready": 2632.084,
+        "audio_clock_ready": 2632.195,
+        "first_audio_scheduled": 2632.195,
+        "first_video_scheduled": 2642.441
+      },
+      "41427525114": {
+        "video_bound": 512.033,
+        "audio_bound": 512.06,
+        "bound_audio_pcm": 504.774,
+        "first_incoming_video_report": 4299.991,
+        "first_incoming_audio_report": 4299.991,
+        "video_clock_ready": 4394.086,
+        "audio_clock_ready": 4394.176,
+        "first_audio_scheduled": 4394.176,
+        "first_video_scheduled": 4403.746
+      }
+    },
+    "independent_abs_p95_ms": 55.333332999999584,
+    "unmatched_audio": 0,
+    "unmatched_video": 0,
+    "local_gate_passed": true,
+    "discovery_after_shutdown": {
+      "active": 0,
+      "cancelled": 0,
+      "capacity": 1,
+      "completed": 10,
+      "failed": 0,
+      "overall_timeout_ms": 250,
+      "peak_active": 1,
+      "presentation_loop_awaits_stats": false,
+      "spawned": 10,
+      "stale_epoch_results": 0,
+      "timed_out": 0
+    },
+    "g1_complete": false,
+    "capture_to_playout_latency_qualified": false
+  }
+]

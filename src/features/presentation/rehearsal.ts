@@ -1,3 +1,6 @@
+import {SetRuntime,type Snapshot as ModuleSnapshot,type Command as ModuleCommand,type Result as ModuleResult} from '../../../shared/set-runtime/runtime';
+import {runtimeFields} from '../../../shared/set-runtime/projection';
+let moduleEpoch=Date.now();
 import {enterMedia,mediaPosition,layoutMedia,playable,type MediaTransport,type PlaybackConfig} from './playback';
 import {outputProjection} from './projection';
 import {layoutTransition} from './layoutTransition';
@@ -12,12 +15,16 @@ function freeze<T>(value: T): T {
 }
 
 export interface RehearsalState {
+  moduleCommit:{setEpoch:number;revision:number};
+  modules:Record<string,Record<string,Scalar>>;
+  moduleConnection:'private'|'simulation'|'connecting'|'live'|'error';
+  moduleError:string;
   media?:Record<string,MediaTransport>;
   animationClock?:AnimationClock;
   layoutMotion?:AnimationTrack[];
   layoutMotionId?:string;
-  mode: 'rehearsal'; sandboxId: string; revision: number; elapsedMs: number;
-  workspaceMode: 'prepare' | 'rehearsal';
+  mode: 'rehearsal' | 'live'; sandboxId: string; revision: number; elapsedMs: number;
+  workspaceMode: 'prepare' | 'rehearsal' | 'live';
   running: boolean; paused: boolean; layoutId: string;
   values: Record<string, Scalar>; feeds: Record<string, Scalar>;
   show: { phase: string; collecting: boolean; revealed: boolean; winner: string; result: '' | 'winner' | 'draw'; ballot: number;
@@ -30,6 +37,7 @@ export type SimulationEvent =
   | { type: 'field'; key: string; value: Scalar }
   | { type: 'feed'; key: string; value: Scalar }
   | { type: 'tick'; milliseconds: number }
+  | { type: 'segment.select'; phaseId:string }
   | { type: 'seek'; milliseconds:number }
   | { type: 'pause'; paused: boolean }
   | { type: 'vote'; playerId: string; choiceId: string }
@@ -41,7 +49,8 @@ export function evaluate(binding: Binding, state: RehearsalState, props: Record<
   if (typeof binding !== 'object') return binding;
   if ('get' in binding) {
     if(binding.get==='show.layoutId')return state.layoutId;
-    const [scope, key] = binding.get.split('.');
+    const [scope, key,field] = binding.get.split('.');
+    if(scope==='modules'){const values=state.modules?.[key];if(!values||!Object.prototype.hasOwnProperty.call(values,field))throw new Error('Missing module output '+binding.get);return values[field];}
     const data = scope === 'tokens' ? tokens : scope === 'props' ? props : scope === 'values' ? state.values : scope === 'feeds' ? state.feeds : state.show;
     const v = (data as Record<string, Scalar>)[key];
     if (!Object.prototype.hasOwnProperty.call(data, key)) throw new Error(`Missing binding ${binding.get}.`);
@@ -59,12 +68,20 @@ export function evaluate(binding: Binding, state: RehearsalState, props: Record<
   return text;
 }
 
+function hasShader(doc:PresentationPackage,node:PresentationPackage['set']['layouts'][number]['root']):boolean {
+  return node.type==='shader'||node.type==='component'&&hasShader(doc,doc.set.components[node.component!].root)||(node.children??[]).some(child=>hasShader(doc,child));
+}
+
 /** Simulation has no transport/native/recording adapter. An imported command
  * cannot change that; unknown event/action types are refused at this boundary.
  */
 export class RehearsalSession {
   package: PresentationPackage;
   private state: RehearsalState;
+  moduleRuntime:SetRuntime;
+  private stopModules?:()=>void;
+  private liveModules?:ModuleSnapshot;
+  private moduleTransport?:((command:ModuleCommand)=>Promise<ModuleResult>);
   private voters = new Map<string, string>();
   private listeners = new Set<() => void>();
   private reactionTimes = new Map<string, number>();
@@ -74,11 +91,11 @@ export class RehearsalSession {
   private preparation?: Pick<RehearsalState, 'layoutId' | 'values' | 'feeds'>;
   constructor(doc: unknown, sandboxId = `rehearsal-${crypto.randomUUID()}`, workspaceMode: RehearsalState['workspaceMode'] = 'rehearsal') {
     this.workspaceMode = workspaceMode;
-    this.package = freeze(parsePackage(doc)); this.sandboxId = sandboxId; this.state = freeze(this.initial());
+    this.package = freeze(parsePackage(doc)); this.sandboxId = sandboxId;this.moduleRuntime=this.createModules();this.state = freeze(this.initial());this.observeModules();
   }
   private initial(): RehearsalState {
     const media:Record<string,MediaTransport>={};enterMedia(this.package,undefined,this.preparation?.layoutId??this.package.set.initialLayout,media);
-    return { media,...(this.package.set.layouts.some(l=>l.animation||l.root.children?.some(n=>n.type==='shader'))?{animationClock:{running:false,positionMs:0,segmentMs:0,anchorMs:Date.now()}}:{}), mode: 'rehearsal', workspaceMode: this.workspaceMode, sandboxId: this.sandboxId, revision: 0, elapsedMs: 0, running: false, paused: false,
+    return { moduleCommit:{setEpoch:this.moduleRuntime.snapshot().setEpoch,revision:this.moduleRuntime.snapshot().revision},modules:runtimeFields(this.moduleRuntime.snapshot(),this.package.runtime),moduleConnection:this.workspaceMode==='live'?'connecting':this.workspaceMode==='rehearsal'?'simulation':'private',moduleError:'',media,...(this.package.set.layouts.some(l=>l.animation||hasShader(this.package,l.root))?{animationClock:{running:!this.package.show,positionMs:0,segmentMs:0,anchorMs:Date.now()}}:{}), mode: this.workspaceMode==='live'?'live':'rehearsal', workspaceMode: this.workspaceMode, sandboxId: this.sandboxId, revision: 0, elapsedMs: 0, running: false, paused: false,
       layoutId: this.package.set.initialLayout,
       values: Object.fromEntries(Object.entries(this.package.set.values).map(([k, v]) => [k, v.default])),
       feeds: Object.fromEntries(Object.entries(this.package.set.feeds).map(([k, v]) => [k, v.default])),
@@ -94,6 +111,12 @@ export class RehearsalSession {
     this.preparation = structuredClone({ layoutId: this.state.layoutId, values: this.state.values, feeds: this.state.feeds });
     this.workspaceMode = 'rehearsal'; this.freshBoundary(); return true;
   };
+  /** The room runner shares segment semantics, but owns a separate runtime boundary. */
+  enterLive = (): boolean => {
+    if(this.workspaceMode !== 'prepare')return false;
+    this.preparation=structuredClone({layoutId:this.state.layoutId,values:this.state.values,feeds:this.state.feeds});
+    this.workspaceMode='live';this.freshBoundary();return true;
+  };
   exitRehearsal = (): boolean => {
     if (this.workspaceMode !== 'rehearsal') return false;
     this.workspaceMode = 'prepare'; this.freshBoundary(); this.preparation = undefined; return true;
@@ -101,8 +124,49 @@ export class RehearsalSession {
   private freshBoundary() {
     this.voters.clear(); this.reactionTimes.clear(); this.heatEvents = [];
     this.sandboxId = `rehearsal-${crypto.randomUUID()}`;
-    this.state = freeze(this.initial()); this.emit();
+    this.stopModules?.();this.moduleRuntime.shutdown();this.liveModules=undefined;this.moduleTransport=undefined;this.moduleLifecycleTransport=undefined;this.moduleRuntime=this.createModules();this.state = freeze(this.initial());this.observeModules();this.syncModuleLifecycle();this.emit();
   }
+  private lastModuleView='';
+  private applyModuleView(snapshot:ModuleSnapshot){
+    const id=this.package.set.viewController,view=id?snapshot.modules[id]?.view:undefined;if(!view||view===this.lastModuleView)return;this.lastModuleView=view;
+    const variants=this.package.set.views?.[view],current=this.package.set.layouts.find(l=>l.id===this.state.layoutId);if(!variants||!current)return;
+    const orientation=current.width>current.height?'landscape':current.width<current.height?'portrait':'square',layout=variants[orientation];if(layout&&layout!==this.state.layoutId)this.send({type:'control',action:{type:'layout.select',layoutId:layout}});
+  }
+  private createModules(){return new SetRuntime(this.package.runtime,{epoch:++moduleEpoch,domain:this.workspaceMode==='live'?'live':'rehearsal',capabilities:['audience.vote@1','audience.text@1','data.weather@1','data.agent@1','room.chat@1']});}
+  private observeModules(){const id=this.package.set.viewController;this.lastModuleView=id?this.moduleRuntime.snapshot().modules[id]?.view??'':'';this.stopModules=this.moduleRuntime.subscribe(()=>{this.state=freeze({...this.state,moduleCommit:{setEpoch:this.moduleRuntime.snapshot().setEpoch,revision:this.moduleRuntime.snapshot().revision},modules:runtimeFields(this.moduleRuntime.snapshot(),this.package.runtime),revision:this.state.revision+1});this.applyModuleView(this.moduleRuntime.snapshot());this.emit();});}
+  private moduleLifecycleTransport?: (state:{segment:string;running:boolean;paused:boolean})=>void;
+  attachModuleLifecycle=(send:typeof this.moduleLifecycleTransport)=>{this.moduleLifecycleTransport=send;if(send)this.syncModuleLifecycle();};
+  private syncModuleLifecycle(){
+    if(this.workspaceMode==='live'){this.moduleLifecycleTransport?.({segment:this.state.show.phase,running:this.state.running,paused:this.state.paused});return;}
+    if(this.workspaceMode!=='rehearsal')return;
+    this.moduleRuntime.orchestrate({setEpoch:this.moduleRuntime.snapshot().setEpoch,segment:this.state.show.phase,running:this.state.running,paused:this.state.paused,showAttached:!!this.package.show},{role:'show',id:'show-runner',modules:this.package.runtime.instances.map(i=>i.id)},Date.now());
+  }
+  receiveModuleData=(command:ModuleCommand):ModuleResult=>{
+    if(this.workspaceMode!=='rehearsal')return {status:'rejected',revision:this.moduleSnapshot().revision,error:'Rehearsal connection expired'};
+    return this.moduleRuntime.dispatch(command,{role:'connector',id:'saved-connection',modules:[command.module]},Date.now());
+  };
+  moduleParticipantSnapshot=()=>this.moduleRuntime.public();
+  moduleSnapshot=()=>this.liveModules??this.moduleRuntime.snapshot();
+  attachModuleTransport=(send:((command:ModuleCommand)=>Promise<ModuleResult>)|undefined,error='')=>{
+    this.moduleTransport=send;this.state=freeze({...this.state,moduleConnection:error?'error':send?'live':this.workspaceMode==='live'?'connecting':this.workspaceMode==='rehearsal'?'simulation':'private',moduleError:error});this.emit();
+  };
+  receiveModuleSnapshot=(snapshot:ModuleSnapshot)=>{
+    if(this.workspaceMode!=='live')return;
+    if(this.liveModules&&(snapshot.setEpoch<this.liveModules.setEpoch||snapshot.setEpoch===this.liveModules.setEpoch&&snapshot.revision<=this.liveModules.revision))return;
+    this.liveModules=freeze(structuredClone(snapshot));this.state=freeze({...this.state,moduleCommit:{setEpoch:this.liveModules.setEpoch,revision:this.liveModules.revision},modules:runtimeFields(this.liveModules,this.package.runtime),revision:this.state.revision+1});this.applyModuleView(this.liveModules);this.emit();
+  };
+  sendModule=async(module:string,op:string,input:Record<string,Scalar>={},participant?:string):Promise<ModuleResult>=>{
+    const snapshot=this.moduleSnapshot(),target=snapshot.modules[module];
+    if(!target)return {status:'rejected',revision:snapshot.revision,error:'Unknown module'};
+    const command:ModuleCommand={id:crypto.randomUUID(),setEpoch:snapshot.setEpoch,module,epoch:target.epoch,op,input};
+    if(this.workspaceMode==='live'){
+      if(participant)return {status:'rejected',revision:snapshot.revision,error:'Use the audience connection for live inputs'};
+      if(!this.moduleTransport)return {status:'rejected',revision:snapshot.revision,error:this.state.moduleError||'Live module service is not connected'};
+      return this.moduleTransport(command);
+    }
+    if(this.workspaceMode!=='rehearsal')return {status:'rejected',revision:snapshot.revision,error:'Enter rehearsal to simulate module controls'};
+    return this.moduleRuntime.dispatch(command,{role:participant?'audience':'operator',id:participant??'operator',modules:[module]},Date.now());
+  };
   snapshot = () => this.state;
   /** Export configured defaults, never practice edits, identities or results. */
   exportPreparedPackage = (): PresentationPackage => {
@@ -110,6 +174,7 @@ export class RehearsalSession {
     const configured = this.workspaceMode === 'prepare' ? this.state : this.preparation;
     if (configured) {
       doc.set.initialLayout = configured.layoutId;
+      if(doc.set.views){const view=Object.entries(doc.set.views).find(([,variants])=>Object.values(variants).includes(configured.layoutId));if(view)doc.set.initialView=view[0];else delete doc.set.initialView;}
       for (const [key, value] of Object.entries(configured.values)) doc.set.values[key].default = value;
       for (const [key, value] of Object.entries(configured.feeds)) doc.set.feeds[key].default = value;
     }
@@ -141,11 +206,23 @@ export class RehearsalSession {
       if (this.workspaceMode === 'prepare' &&
         (['pause', 'tick', 'seek', 'vote', 'reaction', 'stop'].includes(event.type) || event.type === 'control' && event.action.type.startsWith('show.')))
         throw new Error('Enter rehearsal before running the show or sending practice inputs.');
+      if(this.workspaceMode==='live'&&(['vote','reaction','feed'].includes(event.type)||event.type==='control'&&['show.vote','show.react'].includes(event.action.type)))
+        throw new Error('Audience inputs require a connected data source. Practice inputs are available in editor rehearsal.');
       switch (event.type) {
+        case 'segment.select': {
+          const target=this.package.show?.phases.find(p=>p.id===event.phaseId);
+          if(!target)throw new Error('Unknown segment.');
+          if(target.id===next.show.phase&&target.layoutId===next.layoutId)return true;
+          next.show.phase=target.id;next.layoutId=target.layoutId;
+          next.paused=next.running&&this.workspaceMode!=='live';next.show.remainingMs=target.collectMs??0;
+          next.show.collecting=next.running&&!!target.collectMs;
+          if(target.collectMs){this.voters.clear();next.ballotChoiceIds=this.package.show!.choices.map(c=>c.id);next.ballotHistory=[];next.show.ballot=1;next.show.result='';next.show.total=0;next.show.revealed=false;next.show.winner='';Object.keys(next.counts).forEach(k=>next.counts[k]=0);}
+          log(`Editing segment: ${target.label}.`);break;
+        }
         case 'seek': if(!Number.isFinite(event.milliseconds)||event.milliseconds<0||event.milliseconds>60_000)throw new Error('Invalid segment animation time.');break;
         case 'reset':
           this.voters.clear(); this.reactionTimes.clear(); this.heatEvents = [];
-          this.state = freeze(this.initial()); this.emit(); return true;
+          this.state = freeze(this.initial()); this.syncModuleLifecycle();this.emit(); return true;
         case 'stop': next.running = false; next.paused = false; next.show.collecting = false; log('Run stopped.'); break;
         case 'pause': if (!next.running || typeof event.paused !== 'boolean') throw new Error('Start the show before pausing.'); next.paused = event.paused; log(event.paused ? 'Paused.' : 'Resumed.'); break;
         case 'field': this.writeValue(next.values, this.package.set.values, event.key, event.value); break;
@@ -181,7 +258,7 @@ export class RehearsalSession {
               next.running = true; next.paused = false; next.elapsedMs = 0;
               next.layoutId = phase.layoutId;
               next.show.remainingMs = phase.collectMs ?? 0; next.show.collecting = !!phase.collectMs;
-              log('Show started in rehearsal.'); break;
+              log(this.workspaceMode==='live'?'Show started on room output.':'Show started in rehearsal.'); break;
             }
             case 'show.previous':
             case 'show.next': {
@@ -242,7 +319,7 @@ export class RehearsalSession {
       else if(event.type==='seek'){position.positionMs+=event.milliseconds-position.segmentMs;position.segmentMs=event.milliseconds;for(const [id,t]of Object.entries(next.media))next.media[id]={...t,positionMs:event.milliseconds,anchorMs:animationNow};}
       // Control edges update the anchor. Ordinary content edits retain it, so
       // editing a title never restarts an animation.
-      if(this.state.animationClock&&(['pause','stop','tick','seek'].includes(event.type)||event.type==='control'&&(['show.start','show.next','show.previous','layout.select'].includes(event.action.type))))next.animationClock={...position,positionMs:Math.max(0,position.positionMs),running:next.running&&!next.paused,anchorMs:animationNow};
+      if(this.state.animationClock&&(['pause','stop','tick','seek','segment.select'].includes(event.type)||event.type==='control'&&(['show.start','show.next','show.previous','layout.select'].includes(event.action.type))))next.animationClock={...position,positionMs:Math.max(0,position.positionMs),running:(!this.package.show||next.running)&&!next.paused,anchorMs:animationNow};
       if(next.layoutId!==this.state.layoutId){
         delete next.layoutMotion;delete next.layoutMotionId;
         const transition=this.package.set.layouts.find(l=>l.id===next.layoutId)?.animation?.transition;
@@ -253,13 +330,13 @@ export class RehearsalSession {
       if(event.type==='stop'){delete next.layoutMotion;delete next.layoutMotionId;}
       if(event.type==='control'&&event.action.type==='show.start')enterMedia(this.package,undefined,next.layoutId,next.media);
       else enterMedia(this.package,this.state.layoutId,next.layoutId,next.media,Date.now(),this.state,next);
-      if(event.type==='pause'||event.type==='stop'){
+      if(event.type==='pause'||event.type==='stop'||event.type==='segment.select'&&next.running){
         const now=Date.now();for(const [id,t]of Object.entries(next.media)){
           if(event.type==='pause'&&!event.paused){if(t.resumeAfterPause)next.media[id]={playing:true,positionMs:t.positionMs,anchorMs:now};}
-          else next.media[id]={playing:false,positionMs:mediaPosition(t,now),anchorMs:now,resumeAfterPause:event.type==='pause'&&t.playing};
+          else next.media[id]={playing:false,positionMs:mediaPosition(t,now),anchorMs:now,resumeAfterPause:(event.type==='pause'||event.type==='segment.select')&&t.playing};
         }
       }
-      next.revision++; this.state = freeze(next); this.emit(); return true;
+      next.revision++; this.state = freeze(next);this.syncModuleLifecycle();this.emit(); return true;
     } catch (e) {
       const rejected = structuredClone(this.state);
       rejected.trace = [...rejected.trace.slice(-29), { at: rejected.elapsedMs, message: `Rejected: ${e instanceof Error ? e.message : 'Invalid input.'}` }];

@@ -1,0 +1,24 @@
+{
+  "passed": true,
+  "repeated_source_cycles": 20,
+  "generated_video_only": true,
+  "sdk_or_devices_used": false,
+  "checks": [
+    "replacement invalidates old delivery",
+    "duplicate timestamps rejected",
+    "short planes rejected",
+    "concurrent delivery stopped before release",
+    "retirement removes registration",
+    "late old retirement preserves replacement",
+    "weak source owners expire",
+    "partial initialization rejects null source"
+  ],
+  "source_sha256": {
+    "src-tauri/src/live/rtc_ingest.rs": "cbf20aec834f89a3a606a81a6c9bd0c019767782b73aa3e16f7faac1efae6045",
+    "src-tauri/src/live/guest_ingest.c": "1a348d487636c832a56ec3338e3778f17f7570b7283c463a6f1728ba019332dc",
+    "src-tauri/src/live/guest_ingest.h": "6664160473e007866a3f8e45832165aa23fe0ed856a6a9921645aaac6413e32b",
+    "tests/rtc_ingest_native.rs": "a7ddf5f3e620bb2cd226cd8a45ef1c6a6c6a912688ea6dcb33622667e62feaf8",
+    "scripts/test-rtc-ingest-native.py": "e305b7c1bd3f5973fb860a16d3dc2e60fc074f06e6382e3ca14bc2d640116bc4"
+  },
+  "qualification": "OBS endpoint ownership only; not ordinary-room LiveKit timing or AEC"
+}

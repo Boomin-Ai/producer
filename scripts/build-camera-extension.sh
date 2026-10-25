@@ -16,7 +16,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$REPO_ROOT/engine/obs-studio/plugins/mac-virtualcam/src/camera-extension"
 OUT_DIR="$REPO_ROOT/engine/camera-extension"
 
-EXT_ID="ai.boomin.producer.camera-extension"
+EXT_ID="${PRODUCER_VCAM_EXTENSION_ID:-ai.boomin.producer.camera-extension}"
 TEAM_ID="${PRODUCER_TEAM_ID:-9936A69867}"
 DEVICE_NAME="${PRODUCER_VCAM_NAME:-Producer Virtual Camera}"
 
@@ -39,6 +39,17 @@ WORK="$(mktemp -d)"
 cp "$SRC"/*.swift "$WORK/"
 /usr/bin/sed -i '' "s/OBS Virtual Camera/$DEVICE_NAME/g" "$WORK"/*.swift
 /usr/bin/sed -i '' "s/OBS Camera Extension Stream/Producer Camera Stream/g" "$WORK"/*.swift
+
+python3 "$REPO_ROOT/scripts/patch-single-camera-extension.py" "$WORK"
+
+if [[ ${PRODUCER_VCAM_RETIRED:-0} == 1 ]]; then
+  python3 - "$WORK/OBSCameraProviderSource.swift" <<'PYRETIRED'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1]);s=p.read_text();a=s.index('        deviceSource = OBSCameraDeviceSource(');b=s.index('\n    func connect(',a)
+s=s[:a]+'    }\n'+s[b:];p.write_text(s)
+PYRETIRED
+fi
 
 swiftc -O -swift-version 5 \
   -target "arm64-apple-macos13.0" \
@@ -80,12 +91,12 @@ cat > "$BUNDLE/Contents/Info.plist" <<PLIST
 	<key>CFBundlePackageType</key>
 	<string>SYSX</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.2</string>
+	<string>1.3</string>
 	<!-- 🔴 BUMP THIS whenever the extension changes. macOS will NOT replace an
 	     installed system extension that carries the same version, so a fixed
 	     build silently keeps running the broken copy already registered. -->
 	<key>CFBundleVersion</key>
-	<string>3</string>
+	<string>4</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 	<key>NSSystemExtensionUsageDescription</key>
@@ -95,6 +106,8 @@ cat > "$BUNDLE/Contents/Info.plist" <<PLIST
 		<key>CMIOExtensionMachServiceName</key>
 		<string>$TEAM_ID.$EXT_ID</string>
 	</dict>
+	<key>ProducerCameraFormats</key>
+	<array><string>1920x1080</string><string>1080x1920</string></array>
 	<key>OBSCameraDeviceUUID</key>
 	<string>$DEVICE_UUID</string>
 	<key>OBSCameraSourceUUID</key>
@@ -105,5 +118,10 @@ cat > "$BUNDLE/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
+if [[ ${PRODUCER_VCAM_RETIRED:-0} == 1 ]]; then
+  /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 1.2' "$BUNDLE/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 3' "$BUNDLE/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c 'Add :ProducerRetiredCamera bool true' "$BUNDLE/Contents/Info.plist"
+fi
 rm -rf "$WORK"
 echo "built: $BUNDLE"

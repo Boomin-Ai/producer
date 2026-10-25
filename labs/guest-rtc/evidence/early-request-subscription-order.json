@@ -1,0 +1,38 @@
+{
+  "events": [
+    {
+      "timestamp": "2026-10-10T08:10:03.430-0600",
+      "event": "lab early audio sender report request",
+      "track_id": "TR_AMaDLFYW4WdGUs",
+      "request_number": 1,
+      "sfu_wall_us": 1791641403430597,
+      "subscriber_id": null
+    },
+    {
+      "timestamp": "2026-10-10T08:10:03.520-0600",
+      "event": "downtrack added",
+      "track_id": "TR_AMaDLFYW4WdGUs",
+      "request_number": null,
+      "sfu_wall_us": null,
+      "subscriber_id": "PA_2atareBdzZNX:1791641403360510000"
+    },
+    {
+      "timestamp": "2026-10-10T08:10:11.662-0600",
+      "event": "lab early audio sender report request",
+      "track_id": "TR_AMadCDLJ5QMf6Q",
+      "request_number": 1,
+      "sfu_wall_us": 1791641411662903,
+      "subscriber_id": null
+    },
+    {
+      "timestamp": "2026-10-10T08:10:11.754-0600",
+      "event": "downtrack added",
+      "track_id": "TR_AMadCDLJ5QMf6Q",
+      "request_number": null,
+      "sfu_wall_us": null,
+      "subscriber_id": "PA_2atareBdzZNX:1791641411594891000"
+    }
+  ],
+  "inference": "Requests preceded audio downtrack addition; cached SR seed absence is a source finding. Publisher SR receipt at buffer was not separately instrumented.",
+  "g1_complete": false
+}

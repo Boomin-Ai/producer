@@ -1,0 +1,30 @@
+{
+  "kind": "just-facts-claude-live-provider",
+  "ok": true,
+  "testedAt": "2026-10-25T05:09:30.492Z",
+  "scope": "Real authenticated Claude Messages API web research into the Just Facts module runtime; room editor/native canvas integration still pending",
+  "model": "claude-sonnet-5-5",
+  "researched": true,
+  "citationCount": 4,
+  "responseCharacters": 1646,
+  "withheldUntilExplicitShow": true,
+  "shownAfterExplicitAction": true,
+  "sources": [
+    {
+      "title": "Air Mass/Density",
+      "url": "https://www.earthdata.nasa.gov/topics/atmosphere/air-mass-density"
+    },
+    {
+      "title": "yoss act 4",
+      "url": "https://www.nasa.gov/wp-content/uploads/2015/01/yoss_act_4.pdf"
+    },
+    {
+      "title": "What's in the Air? - UCAR Center for Science Education",
+      "url": "https://scied.ucar.edu/learning-zone/air-quality/whats-in-the-air"
+    },
+    {
+      "title": "Air Mass/Density",
+      "url": "https://www.earthdata.nasa.gov/topics/atmosphere/air-mass-density"
+    }
+  ]
+}

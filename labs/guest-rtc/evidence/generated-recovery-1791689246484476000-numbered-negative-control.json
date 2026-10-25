@@ -1,0 +1,203 @@
+{
+  "absolute_p95_ms" : null,
+  "audio_detector_window_ms" : 10,
+  "audio_markers" : [
+    {
+      "id_mod16" : 0,
+      "pts_ms" : 3490,
+      "tone_confidence_ratio" : 3911.452831435673
+    },
+    {
+      "id_mod16" : 0,
+      "pts_ms" : 5490,
+      "tone_confidence_ratio" : 4021.0231379222419
+    },
+    {
+      "id_mod16" : 0,
+      "pts_ms" : 7490,
+      "tone_confidence_ratio" : 3157.3250061751301
+    },
+    {
+      "id_mod16" : 0,
+      "pts_ms" : 9500,
+      "tone_confidence_ratio" : 3197.8908452180831
+    },
+    {
+      "id_mod16" : 0,
+      "pts_ms" : 11500,
+      "tone_confidence_ratio" : 3144.9986158679935
+    },
+    {
+      "id_mod16" : 0,
+      "pts_ms" : 13500,
+      "tone_confidence_ratio" : 3164.6893366654876
+    },
+    {
+      "id_mod16" : 0,
+      "pts_ms" : 15500,
+      "tone_confidence_ratio" : 4482.0085614175678
+    },
+    {
+      "id_mod16" : 0,
+      "pts_ms" : 17500,
+      "tone_confidence_ratio" : 4532.3514473388823
+    },
+    {
+      "id_mod16" : 0,
+      "pts_ms" : 19500.000000000004,
+      "tone_confidence_ratio" : 4243.0053308795714
+    },
+    {
+      "id_mod16" : 0,
+      "pts_ms" : 21490,
+      "tone_confidence_ratio" : 4222.5742761108741
+    },
+    {
+      "id_mod16" : 0,
+      "pts_ms" : 23489.999999999996,
+      "tone_confidence_ratio" : 4264.1742483539056
+    },
+    {
+      "id_mod16" : 0,
+      "pts_ms" : 25480,
+      "tone_confidence_ratio" : 4319.0750606473994
+    },
+    {
+      "id_mod16" : 0,
+      "pts_ms" : 27490.000000000004,
+      "tone_confidence_ratio" : 4035.1850868893139
+    },
+    {
+      "id_mod16" : 0,
+      "pts_ms" : 29480,
+      "tone_confidence_ratio" : 4145.6143196205094
+    },
+    {
+      "id_mod16" : 0,
+      "pts_ms" : 31489.999999999996,
+      "tone_confidence_ratio" : 4474.7195828900021
+    },
+    {
+      "id_mod16" : 0,
+      "pts_ms" : 33500,
+      "tone_confidence_ratio" : 4474.9971288440711
+    },
+    {
+      "id_mod16" : 0,
+      "pts_ms" : 35490,
+      "tone_confidence_ratio" : 4549.5994290711369
+    },
+    {
+      "id_mod16" : 0,
+      "pts_ms" : 37490,
+      "tone_confidence_ratio" : 3879.0411123700133
+    },
+    {
+      "id_mod16" : 0,
+      "pts_ms" : 39489.999999999993,
+      "tone_confidence_ratio" : 4514.5228362121588
+    }
+  ],
+  "audio_pts_discontinuities" : 0,
+  "audio_samples" : 1935360,
+  "decoder" : "macOS AVFoundation",
+  "duration_seconds" : 40.334000000000003,
+  "g1_complete" : false,
+  "lip_sync_qualified" : false,
+  "local_numbered_marker_gate_passed" : false,
+  "missing_video_labels_within_observed_span" : [
+
+  ],
+  "pairs" : [
+
+  ],
+  "raw_audio_crossings" : 19,
+  "raw_video_crossings" : 19,
+  "recording" : "generated-recovery-1791689246484476000-obs.mp4",
+  "regressed_video_labels" : 0,
+  "repeated_video_labels" : 18,
+  "source_paint_uncertainty_ms" : 33.333333333333336,
+  "startup_and_tail_loss_qualified" : false,
+  "uncertain_tones" : 0,
+  "unmatched_audio" : 19,
+  "unmatched_video" : 19,
+  "video_frames" : 1210,
+  "video_markers" : [
+    {
+      "id" : 255,
+      "pts_ms" : 3466.666666666667
+    },
+    {
+      "id" : 255,
+      "pts_ms" : 5533.333333333333
+    },
+    {
+      "id" : 255,
+      "pts_ms" : 7466.666666666667
+    },
+    {
+      "id" : 255,
+      "pts_ms" : 9533.3333333333339
+    },
+    {
+      "id" : 255,
+      "pts_ms" : 11466.666666666666
+    },
+    {
+      "id" : 255,
+      "pts_ms" : 13466.666666666666
+    },
+    {
+      "id" : 255,
+      "pts_ms" : 15533.333333333334
+    },
+    {
+      "id" : 255,
+      "pts_ms" : 17466.666666666664
+    },
+    {
+      "id" : 255,
+      "pts_ms" : 19533.333333333336
+    },
+    {
+      "id" : 255,
+      "pts_ms" : 21466.666666666664
+    },
+    {
+      "id" : 255,
+      "pts_ms" : 23466.666666666664
+    },
+    {
+      "id" : 255,
+      "pts_ms" : 25533.333333333336
+    },
+    {
+      "id" : 255,
+      "pts_ms" : 27466.666666666664
+    },
+    {
+      "id" : 255,
+      "pts_ms" : 29533.333333333336
+    },
+    {
+      "id" : 255,
+      "pts_ms" : 31466.666666666664
+    },
+    {
+      "id" : 255,
+      "pts_ms" : 33466.666666666672
+    },
+    {
+      "id" : 255,
+      "pts_ms" : 35533.333333333328
+    },
+    {
+      "id" : 255,
+      "pts_ms" : 37466.666666666672
+    },
+    {
+      "id" : 255,
+      "pts_ms" : 39500
+    }
+  ]
+}

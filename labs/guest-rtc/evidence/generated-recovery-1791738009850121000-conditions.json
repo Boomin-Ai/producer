@@ -1,0 +1,22 @@
+{
+  "run": "generated-recovery-1791738009850121000",
+  "status": "failed",
+  "guests": 1,
+  "isolated_playback_candidate": true,
+  "seconds": 45,
+  "reconnect": "full",
+  "reconnect_count": 1,
+  "hardware_capture_used": false,
+  "speaker_playback_used": false,
+  "media_recorded": true,
+  "media_scope": "generated selected guest-1 only",
+  "obs_recording_requested": true,
+  "g1_complete": false,
+  "native_sha256": "9789ae83056a4cb3fd89f833d275a6b6d0be4397dc1f7cce403aef183fed5ac8",
+  "sfu_sha256": "462b296c94efeca28e170ac18ca5b2fc1cdb65a8f896845f5f0e371eaca6c40e",
+  "subscriber_report_candidate": true,
+  "sfu_provenance_file": "generated-recovery-1791738009850121000-sfu-provenance.json",
+  "sfu_provenance_sha256": "c070e5dee50fe2fb6ab85eda727a8a66059f87135704df728602da75b78344f8",
+  "sfu_request_delay_ms": 250,
+  "sfu_request_trigger": "First forwarded audio packet of new downtrack, after timestamp translation starts"
+}

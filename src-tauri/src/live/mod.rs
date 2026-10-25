@@ -6,6 +6,10 @@ pub mod animation;
 pub mod bridge;
 pub mod commands;
 pub mod creds;
+#[cfg(all(have_engine, target_os = "macos", feature = "portrait-camera-dev"))]
+pub(crate) mod portrait_camera_probe;
+#[cfg(feature = "guest-rtc-pilot")]
+pub use producer_guest_session as guest_session;
 #[cfg(have_engine)]
 pub mod dj;
 #[cfg(all(have_engine, target_os = "macos"))]
@@ -16,6 +20,14 @@ pub mod presentation;
 mod presentation_probe;
 #[cfg(have_engine)]
 pub mod program_audio;
+#[cfg(all(have_engine, feature = "guest-rtc-pilot"))]
+pub mod rtc_ingest;
+#[cfg(all(have_engine, feature = "guest-rtc-pilot"))]
+pub mod rtc_media;
+#[cfg(all(have_engine, feature = "guest-rtc-pilot"))]
+pub mod rtc_program;
+#[cfg(all(have_engine, target_os = "macos"))]
+pub mod sets_v2;
 pub mod shaders;
 
 /// The virtual camera's label, identical on both platforms: macOS bakes it
@@ -93,6 +105,21 @@ pub struct Live {
 }
 
 impl Live {
+    pub fn virtual_cam_mirror(&self, on: Option<bool>) -> Result<bool, String> {
+        #[cfg(have_engine)]
+        {
+            self.handle
+                .as_ref()
+                .ok_or("live engine not running")?
+                .virtual_cam_mirror(on)
+        }
+        #[cfg(not(have_engine))]
+        {
+            let _ = on;
+            Err("live engine not bundled in this build".into())
+        }
+    }
+
     pub fn select_output(&self, portrait: bool) -> Result<(), String> {
         #[cfg(have_engine)]
         {
@@ -752,6 +779,15 @@ impl Live {
     #[cfg(not(have_engine))]
     pub fn list_windows(&self) -> Result<serde_json::Value, String> {
         Err("live engine not bundled in this build".into())
+    }
+
+    pub fn set_preview_sources(&self, lease: String, ids: Vec<String>) {
+        #[cfg(have_engine)]
+        if let Some(h) = self.handle.as_ref() {
+            h.set_preview_sources(lease, ids);
+        }
+        #[cfg(not(have_engine))]
+        let _ = (lease, ids);
     }
 
     #[cfg(have_engine)]

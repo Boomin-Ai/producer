@@ -1,5 +1,5 @@
 {
-  "schema": "producer.presentation/1",
+  "schema": "producer.presentation/2",
   "id": "head-to-head",
   "version": "0.2.0",
   "name": "Head to Head",

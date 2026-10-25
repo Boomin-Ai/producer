@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import { build } from 'esbuild';
 import { mkdtemp, writeFile, unlink, rmdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -9,11 +10,12 @@ const result = await build({ stdin: { contents: `export * from './src/features/p
 export * from './src/features/presentation/fixtures';
 export * from './src/features/presentation/rehearsal';
 export * from './src/features/presentation/rundown';
+export * from './src/features/presentation/animation';
 export * from './src/features/presentation/projection';`, resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'esm', write: false });
 const temp = await mkdtemp(join(tmpdir(), 'producer-presentation-'));
 const file = join(temp, 'runtime.mjs');
 await writeFile(file, result.outputFiles[0].text);
-const { parsePackage, presentationJsonSchema, AFTER_HOURS, HEAD_TO_HEAD, RehearsalSession, outputProjection, rundown, timeLabel } = await import(pathToFileURL(file));
+const { parsePackage, presentationJsonSchema, AFTER_HOURS, HEAD_TO_HEAD, RehearsalSession, outputProjection, rundown, timeLabel, authoredCrossfadeMs } = await import(pathToFileURL(file));
 await unlink(file); await rmdir(temp);
 let checks = 0;
 const test = (name, fn) => { fn(); checks++; console.log('PASS:', name); };
@@ -21,6 +23,40 @@ const edit = fn => { const doc = structuredClone(AFTER_HOURS); fn(doc); return d
 const texts = projection => JSON.stringify(projection);
 const control = (session, type, args = {}) => session.send({ type: 'control', action: { type, ...args } });
 const round = () => { const s = new RehearsalSession(HEAD_TO_HEAD, 'test'); assert.ok(control(s, 'show.start')); assert.ok(control(s, 'show.next')); return s; };
+
+test('presentation/2 rejects old packages and private module output references',()=>{
+ const doc=JSON.parse(readFileSync('docs/shows/just-facts.json','utf8'));assert.throws(()=>parsePackage({...doc,schema:'producer.presentation/1'}));
+ const bad=structuredClone(doc);bad.set.layouts[0].root.children.push({id:'private-response',type:'text',text:{get:'modules.research.response'}});assert.throws(()=>parsePackage(bad));
+ const wrong=structuredClone(doc);wrong.set.viewController='missing';assert.throws(()=>parsePackage(wrong));
+});
+test('prepared canvas variants export a matching initial view and isolate simulated answers',()=>{
+ const doc=JSON.parse(readFileSync('docs/shows/just-facts.json','utf8')),s=new RehearsalSession(doc,undefined,'prepare');control(s,'layout.select',{layoutId:'view1-portrait'});const exported=s.exportPreparedPackage();assert.equal(exported.set.initialView,'view1');assert.equal(exported.set.initialLayout,'view1-portrait');
+ assert.ok(s.enterRehearsal());const snap=s.moduleSnapshot();const result=s.receiveModuleData({id:'unrequested-answer',setEpoch:snap.setEpoch,module:'research',epoch:snap.modules.research.epoch,op:'agent.complete',input:{requestId:'unknown',response:'Unexpected answer'}});assert.equal(result.status,'rejected');s.exitRehearsal();assert(!JSON.stringify(s.exportPreparedPackage()).includes('Unexpected answer'));
+});
+
+test('Grand Arena segment morphs keep text visible unless its opacity is explicitly authored',()=>{
+ const doc=parsePackage(JSON.parse(readFileSync('docs/shows/head-to-head-grand-arena.json','utf8')));
+ for(const portrait of [false,true]){
+  const session=new RehearsalSession(doc,undefined,'prepare');session.enterLive();control(session,'show.start');
+  if(portrait)control(session,'layout.select',{layoutId:'faceoff-portrait'});
+  const phases=doc.show.phases;
+  for(const phase of phases.slice(1)){
+   // Exercise each adjacent layout pair, including the vote->verdict edge.
+   const layoutId=phase.layoutId.replace(/-landscape$/,portrait?'-portrait':'-landscape');
+   control(session,'layout.select',{layoutId});
+   const projection=outputProjection(doc,session.snapshot());
+   const textIds=new Set();const visit=n=>{if(n.type==='text')textIds.add(n.id);n.children.forEach(visit);};visit(projection.root);
+   const authored=doc.set.layouts.find(l=>l.id===layoutId).animation.tracks;
+   for(const track of projection.timeline.tracks.filter(t=>textIds.has(t.target)&&t.property==='opacity')){
+    assert.ok(authored.some(t=>t.target===track.target.split('/').slice(2).join('/')&&t.property==='opacity'),`Unexpected text blackout in ${layoutId}: ${track.target}`);
+   }
+  }
+ }
+ const authored=structuredClone(doc),layout=authored.set.layouts.find(l=>l.id==='host-case-landscape');
+ layout.animation.tracks.push({target:'stage-label',property:'opacity',keyframes:[{atMs:0,value:0},{atMs:650,value:1}],clock:'segment'});
+ const session=new RehearsalSession(parsePackage(authored),undefined,'prepare');session.enterLive();control(session,'show.start');control(session,'show.next');
+ assert.deepEqual(outputProjection(session.package,session.snapshot()).timeline.tracks.find(t=>t.target.endsWith('/stage-label')&&t.property==='opacity').keyframes,layout.animation.tracks[0].keyframes);
+});
 
 test('prepare/rehearse boundary restores setup and discards practice state and private identities', () => {
   const withFeeds = structuredClone(HEAD_TO_HEAD);
@@ -56,6 +92,34 @@ test('prepare/rehearse boundary restores setup and discards practice state and p
   const standalone = new RehearsalSession(AFTER_HOURS, 'set-only', 'prepare');
   assert.ok(standalone.enterRehearsal()); assert.equal(standalone.snapshot().running, false);
   assert.equal(standalone.package.show, undefined); assert.ok(standalone.exitRehearsal());
+});
+
+test('only authored crossfades add compositor transition duration',()=>{
+ assert.equal(authoredCrossfadeMs(undefined,true,false),0);
+ assert.equal(authoredCrossfadeMs({type:'cut',durationMs:500},true,false),0);
+ assert.equal(authoredCrossfadeMs({type:'morph',durationMs:500},true,false),0);
+ assert.equal(authoredCrossfadeMs({type:'crossfade',durationMs:170},true,false),170);
+ assert.equal(authoredCrossfadeMs({type:'crossfade',durationMs:170},false,false),0);
+ assert.equal(authoredCrossfadeMs({type:'crossfade',durationMs:170},true,true),0);
+});
+
+test('room show and private rehearsal own independent runtime and prepared state',()=>{
+  const room=new RehearsalSession(HEAD_TO_HEAD,'room','prepare');
+  const draft=new RehearsalSession(room.exportPreparedPackage(),'editor','prepare');
+  const before=structuredClone(room.snapshot());
+  draft.enterRehearsal();control(draft,'show.start');control(draft,'show.next');
+  assert.ok(draft.send({type:'vote',playerId:'practice',choiceId:'a'}));
+  draft.send({type:'field',key:'hostName',value:'Practice name'});
+  assert.deepEqual(room.snapshot(),before);
+  draft.exitRehearsal();assert.equal(draft.snapshot().show.total,0);
+  assert.equal(draft.snapshot().values.hostName,room.snapshot().values.hostName);
+  assert.ok(room.enterLive());assert.ok(control(room,'show.start'));
+  assert.equal(room.snapshot().workspaceMode,'live');
+  assert.ok(room.send({type:'tick',milliseconds:1000}));assert.equal(room.snapshot().elapsedMs,1000);
+  assert.equal(room.send({type:'vote',playerId:'fake',choiceId:'a'}),false);
+  assert.equal(control(room,'show.vote',{choiceId:'a'}),false);
+  assert.ok(room.send({type:'segment.select',phaseId:HEAD_TO_HEAD.show.phases[1].id}));assert.equal(room.snapshot().paused,false);
+  assert.equal(draft.snapshot().running,false);assert.equal(draft.snapshot().elapsedMs,0);
 });
 
 test('agent export retains configured defaults and excludes all rehearsal edits/results', () => {
@@ -99,9 +163,29 @@ test('standalone set needs no show, choices, phases or live adapters', () => {
   assert.ok(s.send({ type: 'feed', key: 'headline', value: 'NEW TOPIC' }));
   assert.ok(texts(outputProjection(s.package, s.snapshot())).includes('NEW TOPIC'));
 });
+test('standalone layout animation does not depend on a show transport',()=>{
+ const doc=structuredClone(AFTER_HOURS),layout=doc.set.layouts[0];
+ layout.animation={tracks:[{target:layout.root.children[0].id,property:'opacity',keyframes:[{atMs:0,value:0},{atMs:1000,value:1}]}]};
+ const session=new RehearsalSession(doc,undefined,'prepare');assert.equal(session.snapshot().animationClock.running,true);assert.equal(session.snapshot().running,false);
+ control(session,'layout.select',{layoutId:'solo'});control(session,'layout.select',{layoutId:layout.id});
+ assert.equal(session.snapshot().animationClock.running,true);assert.equal(session.snapshot().animationClock.segmentMs,0);assert.equal(session.snapshot().running,false);
+});
+
+test('a show can sequence layouts without contestants or voting',()=>{
+ const doc=structuredClone(AFTER_HOURS);
+ doc.show={id:'conversation-sequence',version:'1',initialPhase:'opening',phases:[{id:'opening',label:'Opening',layoutId:doc.set.layouts[0].id,next:'close'},{id:'close',label:'Closing',layoutId:'solo'}]};
+ const parsed=parsePackage(doc);assert.deepEqual(parsed.show.choices,[]);
+ assert(!presentationJsonSchema.properties.show.required.includes('choices'));
+ const session=new RehearsalSession(parsed,undefined,'prepare');session.enterLive();
+ assert.ok(control(session,'show.start'));assert.ok(control(session,'show.next'));
+ assert.equal(session.snapshot().show.phase,'close');assert.equal(session.snapshot().layoutId,'solo');assert.deepEqual(session.snapshot().counts,{});
+ const invalid=structuredClone(doc);invalid.show.phases[0].collectMs=10000;
+ assert.throws(()=>parsePackage(invalid),/Voting needs at least two choices/);
+});
+
 test('schema is generated from the same strict codec', () => {
   assert.equal(presentationJsonSchema.additionalProperties, false);
-  assert.equal(presentationJsonSchema.properties.schema.const, 'producer.presentation/1');
+  assert.equal(presentationJsonSchema.properties.schema.const, 'producer.presentation/2');
   assert.ok(presentationJsonSchema.$defs.node); assert.ok(presentationJsonSchema.$defs.binding);
   assert.deepEqual(parsePackage(AFTER_HOURS), AFTER_HOURS);
 });
@@ -264,7 +348,8 @@ test('event replay is deterministic; invalid action cannot invoke native or netw
   const a = round(), b = round();
   const events = [{ type: 'reaction', playerId: 'p' }, { type: 'reaction', playerId: 'p' }, { type: 'tick', milliseconds: 10000 }, { type: 'control', action: { type: 'native.invoke', command: 'record_start' } }];
   for (const event of events) assert.equal(a.send(event), b.send(event));
-  assert.deepEqual(a.snapshot(), b.snapshot()); assert.equal(a.snapshot().show.heat, 0);
+  const left=structuredClone(a.snapshot()),right=structuredClone(b.snapshot());assert.notEqual(left.moduleCommit.setEpoch,right.moduleCommit.setEpoch);left.moduleCommit.setEpoch=right.moduleCommit.setEpoch=0;
+  assert.deepEqual(left,right); assert.equal(a.snapshot().show.heat, 0);
   assert.equal(outputProjection(a.package, a.snapshot()).css, outputProjection(b.package, b.snapshot()).css);
   assert.ok(outputProjection(a.package, a.snapshot()).css.includes('animation-play-state:paused'));
   a.send({ type: 'reset' }); assert.equal(a.snapshot().show.total, 0); assert.equal(a.snapshot().running, false);
@@ -278,6 +363,25 @@ test('shared style tokens resolve without flattening reusable presets',()=>{
  assert.throws(()=>parsePackage(edit(d=>{d.set.layouts[0].root.styles.clipPath='circle(50%)';})));
  assert.throws(()=>parsePackage(edit(d=>{d.set.styles={bad:{fontFamily:'url(https://evil)'}};})));
  assert.throws(()=>parsePackage(edit(d=>{d.set.styles={bad:{color:{get:'tokens.missing'}}};})));
+});
+test('Editor segment navigation reaches any segment without starting a show and pauses an active rehearsal', () => {
+ const session=new RehearsalSession(HEAD_TO_HEAD,undefined,'prepare');
+ session.send({type:'field',key:'hostName',value:'Editor test'});
+ for(const phase of HEAD_TO_HEAD.show.phases){assert.equal(session.send({type:'segment.select',phaseId:phase.id}),true);assert.equal(session.snapshot().layoutId,phase.layoutId);assert.equal(session.snapshot().show.phase,phase.id);assert.equal(session.snapshot().running,false);assert.equal(session.snapshot().values.hostName,'Editor test');}
+ const before=session.snapshot().layoutId;assert.equal(session.send({type:'segment.select',phaseId:'unknown'}),false);assert.equal(session.snapshot().layoutId,before);
+ session.enterRehearsal();session.send({type:'control',action:{type:'show.start'}});
+ const voting=HEAD_TO_HEAD.show.phases.find(p=>p.collectMs);
+ assert.equal(session.send({type:'segment.select',phaseId:voting.id}),true);
+ assert.equal(session.snapshot().paused,true);assert.equal(session.snapshot().show.collecting,true);assert.equal(session.snapshot().animationClock?.running??false,false);
+ const remaining=session.snapshot().show.remainingMs;assert.equal(session.send({type:'tick',milliseconds:1000}),false);assert.equal(session.snapshot().show.remainingMs,remaining);
+ assert.equal(session.send({type:'pause',paused:false}),true);assert.equal(session.send({type:'tick',milliseconds:1000}),true);assert.equal(session.snapshot().show.remainingMs,remaining-1000);
+});
+test('live lifecycle transport preserves rapid segment changes without a React render boundary',()=>{
+ const doc=parsePackage(JSON.parse(readFileSync('docs/shows/head-to-head-grand-arena.json','utf8'))),session=new RehearsalSession(doc,undefined,'prepare');assert.ok(session.enterLive());const events=[];
+ session.attachModuleLifecycle(value=>events.push(structuredClone(value)));
+ assert.ok(control(session,'show.start'));assert.ok(control(session,'show.next'));assert.ok(control(session,'show.previous'));
+ assert.deepEqual(events.map(e=>[e.segment,e.running]),[[doc.show.initialPhase,false],[doc.show.initialPhase,true],[doc.show.phases[0].next,true],[doc.show.initialPhase,true]]);
+ session.attachModuleLifecycle(undefined);const count=events.length;assert.ok(control(session,'show.next'));assert.equal(events.length,count);
 });
 console.log(`Presentation runtime: ${checks} checks passed.`);
 

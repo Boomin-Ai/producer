@@ -1,0 +1,38 @@
+{
+  "experiment": "Subscriber admission audio SR request, bounded packet-driven policy; loopback opt-in",
+  "delay_ms": 250,
+  "request_spacing_ms": 250,
+  "max_requests_per_publisher_budget_window": 3,
+  "budget_window_ms": 2000,
+  "no_goroutines_or_timers_added": true,
+  "default_behavior_changed": false,
+  "patch_sha256": "d74d6aa517993e850d2a5cde2735c1e59f8e7f02bd0bcc889459b22cd66adbb0",
+  "base_files_sha256": {
+    "pkg/sfu/buffer/buffer.go": "1ec37bd7faa91986bc93fe98d97d8945fba8d2af119028d1b38d0cf34dac4e38",
+    "pkg/sfu/receiver_base.go": "af59fd008776cdde15d01b8bf76030e9de1c7e96fb2f5c9b19d5d77a71882953",
+    "pkg/sfu/downtrack.go": "34adb600577dea100430d0452e6e4ad2ea7641768349bf02c95a833bf51a49d0",
+    "pkg/sfu/redprimaryreceiver.go": "5c6c9a9a5827cb1ff5d2e1b5b89cf8fd4bca5cfed7f2337c8f08d4843d574d9b",
+    "pkg/rtc/wrappedreceiver.go": "3d2874bed7fec7adabb9f0e38e72165b60918152dbed5b046d411bb557edf5f4",
+    "pkg/rtc/mediatrackreceiver.go": "cc6cc4f6b9686d0c3bfb48f080aea29afe6be626535745ce836b8aa94ac8e031",
+    "pkg/sfu/redreceiver.go": "51b3375aab9f994e2352b9f75bda29c2230db947919d8dfc4b84ee7c060adc52"
+  },
+  "patched_files_sha256": {
+    "pkg/sfu/buffer/buffer.go": "d154796e400fbbbb719086c8120a4b6f8045467430d3750f64543fc23e660aca",
+    "pkg/sfu/receiver_base.go": "de8ddd841a9f74a69cfcadc730feca8ea1af71126eadfae09436ff1df1841384",
+    "pkg/sfu/buffer/lab_subscriber_sr_request.go": "7766a288708f5844cd77b8ad6e890f7ec86c49c318be1d77b69535533729754e",
+    "pkg/sfu/buffer/lab_subscriber_sr_request_test.go": "d04798894a12b2b52e807e89dc4454b7f8b2e64ce527483550e146cd3e1d9459",
+    "pkg/sfu/buffer/lab_subscriber_sr_buffer_test.go": "1f4efe022b93384dedce930998dafb031329b36296aa73bd956568e4e104beec",
+    "pkg/sfu/downtrack.go": "2511c7912cf7b03fe23a5a7ab50cb6f15443abdbaaae4a307edcd7049de9d62f",
+    "pkg/sfu/redprimaryreceiver.go": "e1d417055e83e21dffb9212d7611d8247e3ae67dcd812072ef4256dae7a32878",
+    "pkg/rtc/wrappedreceiver.go": "cde706924fc86d47ee0f6ecec92d9493569dee1963c660f72f5c6bb590cc9fd2",
+    "pkg/rtc/mediatrackreceiver.go": "7b6dfde09a5adf7aee5151db7906e589c41abd0f099ee21023b31bfb2e28fdb9",
+    "pkg/sfu/redreceiver.go": "44ffab4975235ded680c2d9963bf9bdfe9f6f81f5798cac148b7fe155f33efaf",
+    "pkg/rtc/lab_subscriber_sr_wrapper_test.go": "44e69e065fc9399bdd85134c0c6c34f7f89f3e1ebd1148185adf33e9e5447b8f"
+  },
+  "helper_tests_passed": true,
+  "full_server_build_passed": true,
+  "managed_livekit_compatible": false,
+  "startup_qualified": false,
+  "trigger": "First forwarded audio packet of new downtrack, after timestamp translation starts",
+  "built_binary_sha256": "462b296c94efeca28e170ac18ca5b2fc1cdb65a8f896845f5f0e371eaca6c40e"
+}

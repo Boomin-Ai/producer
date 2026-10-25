@@ -1,0 +1,179 @@
+{
+  "audio_detector_window_max_ms" : 10,
+  "audio_marker_pts_ms" : [
+    4728,
+    6726,
+    8704,
+    10661.333333333334,
+    12810,
+    14747.333333333334,
+    16725.333333333332,
+    20058,
+    22076,
+    24094,
+    27266,
+    29314,
+    31312,
+    33370,
+    35358,
+    37496,
+    39494
+  ],
+  "audio_samples_decoded" : 1936320,
+  "browser_source_paint_uncertainty_ms" : 33.333333333333336,
+  "decoder" : "macOS AVFoundation",
+  "duration_seconds" : 40.387999999999998,
+  "g1_complete" : false,
+  "late_minus_early_median_offset_ms" : 0.66666666666787933,
+  "lip_sync_qualified" : false,
+  "network_impairment_qualified" : false,
+  "observed_marker_test_pass" : false,
+  "pairs" : [
+    {
+      "audio_pts_ms" : 4728,
+      "video_minus_audio_ms" : -39.97916666666606,
+      "video_pts_ms" : 4688.0208333333339
+    },
+    {
+      "audio_pts_ms" : 6726,
+      "video_minus_audio_ms" : -37.97916666666606,
+      "video_pts_ms" : 6688.0208333333339
+    },
+    {
+      "audio_pts_ms" : 8704,
+      "video_minus_audio_ms" : -15.979166666667879,
+      "video_pts_ms" : 8688.0208333333321
+    },
+    {
+      "audio_pts_ms" : 10661.333333333334,
+      "video_minus_audio_ms" : 26.687499999998181,
+      "video_pts_ms" : 10688.020833333332
+    },
+    {
+      "audio_pts_ms" : 14747.333333333334,
+      "video_minus_audio_ms" : 40.687499999998181,
+      "video_pts_ms" : 14788.020833333332
+    },
+    {
+      "audio_pts_ms" : 16725.333333333332,
+      "video_minus_audio_ms" : 29.354166666667879,
+      "video_pts_ms" : 16754.6875
+    },
+    {
+      "audio_pts_ms" : 20058,
+      "video_minus_audio_ms" : 63.354166666667879,
+      "video_pts_ms" : 20121.354166666668
+    },
+    {
+      "audio_pts_ms" : 22076,
+      "video_minus_audio_ms" : 45.354166666667879,
+      "video_pts_ms" : 22121.354166666668
+    },
+    {
+      "audio_pts_ms" : 24094,
+      "video_minus_audio_ms" : -5.9791666666642413,
+      "video_pts_ms" : 24088.020833333336
+    },
+    {
+      "audio_pts_ms" : 27266,
+      "video_minus_audio_ms" : 88.6875,
+      "video_pts_ms" : 27354.6875
+    },
+    {
+      "audio_pts_ms" : 29314,
+      "video_minus_audio_ms" : 40.6875,
+      "video_pts_ms" : 29354.6875
+    },
+    {
+      "audio_pts_ms" : 31312,
+      "video_minus_audio_ms" : 42.6875,
+      "video_pts_ms" : 31354.6875
+    },
+    {
+      "audio_pts_ms" : 33370,
+      "video_minus_audio_ms" : -15.3125,
+      "video_pts_ms" : 33354.6875
+    },
+    {
+      "audio_pts_ms" : 35358,
+      "video_minus_audio_ms" : -36.645833333335759,
+      "video_pts_ms" : 35321.354166666664
+    },
+    {
+      "audio_pts_ms" : 37496,
+      "video_minus_audio_ms" : -107.97916666666424,
+      "video_pts_ms" : 37388.020833333336
+    },
+    {
+      "audio_pts_ms" : 39494,
+      "video_minus_audio_ms" : -39.3125,
+      "video_pts_ms" : 39454.6875
+    }
+  ],
+  "pulse_recrossing_collapse_window_ms" : 150,
+  "raw_audio_threshold_crossings_ms" : [
+    4728,
+    6726,
+    8704,
+    10661.333333333334,
+    12810,
+    14747.333333333334,
+    16725.333333333332,
+    20058,
+    22076,
+    24094,
+    27266,
+    29314,
+    31312,
+    33370,
+    35358,
+    37496,
+    39494
+  ],
+  "raw_video_threshold_crossings_ms" : [
+    2721.3541666666665,
+    4688.0208333333339,
+    6688.0208333333339,
+    8688.0208333333321,
+    10688.020833333332,
+    14788.020833333332,
+    16754.6875,
+    20121.354166666668,
+    22121.354166666668,
+    24088.020833333336,
+    27354.6875,
+    29354.6875,
+    31354.6875,
+    33354.6875,
+    35321.354166666664,
+    37388.020833333336,
+    39454.6875
+  ],
+  "recorded_av_abs_p95_ms" : 88.6875,
+  "recorded_video_minus_audio_median_ms" : 26.687499999998181,
+  "recording" : "obs-packet-lifecycle-v2.mp4",
+  "schema_version" : 2,
+  "source_pulse_duration_ms" : 120,
+  "unmatched_audio_markers" : 1,
+  "unmatched_video_markers" : 1,
+  "video_frames_decoded" : 1211,
+  "video_marker_pts_ms" : [
+    2721.3541666666665,
+    4688.0208333333339,
+    6688.0208333333339,
+    8688.0208333333321,
+    10688.020833333332,
+    14788.020833333332,
+    16754.6875,
+    20121.354166666668,
+    22121.354166666668,
+    24088.020833333336,
+    27354.6875,
+    29354.6875,
+    31354.6875,
+    33354.6875,
+    35321.354166666664,
+    37388.020833333336,
+    39454.6875
+  ]
+}

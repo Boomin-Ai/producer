@@ -1,0 +1,69 @@
+{
+  "run": "physical-publication-1791686330531080000",
+  "original_fixture_status": "failed: terminal absent audio stats were incorrectly counted as zero; original report preserved",
+  "corrected_receiver_growth": {
+    "resumed_at_ms": 8047,
+    "post_resume_samples": 30,
+    "observations_without_valid_audio_stats": 1,
+    "first_observed_at_ms": 11071.011457999994,
+    "last_observed_at_ms": 40221.20545800001,
+    "receiver_epoch": "IT01A3028863915:3028863915",
+    "video_frames": 704,
+    "audio_packets": 1448,
+    "error": null,
+    "scope": "receiver growth after actual SDK signaling resume; does not establish WAN outage or lip-sync offset"
+  },
+  "actual_duration_seconds": 40.233250042,
+  "audio_p95_ms": 26,
+  "audio_deadline_recoveries": 0,
+  "camera": {
+    "av_sync_qualified": false,
+    "capture_timestamp_domain": "AVCaptureSession synchronizationClock converted to CMClockGetHostTimeClock",
+    "capture_to_sdk_p95_ms_upper_bucket": 37,
+    "enabled": true,
+    "error": null,
+    "lifecycle": {
+      "actual_height": 480,
+      "actual_pixel_format": 875704438,
+      "actual_width": 640,
+      "callbacks_active_after_stop": 0,
+      "capacity_frames": 3,
+      "consumed": 1154,
+      "fault_codes": "1 no pixel; 2 format/dimensions; 3 regressed timestamp; 4 pixel lock; 5 planes/strides; 6 absent clock; 7 invalid converted time; 8 runtime error",
+      "first_fault_code": 0,
+      "format_or_timestamp_errors": 0,
+      "native_late_discarded": 0,
+      "overflow_newest_discarded": 0,
+      "owners_retired": true,
+      "pending_retired": 0,
+      "queued": 1154
+    },
+    "maximum_capture_to_sdk_us": 79721,
+    "pixel_format": "NV12 video range to I420",
+    "resolution": {
+      "height": 480,
+      "width": 640
+    },
+    "sdk_adapted_or_rejected": 194,
+    "sdk_video_timestamp_alignment": "SDK TimestampAligner still translates host capture timestamps; cross-media RTP alignment not qualified",
+    "shutdown_ms": 142.88662499999998,
+    "stale_discarded": 0,
+    "submitted": 960,
+    "thread_joined": true,
+    "video_recorded_by_native": false
+  },
+  "publisher_join": {
+    "joined": true,
+    "named_thread": true,
+    "shutdown_ms": 186.047416
+  },
+  "private_av_capture": {
+    "recorded": true,
+    "bytes": 3610366,
+    "mime": "video/webm;codecs=vp8,opus",
+    "scope": "private Application Support; decoded AV browser re-encode, not raw source media"
+  },
+  "subjective_sync_review": "Still aligned",
+  "g1_complete": false,
+  "subjective_sync_scope": "Operator clap/lip review after signaling resume in this 40-second Mac loopback trial"
+}

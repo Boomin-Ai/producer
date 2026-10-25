@@ -1,0 +1,21 @@
+{
+  "capture_queue_blocks_before": 8,
+  "capture_queue_blocks_after": 12,
+  "standard_obs_block_frames": 1024,
+  "sample_rate": 48000,
+  "valid_burst_blocks": 10,
+  "valid_burst_duration_ms": 213.333,
+  "before_valid_burst_failed": true,
+  "after_callback_tests_passed": 2,
+  "excessive_backlog_still_rejected": true,
+  "main_thread_tap": {
+    "audio_blocks": 93,
+    "passed": true,
+    "video_frames": 58
+  },
+  "concurrent_second_engine_qualified": false,
+  "qualification": "Deterministic real callback burst regression and standalone OBS tap. Historical concurrent failure was unclassified; simultaneous second-engine Metal initialization remains unqualified.",
+  "source_sha256": {
+    "src-tauri/src/live/rtc_program.rs": "93a9c15907d281a3c1865282adac953272ce7d8114c1d42c11323673be492826"
+  }
+}

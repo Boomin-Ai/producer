@@ -1,5 +1,10 @@
 {
-  "schema": "producer.presentation/1",
+  "schema": "producer.presentation/2",
+  "runtime": {
+    "schema": "producer.modules/1",
+    "definitions": {},
+    "instances": []
+  },
   "id": "head-to-head",
   "version": "0.2.0",
   "name": "Head to Head",

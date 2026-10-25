@@ -1,0 +1,50 @@
+{
+  "runs": [
+    {
+      "variant": "control",
+      "trace_sha256": "6124cd03280a75d031021590c02c1bac854600744600a7ca7066912e17c2bd97",
+      "guest_audio_tracks": [
+        {
+          "track_id": "TR_AM7CoHZGaoVSQm",
+          "requests": 0,
+          "first_receipt_subscribers": 1,
+          "request_after_downtrack_ms": null,
+          "first_receipt_after_downtrack_ms": 2344.326,
+          "first_forward_after_receipt_ms": 0.05
+        },
+        {
+          "track_id": "TR_AMrUZirDx5T3tt",
+          "requests": 0,
+          "first_receipt_subscribers": 1,
+          "request_after_downtrack_ms": null,
+          "first_receipt_after_downtrack_ms": 2340.173,
+          "first_forward_after_receipt_ms": 0.023
+        }
+      ]
+    },
+    {
+      "variant": "candidate",
+      "trace_sha256": "73cab38d9fc3cb16bbd6049d405d3d5696c1ad6b005510ec93494f3fa34684b9",
+      "guest_audio_tracks": [
+        {
+          "track_id": "TR_AMLB8wkTNDhbK3",
+          "requests": 1,
+          "first_receipt_subscribers": 1,
+          "request_after_downtrack_ms": 443.39,
+          "first_receipt_after_downtrack_ms": 444.216,
+          "first_forward_after_receipt_ms": 0.015
+        },
+        {
+          "track_id": "TR_AMtm4DhiYLiN7r",
+          "requests": 1,
+          "first_receipt_subscribers": 1,
+          "request_after_downtrack_ms": 410.809,
+          "first_receipt_after_downtrack_ms": 411.553,
+          "first_forward_after_receipt_ms": 0.014
+        }
+      ]
+    }
+  ],
+  "clock_domain": "All deltas use SFU wall time; receipt is callback observation, not packet wire arrival. Downtrack log has millisecond precision.",
+  "g1_complete": false
+}

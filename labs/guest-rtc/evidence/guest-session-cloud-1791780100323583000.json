@@ -1,0 +1,56 @@
+{
+  "status": "passed",
+  "provider": "LiveKit Cloud",
+  "room": "b_31869838-7e9a-4148-a4b3-44a5e4cdde92_r_5d35a581-dfec-4d1c-a85f-0e0d5bac649b_run_c003de7a-31c0-46bb-b368-e367f9e3169a_stage",
+  "production_routes_used": false,
+  "production_database_used": false,
+  "physical_capture_used": false,
+  "speaker_playback_used": false,
+  "refreshed_token_replay_tested": false,
+  "broader_g2_complete": false,
+  "production_deployed": false,
+  "stage": "complete",
+  "source_sha256": {
+    "scripts/livekit-session-cloud-smoke.ts": "4fafe1390f1aa8ad8eacac8fb4c435ed3cdded93efb10463b9a28ed3782710a2",
+    "src/services/live/guest-session-contract.ts": "bb1f70a8f0c81cbbf33b2e1207b12dc8598b27fdcccd8ab86a435d51282676ef",
+    "src/services/live/livekit-session.ts": "9b29af9aa2ca0c91e23570da1ed6f473c5785e6a8ad5848dbb9b0e98cd00c4b6",
+    "src/lib/crypto.ts": "47f709d6b3351a103b3785d4b3e7414fbd3f7386769189437d33e19680d088b1"
+  },
+  "native_validator_sha256": "45a545ff8722db1f622293a5ee1d4ac23e4ef9e25c25b1e9e854688c63ed59d3",
+  "browser_sdk_sha256": "13dba7e174d59892a6cd8f0647fc132fe56da4e065c60d7bd7aaa3ce15009d54",
+  "native_contract_checks": 3,
+  "participant_lookup_status": 200,
+  "observed_permission": {
+    "can_publish": false,
+    "can_subscribe": true,
+    "publish_data": false,
+    "update_metadata": false,
+    "publish_sources": []
+  },
+  "cloud_participant_permissions": {
+    "producer": {
+      "can_publish": true,
+      "can_subscribe": true,
+      "publish_data": false,
+      "update_metadata": false,
+      "source_grant_verified": true
+    },
+    "guest": {
+      "can_publish": true,
+      "can_subscribe": true,
+      "publish_data": false,
+      "update_metadata": false,
+      "source_grant_verified": true
+    },
+    "monitor": {
+      "can_publish": false,
+      "can_subscribe": true,
+      "publish_data": false,
+      "update_metadata": false,
+      "source_grant_verified": false
+    }
+  },
+  "monitor_admin_escalation_status": 401,
+  "original_monitor_token_replay_rejected": true,
+  "owned_room_deleted": true
+}

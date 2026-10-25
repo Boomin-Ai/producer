@@ -1,0 +1,69 @@
+{
+  "browser": "154.0.8037.98",
+  "guests": 1,
+  "mode": "normal",
+  "states": [
+    {
+      "identity": "guest-1",
+      "connected": true,
+      "published": true,
+      "returnAudioBlocks": 969,
+      "returnAudioPulses": 16,
+      "returnVideoFrames": 464,
+      "events": [
+        "return-audio",
+        "return-video"
+      ],
+      "audioMaxRms": 0.41458134585942136,
+      "error": null,
+      "syncStreams": true
+    }
+  ],
+  "audioStats": [
+    [
+      {
+        "id": "IT01A1518064872",
+        "timestamp": 1791612059017.615,
+        "type": "inbound-rtp",
+        "codecId": "CIT01_111_minptime=10;stereo=1;useinbandfec=1",
+        "kind": "audio",
+        "mediaType": "audio",
+        "ssrc": 1518064872,
+        "transportId": "T01",
+        "jitter": 0.016,
+        "packetsLost": 3,
+        "packetsReceived": 199,
+        "packetsReceivedWithCe": 0,
+        "packetsReceivedWithEct1": 0,
+        "audioLevel": 0,
+        "bytesReceived": 2725,
+        "concealedSamples": 4290,
+        "concealmentEvents": 5,
+        "fecPacketsDiscarded": 0,
+        "fecPacketsReceived": 0,
+        "headerBytesReceived": 2388,
+        "insertedSamplesForDeceleration": 120,
+        "jitterBufferDelay": 8438.4,
+        "jitterBufferEmittedCount": 191040,
+        "jitterBufferMinimumDelay": 14860.8,
+        "jitterBufferTargetDelay": 14860.8,
+        "lastPacketReceivedTimestamp": 1791612059004.603,
+        "mid": "8",
+        "packetsDiscarded": 0,
+        "playoutId": "AP",
+        "removedSamplesForAcceleration": 0,
+        "silentConcealedSamples": 360,
+        "totalAudioEnergy": 0,
+        "totalProcessingDelay": 7521.20928,
+        "totalSamplesDuration": 4.089999999999957,
+        "totalSamplesReceived": 194400,
+        "trackIdentifier": "e2fc7d6f-1d35-4ac1-80a1-95237e4a022f"
+      }
+    ]
+  ],
+  "impairments": [],
+  "packetProbe": [],
+  "return_transport_observed": true,
+  "hardware_capture_used": false,
+  "physical_speaker_playout_used": false
+}

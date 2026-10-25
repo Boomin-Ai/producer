@@ -17,3 +17,8 @@ export function sampleTrack(track:AnimationTrack,position:number){
  if(track.easing==='easeIn')t*=t;else if(track.easing==='easeOut')t=1-(1-t)*(1-t);else if(!track.easing||track.easing==='easeInOut')t=t*t*(3-2*t);
  return a.value+(b.value-a.value)*t;
 }
+
+/** Only a set-authored crossfade adds a compositor transition. Morph uses tracks. */
+export function authoredCrossfadeMs(transition:LayoutAnimation['transition'],layoutChanged:boolean,paused:boolean):number {
+ return layoutChanged&&!paused&&transition?.type==='crossfade'?transition.durationMs:0;
+}

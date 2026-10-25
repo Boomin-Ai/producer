@@ -1,0 +1,752 @@
+{
+  "actual_duration_seconds": 1.98811025,
+  "audio_ingest_generation_reports": [],
+  "audio_ingest_session_totals": {
+    "callback_contention_dropped": 0,
+    "clock_resets": 0,
+    "consumed": 0,
+    "overflow_oldest_dropped": 0,
+    "pending_frames": 0,
+    "received": 0,
+    "stale_dropped": 0
+  },
+  "audio_master_playback": null,
+  "audio_worker_lifecycle": null,
+  "callback_timestamps_are_capture_timestamps": false,
+  "capture_publication": {
+    "aec_enforced_high_pass": false,
+    "awaiting_fresh_capture_at_shutdown": false,
+    "camera": {
+      "av_sync_qualified": false,
+      "capture_timestamp_domain": "AVCaptureSession synchronizationClock converted to CMClockGetHostTimeClock",
+      "capture_to_sdk_p95_ms_upper_bucket": null,
+      "enabled": true,
+      "error": "Native camera format/timestamp/runtime fault",
+      "lifecycle": {
+        "callbacks_active_after_stop": 0,
+        "capacity_frames": 3,
+        "consumed": 0,
+        "format_or_timestamp_errors": 10,
+        "native_late_discarded": 0,
+        "overflow_newest_discarded": 0,
+        "owners_retired": true,
+        "pending_retired": 0,
+        "queued": 0
+      },
+      "maximum_capture_to_sdk_us": 0,
+      "pixel_format": "NV12 video range to I420",
+      "resolution": {
+        "height": 480,
+        "width": 640
+      },
+      "sdk_adapted_or_rejected": 0,
+      "sdk_video_timestamp_alignment": "SDK TimestampAligner still translates host capture timestamps; cross-media RTP alignment not qualified",
+      "shutdown_ms": 0.01175,
+      "stale_discarded": 0,
+      "submitted": 0,
+      "thread_joined": true,
+      "video_recorded_by_native": false
+    },
+    "capture_hold_retired": false,
+    "capture_rtp_alignment_qualified": false,
+    "capture_timing_capacity": 64,
+    "capture_timing_last_blocks": [
+      {
+        "age_before_apm_us": 14120,
+        "host_ns": 68267045784875,
+        "processing_us": 98
+      },
+      {
+        "age_before_apm_us": 15148,
+        "host_ns": 68267055784875,
+        "processing_us": 110
+      },
+      {
+        "age_before_apm_us": 15121,
+        "host_ns": 68267065785083,
+        "processing_us": 74
+      },
+      {
+        "age_before_apm_us": 16073,
+        "host_ns": 68267075785291,
+        "processing_us": 123
+      },
+      {
+        "age_before_apm_us": 16106,
+        "host_ns": 68267085785500,
+        "processing_us": 248
+      },
+      {
+        "age_before_apm_us": 17025,
+        "host_ns": 68267095785666,
+        "processing_us": 116
+      },
+      {
+        "age_before_apm_us": 18152,
+        "host_ns": 68267105785874,
+        "processing_us": 85
+      },
+      {
+        "age_before_apm_us": 18106,
+        "host_ns": 68267115786083,
+        "processing_us": 180
+      },
+      {
+        "age_before_apm_us": 19107,
+        "host_ns": 68267125786291,
+        "processing_us": 72
+      },
+      {
+        "age_before_apm_us": 20068,
+        "host_ns": 68267135786499,
+        "processing_us": 87
+      },
+      {
+        "age_before_apm_us": 20122,
+        "host_ns": 68267145786708,
+        "processing_us": 110
+      },
+      {
+        "age_before_apm_us": 21102,
+        "host_ns": 68267155786916,
+        "processing_us": 74
+      },
+      {
+        "age_before_apm_us": 22120,
+        "host_ns": 68267165787124,
+        "processing_us": 81
+      },
+      {
+        "age_before_apm_us": 22117,
+        "host_ns": 68267175787333,
+        "processing_us": 124
+      },
+      {
+        "age_before_apm_us": 23110,
+        "host_ns": 68267185787541,
+        "processing_us": 83
+      },
+      {
+        "age_before_apm_us": 14067,
+        "host_ns": 68267195787749,
+        "processing_us": 74
+      },
+      {
+        "age_before_apm_us": 14211,
+        "host_ns": 68267205787916,
+        "processing_us": 83
+      },
+      {
+        "age_before_apm_us": 14125,
+        "host_ns": 68267215787916,
+        "processing_us": 167
+      },
+      {
+        "age_before_apm_us": 15147,
+        "host_ns": 68267225788124,
+        "processing_us": 91
+      },
+      {
+        "age_before_apm_us": 16104,
+        "host_ns": 68267235788832,
+        "processing_us": 94
+      },
+      {
+        "age_before_apm_us": 16103,
+        "host_ns": 68267245789041,
+        "processing_us": 238
+      },
+      {
+        "age_before_apm_us": 17108,
+        "host_ns": 68267255789249,
+        "processing_us": 104
+      },
+      {
+        "age_before_apm_us": 18117,
+        "host_ns": 68267265789499,
+        "processing_us": 94
+      },
+      {
+        "age_before_apm_us": 18107,
+        "host_ns": 68267275789708,
+        "processing_us": 290
+      },
+      {
+        "age_before_apm_us": 19117,
+        "host_ns": 68267285789916,
+        "processing_us": 85
+      },
+      {
+        "age_before_apm_us": 20112,
+        "host_ns": 68267295790124,
+        "processing_us": 102
+      },
+      {
+        "age_before_apm_us": 20105,
+        "host_ns": 68267305790333,
+        "processing_us": 149
+      },
+      {
+        "age_before_apm_us": 21105,
+        "host_ns": 68267315790541,
+        "processing_us": 84
+      },
+      {
+        "age_before_apm_us": 22114,
+        "host_ns": 68267325790749,
+        "processing_us": 272
+      },
+      {
+        "age_before_apm_us": 22102,
+        "host_ns": 68267335790958,
+        "processing_us": 115
+      },
+      {
+        "age_before_apm_us": 23101,
+        "host_ns": 68267345791166,
+        "processing_us": 69
+      },
+      {
+        "age_before_apm_us": 14064,
+        "host_ns": 68267355791374,
+        "processing_us": 61
+      },
+      {
+        "age_before_apm_us": 14100,
+        "host_ns": 68267365791583,
+        "processing_us": 66
+      },
+      {
+        "age_before_apm_us": 14111,
+        "host_ns": 68267375791583,
+        "processing_us": 136
+      },
+      {
+        "age_before_apm_us": 15113,
+        "host_ns": 68267385791791,
+        "processing_us": 72
+      },
+      {
+        "age_before_apm_us": 16095,
+        "host_ns": 68267395791999,
+        "processing_us": 76
+      },
+      {
+        "age_before_apm_us": 16103,
+        "host_ns": 68267405792208,
+        "processing_us": 96
+      },
+      {
+        "age_before_apm_us": 17100,
+        "host_ns": 68267415792416,
+        "processing_us": 78
+      },
+      {
+        "age_before_apm_us": 18099,
+        "host_ns": 68267425792624,
+        "processing_us": 62
+      },
+      {
+        "age_before_apm_us": 18110,
+        "host_ns": 68267435792833,
+        "processing_us": 290
+      },
+      {
+        "age_before_apm_us": 19100,
+        "host_ns": 68267445793041,
+        "processing_us": 66
+      },
+      {
+        "age_before_apm_us": 20101,
+        "host_ns": 68267455793249,
+        "processing_us": 81
+      },
+      {
+        "age_before_apm_us": 20099,
+        "host_ns": 68267465793458,
+        "processing_us": 212
+      },
+      {
+        "age_before_apm_us": 21099,
+        "host_ns": 68267475793666,
+        "processing_us": 81
+      },
+      {
+        "age_before_apm_us": 22129,
+        "host_ns": 68267485793874,
+        "processing_us": 64
+      },
+      {
+        "age_before_apm_us": 22103,
+        "host_ns": 68267495794083,
+        "processing_us": 150
+      },
+      {
+        "age_before_apm_us": 23099,
+        "host_ns": 68267505794291,
+        "processing_us": 65
+      },
+      {
+        "age_before_apm_us": 14065,
+        "host_ns": 68267515794499,
+        "processing_us": 60
+      },
+      {
+        "age_before_apm_us": 14099,
+        "host_ns": 68267525794750,
+        "processing_us": 65
+      },
+      {
+        "age_before_apm_us": 14103,
+        "host_ns": 68267535794750,
+        "processing_us": 114
+      },
+      {
+        "age_before_apm_us": 15119,
+        "host_ns": 68267545794958,
+        "processing_us": 87
+      },
+      {
+        "age_before_apm_us": 16095,
+        "host_ns": 68267555795166,
+        "processing_us": 85
+      },
+      {
+        "age_before_apm_us": 16082,
+        "host_ns": 68267565795416,
+        "processing_us": 71
+      },
+      {
+        "age_before_apm_us": 17100,
+        "host_ns": 68267575795624,
+        "processing_us": 84
+      },
+      {
+        "age_before_apm_us": 18096,
+        "host_ns": 68267585795832,
+        "processing_us": 69
+      },
+      {
+        "age_before_apm_us": 18281,
+        "host_ns": 68267595796041,
+        "processing_us": 233
+      },
+      {
+        "age_before_apm_us": 19097,
+        "host_ns": 68267605796249,
+        "processing_us": 69
+      },
+      {
+        "age_before_apm_us": 20106,
+        "host_ns": 68267615796499,
+        "processing_us": 109
+      },
+      {
+        "age_before_apm_us": 20110,
+        "host_ns": 68267625796708,
+        "processing_us": 143
+      },
+      {
+        "age_before_apm_us": 21099,
+        "host_ns": 68267635796916,
+        "processing_us": 84
+      },
+      {
+        "age_before_apm_us": 22103,
+        "host_ns": 68267645797124,
+        "processing_us": 67
+      },
+      {
+        "age_before_apm_us": 22096,
+        "host_ns": 68267655797333,
+        "processing_us": 102
+      },
+      {
+        "age_before_apm_us": 23105,
+        "host_ns": 68267665797541,
+        "processing_us": 91
+      },
+      {
+        "age_before_apm_us": 14053,
+        "host_ns": 68267675797749,
+        "processing_us": 67
+      }
+    ],
+    "capture_to_sdk_clock_target_ms": 25,
+    "capture_to_sdk_p95_ms_upper_bucket": 26,
+    "deadline_recoveries": 0,
+    "deadline_recovery_qualified": false,
+    "discarded_stale_capture_blocks": 0,
+    "enabled": true,
+    "first_capture_age_before_apm_us": 14126,
+    "full_monitor_reference_qualified": false,
+    "g1_complete": false,
+    "generation_history_capacity": 32,
+    "guest_monitor": {
+      "full_room_monitor_qualified": false,
+      "inbox": {
+        "accepted": 166,
+        "before_device_ready_rejected": 30,
+        "callback_contention_rejected": 0,
+        "capacity_blocks": 8,
+        "device_ready": false,
+        "generation": 2,
+        "max_age_ms": 30,
+        "old_generation_rejected": 0,
+        "overflow_rejected": 0,
+        "pending": 0,
+        "retired": 0,
+        "stale": 0,
+        "suspended": false,
+        "suspended_rejected": 0
+      },
+      "native": {
+        "capacity_blocks": 8,
+        "consumed": 165,
+        "gain": 0.2,
+        "max_age_ms": 80,
+        "overflow_rejected": 0,
+        "pending": 1,
+        "played_blocks": 165,
+        "queued": 166,
+        "silent_samples": 0,
+        "stale_or_generation_retired": 0
+      },
+      "progress": [
+        {
+          "at_ms": 0,
+          "inbox": {
+            "accepted": 0,
+            "before_device_ready_rejected": 30,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 1,
+            "max_age_ms": 30,
+            "old_generation_rejected": 0,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 0,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "played_blocks": 0,
+            "queued": 0,
+            "silent_samples": 0,
+            "stale_or_generation_retired": 0
+          }
+        },
+        {
+          "at_ms": 1000,
+          "inbox": {
+            "accepted": 100,
+            "before_device_ready_rejected": 30,
+            "callback_contention_rejected": 0,
+            "capacity_blocks": 8,
+            "device_ready": true,
+            "generation": 1,
+            "max_age_ms": 30,
+            "old_generation_rejected": 0,
+            "overflow_rejected": 0,
+            "pending": 0,
+            "retired": 0,
+            "stale": 0,
+            "suspended": false,
+            "suspended_rejected": 0
+          },
+          "native": {
+            "capacity_blocks": 8,
+            "consumed": 99,
+            "gain": 0.2,
+            "max_age_ms": 80,
+            "overflow_rejected": 0,
+            "pending": 1,
+            "played_blocks": 99,
+            "queued": 100,
+            "silent_samples": 0,
+            "stale_or_generation_retired": 0
+          }
+        }
+      ]
+    },
+    "handoff": {
+      "accepted": 144,
+      "adapter_queue_age_histogram_bins": 350,
+      "adapter_queue_age_p95_ms_upper_bucket": 11,
+      "adapter_queue_age_target_met": true,
+      "adapter_queue_age_target_ms": 30,
+      "capacity_blocks": 32,
+      "capture_clock_anchored": true,
+      "closed": true,
+      "deadline_missed": false,
+      "emitted": 143,
+      "faults": 0,
+      "maximum_adapter_queue_age_us": 10938,
+      "maximum_lateness_ms": 20,
+      "maximum_lateness_us": 1165,
+      "minimum_spacing_ms": 8,
+      "minimum_spacing_us": 8951,
+      "peak_pending": 2,
+      "pending": 0,
+      "retired_pending": 1,
+      "sdk_external_capture_timestamp_supported": false,
+      "sdk_internal_queue_ms": 0
+    },
+    "hardware_capture_used": true,
+    "input": "physical native I/O microphone",
+    "maximum_capture_apm_us": 320,
+    "maximum_capture_to_sdk_us": 26166,
+    "maximum_owner_tick_gap_us": 1309,
+    "maximum_reverse_apm_us": 331,
+    "maximum_sdk_capture_us": 45,
+    "maximum_video_capture_us": 0,
+    "native_lifecycle": {
+      "callbacks_active": 0,
+      "clipped_samples": 0,
+      "first_io_fault": {
+        "codes": "0 none; 1 timestamp/layout; 2 buffer; 3 timeline; 4 nonfinite sample; 5 post-render error; 6 configuration change",
+        "microphone": 0,
+        "speaker": 0
+      },
+      "format_or_timeline_errors": 0,
+      "maximum_tap_frames": {
+        "microphone": 512,
+        "speaker": 512
+      },
+      "microphone": {
+        "capacity": 32,
+        "consumed": 144,
+        "overflow": 0,
+        "pending_retired": 0,
+        "queued": 144
+      },
+      "monitor_after_stop": {
+        "consumed": 165,
+        "overflow_rejected": 0,
+        "partial_samples_retired": 352,
+        "pending_retired": 1,
+        "played_blocks": 165,
+        "queued": 166,
+        "silent_samples": 0,
+        "stale_or_generation_retired": 0
+      },
+      "owners_and_callback_state_retired": true,
+      "render_notifications_alive": 0,
+      "speaker": {
+        "capacity": 32,
+        "consumed": 146,
+        "overflow": 0,
+        "pending_retired": 0,
+        "queued": 146
+      },
+      "startup_quarantine": {
+        "duration_ms": 250,
+        "microphone_frames": 9728,
+        "scope": "I/O callback mode only; PCM before the fixed deadline is not recorded or processed",
+        "speaker_frames": 8704
+      }
+    },
+    "physical_aec_qualified": false,
+    "physical_microphone_published_to_loopback_only": true,
+    "physical_speaker_playout_used": true,
+    "processed": 144,
+    "publication_generations_retired": [],
+    "published": 143,
+    "publisher_effective_qos": 33,
+    "publisher_previous_qos": 21,
+    "publisher_qos_scope": "only this disposable thread; joined on shutdown, not a realtime-workgroup claim",
+    "publisher_timing_owner": "dedicated native absolute-wait loop",
+    "reference_scope": "selected remote guest-1 final native output; local microphone excluded",
+    "rejected_processed_blocks": 0,
+    "render_blocks": 146,
+    "sdk_aec_ns_agc": false,
+    "sdk_submission_unconfirmed_at_shutdown": false,
+    "video": "native built-in physical camera"
+  },
+  "capture_publisher_owner": {
+    "joined": true,
+    "named_thread": true,
+    "shutdown_ms": 0.021916
+  },
+  "consumer_stall_ms": 0,
+  "decoded_pcm_origin_handoff": {
+    "capacity_rejected": 0,
+    "capture_time_qualified": false,
+    "clock_domain": "remote sender-report NTP; no sender-to-local offset",
+    "fixture_clock_rate": 48000,
+    "obs_connected": false,
+    "online": true,
+    "sources": []
+  },
+  "duration_seconds": 30,
+  "g1_complete": false,
+  "lifecycle": [
+    {
+      "at_ms": 0,
+      "event": "subscribed",
+      "identity": "guest-1",
+      "sid": "TR_VCZ4VX6fLnuyKr"
+    },
+    {
+      "at_ms": 8,
+      "event": "subscribed",
+      "identity": "guest-1",
+      "sid": "TR_AMpErCtE4a6r5C"
+    }
+  ],
+  "livekit": "0.9.4",
+  "local_playout_clock_requested": false,
+  "native_publish_audio_internal_queue_ms": 0,
+  "obs_recorded_av_qualified": false,
+  "obs_recording": null,
+  "participants": [
+    {
+      "audio_bad_format": 0,
+      "audio_blocks": 197,
+      "audio_blocks_with_capture_timestamp": 0,
+      "audio_callback_to_consumer_p95_ms": 4.35,
+      "audio_pulses_ms": [],
+      "audio_queue": {
+        "callback_contention_dropped": 0,
+        "capacity_frames": 3,
+        "consumed": 197,
+        "max_age_ms": 30,
+        "overflow_oldest_dropped": 0,
+        "pending_frames": 1,
+        "received": 198,
+        "stale_dropped": 0
+      },
+      "audio_resampled_blocks": 196,
+      "audio_sample_discontinuities": 0,
+      "callback_av_abs_p95_ms": null,
+      "capture_timestamp_clock_domain": "WebRTC TimeMillis (unmapped to OBS)",
+      "capture_timestamp_regressions": 0,
+      "capture_timestamp_step_p95_ms": null,
+      "identity": "guest-1",
+      "original_audio_capture_timestamp_available": false,
+      "paired_callback_video_minus_audio_ms": [],
+      "retired_queues": [],
+      "video_callback_to_consumer_p95_ms": 7.969542,
+      "video_deadline_minus_arrival_p95_ms": 9.821417,
+      "video_frames": 33,
+      "video_frames_with_ntp_metadata": 0,
+      "video_local_deadline_invalid": 0,
+      "video_local_deadline_valid": 33,
+      "video_pulses_ms": [
+        956.651083
+      ],
+      "video_queue": {
+        "callback_contention_dropped": 0,
+        "capacity_frames": 2,
+        "consumed": 33,
+        "max_age_ms": 50,
+        "overflow_oldest_dropped": 0,
+        "pending_frames": 0,
+        "received": 33,
+        "stale_dropped": 0
+      }
+    }
+  ],
+  "physical_speaker_reference_connected": false,
+  "publisher_error": "Physical camera failed; inspect camera evidence",
+  "receiver_stats": [
+    {
+      "concealed_samples": 0,
+      "estimated_playout_presence_preserved": false,
+      "estimated_playout_timestamp_ms": 0.0,
+      "frames_dropped": 0,
+      "identity": "guest-1",
+      "inserted_samples_for_deceleration": 0,
+      "jitter_buffer_delay_seconds": 0.373004,
+      "jitter_buffer_emitted_count": 32,
+      "jitter_seconds": 0.0,
+      "kind": "video",
+      "packets_lost": 0,
+      "packets_received": 50,
+      "removed_samples_for_acceleration": 0,
+      "sid": "TR_VCZ4VX6fLnuyKr",
+      "ssrc": 3084919007
+    },
+    {
+      "concealed_samples": 0,
+      "estimated_playout_presence_preserved": false,
+      "estimated_playout_timestamp_ms": 0.0,
+      "frames_dropped": 0,
+      "identity": "guest-1",
+      "inserted_samples_for_deceleration": 1080,
+      "jitter_buffer_delay_seconds": 2486.4,
+      "jitter_buffer_emitted_count": 94080,
+      "jitter_seconds": 0.002,
+      "kind": "audio",
+      "packets_lost": 0,
+      "packets_received": 99,
+      "removed_samples_for_acceleration": 0,
+      "sid": "TR_AMpErCtE4a6r5C",
+      "ssrc": 3502715163
+    }
+  ],
+  "remote_sender_reports": [],
+  "rrtr_lab_experiment_requested": false,
+  "rtcp_exchange_probe": {
+    "logs_alive": 0,
+    "logs_created": 0,
+    "logs_destroyed": 0,
+    "peers": [],
+    "raw_packets_retained": false,
+    "registry_expired": true,
+    "scope": "factory event-log instances; one instance may cover multiple peer connections; factory lifetime extends beyond room close"
+  },
+  "schema_version": 1,
+  "sender_report_origin_maps": [
+    {
+      "audio_source_generation": null,
+      "clock_domain": "remote sender-report NTP; no sender-to-local clock offset established",
+      "fixture_clock_rate": 90000,
+      "identity": "guest-1",
+      "kind": "video",
+      "last_decoded_audio_origin_ntp_us": null,
+      "obs_connected": false,
+      "observations_only": true,
+      "rejected_reports": 0,
+      "resets": 0,
+      "sid": "TR_VCZ4VX6fLnuyKr",
+      "ssrc": 3084919007,
+      "two_report_map_available": false
+    },
+    {
+      "audio_source_generation": null,
+      "clock_domain": "remote sender-report NTP; no sender-to-local clock offset established",
+      "fixture_clock_rate": 48000,
+      "identity": "guest-1",
+      "kind": "audio",
+      "last_decoded_audio_origin_ntp_us": null,
+      "obs_connected": false,
+      "observations_only": true,
+      "rejected_reports": 0,
+      "resets": 0,
+      "sid": "TR_AMpErCtE4a6r5C",
+      "ssrc": 3502715163,
+      "two_report_map_available": false
+    }
+  ],
+  "signaling_url": "ws://127.0.0.1:7880",
+  "stall_period_seconds": 5,
+  "sync_streams_requested": true,
+  "timed_mixer_probe": {
+    "observations_only": true,
+    "registry_expired": true,
+    "sources": [],
+    "sources_alive": 0,
+    "sources_created": 0,
+    "sources_destroyed": 0
+  },
+  "topology": "local browser guests to native host through loopback SFU"
+}

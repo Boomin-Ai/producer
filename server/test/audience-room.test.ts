@@ -3,6 +3,14 @@ import { AudienceRoom } from '../src/audienceRoom';
 import { FakeState,FakeSocket } from './do';
 function setup(){const state=new FakeState();const controller=new AudienceRoom(state.storage,()=>state.getWebSockets(),url=>url.origin==='https://room.test');const host=state.attach('host',{publisherId:'native',audienceHost:true});const viewer=(id:string)=>state.attach(id,{audienceId:id,name:id});return {state,controller,host,viewer};}
 describe('interactive audience authority',()=>{
+  it('notifies the module bridge only after chat authorization and persistence',async()=>{
+    const state=new FakeState(),bridge=vi.fn(),room=new AudienceRoom(state.storage,()=>state.getWebSockets(),()=>false,bridge);
+    const host=state.attach('host',{publisherId:'host',audienceHost:true,roomId:'room-one'});await room.handle(host,{type:'audience.configure',enabled:true,direct_limit:4});
+    const viewer=state.attach('viewer',{audienceId:'one',name:'Viewer',roomId:'room-one'});await room.admit(viewer);await room.handle(viewer,{type:'audience.chat',text:'Check this claim'});
+    expect(bridge).toHaveBeenCalledTimes(1);expect(bridge.mock.calls[0][0]).toMatchObject({text:'Check this claim',name:'Viewer'});expect(bridge.mock.calls[0][1]).toBe('room-one');
+    await room.handle(viewer,{type:'audience.chat',text:'Too fast'});expect(bridge).toHaveBeenCalledTimes(1);
+  });
+
   it('routes moderator invitation requests to the active host and enforces admission permission',async()=>{
     const {controller,host,viewer,state}=setup();await controller.handle(host,{type:'audience.configure',enabled:true,direct_limit:1});
     const guest=viewer('viewer');await controller.admit(guest);

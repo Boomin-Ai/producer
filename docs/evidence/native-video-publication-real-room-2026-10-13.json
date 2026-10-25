@@ -1,0 +1,25 @@
+{
+  "scope": "Real native staging room startup with four automated browser guests",
+  "passed": false,
+  "production_release_ready": false,
+  "finding": "Video publication isolation did not prevent late captured audio from stopping the shared native owner. Guest admission conflicts occurred after the owner lost its active lease.",
+  "publisher_deadline_failures": 4,
+  "maximum_audio_late_us": 157106,
+  "maximum_capture_age_us": 552399,
+  "maximum_audio_call_us": 476,
+  "maximum_loop_gap_us": 2746,
+  "maximum_video_call_us": 145598,
+  "program_buffer_ms": 400,
+  "owner_stop_reason": "Native program capture or publication stopped",
+  "next_proof": "Identify capture callback delay and repeat real-room cleanup/rejoin before release signing.",
+  "retry": {
+    "all_four_admitted": true,
+    "all_four_off_stage": true,
+    "publisher_deadline_failures": 4,
+    "maximum_capture_age_us": 462776,
+    "maximum_audio_late_us": 68825,
+    "maximum_audio_call_us": 816,
+    "maximum_loop_gap_us": 7033,
+    "passed": false
+  }
+}

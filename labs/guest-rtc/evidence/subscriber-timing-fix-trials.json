@@ -1,0 +1,329 @@
+{
+  "control_runs": [
+    "generated-recovery-1791689373777632000",
+    "generated-recovery-1791689912496953000"
+  ],
+  "final_sfu_binary_sha256": "462b296c94efeca28e170ac18ca5b2fc1cdb65a8f896845f5f0e371eaca6c40e",
+  "runs": [
+    {
+      "run": "generated-recovery-1791690779942007000",
+      "variant": "intermediate: 500 ms admission trigger",
+      "conditions": "generated-recovery-1791690779942007000-conditions.json",
+      "sfu_binary_sha256": "6cc12cb5348b39061c18022777e658ee66fd4b295a7888fc075a8fdbb0ccedb0",
+      "recording_sha256": "5544652f5636620a83c66536c38064be498dac6db401dfa95c561e081c3d0de7",
+      "local_readiness_gate_passed": true,
+      "local_obs_acceptance_passed": false,
+      "output_epochs": [
+        {
+          "binding_since_us": 76274618242,
+          "recovery_started_us": 76274618242,
+          "superseded_binding_epochs": [],
+          "first_scheduled_ms": {
+            "audio": 745.766,
+            "video": 766.578
+          }
+        }
+      ],
+      "paired_markers": 17,
+      "absolute_marker_p95_ms": 63.33333333333212,
+      "missing_video_labels": [],
+      "unmatched_audio": 1,
+      "unmatched_video": 0
+    },
+    {
+      "run": "generated-recovery-1791690889077133000",
+      "variant": "intermediate: 500 ms admission trigger",
+      "conditions": "generated-recovery-1791690889077133000-conditions.json",
+      "sfu_binary_sha256": "6cc12cb5348b39061c18022777e658ee66fd4b295a7888fc075a8fdbb0ccedb0",
+      "recording_sha256": "2f5036af4cd6714d6bbe754ae1086a5f060c69e8122e1e3910a59641a54d523d",
+      "local_readiness_gate_passed": true,
+      "local_obs_acceptance_passed": false,
+      "output_epochs": [
+        {
+          "binding_since_us": 76376690769,
+          "recovery_started_us": 76376690769,
+          "superseded_binding_epochs": [],
+          "first_scheduled_ms": {
+            "audio": 749.514,
+            "video": 769.966
+          }
+        },
+        {
+          "binding_since_us": 76388735512,
+          "recovery_started_us": 76388735512,
+          "superseded_binding_epochs": [],
+          "first_scheduled_ms": {
+            "audio": 846.192,
+            "video": 856.245
+          }
+        }
+      ],
+      "paired_markers": 22,
+      "absolute_marker_p95_ms": 33.333333333343035,
+      "missing_video_labels": [
+        7
+      ],
+      "unmatched_audio": 1,
+      "unmatched_video": 0
+    },
+    {
+      "run": "generated-recovery-1791691382479726000",
+      "variant": "rejected: forwarding request swallowed by receiver views",
+      "conditions": "generated-recovery-1791691382479726000-conditions.json",
+      "sfu_binary_sha256": "1d8b26d534228eebdb17495b140395fd8b1f765690a19f64bd40cef2251121d3",
+      "recording_sha256": "0f21d08a3815998eedb7f1d043e672302f6ae55724a550a605024ed71234a02a",
+      "local_readiness_gate_passed": false,
+      "local_obs_acceptance_passed": false,
+      "output_epochs": [
+        {
+          "binding_since_us": 76871974156,
+          "first_scheduled_ms": {
+            "audio": 1251.426,
+            "video": 1313.164
+          }
+        },
+        {
+          "binding_since_us": 76884178905,
+          "first_scheduled_ms": {
+            "audio": 4589.139,
+            "video": 4608.081
+          }
+        }
+      ],
+      "paired_markers": 19,
+      "absolute_marker_p95_ms": 106.66666666666424,
+      "missing_video_labels": [
+        7,
+        8,
+        9
+      ],
+      "unmatched_audio": 0,
+      "unmatched_video": 0
+    },
+    {
+      "run": "generated-recovery-1791691914921806000",
+      "variant": "rejected: normalization did not resolve upgraded receiver views",
+      "conditions": "generated-recovery-1791691914921806000-conditions.json",
+      "sfu_binary_sha256": "a8775b29a9deacd56340ac2251c5f53a3bd651a89b362c3d731fca85a067e691",
+      "recording_sha256": "bd6943b47e29ccd808a762e79af8309a9850dab75bad76b6f58ff17e428c5b8d",
+      "local_readiness_gate_passed": false,
+      "local_obs_acceptance_passed": false,
+      "output_epochs": [
+        {
+          "binding_since_us": 77422664669,
+          "first_scheduled_ms": {
+            "audio": 3458.74,
+            "video": 3481.39
+          }
+        },
+        {
+          "binding_since_us": 77436407882,
+          "first_scheduled_ms": {
+            "audio": 3777.526,
+            "video": 3815.37
+          }
+        }
+      ],
+      "paired_markers": 13,
+      "absolute_marker_p95_ms": 130,
+      "missing_video_labels": [
+        6,
+        9,
+        10,
+        11,
+        12,
+        13
+      ],
+      "unmatched_audio": 2,
+      "unmatched_video": 0
+    },
+    {
+      "run": "generated-recovery-1791692891810109000",
+      "variant": "final: first-forward request through explicit receiver views",
+      "conditions": "generated-recovery-1791692891810109000-conditions.json",
+      "sfu_binary_sha256": "462b296c94efeca28e170ac18ca5b2fc1cdb65a8f896845f5f0e371eaca6c40e",
+      "recording_sha256": "e4d80e833cd059f5524bbb610be2ab61a4a4f0726c31cd6d2e742f34842d6387",
+      "local_readiness_gate_passed": false,
+      "local_obs_acceptance_passed": false,
+      "output_epochs": [
+        {
+          "binding_since_us": 78421449708,
+          "first_scheduled_ms": {
+            "audio": 213.586,
+            "video": 628.413
+          }
+        },
+        {
+          "binding_since_us": 78435188700,
+          "first_scheduled_ms": {
+            "audio": 1694.36,
+            "video": 1698.122
+          }
+        }
+      ],
+      "paired_markers": 12,
+      "absolute_marker_p95_ms": 126.66666666666788,
+      "missing_video_labels": [
+        10,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        24,
+        26
+      ],
+      "unmatched_audio": 4,
+      "unmatched_video": 1
+    },
+    {
+      "run": "generated-recovery-1791693163493847000",
+      "variant": "final: repeated single guest full rebuild",
+      "conditions": "generated-recovery-1791693163493847000-conditions.json",
+      "sfu_binary_sha256": "462b296c94efeca28e170ac18ca5b2fc1cdb65a8f896845f5f0e371eaca6c40e",
+      "recording_sha256": "fb15181a2123f925575d0e2fe3450ac7e9d840563ba3b6f179c6bacad352fa99",
+      "local_readiness_gate_passed": true,
+      "local_obs_acceptance_passed": false,
+      "output_epochs": [
+        {
+          "binding_since_us": 78658738197,
+          "recovery_started_us": 78658738197,
+          "superseded_binding_epochs": [],
+          "first_scheduled_ms": {
+            "audio": 410.925,
+            "video": 431.792
+          }
+        },
+        {
+          "binding_since_us": 78670808110,
+          "recovery_started_us": 78670808110,
+          "superseded_binding_epochs": [],
+          "first_scheduled_ms": {
+            "audio": 586.889,
+            "video": 589.336
+          }
+        }
+      ],
+      "paired_markers": 18,
+      "absolute_marker_p95_ms": 43.33333333333303,
+      "missing_video_labels": [
+        9,
+        10,
+        11,
+        16
+      ],
+      "unmatched_audio": 3,
+      "unmatched_video": 0
+    },
+    {
+      "run": "generated-recovery-1791693336449804000",
+      "variant": "final: three guests and three full rebuilds",
+      "conditions": "generated-recovery-1791693336449804000-conditions.json",
+      "sfu_binary_sha256": "462b296c94efeca28e170ac18ca5b2fc1cdb65a8f896845f5f0e371eaca6c40e",
+      "recording_sha256": "9b69c1c42dd5cecbe0be8f49f21140d731483b927b21ecd0b01c9d29196899ca",
+      "local_readiness_gate_passed": true,
+      "local_obs_acceptance_passed": false,
+      "output_epochs": [
+        {
+          "binding_since_us": 78850357304,
+          "recovery_started_us": 78850357304,
+          "superseded_binding_epochs": [],
+          "first_scheduled_ms": {
+            "audio": 106.702,
+            "video": 412.491
+          }
+        },
+        {
+          "binding_since_us": 78863355341,
+          "recovery_started_us": 78863355341,
+          "superseded_binding_epochs": [],
+          "first_scheduled_ms": {
+            "audio": 488.277,
+            "video": 641.248
+          }
+        },
+        {
+          "binding_since_us": 78904972566,
+          "recovery_started_us": 78904807601,
+          "superseded_binding_epochs": [
+            78904807601
+          ],
+          "first_scheduled_ms": {
+            "audio": 878.248,
+            "video": 904.273
+          }
+        },
+        {
+          "binding_since_us": 78943746520,
+          "recovery_started_us": 78943117593,
+          "superseded_binding_epochs": [
+            78943117593
+          ],
+          "first_scheduled_ms": {
+            "audio": 848.929,
+            "video": 850.498
+          }
+        }
+      ],
+      "paired_markers": 51,
+      "absolute_marker_p95_ms": 106.66666666666788,
+      "missing_video_labels": [
+        18,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        45,
+        47,
+        58,
+        62,
+        68
+      ],
+      "unmatched_audio": 6,
+      "unmatched_video": 3
+    },
+    {
+      "run": "generated-recovery-1791693744194983000",
+      "variant": "final: default runner baseline",
+      "conditions": "generated-recovery-1791693744194983000-conditions.json",
+      "sfu_binary_sha256": "462b296c94efeca28e170ac18ca5b2fc1cdb65a8f896845f5f0e371eaca6c40e",
+      "recording_sha256": "a7899caf464a327d38c7d01fda08f1f94f9245e2134d60ca357e9aff5c7ff32b",
+      "local_readiness_gate_passed": true,
+      "local_obs_acceptance_passed": false,
+      "output_epochs": [
+        {
+          "binding_since_us": 79244517726,
+          "recovery_started_us": 79244485025,
+          "superseded_binding_epochs": [
+            79244485025
+          ],
+          "first_scheduled_ms": {
+            "audio": 560.68,
+            "video": 603.299
+          }
+        }
+      ],
+      "paired_markers": 11,
+      "absolute_marker_p95_ms": 106.66666666666788,
+      "missing_video_labels": [
+        8,
+        9,
+        10,
+        17,
+        20
+      ],
+      "unmatched_audio": 3,
+      "unmatched_video": 1
+    }
+  ],
+  "stall_fix_scope": "Fresh publisher audio timing after forwarding begins on each new downtrack. Provisional local output readiness includes all preceding partial pair resets.",
+  "limits": "One final single-guest run exceeded total output readiness due late native track binding despite early sender reports. Recording sync/loss gates still fail. No managed LiveKit, WAN, sustained 5-hour, capture-clock, or production qualification.",
+  "g1_complete": false,
+  "production_changed": false
+}

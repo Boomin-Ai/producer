@@ -1,0 +1,15 @@
+{
+  "variant": "candidate",
+  "sfu_binary_sha256": "09d100f23cd3377edb8acb90496d63ed95a590b8524d6b33061bf9108fb31c09",
+  "native_binary_sha256": "70fca232e2824d6c79e063ee61cdd62fe5107b781288f6922adbba5778d76cf9",
+  "status": "completed",
+  "guests": 1,
+  "mode": "republish",
+  "seconds": 30,
+  "packet_profile": "audio-jitter",
+  "report_interval_ms": 250,
+  "delayed_request_ms": 500,
+  "generated_batched_capture_handoff": false,
+  "physical_speaker_playout_used": false,
+  "g1_complete": false
+}

@@ -51,7 +51,7 @@ function roomStateStub(env: Env, roomId: string): DurableObjectStub {
 }
 
 /** Call the DO and translate its error envelope back into an ApiError. */
-async function roomStateCall<T>(env: Env, roomId: string, path: string, init?: RequestInit): Promise<T> {
+export async function roomStateCall<T>(env: Env, roomId: string, path: string, init?: RequestInit): Promise<T> {
   const res = await roomStateStub(env, roomId).fetch(`https://do${path}`, init);
   const body = (await res.json().catch(() => null)) as (T & { error?: { code: string; message: string } }) | null;
   if (!res.ok) {
@@ -267,7 +267,7 @@ interactionConnectRoutes.post("/audience/:code/token", async (c) => {
   );
 });
 
-async function audienceClaims(c: { req: { header(n: string): string | undefined } }, env: Env) {
+export async function audienceClaims(c: { req: { header(n: string): string | undefined } }, env: Env) {
   const header = c.req.header("Authorization") ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
   if (!env.SIGNALING_SECRET) throw new ApiError(503, "realtime_unavailable", "SIGNALING_SECRET is not configured.");

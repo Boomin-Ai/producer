@@ -1,0 +1,66 @@
+{
+  "local_obs_acceptance_passed": true,
+  "failure_reasons": [],
+  "local_delivery_worker_gate_passed": true,
+  "delivery_worker_failure_reasons": [],
+  "local_readiness_gate_passed": true,
+  "readiness_failure_reasons": [],
+  "binding_epochs": [
+    {
+      "binding_since_us": 14403436302,
+      "recovery_started_us": 14403407703,
+      "superseded_binding_epochs": [
+        14403407703,
+        14403430698
+      ],
+      "first_scheduled_ms": {
+        "audio": 528.703,
+        "video": 545.76
+      }
+    },
+    {
+      "binding_since_us": 14415842922,
+      "recovery_started_us": 14415759507,
+      "superseded_binding_epochs": [
+        14415759507,
+        14415759559,
+        14415841243
+      ],
+      "first_scheduled_ms": {
+        "audio": 657.58,
+        "video": 665.001
+      }
+    },
+    {
+      "binding_since_us": 14455854319,
+      "recovery_started_us": 14455770934,
+      "superseded_binding_epochs": [
+        14455770934,
+        14455771011,
+        14455852783
+      ],
+      "first_scheduled_ms": {
+        "audio": 583.837,
+        "video": 583.908
+      }
+    }
+  ],
+  "raw_binding_epoch_count": 11,
+  "superseded_binding_epochs": [
+    14403407703,
+    14403430698,
+    14415759507,
+    14415759559,
+    14415841243,
+    14455770934,
+    14455771011,
+    14455852783
+  ],
+  "unfinished_binding_epochs": [],
+  "expected_binding_epochs": 3,
+  "readiness_budget_ms": 1500,
+  "budget_scope": "prototype local recovery from earliest pending reset, not WAN service guarantee",
+  "startup_and_tail_loss_qualified": false,
+  "lip_sync_qualified": false,
+  "g1_complete": false
+}

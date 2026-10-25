@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const {chromium}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??'/private/tmp/producer-sets-v2-browser/node_modules/playwright-core/index.mjs');
+const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
+try{
+ const page=await browser.newPage({viewport:{width:1440,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:1436/');
+ await page.evaluate(async()=>{
+  const R=await import('/node_modules/.vite/deps/react.js'),D=await import('/node_modules/.vite/deps/react-dom_client.js');const React=R.default??R;
+  const {SetControlsPanel}=await import('/src/features/presentation/SetControlsPanel.tsx');const {SIGNAL_DESK}=await import('/src/features/presentation/fixtures.ts');const source=await(await fetch('/src/features/presentation/SetControlsPanel.tsx')).text();const {RehearsalSession}=await import(source.match(/from "([^"]*rehearsal\.ts[^"]*)"/)[1]);
+  const saved={...structuredClone(SIGNAL_DESK),id:'saved-desk',name:'Saved newsroom'};window.configCalls=[];window.savedPackage=JSON.stringify(saved);
+  window.__TAURI_INTERNALS__={transformCallback:()=>1,invoke:async(cmd,args)=>{window.configCalls.push({cmd,args});if(cmd==='set_library_list')return [{file:'saved.json',id:saved.id,name:saved.name}];if(cmd==='set_library_read')return JSON.stringify(saved);return null;}};window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};
+  function Harness(){const [session,setSession]=React.useState(()=>new RehearsalSession(saved,undefined,'prepare'));const[auto,setAuto]=React.useState(true);return React.createElement(SetControlsPanel,{session,onChange:doc=>setSession(new RehearsalSession(doc,undefined,'prepare')),output:{renderer:'native',selectToShow:auto,setSelectToShow:setAuto,active:false,busy:false,error:'',bindings:{},framing:{},sources:{items:[]},bind:()=>{},frame:()=>{},apply:async()=>{},returnToRoom:async()=>true}});}
+  const host=document.createElement('div');host.style.cssText='height:900px;width:100%';document.body.replaceChildren(host);(D.createRoot??D.default.createRoot)(host).render(React.createElement(Harness));
+ });
+ assert.equal(await page.getByRole('combobox',{name:'Choose set',exact:true}).count(),0);
+ await page.getByRole('button',{name:'Set settings',exact:true}).click();let editor=page.locator('.set-preview-dialog[open]');const toolbar=editor.getByRole('toolbar',{name:'Set configuration'});await toolbar.waitFor();
+ const placement=await editor.evaluate(el=>{const bar=el.querySelector('.set-configuration').getBoundingClientRect(),main=el.querySelector('.set-editor-layout').getBoundingClientRect();return {above:bar.bottom<=main.top,left:bar.left===main.left,width:bar.width>=main.width-1,insideSegment:!!el.querySelector('.set-editor-controls .set-configuration')};});assert(placement.above&&placement.left&&placement.width&&!placement.insideSegment);
+ assert.equal(await editor.locator('.set-preview-dialog-content > header').count(),0,'picker replaces repeated title header');
+ const chooser=toolbar.getByRole('combobox',{name:'Choose set'});await chooser.click();assert.equal(await page.getByRole('option',{name:'Signal Desk',exact:true}).count(),0);assert.equal(await page.getByRole('option',{name:'After Hours',exact:true}).count(),0);await page.getByRole('option',{name:'Head to Head — The Grand Arena',exact:true}).click();await chooser.filter({hasText:'The Grand Arena'}).waitFor();assert.equal(await editor.count(),1);
+ await chooser.click();await page.getByRole('searchbox',{name:'Search sets'}).fill('newsroom');await page.waitForFunction(()=>document.querySelectorAll('.set-picker-list [role=option]').length===1);await page.keyboard.press('Enter');await chooser.filter({hasText:'Saved newsroom'}).waitFor();
+ await chooser.click();
+ const pickerStyle=await page.locator('.set-picker-menu:popover-open').evaluate(el=>({background:getComputedStyle(el).backgroundColor,font:getComputedStyle(el).fontSize}));assert(!pickerStyle.background.includes('rgba'));assert.equal(pickerStyle.font,'12px');
+ await page.waitForFunction(()=>document.querySelectorAll('.set-picker-menu:popover-open .set-choice-thumbnail-canvas').length>=2);
+ await page.screenshot({path:'/private/tmp/producer-set-picker-refined.png'});
+ await page.keyboard.press('Escape');assert.equal(await editor.count(),1);await page.waitForFunction(()=>document.querySelector('[role=combobox][aria-label="Choose set"]').getAttribute('aria-expanded')==='false');
+ await toolbar.getByRole('button',{name:'Set options',exact:true}).click();const options=editor.locator('.set-configuration-popover:popover-open');await options.waitFor();assert.equal(await options.getByRole('checkbox').count(),0,'private editor selection never auto-takes');await options.getByText('Advanced',{exact:true}).click();assert(await options.getByRole('button',{name:'Reload saved set'}).isVisible());assert(await options.getByRole('button',{name:'Edit set with agent',exact:true}).isVisible());await toolbar.getByRole('button',{name:'Set options',exact:true}).click();
+ await toolbar.getByRole('button',{name:'Files',exact:false}).click();await toolbar.getByRole('button',{name:'Export set',exact:true}).click();assert.equal(await page.locator('dialog[open]').count(),2);await page.keyboard.press('Escape');assert.equal(await editor.count(),1);
+ await toolbar.getByRole('button',{name:'Files',exact:false}).click();await toolbar.getByRole('button',{name:'Media assets',exact:true}).click();const media=page.getByRole('dialog',{name:'Set media assets',exact:true});await media.waitFor();await media.getByRole('button',{name:'Close',exact:true}).click();assert.equal(await editor.count(),1);
+ await editor.getByLabel('Import set package').setInputFiles({name:'invalid.json',mimeType:'application/json',buffer:Buffer.from('{bad')});await editor.getByRole('alert').waitFor();assert.equal(await editor.count(),1);
+ const saved=await page.evaluate(()=>window.savedPackage);await editor.getByLabel('Import set package').setInputFiles({name:'saved.json',mimeType:'application/json',buffer:Buffer.from(saved)});await page.waitForTimeout(100);assert(await page.evaluate(()=>window.configCalls.some(c=>c.cmd==='set_library_save')));
+ await page.screenshot({path:'/private/tmp/producer-set-configuration-toolbar.png'});assert.deepEqual(errors,[]);
+ assert(!fs.readFileSync('src/views/Live.tsx','utf8').includes('<SetMenu'));
+ console.log('PASS: one panel launcher opens full-width configuration toolbar; Grand Arena replaces retired builtins; saved selection stays in editor; preferences, export and import work; no room-header selector');
+}finally{await browser.close();}

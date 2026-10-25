@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "scope": "isolated native OBS / LiveKit G1 fixture; production unchanged",
+  "packet_impairment_verified": true,
+  "g1_complete": false,
+  "observed_marker_target_ms": 80,
+  "classifier": "fixture-negotiated RTP PT111 Opus; other RTP treated as video; control traffic unchanged",
+  "impairment_legs_per_browser_to_native_path": 2,
+  "profiles": {
+    "video-jitter": "20\u2013119 ms delay and approximately 2% loss per relay leg, video only",
+    "audio-jitter": "20\u201379 ms delay and approximately 2% loss per relay leg, audio only",
+    "hard-loss": "all RTP dropped; STUN/DTLS/RTCP forwarded"
+  },
+  "runs": [
+    {
+      "name": "transport-packet-baseline",
+      "evidence_sha256": {
+        "transport-packet-baseline.json": "4d91904d61585f96b679a6157911ee09461a8d947793997af6435097256307aa",
+        "transport-packet-baseline-browser.json": "d1c1c47119775e7a9eb4a8fa4de58187799e2097225e29a0a562f8a54b815957",
+        "transport-packet-baseline-packet.json": "30b43aaba74b596641d7d21f05e0fb0bce3641267dc7cb4a583b5f80a5ab00ab"
+      }
+    },
+    {
+      "name": "transport-packet-hard-loss",
+      "evidence_sha256": {
+        "transport-packet-hard-loss.json": "f5d179827d9902d9e96ee3462b2c0e3243cd4efe51118c585df55233c052f0bb",
+        "transport-packet-hard-loss-browser.json": "49fd79b0101939268ae85c86f0a7f9fd8d9528a3e3db8a9dc2156bfc004ba084",
+        "transport-packet-hard-loss-packet.json": "ae61d480aac7cb0d7d7b1a8856cd260539ce76beef9b9fec8ac52f79377e4c8b"
+      }
+    },
+    {
+      "name": "transport-obs-packet-video",
+      "evidence_sha256": {
+        "transport-obs-packet-video.json": "76575e95df6161c903e10a408ab15455d50269b9f48a53dfdade752a7cab9a4d",
+        "transport-obs-packet-video-browser.json": "3fe6629f0e8bdfa741de1e0d7e92e612661abdebb6bb397fbd4a4817fac01ad3",
+        "transport-obs-packet-video-packet.json": "85ea163fa2f8e57e0fd75cf2d1d5a61afb011ac95a8f6bd52f71150b9ff83b71",
+        "obs-packet-video-markers.json": "2556b6d51d0df19dd2a839d5cf7b6fe02dc2c5b3eab35dd0c2af10cdc15ffb74"
+      },
+      "recording_sha256": "aae6ca8fa978a1f935a779cc2f2c81cb9c1ea5a71f7cfe75b696a53728682c5b"
+    },
+    {
+      "name": "transport-obs-packet-audio",
+      "evidence_sha256": {
+        "transport-obs-packet-audio.json": "31217444d05bcb781c9b543026803e88a1844cd7c9dffac1ab27c0ff873849eb",
+        "transport-obs-packet-audio-browser.json": "edde52fc2da4715d4b98c23dd0c2e8bbe1e3fdea34e18fce6a6e4339ef5eb584",
+        "transport-obs-packet-audio-packet.json": "bc781b68233f9683b742b67988405b01ce0248acee36def14e6b485cf8dca665",
+        "obs-packet-audio-markers.json": "e71ad4f28ce45a498e46e5d10fe1044ffd4642ae607c2d5a1233c8b421bfd5b3"
+      },
+      "recording_sha256": "ec0cbf216e4f3cf1552fe4a7c99f95a612e2eb7a6c6299b27d5f3f925bc14bc4"
+    },
+    {
+      "name": "transport-obs-packet-churn",
+      "evidence_sha256": {
+        "transport-obs-packet-churn.json": "16cfa223c1a8c412e329d3e3f43a322235ab8a191239f716091bfd07b3f33c0b",
+        "transport-obs-packet-churn-browser.json": "a391b9895e36103efabc81f96969e08dbf5857e5f9c0dda58130b590b9180af0",
+        "transport-obs-packet-churn-packet.json": "9bcad6fb7ae38cb4af6043d4f5b139f039d3d795fa3e1427424be898affce821",
+        "obs-packet-churn-markers.json": "dd5f9c8d4ec93bd91d8dc5bb67eaa5c791bbe1fe9e88283d26bdea7301c73661"
+      },
+      "recording_sha256": "aa876ce6c648583b021d917574957830f19b74ace7837021f4a98c41885e05be"
+    },
+    {
+      "name": "transport-obs-packet-lifecycle-v2",
+      "evidence_sha256": {
+        "transport-obs-packet-lifecycle-v2.json": "97bb181c27c5c171cc03f44f7212534b53f18f3193658fbe6add27f09aa24f90",
+        "transport-obs-packet-lifecycle-v2-browser.json": "7ad4e83f6d2e068ba47b102eead21a1fc5826e4eeedaad260a21f59dbe54fd34",
+        "transport-obs-packet-lifecycle-v2-packet.json": "d4af3955cecca2cbd3870d941fda4c5134f1366d8b11d68439741232aa4a0639",
+        "obs-packet-lifecycle-v2-markers.json": "ca27c33483b14c40dbc1b8b8f409bacfcb24feb9930415cef5cb3ac32d806370"
+      },
+      "recording_sha256": "f6cd0d02a275d54e0151beed4c7bef415076d1850b2b74d20269f7ee6361cbd5"
+    },
+    {
+      "name": "transport-obs-packet-accounting",
+      "evidence_sha256": {
+        "transport-obs-packet-accounting.json": "317df8f3072161e9c59104ad02d7c30d09046b8c26cdc6f765f18b134f84e129",
+        "transport-obs-packet-accounting-browser.json": "6944dadc380d403d56babe355166b1dd11ee2736863f703f986c1541dde51e03",
+        "transport-obs-packet-accounting-packet.json": "dc6f689ff3010b14c4bf5d756e832ca453a0cc633b5015c9c6f0887eb375ec46",
+        "obs-packet-accounting-markers.json": "1886fdaf335ef62ddf0729cb0e6dc7d648e89a270045671507a372f7ae60c387"
+      },
+      "recording_sha256": "3310b4f983755d24f9e2377571c8608f47a82a121f0133f5b68236eeb3615b4f"
+    }
+  ],
+  "accounting_verification": "ingest-accounting-verification.json",
+  "limitations": [
+    "Short synthetic marker runs, not speech or physical AEC qualification",
+    "Per-frame audio origin/playout timing still unavailable in the current raw sink",
+    "Application worker cleanup verified; SDK/device resources and privacy flush remain unqualified",
+    "Loopback relay impairment is not an Internet/TURN field trial"
+  ]
+}

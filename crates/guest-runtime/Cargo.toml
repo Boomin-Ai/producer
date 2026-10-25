@@ -1,0 +1,33 @@
+[package]
+name = "producer-guest-runtime"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "AGPL-3.0-only"
+
+[features]
+obs-proof = []
+
+[dependencies]
+producer-guest-session = { path = "../guest-session" }
+livekit = { version = "=0.9.4", default-features = false, features = ["native", "rustls-tls-native-roots"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = "1"
+webrtc-sys = "=0.3.48"
+cxx = "1.0"
+
+[patch.crates-io]
+webrtc-sys = { path = "../../labs/guest-rtc/vendor/webrtc-sys" }
+libwebrtc = { path = "../../labs/guest-rtc/vendor/libwebrtc" }
+
+[profile.dev]
+debug = 0
+incremental = false
+
+[dev-dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }

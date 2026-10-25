@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-25T06:00:52.647Z",
+  "scope": "Actual managed weather connection → Open-Meteo → local Worker → durable Atmosphere module",
+  "provider": "Open-Meteo",
+  "location": "Atlanta",
+  "units": "fahrenheit",
+  "condition": "clear",
+  "temperature": 53.2,
+  "dataStatus": "fresh"
+}

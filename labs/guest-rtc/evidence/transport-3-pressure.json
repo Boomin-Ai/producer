@@ -1,0 +1,247 @@
+{
+  "callback_timestamps_are_capture_timestamps": false,
+  "consumer_stall_ms": 200,
+  "duration_seconds": 25,
+  "g1_complete": false,
+  "lifecycle": [
+    {
+      "at_ms": 2079,
+      "event": "subscribed",
+      "identity": "guest-1"
+    },
+    {
+      "at_ms": 2341,
+      "event": "subscribed",
+      "identity": "guest-1"
+    },
+    {
+      "at_ms": 2675,
+      "event": "subscribed",
+      "identity": "guest-2"
+    },
+    {
+      "at_ms": 2910,
+      "event": "subscribed",
+      "identity": "guest-2"
+    },
+    {
+      "at_ms": 3291,
+      "event": "subscribed",
+      "identity": "guest-3"
+    },
+    {
+      "at_ms": 3481,
+      "event": "subscribed",
+      "identity": "guest-3"
+    }
+  ],
+  "livekit": "0.9.4",
+  "native_publish_audio_internal_queue_ms": 0,
+  "obs_recorded_av_qualified": false,
+  "participants": [
+    {
+      "audio_bad_format": 0,
+      "audio_blocks": 2128,
+      "audio_callback_to_consumer_p95_ms": 8.458,
+      "audio_pulses_ms": [
+        3066.8635000000004,
+        5175.8790420000005,
+        7135.518458,
+        9135.5355,
+        11134.749958,
+        13094.476,
+        15174.921083,
+        17095.009707999998,
+        19093.905875,
+        21075.497917,
+        23074.321042
+      ],
+      "audio_queue": {
+        "callback_contention_dropped": 0,
+        "capacity_frames": 3,
+        "max_age_ms": 30,
+        "overflow_oldest_dropped": 79,
+        "received": 2210,
+        "stale_dropped": 1
+      },
+      "audio_sample_discontinuities": 6,
+      "callback_av_abs_p95_ms": 86.82158299999901,
+      "identity": "guest-2",
+      "original_audio_capture_timestamp_available": false,
+      "paired_callback_video_minus_audio_ms": [
+        -17.593708000000333,
+        -83.85229100000015,
+        -86.82158299999901,
+        -76.88741599999958,
+        -46.846166999999696,
+        -10.226874999998472,
+        -33.11679099999674,
+        -48.42479200000162,
+        -21.083999999998923,
+        -28.161834000002273
+      ],
+      "video_callback_to_consumer_p95_ms": 9.546875,
+      "video_frames": 584,
+      "video_frames_with_ntp_metadata": 0,
+      "video_pulses_ms": [
+        3049.269792,
+        7051.666166999999,
+        9048.713917000001,
+        11057.862542,
+        13047.629833,
+        15164.694208,
+        17061.892917,
+        19045.481083,
+        21054.413917,
+        23046.159207999997
+      ],
+      "video_queue": {
+        "callback_contention_dropped": 0,
+        "capacity_frames": 2,
+        "max_age_ms": 50,
+        "overflow_oldest_dropped": 14,
+        "received": 601,
+        "stale_dropped": 3
+      }
+    },
+    {
+      "audio_bad_format": 0,
+      "audio_blocks": 2185,
+      "audio_callback_to_consumer_p95_ms": 8.502374999999999,
+      "audio_pulses_ms": [
+        2343.899958,
+        4354.643958,
+        6385.449958,
+        8385.090124999999,
+        10385.073917,
+        12373.78975,
+        14375.0605,
+        16375.631958,
+        18374.718583,
+        20334.716333,
+        22335.508792,
+        24334.489917
+      ],
+      "audio_queue": {
+        "callback_contention_dropped": 0,
+        "capacity_frames": 3,
+        "max_age_ms": 30,
+        "overflow_oldest_dropped": 79,
+        "received": 2267,
+        "stale_dropped": 1
+      },
+      "audio_sample_discontinuities": 6,
+      "callback_av_abs_p95_ms": 80.59845899999891,
+      "identity": "guest-1",
+      "original_audio_capture_timestamp_available": false,
+      "paired_callback_video_minus_audio_ms": [
+        -26.004624999999578,
+        -37.86354100000062,
+        -23.172041999998328,
+        -80.59845899999891,
+        -41.85533300000134,
+        -45.097249999998894,
+        -68.31058299999859,
+        -20.88887500000419,
+        -33.837625000000116,
+        -3.7712500000016007,
+        -5.8223749999961
+      ],
+      "video_callback_to_consumer_p95_ms": 9.719833000000001,
+      "video_frames": 579,
+      "video_frames_with_ntp_metadata": 0,
+      "video_pulses_ms": [
+        4328.639333,
+        6347.5864169999995,
+        8361.918083,
+        10304.475458,
+        12331.934416999999,
+        14329.96325,
+        16307.321375000001,
+        18353.829707999997,
+        20300.878708,
+        22331.737542,
+        24328.667542000003
+      ],
+      "video_queue": {
+        "callback_contention_dropped": 0,
+        "capacity_frames": 2,
+        "max_age_ms": 50,
+        "overflow_oldest_dropped": 14,
+        "received": 597,
+        "stale_dropped": 3
+      }
+    },
+    {
+      "audio_bad_format": 0,
+      "audio_blocks": 2071,
+      "audio_callback_to_consumer_p95_ms": 8.415833,
+      "audio_pulses_ms": [
+        3516.871917,
+        5535.14875,
+        7575.599833,
+        9575.898167,
+        11575.705042,
+        13573.884708,
+        15573.797917,
+        17575.696167000002,
+        19553.957707999998,
+        21555.171042,
+        23553.727042
+      ],
+      "audio_queue": {
+        "callback_contention_dropped": 0,
+        "capacity_frames": 3,
+        "max_age_ms": 30,
+        "overflow_oldest_dropped": 79,
+        "received": 2153,
+        "stale_dropped": 1
+      },
+      "audio_sample_discontinuities": 6,
+      "callback_av_abs_p95_ms": 73.15058300000055,
+      "identity": "guest-3",
+      "original_audio_capture_timestamp_available": false,
+      "paired_callback_video_minus_audio_ms": [
+        -17.207749999999578,
+        -20.289708000000246,
+        -48.20533300000079,
+        -56.86291699999856,
+        -22.711999999999534,
+        -73.15058300000055,
+        -56.08870899999965,
+        -50.7367090000007,
+        -49.46770799999649,
+        -20.14375000000291,
+        -53.6217089999991
+      ],
+      "video_callback_to_consumer_p95_ms": 9.646458,
+      "video_frames": 596,
+      "video_frames_with_ntp_metadata": 0,
+      "video_pulses_ms": [
+        3499.6641670000004,
+        5514.859042,
+        7527.394499999999,
+        9519.03525,
+        11552.993042,
+        13500.734124999999,
+        15517.709208,
+        17524.959458,
+        19504.49,
+        21535.027292,
+        23500.105333
+      ],
+      "video_queue": {
+        "callback_contention_dropped": 0,
+        "capacity_frames": 2,
+        "max_age_ms": 50,
+        "overflow_oldest_dropped": 16,
+        "received": 616,
+        "stale_dropped": 3
+      }
+    }
+  ],
+  "physical_speaker_reference_connected": false,
+  "schema_version": 1,
+  "stall_period_seconds": 5,
+  "topology": "local browser guests to native host through loopback SFU"
+}

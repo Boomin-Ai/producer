@@ -1,0 +1,22 @@
+import os from 'node:os';
+import path from 'node:path';
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const env=Object.fromEntries(fs.readFileSync(path.join(os.homedir(),'Library/Application Support/ai.boomin.producer.sets-v2-dev/local-workspace/workspace.env'),'utf8').trim().split('\n').map(l=>{const n=l.indexOf('=');return [l.slice(0,n),l.slice(n+1)];}));
+const base='http://127.0.0.1:8795';
+async function call(path,body,token=env.PRIMARY_TOKEN){const response=await fetch(base+path,{headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(body?{method:'POST',body:JSON.stringify(body)}:{})});const result=await response.json();assert(response.ok,`${path}: ${response.status} ${result.error?.message??''}`);return result;}
+const {room}=await call('/v1/app/live/rooms',{title:'Sets v2 · Audience proof',external_ref:'sets-v2-audience-proof'});
+await call(`/v1/app/live/rooms/${room.id}/guests`);
+const link=await call(`/v1/app/live/rooms/${room.id}/audience-link`,{}),{token}=await call(`/v1/connect/audience/${link.code}/token`,{device_id:'sets-v2-browser-proof'});
+const doc=JSON.parse(fs.readFileSync('docs/shows/decision-room.json','utf8')),root=`/v1/app/live/rooms/${room.id}/set-runtime`,old=await call(root);
+let reply=await call(root,{deployment:'audience-'+crypto.randomUUID(),definition:doc.runtime,expectedEpoch:old.snapshot?.setEpoch??0});
+const command=(op,input={})=>({id:crypto.randomUUID(),setEpoch:reply.snapshot.setEpoch,module:'decision',epoch:reply.snapshot.modules.decision.epoch,op,input});
+for(const op of ['start','publish','open'])reply=await call(root+'/commands',{command:command(op)});
+const publicPath='/v1/connect/audience/set-runtime/state';let audience=await call(publicPath,undefined,token);assert.equal(audience.snapshot.modules[0].vote.results,null);
+const vote=await call('/v1/connect/audience/set-runtime/commands',{command:command('vote',{round:1,choice:'opportunity'})},token);assert.equal(vote.result.status,'committed');assert(!vote.snapshot);
+const duplicate=await call('/v1/connect/audience/set-runtime/commands',{command:command('vote',{round:1,choice:'disruption'})},token);assert.equal(duplicate.result.status,'rejected');
+const escalation=await call('/v1/connect/audience/set-runtime/commands',{command:command('reset')},token);assert.equal(escalation.result.status,'rejected');
+for(const op of ['close','reveal'])reply=await call(root+'/commands',{command:command(op)});
+audience=await call(publicPath,undefined,token);assert.equal(audience.snapshot.modules[0].vote.results.total,1);assert(!JSON.stringify(audience).includes('ballots'));
+const report={scope:'Actual local Worker + RoomState durable object + signed audience token HTTP routes',at:new Date().toISOString(),publishedPanel:true,voteCounted:true,duplicateRejected:true,authorityEscalationRejected:true,resultsHiddenUntilReveal:true,publicContainsNoBallotIdentity:true};
+fs.writeFileSync('docs/set-runtime/audience-managed-proof.json',JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report));

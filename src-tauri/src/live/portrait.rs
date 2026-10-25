@@ -202,6 +202,11 @@ pub struct Portrait {
     needs_prewarm: bool,
 }
 impl Portrait {
+    pub unsafe fn native_room(&mut self) -> (*mut ffi::obs_scene_t, u32, u32) {
+        self.room();
+        (self.room_scene, self.width, self.height)
+    }
+
     pub unsafe fn create() -> Result<Self, String> {
         let mut info: std::mem::MaybeUninit<ffi::obs_video_info> = std::mem::MaybeUninit::zeroed();
         if !ffi::obs_get_video_info(info.as_mut_ptr()) {
@@ -476,9 +481,9 @@ impl Portrait {
         mut request: Request,
         captures: HashMap<String, *mut ffi::obs_source_t>,
     ) -> Result<Arc<Bridge>, String> {
-        if request.projection.width >= request.projection.height {
-            return Err("Choose a portrait set layout first".into());
-        }
+        // Composition::build_sized fits the complete composition into this
+        // canvas. Landscape-only sets remain on output with letterboxing,
+        // instead of falling back to unrelated room sources.
         if let Some(active) = &self.active {
             if request.lease != active.request.lease
                 || request.projection.revision

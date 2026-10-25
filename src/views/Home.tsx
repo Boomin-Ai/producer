@@ -1,3 +1,4 @@
+import {DataIntegrations} from "../components/DataIntegrations";
 import { ShareDomainSettings } from "../components/ShareDomainSettings";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StoragePanel } from "../components/StoragePanel";
@@ -912,7 +913,7 @@ function NetworkInviteReset({ endpoints }: { endpoints: EndpointInfo[] }) {
 type SettingsSection = "app" | "output" | "audio" | "guests" | "integrations" | "access" | "storage";
 const SETTINGS_SECTIONS: { id: SettingsSection; label: string; sub: string; built: boolean }[] = [
   { id: "app", label: "App", sub: "Version, updates, shortcuts", built: true },
-  { id: "integrations", label: "Integrations", sub: "Live destinations, posting channels", built: true },
+  { id: "integrations", label: "Integrations", sub: "Live destinations, data and agents", built: true },
   // The sub reads in the server's own nouns (see the nav below).
   { id: "access", label: "Access", sub: "Team, room roles, invites", built: true },
   { id: "output", label: "Output", sub: "Encoder, bitrate, recording", built: false },
@@ -940,7 +941,7 @@ function SettingsPanel({
   destinations: LiveDestination[];
   channels: Channel[];
   onChannelsChanged: () => void;
-  updater: { state: string; version: string | null; restart: () => void };
+  updater: { state: string; version: string | null; restart: () => void; checkNow: () => void };
   onClose: () => void;
 }) {
   const [appVersion, setAppVersion] = useState<string | null>(null);
@@ -1056,8 +1057,11 @@ function SettingsPanel({
               <>An update is ready. <button className="linkish" onClick={updater.restart}>Restart to install{updater.version ? ` ${updater.version}` : ""}</button></>
             ) : updater.state === "downloading" ? (
               "Downloading an update…"
+            ) : updater.state === "checking" ? (
+              "Checking for updates…"
             ) : (
-              "Up to date. Updates install themselves."
+              <>{updater.state === "current" ? "Up to date." : updater.state === "error" ? "Could not check for updates." : "Updates download automatically."}{" "}
+                <button className="linkish" onClick={updater.checkNow}>Check for updates</button></>
             )}
           </div>
           {Array.isArray(releases) && releases[0] && (() => {
@@ -1157,6 +1161,7 @@ function SettingsPanel({
         )}
         {section === "integrations" && (
           <>
+        <DataIntegrations endpointId={current?.id??null}/>
         {current && (
           <ChannelsBlock
             destinations={destinations}

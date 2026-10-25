@@ -1,0 +1,82 @@
+{
+  "run": "generated-recovery-1791757273637421000",
+  "provider": "LiveKit Cloud",
+  "g1_complete": false,
+  "production_deployed": false,
+  "loss_gate_relaxed": false,
+  "guests": 3,
+  "seconds": 60,
+  "selected_guest_recorded": "guest-1",
+  "native_sha256": "d741e5bfae81c976ccadfdcdbccce3c6e5ed7c80171ed7aaeac4eca62309af8b",
+  "local_obs_acceptance_passed": false,
+  "failure_reasons": [
+    "epoch 14567508723: audio readiness exceeded budget including preceding resets",
+    "epoch 14567508723: video readiness exceeded budget including preceding resets",
+    "epoch 14580347170: audio readiness exceeded budget including preceding resets",
+    "epoch 14580347170: video readiness exceeded budget including preceding resets",
+    "numbered recording marker gate failed",
+    "missing marker labels within observed recording span"
+  ],
+  "pairs": 23,
+  "absolute_p95_ms": 43.33333333332121,
+  "missing_labels": [
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "binding_epochs": [
+    {
+      "binding_since_us": 14567508723,
+      "recovery_started_us": 14567508011,
+      "superseded_binding_epochs": [
+        14567508011,
+        14567508318
+      ],
+      "first_scheduled_ms": {
+        "audio": 2903.316,
+        "video": 2923.096
+      }
+    },
+    {
+      "binding_since_us": 14580347170,
+      "recovery_started_us": 14579514024,
+      "superseded_binding_epochs": [
+        14579514024,
+        14579514060,
+        14580345688
+      ],
+      "first_scheduled_ms": {
+        "audio": 9967.54,
+        "video": 9991.718
+      }
+    }
+  ],
+  "collector": {
+    "active_after_shutdown": false,
+    "capacity": 1,
+    "clock_snapshot_capacity": 1024,
+    "collected": 580,
+    "consumed": 578,
+    "errors": 0,
+    "max_collection_us": 129,
+    "pending": 0,
+    "presentation_waits_for_collection": false,
+    "replaced": 2,
+    "shutdown_us": 1292,
+    "snapshot_retains_native_owner": false,
+    "typed_incoming_clock_snapshot": true
+  },
+  "owned_room_delete_exit_code": 0,
+  "input_sha256": {
+    "generated-recovery-1791757273637421000-browser.json": "93a3c1a68210d21cbedea08cc809d8dd22dcf9177408c18b53fd0d98b1282aa0",
+    "generated-recovery-1791757273637421000-conditions.json": "c3f0281fd987ef3b47aecc207a63ce524fba4714243a612a056c12b4d777bd72",
+    "generated-recovery-1791757273637421000-obs-acceptance.json": "d1eb4cb1dc0675d5fae93043f864c218f42db21b2d1891470fb1f40e11932bb9",
+    "generated-recovery-1791757273637421000-obs-markers.json": "4b36dc6b5270cec11b92d88871ab665dc7ee1f9e3f55d9b2c70581133836a43a",
+    "generated-recovery-1791757273637421000-obs-numbered.json": "7967f592564d4808869fdc44a4a942a785ecd31b8fa43a38215017df192c840e",
+    "generated-recovery-1791757273637421000-reconnect-loss.json": "cf1ac471546c35ee24a9fd1b5d8aef43ba5e881094bce440ee026185a99aa6f3",
+    "generated-recovery-1791757273637421000.json": "9fceef7a09fe8876d885c7e5088811ba812ff8a8bdf338e7abf3e54cb8d2eb97"
+  },
+  "scope": "Typed handoff removes JSON collection overhead; Cloud timing report delay remains. No generated recording marker threshold/readiness budget changed."
+}

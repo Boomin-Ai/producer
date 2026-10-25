@@ -1,0 +1,164 @@
+{
+  "run": "physical-publication-1791687160475252000",
+  "profile": "audio-jitter",
+  "duration_seconds": 40.122666834,
+  "audio_p95_ms": 26,
+  "audio_deadline_recoveries": 0,
+  "native_audio_errors": 0,
+  "native_clipped_samples": 566,
+  "camera": {
+    "av_sync_qualified": false,
+    "capture_timestamp_domain": "AVCaptureSession synchronizationClock converted to CMClockGetHostTimeClock",
+    "capture_to_sdk_p95_ms_upper_bucket": 37,
+    "enabled": true,
+    "error": null,
+    "lifecycle": {
+      "actual_height": 480,
+      "actual_pixel_format": 875704438,
+      "actual_width": 640,
+      "callbacks_active_after_stop": 0,
+      "capacity_frames": 3,
+      "consumed": 1154,
+      "fault_codes": "1 no pixel; 2 format/dimensions; 3 regressed timestamp; 4 pixel lock; 5 planes/strides; 6 absent clock; 7 invalid converted time; 8 runtime error",
+      "first_fault_code": 0,
+      "format_or_timestamp_errors": 0,
+      "native_late_discarded": 0,
+      "overflow_newest_discarded": 0,
+      "owners_retired": true,
+      "pending_retired": 0,
+      "queued": 1154
+    },
+    "maximum_capture_to_sdk_us": 84488,
+    "pixel_format": "NV12 video range to I420",
+    "resolution": {
+      "height": 480,
+      "width": 640
+    },
+    "sdk_adapted_or_rejected": 194,
+    "sdk_video_timestamp_alignment": "SDK TimestampAligner still translates host capture timestamps; cross-media RTP alignment not qualified",
+    "shutdown_ms": 85.99841599999999,
+    "stale_discarded": 0,
+    "submitted": 960,
+    "thread_joined": true,
+    "video_recorded_by_native": false
+  },
+  "publisher_join": {
+    "joined": true,
+    "named_thread": true,
+    "shutdown_ms": 108.729166
+  },
+  "relay": {
+    "profile": "audio-jitter",
+    "signaling_rewrites": 80,
+    "rejected_tcp_candidates": 0,
+    "rejected_non_mux_candidates": 40,
+    "pending_max": 8,
+    "snapshot_write_errors": 0,
+    "last_snapshot_error_code": null,
+    "peer_limit_drops": 0,
+    "overflow_drops": 0,
+    "send_errors": 0,
+    "websocket_backpressure_closes": 0,
+    "packets": {
+      "client_to_sfu:control": {
+        "received": 348,
+        "forwarded": 348,
+        "dropped": 0,
+        "delayed": 0,
+        "max_delay_ms": 0
+      },
+      "sfu_to_client:control": {
+        "received": 451,
+        "forwarded": 451,
+        "dropped": 0,
+        "delayed": 0,
+        "max_delay_ms": 0
+      },
+      "client_to_sfu:video": {
+        "received": 2332,
+        "forwarded": 2332,
+        "dropped": 0,
+        "delayed": 0,
+        "max_delay_ms": 0
+      },
+      "client_to_sfu:audio": {
+        "received": 3940,
+        "forwarded": 3877,
+        "dropped": 60,
+        "delayed": 3880,
+        "max_delay_ms": 79
+      },
+      "sfu_to_client:audio": {
+        "received": 1984,
+        "forwarded": 1946,
+        "dropped": 37,
+        "delayed": 1947,
+        "max_delay_ms": 79
+      },
+      "sfu_to_client:video": {
+        "received": 2298,
+        "forwarded": 2298,
+        "dropped": 0,
+        "delayed": 0,
+        "max_delay_ms": 0
+      }
+    },
+    "payloads_decrypted": false,
+    "payloads_logged": false,
+    "packet_profile_effect_observed": true
+  },
+  "received_video_frames": 933,
+  "audio_rtp": [
+    {
+      "id": "IT01A101003536",
+      "timestamp": 1791687242840.724,
+      "type": "inbound-rtp",
+      "codecId": "CIT01_111_minptime=10;stereo=1;useinbandfec=1",
+      "kind": "audio",
+      "mediaType": "audio",
+      "ssrc": 101003536,
+      "transportId": "T01",
+      "jitter": 0.024,
+      "packetsLost": 37,
+      "packetsReceived": 1938,
+      "packetsReceivedWithCe": 0,
+      "packetsReceivedWithEct1": 0,
+      "audioLevel": 0,
+      "bytesReceived": 231351,
+      "concealedSamples": 35407,
+      "concealmentEvents": 38,
+      "estimatedPlayoutTimestamp": 4000676042698,
+      "fecPacketsDiscarded": 0,
+      "fecPacketsReceived": 0,
+      "headerBytesReceived": 23256,
+      "insertedSamplesForDeceleration": 2764,
+      "jitterBufferDelay": 99100.8,
+      "jitterBufferEmittedCount": 1858560,
+      "jitterBufferMinimumDelay": 148684.8,
+      "jitterBufferTargetDelay": 148684.8,
+      "lastPacketReceivedTimestamp": 1791687242835.766,
+      "mid": "9",
+      "packetsDiscarded": 0,
+      "playoutId": "AP",
+      "remoteId": "ROA101003536",
+      "removedSamplesForAcceleration": 0,
+      "silentConcealedSamples": 0,
+      "totalAudioEnergy": 0,
+      "totalProcessingDelay": 90500.93088,
+      "totalSamplesDuration": 40.030000000000605,
+      "totalSamplesReceived": 1896480,
+      "trackIdentifier": "214d8617-5c8f-4d71-8ffc-99a15cb5cd7f"
+    }
+  ],
+  "private_av_capture": {
+    "recorded": true,
+    "bytes": 3625647,
+    "mime": "video/webm;codecs=vp8,opus",
+    "scope": "private Application Support; decoded AV browser re-encode, not raw source media"
+  },
+  "subjective_sync_voice_review": "Clear and aligned",
+  "scope": "variable delay/loss on audio-classified RTP on both loopback relay legs; not actual WAN qualification",
+  "quantitative_sync_qualified": false,
+  "g1_complete": false,
+  "subjective_review_scope": "Operator clap/lip and voice listening review of this 40-second Mac loopback impairment trial"
+}

@@ -1,5 +1,5 @@
 {
-  "schema": "producer.presentation/1",
+  "schema": "producer.presentation/2",
   "id": "raiders-dolphins",
   "version": "0.1.1",
   "name": "Raiders vs. Dolphins",

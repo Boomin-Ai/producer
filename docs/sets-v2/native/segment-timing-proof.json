@@ -1,0 +1,1555 @@
+{
+  "completedAt": "2026-10-24T12:34:53.522Z",
+  "events": [
+    {
+      "hiddenInRoom": true,
+      "inlineSourceCreatedAndAssigned": true,
+      "nativeSourcePreviewFrame": true
+    },
+    {
+      "clockMs": 1833.3332240581512,
+      "generation": 2,
+      "outputId": "program",
+      "paused": false,
+      "preparedRevision": 2,
+      "queued": false,
+      "ready": true,
+      "renderSerial": 1,
+      "renderedRevision": 2,
+      "transitionProgress": 1,
+      "transitioning": false,
+      "warmed": true
+    }
+  ],
+  "kind": "segment-timing",
+  "ok": true,
+  "segmentTiming": {
+    "measurement": "Next click to native render completion; transition-first-observed is status polling estimate, not display scanout",
+    "measurements": [
+      {
+        "clickToCompleteMs": 874,
+        "name": "Head to Head \u2014 The Arena",
+        "pass": "first-visit",
+        "stages": [
+          {
+            "at": 10771,
+            "clickMs": 59,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 0,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 10816,
+            "clickMs": 104,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 45,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "revision": 4,
+            "stage": "compile-start"
+          },
+          {
+            "at": 10825,
+            "clickMs": 113,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 54,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "revision": 4,
+            "stage": "compile-done"
+          },
+          {
+            "at": 11044,
+            "clickMs": 332,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 273,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "revision": 4,
+            "stage": "prepare-submitted"
+          },
+          {
+            "at": 11524,
+            "clickMs": 812,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 753,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "revision": 4,
+            "stage": "ready-warmed"
+          },
+          {
+            "at": 11524,
+            "clickMs": 812,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 753,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "revision": 4,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 11586,
+            "clickMs": 874,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 815,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "renderSerial": 98,
+            "revision": 4,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 1,
+        "target": "hot-take"
+      },
+      {
+        "clickToCompleteMs": 830,
+        "name": "Head to Head \u2014 The Arena",
+        "pass": "first-visit",
+        "stages": [
+          {
+            "at": 12092,
+            "clickMs": 60,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 0,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 12111,
+            "clickMs": 79,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 19,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "revision": 5,
+            "stage": "compile-start"
+          },
+          {
+            "at": 12117,
+            "clickMs": 85,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 25,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "revision": 5,
+            "stage": "compile-done"
+          },
+          {
+            "at": 12311,
+            "clickMs": 279,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 219,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "revision": 5,
+            "stage": "prepare-submitted"
+          },
+          {
+            "at": 12810,
+            "clickMs": 778,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 718,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "revision": 5,
+            "stage": "ready-warmed"
+          },
+          {
+            "at": 12810,
+            "clickMs": 778,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 718,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "revision": 5,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 12862,
+            "clickMs": 830,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 770,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "renderSerial": 136,
+            "revision": 5,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 2,
+        "target": "host-case"
+      },
+      {
+        "clickToCompleteMs": 864,
+        "name": "Head to Head \u2014 The Arena",
+        "pass": "first-visit",
+        "stages": [
+          {
+            "at": 13411,
+            "clickMs": 89,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 0,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 13418,
+            "clickMs": 96,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 7,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "revision": 6,
+            "stage": "compile-start"
+          },
+          {
+            "at": 13424,
+            "clickMs": 102,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 13,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "revision": 6,
+            "stage": "compile-done"
+          },
+          {
+            "at": 13644,
+            "clickMs": 322,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 233,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "revision": 6,
+            "stage": "prepare-submitted"
+          },
+          {
+            "at": 14140,
+            "clickMs": 818,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 729,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "revision": 6,
+            "stage": "ready-warmed"
+          },
+          {
+            "at": 14140,
+            "clickMs": 818,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 729,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "revision": 6,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 14186,
+            "clickMs": 864,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 775,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "renderSerial": 176,
+            "revision": 6,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 3,
+        "target": "guest-case"
+      },
+      {
+        "clickToCompleteMs": 821,
+        "name": "Head to Head \u2014 The Arena",
+        "pass": "repeat",
+        "stages": [
+          {
+            "at": 15691,
+            "clickMs": 60,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 0,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 15718,
+            "clickMs": 87,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 27,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "revision": 8,
+            "stage": "compile-start"
+          },
+          {
+            "at": 15725,
+            "clickMs": 94,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 34,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "revision": 8,
+            "stage": "compile-done"
+          },
+          {
+            "at": 15974,
+            "clickMs": 343,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 283,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "revision": 8,
+            "stage": "prepare-submitted"
+          },
+          {
+            "at": 16385,
+            "clickMs": 754,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 694,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "revision": 8,
+            "stage": "ready-warmed"
+          },
+          {
+            "at": 16385,
+            "clickMs": 754,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 694,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "revision": 8,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 16452,
+            "clickMs": 821,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 761,
+            "layout": "hot-take-landscape",
+            "phase": "hot-take",
+            "renderSerial": 244,
+            "revision": 8,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 1,
+        "target": "hot-take"
+      },
+      {
+        "clickToCompleteMs": 1014,
+        "name": "Head to Head \u2014 The Arena",
+        "pass": "repeat",
+        "stages": [
+          {
+            "at": 17012,
+            "clickMs": 121,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 0,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 17057,
+            "clickMs": 166,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 45,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "revision": 9,
+            "stage": "compile-start"
+          },
+          {
+            "at": 17065,
+            "clickMs": 174,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 53,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "revision": 9,
+            "stage": "compile-done"
+          },
+          {
+            "at": 17448,
+            "clickMs": 557,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 436,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "revision": 9,
+            "stage": "prepare-submitted"
+          },
+          {
+            "at": 17846,
+            "clickMs": 955,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 834,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "revision": 9,
+            "stage": "ready-warmed"
+          },
+          {
+            "at": 17847,
+            "clickMs": 956,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 835,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "revision": 9,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 17905,
+            "clickMs": 1014,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 893,
+            "layout": "host-case-landscape",
+            "phase": "host-case",
+            "renderSerial": 287,
+            "revision": 9,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 2,
+        "target": "host-case"
+      },
+      {
+        "clickToCompleteMs": 821,
+        "name": "Head to Head \u2014 The Arena",
+        "pass": "repeat",
+        "stages": [
+          {
+            "at": 18451,
+            "clickMs": 90,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 0,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 18479,
+            "clickMs": 118,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 28,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "revision": 10,
+            "stage": "compile-start"
+          },
+          {
+            "at": 18486,
+            "clickMs": 125,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 35,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "revision": 10,
+            "stage": "compile-done"
+          },
+          {
+            "at": 18760,
+            "clickMs": 399,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 309,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "revision": 10,
+            "stage": "prepare-submitted"
+          },
+          {
+            "at": 19152,
+            "clickMs": 791,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 701,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "revision": 10,
+            "stage": "ready-warmed"
+          },
+          {
+            "at": 19152,
+            "clickMs": 791,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 701,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "revision": 10,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 19182,
+            "clickMs": 821,
+            "definition": "head-to-head-arena",
+            "elapsedMs": 731,
+            "layout": "guest-case-landscape",
+            "phase": "guest-case",
+            "renderSerial": 326,
+            "revision": 10,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 3,
+        "target": "guest-case"
+      },
+      {
+        "clickToCompleteMs": 869,
+        "name": "Producer \u2014 Make Your Show",
+        "pass": "first-visit",
+        "stages": [
+          {
+            "at": 22201,
+            "clickMs": 90,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 0,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 22213,
+            "clickMs": 102,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 12,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "revision": 12,
+            "stage": "compile-start"
+          },
+          {
+            "at": 22217,
+            "clickMs": 106,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 16,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "revision": 12,
+            "stage": "compile-done"
+          },
+          {
+            "at": 22247,
+            "clickMs": 136,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 46,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "revision": 12,
+            "stage": "prepare-submitted"
+          },
+          {
+            "at": 22588,
+            "clickMs": 477,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 387,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "revision": 12,
+            "stage": "ready-warmed"
+          },
+          {
+            "at": 22588,
+            "clickMs": 477,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 387,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "revision": 12,
+            "stage": "take-request",
+            "transitionMs": 320
+          },
+          {
+            "at": 22637,
+            "clickMs": 526,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 436,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "renderSerial": 430,
+            "revision": 12,
+            "stage": "transition-first-observed"
+          },
+          {
+            "at": 22980,
+            "clickMs": 869,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 779,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "renderSerial": 440,
+            "revision": 12,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 1,
+        "target": "conversation"
+      },
+      {
+        "clickToCompleteMs": 733,
+        "name": "Producer \u2014 Make Your Show",
+        "pass": "first-visit",
+        "stages": [
+          {
+            "at": 23522,
+            "clickMs": 121,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 0,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 23532,
+            "clickMs": 131,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 10,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "revision": 13,
+            "stage": "compile-start"
+          },
+          {
+            "at": 23539,
+            "clickMs": 138,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 17,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "revision": 13,
+            "stage": "compile-done"
+          },
+          {
+            "at": 23586,
+            "clickMs": 185,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 64,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "revision": 13,
+            "stage": "prepare-submitted"
+          },
+          {
+            "at": 23778,
+            "clickMs": 377,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 256,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "revision": 13,
+            "stage": "ready-warmed"
+          },
+          {
+            "at": 23778,
+            "clickMs": 377,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 256,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "revision": 13,
+            "stage": "take-request",
+            "transitionMs": 320
+          },
+          {
+            "at": 23804,
+            "clickMs": 403,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 282,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "renderSerial": 465,
+            "revision": 13,
+            "stage": "transition-first-observed"
+          },
+          {
+            "at": 24134,
+            "clickMs": 733,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 612,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "renderSerial": 475,
+            "revision": 13,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 2,
+        "target": "guest-focus"
+      },
+      {
+        "clickToCompleteMs": 772,
+        "name": "Producer \u2014 Make Your Show",
+        "pass": "first-visit",
+        "stages": [
+          {
+            "at": 24631,
+            "clickMs": 60,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 0,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 24641,
+            "clickMs": 70,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 10,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "revision": 14,
+            "stage": "compile-start"
+          },
+          {
+            "at": 24648,
+            "clickMs": 77,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 17,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "revision": 14,
+            "stage": "compile-done"
+          },
+          {
+            "at": 24708,
+            "clickMs": 137,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 77,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "revision": 14,
+            "stage": "prepare-submitted"
+          },
+          {
+            "at": 24973,
+            "clickMs": 402,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 342,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "revision": 14,
+            "stage": "ready-warmed"
+          },
+          {
+            "at": 24973,
+            "clickMs": 402,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 342,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "revision": 14,
+            "stage": "take-request",
+            "transitionMs": 320
+          },
+          {
+            "at": 25015,
+            "clickMs": 444,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 384,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "renderSerial": 501,
+            "revision": 14,
+            "stage": "transition-first-observed"
+          },
+          {
+            "at": 25343,
+            "clickMs": 772,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 712,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "renderSerial": 511,
+            "revision": 14,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 3,
+        "target": "live-demo"
+      },
+      {
+        "clickToCompleteMs": 745,
+        "name": "Producer \u2014 Make Your Show",
+        "pass": "repeat",
+        "stages": [
+          {
+            "at": 26882,
+            "clickMs": 120,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 0,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 26888,
+            "clickMs": 126,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 6,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "revision": 16,
+            "stage": "compile-start"
+          },
+          {
+            "at": 26892,
+            "clickMs": 130,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 10,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "revision": 16,
+            "stage": "compile-done"
+          },
+          {
+            "at": 26915,
+            "clickMs": 153,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 33,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "revision": 16,
+            "stage": "prepare-submitted"
+          },
+          {
+            "at": 27106,
+            "clickMs": 344,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 224,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "revision": 16,
+            "stage": "ready-warmed"
+          },
+          {
+            "at": 27106,
+            "clickMs": 344,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 224,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "revision": 16,
+            "stage": "take-request",
+            "transitionMs": 320
+          },
+          {
+            "at": 27135,
+            "clickMs": 373,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 253,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "renderSerial": 565,
+            "revision": 16,
+            "stage": "transition-first-observed"
+          },
+          {
+            "at": 27507,
+            "clickMs": 745,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 625,
+            "layout": "conversation-landscape",
+            "phase": "conversation",
+            "renderSerial": 576,
+            "revision": 16,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 1,
+        "target": "conversation"
+      },
+      {
+        "clickToCompleteMs": 742,
+        "name": "Producer \u2014 Make Your Show",
+        "pass": "repeat",
+        "stages": [
+          {
+            "at": 27992,
+            "clickMs": 60,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 0,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 28019,
+            "clickMs": 87,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 27,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "revision": 17,
+            "stage": "compile-start"
+          },
+          {
+            "at": 28024,
+            "clickMs": 92,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 32,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "revision": 17,
+            "stage": "compile-done"
+          },
+          {
+            "at": 28049,
+            "clickMs": 117,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 57,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "revision": 17,
+            "stage": "prepare-submitted"
+          },
+          {
+            "at": 28305,
+            "clickMs": 373,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 313,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "revision": 17,
+            "stage": "ready-warmed"
+          },
+          {
+            "at": 28305,
+            "clickMs": 373,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 313,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "revision": 17,
+            "stage": "take-request",
+            "transitionMs": 320
+          },
+          {
+            "at": 28337,
+            "clickMs": 405,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 345,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "renderSerial": 601,
+            "revision": 17,
+            "stage": "transition-first-observed"
+          },
+          {
+            "at": 28674,
+            "clickMs": 742,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 682,
+            "layout": "guest-focus-landscape",
+            "phase": "guest-focus",
+            "renderSerial": 611,
+            "revision": 17,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 2,
+        "target": "guest-focus"
+      },
+      {
+        "clickToCompleteMs": 808,
+        "name": "Producer \u2014 Make Your Show",
+        "pass": "repeat",
+        "stages": [
+          {
+            "at": 29161,
+            "clickMs": 59,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 0,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 29185,
+            "clickMs": 83,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 24,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "revision": 18,
+            "stage": "compile-start"
+          },
+          {
+            "at": 29191,
+            "clickMs": 89,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 30,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "revision": 18,
+            "stage": "compile-done"
+          },
+          {
+            "at": 29240,
+            "clickMs": 138,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 79,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "revision": 18,
+            "stage": "prepare-submitted"
+          },
+          {
+            "at": 29534,
+            "clickMs": 432,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 373,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "revision": 18,
+            "stage": "ready-warmed"
+          },
+          {
+            "at": 29534,
+            "clickMs": 432,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 373,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "revision": 18,
+            "stage": "take-request",
+            "transitionMs": 320
+          },
+          {
+            "at": 29566,
+            "clickMs": 464,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 405,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "renderSerial": 638,
+            "revision": 18,
+            "stage": "transition-first-observed"
+          },
+          {
+            "at": 29910,
+            "clickMs": 808,
+            "definition": "producer-download-session-v1",
+            "elapsedMs": 749,
+            "layout": "live-demo-landscape",
+            "phase": "live-demo",
+            "renderSerial": 648,
+            "revision": 18,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 3,
+        "target": "live-demo"
+      },
+      {
+        "clickToCompleteMs": 446,
+        "name": "Claude Code \u2014 Build, Review, Ship",
+        "pass": "first-visit",
+        "stages": [
+          {
+            "at": 35282,
+            "clickMs": 60,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 0,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 35293,
+            "clickMs": 71,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 11,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "revision": 21,
+            "stage": "compile-start"
+          },
+          {
+            "at": 35296,
+            "clickMs": 74,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 14,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "revision": 21,
+            "stage": "compile-done"
+          },
+          {
+            "at": 35305,
+            "clickMs": 83,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 23,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "revision": 21,
+            "stage": "prepare-submitted"
+          },
+          {
+            "at": 35644,
+            "clickMs": 422,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 362,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "revision": 21,
+            "stage": "ready-warmed"
+          },
+          {
+            "at": 35644,
+            "clickMs": 422,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 362,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "revision": 21,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 35668,
+            "clickMs": 446,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 386,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "renderSerial": 821,
+            "revision": 21,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 1,
+        "target": "hero"
+      },
+      {
+        "clickToCompleteMs": 444,
+        "name": "Claude Code \u2014 Build, Review, Ship",
+        "pass": "first-visit",
+        "stages": [
+          {
+            "at": 36211,
+            "clickMs": 120,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 0,
+            "layout": "review-landscape",
+            "phase": "review",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 36220,
+            "clickMs": 129,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 9,
+            "layout": "review-landscape",
+            "phase": "review",
+            "revision": 22,
+            "stage": "compile-start"
+          },
+          {
+            "at": 36224,
+            "clickMs": 133,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 13,
+            "layout": "review-landscape",
+            "phase": "review",
+            "revision": 22,
+            "stage": "compile-done"
+          },
+          {
+            "at": 36234,
+            "clickMs": 143,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 23,
+            "layout": "review-landscape",
+            "phase": "review",
+            "revision": 22,
+            "stage": "prepare-submitted"
+          },
+          {
+            "at": 36498,
+            "clickMs": 407,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 287,
+            "layout": "review-landscape",
+            "phase": "review",
+            "revision": 22,
+            "stage": "ready-warmed"
+          },
+          {
+            "at": 36498,
+            "clickMs": 407,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 287,
+            "layout": "review-landscape",
+            "phase": "review",
+            "revision": 22,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 36535,
+            "clickMs": 444,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 324,
+            "layout": "review-landscape",
+            "phase": "review",
+            "renderSerial": 847,
+            "revision": 22,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 2,
+        "target": "review"
+      },
+      {
+        "clickToCompleteMs": 478,
+        "name": "Claude Code \u2014 Build, Review, Ship",
+        "pass": "first-visit",
+        "stages": [
+          {
+            "at": 37052,
+            "clickMs": 90,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 0,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 37078,
+            "clickMs": 116,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 26,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "revision": 23,
+            "stage": "compile-start"
+          },
+          {
+            "at": 37081,
+            "clickMs": 119,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 29,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "revision": 23,
+            "stage": "compile-done"
+          },
+          {
+            "at": 37098,
+            "clickMs": 136,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 46,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "revision": 23,
+            "stage": "prepare-submitted"
+          },
+          {
+            "at": 37394,
+            "clickMs": 432,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 342,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "revision": 23,
+            "stage": "ready-warmed"
+          },
+          {
+            "at": 37394,
+            "clickMs": 432,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 342,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "revision": 23,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 37440,
+            "clickMs": 478,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 388,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "renderSerial": 874,
+            "revision": 23,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 3,
+        "target": "refine"
+      },
+      {
+        "clickToCompleteMs": 414,
+        "name": "Claude Code \u2014 Build, Review, Ship",
+        "pass": "repeat",
+        "stages": [
+          {
+            "at": 38642,
+            "clickMs": 60,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 0,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 38650,
+            "clickMs": 68,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 8,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "revision": 25,
+            "stage": "compile-start"
+          },
+          {
+            "at": 38654,
+            "clickMs": 72,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 12,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "revision": 25,
+            "stage": "compile-done"
+          },
+          {
+            "at": 38668,
+            "clickMs": 86,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 26,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "revision": 25,
+            "stage": "prepare-submitted"
+          },
+          {
+            "at": 38968,
+            "clickMs": 386,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 326,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "revision": 25,
+            "stage": "ready-warmed"
+          },
+          {
+            "at": 38968,
+            "clickMs": 386,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 326,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "revision": 25,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 38996,
+            "clickMs": 414,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 354,
+            "layout": "hero-landscape",
+            "phase": "hero",
+            "renderSerial": 921,
+            "revision": 25,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 1,
+        "target": "hero"
+      },
+      {
+        "clickToCompleteMs": 385,
+        "name": "Claude Code \u2014 Build, Review, Ship",
+        "pass": "repeat",
+        "stages": [
+          {
+            "at": 39481,
+            "clickMs": 59,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 0,
+            "layout": "review-landscape",
+            "phase": "review",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 39488,
+            "clickMs": 66,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 7,
+            "layout": "review-landscape",
+            "phase": "review",
+            "revision": 26,
+            "stage": "compile-start"
+          },
+          {
+            "at": 39492,
+            "clickMs": 70,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 11,
+            "layout": "review-landscape",
+            "phase": "review",
+            "revision": 26,
+            "stage": "compile-done"
+          },
+          {
+            "at": 39499,
+            "clickMs": 77,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 18,
+            "layout": "review-landscape",
+            "phase": "review",
+            "revision": 26,
+            "stage": "prepare-submitted"
+          },
+          {
+            "at": 39783,
+            "clickMs": 361,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 302,
+            "layout": "review-landscape",
+            "phase": "review",
+            "revision": 26,
+            "stage": "ready-warmed"
+          },
+          {
+            "at": 39783,
+            "clickMs": 361,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 302,
+            "layout": "review-landscape",
+            "phase": "review",
+            "revision": 26,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 39807,
+            "clickMs": 385,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 326,
+            "layout": "review-landscape",
+            "phase": "review",
+            "renderSerial": 945,
+            "revision": 26,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 2,
+        "target": "review"
+      },
+      {
+        "clickToCompleteMs": 605,
+        "name": "Claude Code \u2014 Build, Review, Ship",
+        "pass": "repeat",
+        "stages": [
+          {
+            "at": 40322,
+            "clickMs": 90,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 0,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "revision": 0,
+            "stage": "apply-start"
+          },
+          {
+            "at": 40332,
+            "clickMs": 100,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 10,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "revision": 27,
+            "stage": "compile-start"
+          },
+          {
+            "at": 40335,
+            "clickMs": 103,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 13,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "revision": 27,
+            "stage": "compile-done"
+          },
+          {
+            "at": 40343,
+            "clickMs": 111,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 21,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "revision": 27,
+            "stage": "prepare-submitted"
+          },
+          {
+            "at": 40808,
+            "clickMs": 576,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 486,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "revision": 27,
+            "stage": "ready-warmed"
+          },
+          {
+            "at": 40808,
+            "clickMs": 576,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 486,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "revision": 27,
+            "stage": "take-request",
+            "transitionMs": 0
+          },
+          {
+            "at": 40837,
+            "clickMs": 605,
+            "definition": "claude-code-media-walkthrough",
+            "elapsedMs": 515,
+            "layout": "refine-landscape",
+            "phase": "refine",
+            "renderSerial": 976,
+            "revision": 27,
+            "stage": "render-complete"
+          }
+        ],
+        "step": 3,
+        "target": "refine"
+      }
+    ]
+  }
+}

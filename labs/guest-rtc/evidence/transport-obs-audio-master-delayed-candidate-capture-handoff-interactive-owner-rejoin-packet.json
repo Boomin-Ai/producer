@@ -1,0 +1,60 @@
+{
+  "profile": "audio-jitter",
+  "signaling_rewrites": 145,
+  "rejected_tcp_candidates": 0,
+  "rejected_non_mux_candidates": 117,
+  "pending_max": 8,
+  "snapshot_write_errors": 1,
+  "last_snapshot_error_code": "ENOSPC",
+  "peer_limit_drops": 0,
+  "overflow_drops": 0,
+  "send_errors": 0,
+  "websocket_backpressure_closes": 0,
+  "packets": {
+    "client_to_sfu:control": {
+      "received": 136,
+      "forwarded": 136,
+      "dropped": 0,
+      "delayed": 0,
+      "max_delay_ms": 0
+    },
+    "sfu_to_client:control": {
+      "received": 284,
+      "forwarded": 284,
+      "dropped": 0,
+      "delayed": 0,
+      "max_delay_ms": 0
+    },
+    "sfu_to_client:audio": {
+      "received": 729,
+      "forwarded": 715,
+      "dropped": 12,
+      "delayed": 717,
+      "max_delay_ms": 79
+    },
+    "client_to_sfu:video": {
+      "received": 711,
+      "forwarded": 711,
+      "dropped": 0,
+      "delayed": 0,
+      "max_delay_ms": 0
+    },
+    "sfu_to_client:video": {
+      "received": 220,
+      "forwarded": 220,
+      "dropped": 0,
+      "delayed": 0,
+      "max_delay_ms": 0
+    },
+    "client_to_sfu:audio": {
+      "received": 1336,
+      "forwarded": 1315,
+      "dropped": 19,
+      "delayed": 1317,
+      "max_delay_ms": 79
+    }
+  },
+  "payloads_decrypted": false,
+  "payloads_logged": false,
+  "packet_profile_effect_observed": true
+}

@@ -1,0 +1,49 @@
+{
+  "missing_recorded_labels": [],
+  "binding_readiness": [
+    {
+      "binding_since_us": 22412083364,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 22412083715,
+      "milestones_ms": {
+        "binding_reset": 0.0
+      }
+    },
+    {
+      "binding_since_us": 22412083831,
+      "milestones_ms": {
+        "binding_reset": 0.0,
+        "audio_bound": 11.753,
+        "bound_audio_pcm": 8.802,
+        "audio_clock_ready": 26.078,
+        "first_audio_scheduled": 26.078,
+        "video_bound": 111.437,
+        "video_clock_ready": 962.561,
+        "first_video_scheduled": 962.561,
+        "first_incoming_video_report": 2913.493,
+        "first_incoming_audio_report": 2913.493
+      }
+    }
+  ],
+  "injected_marker_output_outcomes": [],
+  "pulse_trigger_receipts_verified": false,
+  "queued_av_trigger_receipts_verified": false,
+  "unmatched_recorded_video_labels": [],
+  "native_reconnect_events": [],
+  "source_errors": [],
+  "loss_gate_relaxed": false,
+  "transport_loss_proven": false,
+  "g1_complete": false,
+  "clock_domains": "Label identity joins only. Readiness is within each native binding monotonic epoch. Source AudioContext, lifecycle and OBS PTS are not subtracted from one another.",
+  "scope": "Selected guest-1 only. Optional decoder-ingress receipts precede the application queue; absence does not prove network loss or cover periods without a sink. Playback receipts prove kernel arrival; a clock target does not prove native submission or recording. Audio receipt and final drop causality remain separate.",
+  "run": "generated-recovery-1791777427816921000",
+  "input_sha256": {
+    "generated-recovery-1791777427816921000.json": "c835298e87e1cb2dfee3b0b68e32bfcd0b66f4500dda0c1d3745382b60c9f02f",
+    "generated-recovery-1791777427816921000-browser.json": "44a19c92c6fdf89c778ccd929699349f472b47d42e12a559d0d000afbb232f23",
+    "generated-recovery-1791777427816921000-obs-numbered.json": "c4a3f8ddcfd4eee7e39f3aa1d2854294f1cabd503d03ccc8ca1bef3c88f8e0be"
+  }
+}

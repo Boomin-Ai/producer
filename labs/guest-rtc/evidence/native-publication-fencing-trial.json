@@ -1,0 +1,153 @@
+{
+  "g1_complete": false,
+  "production_deployed": false,
+  "isolated_scheduling_coordinator_implemented": false,
+  "native_tests_passed": 56,
+  "strict_clippy_all_targets_combined_features_passed": true,
+  "run": "generated-recovery-1791726363495125000",
+  "native_sha256": "9b219a5e829348ce3d5fffebb99361b20de180ec4ff8a08be0a23b5f0731f2a5",
+  "guests": 3,
+  "reconnect_count": 3,
+  "local_acceptance_passed": false,
+  "failure_reasons": [
+    "numbered recording marker gate failed",
+    "missing marker labels within observed recording span"
+  ],
+  "readiness_passed": true,
+  "delivery_worker_gate_passed": true,
+  "numbered_pairs": 65,
+  "numbered_p95_ms": 89.99999999998545,
+  "missing_video_labels": [
+    9,
+    29,
+    45,
+    46,
+    49
+  ],
+  "audio_pts_discontinuities": 0,
+  "audio_output": {
+    "active_after_shutdown": false,
+    "capacity": 24,
+    "enqueue_contention_dropped": 99,
+    "flushed": 46,
+    "late": 125,
+    "max_native_submit_us": 76062,
+    "max_tick_gap_us": 208196,
+    "overflow": 0,
+    "pending": 0,
+    "publication_epoch": 14,
+    "pushed": 13123,
+    "retired_producer_dropped": 0,
+    "submitted": 12952,
+    "worker_failed": false,
+    "worker_qos_result_previous_effective": [
+      0,
+      21,
+      33
+    ]
+  },
+  "video_output": {
+    "active_after_shutdown": false,
+    "capacity": 14,
+    "enqueue_contention_dropped": 4,
+    "flushed": 19,
+    "late": 36,
+    "max_native_submit_us": 75961,
+    "max_tick_gap_us": 199524,
+    "overflow": 0,
+    "pending": 0,
+    "publication_epoch": 14,
+    "pushed": 3499,
+    "retired_producer_dropped": 0,
+    "submitted": 3444,
+    "worker_failed": false,
+    "worker_qos_result_previous_effective": [
+      0,
+      21,
+      33
+    ]
+  },
+  "decoded_drain": {
+    "active_after_shutdown": false,
+    "discarded_shutdown": 3,
+    "max_poll_gap_us": 213567,
+    "poll_interval_ms": 5,
+    "queue": {
+      "callback_contention_dropped": 11,
+      "capacity_frames": 192,
+      "consumed": 40279,
+      "max_age_ms": 100,
+      "overflow_oldest_dropped": 12,
+      "pending_frames": 0,
+      "received": 40579,
+      "stale_dropped": 277
+    },
+    "worker_failed": false,
+    "worker_qos_result_previous_effective": [
+      0,
+      21,
+      33
+    ]
+  },
+  "audio_continuity": {
+    "gap_events": 233,
+    "maximum_fill_blocks": 12,
+    "maximum_gap_blocks": 60,
+    "missing_pcm_recovered": false,
+    "silence_gap_blocks": 434,
+    "unfilled_gap_or_reanchor_events": 8
+  },
+  "loop_timing": {
+    "decoded_audio": {
+      "count": 12955,
+      "max_us": 27970,
+      "mean_us": 67,
+      "over_100_ms": 0,
+      "over_10_ms": 4,
+      "over_30_ms": 0
+    },
+    "observer_audio": {
+      "count": 12955,
+      "max_us": 9156,
+      "mean_us": 13,
+      "over_100_ms": 0,
+      "over_10_ms": 0,
+      "over_30_ms": 0
+    },
+    "observer_video": {
+      "count": 12955,
+      "max_us": 101744,
+      "mean_us": 123,
+      "over_100_ms": 1,
+      "over_10_ms": 14,
+      "over_30_ms": 3
+    },
+    "sender_report_refresh": {
+      "count": 12955,
+      "max_us": 115160,
+      "mean_us": 114,
+      "over_100_ms": 1,
+      "over_10_ms": 14,
+      "over_30_ms": 2
+    },
+    "tick_gap": {
+      "count": 12955,
+      "max_us": 697484,
+      "mean_us": 10806,
+      "over_100_ms": 17,
+      "over_10_ms": 7040,
+      "over_30_ms": 135
+    },
+    "tick_work": {
+      "count": 12955,
+      "max_us": 115255,
+      "mean_us": 341,
+      "over_100_ms": 2,
+      "over_10_ms": 39,
+      "over_30_ms": 7
+    }
+  },
+  "unmatched_audio": 3,
+  "unmatched_video": 0,
+  "uncertain_tones": 1
+}

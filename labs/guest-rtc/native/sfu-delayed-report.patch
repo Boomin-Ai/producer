@@ -1,0 +1,99 @@
+--- a/pkg/sfu/buffer/buffer.go
++++ b/pkg/sfu/buffer/buffer.go
+@@ -96,7 +96,7 @@
+ }
+ 
+ func NewBuffer(ssrc uint32, maxVideoPkts, maxAudioPkts int) *Buffer {
+-	b := &Buffer{labReportRequest: labSRRequest{enabled: os.Getenv("LIVEKIT_LAB_EARLY_AUDIO_SR") == "1"}}
++	b := &Buffer{labReportRequest: labSRRequest{enabled: os.Getenv("LIVEKIT_LAB_EARLY_AUDIO_SR") == "1" || os.Getenv("LIVEKIT_LAB_DELAYED_AUDIO_SR") == "1", delayed: os.Getenv("LIVEKIT_LAB_DELAYED_AUDIO_SR") == "1"}}
+ 	b.BufferBase = NewBufferBase(BufferBaseParams{
+ 		SSRC:               ssrc,
+ 		MaxVideoPkts:       maxVideoPkts,
+--- a/pkg/sfu/buffer/lab_sr_request.go
++++ b/pkg/sfu/buffer/lab_sr_request.go
+@@ -5,6 +5,7 @@
+ // or goroutine. A received report or expiry permanently retires the policy.
+ type labSRRequest struct {
+ 	enabled bool
++	delayed bool
+ 	started bool
+ 	first   int64
+ 	last    int64
+@@ -29,6 +30,18 @@
+ 		r.enabled = false
+ 		return false
+ 	}
++	// The delayed variant makes one request after 500 ms, only while no
++	// sender report is available. This is a diagnostic delay, not a guarantee
++	// that every subscriber is bound. No timer or repeated RTCP request.
++	if r.delayed {
++		if now-r.first < 500_000_000 {
++			return false
++		}
++		r.enabled = false
++		r.last = now
++		r.count++
++		return true
++	}
+ 	if r.count > 0 && now-r.last < 250_000_000 {
+ 		return false
+ 	}
+--- a/pkg/sfu/buffer/lab_sr_request_test.go
++++ b/pkg/sfu/buffer/lab_sr_request_test.go
+@@ -32,3 +32,33 @@
+ 		t.Fatal("Disabled policy emitted a request")
+ 	}
+ }
++
++func TestLabDelayedSRRequest(t *testing.T) {
++	r := labSRRequest{enabled: true, delayed: true}
++	for _, tt := range []struct {
++		now  int64
++		want bool
++	}{
++		{10, false}, {499_999_999, false}, {500_000_010, true},
++		{750_000_010, false}, {1_000_000_010, false},
++	} {
++		if got := r.take(tt.now, false); got != tt.want {
++			t.Fatalf("%d: got %v want %v", tt.now, got, tt.want)
++		}
++	}
++	if r.count != 1 || r.enabled {
++		t.Fatal("One-shot request did not retire")
++	}
++	r = labSRRequest{enabled: true, delayed: true}
++	if r.take(0, false) || r.take(1_000_000_000, false) || r.enabled {
++		t.Fatal("Expired delayed request emitted")
++	}
++	r = labSRRequest{enabled: true, delayed: true}
++	if r.take(0, false) || r.take(100_000_000, true) || r.take(600_000_000, false) || r.enabled {
++		t.Fatal("Received report did not retire delayed policy")
++	}
++	r = labSRRequest{enabled: true, delayed: true}
++	if r.take(100, false) || r.take(99, false) || r.count != 0 {
++		t.Fatal("Regressed clock emitted")
++	}
++}
+--- a/pkg/sfu/receiver_base.go
++++ b/pkg/sfu/receiver_base.go
+@@ -18,6 +18,7 @@
+ 	"errors"
+ 	"fmt"
+ 	"io"
++	"os"
+ 	"slices"
+ 	"strings"
+ 	"sync"
+@@ -698,6 +699,12 @@
+ 	buff.SetStreamRestartDetection(r.enableRTPStreamRestartDetection)
+ 	buff.OnRtcpSenderReport(func() {
+ 		srData := buff.GetSenderReportData()
++		if os.Getenv("LIVEKIT_LAB_RTCP_TRACE") == "1" && srData != nil {
++			r.params.Logger.Debugw("lab buffer sender report received",
++				"lab_wall_us", time.Now().UnixMicro(), "lab_layer", layer,
++				"lab_publisher_ntp", srData.NtpTimestamp, "lab_publisher_rtp", srData.RtpTimestamp,
++				"lab_subscribers", len(r.downTrackSpreader.GetDownTracks()))
++		}
+ 		r.downTrackSpreader.Broadcast(func(dt TrackSender) {
+ 			_ = dt.HandleRTCPSenderReportData(r.params.Codec.PayloadType, layer, srData)
+ 		})

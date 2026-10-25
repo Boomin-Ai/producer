@@ -1,0 +1,22 @@
+{
+  "local_obs_acceptance_passed": false,
+  "failure_reasons": [
+    "epoch 75402720923: audio readiness exceeded budget",
+    "epoch 75402720923: video readiness exceeded budget"
+  ],
+  "binding_epochs": [
+    {
+      "binding_since_us": 75402720923,
+      "first_scheduled_ms": {
+        "audio": 4780.23,
+        "video": 4781.115
+      }
+    }
+  ],
+  "expected_binding_epochs": 1,
+  "readiness_budget_ms": 1500,
+  "budget_scope": "prototype local per-binding readiness, not WAN service guarantee",
+  "startup_and_tail_loss_qualified": false,
+  "lip_sync_qualified": false,
+  "g1_complete": false
+}

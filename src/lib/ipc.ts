@@ -157,6 +157,9 @@ export const ipc = {
   liveDeleteDestination: (id: string) => invoke("live_delete_destination", { id }),
   liveGoLive: (endpointId?: string, serverRoomId?: string) => invoke("live_go_live", { endpointId, serverRoomId }),
   liveStop: () => invoke("live_stop"),
+  liveRtcStart: (endpointId:string,brandId:string,roomId:string) => invoke<boolean>("live_rtc_start",{endpointId,brandId,roomId}),
+  liveRtcEnabled: (endpointId:string,roomId:string) => invoke<boolean>("live_rtc_enabled",{endpointId,roomId}),
+  liveRtcStop: (roomId?:string) => invoke<void>("live_rtc_stop",{roomId}),
   liveEngineStatus: () => invoke<LiveSnapshot>("live_engine_status"),
   liveAttachPreview: (x: number, y: number, w: number, h: number) =>
     invoke<boolean>("live_attach_preview", { x, y, w, h }),
@@ -215,6 +218,7 @@ export const ipc = {
   }) => invoke<{ sources: LiveSources; warnings: string[] }>("live_restore_room", { restore }),
   livePortraitRoom: ()=>invoke<LiveSources>('live_portrait_room'),
   liveSelectOutput: (portrait:boolean)=>invoke<void>('live_select_output',{portrait}),
+  liveVirtualCamMirror: (on?:boolean)=>invoke<boolean>('live_virtual_cam_mirror',{on:on??null}),
   livePortraitState: ()=>invoke<LiveSources>('live_portrait_state'),
   livePortraitTransform: (id:string,patch:LiveTransformPatch)=>invoke<LiveSources>('live_portrait_transform',{id,patch}),
   livePortraitPreview: (rect:{x:number;y:number;w:number;h:number}|null)=>invoke<boolean>('live_portrait_preview',{rect}),
@@ -292,6 +296,7 @@ export interface LiveItem {
   /** Capture kinds (camera / screen / mic): the device the source is on,
    * as libobs names it. Absent for everything else. */
   device?: string | null;
+  rtc_source_id?: string | null;
 }
 
 export type { LiveTransformPatch } from "./sourceSpec";

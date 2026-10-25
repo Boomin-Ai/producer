@@ -492,7 +492,7 @@ int producer_default_camera_id(char *buf, int buflen) {
     // virtual-camera output could no longer start. macOS will happily hand it
     // back as the "default" device once a real camera is denied or absent.
     AVCaptureDevice *device = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
-    if (device && [device.localizedName containsString:@"Producer Virtual Camera"]) {
+    if (device && ([device.localizedName containsString:@"Producer Virtual Camera"] || [device.localizedName containsString:@"Producer Portrait Camera"])) {
         device = nil;
         AVCaptureDeviceDiscoverySession *s = [AVCaptureDeviceDiscoverySession
             discoverySessionWithDeviceTypes:@[ AVCaptureDeviceTypeBuiltInWideAngleCamera,
@@ -500,7 +500,7 @@ int producer_default_camera_id(char *buf, int buflen) {
                                   mediaType:AVMediaTypeVideo
                                    position:AVCaptureDevicePositionUnspecified];
         for (AVCaptureDevice *d in s.devices) {
-            if (![d.localizedName containsString:@"Producer Virtual Camera"]) {
+            if (![d.localizedName containsString:@"Producer Virtual Camera"] && ![d.localizedName containsString:@"Producer Portrait Camera"]) {
                 device = d;
                 break;
             }

@@ -1,0 +1,73 @@
+--- a/pkg/rtc/participant.go
++++ b/pkg/rtc/participant.go
+@@ -2867,7 +2867,7 @@
+ 			}
+ 		}
+ 
+-		time.Sleep(3 * time.Second)
++		time.Sleep(labSenderReportInterval())
+ 	}
+ }
+ 
+--- a/pkg/sfu/downtrack.go
++++ b/pkg/sfu/downtrack.go
+@@ -21,6 +21,7 @@
+ 	"io"
+ 	"math"
+ 	"math/rand"
++	"os"
+ 	"strings"
+ 	"sync"
+ 	"time"
+@@ -2775,6 +2776,13 @@
+ 	layer int32,
+ 	publisherSRData *livekit.RTCPSenderReportState,
+ ) error {
++	if os.Getenv("LIVEKIT_LAB_RTCP_TRACE") == "1" && publisherSRData != nil {
++		d.params.Logger.Debugw("lab publisher sender report",
++			"lab_wall_us", time.Now().UnixMicro(), "lab_stream_id", d.params.StreamID,
++			"lab_downstream_ssrc", d.ssrc, "lab_layer", layer,
++			"lab_publisher_ntp", publisherSRData.NtpTimestamp,
++			"lab_publisher_rtp", publisherSRData.RtpTimestamp)
++	}
+ 	d.forwarder.SetRefSenderReport(layer, publisherSRData)
+ 
+ 	currentLayer, isSingleStream, tsOffset, refSenderReport := d.forwarder.GetSenderReportParams()
+--- /dev/null
++++ b/pkg/rtc/lab_sender_report_interval.go
+@@ -0,0 +1,14 @@
++// Isolated G1 diagnostic experiment. Default upstream cadence is unchanged.
++package rtc
++
++import (
++	"os"
++	"time"
++)
++
++func labSenderReportInterval() time.Duration {
++	if os.Getenv("LIVEKIT_LAB_FAST_RTCP") == "1" {
++		return 250 * time.Millisecond
++	}
++	return 3 * time.Second
++}
+--- /dev/null
++++ b/pkg/rtc/lab_sender_report_interval_test.go
+@@ -0,0 +1,18 @@
++package rtc
++
++import (
++	"testing"
++	"time"
++)
++
++func TestLabSenderReportCadenceIsOptIn(t *testing.T) {
++	for _, test := range []struct {
++		value string
++		want  time.Duration
++	}{{"", 3 * time.Second}, {"0", 3 * time.Second}, {"bad", 3 * time.Second}, {"1", 250 * time.Millisecond}} {
++		t.Setenv("LIVEKIT_LAB_FAST_RTCP", test.value)
++		if got := labSenderReportInterval(); got != test.want {
++			t.Fatalf("%q cadence %v, want %v", test.value, got, test.want)
++		}
++	}
++}

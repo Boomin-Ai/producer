@@ -1,0 +1,175 @@
+{
+  "audio_detector_window_max_ms" : 10,
+  "audio_marker_pts_ms" : [
+    4828.666666666667,
+    6855.333333333333,
+    8858,
+    10856,
+    12848.666666666666,
+    14855.333333333334,
+    16858,
+    18856,
+    20858.666666666668,
+    22855.333333333332,
+    24853.333333333332,
+    26852,
+    28848.666666666668,
+    30942,
+    32944.666666666672,
+    34942.666666666664
+  ],
+  "audio_samples_decoded" : 1748976,
+  "browser_source_paint_uncertainty_ms" : 33.333333333333336,
+  "decoder" : "macOS AVFoundation",
+  "duration_seconds" : 36.466999999999999,
+  "g1_complete" : false,
+  "late_minus_early_median_offset_ms" : -20,
+  "lip_sync_qualified" : false,
+  "network_impairment_qualified" : false,
+  "observed_marker_test_pass" : true,
+  "pairs" : [
+    {
+      "audio_pts_ms" : 4828.666666666667,
+      "video_minus_audio_ms" : 71.33333333333303,
+      "video_pts_ms" : 4900
+    },
+    {
+      "audio_pts_ms" : 6855.333333333333,
+      "video_minus_audio_ms" : 11.33333333333303,
+      "video_pts_ms" : 6866.6666666666661
+    },
+    {
+      "audio_pts_ms" : 8858,
+      "video_minus_audio_ms" : 42,
+      "video_pts_ms" : 8900
+    },
+    {
+      "audio_pts_ms" : 10856,
+      "video_minus_audio_ms" : 10.666666666667879,
+      "video_pts_ms" : 10866.666666666668
+    },
+    {
+      "audio_pts_ms" : 12848.666666666666,
+      "video_minus_audio_ms" : 18.000000000001819,
+      "video_pts_ms" : 12866.666666666668
+    },
+    {
+      "audio_pts_ms" : 14855.333333333334,
+      "video_minus_audio_ms" : 44.66666666666606,
+      "video_pts_ms" : 14900
+    },
+    {
+      "audio_pts_ms" : 16858,
+      "video_minus_audio_ms" : 8.6666666666678793,
+      "video_pts_ms" : 16866.666666666668
+    },
+    {
+      "audio_pts_ms" : 18856,
+      "video_minus_audio_ms" : 44,
+      "video_pts_ms" : 18900
+    },
+    {
+      "audio_pts_ms" : 20858.666666666668,
+      "video_minus_audio_ms" : -25.333333333335759,
+      "video_pts_ms" : 20833.333333333332
+    },
+    {
+      "audio_pts_ms" : 22855.333333333332,
+      "video_minus_audio_ms" : 44.666666666667879,
+      "video_pts_ms" : 22900
+    },
+    {
+      "audio_pts_ms" : 24853.333333333332,
+      "video_minus_audio_ms" : 46.666666666667879,
+      "video_pts_ms" : 24900
+    },
+    {
+      "audio_pts_ms" : 26852,
+      "video_minus_audio_ms" : -18.666666666667879,
+      "video_pts_ms" : 26833.333333333332
+    },
+    {
+      "audio_pts_ms" : 28848.666666666668,
+      "video_minus_audio_ms" : 18,
+      "video_pts_ms" : 28866.666666666668
+    },
+    {
+      "audio_pts_ms" : 30942,
+      "video_minus_audio_ms" : -75.333333333332121,
+      "video_pts_ms" : 30866.666666666668
+    },
+    {
+      "audio_pts_ms" : 32944.666666666672,
+      "video_minus_audio_ms" : 22,
+      "video_pts_ms" : 32966.666666666672
+    },
+    {
+      "audio_pts_ms" : 34942.666666666664,
+      "video_minus_audio_ms" : 24.000000000007276,
+      "video_pts_ms" : 34966.666666666672
+    }
+  ],
+  "pulse_recrossing_collapse_window_ms" : 150,
+  "raw_audio_threshold_crossings_ms" : [
+    4828.666666666667,
+    6855.333333333333,
+    8858,
+    10856,
+    12848.666666666666,
+    14855.333333333334,
+    16858,
+    18856,
+    20858.666666666668,
+    22855.333333333332,
+    24853.333333333332,
+    26852,
+    28848.666666666668,
+    30942,
+    32944.666666666672,
+    34942.666666666664
+  ],
+  "raw_video_threshold_crossings_ms" : [
+    4900,
+    6866.6666666666661,
+    8900,
+    10866.666666666668,
+    12866.666666666668,
+    14900,
+    16866.666666666668,
+    18900,
+    20833.333333333332,
+    22900,
+    24900,
+    26833.333333333332,
+    28866.666666666668,
+    30866.666666666668,
+    32966.666666666672,
+    34966.666666666672
+  ],
+  "recorded_av_abs_p95_ms" : 71.33333333333303,
+  "recorded_video_minus_audio_median_ms" : 22,
+  "recording" : "generated-recovery-1791759546952591000-obs.mp4",
+  "schema_version" : 2,
+  "source_pulse_duration_ms" : 120,
+  "unmatched_audio_markers" : 0,
+  "unmatched_video_markers" : 0,
+  "video_frames_decoded" : 1094,
+  "video_marker_pts_ms" : [
+    4900,
+    6866.6666666666661,
+    8900,
+    10866.666666666668,
+    12866.666666666668,
+    14900,
+    16866.666666666668,
+    18900,
+    20833.333333333332,
+    22900,
+    24900,
+    26833.333333333332,
+    28866.666666666668,
+    30866.666666666668,
+    32966.666666666672,
+    34966.666666666672
+  ]
+}

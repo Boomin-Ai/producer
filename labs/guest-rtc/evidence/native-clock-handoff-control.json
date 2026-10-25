@@ -1,0 +1,133 @@
+{
+  "run": "generated-recovery-1791754759647749000",
+  "g1_complete": false,
+  "production_deployed": false,
+  "loss_gate_relaxed": false,
+  "selected_guest_recorded": "guest-1",
+  "guests": 3,
+  "seconds": 90,
+  "native_sha256": "1c4b3bd3db1c7763f912a5476668b6b21326caacf73b64d6d35c3cc4df166a62",
+  "local_obs_acceptance_passed": false,
+  "failure_reasons": [
+    "numbered recording marker gate failed",
+    "missing marker labels within observed recording span"
+  ],
+  "pairs": 41,
+  "absolute_p95_ms": 40,
+  "missing_labels": [
+    21,
+    22,
+    23
+  ],
+  "marker_causes": [
+    {
+      "label": 21,
+      "clock_rejections": [],
+      "video_dispositions": [
+        "late"
+      ]
+    },
+    {
+      "label": 22,
+      "clock_rejections": [
+        {
+          "details": {
+            "audio_origin_us": 4000743608464387,
+            "delta_us": 578982,
+            "origin_age_us": 10622,
+            "sender_us": 4000743609043369
+          },
+          "reason": "video_origin_delta_out_of_bounds"
+        }
+      ],
+      "video_dispositions": []
+    },
+    {
+      "label": 23,
+      "clock_rejections": [
+        {
+          "details": {
+            "audio_origin_us": 4000743610710306,
+            "delta_us": 318693,
+            "late_us": 0,
+            "lead_us": 457019,
+            "origin_age_us": 8640,
+            "sender_us": 4000743611028999
+          },
+          "reason": "video_deadline_too_early"
+        }
+      ],
+      "video_dispositions": []
+    }
+  ],
+  "collector": {
+    "active_after_shutdown": false,
+    "capacity": 1,
+    "collected": 841,
+    "consumed": 841,
+    "errors": 0,
+    "max_collection_us": 284086,
+    "pending": 0,
+    "presentation_waits_for_collection": false,
+    "replaced": 0,
+    "shutdown_us": 1086
+  },
+  "audio_queue": {
+    "active_after_shutdown": false,
+    "capacity": 24,
+    "enqueue_contention_dropped": 26,
+    "flushed": 0,
+    "late": 25,
+    "max_native_submit_us": 3447,
+    "max_tick_gap_us": 184133,
+    "nonoverlapping_clock_retirements": 3,
+    "overflow": 0,
+    "pending": 0,
+    "publication_epoch": 15,
+    "pushed": 8652,
+    "retired_producer_dropped": 0,
+    "same_authority_transport_retirements": 10,
+    "sealed_for_finish": true,
+    "submitted": 8627,
+    "worker_failed": false,
+    "worker_qos_result_previous_effective": [
+      0,
+      21,
+      33
+    ]
+  },
+  "video_queue": {
+    "active_after_shutdown": false,
+    "capacity": 14,
+    "enqueue_contention_dropped": 4,
+    "flushed": 0,
+    "late": 8,
+    "max_native_submit_us": 5597,
+    "max_tick_gap_us": 187090,
+    "nonoverlapping_clock_retirements": 0,
+    "overflow": 0,
+    "pending": 0,
+    "publication_epoch": 13,
+    "pushed": 2278,
+    "retired_producer_dropped": 0,
+    "same_authority_transport_retirements": 8,
+    "sealed_for_finish": true,
+    "submitted": 2270,
+    "worker_failed": false,
+    "worker_qos_result_previous_effective": [
+      0,
+      21,
+      33
+    ]
+  },
+  "input_sha256": {
+    "generated-recovery-1791754759647749000-browser.json": "cffbaf77924fec7f1316f393e9e45cc2c38da9cdbbdff1fec5a0d11a4feb0994",
+    "generated-recovery-1791754759647749000-conditions.json": "c9c4a3f3eab6f7d8a709dc2c59080ec99a3cc1349bc34445deb62569b8a17ee2",
+    "generated-recovery-1791754759647749000-obs-acceptance.json": "54b2e7f232884821add571aa89e999fd660d35c4f19135205580fd388b731b12",
+    "generated-recovery-1791754759647749000-obs-markers.json": "084cc3f01c0e50f1d428d58e55160670c0448dda2fb6dbdda5b30fb84b4dc3b5",
+    "generated-recovery-1791754759647749000-obs-numbered.json": "af166f58872236b26b3ead2023e1c9bbacec6a2e1a45a82e8deb6c0ccd940a8b",
+    "generated-recovery-1791754759647749000-reconnect-loss.json": "d575e13ba7825371f95a63cc7a628716a412f41423a06b841a6eaa14752c53f8",
+    "generated-recovery-1791754759647749000-sfu-provenance.json": "c070e5dee50fe2fb6ab85eda727a8a66059f87135704df728602da75b78344f8",
+    "generated-recovery-1791754759647749000.json": "0d0ea3630c31f24b053b18e0c837006cc46f5b868b9cb181ce67afeb4037a548"
+  }
+}

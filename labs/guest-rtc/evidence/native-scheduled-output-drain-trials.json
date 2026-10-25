@@ -1,0 +1,264 @@
+{
+  "g1_complete": false,
+  "production_deployed": false,
+  "all_guest_camera_compositing_qualified": false,
+  "tests": {
+    "native": 60,
+    "recording_gate": 16,
+    "strict_clippy_all_targets_combined_features_passed": true
+  },
+  "trials": [
+    {
+      "run": "generated-recovery-1791742532950268000",
+      "guests_connected": 1,
+      "recorded_guest_streams": 1,
+      "reconnect": "full",
+      "reconnect_count": 1,
+      "local_acceptance_passed": true,
+      "failure_reasons": [],
+      "numbered_pairs": 23,
+      "p95_ms": 66.66666666666424,
+      "missing_video_labels": [],
+      "unmatched_audio": 0,
+      "unmatched_video": 0,
+      "drain": {
+        "budget_ms": 450,
+        "elapsed_us": 137984,
+        "new_input_sealed": true,
+        "pending_after_audio_video": [
+          0,
+          0
+        ],
+        "pending_before_audio_video": [
+          12,
+          5
+        ],
+        "timed_out": false
+      },
+      "audio_output": {
+        "active_after_shutdown": false,
+        "capacity": 24,
+        "enqueue_contention_dropped": 14,
+        "flushed": 12,
+        "late": 0,
+        "max_native_submit_us": 2754,
+        "max_tick_gap_us": 13563,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 6,
+        "pushed": 4375,
+        "retired_producer_dropped": 0,
+        "sealed_for_finish": true,
+        "submitted": 4363,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "video_output": {
+        "active_after_shutdown": false,
+        "capacity": 14,
+        "enqueue_contention_dropped": 0,
+        "flushed": 5,
+        "late": 0,
+        "max_native_submit_us": 441,
+        "max_tick_gap_us": 13470,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 6,
+        "pushed": 1146,
+        "retired_producer_dropped": 0,
+        "sealed_for_finish": true,
+        "submitted": 1141,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "clock_worker": {
+        "active_after_shutdown": false,
+        "poll_interval_ms": 2,
+        "qos": [
+          0,
+          21,
+          33
+        ],
+        "timings": {
+          "decoded_audio": {
+            "count": 18092,
+            "max_us": 1397,
+            "mean_us": 8,
+            "over_100_ms": 0,
+            "over_10_ms": 0,
+            "over_30_ms": 0
+          },
+          "observer_video": {
+            "count": 18092,
+            "max_us": 1505,
+            "mean_us": 6,
+            "over_100_ms": 0,
+            "over_10_ms": 0,
+            "over_30_ms": 0
+          },
+          "sender_report_refresh": {
+            "count": 18092,
+            "max_us": 1909,
+            "mean_us": 6,
+            "over_100_ms": 0,
+            "over_10_ms": 0,
+            "over_30_ms": 0
+          },
+          "tick_gap": {
+            "count": 18091,
+            "max_us": 13666,
+            "mean_us": 2487,
+            "over_100_ms": 0,
+            "over_10_ms": 3,
+            "over_30_ms": 0
+          },
+          "tick_work": {
+            "count": 18092,
+            "max_us": 1913,
+            "mean_us": 23,
+            "over_100_ms": 0,
+            "over_10_ms": 0,
+            "over_30_ms": 0
+          }
+        },
+        "worker_failed": false
+      },
+      "native_sha256": "b4fae3bab40f9ca52616e3452ad2fca4355838cf3d8011a76210811d102b217b",
+      "sfu_sha256": "462b296c94efeca28e170ac18ca5b2fc1cdb65a8f896845f5f0e371eaca6c40e"
+    },
+    {
+      "run": "generated-recovery-1791742669314440000",
+      "guests_connected": 3,
+      "recorded_guest_streams": 1,
+      "reconnect": "none",
+      "reconnect_count": 0,
+      "local_acceptance_passed": true,
+      "failure_reasons": [],
+      "numbered_pairs": 30,
+      "p95_ms": 33.33333333333576,
+      "missing_video_labels": [],
+      "unmatched_audio": 0,
+      "unmatched_video": 0,
+      "drain": {
+        "budget_ms": 450,
+        "elapsed_us": 116583,
+        "new_input_sealed": true,
+        "pending_after_audio_video": [
+          0,
+          0
+        ],
+        "pending_before_audio_video": [
+          12,
+          4
+        ],
+        "timed_out": false
+      },
+      "audio_output": {
+        "active_after_shutdown": false,
+        "capacity": 24,
+        "enqueue_contention_dropped": 29,
+        "flushed": 0,
+        "late": 4,
+        "max_native_submit_us": 6898,
+        "max_tick_gap_us": 68656,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 2,
+        "pushed": 5916,
+        "retired_producer_dropped": 0,
+        "sealed_for_finish": true,
+        "submitted": 5912,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "video_output": {
+        "active_after_shutdown": false,
+        "capacity": 14,
+        "enqueue_contention_dropped": 1,
+        "flushed": 0,
+        "late": 1,
+        "max_native_submit_us": 33692,
+        "max_tick_gap_us": 68335,
+        "overflow": 0,
+        "pending": 0,
+        "publication_epoch": 2,
+        "pushed": 1596,
+        "retired_producer_dropped": 0,
+        "sealed_for_finish": true,
+        "submitted": 1595,
+        "worker_failed": false,
+        "worker_qos_result_previous_effective": [
+          0,
+          21,
+          33
+        ]
+      },
+      "clock_worker": {
+        "active_after_shutdown": false,
+        "poll_interval_ms": 2,
+        "qos": [
+          0,
+          21,
+          33
+        ],
+        "timings": {
+          "decoded_audio": {
+            "count": 24168,
+            "max_us": 33755,
+            "mean_us": 9,
+            "over_100_ms": 0,
+            "over_10_ms": 2,
+            "over_30_ms": 1
+          },
+          "observer_video": {
+            "count": 24168,
+            "max_us": 20384,
+            "mean_us": 7,
+            "over_100_ms": 0,
+            "over_10_ms": 1,
+            "over_30_ms": 0
+          },
+          "sender_report_refresh": {
+            "count": 24168,
+            "max_us": 608,
+            "mean_us": 2,
+            "over_100_ms": 0,
+            "over_10_ms": 0,
+            "over_30_ms": 0
+          },
+          "tick_gap": {
+            "count": 24167,
+            "max_us": 68364,
+            "mean_us": 2482,
+            "over_100_ms": 0,
+            "over_10_ms": 17,
+            "over_30_ms": 3
+          },
+          "tick_work": {
+            "count": 24168,
+            "max_us": 33758,
+            "mean_us": 20,
+            "over_100_ms": 0,
+            "over_10_ms": 3,
+            "over_30_ms": 1
+          }
+        },
+        "worker_failed": false
+      },
+      "native_sha256": "b4fae3bab40f9ca52616e3452ad2fca4355838cf3d8011a76210811d102b217b",
+      "sfu_sha256": "462b296c94efeca28e170ac18ca5b2fc1cdb65a8f896845f5f0e371eaca6c40e"
+    }
+  ]
+}

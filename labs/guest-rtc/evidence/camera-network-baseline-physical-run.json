@@ -1,0 +1,81 @@
+{
+  "run": "physical-publication-1791686827299744000",
+  "profile": "baseline",
+  "duration_seconds": 30.159659584,
+  "camera_submitted": 709,
+  "camera_p95_ms": 37,
+  "audio_p95_ms": 26,
+  "audio_deadline_recoveries": 0,
+  "camera_errors": 0,
+  "audio_errors": 0,
+  "native_clipped_samples": 478,
+  "received_video_frames": 688,
+  "packet_relay": {
+    "profile": "baseline",
+    "signaling_rewrites": 90,
+    "rejected_tcp_candidates": 0,
+    "rejected_non_mux_candidates": 48,
+    "pending_max": 0,
+    "snapshot_write_errors": 0,
+    "last_snapshot_error_code": null,
+    "peer_limit_drops": 0,
+    "overflow_drops": 0,
+    "send_errors": 0,
+    "websocket_backpressure_closes": 0,
+    "packets": {
+      "client_to_sfu:control": {
+        "received": 309,
+        "forwarded": 309,
+        "dropped": 0,
+        "delayed": 0,
+        "max_delay_ms": 0
+      },
+      "sfu_to_client:control": {
+        "received": 427,
+        "forwarded": 427,
+        "dropped": 0,
+        "delayed": 0,
+        "max_delay_ms": 0
+      },
+      "client_to_sfu:video": {
+        "received": 2230,
+        "forwarded": 2230,
+        "dropped": 0,
+        "delayed": 0,
+        "max_delay_ms": 0
+      },
+      "client_to_sfu:audio": {
+        "received": 3774,
+        "forwarded": 3774,
+        "dropped": 0,
+        "delayed": 0,
+        "max_delay_ms": 0
+      },
+      "sfu_to_client:audio": {
+        "received": 1482,
+        "forwarded": 1482,
+        "dropped": 0,
+        "delayed": 0,
+        "max_delay_ms": 0
+      },
+      "sfu_to_client:video": {
+        "received": 1684,
+        "forwarded": 1684,
+        "dropped": 0,
+        "delayed": 0,
+        "max_delay_ms": 0
+      }
+    },
+    "payloads_decrypted": false,
+    "payloads_logged": false,
+    "packet_profile_effect_observed": false
+  },
+  "private_av_capture": {
+    "recorded": true,
+    "bytes": 2727068,
+    "mime": "video/webm;codecs=vp8,opus",
+    "scope": "private Application Support; decoded AV browser re-encode, not raw source media"
+  },
+  "subjective_review": "not requested for relay-routing control",
+  "g1_complete": false
+}

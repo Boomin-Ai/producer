@@ -1,0 +1,52 @@
+{
+  "local_obs_acceptance_passed": false,
+  "failure_reasons": [
+    "numbered recording marker gate failed"
+  ],
+  "local_delivery_worker_gate_passed": true,
+  "delivery_worker_failure_reasons": [],
+  "local_readiness_gate_passed": true,
+  "readiness_failure_reasons": [],
+  "binding_epochs": [
+    {
+      "binding_since_us": 101083652085,
+      "recovery_started_us": 101083651034,
+      "superseded_binding_epochs": [
+        101083651034,
+        101083651643
+      ],
+      "first_scheduled_ms": {
+        "audio": 743.843,
+        "video": 809.847
+      }
+    },
+    {
+      "binding_since_us": 101095841875,
+      "recovery_started_us": 101095663487,
+      "superseded_binding_epochs": [
+        101095663487,
+        101095664884,
+        101095840774
+      ],
+      "first_scheduled_ms": {
+        "audio": 682.457,
+        "video": 695.034
+      }
+    }
+  ],
+  "raw_binding_epoch_count": 7,
+  "superseded_binding_epochs": [
+    101083651034,
+    101083651643,
+    101095663487,
+    101095664884,
+    101095840774
+  ],
+  "unfinished_binding_epochs": [],
+  "expected_binding_epochs": 2,
+  "readiness_budget_ms": 1500,
+  "budget_scope": "prototype local recovery from earliest pending reset, not WAN service guarantee",
+  "startup_and_tail_loss_qualified": false,
+  "lip_sync_qualified": false,
+  "g1_complete": false
+}

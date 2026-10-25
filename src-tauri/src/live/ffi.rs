@@ -38,6 +38,14 @@ pub struct obs_audio_info {
 }
 
 #[repr(C)]
+pub struct obs_audio_info2 {
+    pub samples_per_sec: u32,
+    pub speakers: c_int,
+    pub max_buffering_ms: u32,
+    pub fixed_buffering: bool,
+}
+
+#[repr(C)]
 pub struct obs_module_failure_info {
     pub failed_modules: *mut *mut c_char,
     pub count: usize,
@@ -107,6 +115,7 @@ extern "C" {
     pub fn obs_reset_video(ovi: *mut obs_video_info) -> c_int;
     pub fn obs_set_video_levels(sdr_white_level: f32, hdr_nominal_peak_level: f32);
     pub fn obs_reset_audio(oai: *const obs_audio_info) -> bool;
+    pub fn obs_reset_audio2(oai: *const obs_audio_info2) -> bool;
     pub fn obs_load_all_modules2(mfi: *mut obs_module_failure_info);
     pub fn obs_module_failure_info_free(mfi: *mut obs_module_failure_info);
     pub fn obs_post_load_modules();
@@ -177,6 +186,7 @@ extern "C" {
     pub fn gs_enable_framebuffer_srgb(enable: bool);
     pub fn gs_framebuffer_srgb_enabled() -> bool;
     pub fn gs_matrix_push();
+    pub fn gs_matrix_identity();
     pub fn gs_matrix_pop();
     pub fn gs_matrix_translate3f(x: f32, y: f32, z: f32);
     pub fn gs_get_render_target() -> *mut c_void;
@@ -642,6 +652,7 @@ extern "C" {
         idx: usize,
     );
     pub fn obs_output_set_service(output: *mut obs_output_t, service: *mut obs_service_t);
+    pub fn obs_output_update(output: *mut obs_output_t, settings: *mut obs_data_t);
     pub fn obs_output_start(output: *mut obs_output_t) -> bool;
     pub fn obs_output_stop(output: *mut obs_output_t);
     pub fn obs_output_active(output: *const obs_output_t) -> bool;
@@ -789,6 +800,19 @@ extern "C" {
     // stubs this block synthesises, so every obs symbol shim_win.c calls
     // must be declared here or the release link fails at `__imp_*`.
     pub fn obs_register_source_s(info: *const c_void, size: usize);
+    // The opt-in guest ingress C boundary needs these Windows import stubs.
+    // Frame/audio layouts stay in guest_ingest.c, pinned to the engine ABI.
+    pub fn obs_source_output_video(source: *mut obs_source_t, frame: *const c_void);
+    #[cfg(target_os = "windows")]
+    pub fn obs_source_output_audio(source: *mut obs_source_t, audio: *const c_void);
+    #[cfg(target_os = "windows")]
+    pub fn video_format_get_parameters(
+        colorspace: c_int,
+        range: c_int,
+        matrix: *mut f32,
+        min: *mut f32,
+        max: *mut f32,
+    ) -> bool;
     pub fn obs_source_skip_video_filter(filter: *mut obs_source_t);
     pub fn obs_data_set_default_string(
         data: *mut obs_data_t,

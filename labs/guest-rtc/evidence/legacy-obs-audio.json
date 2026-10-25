@@ -1,0 +1,35 @@
+{
+  "admitted_muted_rms": [
+    0.0,
+    0.0
+  ],
+  "checks": [
+    "remote host playback configured",
+    "admission starts silent",
+    "guest excluded from stage return",
+    "host in both buses",
+    "native volume",
+    "native mute"
+  ],
+  "guest_only_rms": [
+    0.12944703086664072,
+    0.0
+  ],
+  "half_gain_rms": [
+    0.06475053369997806,
+    0.06475053369997806
+  ],
+  "host_rms": [
+    0.1294726561674767,
+    0.1294726561674767
+  ],
+  "muted_rms": [
+    0.0,
+    0.0
+  ],
+  "ok": true,
+  "fixture": "Existing debug Producer binary with installed OBS plugins, synthetic audio, monitoring disabled",
+  "binary_sha256": "4eca7af5e7bae088bb93415a81531ae2d3787eb77ed1c35c0e41ed2e8194d047",
+  "compiled_source_commit": "not established; existing binary predates this isolated worktree",
+  "is_livekit_media_adapter": false
+}

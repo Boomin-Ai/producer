@@ -9,6 +9,22 @@ on:
         description: "Upload assets to the public GitHub release (false = dry-run: build, notarize, verify, upload as Actions artifact only)"
         type: boolean
         default: false
+      native_guest:
+        description: "Include the native LiveKit guest runtime in the Apple Silicon candidate"
+        type: boolean
+        default: false
+      promote_run:
+        description: "Completed Release run to promote without rebuilding (blank = normal build)"
+        type: string
+        default: ""
+      candidate_tag:
+        description: "Existing draft LiveKit candidate tag for promotion"
+        type: string
+        default: ""
+      expected_mac_sha256:
+        description: "Verified notarized installer SHA-256 for promotion"
+        type: string
+        default: ""
 
 # One release run at a time, newest wins. Re-pushing a tag otherwise leaves
 # TWO complete runs racing as writers on the same release — v0.4.0 shipped a
@@ -19,13 +35,68 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  promote-signed-candidate:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.promote_run != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN: ${{ inputs.promote_run }}
+      CANDIDATE_TAG: ${{ inputs.candidate_tag }}
+      EXPECTED_MAC_SHA256: ${{ inputs.expected_mac_sha256 }}
+    steps:
+      - name: Verify completed build and draft target
+        run: |
+          python3 - <<'PY'
+          import os, re, json, subprocess
+          run_id = os.environ['SOURCE_RUN']; tag = os.environ['CANDIDATE_TAG']
+          assert re.fullmatch(r'[0-9]+', run_id)
+          assert re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+-livekit\.[0-9]+', tag)
+          assert re.fullmatch(r'[0-9a-f]{64}', os.environ['EXPECTED_MAC_SHA256'])
+          def api(path): return json.loads(subprocess.check_output(['gh','api','repos/Boomin-Ai/producer/'+path]))
+          build = api('actions/runs/'+run_id)
+          assert build['name'] == 'Release' and build['conclusion'] == 'success'
+          release = next(r for r in api('releases?per_page=30') if r['tag_name'] == tag)
+          assert release['draft'] and release['prerelease']
+          assert release['target_commitish'] == build['head_sha']
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: Producer-macos-arm64-live
+          run-id: ${{ inputs.promote_run }}
+          github-token: ${{ github.token }}
+          path: candidate
+      - name: Verify exact signed installer bytes and retain other platforms
+        run: |
+          python3 - <<'PY'
+          import pathlib, hashlib, os
+          files = list(pathlib.Path('candidate').glob('*.dmg'))
+          assert len(files) == 1
+          assert hashlib.sha256(files[0].read_bytes()).hexdigest() == os.environ['EXPECTED_MAC_SHA256']
+          PY
+          gh release download v0.4.69 --repo Boomin-Ai/producer -p 'Producer_0.4.69_x64.dmg' -p 'Producer_0.4.69_x64-setup.exe' -p 'Producer_0.4.69_amd64.AppImage' -D candidate
+          (cd candidate && sha256sum * > SHA256SUMS.txt)
+      - name: Upload complete candidate and publish
+        run: |
+          gh release upload "$CANDIDATE_TAG" candidate/* --clobber --repo Boomin-Ai/producer
+          python3 - <<'PY'
+          import os, json, pathlib, subprocess
+          tag = os.environ['CANDIDATE_TAG']
+          releases = json.loads(subprocess.check_output(['gh','api','repos/Boomin-Ai/producer/releases?per_page=30']))
+          release = next(r for r in releases if r['tag_name'] == tag)
+          for file in pathlib.Path('candidate').iterdir():
+            assert any(a['name'] == file.name and a['state'] == 'uploaded' and a['size'] == file.stat().st_size for a in release['assets'])
+          PY
+          gh release edit "$CANDIDATE_TAG" --draft=false --prerelease --latest=false --repo Boomin-Ai/producer
   # ── Linux / Intel-mac (engine-less, unchanged path) ────────────────────────
   # Skipped on dry-runs so a dispatch can't clobber public release assets.
   # Windows left this matrix when build-windows-live landed: an engine-less
   # Windows exe here would race the live one for the same asset names, and
   # tauri-action's latest.json entry would point updaters at a stub build.
   build:
-    if: ${{ github.event_name == 'push' || inputs.publish }}
+    if: ${{ inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) }}
     permissions:
       contents: write
     strategy:
@@ -80,19 +151,16 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: "Producer v__VERSION__"
+          releaseCommitish: ${{ github.sha }}
           releaseBody: |
-            Camera filters now survive room exits and source replacement.
-            Browser guests reconnect with fresh signaling credentials while
-            keeping their camera and microphone tracks running.
-            Recording writes recoverable MP4 indexes during capture and
-            reports failed recording helpers instead of silently losing media.
+            Introduces module-based interactive sets: Grand Arena, Decision Room, Open Floor, Atmosphere and Just Facts.
+            Apple Silicon uses prepared native scenes, layered artwork, live source slots and authored landscape/portrait compositions.
+            Configure audience voting, moderated submissions/chat, weather and Claude/OpenAI connections through the set editor and Settings → Integrations.
+            Shows optionally sequence independently scoped modules; rehearsal uses isolated simulated participants.
+            Fixes portrait weather flicker, native media-cache failures and module reconnection after workspace outages.
+            Preserves the single virtual camera and native guest runtime on Apple Silicon. Windows retains its existing Live engine; Intel macOS and Linux retain their existing engine-less scope.
 
-            Apple Silicon app and installers are Developer ID signed and
-            Apple notarized. Windows retains its native Live engine;
-            Intel macOS and Linux retain their existing engine-less builds.
-
-            Full release details: https://github.com/Boomin-Ai/producer/blob/main/docs/RELEASE-0.4.69.md
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
 
@@ -117,6 +185,7 @@ jobs:
   #     absent artifact = silent stub build — guarded below with otool)
   #   engine inside the .app BEFORE notarization    (Apple scans nested Mach-Os)
   build-macos-arm64-live:
+    if: ${{ inputs.promote_run == '' }}
     permissions:
       contents: write
     runs-on: macos-latest
@@ -179,6 +248,19 @@ jobs:
             || { echo "FATAL: engine artifact missing after fetch — refusing to ship a stub build" >&2; exit 1; }
           echo "ENGINE_NAME=$NAME" >> "$GITHUB_ENV"
 
+      - name: Build single camera and retired-device migration from pinned source
+        run: |
+          set -euo pipefail
+          brew install simde
+          PIN="$(python3 -c "import json;print(json.load(open('engine/obs.lock'))['obs']['commit'])")"
+          git init engine/obs-studio
+          git -C engine/obs-studio remote add origin https://github.com/obsproject/obs-studio.git
+          git -C engine/obs-studio fetch --depth 1 origin "$PIN"
+          git -C engine/obs-studio checkout --detach FETCH_HEAD
+          bash scripts/build-camera-extension.sh
+          bash scripts/build-retired-camera-extension.sh
+          bash scripts/build-virtualcam-plugin.sh --stage "engine/artifacts/$ENGINE_NAME"
+
       - name: Require Apple signing and notarization credentials
         run: |
           set -euo pipefail
@@ -220,7 +302,14 @@ jobs:
       # No APPLE_* env here on purpose: tauri must NOT sign/notarize the
       # engine-less intermediate app; signing happens after engine assembly.
       - name: Build app (engine linked, unsigned)
-        run: bun run tauri build --target aarch64-apple-darwin
+        env:
+          INCLUDE_NATIVE_GUEST: ${{ inputs.native_guest && '1' || '0' }}
+        run: |
+          if [ "$INCLUDE_NATIVE_GUEST" = "1" ]; then
+            bun run tauri build --target aarch64-apple-darwin --features guest-rtc-production
+          else
+            bun run tauri build --target aarch64-apple-darwin
+          fi
 
       - name: Guard — refuse stub build
         run: |
@@ -298,7 +387,7 @@ jobs:
         if: ${{ github.event_name == 'push' || inputs.publish }}
         run: |
           set -euo pipefail
-          gh release create "v$VERSION" --title "Producer v$VERSION" --notes "Producer v$VERSION" 2>/dev/null || true
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "Producer v$VERSION" --draft --notes "Producer v$VERSION" 2>/dev/null || true
           gh release upload "v$VERSION" "$DMG" --clobber
 
       # Auto-update leg: the updater archive must contain the ASSEMBLED,
@@ -321,7 +410,7 @@ jobs:
           # can land after our merged manifest.
           for i in $(seq 1 120); do
             PENDING="$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs" --paginate \
-              --jq '[.jobs[] | select(.name != "build-macos-arm64-live") | select(.status != "completed")] | length')"
+              --jq '[.jobs[] | select(.name != "build-macos-arm64-live" and .name != "publish-verified-release") | select(.status != "completed")] | length')"
             [ "$PENDING" = "0" ] && break
             echo "waiting on $PENDING sibling job(s)… ($i)"
             sleep 30
@@ -389,6 +478,7 @@ jobs:
   # + scripts/build-windows.ps1) so CI ships exactly what that box verified.
   # There is no Windows code-signing certificate wired; the installer is unsigned.
   build-windows-live:
+    if: ${{ inputs.promote_run == '' }}
     permissions:
       contents: write
     runs-on: windows-2022
@@ -503,7 +593,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release create "v$VERSION" --title "Producer v$VERSION" --notes "Producer v$VERSION" 2>/dev/null || true
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "Producer v$VERSION" --draft --notes "Producer v$VERSION" 2>/dev/null || true
           # Only the installers and their updater signatures. `dist/` is the
           # web bundle's own output dir too (index.html, assets/), and a
           # directory in the upload list fails the whole step.
@@ -511,3 +601,27 @@ jobs:
             [ -f "$f" ] || continue
             gh release upload "v$VERSION" "$f" --clobber
           done
+
+
+  # Keep the previous public release current until every new platform passes.
+  publish-verified-release:
+    if: ${{ inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) }}
+    needs: [build, build-macos-arm64-live, build-windows-live]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify all updater payload signatures before public promotion
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y minisign
+          python3 scripts/verify-release-payloads.py
+      - name: Publish the verified release
+        run: |
+          set -euo pipefail
+          VERSION="$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")"
+          gh release edit "v$VERSION" --draft=false --latest --notes-file /tmp/producer-release-verification/release-notes.md

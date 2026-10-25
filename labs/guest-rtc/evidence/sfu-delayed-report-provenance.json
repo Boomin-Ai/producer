@@ -1,0 +1,23 @@
+{
+  "experiment": "One-shot delayed audio SR request with buffer arrival trace; loopback only",
+  "delay_ms": 500,
+  "max_requests_per_audio_ssrc": 1,
+  "startup_qualified": false,
+  "patch_sha256": "fdba24eedd6400e143c6fcf22e70af683b683138146cfc550aa04d25e62d842e",
+  "base_files_sha256": {
+    "pkg/sfu/buffer/buffer.go": "1abacc2f10bf4014ebccf5e2ae971f87cc4c11c16fcf3848052171af309eff10",
+    "pkg/sfu/buffer/lab_sr_request.go": "46628f61cc5ce699063b07d09dd74fc8e6f0e1e6b102709283956fc0b37fa5e8",
+    "pkg/sfu/buffer/lab_sr_request_test.go": "55755b3782dd0a4b37ac18ea32daf180b3e0026fd11ac48777c908bbdb1ecda7",
+    "pkg/sfu/receiver_base.go": "38620b025861461becd90a2c9c413bb1bd06e8f56cba686300a3c7e0b274832d"
+  },
+  "patched_files_sha256": {
+    "pkg/sfu/buffer/buffer.go": "1ec37bd7faa91986bc93fe98d97d8945fba8d2af119028d1b38d0cf34dac4e38",
+    "pkg/sfu/buffer/lab_sr_request.go": "3a56b2639971fbc72ee8e180dc28bbb41d7dbb24ddb25da3dea8dbe0c616fc7b",
+    "pkg/sfu/buffer/lab_sr_request_test.go": "f5915e7ba3eec01a6a2e713a6c3db4a23705c65c38b1b4455c4f3f5f3fde3ffc",
+    "pkg/sfu/receiver_base.go": "af59fd008776cdde15d01b8bf76030e9de1c7e96fb2f5c9b19d5d77a71882953"
+  },
+  "built_binary_sha256": "09d100f23cd3377edb8acb90496d63ed95a590b8524d6b33061bf9108fb31c09",
+  "helper_tests_passed": true,
+  "full_server_build_passed": true,
+  "full_upstream_suite_run": false
+}

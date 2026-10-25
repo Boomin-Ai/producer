@@ -1,0 +1,108 @@
+{
+  "g1_complete": false,
+  "production_deployed": false,
+  "loss_gate_relaxed": false,
+  "scope": "Single guest, 45 seconds, one deliberate accepted-pulse full reconnect on modified local SFU; does not qualify Cloud or three guests.",
+  "run": "generated-recovery-1791754594143926000",
+  "native_sha256": "057d866db58623f5174fd1ae6c651ee967d923d1b90d93701d21503f47526a1d",
+  "local_obs_acceptance_passed": true,
+  "pairs": 22,
+  "absolute_p95_ms": 43.333333333332575,
+  "binding_epochs": [
+    {
+      "binding_since_us": 13503043524,
+      "recovery_started_us": 13503043211,
+      "superseded_binding_epochs": [
+        13503043211,
+        13503043372
+      ],
+      "first_scheduled_ms": {
+        "audio": 518.658,
+        "video": 518.726
+      }
+    },
+    {
+      "binding_since_us": 13516127758,
+      "recovery_started_us": 13516068911,
+      "superseded_binding_epochs": [
+        13516068911,
+        13516069003,
+        13516127677
+      ],
+      "first_scheduled_ms": {
+        "audio": 550.172,
+        "video": 560.094
+      }
+    }
+  ],
+  "audio_tail": {
+    "block_duration_ms": 10,
+    "blocks_per_transition": 2,
+    "fake_sender_timestamps_used": false,
+    "missing_pcm_recovered": false,
+    "synthetic_blocks_enqueued": 2,
+    "synthetic_blocks_rejected": 0
+  },
+  "audio_queue": {
+    "active_after_shutdown": false,
+    "capacity": 24,
+    "enqueue_contention_dropped": 13,
+    "flushed": 0,
+    "late": 0,
+    "max_native_submit_us": 384,
+    "max_tick_gap_us": 15690,
+    "nonoverlapping_clock_retirements": 0,
+    "overflow": 0,
+    "pending": 0,
+    "publication_epoch": 7,
+    "pushed": 4379,
+    "retired_producer_dropped": 0,
+    "same_authority_transport_retirements": 5,
+    "sealed_for_finish": true,
+    "submitted": 4379,
+    "worker_failed": false,
+    "worker_qos_result_previous_effective": [
+      0,
+      21,
+      33
+    ]
+  },
+  "video_queue": {
+    "active_after_shutdown": false,
+    "capacity": 14,
+    "enqueue_contention_dropped": 1,
+    "flushed": 0,
+    "late": 0,
+    "max_native_submit_us": 168,
+    "max_tick_gap_us": 15700,
+    "nonoverlapping_clock_retirements": 0,
+    "overflow": 0,
+    "pending": 0,
+    "publication_epoch": 6,
+    "pushed": 1146,
+    "retired_producer_dropped": 0,
+    "same_authority_transport_retirements": 4,
+    "sealed_for_finish": true,
+    "submitted": 1146,
+    "worker_failed": false,
+    "worker_qos_result_previous_effective": [
+      0,
+      21,
+      33
+    ]
+  },
+  "preceding_invalid_run": "generated-recovery-1791754355212659000",
+  "invalid_reason": "ENOSPC; incomplete native evidence, no media gate verdict",
+  "input_sha256": {
+    "generated-recovery-1791754594143926000-browser.json": "52c9274037efdeb143b971eca251fc54b4f7e48aa6da490db987c38edb7c372f",
+    "generated-recovery-1791754594143926000-conditions.json": "02b1ecea9a3945072080958a4886b17ad1a54b9f10e4f79c4bac8c969c5f6a69",
+    "generated-recovery-1791754594143926000-obs-acceptance.json": "2a2100c8cd24c78191dee6fab37b2c883b2c2d5d11f17a3624996757260e6b97",
+    "generated-recovery-1791754594143926000-obs-markers.json": "0cfd21c76124031cf3d09e816900c2724adecb5a9bf34cfa85f5c99713bc6765",
+    "generated-recovery-1791754594143926000-obs-numbered.json": "cb85999d223da85dad32401225d51398fc59172768ad19840541a5b144883c0c",
+    "generated-recovery-1791754594143926000-reconnect-loss.json": "3cf3b33788d2b4d6905ceda9ab7feb6fcbdc42c5041874c31fa20b82f13d0595",
+    "generated-recovery-1791754594143926000-sfu-provenance.json": "c070e5dee50fe2fb6ab85eda727a8a66059f87135704df728602da75b78344f8",
+    "generated-recovery-1791754594143926000.json": "576ae27af2bea772b9183874f2b807ac8c29915da0f40c1247dc3bda6bfb544c",
+    "generated-recovery-1791754355212659000-conditions.json": "15dc18ee78ea68a4a7c1e8a474206dd3173487ddb913ffc4b375e358ee1c9c25",
+    "generated-recovery-1791754355212659000-sfu-provenance.json": "c070e5dee50fe2fb6ab85eda727a8a66059f87135704df728602da75b78344f8"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "run_name": "physical-publication-1791657157584194000",
+  "status": "completed",
+  "loopback_only": true,
+  "physical_microphone_publication_requested": true,
+  "browser_voice_recorded": false,
+  "seconds": 60,
+  "g1_complete": false
+}

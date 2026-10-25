@@ -1,0 +1,40 @@
+{
+  "local_obs_acceptance_passed": false,
+  "failure_reasons": [
+    "epoch 77422664669: audio readiness exceeded budget",
+    "epoch 77422664669: video readiness exceeded budget",
+    "epoch 77436407882: audio readiness exceeded budget",
+    "epoch 77436407882: video readiness exceeded budget",
+    "numbered recording marker gate failed",
+    "missing marker labels within observed recording span"
+  ],
+  "local_readiness_gate_passed": false,
+  "readiness_failure_reasons": [
+    "epoch 77422664669: audio readiness exceeded budget",
+    "epoch 77422664669: video readiness exceeded budget",
+    "epoch 77436407882: audio readiness exceeded budget",
+    "epoch 77436407882: video readiness exceeded budget"
+  ],
+  "binding_epochs": [
+    {
+      "binding_since_us": 77422664669,
+      "first_scheduled_ms": {
+        "audio": 3458.74,
+        "video": 3481.39
+      }
+    },
+    {
+      "binding_since_us": 77436407882,
+      "first_scheduled_ms": {
+        "audio": 3777.526,
+        "video": 3815.37
+      }
+    }
+  ],
+  "expected_binding_epochs": 2,
+  "readiness_budget_ms": 1500,
+  "budget_scope": "prototype local per-binding readiness, not WAN service guarantee",
+  "startup_and_tail_loss_qualified": false,
+  "lip_sync_qualified": false,
+  "g1_complete": false
+}

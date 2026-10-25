@@ -1,0 +1,33 @@
+{
+  "release": "v0.4.72",
+  "source": "a825db03c437018a365c3690afa0f97edaefdcb0",
+  "run": 39127778689,
+  "all_platform_builds": "success",
+  "updater_signatures_verified": [
+    "darwin-aarch64",
+    "darwin-x86_64",
+    "linux-x86_64",
+    "windows-x86_64"
+  ],
+  "mac_arm64": [
+    "codesign deep strict",
+    "notarized app and DMG stapler validation",
+    "Gatekeeper accepted",
+    "both camera bundles and mirror support"
+  ],
+  "sha256": {
+    "Producer_0.4.72_x64-setup.exe": "7a330724e751e197e7414b1dd32f2c8cd0295b8a01caee2ab593381715e846cc",
+    "Producer_0.4.72_amd64.AppImage": "b5e2e9a1d78412722ec37c021d417e094a8dc81c3885697ad43d0c0c73841dae",
+    "Producer_0.4.72_aarch64.dmg": "33ffab3b61e2230d6bb586554de43280e7f875496244e7f664a42b86a938b782",
+    "Producer_0.4.72_aarch64.app.tar.gz": "d0cfad718b9a98286370faeca76f4028222762b43f85c1224597b78496815d5f",
+    "Producer_x64.app.tar.gz": "b2f2c7894c216f2ed272f47e27e15037ef6bd711c52654ddbf01fc309b08e219"
+  },
+  "producer_dev": {
+    "version": "v0.4.72",
+    "macos": 195110878,
+    "macos-intel": 11945752,
+    "windows": 136759455,
+    "linux": 85387768,
+    "all_download_statuses": 200
+  }
+}

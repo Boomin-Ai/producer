@@ -1,0 +1,74 @@
+{
+  "browser": "154.0.8037.98",
+  "guests": 1,
+  "mode": "republish",
+  "states": [
+    {
+      "identity": "guest-1",
+      "connected": true,
+      "published": true,
+      "returnAudioBlocks": 817,
+      "returnAudioPulses": 7,
+      "returnVideoFrames": 298,
+      "events": [
+        "return-audio",
+        "return-video",
+        "disconnected",
+        "return-audio",
+        "return-video"
+      ],
+      "audioMaxRms": 0.3002670824917614,
+      "error": null,
+      "syncStreams": true
+    }
+  ],
+  "audioStats": [
+    [
+      {
+        "id": "IT01A4219008161",
+        "timestamp": 1791650624232.304,
+        "type": "inbound-rtp",
+        "codecId": "CIT01_111_minptime=10;stereo=1;useinbandfec=1",
+        "kind": "audio",
+        "mediaType": "audio",
+        "ssrc": 4219008161,
+        "transportId": "T01",
+        "jitter": 0.017,
+        "packetsLost": 3,
+        "packetsReceived": 199,
+        "packetsReceivedWithCe": 0,
+        "packetsReceivedWithEct1": 0,
+        "audioLevel": 0,
+        "bytesReceived": 2823,
+        "concealedSamples": 3690,
+        "concealmentEvents": 5,
+        "estimatedPlayoutTimestamp": 4000639424095,
+        "fecPacketsDiscarded": 0,
+        "fecPacketsReceived": 0,
+        "headerBytesReceived": 2388,
+        "insertedSamplesForDeceleration": 1224,
+        "jitterBufferDelay": 9465.6,
+        "jitterBufferEmittedCount": 189120,
+        "jitterBufferMinimumDelay": 15129.6,
+        "jitterBufferTargetDelay": 15129.6,
+        "lastPacketReceivedTimestamp": 1791650624212.157,
+        "mid": "8",
+        "packetsDiscarded": 0,
+        "playoutId": "AP",
+        "remoteId": "ROA4219008161",
+        "removedSamplesForAcceleration": 0,
+        "silentConcealedSamples": 0,
+        "totalAudioEnergy": 0,
+        "totalProcessingDelay": 8518.65984,
+        "totalSamplesDuration": 4.069999999999958,
+        "totalSamplesReceived": 192960,
+        "trackIdentifier": "08f9ae49-b224-4bfc-8d21-1b70a90786f8"
+      }
+    ]
+  ],
+  "impairments": [],
+  "packetProbe": [],
+  "return_transport_observed": true,
+  "hardware_capture_used": false,
+  "physical_speaker_playout_used": false
+}
