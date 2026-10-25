@@ -20,10 +20,11 @@ export function useSetModules(session:RehearsalSession,endpoint:string|undefined
   const attach=()=>{session.attachModuleLifecycle(lifecycle);session.attachModuleTransport(async command=>{if(!valid())throw Error('Set connection expired');const result=await moduleCall(endpoint,room,'POST','/commands',{command});if(valid()&&result.snapshot)session.receiveModuleSnapshot(result.snapshot);if(!result.result)throw Error('Missing command receipt');return result.result;});};
   const refresh=async()=>{
    try{const reply=await moduleCall(endpoint,room,'GET');if(!valid())return;if(reply.deployment!==deployment)throw Error('The room’s set was replaced. Apply this set again to take control.');if(reply.snapshot)session.receiveModuleSnapshot(reply.snapshot);attach();pollWeather();}
-   catch(e){if(valid())session.attachModuleTransport(undefined,e instanceof Error?e.message:'Live module connection failed');}
+   catch(e){if(valid())session.attachModuleTransport(undefined,e instanceof Error?e.message:String(e));}
    finally{if(valid())timer=setTimeout(()=>void refresh(),1000);}
   };
-  void (async()=>{
+  let connectionAttempts=0;
+  const connect=async()=>{
    try{
     const saved=await dataIntegrations.list(endpoint).catch(()=>({connections:[]}));for(const [role,binding]of Object.entries(bindings)){const c=saved.connections.find(c=>c.connection.id===binding.id)?.connection;if(c?.kind==='weather')weatherIntervals.set(role,c.pollSeconds*1000);}
     const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(signature));deployment='set-'+Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('');
@@ -32,8 +33,9 @@ export function useSetModules(session:RehearsalSession,endpoint:string|undefined
     if(!valid())return;if(reply.snapshot)session.receiveModuleSnapshot(reply.snapshot);
     attach();
     timer=setTimeout(()=>void refresh(),1000);
-   }catch(e){if(valid())session.attachModuleTransport(undefined,e instanceof Error?e.message:'Live module connection failed');}
-  })();
+   }catch(e){if(valid()){session.attachModuleTransport(undefined,e instanceof Error?e.message:String(e));timer=setTimeout(()=>void connect(),Math.min(15000,1000*2**Math.min(connectionAttempts++,4)));}}
+  };
+  void connect();
   return()=>{disposed=true;clearTimeout(timer);session.attachModuleLifecycle(undefined);session.attachModuleTransport(undefined);};
  },[session,endpoint,room,active,mode,signature]);
 

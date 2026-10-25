@@ -38,7 +38,10 @@
     "test:sets-v2": "node scripts/test-sets-v2.mjs",
     "test:sets-v2-native": "bash scripts/sets-v2/run-native-probe.sh",
     "dev:sets-v2-room": "python3 scripts/sets-v2/dev-room.py",
-    "dev:sets-v2": "vite --host 127.0.0.1 --port 1436 --strictPort"
+    "dev:sets-v2": "vite --host 127.0.0.1 --port 1436 --strictPort",
+    "test:module-recovery-browser": "node scripts/test-module-recovery-browser.mjs",
+    "test:weather-output-stability-browser": "node scripts/test-weather-output-stability-browser.mjs",
+    "dev:sets-v2-workspace": "node scripts/sets-v2/local-workspace.mjs --background"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.0",

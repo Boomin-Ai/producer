@@ -267,6 +267,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
         <RehearsalPreview doc={doc} state={state} output={output} outputActive={output?.active} workspace={workspace} onEditorClose={onWorkspaceClose} configuration={<SetConfiguration session={session} onChange={onChange} output={output}/>} editor={editor} sources={visibleSlots.size ? sourceEditor : undefined} />
       </div>
     </header>
+    {doc.runtime.instances.length>0&&state.workspaceMode==='live'&&state.moduleConnection!=='live'&&<p role="status" className={state.moduleError?'set-error':'set-section-note'}>{state.moduleError?`Modules disconnected — reconnecting. ${state.moduleError}`:'Connecting live controls…'}</p>}
     {output?.layoutReadiness&&Object.values(output.layoutReadiness).some(s=>s.state==='error')&&<p className="set-error">Some layouts could not load. <button onClick={output.retryPreparation}>Retry loading</button></p>}
     {output?.error && <div role="alert" className="set-error">{output.error} <button disabled={output.busy&&!output.active} onClick={()=>void output.apply()}>Retry update</button></div>}
     {state.trace[state.trace.length - 1]?.message.startsWith('Rejected:') && <p role="status" className="set-error">{state.trace[state.trace.length - 1]!.message}</p>}

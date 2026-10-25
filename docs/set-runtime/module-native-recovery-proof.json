@@ -1,0 +1,88 @@
+{
+  "after": [
+    {
+      "cachedBytes": 129956440,
+      "cachedKeys": [
+        "scene-3b2a756c-eb5574c4",
+        "scene-53af1d00-256619f4"
+      ],
+      "clockMs": 26599.99841451645,
+      "generation": 2,
+      "paused": false,
+      "preparedRevision": 10,
+      "queued": false,
+      "ready": true,
+      "renderSerial": 674,
+      "renderedRevision": 7,
+      "transitionProgress": 1,
+      "transitioning": false,
+      "warmed": true
+    },
+    {
+      "cachedBytes": 136914112,
+      "cachedKeys": [
+        "scene-89bc4d8b-dd299011",
+        "scene-8d398545-f5da16c1"
+      ],
+      "clockMs": 13233.3325445652,
+      "generation": 2,
+      "paused": false,
+      "preparedRevision": 11,
+      "queued": false,
+      "ready": true,
+      "renderSerial": 597,
+      "renderedRevision": 9,
+      "transitionProgress": 1,
+      "transitioning": false,
+      "warmed": true
+    }
+  ],
+  "at": "2026-10-25T08:31:33.466Z",
+  "before": [
+    {
+      "cachedBytes": 64978220,
+      "cachedKeys": [
+        "scene-3b2a756c-eb5574c4"
+      ],
+      "clockMs": 20366.665452718735,
+      "generation": 2,
+      "paused": false,
+      "preparedRevision": 10,
+      "queued": false,
+      "ready": false,
+      "renderSerial": 487,
+      "renderedRevision": 7,
+      "transitionProgress": 1,
+      "transitioning": false,
+      "warmed": true
+    },
+    {
+      "cachedBytes": 68457056,
+      "cachedKeys": [
+        "scene-89bc4d8b-dd299011"
+      ],
+      "clockMs": 6999.999582767487,
+      "generation": 2,
+      "paused": false,
+      "preparedRevision": 9,
+      "queued": false,
+      "ready": true,
+      "renderSerial": 224,
+      "renderedRevision": 9,
+      "transitionProgress": 1,
+      "transitioning": false,
+      "warmed": true
+    }
+  ],
+  "generation": 2,
+  "idleSampleMs": 6200,
+  "kind": "weather-native-output-stability",
+  "layoutsReady": 2,
+  "nextSegment": true,
+  "ok": true,
+  "portraitError": false,
+  "queriedAgent": false,
+  "showStarted": true,
+  "showStopped": true,
+  "status": "passed"
+}

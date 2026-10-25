@@ -7,6 +7,17 @@ export async function weatherRoomProof(){
   const button=(name:string)=>Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(b=>(b.textContent?.trim()===name||b.getAttribute('aria-label')===name)&&!b.disabled);
   const dock=await until(()=>document.querySelector<HTMLElement>('[aria-label="Show the bottom row"]')||button('Set settings'),'bottom row');
   if(dock.getAttribute('aria-label')==='Show the bottom row')dock.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+  // Exercise real Show transport without making an agent/provider request.
+  (await until(()=>button('Set settings'),'show editor')).click();
+  const showEditor=await until(()=>document.querySelector<HTMLDialogElement>('dialog[open]'),'show editor dialog');
+  (await until(()=>showEditor.querySelector<HTMLButtonElement>('[role=combobox][aria-label="Choose set"]'),'show picker')).click();
+  (await until(()=>Array.from(document.querySelectorAll<HTMLButtonElement>('[role=option]')).find(o=>o.textContent?.includes('Just Facts')),'Just Facts option')).click();
+  await until(()=>showEditor.querySelector('[role=combobox][aria-label="Choose set"]')?.textContent?.includes('Just Facts'),'Just Facts loaded');await sleep(150);
+  button('Show on output')?.click();await until(()=>showEditor.querySelector('.set-editor-apply-status.applied'),'applied Just Facts');button('Close editor')?.click();
+  (await until(()=>button('Start show'),'enabled show start')).click();
+  await until(()=>button('Stop run'),'running show');(await until(()=>button('Next'),'next segment')).click();
+  await until(()=>document.querySelector('.set-run-current-label')?.textContent?.includes('The evidence'),'next segment selected');
+  button('Stop run')!.click();await until(()=>button('Start show'),'stopped show');
   (await until(()=>button('Set settings'),'set editor')).click();
   const editor=await until(()=>document.querySelector<HTMLDialogElement>('dialog[open]'),'editor');
   (await until(()=>editor.querySelector<HTMLButtonElement>('[role=combobox][aria-label="Choose set"]'),'set picker')).click();
@@ -27,6 +38,6 @@ export async function weatherRoomProof(){
   if(after.some((s,i)=>s.renderedRevision!==before[i].renderedRevision))throw Error('Idle polling reactivated a native output: '+JSON.stringify({before,after}));
   if(after.some((s,i)=>s.renderSerial<=before[i].renderSerial))throw Error('Native rendering stopped during the sample');
   if(document.querySelector('.rm-portrait-error'))throw Error('Portrait asset error remained');
-  await invoke('live_set_v2_report',{result:{kind:'weather-native-output-stability',ok:true,status:'passed',generation,idleSampleMs:6200,before,after,layoutsReady:2,portraitError:false,at:new Date().toISOString()}});
+  await invoke('live_set_v2_report',{result:{kind:'weather-native-output-stability',showStarted:true,nextSegment:true,showStopped:true,queriedAgent:false,ok:true,status:'passed',generation,idleSampleMs:6200,before,after,layoutsReady:2,portraitError:false,at:new Date().toISOString()}});
  }catch(error){await invoke('live_set_v2_report',{result:{kind:'weather-native-output-stability',ok:false,status:'failed',error:String(error),at:new Date().toISOString()}});}
 }
