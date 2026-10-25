@@ -36,6 +36,27 @@ export function SetsDevelopmentRoom() {
       if(workspace)setActiveEndpointId(workspace.endpointId);
       const rooms = await ipc.liveListRooms();
       let room = rooms.filter(r=>r.name===name).sort((a,b)=>(b.config?.length??0)-(a.config?.length??0))[0] ?? (await ipc.liveCreateRoom(name));
+      // This isolated study was previously saved as 0.1 (lighting only).
+      // Upgrade that exact fixture on a normal reopen as well as in proof mode;
+      // preserve room bindings/framing and authored text defaults.
+      if(studio){
+        const upgrade=(previous:typeof studio3d)=>({
+          ...structuredClone(studio3d),
+          set:{...structuredClone(studio3d.set),values:{...studio3d.set.values,...previous.set.values}},
+        });
+        const config=JSON.parse(room.config||'{}');
+        const previous=config.presentation?.package;
+        if(previous?.id===studio3d.id&&previous.version==='0.1.0'){
+          config.presentation={...config.presentation,package:upgrade(previous)};
+          await ipc.liveUpdateRoom(room.id,{config:JSON.stringify(config)});
+          room={...room,config:JSON.stringify(config)};
+        }
+        for(const entry of await ipc.setLibraryList()){
+          if(entry.id!==studio3d.id)continue;
+          const saved=JSON.parse(await ipc.setLibraryRead(entry.file));
+          if(saved.version==='0.1.0')await ipc.setLibrarySave(JSON.stringify(upgrade(saved)));
+        }
+      }
       if(smoke){
         const config=JSON.parse(room.config||'{}');
         if(workspace){config.server_room_id=workspace.serverRoomId;if(config.presentation)config.presentation.moduleBindings={...config.presentation.moduleBindings,...workspace.moduleBindings};}
