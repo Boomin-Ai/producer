@@ -8,7 +8,7 @@ import { formatGuestLink, hostedAudienceLink } from "../lib/hostedShare";
 import { previewSession, setPreviewTransparency } from "../lib/previewSession";
 import { useSetOutput } from "../features/presentation/useSetOutput";
 import { SetControlsPanel } from "../features/presentation/SetControlsPanel";
-import { AFTER_HOURS } from "../features/presentation/fixtures";
+import { GRAND_ARENA } from "../features/presentation/catalog";
 import { RehearsalSession } from "../features/presentation/rehearsal";
 import { roomSession } from "../lib/roomSession";
 import { sharedProgramCapture } from "../lib/programCapture";
@@ -2802,7 +2802,7 @@ export function LiveView({
   const [micPopOpen, setMicPopOpen] = useState(false);
   const [destsOpen, setDestsOpen] = useState(false);
   const [qualityOpen, setQualityOpen] = useState(false);
-  const [setRehearsal, setSetRehearsal] = useState(() => new RehearsalSession(parseConfig(room?.config).presentation?.package ?? AFTER_HOURS, undefined, 'prepare'));
+  const [setRehearsal, setSetRehearsal] = useState(() => new RehearsalSession(parseConfig(room?.config).presentation?.package ?? GRAND_ARENA, undefined, 'prepare'));
   const [panelMenu, setPanelMenu] = useState<PanelId | null>(null);
   const [layoutMenu, setLayoutMenu] = useState(false);
   const [layoutEdit, setLayoutEdit] = useState(false);

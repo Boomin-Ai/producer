@@ -24,15 +24,16 @@ with urllib.request.urlopen('http://127.0.0.1:1436/', timeout=3) as response:
     if response.status != 200:
         raise SystemExit('Start npm run dev:sets-v2 on port 1436 first')
 env = dict(os.environ, CARGO_TARGET_DIR=str(target), CARGO_PROFILE_DEV_DEBUG='0', CARGO_INCREMENTAL='0', CARGO_BUILD_JOBS='1', PRODUCER_ENGINE_DIR=str(runtime / 'Contents'), TAURI_CONFIG=json.dumps(config))
-# Read existing set files into a separate editable library. Original packages and
-# media grants remain untouched; no account credentials/workspace DB are copied.
+# Fresh catalog: never seed retired sets back into the development library.
+# Grand Arena's configured copy is preserved; new showcase packages will be
+# added explicitly after their capability and output acceptance checks pass.
 profile=Path.home()/'Library/Application Support'/config['identifier']
 library=profile/'sets-library'
 library.mkdir(parents=True,exist_ok=True)
-for original in (Path.home()/'Documents/boomin/docs/shows').glob('*.json'):
-    destination=library/original.name
-    if not destination.exists():
-        shutil.copyfile(original,destination)
+original=root/'docs/shows/head-to-head-grand-arena.json'
+destination=library/original.name
+if not destination.exists():
+    shutil.copyfile(original,destination)
 original_grants=Path.home()/'Library/Application Support/ai.boomin.producer/set-media-files.json'
 if original_grants.is_file() and not (profile/'set-media-files.json').exists():
     shutil.copyfile(original_grants,profile/'set-media-files.json')

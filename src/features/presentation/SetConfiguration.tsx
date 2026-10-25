@@ -3,7 +3,7 @@ import {MediaAssetsDialog} from './MediaAssetsDialog';
 import {ipc} from '../../lib/ipc';
 import {PACKAGE_BYTES} from './assets';
 import { useEffect, useMemo, useId, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { AFTER_HOURS, HEAD_TO_HEAD, SIGNAL_DESK } from './fixtures';
+import { BUILTIN_SETS } from './catalog';
 import { PackageAuthoringDialog, type AuthoringIntent } from './PackageAuthoringDialog';
 import { RehearsalSession } from './rehearsal';
 import type { PresentationPackage } from './schema';
@@ -41,16 +41,16 @@ export function SetConfiguration({ session, onChange, output, hideOutputAction=f
     finally { if (file.current) file.current.value = ''; }
   }
   const choices=useMemo(()=>[
-    ...[SIGNAL_DESK,AFTER_HOURS,HEAD_TO_HEAD].map(doc=>({value:`builtin:${doc.id}`,label:doc.name,group:'Built-in sets',load:async()=>doc})),
+    ...BUILTIN_SETS.filter(doc=>!library.some(entry=>entry.id===doc.id)).map(doc=>({value:`builtin:${doc.id}`,label:doc.name,group:'Built-in sets',load:async()=>doc})),
     ...library.map(entry=>({value:`file:${entry.file}`,label:entry.name+(library.filter(other=>other.name===entry.name).length>1?` · ${entry.file}`:''),group:'Saved sets',load:async()=>JSON.parse(await ipc.setLibraryRead(entry.file)) as PresentationPackage})),
-    ...(![AFTER_HOURS.id,HEAD_TO_HEAD.id,SIGNAL_DESK.id].includes(session.package.id)&&!library.some(entry=>entry.id===session.package.id)?[{value:'imported',label:session.package.name,group:'Current set',load:async()=>session.package}]:[]),
+    ...(!BUILTIN_SETS.map(doc=>doc.id).includes(session.package.id)&&!library.some(entry=>entry.id===session.package.id)?[{value:'imported',label:session.package.name,group:'Current set',load:async()=>session.package}]:[]),
   ],[library,session.package]);
   return <>
     <section className="set-configuration" role="toolbar" aria-label="Set configuration">
       <div className="set-menu-section">
-      <span className="set-picker-label">Choose set</span><SetPicker value={library.some(entry=>entry.file===selectedFile&&entry.id===session.package.id)?`file:${selectedFile}`:library.some(entry=>entry.id===session.package.id)?`file:${library.find(entry=>entry.id===session.package.id)!.file}`:[AFTER_HOURS.id, HEAD_TO_HEAD.id, SIGNAL_DESK.id].includes(session.package.id)?`builtin:${session.package.id}`:'imported'}
+      <span className="set-picker-label">Choose set</span><SetPicker value={library.some(entry=>entry.file===selectedFile&&entry.id===session.package.id)?`file:${selectedFile}`:library.some(entry=>entry.id===session.package.id)?`file:${library.find(entry=>entry.id===session.package.id)!.file}`:BUILTIN_SETS.map(doc=>doc.id).includes(session.package.id)?`builtin:${session.package.id}`:'imported'}
         options={choices}
-        onSelect={value=>{if(value.startsWith('file:'))void loadLibrary(value.slice(5));else {const next=[SIGNAL_DESK,AFTER_HOURS,HEAD_TO_HEAD].find(doc=>`builtin:${doc.id}`===value);if(next){setSelectedFile('');setError('');onChange(next);}}}}/>
+        onSelect={value=>{if(value.startsWith('file:'))void loadLibrary(value.slice(5));else {const next=BUILTIN_SETS.find(doc=>`builtin:${doc.id}`===value);if(next){setSelectedFile('');setError('');onChange(next);}}}}/>
 
 
       </div>

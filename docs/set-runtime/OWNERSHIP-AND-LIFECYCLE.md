@@ -2,6 +2,8 @@
 
 Status: design draft 0.1 for review, 2026-10-24. This is a proposed runtime contract, not an implemented package schema or a claim that the current runtime conforms. The existing compositor remains an implementation building block. Package-format and transport-protocol versions will be independent. HTML-to-canvas is outside this work.
 
+The requested fresh-library and audience/editor integration scope is specified in [Showcase and audience plan](SHOWCASE-AND-AUDIENCE-PLAN.md).
+
 The goal is to author new interactive production experiences as packages within Producer's advertised capabilities, without adding experience-specific Producer code. Standalone sets and concurrently operating modules are fundamental. Shows are optional orchestration.
 
 ## 1. Terms and ownership
