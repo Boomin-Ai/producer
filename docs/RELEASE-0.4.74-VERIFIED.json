@@ -1,0 +1,76 @@
+{
+  "version": "0.4.74",
+  "sha": "c228570d8c5b63822b2c89a2287fba46b71d068d",
+  "checks": [
+    {
+      "platform": "darwin-aarch64",
+      "asset": "Producer_0.4.74_aarch64.app.tar.gz",
+      "sha256": "0d1ac7d9d1aae22e4769128b3bc54038d37cd554eb4442e8423e0033d1db805d",
+      "signatureVerified": true
+    },
+    {
+      "platform": "darwin-x86_64",
+      "asset": "Producer_x64.app.tar.gz",
+      "sha256": "5a8e8a10672b0233742ea5357e1e7321c5df1205dbe36d74837678c3c7d2476f",
+      "signatureVerified": true
+    },
+    {
+      "platform": "windows-x86_64",
+      "asset": "Producer_0.4.74_x64-setup.exe",
+      "sha256": "e51ea3fbd23e869dbd6b219594f9864403da9dbea53814d97c67f72427e18d1a",
+      "signatureVerified": true
+    },
+    {
+      "platform": "linux-x86_64",
+      "asset": "Producer_0.4.74_amd64.AppImage",
+      "sha256": "bcbe039b9363bc0d2e85e1ab9e905e6e968e64411c9625baf355744ce113ddd7",
+      "signatureVerified": true
+    },
+    {
+      "asset": "Producer_0.4.74_aarch64.dmg",
+      "sha256": "b7614bdeeef273c81be24dbe52cffe2d697612904f1af9578bdc0dbfc8b3d36e"
+    },
+    {
+      "asset": "Producer_0.4.74_x64.dmg",
+      "sha256": "ebbf383a21e81a6de230f16156294700e8c54a095a6f6d572ef8f8ae62505d9c"
+    }
+  ],
+  "releaseRun": 40180638764,
+  "releaseUrl": "https://github.com/Boomin-Ai/producer/releases/tag/v0.4.74",
+  "verifiedAt": "2026-10-25T12:11:16.851842+00:00",
+  "apple": {
+    "appleSiliconJob": 121130778895,
+    "intelJob": 121130778911,
+    "codesignNotarizationAndStapling": "passed"
+  },
+  "api": {
+    "sha": "cc3f5e2b31c75de1c4a54e8266725b684b8171c6",
+    "deployRun": 40179838568,
+    "status": "success"
+  },
+  "audienceWeb": {
+    "sha": "8ab656de2934117df1a2cb9e7d650fe729824f5e",
+    "deployRun": 40179992031,
+    "status": "success",
+    "producerDevBrandedRoom": "HTTP 200; deployed bundle contains the module audience routes"
+  },
+  "downloads": {
+    "macos": {
+      "status": 200,
+      "version": "0.4.74"
+    },
+    "macos-intel": {
+      "status": 200,
+      "version": "0.4.74"
+    },
+    "windows": {
+      "status": 200,
+      "version": "0.4.74"
+    },
+    "linux": {
+      "status": 200,
+      "version": "0.4.74"
+    }
+  },
+  "publicUpdaterVersion": "0.4.74"
+}

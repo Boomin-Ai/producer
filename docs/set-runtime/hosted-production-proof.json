@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-25T09:20:15.674Z",
+  "api": "https://api.boomin.ai",
+  "authenticatedRoomAuthority": true,
+  "weatherConnectionSaved": true,
+  "weatherThroughModule": true,
+  "showStarted": true,
+  "nextSegment": true,
+  "showStopped": true,
+  "agentQueryMade": false,
+  "temporaryRoomRemoved": true,
+  "weather": {
+    "location": "Atlanta",
+    "temperature": 50.6,
+    "condition": "clear"
+  }
+}

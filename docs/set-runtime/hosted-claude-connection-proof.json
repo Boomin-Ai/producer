@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-25T09:22:14.863Z",
+  "provider": "anthropic",
+  "model": "claude-sonnet-5-5",
+  "storedInAuthenticatedHostedBrand": true,
+  "modelAccessVerified": true,
+  "plaintextWritten": false,
+  "paidQueryMade": false
+}
