@@ -4,19 +4,11 @@ use tauri::Manager;
 
 const MAX_BYTES: u64 = 40 * 1024 * 1024;
 fn folder(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
-    #[cfg(feature = "sets-v2-dev")]
-    {
-        return Ok(app
-            .path()
-            .app_data_dir()
-            .map_err(|e| e.to_string())?
-            .join("sets-library"));
-    }
     Ok(app
         .path()
-        .document_dir()
+        .app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("boomin/docs/shows"))
+        .join("sets-library"))
 }
 #[derive(Serialize)]
 pub struct Entry {
