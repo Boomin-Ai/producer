@@ -8,6 +8,7 @@ import { LiveView } from "./Live";
 export function SetsDevelopmentRoom() {
   const [room, setRoom] = useState<LiveRoom>(),
     [error, setError] = useState("");
+  const bootstrap=useRef<Promise<LiveRoom>|undefined>(undefined);
   const smokeStarted = useRef(false);
   const studioStarted=useRef(false);
   const studio=import.meta.env.DEV&&import.meta.env.VITE_SCENE3D_STUDIO;
@@ -23,12 +24,12 @@ export function SetsDevelopmentRoom() {
   useEffect(() => {
     void invoke<boolean>("live_set_v2_smoke_enabled").then(enabled=>{
       if(enabled && new URLSearchParams(location.search).has('roomApplyCheck') && !smokeStarted.current) { smokeStarted.current=true; void import('../features/sets-v2/roomSmoke').then(m=>m.roomApplyCheck()); }
-      else if(enabled && !new URLSearchParams(location.search).has('roomInspect') && !smokeStarted.current) { smokeStarted.current=true; void import("../features/sets-v2/roomSmoke").then(m=>m.roomSmoke(new URLSearchParams(location.search).get('roomTiming')==='1',new URLSearchParams(location.search).get('roomResolution')==='1',new URLSearchParams(location.search).get('roomShowcase')==='1')); }
+      else if(enabled && !studio && !new URLSearchParams(location.search).has('roomInspect') && !smokeStarted.current) { smokeStarted.current=true; void import("../features/sets-v2/roomSmoke").then(m=>m.roomSmoke(new URLSearchParams(location.search).get('roomTiming')==='1',new URLSearchParams(location.search).get('roomResolution')==='1',new URLSearchParams(location.search).get('roomShowcase')==='1')); }
     });
   }, []);
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
+    bootstrap.current??=(async () => {
       const smoke = await invoke<boolean>("live_set_v2_smoke_enabled");
       const name = studio ? "Producer 3D Studio" : scene3d ? "Producer 3D GPU lab" : new URLSearchParams(location.search).has("roomColor") ? "Producer color check" : smoke ? "Producer dev smoke" : "Producer dev";
       const workspace=await invoke<{endpointId:string;serverRoomId:string;runProof?:boolean;moduleBindings:import('../../shared/set-runtime/contract').ModuleBindings}|null>('live_set_v2_dev_workspace');
@@ -43,8 +44,10 @@ export function SetsDevelopmentRoom() {
         await ipc.liveUpdateRoom(room.id,{config:JSON.stringify(config)});
         room={...room,config:JSON.stringify(config)};
       }
-      if (!cancelled){setRoom(room);if(workspace?.runProof)window.setTimeout(()=>void import('../features/sets-v2/weatherRoomProof').then(m=>m.weatherRoomProof()),1000);}
-    })().catch((e) => setError(String(e)));
+      if(workspace?.runProof)window.setTimeout(()=>void import('../features/sets-v2/weatherRoomProof').then(m=>m.weatherRoomProof()),1000);
+      return room;
+    })();
+    void bootstrap.current.then(room=>{if(!cancelled)setRoom(room);}).catch(e=>{if(!cancelled)setError(String(e));});
     return () => {
       cancelled = true;
     };
