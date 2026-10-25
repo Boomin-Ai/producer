@@ -8,6 +8,14 @@ export function SetsDevelopmentRoom() {
   const [room, setRoom] = useState<LiveRoom>(),
     [error, setError] = useState("");
   const smokeStarted = useRef(false);
+  const scene3dStarted = useRef(false);
+  const scene3d = import.meta.env.DEV && import.meta.env.VITE_SCENE3D_PROOF;
+  useEffect(()=>{
+    if(room && scene3d && !scene3dStarted.current){
+      scene3dStarted.current=true;
+      void import('../features/sets-v2/scene3dRoomProof').then(m=>m.scene3dRoomProof(JSON.parse(scene3d)));
+    }
+  },[room,scene3d]);
   useEffect(() => {
     void invoke<boolean>("live_set_v2_smoke_enabled").then(enabled=>{
       if(enabled && new URLSearchParams(location.search).has('roomApplyCheck') && !smokeStarted.current) { smokeStarted.current=true; void import('../features/sets-v2/roomSmoke').then(m=>m.roomApplyCheck()); }
@@ -18,7 +26,7 @@ export function SetsDevelopmentRoom() {
     let cancelled = false;
     void (async () => {
       const smoke = await invoke<boolean>("live_set_v2_smoke_enabled");
-      const name = new URLSearchParams(location.search).has("roomColor") ? "Producer color check" : smoke ? "Producer dev smoke" : "Producer dev";
+      const name = scene3d ? "Producer 3D GPU lab" : new URLSearchParams(location.search).has("roomColor") ? "Producer color check" : smoke ? "Producer dev smoke" : "Producer dev";
       const workspace=await invoke<{endpointId:string;serverRoomId:string;runProof?:boolean;moduleBindings:import('../../shared/set-runtime/contract').ModuleBindings}|null>('live_set_v2_dev_workspace');
       if(workspace)setActiveEndpointId(workspace.endpointId);
       const rooms = await ipc.liveListRooms();

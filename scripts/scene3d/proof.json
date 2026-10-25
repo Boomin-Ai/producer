@@ -1,0 +1,60 @@
+{
+  "recordedAt": "2026-10-25T16:07:22.182Z",
+  "scope": "Experimental Three.js renderer and isolated native room harness; no public scene3d capability or production deployment",
+  "checks": {
+    "descriptorValidation": true,
+    "retainedCanvasBrowserCheck": true,
+    "typescript": true,
+    "nativeLandscape": true,
+    "nativePortrait": true,
+    "physicalNativeCamera": true,
+    "nativeForegroundAlpha": true,
+    "nativeRoomPresentedRevision": true
+  },
+  "recording": {
+    "changedStageSamples": 8006,
+    "duration": 10.133,
+    "encodedStageMotion": true,
+    "fps": 30,
+    "height": 1080,
+    "width": 1920
+  },
+  "room": {
+    "generation": 2,
+    "kind": "scene3d-room",
+    "ok": true,
+    "revision": 1,
+    "scope": "Dev prototype; existing native compositing API, no package schema change.",
+    "sourceCount": 3
+  },
+  "renderer": {
+    "landscape/background": {
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "webgl2": true,
+      "ready": true,
+      "lost": false,
+      "rendered": 8479,
+      "drawCalls": 59,
+      "triangles": 9458,
+      "meanDrawIntervalMs": 33.703888888888955,
+      "p95DrawIntervalMs": 33.40000000002328
+    },
+    "landscape/foreground": {
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "webgl2": true,
+      "ready": true,
+      "lost": false,
+      "rendered": 1,
+      "drawCalls": 8,
+      "triangles": 16,
+      "meanDrawIntervalMs": null,
+      "p95DrawIntervalMs": null
+    }
+  },
+  "limitations": [
+    "Short, resource-constrained frame pacing samples are not a production benchmark.",
+    "GPU renderer identified; accelerated IOSurface import not instrumented.",
+    "Native camera video remains planar.",
+    "Public schema/compiler resource lifecycle and context recovery remain future work."
+  ]
+}

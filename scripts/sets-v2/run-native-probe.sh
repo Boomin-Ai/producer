@@ -28,16 +28,18 @@ mkdir -p "$probe_app/Contents/MacOS"
 # APFS clones give it an actual isolated bundle without duplicating asset blocks.
 cp -cR "$frameworks" "$probe_app/Contents/Frameworks"
 cat > "$probe_app/Contents/Info.plist" <<'PLIST'
-<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>ai.boomin.producer.sets-v2-probe</string><key>CFBundleName</key><string>producer</string><key>CFBundleExecutable</key><string>producer</string><key>CFBundlePackageType</key><string>APPL</string><key>LSUIElement</key><true/></dict></plist>
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>ai.boomin.producer.sets-v2-probe</string><key>CFBundleName</key><string>producer</string><key>CFBundleExecutable</key><string>producer</string><key>CFBundlePackageType</key><string>APPL</string><key>LSUIElement</key><true/><key>NSCameraUsageDescription</key><string>Preview the native camera inside the local Three.js rendering experiment.</string></dict></plist>
 PLIST
 CARGO_BUILD_JOBS=1 CARGO_TARGET_DIR="${PRODUCER_SETS_V2_RUST_TARGET:-/private/tmp/producer-sets-v2-rust-target}" cargo build --offline --manifest-path scripts/sets-v2/rust-probe/Cargo.toml
 rust_lib="${PRODUCER_SETS_V2_RUST_TARGET:-/private/tmp/producer-sets-v2-rust-target}/debug/libproducer_sets_v2_native_adapter_probe.a"
 clang -std=gnu11 -fobjc-arc -Werror=implicit-function-declaration -Isrc-tauri/src/live \
   scripts/sets-v2/native-probe.m src-tauri/src/live/sets_v2/group.c src-tauri/src/live/sets_v2/transition.c src-tauri/src/live/sets_v2/scene.c src-tauri/src/live/sets_v2/program.c src-tauri/src/live/sets_v2/readiness.c src-tauri/src/live/source_appearance.c "$rust_lib" \
-  -F"$frameworks" -framework libobs -framework AppKit -framework Metal -framework Security -framework SystemConfiguration -liconv \
+  -F"$frameworks" -framework libobs -framework AppKit -framework Metal -framework AVFoundation -framework Security -framework SystemConfiguration -liconv \
   -Wl,-rpath,"$frameworks" -o "$probe_app/Contents/MacOS/producer"
 codesign --force --sign - "$probe_app"
-if [[ -n "${PRODUCER_PROBE_TEXT_QUALITY_ONLY:-}" ]]; then
+if [[ -n "${PRODUCER_PROBE_SCENE3D_MANIFEST:-}" ]]; then
+  : # Three.js scene is served by the local prototype runner.
+elif [[ -n "${PRODUCER_PROBE_TEXT_QUALITY_ONLY:-}" ]]; then
   node scripts/sets-v2/make-text-quality-plans.mjs "$proof_dir"
 elif [[ -n "${PRODUCER_PROBE_SHOWCASE_ONLY:-}" || -n "${PRODUCER_PROBE_COLOR_ONLY:-}" ]]; then
   : # Showcase plans are compiled by test-grand-arena-browser.mjs.
@@ -53,6 +55,6 @@ fi
 if [[ -n "${PRODUCER_PROBE_TEXT_QUALITY_ONLY:-}" ]]; then
   node scripts/sets-v2/record-text-quality-proof.mjs "$proof_dir" "$app"
 fi
-if [[ -z "${PRODUCER_PROBE_SHARPNESS_ONLY:-}" && -z "${PRODUCER_PROBE_TEXT_QUALITY_ONLY:-}" && -z "${PRODUCER_PROBE_SHOWCASE_ONLY:-}" && -z "${PRODUCER_PROBE_COLOR_ONLY:-}" ]]; then
+if [[ -z "${PRODUCER_PROBE_SCENE3D_MANIFEST:-}" && -z "${PRODUCER_PROBE_SHARPNESS_ONLY:-}" && -z "${PRODUCER_PROBE_TEXT_QUALITY_ONLY:-}" && -z "${PRODUCER_PROBE_SHOWCASE_ONLY:-}" && -z "${PRODUCER_PROBE_COLOR_ONLY:-}" ]]; then
   node scripts/sets-v2/record-native-proof.mjs "$proof_dir" "$app" "$started_at"
 fi
