@@ -1,5 +1,5 @@
 {
-  "schema": "producer.presentation/1",
+  "schema": "producer.presentation/2",
   "id": "json-ui-test",
   "version": "1.1.0",
   "name": "JSON UI Test — Motion & Audience",

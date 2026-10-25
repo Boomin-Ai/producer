@@ -37,14 +37,18 @@ dataIntegrationRoutes.post('/:id/test',async c=>{
  try{const result=await testConnection(parseConnection(JSON.parse(row.config)),await secret(c.env,row));if('sample'in result)await c.env.DB.prepare('UPDATE data_integrations SET last_result=?1,last_result_at=?2 WHERE id=?3 AND revision=?4').bind(JSON.stringify(result.sample),Date.now(),row.id,row.revision).run();await c.env.DB.prepare("UPDATE data_integrations SET status='ready',error='',tested_at=?1 WHERE id=?2 AND revision=?3").bind(Date.now(),row.id,row.revision).run();return c.json({...result,connectionRevision:row.revision});}
  catch(error){const message=error instanceof ProviderError?error.message:'Connection test did not complete';await c.env.DB.prepare("UPDATE data_integrations SET status='error',error=?1,tested_at=?2 WHERE id=?3 AND revision=?4").bind(message,Date.now(),row.id,row.revision).run();throw error;}
 });
+export async function querySavedConnection(env:Env,id:string,expectedRevision:number,inputValue?:unknown){
+ const row=await load(env,id),connection:Connection=parseConnection(JSON.parse(row.config));
+ if(expectedRevision!==row.revision)throw new ApiError(409,'revision_conflict','Connection settings changed. Refresh the saved connection.');
+ if(connection.kind==='weather'&&row.last_result&&row.last_result_at&&Date.now()-row.last_result_at<connection.pollSeconds*1000)return {connectionId:row.id,connectionRevision:row.revision,result:JSON.parse(row.last_result),cached:true};
+ await reserve(env,row,connection.kind==='weather'?connection.pollSeconds*1000:2000);
+ const result=connection.kind==='weather'?await weather(connection):await agent(connection,(await secret(env,row))??'',inputValue);
+ const current=await load(env,row.id);if(current.revision!==row.revision)throw new ApiError(409,'revision_conflict','Connection changed while the provider request was running.');
+ if(connection.kind==='weather')await env.DB.prepare('UPDATE data_integrations SET last_result=?1,last_result_at=?2 WHERE id=?3 AND revision=?4').bind(JSON.stringify(result),Date.now(),row.id,row.revision).run();
+ return {connectionId:row.id,connectionRevision:row.revision,result};
+}
+export async function savedConnection(env:Env,id:string){return publicRow(await load(env,id));}
 dataIntegrationRoutes.post('/:id/query',async c=>{
- const row=await load(c.env,c.req.param('id')),connection:Connection=parseConnection(JSON.parse(row.config)),body=await input(c.req);
- if(Object.keys(body).some(k=>!['expectedRevision','input'].includes(k)))throw new ApiError(400,'invalid_request','Unknown query field');
- if(body.expectedRevision!==row.revision)throw new ApiError(409,'revision_conflict','Connection settings changed. Refresh the saved connection.');
- if(connection.kind==='weather'&&row.last_result&&row.last_result_at&&Date.now()-row.last_result_at<connection.pollSeconds*1000)return c.json({connectionId:row.id,connectionRevision:row.revision,result:JSON.parse(row.last_result),cached:true});
- await reserve(c.env,row,connection.kind==='weather'?connection.pollSeconds*1000:2000);
- const result=connection.kind==='weather'?await weather(connection):await agent(connection,(await secret(c.env,row))??'',body.input);
- const current=await load(c.env,row.id);if(current.revision!==row.revision)throw new ApiError(409,'revision_conflict','Connection changed while the provider request was running.');
- if(connection.kind==='weather')await c.env.DB.prepare('UPDATE data_integrations SET last_result=?1,last_result_at=?2 WHERE id=?3 AND revision=?4').bind(JSON.stringify(result),Date.now(),row.id,row.revision).run();
- return c.json({connectionId:row.id,connectionRevision:row.revision,result});
+ const body=await input(c.req);if(Object.keys(body).some(k=>!['expectedRevision','input'].includes(k))||typeof body.expectedRevision!=='number')throw new ApiError(400,'invalid_request','Invalid query fields');
+ return c.json(await querySavedConnection(c.env,c.req.param('id'),body.expectedRevision,body.input));
 });

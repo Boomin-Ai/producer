@@ -1,3 +1,6 @@
+import {ParticipantPanel,type ParticipantSnapshot} from '../../../shared/set-runtime/ParticipantPanel';
+import type {Command,Result} from '../../../shared/set-runtime/runtime';
+import '../../../shared/set-runtime/panels.css';
 // /a/:code — the audience phone (#51). No account, no email, no camera:
 // a per-device capability token from the door, a hibernating read-only
 // socket for state + tally, an HTTP POST per answer. Every frame carries
@@ -27,6 +30,8 @@ function deviceId(): string {
 }
 
 export default function AudiencePage({ code }: { code: string }) {
+  const [modules,setModules]=useState<ParticipantSnapshot|null>(null);
+  const [moduleOnline,setModuleOnline]=useState(false);
   const [phase, setPhase] = useState<Phase>("probe");
   const [title, setTitle] = useState<string>("");
   const [message, setMessage] = useState<string | null>(null);
@@ -76,6 +81,16 @@ export default function AudiencePage({ code }: { code: string }) {
     }
     return body;
   }, [code]);
+
+  useEffect(()=>{
+    let stopped=false,timer:ReturnType<typeof setTimeout>;
+    const poll=async()=>{try{if(tokenRef.current){const response=await fetch(`${CONNECT_API_BASE_URL}/audience/set-runtime/state`,{headers:{Authorization:`Bearer ${tokenRef.current}`}});if(!response.ok)throw Error('Disconnected');const body=await response.json() as {snapshot:ParticipantSnapshot|null};if(!stopped){setModules(body.snapshot);setModuleOnline(true);}}}catch{if(!stopped)setModuleOnline(false);}finally{if(!stopped)timer=setTimeout(()=>void poll(),1500);}};
+    void poll();return()=>{stopped=true;clearTimeout(timer);setModules(null);setModuleOnline(false);};
+  },[code]);
+  const moduleCommand=async(command:Command):Promise<Result>=>{
+    const response=await fetch(`${CONNECT_API_BASE_URL}/audience/set-runtime/commands`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${tokenRef.current??''}`},body:JSON.stringify({command})});
+    if(!response.ok)throw Error('Your response could not be submitted. Reconnect and try again.');return ((await response.json()) as {result:Result}).result;
+  };
 
   const connect = useCallback(async () => {
     if (!aliveRef.current) return;
@@ -226,7 +241,7 @@ export default function AudiencePage({ code }: { code: string }) {
         <video ref={videoRef} onLoadedMetadata={e=>{const v=e.currentTarget;if(v.videoWidth&&v.videoHeight)setProgramAspect(v.videoWidth/v.videoHeight);}} onResize={e=>{const v=e.currentTarget;if(v.videoWidth&&v.videoHeight)setProgramAspect(v.videoWidth/v.videoHeight);}} autoPlay playsInline controls muted={muted} style={{width:`min(100%, ${programAspect*90}svh)`,display:'block',margin:'0 auto',aspectRatio:String(programAspect),maxHeight:'90svh',objectFit:'contain',background:'#151517',borderRadius:12}} aria-label="Live program" />
         <div style={{display:'flex',gap:8}}><button style={S.ghost} disabled={!online||!roomState.enabled} onClick={()=>{wantsVideoRef.current=true;watchRequestedRef.current=true;send({type:'audience.watch'});}}>{watching?'Reconnect video':'Watch the show'}</button><button style={S.ghost} onClick={()=>{setMuted(!muted);void videoRef.current?.play();}}>{muted?'Enable sound':'Mute'}</button></div>
         <p style={S.sub}>{roomState.online??0} in the room</p>
-        {active ? (
+        {modules?<ParticipantPanel snapshot={modules} connected={moduleOnline} onCommand={moduleCommand}/>:active ? (
           <VoteCard
             interaction={active}
             offset={offset}

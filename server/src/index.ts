@@ -1,3 +1,4 @@
+import {setRuntimeHostRoutes,setRuntimeAudienceRoutes} from './setRuntimeRoutes';
 // producer-server — the sovereignty backend for Producer.
 //
 // One deployment = one workspace. The desktop app (or a CLI, or an
@@ -490,6 +491,8 @@ app.route("/v1/app/live", liveHostRoutes);
 app.route("/v1/connect", connectGuestRoutes);
 app.route("/v1/connect", modRoutes);
 app.route("/v1/app/live", interactionHostRoutes);
+app.route("/v1/app/live", setRuntimeHostRoutes);
+app.route("/v1/connect", setRuntimeAudienceRoutes);
 app.route("/v1/connect", interactionConnectRoutes);
 
 // ── Contract-first stubs (docs/CONTRIBUTIONS.md) ─────────────────────────────

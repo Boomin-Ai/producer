@@ -1,3 +1,6 @@
+import {parseRuntimeDefinition,type RuntimeDefinition} from '../../../shared/set-runtime/contract';
+import {runtimeSchemaBody,runtimeSchemaDefs} from '../../../shared/set-runtime/jsonSchema';
+import {outputTypes} from '../../../shared/set-runtime/projection';
 import {validateAsset,ASSET_BYTES,PACKAGE_BYTES} from './assets';
 import { parseSourceAppearance, sourceAppearanceSchema, type SourceAppearance } from '../../lib/sourceAppearance';
 /** One codec describes the import shape, TypeScript type and exported JSON schema.
@@ -72,7 +75,7 @@ const union = <C extends Codec<unknown>[]>(...codecs: C): Codec<Type<C[number]>>
   json: { anyOf: codecs.map(c => c.json) },
   read(v, p, d) {
     bounded(d, p);
-    for (const codec of codecs) { try { return codec.read(v, p, d + 1) as Type<C[number]>; } catch (e) { if (!(e instanceof PackageError)) throw e; } }
+    for (const codec of codecs) { try { return codec.read(v, p, d) as Type<C[number]>; } catch (e) { if (!(e instanceof PackageError)) throw e; } }
     return fail(p, 'Unsupported value or invalid fields.');
   },
 });
@@ -90,13 +93,13 @@ const dictionary = <T>(codec: Codec<T>, maxProperties = 40): Codec<Record<string
   },
 });
 const ref = <T>(name: string, get: () => Codec<T>): Codec<T> => ({
-  json: { $ref: `#/$defs/${name}` }, read: (v, p, d) => { bounded(d, p); return get().read(v, p, d + 1); },
+  json: { $ref: `#/$defs/${name}` }, read: (v, p, d) => { bounded(d, p); return get().read(v, p, d); },
 });
 const id = string(64, '^[a-zA-Z][a-zA-Z0-9_-]{0,63}$');
 export type Scalar = string | number | boolean;
 const scalar = union(string(512), number(-1e6, 1e6), boolean);
 export type Binding = Scalar | { get: string } | { op: 'eq' | 'if' | 'concat'; args: Binding[] };
-const binding: Codec<Binding> = union(scalar, object({ get: string(128, '^(values|feeds|props|show|tokens)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$') }),
+const binding: Codec<Binding> = union(scalar, object({ get: string(128, '^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$') }),
   object({ op: union(literal('eq'), literal('if'), literal('concat')), args: array(ref('binding', () => binding), 8) }));
 export const STYLE_KEYS = ['position', 'inset', 'left', 'top', 'right', 'bottom', 'width', 'height', 'display', 'gap', 'padding',
   'background', 'color', 'border', 'borderRadius', 'boxShadow', 'fontSize', 'fontWeight', 'letterSpacing', 'textAlign', 'lineHeight',
@@ -104,7 +107,7 @@ export const STYLE_KEYS = ['position', 'inset', 'left', 'top', 'right', 'bottom'
 const styles = dictionary(binding, STYLE_KEYS.length);
 const motion = object({ durationMs: number(200, 30_000), property: union(literal('opacity'), literal('transform')),
   from: scalar, to: scalar });
-const shader=object({effect:union(literal('aurora'),literal('edgeGlow'),literal('lightSweep'),literal('plasma'),literal('silk'),literal('rings'),literal('grid'),literal('stars'),literal('petals'),literal('contours'),literal('prism'),literal('borderFlare')),colors:array(string(7),3),speed:number(0,4),intensity:number(0,2),scale:number(.25,4),opacity:number(0,1),radius:number(0,960),quality:union(literal('low'),literal('medium')),clock:union(literal('show'),literal('segment'))});
+const shader=object({effect:union(literal('aurora'),literal('edgeGlow'),literal('lightSweep'),literal('plasma'),literal('silk'),literal('rings'),literal('grid'),literal('stars'),literal('petals'),literal('contours'),literal('prism'),literal('borderFlare'),literal('rain'),literal('snow'),literal('clouds')),colors:array(string(7),3),speed:number(0,4),intensity:number(0,2),scale:number(.25,4),opacity:number(0,1),radius:number(0,960),quality:union(literal('low'),literal('medium')),clock:union(literal('show'),literal('segment'))});
 const animation=object({tracks:array(object({target:id,property:union(literal('x'),literal('y'),literal('width'),literal('height'),literal('opacity'),literal('scale'),literal('rotation'),literal('shader.intensity'),literal('shader.scale')),
   keyframes:array(object({atMs:number(0,60_000),value:number(-3840,3840)}),16),easing:optional(union(literal('linear'),literal('easeIn'),literal('easeOut'),literal('easeInOut'))),
   clock:optional(union(literal('show'),literal('segment'))),delayMs:optional(number(0,60_000)),loop:optional(union(literal('none'),literal('repeat'),literal('pingpong')))}),32),transition:optional(object({type:union(literal('cut'),literal('crossfade'),literal('morph')),durationMs:number(0,2000)}))});
@@ -166,9 +169,10 @@ const show = object({ id, version: string(32), initialPhase: id,
   phases: array(object({ id, label: string(80), layoutId: id, next: optional(id), collectMs: optional(number(1000, 3_600_000)) }), 16),
   choices: defaulted(array(object({ id, label: string(80) }), 6), []),
 });
+const moduleCodec:Codec<RuntimeDefinition>={json:runtimeSchemaBody,read(v,p){try{return parseRuntimeDefinition(v);}catch(error){return fail(p,error instanceof Error?error.message:'Invalid module configuration');}}};
 const codec = object({
-  schema: literal('producer.presentation/1'), id, version: string(32), name: string(80),
-  set: object({ styles:optional(dictionary(styles,32)), tokens:optional(dictionary(union(string(240),number(-10000,10000)),64)), assets:optional(dictionary(object({name:string(160),mime:string(40),data:string(ASSET_BYTES*4/3+100),playback:optional(object({start:union(literal('entry'),literal('manual')),loop:boolean,exit:union(literal('reset'),literal('pause'),literal('continue')),return:union(literal('restart'),literal('resume')),hostControls:boolean}))}),24)),initialLayout: id, values: dictionary(valueDefinition),
+  schema: literal('producer.presentation/2'), runtime:defaulted(moduleCodec,{schema:'producer.modules/1',definitions:{},instances:[]}), id, version: string(32), name: string(80),
+  set: object({ viewController:optional(id),views:optional(dictionary(object({landscape:optional(id),portrait:optional(id),square:optional(id)}),32)),initialView:optional(id),styles:optional(dictionary(styles,32)), tokens:optional(dictionary(union(string(240),number(-10000,10000)),64)), assets:optional(dictionary(object({name:string(160),mime:string(40),data:string(ASSET_BYTES*4/3+100),playback:optional(object({start:union(literal('entry'),literal('manual')),loop:boolean,exit:union(literal('reset'),literal('pause'),literal('continue')),return:union(literal('restart'),literal('resume')),hostControls:boolean}))}),24)),initialLayout: id, values: dictionary(valueDefinition),
     feeds: dictionary(valueDefinition), slots: array(object({ id, label: string(80) }), 8),
     components: dictionary(object({ props: dictionary(scalar), root: ref('node', () => node) }), 16),
     layouts: array(object({ id, label: string(80), width: number(320, 1920), height: number(320, 1920), root: ref('node', () => node),animation:optional(animation) }), 32),
@@ -178,7 +182,7 @@ const codec = object({
 export type PresentationPackage = Type<typeof codec>;
 export type ValueDefinition = Type<typeof valueDefinition>;
 export const presentationJsonSchema = { $schema: 'https://json-schema.org/draft/2020-12/schema', ...codec.json,
-  $defs: { binding: binding.json, node: node.json } };
+  $defs: { ...runtimeSchemaDefs,binding: binding.json, node: node.json } };
 
 export function parsePackage(value: unknown): PresentationPackage {
   const doc = codec.read(value, '$', 0);
@@ -192,6 +196,11 @@ export function parsePackage(value: unknown): PresentationPackage {
     if (typeof b !== 'object') return;
     if ('get' in b) {
       const [root, key, ...rest] = b.get.split('.');
+      if(root==='modules'){
+        const instance=doc.runtime.instances.find(i=>i.id===key);
+        if(rest.length!==1||!instance||unsafeKey(rest[0])||!hasOwn(outputTypes(doc.runtime.definitions[instance.definition]),rest[0]))fail('$',`Unknown module output binding ${b.get}.`);
+        return;
+      }
       if (rest.length || unsafeKey(key) || (root === 'props' ? !scope.has(key) : root === 'values' ? !hasOwn(doc.set.values, key)
         : root === 'feeds' ? !hasOwn(doc.set.feeds, key) : root === 'tokens' ? !hasOwn(doc.set.tokens??{},key) : !doc.show || !['layoutId', 'phase', 'collecting', 'revealed', 'winner', 'result', 'ballot', 'heat', 'remainingMs', 'total'].includes(key))) fail('$', `Unknown binding ${b.get}.`);
     } else {
@@ -202,7 +211,8 @@ export function parsePackage(value: unknown): PresentationPackage {
   const bindingType = (b: Binding, props: Record<string, Scalar> = {}): string => {
     if (typeof b !== 'object') return typeof b;
     if ('get' in b) {
-      const [root, key] = b.get.split('.');
+      const [root, key,field] = b.get.split('.');
+      if(root==='modules'){const instance=doc.runtime.instances.find(i=>i.id===key);const type=instance?outputTypes(doc.runtime.definitions[instance.definition])[field]:undefined;return type==='text'?'string':type??'undefined';}
       if (root === 'props') return typeof props[key];
       if (root === 'tokens') return typeof doc.set.tokens?.[key];
       if (root === 'show') return ['layoutId', 'phase', 'winner', 'result'].includes(key) ? 'string' : ['collecting', 'revealed'].includes(key) ? 'boolean' : 'number';
@@ -290,6 +300,14 @@ export function parsePackage(value: unknown): PresentationPackage {
   // Unused component definitions are checked too, rather than hiding unsafe nodes.
   for (const [name, def] of Object.entries(doc.set.components)){const hasShader=(n:PresentationNode):boolean=>n.type==='shader'||!!n.children?.some(hasShader);if(hasShader(def.root))fail('$.set.components','Shader layers belong directly under a layout root.');walk(def.root, def.props, [name], new Set());}
   if (!layouts.has(doc.set.initialLayout)) fail('$.set.initialLayout', 'Unknown layout.');
+  for(const [view,variants]of Object.entries(doc.set.views??{})){
+    if(!Object.keys(variants).length)fail('$.set.views','A view needs at least one variant.');
+    for(const [orientation,layoutId]of Object.entries(variants)){const layout=doc.set.layouts.find(l=>l.id===layoutId);if(!layout)fail('$.set.views',`Unknown layout in ${view}.`);const actual=layout.width>layout.height?'landscape':layout.width<layout.height?'portrait':'square';if(actual!==orientation)fail('$.set.views','View variant orientation does not match its canvas.');}
+  }
+  for(const instance of doc.runtime.instances)for(const segment of instance.audienceSegments??[])if(!doc.show?.phases.some(p=>p.id===segment))fail('$.runtime.instances','Audience exposure names an unknown show segment.');
+  if(doc.set.viewController){const owner=doc.runtime.instances.find(i=>i.id===doc.set.viewController);if(!owner||owner.owner!=='set')fail('$.set.viewController','Canvas view control requires a set-owned module.');const module=doc.runtime.definitions[owner!.definition];if(!module.views?.length||module.views.some(view=>!doc.set.views?.[view]))fail('$.set.viewController','Every controlled view needs an authored canvas variant.');}
+  if(doc.set.initialView){const view=doc.set.views?.[doc.set.initialView];if(!view||!Object.values(view).includes(doc.set.initialLayout))fail('$.set.initialView','Initial view and layout do not match.');}
+  for(const instance of doc.runtime.instances)if(instance.owner==='segment'&&!doc.show?.phases.some(p=>p.id===instance.segment))fail('$.runtime.instances','Module owns an unknown show segment.');
   for (const [key, def] of [...Object.entries(doc.set.values), ...Object.entries(doc.set.feeds)]) validateValue(def, def.default, key);
   const controls = new Set<string>();
   doc.set.controls.forEach(c => {

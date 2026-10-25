@@ -12,5 +12,5 @@ export const dataIntegrations={
  save:(endpoint:string,connection:Connection,apiKey?:string,expectedRevision?:number)=>call<SavedConnection>(endpoint,'POST','',{connection,...(apiKey?{apiKey}:{}),...(expectedRevision!==undefined?{expectedRevision}:{})}),
  remove:(endpoint:string,saved:SavedConnection)=>call<{deleted:boolean}>(endpoint,'DELETE','/'+encodeURIComponent(saved.connection.id),{expectedRevision:saved.revision}),
  test:(endpoint:string,saved:SavedConnection)=>call<{ok:boolean;connectionRevision:number;sample?:WeatherResult}>(endpoint,'POST','/'+encodeURIComponent(saved.connection.id)+'/test',{}),
- query:(endpoint:string,saved:SavedConnection,input?:{question:string;mode:'answer'|'factCheck'})=>call<{connectionId:string;connectionRevision:number;result:AgentResult|WeatherResult}>(endpoint,'POST','/'+encodeURIComponent(saved.connection.id)+'/query',{expectedRevision:saved.revision,...(input?{input}:{})}),
+ query:(endpoint:string,saved:SavedConnection,input?:{question:string;mode:'answer'|'factCheck';instructions?:string})=>call<{connectionId:string;connectionRevision:number;result:AgentResult|WeatherResult}>(endpoint,'POST','/'+encodeURIComponent(saved.connection.id)+'/query',{expectedRevision:saved.revision,...(input?{input}:{})}),
 };

@@ -29,6 +29,9 @@ impl ShaderEffect {
                 | "contours"
                 | "prism"
                 | "borderFlare"
+                | "rain"
+                | "snow"
+                | "clouds"
         ) || !matches!(self.quality.as_str(), "low" | "medium")
             || !matches!(self.clock.as_str(), "show" | "segment")
             || self.colors.len() != 3

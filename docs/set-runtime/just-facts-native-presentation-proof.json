@@ -1,0 +1,39 @@
+{
+  "at": "2026-10-25T07:20:57.726Z",
+  "citations": 4,
+  "kind": "just-facts-presentation-ui",
+  "native": {
+    "cachedBytes": 151660784,
+    "cachedKeys": [
+      "scene-b5254d7f-4d009173",
+      "scene-bfd40558-72d11c28"
+    ],
+    "clockMs": 8966.666132211685,
+    "generation": 2,
+    "paused": false,
+    "preparedRevision": 8,
+    "queued": false,
+    "ready": true,
+    "renderSerial": 159,
+    "renderedRevision": 8,
+    "transitionProgress": 1,
+    "transitioning": false,
+    "warmed": true
+  },
+  "ok": true,
+  "presented": {
+    "generation": 2,
+    "moduleCommit": {
+      "domain": "live",
+      "revision": 23,
+      "setEpoch": 2
+    },
+    "nativeRevision": 8,
+    "output": "program",
+    "renderSerial": 158
+  },
+  "providerOrigin": "provider",
+  "queriedProviderThisRun": false,
+  "reusedCompletedResponse": true,
+  "status": "passed"
+}

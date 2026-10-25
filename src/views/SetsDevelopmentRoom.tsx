@@ -1,3 +1,4 @@
+import {setActiveEndpointId} from '../lib/workspace';
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import { ipc, type LiveRoom } from "../lib/ipc";
@@ -18,15 +19,18 @@ export function SetsDevelopmentRoom() {
     void (async () => {
       const smoke = await invoke<boolean>("live_set_v2_smoke_enabled");
       const name = new URLSearchParams(location.search).has("roomColor") ? "Producer color check" : smoke ? "Producer dev smoke" : "Producer dev";
+      const workspace=await invoke<{endpointId:string;serverRoomId:string;runProof?:boolean;moduleBindings:import('../../shared/set-runtime/contract').ModuleBindings}|null>('live_set_v2_dev_workspace');
+      if(workspace)setActiveEndpointId(workspace.endpointId);
       const rooms = await ipc.liveListRooms();
       let room = rooms.filter(r=>r.name===name).sort((a,b)=>(b.config?.length??0)-(a.config?.length??0))[0] ?? (await ipc.liveCreateRoom(name));
       if(smoke){
         const config=JSON.parse(room.config||'{}');
+        if(workspace){config.server_room_id=workspace.serverRoomId;if(config.presentation)config.presentation.moduleBindings={...config.presentation.moduleBindings,...workspace.moduleBindings};}
         config.layout={top:[],left:['scenes','sources'],right:[],bottom:['setControls'],hidden:['guests','vote','mods','mixer','stats','dj','chat','channels','updates']};
         await ipc.liveUpdateRoom(room.id,{config:JSON.stringify(config)});
         room={...room,config:JSON.stringify(config)};
       }
-      if (!cancelled) setRoom(room);
+      if (!cancelled){setRoom(room);if(workspace?.runProof)window.setTimeout(()=>void import('../features/sets-v2/moduleRoomProof').then(m=>m.moduleRoomProof(workspace.serverRoomId)),1000);}
     })().catch((e) => setError(String(e)));
     return () => {
       cancelled = true;
@@ -41,12 +45,7 @@ export function SetsDevelopmentRoom() {
   return (
     <LiveView
       room={room}
-      onLeave={() =>
-        void ipc.liveListRooms().then((rooms) => {
-          const next = rooms.find((r) => r.id === room.id);
-          if (next) setRoom(next);
-        })
-      }
+      onLeave={() => location.assign('/')}
     />
   );
 }

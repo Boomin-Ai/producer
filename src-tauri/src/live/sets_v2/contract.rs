@@ -345,6 +345,9 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
                 "contours",
                 "prism",
                 "borderFlare",
+                "rain",
+                "snow",
+                "clouds",
             ]
             .contains(&s.effect.as_str())
             || s.colors.len() != 3

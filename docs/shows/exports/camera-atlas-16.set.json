@@ -1,5 +1,5 @@
 {
-  "schema": "producer.presentation/1",
+  "schema": "producer.presentation/2",
   "id": "camera-atlas",
   "version": "0.1.0",
   "name": "Camera Atlas \u00b7 16 Looks",

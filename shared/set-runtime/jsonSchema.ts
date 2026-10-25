@@ -14,13 +14,13 @@ const field={oneOf:[object({type:{const:'text'},default:text(1024),maxLength:{ty
 const step={oneOf:[object({op:{enum:['set','add']},field:id,value:ref('Expression')}),object({op:{const:'view'},view:id})]};
 const control=object({id,type:{enum:['button','toggle','text','number','choice','readout']},label:text(80),action:id,field:id,options:array(option,12),when:ref('Expression'),enabled:ref('Expression')},['id','type','label']);
 const behavior={oneOf:[
- object({type:{const:'vote'},question:text(240),options:{...array(option,12),minItems:2},maxParticipants:{type:'integer',minimum:1,maximum:100000},allowChange:{type:'boolean'}}),
- object({type:{const:'submissions'},prompt:text(240),maxLength:{type:'integer',minimum:1,maximum:1000},capacity:{type:'integer',minimum:1,maximum:500}}),
+ object({type:{const:'vote'},question:text(240),options:{...array(option,12),minItems:2},maxParticipants:{type:'integer',minimum:1,maximum:100000},allowChange:{type:'boolean'},showView:id},['type','question','options','maxParticipants','allowChange']),
+ object({type:{const:'submissions'},prompt:text(240),maxLength:{type:'integer',minimum:1,maximum:1000},capacity:{type:'integer',minimum:1,maximum:500},showView:id,sources:{type:'array',items:{enum:['submissions','chat']},maxItems:2}},['type','prompt','maxLength','capacity']),
  object({type:{const:'weather'},integrationRole:id}),
- object({type:{const:'agent'},integrationRole:id,prompt:text(1000),mode:{enum:['answer','factCheck']},maxLength:{type:'number',minimum:240,maximum:16000}}),
+ object({type:{const:'agent'},integrationRole:id,prompt:text(1000),mode:{enum:['answer','factCheck']},maxLength:{type:'number',minimum:240,maximum:16000},showView:id},['type','integrationRole','prompt','mode','maxLength']),
 ]};
 const definition=object({label:text(80),state:dictionary(ref('Field'),64),publicFields:array(id,64),initialView:id,views:array(id,32),actions:dictionary(object({roles:array(role,4),steps:array(step,32),when:ref('Expression')},['roles','steps']),64),controls:array(object({id,label:text(80),audience:role,controls:array(control,32)}),16),capabilities:array({type:'string',maxLength:80,pattern:'^[a-z][a-z0-9.-]+@[1-9][0-9]*$'},16),behavior},['label','state','actions','controls','capabilities']);
-const instance=object({id,definition:id,owner:{enum:['set','segment']},segment:id,initialState:dictionary(scalar,64),hidden:{enum:['continue','pause']},onExit:{enum:['continue','pause','stop','dispose']},reenter:{enum:['resume','reset','new']}},['id','definition','owner','hidden','onExit','reenter']);
+const instance=object({id,definition:id,owner:{enum:['set','segment']},audiencePolicy:{enum:['manual','whileRunning']},audienceSegments:array(id,32),segment:id,initialState:dictionary(scalar,64),hidden:{enum:['continue','pause']},onExit:{enum:['continue','pause','stop','dispose']},reenter:{enum:['resume','reset','new']}},['id','definition','owner','hidden','onExit','reenter']);
 export const runtimeSchemaDefs={moduleExpression:expression,moduleField:field,moduleDefinition:definition,moduleInstance:instance};
 export const runtimeSchemaBody=object({schema:{const:'producer.modules/1'},definitions:dictionary(ref('Definition'),32),instances:array(ref('Instance'),32)});
 export const runtimeJsonSchema={$schema:'https://json-schema.org/draft/2020-12/schema',...runtimeSchemaBody,$defs:runtimeSchemaDefs};

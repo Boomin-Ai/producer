@@ -6,10 +6,10 @@
     "hasAlpha" : true,
     "height" : 941,
     "openingPixels" : {
-      "height" : 709,
-      "left" : 79,
-      "top" : 110,
-      "width" : 1512
+      "height" : 711,
+      "left" : 77,
+      "top" : 109,
+      "width" : 1517
     },
     "width" : 1672
   },
@@ -32,10 +32,10 @@
     "hasAlpha" : true,
     "height" : 940,
     "openingPixels" : {
-      "height" : 650,
-      "left" : 133,
-      "top" : 143,
-      "width" : 1411
+      "height" : 663,
+      "left" : 127,
+      "top" : 138,
+      "width" : 1421
     },
     "width" : 1672
   },
@@ -58,9 +58,9 @@
     "hasAlpha" : true,
     "height" : 941,
     "openingPixels" : {
-      "height" : 528,
+      "height" : 688,
       "left" : 103,
-      "top" : 128,
+      "top" : 125,
       "width" : 1467
     },
     "width" : 1672
@@ -84,10 +84,10 @@
     "hasAlpha" : true,
     "height" : 941,
     "openingPixels" : {
-      "height" : 585,
-      "left" : 112,
-      "top" : 177,
-      "width" : 1446
+      "height" : 590,
+      "left" : 111,
+      "top" : 176,
+      "width" : 1450
     },
     "width" : 1672
   },

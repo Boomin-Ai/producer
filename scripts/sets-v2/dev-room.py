@@ -34,10 +34,22 @@ original=root/'docs/shows/head-to-head-grand-arena.json'
 destination=library/original.name
 if not destination.exists():
     shutil.copyfile(original,destination)
+for name in ['decision-room','open-floor','atmosphere','just-facts']:
+    original=root/'docs/shows'/(name+'.json')
+    destination=library/original.name
+    if not destination.exists():shutil.copyfile(original,destination)
 original_grants=Path.home()/'Library/Application Support/ai.boomin.producer/set-media-files.json'
 if original_grants.is_file() and not (profile/'set-media-files.json').exists():
     shutil.copyfile(original_grants,profile/'set-media-files.json')
-subprocess.run(['cargo', 'build', '--offline', '--manifest-path', str(root / 'src-tauri/Cargo.toml'), '--features', 'sets-v2-dev'], cwd=root, env=env, check=True)
+# This isolated desktop app needs the Rust library and binary only. Avoid
+# emitting redundant static/mobile library archives on a storage-limited host.
+manifest=root/'src-tauri/Cargo.toml'
+original_manifest=manifest.read_text()
+try:
+    manifest.write_text(original_manifest.replace('crate-type = ["staticlib", "cdylib", "rlib"]','crate-type = ["rlib"]'))
+    subprocess.run(['cargo', 'build', '--offline', '--manifest-path', str(manifest), '--features', 'sets-v2-dev'], cwd=root, env=env, check=True)
+finally:
+    manifest.write_text(original_manifest)
 stage.parent.mkdir(parents=True, exist_ok=True)
 if stage.exists():
     shutil.rmtree(stage)

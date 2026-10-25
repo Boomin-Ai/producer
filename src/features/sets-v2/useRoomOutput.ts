@@ -39,6 +39,8 @@ export function useRoomOutput(
     [framing, setFraming] = useState(initialFraming);
   const [pendingChange, setPendingChange] = useState<"set" | "segment" | "content">("content");
   const shownSelection = useRef({definition: "", layout: "", phase: ""});
+  const deliberatelyHidden=useRef(false);
+  useEffect(()=>{deliberatelyHidden.current=false;},[session.package.id,roomId]);
   const [active, setActive] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -107,7 +109,7 @@ export function useRoomOutput(
       return {projection:item.projection,phase:item.phase,layout:item.layout,definition:selected.package.id,instance:'room-'+(roomId??'local').slice(0,50),bindings:selectedBindings,target:item.projection.height>item.projection.width?{id:'portrait',orientation:'portrait',width:canvas.height,height:Math.round(canvas.height*16/9),scaling:'contain'}:{id:'program',orientation:'landscape',...canvas,scaling:'contain'},targets:morphTargets(projections,item.projection),assetVersion:version+JSON.stringify(Object.values(selectedBindings).map(id=>{const source=sources.items?.find(s=>s.id===id);return [id,source?.src_w,source?.src_h];}))};
     });
   };
-  const inventory=useMemo(()=>specsFor(session,bindings,framing),[session.package,JSON.stringify(state.values),JSON.stringify(state.feeds),JSON.stringify(bindings),JSON.stringify(framing),JSON.stringify(sources.items?.map(s=>[s.id,s.src_w,s.src_h,s.has_frame])),canvas,roomId]);
+  const inventory=useMemo(()=>specsFor(session,bindings,framing),[session.package,JSON.stringify(state.values),JSON.stringify(state.feeds),JSON.stringify(state.modules),JSON.stringify(bindings),JSON.stringify(framing),JSON.stringify(sources.items?.map(s=>[s.id,s.src_w,s.src_h,s.has_frame])),canvas,roomId]);
   const candidates=useMemo(()=>draftCandidate?specsFor(new RehearsalSession(draftCandidate.doc,undefined,'prepare'),draftCandidate.bindings,draftCandidate.framing):[],[draftCandidate,canvas,roomId]);
   const specsRef=useRef(inventory);specsRef.current=inventory;
   useEffect(()=>{
@@ -177,6 +179,7 @@ export function useRoomOutput(
     });
   };
   const apply = async () => {
+    deliberatelyHidden.current=false;
     if (!latest.current.enabled || flight.current) return;
     const selectedSession=latest.current.session;
     try { if(!await waitForCanvas()||flight.current||latest.current.session!==selectedSession)return; }
@@ -224,7 +227,8 @@ export function useRoomOutput(
         const status = await request({ op: "status" });
         if(status.transitioning&&!sawTransition){sawTransition=true;timing('transition-first-observed',{renderSerial:status.renderSerial});}
         if (status.renderedRevision === attempted && !status.transitioning) {
-          timing('render-complete',{renderSerial:status.renderSerial});
+          timing('render-complete',{renderSerial:status.renderSerial,moduleCommit:full.moduleCommit});
+          if(full.moduleCommit)window.dispatchEvent(new CustomEvent('producer:module-presented',{detail:{output:'program',generation:generation.current,nativeRevision:attempted,renderSerial:status.renderSerial,moduleCommit:full.moduleCommit}}));
           if (!alive.current || current.roomId !== latest.current.roomId)
             return;
           media.current.acknowledge(full);
@@ -259,7 +263,7 @@ export function useRoomOutput(
       const status = await request({ op: "return" });
       generation.current = status.generation;
       cacheGeneration.current = status.generation;
-      isActive.current = false;
+      isActive.current = false;deliberatelyHidden.current=true;
       setActive(false);
       // A deliberate return stays on the room until content or selection changes.
       confirmed.current = signature();
@@ -307,7 +311,7 @@ export function useRoomOutput(
     if (!enabled || !canvasReady || busy || error) return;
     // Changes to the selected set flow through the same normal Show/Next controls.
     // Choosing an unconfigured set opens its existing source editor first.
-    if (!active && !(selectToShow && Object.keys(bindings).length)) return;
+    if (!active && (deliberatelyHidden.current||!(selectToShow && Object.keys(bindings).length))) return;
     let fingerprint: string;
     try {
       fingerprint = signature();
@@ -370,7 +374,7 @@ export function useRoomOutput(
       if (
         state.renderedRevision === candidate &&
         !state.transitioning
-      ) { portraitShownLayout.current=portraitKey; return; }
+      ) { portraitShownLayout.current=portraitKey;if(projection.moduleCommit)window.dispatchEvent(new CustomEvent('producer:module-presented',{detail:{output:'portrait',generation:generation.current,nativeRevision:candidate,renderSerial:state.renderSerial,moduleCommit:projection.moduleCommit}})); return; }
       if (i === 199) throw Error("Portrait did not confirm its rendered frame");
       await sleep(20);
     }

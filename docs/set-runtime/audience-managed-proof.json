@@ -1,0 +1,10 @@
+{
+  "scope": "Actual local Worker + RoomState durable object + signed audience token HTTP routes",
+  "at": "2026-10-25T05:48:02.600Z",
+  "publishedPanel": true,
+  "voteCounted": true,
+  "duplicateRejected": true,
+  "authorityEscalationRejected": true,
+  "resultsHiddenUntilReveal": true,
+  "publicContainsNoBallotIdentity": true
+}

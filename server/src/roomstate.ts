@@ -1,3 +1,4 @@
+import {SetRuntimeService} from './setRuntimeService';
 // RoomState — the room's game-state Durable Object (#51, docs/INTERACTIVE.md
 // §4). One per room, beside RealtimeHub (which stays signaling + scene
 // frames). Authoritative while an interaction is LIVE: the tally, the
@@ -47,6 +48,7 @@ const AUDIENCE_DELTA_MS = 250; // ≤ 4 Hz
 const HOST_DELTA_MS = 100; // ≤ 10 Hz
 
 export class RoomState {
+  private modules?:SetRuntimeService;
   private pendingAudience: Set<string> = new Set();
   private pendingHost: Set<string> = new Set();
   private audienceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -88,6 +90,7 @@ export class RoomState {
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    if(url.pathname.startsWith('/set-runtime/')){this.modules??=new SetRuntimeService(this.state.storage);return this.modules.fetch(request);}
     if (request.method === "GET" && url.pathname === "/audience/snapshot") {
       const now = Date.now();
       return Response.json({ interactions: (await this.all()).filter(this.isLive).map((live) => project(live.doc, live.tally, "audience", now)) });

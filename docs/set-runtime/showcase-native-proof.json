@@ -1,0 +1,198 @@
+{
+  "at": "2026-10-25T07:22:45.799111+00:00",
+  "kind": "five-set-native-layouts",
+  "ok": true,
+  "authoredLayoutsAndStates": 36,
+  "remainingGroups": 0,
+  "remainingSyntheticSources": 0,
+  "scope": "Real OBS native render captures using synthetic camera fixtures. Static authored layouts plus dynamic vote, submission, researched-answer and weather states. Not a transition timing or audience load benchmark.",
+  "packages": {
+    "head-to-head-grand-arena": "d316adf48b27fefec0c4318b2bd848400d1cf3c0a41a14e7251bfbe26047d9b7",
+    "decision-room": "7a983d1500bea39723bec7a1e5b4284a568f351eec1938468218bbcdae469296",
+    "open-floor": "415629eae01d643f194175a97e22e5250f18bfead38f43635b9dbb68b6abfee3",
+    "atmosphere": "1be662fa5738ee22cdb3a4b020bfc09e2d39b5d58ba26ffd98a91dd7f70f79a3",
+    "just-facts": "e7eff25ada6d7460e48f52b48e6c46eae45567dde545ce60cacdcbc4fba40ba7"
+  },
+  "captures": [
+    {
+      "plan": "atmosphere-cloudy-landscape.json",
+      "planSha256": "aa390d5552e2d9b9ae621e0af4157cf27398ec8fad50d2054c3bb7b313864aae",
+      "captureSha256": "2a902e45843957a3235397ac11bd50c8187842b5f75b314c768091785fc495bb"
+    },
+    {
+      "plan": "atmosphere-cloudy-portrait.json",
+      "planSha256": "55cccf41ce095fe24536e1354059f508463a00ecf3fe3f38c39004a36b55db4e",
+      "captureSha256": "15d5c40c8c8dc6efc8679ba09eefe680a4d356910661e6a7ce5e5df2f37703f5"
+    },
+    {
+      "plan": "atmosphere-snow-landscape.json",
+      "planSha256": "22340ef61196b3d71dd88e5af44b30684e8e09ac5c6650c9603be7eaa0252cc8",
+      "captureSha256": "3bca243c7a776a61070c5a26f72dcdd8f9a7b846ce3a200389305977afbe26b9"
+    },
+    {
+      "plan": "atmosphere-snow-portrait.json",
+      "planSha256": "738cf7eef09ff90ebb52f67299dab086c17b73f5694efb61cf6863483c9bee8a",
+      "captureSha256": "5c9b8e3806e59aaeec859b6076d9216251141d255ea252802d09c3817f285447"
+    },
+    {
+      "plan": "atmosphere-view0-landscape.json",
+      "planSha256": "616185004612fde491d0a161e9e15de8b90f0a7f3de3f47c16452cb7945cb459",
+      "captureSha256": "9b37ff05777f5e1d08a752b59c72610e45f35e73e6c9b40c5aecdfed8a2aa659"
+    },
+    {
+      "plan": "atmosphere-view0-portrait.json",
+      "planSha256": "01f4afed74b89313aa194b77dd58cc1e8a515a7f7332689a9f5d4dc5b32a1a60",
+      "captureSha256": "d0cc43ad95a7391cbaa3c71d30ca25a828d6ea0080853b96a325a7d94776815b"
+    },
+    {
+      "plan": "decision-room-revealed-landscape.json",
+      "planSha256": "e5cd4fd4551ccae101ffe98fbf0b83519f06ffa073cfa22e6665d8cf6c2ba5b9",
+      "captureSha256": "99973871560c95dfeb54b2728b295d613ca7b5b2c65759f1348b1d9efd149320"
+    },
+    {
+      "plan": "decision-room-revealed-portrait.json",
+      "planSha256": "3a0ca1a522deb7391bcb5f00ca75a118eb45797bcc122dcc205ae626c7429eb5",
+      "captureSha256": "da9fa7fac8a358fea368f254173d8640677afb5f3f5d48edf60c8d1274fff1e0"
+    },
+    {
+      "plan": "decision-room-view0-landscape.json",
+      "planSha256": "0ed25fc3010690aea143c9bbb53804de91f0752a12f49dcfcaca708ea1c6c806",
+      "captureSha256": "d4b56627800231df418d0c3ef48b6421486cd1e6e6b7c879d638e9709108a8b2"
+    },
+    {
+      "plan": "decision-room-view0-portrait.json",
+      "planSha256": "c57c7c060a97b1ab21b44259da913b1a4d65dad4e8c427c5967862dc408a18cf",
+      "captureSha256": "a3de22bc4c7820abe5d593abc9473fd32474930df4db4e49a4bedeba8df36b0e"
+    },
+    {
+      "plan": "decision-room-view1-landscape.json",
+      "planSha256": "42ffa1499fe52ea196de3f286d380de220b338aae6dc851947585cbee7fc9bca",
+      "captureSha256": "aebade2502d72c869c58b5847c3e2b27329ac860a064e6ff2318f7a77e095665"
+    },
+    {
+      "plan": "decision-room-view1-portrait.json",
+      "planSha256": "02e13f82c8677fbbb1dfaa9195f6d7d5fa3c85c8400126b71f137483c4c01b20",
+      "captureSha256": "dd1ab5f2e26a52c83681dcc301cb07c1680b54dcf6e8a3233fac5b5686e4a589"
+    },
+    {
+      "plan": "head-to-head-grand-arena-crowd-call-landscape.json",
+      "planSha256": "6479867cef373a781ada4aaf48a323fc24a4ee92574bbd32153f87c4d8502e2b",
+      "captureSha256": "c5b0dbeb9dc72525bad7a33fa4a09c338370997092bfd81af75b94d4888dd6b6"
+    },
+    {
+      "plan": "head-to-head-grand-arena-crowd-call-portrait.json",
+      "planSha256": "ca716569939b4c19a5bf71ea2032bc93359910ca1d79fbf50e02b5badeb24b2a",
+      "captureSha256": "54b250648a20970731eaad5a90b4378cc91f3561ce69cbf8247cc7407fd42f60"
+    },
+    {
+      "plan": "head-to-head-grand-arena-faceoff-landscape.json",
+      "planSha256": "ddeb638be0580f3c611e4d38ae4894591f2dda4286091fac64b9d5d1eb20187f",
+      "captureSha256": "96c2643a2dc3bbe60c45ed6546da16af3df3266b58d3bf6dbebd759e1a35a424"
+    },
+    {
+      "plan": "head-to-head-grand-arena-faceoff-portrait.json",
+      "planSha256": "608ddcb9dd2f5c15d4f27357674bf16953713a6b4831bbe19f5737a2f5422808",
+      "captureSha256": "0733d0d888e7c670ed13587cb6d8116fc213a88ef742d73ec79c7144e8daf5bc"
+    },
+    {
+      "plan": "head-to-head-grand-arena-guest-case-landscape.json",
+      "planSha256": "4429af39d9b775a82d06bccec036857fd70a8b063e6139b14ad3a50b42427e13",
+      "captureSha256": "27f2086d38a080dc07dfd5eeeb344f0413bf3a0501f5b1182ab46785dcdc13ef"
+    },
+    {
+      "plan": "head-to-head-grand-arena-guest-case-portrait.json",
+      "planSha256": "e0c8f2063162b5c0c12a53b1b7286fe012de244494a8091844ff2dbaff485716",
+      "captureSha256": "4970979b109b4b16e9f10bd070e715c6611cf881bb493a49ea7e3c9619f4c77e"
+    },
+    {
+      "plan": "head-to-head-grand-arena-host-case-landscape.json",
+      "planSha256": "2568f09e107d38c2bf84eb4296b6490dbbd25d7225807ea5bdc641360268906f",
+      "captureSha256": "228097348ead11cdc60c02eb51638d93a7b79b52cc51362ec61d20d1a5fa5509"
+    },
+    {
+      "plan": "head-to-head-grand-arena-host-case-portrait.json",
+      "planSha256": "87f60b56d1a825f4dea206908926034d122b7732c90791badb99866db87ca690",
+      "captureSha256": "f7a94c2bb1b8a12abee7b858661e5270882046131ea7ebea22a04dcf01c8f086"
+    },
+    {
+      "plan": "head-to-head-grand-arena-receipts-landscape.json",
+      "planSha256": "16440d4cd38658ed05e92136bee3d08eeba369ea5206fdae1926044281ddf44c",
+      "captureSha256": "d1b0d51249c1ca30cbaacde7c4ec04c537397e67ba8a78aedb9d943fa9f59488"
+    },
+    {
+      "plan": "head-to-head-grand-arena-receipts-portrait.json",
+      "planSha256": "0a95965a5d03120a7efdd8122c36dbb0a8f59d4ad428af0a6efabe27045c7fb1",
+      "captureSha256": "40248c9671a1bcc19c3119662017cc4fe2ab8f30219081d2e3394dab4dfb6d72"
+    },
+    {
+      "plan": "head-to-head-grand-arena-verdict-landscape.json",
+      "planSha256": "160869069e872597ea1b9bddd34f300d188af74acce007958653dcae43ae727b",
+      "captureSha256": "2f49eff4d7976eae630ec35c67f5ac280699c2cccd5c7571bc90cbfa804d39ca"
+    },
+    {
+      "plan": "head-to-head-grand-arena-verdict-portrait.json",
+      "planSha256": "633bcfcb9fca8fd977877395993d6b926890d6eac1f47a79d8da18a6afa8ea86",
+      "captureSha256": "7874212e2af7e0b0ebfd7844fdbda9b942fa677517dcc7f9872fbd5e34e0253a"
+    },
+    {
+      "plan": "just-facts-view0-landscape.json",
+      "planSha256": "943b2bc8fec2606e92ddeaa940a6620806f9e5d95689b3ffdacbc2da73a01a75",
+      "captureSha256": "fe1e08197c6e64d21bbfcc8d4d76eef02d1601ee6ffd9330a7baa63d3955d5a6"
+    },
+    {
+      "plan": "just-facts-view0-portrait.json",
+      "planSha256": "0d705f064d92ab76f1018bb61c2b811bd19a2bed64e8e1db3772dd59d9268241",
+      "captureSha256": "15109ae738e14346139cdfbe631939feb6555d953b41fd24e008be3ce75a7463"
+    },
+    {
+      "plan": "just-facts-view1-landscape.json",
+      "planSha256": "be2c3a645308e9ea734a64dc26e4ebd7dc50e97f3c6d4e3c710168f39e2b9592",
+      "captureSha256": "10f7551571194b5b415b801cdc8893ced07251774f788862cdabefca77519706"
+    },
+    {
+      "plan": "just-facts-view1-portrait.json",
+      "planSha256": "8cc0d0583065e177841deaa5e8b6c1c0bfc73f076cd1499ad1946c2c60df6fb1",
+      "captureSha256": "15109ae738e14346139cdfbe631939feb6555d953b41fd24e008be3ce75a7463"
+    },
+    {
+      "plan": "just-facts-view2-landscape.json",
+      "planSha256": "cece5b87ba51711ec85276e5f2d9301f1860f8b7589a027833cd008f9b20bd07",
+      "captureSha256": "257318baa15f75de9f4ee207b189b2132f239926eeee7b5aaa06d6b344bf05ab"
+    },
+    {
+      "plan": "just-facts-view2-portrait.json",
+      "planSha256": "111e547ba1497bf83e64c418e491f778e9e81c7c4b0bcdbd482d1027ed6777bb",
+      "captureSha256": "f264318ceb7a3087689ab75e4ef5be05be57b70a38bb64a35904d4e351a87371"
+    },
+    {
+      "plan": "open-floor-featured-landscape.json",
+      "planSha256": "53387379c85a6988cc3065bb3689b7c20dad3f9f4c1523f5d88650997f7bc0bd",
+      "captureSha256": "c3d8bcceea708c3f3a8d2e1fc12c5dcbb0d6d352bc122270b2c884d8c692c13c"
+    },
+    {
+      "plan": "open-floor-featured-portrait.json",
+      "planSha256": "9840532929c90d66ea69dfd92652b7726b369bf47e1cf986fa2dc44ebaf5519e",
+      "captureSha256": "00935e5a15f9276bfc06ce306f62b08e17d5f080287b02338821377b80f4a723"
+    },
+    {
+      "plan": "open-floor-view0-landscape.json",
+      "planSha256": "81412f0088d1b58d3af4a1214b1f61ed93581bd621ed2101adbca38bf346f98d",
+      "captureSha256": "e2b50c16abd01b3fb3d3f5bfade14189ec8cfb57c3732ae9cd6fbdd69a2f5b6c"
+    },
+    {
+      "plan": "open-floor-view0-portrait.json",
+      "planSha256": "e914827d94e0aa6b64a378a769aabf0a33cb2f9ec3454a5a0ab2025b6d9572fa",
+      "captureSha256": "59062dcffc397049e379cf691cff3241b2d67cb0d355f8bf8799f5d3d19b66cf"
+    },
+    {
+      "plan": "open-floor-view1-landscape.json",
+      "planSha256": "100d611d0955baa22b152ac164901906bd1594db169b8bb3d14e2c0901b7f63c",
+      "captureSha256": "93c2168853d62c29ed8f3b937f4e396ad7520f4a6167a7c198e8744a25f89aaf"
+    },
+    {
+      "plan": "open-floor-view1-portrait.json",
+      "planSha256": "de1ecdf51be04ebdde2e08c76e8759a606a60b4e9f7190d676e01b5eb2530c2b",
+      "captureSha256": "d8ca1707fd4b57b40f9dd14c01e122a6a1b89a93ead10529a9a64538414f953e"
+    }
+  ]
+}

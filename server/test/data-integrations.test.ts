@@ -77,4 +77,10 @@ describe('provider adapters',()=>{
   expect((await request(a,e,'','POST',{connection:{...llm,provider:'anthropic'},expectedRevision:1})).status).toBe(409);
  });
 
+ it('rejects provider redirects without forwarding the credential',async()=>{
+  const fetcher=vi.fn<typeof fetch>(async()=>new Response(null,{status:302,headers:{Location:'https://another.example/'}}));
+  await expect(testConnection(llm,'synthetic-private-key',fetcher)).rejects.toThrow('Provider request failed (302)');
+  expect(fetcher).toHaveBeenCalledTimes(1);expect(fetcher.mock.calls[0][1]?.redirect).toBe('manual');
+ });
+
 });

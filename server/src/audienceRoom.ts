@@ -2,13 +2,13 @@
 // admits viewers, routes signaling and coordinates chat/hand/moderation state.
 // All mutations share one queue so admission cannot oversubscribe the budget.
 export interface AudienceSocketState {
-  audienceId?: string; name?: string; publisherId?: string;
+  roomId?:string;audienceId?: string; name?: string; publisherId?: string;
   audienceControl?: boolean; audienceHost?: boolean; audienceInvite?: boolean;
   mutedUntil?: number; lastChat?: number; lastReaction?: number; lastHand?: number; lastWatch?: number;
 }
 interface Store { get<T>(key: string): Promise<T | undefined>; put(key: string, value: unknown): Promise<void> }
 interface Socket { send(data: string): void; close(code?: number, reason?: string): void; deserializeAttachment(): unknown; serializeAttachment(data: unknown): void }
-interface ChatMessage { id: string; from: string; name: string; text: string; at: number }
+export interface ChatMessage { id: string; from: string; name: string; text: string; at: number }
 interface AudienceState { enabled: boolean; direct_limit: number; publisher: string | null; chat: ChatMessage[]; hands: { id: string; name: string; at: number }[]; bans: Record<string, number>; mutes: Record<string, number> }
 const KEY = 'audience-room:v1';
 const LIMIT = 100;
@@ -16,7 +16,7 @@ export class AudienceRoom {
   private reactions: Record<string, number> = {};
   private reactionTimer: ReturnType<typeof setTimeout> | null = null;
   private queue: Promise<unknown> = Promise.resolve();
-  constructor(private readonly storage: Store, private readonly sockets: () => Socket[], private readonly inviteAllowed: (url: URL) => boolean = () => false) {}
+  constructor(private readonly storage: Store, private readonly sockets: () => Socket[], private readonly inviteAllowed: (url: URL) => boolean = () => false,private readonly onChat?:(message:ChatMessage,roomId:string)=>void) {}
   private serialize<T>(run: () => Promise<T>): Promise<T> { const next=this.queue.then(run,run);this.queue=next.catch(()=>{});return next; }
   private async load(): Promise<AudienceState> { return await this.storage.get<AudienceState>(KEY) ?? { enabled:false,direct_limit:4,publisher:null,chat:[],hands:[],bans:{},mutes:{} }; }
   private send(ws: Socket, type: string, payload: object = {}): void { try{ws.send(JSON.stringify({ type,...payload,server_now:Date.now() }));}catch{} }
@@ -60,7 +60,7 @@ export class AudienceRoom {
       if(now-(actor.lastChat??0)<1500)return fail('slow_down');
       if(typeof msg.text!=='string'||!msg.text.trim()||msg.text.length>500)return fail('invalid_message');
       const m:ChatMessage={id:crypto.randomUUID(),from:id??actor.publisherId??'moderator',name:actor.name??(control?'Host':'Viewer'),text:msg.text.trim(),at:now};
-      actor.lastChat=now;ws.serializeAttachment(actor);state.chat=[...state.chat.slice(-99),m];await this.storage.put(KEY,state);this.broadcast('audience.chat',{message:m});return true;
+      actor.lastChat=now;ws.serializeAttachment(actor);state.chat=[...state.chat.slice(-99),m];await this.storage.put(KEY,state);this.broadcast('audience.chat',{message:m});if(this.onChat&&actor.roomId)try{this.onChat(m,actor.roomId);}catch{/* Chat stays delivered if a module intake is unavailable. */}return true;
     }
     if(msg.type==='audience.reaction'){
       if(!id)return fail('forbidden');if(now-(actor.lastReaction??0)<1000)return fail('slow_down');

@@ -2,7 +2,7 @@
 function producerShaderPreview(canvas,config,width,height){
  const gl=canvas.getContext('webgl',{alpha:true,premultipliedAlpha:true,antialias:false,preserveDrawingBuffer:true});
  if(!gl){canvas.dataset.gpu='unavailable';return {draw(){},destroy(){}};}
- const mode=['aurora','edgeGlow','lightSweep','plasma','silk','rings','grid','stars','petals','contours','prism','borderFlare'].indexOf(config.effect),low=config.quality==='low',reduction=mode===0||(mode>=3&&mode<11)?(low?.25:.5):(low?.5:1);
+ const mode=['aurora','edgeGlow','lightSweep','plasma','silk','rings','grid','stars','petals','contours','prism','borderFlare','rain','snow','clouds'].indexOf(config.effect),low=config.quality==='low',reduction=mode===0||(mode>=3&&mode<11)?(low?.25:.5):(low?.5:1);
  canvas.width=Math.max(1,Math.ceil(width*reduction));canvas.height=Math.max(1,Math.ceil(height*reduction));
  const compile=(type,code)=>{const s=gl.createShader(type);gl.shaderSource(s,code);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s;};
  const vs=compile(gl.VERTEX_SHADER,'attribute vec2 point;varying vec2 uv;void main(){uv=vec2((point.x+1.0)*0.5,(1.0-point.y)*0.5);gl_Position=vec4(point,0.0,1.0);}');

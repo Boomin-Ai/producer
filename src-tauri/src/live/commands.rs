@@ -1409,6 +1409,26 @@ pub async fn live_set_v2_report(app: tauri::AppHandle, result: serde_json::Value
 #[tauri::command]
 pub fn live_set_v2_enabled()->bool{cfg!(all(have_engine,feature="sets-v2-dev",target_os="macos"))}
 
+/// Isolated development workspace bootstrap. Provider credentials never enter this app.
+#[tauri::command]
+pub fn live_set_v2_dev_workspace(state:State<'_,AppState>)->Result<Option<serde_json::Value>,String>{
+ #[cfg(feature="sets-v2-dev")]{
+  if std::env::var("PRODUCER_SETS_V2_LOCAL_WORKSPACE").as_deref()!=Ok("1"){return Ok(None);}
+  #[derive(Deserialize)]
+  #[serde(rename_all="camelCase",deny_unknown_fields)]
+  struct LocalWorkspace {endpoint_id:String,base_url:String,token:String,server_room_id:String,module_bindings:serde_json::Value}
+  let raw=std::fs::read_to_string("/private/tmp/producer-sets-v2-local-workspace.json").map_err(|_|"Local workspace setup is missing")?;
+  let config:LocalWorkspace=serde_json::from_str(&raw).map_err(|_|"Invalid local workspace setup")?;
+  if config.base_url!="http://127.0.0.1:8795"||Uuid::parse_str(&config.endpoint_id).is_err()||config.token.len()<32{return Err("Invalid isolated workspace identity".into());}
+  crate::vault::set_token(&config.endpoint_id,&config.token).map_err(|_|"Could not store local endpoint token")?;
+  let db=state.db.lock().map_err(|_|"Development storage unavailable")?;
+  db.execute("INSERT INTO endpoints (id,kind,name,base_url) VALUES (?1,'connected','Sets v2 Local',?2) ON CONFLICT(id) DO UPDATE SET base_url=excluded.base_url",params![config.endpoint_id,config.base_url]).map_err(|_|"Could not save development workspace")?;
+  db.execute("UPDATE live_rooms SET endpoint_id=?1 WHERE name='Producer dev smoke'",params![config.endpoint_id]).map_err(|_|"Could not bind development room")?;
+  return Ok(Some(serde_json::json!({"endpointId":config.endpoint_id,"serverRoomId":config.server_room_id,"moduleBindings":config.module_bindings,"runProof":std::env::var("PRODUCER_SETS_V2_MODULE_PROBE").as_deref()==Ok("1")})));
+ }
+ #[cfg(not(feature="sets-v2-dev"))]{let _=state;Ok(None)}
+}
+
 #[tauri::command]
 pub fn live_set_v2_smoke_enabled()->bool {
  cfg!(feature="sets-v2-dev") && std::env::var("PRODUCER_SETS_V2_UI_PROBE").as_deref()==Ok("1")

@@ -1,4 +1,5 @@
 /** Portable module contract. No renderer, transport, credentials or ambient IO. */
+export type ModuleBindings=Record<string,{id:string;revision:number}>;
 export type Scalar = string | number | boolean;
 export type Role = 'operator' | 'audience' | 'connector' | 'show';
 export type Field = {type:'text';default:string;maxLength:number}|{type:'number';default:number;min:number;max:number}|{type:'boolean';default:boolean};
@@ -16,12 +17,12 @@ export interface ModuleDefinition {
  controls:{id:string;label:string;audience:Role;controls:Control[]}[];
  capabilities:string[];
  behavior?:
-  |{type:'vote';question:string;options:{id:string;label:string}[];maxParticipants:number;allowChange:boolean}
-  |{type:'submissions';prompt:string;maxLength:number;capacity:number}
-  |{type:'agent';integrationRole:string;prompt:string;mode:'answer'|'factCheck';maxLength:number}
+  |{type:'vote';question:string;options:{id:string;label:string}[];maxParticipants:number;allowChange:boolean;showView?:string}
+  |{type:'submissions';prompt:string;maxLength:number;capacity:number;showView?:string;sources?:Array<'submissions'|'chat'>}
+  |{type:'agent';integrationRole:string;prompt:string;mode:'answer'|'factCheck';maxLength:number;showView?:string}
   |{type:'weather';integrationRole:string};
 }
-export interface ModuleInstanceDefinition {id:string;definition:string;owner:'set'|'segment';segment?:string;initialState?:Record<string,Scalar>;hidden:'continue'|'pause';onExit:'continue'|'pause'|'stop'|'dispose';reenter:'resume'|'reset'|'new'}
+export interface ModuleInstanceDefinition {id:string;definition:string;owner:'set'|'segment';audiencePolicy?:'manual'|'whileRunning';audienceSegments?:string[];segment?:string;initialState?:Record<string,Scalar>;hidden:'continue'|'pause';onExit:'continue'|'pause'|'stop'|'dispose';reenter:'resume'|'reset'|'new'}
 export interface RuntimeDefinition {schema:'producer.modules/1';definitions:Record<string,ModuleDefinition>;instances:ModuleInstanceDefinition[]}
 export class ContractError extends Error {}
 export const key=(v:unknown):v is string=>typeof v==='string'&&/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(v)&&!['constructor','prototype','__proto__'].includes(v);
@@ -68,9 +69,9 @@ function options(v:unknown){const items=list(v,12).map(v=>{const o=object(v,['id
 function behavior(v:unknown):ModuleDefinition['behavior']{
  if(v===undefined)return;
  if(!v||typeof v!=='object')fail('Invalid behavior');const type=(v as any).type;
- if(type==='vote'){const o=object(v,['type','question','options','maxParticipants','allowChange']);const choices=options(o.options);if(choices.length<2)fail('Vote requires two or more choices');const maxParticipants=num(o.maxParticipants,1,100000);if(!Number.isInteger(maxParticipants))fail('Invalid participant capacity');return {type,question:text(o.question,240),options:choices,maxParticipants,allowChange:bool(o.allowChange)};}
- if(type==='submissions'){const o=object(v,['type','prompt','maxLength','capacity']);const maxLength=num(o.maxLength,1,1000),capacity=num(o.capacity,1,500);if(!Number.isInteger(maxLength)||!Number.isInteger(capacity))fail('Invalid submission bounds');return {type,prompt:text(o.prompt,240),maxLength,capacity};}
- if(type==='agent'){const o=object(v,['type','integrationRole','prompt','mode','maxLength']);if(o.mode!=='answer'&&o.mode!=='factCheck')fail('Invalid agent mode');return {type,integrationRole:id(o.integrationRole),prompt:text(o.prompt,1000),mode:o.mode,maxLength:num(o.maxLength,240,16000)};}
+ if(type==='vote'){const o=object(v,['type','question','options','maxParticipants','allowChange','showView'],['type','question','options','maxParticipants','allowChange']);const choices=options(o.options);if(choices.length<2)fail('Vote requires two or more choices');const maxParticipants=num(o.maxParticipants,1,100000);if(!Number.isInteger(maxParticipants))fail('Invalid participant capacity');return {type,question:text(o.question,240),options:choices,maxParticipants,allowChange:bool(o.allowChange),...(o.showView!==undefined?{showView:id(o.showView)}:{})};}
+ if(type==='submissions'){const o=object(v,['type','prompt','maxLength','capacity','showView','sources'],['type','prompt','maxLength','capacity']);const maxLength=num(o.maxLength,1,1000),capacity=num(o.capacity,1,500);if(!Number.isInteger(maxLength)||!Number.isInteger(capacity))fail('Invalid submission bounds');return {type,prompt:text(o.prompt,240),maxLength,capacity,...(o.sources===undefined?{}:{sources:list(o.sources,2).map(v=>{if(v!=='submissions'&&v!=='chat')fail('Unknown audience source');return v as 'submissions'|'chat';})}),...(o.showView!==undefined?{showView:id(o.showView)}:{})};}
+ if(type==='agent'){const o=object(v,['type','integrationRole','prompt','mode','maxLength','showView'],['type','integrationRole','prompt','mode','maxLength']);if(o.mode!=='answer'&&o.mode!=='factCheck')fail('Invalid agent mode');return {type,integrationRole:id(o.integrationRole),prompt:text(o.prompt,1000),mode:o.mode,maxLength:num(o.maxLength,240,16000),...(o.showView!==undefined?{showView:id(o.showView)}:{})};}
  if(type==='weather'){const o=object(v,['type','integrationRole']);return {type,integrationRole:id(o.integrationRole)};}
  return fail('Unsupported behavior capability');
 }
@@ -89,16 +90,18 @@ export function parseRuntimeDefinition(value:unknown):RuntimeDefinition{
   for(const a of Object.values(actions)){if(a.when!==undefined)validateExpression(a.when);for(const step of a.steps)if(step.op!=='view')validateExpression(step.value);}
   for(const g of controls)for(const c of g.controls){const audience=g.audience==='audience';if(audience&&c.field&&!publicFields.includes(c.field))fail('Audience control reads private field');if(c.when!==undefined)validateExpression(c.when,audience,false);if(c.enabled!==undefined)validateExpression(c.enabled,audience,false);}
   const capabilities=list(o.capabilities,16).map(v=>text(v,80));if(capabilities.some(c=>!/^[a-z][a-z0-9.-]+@[1-9][0-9]*$/.test(c)))fail('Invalid capability requirement');
-  const b=behavior(o.behavior);if(b){const cap=b.type==='vote'?'audience.vote@1':b.type==='submissions'?'audience.text@1':b.type==='agent'?'data.agent@1':'data.weather@1';if(!capabilities.includes(cap))fail('Behavior capability must be declared');}
+  const b=behavior(o.behavior);if(b?.type==='submissions'&&b.sources?.includes('chat')&&!capabilities.includes('room.chat@1'))fail('Chat input requires room.chat@1');if(b&&'showView'in b&&b.showView&&!views?.includes(b.showView))fail('Unknown presentation view');if(b){const cap=b.type==='vote'?'audience.vote@1':b.type==='submissions'?'audience.text@1':b.type==='agent'?'data.agent@1':'data.weather@1';if(!capabilities.includes(cap))fail('Behavior capability must be declared');}
   const initialView=o.initialView===undefined?undefined:id(o.initialView);if(initialView&&!views?.includes(initialView))fail('Initial view is not declared');
   return {label:text(o.label,80),state,publicFields,actions,controls,capabilities,...(views?{views}:{}),...(initialView?{initialView}:{}),...(b?{behavior:b}:{})};
  },32);
  const instanceIds=new Set<string>();const instances=list(root.instances,32).map(v=>{
-  const o=object(v,['id','definition','owner','segment','initialState','hidden','onExit','reenter'],['id','definition','owner','hidden','onExit','reenter']);const name=id(o.id),definition=id(o.definition);if(instanceIds.has(name)||!own(definitions,definition))fail('Duplicate instance or missing definition');instanceIds.add(name);
+  const o=object(v,['id','definition','owner','segment','initialState','hidden','onExit','reenter','audiencePolicy','audienceSegments'],['id','definition','owner','hidden','onExit','reenter']);const name=id(o.id),definition=id(o.definition);if(instanceIds.has(name)||!own(definitions,definition))fail('Duplicate instance or missing definition');instanceIds.add(name);
   if(o.owner!=='set'&&o.owner!=='segment'||!['continue','pause'].includes(String(o.hidden))||!['continue','pause','stop','dispose'].includes(String(o.onExit))||!['resume','reset','new'].includes(String(o.reenter)))fail('Invalid lifecycle policy');
+  if(o.audiencePolicy!==undefined&&!['manual','whileRunning'].includes(String(o.audiencePolicy)))fail('Invalid audience exposure policy');
+  const audienceSegments=o.audienceSegments===undefined?undefined:list(o.audienceSegments,32).map(id);
   const segment=o.segment===undefined?undefined:id(o.segment);if((o.owner==='segment')!==!!segment)fail('Segment ownership requires a segment');
   const initialState=o.initialState===undefined?undefined:record(o.initialState,scalar);for(const [k,v]of Object.entries(initialState??{})){if(!own(definitions[definition].state,k))fail('Unknown initial state field');fieldValue(definitions[definition].state[k],v);}
-  return {id:name,definition,owner:o.owner as 'set'|'segment',hidden:o.hidden as 'continue'|'pause',onExit:o.onExit as 'continue'|'pause'|'stop'|'dispose',reenter:o.reenter as 'resume'|'reset'|'new',...(segment?{segment}:{}),...(initialState?{initialState}:{})};
+  return {id:name,definition,owner:o.owner as 'set'|'segment',hidden:o.hidden as 'continue'|'pause',onExit:o.onExit as 'continue'|'pause'|'stop'|'dispose',reenter:o.reenter as 'resume'|'reset'|'new',...(o.audiencePolicy!==undefined?{audiencePolicy:o.audiencePolicy as 'manual'|'whileRunning'}:{}),...(audienceSegments?{audienceSegments}:{}),...(segment?{segment}:{}),...(initialState?{initialState}:{})};
  });
  return {schema:'producer.modules/1',definitions,instances};
 }

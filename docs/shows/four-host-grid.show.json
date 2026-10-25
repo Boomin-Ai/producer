@@ -1,5 +1,5 @@
 {
-  "schema": "producer.presentation/1",
+  "schema": "producer.presentation/2",
   "id": "four-host-grid-v2",
   "version": "2.0.0",
   "name": "Four Host Grid \u2014 Guest Focus (v2)",

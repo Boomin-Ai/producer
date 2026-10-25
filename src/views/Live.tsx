@@ -1,3 +1,4 @@
+import {useSetModules} from '../features/presentation/useSetModules';
 import {invoke} from "@tauri-apps/api/core";
 import { admitGuestThroughTransport, revokeGuestAndConfirm } from "../lib/guestAdmission";
 import {PortraitCanvas} from '../features/presentation/PortraitCanvas';
@@ -4455,12 +4456,13 @@ export function LiveView({
     if(assign)setOutput.bind(slot,id);
     return id;
   };
-  const changeSet=async (doc:import('../features/presentation/schema').PresentationPackage)=> {
+  const changeSet=async (doc:import('../features/presentation/schema').PresentationPackage,moduleBindings?:import('../features/presentation/moduleConnections').ModuleBindings)=> {
     if(setOutput.renderer!=='native'&&!await setOutput.returnToRoom())return;
     setSetRehearsal(new RehearsalSession(doc,undefined,'prepare'));
-    writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:doc,bindings:setOutput.bindings,framing:setOutput.framing}});
+    writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,...(moduleBindings?{moduleBindings}:{}),package:doc,bindings:setOutput.bindings,framing:setOutput.framing}});
   };
   const setWorkspaceState=useSyncExternalStore(setRehearsal.subscribe,setRehearsal.snapshot);
+  useSetModules(setRehearsal,endpointRef.current??activeEndpointId()??undefined,cfg.server_room_id??undefined,!!setOutput.active,setWorkspaceState.workspaceMode,cfg.presentation?.moduleBindings??{});
   const [setHostName,setSetHostName]=useState('');
   useEffect(()=>{let cancelled=false;setSetHostName('');const endpoint=endpointRef.current ?? activeEndpointId();if(isHost&&endpoint)void fetchMe(endpoint).then(me=>{if(!cancelled)setSetHostName(me.name?.trim() ?? '');}).catch(()=>{});return()=>{cancelled=true;};},[roomId,isHost]);
   const setSourceNames:Record<string,string>={};
@@ -6819,7 +6821,7 @@ export function LiveView({
   const panelBody = (id: PanelId) => {
     switch (id) {
       case "setControls":
-        return <SetControlsPanel voting={roomAccess.can.interactions?<SetRoomVoting vote={vote} savedVotes={savedVotes} onSelectVote={selectSavedVote} onOpen={openVote} onTransition={(action,hold)=>void transitionVote(action,hold)}/>:undefined} sourceNames={setSourceNames} onFieldEdit={editSetField} session={setRehearsal} output={setOutput} blocked={!docApplied}
+        return <SetControlsPanel endpoint={endpointRef.current??activeEndpointId()??undefined} serverRoomId={cfg.server_room_id??undefined} moduleBindings={cfg.presentation?.moduleBindings} voting={roomAccess.can.interactions?<SetRoomVoting vote={vote} savedVotes={savedVotes} onSelectVote={selectSavedVote} onOpen={openVote} onTransition={(action,hold)=>void transitionVote(action,hold)}/>:undefined} sourceNames={setSourceNames} onFieldEdit={editSetField} session={setRehearsal} output={setOutput} blocked={!docApplied}
           blockedReason={!docApplied ? "Waiting for the room to finish loading." : undefined}
           onChange={changeSet} />;
       case "dj":

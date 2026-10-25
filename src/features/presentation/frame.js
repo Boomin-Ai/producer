@@ -162,7 +162,7 @@
         shape.style.border = a.outlineWidth + 'px solid ' + a.outlineColor;
         shape.style.opacity = a.opacity;
         const fill = document.createElement('div');
-        fill.style.cssText = 'position:absolute;inset:0;background:linear-gradient(135deg,#292738,#403748);';
+        fill.style.cssText = 'position:absolute;inset:0;background:linear-gradient(135deg,#172330,#263543);';
         fill.style.filter = 'grayscale(' + a.grayscale + ')';
         const label = document.createElement('span');
         label.style.position = 'relative';

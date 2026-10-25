@@ -12,7 +12,7 @@ export interface RenderNode {
   id: string; type: 'box' | 'text' | 'slot' | 'media' | 'shader'; text?: string; slotLabel?: string; slotId?: string; framing?: import('./schema').SlotFraming; appearance?: SourceAppearance;
   styles: Record<string, string | number>; children: RenderNode[]; motionClass?: string;
 }
-export interface OutputProjection { timeline?:AnimationTimeline;assets?:Record<string,import('./assets').MediaAsset>; width: number; height: number; revision: number; root: RenderNode; css: string }
+export interface OutputProjection { moduleCommit?:{setEpoch:number;revision:number;domain:'live'|'rehearsal'}; timeline?:AnimationTimeline;assets?:Record<string,import('./assets').MediaAsset>; width: number; height: number; revision: number; root: RenderNode; css: string }
 
 /** Output receives resolved visual data only, never the operator tree or raw state.
  * Any future live adapter must supply an authorized public state projection here.
@@ -83,5 +83,5 @@ export function outputProjection(doc: PresentationPackage, state: RehearsalState
   const timeline:AnimationTimeline|undefined=layout.animation||hasShaders?{...layout.animation,tracks:(layout.animation?.tracks??[]).filter(t=>resolved.has(t.target)).map(t=>({...t,target:resolved.get(t.target)!})),clock:state.animationClock?{...state.animationClock}:{running:false,positionMs:state.elapsedMs,segmentMs:0,anchorMs:Date.now()}}:undefined;
   if(timeline&&state.layoutMotion&&state.layoutMotionId===layout.id){const visible=new Set(resolved.values()),motion=state.layoutMotion.filter(t=>visible.has(t.target));const keys=new Set(motion.map(t=>`${t.target}:${t.property}`));timeline.tracks=[...timeline.tracks.filter(t=>!keys.has(`${t.target}:${t.property}`)),...motion];}
   if(timeline&&hasShaders&&!doc.show)timeline.clock={...timeline.clock,running:true};
-  return { ...(timeline?{timeline}:{}),...(used.size?{assets}:{}),width: layout.width, height: layout.height, revision: state.revision, root, css: css.join('\n') };
+  return { ...((state.moduleConnection==='live'||state.workspaceMode==='rehearsal')?{moduleCommit:{...state.moduleCommit,domain:state.workspaceMode==='rehearsal'?'rehearsal' as const:'live' as const}}:{}),...(timeline?{timeline}:{}),...(used.size?{assets}:{}),width: layout.width, height: layout.height, revision: state.revision, root, css: css.join('\n') };
 }

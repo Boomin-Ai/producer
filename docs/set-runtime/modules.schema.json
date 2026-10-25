@@ -535,6 +535,17 @@
                 },
                 "allowChange": {
                   "type": "boolean"
+                },
+                "showView": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+                  "not": {
+                    "enum": [
+                      "constructor",
+                      "prototype",
+                      "__proto__"
+                    ]
+                  }
                 }
               },
               "required": [
@@ -565,6 +576,27 @@
                   "type": "integer",
                   "minimum": 1,
                   "maximum": 500
+                },
+                "showView": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+                  "not": {
+                    "enum": [
+                      "constructor",
+                      "prototype",
+                      "__proto__"
+                    ]
+                  }
+                },
+                "sources": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "submissions",
+                      "chat"
+                    ]
+                  },
+                  "maxItems": 2
                 }
               },
               "required": [
@@ -630,6 +662,17 @@
                   "type": "number",
                   "minimum": 240,
                   "maximum": 16000
+                },
+                "showView": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+                  "not": {
+                    "enum": [
+                      "constructor",
+                      "prototype",
+                      "__proto__"
+                    ]
+                  }
                 }
               },
               "required": [
@@ -683,6 +726,27 @@
             "set",
             "segment"
           ]
+        },
+        "audiencePolicy": {
+          "enum": [
+            "manual",
+            "whileRunning"
+          ]
+        },
+        "audienceSegments": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+            "not": {
+              "enum": [
+                "constructor",
+                "prototype",
+                "__proto__"
+              ]
+            }
+          },
+          "maxItems": 32
         },
         "segment": {
           "type": "string",

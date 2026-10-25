@@ -708,10 +708,11 @@ static NSArray *real_room_proof(NSString *out) {
       unsigned titlePixels=0,videoPixels=0;
       for(uint32_t y=0;y<h;y++)for(uint32_t x=0;x<w;x++){
         const uint8_t *p=pixel(frame,w,x,y);
-        if(y>(w>h?165:220)&&y<(w>h?270:315)&&p[0]>215&&p[1]>215&&p[2]>205)titlePixels++;
+        if((getenv("PRODUCER_PROBE_DYNAMIC_SHOWCASE") ? (y>150&&y<h-80) : (y>(w>h?165:220)&&y<(w>h?270:315)))&&p[0]>215&&p[1]>215&&p[2]>205)titlePixels++;
         if(p[1]>245&&p[0]<10&&p[2]<10)videoPixels++;
       }
       require(titlePixels>200,"prepared native graphics remain painted after repeated takes");
+      if(getenv("PRODUCER_PROBE_DYNAMIC_SHOWCASE")&&[file hasPrefix:@"atmosphere"]){unsigned heading=0;for(uint32_t y=52;y<110;y++)for(uint32_t x=80;x<520;x++){const uint8_t *p=pixel(frame,w,x,y);if(p[0]>220&&p[1]>220&&p[2]>220)heading++;}require(heading>200,"weather shaders preserve following heading graphics");const uint8_t *bottom=pixel(frame,w,w>h?1480:540,w>h?620:1200);require(bottom[1]>245&&bottom[0]<10&&bottom[2]<10,"camera fills the lower transparent bezel opening");}
       require(videoPixels>5000,"native camera remains visible through transparent bezel");
     }
     png(frame,w,h,[out stringByAppendingPathComponent:[[file stringByDeletingPathExtension] stringByAppendingString:@"-room.png"]]);

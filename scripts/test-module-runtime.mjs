@@ -58,4 +58,38 @@ test('Just Facts agent requests are fenced and responses require explicit on-out
  ok(r,'facts','agent.show',{},host);assert.equal(r.publicModule(r.snapshot().modules.facts).agent.response,'An existing agent response');
  ok(r,'facts','stop',{},host);assert.equal(r.snapshot().modules.facts.epoch,2);no(r,'facts','agent.complete',{requestId:second,response:'Late'},connector,{epoch:1});
 });
+test('segment orchestration commits once, preserves set modules, and isolates reentry policy',()=>{
+ const d=structuredClone(definition);d.instances[0].onExit='pause';d.instances[0].reenter='reset';const r=new SetRuntime(d,{epoch:10,domain:'rehearsal',capabilities:cap});
+ ok(r,'vote','start');let notifications=0;r.subscribe(()=>notifications++);
+ const orchestrate=(segment,running=true,paused=false)=>r.orchestrate({setEpoch:10,segment,running,paused},{role:'show',id:'runner',modules:d.instances.map(i=>i.id)},10000);
+ const before=r.snapshot().revision;assert.equal(orchestrate('host').status,'committed');assert.equal(r.snapshot().revision,before+1);assert.equal(notifications,1);ok(r,'host','point');
+ assert.equal(orchestrate('guest').status,'committed');assert.equal(r.snapshot().modules.host.execution,'paused');assert.equal(r.snapshot().modules.guest.execution,'running');assert.equal(r.snapshot().modules.vote.execution,'running');
+ assert.equal(orchestrate('host').status,'committed');assert.equal(r.snapshot().modules.host.values.score,0);assert.equal(r.snapshot().modules.host.epoch,2);assert.equal(r.snapshot().modules.guest.execution,'stopped');
+ const revision=r.snapshot().revision;assert.equal(orchestrate('host').revision,revision);assert.equal(r.snapshot().revision,revision);
+});
+test('show pause reasons do not clear operator suspension, including leave and resume',()=>{
+ const d=structuredClone(definition);d.instances[0].onExit='pause';const r=new SetRuntime(d,{epoch:10,domain:'rehearsal',capabilities:cap});
+ const run=(segment,running,paused)=>r.orchestrate({setEpoch:10,segment,running,paused},{role:'show',id:'runner',modules:d.instances.map(i=>i.id)},10000);
+ run('host',true,false);ok(r,'host','pause');run('host',true,true);run('guest',true,false);run('host',true,false);
+ assert.deepEqual(r.snapshot().modules.host.pauseReasons,['operator']);assert.equal(r.snapshot().modules.host.execution,'paused');ok(r,'host','resume');assert.equal(r.snapshot().modules.host.execution,'running');
+});
+test('ungranted show orchestration cannot partially activate any module',()=>{
+ const r=make(),before=r.snapshot();assert.equal(r.orchestrate({setEpoch:10,segment:'host',running:true,paused:false},{role:'show',id:'runner',modules:['host']},10000).status,'rejected');assert.deepEqual(r.snapshot(),before);
+});
+test('audience exposure follows optional show orchestration without owning module execution',()=>{
+ const d=structuredClone(definition);d.instances.find(i=>i.id==='vote').audiencePolicy='whileRunning';d.instances.find(i=>i.id==='vote').audienceSegments=['host'];
+ const r=new SetRuntime(d,{epoch:10,domain:'live',capabilities:cap}),show={role:'show',id:'runner',modules:d.instances.map(i=>i.id)};
+ const run=(segment,running,paused=false)=>{const result=r.orchestrate({setEpoch:10,segment,running,paused,showAttached:true},show,10000);assert.equal(result.status,'committed',JSON.stringify(result));};
+ run('host',false);assert.equal(r.snapshot().modules.vote.published,false);run('host',true);assert.equal(r.snapshot().modules.vote.admission,'open');ok(r,'vote','vote',{round:1,choice:'yes'},principal('audience','voter'));
+ run('guest',true);assert.equal(r.snapshot().modules.vote.execution,'running');assert.equal(r.snapshot().modules.vote.published,false);assert.equal(r.snapshot().modules.vote.total,1);run('host',true);assert.equal(r.snapshot().modules.vote.admission,'open');run('host',true,true);assert.equal(r.snapshot().modules.vote.published,false);run('host',true);assert.equal(r.snapshot().modules.vote.total,1);
+ const standalone=structuredClone(d);delete standalone.instances.find(i=>i.id==='vote').audienceSegments;const solo=new SetRuntime(standalone,{epoch:10,domain:'live',capabilities:cap});assert.equal(solo.orchestrate({setEpoch:10,segment:'',running:false,paused:false,showAttached:false},show,10000).status,'committed');assert.equal(solo.snapshot().modules.vote.admission,'open');
+});
+test('room chat requires an explicit capability, is deduplicated, and stays private until moderated',()=>{
+ const d=structuredClone(definition);d.definitions.submissions.behavior.sources=['submissions','chat'];assert.throws(()=>parseRuntimeDefinition(d));d.definitions.submissions.capabilities.push('room.chat@1');
+ const r=new SetRuntime(d,{epoch:10,domain:'live',capabilities:[...cap,'room.chat@1']});for(const op of ['start','publish','open'])ok(r,'text',op);
+ const input={messageId:'message-one',text:'A room chat question',name:'Viewer',at:10000};no(r,'text','chat.ingest',input);ok(r,'text','chat.ingest',input,principal('connector','chat'));no(r,'text','chat.ingest',input,principal('connector','chat'));assert.equal(r.snapshot().modules.text.total,1);assert(!JSON.stringify(r.public()).includes(input.text));
+ ok(r,'text','approve',{item:'item-1-r1'});ok(r,'text','feature',{item:'item-1-r1'});assert.equal(r.public().modules.find(m=>m.id==='text').text.featured.source,'chat');
+ const command={id:'new-intake',setEpoch:10,module:'text',epoch:1,op:'close'};for(const op of ['close','round.new','open'])assert.equal(r.dispatch({...command,id:op,op},principal(),20000).status,'committed');
+ assert.equal(r.dispatch({...command,id:'late-chat',op:'chat.ingest',input:{...input,messageId:'late-message'}},principal('connector','chat'),20000).status,'rejected');
+});
 console.log('Module runtime:',tests,'checks passed');

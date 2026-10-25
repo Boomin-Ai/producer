@@ -52,7 +52,7 @@ function layout(phase,label,strap,portrait){
   const side=phase==='host-case'?'host':'guest';
   const x=portrait?80:side==='host'?1380:100,y=portrait?1635:820,tw=portrait?920:440;
   nodes.push(text('case-kicker','THE '+(side==='host'?'BLUE':'AMBER')+' SIDE',x,y,tw,38,portrait?24:18,side==='host'?blue:gold,700));
-  nodes.push(text('case-line',get('values.'+side+'Position'),x,y+(portrait?54:40),tw,portrait?125:130,portrait?40:28,white,600));
+  nodes.push(text('case-line',get('modules.'+side+'Case.claim'),x,y+(portrait?54:40),tw,portrait?125:130,portrait?40:28,white,600));
  }
  if(phase==='receipts'){
   const x=portrait?80:610,y=portrait?760:315,bw=portrait?920:700,bh=portrait?900:610;
@@ -70,29 +70,34 @@ function layout(phase,label,strap,portrait){
   nodes.push(box('audience-console',x,y,bw,portrait?126:134,[
    text('ballot-kicker',phase==='crowd-call'?'THE ROOM DECIDES':'AUDIENCE VERDICT',28,18,bw-56,32,18,gold,700),
    box('blue-vote-lane',28,63,(bw-68)/2,5,[],{background:blue}),box('amber-vote-lane',bw/2+6,63,(bw-68)/2,5,[],{background:gold}),
-   text('ballot-caption',iff(get('show.revealed'),cat(get('show.total'),' CONFIRMED VOTES'),phase==='crowd-call'?'ONE PERSON. ONE VOTE.':'REVEAL WHEN YOU ARE READY.'),28,84,bw-56,32,portrait?18:17,muted,600),
+   text('ballot-caption',iff(get('modules.verdict.revealed'),cat(get('modules.verdict.total'),' CONFIRMED VOTES'),phase==='crowd-call'?'ONE PERSON. ONE VOTE.':'REVEAL WHEN YOU ARE READY.'),28,84,bw-56,32,portrait?18:17,muted,600),
   ],{background:'#0c1623ed',borderRadius:18}));
  }
  if(phase==='verdict'){
   const x=portrait?80:610,y=portrait?820:335,bw=portrait?920:700;
   nodes.push(box('verdict-board',x,y,bw,portrait?670:435,[
-   text('verdict-kicker',iff(get('show.revealed'),'THE AUDIENCE HAS SPOKEN','THE VERDICT'),32,40,bw-64,45,portrait?26:19,gold,700,'center'),
-   ...[['host',get('values.hostName'),eq(get('show.winner'),'Blue side')],['guest',get('values.guestName'),eq(get('show.winner'),'Amber side')],['draw','A DRAW.',eq(get('show.result'),'draw')],['pending','VERDICT PENDING',eq(get('show.revealed'),false)]].map(([id,label,when])=>({...text('winner-'+id,label,32,portrait?140:114,bw-64,portrait?310:190,portrait?82:62,white,800,'center'),when})),
-   text('verdict-note',iff(get('show.revealed'),get('values.closingLine'),'Collect votes, then reveal the result.'),32,portrait?505:334,bw-64,100,portrait?32:25,muted,400,'center'),
+   text('verdict-kicker',iff(get('modules.verdict.revealed'),'THE AUDIENCE HAS SPOKEN','THE VERDICT'),32,40,bw-64,45,portrait?26:19,gold,700,'center'),
+   ...[['host',get('values.hostName'),eq(get('modules.verdict.winner'),'Blue side')],['guest',get('values.guestName'),eq(get('modules.verdict.winner'),'Amber side')],['draw','A DRAW.',eq(get('modules.verdict.winner'),'Draw')],['pending','VERDICT PENDING',eq(get('modules.verdict.revealed'),false)]].map(([id,label,when])=>({...text('winner-'+id,label,32,portrait?140:114,bw-64,portrait?310:190,portrait?82:62,white,800,'center'),when})),
+   text('verdict-note',iff(get('modules.verdict.revealed'),get('values.closingLine'),'Collect votes, then reveal the result.'),32,portrait?505:334,bw-64,100,portrait?32:25,muted,400,'center'),
   ],{background:'#0b1422ed',borderRadius:28,border:'1px solid #65738b'}));
  }
  if(phase==='faceoff')nodes.push(text('opening-note',strap,portrait?100:400,portrait?1740:890,portrait?880:1120,portrait?110:72,portrait?32:27,muted,400,'center'));
  const footy=portrait?1878:1028;
- nodes.push(text('show-footer',cat('BLUE ',get('values.hostScore'),'   /   AMBER ',get('values.guestScore')),portrait?80:100,footy,portrait?650:1000,32,portrait?18:17,muted,700));
+ nodes.push(text('show-footer',cat('BLUE ',get('modules.scoring.hostScore'),'   /   AMBER ',get('modules.scoring.guestScore')),portrait?80:100,footy,portrait?650:1000,32,portrait?18:17,muted,700));
  nodes.push(text('round-footer','YOUR TAKE. YOUR RECEIPTS. YOUR CALL.',portrait?80:1120,footy,portrait?920:700,30,14,muted,700,portrait?'right':'right'));
  // Stable rig IDs let native morph tracks move camera, bezel and nameplate together.
  return {id:phase+(portrait?'-portrait':'-landscape'),label:label.replace(/^\d+ \/ /,'')+' / '+(portrait?'Vertical':'Landscape'),width:w,height:h,root:{id:'stage',type:'box',styles:{position:'relative',width:w,height:h,overflow:'hidden'},children:nodes},animation:{tracks:[],transition:{type:'morph',durationMs:650}}};
 }
 const value=(text,maxLength=100)=>({type:'text',default:text,maxLength});
 const set={initialLayout:'faceoff-landscape',values:{hostName:value('Kleveland',40),guestName:value('Challenger',40),topic:value('Does AI create more opportunity than it replaces?',120),hostPosition:value('More access. More people building.',100),guestPosition:value('Better tools. Fewer entry-level paths.',100),receiptTitle:value('Show the work. Check the source.',90),sourceLabel:value('SOURCE / Add your reference',100),closingLine:value('Different takes. A better conversation.',100),hostScore:{type:'number',default:0,min:0,max:99},guestScore:{type:'number',default:0,min:0,max:99}},feeds:{},slots:[{id:'host',label:'Blue side / Host camera'},{id:'guest',label:'Amber side / Challenger camera'},{id:'evidence',label:'Receipts / Image, video or screen'}],components:{},assets:Object.fromEntries([['landscape','arena-landscape.png'],['portrait','arena-portrait.png'],['bezel','camera-bezel.png']].map(([id,file])=>[id,{name:file,mime:'image/png',data:'data:image/png;base64,'+fs.readFileSync(path.join(folder,file)).toString('base64')}])),layouts:phases.flatMap(p=>[layout(...p,false),layout(...p,true)]),controls:[]};
-set.controls=[...set.layouts.map((l,i)=>({id:'layout-'+i,type:'button',label:l.label,action:{type:'layout.select',layoutId:l.id}})),...Object.entries(set.values).map(([key,v])=>({id:'edit-'+key,type:v.type,label:key.replace(/([A-Z])/g,' $1').replace(/^./,c=>c.toUpperCase()),key})),{id:'reveal',type:'button',label:'Reveal verdict',action:{type:'show.reveal'}},{id:'reopen',type:'button',label:'Reopen ballot',action:{type:'show.reopen'}},{id:'draw',type:'button',label:'Call a draw',action:{type:'show.draw'}}];
-const doc={schema:'producer.presentation/1',id:'head-to-head-grand-arena',version:'1.0.0',name:'Head to Head — The Grand Arena',set,show:{id:'grand-arena-show',version:'1.0.0',initialPhase:'faceoff',choices:[{id:'blue',label:'Blue side'},{id:'amber',label:'Amber side'}],phases:phases.map(([id,label],i)=>({id,label,layoutId:id+'-landscape',...(phases[i+1]?{next:phases[i+1][0]}:{}),...(id==='crowd-call'?{collectMs:45000}:{})}))}};
-const built=await build({stdin:{contents:"export {parsePackage} from './src/features/presentation/schema'",resolveDir:root},bundle:true,platform:'node',format:'esm',write:false});
-const {parsePackage}=await import('data:text/javascript;base64,'+Buffer.from(built.outputFiles[0].text).toString('base64'));
+set.controls=[...set.layouts.map((l,i)=>({id:'layout-'+i,type:'button',label:l.label,action:{type:'layout.select',layoutId:l.id}})),...Object.entries(set.values).map(([key,v])=>({id:'edit-'+key,type:v.type,label:key.replace(/([A-Z])/g,' $1').replace(/^./,c=>c.toUpperCase()),key}))];
+const doc={schema:'producer.presentation/2',id:'head-to-head-grand-arena',version:'2.0.0',name:'Head to Head — The Grand Arena',set,show:{id:'grand-arena-show',version:'1.0.0',initialPhase:'faceoff',choices:[],phases:phases.map(([id,label],i)=>({id,label,layoutId:id+'-landscape',...(phases[i+1]?{next:phases[i+1][0]}:{})}))}};
+const built=await build({stdin:{contents:"export {parsePackage} from './src/features/presentation/schema';export {moduleTemplate,moduleInstance} from './shared/set-runtime/templates'",resolveDir:root},bundle:true,platform:'node',format:'esm',write:false});
+const {parsePackage,moduleTemplate,moduleInstance}=await import('data:text/javascript;base64,'+Buffer.from(built.outputFiles[0].text).toString('base64'));
+const voting=moduleTemplate('vote');voting.label='Audience verdict';voting.behavior.question='Which side made the stronger case?';voting.behavior.options=[{id:'blue',label:'Blue side'},{id:'amber',label:'Amber side'}];
+const argument={label:'The argument',state:{claim:{type:'text',default:'Make the case. Back it up.',maxLength:240}},publicFields:['claim'],capabilities:[],actions:{},controls:[{id:'case',label:'This segment',audience:'operator',controls:[{id:'claim',type:'text',label:'The case',field:'claim'}]}]};
+const scoring={label:'Scoreboard',state:{hostScore:{type:'number',default:0,min:0,max:99},guestScore:{type:'number',default:0,min:0,max:99}},publicFields:['hostScore','guestScore'],capabilities:[],actions:{hostPoint:{roles:['operator'],steps:[{op:'add',field:'hostScore',value:1}]},guestPoint:{roles:['operator'],steps:[{op:'add',field:'guestScore',value:1}]}},controls:[{id:'points',label:'Points',audience:'operator',controls:[{id:'hostPoint',type:'button',label:'Blue +1',action:'hostPoint'},{id:'guestPoint',type:'button',label:'Amber +1',action:'guestPoint'},{id:'hostScore',type:'number',label:'Blue points',field:'hostScore'},{id:'guestScore',type:'number',label:'Amber points',field:'guestScore'}]}]};
+doc.runtime={schema:'producer.modules/1',definitions:{voting,argument,scoring},instances:[{...moduleInstance('verdict','voting'),audiencePolicy:'whileRunning',audienceSegments:['crowd-call','verdict']},moduleInstance('scoring','scoring'),{...moduleInstance('hostCase','argument','host-case'),initialState:{claim:'More access. More people building.'}},{...moduleInstance('guestCase','argument','guest-case'),initialState:{claim:'Better tools. Fewer entry-level paths.'}}]};
+for(const field of ['hostScore','guestScore','hostPosition','guestPosition'])delete doc.set.values[field];doc.set.controls=doc.set.controls.filter(c=>!c.key||c.key in doc.set.values);
 let parsed;try{parsed=parsePackage(doc);}catch(e){console.error(e.message);process.exit(1);}const output=path.join(root,'docs/shows/head-to-head-grand-arena.json');fs.writeFileSync(output,JSON.stringify(parsed));
 console.log('Authored',parsed.name,parsed.set.layouts.length,'layouts;',Math.round(fs.statSync(output).size/1024),'KiB');
