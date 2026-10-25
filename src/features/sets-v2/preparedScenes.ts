@@ -62,7 +62,7 @@ export class PreparedScenes {
      const state=await this.send({op:'status',outputId:spec.target.id});if(state.cachedKeys?.includes(entry.key)){this.log('ready '+entry.key);entry.state={state:'ready'};return entry;}await sleep(20);
     }
     throw Error('Layout did not finish preparing');
-   }catch(e){if(revision)await this.send({op:'cancel',outputId:spec.target.id,revision}).catch(()=>{});entry.state={state:'error',error:String(e)};throw e;}
+   }catch(e){if(revision)await this.send({op:'cancel',outputId:spec.target.id,revision}).catch(()=>{});entry.plan=undefined;entry.state={state:'error',error:String(e)};throw e;}
    finally{entry.promise=undefined;this.changed();}
   });return entry.promise;
  }

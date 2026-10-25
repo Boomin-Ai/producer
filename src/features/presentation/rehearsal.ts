@@ -68,6 +68,10 @@ export function evaluate(binding: Binding, state: RehearsalState, props: Record<
   return text;
 }
 
+function hasShader(doc:PresentationPackage,node:PresentationPackage['set']['layouts'][number]['root']):boolean {
+  return node.type==='shader'||node.type==='component'&&hasShader(doc,doc.set.components[node.component!].root)||(node.children??[]).some(child=>hasShader(doc,child));
+}
+
 /** Simulation has no transport/native/recording adapter. An imported command
  * cannot change that; unknown event/action types are refused at this boundary.
  */
@@ -91,7 +95,7 @@ export class RehearsalSession {
   }
   private initial(): RehearsalState {
     const media:Record<string,MediaTransport>={};enterMedia(this.package,undefined,this.preparation?.layoutId??this.package.set.initialLayout,media);
-    return { moduleCommit:{setEpoch:this.moduleRuntime.snapshot().setEpoch,revision:this.moduleRuntime.snapshot().revision},modules:runtimeFields(this.moduleRuntime.snapshot(),this.package.runtime),moduleConnection:this.workspaceMode==='live'?'connecting':this.workspaceMode==='rehearsal'?'simulation':'private',moduleError:'',media,...(this.package.set.layouts.some(l=>l.animation||l.root.children?.some(n=>n.type==='shader'))?{animationClock:{running:!this.package.show,positionMs:0,segmentMs:0,anchorMs:Date.now()}}:{}), mode: this.workspaceMode==='live'?'live':'rehearsal', workspaceMode: this.workspaceMode, sandboxId: this.sandboxId, revision: 0, elapsedMs: 0, running: false, paused: false,
+    return { moduleCommit:{setEpoch:this.moduleRuntime.snapshot().setEpoch,revision:this.moduleRuntime.snapshot().revision},modules:runtimeFields(this.moduleRuntime.snapshot(),this.package.runtime),moduleConnection:this.workspaceMode==='live'?'connecting':this.workspaceMode==='rehearsal'?'simulation':'private',moduleError:'',media,...(this.package.set.layouts.some(l=>l.animation||hasShader(this.package,l.root))?{animationClock:{running:!this.package.show,positionMs:0,segmentMs:0,anchorMs:Date.now()}}:{}), mode: this.workspaceMode==='live'?'live':'rehearsal', workspaceMode: this.workspaceMode, sandboxId: this.sandboxId, revision: 0, elapsedMs: 0, running: false, paused: false,
       layoutId: this.package.set.initialLayout,
       values: Object.fromEntries(Object.entries(this.package.set.values).map(([k, v]) => [k, v.default])),
       feeds: Object.fromEntries(Object.entries(this.package.set.feeds).map(([k, v]) => [k, v.default])),

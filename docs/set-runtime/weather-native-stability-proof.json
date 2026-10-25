@@ -1,0 +1,86 @@
+{
+  "after": [
+    {
+      "cachedBytes": 129956440,
+      "cachedKeys": [
+        "scene-53af1d00-256619f4",
+        "scene-24d0faf8-90a2f666"
+      ],
+      "clockMs": 14033.332496881483,
+      "generation": 5,
+      "paused": false,
+      "preparedRevision": 6,
+      "queued": false,
+      "ready": true,
+      "renderSerial": 374,
+      "renderedRevision": 6,
+      "transitionProgress": 1,
+      "transitioning": false,
+      "warmed": true
+    },
+    {
+      "cachedBytes": 136914112,
+      "cachedKeys": [
+        "scene-8d398545-f5da16c1",
+        "scene-89f58009-75ac0f53"
+      ],
+      "clockMs": 12066.665947437286,
+      "generation": 5,
+      "paused": false,
+      "preparedRevision": 8,
+      "queued": false,
+      "ready": true,
+      "renderSerial": 548,
+      "renderedRevision": 8,
+      "transitionProgress": 1,
+      "transitioning": false,
+      "warmed": true
+    }
+  ],
+  "at": "2026-10-25T07:42:02.557Z",
+  "before": [
+    {
+      "cachedBytes": 129956440,
+      "cachedKeys": [
+        "scene-53af1d00-256619f4",
+        "scene-24d0faf8-90a2f666"
+      ],
+      "clockMs": 7833.332866430283,
+      "generation": 5,
+      "paused": false,
+      "preparedRevision": 6,
+      "queued": false,
+      "ready": true,
+      "renderSerial": 188,
+      "renderedRevision": 6,
+      "transitionProgress": 1,
+      "transitioning": false,
+      "warmed": true
+    },
+    {
+      "cachedBytes": 136914112,
+      "cachedKeys": [
+        "scene-8d398545-f5da16c1",
+        "scene-89f58009-75ac0f53"
+      ],
+      "clockMs": 5866.666316986084,
+      "generation": 5,
+      "paused": false,
+      "preparedRevision": 8,
+      "queued": false,
+      "ready": true,
+      "renderSerial": 176,
+      "renderedRevision": 8,
+      "transitionProgress": 1,
+      "transitioning": false,
+      "warmed": true
+    }
+  ],
+  "generation": 5,
+  "idleSampleMs": 6200,
+  "kind": "weather-native-output-stability",
+  "layoutsReady": 2,
+  "ok": true,
+  "portraitError": false,
+  "status": "passed"
+}

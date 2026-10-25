@@ -20,6 +20,9 @@ try{
   const changed=structuredClone(specs[0]);changed.projection.root.styles.background='#ff0000';await bank.ensure(changed);
   const edited=compiles;
   const runtime=structuredClone(specs[0].projection);if(runtime.timeline)runtime.timeline.clock={running:true,positionMs:50,segmentMs:0,anchorMs:Date.now()};const plan=runtimePlan(bank.get(specs[0]).plan,runtime);
+  let failed=false,retryCompiles=0;
+  const retryBank=new PreparedScenes(async request=>{if(request.op==='preload'&&!failed){failed=true;throw Error('Missing media asset portrait');}return send(request);},()=>{},async(...args)=>{retryCompiles++;return compileRoomScene(...args);});
+  await retryBank.ensure(specs[0]).catch(()=>{});if(retryBank.readiness(specs[0]).state!=='error')throw Error('Missing failed state');retryBank.retry();await retryBank.ensure(specs[0]);if(retryCompiles!==2||retryBank.readiness(specs[0]).state!=='ready')throw Error('Retry reused a failed compiled plan');retryBank.dispose();
   bank.dispose();
   return {layouts:specs.length,loaded,repeatCompiles,edited,updates,preloads:calls.filter(c=>c==='preload').length,hasPlan:!!plan.root};
  });

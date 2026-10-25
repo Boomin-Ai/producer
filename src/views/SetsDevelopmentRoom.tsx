@@ -30,7 +30,7 @@ export function SetsDevelopmentRoom() {
         await ipc.liveUpdateRoom(room.id,{config:JSON.stringify(config)});
         room={...room,config:JSON.stringify(config)};
       }
-      if (!cancelled){setRoom(room);if(workspace?.runProof)window.setTimeout(()=>void import('../features/sets-v2/moduleRoomProof').then(m=>m.moduleRoomProof(workspace.serverRoomId)),1000);}
+      if (!cancelled){setRoom(room);if(workspace?.runProof)window.setTimeout(()=>void import('../features/sets-v2/weatherRoomProof').then(m=>m.weatherRoomProof()),1000);}
     })().catch((e) => setError(String(e)));
     return () => {
       cancelled = true;
