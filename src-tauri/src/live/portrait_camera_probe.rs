@@ -78,10 +78,30 @@ pub fn start(app: tauri::AppHandle, report: PathBuf) {
                 (ids[1], 0., 0., 180., 180., 1),
                 (ids[2], 1100., 540., 180., 180., 2),
             ] {
-                let source = sources.items.iter().find(|item| item.id == id).ok_or("Missing landscape fixture")?;
-                let crop_right = if z == 0 { 0 } else { source.src_w.saturating_sub(source.src_h) as i32 };
-                live.set_transform(id.into(), TransformPatch { x: Some(x), y: Some(y), w: Some(w), h: Some(h),
-                    z: Some(z), crop_right: Some(crop_right), visible: Some(true), ..Default::default() }, false)?;
+                let source = sources
+                    .items
+                    .iter()
+                    .find(|item| item.id == id)
+                    .ok_or("Missing landscape fixture")?;
+                let crop_right = if z == 0 {
+                    0
+                } else {
+                    source.src_w.saturating_sub(source.src_h) as i32
+                };
+                live.set_transform(
+                    id.into(),
+                    TransformPatch {
+                        x: Some(x),
+                        y: Some(y),
+                        w: Some(w),
+                        h: Some(h),
+                        z: Some(z),
+                        crop_right: Some(crop_right),
+                        visible: Some(true),
+                        ..Default::default()
+                    },
+                    false,
+                )?;
             }
             live.select_output(true)?;
             live.set_virtual_cam(true)?;
@@ -96,8 +116,17 @@ pub fn start(app: tauri::AppHandle, report: PathBuf) {
                     if phase != 0 {
                         write(serde_json::json!({"stage":"reconnect_required", "phase":phase}));
                         let until = std::time::Instant::now() + Duration::from_secs(30);
-                        while std::fs::read_to_string(report.with_extension("receiver-ready")).ok().as_deref() != Some(&phase.to_string()) {
-                            if std::time::Instant::now() >= until { return Err("Receiver did not release its camera before orientation switch".into()); }
+                        while std::fs::read_to_string(report.with_extension("receiver-ready"))
+                            .ok()
+                            .as_deref()
+                            != Some(&phase.to_string())
+                        {
+                            if std::time::Instant::now() >= until {
+                                return Err(
+                                    "Receiver did not release its camera before orientation switch"
+                                        .into(),
+                                );
+                            }
                             std::thread::sleep(Duration::from_millis(100));
                         }
                     }
@@ -107,9 +136,11 @@ pub fn start(app: tauri::AppHandle, report: PathBuf) {
                 }
                 let mirrored = phase == 1 || phase == 4;
                 live.virtual_cam_mirror(Some(mirrored))?;
-                write(serde_json::json!({"stage":"camera_running", "phase":phase, "mirrored":mirrored,
+                write(
+                    serde_json::json!({"stage":"camera_running", "phase":phase, "mirrored":mirrored,
                     "camera":"Producer Virtual Camera", "expected_width":if portrait {1080} else {1920},
-                    "expected_height":if portrait {1920} else {1080}, "switch_guard":true}));
+                    "expected_height":if portrait {1920} else {1080}, "switch_guard":true}),
+                );
                 std::thread::sleep(Duration::from_secs(15));
             }
             Ok(())

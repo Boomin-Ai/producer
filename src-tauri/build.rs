@@ -69,7 +69,7 @@ fn link_live_engine_macos() {
     }
 
     println!("cargo:rustc-cfg=have_engine");
-    if std::env::var_os("CARGO_FEATURE_SETS_V2_DEV").is_some() {
+    {
         let mut build = cc::Build::new();
         for name in ["group", "scene", "transition", "program", "readiness"] {
             let file = format!("src/live/sets_v2/{name}.c");

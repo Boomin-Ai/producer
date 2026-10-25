@@ -153,12 +153,12 @@ jobs:
           releaseName: "Producer v__VERSION__"
           releaseCommitish: ${{ github.sha }}
           releaseBody: |
-            One Producer Virtual Camera now supports landscape 1920×1080 and portrait 1080×1920 on Apple Silicon.
-            The camera follows Producer's selected canvas; stop it before switching orientation and reconnect receiving apps that lock their format.
-            Fixes whole-picture mirroring by keeping camera frames BGRA instead of silently falling back to NV12.
-            Retires the separate Producer Portrait Camera through macOS extension removal.
-            Keeps portrait set routing, saved mirror preference, and existing guest startup/recovery improvements.
-            Windows retains its native Live engine; Intel macOS and Linux retain their existing engine-less scope.
+            Introduces module-based interactive sets: Grand Arena, Decision Room, Open Floor, Atmosphere and Just Facts.
+            Apple Silicon uses prepared native scenes, layered artwork, live source slots and authored landscape/portrait compositions.
+            Configure audience voting, moderated submissions/chat, weather and Claude/OpenAI connections through the set editor and Settings → Integrations.
+            Shows optionally sequence independently scoped modules; rehearsal uses isolated simulated participants.
+            Fixes portrait weather flicker, native media-cache failures and module reconnection after workspace outages.
+            Preserves the single virtual camera and native guest runtime on Apple Silicon. Windows retains its existing Live engine; Intel macOS and Linux retain their existing engine-less scope.
 
           releaseDraft: false
           prerelease: false

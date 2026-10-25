@@ -593,10 +593,10 @@ pub struct SceneGraph {
     presentation_spare: Option<super::presentation::Composition>,
     presentation_retiring: Option<super::presentation::Composition>,
     presentation_needs_prewarm: bool,
-    #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
+    #[cfg(all(target_os = "macos"))]
     sets_v2: Option<super::sets_v2::RoomProgram>,
-    #[cfg(all(feature="sets-v2-dev",target_os="macos"))]
-    sets_v2_portrait:Option<super::sets_v2::RoomProgram>,
+    #[cfg(all(target_os = "macos"))]
+    sets_v2_portrait: Option<super::sets_v2::RoomProgram>,
     #[cfg(target_os = "macos")]
     portrait: Option<super::portrait::Portrait>,
     overlay: Option<(
@@ -747,7 +747,9 @@ fn drop_own_vcam(kind: &str, opts: Vec<DeviceOption>) -> Vec<DeviceOption> {
         return opts;
     }
     opts.into_iter()
-        .filter(|o| !o.name.contains(VCAM_DEVICE_NAME) && !o.name.contains("Producer Portrait Camera"))
+        .filter(|o| {
+            !o.name.contains(VCAM_DEVICE_NAME) && !o.name.contains("Producer Portrait Camera")
+        })
         .collect()
 }
 
@@ -816,10 +818,10 @@ impl SceneGraph {
                 presentation_spare: None,
                 presentation_retiring: None,
                 presentation_needs_prewarm: false,
-                #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
+                #[cfg(all(target_os = "macos"))]
                 sets_v2: None,
-                #[cfg(all(feature="sets-v2-dev",target_os="macos"))]
-                sets_v2_portrait:None,
+                #[cfg(all(target_os = "macos"))]
+                sets_v2_portrait: None,
                 #[cfg(target_os = "macos")]
                 portrait: None,
                 overlay: None,
@@ -1342,10 +1344,28 @@ impl SceneGraph {
         self.add_extra_visible(id, label, spec, true)
     }
 
-    #[cfg(all(feature="sets-v2-dev",target_os="macos"))]
-    pub fn create_set_source(&mut self,id:&str,label:&str,spec:&ExtraSpec)->Result<SourcesState,String>{
-        if !super::sets_v2::contract::identity(id) || label.is_empty()||label.len()>160 || !matches!(spec,ExtraSpec::Camera{..}|ExtraSpec::Screen{..}|ExtraSpec::Image{..}|ExtraSpec::Media{..}|ExtraSpec::Color{..}){return Err("Invalid set source recipe".into());}
-        self.add_extra_visible(id,label,spec,false)?;
+    #[cfg(all(target_os = "macos"))]
+    pub fn create_set_source(
+        &mut self,
+        id: &str,
+        label: &str,
+        spec: &ExtraSpec,
+    ) -> Result<SourcesState, String> {
+        if !super::sets_v2::contract::identity(id)
+            || label.is_empty()
+            || label.len() > 160
+            || !matches!(
+                spec,
+                ExtraSpec::Camera { .. }
+                    | ExtraSpec::Screen { .. }
+                    | ExtraSpec::Image { .. }
+                    | ExtraSpec::Media { .. }
+                    | ExtraSpec::Color { .. }
+            )
+        {
+            return Err("Invalid set source recipe".into());
+        }
+        self.add_extra_visible(id, label, spec, false)?;
         Ok(self.state())
     }
     fn add_extra_visible(
@@ -2364,15 +2384,18 @@ impl ThumbHub {
         {
             wanted.push((cam.id.as_str(), cam.src));
         }
-        let requests=self.preview_requests.lock().unwrap();
+        let requests = self.preview_requests.lock().unwrap();
         for extra in &scene.extras {
-            if extra.kind != "mic" && !extra.src.is_null()
-                && requests.values().any(|ids|ids.contains(&extra.id))
-                && !wanted.iter().any(|(id,_)|*id==extra.id) {
-                wanted.push((extra.id.as_str(),extra.src));
+            if extra.kind != "mic"
+                && !extra.src.is_null()
+                && requests.values().any(|ids| ids.contains(&extra.id))
+                && !wanted.iter().any(|(id, _)| *id == extra.id)
+            {
+                wanted.push((extra.id.as_str(), extra.src));
             }
         }
-        let preview_ids: std::collections::HashSet<String>=requests.values().flatten().cloned().collect();
+        let preview_ids: std::collections::HashSet<String> =
+            requests.values().flatten().cloned().collect();
         drop(requests);
         // The program: whatever sits on output channel 0 (the transition
         // wrapping the scene). obs_get_output_source hands back its OWN ref;
@@ -2412,10 +2435,9 @@ impl ThumbHub {
         {
             let cur = self.targets.lock().unwrap();
             if cur.len() == wanted.len()
-                && cur
-                    .iter()
-                    .zip(wanted.iter())
-                    .all(|(a, (id, src))| a.id == *id && a.src == *src && a.preview_active == preview_ids.contains(*id))
+                && cur.iter().zip(wanted.iter()).all(|(a, (id, src))| {
+                    a.id == *id && a.src == *src && a.preview_active == preview_ids.contains(*id)
+                })
             {
                 release_program();
                 return;
@@ -2431,8 +2453,10 @@ impl ThumbHub {
                     // CEF WasHidden(true) — no frames, texture torn down, and
                     // its video_render body is `if (texture)`: silent black.
                     ffi::obs_source_inc_showing(r);
-                    let preview_active=preview_ids.contains(id);
-                    if preview_active {ffi::obs_source_inc_active(r);}
+                    let preview_active = preview_ids.contains(id);
+                    if preview_active {
+                        ffi::obs_source_inc_active(r);
+                    }
                     next.push(ThumbTarget {
                         id: id.to_string(),
                         src: r,
@@ -2444,7 +2468,9 @@ impl ThumbHub {
         let old = std::mem::replace(&mut *self.targets.lock().unwrap(), next);
         unsafe {
             for t in old {
-                if t.preview_active {ffi::obs_source_dec_active(t.src);}
+                if t.preview_active {
+                    ffi::obs_source_dec_active(t.src);
+                }
                 ffi::obs_source_dec_showing(t.src);
                 ffi::obs_source_release(t.src);
             }
@@ -2467,7 +2493,12 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
     {
         fps = fps.max(PROGRAM_THUMB_FPS);
     }
-    if hub.preview_wanted.load(std::sync::atomic::Ordering::Relaxed) { fps=fps.max(8); }
+    if hub
+        .preview_wanted
+        .load(std::sync::atomic::Ordering::Relaxed)
+    {
+        fps = fps.max(8);
+    }
     if fps == 0 {
         return;
     }
@@ -2587,51 +2618,86 @@ pub extern "C" fn thumb_render_cb(param: *mut std::os::raw::c_void, _cx: u32, _c
     hub.wake.notify_one();
 }
 
-
 /// Synthetic, hidden native source: no camera, network, room data or credentials.
 #[cfg(all(feature = "guest-rtc-pilot", debug_assertions, target_os = "macos"))]
 pub fn thumbnail_selftest() {
-    extern "C" { fn os_gettime_ns() -> u64; }
+    extern "C" {
+        fn os_gettime_ns() -> u64;
+    }
     let temp = std::env::temp_dir().join(format!("producer-thumb-proof-{}", std::process::id()));
     super::engine::bootstrap_with_config(&temp);
     let mut graph = SceneGraph::create().unwrap();
     let participant = "12345678-1234-1234-1234-123456789abc";
     let id = "guest-12345678";
-    graph.add_extra(id, "Synthetic thumbnail", &ExtraSpec::RtcGuest { participant_id: participant.into() }).unwrap();
+    graph
+        .add_extra(
+            id,
+            "Synthetic thumbnail",
+            &ExtraSpec::RtcGuest {
+                participant_id: participant.into(),
+            },
+        )
+        .unwrap();
     let endpoint = super::rtc_ingest::endpoint(&format!("guest-{participant}")).unwrap();
     let delivery = endpoint.replace().unwrap();
     let hub = ThumbHub::new();
     hub.fps.store(15, std::sync::atomic::Ordering::Relaxed);
     hub.publish_targets(&graph);
     let param = &hub as *const ThumbHub as *mut std::os::raw::c_void;
-    unsafe { ffi::obs_add_main_render_callback(thumb_render_cb, param); }
+    unsafe {
+        ffi::obs_add_main_render_callback(thumb_render_cb, param);
+    }
     let y = vec![145u8; 320 * 180];
     let u = vec![54u8; 160 * 90];
     let v = vec![34u8; 160 * 90];
     for _ in 0..90 {
-        assert!(delivery.video(super::rtc_ingest::Video { planes: (&y, &u, &v), width: 320, height: 180, strides: (320, 160, 160) }, unsafe { os_gettime_ns() }));
+        assert!(delivery.video(
+            super::rtc_ingest::Video {
+                planes: (&y, &u, &v),
+                width: 320,
+                height: 180,
+                strides: (320, 160, 160)
+            },
+            unsafe { os_gettime_ns() }
+        ));
         std::thread::sleep(std::time::Duration::from_millis(33));
     }
-    unsafe { ffi::obs_remove_main_render_callback(thumb_render_cb, param); }
+    unsafe {
+        ffi::obs_remove_main_render_callback(thumb_render_cb, param);
+    }
     let (frames, colored) = {
         let slots = hub.slots.lock().unwrap();
         let slot = slots.get(id).expect("No thumbnail frames");
-        (slot.seq, slot.rgba.chunks_exact(4).filter(|p| p[1] > 80 && p[1] > p[0].saturating_add(30)).count())
+        (
+            slot.seq,
+            slot.rgba
+                .chunks_exact(4)
+                .filter(|p| p[1] > 80 && p[1] > p[0].saturating_add(30))
+                .count(),
+        )
     };
-    assert!(frames >= 5 && colored > 1000, "Black native thumbnail: frames={frames}, colored={colored}");
+    assert!(
+        frames >= 5 && colored > 1000,
+        "Black native thumbnail: frames={frames}, colored={colored}"
+    );
     graph.clear_room().unwrap();
     hub.publish_targets(&graph);
     unsafe {
         ffi::obs_enter_graphics();
         for (_, ring) in hub.rings.lock().unwrap().drain() {
             ffi::gs_texrender_destroy(ring.rt);
-            for surface in ring.surfs { ffi::gs_stagesurface_destroy(surface); }
+            for surface in ring.surfs {
+                ffi::gs_stagesurface_destroy(surface);
+            }
         }
         ffi::obs_leave_graphics();
         ffi::obs_shutdown();
     }
     let _ = std::fs::remove_dir_all(temp);
-    println!("{}", serde_json::json!({"passed":true,"hidden_native_guest":true,"thumbnail_frames":frames,"green_pixels":colored}));
+    println!(
+        "{}",
+        serde_json::json!({"passed":true,"hidden_native_guest":true,"thumbnail_frames":frames,"green_pixels":colored})
+    );
 }
 
 #[cfg(test)]
@@ -2640,13 +2706,28 @@ mod scene_restoration_tests {
 
     #[test]
     fn camera_picker_excludes_both_producer_output_devices() {
-        let options = || ["MacBook Camera", "Producer Virtual Camera", "Producer Portrait Camera", "USB Capture"]
-            .into_iter().map(|name| DeviceOption {id:name.into(), name:name.into(), disabled:false}).collect();
+        let options = || {
+            [
+                "MacBook Camera",
+                "Producer Virtual Camera",
+                "Producer Portrait Camera",
+                "USB Capture",
+            ]
+            .into_iter()
+            .map(|name| DeviceOption {
+                id: name.into(),
+                name: name.into(),
+                disabled: false,
+            })
+            .collect()
+        };
         let cameras = drop_own_vcam("camera", options());
-        assert_eq!(cameras.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(), ["MacBook Camera", "USB Capture"]);
+        assert_eq!(
+            cameras.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(),
+            ["MacBook Camera", "USB Capture"]
+        );
         assert_eq!(drop_own_vcam("mic", options()).len(), 4);
     }
-
 
     #[cfg(feature = "guest-rtc-pilot")]
     #[test]
@@ -2701,7 +2782,10 @@ mod scene_restoration_tests {
             .unwrap();
         assert_eq!((item.x, item.y, item.w, item.h), (107., 83., 320., 180.));
         assert!(item.visible && item.muted);
-        assert_eq!(item.rtc_source_id.as_deref(), Some(format!("guest-{participant}").as_str()));
+        assert_eq!(
+            item.rtc_source_id.as_deref(),
+            Some(format!("guest-{participant}").as_str())
+        );
         assert!((item.volume - 0.42).abs() < 0.001);
         assert!(super::super::rtc_ingest::endpoint(&format!("guest-{participant}")).is_some());
         assert!(super::super::rtc_ingest::endpoint(id).is_none());
@@ -3104,8 +3188,10 @@ impl SceneGraph {
                     info.base_width as f32,
                     info.base_height as f32,
                 );
-                #[cfg(feature="sets-v2-dev")]
-                if let Some(program)=&self.sets_v2_portrait{program.raise();}
+                #[cfg(target_os = "macos")]
+                if let Some(program) = &self.sets_v2_portrait {
+                    program.raise();
+                }
             }
         }
     }
@@ -3236,8 +3322,10 @@ impl SceneGraph {
     }
     #[cfg(target_os = "macos")]
     pub fn portrait_stop(&mut self) {
-        #[cfg(feature="sets-v2-dev")]
-        {self.sets_v2_portrait=None;}
+        #[cfg(target_os = "macos")]
+        {
+            self.sets_v2_portrait = None;
+        }
         self.portrait = None;
     }
     #[cfg(target_os = "macos")]
@@ -3254,44 +3342,96 @@ impl SceneGraph {
                 .map_or(0, |p| p.request.projection.revision),
         }
     }
-    #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
-    pub fn sets_v2(&mut self, action: super::sets_v2::contract::Action) -> Result<super::sets_v2::contract::Status, String> {
-        use super::sets_v2::{contract::{Action, Status}, RoomProgram};
+    #[cfg(all(target_os = "macos"))]
+    pub fn sets_v2(
+        &mut self,
+        action: super::sets_v2::contract::Action,
+    ) -> Result<super::sets_v2::contract::Status, String> {
+        use super::sets_v2::{
+            contract::{Action, Status},
+            RoomProgram,
+        };
         if action.generation() != self.presentation_generation {
             return Err("Room changed; prepare this v2 set again".into());
         }
-        if !["program","portrait"].contains(&action.output()){return Err("Unknown set output".into());}
-        if action.output()=="portrait" {
-            if matches!(action,Action::Return{..}){self.sets_v2_portrait=None;return Ok(Status{generation:self.presentation_generation,..Default::default()});}
-            if self.sets_v2_portrait.is_none(){
-                if !matches!(action,Action::Prepare{..}|Action::Preload{..}){return Err("Prepare the portrait set first".into());}
-                self.portrait_room()?;
-                let(parent,w,h)=unsafe{self.portrait.as_mut().unwrap().native_room()};
-                self.sets_v2_portrait=Some(unsafe{RoomProgram::attach(parent,self.presentation_generation,w,h)?});
+        if !["program", "portrait"].contains(&action.output()) {
+            return Err("Unknown set output".into());
+        }
+        if action.output() == "portrait" {
+            if matches!(action, Action::Return { .. }) {
+                self.sets_v2_portrait = None;
+                return Ok(Status {
+                    generation: self.presentation_generation,
+                    ..Default::default()
+                });
             }
-            let sources:std::collections::HashMap<_,_>=self.state().items.into_iter().filter(|item|item.kind!="mic").filter_map(|item|self.source_by_id(&item.id).map(|s|(item.id,s))).collect();
-            return unsafe{self.sets_v2_portrait.as_mut().unwrap().dispatch(action,|id|sources.get(id).copied().ok_or_else(||format!("Portrait source {id} is unavailable")))};
+            if self.sets_v2_portrait.is_none() {
+                if !matches!(action, Action::Prepare { .. } | Action::Preload { .. }) {
+                    return Err("Prepare the portrait set first".into());
+                }
+                self.portrait_room()?;
+                let (parent, w, h) = unsafe { self.portrait.as_mut().unwrap().native_room() };
+                self.sets_v2_portrait = Some(unsafe {
+                    RoomProgram::attach(parent, self.presentation_generation, w, h)?
+                });
+            }
+            let sources: std::collections::HashMap<_, _> = self
+                .state()
+                .items
+                .into_iter()
+                .filter(|item| item.kind != "mic")
+                .filter_map(|item| self.source_by_id(&item.id).map(|s| (item.id, s)))
+                .collect();
+            return unsafe {
+                self.sets_v2_portrait
+                    .as_mut()
+                    .unwrap()
+                    .dispatch(action, |id| {
+                        sources
+                            .get(id)
+                            .copied()
+                            .ok_or_else(|| format!("Portrait source {id} is unavailable"))
+                    })
+            };
         }
         if matches!(action, Action::Return { .. }) {
             self.sets_v2 = None;
-            self.sets_v2_portrait=None;
+            self.sets_v2_portrait = None;
             self.presentation_generation += 1;
-            return Ok(Status { generation: self.presentation_generation, ..Default::default() });
+            return Ok(Status {
+                generation: self.presentation_generation,
+                ..Default::default()
+            });
         }
         if self.presentation.is_some() || self.presentation_pending.is_some() {
-            return Err("Return the current set to the room before using the v2 dev adapter".into());
+            return Err(
+                "Return the current set to the room before using the v2 dev adapter".into(),
+            );
         }
         if self.sets_v2.is_none() {
-            if !matches!(action, Action::Prepare { .. }|Action::Preload{..}) {
+            if !matches!(action, Action::Prepare { .. } | Action::Preload { .. }) {
                 return Err("Prepare a v2 set first".into());
             }
-            let (w,h) = Self::base_size();
-            self.sets_v2 = Some(unsafe { RoomProgram::attach(self.scene, self.presentation_generation, w as u32, h as u32)? });
+            let (w, h) = Self::base_size();
+            self.sets_v2 = Some(unsafe {
+                RoomProgram::attach(self.scene, self.presentation_generation, w as u32, h as u32)?
+            });
         }
-        let sources: std::collections::HashMap<_,_> = self.state().items.into_iter()
+        let sources: std::collections::HashMap<_, _> = self
+            .state()
+            .items
+            .into_iter()
             .filter(|item| item.kind != "mic")
-            .filter_map(|item| self.source_by_id(&item.id).map(|source| (item.id, source))).collect();
-        unsafe { self.sets_v2.as_mut().unwrap().dispatch(action, |id| sources.get(id).copied().ok_or_else(|| format!("Room source {id} has no ready video frame"))) }
+            .filter_map(|item| self.source_by_id(&item.id).map(|source| (item.id, source)))
+            .collect();
+        unsafe {
+            self.sets_v2.as_mut().unwrap().dispatch(action, |id| {
+                sources
+                    .get(id)
+                    .copied()
+                    .ok_or_else(|| format!("Room source {id} has no ready video frame"))
+            })
+        }
     }
     pub fn warm_presentation(
         &mut self,
@@ -3306,8 +3446,10 @@ impl SceneGraph {
         &mut self,
         mut request: super::presentation::Request,
     ) -> Result<std::sync::Arc<super::presentation::Bridge>, String> {
-        #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
-        if self.sets_v2.is_some() { return Err("Return v2 output to the room before opening a v1 set".into()); }
+        #[cfg(all(target_os = "macos"))]
+        if self.sets_v2.is_some() {
+            return Err("Return v2 output to the room before opening a v1 set".into());
+        }
         if let Some(active) = self
             .presentation
             .as_ref()
@@ -3641,10 +3783,13 @@ impl SceneGraph {
             return Ok(self.presentation_status());
         }
         let occupied = active.is_some() || pending.is_some();
-        #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
+        #[cfg(all(target_os = "macos"))]
         let occupied = occupied || self.sets_v2.is_some();
-        #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
-        { self.sets_v2 = None;self.sets_v2_portrait=None; }
+        #[cfg(all(target_os = "macos"))]
+        {
+            self.sets_v2 = None;
+            self.sets_v2_portrait = None;
+        }
 
         #[cfg(target_os = "macos")]
         if let Some(p) = self.portrait.as_mut() {

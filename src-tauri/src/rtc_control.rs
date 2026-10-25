@@ -120,26 +120,43 @@ pub struct Control {
     ticket_renewed_ms: u64,
 }
 fn same_owned_run(next: &Receipt, previous: &Receipt) -> bool {
-    next.room_id == previous.room_id && next.brand_id == previous.brand_id
-        && next.run_id == previous.run_id && next.host_process_id == previous.host_process_id
+    next.room_id == previous.room_id
+        && next.brand_id == previous.brand_id
+        && next.run_id == previous.run_id
+        && next.host_process_id == previous.host_process_id
         && next.host_participant_id == previous.host_participant_id
-        && next.host_lease_epoch == previous.host_lease_epoch && next.endpoint == previous.endpoint
-        && next.transport == "livekit" && next.state == "active"
+        && next.host_lease_epoch == previous.host_lease_epoch
+        && next.endpoint == previous.endpoint
+        && next.transport == "livekit"
+        && next.state == "active"
         && next.control_revision >= previous.control_revision
 }
 fn renewable_after_read(error: &str) -> bool {
-    matches!(error, "RTC authority changed" | "RTC request timed out" | "RTC request failed" | "RTC response failed" | "RTC authority temporarily unavailable")
+    matches!(
+        error,
+        "RTC authority changed"
+            | "RTC request timed out"
+            | "RTC request failed"
+            | "RTC response failed"
+            | "RTC authority temporarily unavailable"
+    )
 }
 
 impl Control {
     /// The independent permission reader already validated this snapshot. Reuse
     /// its current owner revision only; never extend freshness or permissions.
-    pub fn use_current_authority(&mut self, snapshot: &producer_guest_runtime::authority::Snapshot) -> bool {
-        let Some(previous) = self.receipt.as_ref() else { return false; };
+    pub fn use_current_authority(
+        &mut self,
+        snapshot: &producer_guest_runtime::authority::Snapshot,
+    ) -> bool {
+        let Some(previous) = self.receipt.as_ref() else {
+            return false;
+        };
         let next = snapshot.receipt();
         if !snapshot.current(std::time::Instant::now())
             || !same_owned_run(next, previous)
-            || next.host_lease_expires_at_ms <= now().unwrap_or(u64::MAX) {
+            || next.host_lease_expires_at_ms <= now().unwrap_or(u64::MAX)
+        {
             return false;
         }
         self.receipt = Some(next.clone());
@@ -397,7 +414,9 @@ impl Control {
                 || current.host_process_id != pending.host_process_id
                 || current.host_participant_id != pending.host_participant_id
                 || current.host_lease_epoch != pending.host_lease_epoch
-                || current.control_revision != pending.control_revision + u64::from(pending.state == "fencing" && current.state == "active")
+                || current.control_revision
+                    != pending.control_revision
+                        + u64::from(pending.state == "fencing" && current.state == "active")
                 || current.host_lease_expires_at_ms <= now()?
             {
                 return Err("RTC recovery ownership changed");
@@ -635,47 +654,103 @@ pub fn selftest(path: &std::path::Path) -> Result<(), &'static str> {
 mod room_command_tests {
     use super::*;
     const ID: &str = "11111111-1111-4111-8111-111111111111";
-    fn authority_fixture(value: Value, age: Duration) -> producer_guest_runtime::authority::Snapshot {
-        let receipt: Receipt=serde_json::from_value(value.clone()).unwrap();
-        let wall=now().unwrap();let start=std::time::Instant::now()-age;
-        let wire=json!({"schema_version":1,"receipt":value,"observed_at_ms":wall,"guests":[]});
-        producer_guest_runtime::authority::Snapshot::parse(&serde_json::to_vec(&wire).unwrap(),&receipt,wall,start,start).unwrap()
+    fn authority_fixture(
+        value: Value,
+        age: Duration,
+    ) -> producer_guest_runtime::authority::Snapshot {
+        let receipt: Receipt = serde_json::from_value(value.clone()).unwrap();
+        let wall = now().unwrap();
+        let start = std::time::Instant::now() - age;
+        let wire = json!({"schema_version":1,"receipt":value,"observed_at_ms":wall,"guests":[]});
+        producer_guest_runtime::authority::Snapshot::parse(
+            &serde_json::to_vec(&wire).unwrap(),
+            &receipt,
+            wall,
+            start,
+            start,
+        )
+        .unwrap()
     }
     #[test]
     fn current_authority_reuse_rejects_stale_or_other_owner_snapshots() {
-        let receipt=json!({"brand_id":ID,"room_id":ID,"run_id":ID,"host_process_id":ID,"host_participant_id":ID,
+        let receipt = json!({"brand_id":ID,"room_id":ID,"run_id":ID,"host_process_id":ID,"host_participant_id":ID,
             "transport":"livekit","endpoint":ENDPOINT,"state":"active","host_lease_epoch":1,
             "control_revision":5,"host_lease_expires_at_ms":now().unwrap()+45000});
-        let make=|| {
-            let mut control=Control::new(Operator{brand_id:ID.into(),room_id:ID.into(),token:"fixture".into()}).unwrap();
-            control.receipt=Some(serde_json::from_value(receipt.clone()).unwrap());control
+        let make = || {
+            let mut control = Control::new(Operator {
+                brand_id: ID.into(),
+                room_id: ID.into(),
+                token: "fixture".into(),
+            })
+            .unwrap();
+            control.receipt = Some(serde_json::from_value(receipt.clone()).unwrap());
+            control
         };
-        let mut newer=receipt.clone();newer["control_revision"]=6.into();
-        let mut control=make();assert!(control.use_current_authority(&authority_fixture(newer.clone(),Duration::ZERO)));
-        assert_eq!(control.receipt.as_ref().unwrap().control_revision,6);
-        assert!(!control.use_current_authority(&authority_fixture(receipt.clone(),Duration::ZERO)));
-        assert!(!make().use_current_authority(&authority_fixture(newer.clone(),Duration::from_secs(4))));
-        for field in ["brand_id","room_id","run_id","host_process_id","host_participant_id"] {
-            let mut other=newer.clone();other[field]="22222222-2222-4222-8222-222222222222".into();
-            assert!(!make().use_current_authority(&authority_fixture(other,Duration::ZERO)),"{field}");
+        let mut newer = receipt.clone();
+        newer["control_revision"] = 6.into();
+        let mut control = make();
+        assert!(control.use_current_authority(&authority_fixture(newer.clone(), Duration::ZERO)));
+        assert_eq!(control.receipt.as_ref().unwrap().control_revision, 6);
+        assert!(!control.use_current_authority(&authority_fixture(receipt.clone(), Duration::ZERO)));
+        assert!(!make()
+            .use_current_authority(&authority_fixture(newer.clone(), Duration::from_secs(4))));
+        for field in [
+            "brand_id",
+            "room_id",
+            "run_id",
+            "host_process_id",
+            "host_participant_id",
+        ] {
+            let mut other = newer.clone();
+            other[field] = "22222222-2222-4222-8222-222222222222".into();
+            assert!(
+                !make().use_current_authority(&authority_fixture(other, Duration::ZERO)),
+                "{field}"
+            );
         }
-        let mut other_epoch=newer;other_epoch["host_lease_epoch"]=2.into();
-        assert!(!make().use_current_authority(&authority_fixture(other_epoch,Duration::ZERO)));
-        let mut unopened=make();unopened.receipt=None;
-        assert!(!unopened.use_current_authority(&authority_fixture(receipt,Duration::ZERO)));
+        let mut other_epoch = newer;
+        other_epoch["host_lease_epoch"] = 2.into();
+        assert!(!make().use_current_authority(&authority_fixture(other_epoch, Duration::ZERO)));
+        let mut unopened = make();
+        unopened.receipt = None;
+        assert!(!unopened.use_current_authority(&authority_fixture(receipt, Duration::ZERO)));
     }
     #[test]
     fn authority_endpoint_is_explicit_and_pinned() {
-        let operator = || Operator { brand_id: ID.into(), room_id: ID.into(), token: "fixture".into() };
+        let operator = || Operator {
+            brand_id: ID.into(),
+            room_id: ID.into(),
+            token: "fixture".into(),
+        };
         assert_eq!(Control::new(operator()).unwrap().api, API);
-        assert_eq!(Control::for_api(operator(), "https://api.boomin.ai/").unwrap().api, "https://api.boomin.ai");
+        assert_eq!(
+            Control::for_api(operator(), "https://api.boomin.ai/")
+                .unwrap()
+                .api,
+            "https://api.boomin.ai"
+        );
         assert!(Control::for_api(operator(), "https://api.boomin.ai.evil.invalid").is_err());
         assert!(Control::for_api(operator(), "http://api.boomin.ai").is_err());
     }
     #[test]
     fn renewal_recovery_requires_a_fresh_owned_read_and_excludes_rejections() {
-        for error in ["RTC authority changed", "RTC request timed out", "RTC request failed", "RTC response failed", "RTC authority temporarily unavailable"] { assert!(renewable_after_read(error)); }
-        for error in ["RTC authority rejected request", "Native guest authority response expired", "RTC room control authority mismatch", "Invalid control response"] { assert!(!renewable_after_read(error)); }
+        for error in [
+            "RTC authority changed",
+            "RTC request timed out",
+            "RTC request failed",
+            "RTC response failed",
+            "RTC authority temporarily unavailable",
+        ] {
+            assert!(renewable_after_read(error));
+        }
+        for error in [
+            "RTC authority rejected request",
+            "Native guest authority response expired",
+            "RTC room control authority mismatch",
+            "Invalid control response",
+        ] {
+            assert!(!renewable_after_read(error));
+        }
     }
 
     #[test]

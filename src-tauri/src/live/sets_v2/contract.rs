@@ -158,7 +158,7 @@ pub struct Plan {
     #[serde(default)]
     pub motion: Vec<Track>,
     #[serde(default)]
-    pub retained_targets:Vec<String>,
+    pub retained_targets: Vec<String>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(
@@ -175,13 +175,23 @@ pub enum Action {
         plan: Plan,
     },
     Preload {
-        generation:u64, output_id:Option<String>, revision:u64, key:String, plan:Plan,
+        generation: u64,
+        output_id: Option<String>,
+        revision: u64,
+        key: String,
+        plan: Plan,
     },
     Activate {
-        generation:u64, output_id:Option<String>, revision:u64, key:String, plan:Plan,
+        generation: u64,
+        output_id: Option<String>,
+        revision: u64,
+        key: String,
+        plan: Plan,
     },
     Retain {
-        generation:u64, output_id:Option<String>, keys:Vec<String>,
+        generation: u64,
+        output_id: Option<String>,
+        keys: Vec<String>,
     },
     Take {
         generation: u64,
@@ -213,7 +223,9 @@ impl Action {
     pub fn output(&self) -> &str {
         match self {
             Self::Prepare { output_id, .. }
-            | Self::Preload { output_id, .. } | Self::Activate { output_id, .. } | Self::Retain { output_id, .. }
+            | Self::Preload { output_id, .. }
+            | Self::Activate { output_id, .. }
+            | Self::Retain { output_id, .. }
             | Self::Take { output_id, .. }
             | Self::Cancel { output_id, .. }
             | Self::Status { output_id, .. }
@@ -224,7 +236,9 @@ impl Action {
     pub fn generation(&self) -> u64 {
         match self {
             Self::Prepare { generation, .. }
-            | Self::Preload { generation, .. } | Self::Activate { generation, .. } | Self::Retain { generation, .. }
+            | Self::Preload { generation, .. }
+            | Self::Activate { generation, .. }
+            | Self::Retain { generation, .. }
             | Self::Take { generation, .. }
             | Self::Cancel { generation, .. }
             | Self::Status { generation, .. }
@@ -236,8 +250,8 @@ impl Action {
 #[derive(Debug, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Status {
-    pub cached_keys:Vec<String>,
-    pub cached_bytes:usize,
+    pub cached_keys: Vec<String>,
+    pub cached_bytes: usize,
     pub generation: u64,
     pub prepared_revision: u64,
     pub rendered_revision: u64,
@@ -273,7 +287,9 @@ fn bounds(b: &Bounds) -> bool {
         && number(b.height, 0., 8192.)
 }
 pub fn validate(plan: &Plan) -> Result<(), String> {
-    if plan.retained_targets.len()>128||plan.retained_targets.iter().any(|id|!identity(id)){return Err("Invalid retained motion targets".into());}
+    if plan.retained_targets.len() > 128 || plan.retained_targets.iter().any(|id| !identity(id)) {
+        return Err("Invalid retained motion targets".into());
+    }
 
     if ![
         &plan.definition_id,
@@ -713,17 +729,28 @@ pub fn graphics_document(
     origin: (f32, f32),
     palette: &HashMap<String, String>,
 ) -> Result<String, String> {
-    graphics_document_scaled(nodes,width,height,origin,palette,1.)
+    graphics_document_scaled(nodes, width, height, origin, palette, 1.)
 }
 pub fn graphics_document_scaled(
-    nodes:&[&Node],width:u32,height:u32,origin:(f32,f32),
-    palette:&HashMap<String,String>,density:f32,
-)->Result<String,String>{
-    if !density.is_finite() || density<1. || density>8. {return Err("Invalid graphics density".into());}
-    let physical_width=(width as f32*density).ceil() as u32;
-    let physical_height=(height as f32*density).ceil() as u32;
+    nodes: &[&Node],
+    width: u32,
+    height: u32,
+    origin: (f32, f32),
+    palette: &HashMap<String, String>,
+    density: f32,
+) -> Result<String, String> {
+    if !density.is_finite() || density < 1. || density > 8. {
+        return Err("Invalid graphics density".into());
+    }
+    let physical_width = (width as f32 * density).ceil() as u32;
+    let physical_height = (height as f32 * density).ceil() as u32;
     let mut html=format!("<!doctype html><meta charset=utf-8><meta http-equiv=Content-Security-Policy content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\"><style>html,body{{margin:0;width:{physical_width}px;height:{}px;overflow:hidden;background:transparent;font-family:Arial,sans-serif}}*{{box-sizing:border-box}}</style><div style=\"position:absolute;left:0;top:0;width:{width}px;height:{height}px;zoom:{density}\">",physical_height+1);
-    fn append(n: &Node, origin: (f32,f32), palette: &HashMap<String,String>, html: &mut String) -> Result<(),String> {
+    fn append(
+        n: &Node,
+        origin: (f32, f32),
+        palette: &HashMap<String, String>,
+        html: &mut String,
+    ) -> Result<(), String> {
         if !["text", "graphic", "group"].contains(&n.kind.as_str()) {
             return Err("Invalid graphics batch".into());
         }
@@ -753,14 +780,25 @@ pub fn graphics_document_scaled(
         if let Some(paint) = &n.paint {
             style.push_str(&paint_css(paint)?);
         }
-        if let Some(mask) = &n.mask { style.push_str(&format!("border-radius:{}px;",mask.radius)); }
-        style.push_str(&format!("transform:rotate({}deg) scale({},{});transform-origin:center;",p.rotation.unwrap_or(0.),p.scale_x.or(p.scale).unwrap_or(1.),p.scale_y.or(p.scale).unwrap_or(1.)));
+        if let Some(mask) = &n.mask {
+            style.push_str(&format!("border-radius:{}px;", mask.radius));
+        }
+        style.push_str(&format!(
+            "transform:rotate({}deg) scale({},{});transform-origin:center;",
+            p.rotation.unwrap_or(0.),
+            p.scale_x.or(p.scale).unwrap_or(1.),
+            p.scale_y.or(p.scale).unwrap_or(1.)
+        ));
         html.push_str(&format!("<div style=\"{style}\">{text}"));
-        for child in &n.children { append(child,(0.,0.),palette,html)?; }
+        for child in &n.children {
+            append(child, (0., 0.), palette, html)?;
+        }
         html.push_str("</div>");
         Ok(())
     }
-    for n in nodes { append(n,origin,palette,&mut html)?; }
+    for n in nodes {
+        append(n, origin, palette, &mut html)?;
+    }
     html.push_str("</div>");
     // Reserved extra row is cropped by a native placement wrapper. The marker
     // is painted with the document but is never part of outgoing set pixels.

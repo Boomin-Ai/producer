@@ -34,7 +34,7 @@ struct Cached {
     bytes: usize,
 }
 pub struct Store {
-    images:std::cell::RefCell<HashMap<String,std::rc::Weak<Source>>>,
+    images: std::cell::RefCell<HashMap<String, std::rc::Weak<Source>>>,
     directory: PathBuf,
     assets: HashMap<String, Cached>,
     files: HashMap<String, Weak<FileLease>>,
@@ -49,7 +49,7 @@ impl Store {
         ));
         std::fs::create_dir(&directory).map_err(|e| e.to_string())?;
         Ok(Self {
-            images:Default::default(),
+            images: Default::default(),
             directory,
             assets: HashMap::new(),
             files: HashMap::new(),
@@ -136,9 +136,23 @@ impl Store {
         Ok(())
     }
     // Ready scene leases own their files/decoders independently of upload manifests.
-    pub fn clear_manifest(&mut self){self.assets.clear();self.files.retain(|_,file|file.strong_count()>0);}
-    pub fn versions(&self,resources:&[String])->String{
-        let mut versions=resources.iter().filter_map(|r|r.strip_prefix("asset:").and_then(|id|self.assets.get(id).map(|a|format!("{id}:{}",a.fingerprint)))).collect::<Vec<_>>();versions.sort();versions.join("|")
+    pub fn clear_manifest(&mut self) {
+        self.assets.clear();
+        self.files.retain(|_, file| file.strong_count() > 0);
+    }
+    pub fn versions(&self, resources: &[String]) -> String {
+        let mut versions = resources
+            .iter()
+            .filter_map(|r| {
+                r.strip_prefix("asset:").and_then(|id| {
+                    self.assets
+                        .get(id)
+                        .map(|a| format!("{id}:{}", a.fingerprint))
+                })
+            })
+            .collect::<Vec<_>>();
+        versions.sort();
+        versions.join("|")
     }
     pub unsafe fn open(&self, plan: &Plan) -> Result<Prepared, String> {
         let mut out = Prepared {
@@ -183,7 +197,8 @@ impl Store {
                     base_ms: base,
                     running,
                 });
-                out.sources.insert(resource.clone(), std::rc::Rc::new(source));
+                out.sources
+                    .insert(resource.clone(), std::rc::Rc::new(source));
             } else if n.kind == "asset" {
                 let id = resource
                     .strip_prefix("asset:")
@@ -193,10 +208,17 @@ impl Store {
                     .get(id)
                     .ok_or_else(|| format!("Missing media asset {id}"))?;
                 let video = asset.mime.starts_with("video/");
-                let image_key=format!("{}:{}",asset.mime,asset.fingerprint);
+                let image_key = format!("{}:{}", asset.mime, asset.fingerprint);
                 if !video {
-                    if let Some(source)=self.images.borrow().get(&image_key).and_then(std::rc::Weak::upgrade){
-                        out.files.push(asset.file.clone());out.sources.insert(resource.clone(),source);continue;
+                    if let Some(source) = self
+                        .images
+                        .borrow()
+                        .get(&image_key)
+                        .and_then(std::rc::Weak::upgrade)
+                    {
+                        out.files.push(asset.file.clone());
+                        out.sources.insert(resource.clone(), source);
+                        continue;
                     }
                 }
                 let config = if video {
@@ -236,8 +258,12 @@ impl Store {
                     });
                 }
                 out.files.push(asset.file.clone());
-                let source=std::rc::Rc::new(source);
-                if !video {let mut images=self.images.borrow_mut();images.retain(|_,s|s.strong_count()>0);images.insert(image_key,std::rc::Rc::downgrade(&source));}
+                let source = std::rc::Rc::new(source);
+                if !video {
+                    let mut images = self.images.borrow_mut();
+                    images.retain(|_, s| s.strong_count() > 0);
+                    images.insert(image_key, std::rc::Rc::downgrade(&source));
+                }
                 out.sources.insert(resource.clone(), source);
             }
         }

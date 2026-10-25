@@ -482,11 +482,20 @@ async fn ui_log_tail(app: tauri::AppHandle, max_bytes: Option<u64>) -> EngineRes
 }
 
 #[tauri::command]
-pub fn live_set_preview_sources(state: State<'_, AppState>, lease: String, ids: Vec<String>) -> Result<(),String> {
-    if lease.is_empty() || lease.len()>64 || ids.len()>16 || ids.iter().any(|id|id.is_empty()||id.len()>128) {
+pub fn live_set_preview_sources(
+    state: State<'_, AppState>,
+    lease: String,
+    ids: Vec<String>,
+) -> Result<(), String> {
+    if lease.is_empty()
+        || lease.len() > 64
+        || ids.len() > 16
+        || ids.iter().any(|id| id.is_empty() || id.len() > 128)
+    {
         return Err("Invalid source preview subscription".into());
     }
-    state.live.set_preview_sources(lease,ids); Ok(())
+    state.live.set_preview_sources(lease, ids);
+    Ok(())
 }
 
 #[tauri::command]
@@ -1340,10 +1349,17 @@ pub async fn live_portrait_preview(
 }
 
 #[tauri::command]
-pub async fn live_virtual_cam_mirror(app: tauri::AppHandle, on: Option<bool>) -> EngineResult<bool> {
+pub async fn live_virtual_cam_mirror(
+    app: tauri::AppHandle,
+    on: Option<bool>,
+) -> EngineResult<bool> {
     use tauri::Manager;
-    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().live.virtual_cam_mirror(on))
-        .await.map_err(|e| EngineError::Other(e.to_string()))?.map_err(EngineError::Other)
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<AppState>().live.virtual_cam_mirror(on)
+    })
+    .await
+    .map_err(|e| EngineError::Other(e.to_string()))?
+    .map_err(EngineError::Other)
 }
 
 #[tauri::command]
@@ -1372,77 +1388,158 @@ pub async fn live_program_video_read() -> tauri::ipc::Response {
     tauri::ipc::Response::new(Vec::<u8>::new())
 }
 
-/// Development-only v2 protocol. No native source handles or HTML are accepted.
+/// Native set protocol. No native source handles or HTML are accepted.
 #[tauri::command]
-pub async fn live_set_v2(app: tauri::AppHandle, request: serde_json::Value) -> Result<serde_json::Value, String> {
-    #[cfg(all(have_engine, feature = "sets-v2-dev", target_os = "macos"))]
+pub async fn live_set_v2(
+    app: tauri::AppHandle,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    #[cfg(all(have_engine, target_os = "macos"))]
     {
         use tauri::Manager;
-        if request.to_string().len() > 42 * 1024 * 1024 { return Err("Sets v2 request exceeds transport budget".into()); }
-        let action: super::sets_v2::contract::Action = serde_json::from_value(request).map_err(|e| e.to_string())?;
+        if request.to_string().len() > 42 * 1024 * 1024 {
+            return Err("Sets v2 request exceeds transport budget".into());
+        }
+        let action: super::sets_v2::contract::Action =
+            serde_json::from_value(request).map_err(|e| e.to_string())?;
         return tauri::async_runtime::spawn_blocking(move || {
-            let status = app.state::<AppState>().live.handle.as_ref().ok_or("Live engine unavailable")?.sets_v2(action)?;
+            let status = app
+                .state::<AppState>()
+                .live
+                .handle
+                .as_ref()
+                .ok_or("Live engine unavailable")?
+                .sets_v2(action)?;
             serde_json::to_value(status).map_err(|e| e.to_string())
-        }).await.map_err(|e| e.to_string())?;
+        })
+        .await
+        .map_err(|e| e.to_string())?;
     }
-    #[cfg(not(all(have_engine, feature = "sets-v2-dev", target_os = "macos")))]
-    { let _ = (app, request); Err("Sets v2 requires the isolated macOS dev build".into()) }
+    #[cfg(not(all(have_engine, target_os = "macos")))]
+    {
+        let _ = (app, request);
+        Err("Sets v2 requires the macOS native engine".into())
+    }
 }
 
 /// Bounded local evidence for the isolated dev-room smoke test.
 #[tauri::command]
-pub async fn live_set_v2_report(app: tauri::AppHandle, result: serde_json::Value) -> Result<(), String> {
+pub async fn live_set_v2_report(
+    app: tauri::AppHandle,
+    result: serde_json::Value,
+) -> Result<(), String> {
     #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
     {
         use tauri::Manager;
-        if app.config().identifier != "ai.boomin.producer.sets-v2-dev" { return Err("Not the isolated v2 app".into()); }
+        if app.config().identifier != "ai.boomin.producer.sets-v2-dev" {
+            return Err("Not the isolated v2 app".into());
+        }
         let bytes = serde_json::to_vec_pretty(&result).map_err(|e| e.to_string())?;
-        if bytes.len()>64*1024 { return Err("Dev report exceeds budget".into()); }
-        let directory=app.path().app_data_dir().map_err(|e| e.to_string())?;
+        if bytes.len() > 64 * 1024 {
+            return Err("Dev report exceeds budget".into());
+        }
+        let directory = app.path().app_data_dir().map_err(|e| e.to_string())?;
         std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
-        return std::fs::write(directory.join("sets-v2-ui-proof.json"),bytes).map_err(|e| e.to_string());
+        return std::fs::write(directory.join("sets-v2-ui-proof.json"), bytes)
+            .map_err(|e| e.to_string());
     }
     #[cfg(not(all(feature = "sets-v2-dev", target_os = "macos")))]
-    { let _=(app,result);Err("Sets v2 dev reporting is disabled".into()) }
+    {
+        let _ = (app, result);
+        Err("Sets v2 dev reporting is disabled".into())
+    }
 }
 
 #[tauri::command]
-pub fn live_set_v2_enabled()->bool{cfg!(all(have_engine,feature="sets-v2-dev",target_os="macos"))}
+pub fn live_set_v2_enabled() -> bool {
+    cfg!(all(have_engine, target_os = "macos"))
+}
 
 /// Isolated development workspace bootstrap. Provider credentials never enter this app.
 #[tauri::command]
-pub fn live_set_v2_dev_workspace(state:State<'_,AppState>)->Result<Option<serde_json::Value>,String>{
- #[cfg(feature="sets-v2-dev")]{
-  if std::env::var("PRODUCER_SETS_V2_LOCAL_WORKSPACE").as_deref()!=Ok("1"){return Ok(None);}
-  #[derive(Deserialize)]
-  #[serde(rename_all="camelCase",deny_unknown_fields)]
-  struct LocalWorkspace {endpoint_id:String,base_url:String,token:String,server_room_id:String,module_bindings:serde_json::Value}
-  let raw=std::fs::read_to_string("/private/tmp/producer-sets-v2-local-workspace.json").map_err(|_|"Local workspace setup is missing")?;
-  let config:LocalWorkspace=serde_json::from_str(&raw).map_err(|_|"Invalid local workspace setup")?;
-  if config.base_url!="http://127.0.0.1:8795"||Uuid::parse_str(&config.endpoint_id).is_err()||config.token.len()<32{return Err("Invalid isolated workspace identity".into());}
-  crate::vault::set_token(&config.endpoint_id,&config.token).map_err(|_|"Could not store local endpoint token")?;
-  let db=state.db.lock().map_err(|_|"Development storage unavailable")?;
-  db.execute("INSERT INTO endpoints (id,kind,name,base_url) VALUES (?1,'connected','Sets v2 Local',?2) ON CONFLICT(id) DO UPDATE SET base_url=excluded.base_url",params![config.endpoint_id,config.base_url]).map_err(|_|"Could not save development workspace")?;
-  db.execute("UPDATE live_rooms SET endpoint_id=?1 WHERE name='Producer dev smoke'",params![config.endpoint_id]).map_err(|_|"Could not bind development room")?;
-  return Ok(Some(serde_json::json!({"endpointId":config.endpoint_id,"serverRoomId":config.server_room_id,"moduleBindings":config.module_bindings,"runProof":std::env::var("PRODUCER_SETS_V2_MODULE_PROBE").as_deref()==Ok("1")})));
- }
- #[cfg(not(feature="sets-v2-dev"))]{let _=state;Ok(None)}
+pub fn live_set_v2_dev_workspace(
+    state: State<'_, AppState>,
+) -> Result<Option<serde_json::Value>, String> {
+    #[cfg(feature = "sets-v2-dev")]
+    {
+        if std::env::var("PRODUCER_SETS_V2_LOCAL_WORKSPACE").as_deref() != Ok("1") {
+            return Ok(None);
+        }
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct LocalWorkspace {
+            endpoint_id: String,
+            base_url: String,
+            token: String,
+            server_room_id: String,
+            module_bindings: serde_json::Value,
+        }
+        let raw = std::fs::read_to_string("/private/tmp/producer-sets-v2-local-workspace.json")
+            .map_err(|_| "Local workspace setup is missing")?;
+        let config: LocalWorkspace =
+            serde_json::from_str(&raw).map_err(|_| "Invalid local workspace setup")?;
+        if config.base_url != "http://127.0.0.1:8795"
+            || Uuid::parse_str(&config.endpoint_id).is_err()
+            || config.token.len() < 32
+        {
+            return Err("Invalid isolated workspace identity".into());
+        }
+        crate::vault::set_token(&config.endpoint_id, &config.token)
+            .map_err(|_| "Could not store local endpoint token")?;
+        let db = state
+            .db
+            .lock()
+            .map_err(|_| "Development storage unavailable")?;
+        db.execute("INSERT INTO endpoints (id,kind,name,base_url) VALUES (?1,'connected','Sets v2 Local',?2) ON CONFLICT(id) DO UPDATE SET base_url=excluded.base_url",params![config.endpoint_id,config.base_url]).map_err(|_|"Could not save development workspace")?;
+        db.execute(
+            "UPDATE live_rooms SET endpoint_id=?1 WHERE name='Producer dev smoke'",
+            params![config.endpoint_id],
+        )
+        .map_err(|_| "Could not bind development room")?;
+        return Ok(Some(
+            serde_json::json!({"endpointId":config.endpoint_id,"serverRoomId":config.server_room_id,"moduleBindings":config.module_bindings,"runProof":std::env::var("PRODUCER_SETS_V2_MODULE_PROBE").as_deref()==Ok("1")}),
+        ));
+    }
+    #[cfg(not(feature = "sets-v2-dev"))]
+    {
+        let _ = state;
+        Ok(None)
+    }
 }
 
 #[tauri::command]
-pub fn live_set_v2_smoke_enabled()->bool {
- cfg!(feature="sets-v2-dev") && std::env::var("PRODUCER_SETS_V2_UI_PROBE").as_deref()==Ok("1")
+pub fn live_set_v2_smoke_enabled() -> bool {
+    cfg!(feature = "sets-v2-dev")
+        && std::env::var("PRODUCER_SETS_V2_UI_PROBE").as_deref() == Ok("1")
 }
 
 #[tauri::command]
-pub async fn live_set_source_create(app:tauri::AppHandle,id:String,label:String,spec:serde_json::Value)->Result<serde_json::Value,String>{
- #[cfg(all(have_engine,feature="sets-v2-dev",target_os="macos"))]{
-  use tauri::Manager;
-  let spec=serde_json::from_value(spec).map_err(|e|e.to_string())?;
-  return tauri::async_runtime::spawn_blocking(move||{
-   let state=app.state::<AppState>();let handle=state.live.handle.as_ref().ok_or("Live engine unavailable")?;
-   serde_json::to_value(handle.set_source_create(id,label,spec)?).map_err(|e|e.to_string())
-  }).await.map_err(|e|e.to_string())?;
- }
- #[cfg(not(all(have_engine,feature="sets-v2-dev",target_os="macos")))]{let _=(app,id,label,spec);Err("Set source creation requires the v2 dev room".into())}
+pub async fn live_set_source_create(
+    app: tauri::AppHandle,
+    id: String,
+    label: String,
+    spec: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    #[cfg(all(have_engine, target_os = "macos"))]
+    {
+        use tauri::Manager;
+        let spec = serde_json::from_value(spec).map_err(|e| e.to_string())?;
+        return tauri::async_runtime::spawn_blocking(move || {
+            let state = app.state::<AppState>();
+            let handle = state
+                .live
+                .handle
+                .as_ref()
+                .ok_or("Live engine unavailable")?;
+            serde_json::to_value(handle.set_source_create(id, label, spec)?)
+                .map_err(|e| e.to_string())
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(all(have_engine, target_os = "macos")))]
+    {
+        let _ = (app, id, label, spec);
+        Err("Set source creation requires the native macOS engine".into())
+    }
 }

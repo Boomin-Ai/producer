@@ -50,12 +50,22 @@ pub fn run() {
         std::env::set_var("LIVEKIT_LAB_TIMED_MIXER", "1");
         std::env::set_var("LIVEKIT_LAB_RTCP_PROBE", "1");
     }
-    #[cfg(all(feature = "guest-rtc-pilot", have_engine, debug_assertions, target_os = "macos"))]
+    #[cfg(all(
+        feature = "guest-rtc-pilot",
+        have_engine,
+        debug_assertions,
+        target_os = "macos"
+    ))]
     if std::env::var("PRODUCER_RTC_THUMB_PROOF").as_deref() == Ok("1") {
         live::graph::thumbnail_selftest();
         return;
     }
-    #[cfg(all(feature = "guest-rtc-pilot", have_engine, debug_assertions, target_os = "macos"))]
+    #[cfg(all(
+        feature = "guest-rtc-pilot",
+        have_engine,
+        debug_assertions,
+        target_os = "macos"
+    ))]
     if std::env::var("PRODUCER_RTC_TAP_PROOF").as_deref() == Ok("1") {
         live::rtc_program::tap_selftest();
         return;
@@ -134,16 +144,40 @@ pub fn run() {
             if std::env::var("PRODUCER_RTC_ROOM_DEV_FIXTURE").as_deref() == Ok("1")
                 && app.config().identifier != "ai.boomin.producer.rtc-pilot"
             {
-                return Err(std::io::Error::other("RTC development requires its isolated app identifier").into());
+                return Err(std::io::Error::other(
+                    "RTC development requires its isolated app identifier",
+                )
+                .into());
             }
             #[cfg(feature = "sets-v2-dev")]
             if app.config().identifier != "ai.boomin.producer.sets-v2-dev" {
-                return Err(std::io::Error::other("Sets v2 development requires its isolated app identifier").into());
+                return Err(std::io::Error::other(
+                    "Sets v2 development requires its isolated app identifier",
+                )
+                .into());
             }
             #[cfg(feature = "sets-v2-dev")]
             if std::env::var("PRODUCER_SETS_V2_UI_PROBE").as_deref() == Ok("1") {
                 if let Some(window) = app.get_webview_window("main") {
-                    let url=if std::env::var("PRODUCER_SETS_V2_APPLY_PROBE").as_deref()==Ok("1"){"http://localhost:1436/?roomInspect=1&roomApplyCheck=1"}else if std::env::var("PRODUCER_SETS_V2_INSPECT").as_deref()==Ok("1"){"http://localhost:1436/?roomInspect=1"}else if std::env::var("PRODUCER_SETS_V2_COLOR_PROBE").as_deref()==Ok("1"){"http://localhost:1436/?roomSmoke=1&roomShowcase=1&roomColor=1"}else if std::env::var("PRODUCER_SETS_V2_SHOWCASE_PROBE").as_deref()==Ok("1"){"http://localhost:1436/?roomSmoke=1&roomShowcase=1"}else if std::env::var("PRODUCER_SETS_V2_RESOLUTION_PROBE").as_deref()==Ok("1"){"http://localhost:1436/?roomSmoke=1&roomResolution=1"}else if std::env::var("PRODUCER_SETS_V2_TIMING_PROBE").as_deref()==Ok("1"){"http://localhost:1436/?roomSmoke=1&roomTiming=1"}else{"http://localhost:1436/?roomSmoke=1"};
+                    let url = if std::env::var("PRODUCER_SETS_V2_APPLY_PROBE").as_deref() == Ok("1")
+                    {
+                        "http://localhost:1436/?roomInspect=1&roomApplyCheck=1"
+                    } else if std::env::var("PRODUCER_SETS_V2_INSPECT").as_deref() == Ok("1") {
+                        "http://localhost:1436/?roomInspect=1"
+                    } else if std::env::var("PRODUCER_SETS_V2_COLOR_PROBE").as_deref() == Ok("1") {
+                        "http://localhost:1436/?roomSmoke=1&roomShowcase=1&roomColor=1"
+                    } else if std::env::var("PRODUCER_SETS_V2_SHOWCASE_PROBE").as_deref() == Ok("1")
+                    {
+                        "http://localhost:1436/?roomSmoke=1&roomShowcase=1"
+                    } else if std::env::var("PRODUCER_SETS_V2_RESOLUTION_PROBE").as_deref()
+                        == Ok("1")
+                    {
+                        "http://localhost:1436/?roomSmoke=1&roomResolution=1"
+                    } else if std::env::var("PRODUCER_SETS_V2_TIMING_PROBE").as_deref() == Ok("1") {
+                        "http://localhost:1436/?roomSmoke=1&roomTiming=1"
+                    } else {
+                        "http://localhost:1436/?roomSmoke=1"
+                    };
                     window.navigate(url.parse().unwrap())?;
                 }
             }

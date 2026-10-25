@@ -116,7 +116,8 @@ impl HostOwner {
         Self::start_with_recovery(
             control,
             Box::new(receiver),
-            cfg!(feature = "guest-rtc-production") || std::env::var("PRODUCER_RTC_PROGRAM_PILOT").as_deref() == Ok("1"),
+            cfg!(feature = "guest-rtc-production")
+                || std::env::var("PRODUCER_RTC_PROGRAM_PILOT").as_deref() == Ok("1"),
             Some(|| Ok(Box::new(crate::live::rtc_media::SceneOutputs::receiver()?))),
         )
         .await
@@ -146,10 +147,16 @@ impl HostOwner {
         media: Box<dyn producer_guest_runtime::GuestMedia>,
         program_requested: bool,
     ) -> Result<Self, &'static str> {
-        Self::start_with_recovery(control,media,program_requested,None).await
+        Self::start_with_recovery(control, media, program_requested, None).await
     }
-    async fn start_with_recovery(control:Control,media:Box<dyn producer_guest_runtime::GuestMedia>,program_requested:bool,recovery_media:Option<MediaFactory>) -> Result<Self,&'static str> {
-        let (mut owner, connected) = Self::spawn(control, Some(media), program_requested,recovery_media);
+    async fn start_with_recovery(
+        control: Control,
+        media: Box<dyn producer_guest_runtime::GuestMedia>,
+        program_requested: bool,
+        recovery_media: Option<MediaFactory>,
+    ) -> Result<Self, &'static str> {
+        let (mut owner, connected) =
+            Self::spawn(control, Some(media), program_requested, recovery_media);
         match connected.await {
             Ok(Ok(())) => Ok(owner),
             Ok(Err(error)) => {
@@ -178,13 +185,13 @@ impl HostOwner {
         // connection initialization. Cancellation signals stop; it never drops
         // Room::connect halfway through native initialization.
         #[cfg(debug_assertions)]
-        let fault=Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let fault = Arc::new(std::sync::atomic::AtomicBool::new(false));
         #[cfg(debug_assertions)]
-        let fault_task=fault.clone();
+        let fault_task = fault.clone();
         #[cfg(debug_assertions)]
-        let recoveries=Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let recoveries = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         #[cfg(debug_assertions)]
-        let recovered_count=recoveries.clone();
+        let recovered_count = recoveries.clone();
         let task = tokio::spawn(async move {
             let _lifetime = lifetime;
             let mut control = control;
@@ -652,9 +659,9 @@ pub fn program_selftest() -> Result<(), &'static str> {
             worker: Some(worker),
         })
     }
-    let profile=std::env::var("PRODUCER_RTC_PROGRAM_OPERATOR_PROFILE").unwrap_or_else(|_|format!("{ROOT}/operator.json"));
-    let bytes = std::fs::read(profile)
-        .map_err(|_| "Native program operator unavailable")?;
+    let profile = std::env::var("PRODUCER_RTC_PROGRAM_OPERATOR_PROFILE")
+        .unwrap_or_else(|_| format!("{ROOT}/operator.json"));
+    let bytes = std::fs::read(profile).map_err(|_| "Native program operator unavailable")?;
     if bytes.len() > 32768 {
         return Err("Native program operator too large");
     }
@@ -685,52 +692,72 @@ pub fn program_selftest() -> Result<(), &'static str> {
     let generated_av = std::env::var("PRODUCER_RTC_AV_PROOF").as_deref() == Ok("1");
     if generated_av {
         let av_path = std::path::Path::new(ROOT).join("generated-program-av.mov");
-        if !av_path.is_file() { return Err("Generated AV fixture unavailable"); }
-        graph.add_extra("generated-program-av", "Generated numbered AV", &ExtraSpec::Media {
-            path: av_path.to_string_lossy().into_owned(), looping: false,
-        }).map_err(|_| "Generated AV source unavailable")?;
-        graph.set_transform("generated-program-av", &TransformPatch {
-            w: Some(1280.), h: Some(720.), visible: Some(true), ..Default::default()
-        }).map_err(|_| "Generated AV transform failed")?;
-        graph.set_source_audio("generated-program-av", Some(1.0), Some(false))
+        if !av_path.is_file() {
+            return Err("Generated AV fixture unavailable");
+        }
+        graph
+            .add_extra(
+                "generated-program-av",
+                "Generated numbered AV",
+                &ExtraSpec::Media {
+                    path: av_path.to_string_lossy().into_owned(),
+                    looping: false,
+                },
+            )
+            .map_err(|_| "Generated AV source unavailable")?;
+        graph
+            .set_transform(
+                "generated-program-av",
+                &TransformPatch {
+                    w: Some(1280.),
+                    h: Some(720.),
+                    visible: Some(true),
+                    ..Default::default()
+                },
+            )
+            .map_err(|_| "Generated AV transform failed")?;
+        graph
+            .set_source_audio("generated-program-av", Some(1.0), Some(false))
             .map_err(|_| "Generated AV audio routing failed")?;
     } else {
-    graph
-        .add_extra(
-            "generated-program-color",
-            "Generated program",
-            &ExtraSpec::Color {
-                color: "#ff0000".into(),
-            },
-        )
-        .map_err(|_| "Native program color unavailable")?;
-    graph
-        .set_transform(
-            "generated-program-color",
-            &TransformPatch {
-                w: Some(1920.),
-                h: Some(1080.),
-                visible: Some(true),
-                ..Default::default()
-            },
-        )
-        .map_err(|_| "Native program scene failed")?;
-    graph
-        .add_extra(
-            "generated-program-audio",
-            "Generated tone",
-            &ExtraSpec::Media {
-                path: path.to_string_lossy().into_owned(),
-                looping: true,
-            },
-        )
-        .map_err(|_| "Native program tone unavailable")?;
-    graph
-        .set_source_audio("generated-program-audio", Some(0.5), Some(false))
-        .map_err(|_| "Native program tone routing failed")?;
+        graph
+            .add_extra(
+                "generated-program-color",
+                "Generated program",
+                &ExtraSpec::Color {
+                    color: "#ff0000".into(),
+                },
+            )
+            .map_err(|_| "Native program color unavailable")?;
+        graph
+            .set_transform(
+                "generated-program-color",
+                &TransformPatch {
+                    w: Some(1920.),
+                    h: Some(1080.),
+                    visible: Some(true),
+                    ..Default::default()
+                },
+            )
+            .map_err(|_| "Native program scene failed")?;
+        graph
+            .add_extra(
+                "generated-program-audio",
+                "Generated tone",
+                &ExtraSpec::Media {
+                    path: path.to_string_lossy().into_owned(),
+                    looping: true,
+                },
+            )
+            .map_err(|_| "Native program tone unavailable")?;
+        graph
+            .set_source_audio("generated-program-audio", Some(0.5), Some(false))
+            .map_err(|_| "Native program tone routing failed")?;
     }
     let lifecycle = std::env::var("PRODUCER_RTC_LIFECYCLE_PROOF").as_deref() == Ok("1");
-    if generated_av && lifecycle { return Err("AV recording and generated source lifecycle modes are exclusive"); }
+    if generated_av && lifecycle {
+        return Err("AV recording and generated source lifecycle modes are exclusive");
+    }
     let mut loads = Vec::new();
     if lifecycle {
         for index in 0..4 {

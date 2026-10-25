@@ -330,7 +330,10 @@ pub fn persist_video(dir: &std::path::Path, h: u32, f: u32) {
     let _ = std::fs::write(dir.join("video.json"), format!("{{\"h\":{h},\"f\":{f}}}"));
 }
 
-fn bootstrap_inner(module_config_dir: Option<&std::path::Path>, video_mode: (u32, u32)) -> EngineReport {
+fn bootstrap_inner(
+    module_config_dir: Option<&std::path::Path>,
+    video_mode: (u32, u32),
+) -> EngineReport {
     let mut report = EngineReport {
         ok: false,
         obs_version: String::new(),
@@ -448,7 +451,7 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>, video_mode: (u32
     unsafe {
         ffi::producer_person_mask_register();
         ffi::producer_source_appearance_register();
-        #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
+        #[cfg(all(target_os = "macos"))]
         super::sets_v2::register();
         #[cfg(feature = "guest-rtc-pilot")]
         super::rtc_ingest::register_type();
@@ -546,7 +549,8 @@ fn bootstrap_inner(module_config_dir: Option<&std::path::Path>, video_mode: (u32
     // can grow its mixer delay to 960 ms, exceeding our publication budget.
     // Keep this candidate restricted to the explicit native RTC pilot.
     let rtc_audio = cfg!(feature = "guest-rtc-pilot")
-        && (cfg!(feature = "guest-rtc-production") || std::env::var("PRODUCER_RTC_PROGRAM_PILOT").as_deref() == Ok("1"));
+        && (cfg!(feature = "guest-rtc-production")
+            || std::env::var("PRODUCER_RTC_PROGRAM_PILOT").as_deref() == Ok("1"));
     let audio_ready = if rtc_audio {
         let bounded = ffi::obs_audio_info2 {
             samples_per_sec: oai.samples_per_sec,
@@ -723,9 +727,14 @@ pub enum Command {
     PresentationStatus {
         reply: mpsc::Sender<super::presentation::Status>,
     },
-    #[cfg(all(feature="sets-v2-dev",target_os="macos"))]
-    SetSourceCreate {id:String,label:String,spec:graph::ExtraSpec,reply:mpsc::Sender<Result<graph::SourcesState,String>>},
-    #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
+    #[cfg(all(target_os = "macos"))]
+    SetSourceCreate {
+        id: String,
+        label: String,
+        spec: graph::ExtraSpec,
+        reply: mpsc::Sender<Result<graph::SourcesState, String>>,
+    },
+    #[cfg(all(target_os = "macos"))]
     SetsV2 {
         action: super::sets_v2::contract::Action,
         reply: mpsc::Sender<Result<super::sets_v2::contract::Status, String>>,
@@ -755,7 +764,10 @@ pub enum Command {
         action: crate::dj::Action,
         reply: std::sync::mpsc::Sender<Result<crate::dj::Status, String>>,
     },
-    SetPreviewSources { lease: String, ids: Vec<String> },
+    SetPreviewSources {
+        lease: String,
+        ids: Vec<String>,
+    },
     SetThumbRate {
         fps: u32,
     },
@@ -914,9 +926,9 @@ fn cmd_name(c: &Command) -> &'static str {
         Command::ApplyScene { .. } => "ApplyScene",
         Command::PresentationWarm { .. } => "PresentationWarm",
         Command::PresentationStatus { .. } => "PresentationStatus",
-        #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
+        #[cfg(all(target_os = "macos"))]
         Command::SetsV2 { .. } => "SetsV2",
-        #[cfg(all(feature="sets-v2-dev",target_os="macos"))]
+        #[cfg(all(target_os = "macos"))]
         Command::SetSourceCreate { .. } => "SetSourceCreate",
         Command::PortraitRoom { .. } => "PortraitRoom",
         Command::PortraitState { .. } => "PortraitState",
@@ -1223,16 +1235,36 @@ impl LiveHandle {
         rx.recv_timeout(Duration::from_secs(5))
             .map_err(|_| "Set engine did not answer".into())
     }
-    #[cfg(all(feature="sets-v2-dev",target_os="macos"))]
-    pub fn set_source_create(&self,id:String,label:String,spec:graph::ExtraSpec)->Result<graph::SourcesState,String>{
-        let(tx,rx)=mpsc::channel();self.cmd.send(Command::SetSourceCreate{id,label,spec,reply:tx}).map_err(|e|e.to_string())?;
-        rx.recv_timeout(Duration::from_secs(10)).map_err(|_|"Source creation did not answer".to_string())?
-    }
-    #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
-    pub fn sets_v2(&self, action: super::sets_v2::contract::Action) -> Result<super::sets_v2::contract::Status, String> {
+    #[cfg(all(target_os = "macos"))]
+    pub fn set_source_create(
+        &self,
+        id: String,
+        label: String,
+        spec: graph::ExtraSpec,
+    ) -> Result<graph::SourcesState, String> {
         let (tx, rx) = mpsc::channel();
-        self.cmd.send(Command::SetsV2 { action, reply: tx }).map_err(|e| e.to_string())?;
-        rx.recv_timeout(Duration::from_secs(10)).map_err(|_| "Sets v2 engine did not answer".to_string())?
+        self.cmd
+            .send(Command::SetSourceCreate {
+                id,
+                label,
+                spec,
+                reply: tx,
+            })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(10))
+            .map_err(|_| "Source creation did not answer".to_string())?
+    }
+    #[cfg(all(target_os = "macos"))]
+    pub fn sets_v2(
+        &self,
+        action: super::sets_v2::contract::Action,
+    ) -> Result<super::sets_v2::contract::Status, String> {
+        let (tx, rx) = mpsc::channel();
+        self.cmd
+            .send(Command::SetsV2 { action, reply: tx })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(10))
+            .map_err(|_| "Sets v2 engine did not answer".to_string())?
     }
     pub fn presentation_warm(&self, request: super::presentation::Request) -> Result<(), String> {
         let revision = request.projection.revision;
@@ -1398,8 +1430,11 @@ impl LiveHandle {
     /// target `program`, PROGRAM_THUMB_FPS while on).
     pub fn virtual_cam_mirror(&self, on: Option<bool>) -> Result<bool, String> {
         let (tx, rx) = mpsc::channel();
-        self.cmd.send(Command::VirtualCamMirror { on, reply: tx }).map_err(|e| e.to_string())?;
-        rx.recv_timeout(Duration::from_secs(10)).map_err(|_| "Camera mirror settings timed out".to_string())?
+        self.cmd
+            .send(Command::VirtualCamMirror { on, reply: tx })
+            .map_err(|e| e.to_string())?;
+        rx.recv_timeout(Duration::from_secs(10))
+            .map_err(|_| "Camera mirror settings timed out".to_string())?
     }
 
     pub fn select_output(&self, portrait: bool) -> Result<(), String> {
@@ -2230,8 +2265,11 @@ pub fn start(
                             #[cfg(debug_assertions)]
                             // First async-source frames can be black before decoding.
                             // Save the first image containing pixels for diagnostics.
-                            if rgba.chunks_exact(4).any(|p| p[0] > 12 || p[1] > 12 || p[2] > 12)
-                                && dumped.insert(id.clone()) {
+                            if rgba
+                                .chunks_exact(4)
+                                .any(|p| p[0] > 12 || p[1] > 12 || p[2] > 12)
+                                && dumped.insert(id.clone())
+                            {
                                 let _ = std::fs::create_dir_all("/tmp/producer-thumbs");
                                 let _ =
                                     std::fs::write(format!("/tmp/producer-thumbs/{id}.jpg"), &jpg);
@@ -2772,13 +2810,13 @@ pub fn start(
                     }
                     Ok(Command::PortraitStop{reply})=>{if portrait_recorder.is_some()||selected_portrait{let _=reply.send(());continue;}if let Some(p)=portrait_preview.take(){p.detach();}#[cfg(target_os="macos")]if let Some(g)=scene.as_mut(){g.portrait_stop();}let _=reply.send(());}
                     Ok(Command::PortraitFrame{reply})=>{#[cfg(target_os="macos")]let frame=scene.as_ref().map(|g|g.portrait_frame()).unwrap_or_default();#[cfg(not(target_os="macos"))]let frame=String::new();let _=reply.send(frame);}
-                    #[cfg(all(feature="sets-v2-dev",target_os="macos"))]
+                    #[cfg(all(target_os="macos"))]
                     Ok(Command::SetSourceCreate{id,label,spec,reply})=>{
                         let result=scene.as_mut().ok_or("Room unavailable".to_string()).and_then(|g|g.create_set_source(&id,&label,&spec));
                         if let Ok(sources)=&result{snap.lock().unwrap().sources=sources.clone();sink(&LiveEvent::SourcesChanged{sources:sources.clone()});}
                         let _=reply.send(result);
                     }
-                    #[cfg(all(feature = "sets-v2-dev", target_os = "macos"))]
+                    #[cfg(all(target_os = "macos"))]
                     Ok(Command::SetsV2 {action,reply}) => {
                         let result=scene.as_mut().ok_or_else(||"The dev room is not running".to_string()).and_then(|g|g.sets_v2(action));
                         let _=reply.send(result);
