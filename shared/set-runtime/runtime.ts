@@ -103,6 +103,11 @@ export class SetRuntime {
     if(input.citations!==undefined){const raw=JSON.parse(String(input.citations));if(!Array.isArray(raw)||raw.length>20)throw Error('Invalid citations');citations=raw.map(c=>{if(!c||typeof c!=='object'||Object.keys(c).some(k=>!['title','url','start','end'].includes(k))||typeof c.title!=='string'||c.title.length>160||typeof c.url!=='string'||c.url.length>2000)throw Error('Invalid citation');const url=new URL(c.url);if(url.protocol!=='https:'||url.username||url.password)throw Error('Citation must use HTTPS');if(c.start!==undefined||c.end!==undefined){if(!Number.isInteger(c.start)||!Number.isInteger(c.end)||c.start<0||c.end<=c.start||c.end>String(input.response).length)throw Error('Invalid citation position');return {title:c.title,url:url.href,start:c.start,end:c.end};}return {title:c.title,url:url.href};});}
     m.agent={...m.agent,status:'completed',response:input.response.trim(),citations,error:'',...(op==='agent.embed'?{question:String(input.question??m.agent.question).slice(0,1000),origin:'manual' as const,requestId:''}:{})};return;
    }
+   if(op==='agent.showQuestion'){
+    if(m.execution!=='running'||typeof input.question!=='string'||!input.question.trim()||input.question.length>1000)throw Error('Start module and enter a question');
+    const question=input.question.trim(),changed=question!==m.agent.question;
+    m.agent={...m.agent,...(changed?{requestId:'',status:'idle' as const,response:'',citations:[],error:''}:{}),question,displayedQuestion:question,displayedResponse:'',displayedCitations:[],page:0};return;
+   }
    if(op==='agent.page'){const page=input.page;if(typeof page!=='number'||!Number.isInteger(page)||page<0||page>=answerPages(presentationText(m.agent.displayedResponse)).length)throw Error('Invalid answer page');m.agent.page=page;return;}
    if(op==='agent.show'){m.agent.page=0;if(m.agent.status!=='completed')throw Error('No completed response to show');m.agent.displayedQuestion=m.agent.question;m.agent.displayedResponse=m.agent.response;m.agent.displayedCitations=structuredClone(m.agent.citations);if(d.behavior.showView)m.view=d.behavior.showView;return;}
    if(op==='agent.clear'){m.agent.displayedQuestion='';m.agent.displayedResponse='';m.agent.displayedCitations=[];return;}

@@ -1,3 +1,4 @@
+import {upgradeJustFacts} from '../features/presentation/upgradeJustFacts';
 import {setActiveEndpointId} from '../lib/workspace';
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
@@ -51,7 +52,16 @@ export function SetsDevelopmentRoom() {
           await ipc.liveUpdateRoom(room.id,{config:JSON.stringify(config)});
           room={...room,config:JSON.stringify(config)};
         }
+        if(previous?.id==='just-facts'&&previous.version==='1.0.0'){
+          config.presentation={...config.presentation,package:upgradeJustFacts(previous)};
+          await ipc.liveUpdateRoom(room.id,{config:JSON.stringify(config)});
+          room={...room,config:JSON.stringify(config)};
+        }
         for(const entry of await ipc.setLibraryList()){
+          if(entry.id==='just-facts'){
+            const saved=JSON.parse(await ipc.setLibraryRead(entry.file));
+            if(saved.version==='1.0.0')await ipc.setLibrarySave(JSON.stringify(upgradeJustFacts(saved)));
+          }
           if(entry.id!==studio3d.id)continue;
           const saved=JSON.parse(await ipc.setLibraryRead(entry.file));
           if(saved.version==='0.1.0')await ipc.setLibrarySave(JSON.stringify(upgrade(saved)));

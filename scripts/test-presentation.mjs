@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 
 const result = await build({ stdin: { contents: `export * from './src/features/presentation/schema';
 export * from './src/features/presentation/fixtures';
+export * from './src/features/presentation/upgradeJustFacts';
 export * from './src/features/presentation/rehearsal';
 export * from './src/features/presentation/rundown';
 export * from './src/features/presentation/animation';
@@ -15,9 +16,19 @@ export * from './src/features/presentation/projection';`, resolveDir: process.cw
 const temp = await mkdtemp(join(tmpdir(), 'producer-presentation-'));
 const file = join(temp, 'runtime.mjs');
 await writeFile(file, result.outputFiles[0].text);
-const { parsePackage, presentationJsonSchema, AFTER_HOURS, HEAD_TO_HEAD, RehearsalSession, outputProjection, rundown, timeLabel, authoredCrossfadeMs } = await import(pathToFileURL(file));
+const { upgradeJustFacts, parsePackage, presentationJsonSchema, AFTER_HOURS, HEAD_TO_HEAD, RehearsalSession, outputProjection, rundown, timeLabel, authoredCrossfadeMs } = await import(pathToFileURL(file));
 await unlink(file); await rmdir(temp);
 let checks = 0;
+{
+ const old=JSON.parse(readFileSync('docs/shows/just-facts.json','utf8'));old.version='1.0.0';
+ old.set.values.title.default='My custom headline';
+ for(const layout of old.set.layouts)for(const node of layout.root.children??[])if(node.id==='headline')node.text={op:'if',args:[{get:'modules.research.hasAnswer'},{get:'modules.research.questionDisplay'},{get:'values.title'}]};
+ const before=structuredClone(old),next=upgradeJustFacts(parsePackage(old));parsePackage(next);
+ assert.equal(next.version,'1.0.1');assert.equal(next.set.values.title.default,'My custom headline');assert.deepEqual(next.runtime,before.runtime);assert.deepEqual(old,before);
+ assert.equal(upgradeJustFacts(next),next);assert.equal(next.set.layouts[0].root.children.find(n=>n.id==='headline').text.args[0].op,'eq');
+ console.log('PASS: question-only showcase migration preserves authored values and modules');
+}
+
 const test = (name, fn) => { fn(); checks++; console.log('PASS:', name); };
 const edit = fn => { const doc = structuredClone(AFTER_HOURS); fn(doc); return doc; };
 const texts = projection => JSON.stringify(projection);
