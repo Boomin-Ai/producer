@@ -1,0 +1,106 @@
+[
+  {
+    "centerAlpha" : 0,
+    "cornerAlpha" : 0,
+    "file" : "docs\/shows\/media\/decision-room\/camera-bezel.png",
+    "hasAlpha" : true,
+    "height" : 941,
+    "openingPixels" : {
+      "height" : 709,
+      "left" : 79,
+      "top" : 110,
+      "width" : 1512
+    },
+    "width" : 1672
+  },
+  {
+    "file" : "docs\/shows\/media\/decision-room\/studio-landscape.png",
+    "hasAlpha" : false,
+    "height" : 941,
+    "width" : 1672
+  },
+  {
+    "file" : "docs\/shows\/media\/decision-room\/studio-portrait.png",
+    "hasAlpha" : false,
+    "height" : 1672,
+    "width" : 941
+  },
+  {
+    "centerAlpha" : 0,
+    "cornerAlpha" : 0,
+    "file" : "docs\/shows\/media\/open-floor\/camera-bezel.png",
+    "hasAlpha" : true,
+    "height" : 940,
+    "openingPixels" : {
+      "height" : 650,
+      "left" : 133,
+      "top" : 143,
+      "width" : 1411
+    },
+    "width" : 1672
+  },
+  {
+    "file" : "docs\/shows\/media\/open-floor\/studio-landscape.png",
+    "hasAlpha" : false,
+    "height" : 941,
+    "width" : 1672
+  },
+  {
+    "file" : "docs\/shows\/media\/open-floor\/studio-portrait.png",
+    "hasAlpha" : false,
+    "height" : 1672,
+    "width" : 941
+  },
+  {
+    "centerAlpha" : 0,
+    "cornerAlpha" : 0,
+    "file" : "docs\/shows\/media\/atmosphere\/camera-bezel.png",
+    "hasAlpha" : true,
+    "height" : 941,
+    "openingPixels" : {
+      "height" : 528,
+      "left" : 103,
+      "top" : 128,
+      "width" : 1467
+    },
+    "width" : 1672
+  },
+  {
+    "file" : "docs\/shows\/media\/atmosphere\/studio-landscape.png",
+    "hasAlpha" : false,
+    "height" : 941,
+    "width" : 1672
+  },
+  {
+    "file" : "docs\/shows\/media\/atmosphere\/studio-portrait.png",
+    "hasAlpha" : false,
+    "height" : 1672,
+    "width" : 941
+  },
+  {
+    "centerAlpha" : 0,
+    "cornerAlpha" : 0,
+    "file" : "docs\/shows\/media\/just-facts\/camera-bezel.png",
+    "hasAlpha" : true,
+    "height" : 941,
+    "openingPixels" : {
+      "height" : 585,
+      "left" : 112,
+      "top" : 177,
+      "width" : 1446
+    },
+    "width" : 1672
+  },
+  {
+    "file" : "docs\/shows\/media\/just-facts\/studio-landscape.png",
+    "hasAlpha" : false,
+    "height" : 941,
+    "width" : 1672
+  },
+  {
+    "file" : "docs\/shows\/media\/just-facts\/studio-portrait.png",
+    "hasAlpha" : false,
+    "height" : 1672,
+    "width" : 941
+  }
+]
