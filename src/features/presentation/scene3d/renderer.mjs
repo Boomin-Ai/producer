@@ -10,7 +10,7 @@ export async function mountWorld(canvas, input, options) {
  let control=parseControl(options.control),disposed=false,lost=false,epoch=0,raf=0;
  let renderer,scene,camera,trimScene,trimCamera,meshes=[],resources=[],animated=[],lights=[],envTarget;
  let frames=0,renderedRevision=-1,nextDraw=0,lastDraw=0,lastReport=0,ready=false;
- let initialized=false,cueStart=0,cueFrom=[],cameraFrom,cameraTo;
+ let warmFrames=0,initialized=false,cueStart=0,cueFrom=[],cameraFrom,cameraTo;
  const samples=[];
  const time=()=>((control.paused?control.elapsed:Math.max(0,Date.now()-control.anchor))/1000);
  const status=()=>({ready,lost,revision:renderedRevision,frames,width,height,pass,...hardware,samples:samples.slice(-180),calls:renderer?.info.render.calls??0,triangles:renderer?.info.render.triangles??0});
@@ -28,7 +28,7 @@ export async function mountWorld(canvas, input, options) {
  function destination(){return world.views?.[control.view??world.cues?.[control.cue]?.view]??world.camera;}
  function setDestination(){const c=destination();cameraTo={position:new THREE.Vector3(...c.position),target:new THREE.Vector3(...c.target),fov:c.fov};if(!initialized)cameraFrom={position:camera.position.clone(),target:camera.userData.target.clone(),fov:camera.fov};}
  async function build(){
-  const version=++epoch;ready=false;notify();release();animated=[];meshes=[];lights=[];trimScene=undefined;renderedRevision=-1;lastDraw=0;nextDraw=0;
+  const version=++epoch;ready=false;warmFrames=0;notify();release();animated=[];meshes=[];lights=[];trimScene=undefined;renderedRevision=-1;lastDraw=0;nextDraw=0;
   renderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true,premultipliedAlpha:true,powerPreference:'high-performance',preserveDrawingBuffer:false});
   renderer.shadowMap.enabled=world.objects.some(n=>(n.pass??'background')===pass&&n.castShadow);renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   renderer.setPixelRatio(1);renderer.setSize(width,height,false);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=world.environment==='studio'?THREE.ACESFilmicToneMapping:THREE.NoToneMapping;renderer.toneMappingExposure=world.exposure??1;
@@ -68,14 +68,14 @@ export async function mountWorld(canvas, input, options) {
    for(const {mesh,node}of meshes)mesh.visible=world.cues?.[control.cue]?.visibility?.[node.id]??node.visible??true;
    const moving=animated.some(({mesh,node})=>mesh.visible&&(node.motion.kind!=='moveY'||(t-(node.motion.clock==='cue'?cueStart:0)-node.motion.phase)*Math.abs(node.motion.speed)<1));
    const changing=progress<1&&!control.paused;
-   if(renderedRevision===control.revision&&!changing&&(control.rendering===false||control.paused||!moving)){
+   if(warmFrames>=3&&renderedRevision===control.revision&&!changing&&(control.rendering===false||control.paused||!moving)){
     lastDraw=0;if(now-lastReport>1000){lastReport=now;notify();}return;
    }
    for(const {mesh,node}of animated){const m=node.motion,at=m.clock==='cue'?Math.max(0,t-cueStart):t;if(m.kind==='moveY'){const p=Math.min(1,Math.max(0,(at-m.phase)*Math.abs(m.speed)));mesh.position.y=node.position[1]+Math.sign(m.speed)*m.amplitude*p*p*(3-2*p);}
     mesh.rotation.y=node.rotation[1]+(m.kind==='rotateY'?at*m.speed:0);mesh.rotation.z=node.rotation[2]+(m.kind==='swayZ'?Math.sin(at*m.speed+m.phase)*m.amplitude:0);}
    lights.forEach((l,i)=>{const target=world.cues?.[control.cue]?.lights?.[l.id]??l.base;l.light.intensity=THREE.MathUtils.lerp(cueFrom[i],target,eased);});
    if(cameraTo){camera.position.lerpVectors(cameraFrom.position,cameraTo.position,eased);camera.userData.target.lerpVectors(cameraFrom.target,cameraTo.target,eased);camera.lookAt(camera.userData.target);camera.fov=THREE.MathUtils.lerp(cameraFrom.fov,cameraTo.fov,eased);camera.updateProjectionMatrix();}
-   renderer.info.reset();renderer.clear();if(trimScene){renderer.render(trimScene,trimCamera);renderer.clearDepth();}renderer.render(scene,camera);frames++;ready=true;
+   renderer.info.reset();renderer.clear();if(trimScene){renderer.render(trimScene,trimCamera);renderer.clearDepth();}renderer.render(scene,camera);frames++;warmFrames++;ready=true;
    if(lastDraw&&!control.paused&&moving){samples.push(now-lastDraw);if(samples.length>180)samples.shift();}lastDraw=now;
    const changed=renderedRevision!==control.revision;renderedRevision=control.revision;
    if(changed||now-lastReport>1000){lastReport=now;notify();}

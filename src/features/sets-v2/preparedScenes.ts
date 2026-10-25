@@ -99,7 +99,7 @@ export function layoutProjections(session:RehearsalSession){
  const doc=session.package,state=session.snapshot();
  return doc.set.layouts.map(layout=>{
   const phase=doc.show?.phases.find(p=>p.layoutId===layout.id||p.layoutId.replace(/-landscape$/,'-portrait')===layout.id)??doc.show?.phases.find(p=>p.id===state.show.phase);
-  const entry=structuredClone(state);delete entry.layoutMotion;delete entry.layoutMotionId;
+  const entry=structuredClone(state);delete entry.layoutMotion;delete entry.layoutMotionId;delete entry.layoutMotions;
   entry.layoutId=layout.id;entry.show.phase=phase?.id??'';entry.show.collecting=!!phase?.collectMs;entry.show.remainingMs=phase?.collectMs??0;entry.show.total=0;entry.show.revealed=false;entry.show.winner='';entry.show.result='';entry.show.ballot=1;
   entry.counts=Object.fromEntries(Object.keys(entry.counts).map(k=>[k,0]));if(entry.animationClock)entry.animationClock={...entry.animationClock,positionMs:0,segmentMs:0,running:false};
   const projection=outputProjection(doc,entry);projection.assets=Object.fromEntries(Object.entries(doc.set.assets??{}).map(([id,{name,mime,data}])=>[id,{name,mime,data}]));

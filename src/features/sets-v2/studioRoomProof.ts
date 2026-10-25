@@ -16,9 +16,12 @@ export async function studioRoomProof(){
   const editor=await until(()=>document.querySelector<HTMLDialogElement>('dialog[open]'),'editor');
   stage='sources';
   const ids:Record<string,string>={};
+  const initialSources=(await invoke<LiveSnapshot>('live_engine_status')).sources;
   const cards=Array.from(editor.querySelectorAll<HTMLElement>('.set-source-card'));
   for(const [index,slot,kind]of [[0,'host','camera'],[1,'guest','color']] as const){
    const card=cards[index];if(!card)throw Error('Missing source card');
+   const assigned=card.querySelector<HTMLSelectElement>('select[aria-label$=" source"]')?.value;
+   if(assigned&&initialSources?.items?.some(i=>i.id===assigned&&i.kind===kind&&i.src_w>0)){ids[slot]=assigned;continue;}
    (await until(()=>button('Add source here',card),'source creation')).click();
    const type=await until(()=>card.querySelector<HTMLSelectElement>('select[aria-label$=" new source type"]'),'source type');select(type,kind);
    (await until(()=>button('Add and assign',card),'add source')).click();
@@ -27,9 +30,9 @@ export async function studioRoomProof(){
   }
   await until(async()=>{const s=(await invoke<LiveSnapshot>('live_engine_status')).sources;return s?.items?.find(i=>i.id===ids.host&&i.src_w>0);},'camera frame');
   stage='apply';(await until(()=>button('Show on output',editor),'apply')).click();
-  await until(()=>editor.querySelector('.set-editor-apply-status.applied'),'native presentation');
+  await until(()=>document.querySelector('dialog[open] .set-editor-apply-status.applied'),'native presentation');
   (await until(()=>button('Close editor'),'close editor')).click();
-  await until(()=>document.querySelector<HTMLElement>('.set-controls[data-layouts-total="2"]')?.dataset.layoutsReady==='2','both output variants');
+  await until(()=>document.querySelector<HTMLElement>('.set-controls[data-layouts-total="6"]')?.dataset.layoutsReady==='6','both output variants');
   const generation=(await invoke<{generation:number}>('live_set_status')).generation;
   const status=()=>invoke<{scene3dContexts:number;renderedRevision:number;renderSerial:number}>('live_set_v2',{request:{op:'status',generation}});
   button('Output settings')?.click();(await until(()=>button('Both'),'both outputs')).click();button('Close output settings')?.click();
@@ -41,12 +44,14 @@ export async function studioRoomProof(){
   const card=await until(()=>Array.from(document.querySelectorAll<HTMLElement>('.module-operator-card')).find(c=>c.textContent?.includes('Studio direction')),'studio module');
   if(!button('Host’s floor',card))button('Start',card)?.click();
   const takes=[];
+  const transitionRecording=await invoke<string>('live_start_recording',{stamp:'Coordinated studio transition',roomId:null,dual:true});await sleep(300);
   for(const label of ['Host’s floor','Challenger’s floor','Stage push','Wide studio','Reveal emblem','Reveal emblem','Face-off']){
    const previous=(await status()).renderedRevision,portraitPrevious=(await portraitStatus()).renderedRevision;(await until(()=>button(label,card),label)).click();
    const presented=await until(async()=>{const s=await status();return s.renderedRevision>previous?s:null;},'presented '+label);
    const portraitPresented=await until(async()=>{const s=await portraitStatus();return s.renderedRevision>portraitPrevious?s:null;},'portrait presented '+label);
    takes.push({label,revision:presented.renderedRevision,portraitRevision:portraitPresented.renderedRevision,contexts:presented.scene3dContexts});await sleep(750);
   }
+  await invoke('live_stop_recording');
   const after=await status();if(before.scene3dContexts!==after.scene3dContexts)throw Error('3D worlds were recreated by control changes');
   const portraitAfter=await portraitStatus();
   stage='recording collision regression';const paths=[];
@@ -63,7 +68,7 @@ export async function studioRoomProof(){
     const transfer=new DataTransfer();transfer.items.add(new File([JSON.stringify(doc)],doc.id+'.json',{type:'application/json'}));input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));
     await until(()=>dialog.querySelector<HTMLButtonElement>('button[aria-label="Choose set"]')?.textContent?.includes(doc.name),'benchmark package');
     (await until(()=>button('Show on output',dialog),'benchmark apply')).click();
-    await until(()=>dialog.querySelector('.set-editor-apply-status.applied'),'benchmark presentation');
+    await until(()=>document.querySelector('dialog[open] .set-editor-apply-status.applied'),'benchmark presentation');
     (await until(()=>button('Close editor'),'benchmark close')).click();
    };
    const studio=await measure('3d');const flat=structuredClone(original);flat.id='grand-arena-flat-benchmark';flat.name='3D Studio — flat benchmark';
@@ -71,6 +76,6 @@ export async function studioRoomProof(){
    await replace(flat);const baseline=await measure('flat');await replace(original);const restored=await measure('3d restored');
    performanceProof={studio,baseline,restored,comparison:'Same camera slots, text, output dimensions and recording state; flat benchmark omits both 3D passes.'};
   }
-  await invoke('live_set_v2_report',{result:{ok:true,kind:'managed-scene3d-studio',generation,before,after,portraitBefore,portraitAfter,takes,recordings:paths,performance:performanceProof,capability:await invoke('live_set_v2_scene3d_enabled'),at:new Date().toISOString()}});
+  await invoke('live_set_v2_report',{result:{ok:true,kind:'managed-scene3d-studio',generation,before,after,portraitBefore,portraitAfter,takes,recordings:paths,transitionRecording,performance:performanceProof,capability:await invoke('live_set_v2_scene3d_enabled'),at:new Date().toISOString()}});
  }catch(e){await invoke('live_set_v2_report',{result:{ok:false,kind:'managed-scene3d-studio',stage,error:String(e),body:document.body.innerText.slice(-1700)}});}finally{clearInterval(progress);}
 }

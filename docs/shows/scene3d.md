@@ -83,3 +83,33 @@ its phase labels come from periodic progress reports and can lag transitions,
 so use it as diagnostic context, not a precise Producer-only percentage.
 `PRODUCER_SCENE3D_DEBUG=1` enables bounded native readiness diagnostics for reports
 and the clipped fence strip. These diagnostics contain no room camera pixels.
+
+## Coordinated camera and studio transitions
+
+The 0.2 studio study uses existing module views and `set.views` to select
+face-off, host-focus and challenger-focus layouts in both orientations. Each
+layout explicitly authors a 650 ms `morph`; no dissolve is added. Its direction
+action commits lighting, the 3D camera view and module view together.
+
+Video positions, sizes and outlines render natively. Caption containers follow
+the native morph, keeping typography visible. The stage and emblem now share
+one background 3D pass per output; the emblem sits behind video. A transparent
+foreground pass remains available to other packages when their composition
+requires it.
+
+Standalone Sets can now use the same native morph machinery as Shows.
+Ephemeral motion tracks are generated for each authored orientation variant,
+so simultaneous portrait output follows its own geometry. Rapid reversals sample
+the interrupted motion. Geometry preparation excludes those transient tracks;
+all six poses prepare ahead and reuse the orientation's world resource.
+Setting authored morph duration to zero gives an immediate cut.
+
+The declared view controller reasserts its selected view on its own state/view
+commit, including a repeated direction action after a manual layout override.
+Commits from an unrelated module such as scoring leave that override intact.
+This does not add room-source authority to the studio module.
+
+New or recovered WebGL surfaces draw three warm-up frames before entering their
+static draw-suppression path. This gives the offscreen browser compositor paint
+opportunities while native revision-fence verification remains authoritative.
+It does not introduce a per-segment transition delay.

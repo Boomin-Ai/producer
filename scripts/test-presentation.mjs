@@ -34,6 +34,25 @@ test('prepared canvas variants export a matching initial view and isolate simula
  assert.ok(s.enterRehearsal());const snap=s.moduleSnapshot();const result=s.receiveModuleData({id:'unrequested-answer',setEpoch:snap.setEpoch,module:'research',epoch:snap.modules.research.epoch,op:'agent.complete',input:{requestId:'unknown',response:'Unexpected answer'}});assert.equal(result.status,'rejected');s.exitRehearsal();assert(!JSON.stringify(s.exportPreparedPackage()).includes('Unexpected answer'));
 });
 
+test('Standalone module views morph both output variants, preserve scores and sample interrupted motion',()=>{
+ const doc=parsePackage(JSON.parse(readFileSync('docs/shows/grand-arena-3d-study.json','utf8'))),realNow=Date.now;let now=1_000_000;Date.now=()=>now;
+ try{
+  const session=new RehearsalSession(doc,undefined,'prepare');session.enterRehearsal();void session.sendModule('studio','start');void session.sendModule('scoring','start');void session.sendModule('scoring','hostPoint');
+  void session.sendModule('studio','hostFloor');assert.equal(session.snapshot().layoutId,'hostFocus-landscape');
+  const width=(id)=>outputProjection(doc,{...session.snapshot(),layoutId:id}).timeline.tracks.find(t=>t.target.endsWith('/camera-0')&&t.property==='width');
+  const landscape=width('hostFocus-landscape'),portrait=width('hostFocus-portrait');assert(landscape&&portrait);assert.equal(landscape.keyframes.at(-1).value,1075.2);assert.equal(portrait.keyframes.at(-1).value,918);
+  assert(outputProjection(doc,session.snapshot()).timeline.tracks.length<=32);
+  now+=325;void session.sendModule('studio','guestFloor');
+  const interrupted=width('guestFocus-landscape');assert(interrupted.keyframes[0].value>739.2&&interrupted.keyframes[0].value<1075.2);
+  void session.sendModule('studio','neutral');assert.equal(session.snapshot().layoutId,'studio-landscape');
+  control(session,'layout.select',{layoutId:'hostFocus-landscape'});void session.sendModule('scoring','guestPoint');assert.equal(session.snapshot().layoutId,'hostFocus-landscape');
+  void session.sendModule('studio','neutral');assert.equal(session.snapshot().layoutId,'studio-landscape');
+  assert.equal(session.snapshot().modules.scoring.hostScore,1);assert.equal(session.snapshot().modules.scoring.guestScore,1);
+  const cut=structuredClone(doc);for(const layout of cut.set.layouts)layout.animation.transition.durationMs=0;
+  const immediate=new RehearsalSession(cut,undefined,'prepare');immediate.enterRehearsal();void immediate.sendModule('studio','start');void immediate.sendModule('studio','hostFloor');assert(!immediate.snapshot().layoutMotion);
+ }finally{Date.now=realNow;}
+});
+
 test('Grand Arena segment morphs keep text visible unless its opacity is explicitly authored',()=>{
  const doc=parsePackage(JSON.parse(readFileSync('docs/shows/head-to-head-grand-arena.json','utf8')));
  for(const portrait of [false,true]){

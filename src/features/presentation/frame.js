@@ -104,6 +104,11 @@
   function sync(node, parent, used, surface, isRoot = false) {
     used.add(node.id);
     let entry = entries.get(node.id);
+    if(!entry&&node.type==='scene3d'){
+      const identity=node.scene3d.id+':'+node.scene3d.pass;
+      const retained=[...entries].find(([id,e])=>!used.has(id)&&e.scene3dIdentity===identity);
+      if(retained){entries.delete(retained[0]);entry=retained[1];entries.set(node.id,entry);entry.element.dataset.node=node.id;}
+    }
     if (!entry || entry.type !== node.type) {
       if (entry){entry.gpu?.destroy();entry.scene3d?.dispose();entry.scene3dPending=true;entry.scene3dPromise=null;entry.animation?.destroy();entry.element.remove();}
       const el = document.createElement('div');
@@ -121,6 +126,7 @@
     el.className = [node.type === 'slot' ? 'slot' : '', node.motionClass || ''].filter(Boolean).join(' ');
     if (node.type === 'text') el.textContent = node.text;
     if(node.type==='scene3d'&&surface==='preview'){
+      entry.scene3dIdentity=node.scene3d.id+':'+node.scene3d.pass;
       const spec=node.scene3d,signature=JSON.stringify([spec.world,spec.pass,node.styles.width,node.styles.height]);
       const update=updateWorld(entry,spec);
       if(entry.scene3dSignature!==signature){

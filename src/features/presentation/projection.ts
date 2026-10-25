@@ -88,7 +88,8 @@ export function outputProjection(doc: PresentationPackage, state: RehearsalState
   const assets=Object.fromEntries([...used].map(id=>[id,(( {name,mime,data})=>({name,mime,data}))(doc.set.assets![id])]));
   const hasShaders=[...authored.values()].some(n=>n.type==='shader'||n.type==='scene3d');
   const timeline:AnimationTimeline|undefined=layout.animation||hasShaders?{...layout.animation,tracks:(layout.animation?.tracks??[]).filter(t=>resolved.has(t.target)).map(t=>({...t,target:resolved.get(t.target)!})),clock:state.animationClock?{...state.animationClock}:{running:false,positionMs:state.elapsedMs,segmentMs:0,anchorMs:Date.now()}}:undefined;
-  if(timeline&&state.layoutMotion&&state.layoutMotionId===layout.id){const visible=new Set(resolved.values()),motion=state.layoutMotion.filter(t=>visible.has(t.target));const keys=new Set(motion.map(t=>`${t.target}:${t.property}`));timeline.tracks=[...timeline.tracks.filter(t=>!keys.has(`${t.target}:${t.property}`)),...motion];}
+  const layoutMotion=state.layoutMotions?.[layout.id]??(state.layoutMotionId===layout.id?state.layoutMotion:undefined);
+  if(timeline&&layoutMotion){const visible=new Set(resolved.values()),motion=layoutMotion.filter(t=>visible.has(t.target));const keys=new Set(motion.map(t=>`${t.target}:${t.property}`));timeline.tracks=[...timeline.tracks.filter(t=>!keys.has(`${t.target}:${t.property}`)),...motion];}
   if(timeline&&hasShaders&&!doc.show)timeline.clock={...timeline.clock,running:true};
   return { ...((state.moduleConnection==='live'||state.workspaceMode==='rehearsal')?{moduleCommit:{...state.moduleCommit,domain:state.workspaceMode==='rehearsal'?'rehearsal' as const:'live' as const}}:{}),...(timeline?{timeline}:{}),...(used.size?{assets}:{}),width: layout.width, height: layout.height, revision: state.revision, root, css: css.join('\n') };
 }
