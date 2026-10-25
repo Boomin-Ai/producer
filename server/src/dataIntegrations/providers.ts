@@ -1,0 +1,70 @@
+/** Managed providers. Packages supply typed inputs, never URLs or credentials. */
+export type Connection =
+ | {id:string;name:string;kind:'weather';provider:'open-meteo';latitude:number;longitude:number;location:string;units:'celsius'|'fahrenheit';pollSeconds:number}
+ | {id:string;name:string;kind:'agent';provider:'openai'|'anthropic';model:string;webSearch:boolean;maxOutputTokens:number;workspaceId?:string};
+export interface AgentResult {response:string;citations:{title:string;url:string;start?:number;end?:number}[];researched:boolean;model:string}
+export interface WeatherResult {observedAt:number;temperature:number;condition:'clear'|'cloudy'|'fog'|'rain'|'snow'|'storm';isDay:boolean;wind:number;precipitation:number;provider:string;location:string;units:string}
+export class ProviderError extends Error {constructor(public code:string,message:string){super(message);}}
+const own=(o:object,k:string)=>Object.prototype.hasOwnProperty.call(o,k);
+function object(v:unknown,allowed:string[],required=allowed):Record<string,unknown>{if(!v||typeof v!=='object'||Array.isArray(v))throw new ProviderError('invalid_request','Object required');const o=v as Record<string,unknown>;if(Object.keys(o).some(k=>!allowed.includes(k))||required.some(k=>!own(o,k)))throw new ProviderError('invalid_request','Unknown or missing integration field');return o;}
+function text(v:unknown,max:number){if(typeof v!=='string'||!v.trim()||v.length>max)throw new ProviderError('invalid_request','Invalid integration text');return v.trim();}
+function number(v:unknown,min:number,max:number){if(typeof v!=='number'||!Number.isFinite(v)||v<min||v>max)throw new ProviderError('invalid_request','Invalid integration number');return v;}
+export function parseConnection(value:unknown):Connection{
+ if(!value||typeof value!=='object')throw new ProviderError('invalid_request','Connection required');const kind=(value as {kind?:unknown}).kind;
+ if(kind==='weather'){const o=object(value,['id','name','kind','provider','latitude','longitude','location','units','pollSeconds']);if(o.provider!=='open-meteo'||!['celsius','fahrenheit'].includes(String(o.units)))throw new ProviderError('invalid_request','Unsupported weather provider or units');return {id:identity(o.id),name:text(o.name,80),kind,provider:'open-meteo',latitude:number(o.latitude,-90,90),longitude:number(o.longitude,-180,180),location:text(o.location,120),units:o.units as 'celsius'|'fahrenheit',pollSeconds:number(o.pollSeconds,60,3600)};}
+ if(kind==='agent'){const o=object(value,['id','name','kind','provider','model','webSearch','maxOutputTokens','workspaceId'],['id','name','kind','provider','model','webSearch','maxOutputTokens']);if(!['openai','anthropic'].includes(String(o.provider))||typeof o.webSearch!=='boolean')throw new ProviderError('invalid_request','Unsupported agent provider');const model=text(o.model,120);if(!/^[a-zA-Z0-9._:-]+$/.test(model))throw new ProviderError('invalid_request','Invalid model identifier');const maxOutputTokens=number(o.maxOutputTokens,256,4096);if(!Number.isInteger(maxOutputTokens))throw new ProviderError('invalid_request','Token budget must be an integer');return {id:identity(o.id),name:text(o.name,80),kind,provider:o.provider as 'openai'|'anthropic',model,webSearch:o.webSearch,maxOutputTokens,...(o.workspaceId!==undefined?{workspaceId:text(o.workspaceId,120)}:{})};}
+ throw new ProviderError('invalid_request','Unsupported integration kind');
+}
+export function identity(v:unknown){const s=text(v,64);if(!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(s)||['constructor','prototype','__proto__'].includes(s))throw new ProviderError('invalid_request','Invalid connection identity');return s;}
+async function readJson(response:Response,max=512000):Promise<Record<string,unknown>>{
+ if(!response.ok){await response.body?.cancel();throw new ProviderError(response.status===401||response.status===403?'provider_auth':response.status===429?'provider_rate_limit':'provider_error',response.status===401||response.status===403?'Provider rejected this connection. Check its credentials and access.':response.status===429?'Provider rate limit reached. Try again later.':'Provider request failed ('+response.status+').');}
+ const reader=response.body?.getReader();if(!reader)throw new ProviderError('provider_response','Provider returned no body');let length=0;const chunks:Uint8Array[]=[];
+ try{while(true){const {done,value}=await reader.read();if(done)break;length+=value.byteLength;if(length>max)throw new ProviderError('provider_response','Provider response exceeded its budget');chunks.push(value);}}catch(e){await reader.cancel().catch(()=>{});throw e;}
+ const bytes=new Uint8Array(length);let offset=0;for(const c of chunks){bytes.set(c,offset);offset+=c.length;}
+ let parsed:unknown;try{parsed=JSON.parse(new TextDecoder().decode(bytes));}catch{throw new ProviderError('provider_response','Provider returned invalid JSON');}if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))throw new ProviderError('provider_response','Provider returned an invalid object');return parsed as Record<string,unknown>;
+}
+function condition(code:number):WeatherResult['condition']{if(code===0)return 'clear';if(code>=1&&code<=3)return 'cloudy';if(code===45||code===48)return 'fog';if([71,73,75,77,85,86].includes(code))return 'snow';if([95,96,99].includes(code))return 'storm';if([51,53,55,56,57,61,63,65,66,67,80,81,82].includes(code))return 'rain';throw new ProviderError('provider_response','Unsupported weather condition code');}
+export async function weather(connection:Extract<Connection,{kind:'weather'}>,fetcher:typeof fetch=fetch):Promise<WeatherResult>{
+ const url=new URL('https://api.open-meteo.com/v1/forecast');url.search=new URLSearchParams({latitude:String(connection.latitude),longitude:String(connection.longitude),current:'temperature_2m,weather_code,is_day,wind_speed_10m,precipitation',temperature_unit:connection.units,wind_speed_unit:'kmh',timeformat:'unixtime',timezone:'UTC'}).toString();
+ const body=await readJson(await fetcher(url,{signal:AbortSignal.timeout(15000),redirect:'error'}));const c=body.current;if(!c||typeof c!=='object'||Array.isArray(c))throw new ProviderError('provider_response','Weather observation missing');const current=c as Record<string,unknown>;
+ const isDay=number(current.is_day,0,1);if(isDay!==0&&isDay!==1)throw new ProviderError('provider_response','Invalid day/night value');
+ return {observedAt:number(current.time,0,Date.now()/1000+300)*1000,temperature:number(current.temperature_2m,-150,180),condition:condition(number(current.weather_code,0,99)),isDay:isDay===1,wind:number(current.wind_speed_10m,0,500),precipitation:number(current.precipitation,0,1000),provider:'Open-Meteo',location:connection.location,units:connection.units};
+}
+async function openaiAgent(connection:Extract<Connection,{kind:'agent'}>,key:string,input:unknown,fetcher:typeof fetch=fetch):Promise<AgentResult>{
+ const o=object(input,['question','mode'],['question','mode']);const question=text(o.question,1000);if(o.mode!=='answer'&&o.mode!=='factCheck')throw new ProviderError('invalid_request','Invalid agent mode');
+ if(o.mode==='factCheck'&&!connection.webSearch)throw new ProviderError('capability_unavailable','Enable web research on this saved connection for fact checks.');
+ const researched=o.mode==='factCheck';const body={model:connection.model,input:question,instructions:researched?'Research this question using the web. Distinguish supported facts, uncertainty and conflicting evidence. Cite sources in your answer. Do not claim certainty beyond the evidence. Keep the answer suitable for a broadcast response panel.':'Answer the question concisely for a broadcast discussion. State uncertainty when appropriate. Do not invent citations.',store:false,max_output_tokens:connection.maxOutputTokens,...(researched?{tools:[{type:'web_search'}],tool_choice:'required'}:{})};
+ const result=await readJson(await fetcher('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(90000),redirect:'error'}));
+ if(result.status!=='completed')throw new ProviderError('provider_incomplete','The provider did not complete the response. Review the connection or token budget.');
+ const output=Array.isArray(result.output)?result.output:[];const texts:string[]=[];const citations:AgentResult['citations']=[];let searched=false,offset=0;
+ for(const item of output){if(!item||typeof item!=='object')continue;const v=item as Record<string,unknown>;if(v.type==='web_search_call'&&v.status==='completed')searched=true;
+  if(v.type!=='message'||!Array.isArray(v.content))continue;for(const content of v.content){if(!content||content.type!=='output_text'||typeof content.text!=='string')continue;const answer=content.text;
+   if(Array.isArray(content.annotations))for(const a of content.annotations){if(!a||a.type!=='url_citation'||typeof a.url!=='string'||typeof a.title!=='string')continue;let url:URL;try{url=new URL(a.url);}catch{continue;}if(url.protocol!=='https:'||url.username||url.password||url.href.length>2000)continue;const start=typeof a.start_index==='number'?a.start_index:undefined,end=typeof a.end_index==='number'?a.end_index:undefined;citations.push({title:a.title.slice(0,160),url:url.href,...(Number.isInteger(start)&&Number.isInteger(end)&&start!>=0&&end!>start!&&end!<=answer.length?{start:offset+start!,end:offset+end!}:{})});}
+   texts.push(answer);offset+=answer.length+2;
+  }
+ }
+ const response=texts.join('\n\n');if(!response.trim()||response.length>16000||citations.length>20)throw new ProviderError('provider_response','Response is empty or exceeds the broadcast budget');if(researched&&(!searched||!citations.length))throw new ProviderError('provider_evidence','The provider did not return a completed web search with source citations.');
+ return {response,citations,researched,model:connection.model};
+}
+async function claudeAgent(connection:Extract<Connection,{kind:'agent'}>,key:string,input:unknown,fetcher:typeof fetch):Promise<AgentResult>{
+ const o=object(input,['question','mode']);const question=text(o.question,1000);if(o.mode!=='answer'&&o.mode!=='factCheck')throw new ProviderError('invalid_request','Invalid agent mode');
+ const researched=o.mode==='factCheck';if(researched&&!connection.webSearch)throw new ProviderError('capability_unavailable','Enable web research on this saved connection for fact checks.');
+ const result=await readJson(await fetcher('https://api.anthropic.com/v1/messages',{method:'POST',headers:claudeHeaders(connection,key),signal:AbortSignal.timeout(90000),redirect:'error',body:JSON.stringify({model:connection.model,max_tokens:connection.maxOutputTokens,system:researched?'Search the web to investigate this question. Cite evidence, distinguish supported facts from uncertainty, and keep the answer concise for a broadcast panel. Do not present unsupported claims as verified.':'Answer concisely for a broadcast discussion. State uncertainty and do not invent citations.',messages:[{role:'user',content:question}],...(researched?{tools:[{type:'web_search_20250305',name:'web_search',max_uses:3}]}:{})})}));
+ if(result.stop_reason!=='end_turn')throw new ProviderError('provider_incomplete',result.stop_reason==='pause_turn'?'Claude paused this research turn before completion. Try a more focused question.':'Claude did not complete the response. Review the connection or output budget.');
+ const content=Array.isArray(result.content)?result.content:[];const texts:string[]=[];const citations:AgentResult['citations']=[];let searched=false,offset=0;
+ for(const block of content){if(!block||typeof block!=='object')continue;
+  if(block.type==='web_search_tool_result'&&Array.isArray(block.content)&&block.content.some((c:any)=>c?.type==='web_search_result'))searched=true;
+  if(block.type!=='text'||typeof block.text!=='string')continue;
+  if(Array.isArray(block.citations))for(const c of block.citations){if(c?.type!=='web_search_result_location'||typeof c.url!=='string'||typeof c.title!=='string')continue;let url:URL;try{url=new URL(c.url);}catch{continue;}if(url.protocol!=='https:'||url.username||url.password||url.href.length>2000)continue;citations.push({title:c.title.slice(0,160),url:url.href,start:offset,end:offset+block.text.length});}
+  texts.push(block.text);offset+=block.text.length+2;
+ }
+ const response=texts.join('\n\n');if(!response.trim()||response.length>16000||citations.length>20)throw new ProviderError('provider_response','Claude response is empty or exceeds the broadcast budget');if(researched&&(!searched||!citations.length))throw new ProviderError('provider_evidence','Claude did not return completed web research with source citations.');
+ return {response,citations,researched,model:connection.model};
+}
+function claudeHeaders(connection:Extract<Connection,{kind:'agent'}>,key:string){return {Authorization:'Bearer '+key,'anthropic-version':'2026-10-21','Content-Type':'application/json',...(connection.workspaceId?{'anthropic-workspace-id':connection.workspaceId}:{})};}
+export async function agent(connection:Extract<Connection,{kind:'agent'}>,key:string,input:unknown,fetcher:typeof fetch=fetch):Promise<AgentResult>{return connection.provider==='anthropic'?claudeAgent(connection,key,input,fetcher):openaiAgent(connection,key,input,fetcher);}
+export async function testConnection(connection:Connection,key:string|undefined,fetcher:typeof fetch=fetch){
+ if(connection.kind==='weather')return {ok:true,sample:await weather(connection,fetcher)};
+ if(!key)throw new ProviderError('provider_auth','Save an API key for this connection first.');
+ const claude=connection.provider==='anthropic';await readJson(await fetcher((claude?'https://api.anthropic.com':'https://api.openai.com')+'/v1/models/'+encodeURIComponent(connection.model),{headers:claude?claudeHeaders(connection,key):{Authorization:'Bearer '+key},signal:AbortSignal.timeout(15000),redirect:'error'}));return {ok:true};
+}

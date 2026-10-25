@@ -1,3 +1,4 @@
+import {DataIntegrations} from "../components/DataIntegrations";
 import { ShareDomainSettings } from "../components/ShareDomainSettings";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StoragePanel } from "../components/StoragePanel";
@@ -912,7 +913,7 @@ function NetworkInviteReset({ endpoints }: { endpoints: EndpointInfo[] }) {
 type SettingsSection = "app" | "output" | "audio" | "guests" | "integrations" | "access" | "storage";
 const SETTINGS_SECTIONS: { id: SettingsSection; label: string; sub: string; built: boolean }[] = [
   { id: "app", label: "App", sub: "Version, updates, shortcuts", built: true },
-  { id: "integrations", label: "Integrations", sub: "Live destinations, posting channels", built: true },
+  { id: "integrations", label: "Integrations", sub: "Live destinations, data and agents", built: true },
   // The sub reads in the server's own nouns (see the nav below).
   { id: "access", label: "Access", sub: "Team, room roles, invites", built: true },
   { id: "output", label: "Output", sub: "Encoder, bitrate, recording", built: false },
@@ -1160,6 +1161,7 @@ function SettingsPanel({
         )}
         {section === "integrations" && (
           <>
+        <DataIntegrations endpointId={current?.id??null}/>
         {current && (
           <ChannelsBlock
             destinations={destinations}
