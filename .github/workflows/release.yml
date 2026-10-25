@@ -160,7 +160,7 @@ jobs:
             Fixes portrait weather flicker, native media-cache failures and module reconnection after workspace outages.
             Preserves the single virtual camera and native guest runtime on Apple Silicon. Windows retains its existing Live engine; Intel macOS and Linux retain their existing engine-less scope.
 
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
 
@@ -387,7 +387,7 @@ jobs:
         if: ${{ github.event_name == 'push' || inputs.publish }}
         run: |
           set -euo pipefail
-          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "Producer v$VERSION" --notes "Producer v$VERSION" 2>/dev/null || true
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "Producer v$VERSION" --draft --notes "Producer v$VERSION" 2>/dev/null || true
           gh release upload "v$VERSION" "$DMG" --clobber
 
       # Auto-update leg: the updater archive must contain the ASSEMBLED,
@@ -410,7 +410,7 @@ jobs:
           # can land after our merged manifest.
           for i in $(seq 1 120); do
             PENDING="$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs" --paginate \
-              --jq '[.jobs[] | select(.name != "build-macos-arm64-live") | select(.status != "completed")] | length')"
+              --jq '[.jobs[] | select(.name != "build-macos-arm64-live" and .name != "publish-verified-release") | select(.status != "completed")] | length')"
             [ "$PENDING" = "0" ] && break
             echo "waiting on $PENDING sibling job(s)… ($i)"
             sleep 30
@@ -593,7 +593,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "Producer v$VERSION" --notes "Producer v$VERSION" 2>/dev/null || true
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "Producer v$VERSION" --draft --notes "Producer v$VERSION" 2>/dev/null || true
           # Only the installers and their updater signatures. `dist/` is the
           # web bundle's own output dir too (index.html, assets/), and a
           # directory in the upload list fails the whole step.
@@ -601,3 +601,27 @@ jobs:
             [ -f "$f" ] || continue
             gh release upload "v$VERSION" "$f" --clobber
           done
+
+
+  # Keep the previous public release current until every new platform passes.
+  publish-verified-release:
+    if: ${{ inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) }}
+    needs: [build, build-macos-arm64-live, build-windows-live]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify all updater payload signatures before public promotion
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y minisign
+          python3 scripts/verify-release-payloads.py
+      - name: Publish the verified release
+        run: |
+          set -euo pipefail
+          VERSION="$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")"
+          gh release edit "v$VERSION" --draft=false --latest --notes-file /tmp/producer-release-verification/release-notes.md
