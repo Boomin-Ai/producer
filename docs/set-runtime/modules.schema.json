@@ -1,0 +1,762 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "producer.modules/1"
+    },
+    "definitions": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/moduleDefinition"
+      },
+      "maxProperties": 32,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+        "not": {
+          "enum": [
+            "constructor",
+            "prototype",
+            "__proto__"
+          ]
+        }
+      }
+    },
+    "instances": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/moduleInstance"
+      },
+      "maxItems": 32
+    }
+  },
+  "required": [
+    "schema",
+    "definitions",
+    "instances"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "moduleExpression": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 1024
+            },
+            {
+              "type": "number",
+              "minimum": -1000000000,
+              "maximum": 1000000000
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "read": {
+              "type": "string",
+              "maxLength": 160,
+              "pattern": "^(local|input|set)\\.[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+            }
+          },
+          "required": [
+            "read"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "enum": [
+                "eq",
+                "not",
+                "and",
+                "add",
+                "concat",
+                "if"
+              ]
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/moduleExpression"
+              },
+              "maxItems": 8
+            }
+          },
+          "required": [
+            "op",
+            "args"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "moduleField": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "text"
+            },
+            "default": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "maxLength": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 1024
+            }
+          },
+          "required": [
+            "type",
+            "default",
+            "maxLength"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "number"
+            },
+            "default": {
+              "type": "number"
+            },
+            "min": {
+              "type": "number",
+              "minimum": -1000000000,
+              "maximum": 1000000000
+            },
+            "max": {
+              "type": "number",
+              "minimum": -1000000000,
+              "maximum": 1000000000
+            }
+          },
+          "required": [
+            "type",
+            "default",
+            "min",
+            "max"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "boolean"
+            },
+            "default": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "default"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "moduleDefinition": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "state": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/moduleField"
+          },
+          "maxProperties": 64,
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+            "not": {
+              "enum": [
+                "constructor",
+                "prototype",
+                "__proto__"
+              ]
+            }
+          }
+        },
+        "publicFields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+            "not": {
+              "enum": [
+                "constructor",
+                "prototype",
+                "__proto__"
+              ]
+            }
+          },
+          "maxItems": 64
+        },
+        "initialView": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+          "not": {
+            "enum": [
+              "constructor",
+              "prototype",
+              "__proto__"
+            ]
+          }
+        },
+        "views": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+            "not": {
+              "enum": [
+                "constructor",
+                "prototype",
+                "__proto__"
+              ]
+            }
+          },
+          "maxItems": 32
+        },
+        "actions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "roles": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "operator",
+                    "audience",
+                    "connector",
+                    "show"
+                  ]
+                },
+                "maxItems": 4
+              },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "enum": [
+                            "set",
+                            "add"
+                          ]
+                        },
+                        "field": {
+                          "type": "string",
+                          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+                          "not": {
+                            "enum": [
+                              "constructor",
+                              "prototype",
+                              "__proto__"
+                            ]
+                          }
+                        },
+                        "value": {
+                          "$ref": "#/$defs/moduleExpression"
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "field",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "const": "view"
+                        },
+                        "view": {
+                          "type": "string",
+                          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+                          "not": {
+                            "enum": [
+                              "constructor",
+                              "prototype",
+                              "__proto__"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "view"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "maxItems": 32
+              },
+              "when": {
+                "$ref": "#/$defs/moduleExpression"
+              }
+            },
+            "required": [
+              "roles",
+              "steps"
+            ],
+            "additionalProperties": false
+          },
+          "maxProperties": 64,
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+            "not": {
+              "enum": [
+                "constructor",
+                "prototype",
+                "__proto__"
+              ]
+            }
+          }
+        },
+        "controls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+                "not": {
+                  "enum": [
+                    "constructor",
+                    "prototype",
+                    "__proto__"
+                  ]
+                }
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "audience": {
+                "enum": [
+                  "operator",
+                  "audience",
+                  "connector",
+                  "show"
+                ]
+              },
+              "controls": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+                      "not": {
+                        "enum": [
+                          "constructor",
+                          "prototype",
+                          "__proto__"
+                        ]
+                      }
+                    },
+                    "type": {
+                      "enum": [
+                        "button",
+                        "toggle",
+                        "text",
+                        "number",
+                        "choice",
+                        "readout"
+                      ]
+                    },
+                    "label": {
+                      "type": "string",
+                      "maxLength": 80
+                    },
+                    "action": {
+                      "type": "string",
+                      "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+                      "not": {
+                        "enum": [
+                          "constructor",
+                          "prototype",
+                          "__proto__"
+                        ]
+                      }
+                    },
+                    "field": {
+                      "type": "string",
+                      "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+                      "not": {
+                        "enum": [
+                          "constructor",
+                          "prototype",
+                          "__proto__"
+                        ]
+                      }
+                    },
+                    "options": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+                            "not": {
+                              "enum": [
+                                "constructor",
+                                "prototype",
+                                "__proto__"
+                              ]
+                            }
+                          },
+                          "label": {
+                            "type": "string",
+                            "maxLength": 120,
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "label"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 12
+                    },
+                    "when": {
+                      "$ref": "#/$defs/moduleExpression"
+                    },
+                    "enabled": {
+                      "$ref": "#/$defs/moduleExpression"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type",
+                    "label"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 32
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "audience",
+              "controls"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 16
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 80,
+            "pattern": "^[a-z][a-z0-9.-]+@[1-9][0-9]*$"
+          },
+          "maxItems": 16
+        },
+        "behavior": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "vote"
+                },
+                "question": {
+                  "type": "string",
+                  "maxLength": 240
+                },
+                "options": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+                        "not": {
+                          "enum": [
+                            "constructor",
+                            "prototype",
+                            "__proto__"
+                          ]
+                        }
+                      },
+                      "label": {
+                        "type": "string",
+                        "maxLength": 120,
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 12,
+                  "minItems": 2
+                },
+                "maxParticipants": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100000
+                },
+                "allowChange": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "type",
+                "question",
+                "options",
+                "maxParticipants",
+                "allowChange"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "submissions"
+                },
+                "prompt": {
+                  "type": "string",
+                  "maxLength": 240
+                },
+                "maxLength": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000
+                },
+                "capacity": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 500
+                }
+              },
+              "required": [
+                "type",
+                "prompt",
+                "maxLength",
+                "capacity"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "weather"
+                },
+                "integrationRole": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+                  "not": {
+                    "enum": [
+                      "constructor",
+                      "prototype",
+                      "__proto__"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "type",
+                "integrationRole"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "agent"
+                },
+                "integrationRole": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+                  "not": {
+                    "enum": [
+                      "constructor",
+                      "prototype",
+                      "__proto__"
+                    ]
+                  }
+                },
+                "prompt": {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                "mode": {
+                  "enum": [
+                    "answer",
+                    "factCheck"
+                  ]
+                },
+                "maxLength": {
+                  "type": "number",
+                  "minimum": 240,
+                  "maximum": 16000
+                }
+              },
+              "required": [
+                "type",
+                "integrationRole",
+                "prompt",
+                "mode",
+                "maxLength"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "required": [
+        "label",
+        "state",
+        "actions",
+        "controls",
+        "capabilities"
+      ],
+      "additionalProperties": false
+    },
+    "moduleInstance": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+          "not": {
+            "enum": [
+              "constructor",
+              "prototype",
+              "__proto__"
+            ]
+          }
+        },
+        "definition": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+          "not": {
+            "enum": [
+              "constructor",
+              "prototype",
+              "__proto__"
+            ]
+          }
+        },
+        "owner": {
+          "enum": [
+            "set",
+            "segment"
+          ]
+        },
+        "segment": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+          "not": {
+            "enum": [
+              "constructor",
+              "prototype",
+              "__proto__"
+            ]
+          }
+        },
+        "initialState": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024
+              },
+              {
+                "type": "number",
+                "minimum": -1000000000,
+                "maximum": 1000000000
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "maxProperties": 64,
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+            "not": {
+              "enum": [
+                "constructor",
+                "prototype",
+                "__proto__"
+              ]
+            }
+          }
+        },
+        "hidden": {
+          "enum": [
+            "continue",
+            "pause"
+          ]
+        },
+        "onExit": {
+          "enum": [
+            "continue",
+            "pause",
+            "stop",
+            "dispose"
+          ]
+        },
+        "reenter": {
+          "enum": [
+            "resume",
+            "reset",
+            "new"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "definition",
+        "owner",
+        "hidden",
+        "onExit",
+        "reenter"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
