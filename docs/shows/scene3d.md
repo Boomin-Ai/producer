@@ -1,5 +1,7 @@
 # Managed 3D layers
 
+Forward plan: [Set runtime and 3D hardening](../set-runtime/HARDENING-PLAN.md), including external chat adapters and full moderator operation.
+
 A `scene3d` node in a `producer.presentation/2` layout declares a trusted,
 bounded `producer.scene3d/1` world. This is an additive visual capability:
 existing module state, actions, source bindings, typography, audio and optional
