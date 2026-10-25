@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import { build } from 'esbuild';
 import { mkdtemp, writeFile, unlink, rmdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -22,6 +23,30 @@ const edit = fn => { const doc = structuredClone(AFTER_HOURS); fn(doc); return d
 const texts = projection => JSON.stringify(projection);
 const control = (session, type, args = {}) => session.send({ type: 'control', action: { type, ...args } });
 const round = () => { const s = new RehearsalSession(HEAD_TO_HEAD, 'test'); assert.ok(control(s, 'show.start')); assert.ok(control(s, 'show.next')); return s; };
+
+test('Grand Arena segment morphs keep text visible unless its opacity is explicitly authored',()=>{
+ const doc=parsePackage(JSON.parse(readFileSync('docs/shows/head-to-head-grand-arena.json','utf8')));
+ for(const portrait of [false,true]){
+  const session=new RehearsalSession(doc,undefined,'prepare');session.enterLive();control(session,'show.start');
+  if(portrait)control(session,'layout.select',{layoutId:'faceoff-portrait'});
+  const phases=doc.show.phases;
+  for(const phase of phases.slice(1)){
+   // Exercise each adjacent layout pair, including the vote->verdict edge.
+   const layoutId=phase.layoutId.replace(/-landscape$/,portrait?'-portrait':'-landscape');
+   control(session,'layout.select',{layoutId});
+   const projection=outputProjection(doc,session.snapshot());
+   const textIds=new Set();const visit=n=>{if(n.type==='text')textIds.add(n.id);n.children.forEach(visit);};visit(projection.root);
+   const authored=doc.set.layouts.find(l=>l.id===layoutId).animation.tracks;
+   for(const track of projection.timeline.tracks.filter(t=>textIds.has(t.target)&&t.property==='opacity')){
+    assert.ok(authored.some(t=>t.target===track.target.split('/').slice(2).join('/')&&t.property==='opacity'),`Unexpected text blackout in ${layoutId}: ${track.target}`);
+   }
+  }
+ }
+ const authored=structuredClone(doc),layout=authored.set.layouts.find(l=>l.id==='host-case-landscape');
+ layout.animation.tracks.push({target:'stage-label',property:'opacity',keyframes:[{atMs:0,value:0},{atMs:650,value:1}],clock:'segment'});
+ const session=new RehearsalSession(parsePackage(authored),undefined,'prepare');session.enterLive();control(session,'show.start');control(session,'show.next');
+ assert.deepEqual(outputProjection(session.package,session.snapshot()).timeline.tracks.find(t=>t.target.endsWith('/stage-label')&&t.property==='opacity').keyframes,layout.animation.tracks[0].keyframes);
+});
 
 test('prepare/rehearse boundary restores setup and discards practice state and private identities', () => {
   const withFeeds = structuredClone(HEAD_TO_HEAD);
