@@ -113,3 +113,25 @@ New or recovered WebGL surfaces draw three warm-up frames before entering their
 static draw-suppression path. This gives the offscreen browser compositor paint
 opportunities while native revision-fence verification remains authoritative.
 It does not introduce a per-segment transition delay.
+
+## Native readiness threading
+
+Warm-up draws and marker/fence readbacks queue synchronously to OBS's graphics
+thread. The owner thread must not hold the graphics lock while waiting. Merely
+entering the graphics context on the owner thread allows source rendering to
+interleave with the graphics thread's tick/draw lifecycle; crash reports from
+this development build showed invalid Metal render-target references in that
+path and at the next frame reset.
+
+Cold 3D preparation allows up to 30 seconds for shader compilation and the first
+imported browser paint; ordinary media retains its 12-second deadline. This does
+not change cached layout switching or relax the browser/fence acknowledgement.
+
+`VITE_SCENE3D_STUDIO_SOAK=1`, together with the existing native proof flag, adds
+120 repeated direction changes. Each requires landscape and portrait commits
+and unchanged GPU-world counts. Run without manual control or Set changes.
+The initial local run stayed alive for over six minutes through repeated cues
+and a subsequent manual switch to Grand Arena, with no new native crash report.
+That switch interrupted the soak's resource-count assertion, so it is not a
+completed 120-cycle acceptance result. Browser acceptance and the initial native
+apply, six-layout preparation, seven cues and paired recording checks passed.

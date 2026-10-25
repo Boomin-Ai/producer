@@ -76,6 +76,22 @@ export async function studioRoomProof(){
    await replace(flat);const baseline=await measure('flat');await replace(original);const restored=await measure('3d restored');
    performanceProof={studio,baseline,restored,comparison:'Same camera slots, text, output dimensions and recording state; flat benchmark omits both 3D passes.'};
   }
-  await invoke('live_set_v2_report',{result:{ok:true,kind:'managed-scene3d-studio',generation,before,after,portraitBefore,portraitAfter,takes,recordings:paths,transitionRecording,performance:performanceProof,capability:await invoke('live_set_v2_scene3d_enabled'),at:new Date().toISOString()}});
+  let soak:unknown;
+  if(import.meta.env.VITE_SCENE3D_STUDIO_SOAK==='1'){
+   stage='native readiness soak';const started=Date.now(),cycles=120;
+   const labels=['Host’s floor','Challenger’s floor','Face-off','Reveal emblem'];
+   for(let i=0;i<cycles;i++){
+    if(!card.isConnected)throw Error('Soak interrupted: operator changed the Set or control panel');
+    const previous=(await status()).renderedRevision,portraitPrevious=(await portraitStatus()).renderedRevision;
+    (await until(()=>button(labels[i%labels.length],card),'soak direction')).click();
+    await until(async()=>(await status()).renderedRevision>previous,'soak landscape');
+    await until(async()=>(await portraitStatus()).renderedRevision>portraitPrevious,'soak portrait');
+    if(!card.isConnected)throw Error('Soak interrupted: operator changed the Set or control panel');
+    if((await status()).scene3dContexts!==before.scene3dContexts)throw Error('Soak recreated GPU worlds');
+    await sleep(1000);
+   }
+   soak={cycles,durationMs:Date.now()-started,after:await status(),portraitAfter:await portraitStatus()};
+  }
+  await invoke('live_set_v2_report',{result:{ok:true,kind:'managed-scene3d-studio',generation,before,after,portraitBefore,portraitAfter,takes,recordings:paths,transitionRecording,performance:performanceProof,soak,capability:await invoke('live_set_v2_scene3d_enabled'),at:new Date().toISOString()}});
  }catch(e){await invoke('live_set_v2_report',{result:{ok:false,kind:'managed-scene3d-studio',stage,error:String(e),body:document.body.innerText.slice(-1700)}});}finally{clearInterval(progress);}
 }
