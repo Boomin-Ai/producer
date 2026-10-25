@@ -1,0 +1,10 @@
+import {createRequire} from 'node:module';
+import {realpathSync,readFileSync} from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+const require=createRequire(new URL('../../package.json',import.meta.url));
+const {build}=require('esbuild');
+const directory=fileURLToPath(new URL('../../',import.meta.url));
+const three=realpathSync(new URL('./node_modules/three',import.meta.url));
+if(JSON.parse(readFileSync(path.join(three,'package.json'))).version!=='0.183.2')throw Error('Install the pinned Three.js dependency first');
+await build({entryPoints:[path.join(directory,'src/features/presentation/scene3d/renderer.mjs')],bundle:true,format:'iife',globalName:'ProducerScene3d',minify:true,legalComments:'inline',outfile:path.join(directory,'src/features/presentation/vendor/scene3d-renderer.js'),plugins:[{name:'pinned-three',setup(build){build.onResolve({filter:/^three($|\/)/},args=>({path:args.path==='three'?path.join(three,'build/three.module.js'):path.join(three,'examples/jsm',args.path.slice('three/addons/'.length))}));}}]});

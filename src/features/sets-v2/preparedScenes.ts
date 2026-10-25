@@ -14,11 +14,11 @@ type Entry={pins:number;key:string;identity:string;spec:SceneSpec;state:SceneRea
 type Job={priority:number;run:(abort:()=>boolean)=>Promise<unknown>;resolve:(v:any)=>void;reject:(e:unknown)=>void;preemptible:boolean};
 const sleep=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 function digest(text:string){let a=2166136261,b=5381;for(let i=0;i<text.length;i++){a=Math.imul(a^text.charCodeAt(i),16777619);b=Math.imul(b,33)^text.charCodeAt(i);}return 'scene-'+(a>>>0).toString(16)+'-'+(b>>>0).toString(16);}
-function visual(node:RenderNode):unknown{const {playback:_playback,motionClass:_motion,...rest}=node;return {...rest,children:node.children.map(visual)};}
+function visual(node:RenderNode):unknown{const {playback:_playback,motionClass:_motion,...rest}=node;if(rest.scene3d){const {cue:_cue,view:_view,cueSequence:_sequence,...definition}=rest.scene3d;rest.scene3d={...definition,cue:"neutral"};}return {...rest,children:node.children.map(visual)};}
 export function sceneIdentity(spec:SceneSpec){return JSON.stringify({definition:spec.definition,root:visual(spec.projection.root),canvas:spec.layout,bindings:spec.bindings,target:spec.target,targets:spec.targets,assets:spec.assetVersion});}
 export function runtimePlan(plan:Plan,projection:OutputProjection):Plan{
  const next=structuredClone({...plan,assets:{}});next.clock=projection.timeline?.clock;next.motion=projection.timeline?.tracks.map(t=>({...t,target:nativeNodeId(t.target)}))??[];
- const transports=new Map<string,RenderNode>();const collect=(n:RenderNode)=>{transports.set(nativeNodeId(n.id),n);n.children.forEach(collect);};collect(projection.root);
+ const transports=new Map<string,RenderNode>();const collect=(n:RenderNode)=>{if(n.scene3d){next.scenes3d??={};next.scenes3d[n.scene3d.id+"-"+n.scene3d.pass]=structuredClone(n.scene3d);}transports.set(nativeNodeId(n.id),n);n.children.forEach(collect);};collect(projection.root);
  const patch=(n:RenderPlan['root'])=>{const authored=transports.get(n.id);if(authored?.playback){const now=Date.now();Object.assign(n,{playback:{...authored.playback,positionMs:mediaPosition(authored.playback,now),anchorMs:now}});}n.children.forEach(patch);};patch(next.root);
  return next;
 }

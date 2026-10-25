@@ -35,6 +35,7 @@ struct Cached {
 }
 pub struct Store {
     images: std::cell::RefCell<HashMap<String, std::rc::Weak<Source>>>,
+    scenes3d: std::cell::RefCell<HashMap<String, std::rc::Weak<super::scene3d::Lease>>>,
     directory: PathBuf,
     assets: HashMap<String, Cached>,
     files: HashMap<String, Weak<FileLease>>,
@@ -50,6 +51,7 @@ impl Store {
         std::fs::create_dir(&directory).map_err(|e| e.to_string())?;
         Ok(Self {
             images: Default::default(),
+            scenes3d: Default::default(),
             directory,
             assets: HashMap::new(),
             files: HashMap::new(),
@@ -160,6 +162,7 @@ impl Store {
             files: Vec::new(),
             shaders: Vec::new(),
             media: Vec::new(),
+            scenes3d: HashMap::new(),
         };
         let mut nodes = Vec::new();
         fn visit<'a>(n: &'a super::contract::Node, out: &mut Vec<&'a super::contract::Node>) {
@@ -176,7 +179,43 @@ impl Store {
             if out.sources.contains_key(resource) {
                 continue;
             }
-            if n.kind == "shader" {
+            if n.kind == "scene3d" {
+                let key = resource
+                    .strip_prefix("scene3d:")
+                    .ok_or("Invalid 3D resource")?;
+                let spec = plan.scenes3d.get(key).ok_or("Missing 3D definition")?;
+                let w = n.bounds.width.ceil() as u32;
+                let h = n.bounds.height.ceil() as u32;
+                let identity = super::scene3d::key(
+                    &format!("{}:{}", plan.definition_id, plan.instance_id),
+                    spec,
+                    w,
+                    h,
+                );
+                let mut cache = self.scenes3d.borrow_mut();
+                cache.retain(|_, v| v.strong_count() > 0);
+                let lease =
+                    if let Some(lease) = cache.get(&identity).and_then(std::rc::Weak::upgrade) {
+                        lease
+                    } else {
+                        if cache.len() >= 6
+                            || cache
+                                .values()
+                                .filter_map(std::rc::Weak::upgrade)
+                                .map(|l| l.pixels())
+                                .sum::<usize>()
+                                + (w as usize) * (h as usize)
+                                > 24 * 1024 * 1024
+                        {
+                            return Err("3D renderer context budget reached".into());
+                        }
+                        let lease = super::scene3d::Lease::create(spec, w, h)?;
+                        cache.insert(identity, std::rc::Rc::downgrade(&lease));
+                        lease
+                    };
+                out.sources.insert(resource.clone(), lease.source.clone());
+                out.scenes3d.insert(key.to_string(), lease);
+            } else if n.kind == "shader" {
                 let key = resource
                     .strip_prefix("shader:")
                     .ok_or("Invalid material identity")?;
@@ -296,13 +335,51 @@ pub struct Prepared {
     pub sources: HashMap<String, std::rc::Rc<Source>>,
     files: Vec<Arc<FileLease>>,
     pub shaders: Vec<ShaderBinding>,
+    pub scenes3d: HashMap<String, std::rc::Rc<super::scene3d::Lease>>,
     pub media: Vec<MediaBinding>,
 }
 impl Prepared {
     pub unsafe fn ready(&self) -> bool {
-        self.sources
-            .values()
-            .all(|s| producer_set_v2_surface_warm(s.0))
+        self.scenes3d.values().all(|s| s.ready())
+            && self
+                .sources
+                .values()
+                .all(|s| producer_set_v2_surface_warm(s.0))
+    }
+}
+impl Prepared {
+    pub fn publish3d(
+        &self,
+        specs: &HashMap<String, super::scene3d::Spec>,
+        clock: Option<&super::contract::Clock>,
+    ) {
+        for (key, lease) in &self.scenes3d {
+            if let Some(spec) = specs.get(key) {
+                lease.publish(spec, clock);
+            }
+        }
+    }
+    pub fn hide_unshared3d(&self, next: &Self) {
+        for lease in self.scenes3d.values() {
+            if !next
+                .scenes3d
+                .values()
+                .any(|n| std::rc::Rc::ptr_eq(n, lease))
+            {
+                lease.hide();
+            }
+        }
+    }
+    pub fn pause3d(&self, paused: bool) {
+        for lease in self.scenes3d.values() {
+            lease.pause(paused);
+        }
+    }
+    pub fn presented3d(&self) -> bool {
+        self.scenes3d.values().all(|s| s.ready())
+    }
+    pub fn error3d(&self) -> Option<String> {
+        self.scenes3d.values().find_map(|s| s.error())
     }
 }
 impl Drop for Prepared {

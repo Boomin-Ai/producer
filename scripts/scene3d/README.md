@@ -1,3 +1,32 @@
+# Managed Three.js Set layers
+
+The managed renderer now plugs into the existing presentation/2 package, module
+runtime, editor preview, native prepare/take path and recordings. Grand Arena’s
+existing package remains intact. `docs/shows/grand-arena-3d-study.json` is a
+separate development-only design study using the normal Set controller.
+
+See [the authoring and lifecycle contract](../../docs/shows/scene3d.md).
+
+Build the pinned trusted renderer:
+
+```sh
+npm --prefix scripts/scene3d ci
+node scripts/scene3d/build-renderer.mjs
+node scripts/scene3d/make-study.mjs
+```
+
+The browser acceptance check requires Vite on port 1436 and the local Playwright
+installation described in `test-managed-browser.mjs`. Native acceptance is
+opt-in through `VITE_SCENE3D_STUDIO=1 VITE_SCENE3D_STUDIO_PROOF=1` and the
+isolated Sets v2 dev app. It uses camera permission and creates short local
+recordings. It does not start a stream.
+
+## Earlier isolated prototype
+
+The instructions below describe the original engineering diagnostic, retained
+for comparison. Its private descriptor and temporary control bar are separate
+from the managed presentation/2 implementation above.
+
 # Three.js native-output experiment
 
 An isolated development prototype, built on Producer's existing browser sources,

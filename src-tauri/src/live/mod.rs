@@ -63,6 +63,7 @@ pub mod multi;
 pub mod encoders;
 #[cfg(have_engine)]
 mod record;
+mod recording_name;
 #[cfg(have_engine)]
 pub mod stream;
 // Studio output (v0.4.37): the studio scene, the room-only mix, and the

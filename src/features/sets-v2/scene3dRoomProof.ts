@@ -14,7 +14,7 @@ export async function scene3dRoomProof(manifest:Manifest){
  const button=(label:string,action:()=>Promise<unknown>)=>{const b=document.createElement('button');b.textContent=label;b.disabled=true;b.onclick=()=>{void action().catch(e=>{status.textContent=String(e);});};toolbar.append(b);buttons.push(b);return b;};
  const cue=async(action:string)=>{const response=await fetch(manifest.control,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});if(!response.ok)throw Error('3D cue failed');};
  button('Blue',()=>cue('blue'));button('Gold',()=>cue('gold'));button('Neutral',()=>cue('neutral'));button('Pause motion',()=>cue('pause'));button('Resume',()=>cue('resume'));
- const record=button('Record 10s',async()=>{record.disabled=true;try{recordingPath=await recording.start('Scene3D-GPU-proof');status.textContent='Recording native output…';await sleep(10000);const completed=await recording.stop()??recordingPath;recordingPath=undefined;status.textContent='Recording saved';if(completed)await recording.reveal(completed);}finally{record.disabled=false;}});
+ const record=button('Record 10s',async()=>{record.disabled=true;try{recordingPath=await recording.start('Scene3D-'+new Date().toISOString().replace(/[:.]/g,'-')+'-'+crypto.randomUUID().slice(0,8));status.textContent='Recording native output…';await sleep(10000);const completed=await recording.stop()??recordingPath;recordingPath=undefined;status.textContent='Recording saved';if(completed)await recording.reveal(completed);}finally{record.disabled=false;}});
  const close=async()=>{if(closed)return;closed=true;if(recordingPath)await recording.stop().catch(()=>{});if(generation)await invoke('live_set_v2',{request:{op:'return',generation}}).catch(()=>{});for(const id of owned.reverse())await extraSources.remove(id).catch(()=>{});toolbar.remove();};
  const stop=button('Exit prototype',close);stop.disabled=false;
  try{
@@ -50,7 +50,7 @@ export async function scene3dRoomProof(manifest:Manifest){
   status.textContent='3D GPU prototype · native camera';buttons.forEach(b=>b.disabled=false);
   for(let i=0;i<300;i++){const s=await invoke<{renderedRevision:number}>('live_set_v2',{request:{op:'status',generation}});if(s.renderedRevision===revision)break;if(i===299)throw Error('Native presentation timed out');await sleep(50);}
   let recordingProof:string|undefined;
-  if(manifest.recordProof){status.textContent='Recording native 3D output test…';recordingPath=await recording.start('Scene3D-GPU-proof');await sleep(10000);recordingProof=await recording.stop()??recordingPath;recordingPath=undefined;status.textContent='3D GPU prototype · recording verified';}
+  if(manifest.recordProof){status.textContent='Recording native 3D output test…';recordingPath=await recording.start('Scene3D-'+new Date().toISOString().replace(/[:.]/g,'-')+'-'+crypto.randomUUID().slice(0,8));await sleep(10000);recordingProof=await recording.stop()??recordingPath;recordingPath=undefined;status.textContent='3D GPU prototype · recording verified';}
   await invoke('live_set_v2_report',{result:{kind:'scene3d-room',ok:true,run,generation,revision,recordingProof,sourceCount:owned.length,scope:'Dev prototype; existing native compositing API, no package schema change.'}});
  }catch(e){status.textContent=status.textContent+' '+String(e);stop.disabled=false;await invoke('live_set_v2_report',{result:{kind:'scene3d-room',ok:false,error:status.textContent}}).catch(()=>{});}
  return close;

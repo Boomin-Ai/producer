@@ -8,7 +8,7 @@
   let width = 1280, height = 720, port, sequence = 0;
   let entries = new Map(),previousLayer;
   let timeline,motionReady=false;
-  function removePrevious(){if(!previousLayer)return;for(const entry of previousLayer.entries.values()){entry.gpu?.destroy();entry.animation?.destroy();entry.element.querySelector('video')?.pause();}previousLayer.element.remove();previousLayer=null;}
+  function removePrevious(){if(!previousLayer)return;for(const entry of previousLayer.entries.values()){entry.gpu?.destroy();entry.scene3d?.dispose();entry.scene3dPending=true;entry.scene3dPromise=null;entry.animation?.destroy();entry.element.querySelector('video')?.pause();}previousLayer.element.remove();previousLayer=null;}
   function sample(track,time){
     const frames=track.keyframes,last=frames[frames.length-1].atMs;time=Math.max(0,time-(track.delayMs||0));
     if(track.loop==='repeat')time%=last;else if(track.loop==='pingpong'){time%=last*2;if(time>last)time=last*2-time;}
@@ -96,11 +96,16 @@
       video?.addEventListener('loadeddata',ready);video?.addEventListener('seeked',ready);video?.addEventListener('error',failed,{once:true});image?.addEventListener('load',ready,{once:true});image?.addEventListener('error',failed,{once:true});animation?.addEventListener('DOMLoaded',ready);
     });
   }
+  function updateWorld(entry,spec){
+    const clock=timeline?.clock,now=Date.now();
+    const update={revision:(entry.scene3dRevision=(entry.scene3dRevision??0)+1),anchor:clock?.running?clock.anchorMs-clock.positionMs:now,elapsed:clock?.positionMs??0,paused:!clock?.running,cue:spec.cue,...(spec.cueSequence!==undefined?{cueSequence:spec.cueSequence}:{}),...(spec.view?{view:spec.view}:{})};
+    entry.scene3dControl=update;entry.scene3d?.update(update);return update;
+  }
   function sync(node, parent, used, surface, isRoot = false) {
     used.add(node.id);
     let entry = entries.get(node.id);
     if (!entry || entry.type !== node.type) {
-      if (entry){entry.gpu?.destroy();entry.animation?.destroy();entry.element.remove();}
+      if (entry){entry.gpu?.destroy();entry.scene3d?.dispose();entry.scene3dPending=true;entry.scene3dPromise=null;entry.animation?.destroy();entry.element.remove();}
       const el = document.createElement('div');
       el.dataset.node = node.id; entry = { element: el, type: node.type }; entries.set(node.id, entry);
     }
@@ -115,11 +120,20 @@
     if (surface === 'background' && !isRoot) el.style.visibility = 'hidden';
     el.className = [node.type === 'slot' ? 'slot' : '', node.motionClass || ''].filter(Boolean).join(' ');
     if (node.type === 'text') el.textContent = node.text;
+    if(node.type==='scene3d'&&surface==='preview'){
+      const spec=node.scene3d,signature=JSON.stringify([spec.world,spec.pass,node.styles.width,node.styles.height]);
+      const update=updateWorld(entry,spec);
+      if(entry.scene3dSignature!==signature){
+        entry.scene3d?.dispose();entry.scene3dPending=true;el.replaceChildren();const gpu=document.createElement('canvas');gpu.style.cssText='width:100%;height:100%;display:block';el.appendChild(gpu);entry.scene3dSignature=signature;
+        const pending=ProducerScene3d.mountWorld(gpu,spec.world,{pass:spec.pass,width:node.styles.width,height:node.styles.height,control:update,onStatus:s=>{gpu.dataset.scene3dReady=String(s.ready);if(s.error&&!s.lost)port?.postMessage({type:'error'});}});
+        entry.scene3dPromise=pending;pending.then(api=>{if(entry.scene3dPromise!==pending||!el.isConnected){api.dispose();return;}entry.scene3d=api;entry.scene3dPending=false;api.update(entry.scene3dControl);}).catch(()=>port?.postMessage({type:'error'}));
+      }else entry.scene3d?.update(update);
+    }
     if(node.type==='shader'){
       entry.shader=node.shader;
       if(surface==='preview'){
         const signature=JSON.stringify([node.shader,node.styles.width,node.styles.height]);
-        if(entry.shaderSignature!==signature){entry.gpu?.destroy();el.replaceChildren();const gpu=document.createElement('canvas');gpu.style.cssText='width:100%;height:100%;display:block';el.appendChild(gpu);entry.gpu=producerShaderPreview(gpu,node.shader,node.styles.width,node.styles.height);entry.shaderSignature=signature;entry.gpu.draw(0);}
+        if(entry.shaderSignature!==signature){entry.gpu?.destroy();entry.scene3d?.dispose();entry.scene3dPending=true;el.replaceChildren();const gpu=document.createElement('canvas');gpu.style.cssText='width:100%;height:100%;display:block';el.appendChild(gpu);entry.gpu=producerShaderPreview(gpu,node.shader,node.styles.width,node.styles.height);entry.shaderSignature=signature;entry.gpu.draw(0);}
       }else el.style.visibility='hidden';
     }
     if(node.type==='media'&&surface!=='background'){
@@ -178,6 +192,7 @@
     // append also establishes declared order when an existing keyed child moves.
     for (const child of node.children) { sync(child, el, used, surface); el.appendChild(entries.get(child.id).element); }
   }
+  addEventListener('pagehide',()=>{removePrevious();for(const entry of entries.values()){entry.gpu?.destroy();entry.scene3d?.dispose();entry.animation?.destroy();}entries.clear();},{once:true});
   addEventListener('message', event => {
     if (event.source !== parent) return;
     if (event.data === 'presentation.probe') { parent.postMessage('presentation.ready', '*'); return; }
@@ -195,7 +210,7 @@
       try {
         if(data.transportOnly){
           timeline=data.projection.timeline;
-          const apply=node=>{const entry=entries.get(node.id);if(entry&&node.type==='media'){entry.playback=node.playback;entry.loop=node.loop;const video=entry.element.querySelector('video');if(video){video.loop=node.loop;if(!node.playback){if(node.autoplay)video.play().catch(()=>{});else video.pause();}}transport(entry);}node.children.forEach(apply);};
+          const apply=node=>{const entry=entries.get(node.id);if(entry&&node.type==='scene3d')updateWorld(entry,node.scene3d);if(entry&&node.type==='media'){entry.playback=node.playback;entry.loop=node.loop;const video=entry.element.querySelector('video');if(video){video.loop=node.loop;if(!node.playback){if(node.autoplay)video.play().catch(()=>{});else video.pause();}}transport(entry);}node.children.forEach(apply);};
           apply(data.projection.root);return;
         }
         const p = data.projection,outgoingTimeline=timeline;timeline=p.timeline;motionReady=false;assets={...assets,...(p.assets||{})}; if(Array.isArray(data.assetIds))for(const id of Object.keys(assets))if(!data.assetIds.includes(id))delete assets[id];width = p.width; height = p.height;
@@ -208,7 +223,7 @@
         const ticket = ++sequence;
         const used = new Set(); sync(p.root, canvas, used, surface, true);
         if(previousLayer)canvas.appendChild(previousLayer.element);
-        for (const [id, entry] of entries) if (!used.has(id)) { entry.gpu?.destroy();entry.animation?.destroy();entry.element.querySelector('video')?.pause();entry.element.remove(); entries.delete(id); }
+        for (const [id, entry] of entries) if (!used.has(id)) { entry.gpu?.destroy();entry.scene3d?.dispose();entry.scene3dPending=true;entry.scene3dPromise=null;entry.animation?.destroy();entry.element.querySelector('video')?.pause();entry.element.remove(); entries.delete(id); }
         if (style.textContent !== p.css) style.textContent = p.css;
         fit(); port.postMessage({ type: 'rendered', revision: p.revision });
         // Measure synchronously after decode. Offscreen rAF can be throttled; the

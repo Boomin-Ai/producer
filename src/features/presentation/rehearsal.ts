@@ -69,7 +69,7 @@ export function evaluate(binding: Binding, state: RehearsalState, props: Record<
 }
 
 function hasShader(doc:PresentationPackage,node:PresentationPackage['set']['layouts'][number]['root']):boolean {
-  return node.type==='shader'||node.type==='component'&&hasShader(doc,doc.set.components[node.component!].root)||(node.children??[]).some(child=>hasShader(doc,child));
+  return node.type==='shader'||node.type==='scene3d'||node.type==='component'&&hasShader(doc,doc.set.components[node.component!].root)||(node.children??[]).some(child=>hasShader(doc,child));
 }
 
 /** Simulation has no transport/native/recording adapter. An imported command

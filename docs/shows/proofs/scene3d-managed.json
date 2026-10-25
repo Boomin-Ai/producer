@@ -1,0 +1,120 @@
+{
+  "at": "2026-10-25T19:44:16.980Z",
+  "kind": "managed-scene3d-studio",
+  "ok": true,
+  "hardware": "Apple M1; ANGLE Metal WebGL2",
+  "nativeContextCount": {
+    "beforeControls": 4,
+    "afterControls": 4,
+    "afterFlatAndRestore": 4
+  },
+  "takes": [
+    {
+      "contexts": 4,
+      "label": "Host\u2019s floor",
+      "portraitRevision": 13,
+      "revision": 12
+    },
+    {
+      "contexts": 4,
+      "label": "Challenger\u2019s floor",
+      "portraitRevision": 15,
+      "revision": 14
+    },
+    {
+      "contexts": 4,
+      "label": "Stage push",
+      "portraitRevision": 17,
+      "revision": 16
+    },
+    {
+      "contexts": 4,
+      "label": "Wide studio",
+      "portraitRevision": 19,
+      "revision": 18
+    },
+    {
+      "contexts": 4,
+      "label": "Reveal emblem",
+      "portraitRevision": 21,
+      "revision": 22
+    },
+    {
+      "contexts": 4,
+      "label": "Reveal emblem",
+      "portraitRevision": 24,
+      "revision": 23
+    },
+    {
+      "contexts": 4,
+      "label": "Face-off",
+      "portraitRevision": 26,
+      "revision": 25
+    }
+  ],
+  "outputs": [
+    {
+      "id": "program",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30
+    },
+    {
+      "id": "portrait",
+      "width": 1080,
+      "height": 1920,
+      "fps": 30
+    }
+  ],
+  "recordingRegression": {
+    "repeatedCallerLabel": true,
+    "distinctOutputPaths": true,
+    "pairs": [
+      {
+        "landscapeDurationSeconds": 2.13,
+        "portraitDurationSeconds": 1.97
+      },
+      {
+        "landscapeDurationSeconds": 2.27,
+        "portraitDurationSeconds": 1.97
+      }
+    ],
+    "dimensionsAndNominalFpsVerifiedWith": "AVFoundation"
+  },
+  "performance": {
+    "method": "Same camera slots, text, output dimensions and recording state; flat benchmark omits both 3D passes.",
+    "sampleOrder": [
+      "studio",
+      "baseline",
+      "restored"
+    ],
+    "results": {
+      "studio": {
+        "samples": 12,
+        "meanCompositorUs": 8778.18,
+        "meanFps": 30.0
+      },
+      "baseline": {
+        "samples": 12,
+        "meanCompositorUs": 6492.32,
+        "meanFps": 30.0
+      },
+      "restored": {
+        "samples": 12,
+        "meanCompositorUs": 11751.96,
+        "meanFps": 30.0
+      }
+    },
+    "limits": "Development build; both outputs; recordings stopped during timing samples. Background applications uncontrolled. Compositor average frame times are not isolated GPU timings or an attribution of system GPU utilization. Frame counters were zero while not recording and do not establish a dropped-frame rate."
+  },
+  "checks": [
+    "strict public package validation",
+    "module-bound lighting and framing",
+    "repeated same-cue foreground animation",
+    "retained GPU contexts",
+    "native surface revision fence",
+    "portrait presentation",
+    "browser WebGL context recovery and teardown",
+    "two paired native recording cycles"
+  ]
+}

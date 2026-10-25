@@ -1,6 +1,7 @@
 //! Opt-in dev-room adapter. No v1 conversion and no production registration.
 pub mod contract;
 mod resources;
+pub mod scene3d;
 use super::ffi;
 use contract::{Action, Node, Plan, Status};
 use std::{
@@ -123,6 +124,7 @@ extern "C" {
     fn producer_set_v2_program_status(p: *mut ffi::obs_source_t, out: *mut NativeStatus) -> bool;
     fn producer_set_v2_program_stop_motion(p: *mut ffi::obs_source_t);
     fn producer_set_v2_program_collect(p: *mut ffi::obs_source_t) -> bool;
+    fn producer_set_v2_surface_fence(s: *mut ffi::obs_source_t, y: u32, expected: *const u8) -> bool;
     fn producer_set_v2_surface_marker(
         s: *mut ffi::obs_source_t,
         x: u32,
@@ -366,7 +368,7 @@ impl Arena {
             out.children = children.as_ptr();
             out.child_count = children.len();
             self.children.push(children);
-        } else if ["source", "asset", "shader"].contains(&n.kind.as_str()) {
+        } else if ["source", "asset", "shader", "scene3d"].contains(&n.kind.as_str()) {
             out.kind = 1;
             out.fit = match n.fit.as_deref() {
                 Some("cover") => 2,
@@ -487,6 +489,8 @@ pub struct RoomProgram {
     building: Option<Building>,
     latest_revision: u64,
     resources: resources::Store,
+    pending_3d: Option<(u64,HashMap<String,scene3d::Spec>,Option<contract::Clock>)>,
+    presented_revision: u64,
 }
 impl RoomProgram {
     pub unsafe fn attach(
@@ -521,6 +525,8 @@ impl RoomProgram {
             building: None,
             latest_revision: 0,
             resources,
+            pending_3d: None,
+            presented_revision: 0,
         })
     }
     pub unsafe fn dispatch(
@@ -588,6 +594,7 @@ impl RoomProgram {
                     if !resource.starts_with("graphic:")
                         && !resource.starts_with("shader:")
                         && !resource.starts_with("asset:")
+                        && !resource.starts_with("scene3d:")
                     {
                         let current = resolve(resource)?;
                         if draft.captures.get(resource) != Some(&(current as usize)) {
@@ -641,6 +648,7 @@ impl RoomProgram {
                         "V2 candidate is not ready, stale, or another transition is active".into(),
                     );
                 }
+                if let (Some(draft),Some((r,specs,clock)))=(&self.draft,&self.pending_3d){if *r==revision{draft._resources.publish3d(specs,clock.as_ref());}}
             }
             Action::Cancel { revision, .. } => {
                 if self
@@ -657,6 +665,7 @@ impl RoomProgram {
                 self.draft = None;
             }
             Action::Pause { paused, .. } => {
+                if let Some(current)=&self.current{current._resources.pause3d(paused);}
                 if !producer_set_v2_program_pause(self.program.0, paused) {
                     return Err("V2 program clock unavailable".into());
                 }
@@ -673,6 +682,7 @@ impl RoomProgram {
         o.remove("motion");
         o.remove("assets");
         o.remove("definitionRevision");
+        if let Some(specs)=o.get_mut("scenes3d").and_then(|v|v.as_object_mut()){for spec in specs.values_mut(){if let Some(s)=spec.as_object_mut(){s.remove("cue");s.remove("view");s.remove("cueSequence");}}}
         fn strip(n: &mut serde_json::Value) {
             if let Some(o) = n.as_object_mut() {
                 o.remove("playback");
@@ -712,6 +722,7 @@ impl RoomProgram {
             if resource.starts_with("graphic:")
                 || resource.starts_with("asset:")
                 || resource.starts_with("shader:")
+                || resource.starts_with("scene3d:")
             {
                 continue;
             }
@@ -808,7 +819,8 @@ impl RoomProgram {
         self.draft_revision = b.revision;
         Ok(Rc::new(draft))
     }
-    unsafe fn register(&self, draft: &Draft, plan: &Plan, revision: u64) -> Result<(), String> {
+    unsafe fn register(&mut self, draft: &Draft, plan: &Plan, revision: u64) -> Result<(), String> {
+        self.pending_3d=Some((revision,plan.scenes3d.clone(),plan.clock.clone()));
         let (show, segment, running) = contract::clock_positions(plan.clock.as_ref());
         for shader in &draft._resources.shaders {
             let spec = draft
@@ -932,6 +944,7 @@ impl RoomProgram {
     }
     pub unsafe fn poll(&mut self) -> Result<Status, String> {
         if let Some(building) = self.building.take() {
+            if let Some(error)=building.resources.error3d(){return Err(error);}
             if building.resources.ready()
                 && building.captures.values().all(|s| {
                     ffi::obs_source_get_width(s.0 .0) > 0 && ffi::obs_source_get_height(s.0 .0) > 0
@@ -973,11 +986,15 @@ impl RoomProgram {
                 && !native.queued
             {
                 producer_set_v2_program_collect(self.program.0);
+                if let (Some(old),Some(next))=(&self.current,&self.draft){old._resources.hide_unshared3d(&next._resources);}
                 self.current = self.draft.take();
             }
         }
         producer_set_v2_program_collect(self.program.0);
+        let presented=self.current.as_ref().map_or(true,|d|d._resources.presented3d());
+        if presented {self.presented_revision=native.rendered_revision;}
         Ok(Status {
+            scene3d_contexts:scene3d::live_count(),
             cached_keys: self.bank.keys().cloned().collect(),
             cached_bytes: self.bank.values().map(|(_, d)| d.bytes).sum(),
             generation: self.generation,
@@ -985,12 +1002,12 @@ impl RoomProgram {
                 .building
                 .as_ref()
                 .map_or(native.prepared_revision, |b| b.revision),
-            rendered_revision: native.rendered_revision,
+            rendered_revision: if presented {native.rendered_revision}else{self.presented_revision},
             render_serial: native.render_serial,
             clock_ms: native.clock_ms,
             transition_progress: native.transition_progress,
             warmed: self.building.is_none() && native.warmed,
-            ready: self.building.is_none() && native.ready,
+            ready: self.building.is_none() && native.ready && presented,
             queued: native.queued,
             transitioning: native.transitioning,
             paused: native.paused,

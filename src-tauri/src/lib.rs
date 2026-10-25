@@ -342,6 +342,7 @@ pub fn run() {
             live::commands::live_set_status,
             live::commands::live_set_v2,
             live::commands::live_set_v2_enabled,
+            live::commands::live_set_v2_scene3d_enabled,
             live::commands::live_set_source_create,
             live::commands::live_set_v2_report,
             live::commands::live_set_v2_smoke_enabled,
