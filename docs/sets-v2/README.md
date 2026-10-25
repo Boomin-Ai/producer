@@ -1,5 +1,7 @@
 # Sets v2 implementation
 
+**Next runtime design:** [Ownership and lifecycle draft](../set-runtime/OWNERSHIP-AND-LIFECYCLE.md) specifies the proposed module model, authority, concurrency, suspension and output receipts. It is a review document, not a description of implemented runtime support.
+
 Worktree: `/Users/klevelandbishop/Documents/producer-sets-v2`
 Branch: `refactor/sets-v2`
 Baseline: `de5667c` (verified v0.4.73 source + release docs).
